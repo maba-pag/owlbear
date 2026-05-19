@@ -243,8 +243,8 @@ Accessibility and responsive state after #1396:
   `TestFromAC_SaveConfirmedRefetchSurvival`, `TestFromAC_SaveConfirmedTaskSwitch`,
   `TestFromAC_SaveConfirmedFailure`) and
   `serve/cockpit/web/src/__tests__/CockpitRefetch_1624.test.tsx` (provider-level
-  same-task refetch guard). (Literal `p-toast-item` shadow-DOM timing proof deferred to
-  consolidation task #1629.)
+  same-task refetch guard). (Literal `p-toast-item` shadow-DOM timing proof confirmed via
+  #1629 consolidation gate — `npm run test:e2e:all` and `npm test` both exit 0.)
 - #1625 extends `custom-tokens.css` with a second bundled token: `--p-color-contrast-low`
   declared via `light-dark()` for runtime border contrast without CDN dependency. `Shell.css`
   gains `border-right: 1px solid var(--p-color-contrast-low, currentColor)` on
@@ -346,6 +346,23 @@ Accessibility and responsive state after #1396:
   `p-tag[data-testid="tag-chip"]` chip equality, and no legacy span chips) and full
   proof bundle (`npm run test:e2e:all`, `npm test`, `npm run build` all exit 0;
   2324 passed, 0 failed, 11 skipped).
+
+- #1629 is the full-surface consolidation gate for the visual redesign (all 4 batches).
+  JSX inline-style attributes reduced from 14 to 4 across `KanbanBoard.tsx`,
+  `ErrorBoundary.tsx`, `HistorySubtab.tsx`, `DRStatusIndicator.tsx`, `HealthBadge.tsx`,
+  `RepairPanel.tsx`, and `ActivityTab.tsx`; static styles (error-boundary layout,
+  RepairPanel confirm container, and `cursor:pointer` for session rows) moved to CSS.
+  The 4 retained `style={…}` sites — `KanbanBoard.tsx` context-menu and grid-column
+  positioning, `DRStatusIndicator.tsx` popover, and `HealthBadge.tsx` popover — are
+  runtime-positioned and each carry an adjacent `// inline-justified: {reason}` comment.
+  `accessibility-dual-theme.spec.ts` extended from 4 to all 10 accessibility-sweep
+  surfaces (board view, sidecar detail, DRStatusIndicator popover, HealthBadge popover,
+  FilterPanel, ResolveModal, ArchivalModal, ConfirmDialog, CleanupPanel, RepairPanel)
+  under both `.scheme-light` and `.scheme-dark` — 20 Playwright tests, all green.
+  Durable consolidation gate added in `serve/cockpit/tests/test_visual_redesign.py`
+  (6 tests: `test_vitest_passes`, `test_playwright_e2e_all_passes`,
+  `test_production_build_passes`, `test_inline_style_count_at_most_four`,
+  `test_each_inline_style_has_justification_comment`, `test_dual_theme_axe_spec_passes`).
 
 - Documentation here does not treat cache/SSE invalidation work from #1346 as part of
   this delivery bundle.
