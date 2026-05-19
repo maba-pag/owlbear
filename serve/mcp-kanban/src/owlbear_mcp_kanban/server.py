@@ -93,6 +93,18 @@ def _normalize_escaped_newlines(text: str) -> tuple[str, bool]:
     return restored, restored != text
 
 
+def _sanitize_agent_strings(kwargs: dict[str, object]) -> None:
+    """Normalize common LLM string-encoding mistakes in-place.
+
+    Detects literal ``""`` or ``''`` (two quote characters intended as empty
+    string by the agent) and replaces with actual empty string so downstream
+    truthiness checks work correctly.
+    """
+    for key, value in kwargs.items():
+        if isinstance(value, str) and value in ('""', "''"):
+            kwargs[key] = ""
+
+
 def _append_norm_guidance(guidance: list[str] | None, *, changed: bool) -> list[str]:
     """Append normalization guidance only when newline normalization occurred."""
     merged = list(guidance or [])
@@ -381,6 +393,7 @@ async def create_task(  # noqa: PLR0913
         kwargs["ac"] = ac
     if proof_bundle is not None:
         kwargs["proof_bundle"] = proof_bundle
+    _sanitize_agent_strings(kwargs)
     try:
         response = app_ctx.engine.agent_view().create_task(**kwargs)
     except KanbanError as exc:
@@ -532,6 +545,7 @@ async def edit_task(  # noqa: PLR0912, PLR0913, PLR0915, C901
         kwargs["archival_reason"] = archival_reason
     if archival_refs is not None:
         kwargs["archival_refs"] = archival_refs
+    _sanitize_agent_strings(kwargs)
     try:
         response = app_ctx.engine.agent_view().edit_task(resolved_id, **kwargs)
     except KanbanError as exc:
@@ -572,7 +586,7 @@ async def start_work(
 
 
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False))
-async def end_work(  # noqa: PLR0913
+async def end_work(  # noqa: PLR0913, C901
     ctx: Context,
     *,
     id: StrId,  # noqa: A002
@@ -590,6 +604,16 @@ async def end_work(  # noqa: PLR0913
     note_changed = False
     if note is not None:
         normalized_note, note_changed = _normalize_escaped_newlines(note)
+
+    # Sanitize string params for common LLM encoding mistakes (e.g. '""' → "")
+    ew_kwargs: dict[str, object] = {}
+    if block_reason is not None:
+        ew_kwargs["block_reason"] = block_reason
+    if archival_reason is not None:
+        ew_kwargs["archival_reason"] = archival_reason
+    _sanitize_agent_strings(ew_kwargs)
+    sanitized_block_reason: str | None = ew_kwargs.get("block_reason")  # type: ignore[assignment]
+    sanitized_archival_reason: str | None = ew_kwargs.get("archival_reason")  # type: ignore[assignment]
 
     target_status: str | None = None
     if outcome in {"success", "block", "reject"}:
@@ -610,9 +634,9 @@ async def end_work(  # noqa: PLR0913
             resolved_id,
             note=normalized_note,
             outcome=outcome,
-            block_reason=block_reason,
+            block_reason=sanitized_block_reason,
             move_to=move_to,
-            archival_reason=archival_reason,
+            archival_reason=sanitized_archival_reason,
             archival_refs=archival_refs,
         )
     except KanbanError as exc:

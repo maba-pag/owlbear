@@ -1074,7 +1074,7 @@ class TestFromAC_ErrorMapping:
         with pytest.raises(ToolError) as exc_info:
             await create_task(ctx, title="")
         payload = json.loads(str(exc_info.value))
-        assert payload["code"] == "ERR_INVALID_STATUS", f"ToolError JSON must carry error code; got {payload!r}"
+        assert payload["code"] == "ERR_INVALID_TITLE", f"ToolError JSON must carry error code; got {payload!r}"
         assert payload["message"] == "title must not be empty", (
             f"ToolError JSON must carry human-readable message; got {payload!r}"
         )
