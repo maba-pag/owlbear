@@ -53,13 +53,14 @@ concurrency:
   group: sync-to-main
   cancel-in-progress: false
 
-permissions:
-  contents: write
+permissions: {}
 
 jobs:
   sync:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: write
 
     env:
       SYNC_SHARE: ${{ inputs.sync_share }}
