@@ -186,6 +186,32 @@ export default function FilterPanel({
     }
   }, [open])
 
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const panelElement = panelRef.current
+      const target = event.target
+      if (!(target instanceof Node) || panelElement?.contains(target)) {
+        return
+      }
+
+      const toggle = document.querySelector('[data-testid="filter-toggle"], [data-testid="filter-toggle-real"]')
+      if (toggle?.contains(target)) {
+        return
+      }
+
+      onClose?.()
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+    }
+  }, [onClose, open])
+
   if (!open) {
     return null
   }
@@ -213,6 +239,7 @@ export default function FilterPanel({
     >
       <PInputSearch
         ref={searchRef}
+        className="filter-panel__search"
         name="search-filter"
         label="Search tasks"
         role="textbox"
@@ -221,6 +248,7 @@ export default function FilterPanel({
       />
 
       <PSelect
+        className="filter-panel__priority"
         name="priority-filter"
         label="Priority"
         value={filter.priority}
@@ -237,6 +265,7 @@ export default function FilterPanel({
 
       {availableTags.length > 0 ? (
         <PMultiSelect
+          className="filter-panel__tags"
           name="tags-filter"
           label="Tags"
           data-testid="filter-tags"
@@ -256,6 +285,7 @@ export default function FilterPanel({
 
       <PCheckbox
         ref={blockedRef}
+        className="filter-panel__blocked"
         name="blocked-filter"
         label="Show only blocked tasks"
         checked={filter.blocked}
@@ -265,7 +295,13 @@ export default function FilterPanel({
       </PCheckbox>
 
       {isFilterActive ? (
-        <PButton data-testid="filter-reset" variant="secondary" onClick={() => onFilterChange(EMPTY_FILTER)}>
+        <PButton
+          className="filter-panel__reset"
+          data-testid="filter-reset"
+          variant="secondary"
+          compact
+          onClick={() => onFilterChange(EMPTY_FILTER)}
+        >
           Clear all
         </PButton>
       ) : null}

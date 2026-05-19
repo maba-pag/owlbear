@@ -284,8 +284,9 @@ function KanbanBoardContent({
           ref={filterToggleRef}
           data-testid="filter-toggle"
           data-pds-exception="filter-toggle"
-          className="icon-button"
+          className="kanban-filter-toggle"
           variant="secondary"
+          compact
           onClick={() => setPanelOpen((open) => !open)}
         >
           Filters
@@ -299,7 +300,7 @@ function KanbanBoardContent({
           {filterAnnouncement}
         </span>
         {hasActiveFilters ? (
-          <span data-testid="filter-result-count">
+          <span className="kanban-filter-count" data-testid="filter-result-count">
             {filteredTasks.length} / {tasks.length} tasks
           </span>
         ) : null}
@@ -321,10 +322,7 @@ function KanbanBoardContent({
         className="kanban-columns"
         // inline-justified: grid column count is runtime-driven by board status count.
         style={{
-          display: 'grid',
-          gap: 'var(--p-spacing-static-md)',
-          overflowX: 'auto',
-          gridTemplateColumns: `repeat(${board.statuses.length}, minmax(200px, 1fr))`,
+          gridTemplateColumns: `repeat(${board.statuses.length}, minmax(var(--kanban-column-min), 1fr))`,
         }}
       >
         {board.statuses.map(({ name }) => {

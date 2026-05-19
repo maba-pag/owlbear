@@ -66,7 +66,6 @@ function Shell() {
   const [hasLoadedScan, setHasLoadedScan] = useState(() => !isLoading)
   const [isSidecarCollapsed, setIsSidecarCollapsed] = useState(false)
   const [isMobileViewport, setIsMobileViewport] = useState(false)
-  const [isTabletViewport, setIsTabletViewport] = useState(false)
   const [selectedTaskSubtab, setSelectedTaskSubtab] = useState<string | null>(null)
   const [detailValidationMessage, setDetailValidationMessage] = useState<string | null>(null)
   const [bannerError, setBannerError] = useState<{
@@ -142,10 +141,10 @@ function Shell() {
   ].join(' ')
 
   const statusBarClassName = [
-    'shell__status-bar sticky top-0 z-10 flex min-h-14 items-center',
-    'gap-[var(--p-spacing-static-sm)] border-b border-[var(--p-color-contrast-low)]',
+    'shell__status-bar sticky top-0 z-10 flex min-h-14 items-center justify-between',
+    'gap-[var(--p-spacing-static-md)] border-b border-[var(--p-color-contrast-low)]',
     'bg-[var(--p-color-surface)] px-[var(--p-spacing-static-md)]',
-    'max-[767px]:flex-wrap max-[767px]:gap-y-1 max-[767px]:py-1',
+    'max-[767px]:flex-wrap max-[767px]:items-start max-[767px]:gap-y-2 max-[767px]:py-2',
   ].join(' ')
 
   const navRailClassName = [
@@ -159,7 +158,7 @@ function Shell() {
   const sidecarClassName = [
     'shell__sidecar min-w-0 overflow-hidden border-t border-[var(--p-color-contrast-low)]',
     'md:border-t-0 md:border-l md:border-[var(--p-color-contrast-low)]',
-    isTabletViewport ? 'w-12' : 'w-auto',
+    'w-auto',
   ].join(' ')
 
   useEffect(() => {
@@ -167,7 +166,6 @@ function Shell() {
     const handleViewportChange = () => {
       const mobileViewport = window.innerWidth <= 767 || mediaQuery.matches
       setIsMobileViewport(mobileViewport)
-      setIsTabletViewport(window.innerWidth >= 768 && window.innerWidth <= 1023)
     }
 
     handleViewportChange()
@@ -231,50 +229,67 @@ function Shell() {
         className={statusBarClassName}
         data-region="status-bar"
       >
-        <PHeading ref={syncHeadingTagAttr('h1')} tag="h1" className="shell__product-identity min-w-0 break-words">
-          OwlBear Cockpit
-        </PHeading>
-        <span data-testid="traffic-light" data-health={statusHealth} />
-        <span data-testid="task-count" />
-        {hasLoadedScan && !scanError ? (
-          <HealthBadge
-            items={normalizedItems}
-          />
-        ) : null}
-        {hasLoadedScan && !scanError ? (
-          <RepairPanel
-            corruptionCount={normalizedItems.length}
-            files={normalizedItems}
-            onSuccess={refetch}
-          />
-        ) : null}
-        <CleanupPanel onSuccess={refetchTasks} />
-        {scanError ? (
-          <>
-            <span data-testid="scan-error" data-health="error" role="status">
-              Scan failed: {scanError.message}
+        <div className="shell__brand-lockup">
+          <PHeading
+            ref={syncHeadingTagAttr('h1', 'medium')}
+            size="medium"
+            tag="h1"
+            className="shell__product-identity min-w-0 break-words"
+          >
+            OwlBear Cockpit
+          </PHeading>
+          <span className="shell__brand-subtitle">Command center</span>
+        </div>
+        <div className="shell__command-strip" aria-label="Cockpit status and actions">
+          <div className="shell__status-cluster" aria-label="System status">
+            <span className="shell__traffic-light" data-testid="traffic-light" data-health={statusHealth} />
+            <span className="shell__task-count" data-testid="task-count">{tasks.length} tasks</span>
+            {hasLoadedScan && !scanError ? (
+              <HealthBadge
+                items={normalizedItems}
+              />
+            ) : null}
+            {scanError ? (
+              <span className="shell__status-error" data-testid="scan-error" data-health="error" role="status">
+                Scan failed: {scanError.message}
+              </span>
+            ) : null}
+            {scanError ? (
+              <PButton
+                type="button"
+                data-testid="scan-retry"
+                variant="secondary"
+                compact
+                onClick={refetch}
+              >
+                Retry scan
+              </PButton>
+            ) : null}
+            <DRStatusIndicator
+              count={pendingDRCount}
+              items={pendingDRItems}
+              onItemClick={setSelectedDRId}
+            />
+          </div>
+          <div className="shell__action-cluster" aria-label="Maintenance actions">
+            {hasLoadedScan && !scanError ? (
+              <RepairPanel
+                corruptionCount={normalizedItems.length}
+                files={normalizedItems}
+                onSuccess={refetch}
+              />
+            ) : null}
+            <CleanupPanel onSuccess={refetchTasks} />
+          </div>
+          <div className="shell__utility-cluster" aria-label="View settings">
+            <ThemeToggle />
+          </div>
+          {pendingDRError ? (
+            <span className="shell__status-error" data-testid="dr-polling-error" role="status">
+              {pendingDRError.message}
             </span>
-            <PButton
-              type="button"
-              data-testid="scan-retry"
-              variant="secondary"
-              onClick={refetch}
-            >
-              Retry scan
-            </PButton>
-          </>
-        ) : null}
-        <DRStatusIndicator
-          count={pendingDRCount}
-          items={pendingDRItems}
-          onItemClick={setSelectedDRId}
-        />
-        <ThemeToggle />
-        {pendingDRError ? (
-          <span data-testid="dr-polling-error" role="status">
-            {pendingDRError.message}
-          </span>
-        ) : null}
+          ) : null}
+        </div>
       </header>
       <nav
         className={navRailClassName}
@@ -328,13 +343,14 @@ function Shell() {
       >
         <button
           type="button"
-          className="icon-button inline-flex items-center px-3 py-1"
+          className="shell__sidecar-toggle icon-button"
           data-testid="sidecar-collapse"
           aria-expanded={!isSidecarCollapsed}
+          aria-label={isSidecarCollapsed ? 'Expand sidecar' : 'Collapse sidecar'}
           aria-controls="shell-sidecar-content"
           onClick={() => setIsSidecarCollapsed((current) => !current)}
         >
-          {isSidecarCollapsed ? 'Expand sidecar' : 'Collapse sidecar'}
+          {isSidecarCollapsed ? 'Show' : 'Hide'}
         </button>
         {isMobileViewport ? (
           <p-sheet

@@ -222,6 +222,7 @@ export default function RepairPanel({ corruptionCount, onSuccess, files = [] }: 
     <PButton
       type="button"
       data-testid="repair-button"
+      compact
       onClick={() => requestRepair(corruptionCount)}
     >
       Repair

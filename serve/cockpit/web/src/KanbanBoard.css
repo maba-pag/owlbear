@@ -1,15 +1,39 @@
 .kanban-board {
+  --kanban-column-min: clamp(240px, 18vw, 292px);
+
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: var(--p-spacing-static-md);
+  gap: var(--p-spacing-static-sm);
   min-height: 0;
   height: 100%;
+  box-sizing: border-box;
+  padding: var(--p-spacing-static-md);
 }
 
 .kanban-filter-row {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: var(--p-spacing-static-xs);
+  min-height: 34px;
+  flex-wrap: wrap;
+}
+
+.kanban-filter-toggle {
+  max-width: fit-content;
+}
+
+.kanban-filter-count {
+  padding: 2px 8px;
+  border: 1px solid var(--p-color-contrast-low);
+  border-radius: var(--p-radius-full);
+  background: var(--p-color-frosted-soft);
+  color: var(--p-color-primary);
+  font-size: var(--p-typescale-xs);
+  font-weight: var(--p-font-weight-semibold);
+  line-height: var(--p-leading-normal);
+  white-space: nowrap;
 }
 
 .kanban-live-region {
@@ -20,10 +44,12 @@
 .kanban-columns {
   display: grid;
   gap: var(--p-spacing-static-md);
-  padding: var(--p-spacing-static-md);
+  padding: 0 0 var(--p-spacing-static-xs);
   overflow-x: auto;
+  overflow-y: hidden;
   flex: 1;
   min-height: 0;
+  scrollbar-gutter: stable;
 }
 
 .kanban-context-menu {
@@ -31,4 +57,12 @@
   box-shadow: var(--p-shadow-md);
   border-radius: var(--p-radius-md);
   padding: 4px;
+}
+
+@media (max-width: 767px) {
+  .kanban-board {
+    --kanban-column-min: min(78vw, 300px);
+
+    padding: var(--p-spacing-static-sm);
+  }
 }
