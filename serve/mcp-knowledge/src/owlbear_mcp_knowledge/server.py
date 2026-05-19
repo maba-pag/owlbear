@@ -1279,12 +1279,12 @@ async def get_next_batch(ctx: Context, limit: int = 10) -> list[EnrichmentChunk]
         {
             "chunk_id": row[0],
             "text": row[1],
-            "doc_title": row[2],
+            "doc_title": row[2] if isinstance(row[2], str) else "",
             "section_path": _extract_section_path(row[3]),
-            "source_name": row[4],
+            "source_name": row[4] if isinstance(row[4], str) else "",
             "document_id": row[5],
             "source_id": row[6],
-            "scope": row[7],
+            "scope": row[7] if isinstance(row[7], str) and row[7] else "global",
         }
         for row in rows
     ]

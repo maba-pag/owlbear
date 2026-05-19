@@ -607,6 +607,44 @@ async def test_get_next_batch_rejects_non_positive_limits_without_claiming(conn:
 
 
 @pytest.mark.asyncio
+async def test_get_next_batch_normalizes_nullable_string_fields(conn: sqlite3.Connection) -> None:
+    source_id = _insert_source(conn, "Source")
+    document_id = uuid.uuid4().hex
+    chunk_id = uuid.uuid4().hex
+    now = _now()
+    conn.execute(
+        """
+        INSERT INTO documents (id, title, content, metadata, created_at, scope, source_id)
+        VALUES (?, NULL, 'content', '{}', ?, NULL, ?)
+        """,
+        (document_id, now, source_id),
+    )
+    conn.execute(
+        """
+        INSERT INTO chunks (id, document_id, chunk_index, content, metadata, created_at, scope, enrichment_state)
+        VALUES (?, ?, 0, 'chunk text', '{}', ?, NULL, 'pending')
+        """,
+        (chunk_id, document_id, now),
+    )
+    conn.commit()
+
+    batch = await get_next_batch(_ctx(conn), limit=10)
+
+    assert batch == [
+        {
+            "chunk_id": chunk_id,
+            "text": "chunk text",
+            "doc_title": "",
+            "section_path": None,
+            "source_name": "Source",
+            "document_id": document_id,
+            "source_id": source_id,
+            "scope": "global",
+        }
+    ]
+
+
+@pytest.mark.asyncio
 async def test_get_next_batch_skips_disabled_sources(conn: sqlite3.Connection) -> None:
     source_id = _insert_source(conn, "Source")
     conn.execute("UPDATE knowledge_sources SET enabled = 0 WHERE id = ?", (source_id,))
