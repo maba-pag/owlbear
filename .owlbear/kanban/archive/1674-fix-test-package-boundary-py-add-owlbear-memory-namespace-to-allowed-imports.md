@@ -1,10 +1,10 @@
 ---
 id: 1674
 title: 'Fix test_package_boundary.py: add owlbear_memory namespace to ALLOWED_IMPORTS'
-status: docs
+status: archived
 priority: needed
 created: 2026-05-19T06:27:15.486710+02:00
-updated: 2026-05-19T09:26:58.437364+02:00
+updated: 2026-05-19T10:36:16.602369+02:00
 tags:
   - phase-2
   - backend
@@ -23,7 +23,7 @@ proof_bundle: existing
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Scope
@@ -147,3 +147,44 @@ Post-task reflection:
 
 ## Observations
 - The supplementary superset checks at `tests/test_package_boundary_1674.py:87`, `tests/test_package_boundary_1674.py:94`, and `tests/test_package_boundary_1674.py:101` are redundant with the equality assertions, but they are harmless.
+
+[[2026-05-19T10:07:59+02:00]]
+## Docs Gate
+
+### Checklist
+
+| Item | Result | Evidence |
+|------|--------|----------|
+| 1. README Verification | N/A | Changed files: `tests/test_package_boundary.py`, `tests/test_package_boundary_1674.py`. Both are root test files tagged `type:test`. Convention mapping (`serve/{pkg}/src/**` → README) does not apply. No README documents ALLOWED_IMPORTS or boundary test contents. |
+| 2. External Attribution | N/A | Pure internal refactor — updating boundary test to reflect package extraction #1668. No external sources consulted. |
+| 3. Research Doc | N/A | No research artifact exists for this task. |
+| 4. Deletion Detection | N/A | No files deleted — one file edited, one added. No orphaned references possible. |
+
+### Files Updated
+None — no docs impact.
+
+### Scratch Cleanup
+Clean — `.owlbear/scratch/1674-pytest-output.txt` and `.owlbear/scratch/1674-ruff-output.txt` already removed prior to this gate.
+
+[[2026-05-19T10:36:16+02:00]]
+## Audit
+
+### Regression Detection
+quality-runner full report: 5187 passed, 20 failed (all pre-existing in unrelated domains: test_cockpit_view FileNotFoundError, test_server TypeError, test_engine_accessor_migration AssertionError), 14 skipped, lint clean. No regressions attributable to this task.
+
+### Intent Verification
+Changed files: `tests/test_package_boundary.py` (edited), `tests/test_package_boundary_1674.py` (added). Both stay within test infrastructure domain. Implementation matches stated purpose: boundary test update to reflect memory package extraction (#1668). No extraneous scope.
+
+### Architect Quality
+Score: 4/5. AC lines were specific and verifiable (exact dict values). Reviewer identified a proof-assertibility gap on AC1-3 which was addressed via test-writer retry. Architect correctly elevated item 3 from optional to mandatory based on codebase evidence.
+
+### Commit Integrity
+- `688038ab` — builder: `test: update package boundary imports for memory split (#1674, builder)`
+- `05a0f324` — test-writer: `test: add manifest-alignment assertions for #1674 retry (test-writer)`
+Both commits present and properly attributed.
+
+### Deduction Breakdown
+No deductions.
+
+### Confidence: 1.00
+### Action: ARCHIVE
