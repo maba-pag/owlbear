@@ -1,7 +1,6 @@
-import { lazy, type ComponentType } from 'react'
+import { type ComponentType } from 'react'
 import KanbanBoard, { type KanbanBoardProps } from './KanbanBoard'
-
-const DecisionsPage = lazy(() => import('./pages/DecisionsPage'))
+import DecisionsPage from './pages/DecisionsPage'
 
 export interface RouteConfigEntry {
   path: string
