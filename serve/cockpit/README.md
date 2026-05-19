@@ -413,6 +413,24 @@ Accessibility and responsive state after #1396:
   falsifiability gate tests proving button count and identity track `routeConfig`
   entries rather than any hardcoded set).
 
+- #1671 adds the Memory tab list view at `/memories`. `pages/MemoryTab.tsx` (default
+  export, lazy-loaded in `routeConfig` with `hasSidecar: false`) fetches `GET
+  /api/memories` on mount and on `document.visibilitychange` to visible (no SSE in V1).
+  Client-side intersection filtering supports state `p-multi-select[name="state-filter"]`
+  (initial: `[pending, curated, approved]`), category `p-multi-select[name="category-filter"]`
+  (initial: `[]`; AND logic within dimension), agent `p-select[name="agent-filter"]`
+  (initial: `""`; empty `scope_agents` passes unconditionally), and
+  `p-input-search[name="memory-search"]` (title + content case-insensitive substring).
+  Entries are sorted by state priority (`pending=0`, `curated=1`, `approved=2`,
+  `deleted=3`) then `created_at` asc. State badge is `p-tag[data-testid="memory-entry-state"]`
+  with `.variant` property (`pending="warning"`, `curated="info"`, `approved="success"`,
+  `deleted="secondary"`); no synthetic `setAttribute` calls — `variant` prop drives the
+  DOM property. `data-testid="clear-filters"` resets all controls to initial values.
+  `data-testid="parse-errors-warning"` appears when `parse_errors > 0`. Verified by
+  `serve/cockpit/web/src/__tests__/MemoryTab_1671.test.tsx` (74 tests — route mount,
+  fetch, sort, filter intersection, PDS option dual-render guard, state variant proof,
+  empty states, clear-filters per-control reset, and parse-error warning).
+
 ## Product Boundary
 
 Cockpit steering owns viewing, editing, moving/archiving, user blocks, health/admin,
