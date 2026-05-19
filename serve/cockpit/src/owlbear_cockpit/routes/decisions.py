@@ -97,7 +97,7 @@ def list_pending_decisions(decisions_dir: _DecisionsDir) -> PendingDRResponse:
     """List pending decision requests as cockpit-ready JSON."""
     pending_dir = decisions_dir / "pending"
     if not pending_dir.is_dir():
-        return {"count": 0, "items": []}
+        return PendingDRResponse(count=0, items=[])
 
     items: list[PendingDRItem] = []
     for path in sorted(pending_dir.glob("*.md")):
