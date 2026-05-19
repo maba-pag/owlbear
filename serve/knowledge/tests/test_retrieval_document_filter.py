@@ -58,6 +58,10 @@ class FakeGraphStore:
         _ = scopes
         return [self.seed]
 
+    def get_entities_by_chunk_ids(self, chunk_ids: set[str], *, scopes: list[str] | None = None) -> list[Entity]:
+        _ = scopes
+        return [self.seed] if self.seed.chunk_id in chunk_ids else []
+
     def get_entity(self, entity_id: str) -> Entity | None:
         entities = {
             self.seed.id: self.seed,
@@ -107,6 +111,11 @@ class MultiSeedGraphStore:
             ),
         ]
 
+    def get_entities_by_chunk_ids(self, chunk_ids: set[str], *, scopes: list[str] | None = None) -> list[Entity]:
+        _ = scopes
+        all_entities = self.list_entities()
+        return [e for e in all_entities if e.chunk_id in chunk_ids]
+
     def get_neighbors(
         self,
         entity_id: str,
@@ -154,6 +163,10 @@ class ImportanceGraphStore:
             )
         ]
 
+    def get_entities_by_chunk_ids(self, chunk_ids: set[str], *, scopes: list[str] | None = None) -> list[Entity]:
+        _ = scopes
+        return [e for e in self.list_entities() if e.chunk_id in chunk_ids]
+
     def get_neighbors(
         self,
         entity_id: str,
@@ -200,6 +213,10 @@ class IncomingEdgeGraphStore:
                 document_id="doc-a",
             )
         ]
+
+    def get_entities_by_chunk_ids(self, chunk_ids: set[str], *, scopes: list[str] | None = None) -> list[Entity]:
+        _ = scopes
+        return [e for e in self.list_entities() if e.chunk_id in chunk_ids]
 
     def get_neighbors(
         self,

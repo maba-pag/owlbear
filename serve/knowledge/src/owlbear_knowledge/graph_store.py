@@ -158,6 +158,29 @@ class GraphStore:
         rows = self._conn.execute(sql, params).fetchall()
         return [self._entity_from_row(r) for r in rows]
 
+    def get_entities_by_chunk_ids(
+        self,
+        chunk_ids: set[str],
+        scopes: list[str] | None = None,
+    ) -> list[Entity]:
+        """Return entities whose chunk_id is in *chunk_ids*."""
+        if not chunk_ids:
+            return []
+        if scopes is not None and len(scopes) == 0:
+            return []
+
+        params: list[str] = list(chunk_ids)
+        placeholders = ", ".join("?" for _ in chunk_ids)
+        cols = "id, name, entity_type, description, metadata, scope, document_id, chunk_id, importance"
+        sql = f"SELECT {cols} FROM entities WHERE chunk_id IN ({placeholders})"  # noqa: S608
+        if scopes is not None:
+            scope_placeholders = ", ".join("?" for _ in scopes)
+            sql += f" AND scope IN ({scope_placeholders})"
+            params.extend(scopes)
+
+        rows = self._conn.execute(sql, params).fetchall()
+        return [self._entity_from_row(r) for r in rows]
+
     def list_entities_for_document(
         self,
         document_id: str,

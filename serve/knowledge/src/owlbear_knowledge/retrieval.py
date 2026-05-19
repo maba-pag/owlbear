@@ -138,8 +138,7 @@ class GraphAugmentedRetriever:
             Matching :class:`Entity` objects.
         """
         chunk_ids = {chunk_id for chunk_id, _ in chunks}
-        all_entities = self._graph_store.list_entities(scopes=scopes)
-        return [e for e in all_entities if e.chunk_id is not None and e.chunk_id in chunk_ids]
+        return self._graph_store.get_entities_by_chunk_ids(chunk_ids, scopes=scopes)
 
     def _resolve_endpoint_entity(self, entity_id: str, seed: Entity, neighbor: Entity) -> Entity | None:
         """Resolve an edge endpoint from the known traversal entities or graph store."""

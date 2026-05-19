@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import uuid
 from datetime import UTC, datetime
 from typing import Literal
@@ -17,6 +18,16 @@ except ImportError:
 
 COLLECTION_NAME = "owlbear_vectors"
 DENSE_DIM = 1024
+
+
+def _cosine_similarity(a: list[float], b: list[float]) -> float:
+    """Compute cosine similarity between two vectors."""
+    dot = sum(x * y for x, y in zip(a, b, strict=True))
+    norm_a = math.sqrt(sum(x * x for x in a))
+    norm_b = math.sqrt(sum(x * x for x in b))
+    if norm_a == 0 or norm_b == 0:
+        return 0.0
+    return dot / (norm_a * norm_b)
 
 
 def _point_id(entity_or_doc_id: str) -> str:
@@ -196,7 +207,12 @@ class QdrantVectorStore:
         top_k: int,
         query_filter: object | None,
     ) -> list[tuple[str, float]]:
-        """Run Qdrant prefetch+RRF hybrid search and return normalized (id, score) pairs."""
+        """Run Qdrant prefetch+RRF hybrid search with absolute cosine scoring.
+
+        Results are ordered by hybrid ranking quality (RRF + optional ColBERT
+        rerank) but scored by dense cosine similarity — an absolute metric
+        suitable for threshold filtering.
+        """
         assert query_embedding.sparse is not None  # guaranteed by caller
         dense_prefetch = qmodels.Prefetch(
             query=query_embedding.dense,
@@ -239,6 +255,7 @@ class QdrantVectorStore:
                 using="colbert",
                 limit=top_k,
                 with_payload=True,
+                with_vectors=["dense"],
             )
         else:
             response = self._client.query_points(
@@ -248,18 +265,24 @@ class QdrantVectorStore:
                 limit=top_k,
                 query_filter=query_filter,
                 with_payload=True,
+                with_vectors=["dense"],
             )
-        raw = [
-            (point.payload["entity_or_doc_id"], point.score)  # type: ignore[index]
-            for point in response.points
-        ]
-        if not raw:
-            return raw
-        scores = [s for _, s in raw]
-        min_s, max_s = min(scores), max(scores)
-        if max_s == min_s:
-            return [(pid, 1.0) for pid, _ in raw]
-        return [(pid, (s - min_s) / (max_s - min_s)) for pid, s in raw]
+
+        # Score each result by dense cosine similarity (absolute quality metric)
+        # while preserving hybrid ranking order.
+        results: list[tuple[str, float]] = []
+        for point in response.points:
+            doc_id = point.payload["entity_or_doc_id"]  # type: ignore[index]
+            stored_dense = (  # type: ignore[union-attr]
+                point.vector.get("dense") if isinstance(point.vector, dict) else None
+            )
+            if stored_dense is not None:
+                score = _cosine_similarity(query_embedding.dense, stored_dense)
+            else:
+                # Fallback: use normalized hybrid score if dense vector unavailable
+                score = point.score if point.score is not None else 0.0
+            results.append((doc_id, score))
+        return results
 
     def delete_embedding(self, entity_or_doc_id: str) -> bool:
         """Delete the embedding for *entity_or_doc_id*.
