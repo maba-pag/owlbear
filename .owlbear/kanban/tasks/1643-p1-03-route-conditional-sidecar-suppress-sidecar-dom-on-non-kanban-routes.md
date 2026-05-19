@@ -4,7 +4,7 @@ title: 'P1-03: Route-conditional sidecar — suppress sidecar DOM on non-kanban 
 status: in-progress
 priority: needed
 created: 2026-05-18T00:49:27.343819+02:00
-updated: 2026-05-19T10:25:15.193864+02:00
+updated: 2026-05-19T12:20:42.582411+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -28,7 +28,7 @@ ac:
 proof_bundle: behavioral
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-19T12:20:42.582411+02:00
 archival_reason:
 archival_refs: []
 ---
@@ -166,3 +166,47 @@ N/A — client-side conditional rendering. React Router handles unknown routes (
 - Pre-existing regression: ac2 happy remove + ac2 edge preserve-collapsed now fail with "expected <aside ...> to be null" — AC2 was marked PASS in the reviewer's evidence table (Shell.sidecar-conditional_1643.test.tsx:82-114), so this is a regression that emerged between the review verdict and the retry assignment. The builder must investigate and resolve the AC2 regression in addition to the now-passing CSS coverage.
 - Lint: clean (ESLint 0 violations, pre-commit passed).
 - Commit: 229b1c1c (test: add AC3 CSS regression tests for no-sidecar grid contract (#1643, test-writer))
+
+[[2026-05-19T11:40:45+02:00]]
+builder crashed (unstructured output): found unrelated parse error in KanbanBoard.tsx blocking quality verification. Releasing claim before retry.
+
+[[2026-05-19T12:03:16+02:00]]
+## Builder Notes
+- Implementation: updated serve/cockpit/web/src/routes.ts to eager-load DecisionsPage (removed React.lazy route loading for /decisions).
+- Root cause fixed: lazy route transition kept prior UI during navigation test timing, leaving sidecar DOM visible immediately after / -> /decisions click; eager load removes suspense delay so sidecar suppression applies immediately.
+- Tests (RED -> GREEN):
+  - RED verification (quality-runner): serve/cockpit/web/src/__tests__/Shell.sidecar-conditional_1643.test.tsx -> 5 passed, 2 failed (ac2 remove, ac2 preserve-collapsed).
+  - GREEN verification (quality-runner): serve/cockpit/web/src/__tests__/Shell.sidecar-conditional_1643.test.tsx -> 7 passed, 0 failed.
+  - Module baseline verification (quality-runner): serve/cockpit/web/src/__tests__/Shell.test.tsx -> 18 passed, 0 failed.
+  - Combined scoped verification (quality-runner): 25 passed, 0 failed.
+- Lint status: clean (ESLint violations: none).
+- Coverage: src/routes.ts 100% (quality-runner scoped coverage run).
+- Commit: 3f4357d9 (fix: eager-load decisions route for sidecar suppression (#1643, builder)).
+
+[[2026-05-19T12:20:03+02:00]]
+## Review Evidence
+- Verdict: FAIL
+- FAIL #1643 -> in-progress | 1643 AC1-AC3 now map cleanly, but the fix regresses the existing `/decisions` lazy-loading contract in `routes.ts`.
+- AC evidence map:
+
+| AC Line | Code Evidence | Test Evidence | Status |
+|---|---|---|---|
+| AC1 | serve/cockpit/web/src/routes.ts:10,21,25; serve/cockpit/web/src/Shell.tsx:276,279,501 | serve/cockpit/web/src/__tests__/Shell.sidecar-conditional_1643.test.tsx:93; serve/cockpit/web/src/__tests__/Shell.test.tsx:110 | PASS |
+| AC2 | serve/cockpit/web/src/Shell.tsx:279,343,501 | serve/cockpit/web/src/__tests__/Shell.sidecar-conditional_1643.test.tsx:100,120 | PASS |
+| AC3 | serve/cockpit/web/src/Shell.tsx:343; serve/cockpit/web/src/Shell.css:462,463,466 | serve/cockpit/web/src/__tests__/Shell.sidecar-conditional_1643.test.tsx:147,156 | PASS |
+
+- Blocking findings:
+
+| # | AC Line | Finding | Evidence | Route |
+|---|---|---|---|---|
+| 1 | Adjacent contract regression | The builder fixed 1643 by changing `/decisions` from `React.lazy(...)` to an eager import, which breaks the established lazy-loading contract for that route. Task-local sidecar tests still pass, but adjacent proof and runtime verification now fail. This is an implementation defect in the changed source, not a test gap. | serve/cockpit/web/src/routes.ts:3,24; serve/cockpit/web/src/__tests__/routes.lazy-loading_1644.test.tsx:22,33; quality-runner scoped verification: `Shell.sidecar-conditional_1643.test.tsx` PASS 7/7, `routes.lazy-loading_1644.test.tsx` FAIL 0/2 with `Expected Symbol(react.lazy), got undefined` and `Expected ≥2 JS chunks, found 1` | in-progress |
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Restore `/decisions` lazy loading while preserving the 1643 sidecar behavior, so `routeConfig` satisfies the existing lazy-route contract and the sidecar removal tests still pass under navigation. | serve/cockpit/web/src/routes.ts; serve/cockpit/web/src/Shell.tsx; serve/cockpit/web/src/__tests__/Shell.sidecar-conditional_1643.test.tsx; serve/cockpit/web/src/__tests__/routes.lazy-loading_1644.test.tsx | Blocking finding #1 |
+
+## Observations
+- The current 1643 proof is otherwise sufficient: AC3 now has direct CSS regression checks and the sidecar DOM/state behavior is covered.
+- Non-blocking: there is still no task-local proof for the explicit `hasSidecar: true` branch; current coverage exercises `false`, default `undefined`, and unknown-path fallback only.
+- Challenger review agreed the regression is real but clarified that cycle 2 does not force `backlog`; `in-progress` is the correct route for this implementation defect.
