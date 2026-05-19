@@ -51,6 +51,7 @@ interface InlineNotificationHost extends HTMLElement {
 }
 
 export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalProps) {
+  const [snapshotDR] = useState<PendingDRWithBody | null>(() => dr)
   const [response, setResponse] = useState<ResolveDecision>('')
   const [notes, setNotes] = useState('')
   const [error, setError] = useState<ResolveErrorState | null>(null)
@@ -70,7 +71,7 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
   }
 
   async function handleSubmit(retrying = false) {
-    if (!dr || isSubmitting) {
+    if (!snapshotDR || isSubmitting) {
       return
     }
     if (!retrying) {
@@ -78,7 +79,7 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
     }
     setIsSubmitting(true)
     try {
-      await resolveDR(dr.id, {
+      await resolveDR(snapshotDR.id, {
         response: response as 'approved' | 'rejected' | 'needs-info',
         notes,
       })
@@ -113,7 +114,7 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
     setError(null)
   }
 
-  if (!dr) return null
+  if (!snapshotDR) return null
 
   useEffect(() => {
     previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
@@ -235,8 +236,8 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
       onKeyDown={handleModalKeyDown}
       aria={{ 'aria-label': 'Resolve decision request' }}
     >
-      <PHeading ref={setHeadingTagAttr} tag="h2">{dr.title}</PHeading>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>{dr.body ?? ''}</ReactMarkdown>
+      <PHeading ref={setHeadingTagAttr} tag="h2">{snapshotDR.title}</PHeading>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>{snapshotDR.body ?? ''}</ReactMarkdown>
 
       <fieldset data-testid="response-selector">
         <legend>Response</legend>
