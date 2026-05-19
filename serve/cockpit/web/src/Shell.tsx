@@ -1,5 +1,5 @@
-import { Suspense, useRef, useEffect, useState } from 'react'
-import { Routes, Route, useLocation, useNavigate } from 'react-router'
+import { Suspense, useRef, useEffect, useMemo, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   PBanner,
@@ -9,14 +9,13 @@ import {
   PFlyout,
   PHeading,
   PIcon,
-  PTabsBar,
+  PSheet,
   PToast,
   useToastManager,
 } from '@porsche-design-system/components-react'
 import type { IconName } from '@porsche-design-system/components-react'
 import ActivityTab from './components/ActivityTab'
 import CleanupPanel from './components/CleanupPanel'
-import DecisionViewport from './components/DecisionViewport'
 import DetailTab from './components/DetailTab'
 import DRStatusIndicator from './components/DRStatusIndicator'
 import HealthBadge, { type ScanItem as HealthBadgeItem } from './components/HealthBadge'
@@ -63,6 +62,7 @@ function Shell() {
   const navigate = useNavigate()
   const showRuntimeHeadingMirror = typeof navigator !== 'undefined' && !/jsdom/i.test(navigator.userAgent)
   const toastManager = useToastManager()
+  const toastManagerRef = useRef(toastManager)
   const {
     board,
     tasks,
@@ -78,7 +78,6 @@ function Shell() {
   const {
     count: pendingDRCount,
     items: pendingDRItems,
-    isLoading: pendingDRLoading,
     error: pendingDRError,
     refetch: refetchPendingDRs,
     setSelectedDRId,
@@ -105,36 +104,38 @@ function Shell() {
     state: 'error' | 'warning'
   } | null>(null)
   const tabsRef = useRef<HTMLElement>(null)
-  const navTabsRef = useRef<HTMLElement>(null)
   const detailRef = useRef<HTMLDivElement>(null)
   const activityRef = useRef<HTMLDivElement>(null)
   const toastMockClearedRef = useRef(false)
 
-  const kanbanProps = {
-    board,
-    tasks,
-    loading,
-    error,
-    refetchTasks,
-    onSelectTask: (taskId: number) => {
-      select(taskId)
-      setDetailValidationMessage(null)
-    },
-    onMutationError: (heading: string, description: string, state: 'error' | 'warning') => {
-      setBannerError({ heading, description, state })
-    },
-    onMutationSuccess: (message?: string) => {
-      setBannerError(null)
-      if (message) {
-        toastManager.addMessage({
-          text: message,
-          state: 'success',
-        })
-      }
-    },
-    selectedId: selectedTaskId,
-    pendingDRIds: new Set(pendingDRItems.map((dr) => dr.task_id)),
-  }
+  const kanbanProps = useMemo(
+    () => ({
+      board,
+      tasks,
+      loading,
+      error,
+      refetchTasks,
+      onSelectTask: (taskId: number) => {
+        select(taskId)
+        setDetailValidationMessage(null)
+      },
+      onMutationError: (heading: string, description: string, state: 'error' | 'warning') => {
+        setBannerError({ heading, description, state })
+      },
+      onMutationSuccess: (message?: string) => {
+        setBannerError(null)
+        if (message) {
+          toastManagerRef.current.addMessage({
+            text: message,
+            state: 'success',
+          })
+        }
+      },
+      selectedId: selectedTaskId,
+      pendingDRIds: new Set(pendingDRItems.map((dr) => dr.task_id)),
+    }),
+    [board, error, loading, pendingDRItems, refetchTasks, select, selectedTaskId, tasks],
+  )
 
   // Compute active nav index from pathname
   const normalizedPathname = normalizeRoutePath(pathname)
@@ -142,13 +143,23 @@ function Shell() {
     (route) => normalizeRoutePath(route.path) === normalizedPathname,
   )
   const matchedRoute = activeNavIndex >= 0 ? routeConfig[activeNavIndex] : undefined
+  const MatchedRouteComponent = matchedRoute?.component
   const hasSidecar = matchedRoute?.hasSidecar !== false
+  const isTaskInspectorOpen = hasSidecar && selectedTaskId !== null
+  const routeElement = useMemo(
+    () => (MatchedRouteComponent ? <MatchedRouteComponent {...kanbanProps} /> : null),
+    [MatchedRouteComponent, kanbanProps],
+  )
 
   useEffect(() => {
     if (!isLoading) {
       setHasLoadedScan(true)
     }
   }, [isLoading])
+
+  useEffect(() => {
+    toastManagerRef.current = toastManager
+  }, [toastManager])
 
   useEffect(() => {
     if (toastMockClearedRef.current) {
@@ -230,41 +241,19 @@ function Shell() {
     }
   }, [])
 
-  useEffect(() => {
-    const navTabs = navTabsRef.current
-    if (!navTabs) return
-    const onNavTabChange = (e: Event) => {
-      const index = (e as CustomEvent<{ activeTabIndex: number }>).detail.activeTabIndex
-      const route = routeConfig[index]
-      if (route) {
-        navigate(route.path)
-      }
-    }
-    navTabs.addEventListener('tabChange', onNavTabChange)
-    return () => navTabs.removeEventListener('tabChange', onNavTabChange)
-  }, [navigate])
-
-  // Sidecar width (no PDS utility exists for this specific clamp)
-  const sidecarWidth = isSidecarCollapsed
-    ? '48px'
-    : 'clamp(320px, 24vw, 380px)'
-
-  const gridCols = hasSidecar
-    ? `grid-cols-[1fr_${sidecarWidth}]`
-    : 'grid-cols-[1fr]'
-
-  const mobileGridCols = hasSidecar
-    ? 'max-md:grid-cols-[1fr] max-md:grid-rows-[auto_auto_1fr_minmax(0,0.7fr)]'
-    : 'max-md:grid-cols-[1fr] max-md:grid-rows-[auto_auto_1fr]'
+  const shellColumnsClass = !hasSidecar || !isTaskInspectorOpen
+    ? 'md:[grid-template-columns:220px_minmax(0,1fr)_0px]'
+    : isSidecarCollapsed
+      ? 'md:[grid-template-columns:220px_minmax(0,1fr)_48px]'
+      : 'md:[grid-template-columns:220px_minmax(0,1fr)_clamp(320px,24vw,380px)]'
 
   return (
     <div
       className={[
-        'shell grid h-screen min-w-0 grid-rows-[auto_auto_1fr] bg-canvas text-primary',
-        "font-[family-name:'Porsche_Next','Arial_Narrow',Arial,sans-serif]",
-        gridCols,
-        mobileGridCols,
+        'shell grid h-screen min-w-0 bg-canvas font-sans text-primary',
+        'grid-rows-[auto_auto_minmax(0,1fr)] md:grid-rows-[auto_minmax(0,1fr)]',
         'transition-[grid-template-columns] duration-sm',
+        shellColumnsClass,
       ].join(' ')}
       data-sidecar-collapsed={isSidecarCollapsed || undefined}
       data-no-sidecar={!hasSidecar || undefined}
@@ -274,26 +263,28 @@ function Shell() {
       {/* ─── Header ──────────────────────────────────────────────────────────── */}
       <header
         className={[
-          'col-span-full flex min-h-14 items-center justify-between',
-          'gap-static-md border-b border-contrast-low bg-surface px-static-md',
-          'max-md:flex-wrap max-md:items-start max-md:gap-y-2 max-md:py-2',
+          'sticky top-0 z-20 col-span-full grid min-h-14 min-w-0',
+          'grid-cols-[minmax(0,1fr)_auto] items-center gap-static-sm',
+          'border-b border-contrast-low bg-surface px-static-md py-static-sm',
         ].join(' ')}
         data-region="status-bar"
       >
-        <div className="flex items-baseline gap-static-sm min-w-0">
-          <PHeading
-            ref={syncHeadingTagAttr('h1', 'medium')}
-            size="medium"
-            tag="h1"
-            className="min-w-0 break-words"
+        <h1 className="m-0 min-w-0 truncate text-sm font-semibold leading-tight text-primary">
+          <a
+            href="/"
+            className="focus-text block truncate text-primary no-underline"
+            onClick={(event) => {
+              event.preventDefault()
+              navigate('/')
+            }}
           >
             OwlBear Cockpit
-          </PHeading>
-        </div>
+          </a>
+        </h1>
 
-        <div className="flex flex-1 items-center justify-end gap-static-md" aria-label="Cockpit status and actions">
+        <div className="flex min-w-0 items-center justify-end gap-static-sm max-md:gap-static-xs" aria-label="Cockpit status and actions">
           {/* Status cluster */}
-          <div className="flex items-center gap-static-xs border-r border-contrast-low pr-static-sm" aria-label="System status">
+          <div className="flex min-w-0 items-center gap-static-xs border-r border-contrast-low pr-static-sm max-md:pr-static-xs" aria-label="System status">
             <span
               className={[
                 'size-2.5 flex-none rounded-full',
@@ -305,13 +296,15 @@ function Shell() {
               data-health={statusHealth}
             />
             <span
-              className="whitespace-nowrap rounded-full border border-contrast-low bg-frosted-soft px-2 py-0.5 text-xs font-semibold"
+              className="hidden whitespace-nowrap rounded-full border border-contrast-low bg-frosted-soft px-2 py-0.5 text-xs font-semibold sm:inline-flex"
               data-testid="task-count"
             >
               {tasks.length} tasks
             </span>
             {hasLoadedScan && !scanError ? (
-              <HealthBadge items={normalizedItems} />
+              <span className="hidden sm:inline-flex">
+                <HealthBadge items={normalizedItems} />
+              </span>
             ) : null}
             {scanError ? (
               <span className="text-xs text-error whitespace-nowrap" data-testid="scan-error" data-health="error" role="status">
@@ -336,56 +329,61 @@ function Shell() {
             />
           </div>
 
-          {/* Maintenance action */}
-          <div className="relative flex items-center gap-static-xs border-r border-contrast-low pr-static-sm" aria-label="Maintenance actions">
-            <PButtonPure
-              type="button"
-              icon="wrench"
-              hideLabel
-              data-testid="maintenance-menu-toggle"
-              aria-label="Maintenance actions"
-              aria-expanded={isMaintenanceOpen}
-              aria-controls="shell-maintenance-menu"
-              onClick={() => setIsMaintenanceOpen((c) => !c)}
-            >
-              Maintenance
-            </PButtonPure>
-            {normalizedItems.length > 0 ? (
-              <span className="absolute -top-1 -right-1 inline-flex size-4 items-center justify-center rounded-full bg-warning text-[10px] font-semibold leading-none border border-surface" aria-hidden="true">
-                {normalizedItems.length}
-              </span>
-            ) : null}
-            <PFlyout
-              open={isMaintenanceOpen}
-              onDismiss={() => setIsMaintenanceOpen(false)}
-              aria-label="Maintenance actions"
-            >
-              <div
-                id="shell-maintenance-menu"
-                data-testid="maintenance-menu"
-                className="flex flex-col gap-static-sm p-static-sm"
+          {isMobileViewport ? (
+            <div className="flex min-w-0 items-center border-r border-contrast-low pr-static-xs" aria-label="Cleanup actions">
+              <CleanupPanel compact onSuccess={refetchTasks} />
+            </div>
+          ) : (
+            <div className="relative flex min-w-0 items-center gap-static-xs border-r border-contrast-low pr-static-sm" aria-label="Maintenance actions">
+              <PButtonPure
+                type="button"
+                icon="wrench"
+                hideLabel
+                data-testid="maintenance-menu-toggle"
+                aria-label="Maintenance actions"
+                aria-expanded={isMaintenanceOpen}
+                aria-controls="shell-maintenance-menu"
+                onClick={() => setIsMaintenanceOpen((c) => !c)}
               >
-                <div className="flex items-center justify-between text-xs font-semibold uppercase text-contrast-high">
-                  <span>Maintenance</span>
-                  <span>{normalizedItems.length > 0 ? `${normalizedItems.length} issues` : 'Ready'}</span>
+                Maintenance
+              </PButtonPure>
+              {normalizedItems.length > 0 ? (
+                <span className="absolute -top-1 -right-1 inline-flex size-4 items-center justify-center rounded-full bg-warning text-[10px] font-semibold leading-none border border-surface" aria-hidden="true">
+                  {normalizedItems.length}
+                </span>
+              ) : null}
+              <PFlyout
+                open={isMaintenanceOpen}
+                onDismiss={() => setIsMaintenanceOpen(false)}
+                aria-label="Maintenance actions"
+              >
+                <div
+                  id="shell-maintenance-menu"
+                  data-testid="maintenance-menu"
+                  className="flex flex-col gap-static-sm p-static-sm"
+                >
+                  <div className="flex items-center justify-between text-xs font-semibold uppercase text-contrast-high">
+                    <span>Maintenance</span>
+                    <span>{normalizedItems.length > 0 ? `${normalizedItems.length} issues` : 'Ready'}</span>
+                  </div>
+                  <div className="flex flex-col gap-static-xs">
+                    {hasLoadedScan && !scanError ? (
+                      <RepairPanel
+                        corruptionCount={normalizedItems.length}
+                        files={normalizedItems}
+                        onSuccess={refetch}
+                      />
+                    ) : null}
+                  </div>
                 </div>
-                <div className="flex flex-col gap-static-xs">
-                  {hasLoadedScan && !scanError ? (
-                    <RepairPanel
-                      corruptionCount={normalizedItems.length}
-                      files={normalizedItems}
-                      onSuccess={refetch}
-                    />
-                  ) : null}
-                  <CleanupPanel onSuccess={refetchTasks} />
-                </div>
-              </div>
-            </PFlyout>
-          </div>
+              </PFlyout>
+              <CleanupPanel onSuccess={refetchTasks} />
+            </div>
+          )}
 
           {/* Theme toggle */}
           <div className="flex items-center" aria-label="View settings">
-            <ThemeToggle />
+            <ThemeToggle compact={isMobileViewport} />
           </div>
 
           {pendingDRError ? (
@@ -398,59 +396,70 @@ function Shell() {
 
       {/* ─── Navigation Bar ──────────────────────────────────────────────────── */}
       <nav
-        className="col-span-full flex items-center bg-surface border-b border-contrast-low px-static-md"
+        className={[
+          'z-10 flex min-w-0 border-b border-contrast-low bg-surface px-static-sm py-static-xs',
+          'md:col-start-1 md:row-start-2 md:min-h-0 md:flex-col md:gap-static-md',
+          'md:border-b-0 md:border-r md:p-static-md',
+        ].join(' ')}
         data-region="nav-rail"
         role="navigation"
         aria-label="Workspaces"
       >
-        <div aria-label="Workspace switcher">
-          <PTabsBar
-            ref={navTabsRef}
-            activeTabIndex={activeNavIndex >= 0 ? activeNavIndex : 0}
-          >
-            {routeConfig.map((route) => {
-              const isActive = normalizedPathname === normalizeRoutePath(route.path)
-              const isDecisions = route.icon === 'decisions'
-              const isMemory = route.icon === 'memory'
-              const badgeCount = isDecisions ? pendingDRCount : isMemory ? pendingMemoryCount : 0
-              const label = badgeCount > 0
-                ? `${route.label} (${badgeCount} pending)`
-                : route.label
-              return (
-                <button
-                  key={route.path}
-                  type="button"
-                  data-surface={route.icon}
-                  data-pds-exception={`nav-${route.icon}`}
-                  aria-current={isActive ? 'page' : undefined}
-                  aria-label={label}
-                  onClick={() => navigate(route.path)}
-                >
-                  <PIcon
-                    name={NAV_ICONS[route.icon] || 'grid'}
-                    size="small"
-                    className="mr-static-xs"
-                    aria-hidden="true"
-                  />
-                  {route.label}
-                  {badgeCount > 0 ? (
-                    <span
-                      data-testid="nav-badge"
-                      className="ml-static-xs inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-error px-1 text-[0.65rem] font-bold leading-none text-canvas"
-                    >
-                      {badgeCount}
-                    </span>
-                  ) : null}
-                </button>
-              )
-            })}
-          </PTabsBar>
+        <div className="flex min-w-0 gap-static-xs overflow-x-auto md:flex-col md:overflow-visible" aria-label="Workspace switcher">
+          {routeConfig.map((route) => {
+            const isActive = normalizedPathname === normalizeRoutePath(route.path)
+            const isDecisions = route.icon === 'decisions'
+            const isMemory = route.icon === 'memory'
+            const badgeCount = isDecisions ? pendingDRCount : isMemory ? pendingMemoryCount : 0
+            const label = badgeCount > 0
+              ? `${route.label} (${badgeCount} pending)`
+              : route.label
+            return (
+              <button
+                key={route.path}
+                type="button"
+                className={[
+                  'focus-text relative inline-flex h-10 min-w-10 flex-none items-center justify-center',
+                  'gap-static-xs rounded-full border px-static-sm text-sm font-semibold leading-none',
+                  'transition-colors duration-sm md:w-full md:justify-start md:px-static-md',
+                  isActive
+                    ? 'border-primary bg-primary text-canvas'
+                    : 'border-transparent bg-frosted-soft text-primary hover:bg-frosted',
+                ].join(' ')}
+                data-surface={route.icon}
+                data-pds-exception={`nav-${route.icon}`}
+                aria-current={isActive ? 'page' : undefined}
+                aria-label={label}
+                onClick={() => navigate(route.path)}
+              >
+                <PIcon
+                  name={NAV_ICONS[route.icon] || 'grid'}
+                  color="inherit"
+                  size="small"
+                  aria-hidden="true"
+                />
+                <span className="max-sm:sr-only">{route.label}</span>
+                {badgeCount > 0 ? (
+                  <span
+                    data-testid="nav-badge"
+                    className={[
+                      'inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1',
+                      'text-[0.65rem] font-bold leading-none',
+                      isActive ? 'bg-surface text-primary' : 'bg-error text-canvas',
+                    ].join(' ')}
+                  >
+                    {badgeCount}
+                  </span>
+                ) : null}
+              </button>
+            )
+          })}
         </div>
       </nav>
 
       {/* ─── Main Workspace ──────────────────────────────────────────────────── */}
       <main
-        className="min-w-0 overflow-auto bg-canvas"
+        className="min-w-0 overflow-auto bg-canvas md:col-start-2 md:row-start-2"
         data-region="workspace"
         onClickCapture={() => {
           if (isMobileViewport && selectedTaskId === null && tasks.length === 1) {
@@ -461,7 +470,7 @@ function Shell() {
       >
         <Suspense fallback={<div data-testid="route-loading" />}>
           <AnimatePresence mode="wait">
-            {matchedRoute ? (
+            {routeElement ? (
               <motion.div
                 key={pathname}
                 initial={{ opacity: 0, y: 6 }}
@@ -470,18 +479,7 @@ function Shell() {
                 transition={{ duration: 0.18, ease: 'easeOut' }}
                 className="flex min-h-0 flex-1 flex-col"
               >
-                <Routes location={location}>
-                  {routeConfig.map((route) => {
-                    const RouteComponent = route.component
-                    return (
-                      <Route
-                        key={route.path}
-                        path={route.path}
-                        element={<RouteComponent {...kanbanProps} />}
-                      />
-                    )
-                  })}
-                </Routes>
+                {routeElement}
               </motion.div>
             ) : null}
           </AnimatePresence>
@@ -494,7 +492,12 @@ function Shell() {
           initial={{ opacity: 0, x: 24 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.22, ease: 'easeOut' }}
-          className="relative min-w-0 border-l border-contrast-low bg-surface max-md:border-l-0 max-md:border-t"
+          className={[
+            'contents',
+            'md:relative md:col-start-3 md:row-start-2 md:block md:min-w-0 md:overflow-hidden',
+            'md:border-l md:border-contrast-low md:bg-surface',
+            isTaskInspectorOpen ? '' : 'md:pointer-events-none md:border-l-0',
+          ].join(' ')}
           data-region="sidecar"
         >
           {/* Collapse toggle (desktop only) */}
@@ -524,8 +527,13 @@ function Shell() {
           </button>
 
           {isMobileViewport ? (
-            <p-sheet
-              open
+            <PSheet
+              open={isTaskInspectorOpen}
+              onDismiss={() => {
+                clear()
+                setSelectedTaskSubtab(null)
+                setDetailValidationMessage(null)
+              }}
               className="fixed inset-x-0 bottom-0 z-20 block max-h-[min(70vh,560px)] overflow-auto border-t border-contrast-low bg-surface md:hidden"
             >
               <div
@@ -542,13 +550,6 @@ function Shell() {
                     </PHeading>
                   )}
                 </section>
-                <PDivider />
-                <DecisionViewport
-                  items={pendingDRItems}
-                  isLoading={pendingDRLoading}
-                  error={pendingDRError}
-                  onItemClick={setSelectedDRId}
-                />
                 <PDivider />
                 <p-tabs ref={tabsRef}>
                   <p-tabs-item ref={(el: HTMLElement | null) => el?.setAttribute('label', 'Detail')}>
@@ -628,7 +629,7 @@ function Shell() {
                   </p-tabs-item>
                 </p-tabs>
               </div>
-            </p-sheet>
+            </PSheet>
           ) : (
             <div
               id="shell-sidecar-content"
@@ -640,13 +641,6 @@ function Shell() {
                   {selectedTaskHeading}
                 </PHeading>
               </section>
-              <PDivider />
-              <DecisionViewport
-                items={pendingDRItems}
-                isLoading={pendingDRLoading}
-                error={pendingDRError}
-                onItemClick={setSelectedDRId}
-              />
               <PDivider />
               <p-tabs ref={tabsRef}>
                 <p-tabs-item ref={(el: HTMLElement | null) => el?.setAttribute('label', 'Detail')}>
