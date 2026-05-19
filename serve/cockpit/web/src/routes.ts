@@ -7,6 +7,7 @@ export interface RouteConfigEntry {
   label: string
   icon: string
   component: ComponentType<KanbanBoardProps>
+  hasSidecar?: boolean
 }
 
 export const routeConfig: RouteConfigEntry[] = [
@@ -21,5 +22,6 @@ export const routeConfig: RouteConfigEntry[] = [
     label: 'Decisions',
     icon: 'decisions',
     component: DecisionsPage,
+    hasSidecar: false,
   },
 ]

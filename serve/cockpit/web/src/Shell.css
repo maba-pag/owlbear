@@ -302,3 +302,24 @@
 .icon-button:hover {
   background: var(--p-color-frosted);
 }
+
+.shell[data-no-sidecar] {
+  --shell-columns: var(--shell-rail-width) minmax(0, 1fr);
+
+  grid-template-areas:
+    'status-bar status-bar'
+    'nav-rail workspace'
+    'nav-rail workspace';
+}
+
+@media (max-width: 767px) {
+  .shell[data-no-sidecar] {
+    --shell-columns: minmax(0, 1fr);
+    --shell-rows: auto auto minmax(0, 1fr);
+
+    grid-template-areas:
+      'status-bar'
+      'nav-rail'
+      'workspace';
+  }
+}
