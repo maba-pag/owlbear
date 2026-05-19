@@ -1,10 +1,10 @@
 ---
 id: 1590
 title: Cockpit Visual Redesign — PDS v4 Foundation + Full Migration
-status: done
+status: archived
 priority: important
 created: 2026-05-16T03:28:48.217109+00:00
-updated: 2026-05-19T04:20:06.611276+02:00
+updated: 2026-05-19T04:31:44.330342+02:00
 tags:
   - frontend
   - pds
@@ -20,7 +20,7 @@ proof_bundle: skip
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Summary
@@ -297,3 +297,31 @@ No `.owlbear/scratch/1590-*` files existed.
 
 ### Verdict
 DONE #1590 -> done | docs gate passed (no-impact fast path)
+
+[[2026-05-19T04:31:44+02:00]]
+## Audit
+
+### Regression Detection
+Quality-runner full report: 2134 passed, 0 failed, 11 skipped. Lint clean (vitest exit 0, eslint exit 0). No regressions.
+
+### Intent Verification
+Umbrella coordination task. AC requires all child tasks (1591–1629) archived with allowed reasons. Independent `list_tasks(ids=[1591..1629])` confirms: all 39 children at `status=archived`; archival reasons observed: completed (24), deprecated (13), duplicate (2) — all within allowed set {completed, deprecated, duplicate}. Consolidation task #1629 archived with `completed` and `proof_bundle=critical`. Task stays within frontend domain, no extraneous scope.
+
+### Architect Quality
+Score: 4/5. AC is clear, specific, and verifiable via kanban state. One refinement cycle (added `duplicate` to allowed archival reasons) was appropriate and documented. Minor gap: initial AC missed a standard decomposition outcome.
+
+### Commit Integrity
+Non-implementation umbrella (proof_bundle=skip). No code deliverables to commit. Pipeline flow is properly documented through all stages.
+
+### Deduction Breakdown
+| Criterion | Deduction |
+|---|---|
+| Regression failures | 0 |
+| Intent mismatch | 0 |
+| Evidence integrity | 0 |
+| Lint violations | 0 |
+| AC quality (4/5) | 0 |
+| Missing reviewer evidence | 0 |
+
+### Confidence: 1.00
+### Action: ARCHIVE
