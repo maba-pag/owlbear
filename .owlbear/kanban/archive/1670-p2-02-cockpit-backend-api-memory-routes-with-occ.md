@@ -1,10 +1,10 @@
 ---
 id: 1670
 title: 'P2-02: Cockpit backend API — memory routes with OCC'
-status: done
+status: archived
 priority: needed
 created: 2026-05-18T17:43:36.416614+02:00
-updated: 2026-05-19T09:31:53.992147+02:00
+updated: 2026-05-19T10:06:39.199498+02:00
 tags:
   - phase-2
   - scope:cockpit
@@ -42,8 +42,8 @@ ac:
 proof_bundle: behavioral
 blocked: false
 block_reason:
-claimed_at: 2026-05-19T09:31:53.992147+02:00
-archival_reason:
+claimed_at:
+archival_reason: completed
 archival_refs: []
 ---
 Brief: see parent #1659 and `.owlbear/briefs/draft-cockpit-memory-tab/brief.md`
@@ -385,3 +385,30 @@ No follow-up tasks needed — ready for architecture review.
 
 ### Scratch Cleanup
 - No `1670-*` scratch files found.
+
+[[2026-05-19T10:06:39+02:00]]
+## Audit
+
+### Regression Detection
+quality-runner full report: cockpit domain tests 737 passed (excluding known pre-existing failures in test_cockpit_view.py, test_cockpit_mutation_api.py, test_cockpit_pds_build_compat.py, test_cockpit_react_compiler.py, test_cockpit_models.py — all confirmed pre-existing via git blame and pre-task checkout). Task-specific suite: 47/47 passed. mcp-memory domain: 6 failures confirmed from #1669 (not #1670). Lint: all task files clean (ruff check).
+
+### Intent Verification
+Changed files: `serve/cockpit/src/owlbear_cockpit/routes/memory.py`, `deps.py`, `main.py`, `pyproject.toml`, `serve/cockpit/README.md`, `.github/copilot-instructions.md`, `serve/mcp-memory/README.md`, `tests/test_cockpit_memory_routes_1670.py`. All within cockpit domain + docs. Implementation adds 4 memory API endpoints with OCC matching stated task purpose. No extraneous scope.
+
+### Architect Quality
+Score: 5/5. AC went through 2 architecture reviews with challenger refinement. Final 6 AC lines enumerate all fields, error codes, response shapes, and forwarding contract explicitly. Builder needed no improvisation; test-writer iterations were proof-coverage gaps, not AC ambiguity.
+
+### Commit Integrity
+- `57dca8af` test: add failing tests (#1670, test-writer)
+- `4be17bbd` feat: implement cockpit memory routes with OCC (#1670, builder)
+- `fcc292d0` fix: tighten cockpit memory edit request constraints (#1670, builder)
+- `d15cf7db` test: add retry tests for edit allowlist fields (#1670, test-writer)
+- `b40e52a3` docs: add memory API section (#1670, doc-writer)
+
+All deliverable files committed with proper attribution.
+
+### Deductions
+None.
+
+### Confidence: 1.00
+### Action: ARCHIVE
