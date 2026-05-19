@@ -432,6 +432,23 @@ Accessibility and responsive state after #1396:
   AC3 `data-no-sidecar` attribute, CSS 2-column grid-column contract, CSS grid-area
   sidecar exclusion, and preload-hack source-inspection guard).
 
+- #1646 adds a pending-count badge to the nav-rail decisions button. Inside the
+  `routeConfig.map()` render loop in `Shell.tsx`, the decisions entry (`route.icon ===
+  'decisions'`) conditionally renders a child `<span class="shell__nav-badge"
+  data-testid="nav-badge" aria-hidden="true">` displaying `pendingDRCount` when the
+  count is greater than zero; the span is absent from the DOM when the count is zero.
+  `Shell.tsx` also switches the button `aria-label` between `Decisions (N pending)` and
+  `Decisions` to carry the count for assistive technology. Badge overlay styles in
+  `Shell.css` position the span absolutely (top-right corner of its `position:relative`
+  nav button) using PDS notification tokens (`--p-color-notification-error`,
+  `--p-radius-full`, `--p-font-weight-semibold`). `pendingDRCount` is sourced from
+  `useDRState().count` via `CockpitProvider` — no new data-fetching or provider changes.
+  Verified by `serve/cockpit/web/src/__tests__/NavBadge_1646.test.tsx` (15 tests —
+  AC1 badge presence, numeric text, decisions-button scoping, no-kanban-badge guard;
+  AC2 rerender transitions count→0 on both `/` and `/decisions`; AC3 exact aria-label
+  format with count and reversion to `Decisions` on count=0) and durable
+  `serve/cockpit/web/src/__tests__/Shell.test.tsx` (18 tests, all passing).
+
 - #1671 adds the Memory tab list view at `/memories`. `pages/MemoryTab.tsx` (default
   export, lazy-loaded in `routeConfig` with `hasSidecar: false`) fetches `GET
   /api/memories` on mount and on `document.visibilitychange` to visible (no SSE in V1).
