@@ -7,7 +7,7 @@
  * tests that lock in the wiring between /decisions and hasSidecar:false suppression.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, fireEvent } from '@testing-library/react'
+import { render, fireEvent, waitFor } from '@testing-library/react'
 import { MemoryRouter, useNavigate } from 'react-router'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
 import { readFileSync } from 'node:fs'
@@ -19,6 +19,7 @@ import { CockpitProvider } from '../hooks/CockpitProvider'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 const SHELL_CSS_PATH = resolve(__dirname, '..', 'Shell.css')
+const ROUTES_PATH = resolve(__dirname, '..', 'routes.ts')
 
 /** Extract the property declarations inside the first matching CSS selector block. */
 function extractSelectorBlock(css: string, selector: string): string {
@@ -97,27 +98,32 @@ describe('TestFromAC_SidecarConditional', () => {
 
   // ── AC2: navigation removes and restores sidecar ──────────────────────────
 
-  it('ac2 happy remove: navigating from / to /decisions removes sidecar from DOM', () => {
+  it('ac2 happy remove: navigating from / to /decisions removes sidecar from DOM', async () => {
     const { container } = renderShellWithNav('/')
     // Sidecar present at /
     expect(container.querySelector('[data-region="sidecar"]')).not.toBeNull()
     // Navigate to /decisions
     fireEvent.click(container.querySelector('[data-testid="go-decisions"]')!)
-    // Sidecar must be absent after navigation
-    expect(container.querySelector('[data-region="sidecar"]')).toBeNull()
+    // Sidecar must be absent after navigation (waitFor: React Router v7 wraps navigations in startTransition,
+    // which defers useLocation() updates when a lazy route suspends — canonical lazy() requires async polling)
+    await waitFor(() => {
+      expect(container.querySelector('[data-region="sidecar"]')).toBeNull()
+    })
   })
 
-  it('ac2 happy restore: navigating from /decisions back to / restores sidecar in DOM', () => {
+  it('ac2 happy restore: navigating from /decisions back to / restores sidecar in DOM', async () => {
     const { container } = renderShellWithNav('/decisions')
     // Start at /decisions — sidecar absent
     expect(container.querySelector('[data-region="sidecar"]')).toBeNull()
     // Navigate back to /
     fireEvent.click(container.querySelector('[data-testid="go-home"]')!)
-    // Sidecar must be restored
-    expect(container.querySelector('[data-region="sidecar"]')).not.toBeNull()
+    // Sidecar must be restored (waitFor: startTransition-deferred commit after lazy route load)
+    await waitFor(() => {
+      expect(container.querySelector('[data-region="sidecar"]')).not.toBeNull()
+    })
   })
 
-  it('ac2 edge preserve-collapsed: isSidecarCollapsed state persists through / → /decisions → / round-trip', () => {
+  it('ac2 edge preserve-collapsed: isSidecarCollapsed state persists through / → /decisions → / round-trip', async () => {
     const { container } = renderShellWithNav('/')
     // Collapse the sidecar at /
     const toggle = container.querySelector('[data-testid="sidecar-collapse"]') as HTMLButtonElement
@@ -125,11 +131,15 @@ describe('TestFromAC_SidecarConditional', () => {
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
     // Navigate to /decisions — sidecar removed from DOM
     fireEvent.click(container.querySelector('[data-testid="go-decisions"]')!)
-    expect(container.querySelector('[data-region="sidecar"]')).toBeNull()
+    await waitFor(() => {
+      expect(container.querySelector('[data-region="sidecar"]')).toBeNull()
+    })
     // Navigate back to / — sidecar restored in its previous collapsed state
     fireEvent.click(container.querySelector('[data-testid="go-home"]')!)
-    const restoredToggle = container.querySelector('[data-testid="sidecar-collapse"]') as HTMLButtonElement
-    expect(restoredToggle.getAttribute('aria-expanded')).toBe('false')
+    await waitFor(() => {
+      const restoredToggle = container.querySelector('[data-testid="sidecar-collapse"]') as HTMLButtonElement
+      expect(restoredToggle.getAttribute('aria-expanded')).toBe('false')
+    })
   })
 
   // ── AC3: shell grid narrows to 2 columns when sidecar is absent ───────────
@@ -159,6 +169,20 @@ describe('TestFromAC_SidecarConditional', () => {
     expect(
       /sidecar/.test(block),
       'Expected .shell[data-no-sidecar] grid-template-areas to not include a sidecar grid area',
+    ).toBe(false)
+  })
+
+  // ── Source-inspection guard: routes.ts must not preload page modules at module scope ──
+
+  it('ac3 guard: routes.ts uses React.lazy(() => import(...)) — no module-level preload hack', () => {
+    const source = readFileSync(ROUTES_PATH, 'utf-8')
+    // A bare `const identifier = import(` at module scope bypasses React.lazy's deferred
+    // loading contract and violates archived #1644 AC1. This test fails if any page module
+    // import is hoisted outside a lazy() callback (preload hack pattern).
+    const hasModuleLevelPreload = /const\s+\w+\s*=\s*import\(/.test(source)
+    expect(
+      hasModuleLevelPreload,
+      'routes.ts contains a bare module-level import() call. Use React.lazy(() => import(...)) to keep page imports deferred and preserve the lazy-loading contract (#1644).',
     ).toBe(false)
   })
 
