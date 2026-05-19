@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from ruamel.yaml import YAML
 from ruamel.yaml.error import YAMLError
 
@@ -30,7 +30,27 @@ class ResolveRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     response: Literal["approved", "needs-info", "rejected"]
-    notes: str | None = None
+    notes: str | None = Field(default=None, max_length=10_000)
+
+
+class PendingDRItem(BaseModel):
+    """One pending decision request returned by cockpit API."""
+
+    id: str
+    task_id: int
+    agent: str
+    request_type: str
+    created: str
+    title: str
+    body: str
+    body_preview: str
+
+
+class PendingDRResponse(BaseModel):
+    """Response payload for GET /decisions/pending."""
+
+    count: int
+    items: list[PendingDRItem]
 
 
 def _extract_title(body: str, fallback: str) -> str:
@@ -72,14 +92,14 @@ def _validate_decision_id(decision_id: str) -> None:
         raise HTTPException(status_code=422, detail="Invalid decision id")
 
 
-@router.get("/decisions/pending")
-def list_pending_decisions(decisions_dir: _DecisionsDir) -> dict[str, object]:
+@router.get("/decisions/pending", response_model=PendingDRResponse)
+def list_pending_decisions(decisions_dir: _DecisionsDir) -> PendingDRResponse:
     """List pending decision requests as cockpit-ready JSON."""
     pending_dir = decisions_dir / "pending"
     if not pending_dir.is_dir():
         return {"count": 0, "items": []}
 
-    items: list[dict[str, object]] = []
+    items: list[PendingDRItem] = []
     for path in sorted(pending_dir.glob("*.md")):
         try:
             meta, body = parse_dr(path)
@@ -90,20 +110,25 @@ def list_pending_decisions(decisions_dir: _DecisionsDir) -> dict[str, object]:
             continue
 
         preview = body.strip()[:200]
-        items.append(
-            {
-                "id": path.stem,
-                "task_id": meta.get("task_id"),
-                "agent": meta.get("agent", ""),
-                "request_type": meta.get("request_type", ""),
-                "created": meta.get("created", ""),
-                "title": _extract_title(body, path.stem),
-                "body": body.strip(),
-                "body_preview": preview,
-            }
-        )
+        try:
+            item = PendingDRItem.model_validate(
+                {
+                    "id": path.stem,
+                    "task_id": meta.get("task_id"),
+                    "agent": meta.get("agent", ""),
+                    "request_type": meta.get("request_type", ""),
+                    "created": meta.get("created", ""),
+                    "title": _extract_title(body, path.stem),
+                    "body": body.strip(),
+                    "body_preview": preview,
+                }
+            )
+        except ValidationError:
+            continue
 
-    return {"count": len(items), "items": items}
+        items.append(item)
+
+    return PendingDRResponse(count=len(items), items=items)
 
 
 @router.post("/decisions/{decision_id}/resolve")
