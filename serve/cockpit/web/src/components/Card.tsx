@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { PTag } from '@porsche-design-system/components-react'
 import type { Task } from '../hooks/useBoard'
 import { computeSignal } from '../utils/computeSignal'
-import { priorityToVariant, statusToVariant } from '../utils/cardVariants'
 import './Card.css'
 
 const TAG_PREVIEW_LIMIT = 3
@@ -47,13 +46,11 @@ export function Card({
   onDragEnd,
 }: CardProps) {
   const signal = computeSignal(task, pendingDRIds)
-  const showSignalIcon =
-    signal === 'dr-pending' || signal === 'blocked' || signal === 'claimed' || signal === 'deps-unmet'
   const [dragging, setDragging] = useState(false)
   const previewTags = task.tags.slice(0, TAG_PREVIEW_LIMIT)
   const overflowTags = task.tags.length - previewTags.length
   const updatedAge = formatUpdatedAge(task.updated)
-  const hasStateCue = task.blocked || task.claimed || task.dep_status === 'blocked' || signal === 'dr-pending'
+  const signalLabel = signal.replace('-', ' ')
 
   function openContextMenu(event: React.KeyboardEvent<HTMLDivElement>) {
     event.preventDefault()
@@ -93,6 +90,9 @@ export function Card({
         role="button"
         tabIndex={0}
         aria-haspopup="menu"
+        aria-label={
+          `Task #${task.id}: ${task.title}. ${task.priority} priority. ${signalLabel}. Updated ${updatedAge}.`
+        }
         className="card"
         draggable={true}
         onClick={() => onSelect?.(task.id)}
@@ -109,47 +109,10 @@ export function Card({
         onContextMenu={(e) => onContextMenu(e, task)}
     >
       <div className="card-main">
-          <div className="card-header-row">
+          <div className="card-header-row" aria-hidden="true">
             <span data-testid="card-id" className="card-chip card-id">
               #{task.id}
             </span>
-            <PTag
-              compact
-              data-testid="card-status"
-              variant={statusToVariant(task.status)}
-              ref={(element) => {
-                if (element) {
-                  element.setAttribute('compact', '')
-                  element.setAttribute('variant', statusToVariant(task.status))
-                }
-              }}
-            >
-              {task.status}
-            </PTag>
-            <PTag
-              compact
-              data-testid="card-priority"
-              variant={priorityToVariant(task.priority)}
-              ref={(element) => {
-                if (element) {
-                  element.setAttribute('compact', '')
-                  element.setAttribute('variant', priorityToVariant(task.priority))
-                }
-              }}
-            >
-              {task.priority}
-            </PTag>
-            {showSignalIcon ? (
-              <p-icon
-                ref={(element) => {
-                  if (element) {
-                    element.setAttribute('size', 'xs')
-                    element.setAttribute('name', 'information')
-                    element.setAttribute('aria-label', signal)
-                  }
-                }}
-              />
-            ) : null}
             <span data-testid="card-updated" className="card-chip card-updated" aria-label={`Updated ${updatedAge}`}>
               {updatedAge}
             </span>
@@ -185,31 +148,6 @@ export function Card({
                   aria-label={`${overflowTags} more tags`}
                 >
                   +{overflowTags}
-                </span>
-              ) : null}
-            </div>
-          ) : null}
-
-          {hasStateCue ? (
-            <div className="card-cues-row" aria-label="Task state cues">
-              {task.blocked ? (
-                <span data-testid="card-blocked-cue" className="card-chip card-cue card-cue-blocked">
-                  Blocked
-                </span>
-              ) : null}
-              {task.claimed ? (
-                <span data-testid="card-claimed-cue" className="card-chip card-cue card-cue-claimed">
-                  Claimed
-                </span>
-              ) : null}
-              {task.dep_status === 'blocked' ? (
-                <span data-testid="card-deps-unmet-cue" className="card-chip card-cue card-cue-deps">
-                  Dependencies blocked
-                </span>
-              ) : null}
-              {signal === 'dr-pending' ? (
-                <span data-testid="card-dr-pending-cue" className="card-chip card-cue card-cue-dr">
-                  Decision pending
                 </span>
               ) : null}
             </div>
