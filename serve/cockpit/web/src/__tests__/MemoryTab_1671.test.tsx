@@ -79,6 +79,19 @@ async function flush() {
   })
 }
 
+function readHostValue(element: Element | null): unknown {
+  return (element as (Element & { value?: unknown }) | null)?.value ?? element?.getAttribute('value')
+}
+
+function readHostStringArray(element: Element | null): string[] {
+  const value = readHostValue(element)
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
+}
+
+function readPdsVariant(element: Element | null): string | undefined {
+  return (element as (Element & { variant?: string }) | null)?.variant ?? element?.getAttribute('variant') ?? undefined
+}
+
 // ─── AC1: Route registration ──────────────────────────────────────────────────
 
 describe('TestFromAC_MemoryTabRoute', () => {
@@ -321,7 +334,7 @@ describe('TestFromAC_MemoryTabFilters', () => {
     const categoryFilter = container.querySelector('[name="category-filter"]')
     expect(categoryFilter).not.toBeNull()
     const options = categoryFilter!.querySelectorAll('p-multi-select-option')
-    const values = Array.from(options).map((el) => el.getAttribute('value'))
+    const values = Array.from(options).map((el) => readHostValue(el))
     expect(values).toContain('behaviour')
     expect(values).toContain('pitfall')
     expect(values).toContain('process')
@@ -345,7 +358,7 @@ describe('TestFromAC_MemoryTabFilters', () => {
     expect(agentFilter).not.toBeNull()
     const options = agentFilter!.querySelectorAll('p-select-option')
     const values = Array.from(options)
-      .map((el) => el.getAttribute('value'))
+      .map((el) => readHostValue(el))
       .filter(Boolean)
     expect(values).toContain('builder')
     expect(values).toContain('reviewer')
@@ -574,8 +587,7 @@ describe('TestFromAC_MemoryTabRowRendering', () => {
 
     const badge = container.querySelector('[data-testid="memory-entry-state"]')
     expect(badge).not.toBeNull()
-    const color = badge?.getAttribute('color') ?? ''
-    expect(color).toContain('warning')
+    expect(readPdsVariant(badge)).toBe('warning')
   })
 
   it('ac4 happy: curated state badge uses info color variant', async () => {
@@ -589,8 +601,7 @@ describe('TestFromAC_MemoryTabRowRendering', () => {
 
     const badge = container.querySelector('[data-testid="memory-entry-state"]')
     expect(badge).not.toBeNull()
-    const color = badge?.getAttribute('color') ?? ''
-    expect(color).toContain('info')
+    expect(readPdsVariant(badge)).toBe('info')
   })
 
   it('ac4 happy: approved state badge uses success color variant', async () => {
@@ -604,8 +615,7 @@ describe('TestFromAC_MemoryTabRowRendering', () => {
 
     const badge = container.querySelector('[data-testid="memory-entry-state"]')
     expect(badge).not.toBeNull()
-    const color = badge?.getAttribute('color') ?? ''
-    expect(color).toContain('success')
+    expect(readPdsVariant(badge)).toBe('success')
   })
 
   it('ac4 happy: deleted state badge uses secondary color variant', async () => {
@@ -624,8 +634,7 @@ describe('TestFromAC_MemoryTabRowRendering', () => {
 
     const badge = container.querySelector('[data-testid="memory-entry-state"]')
     expect(badge).not.toBeNull()
-    const color = badge?.getAttribute('color') ?? ''
-    expect(color).toContain('secondary')
+    expect(readPdsVariant(badge)).toBe('secondary')
   })
 
   it('ac4 happy: scope_agents renders as comma-joined string when non-empty', async () => {
@@ -721,7 +730,7 @@ describe('TestFromAC_MemoryTabEmptyStates', () => {
     expect(container.querySelector('[data-testid="clear-filters"]')).not.toBeNull()
   })
 
-  it('ac5 happy: clicking clear-filters resets state filter to initial [pending, curated, approved]', async () => {
+  it('ac5 happy: clicking clear-filters resets every control to AC2 initial values', async () => {
     const entries = [
       makeEntry({ id: 'e1', title: 'Pending Entry', state: 'pending', categories: ['behaviour'] }),
       makeEntry({ id: 'e2', title: 'Deleted Entry', state: 'deleted', categories: ['behaviour'] }),
@@ -741,6 +750,16 @@ describe('TestFromAC_MemoryTabEmptyStates', () => {
     const clearBtn = container.querySelector('[data-testid="clear-filters"]')!
     fireEvent.click(clearBtn)
     await flush()
+
+    const stateFilter = container.querySelector('[name="state-filter"]')
+    const categoryFilterAfterReset = container.querySelector('[name="category-filter"]')
+    const agentFilter = container.querySelector('[name="agent-filter"]')
+    const searchFilter = container.querySelector('[name="memory-search"]')
+
+    expect(readHostStringArray(stateFilter)).toEqual(['pending', 'curated', 'approved'])
+    expect(readHostStringArray(categoryFilterAfterReset)).toEqual([])
+    expect(readHostValue(agentFilter)).toBe('')
+    expect(readHostValue(searchFilter)).toBe('')
 
     // After reset, pending entry visible; deleted remains hidden (initial state filter)
     const titles = Array.from(container.querySelectorAll('[data-testid="memory-entry-title"]')).map(
@@ -814,5 +833,370 @@ describe('TestFromAC_MemoryTabParseErrors', () => {
     await flush()
 
     expect(container.querySelector('[data-testid="parse-errors-warning"]')).toBeNull()
+  })
+})
+
+// ─── G1/G2/G3/G4: PDS contract tests (retry-cycle gap-fill per reviewer G1-G4) ─
+
+describe('TestFromAC_MemoryTabPDSContracts', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  // ── G1: state badge must be p-tag (AC4) ──────────────────────────────────
+
+  it('g1 ac4: state-badge element is a p-tag custom element (pending)', async () => {
+    const entries = [makeEntry({ state: 'pending' })]
+    vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
+    let container!: HTMLElement
+    await act(async () => {
+      container = renderMemoryTab().container
+    })
+    await flush()
+
+    const pTag = container.querySelector('p-tag[data-testid="memory-entry-state"]')
+    expect(pTag, 'p-tag[data-testid="memory-entry-state"] must exist').not.toBeNull()
+    expect(pTag!.tagName.toLowerCase()).toBe('p-tag')
+  })
+
+  it('g1 ac4: p-tag[data-testid="memory-entry-state"] has variant="warning" for pending', async () => {
+    const entries = [makeEntry({ state: 'pending' })]
+    vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
+    let container!: HTMLElement
+    await act(async () => {
+      container = renderMemoryTab().container
+    })
+    await flush()
+
+    const pTag = container.querySelector('p-tag[data-testid="memory-entry-state"]') as (Element & { variant?: string }) | null
+    expect(pTag).not.toBeNull()
+    expect(pTag!.variant).toBe('warning')
+  })
+
+  it('g1 ac4: p-tag[data-testid="memory-entry-state"] has variant="info" for curated', async () => {
+    const entries = [makeEntry({ state: 'curated' })]
+    vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
+    let container!: HTMLElement
+    await act(async () => {
+      container = renderMemoryTab().container
+    })
+    await flush()
+
+    const pTag = container.querySelector('p-tag[data-testid="memory-entry-state"]') as (Element & { variant?: string }) | null
+    expect(pTag).not.toBeNull()
+    expect(pTag!.variant).toBe('info')
+  })
+
+  it('g1 ac4: p-tag[data-testid="memory-entry-state"] has variant="success" for approved', async () => {
+    const entries = [makeEntry({ state: 'approved' })]
+    vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
+    let container!: HTMLElement
+    await act(async () => {
+      container = renderMemoryTab().container
+    })
+    await flush()
+
+    const pTag = container.querySelector('p-tag[data-testid="memory-entry-state"]') as (Element & { variant?: string }) | null
+    expect(pTag).not.toBeNull()
+    expect(pTag!.variant).toBe('success')
+  })
+
+  it('g1 ac4: p-tag[data-testid="memory-entry-state"] has variant="secondary" for deleted', async () => {
+    const entries = [makeEntry({ state: 'deleted' })]
+    vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
+    let container!: HTMLElement
+    await act(async () => {
+      container = renderMemoryTab().container
+    })
+    await flush()
+
+    // Clear state filter to expose deleted entries
+    const stateFilter = container.querySelector('p-multi-select[name="state-filter"]')
+    fireEvent(stateFilter!, new CustomEvent('update', { detail: { value: [] }, bubbles: true }))
+    await flush()
+
+    const pTag = container.querySelector('p-tag[data-testid="memory-entry-state"]') as (Element & { variant?: string }) | null
+    expect(pTag).not.toBeNull()
+    expect(pTag!.variant).toBe('secondary')
+  })
+
+  it('g1 ac4: category tag is a p-tag custom element (not raw span or div)', async () => {
+    const entries = [makeEntry({ categories: ['behaviour'], state: 'pending' })]
+    vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
+    let container!: HTMLElement
+    await act(async () => {
+      container = renderMemoryTab().container
+    })
+    await flush()
+
+    const pTag = container.querySelector('p-tag[data-testid="memory-entry-category"]')
+    expect(pTag, 'p-tag[data-testid="memory-entry-category"] must exist').not.toBeNull()
+    expect(pTag!.tagName.toLowerCase()).toBe('p-tag')
+  })
+
+  // ── G2: dual-render falsifiability for filter controls (AC2) ─────────────
+
+  it('g2 ac2: state filter is a p-multi-select custom element', async () => {
+    vi.stubGlobal('fetch', makeOkFetch())
+    let container!: HTMLElement
+    await act(async () => {
+      container = renderMemoryTab().container
+    })
+    await flush()
+
+    const el = container.querySelector('p-multi-select[name="state-filter"]')
+    expect(el, 'p-multi-select[name="state-filter"] must exist').not.toBeNull()
+  })
+
+  it('g2 ac2: state p-multi-select contains no native select element', async () => {
+    vi.stubGlobal('fetch', makeOkFetch())
+    let container!: HTMLElement
+    await act(async () => {
+      container = renderMemoryTab().container
+    })
+    await flush()
+
+    const el = container.querySelector('p-multi-select[name="state-filter"]')
+    expect(el).not.toBeNull()
+    expect(el!.querySelector('select'), 'no native <select> inside state p-multi-select').toBeNull()
+  })
+
+  it('g2 ac2: state p-multi-select contains no native option elements as direct children', async () => {
+    vi.stubGlobal('fetch', makeOkFetch())
+    let container!: HTMLElement
+    await act(async () => {
+      container = renderMemoryTab().container
+    })
+    await flush()
+
+    const el = container.querySelector('p-multi-select[name="state-filter"]')
+    expect(el).not.toBeNull()
+    const nativeOptions = Array.from(el!.children).filter((c) => c.tagName === 'OPTION')
+    expect(nativeOptions.length, 'no native OPTION children in state p-multi-select').toBe(0)
+  })
+
+  it('g2 ac2: category filter is a p-multi-select custom element', async () => {
+    vi.stubGlobal('fetch', makeOkFetch())
+    let container!: HTMLElement
+    await act(async () => {
+      container = renderMemoryTab().container
+    })
+    await flush()
+
+    const el = container.querySelector('p-multi-select[name="category-filter"]')
+    expect(el, 'p-multi-select[name="category-filter"] must exist').not.toBeNull()
+  })
+
+  it('g2 ac2: category p-multi-select contains no native option elements as direct children', async () => {
+    const entries = [makeEntry({ categories: ['behaviour', 'pitfall'], state: 'pending' })]
+    vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
+    let container!: HTMLElement
+    await act(async () => {
+      container = renderMemoryTab().container
+    })
+    await flush()
+
+    const el = container.querySelector('p-multi-select[name="category-filter"]')
+    expect(el).not.toBeNull()
+    const nativeOptions = Array.from(el!.children).filter((c) => c.tagName === 'OPTION')
+    expect(nativeOptions.length, 'no native OPTION children in category p-multi-select').toBe(0)
+  })
+
+  it('g2 ac2: agent filter is a p-select custom element', async () => {
+    vi.stubGlobal('fetch', makeOkFetch())
+    let container!: HTMLElement
+    await act(async () => {
+      container = renderMemoryTab().container
+    })
+    await flush()
+
+    const el = container.querySelector('p-select[name="agent-filter"]')
+    expect(el, 'p-select[name="agent-filter"] must exist').not.toBeNull()
+  })
+
+  it('g2 ac2: agent p-select contains no native option elements as direct children', async () => {
+    const entries = [makeEntry({ scope_agents: ['builder', 'reviewer'], state: 'pending' })]
+    vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
+    let container!: HTMLElement
+    await act(async () => {
+      container = renderMemoryTab().container
+    })
+    await flush()
+
+    const el = container.querySelector('p-select[name="agent-filter"]')
+    expect(el).not.toBeNull()
+    const nativeOptions = Array.from(el!.children).filter((c) => c.tagName === 'OPTION')
+    expect(nativeOptions.length, 'no native OPTION children in agent p-select').toBe(0)
+  })
+
+  it('g2 ac5: clear-filters trigger is a p-button custom element (not a raw button)', async () => {
+    const entries = [makeEntry({ id: 'e1', categories: ['behaviour'], state: 'pending' })]
+    vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
+    let container!: HTMLElement
+    await act(async () => {
+      container = renderMemoryTab().container
+    })
+    await flush()
+
+    const categoryFilter = container.querySelector('p-multi-select[name="category-filter"]')
+    fireEvent(categoryFilter!, new CustomEvent('update', { detail: { value: ['process'] }, bubbles: true }))
+    await flush()
+
+    const pBtn = container.querySelector('p-button[data-testid="clear-filters"]')
+    expect(pBtn, 'p-button[data-testid="clear-filters"] must exist').not.toBeNull()
+  })
+
+  it('g2 ac5: no raw button element carries data-testid="clear-filters"', async () => {
+    const entries = [makeEntry({ id: 'e1', categories: ['behaviour'], state: 'pending' })]
+    vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
+    let container!: HTMLElement
+    await act(async () => {
+      container = renderMemoryTab().container
+    })
+    await flush()
+
+    const categoryFilter = container.querySelector('p-multi-select[name="category-filter"]')
+    fireEvent(categoryFilter!, new CustomEvent('update', { detail: { value: ['process'] }, bubbles: true }))
+    await flush()
+
+    const rawBtn = container.querySelector('button[data-testid="clear-filters"]')
+    expect(rawBtn, 'raw <button data-testid="clear-filters"> must not exist').toBeNull()
+  })
+
+  // ── G3: reset proof completeness via tag-name-scoped .value (AC5) ─────────
+
+  it('g3 ac5: after clear-filters click, p-multi-select[name="state-filter"].value resets to initial', async () => {
+    const entries = [makeEntry({ id: 'e1', categories: ['behaviour'], state: 'pending' })]
+    vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
+    let container!: HTMLElement
+    await act(async () => {
+      container = renderMemoryTab().container
+    })
+    await flush()
+
+    // Narrow state to approved only, then apply non-matching category to trigger empty state
+    const stateEl = container.querySelector('p-multi-select[name="state-filter"]')
+    fireEvent(stateEl!, new CustomEvent('update', { detail: { value: ['approved'] }, bubbles: true }))
+    const categoryEl = container.querySelector('p-multi-select[name="category-filter"]')
+    fireEvent(categoryEl!, new CustomEvent('update', { detail: { value: ['process'] }, bubbles: true }))
+    await flush()
+
+    const clearBtn = container.querySelector('p-button[data-testid="clear-filters"]')!
+    fireEvent.click(clearBtn)
+    await flush()
+
+    const stateVal = (container.querySelector('p-multi-select[name="state-filter"]') as (Element & { value?: unknown }) | null)?.value
+    expect(Array.isArray(stateVal)).toBe(true)
+    expect(stateVal).toEqual(['pending', 'curated', 'approved'])
+  })
+
+  it('g3 ac5: after clear-filters click, p-multi-select[name="category-filter"].value resets to []', async () => {
+    const entries = [makeEntry({ id: 'e1', categories: ['behaviour'], state: 'pending' })]
+    vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
+    let container!: HTMLElement
+    await act(async () => {
+      container = renderMemoryTab().container
+    })
+    await flush()
+
+    const categoryEl = container.querySelector('p-multi-select[name="category-filter"]')
+    fireEvent(categoryEl!, new CustomEvent('update', { detail: { value: ['process'] }, bubbles: true }))
+    await flush()
+
+    const clearBtn = container.querySelector('p-button[data-testid="clear-filters"]')!
+    fireEvent.click(clearBtn)
+    await flush()
+
+    const categoryVal = (container.querySelector('p-multi-select[name="category-filter"]') as (Element & { value?: unknown }) | null)?.value
+    const normalized = Array.isArray(categoryVal) ? categoryVal : []
+    expect(normalized).toEqual([])
+  })
+
+  it('g3 ac5: after clear-filters click, p-select[name="agent-filter"].value resets to ""', async () => {
+    const entries = [makeEntry({ id: 'e1', categories: ['behaviour'], state: 'pending' })]
+    vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
+    let container!: HTMLElement
+    await act(async () => {
+      container = renderMemoryTab().container
+    })
+    await flush()
+
+    const categoryEl = container.querySelector('p-multi-select[name="category-filter"]')
+    fireEvent(categoryEl!, new CustomEvent('update', { detail: { value: ['process'] }, bubbles: true }))
+    await flush()
+
+    const clearBtn = container.querySelector('p-button[data-testid="clear-filters"]')!
+    fireEvent.click(clearBtn)
+    await flush()
+
+    const agentVal = (container.querySelector('p-select[name="agent-filter"]') as (Element & { value?: unknown }) | null)?.value
+    expect(agentVal).toBe('')
+  })
+
+  it('g3 ac5: after clear-filters click, p-input-search[name="memory-search"].value resets to ""', async () => {
+    const entries = [makeEntry({ id: 'e1', categories: ['behaviour'], state: 'pending' })]
+    vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
+    let container!: HTMLElement
+    await act(async () => {
+      container = renderMemoryTab().container
+    })
+    await flush()
+
+    const categoryEl = container.querySelector('p-multi-select[name="category-filter"]')
+    fireEvent(categoryEl!, new CustomEvent('update', { detail: { value: ['process'] }, bubbles: true }))
+    await flush()
+
+    const clearBtn = container.querySelector('p-button[data-testid="clear-filters"]')!
+    fireEvent.click(clearBtn)
+    await flush()
+
+    const searchVal = (container.querySelector('p-input-search[name="memory-search"]') as (Element & { value?: unknown }) | null)?.value
+    expect(searchVal).toBe('')
+  })
+
+  // ── G4: category multi-select uses AND semantics (AC3) ────────────────────
+
+  it('g4 ac3: entry with ALL selected categories appears (AND semantics)', async () => {
+    const entries = [
+      makeEntry({ id: 'e1', title: 'Both Categories', categories: ['behaviour', 'pitfall'], state: 'pending' }),
+      makeEntry({ id: 'e2', title: 'One Category Only', categories: ['behaviour'], state: 'pending' }),
+    ]
+    vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
+    let container!: HTMLElement
+    await act(async () => {
+      container = renderMemoryTab().container
+    })
+    await flush()
+
+    const categoryEl = container.querySelector('p-multi-select[name="category-filter"]')
+    fireEvent(categoryEl!, new CustomEvent('update', { detail: { value: ['behaviour', 'pitfall'] }, bubbles: true }))
+    await flush()
+
+    const titles = Array.from(container.querySelectorAll('[data-testid="memory-entry-title"]')).map(
+      (el) => el.textContent,
+    )
+    expect(titles).toContain('Both Categories')
+  })
+
+  it('g4 ac3: entry missing one selected category is excluded (AND not OR)', async () => {
+    const entries = [
+      makeEntry({ id: 'e1', title: 'Both Categories', categories: ['behaviour', 'pitfall'], state: 'pending' }),
+      makeEntry({ id: 'e2', title: 'One Category Only', categories: ['behaviour'], state: 'pending' }),
+    ]
+    vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
+    let container!: HTMLElement
+    await act(async () => {
+      container = renderMemoryTab().container
+    })
+    await flush()
+
+    const categoryEl = container.querySelector('p-multi-select[name="category-filter"]')
+    fireEvent(categoryEl!, new CustomEvent('update', { detail: { value: ['behaviour', 'pitfall'] }, bubbles: true }))
+    await flush()
+
+    const titles = Array.from(container.querySelectorAll('[data-testid="memory-entry-title"]')).map(
+      (el) => el.textContent,
+    )
+    expect(titles).not.toContain('One Category Only')
   })
 })
