@@ -1,12 +1,16 @@
-import { type ComponentType } from 'react'
+import { lazy, type ComponentType, type LazyExoticComponent } from 'react'
 import KanbanBoard, { type KanbanBoardProps } from './KanbanBoard'
-import DecisionsPage from './pages/DecisionsPage'
+
+const decisionsPageModule = import('./pages/DecisionsPage')
+
+const DecisionsPage = lazy(async () => decisionsPageModule)
+const MemoryTab = lazy(() => import('./pages/MemoryTab'))
 
 export interface RouteConfigEntry {
   path: string
   label: string
   icon: string
-  component: ComponentType<KanbanBoardProps>
+  component: ComponentType<KanbanBoardProps> | LazyExoticComponent<ComponentType<KanbanBoardProps>>
   hasSidecar?: boolean
 }
 
@@ -22,6 +26,13 @@ export const routeConfig: RouteConfigEntry[] = [
     label: 'Decisions',
     icon: 'decisions',
     component: DecisionsPage,
+    hasSidecar: false,
+  },
+  {
+    path: '/memories',
+    label: 'Memory',
+    icon: 'memory',
+    component: MemoryTab,
     hasSidecar: false,
   },
 ]
