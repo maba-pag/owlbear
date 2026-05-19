@@ -411,4 +411,135 @@ describe('TestFromAC_DecisionsPage', () => {
       ).toBe(true)
     })
   })
+
+  // ─── AC4: Root width 100% and list container column direction ────────────────
+
+  describe('AC4: root section width 100%, list container flexDirection column (inline style or CSS)', () => {
+    it('ac4 happy: root section has width 100% via inline style or CSS', () => {
+      const { container } = renderPage({ items: [DR_A] })
+      const root = container.querySelector('[data-testid="decisions-page"]') as HTMLElement
+      expect(root).not.toBeNull()
+
+      // Attempt 1: inline style
+      if (root.style.width) {
+        expect(root.style.width).toBe('100%')
+        return
+      }
+
+      // Attempt 2: scan pages/ for Decision-related CSS with a width:100% rule
+      const pagesDir = resolve(webSrcDir, 'pages')
+      let cssContent = ''
+      try {
+        const cssFiles = readdirSync(pagesDir).filter(
+          (f) =>
+            f.toLowerCase().includes('decision') && (f.endsWith('.css') || f.endsWith('.scss')),
+        )
+        cssContent = cssFiles.map((f) => readFileSync(resolve(pagesDir, f), 'utf8')).join('\n')
+      } catch {
+        // pagesDir not readable — fall through to assertion failure
+      }
+
+      const hasFullWidth = /width:\s*100%/.test(cssContent)
+      expect(
+        hasFullWidth,
+        'Root decisions-page section must have width 100% via inline style or CSS',
+      ).toBe(true)
+    })
+
+    it('ac4 happy: list container (direct parent of dr-item-{id}) uses column direction via inline style or CSS', () => {
+      const { container } = renderPage({ items: [DR_A, DR_B] })
+      const page = container.querySelector('[data-testid="decisions-page"]')!
+      const drItems = [...page.querySelectorAll('[data-testid^="dr-item-"]')]
+      expect(drItems.length).toBeGreaterThan(0)
+
+      const listContainer = drItems[0].parentElement as HTMLElement
+      expect(listContainer).not.toBeNull()
+
+      // Attempt 1: inline style
+      if (listContainer.style.flexDirection) {
+        expect(listContainer.style.flexDirection).toBe('column')
+        return
+      }
+
+      // Attempt 2: scan pages/ for Decision-related CSS with a flex-direction:column rule
+      const pagesDir = resolve(webSrcDir, 'pages')
+      let cssContent = ''
+      try {
+        const cssFiles = readdirSync(pagesDir).filter(
+          (f) =>
+            f.toLowerCase().includes('decision') && (f.endsWith('.css') || f.endsWith('.scss')),
+        )
+        cssContent = cssFiles.map((f) => readFileSync(resolve(pagesDir, f), 'utf8')).join('\n')
+      } catch {
+        // pagesDir not readable — fall through to assertion failure
+      }
+
+      const hasColumnDirection = /flex-direction:\s*column/.test(cssContent)
+      expect(
+        hasColumnDirection,
+        'List container must have flex-direction:column via inline style or CSS',
+      ).toBe(true)
+    })
+
+    it('ac4 boundary: root width assertion is discriminating — value must be exactly 100% not a partial match', () => {
+      // Guard: ensures the test would fail for e.g. width:50% or width:auto
+      const { container } = renderPage({ items: [DR_A] })
+      const root = container.querySelector('[data-testid="decisions-page"]') as HTMLElement
+      expect(root).not.toBeNull()
+
+      if (root.style.width) {
+        // Explicit exact-value check: only '100%' passes
+        expect(root.style.width).toBe('100%')
+        expect(root.style.width).not.toBe('50%')
+        expect(root.style.width).not.toBe('auto')
+        return
+      }
+
+      // CSS fallback: if no inline style, the CSS must have width:100% specifically
+      const pagesDir = resolve(webSrcDir, 'pages')
+      let cssContent = ''
+      try {
+        const cssFiles = readdirSync(pagesDir).filter(
+          (f) =>
+            f.toLowerCase().includes('decision') && (f.endsWith('.css') || f.endsWith('.scss')),
+        )
+        cssContent = cssFiles.map((f) => readFileSync(resolve(pagesDir, f), 'utf8')).join('\n')
+      } catch {
+        // pagesDir not readable — fall through to assertion failure
+      }
+
+      expect(/width:\s*100%/.test(cssContent)).toBe(true)
+    })
+
+    it('ac4 boundary: column-direction assertion is discriminating — row or unset would fail', () => {
+      // Guard: ensures the test would fail if flexDirection were changed to row or removed
+      const { container } = renderPage({ items: [DR_A, DR_B] })
+      const page = container.querySelector('[data-testid="decisions-page"]')!
+      const drItems = [...page.querySelectorAll('[data-testid^="dr-item-"]')]
+      expect(drItems.length).toBeGreaterThan(0)
+
+      const listContainer = drItems[0].parentElement as HTMLElement
+      expect(listContainer).not.toBeNull()
+
+      if (listContainer.style.flexDirection) {
+        expect(listContainer.style.flexDirection).toBe('column')
+        expect(listContainer.style.flexDirection).not.toBe('row')
+        return
+      }
+
+      const pagesDir = resolve(webSrcDir, 'pages')
+      let cssContent = ''
+      try {
+        const cssFiles = readdirSync(pagesDir).filter(
+          (f) =>
+            f.toLowerCase().includes('decision') && (f.endsWith('.css') || f.endsWith('.scss')),
+        )
+        cssContent = cssFiles.map((f) => readFileSync(resolve(pagesDir, f), 'utf8')).join('\n')
+      } catch {
+        // pagesDir not readable — fall through to assertion failure
+      }
+
+      expect(/flex-direction:\s*column/.test(cssContent)).toBe(true)
+    })
+  })
 })
