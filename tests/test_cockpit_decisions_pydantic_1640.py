@@ -288,3 +288,43 @@ class TestFromAC_PydanticDecisionsModel:
         assert isinstance(validated.title, str)
         assert isinstance(validated.body, str)
         assert isinstance(validated.body_preview, str)
+
+    # ------------------------------------------------------------------ AC4 --
+
+    def test_list_pending_decisions_returns_instance_missing_dir_path(self, tmp_path: Path) -> None:
+        """list_pending_decisions() called directly with a missing pending/ dir returns a PendingDRResponse instance."""
+        from owlbear_cockpit.routes.decisions import (  # noqa: PLC0415
+            PendingDRResponse,
+            list_pending_decisions,
+        )
+
+        # decisions_dir exists but has no pending/ subdirectory
+        decisions_dir = tmp_path / "decisions"
+        decisions_dir.mkdir()
+
+        result = list_pending_decisions(decisions_dir)
+
+        assert isinstance(result, PendingDRResponse), (
+            f"Expected PendingDRResponse instance on missing-dir path, got {type(result)!r}"
+        )
+        assert result.count == 0
+        assert result.items == []
+
+    def test_list_pending_decisions_returns_instance_normal_path(self, tmp_path: Path) -> None:
+        """list_pending_decisions() called directly with a populated pending/ dir returns a PendingDRResponse instance."""
+        from owlbear_cockpit.routes.decisions import (  # noqa: PLC0415
+            PendingDRResponse,
+            list_pending_decisions,
+        )
+
+        decisions_dir = _make_decisions_dir(tmp_path)
+        _write_pending_dr(decisions_dir, stem="60-direct-call", task_id=60)
+
+        result = list_pending_decisions(decisions_dir)
+
+        assert isinstance(result, PendingDRResponse), (
+            f"Expected PendingDRResponse instance on normal iteration path, got {type(result)!r}"
+        )
+        assert result.count == 1
+        assert len(result.items) == 1
+        assert result.items[0].task_id == 60
