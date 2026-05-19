@@ -25,13 +25,14 @@ import pytest
 
 ALLOWED_IMPORTS: dict[str, set[str]] = {
     "owlbear_browser": set(),
-    "owlbear_cockpit": {"owlbear_kanban"},
+    "owlbear_cockpit": {"owlbear_kanban", "owlbear_memory"},
     "owlbear_kanban": set(),
     "owlbear_knowledge": set(),
+    "owlbear_memory": set(),
     "owlbear_mcp_browser": {"owlbear_browser"},
     "owlbear_mcp_kanban": {"owlbear_kanban"},
     "owlbear_mcp_knowledge": {"owlbear_knowledge"},
-    "owlbear_mcp_memory": set(),
+    "owlbear_mcp_memory": {"owlbear_memory"},
     "owlbear_tools": set(),
 }
 
