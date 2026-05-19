@@ -7,7 +7,6 @@ import { filterTasks, type FilterState } from './utils/filterTasks'
 import { type Board, type Task } from './hooks/useBoard'
 import { moveTask } from './api/tasks'
 import { ApiError } from './api/errors'
-import './KanbanBoard.css'
 
 // ─── KanbanBoard ──────────────────────────────────────────────────────────────
 
@@ -278,31 +277,31 @@ function KanbanBoardContent({
 
   return (
     <div
-      className="kanban-board"
+      className="relative flex h-full min-h-0 flex-col p-static-md [--kanban-column-min:clamp(240px,18vw,292px)]"
       data-testid="kanban-board"
     >
-      <section className="kanban-workspace" aria-labelledby="kanban-board-title">
-        <header className="kanban-toolbar">
-          <div className="kanban-toolbar__identity">
-            <span className="kanban-toolbar__kicker">Kanban</span>
-            <h2 id="kanban-board-title">Pipeline</h2>
+      <section className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-md border border-contrast-low bg-surface shadow-sm" aria-labelledby="kanban-board-title">
+        <header className="grid min-h-16 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-static-md border-b border-contrast-low bg-[var(--p-color-frosted-soft)] px-static-md py-static-sm">
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <span className="text-xs font-semibold uppercase leading-tight text-contrast-high">Kanban</span>
+            <h2 id="kanban-board-title" className="m-0 text-lg font-semibold leading-tight text-primary">Pipeline</h2>
           </div>
-          <div className="kanban-toolbar__summary" aria-label="Board summary">
-            <span className="kanban-summary-pill">
-              <strong>{boardTaskCount}</strong>
+          <div className="flex min-w-0 items-center gap-static-xs" aria-label="Board summary">
+            <span className="inline-flex min-h-[30px] items-baseline gap-1.5 whitespace-nowrap rounded-full border border-contrast-low bg-surface px-2.5 py-1 text-xs text-primary">
+              <strong className="text-sm font-semibold">{boardTaskCount}</strong>
               <span>{boardTaskLabel}</span>
             </span>
-            <span className="kanban-summary-pill">
-              <strong>{board.statuses.length}</strong>
+            <span className="inline-flex min-h-[30px] items-baseline gap-1.5 whitespace-nowrap rounded-full border border-contrast-low bg-surface px-2.5 py-1 text-xs text-primary">
+              <strong className="text-sm font-semibold">{board.statuses.length}</strong>
               <span>lanes</span>
             </span>
           </div>
-          <div className="kanban-filter-row">
+          <div className="flex min-h-[34px] flex-wrap items-center justify-end gap-static-xs">
             <PButton
               ref={filterToggleRef}
               data-testid="filter-toggle"
               data-pds-exception="filter-toggle"
-              className="kanban-filter-toggle"
+              className="max-w-fit"
               variant="secondary"
               compact
               onClick={() => setPanelOpen((open) => !open)}
@@ -311,14 +310,14 @@ function KanbanBoardContent({
               {hasActiveFilters ? ` (${activeFilterCount})` : ''}
             </PButton>
             <span
-              className="kanban-live-region"
+              className="absolute -left-[9999px]"
               data-testid="filter-result-count-live"
               aria-live="polite"
             >
               {filterAnnouncement}
             </span>
             {hasActiveFilters ? (
-              <span className="kanban-filter-count" data-testid="filter-result-count">
+              <span className="whitespace-nowrap rounded-full border border-contrast-low bg-[var(--p-color-frosted-soft)] px-2 py-0.5 text-xs font-semibold leading-normal text-primary" data-testid="filter-result-count">
                 {filteredTasks.length} / {tasks.length} tasks
               </span>
             ) : null}
@@ -338,9 +337,10 @@ function KanbanBoardContent({
         />
 
         <div
-          className="kanban-columns"
+          className="grid flex-1 min-h-0 gap-static-md overflow-x-auto overflow-y-hidden p-static-md [scrollbar-gutter:stable]"
           // inline-justified: grid column count is runtime-driven by board status count.
           style={{
+            display: 'grid',
             gridTemplateColumns: `repeat(${board.statuses.length}, minmax(var(--kanban-column-min), 1fr))`,
           }}
         >
@@ -384,7 +384,7 @@ function KanbanBoardContent({
       {contextMenu && (
         <div
           ref={menuRef}
-          className="kanban-context-menu"
+          className="fixed z-50 min-w-[160px] overflow-hidden rounded-md border border-contrast-low bg-surface py-1 shadow-lg"
           data-testid="context-menu"
           role="menu"
           aria-label="Task actions"
@@ -398,6 +398,7 @@ function KanbanBoardContent({
               data-status={target}
               role="menuitem"
               tabIndex={-1}
+              className="block w-full cursor-pointer px-3 py-2 text-left text-sm hover:bg-[var(--p-color-frosted)]"
               onKeyDown={(event) => {
                 if (event.key === 'Enter' || event.key === ' ') {
                   event.preventDefault()
@@ -439,6 +440,7 @@ function KanbanBoardContent({
           {(board.valid_transitions[contextMenu.taskStatus] ?? []).includes('archived') ? null : (
             <div
               role="menuitem"
+              className="block w-full cursor-pointer px-3 py-2 text-left text-sm hover:bg-[var(--p-color-frosted)]"
               onClick={() =>
                 void handleTransitionClick(
                   contextMenu.taskId,

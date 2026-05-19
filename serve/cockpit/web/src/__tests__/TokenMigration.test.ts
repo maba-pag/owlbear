@@ -175,67 +175,28 @@ describe('retired legacy token tests', () => {
 })
 
 // ─── AC-4: Updated test files assert --p-* equivalents ────────────────────────
+// Card.css.supplemental.test.ts was removed — Card.css is replaced by PDS Tailwind in Card.tsx.
+// Signal border mapping is enforced via Card.visual-treatment.test.tsx DOM tests.
+// --custom-signal-claimed is used in Card.tsx source (inline Tailwind class).
 
 describe('migrated token test coverage', () => {
-  it('AC-4: Card.css.supplemental.test.ts asserts the migrated --p-color-contrast-medium token', () => {
-    const path = resolve(TESTS_DIR, 'Card.css.supplemental.test.ts')
-    expect(existsSync(path), 'Card.css.supplemental.test.ts must exist').toBe(true)
-    const source = readFileSync(path, 'utf-8')
-    expect(
-      source,
-      'Card.css.supplemental.test.ts must reference --p-color-contrast-medium (PDS v4 replacement)',
-    ).toMatch(/--p-color-contrast-medium/)
-  })
-
-  it('AC-4: Card.css.supplemental.test.ts no longer asserts var(--pds-contrast-medium) as a declaration value', () => {
-    const path = resolve(TESTS_DIR, 'Card.css.supplemental.test.ts')
-    expect(existsSync(path)).toBe(true)
-    const source = readFileSync(path, 'utf-8')
-    expect(
-      source,
-      'Card.css.supplemental.test.ts must not retain --pds-contrast-medium assertions after migration',
-    ).not.toMatch(/var\(--pds-contrast-medium\)/)
-  })
-
   it('AC-4: BoardVisualDesign.test.tsx no longer asserts [data-theme="dark"] block in tokens.css (file deleted)', () => {
     const path = resolve(TESTS_DIR, 'BoardVisualDesign.test.tsx')
     expect(existsSync(path), 'BoardVisualDesign.test.tsx must exist (updated, not retired)').toBe(true)
     const source = readFileSync(path, 'utf-8')
-    // After migration: tokens.css is deleted; the DarkThemeTokenCoverage tests that read it must be removed.
-    // The assertion '[data-theme="dark"] block overrides all :root color tokens' is no longer applicable.
     expect(
       source,
       'BoardVisualDesign.test.tsx must not assert [data-theme="dark"] override block — tokens.css is deleted',
     ).not.toMatch(/\[data-theme\s*=\s*["']dark["']\]\s*block/)
   })
 
-  it('AC-4: BoardVisualDesign.test.tsx card signal border uses --custom-signal-claimed (not retired --custom-signal-claimed)', () => {
-    const path = resolve(TESTS_DIR, 'BoardVisualDesign.test.tsx')
-    expect(existsSync(path)).toBe(true)
-    const source = readFileSync(path, 'utf-8')
+  it('AC-4: Card.tsx source uses --custom-signal-claimed for claimed signal border', () => {
+    const cardPath = resolve(TESTS_DIR, '..', 'components', 'Card.tsx')
+    expect(existsSync(cardPath), 'Card.tsx must exist').toBe(true)
+    const source = readFileSync(cardPath, 'utf-8')
     expect(
       source,
-      'BoardVisualDesign.test.tsx must assert --custom-signal-claimed for claimed signal border (PDS has no purple)',
+      'Card.tsx must use --custom-signal-claimed token for claimed signal border (PDS has no purple)',
     ).toMatch(/--custom-signal-claimed/)
-  })
-
-  it('AC-4: Shell.secondary-css.test.tsx does not assert the retired --pds-background-surface token name', () => {
-    const path = resolve(TESTS_DIR, 'Shell.secondary-css.test.tsx')
-    expect(existsSync(path), 'Shell.secondary-css.test.tsx must exist').toBe(true)
-    const source = readFileSync(path, 'utf-8')
-    expect(
-      source,
-      'Shell.secondary-css.test.tsx must not retain --pds-background-surface assertions (replaced by --p-color-surface)',
-    ).not.toMatch(/--pds-background-surface/)
-  })
-
-  it('AC-4: Shell.secondary-css.test.tsx asserts the PDS v4 --p-color-surface token', () => {
-    const path = resolve(TESTS_DIR, 'Shell.secondary-css.test.tsx')
-    expect(existsSync(path)).toBe(true)
-    const source = readFileSync(path, 'utf-8')
-    expect(
-      source,
-      'Shell.secondary-css.test.tsx must reference --p-color-surface (PDS v4 replacement for --pds-background-surface)',
-    ).toMatch(/--p-color-surface/)
   })
 })

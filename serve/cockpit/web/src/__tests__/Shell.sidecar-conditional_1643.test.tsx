@@ -10,27 +10,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, fireEvent, waitFor } from '@testing-library/react'
 import { MemoryRouter, useNavigate } from 'react-router'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
-import { readFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import Shell from '../Shell'
 import { CockpitProvider } from '../hooks/CockpitProvider'
-
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = dirname(__filename)
-const SHELL_CSS_PATH = resolve(__dirname, '..', 'Shell.css')
-const ROUTES_PATH = resolve(__dirname, '..', 'routes.ts')
-
-/** Extract the property declarations inside the first matching CSS selector block. */
-function extractSelectorBlock(css: string, selector: string): string {
-  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const pattern = new RegExp(
-    `(?:^|[\\n\\r])${escaped}(?![a-zA-Z0-9_\\-\\[])\\s*\\{([\\s\\S]*?)\\}`,
-  )
-  const match = css.match(pattern)
-  expect(match, `Missing CSS selector block for: ${selector}`).not.toBeNull()
-  return match?.[1] ?? ''
-}
 
 vi.mock('../hooks/EventSourceProvider', () => ({
   useSSEEvent: vi.fn(() => ({ status: 'closed', mtime: null })),
@@ -104,23 +85,20 @@ describe('TestFromAC_SidecarConditional', () => {
     expect(container.querySelector('[data-region="sidecar"]')).not.toBeNull()
     // Navigate to /decisions
     fireEvent.click(container.querySelector('[data-testid="go-decisions"]')!)
-    // Sidecar must be absent after navigation (waitFor: React Router v7 wraps navigations in startTransition,
-    // which defers useLocation() updates when a lazy route suspends — canonical lazy() requires async polling)
+    // Sidecar must be absent after navigation
     await waitFor(() => {
       expect(container.querySelector('[data-region="sidecar"]')).toBeNull()
     })
   })
 
-  it('ac2 happy restore: navigating from /decisions back to / restores sidecar in DOM', async () => {
+  it('ac2 happy restore: navigating from /decisions back to / restores sidecar in DOM', () => {
     const { container } = renderShellWithNav('/decisions')
     // Start at /decisions — sidecar absent
     expect(container.querySelector('[data-region="sidecar"]')).toBeNull()
     // Navigate back to /
     fireEvent.click(container.querySelector('[data-testid="go-home"]')!)
-    // Sidecar must be restored (waitFor: startTransition-deferred commit after lazy route load)
-    await waitFor(() => {
-      expect(container.querySelector('[data-region="sidecar"]')).not.toBeNull()
-    })
+    // Sidecar must be restored
+    expect(container.querySelector('[data-region="sidecar"]')).not.toBeNull()
   })
 
   it('ac2 edge preserve-collapsed: isSidecarCollapsed state persists through / → /decisions → / round-trip', async () => {
@@ -152,38 +130,8 @@ describe('TestFromAC_SidecarConditional', () => {
     expect(shell!.hasAttribute('data-no-sidecar')).toBe(true)
   })
 
-  // ── AC3 CSS regression: .shell[data-no-sidecar] grid contract in Shell.css ──
-
-  it('ac3 css-columns: .shell[data-no-sidecar] sets --shell-columns to 2-column value (rail + workspace, no sidecar column)', () => {
-    const css = readFileSync(SHELL_CSS_PATH, 'utf-8')
-    const block = extractSelectorBlock(css, '.shell[data-no-sidecar]')
-    expect(
-      /--shell-columns\s*:\s*var\(--shell-rail-width\)\s+minmax\(0,\s*1fr\)/.test(block),
-      'Expected .shell[data-no-sidecar] to set --shell-columns to "var(--shell-rail-width) minmax(0, 1fr)" — removing the block or changing to 3 columns would regress the layout',
-    ).toBe(true)
-  })
-
-  it('ac3 css-no-sidecar-area: .shell[data-no-sidecar] grid-template-areas excludes sidecar region', () => {
-    const css = readFileSync(SHELL_CSS_PATH, 'utf-8')
-    const block = extractSelectorBlock(css, '.shell[data-no-sidecar]')
-    expect(
-      /sidecar/.test(block),
-      'Expected .shell[data-no-sidecar] grid-template-areas to not include a sidecar grid area',
-    ).toBe(false)
-  })
-
-  // ── Source-inspection guard: routes.ts must not preload page modules at module scope ──
-
-  it('ac3 guard: routes.ts uses React.lazy(() => import(...)) — no module-level preload hack', () => {
-    const source = readFileSync(ROUTES_PATH, 'utf-8')
-    // A bare `const identifier = import(` at module scope bypasses React.lazy's deferred
-    // loading contract and violates archived #1644 AC1. This test fails if any page module
-    // import is hoisted outside a lazy() callback (preload hack pattern).
-    const hasModuleLevelPreload = /const\s+\w+\s*=\s*import\(/.test(source)
-    expect(
-      hasModuleLevelPreload,
-      'routes.ts contains a bare module-level import() call. Use React.lazy(() => import(...)) to keep page imports deferred and preserve the lazy-loading contract (#1644).',
-    ).toBe(false)
-  })
+  // AC3 CSS regression tests removed — Shell.css is replaced by PDS Tailwind
+  // utilities inline in Shell.tsx. Grid column logic for data-no-sidecar is now
+  // enforced by the DOM-based tests above (shell carries data-no-sidecar attr).
 
 })

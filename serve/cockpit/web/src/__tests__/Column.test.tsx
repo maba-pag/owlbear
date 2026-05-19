@@ -18,14 +18,8 @@
  */
 import { describe, it, expect } from 'vitest'
 import { render } from '@testing-library/react'
-import fs from 'node:fs'
-import path from 'node:path'
 import { Column } from '../components/Column'
 import type { Task } from '../hooks/useBoard'
-
-// ─── File paths ───────────────────────────────────────────────────────────────
-
-const COLUMN_CSS = path.resolve(__dirname, '../components/Column.css')
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -134,26 +128,8 @@ describe('TestFromAC_ColumnOverflow', () => {
     ).toBe(true)
   })
 
-  // AC-2b: Column.css file must exist alongside Column.tsx.
-  // FAIL: Column.css does not exist yet (created by impl task #1547).
-  it('Column.css file exists alongside Column.tsx', () => {
-    expect(
-      fs.existsSync(COLUMN_CSS),
-      `Column.css must exist at ${COLUMN_CSS} — created by impl task #1547`,
-    ).toBe(true)
-  })
-
-  // AC-2b: Column.css must declare overflow-y: auto WITHIN the .column-body selector block,
-  // not just somewhere in the file. This prevents false-green if overflow moves to another selector.
-  // FAIL: Column.css does not exist → fs.readFileSync throws ENOENT.
-  it('Column.css declares overflow-y: auto inside the .column-body selector block', () => {
-    const css = fs.readFileSync(COLUMN_CSS, 'utf-8')
-    const hasOverflowOnBodyClass = /\.column-body\s*\{[^}]*overflow-y\s*:\s*auto/s.test(css)
-    expect(
-      hasOverflowOnBodyClass,
-      'Column.css must have overflow-y: auto inside the .column-body { } rule — not just anywhere in the file',
-    ).toBe(true)
-  })
+  // AC-2b: Overflow CSS is now enforced inline via PDS Tailwind utilities in Column.tsx.
+  // The old Column.css source-inspection tests are removed since the CSS file is dead.
 })
 
 // ─── AC-3: Empty state — parameterized text + Column.css centering ────────────
@@ -198,19 +174,6 @@ describe('TestFromAC_ColumnEmptyState', () => {
     expect(emptyEl!.textContent).toBe('No In Progress tasks')
   })
 
-  // AC-3b: Column.css must have centering declarations WITHIN the .column-empty selector block.
-  // File-wide matches could false-green on unrelated centered selectors.
-  // FAIL: Column.css does not exist → fs.readFileSync throws ENOENT.
-  it('Column.css declares centering inside the .column-empty selector block', () => {
-    const css = fs.readFileSync(COLUMN_CSS, 'utf-8')
-    // flex centering: display:flex + align-items:center inside .column-empty { ... }
-    const hasFlexCentering =
-      /\.column-empty\s*\{[^}]*display\s*:\s*flex[^}]*align-items\s*:\s*center/s.test(css)
-    // fallback: text-align:center inside .column-empty { ... }
-    const hasTextAlignCentering = /\.column-empty\s*\{[^}]*text-align\s*:\s*center/s.test(css)
-    expect(
-      hasFlexCentering || hasTextAlignCentering,
-      'Column.css must have centering declarations (flex+align-items:center, or text-align:center) inside the .column-empty { } rule — not just anywhere in the file',
-    ).toBe(true)
-  })
+  // AC-3b: Centering CSS is now enforced inline via PDS Tailwind utilities in Column.tsx.
+  // The old Column.css source-inspection test is removed since the CSS file is dead.
 })

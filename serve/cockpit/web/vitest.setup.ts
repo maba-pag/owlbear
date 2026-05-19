@@ -25,6 +25,11 @@ if (typeof window !== 'undefined') {
   window.cancelAnimationFrame = globalThis.cancelAnimationFrame
 }
 
+// PDS TabsBar animateBar() calls bar.getAnimations() which jsdom lacks.
+if (typeof Element !== 'undefined' && !Element.prototype.getAnimations) {
+  Element.prototype.getAnimations = function () { return [] }
+}
+
 if (typeof window !== 'undefined') {
   Object.defineProperty(window, 'matchMedia', {
     configurable: true,

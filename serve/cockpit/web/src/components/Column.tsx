@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Card } from './Card'
 import type { Task } from '../hooks/useBoard'
-import './Column.css'
 
 export interface ColumnProps {
   status: string
@@ -95,7 +94,11 @@ export function Column({
 
   return (
     <div
-      className="column"
+      className={[
+        'column',
+        'flex min-w-[var(--kanban-column-min)] flex-col overflow-hidden rounded-md border border-contrast-low bg-surface',
+        isDragOver && isValidDragTarget ? 'bg-[var(--p-color-frosted)]' : '',
+      ].join(' ')}
       data-column={status}
       data-density={density}
       data-drag-over={isDragOver && isValidDragTarget ? 'true' : undefined}
@@ -115,13 +118,20 @@ export function Column({
         onDrop(status)
       }}
     >
-      <header>
+      <header className="flex min-h-11 shrink-0 items-center justify-between border-b border-contrast-low px-static-sm text-[0.8125rem] font-semibold capitalize">
         <span>{displayStatus}</span>
-        <span className="column-count" data-testid="column-count">{tasks.length}</span>
+        <span className="rounded-full border border-contrast-low bg-[var(--p-color-frosted-soft)] px-2 py-0.5 text-xs font-semibold" data-testid="column-count">{tasks.length}</span>
       </header>
-      <div ref={bodyRef} className="column-body" data-testid="column-body">
+      <div
+        ref={bodyRef}
+        className={[
+          'column-body relative flex min-h-0 min-w-0 flex-1 flex-col gap-static-sm overflow-y-auto p-static-sm',
+          density === 'empty' || density === 'sparse' ? 'bg-[var(--p-color-frosted-soft)]' : 'bg-canvas',
+        ].join(' ')}
+        data-testid="column-body"
+      >
         {sorted.length === 0 ? (
-          <div className="column-empty" data-testid="empty-column">{`No ${displayStatus} tasks`}</div>
+          <div className="flex min-h-[120px] items-center justify-center rounded-md border border-dashed border-contrast-low bg-surface p-static-md text-center text-xs text-contrast-high opacity-70" data-testid="empty-column">{`No ${displayStatus} tasks`}</div>
         ) : (
           sorted.map((task) => (
             <Card

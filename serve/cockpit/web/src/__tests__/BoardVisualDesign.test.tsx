@@ -23,9 +23,6 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render } from '@testing-library/react'
-import { readFileSync } from 'node:fs'
-import { resolve, dirname } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { MemoryRouter } from 'react-router'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
 import KanbanBoard from '../KanbanBoard'
@@ -51,15 +48,6 @@ vi.mock('../hooks/EventSourceProvider', () => ({
 }))
 
 import Shell from '../Shell'
-
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = dirname(__filename)
-
-// ─── CSS file paths ────────────────────────────────────────────────────────────
-
-const CARD_CSS_PATH = resolve(__dirname, '..', 'components', 'Card.css')
-const COLUMN_CSS_PATH = resolve(__dirname, '..', 'components', 'Column.css')
-const KANBAN_CSS_PATH = resolve(__dirname, '..', 'KanbanBoard.css')
 
 // ─── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -124,16 +112,6 @@ function renderCard(task: Task, pendingDRIds: Set<number> = new Set()) {
       onDragEnd={() => {}}
     />,
   )
-}
-
-// ─── CSS helpers ───────────────────────────────────────────────────────────────
-
-function getCSSBlock(css: string, selector: string): string | null {
-  const stripped = css.replace(/\/\*[\s\S]*?\*\//g, '')
-  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const pattern = new RegExp(`${escaped}\\s*\\{([^}]*)\\}`)
-  const match = stripped.match(pattern)
-  return match ? match[1] : null
 }
 
 // ─── AC-1: Board integration — all 4 board-level signal states ────────────────
@@ -257,79 +235,10 @@ describe('ThemeTogglePresence', () => {
   })
 })
 
-// ─── AC-2: Component CSS files use only var(--pds-*) for color values ─────────
-
-describe('ComponentCSSTokensOnly', () => {
-  // Match hardcoded hex codes and color functions. Does NOT flag `transparent` or
-  // `currentColor` which are CSS semantic keywords, not design-token violations.
-  const HARDCODED_COLOR_RE = /#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(/i
-
-  it('Card.css contains no hardcoded hex or rgb()/hsl() color literals', () => {
-    const css = readFileSync(CARD_CSS_PATH, 'utf-8')
-    const withoutComments = css.replace(/\/\*[\s\S]*?\*\//g, '')
-    expect(
-      HARDCODED_COLOR_RE.test(withoutComments),
-      'Card.css must use only var(--pds-*) for color values — found hardcoded hex/rgb/hsl literal',
-    ).toBe(false)
-  })
-
-  it('Column.css contains no hardcoded hex or rgb()/hsl() color literals', () => {
-    const css = readFileSync(COLUMN_CSS_PATH, 'utf-8')
-    const withoutComments = css.replace(/\/\*[\s\S]*?\*\//g, '')
-    expect(
-      HARDCODED_COLOR_RE.test(withoutComments),
-      'Column.css must use only var(--pds-*) for color values — found hardcoded hex/rgb/hsl literal',
-    ).toBe(false)
-  })
-
-  it('KanbanBoard.css contains no hardcoded hex or rgb()/hsl() color literals', () => {
-    const css = readFileSync(KANBAN_CSS_PATH, 'utf-8')
-    const withoutComments = css.replace(/\/\*[\s\S]*?\*\//g, '')
-    expect(
-      HARDCODED_COLOR_RE.test(withoutComments),
-      'KanbanBoard.css must use only var(--pds-*) for color values — found hardcoded hex/rgb/hsl literal',
-    ).toBe(false)
-  })
-})
-
-// ─── AC-3: Card signal left-border CSS mapping (base rule + all 4 overrides) ──
-
-describe('CardSignalBorderMapping', () => {
-  it('.card base rule declares border-left: 4px solid var(--p-color-contrast-medium)', () => {
-    const css = readFileSync(CARD_CSS_PATH, 'utf-8')
-    const block = getCSSBlock(css, '.card')
-    expect(block, '.card rule must exist in Card.css').not.toBeNull()
-    expect(block).toMatch(/border-left\s*:\s*4px\s+solid\s+var\(--p-color-contrast-medium\)/)
-  })
-
-  it('[data-signal="dr-pending"] → border-left-color: var(--p-color-warning) (orange)', () => {
-    const css = readFileSync(CARD_CSS_PATH, 'utf-8')
-    const block = getCSSBlock(css, '[data-signal="dr-pending"]')
-    expect(block, '[data-signal="dr-pending"] block must exist').not.toBeNull()
-    expect(block).toMatch(/border-left-color\s*:\s*var\(--p-color-warning\)/)
-  })
-
-  it('[data-signal="blocked"] → border-left-color: var(--p-color-error) (red)', () => {
-    const css = readFileSync(CARD_CSS_PATH, 'utf-8')
-    const block = getCSSBlock(css, '[data-signal="blocked"]')
-    expect(block, '[data-signal="blocked"] block must exist').not.toBeNull()
-    expect(block).toMatch(/border-left-color\s*:\s*var\(--p-color-error\)/)
-  })
-
-  it('[data-signal="claimed"] → border-left-color: var(--custom-signal-claimed) (custom purple)', () => {
-    const css = readFileSync(CARD_CSS_PATH, 'utf-8')
-    const block = getCSSBlock(css, '[data-signal="claimed"]')
-    expect(block, '[data-signal="claimed"] block must exist').not.toBeNull()
-    expect(block).toMatch(/border-left-color\s*:\s*var\(--custom-signal-claimed\)/)
-  })
-
-  it('[data-signal="deps-unmet"] → border-left-color: var(--p-color-contrast-medium) (grey)', () => {
-    const css = readFileSync(CARD_CSS_PATH, 'utf-8')
-    const block = getCSSBlock(css, '[data-signal="deps-unmet"]')
-    expect(block, '[data-signal="deps-unmet"] block must exist').not.toBeNull()
-    expect(block).toMatch(/border-left-color\s*:\s*var\(--p-color-contrast-medium\)/)
-  })
-})
+// ─── AC-2 & AC-3: CSS source-inspection tests removed ────────────────────────
+// Card.css, Column.css, KanbanBoard.css are now fully replaced by PDS Tailwind
+// utilities inlined in Card.tsx, Column.tsx, and KanbanBoard.tsx.
+// Signal border mapping is now enforced via Card.visual-treatment.test.tsx DOM tests.
 
 // ─── AC-1(c): Shell-level integration — ThemeToggle and DRStatusIndicator ─────
 //

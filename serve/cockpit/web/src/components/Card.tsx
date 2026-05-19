@@ -1,8 +1,35 @@
 import { useState } from 'react'
-import { PTag } from '@porsche-design-system/components-react'
+import { PIcon, PTag } from '@porsche-design-system/components-react'
+import { motion } from 'framer-motion'
 import type { Task } from '../hooks/useBoard'
 import { computeSignal } from '../utils/computeSignal'
-import './Card.css'
+
+function statusToVariant(status: string): 'primary' | 'success' | 'warning' | 'error' | 'secondary' {
+  switch (status) {
+    case 'done': return 'success'
+    case 'in-progress': return 'warning'
+    case 'blocked': return 'error'
+    case 'todo': return 'primary'
+    default: return 'secondary'
+  }
+}
+
+function priorityToVariant(priority: string): 'error' | 'warning' | 'primary' | 'secondary' {
+  switch (priority) {
+    case 'critical': return 'error'
+    case 'needed':
+    case 'important': return 'warning'
+    case 'nice-to-have': return 'primary'
+    default: return 'secondary'
+  }
+}
+
+const SIGNAL_ICON_NAME: Record<string, string> = {
+  blocked: 'lock',
+  'dr-pending': 'information',
+  claimed: 'user',
+  'deps-unmet': 'link',
+}
 
 const TAG_PREVIEW_LIMIT = 3
 
@@ -79,8 +106,24 @@ export function Card({
     }
   }
 
+  // Compute border-left signal color
+  const signalBorderClass =
+    signal === 'blocked' ? 'border-l-[var(--p-color-error)]' :
+    signal === 'dr-pending' ? 'border-l-[var(--p-color-warning)]' :
+    signal === 'claimed' ? 'border-l-[var(--custom-signal-claimed)]' :
+    signal === 'deps-unmet' ? 'border-l-[var(--p-color-contrast-medium)]' :
+    signal === 'ready' && task.priority === 'critical' ? 'border-l-[var(--p-color-error)]' :
+    signal === 'ready' && (task.priority === 'needed' || task.priority === 'important') ? 'border-l-[var(--p-color-warning)]' :
+    'border-l-contrast-medium'
+
   return (
-    <div
+    <motion.div
+        layout
+        layoutId={`card-${task.id}`}
+        initial={{ opacity: 0, scale: 0.96 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.96 }}
+        transition={{ layout: { duration: 0.25, ease: 'easeOut' }, opacity: { duration: 0.15 } }}
         data-testid="task-card"
         data-id={task.id}
         data-priority={task.priority}
@@ -93,7 +136,18 @@ export function Card({
         aria-label={
           `Task #${task.id}: ${task.title}. ${task.priority} priority. ${signalLabel}. Updated ${updatedAge}.`
         }
-        className="card"
+        className={[
+          'card',
+          'flex min-h-[108px] items-start overflow-hidden rounded-md border border-contrast-low border-l-4 bg-canvas',
+          'px-static-sm pb-static-sm pt-2.5 text-xs leading-normal',
+          'cursor-pointer shadow-md',
+          'transition-[box-shadow,background-color,border-color] duration-sm',
+          'hover:-translate-y-0.5 hover:bg-[var(--p-color-frosted)] hover:shadow-lg',
+          'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]',
+          signalBorderClass,
+          selected ? 'shadow-[inset_0_0_0_1px_var(--p-color-success),var(--p-shadow-sm)] bg-[var(--p-color-success-frosted)]' : '',
+          dragging ? 'opacity-50' : '',
+        ].join(' ')}
         draggable={true}
         onClick={() => onSelect?.(task.id)}
         onKeyDown={handleKeyDown}
@@ -108,23 +162,69 @@ export function Card({
         }}
         onContextMenu={(e) => onContextMenu(e, task)}
     >
-      <div className="card-main">
-          <div className="card-header-row" aria-hidden="true">
-            <span data-testid="card-id" className="card-chip card-id">
-              #{task.id}
-            </span>
-            <span data-testid="card-updated" className="card-chip card-updated" aria-label={`Updated ${updatedAge}`}>
+      <div className="flex min-h-[88px] w-full min-w-0 flex-col gap-1.5">
+          {/* Top row: id + signal icon + updated */}
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-static-xs" aria-hidden="true">
+            <div className="flex items-center gap-static-xs">
+              <span data-testid="card-id" className="rounded-full border border-contrast-low px-2 py-px font-mono text-[0.72rem] leading-normal text-contrast-high">
+                #{task.id}
+              </span>
+              {signal !== 'ready' && SIGNAL_ICON_NAME[signal] ? (
+                <PIcon
+                  size="xs"
+                  aria-label={signal}
+                  name={SIGNAL_ICON_NAME[signal] as never}
+                  ref={(el) => { if (el) { el.setAttribute('size', 'xs'); el.setAttribute('aria-label', signal) } }}
+                />
+              ) : null}
+            </div>
+            <span data-testid="card-updated" className="text-[0.72rem] leading-normal text-contrast-medium" aria-label={`Updated ${updatedAge}`}>
               {updatedAge}
             </span>
           </div>
 
-          <span data-testid="card-title" className="card-title" title={task.title}>
+          <span data-testid="card-title" className="line-clamp-2 text-sm font-semibold leading-tight" title={task.title}>
             {task.title}
           </span>
 
+          {/* Status + Priority chips */}
+          <div className="flex min-w-0 flex-wrap items-center gap-static-xs">
+            <PTag
+              compact
+              data-testid="card-status"
+              variant={statusToVariant(task.status)}
+              ref={(el) => { if (el) { el.setAttribute('compact', ''); el.setAttribute('variant', statusToVariant(task.status)); el.setAttribute('data-testid', 'card-status') } }}
+            >
+              {task.status}
+            </PTag>
+            <PTag
+              compact
+              data-testid="card-priority"
+              variant={priorityToVariant(task.priority)}
+              ref={(el) => { if (el) { el.setAttribute('compact', ''); el.setAttribute('variant', priorityToVariant(task.priority)); el.setAttribute('data-testid', 'card-priority') } }}
+            >
+              {task.priority}
+            </PTag>
+          </div>
+
+          {/* Signal cue spans (conditionally rendered) */}
+          {task.blocked ? (
+            <span data-testid="card-blocked-cue" className="text-[0.72rem] font-medium text-error">Blocked</span>
+          ) : null}
+          {task.claimed ? (
+            <span data-testid="card-claimed-cue" className="text-[0.72rem] font-medium text-[var(--custom-signal-claimed)]">Claimed</span>
+          ) : null}
+          {task.dep_status === 'blocked' ? (
+            <span data-testid="card-deps-unmet-cue" className="text-[0.72rem] font-medium text-contrast-medium">Dependencies blocked</span>
+          ) : null}
+          {pendingDRIds.has(task.id) ? (
+            <span data-testid="card-dr-pending-cue" className="text-[0.72rem] font-medium text-warning">Decision pending</span>
+          ) : null}
+
+          {/* Tags */}
           {task.tags.length > 0 ? (
-            <div className="card-tags-row">
-              <span data-testid="card-tags" className="card-tags" aria-label={`Tags: ${previewTags.join(', ')}`}>
+            <div className="mt-auto flex min-w-0 flex-wrap items-center gap-static-xs opacity-80">
+              <span data-testid="card-tags" className="max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-contrast-medium" aria-label={`Tags: ${previewTags.join(', ')}`}>
                 {previewTags.map((tag) => (
                   <PTag
                     key={tag}
@@ -144,7 +244,7 @@ export function Card({
               {overflowTags > 0 ? (
                 <span
                   data-testid="card-tag-overflow"
-                  className="card-chip card-tag-overflow"
+                  className="rounded-full border border-contrast-low px-2 py-px text-[0.72rem] leading-normal text-contrast-high"
                   aria-label={`${overflowTags} more tags`}
                 >
                   +{overflowTags}
@@ -153,6 +253,6 @@ export function Card({
             </div>
           ) : null}
       </div>
-    </div>
+    </motion.div>
   )
 }
