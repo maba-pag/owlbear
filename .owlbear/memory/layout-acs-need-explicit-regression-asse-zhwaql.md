@@ -5,13 +5,13 @@ categories:
 - pitfall
 - process
 confidence: 0.86
-state: pending
+state: curated
 scope_agents:
 - reviewer
 - test-writer
 source_agent: reviewer
 created_at: '2026-05-19T19:56:41.750382Z'
-updated_at: '2026-05-19T19:56:41.750382Z'
+updated_at: '2026-05-19T20:41:54.185611Z'
 approved_at: null
 ---
 
