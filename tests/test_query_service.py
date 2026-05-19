@@ -353,6 +353,27 @@ class TestFromAC_RetrievalPath:
         assert results[0].retrieval_path == "vector"
         assert results[0].graph_context == ""
 
+    @pytest.mark.asyncio
+    async def test_retriever_receives_similarity_threshold(self) -> None:
+        """Retriever graph expansion uses the same similarity threshold as structured results."""
+        retriever = _mock_retriever(entities_found=1)
+        service = KnowledgeQueryService(
+            vector_store=_mock_vector_store(),
+            graph_store=_mock_graph_store(),
+            embedding_provider=_mock_embedding_provider(),
+            retriever=retriever,
+            similarity_threshold=0.7,
+        )
+
+        await _query(service)
+
+        retriever.retrieve.assert_called_with(
+            "test query",
+            top_k=5,
+            scopes=None,
+            similarity_threshold=0.7,
+        )
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # AC2b: effective scopes applied consistently (td:2)

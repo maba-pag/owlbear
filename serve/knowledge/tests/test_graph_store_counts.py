@@ -152,3 +152,38 @@ class TestFromAC_GraphStoreGetCounts:
         assert len(non_self_params) == 0, (
             f"get_counts() should take no params (SQL COUNT is O(1)), got: {[p.name for p in non_self_params]}"
         )
+
+
+class TestFromAC_GraphStoreInsertEdgeDocumentId:
+    """GraphStore.insert_edge keeps edge document provenance compatible with the schema."""
+
+    def test_insert_edge_infers_document_id_from_source_entity(self) -> None:
+        """insert_edge(edge) stores source entity document_id when no explicit document_id is provided."""
+        conn = sqlite3.connect(":memory:")
+        init_db(conn)
+        graph = GraphStore(conn)
+        graph.insert_document(Document(id="d1", title="Doc 1", content="content one"))
+        graph.insert_document(Document(id="d2", title="Doc 2", content="content two"))
+        graph.insert_entity(Entity(id="e1", name="Alpha", entity_type=EntityType.CONCEPT, document_id="d1"))
+        graph.insert_entity(Entity(id="e2", name="Beta", entity_type=EntityType.CONCEPT, document_id="d2"))
+
+        graph.insert_edge(Edge(id="edge-source", source_id="e1", target_id="e2", relation=RelationType.RELATED_TO))
+
+        row = conn.execute("SELECT document_id FROM edges WHERE id = 'edge-source'").fetchone()
+        assert row == ("d1",)
+
+    def test_insert_edge_raises_clear_error_when_document_id_unresolved(self) -> None:
+        """insert_edge(edge) fails before SQLite when neither endpoint can provide document provenance."""
+        conn = sqlite3.connect(":memory:")
+        init_db(conn)
+        graph = GraphStore(conn)
+
+        with pytest.raises(ValueError, match="edge document_id is required"):
+            graph.insert_edge(
+                Edge(
+                    id="edge-missing",
+                    source_id="missing-a",
+                    target_id="missing-b",
+                    relation=RelationType.RELATED_TO,
+                )
+            )

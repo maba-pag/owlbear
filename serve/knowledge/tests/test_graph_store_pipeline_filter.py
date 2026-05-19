@@ -33,3 +33,31 @@ def test_pipeline_name_filters_match_stored_extraction_metadata() -> None:
     assert [edge.id for edge in graph.list_edges(pipeline_name="ingest")] == ["edge-a"]
     assert graph.list_entities(pipeline_name="other") == []
     assert graph.list_edges(pipeline_name="other") == []
+
+
+def test_store_extractions_ignores_duplicate_edge_facts() -> None:
+    conn = sqlite3.connect(":memory:")
+    init_db(conn)
+    graph = GraphStore(conn)
+    docs = DocumentStore(conn, graph, MagicMock(), MagicMock())
+    extraction = ExtractionResult(
+        entities=[
+            Entity(id="entity-a", name="A", entity_type=EntityType.CONCEPT),
+            Entity(id="entity-b", name="B", entity_type=EntityType.CONCEPT),
+        ],
+        edges=[
+            Edge(id="edge-a", source_id="entity-a", target_id="entity-b", relation=RelationType.RELATED_TO),
+            Edge(id="edge-b", source_id="entity-a", target_id="entity-b", relation=RelationType.RELATED_TO),
+        ],
+    )
+
+    entity_count, edge_count = docs.store_extractions(
+        [extraction],
+        document_id="doc-1",
+        chunk_ids=["chunk-1"],
+        pipeline_name="ingest",
+    )
+
+    assert entity_count == 2
+    assert edge_count == 1
+    assert conn.execute("SELECT COUNT(*) FROM edges").fetchone() == (1,)

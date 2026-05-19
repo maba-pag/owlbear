@@ -95,3 +95,19 @@ class TestFromAC_KnowledgeToolAnnotations:
         assert ann.idempotentHint is True, (  # type: ignore[union-attr]
             f"Expected idempotentHint=True for get_stats, got: {ann.idempotentHint!r}"
         )
+
+    def test_get_consolidation_candidates_read_only_hint_true(self) -> None:
+        """get_consolidation_candidates is read-only: readOnlyHint must be True."""
+        ann = _get_tool_annotations("get_consolidation_candidates")
+        assert ann is not None
+        assert ann.readOnlyHint is True, (  # type: ignore[union-attr]
+            f"Expected readOnlyHint=True for get_consolidation_candidates, got: {ann.readOnlyHint!r}"
+        )
+
+    def test_get_consolidation_candidates_idempotent_hint_true(self) -> None:
+        """get_consolidation_candidates is idempotent for the same DB state."""
+        ann = _get_tool_annotations("get_consolidation_candidates")
+        assert ann is not None
+        assert ann.idempotentHint is True, (  # type: ignore[union-attr]
+            f"Expected idempotentHint=True for get_consolidation_candidates, got: {ann.idempotentHint!r}"
+        )

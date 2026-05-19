@@ -12,7 +12,7 @@ import pytest
 from mcp.server.fastmcp.exceptions import ToolError
 
 from owlbear_knowledge.graph_store import GraphStore
-from owlbear_knowledge.models import EntityType, RelationType
+from owlbear_knowledge.models import Edge, EntityType, RelationType
 from owlbear_knowledge.schema import init_db
 from owlbear_mcp_knowledge.server import (
     _MAX_ENRICHMENT_BATCH_SIZE,
@@ -172,6 +172,34 @@ async def test_consolidation_candidates_exclude_cross_scope_entities(conn: sqlit
 
 
 @pytest.mark.asyncio
+async def test_consolidation_candidates_ignore_non_consolidation_edges(conn: sqlite3.Connection) -> None:
+    source_a = _insert_source(conn, "Source A")
+    source_b = _insert_source(conn, "Source B")
+    doc_a = _insert_document(conn, source_a)
+    doc_b = _insert_document(conn, source_b)
+    entity_a = _insert_entity(conn, doc_a, "Shared Concept")
+    entity_b = _insert_entity(conn, doc_b, "Shared Concept")
+    graph = GraphStore(conn)
+
+    graph.insert_edge(Edge(source_id=entity_a, target_id=entity_b, relation=RelationType.RELATED_TO), document_id=doc_a)
+    related_candidates = await get_consolidation_candidates(_ctx(conn), limit=20)
+
+    assert len(related_candidates) == 1
+
+    graph.insert_edge(Edge(source_id=entity_a, target_id=entity_b, relation=RelationType.SAME_AS), document_id=doc_a)
+    same_as_candidates = await get_consolidation_candidates(_ctx(conn), limit=20)
+
+    assert same_as_candidates == []
+
+
+@pytest.mark.asyncio
+async def test_consolidation_candidates_reject_non_positive_limits(conn: sqlite3.Connection) -> None:
+    for limit in (0, -1):
+        with pytest.raises(ToolError):
+            await get_consolidation_candidates(_ctx(conn), limit=limit)
+
+
+@pytest.mark.asyncio
 async def test_phase2_rejects_cross_scope_candidate_id(conn: sqlite3.Connection) -> None:
     source_a = _insert_source(conn, "Source A", scope="alpha")
     source_b = _insert_source(conn, "Source B", scope="beta")
@@ -228,6 +256,84 @@ async def test_phase1_unknown_relation_fails_without_enriching_chunk(conn: sqlit
 
     state = conn.execute("SELECT enrichment_state FROM chunks WHERE id = ?", (chunk_id,)).fetchone()[0]
     assert state == "failed"
+
+
+@pytest.mark.asyncio
+async def test_phase1_rejects_chunks_when_source_enrichment_is_disabled(conn: sqlite3.Connection) -> None:
+    source_id = _insert_source(conn, "Source")
+    conn.execute("UPDATE knowledge_sources SET enrich = 0 WHERE id = ?", (source_id,))
+    document_id = _insert_document(conn, source_id)
+    chunk_id = _insert_chunk(conn, document_id, state="pending")
+
+    with pytest.raises(ToolError):
+        await store_enrichment(
+            _ctx(conn),
+            chunk_id=chunk_id,
+            entities=[{"name": "Alpha", "entity_type": "concept"}],
+            edges=[],
+        )
+
+    state = conn.execute("SELECT enrichment_state FROM chunks WHERE id = ?", (chunk_id,)).fetchone()[0]
+    assert state == "pending"
+    assert conn.execute("SELECT COUNT(*) FROM entities").fetchone()[0] == 0
+
+
+@pytest.mark.asyncio
+async def test_phase1_rejects_chunks_when_source_is_disabled(conn: sqlite3.Connection) -> None:
+    source_id = _insert_source(conn, "Source")
+    conn.execute("UPDATE knowledge_sources SET enabled = 0 WHERE id = ?", (source_id,))
+    document_id = _insert_document(conn, source_id)
+    chunk_id = _insert_chunk(conn, document_id, state="pending")
+
+    with pytest.raises(ToolError):
+        await store_enrichment(
+            _ctx(conn),
+            chunk_id=chunk_id,
+            entities=[{"name": "Alpha", "entity_type": "concept"}],
+            edges=[],
+        )
+
+    state = conn.execute("SELECT enrichment_state FROM chunks WHERE id = ?", (chunk_id,)).fetchone()[0]
+    assert state == "pending"
+    assert conn.execute("SELECT COUNT(*) FROM entities").fetchone()[0] == 0
+
+
+@pytest.mark.asyncio
+async def test_phase1_rejects_failed_chunks_without_persistence(conn: sqlite3.Connection) -> None:
+    source_id = _insert_source(conn, "Source")
+    document_id = _insert_document(conn, source_id)
+    chunk_id = _insert_chunk(conn, document_id, state="failed")
+
+    with pytest.raises(ToolError):
+        await store_enrichment(
+            _ctx(conn),
+            chunk_id=chunk_id,
+            entities=[{"name": "Alpha", "entity_type": "concept"}],
+            edges=[],
+        )
+
+    state = conn.execute("SELECT enrichment_state FROM chunks WHERE id = ?", (chunk_id,)).fetchone()[0]
+    assert state == "failed"
+    assert conn.execute("SELECT COUNT(*) FROM entities").fetchone()[0] == 0
+
+
+@pytest.mark.asyncio
+async def test_store_enrichment_rejects_ambiguous_mode_without_persistence(conn: sqlite3.Connection) -> None:
+    source_id = _insert_source(conn, "Source")
+    document_id = _insert_document(conn, source_id)
+    chunk_id = _insert_chunk(conn, document_id, state="pending")
+
+    with pytest.raises(ToolError):
+        await store_enrichment(
+            _ctx(conn),
+            chunk_id=chunk_id,
+            candidate_id="not-a-real-candidate",
+            entities=[],
+            edges=[],
+        )
+
+    state = conn.execute("SELECT enrichment_state FROM chunks WHERE id = ?", (chunk_id,)).fetchone()[0]
+    assert state == "pending"
 
 
 @pytest.mark.asyncio
@@ -330,6 +436,20 @@ async def test_get_next_batch_rejects_non_positive_limits_without_claiming(conn:
         with pytest.raises(ToolError):
             await get_next_batch(_ctx(conn), limit=limit)
 
+    state = conn.execute("SELECT enrichment_state FROM chunks").fetchone()[0]
+    assert state == "pending"
+
+
+@pytest.mark.asyncio
+async def test_get_next_batch_skips_disabled_sources(conn: sqlite3.Connection) -> None:
+    source_id = _insert_source(conn, "Source")
+    conn.execute("UPDATE knowledge_sources SET enabled = 0 WHERE id = ?", (source_id,))
+    document_id = _insert_document(conn, source_id)
+    _insert_chunk(conn, document_id, state="pending")
+
+    batch = await get_next_batch(_ctx(conn), limit=10)
+
+    assert batch == []
     state = conn.execute("SELECT enrichment_state FROM chunks").fetchone()[0]
     assert state == "pending"
 

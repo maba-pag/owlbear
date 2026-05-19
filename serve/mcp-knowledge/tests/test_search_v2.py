@@ -15,6 +15,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from mcp.server.fastmcp.exceptions import ToolError
 
 from owlbear_knowledge.query_service import KnowledgeQueryError, StructuredSearchResult
 from owlbear_mcp_knowledge.server import search_knowledge
@@ -180,6 +181,54 @@ class TestFromAC_SearchKnowledgeV2:
         await search_knowledge(ctx, query="bounded", limit=7)
 
         qs.query.assert_awaited_once_with("bounded", top_k=7, scopes=None)
+
+    @pytest.mark.asyncio
+    async def test_scopes_normalized_before_query(self) -> None:
+        """Scope filters are stripped and null-like entries are dropped before query execution."""
+        qs = AsyncMock()
+        qs.query = AsyncMock(return_value=[])
+        ctx = _make_ctx(qs)
+
+        await search_knowledge(ctx, query="scoped", scopes=[" global ", "", "null", "project"])
+
+        qs.query.assert_awaited_once_with("scoped", top_k=5, scopes=["global", "project"])
+
+    @pytest.mark.asyncio
+    async def test_empty_scopes_normalize_to_no_scope_filter(self) -> None:
+        """Blank/null-like scope lists behave like no scope filter."""
+        qs = AsyncMock()
+        qs.query = AsyncMock(return_value=[])
+        ctx = _make_ctx(qs)
+
+        await search_knowledge(ctx, query="scoped", scopes=["", "none"])
+
+        qs.query.assert_awaited_once_with("scoped", top_k=5, scopes=None)
+
+    @pytest.mark.asyncio
+    async def test_invalid_limit_rejected_before_query(self) -> None:
+        """Invalid limits should fail at the MCP boundary before query execution."""
+        for limit in (0, -1, True):
+            qs = AsyncMock()
+            qs.query = AsyncMock(return_value=[])
+            ctx = _make_ctx(qs)
+
+            with pytest.raises(ToolError):
+                await search_knowledge(ctx, query="bounded", limit=limit)
+
+            qs.query.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_invalid_scopes_rejected_before_query(self) -> None:
+        """Invalid scope shapes should fail at the MCP boundary before query execution."""
+        for scopes in ("global", [None], [True]):
+            qs = AsyncMock()
+            qs.query = AsyncMock(return_value=[])
+            ctx = _make_ctx(qs)
+
+            with pytest.raises(ToolError):
+                await search_knowledge(ctx, query="scoped", scopes=scopes)  # type: ignore[arg-type]
+
+            qs.query.assert_not_called()
 
     # ------------------------------------------------------------------
     # AC: returns "Knowledge service not available." when query_service is None

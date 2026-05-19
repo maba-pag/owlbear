@@ -492,13 +492,14 @@ def _real_ks_source(
     name: str = "RealSource",
     url: str = "https://real.example.com/",
     source_id: str = "src-real",
+    urls: list[str] | str | None = None,
 ) -> KnowledgeSource:
     """Return a real KnowledgeSource with config['url'] set (no bare .url attr)."""
     return KnowledgeSource(
         id=source_id,
         name=name,
         source_type=SourceType.URL_LIST,
-        config={"url": url},
+        config={"urls": urls} if urls is not None else {"url": url},
         created_at="2026-01-01T00:00:00Z",
         updated_at="2026-01-01T00:00:00Z",
     )
@@ -519,6 +520,58 @@ class TestFromAC_MCPBoundarySourceProof:
         result = await search_knowledge(ctx, query="test")
 
         assert result[0]["source"]["url"] == "https://config-dict.example.com/"
+
+    @pytest.mark.asyncio
+    async def test_source_url_serialized_from_config_urls_list(self) -> None:
+        """search_knowledge serializes URL from the first string in config['urls']."""
+        real_ks = _real_ks_source(
+            name="RealSource",
+            urls=["https://first.example.com/", "https://second.example.com/"],
+        )
+
+        qs = AsyncMock()
+        qs.query = AsyncMock(return_value=[_make_enriched_result(source=real_ks)])
+        ctx = _make_ctx(qs)
+
+        result = await search_knowledge(ctx, query="test")
+
+        assert result[0]["source"]["url"] == "https://first.example.com/"
+
+    @pytest.mark.asyncio
+    async def test_source_url_serialized_from_config_urls_string(self) -> None:
+        """search_knowledge serializes URL from the first entry in string config['urls']."""
+        real_ks = _real_ks_source(
+            name="RealSource",
+            urls="https://first.example.com/, https://second.example.com/",
+        )
+
+        qs = AsyncMock()
+        qs.query = AsyncMock(return_value=[_make_enriched_result(source=real_ks)])
+        ctx = _make_ctx(qs)
+
+        result = await search_knowledge(ctx, query="test")
+
+        assert result[0]["source"]["url"] == "https://first.example.com/"
+
+    @pytest.mark.asyncio
+    async def test_source_url_falls_back_when_config_url_blank(self) -> None:
+        """search_knowledge falls back to config['urls'] when config['url'] is blank."""
+        real_ks = KnowledgeSource(
+            id="src-real",
+            name="RealSource",
+            source_type=SourceType.URL_LIST,
+            config={"url": "   ", "urls": ["https://fallback.example.com/"]},
+            created_at="2026-01-01T00:00:00Z",
+            updated_at="2026-01-01T00:00:00Z",
+        )
+
+        qs = AsyncMock()
+        qs.query = AsyncMock(return_value=[_make_enriched_result(source=real_ks)])
+        ctx = _make_ctx(qs)
+
+        result = await search_knowledge(ctx, query="test")
+
+        assert result[0]["source"]["url"] == "https://fallback.example.com/"
 
     @pytest.mark.asyncio
     async def test_source_name_serialized_from_real_knowledge_source(self) -> None:

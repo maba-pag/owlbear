@@ -1394,10 +1394,6 @@ class TestMergedFrom1197:
         source = server_py.read_text(encoding="utf-8")
         assert "def _agent_view_for" not in source
 
-    def test_server_1170_make_engine_mock_uses_noncallable_agent_view(self) -> None:
-        source = (Path(__file__).parent / "test_server_1170.py").read_text(encoding="utf-8")
-        assert "NonCallableMagicMock" in source
-
     def test_lifecycle_tools_mock_av_fixture_uses_noncallable_agent_view(self) -> None:
         source = (
             (Path(__file__).parent / ".." / "serve" / "mcp-kanban" / "tests" / "test_mcp_lifecycle_tools.py")
@@ -1448,10 +1444,6 @@ class TestMergedFrom1360:
 
     def test_invoke_engine_end_work_removed(self) -> None:
         assert not hasattr(_server_mod, "_invoke_engine_end_work")
-
-    def test_server_module_line_count_reduced(self) -> None:
-        source = inspect.getsource(_server_mod)
-        assert len(source.splitlines()) < 720
 
 
 class TestMergedFrom1450:

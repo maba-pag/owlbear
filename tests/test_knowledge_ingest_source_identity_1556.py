@@ -28,13 +28,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from owlbear_knowledge.chunker import TextChunker
+from owlbear_knowledge.chunker import Chunk, TextChunker
 from owlbear_knowledge.document_store import DocumentStore
 from owlbear_knowledge.extractor import EntityExtractor, ExtractionResult
 from owlbear_knowledge.graph_store import GraphStore
 from owlbear_knowledge.ingest import IngestPipeline
 from owlbear_knowledge.intake import IntakeResult
 from owlbear_knowledge.models import Edge, Entity, EntityType, RelationType
+from owlbear_knowledge.protocol import HybridEmbedding
 from owlbear_knowledge.query_service import KnowledgeQueryService
 from owlbear_knowledge.schema import init_db
 from owlbear_knowledge.source_store import KnowledgeSourceStore
@@ -1519,6 +1520,47 @@ class TestFromAC_EndToEndSearchResolution:
     - (c) Query result has source.name and source.config['url'] from KnowledgeSource row.
     - (d) Result carries source scope, not 'global'.
     """
+
+    @pytest.mark.asyncio
+    async def test_new_store_embeddings_api_uses_persisted_chunk_ids(self, conn: sqlite3.Connection) -> None:
+        """DocumentStore.store_embeddings(document_id, chunks, embeddings) must preserve search ID continuity."""
+        svs = _SearchableVectorStore()
+        mock_emb_local: MagicMock = MagicMock()
+        mock_emb_local.embed = MagicMock(return_value=[[0.1] * 10])
+
+        graph_store = GraphStore(conn)
+        doc_store = DocumentStore(conn, graph_store, svs, mock_emb_local)
+        doc_store.insert_document(
+            "doc-new-api",
+            IntakeResult(
+                content="new api search content",
+                source="New API Doc",
+                metadata={"title": "New API Doc"},
+            ),
+            scope="team-a",
+            source_id=None,
+        )
+        chunks = [Chunk(text="new api searchable chunk", index=0, metadata={})]
+        chunk_ids = doc_store.store_chunks("doc-new-api", chunks, scope="team-a")
+
+        doc_store.store_embeddings(
+            "doc-new-api",
+            chunks,
+            [HybridEmbedding(dense=[0.1] * 10)],
+            scope="team-a",
+        )
+
+        assert svs.stored_ids == set(chunk_ids)
+
+        query_service = KnowledgeQueryService(
+            vector_store=svs,
+            graph_store=graph_store,
+            embedding_provider=mock_emb_local,
+        )
+        results = await query_service.query("new api", top_k=1, scopes=["team-a"])
+
+        assert len(results) == 1
+        assert results[0].doc_id == "doc-new-api"
 
     @pytest.mark.asyncio
     async def test_chunk_ids_in_db_match_vector_store_ids(self, conn: sqlite3.Connection) -> None:

@@ -376,6 +376,130 @@ class TestFromAC_ManifestLoaderSourceId:
         assert str(document_sources[0][0]).endswith("doc.md")
 
     @pytest.mark.asyncio
+    async def test_refresh_loaded_file_glob_reports_empty_match(
+        self,
+        real_pipeline: dict,
+        tmp_path: Path,
+    ) -> None:
+        """Refreshing a source whose glob matches nothing should be visible in source status."""
+        manifest = tmp_path / "manifest.yaml"
+        _write_single_source_manifest(manifest, name="Missing Files", glob="*.md")
+
+        await load_manifest_file(
+            manifest_path=manifest,
+            workspace_root=tmp_path,
+            source_store=real_pipeline["source_store"],
+            pipeline=real_pipeline["pipeline"],
+        )
+
+        source = real_pipeline["source_store"].list_all()[0]
+        result = await RefreshOrchestrator(
+            store=real_pipeline["source_store"],
+            pipeline=real_pipeline["pipeline"],
+            workspace_root=tmp_path,
+        ).refresh(source)
+
+        assert result.failed == 1
+        assert result.errors == ["no files matched source pattern '*.md'"]
+
+        refreshed_source = real_pipeline["source_store"].get(source.id)
+        assert refreshed_source is not None
+        assert refreshed_source.last_checked_at is not None
+        assert refreshed_source.last_refreshed_at is None
+        assert refreshed_source.last_error == "no files matched source pattern '*.md'"
+
+    @pytest.mark.asyncio
+    async def test_manifest_file_glob_reports_empty_match(
+        self,
+        real_pipeline: dict,
+        tmp_path: Path,
+    ) -> None:
+        """Initial manifest loads should report enabled globs that ingest no files."""
+        manifest = tmp_path / "manifest.yaml"
+        _write_single_source_manifest(manifest, name="Empty Manifest Glob", glob="*.md")
+
+        summary = await load_manifest_file(
+            manifest_path=manifest,
+            workspace_root=tmp_path,
+            source_store=real_pipeline["source_store"],
+            pipeline=real_pipeline["pipeline"],
+        )
+
+        assert summary.failed == 1
+        assert summary.ingested == 0
+        assert summary.skipped == 0
+        assert summary.all_source_ok is False
+        assert len(real_pipeline["source_store"].list_all()) == 1
+
+        document_count = real_pipeline["conn"].execute("SELECT COUNT(*) FROM documents").fetchone()[0]
+        assert document_count == 0
+
+    @pytest.mark.asyncio
+    async def test_manifest_file_glob_uses_base_dir(
+        self,
+        real_pipeline: dict,
+        tmp_path: Path,
+    ) -> None:
+        """Initial manifest loads should resolve glob patterns relative to base_dir."""
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir()
+        (docs_dir / "doc.md").write_text("# Nested Source\n\nLoaded from a configured base directory.")
+        manifest = tmp_path / "manifest.yaml"
+        manifest.write_text(
+            "sources:\n"
+            '  - name: "Nested Docs"\n'
+            "    type: file_glob\n"
+            "    config:\n"
+            '      base_dir: "docs"\n'
+            '      glob: "*.md"\n'
+        )
+
+        summary = await load_manifest_file(
+            manifest_path=manifest,
+            workspace_root=tmp_path,
+            source_store=real_pipeline["source_store"],
+            pipeline=real_pipeline["pipeline"],
+        )
+
+        assert summary.failed == 0
+        assert summary.ingested == 1
+        assert summary.all_source_ok is True
+
+        document_sources = real_pipeline["conn"].execute("SELECT source FROM document_status").fetchall()
+        assert len(document_sources) == 1
+        assert str(document_sources[0][0]).endswith("docs/doc.md")
+
+    @pytest.mark.asyncio
+    async def test_manifest_file_glob_reports_missing_pattern(
+        self,
+        real_pipeline: dict,
+        tmp_path: Path,
+    ) -> None:
+        """Initial manifest loads should report missing glob patterns without raising."""
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir()
+        manifest = tmp_path / "manifest.yaml"
+        manifest.write_text(
+            'sources:\n  - name: "Missing Pattern"\n    type: file_glob\n    config:\n      base_dir: "docs"\n'
+        )
+
+        summary = await load_manifest_file(
+            manifest_path=manifest,
+            workspace_root=tmp_path,
+            source_store=real_pipeline["source_store"],
+            pipeline=real_pipeline["pipeline"],
+        )
+
+        assert summary.failed == 1
+        assert summary.ingested == 0
+        assert summary.skipped == 0
+        assert summary.all_source_ok is False
+        assert len(real_pipeline["source_store"].list_all()) == 1
+
+        document_count = real_pipeline["conn"].execute("SELECT COUNT(*) FROM documents").fetchone()[0]
+        assert document_count == 0
+
+    @pytest.mark.asyncio
     async def test_reloading_manifest_reuses_existing_source_and_ingests(
         self,
         real_pipeline: dict,
@@ -975,6 +1099,43 @@ class TestFromAC_LoaderBranchCoverage:
 
         mock_pipeline.ingest.assert_not_called()
         assert summary.ingested == 0
+        sources = source_store.list_all()
+        assert len(sources) == 1
+        assert sources[0].enabled is False
+
+    @pytest.mark.asyncio
+    async def test_disabled_source_entry_updates_existing_source(
+        self, conn: sqlite3.Connection, tmp_path: Path
+    ) -> None:
+        """A disabled manifest entry must persist enabled=false on an existing source row."""
+        (tmp_path / "doc.md").write_text("Some content.")
+        manifest = tmp_path / "manifest.yaml"
+        manifest.write_text('sources:\n  - name: Toggle\n    type: file_glob\n    config:\n      glob: "*.md"\n')
+        source_store = KnowledgeSourceStore(conn)
+        mock_pipeline = MagicMock()
+        mock_pipeline.ingest = AsyncMock(return_value=_stub_ingest_result())
+
+        await load_manifest_file(
+            manifest_path=manifest,
+            workspace_root=tmp_path,
+            source_store=source_store,
+            pipeline=mock_pipeline,
+        )
+        assert source_store.list_all()[0].enabled is True
+
+        mock_pipeline.ingest.reset_mock()
+        manifest.write_text(
+            'sources:\n  - name: Toggle\n    type: file_glob\n    config:\n      glob: "*.md"\n    enabled: false\n'
+        )
+        await load_manifest_file(
+            manifest_path=manifest,
+            workspace_root=tmp_path,
+            source_store=source_store,
+            pipeline=mock_pipeline,
+        )
+
+        mock_pipeline.ingest.assert_not_called()
+        assert source_store.list_all()[0].enabled is False
 
     @pytest.mark.asyncio
     async def test_glob_matching_no_files_skips_ingest(self, conn: sqlite3.Connection, tmp_path: Path) -> None:

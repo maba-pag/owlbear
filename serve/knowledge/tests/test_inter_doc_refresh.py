@@ -106,10 +106,13 @@ class MissingEmbeddingVectorStore:
 
 
 class EdgeExtractor:
-    async def extract(self, _prompt: str) -> ExtractionResult:
-        return ExtractionResult(
-            edges=[Edge(source_id="ent-new", target_id="ent-old", relation=RelationType.RELATED_TO)]
-        )
+    def __init__(self, edges: list[Edge] | None = None) -> None:
+        self.edges = edges or [Edge(source_id="ent-new", target_id="ent-old", relation=RelationType.RELATED_TO)]
+        self.prompts: list[str] = []
+
+    async def extract(self, prompt: str) -> ExtractionResult:
+        self.prompts.append(prompt)
+        return ExtractionResult(edges=self.edges)
 
 
 @pytest.mark.asyncio
@@ -151,11 +154,14 @@ async def test_inter_doc_builder_stamps_scope_document_and_vector_scope(conn: sq
     _seed_two_documents(graph)
     entities = graph.list_entities(scopes=["proof"])
     vector_store = CapturingVectorStore()
-    builder = InterDocGraphBuilder(EdgeExtractor(), vector_store, graph)
+    extractor = EdgeExtractor()
+    builder = InterDocGraphBuilder(extractor, vector_store, graph)
 
     result = await builder.build(entities, scope="proof")
 
     assert len(result.edges) == 1
+    assert "ent-new | Shared" in extractor.prompts[0]
+    assert "ent-old | Shared" in extractor.prompts[0]
     edge = result.edges[0]
     assert edge.scope == "proof"
     assert edge.metadata["source"] == "inter_doc_inference"
@@ -179,3 +185,17 @@ async def test_inter_doc_builder_keeps_canonical_candidates_without_entity_embed
 
     assert len(result.edges) == 1
     assert vector_store.search_called is False
+
+
+@pytest.mark.asyncio
+async def test_inter_doc_builder_drops_edges_outside_candidate_pairs(conn: sqlite3.Connection) -> None:
+    graph = GraphStore(conn)
+    _seed_two_documents(graph)
+    vector_store = MissingEmbeddingVectorStore()
+    extractor = EdgeExtractor(edges=[Edge(source_id="missing", target_id="ent-old", relation=RelationType.RELATED_TO)])
+    builder = InterDocGraphBuilder(extractor, vector_store, graph)
+
+    result = await builder.build(graph.list_entities(scopes=["proof"]), scope="proof")
+
+    assert result.edges == []
+    assert result.edges_added == 0

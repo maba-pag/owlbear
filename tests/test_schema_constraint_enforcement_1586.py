@@ -364,6 +364,28 @@ class TestFromAC_WritePathsPostMigration:
         assert entity_count >= 1
         assert edge_count >= 1
 
+    def test_store_extractions_rejects_blank_document_id_for_graph_rows(self) -> None:
+        """store_extractions() refuses to persist entity/edge rows without document provenance."""
+        conn = _make_migrated_conn()
+        store = _make_document_store(conn)
+        entity = Entity(
+            id="ent-blank-doc",
+            name="Alpha",
+            entity_type=EntityType.CONCEPT,
+        )
+
+        with pytest.raises(ValueError, match="document_id is required"):
+            store.store_extractions([ExtractionResult(entities=[entity], edges=[])])
+
+        assert conn.execute("SELECT COUNT(*) FROM entities").fetchone()[0] == 0
+
+    def test_store_extractions_allows_empty_results_without_document_id(self) -> None:
+        """Empty extraction results can still be stored as a no-op without document provenance."""
+        conn = _make_migrated_conn()
+        store = _make_document_store(conn)
+
+        assert store.store_extractions([ExtractionResult(entities=[], edges=[])]) == (0, 0)
+
     def test_delete_document_data_removes_all_rows_without_fk_violation(self) -> None:
         """(AC-3) delete_document_data() removes all associated rows without FK violation."""
         conn = _make_migrated_conn()

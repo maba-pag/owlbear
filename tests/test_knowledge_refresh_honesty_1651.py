@@ -8,8 +8,12 @@ AC-4: _update_source_record all counters zero → no store update.
 
 from __future__ import annotations
 
+import asyncio
 import sqlite3
 from datetime import UTC, datetime
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 
 from owlbear_knowledge.models import KnowledgeSource, SourceType
 from owlbear_knowledge.refresh import RefreshOrchestrator, RefreshResult
@@ -51,6 +55,17 @@ class _SpyStore:
 
 class _StubPipeline:
     """Empty pipeline stub — _update_source_record does not call pipeline."""
+
+
+class _AsyncIngestPipeline:
+    """Async pipeline stub that records refresh intake calls."""
+
+    def __init__(self) -> None:
+        self.calls: list[object] = []
+
+    async def ingest(self, intake_result: object, *, scope: str, source_id: str | None = None) -> object:
+        self.calls.append((intake_result, scope, source_id))
+        return SimpleNamespace(status="ok", document_id="doc-test")
 
 
 def _make_db() -> sqlite3.Connection:
@@ -662,3 +677,74 @@ class TestFromAC_UpdateSourceRecordAllZero:
         orch._update_source_record(source, result)  # noqa: SLF001
 
         assert spy.update_call_count == 0  # fails until logic added
+
+
+# ---------------------------------------------------------------------------
+# URL configuration compatibility
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_RefreshUrlConfig:
+    def test_refresh_accepts_comma_separated_urls_string(self) -> None:
+        """Refresh should parse persisted config.urls strings the same way source lookup does."""
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            first = root / "first.md"
+            second = root / "second.md"
+            first.write_text("# First\n")
+            second.write_text("# Second\n")
+
+            pipeline = _AsyncIngestPipeline()
+            spy = _SpyStore()
+            source = _make_source(
+                source_type=SourceType.AUTHENTICATED_WEB,
+                fetch_method="browser",
+                config={"urls": f"{first}, {second}"},
+            )
+            result = asyncio.run(
+                RefreshOrchestrator(
+                    store=spy,
+                    pipeline=pipeline,
+                    workspace_root=root,
+                ).refresh(source)
+            )
+
+        assert result.refreshed == 2
+        assert result.failed == 0
+        assert result.errors == []
+        assert len(pipeline.calls) == 2
+        assert spy.updated is not None
+        assert spy.updated.last_checked_at is not None
+
+
+class TestFromAC_RefreshFileGlobConfig:
+    def test_refresh_reports_missing_file_glob_pattern(self) -> None:
+        """Refresh should fail malformed file_glob sources instead of broadening to '*'."""
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            docs_dir = root / "docs"
+            docs_dir.mkdir()
+            (docs_dir / "one.md").write_text("# One\n")
+            (docs_dir / "two.txt").write_text("Two\n")
+
+            pipeline = _AsyncIngestPipeline()
+            spy = _SpyStore()
+            source = _make_source(
+                source_type=SourceType.FILE_GLOB,
+                fetch_method="file",
+                config={"base_dir": "docs"},
+            )
+            result = asyncio.run(
+                RefreshOrchestrator(
+                    store=spy,
+                    pipeline=pipeline,
+                    workspace_root=root,
+                ).refresh(source)
+            )
+
+        assert result.refreshed == 0
+        assert result.failed == 1
+        assert result.errors == ["source has no glob pattern configured"]
+        assert pipeline.calls == []
+        assert spy.updated is not None
+        assert spy.updated.last_error == "source has no glob pattern configured"

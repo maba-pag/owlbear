@@ -1,7 +1,4 @@
-"""RED phase tests — body newline normalization at MCP kanban ingress.
-
-Task: #1532  Parent: #1531
-"""
+"""Durable MCP server regression tests for escaped-newline normalization."""
 
 from __future__ import annotations
 
@@ -21,11 +18,7 @@ from owlbear_mcp_kanban.server import (
     end_work,
 )
 
-# ── shared helpers ────────────────────────────────────────────────────────────
-
 _CONFIG_YAML = "next_id: 1\n"
-
-# Substring that uniquely identifies the normalization guidance message (AC 3).
 _NORM_SUBSTR = "normalized to actual newlines"
 
 
@@ -70,15 +63,11 @@ def _make_response(**overrides: object) -> SingleTaskResponse:
 
 
 def _has_norm_guidance(guidance: list[str]) -> bool:
-    return any(_NORM_SUBSTR in g for g in guidance)
-
-
-# ── fixtures ──────────────────────────────────────────────────────────────────
+    return any(_NORM_SUBSTR in guidance_item for guidance_item in guidance)
 
 
 @pytest.fixture
 def mock_view_ctx(tmp_path: Path) -> tuple[AppContext, MagicMock]:
-    """App context with mock agent view for all mutation tools."""
     kanban_dir = _make_board(tmp_path)
     engine = KanbanEngine(kanban_dir)
     engine.create_task("Seed", status="todo", priority="important")
@@ -96,7 +85,6 @@ def mock_view_ctx(tmp_path: Path) -> tuple[AppContext, MagicMock]:
 
 @pytest.fixture
 def dr_ctx(tmp_path: Path) -> AppContext:
-    """Real board for create_dr integration tests."""
     kanban_dir = _make_board(tmp_path)
     engine = KanbanEngine(kanban_dir)
     engine.create_task("DR seed", status="todo", priority="important")
@@ -104,12 +92,7 @@ def dr_ctx(tmp_path: Path) -> AppContext:
     return AppContext(engine=engine, kanban_dir=kanban_dir)
 
 
-# ── helpers for create_dr monkeypatch ─────────────────────────────────────────
-
-
 def _fake_decisions(captured: dict) -> types.SimpleNamespace:
-    """Return a decisions namespace stub that captures body and creates a real file."""
-
     def fake_create_dr(
         d_dir: Path,
         _engine: object,
@@ -127,12 +110,7 @@ def _fake_decisions(captured: dict) -> types.SimpleNamespace:
     return types.SimpleNamespace(create_dr=fake_create_dr)
 
 
-# ── 1. Unit tests: _normalize_escaped_newlines helper ────────────────────────
-
-
-class TestFromAC_NormalizeHelper:
-    """AC 1: helper exists in server.py; implements three-step protect/normalize/restore."""
-
+class TestNormalizeEscapedNewlines:
     def _fn(self):  # type: ignore[return]
         from owlbear_mcp_kanban.server import _normalize_escaped_newlines
 
@@ -158,14 +136,12 @@ class TestFromAC_NormalizeHelper:
         assert text == "Hello world, no escapes here."
         assert changed is False
 
-    def test_actual_newline_0x0a_unchanged_changed_false(self) -> None:
-        # Correct newline (0x0A) must NOT be touched.
+    def test_actual_newline_unchanged_changed_false(self) -> None:
         text, changed = self._fn()("line1\nline2")
         assert text == "line1\nline2"
         assert changed is False
 
     def test_literal_backslash_n_becomes_actual_newline(self) -> None:
-        # Simulates JSON `\\n` → Python receives `\n` (0x5C 0x6E) — the agent bug.
         text, changed = self._fn()("line1\\nline2")
         assert text == "line1\nline2"
         assert changed is True
@@ -181,14 +157,11 @@ class TestFromAC_NormalizeHelper:
         assert changed is True
 
     def test_escape_convention_double_backslash_n_preserved_as_single(self) -> None:
-        # JSON `\\\\n` → Python receives `\\n` (0x5C 0x5C 0x6E).
-        # Three-step should reduce `\\n` (3 chars) → `\n` (2 chars, i.e. literal backslash+n).
         text, changed = self._fn()("prefix\\\\nsuffix")
         assert text == "prefix\\nsuffix"
         assert changed is True
 
     def test_mixed_bug_and_escape_convention_in_same_string(self) -> None:
-        # `\\n` = bug → newline; `\\\\n` = convention → `\n` (literal backslash+n)
         text, changed = self._fn()("bug\\nok\\\\nend")
         assert text == "bug\nok\\nend"
         assert changed is True
@@ -202,12 +175,7 @@ class TestFromAC_NormalizeHelper:
         assert changed is False
 
 
-# ── 2. create_task — body normalization ──────────────────────────────────────
-
-
-class TestFromAC_CreateTaskNormalization:
-    """AC 2, 3, 5: create_task body normalized; guidance appended; escape convention."""
-
+class TestCreateTaskNormalization:
     @pytest.mark.asyncio
     async def test_body_literal_backslash_n_normalized_before_engine_call(
         self, mock_view_ctx: tuple[AppContext, MagicMock]
@@ -229,19 +197,13 @@ class TestFromAC_CreateTaskNormalization:
     async def test_escape_convention_body_preserved_as_single_backslash_n(
         self, mock_view_ctx: tuple[AppContext, MagicMock]
     ) -> None:
-        # JSON `\\\\n` → Python `\\n` (double backslash+n); should become `\n` (single).
         app_ctx, mock_view = mock_view_ctx
         await create_task(_make_ctx(app_ctx), title="T", body="want\\\\nliteral")
         body_passed = mock_view.create_task.call_args.kwargs["body"]
         assert body_passed == "want\\nliteral"
 
 
-# ── 3. edit_task — body and append_body normalization ────────────────────────
-
-
-class TestFromAC_EditTaskNormalization:
-    """AC 2, 3, 5: edit_task body and append_body normalized; guidance appended."""
-
+class TestEditTaskNormalization:
     @pytest.mark.asyncio
     async def test_body_literal_backslash_n_normalized_before_engine_call(
         self, mock_view_ctx: tuple[AppContext, MagicMock]
@@ -293,12 +255,7 @@ class TestFromAC_EditTaskNormalization:
         assert append_passed == "want\\nliteral"
 
 
-# ── 4. end_work — note normalization ─────────────────────────────────────────
-
-
-class TestFromAC_EndWorkNormalization:
-    """AC 2, 3, 5: end_work note normalized; guidance appended."""
-
+class TestEndWorkNormalization:
     @pytest.mark.asyncio
     async def test_note_literal_backslash_n_normalized_before_engine_call(
         self, mock_view_ctx: tuple[AppContext, MagicMock]
@@ -324,21 +281,13 @@ class TestFromAC_EndWorkNormalization:
         assert note_passed == "want\\nliteral"
 
 
-# ── 5. create_dr — body normalization ────────────────────────────────────────
-
-
-class TestFromAC_CreateDrNormalization:
-    """AC 2, 3, 4, 5: create_dr body normalized; guidance key in dict response."""
-
+class TestCreateDrNormalization:
     @pytest.mark.asyncio
     async def test_body_literal_backslash_n_normalized_before_decisions_call(
         self, dr_ctx: AppContext, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         captured: dict = {}
-        monkeypatch.setattr(
-            "owlbear_mcp_kanban.server.decisions",
-            _fake_decisions(captured),
-        )
+        monkeypatch.setattr("owlbear_mcp_kanban.server.decisions", _fake_decisions(captured))
         await create_dr(
             _make_ctx(dr_ctx),
             task_id="1",
@@ -353,10 +302,7 @@ class TestFromAC_CreateDrNormalization:
         self, dr_ctx: AppContext, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         captured: dict = {}
-        monkeypatch.setattr(
-            "owlbear_mcp_kanban.server.decisions",
-            _fake_decisions(captured),
-        )
+        monkeypatch.setattr("owlbear_mcp_kanban.server.decisions", _fake_decisions(captured))
         result = await create_dr(
             _make_ctx(dr_ctx),
             task_id="1",
@@ -372,13 +318,8 @@ class TestFromAC_CreateDrNormalization:
     async def test_escape_convention_body_preserved_as_single_backslash_n(
         self, dr_ctx: AppContext, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        # JSON `\\\\n` → Python `\\n` (double backslash+n); decisions call should
-        # receive `\n` (single backslash+n).
         captured: dict = {}
-        monkeypatch.setattr(
-            "owlbear_mcp_kanban.server.decisions",
-            _fake_decisions(captured),
-        )
+        monkeypatch.setattr("owlbear_mcp_kanban.server.decisions", _fake_decisions(captured))
         await create_dr(
             _make_ctx(dr_ctx),
             task_id="1",
@@ -389,13 +330,7 @@ class TestFromAC_CreateDrNormalization:
         assert captured["body"] == "want\\nliteral"
 
 
-# ── 6. Guidance positional ordering ──────────────────────────────────────────
-
-
-class TestFromAC_GuidancePositioning:
-    """AC 4: normalization guidance appended AFTER existing collect_guidance block;
-    both existing reminders and normalization guidance appear when both conditions fire."""
-
+class TestGuidancePositioning:
     @pytest.mark.asyncio
     async def test_edit_task_existing_and_norm_guidance_both_present(
         self,
@@ -408,12 +343,11 @@ class TestFromAC_GuidancePositioning:
             lambda *_args, **_kwargs: ["existing reminder"],
         )
         result = await edit_task(_make_ctx(app_ctx), id="1", body="line1\\nline2")
-        assert any(g == "existing reminder" for g in result.guidance)
+        assert any(guidance == "existing reminder" for guidance in result.guidance)
         assert _has_norm_guidance(result.guidance)
-        # Assert relative order: existing reminder must precede normalization guidance.
-        existing_idx = next(i for i, g in enumerate(result.guidance) if g == "existing reminder")
-        norm_idx = next(i for i, g in enumerate(result.guidance) if _NORM_SUBSTR in g)
-        assert existing_idx < norm_idx, "normalization guidance must come AFTER existing guidance"
+        existing_idx = next(index for index, guidance in enumerate(result.guidance) if guidance == "existing reminder")
+        norm_idx = next(index for index, guidance in enumerate(result.guidance) if _NORM_SUBSTR in guidance)
+        assert existing_idx < norm_idx
 
     @pytest.mark.asyncio
     async def test_end_work_existing_and_norm_guidance_both_present(
@@ -427,27 +361,19 @@ class TestFromAC_GuidancePositioning:
             lambda *_args, **_kwargs: ["existing reminder"],
         )
         result = await end_work(_make_ctx(app_ctx), id="1", outcome="success", note="done\\nmore")
-        assert any(g == "existing reminder" for g in result.guidance)
+        assert any(guidance == "existing reminder" for guidance in result.guidance)
         assert _has_norm_guidance(result.guidance)
-        # Assert relative order: existing reminder must precede normalization guidance.
-        existing_idx = next(i for i, g in enumerate(result.guidance) if g == "existing reminder")
-        norm_idx = next(i for i, g in enumerate(result.guidance) if _NORM_SUBSTR in g)
-        assert existing_idx < norm_idx, "normalization guidance must come AFTER existing guidance"
+        existing_idx = next(index for index, guidance in enumerate(result.guidance) if guidance == "existing reminder")
+        norm_idx = next(index for index, guidance in enumerate(result.guidance) if _NORM_SUBSTR in guidance)
+        assert existing_idx < norm_idx
 
 
-# ── 7. Passthrough: no normalization when no literal \n in input ─────────────
-
-
-class TestFromAC_PassthroughNoNormalization:
-    """AC 6 (AC 5 in brief): when input has no literal \\n, no normalization occurs and no
-    guidance is emitted. Each test imports _normalize_escaped_newlines directly so it fails
-    with ImportError until the implementation ships (RED anchor)."""
-
+class TestPassthroughWithoutNormalization:
     @pytest.mark.asyncio
     async def test_create_task_body_passthrough_no_normalization(
         self, mock_view_ctx: tuple[AppContext, MagicMock]
     ) -> None:
-        from owlbear_mcp_kanban.server import _normalize_escaped_newlines  # RED anchor
+        from owlbear_mcp_kanban.server import _normalize_escaped_newlines
 
         _, changed = _normalize_escaped_newlines("clean body no escapes")
         assert not changed
@@ -461,7 +387,7 @@ class TestFromAC_PassthroughNoNormalization:
     async def test_edit_task_body_passthrough_no_normalization(
         self, mock_view_ctx: tuple[AppContext, MagicMock]
     ) -> None:
-        from owlbear_mcp_kanban.server import _normalize_escaped_newlines  # RED anchor
+        from owlbear_mcp_kanban.server import _normalize_escaped_newlines
 
         _, changed = _normalize_escaped_newlines("clean body no escapes")
         assert not changed
@@ -475,7 +401,7 @@ class TestFromAC_PassthroughNoNormalization:
     async def test_edit_task_append_body_passthrough_no_normalization(
         self, mock_view_ctx: tuple[AppContext, MagicMock]
     ) -> None:
-        from owlbear_mcp_kanban.server import _normalize_escaped_newlines  # RED anchor
+        from owlbear_mcp_kanban.server import _normalize_escaped_newlines
 
         _, changed = _normalize_escaped_newlines("clean append no escapes")
         assert not changed
@@ -489,7 +415,7 @@ class TestFromAC_PassthroughNoNormalization:
     async def test_end_work_note_passthrough_no_normalization(
         self, mock_view_ctx: tuple[AppContext, MagicMock]
     ) -> None:
-        from owlbear_mcp_kanban.server import _normalize_escaped_newlines  # RED anchor
+        from owlbear_mcp_kanban.server import _normalize_escaped_newlines
 
         _, changed = _normalize_escaped_newlines("clean note no escapes")
         assert not changed
@@ -503,15 +429,12 @@ class TestFromAC_PassthroughNoNormalization:
     async def test_create_dr_body_passthrough_no_normalization(
         self, dr_ctx: AppContext, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from owlbear_mcp_kanban.server import _normalize_escaped_newlines  # RED anchor
+        from owlbear_mcp_kanban.server import _normalize_escaped_newlines
 
         _, changed = _normalize_escaped_newlines("clean body no escapes")
         assert not changed
         captured: dict = {}
-        monkeypatch.setattr(
-            "owlbear_mcp_kanban.server.decisions",
-            _fake_decisions(captured),
-        )
+        monkeypatch.setattr("owlbear_mcp_kanban.server.decisions", _fake_decisions(captured))
         result = await create_dr(
             _make_ctx(dr_ctx),
             task_id="1",
@@ -521,55 +444,3 @@ class TestFromAC_PassthroughNoNormalization:
         )
         assert captured["body"] == "clean body no escapes"
         assert not _has_norm_guidance(result.get("guidance", []))
-
-
-# ── 8. Durable regression gate ───────────────────────────────────────────────
-
-
-class TestFromAC_ExistingDurableTestsUnchanged:
-    """Refined AC 7: no new failures in tests/test_mcp_kanban.py beyond the two
-    known pre-existing failures (both predate the normalization feature):
-      - TestMergedFrom1360::test_server_module_line_count_reduced
-        (720-line cap outdated after legitimate feature growth)
-      - TestMergedFrom1197::test_server_1170_make_engine_mock_uses_noncallable_agent_view
-        (referenced test_server_1170.py file no longer exists)
-    Provides the falsifiable regression gate required by the reviewer.
-    """
-
-    def test_durable_mcp_kanban_suite_no_new_failures(self) -> None:
-        """Run the durable MCP kanban suite excluding the two known pre-existing failures.
-
-        Fails if the normalization feature introduced any regression in existing
-        MCP kanban tool behaviors.
-        """
-        import os
-        import subprocess
-        import sys
-        from pathlib import Path
-
-        repo_root = Path(__file__).resolve().parent.parent
-        # Strip PYTEST_DISABLE_PLUGIN_AUTOLOAD so the subprocess gets the full
-        # plugin suite (pytest-asyncio, pytest-xdist, etc.).
-        env = {k: v for k, v in os.environ.items() if k != "PYTEST_DISABLE_PLUGIN_AUTOLOAD"}
-        result = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "pytest",
-                "tests/test_mcp_kanban.py",
-                "--deselect=tests/test_mcp_kanban.py::TestMergedFrom1360::test_server_module_line_count_reduced",
-                "--deselect=tests/test_mcp_kanban.py::TestMergedFrom1197::test_server_1170_make_engine_mock_uses_noncallable_agent_view",
-                "--override-ini=addopts=",
-                "-q",
-                "--no-header",
-                "--tb=short",
-            ],
-            capture_output=True,
-            text=True,
-            cwd=str(repo_root),
-            env=env,
-        )
-        assert result.returncode == 0, (
-            "Durable MCP kanban suite has unexpected failures — normalization feature "
-            f"may have introduced a regression:\n{result.stdout}\n{result.stderr}"
-        )
