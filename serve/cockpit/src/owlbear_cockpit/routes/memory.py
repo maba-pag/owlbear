@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated
 
 from fastapi import APIRouter, Depends
 from owlbear_memory.models import MemoryCategory, MemoryEntry, MemoryState  # noqa: TC002
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from owlbear_cockpit.deps import get_memory_engine
 
@@ -59,10 +59,10 @@ class EditRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     expected_updated_at: str
-    title: str | None = None
-    content: str | None = None
-    categories: list[MemoryCategory] | None = None
-    confidence: float | None = None
+    title: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)] | None = None
+    content: Annotated[str, Field(max_length=1024)] | None = None
+    categories: Annotated[list[MemoryCategory], Field(min_length=1)] | None = None
+    confidence: Annotated[float, Field(ge=0.7, le=1.0)] | None = None
     scope_agents: list[str] | None = None
 
 
