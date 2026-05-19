@@ -309,5 +309,18 @@ describe('TestFromAC_NavRailButtons', () => {
       fireEvent.click(navBtn(rail(container), 'gate-1642'))
       expect(capturedPathname).toBe('/gate-test-1642')
     })
+
+    it('ac2 falsify: slash-normalized config path is current for slashless location', () => {
+      routeConfigMut.length = 0
+      routeConfigMut.push({
+        path: '/normalized-1642/',
+        label: 'Normalized',
+        icon: 'normalized-1642',
+        component: () => null,
+      })
+
+      const { container } = renderShell('/normalized-1642')
+      expect(navBtn(rail(container), 'normalized-1642').getAttribute('aria-current')).toBe('page')
+    })
   })
 })

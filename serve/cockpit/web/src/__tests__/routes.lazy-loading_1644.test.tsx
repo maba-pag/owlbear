@@ -10,12 +10,13 @@
  *     AC2 assertion fails.
  */
 import { describe, it, expect } from 'vitest'
-import { existsSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { routeConfig } from '../routes'
 
 const _dir = dirname(fileURLToPath(import.meta.url))
+const ROUTES_SOURCE = resolve(_dir, '../routes.ts')
 
 describe('TestFromAC_LazyLoadingRoutes', () => {
   // ── AC1: DecisionsPage loaded via React.lazy ─────────────────────────────
@@ -27,6 +28,12 @@ describe('TestFromAC_LazyLoadingRoutes', () => {
     // In GREEN: React.lazy(…) wraps DecisionsPage — $$typeof is the react.lazy symbol.
     const comp = entry!.component as unknown as { $$typeof: symbol }
     expect(comp.$$typeof).toBe(Symbol.for('react.lazy'))
+  })
+
+  it('ac1 challenge: /decisions lazy import starts inside the React.lazy callback', () => {
+    const source = readFileSync(ROUTES_SOURCE, 'utf-8')
+    expect(source).toMatch(/lazy\(\s*\(\)\s*=>\s*import\(['"]\.\/pages\/DecisionsPage['"]\)\s*\)/)
+    expect(source).not.toMatch(/const\s+\w*decisions\w*\s*=\s*import\(['"]\.\/pages\/DecisionsPage['"]\)/i)
   })
 
   // ── AC2: build produces ≥2 JS chunks ─────────────────────────────────────
