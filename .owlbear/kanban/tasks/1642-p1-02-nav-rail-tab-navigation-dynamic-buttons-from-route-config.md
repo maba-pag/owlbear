@@ -1,10 +1,10 @@
 ---
 id: 1642
 title: 'P1-02: Nav-rail tab navigation — dynamic buttons from route config'
-status: review
+status: backlog
 priority: needed
 created: 2026-05-18T00:49:27.319192+02:00
-updated: 2026-05-19T12:44:54.989251+02:00
+updated: 2026-05-19T12:59:24.929764+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -22,7 +22,7 @@ ac:
 proof_bundle: smoke+challenge
 blocked: false
 block_reason:
-claimed_at: 2026-05-19T12:44:54.989251+02:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -291,3 +291,34 @@ The behavioral bundle was appropriate at planner time when implementation shape 
 - Required Follow-up from last review was directed at architect (coverage gate), which architect resolved in the rework cycle. No test-writer gaps remain.
 - Quality-runner: 26/26 passed, ESLint clean.
 - Builder skip: test-only retry, all tests green → advancing directly to review.
+
+[[2026-05-19T12:59:24+02:00]]
+## Review Evidence
+- Verdict: FAIL
+- FAIL #1642 -> backlog | AC2 current-state logic diverges from Shell's own normalized route matching, and the task-local proof misses that shipped defect.
+- Builder evidence reviewed first: builder packet reported `NavRailButtons_1642.test.tsx` 22/22 passed, `Shell.test.tsx` 18/18 passed, lint clean for `Shell.tsx` and the task test, and scoped `Shell.tsx` coverage 71.21%. Test-writer retry reported 26/26 task tests passed and ESLint clean after adding falsifiability gates. The architect later de-escalated the proof bundle to `smoke+challenge` for this re-entry.
+- Challenger result: reconsider. Code-reader cross-check confirmed one remaining blocking AC2 defect and the corresponding proof gap.
+
+| AC Line | Code Evidence | Test Evidence | Status |
+|---|---|---|---|
+| AC1 | `serve/cockpit/web/src/Shell.tsx:451-469` renders an explicit navigation landmark and maps `routeConfig` entries to native buttons with `onClick={() => navigate(route.path)}`. | `serve/cockpit/web/src/__tests__/NavRailButtons_1642.test.tsx:98-158` verifies explicit `role="navigation"`, per-entry button rendering, presence of expected buttons, and click navigation. | PASS |
+| AC2 | `serve/cockpit/web/src/Shell.tsx:95-99` defines slash-normalized route identity and `serve/cockpit/web/src/Shell.tsx:275-278` uses it to find the matched route, but `serve/cockpit/web/src/Shell.tsx:456-464` still computes nav active state with raw `pathname === route.path`. That leaves slash-normalized configured routes without any `aria-current="page"` button even though the shell otherwise treats them as the matched route. | `serve/cockpit/web/src/__tests__/NavRailButtons_1642.test.tsx:165-224` and `serve/cockpit/web/src/__tests__/NavRailButtons_1642.test.tsx:243-254` only cover exact path strings (`/`, `/decisions`, `/test-route`, `/unknown`) and therefore would not fail on the normalized-path defect. | FAIL |
+| AC3 | `serve/cockpit/web/src/Shell.tsx:455-469` and `serve/cockpit/web/src/Shell.tsx:487-493` drive both nav buttons and routes from `routeConfig`. | `serve/cockpit/web/src/__tests__/NavRailButtons_1642.test.tsx:231-260` plus the falsifiability gates at `serve/cockpit/web/src/__tests__/NavRailButtons_1642.test.tsx:280-310` prove config-sensitive rendering and navigation for novel entry counts and entries. | PASS |
+
+- Blocking findings:
+
+| # | AC Line | Finding | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | AC2 | The implementation is still wrong for normalized configured routes. Shell already treats normalized paths as route identity for matched-route behavior, but nav current-state uses raw string equality, so a slash-normalized route can render with no active nav button. | `serve/cockpit/web/src/Shell.tsx:95-99`, `serve/cockpit/web/src/Shell.tsx:275-278`, `serve/cockpit/web/src/Shell.tsx:456-464` | backlog |
+| 2 | AC2 / proof sufficiency | The task-local proof misses the shipped AC2 defect because it never exercises a slash-normalized configured route, so the suite would still pass with the broken active-state logic. | `serve/cockpit/web/src/__tests__/NavRailButtons_1642.test.tsx:165-224`, `serve/cockpit/web/src/__tests__/NavRailButtons_1642.test.tsx:243-254` | backlog |
+
+## Observations
+- No AC1 or AC3 blocker remains. The falsifiability tests at `serve/cockpit/web/src/__tests__/NavRailButtons_1642.test.tsx:280-310` are now sufficient to reject a hardcoded fixed-button implementation under the current `smoke+challenge` bundle.
+- The lack of a direct live `/memories` nav-click assertion is not blocking for this task. The data-driven proof is already established by the mutated-route tests, and the live third route entry is separately locked by `serve/cockpit/web/src/routes.ts:32-36` and `serve/cockpit/web/src/__tests__/MemoryTab_1671.test.tsx:85-95`.
+- Safety/security check: no injection, credential, dependency, or data-handling concern was found in this change. The reviewed code maps static route-config entries to native buttons and passes configured paths to `navigate(...)`.
+- No editor-reported TypeScript errors were found in `serve/cockpit/web/src/Shell.tsx`, `serve/cockpit/web/src/__tests__/NavRailButtons_1642.test.tsx`, `serve/cockpit/web/src/__tests__/Shell.test.tsx`, or `serve/cockpit/web/src/routes.ts` during review.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Rework the AC2 contract and re-dispatch implementation/proof so nav current-state uses the same normalized route identity as the rest of `Shell`, and require task-local proof for a slash-normalized configured route before the next review cycle. | `serve/cockpit/web/src/Shell.tsx`, `serve/cockpit/web/src/__tests__/NavRailButtons_1642.test.tsx` | Review findings #1-2; normalized-path mismatch at `serve/cockpit/web/src/Shell.tsx:95-99`, `:275-278`, `:456-464`; missing proof at `serve/cockpit/web/src/__tests__/NavRailButtons_1642.test.tsx:165-224`, `:243-254`. |

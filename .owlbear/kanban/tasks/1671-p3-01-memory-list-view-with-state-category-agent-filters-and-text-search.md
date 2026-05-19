@@ -1,10 +1,10 @@
 ---
 id: 1671
 title: 'P3-01: Memory list view with state/category/agent filters and text search'
-status: review
+status: backlog
 priority: needed
 created: 2026-05-18T17:43:52.849841+02:00
-updated: 2026-05-19T12:44:42.235274+02:00
+updated: 2026-05-19T12:56:43.666066+02:00
 tags:
   - phase-3
   - scope:cockpit-web
@@ -41,7 +41,7 @@ ac:
 proof_bundle: behavioral
 blocked: false
 block_reason:
-claimed_at: 2026-05-19T12:44:42.235274+02:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -153,3 +153,27 @@ Research complete. Straightforward frontend composition — all patterns (route 
 - Module-level durable test check: no non-task MemoryTab durable test file exists (only `serve/cockpit/web/src/__tests__/MemoryTab_1671.test.tsx`) -> skipped.
 - Fixes applied during GREEN: explicit option host `value` attributes for category/agent option assertions; replaced unsupported `PTag color` prop with `variant` + host `color` attribute set for AC/test contract.
 - Commit: `14fe0be9ee2a35119500793afd4e7c123c83eb91` (`feat: implement memory tab list view (#1671, builder)`).
+
+[[2026-05-19T12:56:43+02:00]]
+## Review Evidence
+- Verdict: FAIL
+- FAIL #1671 -> backlog | AC2, AC4, and AC5 are under-proved; the green suite relies on synthetic host attributes instead of falsifiable PDS contract checks.
+- Builder evidence reviewed first: scoped tests 44 passed, lint clean, coverage 93.13%, build success. I did not rerun quality-runner because the builder packet was internally consistent.
+- Direct code inspection indicates the implementation itself likely aligns with AC1-AC6 in [serve/cockpit/web/src/pages/MemoryTab.tsx](serve/cockpit/web/src/pages/MemoryTab.tsx#L126) and [serve/cockpit/web/src/routes.ts](serve/cockpit/web/src/routes.ts#L1). This reject is for proof quality, not for a demonstrated runtime defect.
+
+| # | AC Line | Finding | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | AC4 | State-badge proof does not verify the required PTag variant contract. The tests read a synthetic color attribute, and the component manually writes that attribute on the host, so the suite can pass without proving the AC4 variant requirement. | AC4 in [.owlbear/kanban/tasks/1671-p3-01-memory-list-view-with-state-category-agent-filters-and-text-search.md](.owlbear/kanban/tasks/1671-p3-01-memory-list-view-with-state-category-agent-filters-and-text-search.md#L31); manual host write in [serve/cockpit/web/src/pages/MemoryTab.tsx](serve/cockpit/web/src/pages/MemoryTab.tsx#L388); assertions in [serve/cockpit/web/src/__tests__/MemoryTab_1671.test.tsx](serve/cockpit/web/src/__tests__/MemoryTab_1671.test.tsx#L577), [serve/cockpit/web/src/__tests__/MemoryTab_1671.test.tsx](serve/cockpit/web/src/__tests__/MemoryTab_1671.test.tsx#L592), [serve/cockpit/web/src/__tests__/MemoryTab_1671.test.tsx](serve/cockpit/web/src/__tests__/MemoryTab_1671.test.tsx#L607), [serve/cockpit/web/src/__tests__/MemoryTab_1671.test.tsx](serve/cockpit/web/src/__tests__/MemoryTab_1671.test.tsx#L627); stronger repo precedent in [serve/cockpit/web/src/__tests__/ResolveModalUX.pds-buttons.test.tsx](serve/cockpit/web/src/__tests__/ResolveModalUX.pds-buttons.test.tsx#L79) | backlog |
+| 2 | AC2 | Category and agent PDS control tests only prove positive presence and read host value attributes that the component manually injects, so the suite does not falsify dual-render or native-option regressions strongly enough. | AC2 in [.owlbear/kanban/tasks/1671-p3-01-memory-list-view-with-state-category-agent-filters-and-text-search.md](.owlbear/kanban/tasks/1671-p3-01-memory-list-view-with-state-category-agent-filters-and-text-search.md#L22); manual host writes in [serve/cockpit/web/src/pages/MemoryTab.tsx](serve/cockpit/web/src/pages/MemoryTab.tsx#L310) and [serve/cockpit/web/src/pages/MemoryTab.tsx](serve/cockpit/web/src/pages/MemoryTab.tsx#L334); assertions in [serve/cockpit/web/src/__tests__/MemoryTab_1671.test.tsx](serve/cockpit/web/src/__tests__/MemoryTab_1671.test.tsx#L323), [serve/cockpit/web/src/__tests__/MemoryTab_1671.test.tsx](serve/cockpit/web/src/__tests__/MemoryTab_1671.test.tsx#L329), [serve/cockpit/web/src/__tests__/MemoryTab_1671.test.tsx](serve/cockpit/web/src/__tests__/MemoryTab_1671.test.tsx#L346), [serve/cockpit/web/src/__tests__/MemoryTab_1671.test.tsx](serve/cockpit/web/src/__tests__/MemoryTab_1671.test.tsx#L352); stronger repo precedent in [serve/cockpit/web/src/__tests__/FilterPanel.pds-controls.test.tsx](serve/cockpit/web/src/__tests__/FilterPanel.pds-controls.test.tsx#L165) and [serve/cockpit/web/src/__tests__/FilterPanel.pds-controls.test.tsx](serve/cockpit/web/src/__tests__/FilterPanel.pds-controls.test.tsx#L177) | backlog |
+| 3 | AC5 | Clear-filters proof only checks row visibility after the click. It does not establish that all controls return to the AC2 initial values, which is the actual AC5 contract. | AC5 in [.owlbear/kanban/tasks/1671-p3-01-memory-list-view-with-state-category-agent-filters-and-text-search.md](.owlbear/kanban/tasks/1671-p3-01-memory-list-view-with-state-category-agent-filters-and-text-search.md#L36); reset test title and click in [serve/cockpit/web/src/__tests__/MemoryTab_1671.test.tsx](serve/cockpit/web/src/__tests__/MemoryTab_1671.test.tsx#L724) and [serve/cockpit/web/src/__tests__/MemoryTab_1671.test.tsx](serve/cockpit/web/src/__tests__/MemoryTab_1671.test.tsx#L742) | backlog |
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Refine the proof target for AC2 and AC4 so the retry must prove real PDS contracts without relying on synthetic host attributes, then respin to test-writer. | .owlbear/kanban/tasks/1671-p3-01-memory-list-view-with-state-category-agent-filters-and-text-search.md; serve/cockpit/web/src/__tests__/MemoryTab_1671.test.tsx; serve/cockpit/web/src/pages/MemoryTab.tsx | AC2 [.owlbear/kanban/tasks/1671-p3-01-memory-list-view-with-state-category-agent-filters-and-text-search.md](.owlbear/kanban/tasks/1671-p3-01-memory-list-view-with-state-category-agent-filters-and-text-search.md#L22), AC4 [.owlbear/kanban/tasks/1671-p3-01-memory-list-view-with-state-category-agent-filters-and-text-search.md](.owlbear/kanban/tasks/1671-p3-01-memory-list-view-with-state-category-agent-filters-and-text-search.md#L31), host writes [serve/cockpit/web/src/pages/MemoryTab.tsx](serve/cockpit/web/src/pages/MemoryTab.tsx#L310), [serve/cockpit/web/src/pages/MemoryTab.tsx](serve/cockpit/web/src/pages/MemoryTab.tsx#L334), [serve/cockpit/web/src/pages/MemoryTab.tsx](serve/cockpit/web/src/pages/MemoryTab.tsx#L388) |
+| 2 | architect | Refine AC5 proof expectations so clear-filters must establish a full reset to the AC2 initial values, not only restored row visibility, then respin to test-writer. | .owlbear/kanban/tasks/1671-p3-01-memory-list-view-with-state-category-agent-filters-and-text-search.md; serve/cockpit/web/src/__tests__/MemoryTab_1671.test.tsx | AC5 [.owlbear/kanban/tasks/1671-p3-01-memory-list-view-with-state-category-agent-filters-and-text-search.md](.owlbear/kanban/tasks/1671-p3-01-memory-list-view-with-state-category-agent-filters-and-text-search.md#L36), reset test [serve/cockpit/web/src/__tests__/MemoryTab_1671.test.tsx](serve/cockpit/web/src/__tests__/MemoryTab_1671.test.tsx#L724), click [serve/cockpit/web/src/__tests__/MemoryTab_1671.test.tsx](serve/cockpit/web/src/__tests__/MemoryTab_1671.test.tsx#L742) |
+| 3 | architect | Decide whether AC3 category multi-select semantics are AND or OR within the category dimension before the next RED and GREEN cycle. | .owlbear/kanban/tasks/1671-p3-01-memory-list-view-with-state-category-agent-filters-and-text-search.md; serve/cockpit/web/src/pages/MemoryTab.tsx | AC3 [.owlbear/kanban/tasks/1671-p3-01-memory-list-view-with-state-category-agent-filters-and-text-search.md](.owlbear/kanban/tasks/1671-p3-01-memory-list-view-with-state-category-agent-filters-and-text-search.md#L27), current implementation [serve/cockpit/web/src/pages/MemoryTab.tsx](serve/cockpit/web/src/pages/MemoryTab.tsx#L260) |
+
+## Observations
+- No blocking implementation defect was demonstrated on direct inspection. The reject is about proof sufficiency, not about a confirmed runtime failure in [serve/cockpit/web/src/pages/MemoryTab.tsx](serve/cockpit/web/src/pages/MemoryTab.tsx#L126).
+- Builder evidence was complete and internally consistent, so an independent quality-runner rerun was not cost-justified for this review.

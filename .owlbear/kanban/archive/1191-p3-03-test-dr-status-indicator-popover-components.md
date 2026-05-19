@@ -15,7 +15,6 @@ block_reason:
 archival_reason: completed
 completed: 2026-04-30T05:42:44.624463+00:00
 claimed_at: 2026-04-30T05:35:19.786864+00:00
-archival_reason:
 archival_refs: []
 ---
 
