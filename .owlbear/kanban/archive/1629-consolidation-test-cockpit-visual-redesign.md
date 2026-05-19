@@ -1,10 +1,10 @@
 ---
 id: 1629
 title: 'Consolidation test: cockpit visual redesign'
-status: todo
+status: archived
 priority: important
 created: 2026-05-16T03:37:57.297125+00:00
-updated: 2026-05-19T02:24:59.952805+02:00
+updated: 2026-05-19T03:25:41.213652+02:00
 tags:
   - frontend
   - pds
@@ -50,7 +50,7 @@ proof_bundle: critical
 blocked: false
 block_reason: '""'
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 Brief: see parent #1590.
@@ -503,3 +503,92 @@ Architect override of reconsider: No live source contradiction. All findings are
 
 ### Verdict: APPROVE
 ### Action Taken: Cleared block_reason, advanced to todo. Reviewer will perform critical-bundle verification (full suite + lint + coverage) to confirm AC-1 gate is green post-#1657.
+
+[[2026-05-19T02:50:23+02:00]]
+## Test-Writer Notes
+- Retry cycle 5: no new tests written. All AC coverage intact from prior cycles.
+- Files changed: none — no test changes needed in this cycle.
+- Commit: n/a (nothing changed)
+
+**Why no new tests:**
+The last reviewer Required Follow-up (cycle 4) was directed at the **architect** only: "Re-dispatch the AC-1 blocker… triage why the frontend unit suite is currently red on the CockpitProvider task-switch abort case." This was not a test-proof gap for the test-writer — the existing AC-1 gate correctly caught the regression. Architect resolved it via #1657 (CockpitProvider abort-test timing fix, commit 7f482bc7, audit: 2134/0/11 vitest exit 0).
+
+**Current test state:**
+- AC-2 non-slow tests (2/2): PASS — confirmed by quality-runner (ruff clean, pytest exit 0)
+- AC-1 slow gates (Vitest, build, e2e:all): expected GREEN — architect cycle 5 audit confirmed post-#1657 vitest exit 0; build and e2e:all were green in prior cycles with no intervening changes
+- AC-3 dual-theme spec (20 tests): expected GREEN — confirmed green in cycle 3 retry and not affected by #1657
+
+**AC coverage (unchanged from prior cycles):**
+| AC | Test(s) |
+|----|---------| 
+| AC-1: Vitest + e2e:all + build | test_vitest_passes, test_playwright_e2e_all_passes, test_production_build_passes |
+| AC-2: ≤4 inline styles with justification | test_inline_style_count_at_most_four, test_each_inline_style_has_justification_comment |
+| AC-3: Dual-theme axe — all 10 surfaces | test_dual_theme_axe_spec_passes + accessibility-dual-theme.spec.ts (20 tests) |
+
+**Direct-to-review rationale:** Reviewer Required Follow-up contained no test-proof gaps; architectural fix (#1657) fully resolves the blocker. Builder has no implementation work to do.
+
+[[2026-05-19T03:10:56+02:00]]
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation: PASS #1629 to docs | AC mapped to code and evidence sufficient.
+- Independent reviewer verification was required because the latest task packet only recorded post-#1657 expectations, not fresh review proof.
+
+| AC Line | Code Evidence | Test Evidence | Status |
+|---|---|---|---|
+| AC-1 | serve/cockpit/tests/test_visual_redesign.py:36, 53, 70; serve/cockpit/web/package.json:11, 16, 18 | Independent quality-runner: pytest exit 0 on serve/cockpit/tests/test_visual_redesign.py; Vitest exit 0; build exit 0; Playwright exit 0; dependency #1657 is archived/completed | PASS |
+| AC-2 | serve/cockpit/web/src/KanbanBoard.tsx:322, 323, 373, 374; serve/cockpit/web/src/components/DRStatusIndicator.tsx:95, 96; serve/cockpit/web/src/components/HealthBadge.tsx:94, 95 | Hardened durable checks at serve/cockpit/tests/test_visual_redesign.py:123, 138, 151 pass; source-wide grep finds exactly 4 style attributes and 4 adjacent non-empty inline-justified comments | PASS |
+| AC-3 | serve/cockpit/web/e2e/accessibility-dual-theme.spec.ts:32, 186, 202, 220, 242, 265, 291, 312, 341, 370, 400, 423; baseline sweep parity for CleanupPanel and RepairPanel confirm-dialog surfaces at serve/cockpit/web/e2e/accessibility-sweep.spec.ts:349, 373 | Independent quality-runner: dual-theme Playwright spec exits 0 via serve/cockpit/tests/test_visual_redesign.py:176; full Playwright suite exit 0 | PASS |
+
+- Blocking findings: none.
+- Critical-bundle lint proof: independent quality-runner returned ESLint, Stylelint, HTMLHint, and Ruff clean.
+
+## Observations
+- quality-runner returned no meaningful coverage artifact for this task. The Python durable gate shells out to npm commands, so Python coverage only measures the harness, and frontend coverage is not enabled by default. I did not treat that as blocking because the ACs are proven by direct zero-exit command runs plus source/spec inspection rather than line coverage.
+- Theoretical AC-2 multiline-scan blind spots remain previously accepted non-blocking under repo formatting conventions; current source still has only the four expected inline-style sites.
+- The dual-theme spec names CleanupPanel and RepairPanel as confirm-dialog surfaces, which matches the baseline accessibility-sweep scope. I did not find a remaining AC-3 scope gap.
+
+[[2026-05-19T03:14:32+02:00]]
+## Docs Gate
+
+**Verdict:** PASS
+
+### Checklist
+
+| Item | Result |
+|------|--------|
+| README Verification | `serve/cockpit/README.md` — added #1629 bullet documenting inline-style reduction (14→4), accessibility-dual-theme.spec.ts extension (10 surfaces × 2 themes = 20 tests), and durable consolidation gate in test_visual_redesign.py (6 tests). Also resolved the deferred #1624 p-toast-item proof note from "deferred" to "confirmed via #1629 consolidation gate". Layer 1 grep confirmed both references correct; Layer 2 editorial read confirmed coherence. |
+| External Attribution | N/A — no external sources used |
+| Research Doc | N/A — no research artifact for this task |
+| Deletion Detection | N/A — no source files deleted, only modified |
+
+### Files Updated
+- `serve/cockpit/README.md` — 2 edits, 19 net insertions (commit 769409dd)
+
+### Scratch Cleanup
+- No scratch files created by this gate pass; prior scratch cleanup already confirmed (`rm -f .owlbear/scratch/1629-*`, exit 0)
+
+[[2026-05-19T03:25:41+02:00]]
+## Audit
+
+### Regression Detection
+quality-runner full report: 2211 passed, 0 failed, 11 skipped, all lint clean (vitest exit 0, eslint exit 0, playwright exit 0, pytest exit 0, ruff exit 0). No cross-task regressions detected.
+
+### Intent Verification
+Changed files confined to `serve/cockpit/web/` (frontend components, CSS, e2e specs) and `serve/cockpit/tests/` (Python consolidation gate) plus `serve/cockpit/README.md`. All within cockpit frontend domain. Implementation addresses stated purpose: reduce inline styles, remediate RepairPanel a11y, extend dual-theme accessibility coverage to all 10 surfaces. No extraneous scope.
+
+### Architect Quality
+Score: 4/5. Final ACs are specific, testable, and well-constrained (whitespace-tolerant regex pattern, enumerated surface list, exact command specifications). However, it took 5 architecture review cycles to reach this quality — original AC-2 had false-green regex (missed `style={VAR}` form), AC-3 had ambiguous "modal surfaces" scope. Architect responded constructively to each reviewer escalation. Notable gaps filled by reviewer feedback rather than proactively caught.
+
+### Commit Integrity
+All upstream commits present with proper attribution:
+- Builder: `1aa5cf16`, `9843892d`
+- Test-writer: `8fe458b6`, `93d06aa4`, `1a4b250e`, `bd47982d`
+- Doc-writer: `769409dd`
+
+Commit messages follow convention (type, scope, task ref, agent).
+
+### Deductions
+None.
+
+### Confidence: 1.00
+### Action: Archive
