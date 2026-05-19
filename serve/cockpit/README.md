@@ -398,6 +398,21 @@ Accessibility and responsive state after #1396:
   `serve/cockpit/web/src/__tests__/Shell.suspense-boundary_1644.test.tsx` (1 test —
   `data-testid="route-loading"` fallback renders while the route suspends).
 
+- #1642 wires the nav-rail to `routeConfig`. The `<nav>` element gains an explicit
+  `role="navigation"` landmark; the prior single hardcoded kanban `<button>` is replaced
+  with `routeConfig.map(...)` rendering each config entry as a native `<button>` with
+  `data-surface={route.icon}` (preserving existing test selectors),
+  `onClick={() => navigate(route.path)}` via `useNavigate()`, and
+  `aria-current={isActive ? 'page' : undefined}`. Active state is derived from
+  `normalizedPathname === normalizeRoutePath(route.path)` — the same normalization as
+  Shell's `matchedRoute` logic at `Shell.tsx:275–277` — so slash-normalized configured
+  paths (e.g. `/foo/` active at location `/foo`) mark the correct button current.
+  Verified by `serve/cockpit/web/src/__tests__/NavRailButtons_1642.test.tsx` (27 tests
+  — explicit `role`, per-entry button count, click navigation, active/inactive
+  `aria-current` toggling, route-switch updates, unknown-route behavior, and 4
+  falsifiability gate tests proving button count and identity track `routeConfig`
+  entries rather than any hardcoded set).
+
 ## Product Boundary
 
 Cockpit steering owns viewing, editing, moving/archiving, user blocks, health/admin,
