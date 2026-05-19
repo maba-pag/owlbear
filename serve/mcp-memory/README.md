@@ -24,10 +24,10 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 |--------|---------|
 | `server.py` | FastMCP app definition, tool registration, lifespan wiring |
 | `tools.py` | Tool implementation — validation, state transitions, response formatting |
-| `engine.py` | File I/O layer — read/write/delete/list markdown entries, ID-to-path cache |
-| `models.py` | Pydantic models (`MemoryEntry`, `MemoryCategory`, `MemoryState`) |
 | `git.py` | Batch commit helper — stages non-pending entries by session type |
 | `__main__.py` | Entry point for `python -m owlbear_mcp_memory` |
+
+Engine and model types (`MemoryEngine`, `MemoryEntry`, `MemoryCategory`, `MemoryState`, error types) are provided by the `owlbear-memory` workspace package.
 
 ### State Model
 
@@ -103,5 +103,6 @@ The helper stages only non-pending `.owlbear/memory/*.md` files and returns the 
 | Package | Purpose |
 |---------|---------|
 | `mcp[cli]` | FastMCP server framework |
-| `pydantic` | Model validation |
+| `owlbear-memory` | Shared memory engine, models, and error types (workspace package) |
+| `pydantic` | Model validation at the MCP tool layer |
 | `pyyaml` | YAML frontmatter serialisation for memory files |

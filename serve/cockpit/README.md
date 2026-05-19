@@ -466,6 +466,25 @@ Two endpoints handle Decision Request (DR) lifecycle. These routes use `get_deci
 | `GET /api/decisions/pending` | Reads `decisions/pending/*.md`, parses YAML frontmatter, returns `{count, items[{id, task_id, agent, request_type, created, title, body, body_preview}]}`. Only items with frontmatter `response == "pending"` are included. Returns `{count: 0, items: []}` when the directory is empty or missing. |
 | `POST /api/decisions/{id}/resolve` | Accepts `{response: "approved"\|"needs-info"\|"rejected", notes?: string (max 10,000 chars)}`. Immediately: appends the canonical `## Decision Request` summary to the linked task, unblocks the task for `approved`/`rejected` responses, and moves the DR file from `pending/` to `resolved/`. Returns `{id, response}` on success. Returns 404 (`{detail}`) for unknown or already-cockpit-resolved ids. Returns 409 (`{code, message}`) for DRs resolved by another agent (still in `resolved/`). Returns 422 (`{detail}`) for malformed ids or `notes` exceeding 10,000 characters. |
 
+## Memory API
+
+Four endpoints expose `MemoryEngine` read and OCC mutation operations. These routes use `get_memory_engine` (a separate DI callable in `deps.py`) — not the CockpitView facade.
+
+| Route | Behaviour |
+|-------|----------|
+| `GET /api/memories` | Returns `{ entries: [...], parse_errors: int }`. Each entry carries all 11 `MemoryEntryResponse` fields: `id`, `title`, `content`, `categories`, `confidence`, `state`, `scope_agents`, `source_agent`, `created_at`, `updated_at`, `approved_at`. Entries in all four states (`pending`, `curated`, `approved`, `deleted`) are included. `parse_errors` is the count of files that failed to parse. |
+| `POST /api/memories/{id}/approve` | Accepts `{ expected_updated_at: str }` body. Approves one entry in `curated` state; returns `{ entry: MemoryEntryResponse }` on success. Errors: 404 `MEM_NOT_FOUND`, 409 `MEM_CONFLICT` (OCC mismatch), 422 `MEM_INVALID_TRANSITION` (entry not curated). |
+| `POST /api/memories/{id}/edit` | Accepts `{ expected_updated_at: str, title?, content?, categories?, confidence?, scope_agents? }` with extra fields forbidden. Editable fields are validated at the cockpit boundary (title: non-empty; content: max 1 024 chars; categories: non-empty list; confidence: 0.7–1.0). Editing an `approved` entry transitions it back to `curated`. Returns `{ entry: MemoryEntryResponse }`. Errors: 404 `MEM_NOT_FOUND`, 409 `MEM_CONFLICT`, 422 `MEM_INVALID_TRANSITION` (entry is `deleted`). |
+| `POST /api/memories/{id}/delete` | Accepts `{ expected_updated_at: str }` body. `pending` entries are hard-deleted from disk; `curated`/`approved` entries are soft-deleted (state → `deleted`). Deleting an already-`deleted` entry returns 422. Returns `{ success: true }` on success. Errors: 404 `MEM_NOT_FOUND`, 409 `MEM_CONFLICT`, 422 `MEM_INVALID_TRANSITION`. |
+
+Memory error handlers are registered in `main.py` separately from the kanban error handler, using qualified imports from `owlbear_memory.errors`:
+
+| Memory error | HTTP status | `code` |
+|---|---|---|
+| `NotFoundError` | 404 | `MEM_NOT_FOUND` |
+| `ConcurrencyError` | 409 | `MEM_CONFLICT` |
+| `TransitionError` | 422 | `MEM_INVALID_TRANSITION` |
+
 ## Work Sessions Model
 
 `GET /api/sessions` returns derived `SessionRecord` objects built from `activity.jsonl` at read time — there is no separate sessions store.
@@ -505,6 +524,7 @@ Every mutation written to `activity.jsonl` carries a `source` field. Use `source
 | `COCKPIT_PORT` | `8420` | Override listen port (1-65535) |
 | `COCKPIT_NO_OPEN` | unset | Set to `1` to suppress browser auto-open |
 | `KANBAN_DIR` | `.owlbear/kanban/` | Override kanban directory path |
+| `MEMORY_DIR` | `.owlbear/memory/` | Override memory directory path used by `MemoryEngine` |
 
 ## Delivery Packaging
 
@@ -523,4 +543,5 @@ Every mutation written to `activity.jsonl` carries a `source` field. Use `source
 | `sse-starlette` | SSE streaming for the `GET /api/events` invalidation endpoint |
 | `watchfiles` | File-system watcher used by the events endpoint |
 | `owlbear-kanban` | Kanban engine (workspace package) |
+| `owlbear-memory` | Memory engine (workspace package) |
 | `ruamel.yaml` | Round-trip YAML parsing for the Decisions API |
