@@ -375,13 +375,28 @@ Accessibility and responsive state after #1396:
   only a new array entry without modifying `Shell.tsx`. `pages/DecisionsPage.tsx` is a
   skeleton component (`<section data-testid="decisions-page" />`) that validates
   end-to-end routing. Verified by
-  `serve/cockpit/web/src/__tests__/routes_1639.test.tsx` (10 tests — config shape and
-  extensibility), `serve/cockpit/web/src/__tests__/Shell.tab-routing_1639.test.tsx`
+  `serve/cockpit/web/src/__tests__/routes_1639.test.tsx` (12 tests — config shape,
+  extensibility, and lazy/eager split contract updated by #1644),
+  `serve/cockpit/web/src/__tests__/Shell.tab-routing_1639.test.tsx`
   (12 tests — Shell routing behavior, KanbanBoard props preserved, AC3 extensibility),
   `serve/cockpit/web/src/__tests__/DecisionsPage_1639.test.tsx` (3 tests — skeleton
   testid), and `serve/cockpit/web/src/__tests__/Shell.decisions-integration_1639.test.tsx`
   (3 integration tests — renders real `routeConfig` at `/decisions` and asserts
-  `data-testid="decisions-page"` from the real `DecisionsPage`, closing AC2 proof gap).
+  `data-testid="decisions-page"` from the real `DecisionsPage`, updated by #1644 to
+  await Suspense resolution via `act(async)` + `waitFor`).
+
+- #1644 adds lazy loading for the `/decisions` route. In `routes.ts`, the
+  `DecisionsPage` import is replaced with `const DecisionsPage = lazy(() =>
+  import('./pages/DecisionsPage'))`, while `/` (`KanbanBoard`) remains an eager import.
+  `Shell.tsx` wraps the `<Routes>` block in `<Suspense fallback={<div
+  data-testid="route-loading" />}>`, providing a visible fallback during async chunk
+  load. Vite auto-splits `DecisionsPage` into a separate JS chunk (`DecisionsPage-*.js`
+  alongside `index-*.js` in `dist/assets/`). Verified by
+  `serve/cockpit/web/src/__tests__/routes.lazy-loading_1644.test.tsx` (2 tests —
+  `$$typeof === Symbol.for('react.lazy')` proof for `/decisions`, and ≥2 JS chunk
+  count assertion after `npm run build`) and
+  `serve/cockpit/web/src/__tests__/Shell.suspense-boundary_1644.test.tsx` (1 test —
+  `data-testid="route-loading"` fallback renders while the route suspends).
 
 ## Product Boundary
 
