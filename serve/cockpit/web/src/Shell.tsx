@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from 'react'
+import { Suspense, useRef, useEffect, useState } from 'react'
 import { Routes, Route, useLocation, useNavigate } from 'react-router'
 import { PBanner, PButton, PDivider, PHeading, PToast, useToastManager } from '@porsche-design-system/components-react'
 import ActivityTab from './components/ActivityTab'
@@ -372,18 +372,20 @@ function Shell() {
           }
         }}
       >
-        <Routes>
-          {routeConfig.map((route) => {
-            const RouteComponent = route.component
-            return (
-              <Route
-                key={route.path}
-                path={route.path}
-                element={<RouteComponent {...kanbanProps} />}
-              />
-            )
-          })}
-        </Routes>
+        <Suspense fallback={<div data-testid="route-loading" />}>
+          <Routes>
+            {routeConfig.map((route) => {
+              const RouteComponent = route.component
+              return (
+                <Route
+                  key={route.path}
+                  path={route.path}
+                  element={<RouteComponent {...kanbanProps} />}
+                />
+              )
+            })}
+          </Routes>
+        </Suspense>
       </main>
       {hasSidecar ? (
         <aside
