@@ -1,10 +1,10 @@
 ---
 id: 1671
 title: 'P3-01: Memory list view with state/category/agent filters and text search'
-status: in-progress
+status: review
 priority: needed
 created: 2026-05-18T17:43:52.849841+02:00
-updated: 2026-05-19T12:20:46.170334+02:00
+updated: 2026-05-19T12:44:42.235274+02:00
 tags:
   - phase-3
   - scope:cockpit-web
@@ -41,7 +41,7 @@ ac:
 proof_bundle: behavioral
 blocked: false
 block_reason:
-claimed_at: 2026-05-19T12:20:46.170334+02:00
+claimed_at: 2026-05-19T12:44:42.235274+02:00
 archival_reason:
 archival_refs: []
 ---
@@ -141,3 +141,15 @@ Research complete. Straightforward frontend composition — all patterns (route 
 - Total: 39 tests, all FAIL
 - Failure mode: module resolution error — pages/MemoryTab.tsx does not exist; routeConfig lacks /memories entry
 - ESLint: clean
+
+[[2026-05-19T12:38:39+02:00]]
+## Builder Notes
+- Implementation: Added `serve/cockpit/web/src/pages/MemoryTab.tsx` and updated `serve/cockpit/web/src/routes.ts` with lazy `/memories` route (`label: "Memory"`, `icon: "memory"`, `hasSidecar: false`).
+- Approach: Implemented MemoryTab as a focused route component using `usePollingFetch('/api/memories', { paused: true })`, visibility-triggered refetch, client-side intersection filtering (state/category/agent/text), deterministic sort (state priority then `created_at` asc), and AC-specific UI states/testids.
+- Test evidence (quality-runner, scoped): `serve/cockpit/web/src/__tests__/MemoryTab_1671.test.tsx` -> 44 passed, 0 failed.
+- Lint evidence (quality-runner, scoped): ESLint clean for `serve/cockpit/web/src/routes.ts`, `serve/cockpit/web/src/pages/MemoryTab.tsx`, `serve/cockpit/web/src/__tests__/MemoryTab_1671.test.tsx`.
+- Coverage evidence (quality-runner, scoped): `src/pages/MemoryTab.tsx` = 93.13% (>= 90%).
+- Build evidence (quality-runner): build success (exit 0).
+- Module-level durable test check: no non-task MemoryTab durable test file exists (only `serve/cockpit/web/src/__tests__/MemoryTab_1671.test.tsx`) -> skipped.
+- Fixes applied during GREEN: explicit option host `value` attributes for category/agent option assertions; replaced unsupported `PTag color` prop with `variant` + host `color` attribute set for AC/test contract.
+- Commit: `14fe0be9ee2a35119500793afd4e7c123c83eb91` (`feat: implement memory tab list view (#1671, builder)`).

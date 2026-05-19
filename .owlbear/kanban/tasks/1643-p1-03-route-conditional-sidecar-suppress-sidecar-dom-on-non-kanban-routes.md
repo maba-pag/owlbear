@@ -1,10 +1,10 @@
 ---
 id: 1643
 title: 'P1-03: Route-conditional sidecar — suppress sidecar DOM on non-kanban routes'
-status: in-progress
+status: review
 priority: needed
 created: 2026-05-18T00:49:27.343819+02:00
-updated: 2026-05-19T12:20:42.582411+02:00
+updated: 2026-05-19T12:44:41.803302+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -28,7 +28,7 @@ ac:
 proof_bundle: behavioral
 blocked: false
 block_reason:
-claimed_at: 2026-05-19T12:20:42.582411+02:00
+claimed_at: 2026-05-19T12:44:41.803302+02:00
 archival_reason:
 archival_refs: []
 ---
@@ -210,3 +210,27 @@ builder crashed (unstructured output): found unrelated parse error in KanbanBoar
 - The current 1643 proof is otherwise sufficient: AC3 now has direct CSS regression checks and the sidecar DOM/state behavior is covered.
 - Non-blocking: there is still no task-local proof for the explicit `hasSidecar: true` branch; current coverage exercises `false`, default `undefined`, and unknown-path fallback only.
 - Challenger review agreed the regression is real but clarified that cycle 2 does not force `backlog`; `in-progress` is the correct route for this implementation defect.
+
+[[2026-05-19T12:39:00+02:00]]
+builder crashed (saw parallel #1671 commit during execution); releasing for retry with clean git state
+
+[[2026-05-19T12:41:41+02:00]]
+## Builder Notes
+- Scope handled as verification pass-through on existing workspace state; no new source edits were required in this builder cycle.
+- Validation objective: confirm prior regression fix now preserves both contracts simultaneously:
+  - 1643 sidecar conditional behavior (AC1-AC3)
+  - 1644 adjacent lazy-loading contract for `/decisions`
+
+- Quality-runner evidence (scoped):
+  - Tests: `serve/cockpit/web/src/__tests__/Shell.sidecar-conditional_1643.test.tsx` + `serve/cockpit/web/src/__tests__/routes.lazy-loading_1644.test.tsx` -> 9 passed, 0 failed
+  - Lint: clean (eslint clean on `Shell.tsx`, `routes.ts`, and both scoped test files)
+  - Coverage (informational from scoped run): `src/routes.ts` 83.33%, `src/Shell.tsx` 76.32%
+
+- Baseline regression check:
+  - Tests: `serve/cockpit/web/src/__tests__/Shell.test.tsx` -> 18 passed, 0 failed
+  - Lint: clean (`Shell.tsx`, `Shell.test.tsx`)
+
+- Evidence summary:
+  - 1643 behavioral tests pass including DOM suppression, return-navigation restore, collapsed-state persistence, and CSS no-sidecar contract.
+  - 1644 lazy-loading tests pass including `react.lazy` signature assertion and multi-chunk build artifact assertion.
+  - No blocking defects observed in current state; routing to review for independent confirmation.
