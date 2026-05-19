@@ -367,6 +367,22 @@ Accessibility and responsive state after #1396:
 - Documentation here does not treat cache/SSE invalidation work from #1346 as part of
   this delivery bundle.
 
+- #1639 introduces declarative tab-routing infrastructure. `routes.ts` exports a
+  module-level `routeConfig: RouteConfigEntry[]` array typed `{ path, label, icon,
+  component: ComponentType<KanbanBoardProps> }` with two entries: kanban at `/` and
+  decisions at `/decisions`. `Shell.tsx` replaces its prior single inline `<Route>` with
+  a `routeConfig.map()` render loop inside `<Routes>`, so registering a new tab requires
+  only a new array entry without modifying `Shell.tsx`. `pages/DecisionsPage.tsx` is a
+  skeleton component (`<section data-testid="decisions-page" />`) that validates
+  end-to-end routing. Verified by
+  `serve/cockpit/web/src/__tests__/routes_1639.test.tsx` (10 tests — config shape and
+  extensibility), `serve/cockpit/web/src/__tests__/Shell.tab-routing_1639.test.tsx`
+  (12 tests — Shell routing behavior, KanbanBoard props preserved, AC3 extensibility),
+  `serve/cockpit/web/src/__tests__/DecisionsPage_1639.test.tsx` (3 tests — skeleton
+  testid), and `serve/cockpit/web/src/__tests__/Shell.decisions-integration_1639.test.tsx`
+  (3 integration tests — renders real `routeConfig` at `/decisions` and asserts
+  `data-testid="decisions-page"` from the real `DecisionsPage`, closing AC2 proof gap).
+
 ## Product Boundary
 
 Cockpit steering owns viewing, editing, moving/archiving, user blocks, health/admin,
