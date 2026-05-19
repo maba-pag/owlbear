@@ -4,7 +4,7 @@ title: 'P3-02: Memory accordion detail and state-dependent actions'
 status: research
 priority: important
 created: 2026-05-18T17:44:11.043517+02:00
-updated: 2026-05-18T18:24:23.615705+02:00
+updated: 2026-05-19T20:24:59.372087+02:00
 tags:
   - phase-3
   - scope:cockpit-web
@@ -37,7 +37,7 @@ ac:
 proof_bundle: behavioral
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-19T20:24:59.372087+02:00
 archival_reason:
 archival_refs: []
 ---

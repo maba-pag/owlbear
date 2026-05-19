@@ -1,10 +1,10 @@
 ---
 id: 1645
 title: 'P2-01: Decisions list page with empty state'
-status: research
+status: backlog
 priority: needed
 created: 2026-05-18T00:49:44.974074+02:00
-updated: 2026-05-18T00:49:44.974074+02:00
+updated: 2026-05-19T20:26:58.124858+02:00
 tags:
   - phase-2
   - scope:cockpit-web
@@ -39,3 +39,16 @@ Brief: see parent #1638 and `.owlbear/briefs/draft-cockpit-decisions-tab/brief.m
 ## Context
 
 The skeleton page from P1-01 gets replaced with the real decisions list. Data comes from `useDRState()` (already available via CockpitProvider — no new state fields needed). DecisionViewport.tsx has similar rendering logic for the sidecar that can inform the list item structure, but the tab version uses full-page width with generous spacing.
+
+[[2026-05-19T20:26:58+02:00]]
+## Research
+
+**Findings:** T1-Autonomous frontend component task. All data sources verified:
+- `useDRState()` provides `items: PendingDR[]` with all required fields (agent, request_type, created, task_id, body_preview)
+- `DecisionViewport.tsx` has reusable `formatAge()` utility and item rendering pattern
+- No new state, hooks, or API endpoints needed
+
+**Implementation approach:** Replace skeleton with component calling `useDRState()` directly; render single-column flex list with `<article>` items; extract/reuse `formatAge()` for relative age; enforce 200-char body_preview truncation; empty state with data-testid.
+
+**Doc:** `.owlbear/research/1645-decisions-list-page.md`
+**Follow-ups:** None — task is self-contained, ready for todo.
