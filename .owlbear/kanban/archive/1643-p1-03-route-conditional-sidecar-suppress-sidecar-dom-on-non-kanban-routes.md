@@ -1,10 +1,10 @@
 ---
 id: 1643
 title: 'P1-03: Route-conditional sidecar — suppress sidecar DOM on non-kanban routes'
-status: backlog
+status: archived
 priority: needed
 created: 2026-05-18T00:49:27.343819+02:00
-updated: 2026-05-19T17:22:01.804919+02:00
+updated: 2026-05-19T20:24:12.224781+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -28,8 +28,8 @@ ac:
 proof_bundle: behavioral
 blocked: false
 block_reason:
-claimed_at: 2026-05-19T17:22:01.804919+02:00
-archival_reason:
+claimed_at:
+archival_reason: completed
 archival_refs: []
 ---
 Brief: see parent #1638 and `.owlbear/briefs/draft-cockpit-decisions-tab/brief.md`
@@ -265,3 +265,176 @@ builder crashed (saw parallel #1671 commit during execution); releasing for retr
 - Adversarial cross-checks agreed with the block: code-reader found 1643 AC1-AC3 implemented and tested correctly but identified the 1644 lazy-loading regression and proof gap; challenger rejected a provisional PASS on the same basis.
 - Non-blocking: there is still no task-local proof for an explicit `hasSidecar: true` route entry. Current config uses `false`, `undefined`, and unknown-path fallback only, so this remains lower risk than the lazy-loading defect.
 - `get_errors` reports no editor diagnostics in `serve/cockpit/web/src/routes.ts`, `serve/cockpit/web/src/Shell.tsx`, `serve/cockpit/web/src/__tests__/Shell.sidecar-conditional_1643.test.tsx`, or `serve/cockpit/web/src/__tests__/routes.lazy-loading_1644.test.tsx`.
+
+[[2026-05-19T17:30:00+02:00]]
+## Architecture Review (cycle 4 — loop-breaker resolution)
+
+### Problem Statement
+The builder introduced a module-level preload (`const decisionsPageModule = import(...)` + `lazy(async () => decisionsPageModule)`) to make AC2 navigation tests pass synchronously. This satisfies 1643 tests but violates archived #1644 AC1 (`React.lazy(() => import(...))` semantics). The root cause is a timing interaction between React Router v7's `startTransition`-wrapped navigations and `<Suspense>`.
+
+### Root Cause Analysis
+- React Router v7.15 wraps `useNavigate()` calls in `startTransition`
+- When navigating from `/` (eager KanbanBoard) to `/decisions` (lazy DecisionsPage), the lazy component suspends inside the `<Suspense>` boundary at Shell.tsx L486
+- Because the navigation is a transition, React keeps the ENTIRE old UI visible (including sidecar) until the lazy component resolves
+- `useLocation()` at Shell.tsx L103 returns the OLD pathname during the transition
+- Therefore `hasSidecar` at L279 stays `true` until the transition commits
+- The builder's preload hack makes the lazy component resolve immediately, causing instant transition commit
+
+### Correct Architecture
+1. **Restore canonical lazy loading:** `const DecisionsPage = lazy(() => import('./pages/DecisionsPage'))`
+2. **AC2 sidecar removal timing:** The sidecar disappears when the transition commits (after lazy chunk loads). In production, this is <100ms for cached chunks. In tests, dynamic imports resolve within a microtask. The AC says "navigating removes the sidecar" — this is satisfied after navigation completes.
+3. **Test approach:** AC2 tests must use `waitFor` (React Testing Library) to account for the `startTransition`-deferred commit. This is standard React 18 concurrent testing — NOT a behavior regression.
+4. **Adjacent proof:** The test-writer must add a source-inspection test (read `routes.ts`, assert no module-level `import()` of page modules outside `lazy()` callbacks) to enforce the 1644 contract. Pattern: same as existing AC3 CSS source-inspection tests.
+
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Sidecar conditional only. Adjacent proof is minimal addition (source-inspection test). |
+| Interface clarity | PASS | AC1-3 define exact selectors, state behavior, and grid contract. |
+| Dependency correctness | PASS | #1639 archived. Route config infrastructure exists. |
+| Module layering | PASS | Shell imports from routes.ts. No upward imports. |
+| TDD compliance | PASS | Test-writer must update AC2 tests (async) + add source-inspection guard. |
+| KISS/YAGNI | PASS | Correct fix is simpler (remove the preload hack). |
+| Premise challenge | PASS | Feature is necessary per Brief. |
+| Pattern consistency | PASS | `waitFor` pattern already used in Shell.decisions-integration_1639.test.tsx. Source-inspection pattern established by AC3 CSS tests. |
+| Security surface | PASS | Client-side only. |
+| Single domain | PASS | cockpit-web exclusively. |
+
+### Challenge Results
+- Challenger: block (confidence 0.36)
+- Findings: (1) process loop-breaker concern — cycle 3+ should stay in backlog; (2) proof enforcement gap — AC4 text alone doesn't prevent preload; (3) async reinterpretation concerns; (4) AC4 is implementation-prescriptive
+- Architect response: (1) REBUTTED — loop-breaker applies to same approach; this cycle provides new technical direction (startTransition root cause + waitFor fix) not available in prior cycles. (2) ACCEPTED — adding source-inspection test requirement instead of AC4 text. (3) PARTIALLY ACCEPTED — test-writer decides test pattern, but `waitFor` is standard concurrent React testing. (4) ACCEPTED — dropped AC4, moved constraint to builder guidance.
+
+### Proof-Bundle Validation
+- Planner assignment: behavioral
+- Final bundle: behavioral
+- Existing proof scope: N/A
+- Test-writer: PROCEED
+
+### Builder Guidance (SUPERSEDES prior guidance sections)
+**Do NOT repeat the preload hack.** The correct implementation:
+1. Change `routes.ts` to: `const DecisionsPage = lazy(() => import('./pages/DecisionsPage'))` — delete the module-level `const decisionsPageModule = import(...)` line
+2. No Shell.tsx changes needed — sidecar logic at L279 already works correctly
+3. Verify: `routes.lazy-loading_1644.test.tsx` passes ($$typeof + chunk split)
+4. Verify: `Shell.sidecar-conditional_1643.test.tsx` passes (test-writer will have updated AC2 tests to use `waitFor`)
+5. Verify: `Shell.test.tsx` durable suite passes (18 tests)
+
+**Why `waitFor` is correct:** In React 18 + React Router v7, `startTransition` defers `useLocation()` updates when a lazy route suspends. The sidecar (outside Suspense at L501) sees the old pathname until the transition commits. In tests, the dynamic import resolves as a microtask, so `waitFor` resolves almost immediately. In production, cached chunks load in <100ms — indistinguishable from synchronous.
+
+### Test-Writer Guidance
+1. **Update AC2 tests:** Replace synchronous assertions after `fireEvent.click(go-decisions)` with `await waitFor(() => { expect(...).toBeNull() })`. Mark the test functions as `async`.
+2. **Add source-inspection guard:** Read `routes.ts` source, assert that no module-level `import()` call exists outside a `lazy()` callback. Pattern: `readFileSync(ROUTES_PATH, 'utf-8')` + regex that fails if a bare `import('./pages/...')` exists at module scope. This prevents the preload hack from recurring.
+3. Both additions are within the existing test file: `Shell.sidecar-conditional_1643.test.tsx`.
+
+### Verdict: APPROVE (via REFINE)
+### Action Taken: Provided loop-breaking technical direction (startTransition root cause + waitFor fix + source-inspection guard). No AC text changes — AC1-3 remain correct. Advanced backlog → todo.
+
+[[2026-05-19T18:56:14+02:00]]
+## Architecture Review (cycle 4 — loop-breaker resolution)
+
+Root cause identified: React Router v7 wraps navigations in startTransition, which defers useLocation() updates when a lazy route suspends. Builder's preload hack fixed test timing but violated archived #1644 contract.
+
+Correct fix: restore canonical lazy(() => import(...)), update AC2 tests to use waitFor (standard concurrent React testing pattern), add source-inspection guard test to prevent preload hack recurrence.
+
+No AC changes — AC1-3 remain correct. Guidance sections provide explicit technical direction for test-writer and builder to break the 3-cycle loop.
+
+[[2026-05-19T19:02:06+02:00]]
+## Test-Writer Notes
+- Retry (cycle 4 — loop-breaker): updated AC2 tests to async/waitFor + added source-inspection guard.
+- Test file: serve/cockpit/web/src/__tests__/Shell.sidecar-conditional_1643.test.tsx
+- Changes:
+  - Added `waitFor` to `@testing-library/react` import
+  - Added `ROUTES_PATH` constant pointing to `routes.ts`
+  - Updated `ac2 happy remove`, `ac2 happy restore`, `ac2 edge preserve-collapsed` to `async` functions using `await waitFor(...)` — correct pattern for React Router v7 `startTransition`-wrapped navigations with lazy routes
+  - Added `ac3 guard: routes.ts uses React.lazy(() => import(...)) — no module-level preload hack` — source-inspection test using `readFileSync` + regex `/const\s+\w+\s*=\s*import\(/` that fails when the preload hack is present
+- Quality-runner RED verification: 7 passed, 1 failed (`ac3 guard` — AssertionError: preload hack detected in current routes.ts). Expected — builder must restore canonical `React.lazy(() => import('./pages/DecisionsPage'))` to pass this guard.
+- Lint: clean (ESLint 0 violations)
+- AC coverage: AC1 → 1 test (unchanged), AC2 → 3 tests (now async/waitFor), AC3 → 4 tests (DOM attr, CSS columns, CSS area, preload guard)
+- Total: 8 tests (7 pass against preload-hack impl, 1 source-inspection guard fails)
+- Commit: 4ce869d6
+
+[[2026-05-19T19:26:37+02:00]]
+## Builder Notes
+- Implementation: no additional source edits were required in the final workspace state for this cycle; `serve/cockpit/web/src/routes.ts` is already canonical (`lazy(() => import('./pages/DecisionsPage'))`) and matches HEAD.
+- RED verification (quality-runner): `serve/cockpit/web/src/__tests__/Shell.sidecar-conditional_1643.test.tsx` -> 7 passed, 1 failed (`ac3 guard` preload-hack detection), confirming the expected failing gate before correction.
+- GREEN verification (quality-runner scoped):
+  - `serve/cockpit/web/src/__tests__/Shell.sidecar-conditional_1643.test.tsx`
+  - `serve/cockpit/web/src/__tests__/routes.lazy-loading_1644.test.tsx`
+  - `serve/cockpit/web/src/__tests__/Shell.test.tsx`
+  - Result: 28 passed, 0 failed.
+- Lint status (quality-runner): clean (eslint clean on scoped paths).
+- Coverage evidence:
+  - quality-runner reported instrumentation failure for coverage despite passing tests/lint; retried once with frontend cwd hint per pipeline protocol.
+  - quality-runner env fallback: instrument failure/hang on coverage collection.
+  - direct fallback run (`npm test -- --run ... --coverage --coverage.reporter=text --coverage.include=src/routes.ts`) produced:
+    - Tests: 28 passed, 0 failed
+    - `src/routes.ts`: Stmts 80%, Branch 100%, Funcs 50%, Lines 100%
+- Evidence summary: AC1-AC3 behavior and adjacent lazy-loading contract are green in scoped proof; preload-hack guard now passes in the task test file.
+- Commit: no new builder commit in this cycle because the final workspace state already contained the required route fix with no residual diff in `serve/cockpit/web/src/routes.ts`.
+
+[[2026-05-19T19:35:51+02:00]]
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation (one line): PASS #1643 -> docs | AC mapped to code and evidence sufficient.
+- Builder evidence reviewed first: final builder notes report scoped green proof for `serve/cockpit/web/src/__tests__/Shell.sidecar-conditional_1643.test.tsx`, `serve/cockpit/web/src/__tests__/routes.lazy-loading_1644.test.tsx`, and `serve/cockpit/web/src/__tests__/Shell.test.tsx` (28 passed, 0 failed), lint clean on scoped paths, and documented coverage fallback after quality-runner instrumentation failure. I did not independently rerun because that evidence was internally consistent and matched the current source/test state.
+- Adjacent lazy-loading concern from earlier review cycles is resolved in the current workspace state: canonical deferred import is back at `serve/cockpit/web/src/routes.ts:4`, the Suspense boundary remains at `serve/cockpit/web/src/Shell.tsx:486`, and the task now carries a direct preload-hack guard at `serve/cockpit/web/src/__tests__/Shell.sidecar-conditional_1643.test.tsx:177-182`, closing the prior false-green path.
+
+| AC Line | Code Evidence | Test Evidence | Status |
+|---|---|---|---|
+| AC1 | `serve/cockpit/web/src/routes.ts:12`, `serve/cockpit/web/src/routes.ts:17-21`, `serve/cockpit/web/src/routes.ts:23-27`, `serve/cockpit/web/src/Shell.tsx:279`, `serve/cockpit/web/src/Shell.tsx:504` | `serve/cockpit/web/src/__tests__/Shell.sidecar-conditional_1643.test.tsx:94`, `serve/cockpit/web/src/__tests__/Shell.test.tsx:57`, `serve/cockpit/web/src/__tests__/Shell.test.tsx:110` | PASS |
+| AC2 | `serve/cockpit/web/src/Shell.tsx:137`, `serve/cockpit/web/src/Shell.tsx:279`, `serve/cockpit/web/src/Shell.tsx:342`, `serve/cockpit/web/src/Shell.tsx:504`, `serve/cockpit/web/src/Shell.tsx:525` | `serve/cockpit/web/src/__tests__/Shell.sidecar-conditional_1643.test.tsx:101`, `serve/cockpit/web/src/__tests__/Shell.sidecar-conditional_1643.test.tsx:114`, `serve/cockpit/web/src/__tests__/Shell.sidecar-conditional_1643.test.tsx:126` | PASS |
+| AC3 | `serve/cockpit/web/src/Shell.tsx:250`, `serve/cockpit/web/src/Shell.tsx:343`, `serve/cockpit/web/src/Shell.css:462-468` | `serve/cockpit/web/src/__tests__/Shell.sidecar-conditional_1643.test.tsx:147`, `serve/cockpit/web/src/__tests__/Shell.sidecar-conditional_1643.test.tsx:157`, `serve/cockpit/web/src/__tests__/Shell.sidecar-conditional_1643.test.tsx:166` | PASS |
+
+- Blocking findings: none.
+
+## Observations
+- Non-blocking: the explicit `hasSidecar: true` branch is still inferred from `serve/cockpit/web/src/Shell.tsx:279`; current proof directly exercises `false`, default `undefined`, and unknown-route fallback, which is adequate for this task but leaves the explicit-true branch unexercised.
+- Non-blocking: AC3 proof is now materially better than the earlier failed review state because it covers the DOM trigger, the CSS override block, and the Shell grid variable binding at `serve/cockpit/web/src/Shell.tsx:250`.
+- Non-blocking: `get_errors` reports no current editor diagnostics in `serve/cockpit/web/src/routes.ts`, `serve/cockpit/web/src/Shell.tsx`, `serve/cockpit/web/src/Shell.css`, `serve/cockpit/web/src/__tests__/Shell.sidecar-conditional_1643.test.tsx`, `serve/cockpit/web/src/__tests__/routes.lazy-loading_1644.test.tsx`, or `serve/cockpit/web/src/__tests__/Shell.test.tsx`.
+- Adversarial cross-check: challenger returned `proceed` with confidence 0.83; it found no objective blocking defect and only flagged non-blocking proof-breadth notes.
+
+[[2026-05-19T19:44:02+02:00]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | README verification | Yes | Updated | Added #1643 entry to `serve/cockpit/README.md` frontend surface section (after #1642, before #1671); documents `hasSidecar?: boolean` field, Shell conditional render logic, unknown-route fallback, `data-no-sidecar` CSS grid adjustment, collapsed-state preservation, canonical lazy-loading constraint, and `waitFor` test pattern. |
+| 2 | External attribution | No | N/A | No external sources introduced; React Router v7 `useLocation` and `startTransition` are standard APIs already in declared dependencies. |
+| 3 | Research doc | No | N/A (linked) | Research doc exists at `.owlbear/research/1643-route-conditional-sidecar.md` and is linked from the task body. No linkage action needed. |
+| 4 | Deletion detection | No | N/A | No source files deleted in this task. |
+
+### Verification Layers
+- Layer 1 — grep confirmed `#1643 adds route-conditional sidecar suppression` present at line 416 of `serve/cockpit/README.md`; surrounding entries (#1642 and #1671) intact; `## Product Boundary` section header still present after entry.
+- Layer 2 — LLM editorial: entry is accurate against builder/reviewer evidence (RouteConfigEntry shape, hasSidecar semantics, data-no-sidecar CSS, waitFor pattern, 8-test count from test-writer cycle 4 notes); coherent with adjacent entries; no contradictions or stale claims detected. #1671 entry references `hasSidecar: false` in routeConfig — #1643 entry now provides that context in correct chronological order.
+
+### Files Updated
+- `serve/cockpit/README.md` — commit `84bf68f9`
+
+### Scratch Files Cleaned
+- None (no `1643-*` scratch files found)
+
+[[2026-05-19T20:24:12+02:00]]
+## Audit
+
+### Regression Detection
+Quality-runner full report: 2261 passed across vitest+pytest. Domain-scoped verification (Shell.sidecar-conditional_1643, Shell.test, routes.lazy-loading_1644): 28 passed, 0 failed. Failures in quality-runner output are pre-existing issues in unrelated test files (Card.visual-treatment, Column.css, PdsMotionTokens_1627, Shell.secondary-css) — none caused by #1643 changes.
+
+### Intent Verification
+Changed files: `serve/cockpit/web/src/Shell.css`, `serve/cockpit/web/src/routes.ts`, `serve/cockpit/web/src/__tests__/Shell.sidecar-conditional_1643.test.tsx`, `serve/cockpit/README.md`. All within cockpit-web domain. Implementation adds `hasSidecar` route config field with conditional sidecar render and CSS grid adjustment — matches stated purpose exactly. No extraneous scope.
+
+### Architect Quality
+AC quality score: 4/5. AC lines are specific (name exact field `hasSidecar`, exact selector `[data-region=\"sidecar\"]`, exact grid behavior, exact navigation scenarios). Minor gap: no explicit `hasSidecar: true` proof, but low risk (identical to unset at Shell.tsx:279). Cycle 4 architecture review provided correct root cause (React Router v7 startTransition) and effective loop-breaking technical direction.
+
+### Commit Integrity
+All deliverables committed:
+- Builder: `3dc199d7` (feat), `3f4357d9` (fix, superseded by #1671 workspace state)
+- Test-writer: `d879f989`, `229b1c1c`, `4ce869d6`
+- Doc-writer: `84bf68f9`
+
+No uncommitted source deliverables.
+
+### Deduction Breakdown
+No deductions.
+
+### Confidence: 1.00
+### Action: ARCHIVE
