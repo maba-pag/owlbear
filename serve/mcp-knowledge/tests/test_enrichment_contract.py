@@ -156,6 +156,38 @@ async def test_phase2_edge_without_document_id_persists_readable_edge(conn: sqli
 
 
 @pytest.mark.asyncio
+async def test_phase2_ignores_payload_edge_id_collision(conn: sqlite3.Connection) -> None:
+    source_a = _insert_source(conn, "Source A")
+    source_b = _insert_source(conn, "Source B")
+    doc_a = _insert_document(conn, source_a)
+    doc_b = _insert_document(conn, source_b)
+    entity_a = _insert_entity(conn, doc_a, "Shared Concept")
+    entity_b = _insert_entity(conn, doc_b, "Shared Concept")
+    conn.execute(
+        """
+        INSERT INTO edges (id, source_id, target_id, relation, document_id, weight, metadata, created_at, scope)
+        VALUES ('collision', ?, ?, 'related_to', ?, 1.0, '{}', ?, 'global')
+        """,
+        (entity_a, entity_a, doc_a, _now()),
+    )
+    conn.commit()
+    candidate_id = (await get_consolidation_candidates(_ctx(conn), limit=20))[0]["candidate_id"]
+
+    await store_enrichment(
+        _ctx(conn),
+        candidate_id=candidate_id,
+        edges=[{"id": "collision", "source_id": entity_a, "target_id": entity_b, "relation": "same_as"}],
+    )
+
+    same_as_row = conn.execute(
+        "SELECT source_id, target_id, relation FROM edges WHERE source_id = ? AND target_id = ? AND relation = 'same_as'",
+        (entity_a, entity_b),
+    ).fetchone()
+    assert same_as_row == (entity_a, entity_b, "same_as")
+    assert conn.execute("SELECT COUNT(*) FROM reviewed_pairs").fetchone()[0] == 1
+
+
+@pytest.mark.asyncio
 async def test_consolidation_candidates_exclude_cross_scope_entities(conn: sqlite3.Connection) -> None:
     source_a = _insert_source(conn, "Source A", scope="alpha")
     source_b = _insert_source(conn, "Source B", scope="beta")
@@ -165,6 +197,28 @@ async def test_consolidation_candidates_exclude_cross_scope_entities(conn: sqlit
     chunk_b = _insert_chunk(conn, doc_b, scope="beta")
     _insert_entity(conn, doc_a, "Shared Concept", chunk_id=chunk_a, scope="alpha")
     _insert_entity(conn, doc_b, "Shared Concept", chunk_id=chunk_b, scope="beta")
+
+    candidates = await get_consolidation_candidates(_ctx(conn), limit=20)
+
+    assert candidates == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("inactive_column", ["enabled", "enrich"])
+async def test_consolidation_candidates_exclude_inactive_sources(
+    conn: sqlite3.Connection,
+    inactive_column: str,
+) -> None:
+    source_a = _insert_source(conn, "Source A", scope="team-a")
+    source_b = _insert_source(conn, "Source B", scope="team-a")
+    if inactive_column == "enabled":
+        conn.execute("UPDATE knowledge_sources SET enabled = 0 WHERE id = ?", (source_b,))
+    else:
+        conn.execute("UPDATE knowledge_sources SET enrich = 0 WHERE id = ?", (source_b,))
+    doc_a = _insert_document(conn, source_a, scope="team-a")
+    doc_b = _insert_document(conn, source_b, scope="team-a")
+    _insert_entity(conn, doc_a, "Shared Concept", scope="team-a")
+    _insert_entity(conn, doc_b, "Shared Concept", scope="team-a")
 
     candidates = await get_consolidation_candidates(_ctx(conn), limit=20)
 
@@ -200,6 +254,20 @@ async def test_consolidation_candidates_reject_non_positive_limits(conn: sqlite3
 
 
 @pytest.mark.asyncio
+async def test_consolidation_candidates_accept_null_limit_as_unlimited(conn: sqlite3.Connection) -> None:
+    source_a = _insert_source(conn, "Source A")
+    source_b = _insert_source(conn, "Source B")
+    doc_a = _insert_document(conn, source_a)
+    doc_b = _insert_document(conn, source_b)
+    _insert_entity(conn, doc_a, "Shared Concept")
+    _insert_entity(conn, doc_b, "Shared Concept")
+
+    candidates = await get_consolidation_candidates(_ctx(conn), limit=None)
+
+    assert len(candidates) == 1
+
+
+@pytest.mark.asyncio
 async def test_phase2_rejects_cross_scope_candidate_id(conn: sqlite3.Connection) -> None:
     source_a = _insert_source(conn, "Source A", scope="alpha")
     source_b = _insert_source(conn, "Source B", scope="beta")
@@ -216,6 +284,36 @@ async def test_phase2_rejects_cross_scope_candidate_id(conn: sqlite3.Connection)
 
     reviewed_count = conn.execute("SELECT COUNT(*) FROM reviewed_pairs").fetchone()[0]
     assert reviewed_count == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("inactive_column", ["enabled", "enrich"])
+async def test_phase2_rejects_inactive_source_candidate_id(
+    conn: sqlite3.Connection,
+    inactive_column: str,
+) -> None:
+    source_a = _insert_source(conn, "Source A")
+    source_b = _insert_source(conn, "Source B")
+    doc_a = _insert_document(conn, source_a)
+    doc_b = _insert_document(conn, source_b)
+    entity_a = _insert_entity(conn, doc_a, "Shared Concept")
+    entity_b = _insert_entity(conn, doc_b, "Shared Concept")
+    candidate_id = (await get_consolidation_candidates(_ctx(conn), limit=20))[0]["candidate_id"]
+    if inactive_column == "enabled":
+        conn.execute("UPDATE knowledge_sources SET enabled = 0 WHERE id = ?", (source_b,))
+    else:
+        conn.execute("UPDATE knowledge_sources SET enrich = 0 WHERE id = ?", (source_b,))
+    conn.commit()
+
+    with pytest.raises(ToolError):
+        await store_enrichment(
+            _ctx(conn),
+            candidate_id=candidate_id,
+            edges=[{"source_id": entity_a, "target_id": entity_b, "relation": "same_as"}],
+        )
+
+    assert conn.execute("SELECT COUNT(*) FROM edges").fetchone()[0] == 0
+    assert conn.execute("SELECT COUNT(*) FROM reviewed_pairs").fetchone()[0] == 0
 
 
 @pytest.mark.asyncio
@@ -402,6 +500,31 @@ async def test_phase1_rejects_entity_id_from_another_chunk(conn: sqlite3.Connect
     assert entity_row == (doc_a, chunk_a, "Original")
     chunk_b_state = conn.execute("SELECT enrichment_state FROM chunks WHERE id = ?", (chunk_b,)).fetchone()[0]
     assert chunk_b_state == "failed"
+
+
+@pytest.mark.asyncio
+async def test_phase1_allows_same_scope_cross_document_edge_endpoint_id(conn: sqlite3.Connection) -> None:
+    source_id = _insert_source(conn, "Source", scope="team-a")
+    doc_a = _insert_document(conn, source_id, scope="team-a")
+    doc_b = _insert_document(conn, source_id, scope="team-a")
+    chunk_a = _insert_chunk(conn, doc_a, scope="team-a")
+    chunk_b = _insert_chunk(conn, doc_b, scope="team-a")
+    existing_entity_id = _insert_entity(conn, doc_a, "Existing", chunk_id=chunk_a, scope="team-a")
+
+    await store_enrichment(
+        _ctx(conn),
+        chunk_id=chunk_b,
+        entities=[{"id": "local-entity", "name": "Local", "entity_type": "concept"}],
+        edges=[{"source_id": existing_entity_id, "target_id": "local-entity", "relation": "related_to"}],
+    )
+
+    edge_row = conn.execute(
+        "SELECT source_id, target_id, relation, document_id, scope FROM edges WHERE source_id = ?",
+        (existing_entity_id,),
+    ).fetchone()
+    assert edge_row == (existing_entity_id, "local-entity", "related_to", doc_b, "team-a")
+    chunk_b_state = conn.execute("SELECT enrichment_state FROM chunks WHERE id = ?", (chunk_b,)).fetchone()[0]
+    assert chunk_b_state == "enriched"
 
 
 @pytest.mark.asyncio

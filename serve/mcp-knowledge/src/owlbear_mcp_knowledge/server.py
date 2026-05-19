@@ -170,6 +170,7 @@ class ConsolidationCandidate(TypedDict):
 
 _CANDIDATE_ID_BASE_PARTS = 3
 _CANDIDATE_ID_EXTENDED_PARTS = 5
+_CANDIDATE_SOURCE_COUNT = 2
 
 
 def _encode_candidate_id(
@@ -280,13 +281,17 @@ def _fetch_consolidation_candidate_rows(
             JOIN entities AS e2 ON e1.name = e2.name AND e1.id < e2.id
             JOIN documents AS d1 ON d1.id = e1.document_id
             JOIN documents AS d2 ON d2.id = e2.document_id
-            LEFT JOIN knowledge_sources AS ks1 ON ks1.id = d1.source_id
-            LEFT JOIN knowledge_sources AS ks2 ON ks2.id = d2.source_id
+            JOIN knowledge_sources AS ks1 ON ks1.id = d1.source_id
+            JOIN knowledge_sources AS ks2 ON ks2.id = d2.source_id
             LEFT JOIN chunks AS c1 ON c1.id = e1.chunk_id
             LEFT JOIN chunks AS c2 ON c2.id = e2.chunk_id
             WHERE d1.source_id IS NOT NULL
               AND d2.source_id IS NOT NULL
               AND d1.source_id != d2.source_id
+                            AND ks1.enabled = 1
+                            AND ks2.enabled = 1
+                            AND ks1.enrich = 1
+                            AND ks2.enrich = 1
                             AND COALESCE(e1.scope, 'global') = COALESCE(e2.scope, 'global')
                             AND COALESCE(d1.scope, 'global') = COALESCE(d2.scope, 'global')
               AND NOT EXISTS (
@@ -352,12 +357,12 @@ def _fetch_consolidation_candidate_rows(
 
 async def get_consolidation_candidates(
     ctx: Context,
-    limit: int = 20,
+    limit: int | None = 20,
 ) -> list[ConsolidationCandidate]:
     """Return unresolved cross-source consolidation candidates."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     conn = app_ctx.conn
-    limit = _normalize_read_limit(limit)
+    limit = _normalize_optional_read_limit(limit)
     rows = _fetch_consolidation_candidate_rows(conn, limit=limit)
     return [
         {
@@ -416,6 +421,23 @@ def _candidate_entity_ids(
     return row[0], row[1]
 
 
+def _validate_active_candidate_sources(conn: sqlite3.Connection, *, source_a: str, source_b: str) -> None:
+    """Ensure candidate source endpoints are still active for phase-2 writes."""
+    active_count = conn.execute(
+        """
+        SELECT COUNT(*)
+        FROM knowledge_sources
+        WHERE id IN (?, ?)
+          AND enabled = 1
+          AND enrich = 1
+        """,
+        (source_a, source_b),
+    ).fetchone()
+    if active_count is None or active_count[0] != _CANDIDATE_SOURCE_COUNT:
+        msg = "candidate_id does not resolve to active source endpoints"
+        raise ToolError(msg)
+
+
 def _resolve_candidate_identity(
     conn: sqlite3.Connection,
     *,
@@ -423,6 +445,7 @@ def _resolve_candidate_identity(
 ) -> tuple[str, str, str, str, str]:
     """Resolve candidate identity to a durable row pair and source pair."""
     entity_name, source_a, source_b, id_a, id_b = _decode_candidate_id(candidate_id)
+    _validate_active_candidate_sources(conn, source_a=source_a, source_b=source_b)
     if id_a is not None and id_b is not None:
         row = conn.execute(
             """
@@ -656,8 +679,9 @@ def _validate_phase1_entity_id(
     entity_id: str,
     provenance: _ChunkProvenance,
     allow_new: bool,
+    allow_existing_in_scope: bool = False,
 ) -> str:
-    """Return a phase-1 entity ID only when it is new or already chunk-local."""
+    """Return a phase-1 entity ID when it is new, chunk-local, or an allowed same-scope endpoint."""
     normalized_entity_id = entity_id.strip()
     if not normalized_entity_id:
         msg = "entity id must not be blank"
@@ -680,6 +704,8 @@ def _validate_phase1_entity_id(
 
     entity_scope = row[2] if isinstance(row[2], str) and row[2] else "global"
     if row[0] == provenance.document_id and row[1] == provenance.chunk_id and entity_scope == provenance.scope:
+        return normalized_entity_id
+    if allow_existing_in_scope and entity_scope == provenance.scope:
         return normalized_entity_id
 
     msg = "phase-1 entity IDs must belong to the target chunk"
@@ -761,6 +787,7 @@ def _resolve_phase1_edge_endpoints(
             entity_id=source_id,
             provenance=provenance,
             allow_new=False,
+            allow_existing_in_scope=True,
         )
 
     if target_id is not None:
@@ -769,6 +796,7 @@ def _resolve_phase1_edge_endpoints(
             entity_id=target_id,
             provenance=provenance,
             allow_new=False,
+            allow_existing_in_scope=True,
         )
 
     if source_id is None or target_id is None:
@@ -861,16 +889,12 @@ def _persist_phase2_enrichment(
                 target_id=resolved_target_id,
             )
             edge_metadata = {**edge_metadata, **provenance_metadata}
-            edge_id = (
-                edge.get("id")
-                if isinstance(edge.get("id"), str) and edge.get("id").strip()
-                else _stable_edge_id(
-                    "phase2",
-                    candidate_id,
-                    resolved_source_id,
-                    resolved_target_id,
-                    relation,
-                )
+            edge_id = _stable_edge_id(
+                "phase2",
+                candidate_id,
+                resolved_source_id,
+                resolved_target_id,
+                relation,
             )
             validated_edge = _validate_enrichment_edge_payload(
                 {
@@ -984,7 +1008,13 @@ def _persist_phase1_enrichment(
         metadata = edge.get("metadata")
         edge_metadata = metadata.copy() if isinstance(metadata, dict) else {}
         edge_metadata.setdefault("chunk_id", chunk_id)
-        edge_id = edge.get("id") if isinstance(edge.get("id"), str) and edge.get("id").strip() else uuid4().hex
+        edge_id = _stable_edge_id(
+            "phase1",
+            chunk_id,
+            endpoint_source_id,
+            endpoint_target_id,
+            relation,
+        )
         validated_edge = _validate_enrichment_edge_payload(
             {
                 "id": edge_id,
@@ -1161,6 +1191,13 @@ def _normalize_read_limit(limit: int) -> int:
         msg = "limit must be at least 1"
         raise ToolError(msg)
     return min(limit, _MAX_ENRICHMENT_BATCH_SIZE)
+
+
+def _normalize_optional_read_limit(limit: int | None) -> int | None:
+    """Validate read limits that explicitly support None as unlimited."""
+    if limit is None:
+        return None
+    return _normalize_read_limit(limit)
 
 
 async def get_next_batch(ctx: Context, limit: int = 10) -> list[EnrichmentChunk]:
