@@ -72,6 +72,33 @@ function navIcon(surface: string) {
   )
 }
 
+function maintenanceIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 16 16"
+      width="16"
+      height="16"
+      focusable="false"
+    >
+      <path
+        d="M2 4h6m3 0h3M8 2.5v3M2 8h2m3 0h7M4 6.5v3M2 12h7m3 0h2m-3-1.5v3"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeWidth="1.5"
+      />
+    </svg>
+  )
+}
+
+function normalizeRoutePath(path: string): string {
+  if (path === '/') {
+    return path
+  }
+  return path.replace(/\/+$/, '') || '/'
+}
+
 function Shell() {
   const { pathname } = useLocation()
   const navigate = useNavigate()
@@ -108,6 +135,7 @@ function Shell() {
   const statusHealth = scanError ? 'red' : health
   const [hasLoadedScan, setHasLoadedScan] = useState(() => !isLoading)
   const [isSidecarCollapsed, setIsSidecarCollapsed] = useState(false)
+  const [isMaintenanceMenuOpen, setIsMaintenanceMenuOpen] = useState(false)
   const [isMobileViewport, setIsMobileViewport] = useState(false)
   const [selectedTaskSubtab, setSelectedTaskSubtab] = useState<string | null>(null)
   const [detailValidationMessage, setDetailValidationMessage] = useState<string | null>(null)
@@ -119,6 +147,8 @@ function Shell() {
   const tabsRef = useRef<HTMLElement>(null)
   const detailRef = useRef<HTMLDivElement>(null)
   const activityRef = useRef<HTMLDivElement>(null)
+  const maintenanceTriggerRef = useRef<HTMLButtonElement>(null)
+  const maintenanceMenuRef = useRef<HTMLDivElement>(null)
   const toastMockClearedRef = useRef(false)
 
   const kanbanProps = {
@@ -176,6 +206,44 @@ function Shell() {
     return () => tabs.removeEventListener('tabChange', onTabChange)
   }, [])
 
+  useEffect(() => {
+    if (!isMaintenanceMenuOpen) {
+      return
+    }
+
+    maintenanceMenuRef.current?.focus()
+
+    function closeAndRestoreFocus() {
+      setIsMaintenanceMenuOpen(false)
+      maintenanceTriggerRef.current?.focus()
+    }
+
+    function handleMouseDown(event: MouseEvent) {
+      const target = event.target as Node
+      if (
+        maintenanceMenuRef.current?.contains(target) ||
+        maintenanceTriggerRef.current?.contains(target)
+      ) {
+        return
+      }
+      setIsMaintenanceMenuOpen(false)
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        closeAndRestoreFocus()
+      }
+    }
+
+    document.addEventListener('mousedown', handleMouseDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handleMouseDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isMaintenanceMenuOpen])
+
   const shellClassName = [
     'shell grid h-screen min-w-0 bg-[var(--p-color-canvas)] text-[var(--p-color-primary)]',
     "[font-family:'Porsche_Next','Arial_Narrow',Arial,sans-serif]",
@@ -199,12 +267,15 @@ function Shell() {
   ].join(' ')
 
   const sidecarClassName = [
-    'shell__sidecar min-w-0 overflow-hidden border-t border-[var(--p-color-contrast-low)]',
+    'shell__sidecar min-w-0 border-t border-[var(--p-color-contrast-low)]',
     'md:border-t-0 md:border-l md:border-[var(--p-color-contrast-low)]',
     'w-auto',
   ].join(' ')
 
-  const matchedRoute = routeConfig.find((route) => route.path === pathname)
+  const normalizedPathname = normalizeRoutePath(pathname)
+  const matchedRoute = routeConfig.find(
+    (route) => normalizeRoutePath(route.path) === normalizedPathname,
+  )
   const hasSidecar = matchedRoute?.hasSidecar !== false
 
   useEffect(() => {
@@ -319,14 +390,50 @@ function Shell() {
             />
           </div>
           <div className="shell__action-cluster" aria-label="Maintenance actions">
-            {hasLoadedScan && !scanError ? (
-              <RepairPanel
-                corruptionCount={normalizedItems.length}
-                files={normalizedItems}
-                onSuccess={refetch}
-              />
-            ) : null}
-            <CleanupPanel onSuccess={refetchTasks} />
+            <button
+              ref={maintenanceTriggerRef}
+              type="button"
+              className="shell__maintenance-toggle"
+              data-pds-exception="status-bar-control"
+              data-testid="maintenance-menu-toggle"
+              aria-label="Maintenance actions"
+              aria-expanded={isMaintenanceMenuOpen}
+              aria-controls="shell-maintenance-menu"
+              title="Maintenance actions"
+              onClick={() => setIsMaintenanceMenuOpen((current) => !current)}
+            >
+              {maintenanceIcon()}
+              {normalizedItems.length > 0 ? (
+                <span className="shell__maintenance-count" aria-hidden="true">
+                  {normalizedItems.length}
+                </span>
+              ) : null}
+            </button>
+            <div
+              ref={maintenanceMenuRef}
+              id="shell-maintenance-menu"
+              className="shell__maintenance-menu"
+              data-testid="maintenance-menu"
+              role="dialog"
+              aria-label="Maintenance actions"
+              tabIndex={-1}
+              hidden={!isMaintenanceMenuOpen}
+            >
+              <div className="shell__maintenance-menu-header">
+                <span>Maintenance</span>
+                <span>{normalizedItems.length > 0 ? `${normalizedItems.length} issues` : 'Ready'}</span>
+              </div>
+              <div className="shell__maintenance-menu-actions">
+                {hasLoadedScan && !scanError ? (
+                  <RepairPanel
+                    corruptionCount={normalizedItems.length}
+                    files={normalizedItems}
+                    onSuccess={refetch}
+                  />
+                ) : null}
+                <CleanupPanel onSuccess={refetchTasks} />
+              </div>
+            </div>
           </div>
           <div className="shell__utility-cluster" aria-label="View settings">
             <ThemeToggle />
@@ -342,25 +449,29 @@ function Shell() {
         className={navRailClassName}
         data-region="nav-rail"
         role="navigation"
+        aria-label="Workspaces"
       >
-        {routeConfig.map((route) => {
-          const isActive = pathname === route.path
+        <div className="shell__nav-group" aria-label="Workspace switcher">
+          {routeConfig.map((route) => {
+            const isActive = pathname === route.path
 
-          return (
-            <button
-              key={route.path}
-              type="button"
-              data-surface={route.icon}
-              data-pds-exception={`nav-${route.icon}`}
-              aria-current={isActive ? 'page' : undefined}
-              aria-label={route.label}
-              className="shell__nav-button m-0 block w-10 min-w-0 max-w-10 overflow-hidden"
-              onClick={() => navigate(route.path)}
-            >
-              {navIcon(route.icon)}
-            </button>
-          )
-        })}
+            return (
+              <button
+                key={route.path}
+                type="button"
+                data-surface={route.icon}
+                data-pds-exception={`nav-${route.icon}`}
+                aria-current={isActive ? 'page' : undefined}
+                aria-label={route.label}
+                title={route.label}
+                className="shell__nav-button"
+                onClick={() => navigate(route.path)}
+              >
+                {navIcon(route.icon)}
+              </button>
+            )
+          })}
+        </div>
       </nav>
       <main
         className="shell__workspace min-w-0 overflow-hidden md:overflow-auto"
@@ -392,17 +503,19 @@ function Shell() {
           className={sidecarClassName}
           data-region="sidecar"
         >
-        <button
-          type="button"
-          className="shell__sidecar-toggle icon-button"
-          data-testid="sidecar-collapse"
-          aria-expanded={!isSidecarCollapsed}
-          aria-label={isSidecarCollapsed ? 'Expand sidecar' : 'Collapse sidecar'}
-          aria-controls="shell-sidecar-content"
-          onClick={() => setIsSidecarCollapsed((current) => !current)}
-        >
-          {isSidecarCollapsed ? 'Show' : 'Hide'}
-        </button>
+          <button
+            type="button"
+            className="shell__sidecar-toggle icon-button"
+            data-testid="sidecar-collapse"
+            data-sidecar-state={isSidecarCollapsed ? 'collapsed' : 'expanded'}
+            aria-expanded={!isSidecarCollapsed}
+            aria-label={isSidecarCollapsed ? 'Show inspector' : 'Hide inspector'}
+            title={isSidecarCollapsed ? 'Show inspector' : 'Hide inspector'}
+            aria-controls="shell-sidecar-content"
+            onClick={() => setIsSidecarCollapsed((current) => !current)}
+          >
+            <span aria-hidden="true">{isSidecarCollapsed ? '‹' : '›'}</span>
+          </button>
         {isMobileViewport ? (
           <p-sheet
             open

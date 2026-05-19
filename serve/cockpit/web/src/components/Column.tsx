@@ -47,6 +47,7 @@ export function Column({
   const displayStatus = toDisplayStatus(status)
 
   const sorted = [...tasks].sort((a, b) => priorities.indexOf(b.priority) - priorities.indexOf(a.priority))
+  const density = sorted.length === 0 ? 'empty' : sorted.length <= 2 ? 'sparse' : 'active'
 
   const handleCardDragStart = (taskId: number, updated: string) => {
     onDragStart(status, taskId, updated)
@@ -96,6 +97,7 @@ export function Column({
     <div
       className="column"
       data-column={status}
+      data-density={density}
       data-drag-over={isDragOver && isValidDragTarget ? 'true' : undefined}
       onDragOver={(e) => {
         if (isValidDragTarget) {

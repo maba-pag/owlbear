@@ -96,6 +96,8 @@ function KanbanBoardContent({
     (filter.tags.length > 0 ? 1 : 0) +
     (filter.blocked ? 1 : 0)
   const hasActiveFilters = activeFilterCount > 0
+  const boardTaskCount = hasActiveFilters ? filteredTasks.length : tasks.length
+  const boardTaskLabel = hasActiveFilters ? 'visible' : 'tasks'
 
   useEffect(() => {
     if (!contextMenu) return
@@ -279,75 +281,93 @@ function KanbanBoardContent({
       className="kanban-board"
       data-testid="kanban-board"
     >
-      <div className="kanban-filter-row">
-        <PButton
-          ref={filterToggleRef}
-          data-testid="filter-toggle"
-          data-pds-exception="filter-toggle"
-          className="kanban-filter-toggle"
-          variant="secondary"
-          compact
-          onClick={() => setPanelOpen((open) => !open)}
-        >
-          Filters
-          {hasActiveFilters ? ` (${activeFilterCount})` : ''}
-        </PButton>
-        <span
-          className="kanban-live-region"
-          data-testid="filter-result-count-live"
-          aria-live="polite"
-        >
-          {filterAnnouncement}
-        </span>
-        {hasActiveFilters ? (
-          <span className="kanban-filter-count" data-testid="filter-result-count">
-            {filteredTasks.length} / {tasks.length} tasks
-          </span>
-        ) : null}
-      </div>
+      <section className="kanban-workspace" aria-labelledby="kanban-board-title">
+        <header className="kanban-toolbar">
+          <div className="kanban-toolbar__identity">
+            <span className="kanban-toolbar__kicker">Kanban</span>
+            <h2 id="kanban-board-title">Pipeline</h2>
+          </div>
+          <div className="kanban-toolbar__summary" aria-label="Board summary">
+            <span className="kanban-summary-pill">
+              <strong>{boardTaskCount}</strong>
+              <span>{boardTaskLabel}</span>
+            </span>
+            <span className="kanban-summary-pill">
+              <strong>{board.statuses.length}</strong>
+              <span>lanes</span>
+            </span>
+          </div>
+          <div className="kanban-filter-row">
+            <PButton
+              ref={filterToggleRef}
+              data-testid="filter-toggle"
+              data-pds-exception="filter-toggle"
+              className="kanban-filter-toggle"
+              variant="secondary"
+              compact
+              onClick={() => setPanelOpen((open) => !open)}
+            >
+              Filters
+              {hasActiveFilters ? ` (${activeFilterCount})` : ''}
+            </PButton>
+            <span
+              className="kanban-live-region"
+              data-testid="filter-result-count-live"
+              aria-live="polite"
+            >
+              {filterAnnouncement}
+            </span>
+            {hasActiveFilters ? (
+              <span className="kanban-filter-count" data-testid="filter-result-count">
+                {filteredTasks.length} / {tasks.length} tasks
+              </span>
+            ) : null}
+          </div>
+        </header>
 
-      <FilterPanel
-        filter={filter}
-        onFilterChange={handleFilterChange}
-        priorities={board.priorities}
-        availableTags={availableTags}
-        open={panelOpen}
-        onClose={() => {
-          setPanelOpen(false)
-          filterToggleRef.current?.focus()
-        }}
-      />
+        <FilterPanel
+          filter={filter}
+          onFilterChange={handleFilterChange}
+          priorities={board.priorities}
+          availableTags={availableTags}
+          open={panelOpen}
+          onClose={() => {
+            setPanelOpen(false)
+            filterToggleRef.current?.focus()
+          }}
+        />
 
-      <div
-        className="kanban-columns"
-        // inline-justified: grid column count is runtime-driven by board status count.
-        style={{
-          gridTemplateColumns: `repeat(${board.statuses.length}, minmax(var(--kanban-column-min), 1fr))`,
-        }}
-      >
-        {board.statuses.map(({ name }) => {
-          const colTasks = tasksByStatus[name] ?? []
-          return (
-            <Column
-              key={name}
-              status={name}
-              tasks={colTasks}
-              priorities={board.priorities}
-              selectedId={selectedId}
-              pendingDRIds={pendingDRIds}
-              onSelectTask={onSelectTask}
-              onContextMenu={handleContextMenu}
-              onDragStart={handleDragStart}
-              onDrop={handleDrop}
-              onDragEnd={handleDragEnd}
-              isValidDragTarget={
-                dragSource !== null &&
-                (board.valid_transitions[dragSource.status] ?? []).includes(name)
-              }
-            />
-          )
-        })}
-      </div>
+        <div
+          className="kanban-columns"
+          // inline-justified: grid column count is runtime-driven by board status count.
+          style={{
+            gridTemplateColumns: `repeat(${board.statuses.length}, minmax(var(--kanban-column-min), 1fr))`,
+          }}
+        >
+          {board.statuses.map(({ name }) => {
+            const colTasks = tasksByStatus[name] ?? []
+            return (
+              <Column
+                key={name}
+                status={name}
+                tasks={colTasks}
+                priorities={board.priorities}
+                selectedId={selectedId}
+                pendingDRIds={pendingDRIds}
+                onSelectTask={onSelectTask}
+                onContextMenu={handleContextMenu}
+                onDragStart={handleDragStart}
+                onDrop={handleDrop}
+                onDragEnd={handleDragEnd}
+                isValidDragTarget={
+                  dragSource !== null &&
+                  (board.valid_transitions[dragSource.status] ?? []).includes(name)
+                }
+              />
+            )
+          })}
+        </div>
+      </section>
       {archivalModal && (
         <ArchivalModal
           taskId={archivalModal.taskId}
