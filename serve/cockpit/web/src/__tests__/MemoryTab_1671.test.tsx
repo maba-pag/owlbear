@@ -9,10 +9,16 @@
  * routeConfig has no /memories entry yet → route assertions fail.
  * All tests fail at import or assertion level.
  */
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, fireEvent, act } from '@testing-library/react'
 import { routeConfig } from '../routes'
 import MemoryTab from '../pages/MemoryTab'
+
+const _dir = dirname(fileURLToPath(import.meta.url))
+const ROUTES_SOURCE = resolve(_dir, '../routes.ts')
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -1198,5 +1204,120 @@ describe('TestFromAC_MemoryTabPDSContracts', () => {
       (el) => el.textContent,
     )
     expect(titles).not.toContain('One Category Only')
+  })
+})
+
+// ─── G5-G8 v2: Literal proof tests (3rd retry) ────────────────────────────────
+
+describe('TestFromAC_MemoryTabLiteralProofs', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  // ── G5 (AC1): icon exact literal ─────────────────────────────────────────
+
+  it('g5 ac1: /memories route icon is exactly "memory" (exact string equality)', () => {
+    const entry = routeConfig.find((e) => e.path === '/memories')
+    expect(entry?.icon).toBe('memory')
+  })
+
+  it('g5 ac1: routes.ts source text uses lazy(() => import("./pages/MemoryTab")) for /memories', () => {
+    const source = readFileSync(ROUTES_SOURCE, 'utf-8')
+    expect(source).toMatch(/lazy\(\s*\(\)\s*=>\s*import\(['"]\.\/pages\/MemoryTab['"]\)\s*\)/)
+  })
+
+  // ── G6 (AC2): state option enumeration ────────────────────────────────────
+
+  it('g6 ac2: state p-multi-select contains exactly the four option values: pending, curated, approved, deleted', async () => {
+    vi.stubGlobal('fetch', makeOkFetch())
+    let container!: HTMLElement
+    await act(async () => {
+      container = renderMemoryTab().container
+    })
+    await flush()
+
+    const stateFilter = container.querySelector('p-multi-select[name="state-filter"]')
+    expect(stateFilter).not.toBeNull()
+    const options = Array.from(stateFilter!.querySelectorAll('p-multi-select-option'))
+    const optionValues = options.map((el) => el.getAttribute('value') ?? (el as Element & { value?: unknown }).value)
+    expect(optionValues).toContain('pending')
+    expect(optionValues).toContain('curated')
+    expect(optionValues).toContain('approved')
+    expect(optionValues).toContain('deleted')
+    expect(new Set(optionValues).size).toBe(4)
+  })
+
+  // ── G7 (AC4): scope_agents exact comma-space joined text ──────────────────
+
+  it('g7 ac4: scope_agents with multiple values renders as exact comma-space joined string "builder, reviewer, auditor"', async () => {
+    const entries = [makeEntry({ scope_agents: ['builder', 'reviewer', 'auditor'], state: 'pending' })]
+    vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
+    let container!: HTMLElement
+    await act(async () => {
+      container = renderMemoryTab().container
+    })
+    await flush()
+
+    const agentsEl = container.querySelector('[data-testid="memory-entry-agents"]')
+    expect(agentsEl?.textContent).toBe('builder, reviewer, auditor')
+  })
+
+  // ── G8 (AC5): full reset from non-default — all four controls ─────────────
+
+  it('g8 ac5: clear-filters resets all four controls from non-default values (pre-condition proof for agent and text)', async () => {
+    const entries = [
+      makeEntry({ id: 'e1', title: 'Alpha Entry', state: 'pending', categories: ['behaviour'], scope_agents: ['reviewer'] }),
+    ]
+    vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
+    let container!: HTMLElement
+    await act(async () => {
+      container = renderMemoryTab().container
+    })
+    await flush()
+
+    // Mutate ALL four controls away from AC2 initial values
+    const stateEl = container.querySelector('p-multi-select[name="state-filter"]')!
+    fireEvent(stateEl, new CustomEvent('update', { detail: { value: ['deleted'] }, bubbles: true }))
+    await flush()
+
+    const categoryEl = container.querySelector('p-multi-select[name="category-filter"]')!
+    fireEvent(categoryEl, new CustomEvent('update', { detail: { value: ['behaviour'] }, bubbles: true }))
+    await flush()
+
+    const agentEl = container.querySelector('p-select[name="agent-filter"]')!
+    fireEvent(agentEl, new CustomEvent('update', { detail: { value: 'reviewer' }, bubbles: true }))
+    await flush()
+
+    const searchEl = container.querySelector('p-input-search[name="memory-search"]')!
+    fireEvent(searchEl, new CustomEvent('input', { detail: { value: 'beta' }, bubbles: true }))
+    await flush()
+
+    // Pre-condition: assert ALL FOUR controls are at non-default values BEFORE clicking clear
+    const stateElBefore = container.querySelector('p-multi-select[name="state-filter"]') as (Element & { value?: unknown }) | null
+    const categoryElBefore = container.querySelector('p-multi-select[name="category-filter"]') as (Element & { value?: unknown }) | null
+    const agentElBefore = container.querySelector('p-select[name="agent-filter"]') as (Element & { value?: unknown }) | null
+    const searchElBefore = container.querySelector('p-input-search[name="memory-search"]') as (Element & { value?: unknown }) | null
+
+    expect(stateElBefore?.value, 'state must be ["deleted"] before clear').toEqual(['deleted'])
+    expect(categoryElBefore?.value, 'category must be ["behaviour"] before clear').toEqual(['behaviour'])
+    expect(agentElBefore?.value, 'agent must be "reviewer" before clear').toBe('reviewer')
+    expect(searchElBefore?.value, 'text must be "beta" before clear').toBe('beta')
+
+    // clear-filters button appears because state=["deleted"] excludes the pending entry
+    const clearBtn = container.querySelector('p-button[data-testid="clear-filters"]')
+    expect(clearBtn, 'p-button[data-testid="clear-filters"] must be present').not.toBeNull()
+    fireEvent.click(clearBtn!)
+    await flush()
+
+    // Post-reset: all four controls must return to AC2 initial values
+    const stateElAfter = container.querySelector('p-multi-select[name="state-filter"]') as (Element & { value?: unknown }) | null
+    const categoryElAfter = container.querySelector('p-multi-select[name="category-filter"]') as (Element & { value?: unknown }) | null
+    const agentElAfter = container.querySelector('p-select[name="agent-filter"]') as (Element & { value?: unknown }) | null
+    const searchElAfter = container.querySelector('p-input-search[name="memory-search"]') as (Element & { value?: unknown }) | null
+
+    expect(stateElAfter?.value).toEqual(['pending', 'curated', 'approved'])
+    expect(Array.isArray(categoryElAfter?.value) ? categoryElAfter.value : []).toEqual([])
+    expect(agentElAfter?.value).toBe('')
+    expect(searchElAfter?.value).toBe('')
   })
 })
