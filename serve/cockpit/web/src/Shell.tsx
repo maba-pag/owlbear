@@ -454,6 +454,11 @@ function Shell() {
         <div className="shell__nav-group" aria-label="Workspace switcher">
           {routeConfig.map((route) => {
             const isActive = pathname === route.path
+            const isDecisionsRoute = route.icon === 'decisions'
+            const navLabel =
+              isDecisionsRoute && pendingDRCount > 0
+                ? `${route.label} (${pendingDRCount} pending)`
+                : route.label
 
             return (
               <button
@@ -462,12 +467,17 @@ function Shell() {
                 data-surface={route.icon}
                 data-pds-exception={`nav-${route.icon}`}
                 aria-current={isActive ? 'page' : undefined}
-                aria-label={route.label}
+                aria-label={navLabel}
                 title={route.label}
                 className="shell__nav-button"
                 onClick={() => navigate(route.path)}
               >
                 {navIcon(route.icon)}
+                {isDecisionsRoute && pendingDRCount > 0 ? (
+                  <span className="shell__nav-badge" data-testid="nav-badge" aria-hidden="true">
+                    {pendingDRCount}
+                  </span>
+                ) : null}
               </button>
             )
           })}

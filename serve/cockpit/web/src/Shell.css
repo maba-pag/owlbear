@@ -303,6 +303,25 @@
   opacity: 1;
 }
 
+.shell__nav-badge {
+  position: absolute;
+  inset-block-start: 2px;
+  inset-inline-end: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding-inline: 4px;
+  border-radius: var(--p-radius-full);
+  background: var(--p-color-notification-error);
+  color: var(--p-color-base-white, #fff);
+  font-size: 10px;
+  font-weight: var(--p-font-weight-semibold);
+  line-height: 1;
+  pointer-events: none;
+}
+
 .shell__workspace {
   grid-area: workspace;
   min-width: 0;
