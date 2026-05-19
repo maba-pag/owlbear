@@ -19,7 +19,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, fireEvent, act } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
-import MemoryTab from '../pages/MemoryTab'
+import MemoryTab, { MEMORY_SANITIZE_SCHEMA } from '../pages/MemoryTab'
 import Shell from '../Shell'
 import { CockpitProvider } from '../hooks/CockpitProvider'
 import { usePendingDRs } from '../hooks/usePendingDRs'
@@ -55,12 +55,15 @@ vi.mock('../routes', () => {
   }
 })
 
-// react-markdown mock — passes children through as plain text inside a wrapper
+// react-markdown mock — wrapped in vi.fn() so rehypePlugins/remarkPlugins props can be inspected
 vi.mock('react-markdown', () => ({
-  default: ({ children }: { children: string }) => (
+  default: vi.fn(({ children }: { children: string }) => (
     <div data-testid="markdown-body">{children}</div>
-  ),
+  )),
 }))
+
+import ReactMarkdown from 'react-markdown'
+import rehypeSanitize from 'rehype-sanitize'
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -1099,5 +1102,196 @@ describe('TestFromAC_MemoryStatePromotion', () => {
     await act(async () => { fireEvent.click(saveBtn!) })
     await flush()
     expect(container.textContent).not.toContain('Promoted to curated')
+  })
+})
+
+// ─── AC1 (retry): approved_at metadata field in accordion detail ──────────────
+//
+// Reviewer gap: existing tests assert source_agent/confidence/created_at/updated_at
+// but never assert approved_at is rendered in the accordion detail surface.
+
+describe('TestFromAC_MemoryApprovedAt', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('ac1 retry: accordion detail renders approved_at date string when entry has approved_at set', async () => {
+    const container = await renderWithEntries([
+      makeEntry({ state: 'approved', approved_at: '2026-03-15T10:00:00Z' }),
+    ])
+    await openAccordion(container)
+    const detail = container.querySelector('[data-testid="memory-accordion-detail"]')
+    expect(detail?.textContent).toContain('2026-03-15')
+  })
+})
+
+// ─── AC1 (retry): ReactMarkdown plugin wiring proof ──────────────────────────
+//
+// Reviewer gap: react-markdown was mocked as a passthrough so the suite could not
+// prove that MemoryTab wires rehypeSanitize + MEMORY_SANITIZE_SCHEMA into
+// ReactMarkdown's rehypePlugins. The mock now uses vi.fn() so .mock.calls can be
+// inspected. Pattern follows ResolveModal.plugins.test.tsx:91-101.
+
+describe('TestFromAC_MemoryAccordionPlugins', () => {
+  beforeEach(() => {
+    vi.mocked(ReactMarkdown).mockClear()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('ac1 retry: ReactMarkdown receives rehypeSanitize as the first rehypePlugin when accordion detail opens', async () => {
+    const container = await renderWithEntries([makeEntry()])
+    await openAccordion(container)
+
+    const calls = vi.mocked(ReactMarkdown).mock.calls
+    expect(calls.length).toBeGreaterThan(0)
+    const props = calls[calls.length - 1][0] as Record<string, unknown>
+    const rehypePlugins = (props.rehypePlugins as unknown[] | undefined) ?? []
+    // MemoryTab passes [[rehypeSanitize, MEMORY_SANITIZE_SCHEMA]] — tuple form
+    expect(rehypePlugins.length).toBeGreaterThan(0)
+    const firstPlugin = rehypePlugins[0]
+    const pluginFn = Array.isArray(firstPlugin) ? firstPlugin[0] : firstPlugin
+    expect(pluginFn).toBe(rehypeSanitize)
+  })
+
+  it('ac1 retry: ReactMarkdown receives MEMORY_SANITIZE_SCHEMA as config paired with rehypeSanitize', async () => {
+    const container = await renderWithEntries([makeEntry()])
+    await openAccordion(container)
+
+    const calls = vi.mocked(ReactMarkdown).mock.calls
+    expect(calls.length).toBeGreaterThan(0)
+    const props = calls[calls.length - 1][0] as Record<string, unknown>
+    const rehypePlugins = (props.rehypePlugins as unknown[] | undefined) ?? []
+    const firstPlugin = rehypePlugins[0]
+    // Tuple form: [rehypeSanitize, MEMORY_SANITIZE_SCHEMA]
+    expect(Array.isArray(firstPlugin)).toBe(true)
+    const pluginConfig = (firstPlugin as unknown[])[1]
+    expect(pluginConfig).toBe(MEMORY_SANITIZE_SCHEMA)
+  })
+})
+
+// ─── AC2 (retry): Delete confirmation modal element contract ──────────────────
+//
+// Reviewer gap: existing tests only check container.textContent (which would pass
+// for either inline copy or a real modal). Tests must assert the PModal element
+// [data-testid="memory-delete-confirm-dialog"] is present and the confirm button
+// exists — without conditional if-guards.
+
+describe('TestFromAC_MemoryDeleteModal', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('ac2 retry: clicking Delete on pending entry renders PModal [data-testid="memory-delete-confirm-dialog"]', async () => {
+    const container = await renderWithEntries([makeEntry({ id: 'e1', state: 'pending' })])
+    await openAccordion(container)
+    const deleteBtn = container.querySelector<HTMLElement>('[data-testid="memory-delete-btn"]')
+    expect(deleteBtn).not.toBeNull()
+    await act(async () => { fireEvent.click(deleteBtn!) })
+    await flush()
+    expect(container.querySelector('[data-testid="memory-delete-confirm-dialog"]')).not.toBeNull()
+  })
+
+  it('ac2 retry: clicking Delete on curated entry renders PModal [data-testid="memory-delete-confirm-dialog"]', async () => {
+    const container = await renderWithEntries([makeEntry({ id: 'e1', state: 'curated' })])
+    await openAccordion(container)
+    const deleteBtn = container.querySelector<HTMLElement>('[data-testid="memory-delete-btn"]')
+    expect(deleteBtn).not.toBeNull()
+    await act(async () => { fireEvent.click(deleteBtn!) })
+    await flush()
+    expect(container.querySelector('[data-testid="memory-delete-confirm-dialog"]')).not.toBeNull()
+  })
+
+  it('ac2 retry: delete confirmation dialog contains confirm button — unconditional assertion', async () => {
+    const container = await renderWithEntries([makeEntry({ id: 'e1', state: 'pending' })])
+    await openAccordion(container)
+    const deleteBtn = container.querySelector<HTMLElement>('[data-testid="memory-delete-btn"]')
+    expect(deleteBtn).not.toBeNull()
+    await act(async () => { fireEvent.click(deleteBtn!) })
+    await flush()
+    const dialog = container.querySelector('[data-testid="memory-delete-confirm-dialog"]')
+    expect(dialog).not.toBeNull()
+    // Confirm button must be present — no conditional if-guard
+    expect(container.querySelector('[data-testid="memory-delete-confirm-btn"]')).not.toBeNull()
+  })
+})
+
+// ─── AC3 (retry): Success-path background refetch after every mutation ─────────
+//
+// Reviewer gap: the only explicit refetch assertion was for the 409 conflict path.
+// The source calls void refetch() in handleApprove, handleEditSave, and handleDelete
+// on success — this must be proven for each mutation type.
+//
+// Strategy: count fetch calls to exactly '/api/memories' before and after each
+// successful mutation. The background refetch increments the count by 1.
+
+describe('TestFromAC_MemorySuccessRefetch', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('ac3 retry: approve success triggers background refetch of /api/memories', async () => {
+    const entry = makeEntry({ id: 'e1', state: 'curated' })
+    const updated = { ...entry, state: 'approved' as MemoryState }
+    const fetchMock = makeMutationFetch(200, { entry: updated }, makeApiResponse([entry]))
+    vi.stubGlobal('fetch', fetchMock)
+    let container!: HTMLElement
+    await act(async () => { container = renderMemoryTab().container })
+    await flush()
+    const listCallsBefore = (fetchMock.mock.calls as [string][]).filter(([url]) => url === '/api/memories').length
+    await openAccordion(container)
+    const approveBtn = container.querySelector<HTMLElement>('[data-testid="memory-approve-btn"]')
+    expect(approveBtn).not.toBeNull()
+    await act(async () => { fireEvent.click(approveBtn!) })
+    await flush()
+    const listCallsAfter = (fetchMock.mock.calls as [string][]).filter(([url]) => url === '/api/memories').length
+    expect(listCallsAfter).toBeGreaterThan(listCallsBefore)
+  })
+
+  it('ac3 retry: edit success triggers background refetch of /api/memories', async () => {
+    const entry = makeEntry({ id: 'e1', state: 'pending' })
+    const updated = { ...entry, title: 'Edited Title' }
+    const fetchMock = makeMutationFetch(200, { entry: updated }, makeApiResponse([entry]))
+    vi.stubGlobal('fetch', fetchMock)
+    let container!: HTMLElement
+    await act(async () => { container = renderMemoryTab().container })
+    await flush()
+    const listCallsBefore = (fetchMock.mock.calls as [string][]).filter(([url]) => url === '/api/memories').length
+    await openAccordion(container)
+    const editBtn = container.querySelector<HTMLElement>('[data-testid="memory-edit-btn"]')
+    expect(editBtn).not.toBeNull()
+    await act(async () => { fireEvent.click(editBtn!) })
+    await flush()
+    const saveBtn = container.querySelector<HTMLElement>('[data-testid="memory-edit-save-btn"]')
+    expect(saveBtn).not.toBeNull()
+    await act(async () => { fireEvent.click(saveBtn!) })
+    await flush()
+    const listCallsAfter = (fetchMock.mock.calls as [string][]).filter(([url]) => url === '/api/memories').length
+    expect(listCallsAfter).toBeGreaterThan(listCallsBefore)
+  })
+
+  it('ac3 retry: delete success triggers background refetch of /api/memories', async () => {
+    const entry = makeEntry({ id: 'e1', state: 'pending' })
+    const fetchMock = makeMutationFetch(200, { success: true }, makeApiResponse([entry]))
+    vi.stubGlobal('fetch', fetchMock)
+    let container!: HTMLElement
+    await act(async () => { container = renderMemoryTab().container })
+    await flush()
+    const listCallsBefore = (fetchMock.mock.calls as [string][]).filter(([url]) => url === '/api/memories').length
+    await openAccordion(container)
+    const deleteBtn = container.querySelector<HTMLElement>('[data-testid="memory-delete-btn"]')
+    expect(deleteBtn).not.toBeNull()
+    await act(async () => { fireEvent.click(deleteBtn!) })
+    await flush()
+    const dialog = container.querySelector('[data-testid="memory-delete-confirm-dialog"]')
+    expect(dialog).not.toBeNull()
+    const confirmBtn = container.querySelector<HTMLElement>('[data-testid="memory-delete-confirm-btn"]')
+    expect(confirmBtn).not.toBeNull()
+    await act(async () => { fireEvent.click(confirmBtn!) })
+    await flush()
+    const listCallsAfter = (fetchMock.mock.calls as [string][]).filter(([url]) => url === '/api/memories').length
+    expect(listCallsAfter).toBeGreaterThan(listCallsBefore)
   })
 })
