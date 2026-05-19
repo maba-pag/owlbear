@@ -66,15 +66,21 @@ class DocumentStore:
         """
         if isinstance(document_id_or_doc, str):
             now = datetime.now(tz=UTC).isoformat()
+            source = intake.source if intake else ""
+            metadata = dict(intake.metadata) if intake else {}
+            if intake is not None:
+                metadata.setdefault("intake_source", source)
+            metadata_title = metadata.get("title")
+            title = metadata_title.strip() if isinstance(metadata_title, str) and metadata_title.strip() else source
             self._conn.execute(
                 "INSERT OR REPLACE INTO documents"
                 " (id, title, content, metadata, created_at, scope, source_id)"
                 " VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (
                     document_id_or_doc,
-                    intake.source if intake else "",
+                    title,
                     intake.content if intake else "",
-                    json.dumps(dict(intake.metadata)) if intake else "{}",
+                    json.dumps(metadata),
                     now,
                     scope,
                     source_id,
@@ -173,25 +179,32 @@ class DocumentStore:
             chunk_texts = chunks_or_texts
             if not chunk_ids:
                 return
-            # Prefer hybrid embeddings (dense+sparse+ColBERT) when available
+            embedding_batch: list[object] | None = None
             if hasattr(self._embedder, "embed_hybrid"):
-                hybrid_embs = self._embedder.embed_hybrid(chunk_texts)  # type: ignore[union-attr]
-                for cid, emb in zip(chunk_ids, hybrid_embs, strict=False):
-                    self._vector.store_embedding(  # type: ignore[union-attr]
-                        entity_or_doc_id=cid,
-                        embedding=emb,
-                        embedding_type="document",
-                        scope=scope,
-                    )
-            else:
-                computed: list[list[float]] = self._embedder.embed(chunk_texts)  # type: ignore[union-attr]
-                for cid, emb in zip(chunk_ids, computed, strict=False):
-                    self._vector.store_embedding(  # type: ignore[union-attr]
-                        entity_or_doc_id=cid,
-                        embedding=emb,
-                        embedding_type="document",
-                        scope=scope,
-                    )
+                hybrid_result = self._embedder.embed_hybrid(chunk_texts)  # type: ignore[union-attr]
+                embedding_batch = self._concrete_embedding_batch(hybrid_result, expected_count=len(chunk_ids))
+            if embedding_batch is None:
+                dense_result = self._embedder.embed(chunk_texts)  # type: ignore[union-attr]
+                embedding_batch = self._concrete_embedding_batch(dense_result, expected_count=len(chunk_ids))
+            if embedding_batch is None:
+                msg = "embedding count does not match chunk count"
+                raise ValueError(msg)
+
+            for cid, emb in zip(chunk_ids, embedding_batch, strict=True):
+                self._vector.store_embedding(  # type: ignore[union-attr]
+                    entity_or_doc_id=cid,
+                    embedding=emb,
+                    embedding_type="document",
+                    scope=scope,
+                )
+
+    @staticmethod
+    def _concrete_embedding_batch(value: object, *, expected_count: int) -> list[object] | None:
+        if not isinstance(value, (list, tuple)):
+            return None
+        if len(value) < expected_count:
+            return None
+        return list(value[:expected_count])
 
     def store_entity_embeddings(
         self,
@@ -330,6 +343,7 @@ class DocumentStore:
         entity_rows = self._conn.execute("SELECT id FROM entities WHERE document_id = ?", (document_id,)).fetchall()
         entity_ids = [row[0] for row in entity_rows]
         self.delete_entity_embeddings(entity_ids)
+        self._conn.execute("DELETE FROM edges WHERE document_id = ?", (document_id,))
         for (eid,) in entity_rows:
             self._conn.execute("DELETE FROM edges WHERE source_id = ? OR target_id = ?", (eid, eid))
         self._conn.execute("DELETE FROM entities WHERE document_id = ?", (document_id,))
@@ -373,6 +387,13 @@ class DocumentStore:
     def find_status_by_source(self, source: str, scope: str = "global") -> DocumentStatus | None:
         """Look up a previously-ingested document by source URI."""
         return self._status.find_status_by_source(source, scope)
+
+    def get_document_by_source(self, source: str, scope: str = "global") -> Document | None:
+        """Return the document currently indexed for *source* and *scope*."""
+        status = self.find_status_by_source(source, scope)
+        if status is None:
+            return None
+        return self._graph.get_document(status.document_id)
 
     def check_content_changed(self, source: str, content: str, scope: str = "global") -> tuple[bool, str | None]:
         """Check whether *content* differs from the previously-ingested version.

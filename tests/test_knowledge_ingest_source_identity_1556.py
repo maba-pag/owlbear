@@ -1720,10 +1720,11 @@ class TestFromAC_EndToEndSearchResolution:
         hit = hits[0]
 
         # (b) document was found — resolve via chunk_id -> document_id -> Document.
-        # The ingest() path uses intake.source (URL) as the document title.
-        assert hit.title == "https://example.test/refresh", (
-            f"hit.title must be 'https://example.test/refresh' (intake.source), got {hit.title!r}"
-        )
+        assert hit.title == "Refresh E2E Doc", f"hit.title must be 'Refresh E2E Doc', got {hit.title!r}"
+        source_document = doc_store.get_document_by_source("https://example.test/refresh", scope="team-a")
+        assert source_document is not None
+        assert source_document.id == hit.doc_id
+        assert source_document.metadata["intake_source"] == "https://example.test/refresh"
 
         # (c) source from the linked KnowledgeSource row
         assert hit.source is not None, (

@@ -414,3 +414,30 @@ class TestFromAC_WritePathsPostMigration:
         assert conn.execute("SELECT COUNT(*) FROM entities WHERE document_id='doc-1'").fetchone()[0] == 0
         assert conn.execute("SELECT COUNT(*) FROM edges WHERE document_id='doc-1'").fetchone()[0] == 0
         assert conn.execute("SELECT COUNT(*) FROM documents WHERE id='doc-1'").fetchone()[0] == 0
+
+    def test_delete_document_data_removes_edges_by_document_id(self) -> None:
+        """delete_document_data() removes edges whose provenance document is deleted."""
+        conn = _make_migrated_conn()
+        conn.execute(
+            "INSERT INTO documents (id, title, content, metadata, created_at)"
+            " VALUES ('doc-1', 'Deleted Doc', '', '{}', '2025-01-01')"
+        )
+        conn.execute(
+            "INSERT INTO documents (id, title, content, metadata, created_at)"
+            " VALUES ('doc-2', 'Endpoint Doc', '', '{}', '2025-01-01')"
+        )
+        conn.commit()
+        graph = GraphStore(conn)
+        store = _make_document_store(conn)
+        graph.insert_entity(Entity(id="ent-a", name="Alpha", entity_type=EntityType.CONCEPT, document_id="doc-2"))
+        graph.insert_entity(Entity(id="ent-b", name="Beta", entity_type=EntityType.CONCEPT, document_id="doc-2"))
+        graph.insert_edge(
+            Edge(id="edge-doc-1", source_id="ent-a", target_id="ent-b", relation=RelationType.RELATED_TO),
+            document_id="doc-1",
+        )
+
+        store.delete_document_data("doc-1")
+
+        assert conn.execute("SELECT id FROM documents ORDER BY id").fetchall() == [("doc-2",)]
+        assert conn.execute("SELECT id FROM entities ORDER BY id").fetchall() == [("ent-a",), ("ent-b",)]
+        assert conn.execute("SELECT id FROM edges").fetchall() == []

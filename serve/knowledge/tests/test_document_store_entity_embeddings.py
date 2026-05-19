@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import sqlite3
+from unittest.mock import MagicMock
+
+import pytest
 
 from owlbear_knowledge.document_store import DocumentStore
 from owlbear_knowledge.graph_store import GraphStore
@@ -70,3 +73,35 @@ def test_delete_document_data_removes_chunk_and_entity_embeddings() -> None:
     store.delete_document_data("doc-1")
 
     assert vector_store.deleted == ["chunk-1", "entity-1"]
+
+
+def test_store_embeddings_falls_back_when_hybrid_result_not_concrete() -> None:
+    conn = sqlite3.connect(":memory:")
+    init_db(conn)
+    vector_store = RecordingVectorStore()
+    embedder = MagicMock()
+    embedder.embed.return_value = [[0.1], [0.2]]
+    store = DocumentStore(conn, GraphStore(conn), vector_store, embedder)
+
+    store.store_embeddings(["chunk-a", "chunk-b"], ["a", "b"], scope="team")
+
+    assert embedder.embed_hybrid.called
+    assert embedder.embed.called
+    assert [(call["entity_or_doc_id"], call["embedding"], call["scope"]) for call in vector_store.calls] == [
+        ("chunk-a", [0.1], "team"),
+        ("chunk-b", [0.2], "team"),
+    ]
+
+
+def test_store_embeddings_rejects_embedding_count_mismatch() -> None:
+    conn = sqlite3.connect(":memory:")
+    init_db(conn)
+    vector_store = RecordingVectorStore()
+    embedder = MagicMock()
+    embedder.embed.return_value = [[0.1]]
+    store = DocumentStore(conn, GraphStore(conn), vector_store, embedder)
+
+    with pytest.raises(ValueError, match="embedding count does not match chunk count"):
+        store.store_embeddings(["chunk-a", "chunk-b"], ["a", "b"])
+
+    assert vector_store.calls == []

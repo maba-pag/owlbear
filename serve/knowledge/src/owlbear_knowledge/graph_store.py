@@ -88,6 +88,9 @@ class GraphStore:
 
     def insert_entity(self, entity: Entity) -> None:
         """Insert *entity* into the ``entities`` table."""
+        if not isinstance(entity.document_id, str) or not entity.document_id.strip():
+            msg = "entity document_id is required"
+            raise ValueError(msg)
         self._conn.execute(
             "INSERT INTO entities"
             " (id, name, entity_type, description, metadata,"

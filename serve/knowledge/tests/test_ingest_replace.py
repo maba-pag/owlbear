@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from unittest.mock import MagicMock, patch
 
@@ -43,6 +44,31 @@ def _intake(content: str) -> IntakeResult:
         source="file://docs/source.md",
         metadata={"source_type": "file"},
     )
+
+
+@pytest.mark.asyncio
+async def test_ingest_uses_metadata_title_and_keeps_source_query(
+    conn: sqlite3.Connection,
+    doc_store: DocumentStore,
+    pipeline: IngestPipeline,
+) -> None:
+    intake = IntakeResult(
+        content="titled content",
+        source="file://docs/titled.md",
+        metadata={"source_type": "file", "title": "Readable Title"},
+    )
+
+    result = await pipeline.ingest(intake, scope="global")
+
+    assert result.status == "ok"
+    title, metadata_json = conn.execute(
+        "SELECT title, metadata FROM documents WHERE id = ?", (result.document_id,)
+    ).fetchone()
+    assert title == "Readable Title"
+    assert json.loads(metadata_json)["intake_source"] == "file://docs/titled.md"
+    document = doc_store.get_document_by_source("file://docs/titled.md")
+    assert document is not None
+    assert document.title == "Readable Title"
 
 
 @pytest.mark.asyncio

@@ -187,3 +187,23 @@ class TestFromAC_GraphStoreInsertEdgeDocumentId:
                     relation=RelationType.RELATED_TO,
                 )
             )
+
+
+class TestFromAC_GraphStoreInsertEntityDocumentId:
+    """GraphStore.insert_entity rejects missing document provenance before SQLite."""
+
+    def test_insert_entity_rejects_none_document_id(self) -> None:
+        conn = sqlite3.connect(":memory:")
+        init_db(conn)
+        graph = GraphStore(conn)
+
+        with pytest.raises(ValueError, match="entity document_id is required"):
+            graph.insert_entity(Entity(id="entity-none", name="A", entity_type=EntityType.CONCEPT))
+
+    def test_insert_entity_rejects_blank_document_id(self) -> None:
+        conn = sqlite3.connect(":memory:")
+        init_db(conn)
+        graph = GraphStore(conn)
+
+        with pytest.raises(ValueError, match="entity document_id is required"):
+            graph.insert_entity(Entity(id="entity-blank", name="A", entity_type=EntityType.CONCEPT, document_id="   "))
