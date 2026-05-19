@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   PButton,
   PInputSearch,
+  PModal,
   PMultiSelect,
   PMultiSelectOption,
   PSelect,
@@ -340,6 +341,10 @@ function MemoryTab(_props: KanbanBoardProps) {
   const categoryOptions = useMemo(
     () => toDistinctSortedValues(entries.flatMap((entry) => entry.categories)),
     [entries],
+  )
+  const deleteConfirmEntry = useMemo(
+    () => entries.find((entry) => entry.id === deleteConfirmEntryId) ?? null,
+    [deleteConfirmEntryId, entries],
   )
   const agentOptions = useMemo(
     () => toDistinctSortedValues(entries.flatMap((entry) => entry.scope_agents)),
@@ -701,6 +706,7 @@ function MemoryTab(_props: KanbanBoardProps) {
                     <p>State: {entry.state}</p>
                     <p>Created: {entry.created_at}</p>
                     <p>Updated: {entry.updated_at}</p>
+                    <p>Approved: {entry.approved_at ?? '-'}</p>
 
                     {entry.state === 'approved' ? <p>Editing will require re-approval</p> : null}
 
@@ -731,24 +737,6 @@ function MemoryTab(_props: KanbanBoardProps) {
                           Delete
                         </PButton>
                       </>
-                    ) : null}
-
-                    {deleteConfirmEntryId === entry.id ? (
-                      <div>
-                        <p>
-                          {entry.state === 'pending'
-                            ? 'This is a permanent hard-delete and cannot be undone.'
-                            : 'This will soft-delete the memory and mark it as deleted (removed from view by default).'}
-                        </p>
-                        <PButton
-                          type="button"
-                          data-testid="memory-delete-confirm-btn"
-                          compact
-                          onClick={() => void handleDelete(entry)}
-                        >
-                          Confirm delete
-                        </PButton>
-                      </div>
                     ) : null}
 
                     {editingEntryId === entry.id && editDraft ? (
@@ -854,6 +842,41 @@ function MemoryTab(_props: KanbanBoardProps) {
             </li>
           ))}
         </ul>
+      ) : null}
+
+      {deleteConfirmEntry ? (
+        <PModal
+          data-testid="memory-delete-confirm-dialog"
+          open
+          tabIndex={-1}
+          onDismiss={() => setDeleteConfirmEntryId(null)}
+          disableBackdropClick
+          dismissButton={false}
+          aria-label="Confirm memory deletion"
+        >
+          <p>
+            {deleteConfirmEntry.state === 'pending'
+              ? 'This is a permanent hard-delete and cannot be undone.'
+              : 'This will soft-delete the memory and mark it as deleted (removed from view by default).'}
+          </p>
+          <PButton
+            type="button"
+            data-testid="memory-delete-confirm-btn"
+            compact
+            onClick={() => void handleDelete(deleteConfirmEntry)}
+          >
+            Confirm delete
+          </PButton>
+          <PButton
+            type="button"
+            data-testid="memory-delete-cancel-btn"
+            compact
+            variant="secondary"
+            onClick={() => setDeleteConfirmEntryId(null)}
+          >
+            Cancel
+          </PButton>
+        </PModal>
       ) : null}
     </section>
   )
