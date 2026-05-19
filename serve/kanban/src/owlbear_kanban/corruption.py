@@ -135,7 +135,7 @@ def _read_frontmatter(path: Path) -> tuple[str, dict, str]:
     """
     try:
         content = path.read_text(encoding="utf-8")
-    except OSError as exc:
+    except (OSError, UnicodeDecodeError) as exc:
         raise CorruptionError(
             code=ERR_CORRUPT_DELIMITERS,
             detail=f"cannot read file: {exc}",
@@ -371,6 +371,7 @@ def attempt_repair(  # noqa: C901, PLR0911, PLR0912, PLR0915
         ERR_CORRUPT_DELIMITERS.__name__,
         ERR_CORRUPT_YAML_PARSE.__name__,
         ERR_CORRUPT_INVALID_STATUS.__name__,
+        ERR_CORRUPT_ENCODING.__name__,
     ):
         return _quarantine()
 
