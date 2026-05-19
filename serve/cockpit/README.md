@@ -372,9 +372,9 @@ Accessibility and responsive state after #1396:
   component: ComponentType<KanbanBoardProps> }` with two entries: kanban at `/` and
   decisions at `/decisions`. `Shell.tsx` replaces its prior single inline `<Route>` with
   a `routeConfig.map()` render loop inside `<Routes>`, so registering a new tab requires
-  only a new array entry without modifying `Shell.tsx`. `pages/DecisionsPage.tsx` is a
-  skeleton component (`<section data-testid="decisions-page" />`) that validates
-  end-to-end routing. Verified by
+  only a new array entry without modifying `Shell.tsx`. `pages/DecisionsPage.tsx` is
+  initially a skeleton component (`<section data-testid="decisions-page" />`) that
+  validates end-to-end routing (replaced with the full list view by #1645). Verified by
   `serve/cockpit/web/src/__tests__/routes_1639.test.tsx` (12 tests — config shape,
   extensibility, and lazy/eager split contract updated by #1644),
   `serve/cockpit/web/src/__tests__/Shell.tab-routing_1639.test.tsx`
@@ -431,6 +431,24 @@ Accessibility and responsive state after #1396:
   — AC1 sidecar-absent DOM, AC2 navigate-remove/restore/collapsed-state-preservation,
   AC3 `data-no-sidecar` attribute, CSS 2-column grid-column contract, CSS grid-area
   sidecar exclusion, and preload-hack source-inspection guard).
+
+- #1645 replaces the `DecisionsPage.tsx` skeleton with the full decisions list view.
+  `useDRState().items` drives the render: each `PendingDR` is displayed as a clickable
+  `<div data-testid="dr-item-{id}">` containing an `<article>` with agent, request
+  type, relative age (d/h/m format), task id, and body preview truncated to 200 chars.
+  Items are arranged in a `display:flex` / `flexDirection:column` / `gap:1rem`
+  container; the root `<section data-testid="decisions-page">` carries `width:100%`.
+  When `items` is empty and neither `isLoading` nor `error` is set, a
+  `data-testid="decisions-empty-state"` element with a "nothing to decide" message is
+  rendered instead. Loading and error states are handled separately. Item click calls
+  `setSelectedDRId(item.id)`. The page uses the `try/catch`-guarded `useDRState()`
+  access pattern to preserve standalone mount stability for the `#1639` legacy tests.
+  Verified by `serve/cockpit/web/src/__tests__/DecisionsPage_1645.test.tsx` (29 tests
+  — AC1 item rendering, field display, 200-char truncation, and d/h/m age format;
+  AC2 empty-state presence only under empty/non-loading/non-error preconditions;
+  AC3 `dr-item-{id}` testids, click wiring, `gap >= 16px`, and effective
+  `display:flex|grid` layout mechanism; AC4 discriminating root `width:100%` and
+  list `flexDirection:column` assertions).
 
 - #1646 adds a pending-count badge to the nav-rail decisions button. Inside the
   `routeConfig.map()` render loop in `Shell.tsx`, the decisions entry (`route.icon ===
