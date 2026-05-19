@@ -25,19 +25,22 @@ vi.mock('../hooks/EventSourceProvider', () => ({
   useSSEEvent: vi.fn(() => ({ status: 'closed', mtime: null })),
 }))
 
-// Inject 3-entry routeConfig — a hardcoded 2-button nav-rail fails count tests (AC3)
-vi.mock('../routes', () => {
+// Mutable 3-entry routeConfig array — Shell.tsx holds a reference to this array;
+// mutating it in-place per test is visible at render time without module re-evaluation.
+const routeConfigMut = vi.hoisted(() => {
   function Stub() {
     return null
   }
-  return {
-    routeConfig: [
-      { path: '/', label: 'Kanban', icon: 'kanban', component: Stub },
-      { path: '/decisions', label: 'Decisions', icon: 'decisions', component: Stub },
-      { path: '/test-route', label: 'Test Route', icon: 'test-route', component: Stub },
-    ],
-  }
+  return [
+    { path: '/', label: 'Kanban', icon: 'kanban', component: Stub },
+    { path: '/decisions', label: 'Decisions', icon: 'decisions', component: Stub },
+    { path: '/test-route', label: 'Test Route', icon: 'test-route', component: Stub },
+  ]
 })
+
+vi.mock('../routes', () => ({
+  routeConfig: routeConfigMut,
+}))
 
 // ─── Fetch stub ───────────────────────────────────────────────────────────────
 
@@ -255,6 +258,56 @@ describe('TestFromAC_NavRailButtons', () => {
       // Hardcoded 2-button implementation yields 2 ≠ 3 → FAIL
       const { container } = renderShell()
       expect(rail(container).querySelectorAll('button[data-surface]').length).toBe(3)
+    })
+  })
+
+  // ── AC1/AC3: falsifiability gate — proves buttons are derived from config ──
+  //
+  // The tests above pin the mock to exactly the same 3 icons the impl could
+  // theoretically hardcode. These gate tests mutate routeConfigMut in-place
+  // to use novel entries that no hardcoded impl would render, falsifying any
+  // non-data-driven implementation.
+
+  describe('AC1/AC3 — falsifiability gate: button count and surface track config entries', () => {
+    // Snapshot the default 3 entries for restore after each test.
+    const defaultEntries = routeConfigMut.slice()
+
+    afterEach(() => {
+      routeConfigMut.length = 0
+      routeConfigMut.push(...defaultEntries)
+    })
+
+    it('ac1 falsify: 1-entry config renders exactly 1 nav button (falsifies hardcoded 3-button nav)', () => {
+      routeConfigMut.length = 0
+      routeConfigMut.push({ path: '/only', label: 'Only', icon: 'sentinel-1642', component: () => null })
+      const { container } = renderShell()
+      expect(rail(container).querySelectorAll('button[data-surface]').length).toBe(1)
+    })
+
+    it('ac1 falsify: novel sentinel-1642 button only present when config includes sentinel entry', () => {
+      routeConfigMut.length = 0
+      routeConfigMut.push({ path: '/s', label: 'Sentinel', icon: 'sentinel-1642', component: () => null })
+      const { container } = renderShell()
+      expect(rail(container).querySelector('[data-surface="sentinel-1642"]')).not.toBeNull()
+    })
+
+    it('ac3 falsify: 4-entry config renders exactly 4 nav buttons (falsifies any fixed-count nav)', () => {
+      function Stub() {
+        return null
+      }
+      routeConfigMut.push({ path: '/extra', label: 'Extra', icon: 'extra-gate-1642', component: Stub })
+      const { container } = renderShell()
+      expect(rail(container).querySelectorAll('button[data-surface]').length).toBe(4)
+    })
+
+    it('ac3 falsify: novel gate-1642 entry renders matching button that navigates to its path', () => {
+      routeConfigMut.length = 0
+      routeConfigMut.push({ path: '/', label: 'Kanban', icon: 'kanban', component: () => null })
+      routeConfigMut.push({ path: '/gate-test-1642', label: 'Gate Test', icon: 'gate-1642', component: () => null })
+      const { container } = renderShell()
+      expect(rail(container).querySelector('[data-surface="gate-1642"]')).not.toBeNull()
+      fireEvent.click(navBtn(rail(container), 'gate-1642'))
+      expect(capturedPathname).toBe('/gate-test-1642')
     })
   })
 })
