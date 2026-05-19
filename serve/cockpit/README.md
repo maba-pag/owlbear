@@ -413,6 +413,25 @@ Accessibility and responsive state after #1396:
   falsifiability gate tests proving button count and identity track `routeConfig`
   entries rather than any hardcoded set).
 
+- #1643 adds route-conditional sidecar suppression. `RouteConfigEntry` in `routes.ts`
+  gains an optional `hasSidecar?: boolean` field; when `false`, the
+  `<aside data-region="sidecar">` element is omitted from the DOM entirely on that
+  route. Shell uses `useLocation()` and a `routeConfig` lookup to derive `hasSidecar`
+  at render time; unknown routes default to sidecar-present (no `hasSidecar` key or
+  `hasSidecar: true`). The `/decisions` entry sets `hasSidecar: false`; the `/`
+  (kanban) entry keeps the default. When sidecar is absent, Shell applies
+  `data-no-sidecar` on `.shell`, which reduces `--shell-columns` to
+  `var(--shell-rail-width) minmax(0, 1fr)` (2-column, no sidecar column) so
+  `[data-region="workspace"]` fills the remaining horizontal space. `isSidecarCollapsed`
+  state is preserved across navigation — returning to `/` restores the prior collapsed
+  state. Canonical `React.lazy(() => import('./pages/DecisionsPage'))` loading is
+  preserved; AC2 tests use `async`/`waitFor` to account for React Router v7
+  `startTransition`-deferred commit timing when a lazy route suspends. Verified by
+  `serve/cockpit/web/src/__tests__/Shell.sidecar-conditional_1643.test.tsx` (8 tests
+  — AC1 sidecar-absent DOM, AC2 navigate-remove/restore/collapsed-state-preservation,
+  AC3 `data-no-sidecar` attribute, CSS 2-column grid-column contract, CSS grid-area
+  sidecar exclusion, and preload-hack source-inspection guard).
+
 - #1671 adds the Memory tab list view at `/memories`. `pages/MemoryTab.tsx` (default
   export, lazy-loaded in `routeConfig` with `hasSidecar: false`) fetches `GET
   /api/memories` on mount and on `document.visibilitychange` to visible (no SSE in V1).
