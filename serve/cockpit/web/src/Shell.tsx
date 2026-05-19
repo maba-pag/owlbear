@@ -1,7 +1,6 @@
 import { useRef, useEffect, useState } from 'react'
 import { Routes, Route } from 'react-router'
 import { PBanner, PButton, PDivider, PHeading, PToast, useToastManager } from '@porsche-design-system/components-react'
-import KanbanBoard from './KanbanBoard'
 import ActivityTab from './components/ActivityTab'
 import CleanupPanel from './components/CleanupPanel'
 import DecisionViewport from './components/DecisionViewport'
@@ -13,6 +12,7 @@ import ResolveModal from './components/ResolveModal'
 import ThemeToggle from './components/ThemeToggle'
 import { useBoardState, useDRState, useTaskSelection } from './hooks/CockpitProvider'
 import { type ScanItem as ScanPollingItem } from './hooks/useScanPolling'
+import { routeConfig } from './routes'
 import './Shell.css'
 
 function isHealthBadgeItem(item: ScanPollingItem): item is HealthBadgeItem {
@@ -63,7 +63,7 @@ function Shell() {
       : 'No task selected'
   const normalizedItems = scanItems.filter(isHealthBadgeItem)
   const statusHealth = scanError ? 'red' : health
-  const [hasLoadedScan, setHasLoadedScan] = useState(false)
+  const [hasLoadedScan, setHasLoadedScan] = useState(() => !isLoading)
   const [isSidecarCollapsed, setIsSidecarCollapsed] = useState(false)
   const [isMobileViewport, setIsMobileViewport] = useState(false)
   const [isTabletViewport, setIsTabletViewport] = useState(false)
@@ -310,7 +310,16 @@ function Shell() {
         }}
       >
         <Routes>
-          <Route path="/" element={<KanbanBoard {...kanbanProps} />} />
+          {routeConfig.map((route) => {
+            const RouteComponent = route.component
+            return (
+              <Route
+                key={route.path}
+                path={route.path}
+                element={<RouteComponent {...kanbanProps} />}
+              />
+            )
+          })}
         </Routes>
       </main>
       <aside
