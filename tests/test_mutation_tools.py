@@ -33,13 +33,13 @@ RED failure modes:
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
+from uuid import UUID
 
 import pytest
 from mcp.server.fastmcp.exceptions import ToolError
 
-from owlbear_mcp_memory.engine import MemoryEngine
-from owlbear_mcp_memory.models import MemoryEntry
+from owlbear_memory import MemoryEngine, MemoryEntry
 from owlbear_mcp_memory.tools import curate_memory, delete_memory
 
 # ---------------------------------------------------------------------------
@@ -85,6 +85,61 @@ def _make_ctx(engine: MemoryEngine, caller: str = "curator") -> MagicMock:
     ctx.request_context.lifespan_context.engine = engine
     ctx.request_context.lifespan_context.caller = caller
     return ctx
+
+
+def _seed_entry(engine: MemoryEngine, entry: MemoryEntry) -> MemoryEntry:
+    """Seed an entry through public MemoryEngine APIs with deterministic UUID."""
+    with patch("owlbear_memory.engine.uuid4", return_value=UUID(entry.id)):
+        seeded = engine.save(
+            title=entry.title,
+            content=entry.content,
+            categories=entry.categories,
+            confidence=entry.confidence,
+            source_agent=entry.source_agent,
+            scope_agents=entry.scope_agents,
+        )
+
+    seeded_result = seeded
+    if entry.state == "pending":
+        return seeded_result
+
+    promoted_scope = entry.scope_agents or [entry.source_agent]
+    curated = engine.edit(
+        seeded.id,
+        {
+            "title": entry.title,
+            "content": entry.content,
+            "categories": entry.categories,
+            "confidence": entry.confidence,
+            "scope_agents": promoted_scope,
+        },
+        expected_updated_at=seeded.updated_at,
+    )
+    seeded_result = curated
+
+    if entry.state == "curated" and not entry.scope_agents:
+        seeded_result = engine.edit(
+            curated.id,
+            {"scope_agents": []},
+            expected_updated_at=curated.updated_at,
+        )
+    elif entry.state == "approved":
+        approved = engine.approve(curated.id, expected_updated_at=curated.updated_at)
+        seeded_result = approved
+        if not entry.scope_agents:
+            unscoped_curated = engine.edit(
+                approved.id,
+                {"scope_agents": []},
+                expected_updated_at=approved.updated_at,
+            )
+            seeded_result = engine.approve(
+                unscoped_curated.id,
+                expected_updated_at=unscoped_curated.updated_at,
+            )
+    elif entry.state == "deleted":
+        seeded_result = engine.delete(curated.id, expected_updated_at=curated.updated_at)
+
+    return seeded_result
 
 
 # ---------------------------------------------------------------------------
@@ -248,7 +303,7 @@ class TestFromAC_ListMemories:
 
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(n=1, state="curated", scope_agents=["builder"])
-        engine.write(entry)
+        _seed_entry(engine, entry)
         ctx = _make_ctx(engine)
 
         results = await list_memories(ctx)
@@ -271,8 +326,8 @@ class TestFromAC_ListMemories:
         engine = MemoryEngine(memory_dir=tmp_path)
         curated = _make_entry(n=1, state="curated", scope_agents=["builder"])
         pending = _make_entry(n=2, state="pending", scope_agents=[])
-        engine.write(curated)
-        engine.write(pending)
+        _seed_entry(engine, curated)
+        _seed_entry(engine, pending)
         ctx = _make_ctx(engine)
 
         results = await list_memories(ctx, states=["pending", "curated"])
@@ -300,8 +355,8 @@ class TestFromAC_ListMemories:
         engine = MemoryEngine(memory_dir=tmp_path)
         curated = _make_entry(n=1, state="curated", scope_agents=["builder"])
         deleted = _make_entry(n=2, state="deleted", scope_agents=["builder"])
-        engine.write(curated)
-        engine.write(deleted)
+        _seed_entry(engine, curated)
+        _seed_entry(engine, deleted)
         ctx = _make_ctx(engine)
 
         results = await list_memories(ctx)
@@ -328,8 +383,8 @@ class TestFromAC_ListMemories:
             scope_agents=["builder"],
         )
         entry_pt = _make_entry(n=2, state="curated", categories=["pitfall"], scope_agents=["builder"])
-        engine.write(entry_dk)
-        engine.write(entry_pt)
+        _seed_entry(engine, entry_dk)
+        _seed_entry(engine, entry_pt)
         ctx = _make_ctx(engine)
 
         results = await list_memories(ctx, categories=["pitfall"])
@@ -351,8 +406,8 @@ class TestFromAC_ListMemories:
         engine = MemoryEngine(memory_dir=tmp_path)
         entry_a = _make_entry(n=1, state="curated", scope_agents=["builder"])
         entry_b = _make_entry(n=2, state="curated", scope_agents=["reviewer"])
-        engine.write(entry_a)
-        engine.write(entry_b)
+        _seed_entry(engine, entry_a)
+        _seed_entry(engine, entry_b)
         ctx = _make_ctx(engine)
 
         results = await list_memories(ctx, scope_agents=["builder"])
@@ -378,8 +433,8 @@ class TestFromAC_ListMemories:
         earlier = _make_entry(n=1, state="pending")
         later = _make_entry(n=2, state="pending")
         # Write in reverse insertion order to prove sort is by created_at, not arrival
-        engine.write(later)
-        engine.write(earlier)
+        _seed_entry(engine, later)
+        _seed_entry(engine, earlier)
         ctx = _make_ctx(engine)
 
         results = await list_memories(ctx, states=["pending"])
@@ -406,8 +461,8 @@ class TestFromAC_ListMemories:
         engine = MemoryEngine(memory_dir=tmp_path)
         pending = _make_entry(n=1, state="pending")
         curated = _make_entry(n=2, state="curated", scope_agents=["builder"])
-        engine.write(pending)
-        engine.write(curated)
+        _seed_entry(engine, pending)
+        _seed_entry(engine, curated)
         ctx = _make_ctx(engine)
 
         results = await list_memories(ctx, states=["pending"])
@@ -445,7 +500,7 @@ class TestFromAC_ReadMemory:
             scope_agents=["builder"],
             content="Rich body text here.",
         )
-        engine.write(entry)
+        _seed_entry(engine, entry)
         ctx = _make_ctx(engine)
 
         result = await read_memory(ctx, entry_id=entry.id)
@@ -466,7 +521,7 @@ class TestFromAC_ReadMemory:
 
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(n=1, state="curated", scope_agents=["builder"])
-        engine.write(entry)
+        _seed_entry(engine, entry)
         ctx = _make_ctx(engine)
 
         result = await read_memory(ctx, entry_id=entry.id)
@@ -515,7 +570,7 @@ class TestFromAC_ReadMemory:
 
         engine = MemoryEngine(memory_dir=tmp_path)
         deleted = _make_entry(n=1, state="deleted", scope_agents=[])
-        engine.write(deleted)
+        _seed_entry(engine, deleted)
         ctx = _make_ctx(engine)
 
         with pytest.raises(ToolError):
@@ -544,7 +599,7 @@ class TestFromAC_CurateMemoryValidation:
         """
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(n=1, state="curated", scope_agents=["builder"])
-        engine.write(entry)
+        _seed_entry(engine, entry)
         ctx = _make_ctx(engine)
 
         with pytest.raises(ToolError) as exc_info:
@@ -564,7 +619,7 @@ class TestFromAC_CurateMemoryValidation:
         """
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(n=1, state="curated", scope_agents=["builder"])
-        engine.write(entry)
+        _seed_entry(engine, entry)
         ctx = _make_ctx(engine)
 
         with pytest.raises(ToolError) as exc_info:
@@ -586,7 +641,7 @@ class TestFromAC_CurateMemoryValidation:
         """
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(n=1, state="curated", scope_agents=["builder"])
-        engine.write(entry)
+        _seed_entry(engine, entry)
         ctx = _make_ctx(engine)
 
         with pytest.raises(ToolError) as exc_info:
@@ -607,7 +662,7 @@ class TestFromAC_CurateMemoryValidation:
         """
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(n=1, state="curated", scope_agents=["builder"])
-        engine.write(entry)
+        _seed_entry(engine, entry)
         ctx = _make_ctx(engine)
 
         with pytest.raises(ToolError) as exc_info:
@@ -628,7 +683,7 @@ class TestFromAC_CurateMemoryValidation:
         """
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(n=1, state="curated", scope_agents=["builder"])
-        engine.write(entry)
+        _seed_entry(engine, entry)
         ctx = _make_ctx(engine)
 
         with pytest.raises(ToolError) as exc_info:
@@ -657,7 +712,7 @@ class TestFromAC_CurateMemoryHint:
         """Promoting pending→curated: hint mentions promotion and scope."""
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(n=1, state="pending", scope_agents=[])
-        engine.write(entry)
+        _seed_entry(engine, entry)
         ctx = _make_ctx(engine)
 
         result = await curate_memory(ctx, entry_id=entry.id, scope_agents=["builder"])
@@ -678,7 +733,7 @@ class TestFromAC_CurateMemoryHint:
             scope_agents=["builder"],
             approved_at="2026-05-01T10:00:01Z",
         )
-        engine.write(entry)
+        _seed_entry(engine, entry)
         ctx = _make_ctx(engine)
 
         result = await curate_memory(ctx, entry_id=entry.id, title="Updated title")
@@ -694,7 +749,7 @@ class TestFromAC_CurateMemoryHint:
         """Editing curated→curated: hint mentions the update and curated state."""
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(n=1, state="curated", scope_agents=["builder"])
-        engine.write(entry)
+        _seed_entry(engine, entry)
         ctx = _make_ctx(engine)
 
         result = await curate_memory(ctx, entry_id=entry.id, title="Improved title")
@@ -714,7 +769,7 @@ class TestFromAC_CurateMemoryHint:
         """
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(n=1, state="pending", scope_agents=[])
-        engine.write(entry)
+        _seed_entry(engine, entry)
         ctx = _make_ctx(engine)
 
         result = await curate_memory(ctx, entry_id=entry.id, scope_agents=["builder"])
@@ -740,7 +795,7 @@ class TestFromAC_CurateMemoryHint:
             scope_agents=["builder"],
             approved_at="2026-05-01T10:00:01Z",
         )
-        engine.write(entry)
+        _seed_entry(engine, entry)
         ctx = _make_ctx(engine)
 
         result = await curate_memory(ctx, entry_id=entry.id, title="Updated title")
@@ -760,7 +815,7 @@ class TestFromAC_CurateMemoryHint:
         """
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(n=1, state="curated", scope_agents=["builder"])
-        engine.write(entry)
+        _seed_entry(engine, entry)
         ctx = _make_ctx(engine)
 
         result = await curate_memory(ctx, entry_id=entry.id, title="Refined title")
@@ -793,7 +848,7 @@ class TestFromAC_DeleteMemoryHint:
         """Deleting a pending entry: hint indicates hard-delete, never committed."""
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(n=1, state="pending", scope_agents=[])
-        engine.write(entry)
+        _seed_entry(engine, entry)
         ctx = _make_ctx(engine)
 
         result = await delete_memory(ctx, entry_id=entry.id)
@@ -809,7 +864,7 @@ class TestFromAC_DeleteMemoryHint:
         """Deleting a curated entry: hint indicates soft-delete and file retention."""
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(n=1, state="curated", scope_agents=["builder"])
-        engine.write(entry)
+        _seed_entry(engine, entry)
         ctx = _make_ctx(engine)
 
         result = await delete_memory(ctx, entry_id=entry.id)
@@ -830,7 +885,7 @@ class TestFromAC_DeleteMemoryHint:
             scope_agents=["builder"],
             approved_at="2026-05-01T10:00:01Z",
         )
-        engine.write(entry)
+        _seed_entry(engine, entry)
         ctx = _make_ctx(engine)
 
         result = await delete_memory(ctx, entry_id=entry.id)
@@ -851,7 +906,7 @@ class TestFromAC_DeleteMemoryHint:
         """
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(n=1, state="pending", scope_agents=[])
-        engine.write(entry)
+        _seed_entry(engine, entry)
         ctx = _make_ctx(engine)
 
         result = await delete_memory(ctx, entry_id=entry.id)
@@ -871,7 +926,7 @@ class TestFromAC_DeleteMemoryHint:
         """
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(n=1, state="curated", scope_agents=["builder"])
-        engine.write(entry)
+        _seed_entry(engine, entry)
         ctx = _make_ctx(engine)
 
         result = await delete_memory(ctx, entry_id=entry.id)
@@ -901,7 +956,7 @@ class TestFromAC_ApproveMemory:
 
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(n=1, state="curated", scope_agents=["builder"])
-        engine.write(entry)
+        _seed_entry(engine, entry)
         ctx = _make_ctx(engine)
 
         result = await approve_memory(ctx, entry_id=entry.id)
@@ -918,7 +973,7 @@ class TestFromAC_ApproveMemory:
 
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(n=1, state="curated", scope_agents=["builder"])
-        engine.write(entry)
+        _seed_entry(engine, entry)
         ctx = _make_ctx(engine)
 
         result = await approve_memory(ctx, entry_id=entry.id)
@@ -935,7 +990,7 @@ class TestFromAC_ApproveMemory:
 
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(n=1, state="pending", scope_agents=[])
-        engine.write(entry)
+        _seed_entry(engine, entry)
         ctx = _make_ctx(engine)
 
         with pytest.raises(ToolError):
@@ -956,7 +1011,7 @@ class TestFromAC_ApproveMemory:
             scope_agents=["builder"],
             approved_at="2026-05-01T10:00:01Z",
         )
-        engine.write(entry)
+        _seed_entry(engine, entry)
         ctx = _make_ctx(engine)
 
         with pytest.raises(ToolError):
@@ -972,7 +1027,7 @@ class TestFromAC_ApproveMemory:
 
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(n=1, state="deleted", scope_agents=[])
-        engine.write(entry)
+        _seed_entry(engine, entry)
         ctx = _make_ctx(engine)
 
         with pytest.raises(ToolError):
@@ -1001,7 +1056,7 @@ class TestFromAC_CallerEnvVarNoEffect:
         """
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(n=1, state="curated", scope_agents=["builder"])
-        engine.write(entry)
+        _seed_entry(engine, entry)
         # caller is NOT "curator" — role-check would reject this
         ctx = _make_ctx(engine, caller="some-agent")
 
@@ -1030,7 +1085,7 @@ class TestFromAC_CallerEnvVarNoEffect:
         ctx = _make_ctx(engine, caller=env_caller)
 
         entry = _make_entry(n=1, state="curated", scope_agents=["builder"])
-        engine.write(entry)
+        _seed_entry(engine, entry)
 
         # Must succeed — OWLBEAR_MEMORY_CALLER does not gate tool execution
         result = await curate_memory(ctx, entry_id=entry.id, title="Updated")

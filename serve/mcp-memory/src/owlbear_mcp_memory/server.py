@@ -10,10 +10,9 @@ from typing import TYPE_CHECKING, Annotated, Any
 
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.types import ToolAnnotations
+from owlbear_memory import MemoryCategory, MemoryEngine, MemoryState
 from pydantic import Field
 
-from owlbear_mcp_memory.engine import MemoryEngine
-from owlbear_mcp_memory.models import MemoryCategory, MemoryState
 from owlbear_mcp_memory.tools import (
     approve_memory as approve_memory_impl,
 )

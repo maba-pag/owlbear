@@ -21,12 +21,12 @@ Interface strategy:
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
+from uuid import UUID
 
 import pytest
 
-from owlbear_mcp_memory.engine import MemoryEngine
-from owlbear_mcp_memory.models import MemoryEntry
+from owlbear_memory import MemoryEngine, MemoryEntry
 
 
 async def _recall(*args: object, **kwargs: object) -> str:
@@ -78,6 +78,61 @@ def _make_ctx(engine: MemoryEngine) -> MagicMock:
     return ctx
 
 
+def _seed_entry(engine: MemoryEngine, entry: MemoryEntry) -> MemoryEntry:
+    """Seed an entry through public MemoryEngine APIs with deterministic UUID."""
+    with patch("owlbear_memory.engine.uuid4", return_value=UUID(entry.id)):
+        seeded = engine.save(
+            title=entry.title,
+            content=entry.content,
+            categories=entry.categories,
+            confidence=entry.confidence,
+            source_agent=entry.source_agent,
+            scope_agents=entry.scope_agents,
+        )
+
+    seeded_result = seeded
+    if entry.state == "pending":
+        return seeded_result
+
+    promoted_scope = entry.scope_agents or [entry.source_agent]
+    curated = engine.edit(
+        seeded.id,
+        {
+            "title": entry.title,
+            "content": entry.content,
+            "categories": entry.categories,
+            "confidence": entry.confidence,
+            "scope_agents": promoted_scope,
+        },
+        expected_updated_at=seeded.updated_at,
+    )
+    seeded_result = curated
+
+    if entry.state == "curated" and not entry.scope_agents:
+        seeded_result = engine.edit(
+            curated.id,
+            {"scope_agents": []},
+            expected_updated_at=curated.updated_at,
+        )
+    elif entry.state == "approved":
+        approved = engine.approve(curated.id, expected_updated_at=curated.updated_at)
+        seeded_result = approved
+        if not entry.scope_agents:
+            unscoped_curated = engine.edit(
+                approved.id,
+                {"scope_agents": []},
+                expected_updated_at=approved.updated_at,
+            )
+            seeded_result = engine.approve(
+                unscoped_curated.id,
+                expected_updated_at=unscoped_curated.updated_at,
+            )
+    elif entry.state == "deleted":
+        seeded_result = engine.delete(curated.id, expected_updated_at=curated.updated_at)
+
+    return seeded_result
+
+
 # ---------------------------------------------------------------------------
 # AC1 (td:2): recall returns entries where agent name is in scope_agents
 # ---------------------------------------------------------------------------
@@ -91,7 +146,7 @@ class TestFromAC_ScopeAgentMatch:
         """Entry with scope_agents=["builder"] is returned when agent="builder"."""
         entry = _make_entry(id=_uuid(1), state="curated", scope_agents=["builder"])
         engine = MemoryEngine(memory_dir=tmp_path)
-        engine.write(entry)
+        _seed_entry(engine, entry)
         ctx = _make_ctx(engine)
 
         result = await _recall(ctx, agent="builder")
@@ -103,7 +158,7 @@ class TestFromAC_ScopeAgentMatch:
         """Entry scoped to "reviewer" is not returned when agent="builder"."""
         entry = _make_entry(id=_uuid(1), state="curated", scope_agents=["reviewer"])
         engine = MemoryEngine(memory_dir=tmp_path)
-        engine.write(entry)
+        _seed_entry(engine, entry)
         ctx = _make_ctx(engine)
 
         result = await _recall(ctx, agent="builder")
@@ -115,7 +170,7 @@ class TestFromAC_ScopeAgentMatch:
         """Entry with scope_agents=["builder", "reviewer"] is returned for agent="builder"."""
         entry = _make_entry(id=_uuid(1), state="curated", scope_agents=["builder", "reviewer"])
         engine = MemoryEngine(memory_dir=tmp_path)
-        engine.write(entry)
+        _seed_entry(engine, entry)
         ctx = _make_ctx(engine)
 
         result = await _recall(ctx, agent="builder")
@@ -136,7 +191,7 @@ class TestFromAC_UniversalScope:
         """Entry with scope_agents=["*"] is visible to any named agent."""
         entry = _make_entry(id=_uuid(1), state="curated", scope_agents=["*"])
         engine = MemoryEngine(memory_dir=tmp_path)
-        engine.write(entry)
+        _seed_entry(engine, entry)
         ctx = _make_ctx(engine)
 
         result = await _recall(ctx, agent="builder")
@@ -148,7 +203,7 @@ class TestFromAC_UniversalScope:
         """Entry with scope_agents=["*"] is also visible to a different named agent."""
         entry = _make_entry(id=_uuid(1), state="curated", scope_agents=["*"])
         engine = MemoryEngine(memory_dir=tmp_path)
-        engine.write(entry)
+        _seed_entry(engine, entry)
         ctx = _make_ctx(engine)
 
         result = await _recall(ctx, agent="doc-writer")
@@ -165,7 +220,7 @@ class TestFromAC_UniversalScope:
             approved_at=_TS,
         )
         engine = MemoryEngine(memory_dir=tmp_path)
-        engine.write(entry)
+        _seed_entry(engine, entry)
         ctx = _make_ctx(engine)
 
         result = await _recall(ctx, agent="architect")
@@ -186,7 +241,7 @@ class TestFromAC_UnscopedExclusion:
         """Entry with scope_agents=[] is excluded regardless of requesting agent."""
         entry = _make_entry(id=_uuid(1), state="curated", scope_agents=[])
         engine = MemoryEngine(memory_dir=tmp_path)
-        engine.write(entry)
+        _seed_entry(engine, entry)
         ctx = _make_ctx(engine)
 
         result = await _recall(ctx, agent="builder")
@@ -203,7 +258,7 @@ class TestFromAC_UnscopedExclusion:
             approved_at=_TS,
         )
         engine = MemoryEngine(memory_dir=tmp_path)
-        engine.write(entry)
+        _seed_entry(engine, entry)
         ctx = _make_ctx(engine)
 
         result = await _recall(ctx, agent="builder")
@@ -216,8 +271,8 @@ class TestFromAC_UnscopedExclusion:
         unscoped = _make_entry(id=_uuid(1), title="Unscoped entry", state="curated", scope_agents=[])
         scoped = _make_entry(id=_uuid(2), title="Scoped entry", state="curated", scope_agents=["builder"])
         engine = MemoryEngine(memory_dir=tmp_path)
-        engine.write(unscoped)
-        engine.write(scoped)
+        _seed_entry(engine, unscoped)
+        _seed_entry(engine, scoped)
         ctx = _make_ctx(engine)
 
         result = await _recall(ctx, agent="builder")
@@ -259,7 +314,7 @@ class TestFromAC_BodyOnlyFormat:
         """recall_memory returns a str, not a list or dict."""
         entry = _make_entry(id=_uuid(1), state="curated", scope_agents=["builder"])
         engine = MemoryEngine(memory_dir=tmp_path)
-        engine.write(entry)
+        _seed_entry(engine, entry)
         ctx = _make_ctx(engine)
 
         result = await _recall(ctx, agent="builder")
@@ -276,7 +331,7 @@ class TestFromAC_BodyOnlyFormat:
             scope_agents=["builder"],
         )
         engine = MemoryEngine(memory_dir=tmp_path)
-        engine.write(entry)
+        _seed_entry(engine, entry)
         ctx = _make_ctx(engine)
 
         result = await _recall(ctx, agent="builder")
@@ -294,7 +349,7 @@ class TestFromAC_BodyOnlyFormat:
             scope_agents=["builder"],
         )
         engine = MemoryEngine(memory_dir=tmp_path)
-        engine.write(entry)
+        _seed_entry(engine, entry)
         ctx = _make_ctx(engine)
 
         result = await _recall(ctx, agent="builder")
@@ -316,7 +371,7 @@ class TestFromAC_BodyOnlyFormat:
             confidence=0.95,
         )
         engine = MemoryEngine(memory_dir=tmp_path)
-        engine.write(entry)
+        _seed_entry(engine, entry)
         ctx = _make_ctx(engine)
 
         result = await _recall(ctx, agent="builder")
@@ -332,8 +387,8 @@ class TestFromAC_BodyOnlyFormat:
         e1 = _make_entry(id=_uuid(1), title="First Entry", state="curated", scope_agents=["builder"])
         e2 = _make_entry(id=_uuid(2), title="Second Entry", state="curated", scope_agents=["builder"])
         engine = MemoryEngine(memory_dir=tmp_path)
-        engine.write(e1)
-        engine.write(e2)
+        _seed_entry(engine, e1)
+        _seed_entry(engine, e2)
         ctx = _make_ctx(engine)
 
         result = await _recall(ctx, agent="builder")
@@ -359,7 +414,7 @@ class TestFromAC_BodyOnlyFormat:
             approved_at=None,
         )
         engine = MemoryEngine(memory_dir=tmp_path)
-        engine.write(entry)
+        _seed_entry(engine, entry)
         ctx = _make_ctx(engine)
 
         result = await _recall(ctx, agent="recall-scope-tester")
@@ -406,8 +461,8 @@ class TestFromAC_BodyOnlyFormat:
             scope_agents=["builder"],
         )
         engine = MemoryEngine(memory_dir=tmp_path)
-        engine.write(e1)
-        engine.write(e2)
+        _seed_entry(engine, e1)
+        _seed_entry(engine, e2)
         ctx = _make_ctx(engine)
 
         result = await _recall(ctx, agent="builder")
@@ -443,8 +498,8 @@ class TestFromAC_PriorityOrdering:
         )
         engine = MemoryEngine(memory_dir=tmp_path)
         # Write curated first to test that order is not by insertion
-        engine.write(curated)
-        engine.write(approved)
+        _seed_entry(engine, curated)
+        _seed_entry(engine, approved)
         ctx = _make_ctx(engine)
 
         result = await _recall(ctx, agent="builder")
@@ -477,9 +532,9 @@ class TestFromAC_PriorityOrdering:
             approved_at=_TS,
         )
         engine = MemoryEngine(memory_dir=tmp_path)
-        engine.write(c1)
-        engine.write(a1)
-        engine.write(a2)
+        _seed_entry(engine, c1)
+        _seed_entry(engine, a1)
+        _seed_entry(engine, a2)
         ctx = _make_ctx(engine)
 
         result = await _recall(ctx, agent="builder")
@@ -500,7 +555,7 @@ class TestFromAC_PriorityOrdering:
             scope_agents=["builder"],
         )
         engine = MemoryEngine(memory_dir=tmp_path)
-        engine.write(pending)
+        _seed_entry(engine, pending)
         ctx = _make_ctx(engine)
 
         result = await _recall(ctx, agent="builder")
@@ -517,7 +572,7 @@ class TestFromAC_PriorityOrdering:
             scope_agents=["builder"],
         )
         engine = MemoryEngine(memory_dir=tmp_path)
-        engine.write(deleted)
+        _seed_entry(engine, deleted)
         ctx = _make_ctx(engine)
 
         result = await _recall(ctx, agent="builder")
@@ -551,23 +606,25 @@ class TestFromAC_PriorityOrdering:
 
         engine = MemoryEngine(memory_dir=tmp_path)
         for i, title in enumerate(curated_titles, start=10):
-            engine.write(
+            _seed_entry(
+                engine,
                 _make_entry(
                     id=_uuid(i),
                     title=title,
                     state="curated",
                     scope_agents=["builder"],
-                )
+                ),
             )
         for i, title in enumerate(approved_titles, start=20):
-            engine.write(
+            _seed_entry(
+                engine,
                 _make_entry(
                     id=_uuid(i),
                     title=title,
                     state="approved",
                     scope_agents=["builder"],
                     approved_at=_TS,
-                )
+                ),
             )
         ctx = _make_ctx(engine)
 
@@ -597,13 +654,14 @@ class TestFromAC_LimitParameter:
         """With limit=2 and 5 matching entries, only 2 appear in the result."""
         engine = MemoryEngine(memory_dir=tmp_path)
         for i in range(1, 6):
-            engine.write(
+            _seed_entry(
+                engine,
                 _make_entry(
                     id=_uuid(i),
                     title=f"Entry {i}",
                     state="curated",
                     scope_agents=["builder"],
-                )
+                ),
             )
         ctx = _make_ctx(engine)
 
@@ -618,13 +676,14 @@ class TestFromAC_LimitParameter:
         """Without explicit limit, at most 20 entries are returned by default."""
         engine = MemoryEngine(memory_dir=tmp_path)
         for i in range(1, 26):  # 25 entries
-            engine.write(
+            _seed_entry(
+                engine,
                 _make_entry(
                     id=_uuid(i),
                     title=f"Entry {i:02d}",
                     state="curated",
                     scope_agents=["builder"],
-                )
+                ),
             )
         ctx = _make_ctx(engine)
 
@@ -639,13 +698,14 @@ class TestFromAC_LimitParameter:
         must fail (AC7-fix: exact equality check, not <= 20)."""
         engine = MemoryEngine(memory_dir=tmp_path)
         for i in range(1, 26):  # 25 entries
-            engine.write(
+            _seed_entry(
+                engine,
                 _make_entry(
                     id=_uuid(i),
                     title=f"Exact Limit Entry {i:02d}",
                     state="curated",
                     scope_agents=["builder"],
-                )
+                ),
             )
         ctx = _make_ctx(engine)
 

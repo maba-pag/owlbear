@@ -2,19 +2,22 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
-from uuid import uuid4
 
 from mcp.server.fastmcp.exceptions import ToolError
+from owlbear_memory import (
+    ConcurrencyError,
+    MemoryCategory,
+    MemoryEngine,
+    MemoryEntry,
+    MemoryState,
+    NotFoundError,
+    TransitionError,
+)
 from pydantic import ValidationError
-
-from owlbear_mcp_memory.models import MemoryCategory, MemoryEntry, MemoryState
 
 if TYPE_CHECKING:
     from mcp.server.fastmcp import Context
-
-    from owlbear_mcp_memory.engine import MemoryEngine
 
 __all__ = [
     "approve_memory",
@@ -33,10 +36,6 @@ def _engine_from_ctx(ctx: Context) -> MemoryEngine:
     except AttributeError as exc:
         msg = "memory engine is not available in MCP context"
         raise ToolError(msg) from exc
-
-
-def _now_iso() -> str:
-    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
 def _allowed_category_values() -> str:
@@ -101,7 +100,7 @@ def _entry_to_dict(entry: MemoryEntry) -> dict[str, object]:
 def _load_entry_or_raise(engine: MemoryEngine, entry_id: str) -> MemoryEntry:
     try:
         return engine.get_entry(entry_id)
-    except KeyError as exc:
+    except NotFoundError as exc:
         msg = f"entry not found: {entry_id}"
         raise ToolError(msg) from exc
 
@@ -143,21 +142,6 @@ def _with_hint(data: dict[str, Any], hint: str) -> dict[str, Any]:
     return {**data, "hint": hint}
 
 
-def _ensure_update_transition(current: MemoryState, target: MemoryState) -> None:
-    if current == target:
-        return
-    allowed: dict[MemoryState, set[MemoryState]] = {
-        MemoryState.PENDING: {MemoryState.CURATED},
-        MemoryState.CURATED: set(),
-        MemoryState.APPROVED: {MemoryState.CURATED},
-        MemoryState.DELETED: set(),
-    }
-    if target in allowed[current]:
-        return
-    msg = f"invalid state transition for curate_memory: {current} -> {target}"
-    raise ToolError(msg)
-
-
 async def save_memory(  # noqa: PLR0913
     ctx: Context,
     *,
@@ -170,26 +154,19 @@ async def save_memory(  # noqa: PLR0913
 ) -> dict[str, Any]:
     """Create a pending memory entry with explicit source_agent."""
     engine = _engine_from_ctx(ctx)
-    now = _now_iso()
     coerced_categories = _coerce_categories(categories)
     initial_scope = scope_agents if scope_agents is not None else [source_agent]
     try:
-        entry = MemoryEntry(
-            id=str(uuid4()),
+        entry = engine.save(
             title=title,
+            content=content,
             categories=coerced_categories,
             confidence=confidence,
-            state=MemoryState.PENDING,
-            content=content,
             scope_agents=initial_scope,
             source_agent=source_agent,
-            created_at=now,
-            updated_at=now,
-            approved_at=None,
         )
     except ValidationError as exc:
         raise ToolError(_teaching_validation_message(exc)) from exc
-    engine.write(entry)
     hint = f"Saved as pending. Scoped to {initial_scope}. Curate to promote to curated and adjust scope if needed."
     return _with_hint(_entry_to_dict(entry), hint)
 
@@ -287,7 +264,7 @@ async def recall_memory(
     return "\n\n".join(f"## {entry.title}\n{entry.content}" for entry in entries)
 
 
-async def _update_entry(  # noqa: PLR0913
+async def _update_entry(  # noqa: C901, PLR0913
     ctx: Context,
     *,
     current: MemoryEntry,
@@ -317,31 +294,28 @@ async def _update_entry(  # noqa: PLR0913
         msg = "scope_agents cannot be blanked on curated or approved entries"
         raise ToolError(msg)
 
-    if current.state == MemoryState.APPROVED or (current.state == MemoryState.PENDING and bool(next_scope_agents)):
-        target_state = MemoryState.CURATED
-    else:
-        target_state = current.state
+    payload: dict[str, Any] = {}
+    if title is not None:
+        payload["title"] = title
+    if content is not None:
+        payload["content"] = content
+    if categories is not None:
+        payload["categories"] = coerced_categories
+    if confidence is not None:
+        payload["confidence"] = confidence
+    if scope_agents is not None:
+        payload["scope_agents"] = scope_agents
 
-    _ensure_update_transition(current.state, target_state)
-
-    payload = {
-        "id": current.id,
-        "title": current.title if title is None else title,
-        "content": current.content if content is None else content,
-        "categories": current.categories if categories is None else coerced_categories,
-        "confidence": current.confidence if confidence is None else confidence,
-        "state": target_state,
-        "scope_agents": next_scope_agents,
-        "source_agent": current.source_agent,
-        "created_at": current.created_at,
-        "updated_at": _now_iso(),
-        "approved_at": None if current.state == MemoryState.APPROVED else current.approved_at,
-    }
     try:
-        updated = MemoryEntry.model_validate(payload)
+        updated = engine.edit(
+            current.id,
+            payload,
+            expected_updated_at=current.updated_at,
+        )
+    except (TransitionError, NotFoundError, ConcurrencyError) as exc:
+        raise ToolError(str(exc)) from exc
     except ValidationError as exc:
         raise ToolError(_teaching_validation_message(exc)) from exc
-    engine.write(updated)
     return _entry_to_dict(updated)
 
 
@@ -358,26 +332,19 @@ async def _delete_entry(ctx: Context, *, entry_id: str) -> dict[str, Any]:
         msg = "delete_memory cannot delete an entry that is already deleted"
         raise ToolError(msg)
 
+    try:
+        deleted = engine.delete(current.id, expected_updated_at=current.updated_at)
+    except (TransitionError, NotFoundError, ConcurrencyError) as exc:
+        raise ToolError(str(exc)) from exc
+
     if current.state == MemoryState.PENDING:
-        engine.delete(current.id)
         deleted = current.model_copy(
             update={
                 "state": MemoryState.DELETED,
-                "updated_at": _now_iso(),
-                "approved_at": None,
             }
         )
-        return _entry_to_dict(deleted)
 
-    updated = current.model_copy(
-        update={
-            "state": MemoryState.DELETED,
-            "updated_at": _now_iso(),
-            "approved_at": None,
-        }
-    )
-    engine.write(updated)
-    return _entry_to_dict(updated)
+    return _entry_to_dict(deleted)
 
 
 async def curate_memory(  # noqa: PLR0913
@@ -428,18 +395,11 @@ async def _approve_entry(ctx: Context, *, entry_id: str) -> dict[str, Any]:
     engine = _engine_from_ctx(ctx)
     current = _load_entry_or_raise(engine, entry_id)
 
-    if current.state != MemoryState.CURATED:
-        msg = f"approve_memory requires curated state, got {current.state}"
-        raise ToolError(msg)
+    try:
+        updated = engine.approve(current.id, expected_updated_at=current.updated_at)
+    except (TransitionError, NotFoundError, ConcurrencyError) as exc:
+        raise ToolError(str(exc)) from exc
 
-    updated = current.model_copy(
-        update={
-            "state": MemoryState.APPROVED,
-            "updated_at": _now_iso(),
-            "approved_at": _now_iso(),
-        }
-    )
-    engine.write(updated)
     return _entry_to_dict(updated)
 
 
