@@ -4,7 +4,7 @@ title: 'P3-01: Memory list view with state/category/agent filters and text searc
 status: backlog
 priority: needed
 created: 2026-05-18T17:43:52.849841+02:00
-updated: 2026-05-19T12:56:43.666066+02:00
+updated: 2026-05-19T17:22:03.947698+02:00
 tags:
   - phase-3
   - scope:cockpit-web
@@ -41,7 +41,7 @@ ac:
 proof_bundle: behavioral
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-19T17:22:03.947698+02:00
 archival_reason:
 archival_refs: []
 ---

@@ -1,10 +1,10 @@
 ---
 id: 1643
 title: 'P1-03: Route-conditional sidecar — suppress sidecar DOM on non-kanban routes'
-status: review
+status: backlog
 priority: needed
 created: 2026-05-18T00:49:27.343819+02:00
-updated: 2026-05-19T12:44:41.803302+02:00
+updated: 2026-05-19T17:22:01.804919+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -28,7 +28,7 @@ ac:
 proof_bundle: behavioral
 blocked: false
 block_reason:
-claimed_at: 2026-05-19T12:44:41.803302+02:00
+claimed_at: 2026-05-19T17:22:01.804919+02:00
 archival_reason:
 archival_refs: []
 ---
@@ -234,3 +234,34 @@ builder crashed (saw parallel #1671 commit during execution); releasing for retr
   - 1643 behavioral tests pass including DOM suppression, return-navigation restore, collapsed-state persistence, and CSS no-sidecar contract.
   - 1644 lazy-loading tests pass including `react.lazy` signature assertion and multi-chunk build artifact assertion.
   - No blocking defects observed in current state; routing to review for independent confirmation.
+
+[[2026-05-19T13:01:30+02:00]]
+## Review Evidence
+- Verdict: FAIL
+- FAIL #1643 -> backlog | 1643 AC1-AC3 map cleanly, but current `routes.ts` preloads `/decisions` before React invokes the lazy loader, which breaks archived 1644 AC1 and is not caught by the current adjacent proof.
+- Builder evidence reviewed first: the scoped 1643 and adjacent 1644 tests reported green, lint was clean, and current editor diagnostics are clean. The blocking issue comes from direct source inspection against the archived 1644 contract, not from contradictory builder evidence.
+
+| AC Line | Code Evidence | Test Evidence | Status |
+|---|---|---|---|
+| AC1 | `serve/cockpit/web/src/routes.ts:24-28`; `serve/cockpit/web/src/Shell.tsx:276-279`; `serve/cockpit/web/src/Shell.tsx:501-504` | `serve/cockpit/web/src/__tests__/Shell.sidecar-conditional_1643.test.tsx:93-95`; `serve/cockpit/web/src/__tests__/Shell.test.tsx:110-115` | PASS |
+| AC2 | `serve/cockpit/web/src/Shell.tsx:137`; `serve/cockpit/web/src/Shell.tsx:501-515` | `serve/cockpit/web/src/__tests__/Shell.sidecar-conditional_1643.test.tsx:100-132` | PASS |
+| AC3 | `serve/cockpit/web/src/Shell.tsx:343`; `serve/cockpit/web/src/Shell.css:462-479` | `serve/cockpit/web/src/__tests__/Shell.sidecar-conditional_1643.test.tsx:137-161` | PASS |
+
+- Blocking findings:
+
+| # | AC Line | Finding | Evidence | Route |
+|---|---|---|---|---|
+| 1 | Adjacent contract: 1644 AC1 | Current `routes.ts` no longer satisfies the archived lazy-loading contract. It starts `import('./pages/DecisionsPage')` at module evaluation (`const decisionsPageModule = import(...)`) and only then passes that already-created promise into `React.lazy`, so `/decisions` is preloaded as soon as `routes.ts` loads. Archived 1644 AC1 and its implementation note require `React.lazy(() => import(...))`, which keeps the import inside the lazy callback. | `serve/cockpit/web/src/routes.ts:4-7`; `.owlbear/kanban/archive/1644-p1-04-lazy-loading-react-lazy-with-suspense-boundary-for-tab-components.md:14-17`; `.owlbear/kanban/archive/1644-p1-04-lazy-loading-react-lazy-with-suspense-boundary-for-tab-components.md:49-54` | backlog |
+| 2 | Adjacent proof sufficiency | The current adjacent proof would false-green this regression. `routes.lazy-loading_1644.test.tsx` proves only `$$typeof === react.lazy` and chunk splitting, which still pass with an eager-start import promise. `Shell.suspense-boundary_1644.test.tsx` proves only that a mocked suspending route renders the fallback, not that the real `/decisions` route stays truly lazy or that 1643 sidecar behavior holds while that real import is unresolved. | `serve/cockpit/web/src/__tests__/routes.lazy-loading_1644.test.tsx:22-44`; `serve/cockpit/web/src/__tests__/Shell.suspense-boundary_1644.test.tsx:20-31`; `serve/cockpit/web/src/__tests__/Shell.suspense-boundary_1644.test.tsx:77-85`; `serve/cockpit/web/src/__tests__/Shell.sidecar-conditional_1643.test.tsx:100-132` | backlog |
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Re-scope the 1643/1644 interaction so `/decisions` preserves both contracts: canonical `React.lazy(() => import('./pages/DecisionsPage'))` semantics and immediate sidecar suppression. If one task cannot satisfy both cleanly, split the work into explicit implementation steps. | `serve/cockpit/web/src/routes.ts`; `serve/cockpit/web/src/Shell.tsx`; `.owlbear/kanban/archive/1644-p1-04-lazy-loading-react-lazy-with-suspense-boundary-for-tab-components.md` | Blocking finding #1 |
+| 2 | architect | Strengthen the proof surface so it fails on eager-start preload regressions and proves the real `/decisions` route behavior under an unresolved lazy import, not only a mocked suspending component. | `serve/cockpit/web/src/__tests__/routes.lazy-loading_1644.test.tsx`; `serve/cockpit/web/src/__tests__/Shell.suspense-boundary_1644.test.tsx`; `serve/cockpit/web/src/__tests__/Shell.sidecar-conditional_1643.test.tsx` | Blocking finding #2 |
+
+## Observations
+- This is the third review cycle for 1643; the loop-breaker applies. Prior reviewer failures are already recorded at `.owlbear/kanban/tasks/1643-p1-03-route-conditional-sidecar-suppress-sidecar-dom-on-non-kanban-routes.md:132` and `.owlbear/kanban/tasks/1643-p1-03-route-conditional-sidecar-suppress-sidecar-dom-on-non-kanban-routes.md:189`.
+- Adversarial cross-checks agreed with the block: code-reader found 1643 AC1-AC3 implemented and tested correctly but identified the 1644 lazy-loading regression and proof gap; challenger rejected a provisional PASS on the same basis.
+- Non-blocking: there is still no task-local proof for an explicit `hasSidecar: true` route entry. Current config uses `false`, `undefined`, and unknown-path fallback only, so this remains lower risk than the lazy-loading defect.
+- `get_errors` reports no editor diagnostics in `serve/cockpit/web/src/routes.ts`, `serve/cockpit/web/src/Shell.tsx`, `serve/cockpit/web/src/__tests__/Shell.sidecar-conditional_1643.test.tsx`, or `serve/cockpit/web/src/__tests__/routes.lazy-loading_1644.test.tsx`.

@@ -4,7 +4,7 @@ title: 'P1-02: Nav-rail tab navigation — dynamic buttons from route config'
 status: backlog
 priority: needed
 created: 2026-05-18T00:49:27.319192+02:00
-updated: 2026-05-19T12:59:24.929764+02:00
+updated: 2026-05-19T17:22:03.206961+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -22,7 +22,7 @@ ac:
 proof_bundle: smoke+challenge
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-19T17:22:03.206961+02:00
 archival_reason:
 archival_refs: []
 ---
