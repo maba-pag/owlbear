@@ -207,16 +207,17 @@ class TestFromAC_IdeasPathDep:
 
         assert callable(get_ideas_path)
 
-    def test_get_ideas_path_returns_path_instance(self) -> None:
-        """AC3: get_ideas_path returns a Path object."""
+    def test_get_ideas_path_returns_path_instance(self, tmp_path: Path) -> None:
+        """AC3: default get_ideas_path implementation returns a Path when called with an engine."""
+        from unittest.mock import MagicMock  # noqa: PLC0415
+
         from owlbear_cockpit.deps import get_ideas_path  # noqa: PLC0415
 
-        # Verify the callable is present and produces a Path when the engine dep
-        # resolves — the overridability test below is the authoritative contract.
-        # Calling __wrapped__ covers decorated dep callables; None is expected
-        # when the dep requires engine state injected by FastAPI.
-        result = get_ideas_path.__wrapped__() if hasattr(get_ideas_path, "__wrapped__") else None  # type: ignore[attr-defined]
-        assert result is None or isinstance(result, Path)
+        mock_engine = MagicMock()
+        mock_engine.kanban_dir = str(tmp_path / "kanban")
+
+        result = get_ideas_path(engine=mock_engine)
+        assert isinstance(result, Path)
 
     def test_dependency_overridable_for_test_isolation(self, tmp_path: Path) -> None:
         """AC3: get_ideas_path is overridable via app.dependency_overrides."""
