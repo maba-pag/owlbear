@@ -5,27 +5,33 @@
  *      when `document.visibilityState` becomes 'visible'; on route activation
  *      (component mount after navigation), the existing initial fetch satisfies the
  *      re-fetch requirement.
- * AC2: When IdeasPage content is clean (textarea value equals last-saved baseline) at
- *      visibilitychange re-fetch time, fetched content silently replaces both textarea
- *      value and last-saved baseline without showing a loading indicator.
- * AC3: When IdeasPage content is dirty at visibilitychange re-fetch time and fetched
- *      content differs from the last-saved baseline, a conflict notice appears with
- *      Overwrite and Discard & Reload buttons.
- * AC4: While the IdeasPage conflict notice is showing, both the Save button and
+ * AC2: When IdeasPage content is clean (textarea value equals last-saved baseline)
+ *      both at visibilitychange trigger and when the GET response resolves, fetched
+ *      content silently replaces both textarea value and last-saved baseline without
+ *      showing a loading indicator.
+ * AC3 (NEW): If IdeasPage content was clean at visibilitychange trigger but becomes
+ *      dirty before the GET response resolves, the refetch result is discarded:
+ *      textarea value, last-saved baseline, dirty indicator, and save-button
+ *      enablement remain unchanged.
+ * AC4: When IdeasPage content is dirty at visibilitychange trigger time and fetched
+ *      content differs from the trigger-time last-saved baseline, a conflict notice
+ *      appears with Overwrite and Discard & Reload buttons.
+ * AC5: While the IdeasPage conflict notice is showing, both the Save button and
  *      Cmd/Ctrl+S keyboard shortcut are blocked (no PUT `/api/ideas` issued).
- * AC5: IdeasPage Overwrite button dismisses the conflict notice, updates last-saved
+ * AC6: IdeasPage Overwrite button dismisses the conflict notice, updates last-saved
  *      baseline to fetched content, and re-enables Save (textarea content unchanged;
  *      dirty indicator remains visible).
- * AC6: IdeasPage Discard & Reload button dismisses the conflict notice, sets textarea
+ * AC7: IdeasPage Discard & Reload button dismisses the conflict notice, sets textarea
  *      value and last-saved baseline to fetched content (dirty indicator hidden, Save
  *      disabled).
- * AC7: If the IdeasPage visibilitychange re-fetch fails (non-2xx or network error),
+ * AC8: If the IdeasPage visibilitychange re-fetch fails (non-2xx or network error),
  *      IdeasPage continues with existing textarea content and state without showing
  *      an error or conflict notice.
  *
- * RED phase: visibilitychange listener, silent update on clean re-fetch, conflict
- * notice, Overwrite/Discard buttons are not yet implemented in IdeasPage.tsx →
- * all tests in this file fail.
+ * RED phase (original): visibilitychange listener, silent update on clean re-fetch,
+ * conflict notice, Overwrite/Discard buttons — now implemented.
+ * RED phase (retry AC3): clean-start pending-refetch interleave — not yet implemented;
+ * new TestFromAC_IdeasPageCleanInterleavedRefetch tests FAIL.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, fireEvent, act } from '@testing-library/react'
@@ -102,6 +108,57 @@ async function renderLoaded(initialContent: string): Promise<HTMLElement> {
   })
   await flush()
   return container
+}
+
+/**
+ * Render loaded, then start a pending visibilitychange refetch whose GET response
+ * is held until the caller invokes `resolveRefetch()`. Allows typing into the
+ * textarea between trigger and resolution to test pending-refetch interleavings.
+ */
+async function startPendingRefetch(
+  initialContent: string,
+  fetchedContent: string,
+): Promise<{
+  container: HTMLElement
+  textarea: HTMLTextAreaElement | null
+  resolveRefetch: () => Promise<void>
+  refetchMock: ReturnType<typeof vi.fn>
+}> {
+  const container = await renderLoaded(initialContent)
+
+  let doResolve!: () => void
+  const refetchPromise = new Promise<void>(resolve => {
+    doResolve = resolve
+  })
+
+  const refetchMock = vi.fn(() =>
+    refetchPromise.then(() => ({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ content: fetchedContent }),
+    }))
+  )
+  vi.stubGlobal('fetch', refetchMock)
+
+  setVisibilityState('visible')
+  await act(async () => {
+    document.dispatchEvent(new Event('visibilitychange'))
+  })
+
+  const resolveRefetch = async () => {
+    await act(async () => {
+      doResolve()
+      await Promise.resolve()
+    })
+    await flush()
+  }
+
+  return {
+    container,
+    textarea: container.querySelector('textarea'),
+    resolveRefetch,
+    refetchMock,
+  }
 }
 
 /**
@@ -563,5 +620,97 @@ describe('TestFromAC_IdeasPageRefetchFailure', () => {
     expect(errorFetch).toHaveBeenCalled()
     const textarea = container.querySelector('textarea')
     expect(textarea?.value).toBe('my existing ideas')
+  })
+})
+
+// ─── AC3 (new): Clean-start pending-refetch interleave — discard on dirty ────
+//
+// AC3: If content was clean at trigger but becomes dirty before GET resolves,
+// the refetch result is discarded — textarea, baseline, dirty indicator, and
+// save-button enablement all remain unchanged.
+//
+// Current bug: wasDirtyAtTrigger=false → clean branch applies fetched content
+// unconditionally after await, overwriting edits typed mid-flight.
+// These tests FAIL against the current implementation.
+
+describe('TestFromAC_IdeasPageCleanInterleavedRefetch', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    setVisibilityState('visible')
+  })
+
+  it('ac3 happy: textarea preserves user edits typed before clean-start GET resolves', async () => {
+    const { container, textarea, resolveRefetch, refetchMock } =
+      await startPendingRefetch('original', 'server update')
+
+    // Listener must be registered — GET must be in-flight (fails in RED if missing)
+    expect(refetchMock).toHaveBeenCalled()
+
+    // User types before GET resolves — page becomes dirty
+    if (textarea) {
+      fireEvent.change(textarea, { target: { value: 'user typed this' } })
+    }
+
+    // GET resolves; refetch result must be discarded
+    await resolveRefetch()
+
+    // Textarea must still show user's edits, not the fetched server content
+    expect(container.querySelector('textarea')?.value).toBe('user typed this')
+  })
+
+  it('ac3 happy: last-saved baseline unchanged when refetch discarded after mid-flight edit', async () => {
+    // Proof: after discard, typing the original baseline content back makes the
+    // page clean (save disabled). If baseline was wrongly updated to fetched
+    // content, typing the original would still be dirty → save enabled → FAIL.
+    const { container, textarea, resolveRefetch, refetchMock } =
+      await startPendingRefetch('original', 'server update')
+
+    expect(refetchMock).toHaveBeenCalled()
+
+    if (textarea) {
+      fireEvent.change(textarea, { target: { value: 'user typed this' } })
+    }
+
+    await resolveRefetch()
+
+    // Type original baseline value back; if baseline = 'original' → clean → save disabled
+    if (textarea) {
+      fireEvent.change(textarea, { target: { value: 'original' } })
+    }
+    const saveBtn = container.querySelector<HTMLButtonElement>('[data-testid="ideas-save"]')
+    expect(saveBtn?.disabled).toBe(true)
+  })
+
+  it('ac3 happy: dirty indicator remains visible after refetch discarded (user edits preserved)', async () => {
+    const { container, textarea, resolveRefetch, refetchMock } =
+      await startPendingRefetch('original', 'server update')
+
+    expect(refetchMock).toHaveBeenCalled()
+
+    if (textarea) {
+      fireEvent.change(textarea, { target: { value: 'user typed this' } })
+    }
+
+    await resolveRefetch()
+
+    // Page must still be dirty — user's unsaved edits must not be silently cleared
+    expect(container.querySelector('[data-testid="ideas-dirty"]')).not.toBeNull()
+  })
+
+  it('ac3 happy: save button remains enabled after refetch discarded (user still has dirty edits)', async () => {
+    const { container, textarea, resolveRefetch, refetchMock } =
+      await startPendingRefetch('original', 'server update')
+
+    expect(refetchMock).toHaveBeenCalled()
+
+    if (textarea) {
+      fireEvent.change(textarea, { target: { value: 'user typed this' } })
+    }
+
+    await resolveRefetch()
+
+    // Save must be re-enabled — user's edits are still pending
+    const saveBtn = container.querySelector<HTMLButtonElement>('[data-testid="ideas-save"]')
+    expect(saveBtn?.disabled).toBe(false)
   })
 })
