@@ -24,14 +24,9 @@
 
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, fireEvent, act } from '@testing-library/react'
-import { readFileSync } from 'node:fs'
-import { resolve, dirname } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { Suspense, type ComponentType } from 'react'
 import { routeConfig } from '../routes'
 import IdeasPage from '../pages/IdeasPage'
-
-const _dir = dirname(fileURLToPath(import.meta.url))
-const ROUTES_SOURCE = resolve(_dir, '../routes.ts')
 
 // ─── Fetch mock factories ──────────────────────────────────────────────────────
 
@@ -132,6 +127,10 @@ async function renderDirty(initialContent = 'initial', newContent = 'changed') {
 // ─── AC8: Route config entry ──────────────────────────────────────────────────
 
 describe('TestFromAC_IdeasPageRoute', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
   it('ac8 happy: routeConfig contains an entry with path "/ideas"', () => {
     const paths = routeConfig.map((e) => e.path)
     expect(paths).toContain('/ideas')
@@ -155,11 +154,23 @@ describe('TestFromAC_IdeasPageRoute', () => {
     )
   })
 
-  it('ac8 happy: /ideas route specifically lazy-loads IdeasPage (source assertion)', () => {
-    const source = readFileSync(ROUTES_SOURCE, 'utf-8')
-    expect(source).toMatch(
-      /lazy\(\s*\(\)\s*=>\s*import\(['"]\.\/pages\/IdeasPage['"]\)\s*\)/,
-    )
+  it('ac8 happy: /ideas route component renders IdeasPage-specific DOM when rendered (binding proof)', async () => {
+    // Prove the /ideas entry is wired to IdeasPage specifically:
+    // a different lazy component would not render data-testid="ideas-loading".
+    vi.stubGlobal('fetch', makeGetPendingFetch())
+    const entry = routeConfig.find((e) => e.path === '/ideas')
+    const RouteComponent = entry!.component as unknown as ComponentType<Record<string, never>>
+    let container!: HTMLElement
+    await act(async () => {
+      const result = render(
+        <Suspense fallback={<div>Suspense fallback</div>}>
+          <RouteComponent />
+        </Suspense>,
+      )
+      container = result.container
+    })
+    await flush()
+    expect(container.querySelector('[data-testid="ideas-loading"]')).not.toBeNull()
   })
 })
 
