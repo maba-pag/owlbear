@@ -67,3 +67,8 @@ def get_view(engine=Depends(get_engine)) -> CockpitView:  # noqa: ANN001, B008
 def get_decisions_dir(engine=Depends(get_engine)) -> Path:  # noqa: ANN001, B008
     """Return the decisions directory under the engine's public kanban_dir."""
     return Path(engine.kanban_dir) / "decisions"
+
+
+def get_ideas_path(engine=Depends(get_engine)) -> Path:  # noqa: ANN001, B008
+    """Return the shared ideas markdown path adjacent to the kanban directory."""
+    return Path(engine.kanban_dir).parent / "ideas.md"
