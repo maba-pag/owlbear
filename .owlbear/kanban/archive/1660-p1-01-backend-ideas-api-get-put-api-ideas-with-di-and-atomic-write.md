@@ -1,10 +1,10 @@
 ---
 id: 1660
 title: 'P1-01: Backend Ideas API — GET/PUT /api/ideas with DI and atomic_write'
-status: review
+status: archived
 priority: needed
 created: 2026-05-18T17:41:31.832363+02:00
-updated: 2026-05-20T13:11:01.433622+02:00
+updated: 2026-05-20T13:28:16.410011+02:00
 tags:
   - phase-1
   - scope:cockpit
@@ -23,8 +23,8 @@ ac:
 proof_bundle: behavioral
 blocked: false
 block_reason:
-claimed_at: 2026-05-20T13:11:01.433622+02:00
-archival_reason:
+claimed_at:
+archival_reason: completed
 archival_refs: []
 ---
 ## Context
@@ -186,3 +186,79 @@ AC coverage:
 - Quality-runner: 20 passed, 0 failed, ruff clean.
 - Commit: `8b03e1d8`
 - Builder skip: test-only retry, all 20 tests green against current implementation.
+
+[[2026-05-20T13:19:13+02:00]]
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation: PASS #1660 -> docs | AC mapped to code and evidence sufficient.
+- Builder evidence reviewed first and found internally consistent: builder reported quality-runner GREEN with 20 passed / 0 failed, ruff clean, and 100% coverage for `owlbear_cockpit.routes.ideas`; the test-writer retry replaced the prior vacuous AC3 proof and again reported 20 passed / 0 failed with ruff clean.
+
+| AC Line | Code Evidence | Test Evidence | Status |
+|---|---|---|---|
+| AC1: GET `/api/ideas` returns file contents when present and `{"content": ""}` when absent | `serve/cockpit/src/owlbear_cockpit/routes/ideas.py:34-40` reads the file, catches `FileNotFoundError`, and returns `IdeasResponse(content=content)` | `tests/test_cockpit_ideas_1660.py:85` proves existing-file content is returned; `tests/test_cockpit_ideas_1660.py:100` proves absent-file response is exactly `{"content": ""}` | PASS |
+| AC2: PUT `/api/ideas` accepts `{"content": "..."}`, writes via `atomic_write`, creates on first write, and returns 204 | `serve/cockpit/src/owlbear_cockpit/routes/ideas.py:25-28` uses strict request validation with `ConfigDict(extra="forbid")`; `serve/cockpit/src/owlbear_cockpit/routes/ideas.py:44-47` calls `atomic_write(ideas_path, req.content)` and returns 204 | `tests/test_cockpit_ideas_1660.py:157-158` proves first write creates the file and persists content; `tests/test_cockpit_ideas_1660.py:165` proves `atomic_write` is called with the injected ideas path; `tests/test_cockpit_ideas_1660.py:187` proves extra fields are rejected with 422; `tests/test_cockpit_ideas_1660.py:193` proves the 204 response has no body | PASS |
+| AC3: `get_ideas_path` returns a `Path` and is overridable via `app.dependency_overrides` for test isolation | `serve/cockpit/src/owlbear_cockpit/deps.py:72-74` defines `get_ideas_path(...) -> Path`; `serve/cockpit/src/owlbear_cockpit/main.py:49` mounts the ideas router under `/api` | `tests/test_cockpit_ideas_1660.py:220` now executes the default dependency directly and asserts it returns a `Path`; `tests/test_cockpit_ideas_1660.py:239` proves dependency override isolation; `tests/test_cockpit_ideas_1660.py:245` proves `/api/ideas` is mounted and reachable | PASS |
+
+- Safety & security: PASS. No user-controlled path input reaches filesystem; the write target is supplied by fixed DI, request extras are forbidden, and no new dependency or secret-handling surface was introduced.
+- Challenger cross-check: proceed, confidence 0.84. No blocking findings.
+
+## Observations
+- The prior AC3 blocker is resolved. The retry removed the vacuous return-type check and replaced it with executable proof against `get_ideas_path(engine=mock_engine)`.
+- The dedicated mount assertion at `tests/test_cockpit_ideas_1660.py:245` is weaker than the AC1 GET assertions because it only rules out 404; this is non-blocking because the stronger AC1 request-level tests already prove the mounted route returns 200 with the expected payload shape.
+- The builder's reported 100% coverage applies to `owlbear_cockpit.routes.ideas`; AC3 evidence for `deps.py` and `main.py` is supplied by direct tests and source inspection rather than that coverage figure.
+
+[[2026-05-20T13:21:52+02:00]]
+## Docs Gate
+
+### Item 1: README Verification
+- Convention mapping: `serve/cockpit/src/**` → `serve/cockpit/README.md`
+- **Finding:** No Ideas API section existed in the README; `GET /api/ideas` and `PUT /api/ideas` were undocumented.
+- **Fix:** Added `## Ideas API` section (between Memory API and Work Sessions Model) documenting both endpoints: response shapes, absent-file behavior, strict request model, `atomic_write` semantics, HTTP 204, and the `get_ideas_path` DI callable and override pattern.
+- Also updated `.github/copilot-instructions.md` Endpoints table to add `GET /api/ideas` and `PUT /api/ideas` (task-caused drift in workspace config doc).
+- Pre-existing TODO markers at README:287 (#1628) and README:564 (#1571) are pass-through — scope predates this task.
+- Layer 1 (grep) and Layer 2 (editorial) both clean after update.
+
+### Item 2: External Attribution
+- N/A — no external sources used; implementation follows established cockpit patterns.
+
+### Item 3: Research Doc
+- N/A — no research artifact exists for this task.
+
+### Item 4: Deletion Detection
+- N/A — no files deleted.
+
+### Commit
+- `5a080c51` — docs: add ideas API section to cockpit README (#1660, doc-writer)
+
+### Scratch Cleanup
+- No `.owlbear/scratch/1660-*` files existed.
+
+[[2026-05-20T13:28:16+02:00]]
+## Audit
+
+### Regression Detection
+Quality-runner full-suite: 252 failures all pre-existing (from files last modified in bulk formatting commits `414444b9` predating task). No changes to any failing test file since builder commit `8e99b9f0`. Cockpit-domain regression: 404 tests passed, 0 failed. Task-scoped: 20/20 passed. Lint: clean (ruff + eslint). **No task-caused regressions.**
+
+### Intent Verification
+Changed files: `serve/cockpit/src/owlbear_cockpit/{deps.py,main.py,routes/ideas.py}`, `tests/test_cockpit_ideas_1660.py`, `serve/cockpit/README.md`, `.github/copilot-instructions.md`. All within cockpit backend domain + docs. Implementation adds GET/PUT /api/ideas with DI — matches stated purpose. No extraneous scope.
+
+### Architect Quality
+Score: 4/5. AC specified endpoints, response shapes, DI pattern, strict request model, and file-absent behavior clearly. One reviewer cycle (vacuous test for AC3 default path) — but that was a test-proof gap, not an AC ambiguity. Builder implemented correctly on first pass without improvisation.
+
+### Commit Integrity
+- `4cc5a2bb` — test: add failing tests for cockpit ideas API (#1660, test-writer)
+- `8e99b9f0` — feat: implement cockpit ideas API backend (#1660, builder)
+- `8b03e1d8` — test: replace vacuous ideas path dep test with executable proof (#1660, test-writer)
+- `5a080c51` — docs: add ideas API section to cockpit README (#1660, doc-writer)
+
+All 4 commits properly attributed. No uncommitted deliverables.
+
+### Reviewer Evidence
+Detailed PASS verdict with full AC-to-code mapping. Challenger cross-check: proceed (0.84). Safety/security: PASS.
+
+### Scoring
+| Criterion | Deduction |
+|-----------|----------|
+| (none) | 0 |
+
+**Confidence: 1.00 — Archive.**
