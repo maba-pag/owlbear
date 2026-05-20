@@ -467,6 +467,8 @@ Accessibility and responsive state after #1396:
   format with count and reversion to `Decisions` on count=0) and durable
   `serve/cockpit/web/src/__tests__/Shell.test.tsx` (18 tests, all passing).
 
+- #1648 removes `DecisionViewport` from the Shell sidecar. The `DecisionViewport` import is removed from `Shell.tsx` and the component is no longer rendered inside the sidecar `<aside>` in either the mobile `p-sheet` or desktop branch; the canvas carries `data-no-sidecar`. `DRStatusIndicator` in the status bar and `ResolveModal` gated on `selectedDR` state are retained — both render outside the `<Routes>` outlet and are route-independent by construction. The obsolete `Shell.decision-viewport.test.tsx` legacy proof suite is deleted. Verified by `serve/cockpit/web/src/__tests__/Shell.remove-decision-viewport_1648.test.tsx` (15 tests — AC-1 no-sidecar DOM and zero `DecisionViewport` calls across default, loading, pending, and error states; AC-2 `DRStatusIndicator` presence, count wiring, and click-to-modal at `/`, `/decisions`, and `/memories`; AC-3 render smoke with and without pending DRs).
+
 - #1671 adds the Memory tab list view at `/memories`. `pages/MemoryTab.tsx` (default
   export, lazy-loaded in `routeConfig` with `hasSidecar: false`) fetches `GET
   /api/memories` on mount and on `document.visibilitychange` to visible (no SSE in V1).
@@ -534,8 +536,7 @@ Decision behavior after #1385 and #1389:
 
 - Backend decision lifecycle is canonical: resolution appends the task summary,
   moves decision files to `resolved/`, and applies unblock semantics per response.
-- Frontend decision UX is centered on the decision viewport and resolution modal;
-  it is not limited to a small status popover.
+- Frontend decision UX after #1645 and #1648: the `/decisions` tab (`DecisionsPage`) is the primary path; `DRStatusIndicator` in the status bar → `ResolveModal` is the secondary (route-independent Shell-level) path. `DecisionViewport` is no longer rendered in the sidecar.
 
 ## Error Envelope
 
