@@ -111,7 +111,8 @@ function IdeasPage() {
 
         if (!wasDirtyAtTrigger) {
           const isDirtyAtResolve = contentRef.current !== lastSavedContentRef.current
-          if (isDirtyAtResolve) {
+          const baselineChangedSinceTrigger = lastSavedContentRef.current !== triggerLastSaved
+          if (isDirtyAtResolve || baselineChangedSinceTrigger) {
             return
           }
 
