@@ -522,10 +522,11 @@ Accessibility and responsive state after #1396:
   successful pending-state mutations; `Shell.tsx` consumes this event and updates the
   nav-rail memory badge immediately (hidden at zero, aria-label includes count) without
   waiting for the next 60s poll. Verified by
-  `serve/cockpit/web/src/__tests__/MemoryTab_1672.test.tsx` (66 tests — accordion detail
+  `serve/cockpit/web/src/__tests__/MemoryTab_1672.test.tsx` (74 tests — accordion detail
   and sanitization schema, state-dependent button visibility, OCC/404/422 error UX,
-  response-driven local updates without list spinner, state promotion feedback, and immediate
-  nav-badge sync after pending-state mutations).
+  response-driven local updates without list spinner, state promotion feedback, immediate
+  nav-badge sync after pending-state mutations, approved-state delete confirmation
+  (soft-delete dialog branch), and approved-entry edit downgrade to curated).
 
 ## Product Boundary
 
