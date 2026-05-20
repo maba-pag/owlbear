@@ -714,3 +714,229 @@ describe('TestFromAC_IdeasPageCleanInterleavedRefetch', () => {
     expect(saveBtn?.disabled).toBe(false)
   })
 })
+
+// ─── AC6 (refined): Overwrite — content===fetched branch → page becomes clean ─
+//
+// AC6: "dirty indicator visibility and Save-button enablement reflect whether
+// textarea content differs from the updated baseline."
+//
+// Branch under test: user has typed the same text the server returned, so after
+// Overwrite (baseline=fetched, content unchanged), isDirty=false → clean.
+// This branch was not covered by the original AC5 tests.
+
+describe('TestFromAC_IdeasPageOverwriteCleanBranch', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    setVisibilityState('visible')
+  })
+
+  it('ac6 edge: conflict dismissed when textarea already matches fetched content after Overwrite', async () => {
+    // User typed 'server version' which matches the server's current content.
+    // Conflict still appears (fetched ≠ original baseline), but after Overwrite the page is clean.
+    const container = await renderInConflict('original baseline', 'server version', 'server version')
+
+    const overwriteBtn = container.querySelector('[data-testid="ideas-conflict-overwrite"]')
+    expect(overwriteBtn).not.toBeNull()
+
+    await act(async () => {
+      if (overwriteBtn) fireEvent.click(overwriteBtn as HTMLButtonElement)
+    })
+
+    expect(container.querySelector('[data-testid="ideas-conflict-notice"]')).toBeNull()
+  })
+
+  it('ac6 edge: dirty indicator hidden when textarea content equals fetched after Overwrite', async () => {
+    // After Overwrite: baseline = fetched = 'server version'; content = 'server version'.
+    // isDirty = false → dirty indicator must be hidden (reflects content vs updated baseline).
+    const container = await renderInConflict('original baseline', 'server version', 'server version')
+
+    const overwriteBtn = container.querySelector('[data-testid="ideas-conflict-overwrite"]')
+    expect(overwriteBtn).not.toBeNull()
+
+    await act(async () => {
+      if (overwriteBtn) fireEvent.click(overwriteBtn as HTMLButtonElement)
+    })
+
+    expect(container.querySelector('[data-testid="ideas-dirty"]')).toBeNull()
+  })
+
+  it('ac6 edge: Save disabled when textarea content equals fetched after Overwrite', async () => {
+    // After Overwrite: baseline = fetched = content → isDirty=false → Save must be disabled.
+    const container = await renderInConflict('original baseline', 'server version', 'server version')
+
+    const overwriteBtn = container.querySelector('[data-testid="ideas-conflict-overwrite"]')
+    expect(overwriteBtn).not.toBeNull()
+
+    await act(async () => {
+      if (overwriteBtn) fireEvent.click(overwriteBtn as HTMLButtonElement)
+    })
+
+    const saveBtn = container.querySelector<HTMLButtonElement>('[data-testid="ideas-save"]')
+    expect(saveBtn?.disabled).toBe(true)
+  })
+})
+
+// ─── AC9: Save before GET resolves — trigger-time baseline governs conflict ───
+//
+// AC9: "When IdeasPage is dirty at visibilitychange trigger time and the user
+// saves successfully before the background GET resolves, conflict determination
+// still compares fetched content against the trigger-time last-saved baseline
+// (not the post-save baseline)."
+//
+// Setup: render dirty → fire visibilitychange (GET pending) → Cmd+S save
+// (PUT resolves immediately, updating baseline) → resolve GET → assert conflict.
+//
+// Discriminating case: GET returns the post-save baseline value.
+//   Correct impl  (trigger-time): fetched ≠ trigger-time baseline → conflict.
+//   Broken impl   (post-save):    fetched === post-save baseline → no conflict.
+
+describe('TestFromAC_IdeasPageSaveBeforeResolve', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    setVisibilityState('visible')
+  })
+
+  it('ac9 happy: conflict shows when GET resolves with content != trigger-time baseline after mid-flight save', async () => {
+    const container = await renderLoaded('original baseline')
+    const textarea = container.querySelector('textarea')
+
+    // Make dirty before trigger
+    if (textarea) {
+      fireEvent.change(textarea, { target: { value: 'user edits' } })
+    }
+
+    // GET is pending; PUT resolves 204 immediately
+    let doResolveGet!: () => void
+    const getPromise = new Promise<void>(resolve => { doResolveGet = resolve })
+    const interleave = vi.fn((_url: string, init?: RequestInit) => {
+      if (init?.method === 'PUT') {
+        return Promise.resolve({ ok: true, status: 204, json: () => Promise.resolve(null) })
+      }
+      return getPromise.then(() => ({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ content: 'server changed independently' }),
+      }))
+    })
+    vi.stubGlobal('fetch', interleave)
+
+    // Fire visibilitychange — GET starts; triggerLastSaved = 'original baseline'
+    setVisibilityState('visible')
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+
+    // Save while GET is in-flight — baseline updates to 'user edits'
+    await act(async () => {
+      document.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 's', metaKey: true, bubbles: true }),
+      )
+    })
+    await flush()
+
+    // Resolve GET — 'server changed independently' ≠ trigger-time baseline 'original baseline'
+    await act(async () => {
+      doResolveGet()
+      await Promise.resolve()
+    })
+    await flush()
+
+    expect(container.querySelector('[data-testid="ideas-conflict-notice"]')).not.toBeNull()
+  })
+
+  it('ac9 happy: conflict shows when GET returns post-save baseline value (discriminating case)', async () => {
+    // Discriminating: GET resolves with 'user edits' = post-save baseline, ≠ trigger-time baseline.
+    //   Correct impl:  'user edits' ≠ 'original baseline' → conflict shows.
+    //   Broken impl:   'user edits' === 'user edits' (post-save) → no conflict (regression).
+    const container = await renderLoaded('original baseline')
+    const textarea = container.querySelector('textarea')
+
+    if (textarea) {
+      fireEvent.change(textarea, { target: { value: 'user edits' } })
+    }
+
+    let doResolveGet!: () => void
+    const getPromise = new Promise<void>(resolve => { doResolveGet = resolve })
+    const interleave = vi.fn((_url: string, init?: RequestInit) => {
+      if (init?.method === 'PUT') {
+        return Promise.resolve({ ok: true, status: 204, json: () => Promise.resolve(null) })
+      }
+      // Fetched = post-save baseline ('user edits'), ≠ trigger-time baseline ('original baseline')
+      return getPromise.then(() => ({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ content: 'user edits' }),
+      }))
+    })
+    vi.stubGlobal('fetch', interleave)
+
+    setVisibilityState('visible')
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+
+    await act(async () => {
+      document.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 's', metaKey: true, bubbles: true }),
+      )
+    })
+    await flush()
+
+    await act(async () => {
+      doResolveGet()
+      await Promise.resolve()
+    })
+    await flush()
+
+    // Must show conflict: fetched ('user edits') ≠ trigger-time baseline ('original baseline')
+    // A broken impl using post-save baseline would false-green this path
+    expect(container.querySelector('[data-testid="ideas-conflict-notice"]')).not.toBeNull()
+  })
+
+  it('ac9 happy: no conflict when GET returns trigger-time baseline (no external change)', async () => {
+    // Server still has 'original baseline' — no external edit occurred.
+    // No conflict should show, even though user saved 'user edits' post-trigger.
+    const container = await renderLoaded('original baseline')
+    const textarea = container.querySelector('textarea')
+
+    if (textarea) {
+      fireEvent.change(textarea, { target: { value: 'user edits' } })
+    }
+
+    let doResolveGet!: () => void
+    const getPromise = new Promise<void>(resolve => { doResolveGet = resolve })
+    const interleave = vi.fn((_url: string, init?: RequestInit) => {
+      if (init?.method === 'PUT') {
+        return Promise.resolve({ ok: true, status: 204, json: () => Promise.resolve(null) })
+      }
+      // Server unchanged — returns same as trigger-time baseline
+      return getPromise.then(() => ({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ content: 'original baseline' }),
+      }))
+    })
+    vi.stubGlobal('fetch', interleave)
+
+    setVisibilityState('visible')
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+
+    await act(async () => {
+      document.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 's', metaKey: true, bubbles: true }),
+      )
+    })
+    await flush()
+
+    await act(async () => {
+      doResolveGet()
+      await Promise.resolve()
+    })
+    await flush()
+
+    // No external change → no conflict
+    expect(container.querySelector('[data-testid="ideas-conflict-notice"]')).toBeNull()
+  })
+})
