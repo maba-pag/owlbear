@@ -51,7 +51,7 @@ function IdeasPage() {
   }, [loading, errorMessage])
 
   const handleSave = useCallback(async () => {
-    if (!isDirty || saving || loading || errorMessage) {
+    if (!isDirty || saving || loading) {
       return
     }
 
@@ -66,7 +66,7 @@ function IdeasPage() {
     } finally {
       setSaving(false)
     }
-  }, [content, errorMessage, isDirty, loading, saving])
+  }, [content, isDirty, loading, saving])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
