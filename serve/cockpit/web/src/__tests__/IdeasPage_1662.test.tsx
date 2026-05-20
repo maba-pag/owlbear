@@ -24,8 +24,14 @@
 
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, fireEvent, act } from '@testing-library/react'
+import { readFileSync } from 'node:fs'
+import { resolve, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { routeConfig } from '../routes'
 import IdeasPage from '../pages/IdeasPage'
+
+const _dir = dirname(fileURLToPath(import.meta.url))
+const ROUTES_SOURCE = resolve(_dir, '../routes.ts')
 
 // ─── Fetch mock factories ──────────────────────────────────────────────────────
 
@@ -148,6 +154,13 @@ describe('TestFromAC_IdeasPageRoute', () => {
       Symbol.for('react.lazy'),
     )
   })
+
+  it('ac8 happy: /ideas route specifically lazy-loads IdeasPage (source assertion)', () => {
+    const source = readFileSync(ROUTES_SOURCE, 'utf-8')
+    expect(source).toMatch(
+      /lazy\(\s*\(\)\s*=>\s*import\(['"]\.\/pages\/IdeasPage['"]\)\s*\)/,
+    )
+  })
 })
 
 // ─── AC1: Loading state ───────────────────────────────────────────────────────
@@ -204,6 +217,22 @@ describe('TestFromAC_IdeasPageLoaded', () => {
     const container = await renderLoaded('Content here')
     const textarea = container.querySelector('textarea')
     expect(document.activeElement).toBe(textarea)
+  })
+
+  it('ac2 happy: GET fetch targets exactly /api/ideas (not another endpoint)', async () => {
+    const fetchMock = makeGetOkFetch('hello')
+    vi.stubGlobal('fetch', fetchMock)
+    let container!: HTMLElement
+    await act(async () => {
+      container = renderIdeasPage().container
+    })
+    await flush()
+    void container
+    const getCalls = fetchMock.mock.calls.filter(
+      ([, init]: [string, RequestInit | undefined]) => !init?.method || init.method === 'GET',
+    )
+    expect(getCalls.length).toBeGreaterThan(0)
+    expect(getCalls[0][0]).toBe('/api/ideas')
   })
 })
 
@@ -277,6 +306,32 @@ describe('TestFromAC_IdeasPageSave', () => {
     const { container } = await renderDirty('initial', 'changed')
     const saveBtn = container.querySelector<HTMLButtonElement>('[data-testid="ideas-save"]')
     expect(saveBtn?.disabled).toBe(false)
+  })
+
+  it('ac3 happy: PUT fetch targets exactly /api/ideas (not another endpoint)', async () => {
+    const fetchMock = makeGetOkPutOkFetch('initial')
+    vi.stubGlobal('fetch', fetchMock)
+    let container!: HTMLElement
+    await act(async () => {
+      container = renderIdeasPage().container
+    })
+    await flush()
+    const textarea = container.querySelector('textarea')
+    if (textarea) {
+      fireEvent.change(textarea, { target: { value: 'changed' } })
+    }
+    const saveBtn = container.querySelector<HTMLButtonElement>('[data-testid="ideas-save"]')
+    if (saveBtn) {
+      await act(async () => {
+        fireEvent.click(saveBtn)
+      })
+      await flush()
+    }
+    const putCalls = fetchMock.mock.calls.filter(
+      ([, init]: [string, RequestInit]) => init?.method === 'PUT',
+    )
+    expect(putCalls.length).toBeGreaterThan(0)
+    expect(putCalls[0][0]).toBe('/api/ideas')
   })
 })
 
