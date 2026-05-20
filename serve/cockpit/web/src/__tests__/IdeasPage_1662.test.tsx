@@ -14,7 +14,8 @@
  * AC6: Cmd+S / Ctrl+S shortcut in IdeasPage sends PUT `/api/ideas` when content is
  *      dirty; no-op when content matches baseline
  * AC7: IdeasPage renders error state when GET `/api/ideas` returns non-2xx; PUT
- *      failure preserves textarea content and re-enables save button
+ *      failure preserves textarea content, re-enables save button, and subsequent
+ *      button click or Cmd/Ctrl+S issues a new PUT `/api/ideas`
  * AC8: Route config entry in routes.ts: path `/ideas`, label `Ideas`, icon `ideas`,
  *      component lazy-loaded IdeasPage
  *
@@ -543,5 +544,65 @@ describe('TestFromAC_IdeasPageError', () => {
     await flush()
     const saveBtnAfter = container.querySelector<HTMLButtonElement>('[data-testid="ideas-save"]')
     expect(saveBtnAfter?.disabled).toBe(false)
+  })
+
+  it('ac7 retry: button click after failed PUT issues a second PUT /api/ideas', async () => {
+    const fetchMock = makeGetOkPutErrorFetch('original text', 500)
+    vi.stubGlobal('fetch', fetchMock)
+    let container!: HTMLElement
+    await act(async () => {
+      container = renderIdeasPage().container
+    })
+    await flush()
+    const textarea = container.querySelector('textarea')
+    if (textarea) {
+      fireEvent.change(textarea, { target: { value: 'modified text' } })
+    }
+    // First save attempt — PUT fails, errorMessage set
+    const saveBtn = container.querySelector<HTMLButtonElement>('[data-testid="ideas-save"]')
+    await act(async () => {
+      if (saveBtn) fireEvent.click(saveBtn)
+    })
+    await flush()
+    // Second save attempt — must issue another PUT to /api/ideas
+    const saveBtnAfter = container.querySelector<HTMLButtonElement>('[data-testid="ideas-save"]')
+    await act(async () => {
+      if (saveBtnAfter) fireEvent.click(saveBtnAfter)
+    })
+    await flush()
+    const putCalls = fetchMock.mock.calls.filter(
+      ([, init]: [string, RequestInit]) => init?.method === 'PUT',
+    )
+    expect(putCalls.length).toBe(2)
+    expect(putCalls[1][0]).toBe('/api/ideas')
+  })
+
+  it('ac7 retry: Cmd+S after failed PUT issues a second PUT /api/ideas', async () => {
+    const fetchMock = makeGetOkPutErrorFetch('original text', 500)
+    vi.stubGlobal('fetch', fetchMock)
+    let container!: HTMLElement
+    await act(async () => {
+      container = renderIdeasPage().container
+    })
+    await flush()
+    const textarea = container.querySelector('textarea')
+    if (textarea) {
+      fireEvent.change(textarea, { target: { value: 'modified text' } })
+    }
+    // First save via Cmd+S — PUT fails, errorMessage set
+    await act(async () => {
+      fireEvent.keyDown(document, { key: 's', code: 'KeyS', metaKey: true })
+    })
+    await flush()
+    // Second save via Cmd+S — must issue another PUT to /api/ideas
+    await act(async () => {
+      fireEvent.keyDown(document, { key: 's', code: 'KeyS', metaKey: true })
+    })
+    await flush()
+    const putCalls = fetchMock.mock.calls.filter(
+      ([, init]: [string, RequestInit]) => init?.method === 'PUT',
+    )
+    expect(putCalls.length).toBe(2)
+    expect(putCalls[1][0]).toBe('/api/ideas')
   })
 })
