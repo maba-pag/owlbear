@@ -29,6 +29,7 @@
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, fireEvent, act } from '@testing-library/react'
+import { MemoryRouter, Routes, Route } from 'react-router'
 import IdeasPage from '../pages/IdeasPage'
 
 // ─── Fetch mock factories ──────────────────────────────────────────────────────
@@ -55,6 +56,18 @@ function makeGetErrorFetch(status = 500) {
 
 function makeNetworkErrorFetch() {
   return vi.fn(() => Promise.reject(new TypeError('Network failure')))
+}
+
+// ─── Render helpers ──────────────────────────────────────────────────────────
+
+function renderInRouter() {
+  return render(
+    <MemoryRouter initialEntries={['/ideas']}>
+      <Routes>
+        <Route path="/ideas" element={<IdeasPage />} />
+      </Routes>
+    </MemoryRouter>,
+  )
 }
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
@@ -85,7 +98,7 @@ async function renderLoaded(initialContent: string): Promise<HTMLElement> {
   vi.stubGlobal('fetch', makeGetOkFetch(initialContent))
   let container!: HTMLElement
   await act(async () => {
-    container = render(<IdeasPage />).container
+    container = renderInRouter().container
   })
   await flush()
   return container
@@ -181,7 +194,7 @@ describe('TestFromAC_IdeasPageVisibility', () => {
     vi.stubGlobal('fetch', makeGetOkFetch('initial'))
     let unmount!: () => void
     await act(async () => {
-      const result = render(<IdeasPage />)
+      const result = renderInRouter()
       unmount = result.unmount
     })
     await flush()
