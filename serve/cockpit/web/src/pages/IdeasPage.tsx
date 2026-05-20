@@ -1,9 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useBlocker } from 'react-router'
+import ReactMarkdown from 'react-markdown'
+import rehypeSanitize from 'rehype-sanitize'
+import remarkGfm from 'remark-gfm'
 
 import { fetchIdeas, saveIdeas } from '../api/ideas'
 
 function IdeasPage() {
   const [content, setContent] = useState('')
+  const [previewMode, setPreviewMode] = useState(false)
   const [lastSavedContent, setLastSavedContent] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -11,6 +16,7 @@ function IdeasPage() {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
 
   const isDirty = useMemo(() => content !== lastSavedContent, [content, lastSavedContent])
+  const blocker = useBlocker(isDirty)
 
   useEffect(() => {
     let cancelled = false
@@ -45,10 +51,10 @@ function IdeasPage() {
   }, [])
 
   useEffect(() => {
-    if (!loading && !errorMessage) {
+    if (!loading && !errorMessage && !previewMode) {
       textareaRef.current?.focus()
     }
-  }, [loading, errorMessage])
+  }, [errorMessage, loading, previewMode])
 
   const handleSave = useCallback(async () => {
     if (!isDirty || saving || loading) {
@@ -89,6 +95,21 @@ function IdeasPage() {
     }
   }, [handleSave, isDirty])
 
+  useEffect(() => {
+    if (!isDirty) {
+      return
+    }
+
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+    }
+
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => {
+      window.removeEventListener('beforeunload', onBeforeUnload)
+    }
+  }, [isDirty])
+
   if (loading) {
     return (
       <section>
@@ -111,20 +132,58 @@ function IdeasPage() {
 
   return (
     <section>
+      {blocker.state === 'blocked' ? (
+        <div role="alertdialog" aria-modal="true" aria-label="Unsaved changes">
+          <p>You have unsaved changes. Leave anyway?</p>
+          <button
+            type="button"
+            onClick={() => {
+              blocker.proceed()
+            }}
+          >
+            Leave
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              blocker.reset()
+            }}
+          >
+            Cancel
+          </button>
+        </div>
+      ) : null}
       {errorMessage ? (
         <div data-testid="ideas-error" role="alert">
           {errorMessage}
         </div>
       ) : null}
       {isDirty ? <div data-testid="ideas-dirty">Unsaved changes</div> : null}
-      <textarea
-        ref={textareaRef}
-        value={content}
-        onChange={(event) => {
-          setContent(event.target.value)
+      <button
+        type="button"
+        data-testid="ideas-preview-toggle"
+        onClick={() => {
+          setPreviewMode((value) => !value)
         }}
-        placeholder="Capture ideas here..."
-      />
+      >
+        {previewMode ? 'Edit' : 'Preview'}
+      </button>
+      {previewMode ? (
+        <div data-testid="ideas-preview">
+          <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>
+            {content}
+          </ReactMarkdown>
+        </div>
+      ) : (
+        <textarea
+          ref={textareaRef}
+          value={content}
+          onChange={(event) => {
+            setContent(event.target.value)
+          }}
+          placeholder="Capture ideas here..."
+        />
+      )}
       <button
         type="button"
         data-testid="ideas-save"
