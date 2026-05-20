@@ -16,7 +16,7 @@
 
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, fireEvent, act, waitFor } from '@testing-library/react'
-import { MemoryRouter, Routes, Route, useNavigate } from 'react-router'
+import { BrowserRouter, MemoryRouter, Routes, Route, useNavigate } from 'react-router'
 import IdeasPage from '../pages/IdeasPage'
 
 // ─── Fetch mock helpers ───────────────────────────────────────────────────────
@@ -287,5 +287,112 @@ describe('TestFromAC_EventListenerCleanup', () => {
     const cleanEvent = new Event('beforeunload', { cancelable: true })
     window.dispatchEvent(cleanEvent)
     expect(cleanEvent.defaultPrevented).toBe(false)
+  })
+})
+
+// ─── AC1/AC3: BrowserRouter surface proof (retry: reviewer finding #1) ────────
+//
+// The reviewer found that existing tests only exercise MemoryRouter + useNavigate.
+// Production runs under BrowserRouter (App.tsx:21-29). These tests prove the
+// navigator-patching blocking mechanism works on the actual BrowserRouter navigator
+// (createBrowserHistory object), which has a different object identity from
+// createMemoryHistory. BrowserRouter provides navigator.block = undefined,
+// so the same push/replace/go patching fallback applies — but this must be
+// empirically verified on that surface rather than assumed from MemoryRouter parity.
+
+describe('TestFromAC_BrowserRouterSurface', () => {
+  afterEach(async () => {
+    vi.unstubAllGlobals()
+    // Reset window.location to avoid cross-test URL pollution from BrowserRouter
+    window.history.pushState({}, '', '/')
+  })
+
+  async function renderInBrowserRouter(content = 'initial content') {
+    // BrowserRouter reads window.location — set up /ideas before rendering
+    window.history.pushState({}, '', '/ideas')
+    vi.stubGlobal('fetch', makeGetOkFetch(content))
+    let result!: ReturnType<typeof render>
+    await act(async () => {
+      result = render(
+        <BrowserRouter>
+          <Routes>
+            <Route path="/ideas" element={<IdeasPage />} />
+            <Route path="/" element={<div data-testid="home-page">Home</div>} />
+          </Routes>
+          <NavButton to="/" testId="nav-home" />
+        </BrowserRouter>,
+      )
+    })
+    await flush()
+    return result
+  }
+
+  async function renderDirtyBrowser(initial = 'initial', dirty = 'changed') {
+    const result = await renderInBrowserRouter(initial)
+    const textarea = result.container.querySelector('textarea')!
+    fireEvent.change(textarea, { target: { value: dirty } })
+    return result
+  }
+
+  it('ac1 browser-router: alertdialog renders when dirty and useNavigate triggers route change under BrowserRouter', async () => {
+    const { container } = await renderDirtyBrowser()
+    fireEvent.click(container.querySelector('[data-testid="nav-home"]')!)
+    await waitFor(() => {
+      expect(container.querySelector('[role="alertdialog"]')).not.toBeNull()
+    })
+  })
+
+  it('ac1 browser-router: dialog text is correct under BrowserRouter', async () => {
+    const { container } = await renderDirtyBrowser()
+    fireEvent.click(container.querySelector('[data-testid="nav-home"]')!)
+    await waitFor(() => {
+      const dialog = container.querySelector('[role="alertdialog"]')
+      expect(dialog).not.toBeNull()
+      expect(dialog!.textContent).toContain('You have unsaved changes. Leave anyway?')
+    })
+  })
+
+  it('ac1 browser-router: proceed button completes navigation under BrowserRouter', async () => {
+    const { container } = await renderDirtyBrowser()
+    fireEvent.click(container.querySelector('[data-testid="nav-home"]')!)
+    await waitFor(() => {
+      expect(container.querySelector('[role="alertdialog"]')).not.toBeNull()
+    })
+    const dialog = container.querySelector('[role="alertdialog"]')!
+    const buttons = Array.from(dialog.querySelectorAll('button'))
+    const proceedBtn = buttons.find((b) => /leave|proceed|confirm|yes/i.test(b.textContent ?? ''))
+    expect(proceedBtn).not.toBeUndefined()
+    fireEvent.click(proceedBtn!)
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="home-page"]')).not.toBeNull()
+    })
+    expect(container.querySelector('[role="alertdialog"]')).toBeNull()
+  })
+
+  it('ac1 browser-router: cancel dismisses dialog and keeps user on IdeasPage under BrowserRouter', async () => {
+    const { container } = await renderDirtyBrowser()
+    fireEvent.click(container.querySelector('[data-testid="nav-home"]')!)
+    await waitFor(() => {
+      expect(container.querySelector('[role="alertdialog"]')).not.toBeNull()
+    })
+    const dialog = container.querySelector('[role="alertdialog"]')!
+    const buttons = Array.from(dialog.querySelectorAll('button'))
+    const cancelBtn = buttons.find((b) => /cancel|stay|no|dismiss/i.test(b.textContent ?? ''))
+    expect(cancelBtn).not.toBeUndefined()
+    fireEvent.click(cancelBtn!)
+    await waitFor(() => {
+      expect(container.querySelector('[role="alertdialog"]')).toBeNull()
+    })
+    expect(container.querySelector('textarea')).not.toBeNull()
+    expect(container.querySelector('[data-testid="home-page"]')).toBeNull()
+  })
+
+  it('ac3 browser-router: clean navigation proceeds without dialog under BrowserRouter', async () => {
+    const { container } = await renderInBrowserRouter('same content')
+    fireEvent.click(container.querySelector('[data-testid="nav-home"]')!)
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="home-page"]')).not.toBeNull()
+    })
+    expect(container.querySelector('[role="alertdialog"]')).toBeNull()
   })
 })
