@@ -16,12 +16,13 @@
  */
 
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
-import { render, fireEvent, act } from '@testing-library/react'
+import { render, fireEvent, act, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
 import MemoryTab, { MEMORY_SANITIZE_SCHEMA } from '../pages/MemoryTab'
 import Shell from '../Shell'
 import { CockpitProvider } from '../hooks/CockpitProvider'
+import { usePendingMemoryCount } from '../hooks/usePendingMemoryCount'
 import { usePendingDRs } from '../hooks/usePendingDRs'
 import type { UsePendingDRsResult } from '../hooks/usePendingDRs'
 
@@ -49,8 +50,8 @@ vi.mock('../routes', () => {
   return {
     routeConfig: [
       { path: '/', label: 'Kanban', icon: 'kanban', component: Stub },
-      { path: '/decisions', label: 'Decisions', icon: 'decisions', component: Stub, hasSidecar: false },
-      { path: '/memories', label: 'Memory', icon: 'memory', component: Stub, hasSidecar: false },
+      { path: '/decisions', label: 'Decisions', icon: 'decisions', component: Stub },
+      { path: '/memories', label: 'Memory', icon: 'memory', component: Stub },
     ],
   }
 })
@@ -159,6 +160,20 @@ async function flush() {
 
 function renderMemoryTab() {
   return render(<MemoryTab />)
+}
+
+function PendingMemoryCountProbe() {
+  const { count } = usePendingMemoryCount()
+  return <span data-testid="pending-memory-count">{count}</span>
+}
+
+function renderMemoryTabWithPendingProbe() {
+  return render(
+    <>
+      <PendingMemoryCountProbe />
+      <MemoryTab />
+    </>,
+  )
 }
 
 function renderShell(initialRoute = '/') {
@@ -600,6 +615,25 @@ describe('TestFromAC_MemoryEditForm', () => {
     expect(body['expected_updated_at']).toBe('2026-03-15T12:00:00Z')
   })
 
+  it('ac3 regression: approve payload includes expected_updated_at matching entry updated_at', async () => {
+    const entry = makeEntry({ id: 'entry-42', state: 'curated', updated_at: '2026-03-20T08:30:00Z' })
+    const fetchMock = makeMutationFetch(200, { entry: { ...entry, state: 'approved' } }, makeApiResponse([entry]))
+    vi.stubGlobal('fetch', fetchMock)
+    let container!: HTMLElement
+    await act(async () => { container = renderMemoryTab().container })
+    await flush()
+    await openAccordion(container)
+    const approveBtn = container.querySelector('[data-testid="memory-approve-btn"]')
+    if (approveBtn) {
+      await act(async () => { fireEvent.click(approveBtn) })
+      await flush()
+    }
+    const calls = fetchMock.mock.calls as [string, RequestInit][]
+    const mutationCall = calls.find(([url]) => url.includes('/approve'))
+    const body = JSON.parse((mutationCall?.[1]?.body as string) ?? '{}') as Record<string, unknown>
+    expect(body['expected_updated_at']).toBe('2026-03-20T08:30:00Z')
+  })
+
   it('ac3 happy: entry list remains visible (no list-level loading indicator) during edit save', async () => {
     const entry = makeEntry({ id: 'e1', state: 'pending' })
     // Second fetch (mutation) is slow — doesn't resolve immediately
@@ -824,7 +858,11 @@ describe('TestFromAC_MemoryErrorUX', () => {
       await act(async () => { fireEvent.click(saveBtn) })
       await flush()
     }
-    expect(container.textContent).toContain('must be between 0.7 and 1.0')
+    const form = container.querySelector('[data-testid="memory-edit-form"]')
+    const message = form?.querySelector('[data-testid="memory-validation-message"]')
+    expect(message).not.toBeNull()
+    expect(message).toHaveAttribute('data-field', 'confidence')
+    expect(message?.textContent).toContain('must be between 0.7 and 1.0')
   })
 
   it('ac4 edge: 422 with multiple field errors shows each field message individually', async () => {
@@ -850,8 +888,16 @@ describe('TestFromAC_MemoryErrorUX', () => {
       await act(async () => { fireEvent.click(saveBtn) })
       await flush()
     }
-    expect(container.textContent).toContain('must be >= 0.7')
-    expect(container.textContent).toContain('field required')
+    const form = container.querySelector('[data-testid="memory-edit-form"]')
+    const messages = Array.from(form?.querySelectorAll('[data-testid="memory-validation-message"]') ?? [])
+    expect(messages.map((message) => message.getAttribute('data-field'))).toEqual([
+      'confidence',
+      'title',
+    ])
+    expect(messages.map((message) => message.textContent)).toEqual([
+      'confidence: must be >= 0.7',
+      'title: field required',
+    ])
   })
 })
 
@@ -1293,5 +1339,200 @@ describe('TestFromAC_MemorySuccessRefetch', () => {
     await flush()
     const listCallsAfter = (fetchMock.mock.calls as [string][]).filter(([url]) => url === '/api/memories').length
     expect(listCallsAfter).toBeGreaterThan(listCallsBefore)
+  })
+
+  it('ac3 regression: pending-to-curated edit decrements pending memory count immediately', async () => {
+    const pending = makeEntry({ id: 'e1', state: 'pending' })
+    const otherPending = makeEntry({ id: 'e2', state: 'pending', title: 'Other pending' })
+    const updated = { ...pending, state: 'curated' as MemoryState, scope_agents: ['builder'] }
+    let entries = [pending, otherPending]
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      if (init?.method === 'POST' && url === '/api/memories/e1/edit') {
+        entries = [updated, otherPending]
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ entry: updated }) })
+      }
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(makeApiResponse(entries)) })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    let container!: HTMLElement
+    await act(async () => { container = renderMemoryTabWithPendingProbe().container })
+    await waitFor(() => expect(container.querySelector('[data-testid="pending-memory-count"]')).toHaveTextContent('2'))
+    await openAccordion(container)
+    const editBtn = container.querySelector<HTMLElement>('[data-testid="memory-edit-btn"]')
+    expect(editBtn).not.toBeNull()
+    await act(async () => { fireEvent.click(editBtn!) })
+    await flush()
+    const saveBtn = container.querySelector<HTMLElement>('[data-testid="memory-edit-save-btn"]')
+    expect(saveBtn).not.toBeNull()
+    await act(async () => { fireEvent.click(saveBtn!) })
+    await waitFor(() => expect(container.querySelector('[data-testid="pending-memory-count"]')).toHaveTextContent('1'))
+  })
+
+  it('ac3 regression: pending hard-delete decrements pending memory count immediately', async () => {
+    const pending = makeEntry({ id: 'e1', state: 'pending' })
+    const otherPending = makeEntry({ id: 'e2', state: 'pending', title: 'Other pending' })
+    let entries = [pending, otherPending]
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      if (init?.method === 'POST' && url === '/api/memories/e1/delete') {
+        entries = [otherPending]
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ success: true }) })
+      }
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(makeApiResponse(entries)) })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    let container!: HTMLElement
+    await act(async () => { container = renderMemoryTabWithPendingProbe().container })
+    await waitFor(() => expect(container.querySelector('[data-testid="pending-memory-count"]')).toHaveTextContent('2'))
+    await openAccordion(container)
+    const deleteBtn = container.querySelector<HTMLElement>('[data-testid="memory-delete-btn"]')
+    expect(deleteBtn).not.toBeNull()
+    await act(async () => { fireEvent.click(deleteBtn!) })
+    await flush()
+    const confirmBtn = container.querySelector<HTMLElement>('[data-testid="memory-delete-confirm-btn"]')
+    expect(confirmBtn).not.toBeNull()
+    await act(async () => { fireEvent.click(confirmBtn!) })
+    await waitFor(() => expect(container.querySelector('[data-testid="pending-memory-count"]')).toHaveTextContent('1'))
+  })
+})
+
+// ─── AC7 (retry #1659): Approved-state delete uses soft-delete modal copy ────
+//
+// Reviewer gap: MemoryTab_1672 suite only exercised pending and curated delete
+// dialogs. A regression removing the approved-entry delete affordance, or swapping
+// to the hard-delete copy, would still pass the existing suite.
+//
+// Contract (MemoryTab.tsx:785,943-945):
+//   - Delete button is visible for any non-deleted entry (including approved).
+//   - Confirmation dialog uses the soft-delete branch for non-pending states.
+
+describe('TestFromAC_MemoryApprovedDelete', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('ac7 retry: Delete button is visible inside open accordion for approved entry', async () => {
+    const container = await renderWithEntries([makeEntry({ id: 'e1', state: 'approved' })])
+    await openAccordion(container)
+    expect(container.querySelector('[data-testid="memory-delete-btn"]')).not.toBeNull()
+  })
+
+  it('ac7 retry: clicking Delete on approved entry opens the delete confirmation dialog', async () => {
+    const container = await renderWithEntries([makeEntry({ id: 'e1', state: 'approved' })])
+    await openAccordion(container)
+    const deleteBtn = container.querySelector<HTMLElement>('[data-testid="memory-delete-btn"]')
+    expect(deleteBtn).not.toBeNull()
+    await act(async () => { fireEvent.click(deleteBtn!) })
+    await flush()
+    expect(container.querySelector('[data-testid="memory-delete-confirm-dialog"]')).not.toBeNull()
+  })
+
+  it('ac7 retry: approved delete dialog uses soft-delete copy, not permanent hard-delete copy', async () => {
+    const container = await renderWithEntries([makeEntry({ id: 'e1', state: 'approved' })])
+    await openAccordion(container)
+    const deleteBtn = container.querySelector<HTMLElement>('[data-testid="memory-delete-btn"]')
+    expect(deleteBtn).not.toBeNull()
+    await act(async () => { fireEvent.click(deleteBtn!) })
+    await flush()
+    const dialog = container.querySelector('[data-testid="memory-delete-confirm-dialog"]')
+    expect(dialog).not.toBeNull()
+    // Soft-delete branch: "This will soft-delete the memory and mark it as deleted."
+    expect(dialog!.textContent?.toLowerCase()).toMatch(/soft.?delete|mark it as deleted/)
+    // Must NOT use the permanent hard-delete copy reserved for pending entries
+    expect(dialog!.textContent?.toLowerCase()).not.toContain('permanent')
+  })
+
+  it('ac7 retry: approved delete dialog contains the confirm button', async () => {
+    const container = await renderWithEntries([makeEntry({ id: 'e1', state: 'approved' })])
+    await openAccordion(container)
+    const deleteBtn = container.querySelector<HTMLElement>('[data-testid="memory-delete-btn"]')
+    expect(deleteBtn).not.toBeNull()
+    await act(async () => { fireEvent.click(deleteBtn!) })
+    await flush()
+    expect(container.querySelector('[data-testid="memory-delete-confirm-btn"]')).not.toBeNull()
+  })
+})
+
+// ─── AC8 (retry #1659): Edit of approved entry downgrades state to curated ───
+//
+// Reviewer gap: backend and engine tests prove the approved→curated downgrade,
+// and the UI shows the "Editing will require re-approval" warning, but no
+// MemoryTab test starts from an approved entry, saves, and asserts the visible
+// state transitions to curated in the frontend.
+//
+// Contract (MemoryTab.tsx:580-594): save path is generic — it replaces the
+// local entry state with the API response entry. Backend returns state=curated
+// for an approved-entry edit (test_cockpit_memory_routes_1670.py:337).
+
+describe('TestFromAC_MemoryApprovedEditDowngrade', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('ac8 retry: approved entry has an Edit button', async () => {
+    const container = await renderWithEntries([makeEntry({ id: 'e1', state: 'approved' })])
+    await openAccordion(container)
+    expect(container.querySelector('[data-testid="memory-edit-btn"]')).not.toBeNull()
+  })
+
+  it('ac8 retry: saving edit of approved entry with state=curated response updates state badge to curated', async () => {
+    const original = makeEntry({ id: 'e1', state: 'approved' })
+    const downgraded = { ...original, state: 'curated' as MemoryState }
+    vi.stubGlobal('fetch', makeMutationFetch(200, { entry: downgraded }, makeApiResponse([original])))
+    let container!: HTMLElement
+    await act(async () => { container = renderMemoryTab().container })
+    await flush()
+    await openAccordion(container)
+    const editBtn = container.querySelector<HTMLElement>('[data-testid="memory-edit-btn"]')
+    expect(editBtn).not.toBeNull()
+    await act(async () => { fireEvent.click(editBtn!) })
+    await flush()
+    const saveBtn = container.querySelector<HTMLElement>('[data-testid="memory-edit-save-btn"]')
+    expect(saveBtn).not.toBeNull()
+    await act(async () => { fireEvent.click(saveBtn!) })
+    await flush()
+    const stateBadge = container.querySelector('[data-testid="memory-entry-state"]')
+    expect(stateBadge?.textContent).toBe('curated')
+  })
+
+  it('ac8 retry: state badge is NOT approved after saving edit of approved entry', async () => {
+    const original = makeEntry({ id: 'e1', state: 'approved' })
+    const downgraded = { ...original, state: 'curated' as MemoryState }
+    vi.stubGlobal('fetch', makeMutationFetch(200, { entry: downgraded }, makeApiResponse([original])))
+    let container!: HTMLElement
+    await act(async () => { container = renderMemoryTab().container })
+    await flush()
+    await openAccordion(container)
+    const editBtn = container.querySelector<HTMLElement>('[data-testid="memory-edit-btn"]')
+    expect(editBtn).not.toBeNull()
+    await act(async () => { fireEvent.click(editBtn!) })
+    await flush()
+    const saveBtn = container.querySelector<HTMLElement>('[data-testid="memory-edit-save-btn"]')
+    expect(saveBtn).not.toBeNull()
+    await act(async () => { fireEvent.click(saveBtn!) })
+    await flush()
+    const stateBadge = container.querySelector('[data-testid="memory-entry-state"]')
+    expect(stateBadge?.textContent).not.toBe('approved')
+  })
+
+  it('ac8 retry: Approve button appears after approved-entry edit downgrades state to curated', async () => {
+    const original = makeEntry({ id: 'e1', state: 'approved' })
+    const downgraded = { ...original, state: 'curated' as MemoryState }
+    vi.stubGlobal('fetch', makeMutationFetch(200, { entry: downgraded }, makeApiResponse([original])))
+    let container!: HTMLElement
+    await act(async () => { container = renderMemoryTab().container })
+    await flush()
+    await openAccordion(container)
+    const editBtn = container.querySelector<HTMLElement>('[data-testid="memory-edit-btn"]')
+    expect(editBtn).not.toBeNull()
+    await act(async () => { fireEvent.click(editBtn!) })
+    await flush()
+    const saveBtn = container.querySelector<HTMLElement>('[data-testid="memory-edit-save-btn"]')
+    expect(saveBtn).not.toBeNull()
+    await act(async () => { fireEvent.click(saveBtn!) })
+    await flush()
+    // After downgrade to curated, Approve button should now be visible
+    expect(container.querySelector('[data-testid="memory-approve-btn"]')).not.toBeNull()
   })
 })
