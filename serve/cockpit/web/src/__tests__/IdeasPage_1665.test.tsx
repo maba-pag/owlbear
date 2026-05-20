@@ -1068,3 +1068,105 @@ describe('TestFromAC_IdeasPageCleanSaveBeforeResolve', () => {
     expect(saveBtn?.disabled).toBe(false)
   })
 })
+
+// ─── AC10: Transient dirty history does not latch — fetched content applied ───
+//
+// AC10: "When IdeasPage is clean at visibilitychange trigger and the user
+// transiently edits the textarea then reverts to the original content before
+// the GET resolves, fetched content is still applied per AC2 (transient dirty
+// history does not latch)."
+//
+// Scenario: clean → pending GET → user types (dirty) → user reverts (clean again,
+// baseline unchanged) → GET resolves. At resolve time:
+//   isDirtyAtResolve = false  (content === lastSavedContent === 'original')
+//   baselineChangedSinceTrigger = false  (no save happened)
+// Both discard guards are false → apply branch executes → fetched content is applied.
+//
+// This is a regression guard: the current implementation already satisfies AC10.
+// Tests PASS against current code per Step 1b.1 (direct-to-review advance).
+
+describe('TestFromAC_IdeasPageTransientEditRevert', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    setVisibilityState('visible')
+  })
+
+  it('ac10 happy: fetched content applied when user edits then reverts before GET resolves', async () => {
+    // Setup: clean → pending GET → type → revert to original → GET resolves
+    // Regression guard: a broken impl that latches transient dirty state would
+    // still discard after revert, leaving textarea='original' instead of 'server update'.
+    const { container, textarea, resolveRefetch } =
+      await startPendingRefetch('original', 'server update')
+
+    // Transient dirty edit
+    if (textarea) {
+      fireEvent.change(textarea, { target: { value: 'mid-flight edit' } })
+    }
+    // Revert to original — page is clean again, baseline unchanged
+    if (textarea) {
+      fireEvent.change(textarea, { target: { value: 'original' } })
+    }
+
+    // GET resolves — both discard guards are false → apply must execute
+    await resolveRefetch()
+
+    expect(container.querySelector('textarea')?.value).toBe('server update')
+  })
+
+  it('ac10 happy: last-saved baseline updated to fetched content after transient-edit revert', async () => {
+    // Proof: after apply, typing 'server update' → clean (save disabled).
+    // If baseline was wrongly latched to 'original', typing 'server update' would
+    // be dirty → save enabled → assertion fails.
+    const { container, textarea, resolveRefetch } =
+      await startPendingRefetch('original', 'server update')
+
+    if (textarea) {
+      fireEvent.change(textarea, { target: { value: 'mid-flight edit' } })
+    }
+    if (textarea) {
+      fireEvent.change(textarea, { target: { value: 'original' } })
+    }
+
+    await resolveRefetch()
+
+    // After apply, textarea='server update' and baseline='server update' → clean
+    const saveBtn = container.querySelector<HTMLButtonElement>('[data-testid="ideas-save"]')
+    expect(saveBtn?.disabled).toBe(true)
+  })
+
+  it('ac10 happy: dirty indicator hidden after fetched content applied following transient revert', async () => {
+    // After apply: content='server update', baseline='server update' → isDirty=false
+    // → dirty indicator must not be shown.
+    const { container, textarea, resolveRefetch } =
+      await startPendingRefetch('original', 'server update')
+
+    if (textarea) {
+      fireEvent.change(textarea, { target: { value: 'mid-flight edit' } })
+    }
+    if (textarea) {
+      fireEvent.change(textarea, { target: { value: 'original' } })
+    }
+
+    await resolveRefetch()
+
+    expect(container.querySelector('[data-testid="ideas-dirty"]')).toBeNull()
+  })
+
+  it('ac10 happy: Save button disabled after fetched content applied following transient revert', async () => {
+    // After apply: content===baseline===fetched → isDirty=false → Save must be disabled.
+    const { container, textarea, resolveRefetch } =
+      await startPendingRefetch('original', 'server update')
+
+    if (textarea) {
+      fireEvent.change(textarea, { target: { value: 'mid-flight edit' } })
+    }
+    if (textarea) {
+      fireEvent.change(textarea, { target: { value: 'original' } })
+    }
+
+    await resolveRefetch()
+
+    const saveBtn = container.querySelector<HTMLButtonElement>('[data-testid="ideas-save"]')
+    expect(saveBtn?.disabled).toBe(true)
+  })
+})
