@@ -51,7 +51,7 @@ All other `serve/` packages are Python — use `uv run` for those.
 | Attribute | Value |
 |-----------|-------|
 | Stack | FastAPI + Pydantic v2 |
-| Endpoints | `GET /api/board`, `GET /api/tasks`, `GET /api/tasks/{id}`, `GET /api/sessions`, `GET /health`, `POST /api/tasks/{id}/move`, `POST /api/tasks/{id}/edit`, `POST /api/tasks/{id}/release`, `GET /api/memories`, `POST /api/memories/{id}/approve`, `POST /api/memories/{id}/edit`, `POST /api/memories/{id}/delete` |
+| Endpoints | `GET /api/board`, `GET /api/tasks`, `GET /api/tasks/{id}`, `GET /api/sessions`, `GET /health`, `POST /api/tasks/{id}/move`, `POST /api/tasks/{id}/edit`, `POST /api/tasks/{id}/release`, `GET /api/memories`, `POST /api/memories/{id}/approve`, `POST /api/memories/{id}/edit`, `POST /api/memories/{id}/delete`, `GET /api/ideas`, `PUT /api/ideas` |
 | Launch | `uv run cockpit` — starts uvicorn on `127.0.0.1:8420` (default) and auto-opens browser; `COCKPIT_PORT` overrides port; `COCKPIT_NO_OPEN=1` suppresses browser; `KANBAN_DIR` overrides `.owlbear/kanban/`; requires built `dist/` |
 | DI pattern | `get_engine` from `owlbear_cockpit.main` — override via `app.dependency_overrides` in tests |
 | Cache | `MtimeScanCache` in `cache.py` — skips engine reload when task-dir mtime is unchanged |

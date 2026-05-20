@@ -629,6 +629,17 @@ Memory error handlers are registered in `main.py` separately from the kanban err
 | `ConcurrencyError` | 409 | `MEM_CONFLICT` |
 | `TransitionError` | 422 | `MEM_INVALID_TRANSITION` |
 
+## Ideas API
+
+Two endpoints expose a single shared markdown file for collaborative ideation. These routes use `get_ideas_path` (a DI callable in `deps.py`) — not the CockpitView facade.
+
+| Route | Behaviour |
+|-------|----------|
+| `GET /api/ideas` | Returns `{"content": "..."}` with the full contents of `.owlbear/ideas.md` when the file exists; returns `{"content": ""}` when the file is absent. |
+| `PUT /api/ideas` | Accepts `{"content": "..."}` body (extra fields forbidden — 422 on violation). Writes via `atomic_write` from `owlbear_kanban.storage_io`, creating the file on first write if absent. Returns HTTP 204 with no response body. |
+
+`get_ideas_path` resolves to `kanban_dir.parent / "ideas.md"` (`.owlbear/ideas.md`); override via `app.dependency_overrides` for test isolation.
+
 ## Work Sessions Model
 
 `GET /api/sessions` returns derived `SessionRecord` objects built from `activity.jsonl` at read time — there is no separate sessions store.
