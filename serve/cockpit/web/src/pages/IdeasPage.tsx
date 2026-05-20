@@ -102,20 +102,21 @@ function IdeasPage() {
 
   useEffect(() => {
     const refetchIdeas = async () => {
+      const triggerContent = contentRef.current
+      const triggerLastSaved = lastSavedContentRef.current
+      const wasDirtyAtTrigger = triggerContent !== triggerLastSaved
+
       try {
         const response = await fetchIdeas()
-        const currentContent = contentRef.current
-        const currentLastSaved = lastSavedContentRef.current
-        const isCurrentlyDirty = currentContent !== currentLastSaved
 
-        if (!isCurrentlyDirty) {
+        if (!wasDirtyAtTrigger) {
           setConflictContent(null)
           setContent(response.content)
           setLastSavedContent(response.content)
           return
         }
 
-        if (response.content !== currentLastSaved) {
+        if (response.content !== triggerLastSaved) {
           setConflictContent(response.content)
         }
       } catch {
