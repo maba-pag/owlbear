@@ -162,6 +162,61 @@ async function startPendingRefetch(
 }
 
 /**
+ * Render loaded, fire visibilitychange with a pending GET. The fetch mock resolves
+ * PUT /api/ideas immediately (204) so mid-flight saves work correctly.
+ * Use when you need to trigger a save while the background GET is in-flight.
+ */
+async function startPendingRefetchWithSave(
+  initialContent: string,
+  fetchedContent: string,
+): Promise<{
+  container: HTMLElement
+  textarea: HTMLTextAreaElement | null
+  resolveRefetch: () => Promise<void>
+}> {
+  const container = await renderLoaded(initialContent)
+
+  let doResolve!: () => void
+  const refetchPromise = new Promise<void>(resolve => {
+    doResolve = resolve
+  })
+
+  // GET is pending; PUT (save) resolves immediately with 204.
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((_url: string, init?: RequestInit) => {
+      if (init?.method === 'PUT') {
+        return Promise.resolve({
+          ok: true,
+          status: 204,
+          json: () => Promise.resolve(null),
+        })
+      }
+      return refetchPromise.then(() => ({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ content: fetchedContent }),
+      }))
+    }),
+  )
+
+  setVisibilityState('visible')
+  await act(async () => {
+    document.dispatchEvent(new Event('visibilitychange'))
+  })
+
+  const resolveRefetch = async () => {
+    await act(async () => {
+      doResolve()
+      await Promise.resolve()
+    })
+    await flush()
+  }
+
+  return { container, textarea: container.querySelector('textarea'), resolveRefetch }
+}
+
+/**
  * Render loaded, make content dirty, then fire visibilitychange with a re-fetch
  * that returns fetchedContent. Returns the container in whatever state the
  * (unimplemented) conflict logic puts it.
@@ -938,5 +993,78 @@ describe('TestFromAC_IdeasPageSaveBeforeResolve', () => {
 
     // No external change → no conflict
     expect(container.querySelector('[data-testid="ideas-conflict-notice"]')).toBeNull()
+  })
+})
+
+// ─── AC3 condition b: clean-start → save before GET resolves → GET discarded ──
+//
+// AC3 (refined): "If IdeasPage content was clean at visibilitychange trigger but
+// either (a) the page is dirty when the GET response resolves, or (b) the
+// last-saved baseline differs from the trigger-time baseline when the GET
+// response resolves, the refetch result is discarded."
+//
+// Condition b scenario: clean-start → user edits → user saves (baseline moves)
+// → GET resolves → implementation must discard result.
+//
+// Current bug: IdeasPage.tsx:111-120 checks only `isDirtyAtResolve`; after a
+// mid-flight save the page is clean again, so isDirtyAtResolve=false and the
+// stale GET response is applied, overwriting the just-saved content.
+// Both tests below FAIL against the current implementation.
+
+describe('TestFromAC_IdeasPageCleanSaveBeforeResolve', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    setVisibilityState('visible')
+  })
+
+  it('ac3b happy: textarea preserves post-save content when clean-start GET resolves after mid-flight save', async () => {
+    // Setup: clean page → pending GET → type → save → resolve GET
+    // Expected: textarea still shows post-save content, not stale server value.
+    // Current bug: isDirtyAtResolve=false after save → impl applies 'server update' → FAIL.
+    const { container, textarea, resolveRefetch } =
+      await startPendingRefetchWithSave('original', 'server update')
+
+    // Type to make dirty, then save (Cmd+S) — baseline moves to 'mid-flight edit'
+    if (textarea) {
+      fireEvent.change(textarea, { target: { value: 'mid-flight edit' } })
+    }
+    await act(async () => {
+      document.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 's', metaKey: true, bubbles: true }),
+      )
+    })
+    await flush()
+
+    // GET resolves — AC3 condition b: baseline changed → must discard
+    await resolveRefetch()
+
+    expect(container.querySelector('textarea')?.value).toBe('mid-flight edit')
+  })
+
+  it('ac3b happy: last-saved baseline reflects post-save content after clean-start GET discarded', async () => {
+    // Discriminating probe: after resolve, type 'server update' into textarea.
+    // Correct impl (baseline='mid-flight edit'): 'server update'≠baseline → dirty → Save enabled.
+    // Bug impl (baseline='server update' from applied GET): 'server update'=baseline → clean → Save disabled.
+    const { container, textarea, resolveRefetch } =
+      await startPendingRefetchWithSave('original', 'server update')
+
+    if (textarea) {
+      fireEvent.change(textarea, { target: { value: 'mid-flight edit' } })
+    }
+    await act(async () => {
+      document.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 's', metaKey: true, bubbles: true }),
+      )
+    })
+    await flush()
+
+    await resolveRefetch()
+
+    // Type 'server update' — proves baseline is 'mid-flight edit' (not 'server update')
+    if (textarea) {
+      fireEvent.change(textarea, { target: { value: 'server update' } })
+    }
+    const saveBtn = container.querySelector<HTMLButtonElement>('[data-testid="ideas-save"]')
+    expect(saveBtn?.disabled).toBe(false)
   })
 })
