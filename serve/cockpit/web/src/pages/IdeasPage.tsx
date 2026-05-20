@@ -1,10 +1,21 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useBlocker } from 'react-router'
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { UNSAFE_NavigationContext } from 'react-router'
 import ReactMarkdown from 'react-markdown'
 import rehypeSanitize from 'rehype-sanitize'
 import remarkGfm from 'remark-gfm'
 
 import { fetchIdeas, saveIdeas } from '../api/ideas'
+
+type NavigationTransaction = {
+  retry: () => void
+}
+
+type BlockNavigator = {
+  block?: (blocker: (tx: NavigationTransaction) => void) => () => void
+  push?: (to: string, state?: unknown) => void
+  replace?: (to: string, state?: unknown) => void
+  go?: (delta: number) => void
+}
 
 function IdeasPage() {
   const [content, setContent] = useState('')
@@ -13,10 +24,13 @@ function IdeasPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const pendingTransitionRef = useRef<(() => void) | null>(null)
+  const navigationContext = useContext(UNSAFE_NavigationContext)
 
   const isDirty = useMemo(() => content !== lastSavedContent, [content, lastSavedContent])
-  const blocker = useBlocker(isDirty)
+  const navigator = (navigationContext?.navigator ?? {}) as BlockNavigator
 
   useEffect(() => {
     let cancelled = false
@@ -97,6 +111,93 @@ function IdeasPage() {
 
   useEffect(() => {
     if (!isDirty) {
+      pendingTransitionRef.current = null
+      setShowUnsavedDialog(false)
+      return
+    }
+
+    if (!navigator.block) {
+      return
+    }
+
+    const unblock = navigator.block((tx) => {
+      if (pendingTransitionRef.current !== null) {
+        return
+      }
+      pendingTransitionRef.current = () => {
+        unblock()
+        tx.retry()
+      }
+      setShowUnsavedDialog(true)
+    })
+
+    return () => {
+      unblock()
+      pendingTransitionRef.current = null
+      setShowUnsavedDialog(false)
+    }
+  }, [isDirty, navigator])
+
+  useEffect(() => {
+    if (!isDirty || navigator.block) {
+      return
+    }
+
+    const originalPush = navigator.push
+    const originalReplace = navigator.replace
+    const originalGo = navigator.go
+
+    const queueTransition = (retry: () => void) => {
+      if (pendingTransitionRef.current !== null) {
+        return
+      }
+      pendingTransitionRef.current = retry
+      setShowUnsavedDialog(true)
+    }
+
+    if (originalPush) {
+      navigator.push = (to, state) => {
+        queueTransition(() => {
+          originalPush(to, state)
+        })
+      }
+    }
+
+    if (originalReplace) {
+      navigator.replace = (to, state) => {
+        queueTransition(() => {
+          originalReplace(to, state)
+        })
+      }
+    }
+
+    if (originalGo) {
+      navigator.go = (delta) => {
+        queueTransition(() => {
+          originalGo(delta)
+        })
+      }
+    }
+
+    return () => {
+      if (originalPush) {
+        navigator.push = originalPush
+      }
+      if (originalReplace) {
+        navigator.replace = originalReplace
+      }
+      if (originalGo) {
+        navigator.go = originalGo
+      }
+      pendingTransitionRef.current = null
+      setShowUnsavedDialog(false)
+    }
+  }, [isDirty, navigator])
+
+  useEffect(() => {
+    if (!isDirty) {
+      pendingTransitionRef.current = null
+      setShowUnsavedDialog(false)
       return
     }
 
@@ -109,6 +210,18 @@ function IdeasPage() {
       window.removeEventListener('beforeunload', onBeforeUnload)
     }
   }, [isDirty])
+
+  const handleLeavePage = useCallback(() => {
+    const proceed = pendingTransitionRef.current
+    pendingTransitionRef.current = null
+    setShowUnsavedDialog(false)
+    proceed?.()
+  }, [])
+
+  const handleStayOnPage = useCallback(() => {
+    pendingTransitionRef.current = null
+    setShowUnsavedDialog(false)
+  }, [])
 
   if (loading) {
     return (
@@ -132,23 +245,13 @@ function IdeasPage() {
 
   return (
     <section>
-      {blocker.state === 'blocked' ? (
+      {showUnsavedDialog ? (
         <div role="alertdialog" aria-modal="true" aria-label="Unsaved changes">
           <p>You have unsaved changes. Leave anyway?</p>
-          <button
-            type="button"
-            onClick={() => {
-              blocker.proceed()
-            }}
-          >
+          <button type="button" onClick={handleLeavePage}>
             Leave
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              blocker.reset()
-            }}
-          >
+          <button type="button" onClick={handleStayOnPage}>
             Cancel
           </button>
         </div>
