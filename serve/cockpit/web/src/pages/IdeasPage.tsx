@@ -110,6 +110,11 @@ function IdeasPage() {
         const response = await fetchIdeas()
 
         if (!wasDirtyAtTrigger) {
+          const isDirtyAtResolve = contentRef.current !== lastSavedContentRef.current
+          if (isDirtyAtResolve) {
+            return
+          }
+
           setConflictContent(null)
           setContent(response.content)
           setLastSavedContent(response.content)
