@@ -487,6 +487,33 @@ Accessibility and responsive state after #1396:
   fetch, sort, filter intersection, PDS option dual-render guard, state variant proof,
   empty states, clear-filters per-control reset, and parse-error warning).
 
+- #1672 adds interactive accordion detail and mutation actions to the Memory tab.
+  Each entry expands via `PAccordion` to show sanitized markdown content (rehype-sanitize
+  custom schema allowing p, br, ul, ol, li, strong, em, code, a with href restricted to
+  http/https/mailto protocols; stripped: script, style, img, iframe; no
+  `dangerouslySetInnerHTML`) and all metadata fields (id, source_agent, scope_agents,
+  categories, confidence, state, timestamps). State-dependent action buttons are gated
+  within the accordion: Approve (curated only), Edit (all non-deleted; inline approved-entry
+  warning), and Delete (all non-deleted; confirmation dialog distinguishing hard-delete for
+  pending vs soft-delete for curated/approved). The inline edit form covers title,
+  categories, confidence, scope_agents, and content with a 1024-char counter; save sends
+  `POST /api/memories/{id}/edit` with `expected_updated_at` from the loaded entry. Error
+  UX: 409 OCC conflict shows an inline banner (`Entry was modified — refreshing`) and
+  auto-refetches; 404 removes the entry from the local list; 422 renders field-level
+  validation messages inside the edit form, parsed from FastAPI structured detail
+  (`{detail: [{loc, msg}]}`). On mutation success, the entry is replaced from the response
+  payload (approve/edit) or removed/soft-marked deleted (delete) without a list-level
+  loading spinner; on failure, local state is unchanged. When an edit auto-promotes a
+  pending entry to curated via scope_agents assignment, an inline promotion note is shown
+  immediately. `hooks/usePendingMemoryCount.ts` dispatches a pending-count delta event on
+  successful pending-state mutations; `Shell.tsx` consumes this event and updates the
+  nav-rail memory badge immediately (hidden at zero, aria-label includes count) without
+  waiting for the next 60s poll. Verified by
+  `serve/cockpit/web/src/__tests__/MemoryTab_1672.test.tsx` (66 tests — accordion detail
+  and sanitization schema, state-dependent button visibility, OCC/404/422 error UX,
+  response-driven local updates without list spinner, state promotion feedback, and immediate
+  nav-badge sync after pending-state mutations).
+
 ## Product Boundary
 
 Cockpit steering owns viewing, editing, moving/archiving, user blocks, health/admin,
