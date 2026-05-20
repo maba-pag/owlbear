@@ -1,8 +1,7 @@
-"""Atomic write primitive for kanban task files (Brief C §3.1).
+"""Crash-safe atomic text write utility.
 
-Provides ``atomic_write(target, content)`` — the only function that
-physically writes content to a file.  All higher-level storage operations
-(write_task, save_config, migration rewrites, AR file creation) call it.
+Provides ``atomic_write(target, content)`` to persist text by writing to a
+temporary sibling file and then replacing the destination path atomically.
 """
 
 from __future__ import annotations
@@ -16,7 +15,7 @@ from pathlib import Path
 def atomic_write(target: Path, content: str) -> None:
     """Write *content* to *target* atomically via a sibling .tmp-* file.
 
-    Sequence (per Brief C §3.1):
+    Sequence:
     1. ``mkstemp`` creates a ``.tmp-{random}.md`` in the same directory.
     2. Write *content* to the temp file descriptor (UTF-8, LF line endings).
     3. ``fsync`` the file fd.
