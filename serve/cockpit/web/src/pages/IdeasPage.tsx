@@ -21,16 +21,28 @@ function IdeasPage() {
   const [content, setContent] = useState('')
   const [previewMode, setPreviewMode] = useState(false)
   const [lastSavedContent, setLastSavedContent] = useState('')
+  const [conflictContent, setConflictContent] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const pendingTransitionRef = useRef<(() => void) | null>(null)
+  const contentRef = useRef('')
+  const lastSavedContentRef = useRef('')
   const navigationContext = useContext(UNSAFE_NavigationContext)
 
   const isDirty = useMemo(() => content !== lastSavedContent, [content, lastSavedContent])
+  const hasConflict = conflictContent !== null
   const navigator = (navigationContext?.navigator ?? {}) as BlockNavigator
+
+  useEffect(() => {
+    contentRef.current = content
+  }, [content])
+
+  useEffect(() => {
+    lastSavedContentRef.current = lastSavedContent
+  }, [lastSavedContent])
 
   useEffect(() => {
     let cancelled = false
@@ -71,7 +83,7 @@ function IdeasPage() {
   }, [errorMessage, loading, previewMode])
 
   const handleSave = useCallback(async () => {
-    if (!isDirty || saving || loading) {
+    if (!isDirty || saving || loading || hasConflict) {
       return
     }
 
@@ -86,7 +98,44 @@ function IdeasPage() {
     } finally {
       setSaving(false)
     }
-  }, [content, isDirty, loading, saving])
+  }, [content, hasConflict, isDirty, loading, saving])
+
+  useEffect(() => {
+    const refetchIdeas = async () => {
+      try {
+        const response = await fetchIdeas()
+        const currentContent = contentRef.current
+        const currentLastSaved = lastSavedContentRef.current
+        const isCurrentlyDirty = currentContent !== currentLastSaved
+
+        if (!isCurrentlyDirty) {
+          setConflictContent(null)
+          setContent(response.content)
+          setLastSavedContent(response.content)
+          return
+        }
+
+        if (response.content !== currentLastSaved) {
+          setConflictContent(response.content)
+        }
+      } catch {
+        // Background refetch failure is intentionally silent.
+      }
+    }
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') {
+        return
+      }
+
+      void refetchIdeas()
+    }
+
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
+  }, [])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -96,7 +145,7 @@ function IdeasPage() {
       }
 
       event.preventDefault()
-      if (!isDirty) {
+      if (!isDirty || hasConflict) {
         return
       }
 
@@ -107,7 +156,26 @@ function IdeasPage() {
     return () => {
       document.removeEventListener('keydown', onKeyDown)
     }
-  }, [handleSave, isDirty])
+  }, [handleSave, hasConflict, isDirty])
+
+  const handleConflictOverwrite = useCallback(() => {
+    if (conflictContent === null) {
+      return
+    }
+
+    setLastSavedContent(conflictContent)
+    setConflictContent(null)
+  }, [conflictContent])
+
+  const handleConflictDiscard = useCallback(() => {
+    if (conflictContent === null) {
+      return
+    }
+
+    setContent(conflictContent)
+    setLastSavedContent(conflictContent)
+    setConflictContent(null)
+  }, [conflictContent])
 
   useEffect(() => {
     if (!isDirty) {
@@ -256,6 +324,25 @@ function IdeasPage() {
           </button>
         </div>
       ) : null}
+      {hasConflict ? (
+        <div data-testid="ideas-conflict-notice" role="alert">
+          <p>Ideas were updated externally.</p>
+          <button
+            type="button"
+            data-testid="ideas-conflict-overwrite"
+            onClick={handleConflictOverwrite}
+          >
+            Overwrite
+          </button>
+          <button
+            type="button"
+            data-testid="ideas-conflict-discard"
+            onClick={handleConflictDiscard}
+          >
+            Discard & Reload
+          </button>
+        </div>
+      ) : null}
       {errorMessage ? (
         <div data-testid="ideas-error" role="alert">
           {errorMessage}
@@ -293,7 +380,7 @@ function IdeasPage() {
         onClick={() => {
           void handleSave()
         }}
-        disabled={!isDirty || saving}
+        disabled={!isDirty || saving || hasConflict}
       >
         Save
       </button>
