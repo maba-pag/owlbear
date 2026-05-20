@@ -9,7 +9,7 @@
  *       from the sidecar
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render } from '@testing-library/react'
+import { render, fireEvent, act } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
 
@@ -55,6 +55,10 @@ vi.mock('../components/DRStatusIndicator', () => ({
       </div>
     ),
   ),
+}))
+
+vi.mock('../components/ResolveModal', () => ({
+  default: vi.fn(() => <div data-testid="resolve-modal-stub" />),
 }))
 
 vi.mock('../components/ActivityTab', () => ({
@@ -173,14 +177,13 @@ describe('TestFromAC_DecisionViewportRemoval', () => {
     vi.clearAllMocks()
   })
 
-  // ─── AC-1: DecisionViewport absent from sidecar aside ─────────────────
+  // ─── AC-1: DecisionViewport and retired sidecar are absent ─────────────
 
-  describe('AC1: DecisionViewport is not rendered inside the sidecar aside element', () => {
-    it('ac1 happy: sidecar aside does not contain decision-viewport in desktop mode', () => {
+  describe('AC1: DecisionViewport is not rendered by Shell', () => {
+    it('ac1 happy: Shell does not render sidecar or decision-viewport in desktop mode', () => {
       const { container } = renderShell('/')
-      const sidecar = container.querySelector('[data-region="sidecar"]')
-      expect(sidecar).not.toBeNull()
-      expect(sidecar!.querySelector('[data-testid="decision-viewport"]')).toBeNull()
+      expect(container.querySelector('[data-region="sidecar"]')).toBeNull()
+      expect(container.querySelector('[data-testid="decision-viewport"]')).toBeNull()
     })
 
     it('ac1 happy: Shell does not call DecisionViewport component at all', () => {
@@ -188,23 +191,21 @@ describe('TestFromAC_DecisionViewportRemoval', () => {
       expect(vi.mocked(DecisionViewport)).not.toHaveBeenCalled()
     })
 
-    it('ac1 edge: sidecar renders without decision-viewport even when pending DRs exist', () => {
+    it('ac1 edge: Shell keeps decision-viewport absent even when pending DRs exist', () => {
       stubPendingDRs({ count: 1, items: [DR_A], isLoading: false })
       const { container } = renderShell('/')
-      const sidecar = container.querySelector('[data-region="sidecar"]')
-      expect(sidecar).not.toBeNull()
-      expect(sidecar!.querySelector('[data-testid="decision-viewport"]')).toBeNull()
+      expect(container.querySelector('[data-region="sidecar"]')).toBeNull()
+      expect(container.querySelector('[data-testid="decision-viewport"]')).toBeNull()
     })
 
-    it('ac1 edge: shell-sidecar-content has no decision-viewport child when loading', () => {
+    it('ac1 edge: retired shell-sidecar-content is absent when DRs are loading', () => {
       stubPendingDRs({ count: 0, items: [], isLoading: true })
       const { container } = renderShell('/')
-      const sidecarContent = container.querySelector('#shell-sidecar-content')
-      expect(sidecarContent).not.toBeNull()
-      expect(sidecarContent!.querySelector('[data-testid="decision-viewport"]')).toBeNull()
+      expect(container.querySelector('#shell-sidecar-content')).toBeNull()
+      expect(container.querySelector('[data-testid="decision-viewport"]')).toBeNull()
     })
 
-    it('ac1 error: sidecar does not contain decision-viewport when DR fetch errors', () => {
+    it('ac1 error: Shell keeps decision-viewport absent when DR fetch errors', () => {
       stubPendingDRs({
         count: 0,
         items: [],
@@ -212,8 +213,7 @@ describe('TestFromAC_DecisionViewportRemoval', () => {
         error: new Error('Network error 503'),
       })
       const { container } = renderShell('/')
-      const sidecar = container.querySelector('[data-region="sidecar"]')
-      expect(sidecar!.querySelector('[data-testid="decision-viewport"]')).toBeNull()
+      expect(container.querySelector('[data-testid="decision-viewport"]')).toBeNull()
     })
 
     it('ac1 boundary: DecisionViewport call count is zero across full render', () => {
@@ -223,16 +223,70 @@ describe('TestFromAC_DecisionViewportRemoval', () => {
     })
   })
 
-  // ─── AC-2: DRStatusIndicator continues to function on all routes ───────
-  // Regression guards: DRStatusIndicator wiring is unchanged by this task.
-  // These tests describe existing-passing behavior and therefore cannot be
-  // made to fail in RED phase without testing pre-existing functionality.
-  // Component-level coverage lives in DRStatusIndicator.test.tsx.
-  // Per w-tdd-red: removed after confirmed-pass; noted in channel-B.
+  // ─── AC-2: DRStatusIndicator is route-independent and its callback opens ResolveModal ───
+
+  describe('AC2: DRStatusIndicator is route-independent and its callback opens ResolveModal', () => {
+    it('ac2 happy: DRStatusIndicator is present in the Shell status bar at root route', () => {
+      const { container } = renderShell('/')
+      expect(container.querySelector('[data-testid="dr-status-indicator"]')).not.toBeNull()
+    })
+
+    it('ac2 happy: DRStatusIndicator reflects pending DR count from usePendingDRs', () => {
+      stubPendingDRs({ count: 1, items: [DR_A], isLoading: false })
+      const { container } = renderShell('/')
+      expect(container.querySelector('[data-testid="dr-spy-count"]')?.textContent).toBe('1')
+    })
+
+    it('ac2 happy: clicking a DR item fires onItemClick which opens ResolveModal', () => {
+      stubPendingDRs({ count: 1, items: [DR_A], isLoading: false })
+      const { container } = renderShell('/')
+      const btn = container.querySelector('[data-testid="dr-spy-item-dr-001"]') as HTMLElement
+      expect(btn).not.toBeNull()
+      act(() => { fireEvent.click(btn) })
+      expect(container.querySelector('[data-testid="resolve-modal-stub"]')).not.toBeNull()
+    })
+
+    it('ac2 edge: DRStatusIndicator is present at /decisions route (route-independent)', () => {
+      const { container } = renderShell('/decisions')
+      expect(container.querySelector('[data-testid="dr-status-indicator"]')).not.toBeNull()
+    })
+
+    it('ac2 edge: clicking a DR item opens ResolveModal from /memories route', () => {
+      stubPendingDRs({ count: 1, items: [DR_A], isLoading: false })
+      const { container } = renderShell('/memories')
+      const btn = container.querySelector('[data-testid="dr-spy-item-dr-001"]') as HTMLElement
+      expect(btn).not.toBeNull()
+      act(() => { fireEvent.click(btn) })
+      expect(container.querySelector('[data-testid="resolve-modal-stub"]')).not.toBeNull()
+    })
+
+    it('ac2 boundary: DRStatusIndicator is inside the status-bar div (outside Routes outlet)', () => {
+      const { container } = renderShell('/')
+      const statusBar = container.querySelector('[data-region="status-bar"]')
+      expect(statusBar).not.toBeNull()
+      expect(statusBar?.querySelector('[data-testid="dr-status-indicator"]')).not.toBeNull()
+    })
+
+    it('ac2 boundary: ResolveModal is absent before any DR item is clicked', () => {
+      stubPendingDRs({ count: 1, items: [DR_A], isLoading: false })
+      const { container } = renderShell('/')
+      expect(container.querySelector('[data-testid="resolve-modal-stub"]')).toBeNull()
+    })
+  })
 
   // ─── AC-3: No runtime errors after DecisionViewport removal ───────────
-  // Smoke guards: Shell renders without error both before and after the
-  // builder's change, making these inherently green in RED phase.
-  // AC-3 is satisfied structurally by AC-1: if the sidecar renders without
-  // DecisionViewport (AC-1 passes), there are no missing-import errors.
+
+  describe('AC3: Shell renders without missing-import or render errors', () => {
+    it('ac3 smoke: Shell renders without throwing when DecisionViewport import is removed', () => {
+      const { container } = renderShell('/')
+      expect(container.firstChild).not.toBeNull()
+    })
+
+    it('ac3 smoke: Shell renders cleanly with pending DRs and no sidecar import errors', () => {
+      stubPendingDRs({ count: 2, items: [DR_A], isLoading: false })
+      const { container } = renderShell('/')
+      expect(container.querySelector('[data-testid="dr-status-indicator"]')).not.toBeNull()
+      expect(container.querySelector('[data-testid="decision-viewport"]')).toBeNull()
+    })
+  })
 })
