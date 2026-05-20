@@ -467,6 +467,19 @@ Accessibility and responsive state after #1396:
   format with count and reversion to `Decisions` on count=0) and durable
   `serve/cockpit/web/src/__tests__/Shell.test.tsx` (18 tests, all passing).
 
+- #1647 wires `DecisionsPage` click/keyboard activation to the Shell-level `ResolveModal`
+  and adds a snapshot guard to `ResolveModal`. In `DecisionsPage.tsx`, each DR list item's
+  click and `keydown` handlers call `drState.setSelectedDRId(item.id)`, opening the same
+  Shell-level `ResolveModal` used by `DRStatusIndicator` — no second modal instance is
+  created. In `ResolveModal.tsx`, `const [snapshotDR] = useState(() => dr)` copies the
+  `dr` prop into component-local state on mount; all subsequent renders read from
+  `snapshotDR` rather than the live prop, so SSE-triggered `useDRState()` refetches do not
+  overwrite the title, body, or id visible in the open modal. Closing and reopening the
+  modal creates a fresh mount and a new snapshot, so a second open always reflects current
+  data. Verified by `serve/cockpit/web/src/__tests__/ResolveModalSnapshot_1647.test.tsx`
+  (7 tests — AC1 DecisionsPage click opens Shell modal with DR data; AC2 same-id rerenders
+  do not overwrite the open modal title/body; AC3 reopened modal picks up newer DR data).
+
 - #1648 removes `DecisionViewport` from the Shell sidecar. The `DecisionViewport` import is removed from `Shell.tsx` and the component is no longer rendered inside the sidecar `<aside>` in either the mobile `p-sheet` or desktop branch; the canvas carries `data-no-sidecar`. `DRStatusIndicator` in the status bar and `ResolveModal` gated on `selectedDR` state are retained — both render outside the `<Routes>` outlet and are route-independent by construction. The obsolete `Shell.decision-viewport.test.tsx` legacy proof suite is deleted. Verified by `serve/cockpit/web/src/__tests__/Shell.remove-decision-viewport_1648.test.tsx` (15 tests — AC-1 no-sidecar DOM and zero `DecisionViewport` calls across default, loading, pending, and error states; AC-2 `DRStatusIndicator` presence, count wiring, and click-to-modal at `/`, `/decisions`, and `/memories`; AC-3 render smoke with and without pending DRs).
 
 - #1671 adds the Memory tab list view at `/memories`. `pages/MemoryTab.tsx` (default
