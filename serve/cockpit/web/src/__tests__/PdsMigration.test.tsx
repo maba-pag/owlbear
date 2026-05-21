@@ -288,17 +288,20 @@ describe('TestFromAC_PdsMigration_Buttons', () => {
     })
   })
 
-  describe('AC1: Shell nav rail uses a documented native-button exception', () => {
-    it('kanban surface selector is a native button with a PDS exception marker', () => {
+  describe('AC1: Shell nav rail uses intentional custom workspace controls', () => {
+    it('kanban surface selector is an accessible custom workspace control', () => {
       const { container } = renderShell()
       const navRail = container.querySelector('[data-region="nav-rail"]')
-      expect(navRail?.querySelector('button[data-surface="kanban"][data-pds-exception="nav-kanban"]')).not.toBeNull()
+      const control = navRail?.querySelector('[data-surface="kanban"]')
+      expect(control).not.toBeNull()
+      expect(control?.getAttribute('aria-label')).toBe('Kanban')
+      expect(control?.getAttribute('aria-current')).toBe('page')
     })
 
-    it('renders no unmarked raw <button> in nav-rail', () => {
+    it('renders an intentional dock surface for workspace controls', () => {
       const { container } = renderShell()
       const navRail = container.querySelector('[data-region="nav-rail"]')
-      expect(navRail?.querySelector('button:not([data-pds-exception])')).toBeNull()
+      expect(navRail?.querySelector('[data-testid="nav-rail-dock"]')).not.toBeNull()
     })
   })
 
@@ -465,10 +468,10 @@ describe('TestFromAC_PdsMigration_Buttons', () => {
     })
   })
 
-  describe('AC1 variant: Shell — native nav rail exception remains accessible', () => {
+  describe('AC1 variant: Shell — nav rail control remains accessible', () => {
     it('kanban surface selector has an accessible name and current-page state', () => {
       const { container } = renderShell()
-      const el = container.querySelector('button[data-surface="kanban"]')
+      const el = container.querySelector('[data-surface="kanban"]')
       expect(el?.getAttribute('aria-label')).toBe('Kanban')
       expect(el?.getAttribute('aria-current')).toBe('page')
     })
@@ -754,12 +757,6 @@ describe('TestFromAC_PdsMigration_FormControls', () => {
       expect(el?.hasAttribute('hide-label')).toBe(true)
     })
 
-    it('p-textarea for resolve notes has hide-label attribute (no visible label)', () => {
-      const { container } = renderResolveModal()
-      const el = container.querySelector('p-textarea[data-testid="resolve-notes"]')
-      expect(el?.hasAttribute('hide-label')).toBe(true)
-    })
-
     it('p-input-text for depends_on has hide-label attribute (no visible label)', () => {
       const { container } = renderDetailTab()
       const el = container.querySelector('p-input-text[data-field="depends_on"]')
@@ -794,6 +791,14 @@ describe('TestFromAC_PdsMigration_FormControls', () => {
       if (pSelect) fireEvent(pSelect, new CustomEvent('change', { detail: { value: 'duplicate' }, bubbles: true }))
       const pInput = container.querySelector('p-input-text')
       expect(pInput?.hasAttribute('hide-label')).toBe(false)
+    })
+
+    it('p-textarea for resolve notes keeps its visible PDS label', () => {
+      const { container } = renderResolveModal()
+      const textarea = container.querySelector('p-textarea[data-testid="resolve-notes"]') as HTMLElement & { label?: string }
+      expect(textarea).not.toBeNull()
+      expect(textarea.hasAttribute('hide-label')).toBe(false)
+      expect(textarea.label ?? textarea.getAttribute('label')).toBe('Resolution notes')
     })
   })
 

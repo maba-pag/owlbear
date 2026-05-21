@@ -100,7 +100,7 @@ function navBtn(navRail: Element, surface: string): HTMLElement {
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe('TestFromAC_NavRailButtons', () => {
-  // ── AC1: role="navigation" + one button per routeConfig entry ─────────────
+  // ── AC1: role="navigation" + one control per routeConfig entry ────────────
 
   describe('AC1 — role and data-driven button rendering', () => {
     it('ac1 happy: nav-rail <nav> has explicit role="navigation" attribute', () => {
@@ -109,9 +109,9 @@ describe('TestFromAC_NavRailButtons', () => {
       expect(rail(container).getAttribute('role')).toBe('navigation')
     })
 
-    it('ac1 happy: nav-rail renders 3 buttons matching the mocked 3-entry routeConfig', () => {
+    it('ac1 happy: nav-rail renders 3 controls matching the mocked 3-entry routeConfig', () => {
       const { container } = renderShell()
-      expect(rail(container).querySelectorAll('button[data-surface]').length).toBe(3)
+      expect(rail(container).querySelectorAll('[data-surface]').length).toBe(3)
     })
 
     it('ac1 happy: decisions nav button is present with data-surface="decisions"', () => {
@@ -119,14 +119,13 @@ describe('TestFromAC_NavRailButtons', () => {
       expect(rail(container).querySelector('[data-surface="decisions"]')).not.toBeNull()
     })
 
-    it('ac1 happy: all nav-rail data-surface buttons are native <button> elements', () => {
+    it('ac1 happy: all nav-rail data-surface controls expose accessible labels', () => {
       const { container } = renderShell()
       const navRail = rail(container)
-      // Count check first — fails if fewer than 3 buttons present
-      const buttons = Array.from(navRail.querySelectorAll('button[data-surface]'))
-      expect(buttons.length).toBe(3)
-      for (const btn of buttons) {
-        expect(btn.tagName).toBe('BUTTON')
+      const controls = Array.from(navRail.querySelectorAll('[data-surface]'))
+      expect(controls.length).toBe(3)
+      for (const control of controls) {
+        expect(control.getAttribute('aria-label')).toBeTruthy()
       }
     })
 
@@ -152,10 +151,10 @@ describe('TestFromAC_NavRailButtons', () => {
       expect(label.toLowerCase()).toContain('decisions')
     })
 
-    it('ac1 boundary: button count equals routeConfig.length — proves data-driven rendering', () => {
-      // routeConfig mocked to 3 entries; hardcoded 2-button nav yields 1 ≠ 3
+    it('ac1 boundary: control count equals routeConfig.length — proves data-driven rendering', () => {
+      // routeConfig mocked to 3 entries; hardcoded 2-control nav yields 1 != 3
       const { container } = renderShell()
-      expect(rail(container).querySelectorAll('button[data-surface]').length).toBe(3)
+      expect(rail(container).querySelectorAll('[data-surface]').length).toBe(3)
     })
   })
 
@@ -219,8 +218,7 @@ describe('TestFromAC_NavRailButtons', () => {
     it('ac2 boundary: exactly one nav button has aria-current="page" on a known route', () => {
       const { container } = renderShell('/')
       const navRail = rail(container)
-      // Button count check first — fails if count != 3
-      expect(navRail.querySelectorAll('button[data-surface]').length).toBe(3)
+      expect(navRail.querySelectorAll('[data-surface]').length).toBe(3)
       expect(navRail.querySelectorAll('[data-surface][aria-current="page"]').length).toBe(1)
     })
   })
@@ -254,21 +252,21 @@ describe('TestFromAC_NavRailButtons', () => {
       expect(navBtn(navRail, 'decisions').hasAttribute('aria-current')).toBe(false)
     })
 
-    it('ac3 boundary: total nav-rail button count is 3, proving data-driven rendering', () => {
-      // Hardcoded 2-button implementation yields 2 ≠ 3 → FAIL
+    it('ac3 boundary: total nav-rail control count is 3, proving data-driven rendering', () => {
+      // Hardcoded 2-control implementation yields 2 != 3.
       const { container } = renderShell()
-      expect(rail(container).querySelectorAll('button[data-surface]').length).toBe(3)
+      expect(rail(container).querySelectorAll('[data-surface]').length).toBe(3)
     })
   })
 
-  // ── AC1/AC3: falsifiability gate — proves buttons are derived from config ──
+  // ── AC1/AC3: falsifiability gate — proves controls are derived from config ─
   //
   // The tests above pin the mock to exactly the same 3 icons the impl could
   // theoretically hardcode. These gate tests mutate routeConfigMut in-place
   // to use novel entries that no hardcoded impl would render, falsifying any
   // non-data-driven implementation.
 
-  describe('AC1/AC3 — falsifiability gate: button count and surface track config entries', () => {
+  describe('AC1/AC3 — falsifiability gate: control count and surface track config entries', () => {
     // Snapshot the default 3 entries for restore after each test.
     const defaultEntries = routeConfigMut.slice()
 
@@ -277,30 +275,30 @@ describe('TestFromAC_NavRailButtons', () => {
       routeConfigMut.push(...defaultEntries)
     })
 
-    it('ac1 falsify: 1-entry config renders exactly 1 nav button (falsifies hardcoded 3-button nav)', () => {
+    it('ac1 falsify: 1-entry config renders exactly 1 nav control', () => {
       routeConfigMut.length = 0
       routeConfigMut.push({ path: '/only', label: 'Only', icon: 'sentinel-1642', component: () => null })
       const { container } = renderShell()
-      expect(rail(container).querySelectorAll('button[data-surface]').length).toBe(1)
+      expect(rail(container).querySelectorAll('[data-surface]').length).toBe(1)
     })
 
-    it('ac1 falsify: novel sentinel-1642 button only present when config includes sentinel entry', () => {
+    it('ac1 falsify: novel sentinel-1642 control only present when config includes sentinel entry', () => {
       routeConfigMut.length = 0
       routeConfigMut.push({ path: '/s', label: 'Sentinel', icon: 'sentinel-1642', component: () => null })
       const { container } = renderShell()
       expect(rail(container).querySelector('[data-surface="sentinel-1642"]')).not.toBeNull()
     })
 
-    it('ac3 falsify: 4-entry config renders exactly 4 nav buttons (falsifies any fixed-count nav)', () => {
+    it('ac3 falsify: 4-entry config renders exactly 4 nav controls', () => {
       function Stub() {
         return null
       }
       routeConfigMut.push({ path: '/extra', label: 'Extra', icon: 'extra-gate-1642', component: Stub })
       const { container } = renderShell()
-      expect(rail(container).querySelectorAll('button[data-surface]').length).toBe(4)
+      expect(rail(container).querySelectorAll('[data-surface]').length).toBe(4)
     })
 
-    it('ac3 falsify: novel gate-1642 entry renders matching button that navigates to its path', () => {
+    it('ac3 falsify: novel gate-1642 entry renders matching control that navigates to its path', () => {
       routeConfigMut.length = 0
       routeConfigMut.push({ path: '/', label: 'Kanban', icon: 'kanban', component: () => null })
       routeConfigMut.push({ path: '/gate-test-1642', label: 'Gate Test', icon: 'gate-1642', component: () => null })

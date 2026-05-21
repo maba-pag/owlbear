@@ -59,6 +59,7 @@ function syncTagVariantAttr(variant: string) {
 const NAV_ICONS: Record<string, IconName> = {
   kanban: 'grid',
   decisions: 'document',
+  ideas: 'edit',
   memory: 'brain',
 }
 
@@ -111,6 +112,12 @@ function Shell() {
     }
     return window.matchMedia('(min-width: 1024px)').matches
   })
+  const [isDesktopNavViewport, setIsDesktopNavViewport] = useState(() => {
+    if (typeof window === 'undefined') {
+      return true
+    }
+    return window.matchMedia('(min-width: 1024px)').matches
+  })
   const [isMaintenanceOpen, setIsMaintenanceOpen] = useState(false)
   const [selectedTaskSubtab, setSelectedTaskSubtab] = useState<string | null>(null)
   const [detailValidationMessage, setDetailValidationMessage] = useState<string | null>(null)
@@ -158,7 +165,8 @@ function Shell() {
   const matchedRoute = activeNavIndex >= 0 ? routeConfig[activeNavIndex] : undefined
   const isKanbanRoute = normalizedPathname === '/'
   const isTaskDetailOpen = isKanbanRoute && selectedTaskId !== null
-  const canvasKey = isSidebarStartOpen ? 'nav-open' : 'nav-closed'
+  const isNavRailOpen = isDesktopNavViewport || isSidebarStartOpen
+  const canvasKey = isNavRailOpen ? 'nav-open' : 'nav-closed'
   const routeElement = useMemo(() => {
     if (!matchedRoute) {
       return null
@@ -197,6 +205,7 @@ function Shell() {
   useEffect(() => {
     const mediaQuery = window.matchMedia('(min-width: 1024px)')
     const handleSidebarViewport = () => {
+      setIsDesktopNavViewport(mediaQuery.matches)
       setIsSidebarStartOpen(mediaQuery.matches)
     }
 
@@ -327,7 +336,7 @@ function Shell() {
         className="shell font-sans text-primary"
         background="canvas"
         data-no-sidecar=""
-        sidebarStartOpen={isSidebarStartOpen}
+        sidebarStartOpen={isNavRailOpen}
         sidebarEndOpen={false}
         style={canvasStyle}
         onSidebarStartUpdate={onSidebarStartUpdate}
@@ -406,25 +415,51 @@ function Shell() {
             <PFlyout
               open={isMaintenanceOpen}
               onDismiss={() => setIsMaintenanceOpen(false)}
+              aria={{ 'aria-label': 'Workspace care' }}
+              backdrop="shading"
+              background="surface"
             >
               <div
                 id="shell-maintenance-menu"
                 data-testid="maintenance-menu"
-                className="flex min-w-64 flex-col gap-static-md p-static-sm"
+                className="flex min-w-72 max-w-[min(420px,calc(100vw-2rem))] flex-col gap-static-md p-static-md text-primary"
               >
-                <div className="flex items-center justify-between text-xs font-semibold uppercase text-contrast-high">
-                  <span>Workspace Care</span>
-                  <span>{normalizedItems.length > 0 ? `${normalizedItems.length} attention` : 'Clear'}</span>
+                <div className="grid gap-static-xs border-b border-contrast-low pb-static-sm">
+                  <div className="flex items-start justify-between gap-static-md">
+                    <div className="grid gap-1">
+                      <span className="text-xs font-semibold uppercase text-primary">Workspace Care</span>
+                      <span className="text-sm leading-normal text-primary">Repair corrupted files and clear stale task state before dispatch.</span>
+                    </div>
+                    <span className="shrink-0 rounded-full border border-contrast-low bg-canvas px-static-xs py-1 text-xs font-semibold leading-none text-primary">
+                      {normalizedItems.length > 0 ? `${normalizedItems.length} attention` : 'Clear'}
+                    </span>
+                  </div>
+                  {scanError ? (
+                    <span className="rounded-md border border-error bg-error-low p-static-xs text-sm leading-normal text-error" role="status">
+                      Workspace scan failed: {scanError.message}
+                    </span>
+                  ) : null}
                 </div>
+                {normalizedItems.length > 0 ? (
+                  <ul className="m-0 grid max-h-[min(34vh,260px)] gap-static-xs overflow-y-auto p-0">
+                    {normalizedItems.slice(0, 4).map((item) => (
+                      <li key={`${item.file_path}-${item.code}`} className="grid gap-1 rounded-lg border border-contrast-low bg-canvas p-static-sm">
+                        <span className="break-all font-mono text-xs leading-normal text-primary">{item.file_path}</span>
+                        <span className="w-fit rounded-full border border-error bg-error px-static-xs py-1 text-xs font-semibold leading-none text-canvas">{item.code}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
                 <div className="flex flex-col gap-static-xs">
                   {hasLoadedScan && !scanError ? (
                     <RepairPanel
                       corruptionCount={normalizedItems.length}
                       files={normalizedItems}
                       onSuccess={refetch}
+                      portalConfirmDialog
                     />
                   ) : null}
-                  <CleanupPanel compact={false} onSuccess={refetchTasks} />
+                  <CleanupPanel compact={false} onSuccess={refetchTasks} portalConfirmDialog />
                 </div>
               </div>
             </PFlyout>
@@ -443,64 +478,73 @@ function Shell() {
         </div>
 
         <nav
-        slot="sidebar-start"
-        className="flex min-w-0 flex-col items-center gap-static-xs overflow-hidden"
-        data-region="nav-rail"
-        role="navigation"
-        aria-label="Workspaces"
-      >
-        <div className="flex min-w-0 flex-col items-center gap-static-xs overflow-hidden" aria-label="Workspace switcher">
-          {routeConfig.map((route) => {
-            const isActive = normalizedPathname === normalizeRoutePath(route.path)
-            const isDecisions = route.icon === 'decisions'
-            const isMemory = route.icon === 'memory'
-            const badgeCount = isDecisions ? pendingDRCount : isMemory ? pendingMemoryCount : 0
-            const label = badgeCount > 0
-              ? `${route.label} (${badgeCount} pending)`
-              : route.label
-            return (
-              <button
-                key={route.path}
-                type="button"
-                title={label}
-                className={[
-                  'focus-text relative inline-flex size-11 flex-none items-center justify-center',
-                  'rounded-full border p-0 text-sm font-semibold leading-none',
-                  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]',
-                  'transition-colors duration-sm',
-                  isActive
-                    ? 'border-primary bg-primary text-canvas'
-                    : 'border-transparent bg-frosted-soft text-primary hover:bg-frosted',
-                ].join(' ')}
-                data-surface={route.icon}
-                data-pds-exception={`nav-${route.icon}`}
-                aria-current={isActive ? 'page' : undefined}
-                aria-label={label}
-                onClick={() => navigate(route.path)}
-              >
-                <PIcon
-                  name={NAV_ICONS[route.icon] || 'grid'}
-                  color="inherit"
-                  size="small"
-                  aria-hidden="true"
-                />
-                {badgeCount > 0 ? (
-                  <span
-                    data-testid="nav-badge"
-                    className={[
-                      'absolute right-0 top-0 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1',
-                      'text-[0.65rem] font-bold leading-none',
-                      isActive ? 'bg-surface text-primary' : 'bg-error text-canvas',
-                    ].join(' ')}
-                  >
-                    {badgeCount}
-                  </span>
-                ) : null}
-              </button>
-            )
-          })}
-        </div>
-      </nav>
+          slot="sidebar-start"
+          className={[
+            'flex min-w-0 flex-col items-center overflow-hidden transition-opacity duration-sm',
+            isNavRailOpen ? 'opacity-100' : 'pointer-events-none invisible opacity-0',
+          ].join(' ')}
+          data-region="nav-rail"
+          role="navigation"
+          aria-label="Workspaces"
+          aria-hidden={isNavRailOpen ? undefined : true}
+        >
+          <div
+            className="flex min-w-0 flex-col items-center gap-1 rounded-full border border-contrast-low bg-frosted-soft p-1 shadow-lg backdrop-blur-sm"
+            data-testid="nav-rail-dock"
+            aria-label="Workspace switcher"
+          >
+            {routeConfig.map((route) => {
+              const isActive = normalizedPathname === normalizeRoutePath(route.path)
+              const isDecisions = route.icon === 'decisions'
+              const isMemory = route.icon === 'memory'
+              const badgeCount = isDecisions ? pendingDRCount : isMemory ? pendingMemoryCount : 0
+              const label = badgeCount > 0
+                ? `${route.label} (${badgeCount} pending)`
+                : route.label
+              return (
+                <button
+                  key={route.path}
+                  type="button"
+                  title={label}
+                  className={[
+                    'focus-text relative inline-flex size-10 flex-none items-center justify-center',
+                    'rounded-full border border-transparent p-0 text-sm font-semibold leading-none',
+                    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]',
+                    'transition-[background-color,color,box-shadow,transform] duration-sm',
+                    isActive
+                      ? 'bg-primary text-canvas shadow-md'
+                      : 'text-contrast-high hover:bg-surface hover:shadow-sm',
+                  ].join(' ')}
+                  data-surface={route.icon}
+                  data-pds-exception={`nav-${route.icon}`}
+                  aria-current={isActive ? 'page' : undefined}
+                  aria-label={label}
+                  tabIndex={isNavRailOpen ? 0 : -1}
+                  onClick={() => navigate(route.path)}
+                >
+                  <PIcon
+                    name={NAV_ICONS[route.icon] || 'grid'}
+                    color="inherit"
+                    size="small"
+                    aria-hidden="true"
+                  />
+                  {badgeCount > 0 ? (
+                    <span
+                      data-testid="nav-badge"
+                      className={[
+                        'absolute -right-0.5 -top-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-surface px-1 shadow-sm',
+                        'text-[0.6rem] font-bold leading-none',
+                        isActive ? 'bg-surface text-primary' : 'bg-warning text-primary',
+                      ].join(' ')}
+                    >
+                      {badgeCount}
+                    </span>
+                  ) : null}
+                </button>
+              )
+            })}
+          </div>
+        </nav>
 
       <div
         className="flex h-full min-h-0 min-w-0 flex-col"
@@ -534,13 +578,13 @@ function Shell() {
           aria={{ 'aria-label': selectedTask ? `Task #${selectedTask.id}: ${selectedTask.title}` : 'Task detail' }}
         >
           <div
-            className="flex max-h-[min(82vh,900px)] w-[min(960px,calc(100vw-12rem))] min-w-0 flex-col gap-static-md overflow-hidden"
+            className="flex max-h-[min(88vh,900px)] w-[min(1040px,calc(100vw-8rem))] min-w-0 flex-col gap-static-md overflow-hidden"
             data-region="task-detail-window"
             data-selected-task-id={selectedTask?.id ?? selectedTaskId ?? undefined}
           >
             <header
               data-testid="task-detail-modal-summary"
-              className="flex min-w-0 flex-wrap items-start justify-between gap-static-md rounded-lg bg-frosted-soft p-static-md"
+              className="flex min-w-0 flex-wrap items-start justify-between gap-static-md rounded-lg border border-contrast-low bg-canvas p-static-md max-lg:pr-[4.75rem]"
             >
               <div className="flex min-w-0 flex-1 flex-col gap-static-xs">
                 <span className="text-xs font-semibold uppercase leading-tight text-contrast-high">
@@ -551,7 +595,7 @@ function Shell() {
                 </PHeading>
               </div>
               {selectedTask ? (
-                <div className="flex min-w-0 flex-wrap items-center justify-end gap-static-xs">
+                <div className="flex w-full min-w-0 flex-wrap items-center justify-start gap-static-xs lg:w-auto lg:justify-end">
                   <PTag
                     compact
                     variant={statusToVariant(selectedTask.status)}

@@ -4,7 +4,7 @@ title: 'P3-02: Memory accordion detail and state-dependent actions'
 status: archived
 priority: important
 created: 2026-05-18T17:44:11.043517+02:00
-updated: 2026-05-20T09:40:20.401242+02:00
+updated: 2026-05-21T01:12:02.265231+02:00
 tags:
   - phase-3
   - scope:cockpit-web
@@ -257,6 +257,88 @@ test-writer crashed twice: agent returned no output on both attempts
 
 [[2026-05-20T06:21:05+02:00]]
 
+[[2026-05-21T11:30:00+02:00]]
+
+
+## Ideas PDS Audit Evidence
+
+### Finding Classification
+- Real observed gap: IdeasPage exposed visible command controls and an unsaved-changes confirmation as raw/custom controls even though PDS provides fitting command and modal primitives.
+- Not treated as a blanket rule: the markdown editor remains a native `<textarea>` because this route needs a direct, high-density writing surface; it is now marked with `data-pds-exception="ideas-markdown-editor"` so the exception is explicit.
+
+### PDS Decisions
+- Migrated route commands to `PButton`: preview toggle, save, external-conflict overwrite, external-conflict discard, and unsaved-dialog actions.
+- Migrated the unsaved-changes confirmation to `PModal` with explicit `role="alertdialog"`, `aria-modal="true"`, backdrop-click disabled, and no dismiss button so the existing navigation-guard contract remains intact.
+- Mirrored the save button disabled state onto the PDS host with `aria-disabled="true"`; PDS sets the component property and inner shadow button `aria-disabled`, while Playwright does not classify the custom-element host as disabled via `toBeDisabled()`.
+
+### Verification
+- Focused Ideas Vitest slice: `npm --prefix serve/cockpit/web test -- --run src/__tests__/IdeasPage.test.tsx src/__tests__/IdeasPage_1662.test.tsx src/__tests__/IdeasPage_1663.test.tsx src/__tests__/IdeasPage_1664.test.tsx src/__tests__/IdeasPage_1665.test.tsx --reporter=dot` — 5 files passed, 136 tests passed.
+- Frontend build: `npm run build` in `serve/cockpit/web` — passed; existing Vite chunk-size warning remains.
+- Ideas Playwright slice: `npm run test:e2e:all -- e2e/ideas-page.spec.ts --workers=1` — 2 passed, 0 failed.
+- Browser screenshot audit: fresh light/dark Ideas captures at 1440x1000 had 0 console errors, 0 page errors, 0 request failures, and 0 visible overflow elements. Visual review: PDS command buttons and modal affordances now fit the route; the native markdown editor still reads as an intentional notebook surface rather than a stray form control.
+
+## Archival Modal PDS Select Evidence
+
+### Finding Classification
+- Real observed PDS mismatch: `ArchivalModal` rendered native `<option>` children inside `PSelect`, while the rest of the cockpit frontend already standardizes PDS selects on `PSelectOption` children.
+- Not a theoretical risk: browser probing confirmed the modal's reason select had native option children before the change; after migration the modal contains only `p-select-option` children.
+
+### PDS Decisions
+- Replaced native `<option>` children with `PSelectOption` for the archival reason control.
+- Moved the Reason label onto the `PSelect` `label` prop and the Refs label onto the `PInputText` `label` prop, avoiding extra native label wrappers around PDS form controls.
+
+### Verification
+- Focused Archival/PInlineNotification Vitest slice: `npm test -- --run src/__tests__/ArchivalModal.test.tsx src/__tests__/ArchivalModal.error-body.test.tsx src/__tests__/ArchivalModal.refs-placeholder.test.tsx src/__tests__/PInlineNotification.modal.test.tsx --reporter=dot` — 4 files passed, 93 tests passed.
+- Frontend build: `npm run build` in `serve/cockpit/web` — passed; existing Vite chunk-size warning remains.
+- Focused archival overlay Playwright slice: `npm run test:e2e:all -- e2e/overlay-behavior.spec.ts -g archival_modal --workers=1` — 4 passed, 0 failed.
+- Browser screenshot audit: `.owlbear/scratch/1672-archival-pds-select.png` showed the modal centered and usable; 0 console errors, 0 page errors, and 0 request failures. The 16 reported overflow elements were all board columns inside the expected horizontal board scroll rail behind the backdrop; none were inside `archival-modal`.
+
+## Memory Edit PDS Controls Evidence
+
+### Finding Classification
+- Real observed PDS gap: the Memory inline edit form used custom native scalar inputs with `data-pds-exception="memory-edit-native-input"`, while matching PDS primitives (`PInputText`, `PInputNumber`, `PTextarea`) are available and already used elsewhere in Cockpit edit flows.
+- Exception retired: the scalar edit fields no longer need a PDS exception. The form now uses PDS controls for title, categories, confidence, scope agents, content, and actions.
+
+### PDS Decisions
+- Replaced native title/categories/scope-agent inputs with `PInputText`.
+- Replaced the native confidence number input with `PInputNumber` (`min=0`, `max=1`, `step=0.01`, controls enabled).
+- Kept content on `PTextarea`, now labeled directly through the PDS `label` prop, and preserved the explicit 1024-character cap.
+- Added regression proof that PDS `CustomEvent.detail.value` updates the edit payload for text, number, CSV-list, and textarea fields before save.
+
+### Verification
+- Focused Memory/Nav Vitest slice: `npm test -- --run src/__tests__/MemoryTab_1672.test.tsx src/__tests__/MemoryTab_1671.test.tsx src/__tests__/NavBadge_1646.test.tsx --reporter=dot` — 3 files passed, 135 tests passed.
+- Frontend build: `npm run build` in `serve/cockpit/web` — passed; existing Vite chunk-size warning remains.
+- Browser probe: corrected Memory route stubs opened the first accordion and edit form with 0 console errors, 0 page errors, and 0 request failures; form controls were `p-input-text`, `p-input-text`, `p-input-number`, `p-input-text`, `p-textarea`, `p-button`, `p-button`; `memory-edit-native-input` exception count was 0.
+- Visual audit: element-level capture `.owlbear/scratch/1672-memory-edit-form-element.png` confirms the inline edit form renders as a clean PDS form. The full-page capture was less useful because the form sits low inside the scrollable Memory list; geometry report confirmed the form itself is visible with no clipping ancestors hiding it.
+
+## PDS No-change Decisions
+
+### ResolveModal Response Choice
+- Candidate reviewed: replacing the three native radio-card response choices with `PSegmentedControl`.
+- Decision: no change for now. The current surface is a semantic choice group with per-option explanatory text; `PSegmentedControl` only exposes compact item labels/icons and would reduce the guidance available at decision time. A future dedicated PDS radio-card primitive would be a better fit than forcing this into a segmented control.
+- Classification: intentional custom/domain control, not a current defect.
+
+### Decisions Request Rows
+- Candidate reviewed: replacing full-width clickable decision request rows with `PButtonTile` or `PLinkTile`.
+- Decision: no change for now. PDS tile primitives are optimized for tile/card navigation with label/description and optional media/icon constraints, while the Decisions page row is a dense operational list item with chips, age, preview text, and modal selection behavior. Keeping the custom row is a deliberate density/workflow choice.
+- Classification: intentional custom/domain row, not a current defect.
+
+## PDS Status And Maintenance Audit Evidence
+- Audited the top status bar from left to right: HealthBadge, DRStatusIndicator, maintenance PFlyout, RepairPanel, and CleanupPanel. Decision: keep the Health/DR triggers as documented native status-bar controls (`data-pds-exception="status-bar-control"`) because PDS `PPopover` is too constrained for these rich, focus-managed command panels; keep PDS inside the panels where it fits (`PButton`, `PText`) and preserve explicit keyboard/focus behavior.
+- Reworked maintenance confirmations to use PDS `PModal` as top-level modal overlays when launched from the PDS `PFlyout`. `CleanupPanel` and `RepairPanel` now accept opt-in `portalConfirmDialog`; Shell enables it for the maintenance flyout while direct component tests keep their local DOM contract.
+- Removed legacy `repair-confirm-modal` host styling so `PModal` owns the Repair confirmation overlay. Browser screenshots caught the prior failure mode where Repair only collapsed the flyout content instead of showing a real modal.
+- Raised scan-code pill contrast in Health, maintenance, and Repair confirmation surfaces by switching from `bg-error-low text-error` to `bg-error text-canvas`; this fixed the axe contrast miss on the Repair confirm dialog.
+- Added Playwright regression coverage in `serve/cockpit/web/e2e/overlay-behavior.spec.ts` proving Repair/Cleanup confirmations launched from maintenance are portaled to `document.body`, are modal dialogs, and visually break out of the PFlyout column into the viewport center.
+
+## PDS Status And Maintenance Verification
+- `npm test -- --run src/__tests__/RepairPanel.test.tsx src/__tests__/RepairPanelFocusMgmt.test.tsx src/__tests__/CleanupPanel.test.tsx src/__tests__/CleanupPanel.integration.test.tsx src/__tests__/OverlayAnchoring.test.tsx --reporter=dot` — 5 files passed, 108 tests passed.
+- `npm --prefix serve/cockpit/web run test:e2e:all -- e2e/overlay-behavior.spec.ts -g TestFromAudit_MaintenancePdsModalComposition` — 2 passed.
+- `npm --prefix serve/cockpit/web run test:e2e:all -- e2e/overlay-behavior.spec.ts` — 21 passed.
+- `npm test -- --run src/__tests__/HealthBadge.test.tsx src/__tests__/DRStatusIndicator.test.tsx src/__tests__/PdsSimpleSwaps.test.tsx src/__tests__/KeyboardA11y.test.tsx src/__tests__/DRFocusMgmt.test.tsx src/__tests__/OverlayAnchoring.test.tsx src/__tests__/RepairPanel.test.tsx src/__tests__/RepairPanelFocusMgmt.test.tsx src/__tests__/CleanupPanel.test.tsx src/__tests__/CleanupPanel.integration.test.tsx --reporter=dot` — 10 files passed, 224 tests passed.
+- `npm run build` — passed; known Vite chunk-size warning remains.
+- `npm --prefix serve/cockpit/web run test:e2e:all -- e2e/accessibility-sweep.spec.ts -g "dr status indicator|health badge|cleanup panel|repair panel"` after rebuild — 4 passed, no axe violations.
+- `.owlbear/scratch/1672-pds-status-audit.mjs http://127.0.0.1:4173` — 18 captures across light/dark desktop and tablet states; `.owlbear/scratch/1672-pds-status-audit.json` had empty `consoleMessages` for all captures. Key reviewed screenshots: repair-confirm light/dark, cleanup-confirm light/tablet, health popover light, maintenance flyout dark.
+
 
 ## Verification evidence
 
@@ -381,3 +463,172 @@ Builder commits present: 91cd4f75, 9a80e166, dbfee9ec, d8fadcd7. Test-writer: 71
 
 Note: The uncommitted deliverables represent a process gap. A follow-up commit by the builder is needed to bring git state into alignment with the verified working tree.
 
+[[2026-05-20T23:29:02+02:00]]
+
+
+Evidence update - top-down Cockpit audit/pass:
+- Ideas workspace polished into route-native editor/preview/save flow with unsaved navigation and external conflict handling.
+- Decisions route contrast cleaned by replacing default PDS tags/chips with local high-contrast chips and canvas-backed surfaces.
+- Memory route contrast cleaned by replacing category/state PDS tags with local chips while preserving the state `variant` test contract.
+- Added/expanded dual-theme browser a11y coverage for Ideas, Decisions, Memory, and modal/popover surfaces; verified as part of full browser suite.
+- Token contract restored after contrast fix: focused Vitest `PdsColorSchemeBridge` + `TokenMigration` passed 36/36.
+- Full Vitest passed: 135 files, 2,379 passed, 11 skipped.
+- Final frontend gates passed after latest CSS adjustment: `npm run build`, `npm run lint:css`, `npm run lint:html`, and Playwright 176/176.
+- Logs: `.owlbear/scratch/1672-token-vitest-rerun.log`, `.owlbear/scratch/1672-full-vitest-rerun2.log`, `.owlbear/scratch/1672-final-frontend-gates.log`.
+
+[[2026-05-21T00:01:53+02:00]]
+
+
+## Evidence update - board/detail polish and Memory e2e repair
+- Continued the top-down Cockpit audit through Kanban board, task cards, task detail modal, and the Memory route browser failure found by the full Playwright gate.
+- Board/card polish: softened lane/card surfaces, added status-tone lane accents, widened board column clamp, reduced hard grid feel, and kept card metadata/status affordances compact while preserving existing PDS tag test contracts.
+- Task detail polish: widened modal window, tightened editor density, moved Brief above dependency/parent fields, aligned visual and DOM order for detail/actions/metadata/history, and compacted action buttons.
+- Memory route repair: fixed `usePollingFetch` so StrictMode remounts do not drop a queued initial fetch when interval polling is paused; this restored direct `/memories` navigation under the dual-theme accessibility fixture.
+- Focused verification after hook repair: `npm test -- --run src/__tests__/usePollingFetch.paused.test.ts src/__tests__/usePollingFetch.test.ts src/__tests__/MemoryTab_1672.test.tsx --reporter=dot` — 3 files passed, 102 tests passed.
+- Build verification after hook repair: `npm run build` — passed; existing Vite large-chunk warning only.
+- Browser reproduction after rebuild: `/memories` rendered 2 entries and no empty/loading state with the dual-theme fixture payload.
+- Focused browser verification: `npm run test:e2e:all -- e2e/accessibility-dual-theme.spec.ts --grep "memory workspace" --reporter=line` — 2 passed.
+- Full browser verification: `npm run test:e2e:all -- --reporter=line` — 176 passed, 0 failed.
+- Full frontend unit verification after shared-hook change: `npm test -- --run --reporter=dot` — 135 files passed, 2,379 tests passed, 11 skipped, 0 failed.
+- Scratch cleanup: removed temporary `.owlbear/scratch/1672-memory-debug.mjs`.
+
+[[2026-05-21T00:15:10+02:00]]
+
+
+## Evidence update - narrow task-detail header polish
+- Continued the top-down visual pass after the board/detail sweep and inspected desktop + 768px browser screenshots.
+- Found and fixed a narrow task-detail modal header collision: status/priority chips could sit in the same upper-right space as the PModal close affordance at 768px.
+- Implementation: `Shell.tsx` now reserves right-side close space below desktop widths and stacks the summary chips below the task title until `lg` layout.
+- Regression coverage: added a 768px Playwright geometry assertion in `responsive-contract.spec.ts` proving summary chips sit below the title row.
+- Visual verification: recaptured desktop and narrow modal screenshots; narrow header now has clear separation between title/chips and close affordance.
+- Diagnostics: VS Code reports no errors in `Shell.tsx`, `responsive-contract.spec.ts`, or `usePollingFetch.ts`.
+- Focused browser verification: `npm run test:e2e:all -- e2e/responsive-contract.spec.ts --grep "NarrowLaptopTaskModalContract" --reporter=line` — 5 passed.
+- Focused Shell unit verification: `npm test -- --run src/__tests__/Shell.test.tsx src/__tests__/Shell.callbacks.test.tsx --reporter=dot` — 2 files passed, 34 tests passed.
+- Focused modal/browser verification: `npm run test:e2e:all -- e2e/shell-layout-1606.spec.ts e2e/shell-sidecar-inspector.spec.ts e2e/accessibility-dual-theme.spec.ts --grep "task detail" --reporter=line` — 6 passed.
+- Full browser verification: `npm run test:e2e:all -- --reporter=line` — 177 passed, 0 failed.
+- Full frontend unit verification: `npm test -- --run --reporter=dot` — 135 files passed, 2,379 tests passed, 11 skipped, 0 failed. Existing non-fatal PDS/jsdom slot stderr remains.
+
+[[2026-05-21T00:46:06+02:00]]
+
+
+## Evidence update - Ideas route desktop layout polish
+- Continued the route-level top-down visual audit after the board/detail modal pass.
+- Found the Ideas workspace rendering as a single long column at 1440px: the state/metadata panel sat below the editor instead of beside it, leaving the route feeling sparse and less operational.
+- Root cause: the route used `xl:grid-cols-*`, but the bundled/PDS Tailwind breakpoint for `xl` starts at 1760px in this app. Normal desktop widths never activated the intended two-column layout.
+- Implementation: moved Ideas route shell to `lg:grid-cols-[minmax(0,1fr)_minmax(260px,320px)]` and added stable `ideas-editor-shell` / `ideas-state-panel` selectors.
+- Regression coverage: extended the direct `/ideas` Playwright shell test to assert the Ideas state panel is beside the editor at 1440px, not stacked below it.
+- Additional shell hardening: `main.tsx` now waits for `p-canvas` registration before rendering Cockpit so direct workspace route loads have the shell component available before first paint.
+- Visual verification: viewport route audit recapture shows Ideas desktop light/dark and narrow light are full-width with no console/page errors; Ideas desktop screenshot now shows editor + state rail side-by-side.
+- Verification: `npm run build` passed; existing Vite large-chunk warning only.
+- Verification: `npm run test:e2e:all -- e2e/shell-layout-1606.spec.ts --grep "direct Ideas route" --reporter=line` — 1 passed.
+- Verification: `npm test -- --run src/__tests__/IdeasPage_1662.test.tsx src/__tests__/IdeasPage_1663.test.tsx --reporter=dot` — 2 files passed, 46 tests passed.
+- Verification: `npm run test:e2e:all -- e2e/accessibility-dual-theme.spec.ts --grep "ideas workspace" --reporter=line` — 2 passed.
+- Diagnostics: VS Code reports no errors in `IdeasPage.tsx`, `shell-layout-1606.spec.ts`, `Shell.tsx`, or `main.tsx`.
+
+[[2026-05-21T00:53:13+02:00]]
+
+
+## Evidence update - Memory route narrow filter polish
+- Continued the route-level visual audit into Memory after Ideas route repair.
+- Found the 768px Memory filter panel forcing four controls across a narrow viewport; the state selector truncated heavily and the search box was cramped.
+- Root cause: `MemoryTab.tsx` used an inline fixed four-track grid, bypassing responsive breakpoints.
+- Implementation: replaced the inline grid style with responsive classes: single column by default, two columns at the repo's 768px-capable `sm` breakpoint, and the full four-track layout at `lg` desktop width. Added `memory-filter-panel` selector for route geometry checks.
+- Regression coverage: added a 768px direct `/memories` Playwright geometry test asserting the filter panel is wide, state/category share the first row, and agent/search share the second row.
+- Visual verification: route recapture shows Memory narrow layout now has a balanced two-by-two filter grid with no console/page errors.
+- Verification: `npm run build` passed; existing Vite large-chunk warning only.
+- Verification: `npm run test:e2e:all -- e2e/shell-layout-1606.spec.ts --grep "direct Memory route" --reporter=line` — 1 passed.
+- Verification: `npm test -- --run src/__tests__/MemoryTab_1671.test.tsx src/__tests__/MemoryTab_1672.test.tsx --reporter=dot` — 2 files passed, 118 tests passed.
+- Verification: `npm run test:e2e:all -- e2e/accessibility-dual-theme.spec.ts --grep "memory workspace" --reporter=line` — 2 passed.
+- Diagnostics: VS Code reports no errors in `MemoryTab.tsx` or `shell-layout-1606.spec.ts`.
+
+[[2026-05-21T01:12:02+02:00]]
+ResolveModal / Decisions workflow polish evidence:
+- Restyled `serve/cockpit/web/src/components/ResolveModal.tsx` into a structured decision workflow with metadata chips, markdown context panel, selectable response cards, compact notes, and a persistent footer.
+- Preserved existing modal behavior: radio values/test ids, PDS buttons, error notification retry/dismiss wiring, close path, previous-focus restore, and DOM focus order.
+- Fixed narrow 768px clipping by constraining the modal surface to the PDS content lane, switching response cards to `sm:grid-cols-3`, reducing notes to compact 2-row PTextarea, and anchoring header/body/footer as a three-row grid.
+- Added `data-testid="resolve-modal-surface"` and a direct Decisions 768px Playwright regression in `serve/cockpit/web/e2e/shell-layout-1606.spec.ts` covering modal surface, response selector, notes, submit, and cancel viewport geometry.
+
+Verification:
+- `npm test -- --run src/__tests__/ResolveModal.test.tsx src/__tests__/ResolveModalUX.test.tsx src/__tests__/ResolveModalUX.pds-buttons.test.tsx src/__tests__/ResolveModal.plugins.test.tsx src/__tests__/PModal.coverage.test.tsx --reporter=dot`: 5 files / 87 tests passed.
+- `npm run build`: passed; only known Vite >500 kB chunk warning.
+- `npm run test:e2e:all -- e2e/shell-layout-1606.spec.ts --reporter=line`: 10 passed, including new direct Decisions 768px modal geometry guard.
+- `npm run test:e2e:all -- e2e/accessibility-dual-theme.spec.ts --grep "decisions workspace passes wcag2.1 aa under|dr status indicator popover passes wcag2.1 aa under|resolve modal passes wcag2.1 aa under" --reporter=line`: 6 passed, no axe violations.
+- `npm run test:e2e:all -- e2e/overlay-behavior.spec.ts --grep "resolve_modal" --reporter=line`: 4 passed.
+- `npm run test:e2e:all -- e2e/focus-visible-pds-1626.spec.ts --grep "ResolveModal radio input receives PDS focus via Tab" --reporter=line`: 1 passed.
+- Visual recapture: `.owlbear/scratch/1672-decision-modal-desktop-light.png`, `.owlbear/scratch/1672-decision-modal-desktop-dark.png`, `.owlbear/scratch/1672-decision-modal-narrow-light.png`; final audit recorded zero console/page errors and visible footer/notes at 768px.
+
+[[2026-05-21T11:58:00+02:00]]
+## PDS Board Filter And Card Audit Evidence
+- Continued the top-down PDS audit through the board header, filter panel, and task card signals. Decision: keep the board/card shells custom because they encode kanban domain layout, drag/drop, context-menu, density, and signal treatments; use PDS for command/form primitives (`PButton`, `PInputSearch`, `PSelect`, `PMultiSelect`, `PCheckbox`, `PTag`, `PIcon`) where their semantics fit.
+- Investigated `FilterPanel` native checkbox cleanup with history, tests, and screenshots. The original broad shadow-DOM cleanup was an observed defect, not a theoretical cleanup target: active blocked-filter screenshots showed a missing visible checkbox affordance and a PDS `ElementInternals.setValidity` runtime error after the script deleted the PDS checkbox's internal input.
+- Fixed `FilterPanel` cleanup to remove only light-DOM native checkbox fallbacks under `#filter-panel`, preserving the PDS `PCheckbox` shadow DOM internals. Post-fix browser proof: light-DOM `input[type=checkbox]` count is 0, `p-checkbox` count is 1, PDS shadow checkbox count is 1, `p-checkbox.checked` becomes true, the filter toggle reads `Filters (1)`, and only the two blocked cards remain visible with no console messages.
+- Fixed a second concrete PDS defect found by the same board pass: dependency-blocked cards used invalid `PIcon name="link"`. Switched the card signal map to valid PDS `IconName` values and changed the dependency-blocked signal to `unlinked`; typed the map as `Partial<Record<CardSignal, IconName>>` so invalid icon names are caught earlier.
+- Added a focused regression assertion in `Card.visual-treatment.test.tsx` proving the dependency-blocked card uses PDS `unlinked`. Browser proof with a dependency-blocked card showed `data-signal="deps-unmet"`, `PIcon.name === "unlinked"`, a non-empty icon box, the `Dependencies blocked` cue present, and no console messages.
+
+## PDS Board Filter And Card Verification
+- `npm test -- --run src/__tests__/FilterPanel.test.tsx src/__tests__/FilterPanel.pds-controls.test.tsx src/__tests__/KanbanBoard.filter-e2e.test.tsx --reporter=dot` — 3 files passed, 66 tests passed before the focused fix.
+- `npm run build && npm run test:e2e:all -- e2e/filter-controls.spec.ts` — build passed; filter browser suite passed 36/36; known Vite large-chunk warning only.
+- Post-fix focused verification: `npm test -- --run src/__tests__/Card.visual-treatment.test.tsx src/__tests__/FilterPanel.test.tsx src/__tests__/FilterPanel.pds-controls.test.tsx src/__tests__/KanbanBoard.filter-e2e.test.tsx --reporter=dot` — 4 files passed, 97 tests passed.
+- Post-fix browser verification: `npm run build && npm run test:e2e:all -- e2e/filter-controls.spec.ts` — build passed; 36 passed; known Vite large-chunk warning only.
+- Diagnostics: VS Code reports no errors in `FilterPanel.tsx`, `Card.tsx`, or `Card.visual-treatment.test.tsx`.
+- Visual/probe artifacts: `.owlbear/scratch/pds-filter-audit/desktop-light-filter-active-postfix.png`, `.owlbear/scratch/pds-filter-audit/postfix-summary.json`, `.owlbear/scratch/pds-filter-audit/desktop-light-deps-card-postfix.png`, `.owlbear/scratch/pds-filter-audit/card-icon-summary.json`.
+
+[[2026-05-21T12:18:00+02:00]]
+## PDS Context Menu Audit Evidence
+- Audited the task context menu against PDS alternatives. Decision: keep it as a custom fixed-position `role="menu"`/`role="menuitem"` surface because this PDS package does not expose a menu primitive, `PPopover` is trigger-owned informational content rather than a pointer-anchored action menu, and `PFlyout` is a panel/dialog pattern that would discard the board's existing right-click/Shift+F10 movement workflow. Existing coverage already proves keyboard open, arrow navigation, Enter/Space activation, fixed overlay behavior, Escape dismissal, and focus return.
+- Screenshot/probe audit found a concrete placement defect: right-clicking a task near the viewport's right edge rendered the 160px menu at the raw click coordinate, clipping most of the actions off-screen. This was real user-visible harm, not a theoretical PDS preference.
+- Fixed `KanbanBoard` context-menu positioning to clamp pointer coordinates to the viewport with an 8px edge margin. The menu now estimates its own dimensions before first render and also re-clamps after measuring the rendered surface, matching the placement quality expected from a mature overlay primitive while preserving the board-specific custom interaction model.
+- Added a Playwright regression in `overlay-behavior.spec.ts` that scrolls/right-clicks a task at the right edge and waits for the menu's final bounding box to remain inside the actual browser viewport.
+- Post-fix visual/probe evidence: `.owlbear/scratch/pds-context-menu-audit/desktop-context-menu-right-edge.png` shows the menu fully visible at the right edge; `context-menu-summary.json` reports right-edge rect `x=1272`, `right=1432` in a 1440px viewport, all overflow flags false, and no console messages.
+
+## PDS Context Menu Verification
+- `npm test -- --run src/__tests__/KanbanBoard.test.tsx src/__tests__/KeyboardA11y.test.tsx src/__tests__/KanbanBoard.archive-handler.test.tsx src/__tests__/KanbanBoard.archive-intercept.test.tsx --reporter=dot` — 4 files passed, 74 tests passed before the final e2e assertion adjustment.
+- Focused post-fix unit check: `npm test -- --run src/__tests__/KanbanBoard.test.tsx src/__tests__/KeyboardA11y.test.tsx --reporter=dot` — 2 files passed, 56 tests passed.
+- Focused browser check: `npm run test:e2e:all -- e2e/overlay-behavior.spec.ts -g "context_menu" --workers=1` — 5 passed.
+- `npm run build` — passed during context-menu validation; known Vite large-chunk warning only.
+- Diagnostics: VS Code reports no errors in `KanbanBoard.tsx` or `overlay-behavior.spec.ts`.
+
+[[2026-05-21T12:36:00+02:00]]
+## PDS Context Menu Follow-up Evidence
+- Refined the custom context menu after screenshot review. The issue was real user-facing workflow polish: when `archived` appeared in `valid_transitions`, the board rendered `Move to Archived` even though the backend treats `archived` as a special archive operation requiring archival metadata and the UI opens `ArchivalModal`. Normalized this to a dedicated `Archive` command row, kept existing `data-status="archived"` test hooks when the board supplies that transition, and styled the archive row with the error text token and a separator when mixed with move actions.
+- Reordered context-menu move actions by the board's visible lane order instead of trusting backend set/sorted order. This makes menu scanning match the lanes users are looking at while preserving valid-transition constraints.
+- Rechecked an apparent screenshot concern where the first board lane looked clipped to `search`. A direct browser geometry probe showed the at-rest lane is `Research`, grid `scrollLeft` is `0`, the first header text starts inside the visible padded grid content, and no layout clipping was present; classified as not actionable without a real geometry/browser reproduction.
+- Refreshed context-menu screenshots/probe after the archive follow-up. Normal menu labels are now `Move to Backlog`, `Move to In Progress`, `Archive`; right-edge labels are `Move to In Progress`, `Move to Docs`, `Archive`; keyboard-open labels match the normal path. All overflow flags remained false, first focus stayed on the first move action, and console messages were empty.
+
+## PDS Context Menu Follow-up Verification
+- `npm test -- --run src/__tests__/KanbanBoard.test.tsx` — 1 file passed, 37 tests passed.
+- `npm run test:e2e:all -- e2e/overlay-behavior.spec.ts -g "context_menu" --workers=1` — 5 passed.
+- `npm run build` — passed; known Vite large-chunk warning only.
+- Diagnostics: VS Code reports no errors in `KanbanBoard.tsx` or `KanbanBoard.test.tsx`.
+- Visual/probe artifacts: `.owlbear/scratch/pds-context-menu-audit/desktop-context-menu-normal.png`, `.owlbear/scratch/pds-context-menu-audit/desktop-context-menu-right-edge.png`, `.owlbear/scratch/pds-context-menu-audit/context-menu-summary.json`.
+
+[[2026-05-21T16:15:00+02:00]]
+## Bottom Status Theme PDS Evidence
+- Continued the bottom-up Cockpit PDS audit through the status bar with fresh browser screenshots for baseline status, health popover, DR popover, maintenance flyout, and findings states.
+- Real observed issue fixed: the non-compact theme toggle rendered as a native text button (`data-pds-exception="theme-toggle"`) even though the component already had a fitting PDS `PButtonPure` pattern. In the status bar screenshot it read like loose header text (`Auto`) rather than a deliberate action control.
+- Implementation: `ThemeToggle` now always renders `PButtonPure` with the PDS `theme` icon; compact mode still hides the label, while the status-bar mode keeps the visible Light/Dark/Auto label. The obsolete `theme-toggle` PDS exception was removed.
+- Regression tests updated from native `<button>` shape assertions to the PDS custom-element host contract (`p-button-pure`) in `ThemeToggle.test.tsx` and `BoardVisualDesign.test.tsx`.
+- Classification correction: an initial findings-state screenshot appeared to show the maintenance `PFlyout` clipped past the right viewport edge. A settled re-check waited for the flyout bounding box to stabilize and then found `maintenance-menu` at `left=957`, `right=1377` in a 1440px viewport with no overflowing maintenance elements. This was an animation-timing artifact, not a current UI defect.
+- No-change decision reaffirmed: HealthBadge and DRStatusIndicator remain custom compact status popovers. The current screenshots show them dense, anchored, keyboard/focus managed, and workflow-specific; moving them to the heavier `PFlyout` side-panel pattern would reduce quick-glance status utility without fixing an observed problem.
+
+## Bottom Status Theme Verification
+- Focused Vitest: `npm test -- --run src/__tests__/ThemeToggle.test.tsx src/__tests__/BoardVisualDesign.test.tsx src/__tests__/PdsSimpleSwaps.test.tsx` — 3 files passed, 48 tests passed.
+- Build: `npm run build` — passed; known Vite large-chunk warning only.
+- Corrected browser proof after rebuild: `.owlbear/scratch/1672-bottom-theme-pds-status-corrected.png` and `.owlbear/scratch/1672-bottom-theme-pds-report-corrected.json` report no console/page/request/response errors, no error-boundary heading, no visible overflow, status-bar rect `x=1090.375`, `right=1416`, and theme host `P-BUTTON-PURE` with `aria-label="Theme mode: auto (OS)"` and no `data-pds-exception`.
+- Settled maintenance proof: `.owlbear/scratch/1672-bottom-maintenance-findings-settled.png` and `.owlbear/scratch/1672-bottom-findings-settled-report.json` classify the prior clipping as animation timing after stable bounding-box verification.
+
+[[2026-05-21T17:00:05+02:00]]
+## Nav Dock PDS/Product Evidence
+- Continued the bottom-up audit into the workspace nav rail using rebuilt browser screenshots for Kanban, Decisions, Ideas, Memory, and a 768px compact viewport.
+- Observed issue fixed: the old rail worked functionally, but the desktop screenshots showed four disconnected circular controls rather than a deliberate cockpit navigation dock. This was current product polish harm, not a theoretical PDS-purity concern.
+- Product decision: keep the workspace switcher as a custom compact nav control with a documented PDS exception. PDS v4 provides fitting primitives for buttons/forms/modals/flyouts, but not a dense vertical app-rail primitive with route badges and active workspace state. Forcing generic PDS buttons here would weaken the cockpit workflow.
+- Implementation: `Shell.tsx` now groups workspace controls in a single rounded dock surface (`data-testid="nav-rail-dock"`), tightens items to 40px, gives the active route a stronger selected state, and changes pending-count badges from loud red alerts to smaller warning badges so Decisions/Memory stay visible without dominating the rail.
+- Compact behavior fix: below the desktop breakpoint, a closed PCanvas start sidebar keeps the rail attached for PDS layout but hides it from sight, pointer interaction, assistive tech (`aria-hidden="true"`), and sequential tab order (`tabIndex=-1`). The observed off-canvas nav overflow is now inert; remaining compact overflow belongs to the horizontally scrollable kanban board.
+- Tests-as-artifacts cleanup: rewrote stale nav assertions in `NavRailButtons_1642.test.tsx` and `PdsMigration.test.tsx` so they verify route-driven controls, accessible labels, active state, badges, and the intentional dock surface rather than freezing native `<button>` selectors or old exception wording. Also replaced a stale Resolve notes `hide-label` assertion with a visible-label assertion matching the current modal product surface.
+- Visual/probe artifacts: `.owlbear/scratch/1672-nav-dock-audit/root-1440x1000-full-page.png`, `decisions-1440x1000-full-page.png`, `ideas-1440x1000-full-page.png`, `memories-1440x1000-full-page.png`, `root-768x900-full-page.png`, and `nav-dock-summary.json`.
+
+## Nav Dock Verification
+- Focused Vitest guardrails: `npm test -- --run src/__tests__/NavRailButtons_1642.test.tsx src/__tests__/PdsMigration.test.tsx src/__tests__/Shell.test.tsx src/__tests__/NavBadge_1646.test.tsx` — 4 files passed, 136 tests passed, 3 skipped.
+- Browser guardrails: `npm run test:e2e:all -- e2e/nav-rail-taborder.spec.ts e2e/shell-layout-1606.spec.ts --project=chromium` — 12 passed.
+- Build: `npm run build` — passed; known Vite large-chunk warning only.
+- Corrected browser proof after rebuild: `.owlbear/scratch/1672-nav-dock-audit/nav-dock-summary.json` reports no console/page/request/response errors, no error boundaries on Kanban/Decisions/Ideas/Memory, desktop nav visible with active route changing correctly, Decisions badge `2`, Memory badge `1`, and compact 768px rail hidden/inert when closed.
