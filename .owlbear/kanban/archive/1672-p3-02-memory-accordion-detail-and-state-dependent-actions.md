@@ -632,3 +632,16 @@ Verification:
 - Browser guardrails: `npm run test:e2e:all -- e2e/nav-rail-taborder.spec.ts e2e/shell-layout-1606.spec.ts --project=chromium` — 12 passed.
 - Build: `npm run build` — passed; known Vite large-chunk warning only.
 - Corrected browser proof after rebuild: `.owlbear/scratch/1672-nav-dock-audit/nav-dock-summary.json` reports no console/page/request/response errors, no error boundaries on Kanban/Decisions/Ideas/Memory, desktop nav visible with active route changing correctly, Decisions badge `2`, Memory badge `1`, and compact 768px rail hidden/inert when closed.
+
+[[2026-05-21T18:06:58+02:00]]
+## Kanban Desktop Lane Sizing Evidence
+- Continued the top-down realistic desktop audit after the nav dock pass, focusing on the primary Kanban workspace at 1200px, 1440px, and 1920px. User guidance: do not spend polish effort optimizing below 1200px; horizontal overflow at 1200/1440 is acceptable for the dense lane-strip model.
+- Real observed issue fixed: at 1920x1080 the six-lane morning dashboard still clipped the rightmost Archived lane because the lane min clamp topped out at 304px. This was current product harm on a realistic desktop, not a theoretical responsive edge case.
+- Implementation: tuned `KanbanBoard` lane sizing from `clamp(248px,18vw,304px)` to `clamp(248px,15vw,280px)`. Six operational lanes now fit cleanly at 1920 while narrower desktops and denser boards keep the intentional single-row horizontal scroll behavior.
+- Regression coverage: expanded `board-scroll.spec.ts` so seven-lane boards at 1280x720 still prove horizontal scrolling/no wrapping, and the current six-lane dashboard board proves no horizontal overflow at 1920x1080.
+- Browser proof after rebuild: `.owlbear/scratch/1672-nav-dock-audit/root-1920x1080-full-page.png` shows all six lanes fully visible through Archived; `nav-dock-summary.json` reports `root-1920x1080` overflow `[]`. `root-1200x900` and `root-1440x1000` still show expected lane-strip overflow.
+
+## Kanban Desktop Lane Sizing Verification
+- `npm run build` — passed; known Vite large-chunk warning only.
+- `npm run test:e2e -- e2e/board-scroll.spec.ts` — 3 passed, including the new six-lane 1920x1080 fit guard.
+- Diagnostics: VS Code reports no errors in `KanbanBoard.tsx` or `board-scroll.spec.ts`.
