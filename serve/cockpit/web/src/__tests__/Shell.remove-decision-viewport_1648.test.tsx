@@ -3,13 +3,13 @@
  *
  * AC-1: DecisionViewport is no longer rendered inside the sidecar aside element
  *       — import removed from Shell.tsx, component no longer appears in sidecar DOM
- * AC-2: DRStatusIndicator in the status bar continues to function on all routes
- *       — clicking a DR item opens ResolveModal via setSelectedDRId
+ * AC-2: Decision state is route-owned: no global DRStatusIndicator renders, and
+ *       the workspace nav badge carries pending-decision attention.
  * AC-3: No runtime errors or missing-import warnings after DecisionViewport removal
  *       from the sidecar
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, fireEvent, act } from '@testing-library/react'
+import { render } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
 
@@ -223,54 +223,26 @@ describe('TestFromAC_DecisionViewportRemoval', () => {
     })
   })
 
-  // ─── AC-2: DRStatusIndicator is route-independent and its callback opens ResolveModal ───
+  // ─── AC-2: Decision state is route-owned ────────────────────────────────
 
-  describe('AC2: DRStatusIndicator is route-independent and its callback opens ResolveModal', () => {
-    it('ac2 happy: DRStatusIndicator is present in the Shell status bar at root route', () => {
-      const { container } = renderShell('/')
-      expect(container.querySelector('[data-testid="dr-status-indicator"]')).not.toBeNull()
-    })
-
-    it('ac2 happy: DRStatusIndicator reflects pending DR count from usePendingDRs', () => {
+  describe('AC2: decision state is carried by nav and route surfaces', () => {
+    it('ac2 happy: global DRStatusIndicator is absent from the status bar', () => {
       stubPendingDRs({ count: 1, items: [DR_A], isLoading: false })
       const { container } = renderShell('/')
-      expect(container.querySelector('[data-testid="dr-spy-count"]')?.textContent).toBe('1')
+      expect(container.querySelector('[data-testid="dr-status-indicator"]')).toBeNull()
+      expect(container.querySelector('[data-region="status-bar"] [data-testid="dr-status-indicator"]')).toBeNull()
     })
 
-    it('ac2 happy: clicking a DR item fires onItemClick which opens ResolveModal', () => {
+    it('ac2 happy: pending decisions render the decisions nav badge', () => {
       stubPendingDRs({ count: 1, items: [DR_A], isLoading: false })
       const { container } = renderShell('/')
-      const btn = container.querySelector('[data-testid="dr-spy-item-dr-001"]') as HTMLElement
-      expect(btn).not.toBeNull()
-      act(() => { fireEvent.click(btn) })
-      expect(container.querySelector('[data-testid="resolve-modal-stub"]')).not.toBeNull()
+      expect(container.querySelector('[data-surface="decisions"] [data-testid="nav-badge"]')?.textContent).toBe('1')
     })
 
-    it('ac2 edge: DRStatusIndicator is present at /decisions route (route-independent)', () => {
-      const { container } = renderShell('/decisions')
-      expect(container.querySelector('[data-testid="dr-status-indicator"]')).not.toBeNull()
-    })
-
-    it('ac2 edge: clicking a DR item opens ResolveModal from /memories route', () => {
-      stubPendingDRs({ count: 1, items: [DR_A], isLoading: false })
-      const { container } = renderShell('/memories')
-      const btn = container.querySelector('[data-testid="dr-spy-item-dr-001"]') as HTMLElement
-      expect(btn).not.toBeNull()
-      act(() => { fireEvent.click(btn) })
-      expect(container.querySelector('[data-testid="resolve-modal-stub"]')).not.toBeNull()
-    })
-
-    it('ac2 boundary: DRStatusIndicator is inside the status-bar div (outside Routes outlet)', () => {
+    it('ac2 baseline: decisions nav badge is absent when there are no pending decisions', () => {
+      stubPendingDRs({ count: 0, items: [], isLoading: false })
       const { container } = renderShell('/')
-      const statusBar = container.querySelector('[data-region="status-bar"]')
-      expect(statusBar).not.toBeNull()
-      expect(statusBar?.querySelector('[data-testid="dr-status-indicator"]')).not.toBeNull()
-    })
-
-    it('ac2 boundary: ResolveModal is absent before any DR item is clicked', () => {
-      stubPendingDRs({ count: 1, items: [DR_A], isLoading: false })
-      const { container } = renderShell('/')
-      expect(container.querySelector('[data-testid="resolve-modal-stub"]')).toBeNull()
+      expect(container.querySelector('[data-surface="decisions"] [data-testid="nav-badge"]')).toBeNull()
     })
   })
 
@@ -285,7 +257,7 @@ describe('TestFromAC_DecisionViewportRemoval', () => {
     it('ac3 smoke: Shell renders cleanly with pending DRs and no sidecar import errors', () => {
       stubPendingDRs({ count: 2, items: [DR_A], isLoading: false })
       const { container } = renderShell('/')
-      expect(container.querySelector('[data-testid="dr-status-indicator"]')).not.toBeNull()
+      expect(container.querySelector('[data-surface="decisions"] [data-testid="nav-badge"]')).not.toBeNull()
       expect(container.querySelector('[data-testid="decision-viewport"]')).toBeNull()
     })
   })

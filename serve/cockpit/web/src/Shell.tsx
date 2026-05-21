@@ -4,9 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import {
   PBanner,
   PButton,
-  PButtonPure,
   PCanvas,
-  PFlyout,
   PHeading,
   PIcon,
   PModal,
@@ -17,7 +15,6 @@ import {
 import type { CanvasSidebarStartUpdateEventDetail, IconName } from '@porsche-design-system/components-react'
 import CleanupPanel from './components/CleanupPanel'
 import DetailTab from './components/DetailTab'
-import DRStatusIndicator from './components/DRStatusIndicator'
 import HealthBadge, { type ScanItem as HealthBadgeItem } from './components/HealthBadge'
 import RepairPanel from './components/RepairPanel'
 import ResolveModal from './components/ResolveModal'
@@ -91,7 +88,6 @@ function Shell() {
   const {
     count: pendingDRCount,
     items: pendingDRItems,
-    error: pendingDRError,
     refetch: refetchPendingDRs,
     setSelectedDRId,
     selectedDR,
@@ -112,7 +108,6 @@ function Shell() {
     }
     return window.matchMedia('(min-width: 1024px)').matches
   })
-  const [isMaintenanceOpen, setIsMaintenanceOpen] = useState(false)
   const [selectedTaskSubtab, setSelectedTaskSubtab] = useState<string | null>(null)
   const [detailValidationMessage, setDetailValidationMessage] = useState<string | null>(null)
   const [bannerError, setBannerError] = useState<{
@@ -342,28 +337,28 @@ function Shell() {
           data-region="status-bar"
           aria-label="Cockpit status and actions"
         >
-          <div className="flex min-w-0 items-center gap-static-xs rounded-full border border-contrast-low bg-frosted-soft px-static-xs py-1" aria-label="System status">
-            <span
-              className={[
-                'size-2.5 flex-none rounded-full',
-                statusHealth === 'red' ? 'bg-error ring-3 ring-error-low' :
-                statusHealth === 'yellow' ? 'bg-warning ring-3 ring-warning-low' :
-                'bg-success ring-3 ring-success-low',
-              ].join(' ')}
-              data-testid="traffic-light"
-              data-health={statusHealth}
-            />
-            <span
-              className="hidden whitespace-nowrap px-static-xs text-xs font-semibold leading-none text-primary sm:inline-flex"
-              data-testid="task-count"
-            >
-              {tasks.length} tasks
+          <div className="flex min-w-0 items-center rounded-full border border-contrast-low bg-frosted-soft px-static-xs py-1" aria-label="Workspace status">
+            <span className="inline-flex">
+              <HealthBadge
+                items={normalizedItems}
+                status={statusHealth}
+                portalPopover
+                message={scanError ? `Workspace check failed: ${scanError.message}` : undefined}
+                actions={(
+                  <>
+                    {hasLoadedScan && !scanError ? (
+                      <RepairPanel
+                        corruptionCount={normalizedItems.length}
+                        files={normalizedItems}
+                        onSuccess={refetch}
+                        portalConfirmDialog
+                      />
+                    ) : null}
+                    <CleanupPanel compact={false} onSuccess={refetchTasks} portalConfirmDialog />
+                  </>
+                )}
+              />
             </span>
-            {hasLoadedScan && !scanError ? (
-              <span className="hidden sm:inline-flex">
-                <HealthBadge items={normalizedItems} />
-              </span>
-            ) : null}
             {scanError ? (
               <span className="text-xs text-error whitespace-nowrap" data-testid="scan-error" data-health="error" role="status">
                 Workspace check needs attention: {scanError.message}
@@ -380,94 +375,12 @@ function Shell() {
                   Run check again
               </PButton>
             ) : null}
-            <DRStatusIndicator
-              count={pendingDRCount}
-              items={pendingDRItems}
-              onItemClick={setSelectedDRId}
-            />
-          </div>
-
-          <div className="relative flex min-w-0 items-center border-l border-contrast-low pl-static-sm" role="group" aria-label="Maintenance actions">
-            <PButtonPure
-              type="button"
-              icon="wrench"
-              hideLabel
-              data-testid="maintenance-menu-toggle"
-              aria-label="Maintenance actions"
-              aria-expanded={isMaintenanceOpen}
-              aria-controls="shell-maintenance-menu"
-              onClick={() => setIsMaintenanceOpen((c) => !c)}
-            >
-              Maintenance
-            </PButtonPure>
-            {normalizedItems.length > 0 ? (
-              <span className="absolute -top-1 -right-1 inline-flex size-4 items-center justify-center rounded-full border border-surface bg-warning text-[10px] font-semibold leading-none" aria-hidden="true">
-                {normalizedItems.length}
-              </span>
-            ) : null}
-            <PFlyout
-              open={isMaintenanceOpen}
-              onDismiss={() => setIsMaintenanceOpen(false)}
-              aria={{ 'aria-label': 'Workspace care' }}
-              backdrop="shading"
-              background="surface"
-            >
-              <div
-                id="shell-maintenance-menu"
-                data-testid="maintenance-menu"
-                className="flex min-w-72 max-w-[min(420px,calc(100vw-2rem))] flex-col gap-static-md p-static-md text-primary"
-              >
-                <div className="grid gap-static-xs border-b border-contrast-low pb-static-sm">
-                  <div className="flex items-start justify-between gap-static-md">
-                    <div className="grid gap-1">
-                      <span className="text-xs font-semibold uppercase text-primary">Workspace Care</span>
-                      <span className="text-sm leading-normal text-primary">Repair corrupted files and clear stale task state before dispatch.</span>
-                    </div>
-                    <span className="shrink-0 rounded-full border border-contrast-low bg-canvas px-static-xs py-1 text-xs font-semibold leading-none text-primary">
-                      {normalizedItems.length > 0 ? `${normalizedItems.length} attention` : 'Clear'}
-                    </span>
-                  </div>
-                  {scanError ? (
-                    <span className="rounded-md border border-error bg-error-low p-static-xs text-sm leading-normal text-error" role="status">
-                      Workspace scan failed: {scanError.message}
-                    </span>
-                  ) : null}
-                </div>
-                {normalizedItems.length > 0 ? (
-                  <ul className="m-0 grid max-h-[min(34vh,260px)] gap-static-xs overflow-y-auto p-0">
-                    {normalizedItems.slice(0, 4).map((item) => (
-                      <li key={`${item.file_path}-${item.code}`} className="grid gap-1 rounded-lg border border-contrast-low bg-canvas p-static-sm">
-                        <span className="break-all font-mono text-xs leading-normal text-primary">{item.file_path}</span>
-                        <span className="w-fit rounded-full border border-error bg-error px-static-xs py-1 text-xs font-semibold leading-none text-canvas">{item.code}</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-                <div className="flex flex-col gap-static-xs">
-                  {hasLoadedScan && !scanError ? (
-                    <RepairPanel
-                      corruptionCount={normalizedItems.length}
-                      files={normalizedItems}
-                      onSuccess={refetch}
-                      portalConfirmDialog
-                    />
-                  ) : null}
-                  <CleanupPanel compact={false} onSuccess={refetchTasks} portalConfirmDialog />
-                </div>
-              </div>
-            </PFlyout>
           </div>
 
           {/* Theme toggle */}
           <div className="flex items-center" aria-label="View settings">
             <ThemeToggle compact={false} />
           </div>
-
-          {pendingDRError ? (
-            <span className="text-xs text-error" data-testid="dr-polling-error" role="status">
-              {pendingDRError.message}
-            </span>
-          ) : null}
         </div>
 
         <nav

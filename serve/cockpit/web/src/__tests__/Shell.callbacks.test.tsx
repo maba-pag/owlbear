@@ -70,26 +70,12 @@ vi.mock('../components/DetailTab', () => ({
   ),
 }))
 
-// ── ResolveModal: capture onClose / onResolved; render sentinel ────────────────
-let capturedResolveOnClose: (() => void) | undefined
-let capturedResolveOnResolved: (() => void) | undefined
-
 vi.mock('../components/ResolveModal', () => ({
-  default: vi.fn((props: { onClose?: () => void; onResolved?: () => void }) => {
-    capturedResolveOnClose = props.onClose
-    capturedResolveOnResolved = props.onResolved
-    return <div data-testid="resolve-modal-stub" />
-  }),
+  default: vi.fn(() => <div data-testid="resolve-modal-stub" />),
 }))
 
-// ── DRStatusIndicator: capture onItemClick to drive selectedDRId changes ───────
-let capturedDROnItemClick: ((id: string) => void) | undefined
-
 vi.mock('../components/DRStatusIndicator', () => ({
-  default: vi.fn((props: { onItemClick?: (id: string) => void }) => {
-    capturedDROnItemClick = props.onItemClick
-    return null
-  }),
+  default: vi.fn(() => null),
 }))
 
 // ── Other components – passthrough stubs ──────────────────────────────────────
@@ -177,29 +163,23 @@ describe('TestFromAC_ShellCallbacks', () => {
     capturedDetailOnSelectTask = undefined
     capturedDetailOnTaskCleared = undefined
     capturedDetailOnTaskUpdated = undefined
-    capturedResolveOnClose = undefined
-    capturedResolveOnResolved = undefined
-    capturedDROnItemClick = undefined
     vi.resetAllMocks()
     vi.unstubAllGlobals()
   })
 
-  // ─── anonymous_2: pendingDRItems.find() predicate (line 42) ──────────────
+  // ─── route-owned decision entry ─────────────────────────────────────────
 
-  describe('pendingDRItems.find() predicate (anonymous_2, line 42)', () => {
-    it('find predicate runs when pendingDRItems is non-empty; no modal when id does not match', () => {
+  describe('decision entry remains route-owned', () => {
+    it('pending decision items do not render a global ResolveModal by default', () => {
       stubHooks({ pendingDRItems: [DR_ITEM] })
       const { container } = renderShell()
-      // selectedDRId is null → find returns undefined → no modal
       expect(container.querySelector('[data-testid="resolve-modal-stub"]')).toBeNull()
     })
 
-    it('find predicate returns match when selectedDRId equals DR id', () => {
+    it('pending decision items render the decisions nav badge', () => {
       stubHooks({ pendingDRItems: [DR_ITEM] })
       const { container } = renderShell()
-      act(() => { capturedDROnItemClick?.('dr-1') })
-      // selectedDR is now DR_ITEM → ResolveModal renders
-      expect(container.querySelector('[data-testid="resolve-modal-stub"]')).not.toBeNull()
+      expect(container.querySelector('[data-surface="decisions"] [data-testid="nav-badge"]')?.textContent).toBe('1')
     })
   })
 
@@ -415,26 +395,6 @@ describe('TestFromAC_ShellCallbacks', () => {
     })
   })
 
-  // ─── anonymous_19/20: ResolveModal callbacks (lines 283–284) ─────────────
-
-  describe('ResolveModal callbacks (anonymous_19 line 283, anonymous_20 line 284)', () => {
-    it('ResolveModal.onClose clears selectedDRId and dismisses modal (covers anonymous_19)', () => {
-      stubHooks({ pendingDRItems: [DR_ITEM] })
-      const { container } = renderShell()
-      act(() => { capturedDROnItemClick?.('dr-1') })
-      expect(container.querySelector('[data-testid="resolve-modal-stub"]')).not.toBeNull()
-      act(() => { capturedResolveOnClose?.() })
-      expect(container.querySelector('[data-testid="resolve-modal-stub"]')).toBeNull()
-    })
-
-    it('ResolveModal.onResolved calls refetchTasks and dismisses modal (covers anonymous_20)', () => {
-      const { refetchTasks } = stubHooks({ pendingDRItems: [DR_ITEM] })
-      const { container } = renderShell()
-      act(() => { capturedDROnItemClick?.('dr-1') })
-      expect(container.querySelector('[data-testid="resolve-modal-stub"]')).not.toBeNull()
-      act(() => { capturedResolveOnResolved?.() })
-      expect(refetchTasks).toHaveBeenCalled()
-      expect(container.querySelector('[data-testid="resolve-modal-stub"]')).toBeNull()
-    })
-  })
+  // ResolveModal callback behavior is covered from the Decisions route, where
+  // users now open decision requests.
 })

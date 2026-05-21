@@ -130,10 +130,10 @@ function makeSelectiveFetch(url: string, status: number, body: unknown) {
   })
 }
 
-function renderShell() {
+function renderShell(route = '/') {
   return render(
     <PorscheDesignSystemProvider>
-      <MemoryRouter initialEntries={['/']}>
+      <MemoryRouter initialEntries={[route]}>
         <CockpitProvider>
           <Shell />
         </CockpitProvider>
@@ -335,14 +335,6 @@ describe('TestFromAC_BodyContractAndErrorChain', () => {
       lastDecisionsMtime: null,
     } as ReturnType<typeof useBoard>)
 
-    vi.mocked(DRStatusIndicator).mockImplementation(
-      ({ onItemClick }: { count?: number; items?: unknown[]; onItemClick?: (id: string) => void }) => (
-        <button data-testid="open-dr-modal-body" onClick={() => onItemClick?.('dr-body-1')}>
-          Open DR
-        </button>
-      ),
-    )
-
     // Stub fetch so useScanPolling requests pend until aborted (no selective responses needed).
     vi.stubGlobal('fetch', vi.fn((_url: string, init?: RequestInit) =>
       new Promise<never>((_resolve, reject) => {
@@ -353,10 +345,10 @@ describe('TestFromAC_BodyContractAndErrorChain', () => {
     ))
   })
 
-  // AC2: hook output items carry body field — Shell passes items with body to
-  // DRStatusIndicator (data-contract-level assertion, not rendering assertion).
+  // AC2: hook output items carry body field through the Decisions route and into
+  // the shared ResolveModal.
   // body field present in JS runtime even without TypeScript type declaring it.
-  it('items with body field are passed from usePendingDRs through Shell to DRStatusIndicator', () => {
+  it('items with body field open ResolveModal from the Decisions route', async () => {
     const drWithBody: PendingDR & { body: string } = {
       id: 'dr-body-1',
       task_id: 101,
@@ -376,17 +368,23 @@ describe('TestFromAC_BodyContractAndErrorChain', () => {
       refetch: vi.fn(),
     } as ReturnType<typeof usePendingDRs>)
 
-    renderShell()
+    const { container } = renderShell('/decisions')
 
-    const callProps = vi.mocked(DRStatusIndicator).mock.calls.at(-1)![0] as {
-      items?: unknown[]
-    }
-    expect(callProps.items?.[0]).toHaveProperty('body', '## Architecture decision\n\nProceed with approach A.')
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="dr-item-dr-body-1"]')).not.toBeNull()
+    })
+    fireEvent.click(container.querySelector('[data-testid="dr-item-dr-body-1"]')!)
+
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="resolve-modal"]')).not.toBeNull()
+    })
+    expect(container.querySelector('[data-testid="markdown-body"]')?.textContent)
+      .toContain('Proceed with approach A.')
   })
 
   // AC2: all AC2-required fields (id, task_id, agent, request_type, created, title,
   // body_preview, body) are present in hook output items passed through Shell.
-  it('hook output items contain all required fields including body alongside existing required fields', () => {
+  it('hook output items render required fields on the Decisions route', async () => {
     const drWithAllFields: PendingDR & { body: string } = {
       id: 'dr-all-fields',
       task_id: 202,
@@ -406,23 +404,21 @@ describe('TestFromAC_BodyContractAndErrorChain', () => {
       refetch: vi.fn(),
     } as ReturnType<typeof usePendingDRs>)
 
-    renderShell()
+    const { container } = renderShell('/decisions')
 
-    const callProps = vi.mocked(DRStatusIndicator).mock.calls.at(-1)![0] as { items?: unknown[] }
-    const item = callProps.items?.[0]
-    expect(item).toHaveProperty('id', 'dr-all-fields')
-    expect(item).toHaveProperty('task_id', 202)
-    expect(item).toHaveProperty('agent', 'builder')
-    expect(item).toHaveProperty('request_type', 'decision')
-    expect(item).toHaveProperty('created', '2026-05-08T10:00:00Z')
-    expect(item).toHaveProperty('title', 'Scope boundary decision')
-    expect(item).toHaveProperty('body_preview', 'Builder requests scope clarification...')
-    expect(item).toHaveProperty('body', '## Full decision body with complete context for resolution.')
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="dr-item-dr-all-fields"]')).not.toBeNull()
+    })
+    const item = container.querySelector('[data-testid="dr-item-dr-all-fields"]')!
+    expect(item.textContent).toContain('Scope boundary decision')
+    expect(item.textContent).toContain('Task #202')
+    expect(item.textContent).toContain('builder')
+    expect(item.textContent).toContain('Builder requests scope clarification...')
   })
 
-  // AC4: Shell renders pendingDRError.message at data-testid="dr-polling-error"
-  // when usePendingDRs reports a polling error, proving error content surfaces to UI.
-  it('Shell renders DR polling error message at dr-polling-error when usePendingDRs returns an error', async () => {
+  // AC4: the Decisions route renders pendingDRError.message when usePendingDRs
+  // reports a polling error, proving error content surfaces in the route that owns decisions.
+  it('Decisions route renders DR polling error message when usePendingDRs returns an error', async () => {
     vi.mocked(usePendingDRs).mockReturnValue({
       count: 0,
       items: [],
@@ -431,18 +427,18 @@ describe('TestFromAC_BodyContractAndErrorChain', () => {
       refetch: vi.fn(),
     } as ReturnType<typeof usePendingDRs>)
 
-    const { container } = renderShell()
+    const { container } = renderShell('/decisions')
 
     await waitFor(() => {
-      expect(container.querySelector('[data-testid="dr-polling-error"]')).not.toBeNull()
+      expect(container.querySelector('[role="alert"]')).not.toBeNull()
     })
-    expect(container.querySelector('[data-testid="dr-polling-error"]')!.textContent)
-      .toBe('DR service temporarily unavailable: 503')
+    expect(container.querySelector('[role="alert"]')!.textContent)
+      .toContain('DR service temporarily unavailable: 503')
   })
 
   // AC4: error message contains specific backend-provided content verbatim (not a
   // generic fallback), proving Shell surfaces whatever error.message the hook returns.
-  it('Shell DR polling error shows backend-specific error content verbatim at dr-polling-error', async () => {
+  it('Decisions route shows backend-specific error content verbatim', async () => {
     vi.mocked(usePendingDRs).mockReturnValue({
       count: 0,
       items: [],
@@ -451,12 +447,12 @@ describe('TestFromAC_BodyContractAndErrorChain', () => {
       refetch: vi.fn(),
     } as ReturnType<typeof usePendingDRs>)
 
-    const { container } = renderShell()
+    const { container } = renderShell('/decisions')
 
     await waitFor(() => {
-      expect(container.querySelector('[data-testid="dr-polling-error"]')).not.toBeNull()
+      expect(container.querySelector('[role="alert"]')).not.toBeNull()
     })
-    expect(container.querySelector('[data-testid="dr-polling-error"]')!.textContent)
-      .toBe('Decision endpoint: Task 42 blocked by unresolved conflict')
+    expect(container.querySelector('[role="alert"]')!.textContent)
+      .toContain('Decision endpoint: Task 42 blocked by unresolved conflict')
   })
 })

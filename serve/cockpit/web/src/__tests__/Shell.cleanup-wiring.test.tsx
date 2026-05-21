@@ -1,12 +1,12 @@
 /**
  * Expose maintenance cleanup through Cockpit
  *
- * AC 3d (td:1): CleanupPanel is a separate control from HealthBadge.
+ * AC 3d (td:1): CleanupPanel is available from the shared workspace status surface.
  * Exact Shell placement at builder discretion.
  *
  * These tests mount the real Shell and verify:
  *   1. CleanupPanel is rendered in the status bar.
- *   2. CleanupPanel is a sibling of HealthBadge, not a child.
+ *   2. CleanupPanel is passed into HealthBadge as a workspace-care action.
  *   3. The onSuccess prop passed to CleanupPanel calls Shell's refetchTasks.
  *
  * CleanupPanel is replaced with a stub that exposes the onSuccess callback
@@ -17,6 +17,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
+import type { ReactNode } from 'react'
 
 // ─── Hoisted mocks ─────────────────────────────────────────────────────────────
 // All hooks and components that Shell uses (other than CleanupPanel) are
@@ -39,10 +40,14 @@ vi.mock('../components/ResolveModal', () => ({ default: vi.fn(() => null) }))
 vi.mock('../components/DecisionViewport', () => ({ default: vi.fn(() => null) }))
 vi.mock('../components/DetailTab', () => ({ default: vi.fn(() => null) }))
 
-// HealthBadge stub — renders a known element so tests can check CleanupPanel
-// is a sibling, not a descendant.
+// HealthBadge stub — renders a known element and the action slot Shell passes in.
 vi.mock('../components/HealthBadge', () => ({
-  default: vi.fn(() => <div data-testid="health-badge-stub" />),
+  default: vi.fn((props: { actions?: ReactNode; status?: string }) => (
+    <div data-testid="health-badge-stub">
+      <span data-testid="traffic-light" data-health={props.status} />
+      {props.actions}
+    </div>
+  )),
 }))
 
 // RepairFlow stub — prevent RepairPanel inside HealthBadge from triggering
@@ -162,10 +167,10 @@ describe('TestFromAC_CleanupShellWiring', () => {
     })
   })
 
-  // ─── AC 3d: CleanupPanel is separate from HealthBadge ────────────────────
+  // ─── AC 3d: CleanupPanel is exposed through workspace status ─────────────
 
-  describe('AC 3d: CleanupPanel is a sibling of HealthBadge, not a child', () => {
-    it('cleanup-panel is not a descendant of health-badge-stub: unconditional sibling check after HealthBadge renders', async () => {
+  describe('AC 3d: CleanupPanel is available from HealthBadge actions', () => {
+    it('cleanup-panel is rendered inside the workspace status action slot', async () => {
       stubHooks()
       // Provide a valid scan item so HealthBadge renders (hasLoadedScan=true, item passes isHealthBadgeItem filter)
       vi.mocked(useScanPolling).mockReturnValue({
@@ -183,8 +188,7 @@ describe('TestFromAC_CleanupShellWiring', () => {
       const badgeEl = statusBar.querySelector('[data-testid="health-badge-stub"]')!
       const cleanupEl = statusBar.querySelector('[data-testid="cleanup-panel-stub"]')
       expect(cleanupEl).not.toBeNull()
-      // CleanupPanel must not be a descendant of HealthBadge — they are separate controls
-      expect(badgeEl.contains(cleanupEl)).toBe(false)
+      expect(badgeEl.contains(cleanupEl)).toBe(true)
     })
   })
 
@@ -217,7 +221,7 @@ describe('TestFromAC_CleanupShellWiring', () => {
   // ─── AC 3d: CleanupPanel persists across all Shell scan states ───────────
 
   describe('AC 3d: CleanupPanel renders regardless of scan state', () => {
-    it('CleanupPanel renders while scan is still loading (HealthBadge absent)', () => {
+    it('CleanupPanel renders while scan is still loading', () => {
       const { refetchTasks } = stubHooks()
       vi.mocked(useScanPolling).mockReturnValue({
         items: [],
@@ -227,9 +231,7 @@ describe('TestFromAC_CleanupShellWiring', () => {
       } as ReturnType<typeof useScanPolling>)
       const { container } = renderShell()
       expect(container.querySelector('[data-testid="cleanup-panel-stub"]')).not.toBeNull()
-      // HealthBadge not rendered while scan is loading (hasLoadedScan = false)
-      expect(container.querySelector('[data-testid="health-badge-stub"]')).toBeNull()
-      // onSuccess wiring is still present
+      expect(container.querySelector('[data-testid="health-badge-stub"]')).not.toBeNull()
       const stub = container.querySelector('[data-testid="cleanup-panel-stub"]')!
       expect(stub.getAttribute('data-has-success')).toBe('true')
       // suppress unused warning
@@ -347,7 +349,7 @@ describe('TestFromAC_CleanupShellWiring', () => {
       expect(trafficLight.getAttribute('data-health')).toBe('red')
     })
 
-    it('pendingDRError message rendered in status bar alongside CleanupPanel', () => {
+    it('pendingDRError is route-owned and does not render in the global status bar', () => {
       stubHooks()
       vi.mocked(usePendingDRs).mockReturnValue({
         count: 0,
@@ -357,7 +359,7 @@ describe('TestFromAC_CleanupShellWiring', () => {
         refetch: vi.fn(),
       } as ReturnType<typeof usePendingDRs>)
       const { container } = renderShell()
-      expect(container.querySelector('[data-testid="dr-polling-error"]')).not.toBeNull()
+      expect(container.querySelector('[data-testid="dr-polling-error"]')).toBeNull()
       expect(container.querySelector('[data-testid="cleanup-panel-stub"]')).not.toBeNull()
     })
 

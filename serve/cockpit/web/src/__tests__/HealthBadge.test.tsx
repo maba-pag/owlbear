@@ -73,22 +73,22 @@ describe('TestFromAC_HealthBadge', () => {
     expect(badge?.getAttribute('data-health')).toBe('red')
   })
 
-  it('sets aria-label to "Health: OK" when items is empty', () => {
+  it('sets aria-label to "Workspace status: OK" when items is empty', () => {
     const { container } = renderBadge([])
     const badge = container.querySelector('[data-testid="health-badge"]')
-    expect(badge?.getAttribute('aria-label')).toBe('Health: OK')
+    expect(badge?.getAttribute('aria-label')).toBe('Workspace status: OK')
   })
 
-  it('sets aria-label to "Health: 1 issues" when items has 1 element', () => {
+  it('sets aria-label to "Workspace status: 1 issues" when items has 1 element', () => {
     const { container } = renderBadge([ITEM_A])
     const badge = container.querySelector('[data-testid="health-badge"]')
-    expect(badge?.getAttribute('aria-label')).toBe('Health: 1 issues')
+    expect(badge?.getAttribute('aria-label')).toBe('Workspace status: 1 issues')
   })
 
-  it('sets aria-label to "Health: 2 issues" when items has 2 elements', () => {
+  it('sets aria-label to "Workspace status: 2 issues" when items has 2 elements', () => {
     const { container } = renderBadge([ITEM_A, ITEM_B])
     const badge = container.querySelector('[data-testid="health-badge"]')
-    expect(badge?.getAttribute('aria-label')).toBe('Health: 2 issues')
+    expect(badge?.getAttribute('aria-label')).toBe('Workspace status: 2 issues')
   })
 
   it('reflects exact item count in aria-label for large N', () => {
@@ -99,7 +99,7 @@ describe('TestFromAC_HealthBadge', () => {
     }))
     const { container } = renderBadge(fiveItems)
     const badge = container.querySelector('[data-testid="health-badge"]')
-    expect(badge?.getAttribute('aria-label')).toBe('Health: 5 issues')
+    expect(badge?.getAttribute('aria-label')).toBe('Workspace status: 5 issues')
   })
 
   it('shows issue count text when items is non-empty', () => {
@@ -246,22 +246,22 @@ describe('TestFromAC_HealthBadge', () => {
     expect(popover.textContent?.trim().length).toBeGreaterThan(0)
   })
 
-  it('badge textContent is exactly "Health OK" when items is empty (exact toBe)', () => {
+  it('badge textContent is exactly "Workspace OK" when items is empty (exact toBe)', () => {
     const { container } = renderBadge([])
     const badge = container.querySelector('[data-testid="health-badge"]')!
-    expect(badge.textContent).toBe('Health OK')
+    expect(badge.textContent).toBe('Workspace OK')
   })
 
-  it('badge textContent is exactly "Health 1 issues" for single item (exact toBe)', () => {
+  it('badge textContent is exactly "Workspace 1 issues" for single item (exact toBe)', () => {
     const { container } = renderBadge([ITEM_A])
     const badge = container.querySelector('[data-testid="health-badge"]')!
-    expect(badge.textContent).toBe('Health 1 issues')
+    expect(badge.textContent).toBe('Workspace 1 issues')
   })
 
-  it('badge textContent is exactly "Health 2 issues" for two items (exact toBe)', () => {
+  it('badge textContent is exactly "Workspace 2 issues" for two items (exact toBe)', () => {
     const { container } = renderBadge([ITEM_A, ITEM_B])
     const badge = container.querySelector('[data-testid="health-badge"]')!
-    expect(badge.textContent).toBe('Health 2 issues')
+    expect(badge.textContent).toBe('Workspace 2 issues')
   })
 
   it('first list row textContent contains ITEM_A file_path, code, and detail (per-row)', () => {

@@ -1,10 +1,10 @@
 ---
 id: 1683
 title: Fix status menu outside dismissal
-status: research
+status: done
 priority: important
 created: 2026-05-21T19:52:00.709405+02:00
-updated: 2026-05-21T19:52:00.709405+02:00
+updated: 2026-05-21T21:00:37+02:00
 tags:
   - cockpit-perfect-ui
   - scope:cockpit-web
@@ -40,3 +40,10 @@ Use this task as a product/audit todo item, not an instruction to hand off to th
 - Reproduce current dismissal behavior for Health and Decision menus.
 - Implement standard outside-click / alternate-trigger dismissal if confirmed.
 - Preserve keyboard accessibility and focus management.
+
+## Implementation Evidence
+- Classification: observed interaction defect, not theoretical.
+- Impact: hurt current use now. Header overlays stayed open until the opener was clicked again, which made the cockpit feel unfinished.
+- Decision: Workspace Status now closes on outside click and Escape. The retired global decision popover no longer competes for header overlay state.
+- Evidence: `overlay-behavior.spec.ts` covers outside click, Escape, modal interactions, and status care dialogs. Mobile screenshots also caught and verified the portaled popover geometry.
+- Verification: `npm run test:e2e:all -- e2e/overlay-behavior.spec.ts --reporter=line`; `npm run test:e2e:all -- e2e/focus-visible-pds-1626.spec.ts --reporter=line`.

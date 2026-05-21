@@ -226,10 +226,10 @@ function stubShellHooks(overrides?: { drError?: Error }) {
   } as ReturnType<typeof usePendingDRs>)
 }
 
-function renderShell() {
+function renderShell(route = '/') {
   return render(
     <PorscheDesignSystemProvider>
-      <MemoryRouter initialEntries={['/']}>
+      <MemoryRouter initialEntries={[route]}>
         <CockpitProvider>
           <Shell />
         </CockpitProvider>
@@ -559,18 +559,18 @@ describe('TestFromAC_ErrorRenderingAndRetry', () => {
     expect(container.querySelector('[data-testid="task-fetch-error"]')).not.toBeNull()
   })
 
-  // ── DR polling: error is surfaced in Shell UI ─────────────────────────────────
+  // ── DR polling: error is surfaced in Decisions route UI ───────────────────────
 
-  // FAILS: Shell destructures only {count, items, refetch} from usePendingDRs —
-  // `error` is not destructured → DR polling errors are silently dropped.
-  // After fix, Shell renders a DR polling error indicator when error is present.
-  it('Shell: DR polling error is surfaced in UI — not silently swallowed', () => {
+  it('Decisions route: DR polling error is surfaced in UI — not silently swallowed', async () => {
     const drError = new Error('DR polling failed: connection refused')
     stubShellHooks({ drError })
     vi.stubGlobal('fetch', makeSelectiveFetch({}))
-    const { container } = renderShell()
-    // DR error is in initial state from mock — should be immediately visible in Shell.
-    expect(container.querySelector('[data-testid="dr-polling-error"]')).not.toBeNull()
+    const { container } = renderShell('/decisions')
+    await waitFor(() => {
+      expect(container.querySelector('[role="alert"]')).not.toBeNull()
+    })
+    expect(container.querySelector('[role="alert"]')?.textContent)
+      .toContain('DR polling failed: connection refused')
   })
 
   // ── DetailTab move-backward: error renders validation message ─────────────────

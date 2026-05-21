@@ -103,7 +103,7 @@ function renderShell(route = '/') {
   )
 }
 
-// ─── AC-4: Shell places ThemeToggle after DRStatusIndicator ──────────────────
+// ─── AC-4: Shell places ThemeToggle after workspace status ──────────────────
 
 describe('TestFromAC_ShellThemeTogglePlacement_1548', () => {
   beforeEach(() => {
@@ -126,20 +126,20 @@ describe('TestFromAC_ShellThemeTogglePlacement_1548', () => {
     ).toBeInTheDocument()
   })
 
-  it('AC-4 happy: ThemeToggle appears after DRStatusIndicator in DOM order', () => {
+  it('AC-4 happy: ThemeToggle appears after workspace status in DOM order', () => {
     const { container } = renderShell()
     const statusBar = container.querySelector('[data-region="status-bar"]')
 
     expect(statusBar, 'status-bar region must exist').not.toBeNull()
     const bar = statusBar as HTMLElement
-    const drIndicator = within(bar).getByTestId('dr-indicator')
+    const workspaceStatus = within(bar).getByTestId('health-badge')
     const themeToggle = within(bar).getByTestId('theme-toggle-stub')
 
     // DOCUMENT_POSITION_FOLLOWING (4) = themeToggle is a later sibling/descendant
-    const position = drIndicator.compareDocumentPosition(themeToggle)
+    const position = workspaceStatus.compareDocumentPosition(themeToggle)
     expect(
       position & Node.DOCUMENT_POSITION_FOLLOWING,
-      'ThemeToggle must follow DRStatusIndicator in DOM order',
+      'ThemeToggle must follow workspace status in DOM order',
     ).toBeTruthy()
   })
 })

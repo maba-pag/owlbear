@@ -137,9 +137,10 @@ async function waitForHealthBadge(page: Page): Promise<void> {
   await page.locator('[data-testid="health-badge"]').waitFor({ state: 'visible', timeout: 8_000 })
 }
 
-async function openMaintenanceMenu(page: Page): Promise<void> {
-  await page.locator('[data-testid="maintenance-menu-toggle"]').click()
-  await page.locator('[data-testid="maintenance-menu"]').waitFor({ state: 'visible', timeout: 3_000 })
+async function openWorkspaceStatus(page: Page): Promise<void> {
+  await waitForHealthBadge(page)
+  await page.locator('[data-testid="health-badge"]').click()
+  await page.locator('[data-testid="health-badge-popover"]').waitFor({ state: 'visible', timeout: 3_000 })
 }
 
 /** Return the current bounding-box height of the shell grid root. */
@@ -156,23 +157,20 @@ async function statusBarHeight(page: Page): Promise<number> {
   return box!.height
 }
 
-async function expectMaintenanceConfirmDialogPortaled(page: Page, testId: string): Promise<void> {
+async function expectWorkspaceStatusConfirmDialogPortaled(page: Page, testId: string): Promise<void> {
   const dialog = page.locator(`[data-testid="${testId}"]`)
-  const flyout = page.locator('[data-testid="maintenance-menu"]')
 
   await expect(dialog).toBeVisible()
   await expect(dialog).toHaveAttribute('role', 'dialog')
   await expect(dialog).toHaveAttribute('aria-modal', 'true')
-  await expect(page.locator(`[data-testid="maintenance-menu"] [data-testid="${testId}"]`)).toHaveCount(0)
+  await expect(page.locator(`[data-testid="health-badge-popover"] [data-testid="${testId}"]`)).toHaveCount(0)
 
   const parentTag = await dialog.evaluate((element) => element.parentElement?.tagName.toLowerCase())
-  expect(parentTag, 'maintenance confirmation PModal should be portaled to document.body').toBe('body')
+  expect(parentTag, 'workspace status confirmation PModal should be portaled to document.body').toBe('body')
 
   const dialogContentBox = await dialog.locator('div').first().boundingBox()
-  const flyoutBox = await flyout.boundingBox()
   const viewport = page.viewportSize()
   expect(dialogContentBox, 'visible PModal content must be measurable').not.toBeNull()
-  expect(flyoutBox, 'maintenance flyout must be measurable').not.toBeNull()
   expect(viewport, 'viewport must be available').not.toBeNull()
 
   const dialogCenterX = dialogContentBox!.x + dialogContentBox!.width / 2
@@ -180,16 +178,12 @@ async function expectMaintenanceConfirmDialogPortaled(page: Page, testId: string
     Math.abs(dialogCenterX - viewport!.width / 2),
     'PModal content should be centered in the viewport, not aligned to the PFlyout',
   ).toBeLessThan(120)
-  expect(
-    dialogContentBox!.x,
-    'PModal content should visibly break out of the maintenance flyout column',
-  ).toBeLessThan(flyoutBox!.x - 80)
 }
 
 // ─── AC-1 + AC-3: Shell and status-bar reflow prevention (all 6 AC-1 surfaces) ─
 //
-// RED (HealthBadge, DRStatusIndicator, CleanupPanel, RepairPanel): all four render
-// their disclosure panels as inline div children inside the status-bar flex row
+// RED (HealthBadge, CleanupPanel, RepairPanel): status/care overlays used to render
+// inline inside the status-bar flex row
 // (no position:fixed/absolute). Opening any of them expands the flex row height.
 //
 // Expectation (ResolveModal, ArchivalModal): modal is opened and both shell and
@@ -224,30 +218,14 @@ test.describe('TestFromAC_OverlayReflow', () => {
     )
   })
 
-  // AC-1 surface 2: DRStatusIndicator popover
-  // RED: popover is an inline div appended to the status-bar flex row.
-  test('dr_indicator_popover_does_not_expand_status_bar', async ({ page }) => {
-    const shellH = await shellHeight(page)
-    const heightBefore = await statusBarHeight(page)
-
-    await page.click('[data-testid="dr-indicator"]')
-    await page.locator('[data-testid="dr-popover"]').waitFor({ state: 'visible' })
-
-    // FAILS: inline popover div expands the status-bar flex height.
-    expect(await shellHeight(page), 'shell height must not grow when DRStatusIndicator popover opens').toBe(shellH)
-    expect(await statusBarHeight(page), 'status-bar height must not grow when DRStatusIndicator popover opens').toBe(
-      heightBefore,
-    )
-  })
-
-  // AC-1 surface 3: CleanupPanel confirm dialog
+  // AC-1 surface 2: CleanupPanel confirm dialog
   // RED: CleanupPanel replaces its idle PButton with a larger dialog div in place
   // (no portal). The dialog text + two PButtons expand the flex row height.
   test('cleanup_confirm_dialog_does_not_expand_status_bar', async ({ page }) => {
     const shellH = await shellHeight(page)
     const heightBefore = await statusBarHeight(page)
 
-    await openMaintenanceMenu(page)
+    await openWorkspaceStatus(page)
     await page.click('[data-testid="cleanup-button"]')
     await page.locator('[data-testid="cleanup-confirm-dialog"]').waitFor({ state: 'visible' })
 
@@ -259,7 +237,7 @@ test.describe('TestFromAC_OverlayReflow', () => {
     ).toBe(heightBefore)
   })
 
-  // AC-1 surface 4: RepairPanel confirm dialog
+  // AC-1 surface 3: RepairPanel confirm dialog
   // RED: RepairPanel is nested inside HealthBadge's popover (itself an inline div).
   // Opening HealthBadge and then triggering repair confirm both expand status-bar.
   test('repair_panel_confirm_does_not_expand_status_bar', async ({ page }) => {
@@ -267,7 +245,7 @@ test.describe('TestFromAC_OverlayReflow', () => {
     const shellH = await shellHeight(page)
     const heightBefore = await statusBarHeight(page)
 
-    await openMaintenanceMenu(page)
+    await openWorkspaceStatus(page)
     await page.locator('[data-testid="repair-button"]').waitFor({ state: 'visible' })
 
     // Click repair button — transitions RepairPanel to 'confirming' phase (no API call).
@@ -283,7 +261,7 @@ test.describe('TestFromAC_OverlayReflow', () => {
     ).toBe(heightBefore)
   })
 
-  // AC-1 surface 5: ResolveModal
+  // AC-1 surface 4: ResolveModal
   // ResolveModal renders as an inline <div role="dialog"> that is a direct child
   // of the .shell CSS-grid root (no portal, no position:fixed). Shell height is
   // pinned to 100vh, so the shell bounding-box should not change; the status-bar
@@ -292,9 +270,8 @@ test.describe('TestFromAC_OverlayReflow', () => {
     const shellH = await shellHeight(page)
     const statusH = await statusBarHeight(page)
 
-    // Open DRStatusIndicator popover and click the DR item to open ResolveModal.
-    await page.click('[data-testid="dr-indicator"]')
-    await page.locator('[data-testid="dr-popover"]').waitFor({ state: 'visible' })
+    await page.goto('/decisions')
+    await page.locator('[data-testid="decisions-page"]').waitFor({ state: 'visible', timeout: 5_000 })
     await page.click('[data-testid="dr-item-dr-overlay-001"]')
     await page.locator('[data-testid="resolve-modal"]').waitFor({ state: 'visible', timeout: 5_000 })
 
@@ -308,7 +285,7 @@ test.describe('TestFromAC_OverlayReflow', () => {
     ).toBe(statusH)
   })
 
-  // AC-1 surface 6: ArchivalModal
+  // AC-1 surface 5: ArchivalModal
   // ArchivalModal renders as an inline <div role="dialog"> inside KanbanBoard,
   // which lives in .shell__workspace (overflow:auto). The workspace bounding-box
   // is constrained by the CSS grid 1fr row, so the shell and status-bar heights
@@ -338,7 +315,7 @@ test.describe('TestFromAC_OverlayReflow', () => {
   })
 })
 
-test.describe('TestFromAudit_MaintenancePdsModalComposition', () => {
+test.describe('TestFromAudit_WorkspaceStatusPdsModalComposition', () => {
   test.use({ viewport: DESKTOP_VIEWPORT })
 
   test.beforeEach(async ({ page }) => {
@@ -348,16 +325,16 @@ test.describe('TestFromAudit_MaintenancePdsModalComposition', () => {
     await waitForHealthBadge(page)
   })
 
-  test('repair_confirmation_is_a_top_level_pds_modal_from_the_maintenance_flyout', async ({ page }) => {
-    await openMaintenanceMenu(page)
+  test('repair_confirmation_is_a_top_level_pds_modal_from_workspace_status', async ({ page }) => {
+    await openWorkspaceStatus(page)
     await page.locator('[data-testid="repair-button"]').click()
-    await expectMaintenanceConfirmDialogPortaled(page, 'repair-confirm-dialog')
+    await expectWorkspaceStatusConfirmDialogPortaled(page, 'repair-confirm-dialog')
   })
 
-  test('cleanup_confirmation_is_a_top_level_pds_modal_from_the_maintenance_flyout', async ({ page }) => {
-    await openMaintenanceMenu(page)
+  test('cleanup_confirmation_is_a_top_level_pds_modal_from_workspace_status', async ({ page }) => {
+    await openWorkspaceStatus(page)
     await page.locator('[data-testid="cleanup-button"]').click()
-    await expectMaintenanceConfirmDialogPortaled(page, 'cleanup-confirm-dialog')
+    await expectWorkspaceStatusConfirmDialogPortaled(page, 'cleanup-confirm-dialog')
   })
 })
 
@@ -410,8 +387,8 @@ test.describe('TestFromAC_BlockingDialogSemantics', () => {
   // GREEN (regression guard): source already renders these attributes (ResolveModal.tsx:157-158).
   // Task-local E2E proof required by AC-2.
   test('resolve_modal_has_role_dialog_and_aria_modal', async ({ page }) => {
-    await page.click('[data-testid="dr-indicator"]')
-    await page.locator('[data-testid="dr-popover"]').waitFor({ state: 'visible' })
+    await page.goto('/decisions')
+    await page.locator('[data-testid="decisions-page"]').waitFor({ state: 'visible', timeout: 5_000 })
     await page.click('[data-testid="dr-item-dr-overlay-001"]')
     const modal = page.locator('[data-testid="resolve-modal"]')
     await modal.waitFor({ state: 'visible', timeout: 5_000 })
@@ -478,9 +455,8 @@ test.describe('TestFromAC_BlockingDialogSemantics', () => {
   // focus first (approved radio) → Shift+Tab → last (Close) must be focused.
   // FAILS: no Tab trap → Tab/Shift+Tab escape the modal instead of wrapping.
   test('resolve_modal_tab_focus_cycles_within_modal', async ({ page }) => {
-    // Open DRStatusIndicator popover and click the DR item to open ResolveModal.
-    await page.click('[data-testid="dr-indicator"]')
-    await page.locator('[data-testid="dr-popover"]').waitFor({ state: 'visible' })
+    await page.goto('/decisions')
+    await page.locator('[data-testid="decisions-page"]').waitFor({ state: 'visible', timeout: 5_000 })
     await page.click('[data-testid="dr-item-dr-overlay-001"]')
     const modal = page.locator('[data-testid="resolve-modal"]')
     await modal.waitFor({ state: 'visible', timeout: 5_000 })
@@ -523,12 +499,9 @@ test.describe('TestFromAC_BlockingDialogSemantics', () => {
   // cancel event (PDS PModal in this version focuses the host element, not the shadow dialog,
   // so the native dismiss mechanism is not triggered by Escape keypress). The "Close Modal"
   // button directly calls requestClose() via React onClick — same code path as PModal onDismiss.
-  // Using button click also avoids closing the DRStatusIndicator popover (which Escape would
-  // trigger via its document-level handler), ensuring the dr-item trigger element stays in DOM.
   test('resolve_modal_focus_returned_to_trigger_after_close', async ({ page }) => {
-    // Open DR popover and focus the DR item button — this is the trigger.
-    await page.click('[data-testid="dr-indicator"]')
-    await page.locator('[data-testid="dr-popover"]').waitFor({ state: 'visible' })
+    await page.goto('/decisions')
+    await page.locator('[data-testid="decisions-page"]').waitFor({ state: 'visible', timeout: 5_000 })
     const drItem = page.locator('[data-testid="dr-item-dr-overlay-001"]')
     await drItem.waitFor({ state: 'visible' })
     await drItem.focus()
@@ -538,7 +511,7 @@ test.describe('TestFromAC_BlockingDialogSemantics', () => {
     await page.locator('[data-testid="resolve-modal"]').waitFor({ state: 'visible', timeout: 5_000 })
 
     // Close via the "Close Modal" button — calls requestClose() → onClose() → modal unmounts.
-    // Popover stays open (no Escape pressed) so dr-item-* trigger remains in DOM.
+    // The Decisions route remains mounted, so the dr-item-* trigger remains in DOM.
     const closeBtn = page.locator('[data-testid="resolve-cancel"]')
     await closeBtn.waitFor({ state: 'visible', timeout: 5_000 })
     await closeBtn.click()
@@ -547,8 +520,6 @@ test.describe('TestFromAC_BlockingDialogSemantics', () => {
     // ResolveModal.useEffect cleanup calls previousFocusRef.current?.focus() on unmount.
     // previousFocusRef captured document.activeElement (dr-item button) at mount time.
     // FAILS: ResolveModal does not track previous focus — focus goes to body after close.
-    // NOTE: DRStatusIndicator popover stays open on Cancel-button close, so the dr-item-*
-    // button remains in DOM — exact-element assertion is valid.
     await expect(
       drItem,
       'Focus must return to exact [data-testid="dr-item-dr-overlay-001"] trigger after ResolveModal closes',

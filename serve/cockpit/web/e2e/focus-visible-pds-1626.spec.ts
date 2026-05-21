@@ -147,11 +147,12 @@ test.describe('focus-visible styling on live controls', () => {
     await page.locator('[data-region="workspace"]').waitFor({ state: 'visible' })
   })
 
-  test('status bar native button receives PDS focus via Tab', async ({ page }) => {
-    const themeToggle = page.locator('[data-testid="theme-toggle"]')
-    await tabUntilFocused(page, themeToggle)
-    await expect(themeToggle).toBeFocused()
-    await expectVisibleFocus(themeToggle)
+  test('workspace status button receives PDS focus via Tab', async ({ page }) => {
+    const workspaceStatus = page.locator('[data-testid="health-badge"]')
+    await workspaceStatus.waitFor({ state: 'visible' })
+    await tabUntilFocused(page, workspaceStatus)
+    await expect(workspaceStatus).toBeFocused()
+    await expectVisibleFocus(workspaceStatus)
   })
 
   test('workspace nav button receives PDS focus via Tab', async ({ page }) => {
@@ -180,8 +181,9 @@ test.describe('focus-visible styling on live controls', () => {
   })
 
   test('ResolveModal radio input receives PDS focus via Tab', async ({ page }) => {
-    await page.locator('[data-testid="dr-indicator"]').click()
-    await page.locator('[data-testid="resolve-button"]').click()
+    await page.goto('/decisions')
+    await page.locator('[data-testid="decisions-page"]').waitFor({ state: 'visible' })
+    await page.locator(`[data-testid="dr-item-${DECISION.id}"]`).click()
     await expect(page.locator('[data-testid="resolve-modal"]')).toBeVisible()
 
     const approvedRadio = page.locator(

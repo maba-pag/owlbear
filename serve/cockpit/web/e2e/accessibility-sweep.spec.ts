@@ -159,9 +159,10 @@ async function waitForHealthBadge(page: Page): Promise<void> {
     .waitFor({ state: 'visible', timeout: 8_000 })
 }
 
-async function openMaintenanceMenu(page: Page): Promise<void> {
-  await page.locator('[data-testid="maintenance-menu-toggle"]').click()
-  await page.locator('[data-testid="maintenance-menu"]').waitFor({ state: 'visible', timeout: 3_000 })
+async function openWorkspaceStatus(page: Page): Promise<void> {
+  await waitForHealthBadge(page)
+  await page.locator('[data-testid="health-badge"]').click()
+  await page.locator('[data-testid="health-badge-popover"]').waitFor({ state: 'visible', timeout: 3_000 })
 }
 
 // ─── AC1: WCAG 2.1 AA axe scans on all required surfaces ─────────────────────
@@ -216,29 +217,20 @@ test.describe('TestFromAC_WcagSweep', () => {
     expect(results.violations, formatViolations(results.violations)).toEqual([])
   })
 
-  // ── Surface 3: DRStatusIndicator popover ──────────────────────────────────
-  // The DR popover opens when the dr-indicator button is clicked. It renders a
-  // custom fixed-position div with role="dialog" and a list of pending DR items.
-  test('dr status indicator popover passes wcag2.1 aa axe scan (AC1)', async ({ page }) => {
-    // Assert DR indicator is visible and shows pending items (attention status).
-    const drIndicator = page.locator('[data-testid="dr-indicator"]')
-    await drIndicator.waitFor({ state: 'visible', timeout: 5_000 })
-    await expect(
-      drIndicator,
-      'dr-indicator must have data-status="attention" — /api/decisions/pending must have returned items',
-    ).toHaveAttribute('data-status', 'attention')
-
-    await drIndicator.click()
-    await page.locator('[data-testid="dr-popover"]').waitFor({ state: 'visible', timeout: 3_000 })
+  // ── Surface 3: Decisions workspace ────────────────────────────────────────
+  // Decisions are route-owned; pending DRs resolve from the Decisions workspace.
+  test('decisions workspace passes wcag2.1 aa axe scan (AC1)', async ({ page }) => {
+    await page.goto('/decisions')
+    await expect(page.locator('[data-testid="decisions-page"]')).toBeVisible({ timeout: 8_000 })
+    await expect(page.locator(`[data-testid="dr-item-${PENDING_DRS[0].id}"]`)).toBeVisible({ timeout: 8_000 })
 
     const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze()
     expect(results.violations, formatViolations(results.violations)).toEqual([])
   })
 
-  // ── Surface 4: HealthBadge popover ────────────────────────────────────────
-  // The HealthBadge popover opens when the health-badge button is clicked. It
-  // renders a fixed-position div with role="dialog" listing scan issues.
-  test('health badge popover passes wcag2.1 aa axe scan (AC1)', async ({ page }) => {
+  // ── Surface 4: Workspace Status popover ───────────────────────────────────
+  // The Workspace Status popover lists scan issues and exposes care actions.
+  test('workspace status popover passes wcag2.1 aa axe scan (AC1)', async ({ page }) => {
     await waitForHealthBadge(page)
 
     const badge = page.locator('[data-testid="health-badge"]')
@@ -273,14 +265,11 @@ test.describe('TestFromAC_WcagSweep', () => {
   })
 
   // ── Surface 6: ResolveModal ───────────────────────────────────────────────
-  // ResolveModal opens when a DR item is clicked from the DRStatusIndicator popover.
+  // ResolveModal opens when a DR item is clicked from the Decisions workspace.
   // The modal renders as a custom div with role="dialog" in the Shell.
   test('resolve modal passes wcag2.1 aa axe scan (AC1)', async ({ page }) => {
-    const drIndicator = page.locator('[data-testid="dr-indicator"]')
-    await drIndicator.waitFor({ state: 'visible', timeout: 5_000 })
-    await drIndicator.click()
-
-    await page.locator('[data-testid="dr-popover"]').waitFor({ state: 'visible', timeout: 3_000 })
+    await page.goto('/decisions')
+    await expect(page.locator('[data-testid="decisions-page"]')).toBeVisible({ timeout: 8_000 })
 
     const drItem = page.locator(`[data-testid="dr-item-${PENDING_DRS[0].id}"]`)
     await drItem.waitFor({ state: 'visible', timeout: 3_000 })
@@ -349,10 +338,9 @@ test.describe('TestFromAC_WcagSweep', () => {
   })
 
   // ── Surface 9: CleanupPanel confirm dialog ────────────────────────────────
-  // CleanupPanel's confirm dialog opens when the "Cleanup" button is clicked.
-  // It renders as a custom div with role="dialog" in the status-bar.
+  // CleanupPanel's confirm dialog opens from Workspace Status.
   test('cleanup panel confirm dialog passes wcag2.1 aa axe scan (AC1)', async ({ page }) => {
-    await openMaintenanceMenu(page)
+    await openWorkspaceStatus(page)
 
     const cleanupButton = page.locator('[data-testid="cleanup-button"]')
     await cleanupButton.waitFor({ state: 'visible', timeout: 5_000 })
@@ -369,7 +357,7 @@ test.describe('TestFromAC_WcagSweep', () => {
   })
 
   // ── Surface 10: RepairPanel confirm dialog ────────────────────────────────
-  // RepairPanel confirm dialog opens from the maintenance menu after scan issues load.
+  // RepairPanel confirm dialog opens from Workspace Status after scan issues load.
   //
   // KNOWN RED: `<span data-testid="repair-confirm-btn" onClick>` in RepairPanel.tsx
   // carries a click handler on a non-interactive <span> element. Axe flags this as
@@ -385,7 +373,7 @@ test.describe('TestFromAC_WcagSweep', () => {
       'health-badge must have data-health="red" before clicking to expose repair-button',
     ).toHaveAttribute('data-health', 'red')
 
-    await openMaintenanceMenu(page)
+    await openWorkspaceStatus(page)
 
     const repairButton = page.locator('[data-testid="repair-button"]')
     await repairButton.waitFor({ state: 'visible', timeout: 3_000 })

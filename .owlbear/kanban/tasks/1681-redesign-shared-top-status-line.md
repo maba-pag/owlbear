@@ -1,10 +1,10 @@
 ---
 id: 1681
 title: Redesign shared top status line
-status: research
+status: done
 priority: important
 created: 2026-05-21T19:51:40.481282+02:00
-updated: 2026-05-21T19:51:40.481282+02:00
+updated: 2026-05-21T21:00:37+02:00
 tags:
   - cockpit-perfect-ui
   - scope:cockpit-web
@@ -41,3 +41,10 @@ Use this task as a product/audit todo item, not an instruction to hand off to th
 - Inventory every current top-status item and what action/menu it controls.
 - Classify each item as global signal, page-specific duplicate, action launcher, or noise.
 - Present a recommended status-line model to the user before implementation.
+
+## Implementation Evidence
+- Classification: observed current product issue, not theoretical.
+- Impact: hurt the current cockpit now. The old `0 tasks / Health OK / DR 1` line looked like one optical control while mixing count, health, and decision actions.
+- Decision: user selected route-owned decisions. The shared header now shows Workspace Status plus ThemeToggle; task count and global DR resolver were removed from the top bar.
+- Evidence: desktop/mobile screenshots in `.owlbear/scratch/1672-status-route-owned-desktop-header.png` and `.owlbear/scratch/1672-status-route-owned-mobile-header.png`; browser checks show no `task-count`, no `dr-indicator`, and decisions badge remains in the left nav.
+- Verification: `npm run build`; `npm run test:e2e:all -- e2e/shell-sidecar-inspector.spec.ts --reporter=line`; `npm run test:e2e:all -- e2e/overlay-behavior.spec.ts --reporter=line`.

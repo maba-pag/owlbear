@@ -1,7 +1,7 @@
 /**
  * Playwright coverage for shell and task detail modal behavior.
  *
- * Covers task detail composition, decision request popover structure, keyboard
+ * Covers task detail composition, decision route structure, keyboard
  * modal behavior, and status-bar chrome hierarchy.
  * API mocking: all routes stubbed via page.route(); no real backend required.
  */
@@ -249,17 +249,15 @@ test.describe('TestFromAC_TaskDetailModalComposition', () => {
   })
 })
 
-// ─── AC-2: Decision request popover composition ─────────────────────────────
+// ─── AC-2: Decision route composition ───────────────────────────────────────
 
-test.describe('TestFromAC_DRPopoverComposition', () => {
+test.describe('TestFromAC_DecisionRouteComposition', () => {
   test.use({ viewport: { width: 1280, height: 800 } })
 
   test.beforeEach(async ({ page }) => {
     await stubApis(page)
-    await page.goto('/')
-    await page.waitForSelector('[data-column]', { timeout: 10_000 })
-    await page.locator('[data-testid="dr-indicator"]').click()
-    await expect(page.locator('[data-testid="dr-popover"]')).toBeVisible({ timeout: 8_000 })
+    await page.goto('/decisions')
+    await expect(page.locator('[data-testid="decisions-page"]')).toBeVisible({ timeout: 8_000 })
   })
 
   test('legacy DecisionViewport decision-item elements are absent from the shell', async ({
@@ -268,7 +266,7 @@ test.describe('TestFromAC_DRPopoverComposition', () => {
     await expect(page.locator('[data-testid^="decision-item-"]')).toHaveCount(0)
   })
 
-  test('DR popover exposes pending request identity and resolve action', async ({
+  test('Decisions route exposes pending request identity', async ({
     page,
   }) => {
     const item = page.locator('[data-testid="dr-item-dr-1562-001"]')
@@ -276,10 +274,9 @@ test.describe('TestFromAC_DRPopoverComposition', () => {
     await expect(item).toContainText('Confirm caching strategy')
     await expect(item).toContainText('builder')
     await expect(item).toContainText('1')
-    await expect(page.locator('[data-testid="resolve-button"]')).toBeVisible()
   })
 
-  test('clicking a DR item opens the PModal resolve workflow', async ({
+  test('clicking a Decisions route item opens the PModal resolve workflow', async ({
     page,
   }) => {
     await page.locator('[data-testid="dr-item-dr-1562-001"]').click()
@@ -354,11 +351,11 @@ test.describe('TestFromAC_StatusBarNavHierarchy', () => {
   test('status-bar contains at least one element with an accessible name — regression guard', async ({
     page,
   }) => {
-    // AC-4(c): Each status-bar control (health, DR count, cleanup, theme) must have a
+    // AC-4(c): Each status-bar control (workspace status and theme) must have a
     //          distinguishing accessible name via aria-label or visible text.
     //
     // REGRESSION GUARD: Verifies at least one aria-labeled element exists in the status bar.
-    // ThemeToggle, DRStatusIndicator, CleanupPanel, HealthBadge each have aria-labels.
+    // ThemeToggle and the workspace status trigger each have aria-labels.
     const statusBar = page.locator('[data-region="status-bar"]')
     await expect(statusBar).toBeVisible()
 
@@ -373,28 +370,18 @@ test.describe('TestFromAC_StatusBarNavHierarchy', () => {
     //          Prior spec only checked "at least one labeled element" — a single labeled
     //          control would satisfy it even if health, cleanup, or theme were unlabeled.
     //
-    // DR count indicator — aria-label="Pending decision requests: N"
-    const drIndicator = page.locator('[data-testid="dr-indicator"]')
-    await expect(drIndicator).toBeVisible()
-    await expect(drIndicator).toHaveAttribute('aria-label', /Pending decision requests/)
-
     // Theme toggle — aria-label="Theme mode: ..."
     const themeToggle = page.locator('[data-testid="theme-toggle"]')
     await expect(themeToggle).toBeVisible()
     await expect(themeToggle).toHaveAttribute('aria-label', /Theme mode/)
 
-    // Maintenance actions live behind a compact PFlyout trigger; cleanup is inside the menu.
-    const maintenanceToggle = page.locator('[data-testid="maintenance-menu-toggle"]')
-    await expect(maintenanceToggle).toBeVisible()
-    await expect(maintenanceToggle).toHaveAttribute('aria-label', /Maintenance actions/)
-    await maintenanceToggle.click()
-    await expect(page.locator('[data-testid="maintenance-menu"]')).toBeVisible()
-    await expect(page.locator('[data-testid="cleanup-button"]')).toBeVisible()
-
-    // Health badge — conditionally rendered when scan completes; aria-label reflects health
+    // Workspace status owns health and care actions.
     const healthBadge = page.locator('[data-testid="health-badge"]')
     await expect(healthBadge).toBeVisible({ timeout: 8_000 })
-    await expect(healthBadge).toHaveAttribute('aria-label', /Health/)
+    await expect(healthBadge).toHaveAttribute('aria-label', /Workspace status/)
+    await healthBadge.click()
+    await expect(page.locator('[data-testid="health-badge-popover"]')).toBeVisible()
+    await expect(page.locator('[data-testid="cleanup-button"]')).toBeVisible()
   })
 
   test('nav rail is icon-only while retaining accessible names', async ({

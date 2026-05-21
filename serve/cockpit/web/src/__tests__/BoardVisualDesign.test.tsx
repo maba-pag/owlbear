@@ -338,25 +338,17 @@ describe('ShellLevelIntegration', () => {
     expect(toggle!.tagName.toLowerCase()).toBe('p-button-pure')
   })
 
-  it('Shell status bar renders data-testid="dr-indicator" with data-status="attention" when useDRState returns count=2 with items (positive DR routing proof)', () => {
+  it('Shell routes pending decisions through the workspace nav badge instead of the top status bar', () => {
     stubDRState(2, STUB_DR_ITEMS)
     const { container } = renderShell()
-    const indicator = container.querySelector('[data-testid="dr-indicator"]')
-    expect(
-      indicator,
-      'Shell must render data-testid="dr-indicator" — DRStatusIndicator must be wired into Shell status bar',
-    ).not.toBeNull()
-    expect(indicator!.getAttribute('data-status')).toBe('attention')
+    expect(container.querySelector('[data-testid="dr-indicator"]')).toBeNull()
+    expect(container.querySelector('[data-surface="decisions"] [data-testid="nav-badge"]')).not.toBeNull()
   })
 
-  it('Shell status bar renders data-testid="dr-indicator" with data-status="dormant" when useDRState returns count=0 (baseline)', () => {
+  it('Shell hides the decisions nav badge when there are no pending decisions', () => {
     stubDRState(0)
     const { container } = renderShell()
-    const indicator = container.querySelector('[data-testid="dr-indicator"]')
-    expect(
-      indicator,
-      'Shell must render data-testid="dr-indicator" even when count=0',
-    ).not.toBeNull()
-    expect(indicator!.getAttribute('data-status')).toBe('dormant')
+    expect(container.querySelector('[data-testid="dr-indicator"]')).toBeNull()
+    expect(container.querySelector('[data-surface="decisions"] [data-testid="nav-badge"]')).toBeNull()
   })
 })

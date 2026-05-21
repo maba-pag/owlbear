@@ -14,8 +14,8 @@
  *   3. Decisions workspace
  *   4. Memory workspace
  *   5. Task detail modal
- *   6. DRStatusIndicator popover
- *   7. HealthBadge popover
+ *   6. Workspace Status popover
+ *   7. Workspace Status issue list
  *   8. FilterPanel (open state)
  *   9. ResolveModal (DR resolution modal)
  *  10. ArchivalModal
@@ -204,9 +204,10 @@ async function waitForWorkspaceSettled(page: Page): Promise<void> {
   })
 }
 
-async function openMaintenanceMenu(page: Page): Promise<void> {
-  await page.locator('[data-testid="maintenance-menu-toggle"]').click()
-  await page.locator('[data-testid="maintenance-menu"]').waitFor({ state: 'visible', timeout: 3_000 })
+async function openWorkspaceStatus(page: Page): Promise<void> {
+  await page.locator('[data-testid="health-badge"]').waitFor({ state: 'visible', timeout: 8_000 })
+  await page.locator('[data-testid="health-badge"]').click()
+  await page.locator('[data-testid="health-badge-popover"]').waitFor({ state: 'visible', timeout: 3_000 })
 }
 
 /** Format axe violations into a human-readable string for assertion messages. */
@@ -360,24 +361,24 @@ for (const theme of THEMES) {
       expect(results.violations, formatViolations(results.violations)).toEqual([])
     })
 
-    // ── Surface 6: DRStatusIndicator popover ─────────────────────────────
-    // The DR popover opens when the dr-indicator button is clicked. Renders a
-    // custom fixed-position div with role="dialog" and a list of pending DR items.
-    test(`dr status indicator popover passes wcag2.1 aa under ${theme} theme (AC3)`, async ({ page }) => {
+    // ── Surface 6: Workspace Status popover ──────────────────────────────
+    // Workspace Status owns scan findings and care actions in the header.
+    test(`workspace status popover passes wcag2.1 aa under ${theme} theme (AC3)`, async ({ page }) => {
       await expect(
         page.locator('html'),
         `html element must carry class scheme-${theme}`,
       ).toHaveClass(new RegExp(`scheme-${theme}`))
 
-      const drIndicator = page.locator('[data-testid="dr-indicator"]')
-      await drIndicator.waitFor({ state: 'visible', timeout: 5_000 })
+      const badge = page.locator('[data-testid="health-badge"]')
+      await badge.waitFor({ state: 'visible', timeout: 8_000 })
       await expect(
-        drIndicator,
-        'dr-indicator must have data-status="attention" — /api/decisions/pending must have returned items',
-      ).toHaveAttribute('data-status', 'attention')
+        badge,
+        'health-badge must have data-health="red" — /api/tasks/scan must have returned scan items',
+      ).toHaveAttribute('data-health', 'red')
 
-      await drIndicator.click()
-      await page.locator('[data-testid="dr-popover"]').waitFor({ state: 'visible', timeout: 3_000 })
+      await badge.click()
+      await page.locator('[data-testid="health-badge-popover"]').waitFor({ state: 'visible', timeout: 3_000 })
+      await expect(page.locator('[data-testid="cleanup-button"]')).toBeVisible()
 
       const results = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze()
       expect(results.violations, formatViolations(results.violations)).toEqual([])
@@ -432,22 +433,15 @@ for (const theme of THEMES) {
     })
 
     // ── Surface 9: ResolveModal (modal surface) ───────────────────────────
-    // DR resolution modal — opened from DRStatusIndicator popover.
+    // DR resolution modal — opened from the route-owned Decisions workspace.
     test(`resolve modal passes wcag2.1 aa under ${theme} theme (AC3)`, async ({ page }) => {
       await expect(
         page.locator('html'),
         `html element must carry class scheme-${theme}`,
       ).toHaveClass(new RegExp(`scheme-${theme}`))
 
-      const drIndicator = page.locator('[data-testid="dr-indicator"]')
-      await drIndicator.waitFor({ state: 'visible', timeout: 5_000 })
-      await expect(
-        drIndicator,
-        'dr-indicator must have data-status="attention" — /api/decisions/pending must have returned items',
-      ).toHaveAttribute('data-status', 'attention')
-
-      await drIndicator.click()
-      await page.locator('[data-testid="dr-popover"]').waitFor({ state: 'visible', timeout: 3_000 })
+      await page.goto('/decisions')
+      await waitForWorkspaceSettled(page)
 
       const drItem = page.locator(`[data-testid="dr-item-${PENDING_DRS[0].id}"]`)
       await drItem.waitFor({ state: 'visible', timeout: 3_000 })
@@ -519,15 +513,14 @@ for (const theme of THEMES) {
     })
 
     // ── Surface 12: CleanupPanel confirm dialog ───────────────────────────
-    // CleanupPanel confirm dialog opens when the "Cleanup" button is clicked.
-    // Renders as a custom div with role="dialog" in the status-bar.
+    // CleanupPanel confirm dialog opens from Workspace Status.
     test(`cleanup panel confirm dialog passes wcag2.1 aa under ${theme} theme (AC3)`, async ({ page }) => {
       await expect(
         page.locator('html'),
         `html element must carry class scheme-${theme}`,
       ).toHaveClass(new RegExp(`scheme-${theme}`))
 
-      await openMaintenanceMenu(page)
+      await openWorkspaceStatus(page)
 
       const cleanupButton = page.locator('[data-testid="cleanup-button"]')
       await cleanupButton.waitFor({ state: 'visible', timeout: 5_000 })
@@ -543,7 +536,7 @@ for (const theme of THEMES) {
     })
 
     // ── Surface 13: RepairPanel confirm dialog ───────────────────────────
-    // RepairPanel confirm dialog opens from the maintenance menu after scan issues load.
+    // RepairPanel confirm dialog opens from Workspace Status after scan issues load.
     test(`repair panel confirm dialog passes wcag2.1 aa under ${theme} theme (AC3)`, async ({
       page,
     }) => {
@@ -560,7 +553,7 @@ for (const theme of THEMES) {
         'health-badge must have data-health="red" — /api/tasks/scan must have returned items',
       ).toHaveAttribute('data-health', 'red')
 
-      await openMaintenanceMenu(page)
+      await openWorkspaceStatus(page)
 
       const repairButton = page.locator('[data-testid="repair-button"]')
       await repairButton.waitFor({ state: 'visible', timeout: 3_000 })

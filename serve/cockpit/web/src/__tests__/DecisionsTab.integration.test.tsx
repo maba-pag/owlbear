@@ -9,9 +9,8 @@
  *      sidecar [data-region="sidecar"] and [slot="sidebar-end"] absent on both routes
  * AC2: Nav-rail integration — aria-current="page" on active route button,
  *      badge visible when DR count > 0, badge absent when count is 0
- * AC3: Entry path convergence — DRStatusIndicator popover-item click calls
+ * AC3: Entry path convergence — DecisionsPage list-item click calls
  *      setSelectedDRId(id) → Shell-level ResolveModal renders with targeted DR;
- *      DecisionsPage list-item click does the same via the same Shell mechanism;
  *      Shell passes updated selectedDR prop when CockpitProvider state mutates
  * AC4: Post-resolve integration — onResolved fires: Shell calls refetchPendingDRs()
  *      (drState.refetch), calls refetchTasks(), calls setSelectedDRId(null) clearing
@@ -21,9 +20,9 @@
  *
  * Note on AC3 snapshot guard: the `useState(() => dr)` snapshot behaviour is
  * tested at unit/integration level by the durable #1647 test file
- * (ResolveModalSnapshot_1647.test.tsx). This file focuses on the DRStatusIndicator
- * entry path (not covered by #1647) and the Shell-level prop-passing wiring that
- * delivers the updated selectedDR to ResolveModal after an SSE-driven mutation.
+ * (ResolveModalSnapshot_1647.test.tsx). This file focuses on the route-owned
+ * DecisionsPage entry path and the Shell-level prop-passing wiring that delivers
+ * the updated selectedDR to ResolveModal after an SSE-driven mutation.
  *
  * Dependencies (all archived): #1639 #1640 #1641 #1642 #1643 #1644 #1645 #1646 #1647 #1648
  */
@@ -367,29 +366,14 @@ describe('DecisionsTabEntryPathDurable', () => {
     vi.clearAllMocks()
   })
 
-  it('ac3 happy: DRStatusIndicator item click opens Shell-level ResolveModal', () => {
-    const { container } = renderShell('/')
-    const indicatorItem = container.querySelector<HTMLElement>(
-      `[data-testid="dr-indicator-item-${DR_A.id}"]`,
-    )
-    expect(indicatorItem).not.toBeNull()
-    fireEvent.click(indicatorItem!)
-    expect(container.querySelector('[data-testid="resolve-modal-stub"]')).not.toBeNull()
-  })
-
-  it('ac3 happy: DRStatusIndicator item click passes correct DR to ResolveModal', () => {
-    const { container } = renderShell('/')
-    fireEvent.click(
-      container.querySelector<HTMLElement>(`[data-testid="dr-indicator-item-${DR_A.id}"]`)!,
-    )
-    expect(capturedResolveModalProps.current?.dr?.id).toBe(DR_A.id)
-  })
-
-  it('ac3 happy: DRStatusIndicator item click passes full DR data (not just id)', () => {
-    const { container } = renderShell('/')
-    fireEvent.click(
-      container.querySelector<HTMLElement>(`[data-testid="dr-indicator-item-${DR_A.id}"]`)!,
-    )
+  it('ac3 happy: route-owned DecisionsPage item click passes full DR data', async () => {
+    await act(async () => {
+      renderShell('/decisions')
+    })
+    await waitFor(() => {
+      expect(screen.queryByTestId('decisions-page')).not.toBeNull()
+    })
+    fireEvent.click(screen.getByTestId(`dr-item-${DR_A.id}`))
     expect(capturedResolveModalProps.current?.dr).toMatchObject({
       id: DR_A.id,
       task_id: DR_A.task_id,
@@ -419,18 +403,17 @@ describe('DecisionsTabEntryPathDurable', () => {
     expect(capturedResolveModalProps.current?.dr?.id).toBe(DR_A.id)
   })
 
-  it('ac3 happy: Shell passes updated selectedDR prop when CockpitProvider state mutates (SSE wiring)', () => {
+  it('ac3 happy: Shell passes updated selectedDR prop when CockpitProvider state mutates (SSE wiring)', async () => {
     // Verifies the Shell-level prop-passing wiring: when CockpitProvider's selectedDR
     // mutates (e.g. due to an SSE-driven usePendingDRs refresh), Shell passes the new
     // DR as the `dr` prop to ResolveModal. The snapshot guard inside ResolveModal
     // (useState(() => dr)) is what prevents the displayed content from changing — that
     // guard is individually verified by the durable #1647 test file.
-    const { container, rerender } = renderShell('/')
+    const { rerender } = renderShell('/decisions')
 
     // Open modal
-    fireEvent.click(
-      container.querySelector<HTMLElement>(`[data-testid="dr-indicator-item-${DR_A.id}"]`)!,
-    )
+    await waitFor(() => expect(screen.queryByTestId(`dr-item-${DR_A.id}`)).not.toBeNull())
+    fireEvent.click(screen.getByTestId(`dr-item-${DR_A.id}`))
     expect(capturedResolveModalProps.current?.dr?.title).toBe(DR_A.title)
 
     // Simulate SSE: usePendingDRs now returns updated data for the same DR id
@@ -442,7 +425,7 @@ describe('DecisionsTabEntryPathDurable', () => {
       refetch: vi.fn(),
     } as ReturnType<typeof usePendingDRs>)
 
-    rerender(buildShellTree('/'))
+    rerender(buildShellTree('/decisions'))
 
     // Shell re-derives selectedDR from the updated pendingDRItems array and passes
     // DR_A_UPDATED as the new `dr` prop — the snapshot guard prevents display update.
@@ -466,15 +449,14 @@ describe('DecisionsTabPostResolveDurable', () => {
     vi.clearAllMocks()
   })
 
-  it('ac4 happy: onResolved calls refetchPendingDRs (drState.refetch)', () => {
+  it('ac4 happy: onResolved calls refetchPendingDRs (drState.refetch)', async () => {
     const refetch = vi.fn()
     stubPendingDRs({ count: 1, items: [DR_A], refetch })
-    const { container } = renderShell('/')
+    renderShell('/decisions')
 
     // Open modal then trigger onResolved
-    fireEvent.click(
-      container.querySelector<HTMLElement>(`[data-testid="dr-indicator-item-${DR_A.id}"]`)!,
-    )
+    await waitFor(() => expect(screen.queryByTestId(`dr-item-${DR_A.id}`)).not.toBeNull())
+    fireEvent.click(screen.getByTestId(`dr-item-${DR_A.id}`))
     expect(capturedResolveModalProps.current).not.toBeNull()
     act(() => {
       capturedResolveModalProps.current!.onResolved()
@@ -482,14 +464,13 @@ describe('DecisionsTabPostResolveDurable', () => {
     expect(refetch).toHaveBeenCalled()
   })
 
-  it('ac4 happy: onResolved calls refetchTasks (boardState.refetchTasks)', () => {
+  it('ac4 happy: onResolved calls refetchTasks (boardState.refetchTasks)', async () => {
     const refetchTasks = vi.fn()
     stubBoard({ refetchTasks })
-    const { container } = renderShell('/')
+    renderShell('/decisions')
 
-    fireEvent.click(
-      container.querySelector<HTMLElement>(`[data-testid="dr-indicator-item-${DR_A.id}"]`)!,
-    )
+    await waitFor(() => expect(screen.queryByTestId(`dr-item-${DR_A.id}`)).not.toBeNull())
+    fireEvent.click(screen.getByTestId(`dr-item-${DR_A.id}`))
     expect(capturedResolveModalProps.current).not.toBeNull()
     act(() => {
       capturedResolveModalProps.current!.onResolved()
@@ -497,13 +478,12 @@ describe('DecisionsTabPostResolveDurable', () => {
     expect(refetchTasks).toHaveBeenCalled()
   })
 
-  it('ac4 happy: onResolved clears modal by setting selectedDRId to null', () => {
-    const { container } = renderShell('/')
+  it('ac4 happy: onResolved clears modal by setting selectedDRId to null', async () => {
+    const { container } = renderShell('/decisions')
 
     // Open modal
-    fireEvent.click(
-      container.querySelector<HTMLElement>(`[data-testid="dr-indicator-item-${DR_A.id}"]`)!,
-    )
+    await waitFor(() => expect(screen.queryByTestId(`dr-item-${DR_A.id}`)).not.toBeNull())
+    fireEvent.click(screen.getByTestId(`dr-item-${DR_A.id}`))
     expect(container.querySelector('[data-testid="resolve-modal-stub"]')).not.toBeNull()
 
     // Trigger onResolved → setSelectedDRId(null) → modal unmounts
@@ -513,16 +493,15 @@ describe('DecisionsTabPostResolveDurable', () => {
     expect(container.querySelector('[data-testid="resolve-modal-stub"]')).toBeNull()
   })
 
-  it('ac4 happy: onClose clears modal without triggering refetch callbacks', () => {
+  it('ac4 happy: onClose clears modal without triggering refetch callbacks', async () => {
     const refetch = vi.fn()
     const refetchTasks = vi.fn()
     stubBoard({ refetchTasks })
     stubPendingDRs({ count: 1, items: [DR_A], refetch })
-    const { container } = renderShell('/')
+    const { container } = renderShell('/decisions')
 
-    fireEvent.click(
-      container.querySelector<HTMLElement>(`[data-testid="dr-indicator-item-${DR_A.id}"]`)!,
-    )
+    await waitFor(() => expect(screen.queryByTestId(`dr-item-${DR_A.id}`)).not.toBeNull())
+    fireEvent.click(screen.getByTestId(`dr-item-${DR_A.id}`))
     expect(container.querySelector('[data-testid="resolve-modal-stub"]')).not.toBeNull()
 
     // onClose should clear modal without calling refetch callbacks

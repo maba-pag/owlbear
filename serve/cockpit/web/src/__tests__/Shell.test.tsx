@@ -88,10 +88,10 @@ describe('TestFromAC_AppShell', () => {
       expect(statusBar?.querySelector('[data-testid="traffic-light"]')).not.toBeNull()
     })
 
-    it('renders task count placeholder', () => {
+    it('does not duplicate board task count in the global status bar', () => {
       const { container } = renderShell()
       const statusBar = container.querySelector('[data-region="status-bar"]')
-      expect(statusBar?.querySelector('[data-testid="task-count"]')).not.toBeNull()
+      expect(statusBar?.querySelector('[data-testid="task-count"]')).toBeNull()
     })
   })
 

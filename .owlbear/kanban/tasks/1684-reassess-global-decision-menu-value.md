@@ -1,10 +1,10 @@
 ---
 id: 1684
 title: Reassess global decision menu value
-status: research
+status: done
 priority: important
 created: 2026-05-21T19:52:10.714317+02:00
-updated: 2026-05-21T19:52:10.714317+02:00
+updated: 2026-05-21T21:00:37+02:00
 tags:
   - cockpit-perfect-ui
   - scope:cockpit-web
@@ -40,3 +40,10 @@ Use this task as a product/audit todo item, not an instruction to hand off to th
 - Map all current decision entry points and what each lets the user do.
 - Compare global resolve menu vs route-only decision workflow for morning cockpit usage.
 - Present recommendation before removing or demoting the global decision menu.
+
+## Implementation Evidence
+- Classification: observed product workflow concern, not theoretical.
+- Impact: hurt the current cockpit now and hurt the plan by duplicating the Decisions workspace with a global resolver.
+- Decision: route-owned decisions. The left nav badge remains the global signal; the Decisions route owns the list and opens ResolveModal.
+- Evidence: browser checks confirm no top-bar `dr-indicator` remains, the Decisions badge shows pending count, and `ResolveModal` opens from `[data-testid="dr-item-..."]` on `/decisions`.
+- Verification: `npm run test:e2e:all -- e2e/shell-sidecar-inspector.spec.ts --reporter=line`; `npm run test:e2e:all -- e2e/accessibility-sweep.spec.ts --reporter=line`; `npm run test:e2e:all -- e2e/accessibility-dual-theme.spec.ts --reporter=line`.
