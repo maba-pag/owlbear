@@ -60,6 +60,11 @@ async function flush() {
   })
 }
 
+function findDialogAction(dialog: Element, pattern: RegExp): HTMLElement | undefined {
+  return Array.from(dialog.querySelectorAll<HTMLElement>('button, p-button'))
+    .find((button) => pattern.test(button.textContent ?? ''))
+}
+
 /** Render IdeasPage in router context and wait for GET /api/ideas to complete. */
 async function renderLoaded(content = 'initial content') {
   vi.stubGlobal('fetch', makeGetOkFetch(content))
@@ -123,11 +128,7 @@ describe('TestFromAC_UnsavedChangesNavGuard', () => {
       expect(container.querySelector('[role="alertdialog"]')).not.toBeNull()
     })
     const dialog = container.querySelector('[role="alertdialog"]')!
-    const buttons = Array.from(dialog.querySelectorAll('button'))
-    // Find the proceed / leave button by text content
-    const proceedBtn = buttons.find((b) =>
-      /leave|proceed|confirm|yes/i.test(b.textContent ?? ''),
-    )
+    const proceedBtn = findDialogAction(dialog, /leave|proceed|confirm|yes/i)
     expect(proceedBtn).not.toBeUndefined()
     fireEvent.click(proceedBtn!)
     await waitFor(() => {
@@ -144,11 +145,7 @@ describe('TestFromAC_UnsavedChangesNavGuard', () => {
       expect(container.querySelector('[role="alertdialog"]')).not.toBeNull()
     })
     const dialog = container.querySelector('[role="alertdialog"]')!
-    const buttons = Array.from(dialog.querySelectorAll('button'))
-    // Find the cancel / stay button by text content
-    const cancelBtn = buttons.find((b) =>
-      /cancel|stay|no|dismiss/i.test(b.textContent ?? ''),
-    )
+    const cancelBtn = findDialogAction(dialog, /cancel|stay|no|dismiss/i)
     expect(cancelBtn).not.toBeUndefined()
     fireEvent.click(cancelBtn!)
     await waitFor(() => {
@@ -359,8 +356,7 @@ describe('TestFromAC_BrowserRouterSurface', () => {
       expect(container.querySelector('[role="alertdialog"]')).not.toBeNull()
     })
     const dialog = container.querySelector('[role="alertdialog"]')!
-    const buttons = Array.from(dialog.querySelectorAll('button'))
-    const proceedBtn = buttons.find((b) => /leave|proceed|confirm|yes/i.test(b.textContent ?? ''))
+    const proceedBtn = findDialogAction(dialog, /leave|proceed|confirm|yes/i)
     expect(proceedBtn).not.toBeUndefined()
     fireEvent.click(proceedBtn!)
     await waitFor(() => {
@@ -376,8 +372,7 @@ describe('TestFromAC_BrowserRouterSurface', () => {
       expect(container.querySelector('[role="alertdialog"]')).not.toBeNull()
     })
     const dialog = container.querySelector('[role="alertdialog"]')!
-    const buttons = Array.from(dialog.querySelectorAll('button'))
-    const cancelBtn = buttons.find((b) => /cancel|stay|no|dismiss/i.test(b.textContent ?? ''))
+    const cancelBtn = findDialogAction(dialog, /cancel|stay|no|dismiss/i)
     expect(cancelBtn).not.toBeUndefined()
     fireEvent.click(cancelBtn!)
     await waitFor(() => {

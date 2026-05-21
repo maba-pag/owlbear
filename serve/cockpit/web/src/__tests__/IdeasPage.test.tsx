@@ -306,6 +306,28 @@ describe('IdeasPageIntegration_GuardAfterSave', () => {
   })
 })
 
+describe('IdeasPageIntegration_PdsControls', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('renders editor commands as PDS buttons while keeping the markdown textarea native', async () => {
+    const { container } = await renderLoaded('base')
+    expect(container.querySelector('[data-testid="ideas-preview-toggle"]')?.tagName.toLowerCase()).toBe('p-button')
+    expect(container.querySelector('[data-testid="ideas-save"]')?.tagName.toLowerCase()).toBe('p-button')
+    expect(container.querySelector('textarea')?.getAttribute('data-pds-exception')).toBe('ideas-markdown-editor')
+  })
+
+  it('renders the unsaved navigation confirmation with PModal', async () => {
+    const { container } = await renderLoaded('base')
+    fireEvent.change(container.querySelector('textarea')!, { target: { value: 'unsaved' } })
+    fireEvent.click(container.querySelector('[data-testid="nav-home"]')!)
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="ideas-unsaved-dialog"]')?.tagName.toLowerCase()).toBe('p-modal')
+    })
+  })
+})
+
 // ─── AC4: Conflict trigger ────────────────────────────────────────────────────
 //
 // While dirty, visibilitychange re-fetch returning different server content causes

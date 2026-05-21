@@ -578,9 +578,17 @@ function MemoryTab(_props: KanbanBoardProps) {
   }
 
   return (
-    <section data-testid="memory-tab">
-      <header>
-        <h2>Memory</h2>
+    <section data-testid="memory-tab" className="flex h-full min-h-0 w-full flex-col gap-static-md bg-canvas">
+      <header className="flex min-w-0 flex-wrap items-end justify-between gap-static-md border-b border-contrast-low pb-static-md">
+        <div className="min-w-0">
+          <h1 className="m-0 text-3xl font-semibold leading-tight text-primary">Memory</h1>
+        </div>
+        <div className="inline-flex min-h-10 flex-wrap items-baseline gap-static-xs rounded-full border border-contrast-low bg-surface px-static-sm py-static-xs text-sm text-primary">
+          <span><strong className="text-primary">{entries.length}</strong> entries</span>
+          <span aria-hidden="true">/</span>
+          <span><strong className="text-primary">{visibleEntries.length}</strong> shown</span>
+          {parseErrors > 0 ? <span className="text-error">{parseErrors} unreadable</span> : null}
+        </div>
       </header>
 
       <div>
