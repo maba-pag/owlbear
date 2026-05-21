@@ -1,11 +1,10 @@
 /**
- * Card visual treatment tests — task #1615 (AC-1 through AC-6)
+ * Card visual treatment tests — tasks #1615, #1696, #1706
  *
  * AC coverage:
- *   AC-1: Status chip renders as <PTag compact> with variant from statusToVariant();
- *         unknown status → variant "secondary"
- *   AC-2: Priority chip renders as <PTag compact> with variant from priorityToVariant();
- *         unknown priority → variant "secondary"
+ *   AC-1: Status and priority do not render as visible card chips; status is
+ *         encoded by the column and priority remains on data/ARIA plus the rail.
+ *   AC-2: Ready/default cards do not render a signal chip; exceptional signals do.
  *   AC-3: Signal icon renders as <p-icon size="xs" aria-label={signal}> for
  *         dr-pending, blocked, claimed, deps-unmet; no p-icon element in DOM when signal is ready
  *   AC-4: Each visible tag (up to TAG_PREVIEW_LIMIT=3) renders as individual
@@ -14,13 +13,10 @@
  *         Decision pending) preserved unchanged
  *   AC-6: No inline hex color values in Card output; source imports PTag from PDS
  *
- * Failure modes before builder implementation:
- *   AC-1: querySelector('p-tag[data-testid="card-status"]') returns null — no status chip
- *   AC-2: priority chip tagName is 'span' not 'p-tag'
- *   AC-3: querySelector('p-icon[...]') returns null — no PIcon anywhere in Card
- *   AC-4: querySelectorAll('p-tag[compact][variant="secondary"]') returns 0 — tags are in span
- *   AC-5: combined test fails due to missing p-tag status chip (AC-1 anchor)
- *   AC-6: Card.tsx source does not contain 'PTag' import — assertion fails
+ * Regression focus:
+ *   - No redundant status or priority bubbles on Kanban cards.
+ *   - Ordinary tags stay secondary/grey so they do not compete with alerts.
+ *   - Exceptional operational cues remain visible and perceivable without color alone.
  */
 import { describe, it, expect } from 'vitest'
 import { render } from '@testing-library/react'
@@ -75,99 +71,28 @@ function renderCard(task: CardTask, pendingDRIds: Set<number> = new Set()) {
   )
 }
 
-// ─── AC-1: Status chip renders as PTag compact ───────────────────────────────
+// ─── AC-1: Status and priority do not render as visible card chips ───────────
 
-describe('Card status chip', () => {
-  it('status chip element has tag name p-tag (not a plain span)', () => {
-    // Current Card.tsx has no status chip at all — querySelector returns null,
-    // then tagName check fails. FAIL until builder adds <PTag data-testid="card-status">.
+describe('Card metadata declutter', () => {
+  it('does not render a visible status chip because the column already communicates status', () => {
     const task = makeTask({ id: 1, status: 'todo' })
     const { container } = renderCard(task)
-    const statusChip = container.querySelector('[data-testid="card-status"]')
-    expect(statusChip).not.toBeNull()
-    expect(statusChip!.tagName.toLowerCase()).toBe('p-tag')
+    expect(container.querySelector('[data-testid="card-status"]')).toBeNull()
   })
 
-  it('status chip p-tag has compact attribute', () => {
-    const task = makeTask({ id: 1, status: 'todo' })
-    const { container } = renderCard(task)
-    const statusChip = container.querySelector('p-tag[data-testid="card-status"]')
-    expect(statusChip).not.toBeNull()
-    expect(statusChip!.hasAttribute('compact')).toBe(true)
-  })
-
-  it('status chip has a non-empty variant attribute', () => {
-    const task = makeTask({ id: 1, status: 'todo' })
-    const { container } = renderCard(task)
-    const statusChip = container.querySelector('p-tag[data-testid="card-status"]')
-    expect(statusChip).not.toBeNull()
-    const variant = statusChip!.getAttribute('variant')
-    expect(typeof variant).toBe('string')
-    expect((variant as string).length).toBeGreaterThan(0)
-  })
-
-  it('unknown status string renders status chip with variant="secondary"', () => {
-    const task = makeTask({ id: 1, status: 'completely-unknown-status-xyz' })
-    const { container } = renderCard(task)
-    const statusChip = container.querySelector('p-tag[data-testid="card-status"]')
-    expect(statusChip).not.toBeNull()
-    expect(statusChip!.getAttribute('variant')).toBe('secondary')
-  })
-
-  it('status chip displays the current task status value as text content', () => {
-    const task = makeTask({ id: 1, status: 'in-progress' })
-    const { container } = renderCard(task)
-    const statusChip = container.querySelector('p-tag[data-testid="card-status"]')
-    expect(statusChip).not.toBeNull()
-    expect(statusChip!.textContent?.trim()).toBe('in-progress')
-  })
-})
-
-// ─── AC-2: Priority chip renders as PTag compact ──────────────────────────────
-
-describe('Card priority chip', () => {
-  it('priority chip element has tag name p-tag (not a plain span)', () => {
-    // Current Card.tsx has <span data-testid="card-priority"> — tagName check fails.
-    // FAIL until builder migrates to <PTag data-testid="card-priority">.
+  it('does not render a visible priority chip because priority is encoded by the rail and ARIA label', () => {
     const task = makeTask({ id: 1, priority: 'critical' })
     const { container } = renderCard(task)
-    const priorityChip = container.querySelector('[data-testid="card-priority"]')
-    expect(priorityChip).not.toBeNull()
-    expect(priorityChip!.tagName.toLowerCase()).toBe('p-tag')
+    const card = container.querySelector('[data-testid="task-card"]')
+    expect(container.querySelector('[data-testid="card-priority"]')).toBeNull()
+    expect(card?.getAttribute('data-priority')).toBe('critical')
+    expect(card?.getAttribute('aria-label')).toContain('critical priority')
   })
 
-  it('priority chip p-tag has compact attribute', () => {
-    const task = makeTask({ id: 1, priority: 'critical' })
+  it('does not render a default ready signal chip on ordinary cards', () => {
+    const task = makeTask({ id: 1 })
     const { container } = renderCard(task)
-    const priorityChip = container.querySelector('p-tag[data-testid="card-priority"]')
-    expect(priorityChip).not.toBeNull()
-    expect(priorityChip!.hasAttribute('compact')).toBe(true)
-  })
-
-  it('priority chip has a non-empty variant attribute', () => {
-    const task = makeTask({ id: 1, priority: 'critical' })
-    const { container } = renderCard(task)
-    const priorityChip = container.querySelector('p-tag[data-testid="card-priority"]')
-    expect(priorityChip).not.toBeNull()
-    const variant = priorityChip!.getAttribute('variant')
-    expect(typeof variant).toBe('string')
-    expect((variant as string).length).toBeGreaterThan(0)
-  })
-
-  it('unknown priority string renders priority chip with variant="secondary"', () => {
-    const task = makeTask({ id: 1, priority: 'completely-unknown-priority-xyz' })
-    const { container } = renderCard(task)
-    const priorityChip = container.querySelector('p-tag[data-testid="card-priority"]')
-    expect(priorityChip).not.toBeNull()
-    expect(priorityChip!.getAttribute('variant')).toBe('secondary')
-  })
-
-  it('priority chip displays the current task priority value as text content', () => {
-    const task = makeTask({ id: 1, priority: 'critical' })
-    const { container } = renderCard(task)
-    const priorityChip = container.querySelector('p-tag[data-testid="card-priority"]')
-    expect(priorityChip).not.toBeNull()
-    expect(priorityChip!.textContent?.trim()).toBe('critical')
+    expect(container.querySelector('[data-testid="card-signal"]')).toBeNull()
   })
 })
 
@@ -175,7 +100,6 @@ describe('Card priority chip', () => {
 
 describe('Card signal icon', () => {
   it('dr-pending signal renders p-icon with size="xs" and aria-label="dr-pending"', () => {
-    // No PIcon in current Card.tsx — querySelector returns null. FAIL until builder adds it.
     const task = makeTask({ id: 5 })
     const { container } = renderCard(task, new Set([5]))
     const icon = container.querySelector('p-icon[size="xs"][aria-label="dr-pending"]')
@@ -205,9 +129,6 @@ describe('Card signal icon', () => {
   })
 
   it('ready signal renders no p-icon element — confirmed by blocked card having p-icon', () => {
-    // Anchored to a positive check that FAILS now: blocked card must have p-icon.
-    // Both assertions must pass for the test to pass — if p-icon is never rendered,
-    // the first assertion fails (correct RED behavior).
     const blockedTask = makeTask({ id: 1, blocked: true })
     const { container: blockedContainer } = renderCard(blockedTask)
     expect(blockedContainer.querySelector('p-icon[aria-label="blocked"]')).not.toBeNull()
@@ -233,19 +154,14 @@ describe('Card signal icon', () => {
 // ─── AC-4: Tags render as individual PTag elements ───────────────────────────
 
 describe('Card tag pills', () => {
-  // Note: tests use status='in-progress' and priority='critical' — both are known values
-  // that the mapping utility must map away from the fallback variant (per AC-1/2 contract).
-  // This ensures p-tag[compact][variant="primary"] selects only tag pills, not status chips.
-
-  it('one tag renders as exactly one p-tag[compact][variant="primary"] pill', () => {
-    // Current tags are in a single <span> — querySelectorAll returns 0. FAIL.
+  it('one tag renders as exactly one p-tag[compact][variant="secondary"] pill', () => {
     const task = makeTask({ id: 1, status: 'in-progress', priority: 'critical', tags: ['frontend'] })
     const { container } = renderCard(task)
-    const tagPills = container.querySelectorAll('p-tag[compact][variant="primary"]')
+    const tagPills = container.querySelectorAll('p-tag[compact][variant="secondary"]')
     expect(tagPills.length).toBe(1)
   })
 
-  it('three tags render exactly three p-tag[compact][variant="primary"] pills', () => {
+  it('three tags render exactly three p-tag[compact][variant="secondary"] pills', () => {
     const task = makeTask({
       id: 1,
       status: 'in-progress',
@@ -253,7 +169,7 @@ describe('Card tag pills', () => {
       tags: ['a', 'b', 'c'],
     })
     const { container } = renderCard(task)
-    const tagPills = container.querySelectorAll('p-tag[compact][variant="primary"]')
+    const tagPills = container.querySelectorAll('p-tag[compact][variant="secondary"]')
     expect(tagPills.length).toBe(3)
   })
 
@@ -265,7 +181,7 @@ describe('Card tag pills', () => {
       tags: ['a', 'b', 'c', 'd'],
     })
     const { container } = renderCard(task)
-    const tagPills = container.querySelectorAll('p-tag[compact][variant="primary"]')
+    const tagPills = container.querySelectorAll('p-tag[compact][variant="secondary"]')
     expect(tagPills.length).toBe(3)
   })
 
@@ -277,7 +193,7 @@ describe('Card tag pills', () => {
       tags: ['frontend', 'backend', 'urgent', 'blocked', 'pds'],
     })
     const { container } = renderCard(task)
-    const tagPills = container.querySelectorAll('p-tag[compact][variant="primary"]')
+    const tagPills = container.querySelectorAll('p-tag[compact][variant="secondary"]')
     expect(tagPills.length).toBe(3)
     const texts = Array.from(tagPills).map((el) => el.textContent?.trim())
     expect(texts).toContain('frontend')
@@ -287,21 +203,19 @@ describe('Card tag pills', () => {
     expect(texts).not.toContain('pds')
   })
 
-  it('zero tags renders no p-tag pill elements with variant="primary"', () => {
+  it('zero tags renders no p-tag pill elements with variant="secondary"', () => {
     // Positive anchor: one-tag case must have a pill first.
     const oneTagTask = makeTask({ id: 99, status: 'in-progress', priority: 'critical', tags: ['x'] })
     const { container: oneTagContainer } = renderCard(oneTagTask)
-    expect(oneTagContainer.querySelectorAll('p-tag[compact][variant="primary"]').length).toBe(1)
+    expect(oneTagContainer.querySelectorAll('p-tag[compact][variant="secondary"]').length).toBe(1)
 
     // Now verify: zero tags → no pills
     const task = makeTask({ id: 1, status: 'in-progress', priority: 'critical', tags: [] })
     const { container } = renderCard(task)
-    expect(container.querySelectorAll('p-tag[compact][variant="primary"]').length).toBe(0)
+    expect(container.querySelectorAll('p-tag[compact][variant="secondary"]').length).toBe(0)
   })
 
   it('overflow count indicator preserved when tags exceed TAG_PREVIEW_LIMIT=3', () => {
-    // Anchor: individual tag pills must be p-tags (fails now — tags are still a span).
-    // Both the pill assertion and overflow assertion must pass for the test to pass.
     const task = makeTask({
       id: 1,
       status: 'in-progress',
@@ -309,8 +223,7 @@ describe('Card tag pills', () => {
       tags: ['a', 'b', 'c', 'd', 'e'],
     })
     const { container } = renderCard(task)
-    // AC-4 anchor — fails now (tags still comma-joined in a span, not individual p-tags)
-    const pills = container.querySelectorAll('p-tag[compact][variant="primary"]')
+    const pills = container.querySelectorAll('p-tag[compact][variant="secondary"]')
     expect(pills.length).toBe(3)
     // Regression guard: overflow indicator preserved alongside tag pills
     const overflow = container.querySelector('[data-testid="card-tag-overflow"]')
@@ -320,7 +233,6 @@ describe('Card tag pills', () => {
 
   it('overflow indicator absent when tags are within TAG_PREVIEW_LIMIT', () => {
     // Positive anchor: above-limit case must have both pills AND overflow.
-    // Pill check fails now (no p-tag pills yet) → whole test fails correctly.
     const manyTask = makeTask({
       id: 99,
       status: 'in-progress',
@@ -328,14 +240,13 @@ describe('Card tag pills', () => {
       tags: ['a', 'b', 'c', 'd'],
     })
     const { container: manyContainer } = renderCard(manyTask)
-    // AC-4 anchor — fails now
-    expect(manyContainer.querySelectorAll('p-tag[compact][variant="primary"]').length).toBe(3)
+    expect(manyContainer.querySelectorAll('p-tag[compact][variant="secondary"]').length).toBe(3)
     expect(manyContainer.querySelector('[data-testid="card-tag-overflow"]')).not.toBeNull()
 
     // Main assertion: 3 tags → exactly 3 pills, no overflow
     const task = makeTask({ id: 1, status: 'in-progress', priority: 'critical', tags: ['a', 'b', 'c'] })
     const { container } = renderCard(task)
-    expect(container.querySelectorAll('p-tag[compact][variant="primary"]').length).toBe(3)
+    expect(container.querySelectorAll('p-tag[compact][variant="secondary"]').length).toBe(3)
     expect(container.querySelector('[data-testid="card-tag-overflow"]')).toBeNull()
   })
 })
@@ -343,26 +254,17 @@ describe('Card tag pills', () => {
 // ─── AC-5: Existing state cue text spans preserved unchanged (regression guard) ─
 
 describe('Card cue text preservation', () => {
-  // These are regression guards. Each test is anchored with an AC-1 check
-  // (status chip is p-tag) so the test fails RED until BOTH the new PDS chip
-  // AND the preserved cue span are present. Without the anchor, the cue tests
-  // would pass against the current Card.tsx and not be truly RED.
-
-  it('blocked card retains card-blocked-cue span with text "Blocked" alongside new status chip', () => {
+  it('blocked card retains card-blocked-cue span with text "Blocked"', () => {
     const task = makeTask({ id: 1, blocked: true, status: 'todo' })
     const { container } = renderCard(task)
-    // AC-1 anchor — fails now (no status p-tag yet)
-    expect(container.querySelector('p-tag[data-testid="card-status"]')).not.toBeNull()
-    // AC-5 regression guard
     const cue = container.querySelector('[data-testid="card-blocked-cue"]')
     expect(cue).not.toBeNull()
     expect(cue!.textContent?.trim()).toBe('Blocked')
   })
 
-  it('claimed card retains card-claimed-cue span with text "Claimed" alongside new status chip', () => {
+  it('claimed card retains card-claimed-cue span with text "Claimed"', () => {
     const task = makeTask({ id: 1, claimed: true, status: 'in-progress' })
     const { container } = renderCard(task)
-    expect(container.querySelector('p-tag[data-testid="card-status"]')).not.toBeNull()
     const cue = container.querySelector('[data-testid="card-claimed-cue"]')
     expect(cue).not.toBeNull()
     expect(cue!.textContent?.trim()).toBe('Claimed')
@@ -371,7 +273,6 @@ describe('Card cue text preservation', () => {
   it('deps-unmet card retains card-deps-unmet-cue span with text "Dependencies blocked"', () => {
     const task = makeTask({ id: 1, dep_status: 'blocked', status: 'todo' })
     const { container } = renderCard(task)
-    expect(container.querySelector('p-tag[data-testid="card-status"]')).not.toBeNull()
     const cue = container.querySelector('[data-testid="card-deps-unmet-cue"]')
     expect(cue).not.toBeNull()
     expect(cue!.textContent?.trim()).toBe('Dependencies blocked')
@@ -380,7 +281,6 @@ describe('Card cue text preservation', () => {
   it('dr-pending card retains card-dr-pending-cue span with text "Decision pending"', () => {
     const task = makeTask({ id: 7, status: 'todo' })
     const { container } = renderCard(task, new Set([7]))
-    expect(container.querySelector('p-tag[data-testid="card-status"]')).not.toBeNull()
     const cue = container.querySelector('[data-testid="card-dr-pending-cue"]')
     expect(cue).not.toBeNull()
     expect(cue!.textContent?.trim()).toBe('Decision pending')
@@ -391,14 +291,12 @@ describe('Card cue text preservation', () => {
 
 describe('Card color token usage', () => {
   it('Card.tsx source contains no no-restricted-syntax eslint-disable comment', () => {
-    // FAILS until builder removes the /* eslint-disable no-restricted-syntax */ line from Card.tsx
     const cardSrcPath = resolve(__dirname, '../components/Card.tsx')
     const src = readFileSync(cardSrcPath, 'utf-8')
     expect(src).not.toContain('eslint-disable no-restricted-syntax')
   })
 
   it('Card.tsx source imports PTag from @porsche-design-system/components-react', () => {
-    // FAILS now: current Card.tsx has no PTag import.
     const cardSrcPath = resolve(__dirname, '../components/Card.tsx')
     const src = readFileSync(cardSrcPath, 'utf-8')
     expect(src).toContain('PTag')
@@ -407,10 +305,9 @@ describe('Card color token usage', () => {
 
   it('Card.tsx source contains no inline hex color values', () => {
     // This is a regression guard — hex patterns like #fff or #aabbcc must not appear
-    // in JSX style props. Currently passes (no hex in Card.tsx) but anchored below.
+    // in JSX style props.
     const cardSrcPath = resolve(__dirname, '../components/Card.tsx')
     const src = readFileSync(cardSrcPath, 'utf-8')
-    // Anchored to PTag import to ensure test fails until full implementation.
     expect(src).toContain('PTag')
     const hexPattern = /#[0-9a-fA-F]{3,8}\b/g
     const matches = src.match(hexPattern) ?? []
@@ -418,11 +315,8 @@ describe('Card color token usage', () => {
   })
 
   it('rendered Card output has no elements with inline style containing hex color values', () => {
-    // AC-1 anchor: status chip must be present (fails now).
     const task = makeTask({ id: 1, status: 'todo', priority: 'critical' })
     const { container } = renderCard(task)
-    expect(container.querySelector('p-tag[data-testid="card-status"]')).not.toBeNull()
-    // AC-6: no inline hex colors in rendered DOM
     const elementsWithStyle = container.querySelectorAll('[style]')
     for (const el of elementsWithStyle) {
       const style = el.getAttribute('style') ?? ''

@@ -216,13 +216,13 @@ test.describe('AC-1 | Card rendering fixtures — id, priority, tags, state cues
     await expect(card.locator('[data-testid="card-id"]')).toBeVisible({ timeout: 2_000 })
   })
 
-  test('card displays priority tag as a visible element', async ({ page }) => {
+  test('card keeps priority in data and accessible text without a visible priority chip', async ({ page }) => {
     await loadBoard(page)
-    // Post-remediation: visible priority chip/tag element on each card.
-    // Currently: priority only in data-priority attribute — no visible tag — FAILS.
     const card = page.locator('[data-testid="task-card"][data-id="1"]')
     await card.waitFor({ state: 'visible', timeout: 6_000 })
-    await expect(card.locator('[data-testid="card-priority"]')).toBeVisible({ timeout: 2_000 })
+    await expect(card.locator('[data-testid="card-priority"]')).toHaveCount(0)
+    await expect(card).toHaveAttribute('data-priority', 'critical')
+    await expect(card).toHaveAttribute('aria-label', /critical priority/)
   })
 
   test('card with tags displays tag preview', async ({ page }) => {
@@ -379,13 +379,13 @@ test.describe('AC-3 | Baseline failing evidence — pre-remediation title-only b
     await expect(card.locator('[data-testid="card-id"]')).toBeVisible({ timeout: 2_000 })
   })
 
-  test('baseline: card exposes priority beyond data attribute (proves title-only gap)', async ({ page }) => {
+  test('baseline: card exposes priority via data and accessible text without chip noise', async ({ page }) => {
     await loadBoard(page)
-    // Card.tsx sets data-priority="critical" on root div but renders no priority chip.
-    // FAILS, confirming priority is CSS/color-only, not visible text.
     const card = page.locator('[data-testid="task-card"][data-id="1"]')
     await card.waitFor({ state: 'visible', timeout: 6_000 })
-    await expect(card.locator('[data-testid="card-priority"]')).toBeVisible({ timeout: 2_000 })
+    await expect(card.locator('[data-testid="card-priority"]')).toHaveCount(0)
+    await expect(card).toHaveAttribute('data-priority', 'critical')
+    await expect(card).toHaveAttribute('aria-label', /critical priority/)
   })
 })
 

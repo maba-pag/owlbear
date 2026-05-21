@@ -111,7 +111,7 @@ describe('TestFromAC_CardSignalAttribute', () => {
   })
 })
 
-// ─── AC-1 (density retry): Card metadata chips — id, priority, updated ────────
+// ─── AC-1 (density retry): Card metadata — id, priority, updated ─────────────
 
 describe('TestFromAC_CardDensityElements', () => {
   it('card renders id chip showing #{task.id}', () => {
@@ -122,12 +122,13 @@ describe('TestFromAC_CardDensityElements', () => {
     expect(idChip!.textContent).toContain('#42')
   })
 
-  it('card renders priority chip showing task.priority value', () => {
+  it('card keeps priority in data and accessible text without rendering a priority chip', () => {
     const task = makeTask({ id: 1, priority: 'critical' })
     const { container } = renderCard(task)
-    const priorityChip = container.querySelector('[data-testid="card-priority"]')
-    expect(priorityChip).not.toBeNull()
-    expect(priorityChip!.textContent).toContain('critical')
+    const card = container.querySelector('[data-testid="task-card"]')
+    expect(container.querySelector('[data-testid="card-priority"]')).toBeNull()
+    expect(card?.getAttribute('data-priority')).toBe('critical')
+    expect(card?.getAttribute('aria-label')).toContain('critical priority')
   })
 
   it('card renders updated chip with non-empty text', () => {

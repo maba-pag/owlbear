@@ -1,10 +1,10 @@
 ---
 id: 1696
 title: Remove redundant kanban card status chip
-status: research
+status: done
 priority: important
 created: 2026-05-21T20:21:45.242959+02:00
-updated: 2026-05-21T20:21:45.242959+02:00
+updated: 2026-05-21T22:08:51.897362+02:00
 tags:
   - cockpit-perfect-ui
   - scope:cockpit-web
@@ -39,3 +39,12 @@ Use this task as a product/audit todo item, not an instruction to hand off to th
 - Audit current card chips for redundant status information.
 - Remove or demote the status chip when column placement already communicates it.
 - Rebalance tag styling so tags support scanning without dominating the card.
+
+[[2026-05-21T22:08:37+02:00]]
+## Builder Evidence
+- Classification: observed current redundancy and visual-weight issue, not theoretical. Screenshot review showed card status was repeated even though the column header already provided that state.
+- Impact: hurt Cockpit now by making task cards noisier than needed; also hurt the card-scanning plan because normal tags and repeated workflow labels competed with true alert signals.
+- Implementation: removed the visible `card-status` chip from Kanban task cards; kept status represented by the containing column and preserved machine-readable task metadata.
+- Tag rebalance: regular task tags now use secondary PDS tags so they read as supporting metadata rather than primary alerts.
+- Screenshot evidence: `.owlbear/scratch/1680-route-kanban-desktop.png`, `.owlbear/scratch/1680-route-kanban-mobile.png`.
+- Validation: `npm test -- --run src/__tests__/Card.visual-treatment.test.tsx src/__tests__/Card.signal.test.tsx src/__tests__/CardSignalModel.test.tsx src/__tests__/BoardVisualDesign.test.tsx --reporter=dot` (81 passed); `npm run test:e2e:all -- e2e/card-density.spec.ts --reporter=line` (20 passed after stopping stale preview server); `npx eslint src/components/Card.tsx src/__tests__/Card.visual-treatment.test.tsx src/__tests__/Card.signal.test.tsx e2e/card-density.spec.ts` passed; `npm run build` passed with existing Vite chunk-size warning; board accessibility sweep passed (1); dual-theme board accessibility passed (2).

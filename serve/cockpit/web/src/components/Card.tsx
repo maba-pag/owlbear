@@ -3,7 +3,6 @@ import { PIcon, PTag, type IconName } from '@porsche-design-system/components-re
 import { motion } from 'framer-motion'
 import type { Task } from '../hooks/useBoard'
 import { computeSignal, type CardSignal } from '../utils/computeSignal'
-import { priorityToVariant, statusToVariant } from '../utils/cardVariants'
 
 const SIGNAL_ICON_NAME: Partial<Record<CardSignal, IconName>> = {
   blocked: 'lock',
@@ -69,7 +68,9 @@ export function Card({
   const signalLabel = signal.replace('-', ' ')
   const displaySignalLabel = SIGNAL_LABEL[signal] ?? signalLabel
   const signalIconName = SIGNAL_ICON_NAME[signal]
-  const hasIntegrationCues = task.blocked || task.claimed || task.dep_status === 'blocked' || pendingDRIds.has(task.id)
+  const hasVisibleSignal = signal !== 'ready' && signal !== 'unknown'
+  const hasIntegrationCues =
+    task.blocked || task.claimed || task.dep_status === 'blocked' || pendingDRIds.has(task.id)
 
   function openContextMenu(event: React.KeyboardEvent<HTMLDivElement>) {
     event.preventDefault()
@@ -110,56 +111,57 @@ export function Card({
 
   return (
     <motion.div
-        layout
-        layoutId={`card-${task.id}`}
-        initial={false}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.96 }}
-        transition={{ layout: { duration: 0.25, ease: 'easeOut' }, opacity: { duration: 0.15 } }}
-        data-testid="task-card"
-        data-id={task.id}
-        data-priority={task.priority}
-        data-selected={selected ? 'true' : 'false'}
-        data-signal={signal}
-        data-dragging={dragging ? 'true' : 'false'}
-        role="button"
-        tabIndex={0}
-        aria-haspopup="menu"
-        aria-label={
-          `Task #${task.id}: ${task.title}. ${task.priority} priority. ${signalLabel}. Updated ${updatedAge}.`
-        }
-        className={[
-          'card',
-          'relative flex min-h-[132px] items-start overflow-hidden rounded-lg border border-transparent border-l-[6px] bg-canvas',
-          'px-static-sm pb-static-sm pt-static-sm text-xs leading-normal',
-          'cursor-pointer shadow-sm',
-          'transition-[box-shadow,background-color,border-color,transform] duration-sm',
-          'hover:-translate-y-0.5 hover:bg-frosted hover:shadow-md',
-          'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]',
-          signalBorderClass,
-          selected ? 'border-primary bg-frosted inset-ring-2 inset-ring-primary shadow-lg' : '',
-          dragging ? 'opacity-50' : '',
-        ].join(' ')}
-        draggable={true}
-        onClick={() => onSelect?.(task.id)}
-        onKeyDown={handleKeyDown}
-        onDragStart={() => {
-          onSelect?.(task.id)
-          setDragging(true)
-          onDragStart(task.id, task.updated)
-        }}
-        onDragEnd={() => {
-          setDragging(false)
-          onDragEnd()
-        }}
-        onContextMenu={(e) => onContextMenu(e, task)}
+      layout
+      layoutId={`card-${task.id}`}
+      initial={false}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.96 }}
+      transition={{ layout: { duration: 0.25, ease: 'easeOut' }, opacity: { duration: 0.15 } }}
+      data-testid="task-card"
+      data-id={task.id}
+      data-priority={task.priority}
+      data-selected={selected ? 'true' : 'false'}
+      data-signal={signal}
+      data-dragging={dragging ? 'true' : 'false'}
+      role="button"
+      tabIndex={0}
+      aria-haspopup="menu"
+      aria-label={
+        `Task #${task.id}: ${task.title}. ${task.priority} priority. ${signalLabel}. Updated ${updatedAge}.`
+      }
+      className={[
+        'card',
+        'relative flex min-h-[116px] items-start overflow-hidden rounded-lg border border-transparent border-l-[6px] bg-canvas',
+        'px-static-sm pb-static-sm pt-static-sm text-xs leading-normal',
+        'cursor-pointer shadow-sm',
+        'transition-[box-shadow,background-color,border-color,transform] duration-sm',
+        'hover:-translate-y-0.5 hover:bg-frosted hover:shadow-md',
+        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]',
+        signalBorderClass,
+        selected ? 'border-primary bg-frosted inset-ring-2 inset-ring-primary shadow-lg' : '',
+        dragging ? 'opacity-50' : '',
+      ].join(' ')}
+      draggable={true}
+      onClick={() => onSelect?.(task.id)}
+      onKeyDown={handleKeyDown}
+      onDragStart={() => {
+        onSelect?.(task.id)
+        setDragging(true)
+        onDragStart(task.id, task.updated)
+      }}
+      onDragEnd={() => {
+        setDragging(false)
+        onDragEnd()
+      }}
+      onContextMenu={(e) => onContextMenu(e, task)}
     >
-      <div className="flex min-h-[108px] w-full min-w-0 flex-col gap-static-sm">
-          <div className="flex min-w-0 items-start justify-between gap-static-xs" aria-hidden="true">
-            <div className="flex min-w-0 flex-wrap items-center gap-static-xs">
-              <span data-testid="card-id" className="rounded-full border border-contrast-low bg-surface px-2 py-px font-mono text-[0.72rem] leading-normal text-primary">
-                #{task.id}
-              </span>
+      <div className="flex min-h-[92px] w-full min-w-0 flex-col gap-static-sm">
+        <div className="flex min-w-0 items-start justify-between gap-static-xs" aria-hidden="true">
+          <div className="flex min-w-0 flex-wrap items-center gap-static-xs">
+            <span data-testid="card-id" className="rounded-full border border-contrast-low bg-surface px-2 py-px font-mono text-[0.72rem] leading-normal text-primary">
+              #{task.id}
+            </span>
+            {hasVisibleSignal ? (
               <span data-testid="card-signal" className="inline-flex min-h-6 items-center gap-1 rounded-full bg-surface px-2 py-px text-[0.72rem] font-semibold leading-normal text-primary">
                 {signalIconName ? (
                   <PIcon
@@ -171,85 +173,68 @@ export function Card({
                 ) : null}
                 {displaySignalLabel}
               </span>
-            </div>
-            <span data-testid="card-updated" className="shrink-0 text-[0.72rem] leading-normal text-primary" aria-label={`Updated ${updatedAge}`}>
-              {updatedAge}
-            </span>
+            ) : null}
           </div>
-
-          <span data-testid="card-title" className="line-clamp-2 text-[0.95rem] font-semibold leading-tight text-primary" title={task.title}>
-            {task.title}
+          <span data-testid="card-updated" className="shrink-0 text-[0.72rem] leading-normal text-primary" aria-label={`Updated ${updatedAge}`}>
+            {updatedAge}
           </span>
+        </div>
 
-          {/* Status + Priority chips */}
-          <div className="flex min-w-0 flex-wrap items-center gap-static-xs">
-            <PTag
-              compact
-              data-testid="card-status"
-              variant={statusToVariant(task.status)}
-              ref={(el) => { if (el) { el.setAttribute('compact', ''); el.setAttribute('variant', statusToVariant(task.status)); el.setAttribute('data-testid', 'card-status') } }}
-            >
-              {task.status}
-            </PTag>
-            <PTag
-              compact
-              data-testid="card-priority"
-              variant={priorityToVariant(task.priority)}
-              ref={(el) => { if (el) { el.setAttribute('compact', ''); el.setAttribute('variant', priorityToVariant(task.priority)); el.setAttribute('data-testid', 'card-priority') } }}
-            >
-              {task.priority}
-            </PTag>
+        <span
+          data-testid="card-title"
+          className="line-clamp-2 text-[0.95rem] font-semibold leading-tight text-primary"
+          title={task.title}
+        >
+          {task.title}
+        </span>
+
+        {hasIntegrationCues ? (
+          <div className="mt-auto flex min-w-0 flex-wrap items-center gap-static-xs border-t border-contrast-low pt-static-xs">
+            {task.blocked ? (
+              <span data-testid="card-blocked-cue" className="rounded-full bg-surface px-2 py-px text-[0.72rem] font-medium text-error">Blocked</span>
+            ) : null}
+            {task.claimed ? (
+              <span data-testid="card-claimed-cue" className="rounded-full bg-surface px-2 py-px text-[0.72rem] font-medium text-primary">Claimed</span>
+            ) : null}
+            {task.dep_status === 'blocked' ? (
+              <span data-testid="card-deps-unmet-cue" className="rounded-full bg-surface px-2 py-px text-[0.72rem] font-medium text-primary">Dependencies blocked</span>
+            ) : null}
+            {pendingDRIds.has(task.id) ? (
+              <span data-testid="card-dr-pending-cue" className="rounded-full bg-surface px-2 py-px text-[0.72rem] font-medium text-primary">Decision pending</span>
+            ) : null}
           </div>
+        ) : null}
 
-          {/* Signal cue spans (conditionally rendered) */}
-          {hasIntegrationCues ? (
-            <div className="mt-auto flex min-w-0 flex-wrap items-center gap-static-xs border-t border-contrast-low pt-static-xs">
-              {task.blocked ? (
-                <span data-testid="card-blocked-cue" className="rounded-full bg-surface px-2 py-px text-[0.72rem] font-medium text-error">Blocked</span>
-              ) : null}
-              {task.claimed ? (
-                <span data-testid="card-claimed-cue" className="rounded-full bg-surface px-2 py-px text-[0.72rem] font-medium text-primary">Claimed</span>
-              ) : null}
-              {task.dep_status === 'blocked' ? (
-                <span data-testid="card-deps-unmet-cue" className="rounded-full bg-surface px-2 py-px text-[0.72rem] font-medium text-primary">Dependencies blocked</span>
-              ) : null}
-              {pendingDRIds.has(task.id) ? (
-                <span data-testid="card-dr-pending-cue" className="rounded-full bg-surface px-2 py-px text-[0.72rem] font-medium text-primary">Decision pending</span>
-              ) : null}
-            </div>
-          ) : null}
-
-          {/* Tags */}
-          {task.tags.length > 0 ? (
-            <div className={[hasIntegrationCues ? '' : 'mt-auto', 'flex min-w-0 flex-wrap items-center gap-static-xs'].join(' ')}>
-              <span data-testid="card-tags" className="max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-primary" aria-label={`Tags: ${previewTags.join(', ')}`}>
-                {previewTags.map((tag) => (
-                  <PTag
-                    key={tag}
-                    compact
-                    variant="primary"
-                    ref={(element) => {
-                      if (element) {
-                        element.setAttribute('compact', '')
-                        element.setAttribute('variant', 'primary')
-                      }
-                    }}
-                  >
-                    {tag}
-                  </PTag>
-                ))}
-              </span>
-              {overflowTags > 0 ? (
-                <span
-                  data-testid="card-tag-overflow"
-                  className="rounded-full border border-contrast-low px-2 py-px text-[0.72rem] leading-normal text-contrast-high"
-                  aria-label={`${overflowTags} more tags`}
+        {task.tags.length > 0 ? (
+          <div className={[hasIntegrationCues ? '' : 'mt-auto', 'flex min-w-0 flex-wrap items-center gap-static-xs'].join(' ')}>
+            <span data-testid="card-tags" className="max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-primary" aria-label={`Tags: ${previewTags.join(', ')}`}>
+              {previewTags.map((tag) => (
+                <PTag
+                  key={tag}
+                  compact
+                  variant="secondary"
+                  ref={(element) => {
+                    if (element) {
+                      element.setAttribute('compact', '')
+                      element.setAttribute('variant', 'secondary')
+                    }
+                  }}
                 >
-                  +{overflowTags}
-                </span>
-              ) : null}
-            </div>
-          ) : null}
+                  {tag}
+                </PTag>
+              ))}
+            </span>
+            {overflowTags > 0 ? (
+              <span
+                data-testid="card-tag-overflow"
+                className="rounded-full border border-contrast-low px-2 py-px text-[0.72rem] leading-normal text-contrast-high"
+                aria-label={`${overflowTags} more tags`}
+              >
+                +{overflowTags}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </motion.div>
   )
