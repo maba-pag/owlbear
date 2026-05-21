@@ -14,6 +14,7 @@ import {
 import type { PendingDR } from '../hooks/usePendingDRs'
 import { resolveDR } from '../api/decisions'
 import { ApiError } from '../api/errors'
+import { formatAge, formatRequestType, getDecisionBodyMarkdown, getDecisionBrief } from '../utils/decisionBrief'
 
 const TAB_FOCUSABLE_SELECTOR = [
   'button:not([disabled])',
@@ -116,6 +117,9 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
 
   if (!snapshotDR) return null
 
+  const brief = getDecisionBrief(snapshotDR)
+  const fullRequestBody = getDecisionBodyMarkdown(snapshotDR) || snapshotDR.body || ''
+
   useEffect(() => {
     previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
     const modal = modalRef.current
@@ -176,6 +180,7 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
 
   function setHeadingTagAttr(element: HTMLElement | null): void {
     element?.setAttribute('tag', 'h3')
+    element?.setAttribute('size', 'small')
   }
 
 
@@ -234,22 +239,57 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
       aria={{ 'aria-label': 'Resolve decision request' }}
     >
       <div
-        className="grid max-h-[min(82vh,820px)] w-[min(760px,calc(100vw-6rem))] min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-static-md overflow-hidden text-primary max-md:w-[calc(100vw-12rem)] max-sm:w-[calc(100vw-4rem)]"
+        className="grid max-h-[min(84vh,820px)] w-[min(920px,calc(100vw-8rem))] min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-static-md overflow-hidden text-primary"
         data-testid="resolve-modal-surface"
       >
         <header className="grid gap-static-xs border-b border-contrast-low pb-static-sm pr-[4.5rem]">
           <span className="text-xs font-semibold uppercase text-primary">Decision request</span>
-          <PHeading ref={setHeadingTagAttr} tag="h2">{snapshotDR.title}</PHeading>
+          <PHeading ref={setHeadingTagAttr} size="small" tag="h3">{brief.title}</PHeading>
           <div className="flex min-w-0 flex-wrap items-center gap-static-xs text-xs font-semibold text-primary">
             <span className="rounded-full border border-contrast-low bg-canvas px-static-xs py-1">Task #{snapshotDR.task_id}</span>
             <span className="rounded-full border border-contrast-low bg-canvas px-static-xs py-1">{snapshotDR.agent}</span>
-            <span className="rounded-full border border-contrast-low bg-canvas px-static-xs py-1">{snapshotDR.request_type.replace(/[-_]/g, ' ')}</span>
+            <span className="rounded-full border border-contrast-low bg-canvas px-static-xs py-1">{formatRequestType(snapshotDR.request_type)}</span>
+            <span className="text-xs font-semibold text-contrast-high">{formatAge(snapshotDR.created)}</span>
           </div>
         </header>
 
         <div className="grid min-h-0 gap-static-md overflow-y-auto pr-static-xs">
-          <section className="rounded-lg border border-contrast-low bg-canvas p-static-md text-sm leading-relaxed text-primary [&_h2]:m-0 [&_h2]:mb-static-xs [&_h2]:text-base [&_h2]:font-semibold [&_li]:my-1 [&_p]:my-static-xs [&_ul]:my-static-xs [&_ul]:pl-static-md">
-            <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>{snapshotDR.body ?? ''}</ReactMarkdown>
+          <section data-testid="resolve-request-summary" className="grid gap-static-sm rounded-lg border border-contrast-low bg-canvas p-static-md">
+            <div className="grid gap-1">
+              <span className="text-xs font-semibold uppercase leading-tight text-contrast-high">Context</span>
+              <p className="m-0 text-sm leading-relaxed text-primary">{brief.context}</p>
+            </div>
+            {brief.options.length > 0 ? (
+              <div className="grid gap-1">
+                <span className="text-xs font-semibold uppercase leading-tight text-contrast-high">Options</span>
+                <ol className="m-0 grid list-none gap-static-xs p-0 text-sm leading-normal text-primary">
+                  {brief.options.map((option, optionIndex) => (
+                    <li key={option} className="grid min-w-0 grid-cols-[1.5rem_minmax(0,1fr)] gap-static-xs">
+                      <span className="inline-flex size-5 items-center justify-center rounded-full border border-contrast-low bg-surface text-xs font-semibold leading-none text-primary">
+                        {optionIndex + 1}
+                      </span>
+                      <span>{option}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            ) : null}
+            {brief.recommendation || brief.consequence ? (
+              <div className="grid gap-static-sm sm:grid-cols-2">
+                {brief.recommendation ? (
+                  <div className="grid gap-1 border-l-2 border-info pl-static-xs">
+                    <span className="text-xs font-semibold uppercase leading-tight text-contrast-high">Recommendation</span>
+                    <p className="m-0 text-sm leading-normal text-primary">{brief.recommendation}</p>
+                  </div>
+                ) : null}
+                {brief.consequence ? (
+                  <div className="grid gap-1 border-l-2 border-contrast-low pl-static-xs">
+                    <span className="text-xs font-semibold uppercase leading-tight text-contrast-high">Impact</span>
+                    <p className="m-0 text-sm leading-normal text-primary">{brief.consequence}</p>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </section>
 
           <fieldset data-testid="response-selector" className="m-0 grid gap-static-sm border-0 p-0">
@@ -264,7 +304,7 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
                     checked={response === 'approved'}
                     onChange={handleResponseChange}
                   />
-                  approved
+                  Approve
                 </label>
                 <PText>Proceed with approval and continue implementation.</PText>
               </div>
@@ -277,7 +317,7 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
                     checked={response === 'rejected'}
                     onChange={handleResponseChange}
                   />
-                  rejected
+                  Reject
                 </label>
                 <PText>Send this request back and stop current progress.</PText>
               </div>
@@ -290,12 +330,19 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
                     checked={response === 'needs-info'}
                     onChange={handleResponseChange}
                   />
-                  needs-info
+                  Needs info
                 </label>
                 <PText>Ask for more details and wait for clarification.</PText>
               </div>
             </div>
           </fieldset>
+
+          <details data-testid="resolve-full-request" className="rounded-lg border border-contrast-low bg-canvas p-static-sm text-primary">
+            <summary className="cursor-pointer text-xs font-semibold uppercase leading-tight text-contrast-high">Full request</summary>
+            <section className="mt-static-sm text-sm leading-relaxed text-primary [&_h2]:m-0 [&_h2]:mb-static-xs [&_h2]:text-base [&_h2]:font-semibold [&_li]:my-1 [&_p]:my-static-xs [&_ul]:my-static-xs [&_ul]:pl-static-md">
+              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>{fullRequestBody}</ReactMarkdown>
+            </section>
+          </details>
 
           <PTextarea
             compact

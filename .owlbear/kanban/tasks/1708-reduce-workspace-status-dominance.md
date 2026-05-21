@@ -1,10 +1,10 @@
 ---
 id: 1708
 title: Reduce workspace status dominance
-status: done
+status: todo
 priority: important
 created: 2026-05-21T23:23:05.244698+02:00
-updated: 2026-05-21T23:58:38.277497+02:00
+updated: 2026-05-22T00:56:07.627385+02:00
 tags:
   - cockpit-perfect-ui
   - scope:cockpit-web
@@ -18,6 +18,12 @@ ac:
   - Decide whether persistent status text is needed or should collapse to a
     status light.
   - Preserve accessible status details through hover/focus/click behavior.
+  - Evaluate removing the visible circular bubble around the healthy status
+    light while preserving a 44px keyboard/touch target.
+  - Verify the workspace status light visibly changes across green, yellow, and
+    red states.
+  - Validate the final status control with desktop screenshots at widths >=
+    1200px.
 proof_bundle: smoke
 blocked: false
 block_reason:
@@ -50,3 +56,10 @@ Use this task as a product/audit todo item, not an instruction to hand off to th
 - Implementation: HealthBadge trigger is now a 32px circular status light with no persistent text; scan errors remain available via an accessible `scan-error` status and retry action; popover details and care actions are unchanged.
 - Screenshot evidence: `.owlbear/scratch/1680-route-kanban-desktop.png` and `.owlbear/scratch/1680-route-kanban-mobile.png` show the compact top-right status light.
 - Validation: focused Vitest passed (6 files, 97 tests); `npm run build` passed with existing Vite chunk-size warning; E2E passed for board view + workspace status popover accessibility, HealthBadge popover no-reflow, and status-bar control names (4 tests); eslint and diagnostics passed.
+
+
+## Reopened User Feedback - 2026-05-22
+- The status light still has a surrounding bubble; without the bubble it may be cleaner.
+- Verify whether the light actually changes color across green/yellow/red health states; the current experience has not made that visible.
+- Classification: user-observed delivered-work gap plus behavior-verification question.
+- Impact: hurts Cockpit now if persistent status chrome remains visually heavier than needed or if state color is not visibly truthful.

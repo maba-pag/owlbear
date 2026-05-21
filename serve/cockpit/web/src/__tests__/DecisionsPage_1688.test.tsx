@@ -35,6 +35,22 @@ const DR_WITH_BRIEF: PendingDR = {
   ].join('\n'),
 }
 
+const DR_OLDER: PendingDR = {
+  ...DR_WITH_BRIEF,
+  id: 'dr-1688-oldest',
+  task_id: 1689,
+  created: '2026-05-20T08:00:00Z',
+  title: 'Oldest pending decision',
+}
+
+const DR_NEWER: PendingDR = {
+  ...DR_WITH_BRIEF,
+  id: 'dr-1688-newest',
+  task_id: 1690,
+  created: '2026-05-22T08:00:00Z',
+  title: 'Newest pending decision',
+}
+
 function renderPage(items: PendingDR[] = [DR_WITH_BRIEF]) {
   mockUseDRState.mockReturnValue({
     count: items.length,
@@ -70,13 +86,20 @@ describe('DecisionsPage workflow brief', () => {
     expect(container.querySelector('[data-testid="dr-consequence-dr-1688-001"]')?.textContent).toContain('primary decision workflow')
   })
 
-  it('replaces requested-by emphasis with the actual resolution path', () => {
+  it('replaces requested-by emphasis with the actual resolver path', () => {
     const { container } = renderPage()
     const item = container.querySelector('[data-testid="dr-item-dr-1688-001"]')
     expect(item?.textContent).not.toContain('Requested by')
-    expect(item?.textContent).toContain('Approve')
-    expect(item?.textContent).toContain('Needs info')
-    expect(item?.textContent).toContain('Reject')
-    expect(item?.textContent).toContain('Resolve decision')
+    expect(item?.textContent).not.toContain('ApproveNeeds infoReject')
+    expect(item?.textContent).toContain('Open resolver')
+  })
+
+  it('sorts pending decisions oldest first by created timestamp', () => {
+    const { container } = renderPage([DR_NEWER, DR_OLDER])
+    const items = [...container.querySelectorAll('[data-testid^="dr-item-"]')]
+    expect(items.map((item) => item.getAttribute('data-testid'))).toEqual([
+      'dr-item-dr-1688-oldest',
+      'dr-item-dr-1688-newest',
+    ])
   })
 })

@@ -1,10 +1,10 @@
 ---
 id: 1696
 title: Remove redundant kanban card status chip
-status: done
+status: todo
 priority: important
 created: 2026-05-21T20:21:45.242959+02:00
-updated: 2026-05-21T22:08:51.897362+02:00
+updated: 2026-05-22T00:56:14.765749+02:00
 tags:
   - cockpit-perfect-ui
   - scope:cockpit-web
@@ -17,6 +17,11 @@ ac:
   - Audit Kanban card status chip value versus column placement.
   - Remove or demote redundant status chips where appropriate.
   - Tone regular tags so they do not dominate over task title and true alerts.
+  - Re-audit task-card metadata pills after the first declutter pass.
+  - Remove or demote the task number bubble so the task ID reads as quiet
+    metadata.
+  - Reduce pill styling where text chips make cards feel bubbly, while
+    preserving true alert signals.
 proof_bundle: smoke
 blocked: false
 block_reason:
@@ -48,3 +53,10 @@ Use this task as a product/audit todo item, not an instruction to hand off to th
 - Tag rebalance: regular task tags now use secondary PDS tags so they read as supporting metadata rather than primary alerts.
 - Screenshot evidence: `.owlbear/scratch/1680-route-kanban-desktop.png`, `.owlbear/scratch/1680-route-kanban-mobile.png`.
 - Validation: `npm test -- --run src/__tests__/Card.visual-treatment.test.tsx src/__tests__/Card.signal.test.tsx src/__tests__/CardSignalModel.test.tsx src/__tests__/BoardVisualDesign.test.tsx --reporter=dot` (81 passed); `npm run test:e2e:all -- e2e/card-density.spec.ts --reporter=line` (20 passed after stopping stale preview server); `npx eslint src/components/Card.tsx src/__tests__/Card.visual-treatment.test.tsx src/__tests__/Card.signal.test.tsx e2e/card-density.spec.ts` passed; `npm run build` passed with existing Vite chunk-size warning; board accessibility sweep passed (1); dual-theme board accessibility passed (2).
+
+
+## Reopened User Feedback - 2026-05-22
+- Kanban tasks still feel too bubbly because too much metadata is styled as pill tags.
+- The task number probably should not be in a bubble; it can read as structural metadata instead of a chip.
+- Classification: user-observed card-density issue, not theoretical.
+- Impact: hurts Cockpit now by making cards feel heavier and less scannable than the desired operational surface.

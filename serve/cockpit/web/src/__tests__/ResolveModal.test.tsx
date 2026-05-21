@@ -91,9 +91,9 @@ describe('TestFromAC_ResolveModal', () => {
       const selector = container.querySelector('[data-testid="response-selector"]')
       expect(selector).not.toBeNull()
       const text = selector?.textContent?.toLowerCase() ?? ''
-      expect(text).toContain('approved')
-      expect(text).toContain('rejected')
-      expect(text).toContain('needs-info')
+      expect(text).toContain('approve')
+      expect(text).toContain('reject')
+      expect(text).toContain('needs info')
     })
 
     it('response-selector contains exactly three options and does not include completed', () => {

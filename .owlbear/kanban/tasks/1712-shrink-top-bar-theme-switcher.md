@@ -1,10 +1,10 @@
 ---
 id: 1712
 title: Shrink top bar theme switcher
-status: done
+status: todo
 priority: important
 created: 2026-05-21T23:23:43.267289+02:00
-updated: 2026-05-21T23:58:48.231933+02:00
+updated: 2026-05-22T00:47:04.722393+02:00
 tags:
   - cockpit-perfect-ui
   - scope:cockpit-web
@@ -18,6 +18,12 @@ ac:
   - Design a smaller light/dark/auto state control if it improves chrome
     balance.
   - Preserve accessible labels and keyboard interaction.
+  - Explore a clearer compact theme-state treatment where automatic mode is
+    visibly distinct without a cryptic bare letter.
+  - Discuss the preferred theme-switcher direction with the user before
+    implementation.
+  - Validate the chosen theme control in light, dark, and automatic states on
+    desktop screenshots >= 1200px.
 proof_bundle: smoke
 blocked: false
 block_reason:
@@ -50,3 +56,10 @@ Use this task as a product/audit todo item, not an instruction to hand off to th
 - Implementation: ThemeToggle compact mode now exposes a mode indicator, keeps `aria-label` and `title` for the full state, and preserves the same click/keyboard toggle behavior. Shell now uses compact ThemeToggle.
 - Screenshot evidence: `.owlbear/scratch/1680-route-kanban-desktop.png` and `.owlbear/scratch/1680-route-kanban-mobile.png` show the compact top-right theme icon plus `A` state.
 - Validation: focused Vitest passed (6 files, 97 tests); `npm run build` passed with existing Vite chunk-size warning; E2E passed for board view + workspace status popover accessibility, HealthBadge popover no-reflow, and status-bar control names (4 tests); eslint and diagnostics passed.
+
+
+## Reopened User Feedback - 2026-05-22
+- The compact theme treatment was not what the user meant: a bare letter after the icon is not meaningful enough, but the old full text may be too long.
+- Automatic mode needs a visibly distinct state, and the solution should be discussed before implementation.
+- Classification: user-observed delivered-work gap, not theoretical.
+- Impact: hurts Cockpit now because the current compact control is ambiguous.

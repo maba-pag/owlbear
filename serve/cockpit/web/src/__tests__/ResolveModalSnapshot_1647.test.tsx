@@ -245,9 +245,10 @@ describe('TestFromAC_DecisionsPageModalIntegration', () => {
     })
 
     // AC2: modal must NOT display the SSE-updated title — snapshot guard required.
-    // FAILS: without snapshot, ResolveModal re-renders with DR_A_UPDATED.title.
-    expect(container.textContent).not.toContain(DR_A_UPDATED.title)
-    expect(container.textContent).toContain(DR_A.title)
+    // The route list behind the modal may refresh; scope this contract to the modal.
+    const modal = container.querySelector('[data-testid="resolve-modal"]')
+    expect(modal?.textContent).not.toContain(DR_A_UPDATED.title)
+    expect(modal?.textContent).toContain(DR_A.title)
   })
 
   it('ac1+ac2 edge: modal keeps original DR body after SSE-driven pendingDRItems update', async () => {
