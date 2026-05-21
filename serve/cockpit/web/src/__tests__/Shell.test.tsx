@@ -66,6 +66,23 @@ describe('TestFromAC_AppShell', () => {
     })
   })
 
+  describe('Product identity', () => {
+    it('renders OwlBear identity in the canvas header start slot', () => {
+      const { container } = renderShell()
+      const identity = container.querySelector('[data-testid="app-identity"]')
+      expect(identity).toHaveAttribute('slot', 'header-start')
+      expect(identity).toHaveAttribute('aria-label', 'OwlBear Cockpit')
+      expect(identity?.textContent).toContain('OwlBear')
+      expect(identity?.textContent).toContain('Cockpit')
+    })
+
+    it('does not place product identity in the global status bar', () => {
+      const { container } = renderShell()
+      const statusBar = container.querySelector('[data-region="status-bar"]')
+      expect(statusBar?.textContent).not.toContain('OwlBear')
+    })
+  })
+
   describe('Nav rail', () => {
     it('renders at least one surface selector item inside nav-rail', () => {
       const { container } = renderShell()

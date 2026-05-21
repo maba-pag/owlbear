@@ -116,7 +116,8 @@ test.describe('PCanvas shell layout', () => {
     })
 
     await expect(page.locator('[data-region="status-bar"]')).toBeVisible()
-    await expect(page.getByRole('img', { name: 'Porsche' })).toBeVisible()
+    await expect(page.getByTestId('app-identity')).toBeVisible()
+    await expect(page.getByRole('img', { name: 'Porsche' })).toHaveCount(0)
   })
 
   test('start sidebar contains icon-only workspace navigation', async ({ page }) => {

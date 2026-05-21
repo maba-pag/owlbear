@@ -60,6 +60,25 @@ const NAV_ICONS: Record<string, IconName> = {
   memory: 'brain',
 }
 
+const CANVAS_BRAND_OVERRIDE_ATTR = 'data-cockpit-brand-override'
+
+function hideDefaultPdsCanvasBranding(canvas: HTMLElement | null): boolean {
+  const shadowRoot = canvas?.shadowRoot
+  if (!shadowRoot) {
+    return false
+  }
+
+  if (shadowRoot.querySelector(`[${CANVAS_BRAND_OVERRIDE_ATTR}]`)) {
+    return true
+  }
+
+  const style = document.createElement('style')
+  style.setAttribute(CANVAS_BRAND_OVERRIDE_ATTR, '')
+  style.textContent = '.header__crest,.header__wordmark{display:none!important;}'
+  shadowRoot.append(style)
+  return true
+}
+
 function normalizeRoutePath(path: string): string {
   if (path === '/') {
     return path
@@ -73,6 +92,7 @@ function Shell() {
   const navigate = useNavigate()
   const toastManager = useToastManager()
   const toastManagerRef = useRef(toastManager)
+  const canvasRef = useRef<HTMLElement | null>(null)
   const {
     board,
     tasks,
@@ -231,6 +251,28 @@ function Shell() {
     }
   }, [])
 
+  useEffect(() => {
+    let animationFrame = 0
+    let attempts = 0
+
+    const applyBrandingOverride = () => {
+      if (hideDefaultPdsCanvasBranding(canvasRef.current) || attempts >= 5) {
+        return
+      }
+
+      attempts += 1
+      animationFrame = window.requestAnimationFrame(applyBrandingOverride)
+    }
+
+    applyBrandingOverride()
+
+    return () => {
+      if (animationFrame !== 0) {
+        window.cancelAnimationFrame(animationFrame)
+      }
+    }
+  }, [canvasKey])
+
   const canvasStyle = {
     '--p-canvas-sidebar-start-width': '96px',
   } as CSSProperties
@@ -321,6 +363,7 @@ function Shell() {
 
       <PCanvas
         key={canvasKey}
+        ref={canvasRef}
         className="shell font-sans text-primary"
         background="canvas"
         data-no-sidecar=""
@@ -330,6 +373,16 @@ function Shell() {
         onSidebarStartUpdate={onSidebarStartUpdate}
       >
         <span slot="title" className="sr-only">OwlBear Cockpit</span>
+
+        <span
+          slot="header-start"
+          className="pointer-events-none flex min-w-0 items-baseline gap-static-xs text-sm font-semibold leading-none text-primary"
+          data-testid="app-identity"
+          aria-label="OwlBear Cockpit"
+        >
+          <span className="truncate">OwlBear</span>
+          <span className="hidden opacity-60 sm:inline">Cockpit</span>
+        </span>
 
         <div
           slot="header-end"

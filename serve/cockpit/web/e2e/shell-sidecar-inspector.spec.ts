@@ -315,7 +315,7 @@ test.describe('TestFromAC_TaskModalKeyboardContract', () => {
 
 // ─── AC-4: Status bar and nav hierarchy ──────────────────────────────────────
 //
-// AC-4(a): Porsche wordmark is visible while app title stays hidden in the compact rail.
+// AC-4(a): OwlBear identity is visible while the PCanvas title slot remains hidden.
 // AC-4(b): Nav rail active surface has aria-current="page" (regression guard).
 // AC-4(c): Status-bar has at least one aria-labeled element (regression guard).
 // AC-4(d): Nav rail is compact and icon-only, with labels in accessible names.
@@ -332,7 +332,9 @@ test.describe('TestFromAC_StatusBarNavHierarchy', () => {
   test('product identity is visible without clipping the compact rail', async ({
     page,
   }) => {
-    await expect(page.getByRole('img', { name: 'Porsche' })).toBeVisible()
+    await expect(page.getByTestId('app-identity')).toBeVisible()
+    await expect(page.getByTestId('app-identity')).toHaveText(/OwlBear/)
+    await expect(page.getByRole('img', { name: 'Porsche' })).toHaveCount(0)
     const title = page.locator('[slot="title"]')
     await expect(title).toHaveText('OwlBear Cockpit')
     await expect(title).toHaveClass(/sr-only/)
