@@ -1,0 +1,41 @@
+---
+id: 1678
+title: Fix nav rail collapse control
+status: research
+priority: important
+created: 2026-05-21T19:51:15.660250+02:00
+updated: 2026-05-21T19:51:15.660250+02:00
+tags:
+  - cockpit-perfect-ui
+  - scope:cockpit-web
+  - ux-feedback
+  - nav-rail
+  - behavior
+parent:
+depends_on: []
+ac:
+  - Reproduce the left menu collapse button behavior in browser.
+  - Clarify whether manual nav collapse is intended for the cockpit shell.
+  - Fix the control or remove the misleading affordance based on product value.
+proof_bundle: smoke
+blocked: false
+block_reason:
+claimed_at:
+archival_reason:
+archival_refs: []
+---
+## User Feedback
+The menu on the left does not collapse when pushing the button.
+
+## Framing
+Use this task as a product/audit todo item, not an instruction to hand off to the pipeline automatically.
+
+## Evaluation Notes
+- Classification: user-observed current behavior defect.
+- Value question: should the left workspace rail be manually collapsible on desktop, only PCanvas-controlled, or always visible as app navigation?
+- Screenshot/browser target: click the collapse/open control and observe nav rail state, keyboard/focus state, and available workspace switching.
+
+## Acceptance Criteria
+- Reproduce the collapse button behavior from the user's path.
+- Decide whether collapse is intended or the control should be removed/changed.
+- If collapse remains, clicking it visibly changes the nav state and stays accessible.
