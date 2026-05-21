@@ -60,6 +60,19 @@ async function flush() {
   })
 }
 
+async function enterEditMode(container: HTMLElement) {
+  if (container.querySelector('textarea')) {
+    return
+  }
+
+  const toggle = container.querySelector<HTMLButtonElement>('[data-testid="ideas-preview-toggle"]')
+  expect(toggle).not.toBeNull()
+  await act(async () => {
+    fireEvent.click(toggle!)
+  })
+  await flush()
+}
+
 function findDialogAction(dialog: Element, pattern: RegExp): HTMLElement | undefined {
   return Array.from(dialog.querySelectorAll<HTMLElement>('button, p-button'))
     .find((button) => pattern.test(button.textContent ?? ''))
@@ -73,6 +86,7 @@ async function renderLoaded(content = 'initial content') {
     result = renderInRouter()
   })
   await flush()
+  await enterEditMode(result.container)
   return result
 }
 
@@ -265,6 +279,7 @@ describe('TestFromAC_EventListenerCleanup', () => {
     })
     await flush()
     const { container } = result
+    await enterEditMode(container)
 
     // Make content dirty
     fireEvent.change(container.querySelector('textarea')!, { target: { value: 'modified' } })
@@ -321,6 +336,7 @@ describe('TestFromAC_BrowserRouterSurface', () => {
       )
     })
     await flush()
+    await enterEditMode(result.container)
     return result
   }
 

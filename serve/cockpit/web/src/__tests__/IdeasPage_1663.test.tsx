@@ -1,8 +1,8 @@
 /**
  * Task #1663 — P2-02: IdeasPage — markdown preview toggle
  *
- * AC1: Toggle button switches IdeasPage between edit (textarea visible) and preview
- *      (rendered markdown visible); only one mode active at a time; default mode is edit
+ * AC1: Toggle button switches IdeasPage between preview (rendered markdown visible)
+ *      and edit (textarea visible); only one mode active at a time; default mode is preview
  * AC2: Preview mode renders GFM content (tables render as <table> elements, ~~text~~ as
  *      strikethrough, - [x] as checked items); raw HTML in source (e.g. <script>,
  *      <img onerror=...>) is stripped by rehype-sanitize default schema
@@ -67,29 +67,30 @@ describe('TestFromAC_IdeasPageToggle', () => {
     vi.unstubAllGlobals()
   })
 
-  it('ac1 happy: toggle button is present in initial edit mode', async () => {
+  it('ac1 happy: toggle button is present in initial preview mode', async () => {
     const container = await renderLoaded('some content')
     expect(getToggle(container)).not.toBeNull()
-  })
-
-  it('ac1 happy: clicking toggle enters preview — preview container visible, textarea absent', async () => {
-    const container = await renderLoaded('# Heading')
-    await clickToggle(container)
     expect(container.querySelector('[data-testid="ideas-preview"]')).not.toBeNull()
     expect(container.querySelector('textarea')).toBeNull()
   })
 
-  it('ac1 happy: clicking toggle again returns to edit — textarea visible, preview absent', async () => {
-    const container = await renderLoaded('content')
-    await clickToggle(container) // → preview
-    await clickToggle(container) // → edit
+  it('ac1 happy: clicking toggle enters edit — textarea visible, preview absent', async () => {
+    const container = await renderLoaded('# Heading')
+    await clickToggle(container)
     expect(container.querySelector('textarea')).not.toBeNull()
     expect(container.querySelector('[data-testid="ideas-preview"]')).toBeNull()
   })
 
+  it('ac1 happy: clicking toggle again returns to preview — preview visible, textarea absent', async () => {
+    const container = await renderLoaded('content')
+    await clickToggle(container) // -> edit
+    await clickToggle(container) // -> preview
+    expect(container.querySelector('[data-testid="ideas-preview"]')).not.toBeNull()
+    expect(container.querySelector('textarea')).toBeNull()
+  })
+
   it('ac1 edge: in preview mode textarea and preview are never simultaneously visible', async () => {
     const container = await renderLoaded('content')
-    await clickToggle(container)
     const hasTextarea = container.querySelector('textarea') !== null
     const hasPreview = container.querySelector('[data-testid="ideas-preview"]') !== null
     // Exactly one must be active; never both
@@ -99,7 +100,6 @@ describe('TestFromAC_IdeasPageToggle', () => {
 
   it('ac1 boundary: toggle button remains visible in preview mode (can switch back)', async () => {
     const container = await renderLoaded('content')
-    await clickToggle(container)
     expect(getToggle(container)).not.toBeNull()
   })
 })
@@ -114,21 +114,18 @@ describe('TestFromAC_IdeasPageGFMRendering', () => {
   it('ac2 happy: GFM table in content renders as <table> element in preview mode', async () => {
     const tableMarkdown = '| col1 | col2 |\n|------|------|\n| a    | b    |'
     const container = await renderLoaded(tableMarkdown)
-    await clickToggle(container)
     const preview = container.querySelector('[data-testid="ideas-preview"]')
     expect(preview?.querySelector('table')).not.toBeNull()
   })
 
   it('ac2 happy: GFM strikethrough ~~text~~ renders as <del> element in preview mode', async () => {
     const container = await renderLoaded('~~strikethrough text~~')
-    await clickToggle(container)
     const preview = container.querySelector('[data-testid="ideas-preview"]')
     expect(preview?.querySelector('del')).not.toBeNull()
   })
 
   it('ac2 happy: GFM task list - [x] renders a checked checkbox input in preview mode', async () => {
     const container = await renderLoaded('- [x] Done item\n- [ ] Pending item')
-    await clickToggle(container)
     const preview = container.querySelector('[data-testid="ideas-preview"]')
     const checkboxes = preview
       ? [...preview.querySelectorAll('input[type="checkbox"]')]
@@ -139,21 +136,18 @@ describe('TestFromAC_IdeasPageGFMRendering', () => {
 
   it('ac2 error: <script> tag in content is stripped from preview output by rehype-sanitize', async () => {
     const container = await renderLoaded('<script>alert("xss")</script>safe text')
-    await clickToggle(container)
     const preview = container.querySelector('[data-testid="ideas-preview"]')
     expect(preview?.querySelector('script')).toBeNull()
   })
 
   it('ac2 error: <img onerror=...> has onerror attribute removed from preview by rehype-sanitize', async () => {
     const container = await renderLoaded('<img src="x" onerror="alert(1)">safe text')
-    await clickToggle(container)
     const preview = container.querySelector('[data-testid="ideas-preview"]')
     expect(preview?.querySelector('[onerror]')).toBeNull()
   })
 
   it('ac2 boundary: empty content renders preview container without error', async () => {
     const container = await renderLoaded('')
-    await clickToggle(container)
     expect(container.querySelector('[data-testid="ideas-preview"]')).not.toBeNull()
   })
 })
@@ -168,28 +162,31 @@ describe('TestFromAC_IdeasPageContentPreservation', () => {
   it('ac3 happy: textarea content is unchanged after preview toggle round-trip', async () => {
     const content = 'Ideas I want to keep'
     const container = await renderLoaded(content)
-    await clickToggle(container) // → preview
-    await clickToggle(container) // → edit
+    await clickToggle(container) // -> edit
+    await clickToggle(container) // -> preview
+    await clickToggle(container) // -> edit
     const textarea = container.querySelector('textarea')
     expect(textarea?.value).toBe(content)
   })
 
   it('ac3 happy: user-edited content is preserved after toggle round-trip', async () => {
     const container = await renderLoaded('original')
+    await clickToggle(container) // -> edit
     const textarea = container.querySelector('textarea')
     if (textarea) {
       fireEvent.change(textarea, { target: { value: 'edited by user' } })
     }
-    await clickToggle(container) // → preview
-    await clickToggle(container) // → edit
+    await clickToggle(container) // -> preview
+    await clickToggle(container) // -> edit
     const textareaAfter = container.querySelector('textarea')
     expect(textareaAfter?.value).toBe('edited by user')
   })
 
   it('ac3 edge: empty content is preserved after toggle round-trip', async () => {
     const container = await renderLoaded('')
-    await clickToggle(container) // → preview
-    await clickToggle(container) // → edit
+    await clickToggle(container) // -> edit
+    await clickToggle(container) // -> preview
+    await clickToggle(container) // -> edit
     const textarea = container.querySelector('textarea')
     expect(textarea?.value).toBe('')
   })
@@ -197,8 +194,9 @@ describe('TestFromAC_IdeasPageContentPreservation', () => {
   it('ac3 boundary: multiline markdown content preserved verbatim after toggle round-trip', async () => {
     const md = '# Title\n\n- item\n- [x] checked\n\n> quote\n\n```\ncode\n```'
     const container = await renderLoaded(md)
-    await clickToggle(container) // → preview
-    await clickToggle(container) // → edit
+    await clickToggle(container) // -> edit
+    await clickToggle(container) // -> preview
+    await clickToggle(container) // -> edit
     const textarea = container.querySelector('textarea')
     expect(textarea?.value).toBe(md)
   })

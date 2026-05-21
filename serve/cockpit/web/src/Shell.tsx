@@ -386,7 +386,7 @@ function Shell() {
           aria-label="OwlBear Cockpit"
         >
           <span className="truncate">OwlBear</span>
-          <span className="hidden opacity-60 sm:inline">Cockpit</span>
+          <span className="hidden sm:inline">Cockpit</span>
         </span>
 
         <div

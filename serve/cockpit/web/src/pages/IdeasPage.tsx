@@ -25,7 +25,7 @@ function formatNumber(value: number): string {
 
 function IdeasPage() {
   const [content, setContent] = useState('')
-  const [previewMode, setPreviewMode] = useState(false)
+  const [previewMode, setPreviewMode] = useState(true)
   const [lastSavedContent, setLastSavedContent] = useState('')
   const [conflictContent, setConflictContent] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)

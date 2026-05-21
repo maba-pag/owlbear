@@ -3,8 +3,8 @@
  *
  * AC1: IdeasPage renders a loading indicator while GET `/api/ideas` is pending;
  *      textarea is not present in DOM
- * AC2: IdeasPage renders a focused textarea populated with content from successful
- *      GET `/api/ideas` response
+ * AC2: IdeasPage renders a preview populated with content from successful
+ *      GET `/api/ideas` response, then exposes focused edit mode on request.
  * AC3: IdeasPage save button sends PUT `/api/ideas` with textarea value; disabled
  *      when textarea value equals last-saved baseline
  * AC4: IdeasPage dirty indicator visible when textarea value differs from last-saved
@@ -104,14 +104,34 @@ async function flush() {
   })
 }
 
-/** Render IdeasPage, wait for the fetch to complete, return the container. */
-async function renderLoaded(content = 'Some ideas here') {
+async function enterEditMode(container: HTMLElement) {
+  if (container.querySelector('textarea')) {
+    return
+  }
+
+  const toggle = container.querySelector<HTMLButtonElement>('[data-testid="ideas-preview-toggle"]')
+  expect(toggle).not.toBeNull()
+  await act(async () => {
+    fireEvent.click(toggle!)
+  })
+  await flush()
+}
+
+/** Render IdeasPage, wait for the fetch to complete, return the preview-mode container. */
+async function renderPreviewLoaded(content = 'Some ideas here') {
   vi.stubGlobal('fetch', makeGetOkFetch(content))
   let container!: HTMLElement
   await act(async () => {
     container = renderIdeasPage().container
   })
   await flush()
+  return container
+}
+
+/** Render IdeasPage, wait for the fetch to complete, enter edit mode, return the container. */
+async function renderLoaded(content = 'Some ideas here') {
+  const container = await renderPreviewLoaded(content)
+  await enterEditMode(container)
   return container
 }
 
@@ -206,26 +226,27 @@ describe('TestFromAC_IdeasPageLoading', () => {
   })
 })
 
-// ─── AC2: Loaded state — textarea with fetched content ───────────────────────
+// ─── AC2: Loaded state — preview first, edit on request ──────────────────────
 
 describe('TestFromAC_IdeasPageLoaded', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
   })
 
-  it('ac2 happy: renders a textarea after successful GET /api/ideas', async () => {
-    const container = await renderLoaded('Hello world')
-    expect(container.querySelector('textarea')).not.toBeNull()
+  it('ac2 happy: renders preview after successful GET /api/ideas', async () => {
+    const container = await renderPreviewLoaded('Hello world')
+    expect(container.querySelector('[data-testid="ideas-preview"]')).not.toBeNull()
+    expect(container.querySelector('textarea')).toBeNull()
   })
 
-  it('ac2 happy: textarea value equals content from GET /api/ideas response', async () => {
+  it('ac2 happy: entering edit mode shows textarea with content from GET /api/ideas response', async () => {
     const content = 'My brilliant ideas\n\nLine two'
     const container = await renderLoaded(content)
     const textarea = container.querySelector('textarea')
     expect(textarea?.value).toBe(content)
   })
 
-  it('ac2 happy: textarea is focused after content loads', async () => {
+  it('ac2 happy: textarea is focused after entering edit mode', async () => {
     const container = await renderLoaded('Content here')
     const textarea = container.querySelector('textarea')
     expect(document.activeElement).toBe(textarea)
@@ -263,6 +284,7 @@ describe('TestFromAC_IdeasPageSave', () => {
       container = renderIdeasPage().container
     })
     await flush()
+    await enterEditMode(container)
     const textarea = container.querySelector('textarea')
     if (textarea) {
       fireEvent.change(textarea, { target: { value: 'changed' } })
@@ -288,6 +310,7 @@ describe('TestFromAC_IdeasPageSave', () => {
       container = renderIdeasPage().container
     })
     await flush()
+    await enterEditMode(container)
     const textarea = container.querySelector('textarea')
     if (textarea) {
       fireEvent.change(textarea, { target: { value: 'new content' } })
@@ -328,6 +351,7 @@ describe('TestFromAC_IdeasPageSave', () => {
       container = renderIdeasPage().container
     })
     await flush()
+    await enterEditMode(container)
     const textarea = container.querySelector('textarea')
     if (textarea) {
       fireEvent.change(textarea, { target: { value: 'changed' } })
@@ -372,6 +396,7 @@ describe('TestFromAC_IdeasPageDirtyState', () => {
       container = renderIdeasPage().container
     })
     await flush()
+    await enterEditMode(container)
     const textarea = container.querySelector('textarea')
     if (textarea) {
       fireEvent.change(textarea, { target: { value: 'modified' } })
@@ -421,6 +446,7 @@ describe('TestFromAC_IdeasPageKeyboardShortcut', () => {
       container = renderIdeasPage().container
     })
     await flush()
+    await enterEditMode(container)
     const textarea = container.querySelector('textarea')
     if (textarea) {
       fireEvent.change(textarea, { target: { value: 'changed' } })
@@ -443,6 +469,7 @@ describe('TestFromAC_IdeasPageKeyboardShortcut', () => {
       container = renderIdeasPage().container
     })
     await flush()
+    await enterEditMode(container)
     const textarea = container.querySelector('textarea')
     if (textarea) {
       fireEvent.change(textarea, { target: { value: 'changed' } })
@@ -512,6 +539,7 @@ describe('TestFromAC_IdeasPageError', () => {
       container = renderIdeasPage().container
     })
     await flush()
+    await enterEditMode(container)
     const textarea = container.querySelector('textarea')
     if (textarea) {
       fireEvent.change(textarea, { target: { value: 'modified text' } })
@@ -533,6 +561,7 @@ describe('TestFromAC_IdeasPageError', () => {
       container = renderIdeasPage().container
     })
     await flush()
+    await enterEditMode(container)
     const textarea = container.querySelector('textarea')
     if (textarea) {
       fireEvent.change(textarea, { target: { value: 'changed' } })
@@ -554,6 +583,7 @@ describe('TestFromAC_IdeasPageError', () => {
       container = renderIdeasPage().container
     })
     await flush()
+    await enterEditMode(container)
     const textarea = container.querySelector('textarea')
     if (textarea) {
       fireEvent.change(textarea, { target: { value: 'modified text' } })
@@ -585,6 +615,7 @@ describe('TestFromAC_IdeasPageError', () => {
       container = renderIdeasPage().container
     })
     await flush()
+    await enterEditMode(container)
     const textarea = container.querySelector('textarea')
     if (textarea) {
       fireEvent.change(textarea, { target: { value: 'modified text' } })

@@ -84,6 +84,19 @@ async function flush(): Promise<void> {
   })
 }
 
+async function enterEditMode(container: HTMLElement): Promise<void> {
+  if (container.querySelector('textarea')) {
+    return
+  }
+
+  const toggle = container.querySelector<HTMLButtonElement>('[data-testid="ideas-preview-toggle"]')
+  expect(toggle).not.toBeNull()
+  await act(async () => {
+    fireEvent.click(toggle!)
+  })
+  await flush()
+}
+
 function setVisibilityState(state: 'visible' | 'hidden'): void {
   Object.defineProperty(document, 'visibilityState', {
     configurable: true,
@@ -107,6 +120,7 @@ async function renderLoaded(initialContent: string): Promise<HTMLElement> {
     container = renderInRouter().container
   })
   await flush()
+  await enterEditMode(container)
   return container
 }
 

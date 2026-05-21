@@ -70,6 +70,19 @@ async function flush(): Promise<void> {
   })
 }
 
+async function enterEditMode(container: HTMLElement): Promise<void> {
+  if (container.querySelector('textarea')) {
+    return
+  }
+
+  const toggle = container.querySelector<HTMLButtonElement>('[data-testid="ideas-preview-toggle"]')
+  expect(toggle).not.toBeNull()
+  await act(async () => {
+    fireEvent.click(toggle!)
+  })
+  await flush()
+}
+
 /** Render in router context and wait for GET /api/ideas to settle. */
 async function renderLoaded(content: string): Promise<ReturnType<typeof renderInRouter>> {
   vi.stubGlobal('fetch', makeGetOkFetch(content))
@@ -78,6 +91,7 @@ async function renderLoaded(content: string): Promise<ReturnType<typeof renderIn
     result = renderInRouter()
   })
   await flush()
+  await enterEditMode(result.container)
   return result
 }
 
@@ -95,6 +109,7 @@ async function renderAfterSave(
     result = renderInRouter()
   })
   await flush()
+  await enterEditMode(result.container)
 
   const textarea = result.container.querySelector('textarea')!
   fireEvent.change(textarea, { target: { value: editedContent } })
@@ -189,6 +204,7 @@ describe('IdeasPageIntegration_SaveFlow', () => {
       result = renderInRouter()
     })
     await flush()
+    await enterEditMode(result.container)
 
     fireEvent.change(result.container.querySelector('textarea')!, {
       target: { value: '# My saved ideas' },

@@ -67,7 +67,8 @@ async function stubApis(page: Page): Promise<{ puts: string[] }> {
 async function openIdeas(page: Page): Promise<void> {
   await page.goto('/ideas')
   await expect(page.locator('[data-region="ideas-workspace"]')).toBeVisible({ timeout: 8_000 })
-  await expect(page.locator('textarea[aria-label="Ideas draft"]')).toBeVisible({ timeout: 8_000 })
+  await expect(page.locator('[data-testid="ideas-preview"]')).toBeVisible({ timeout: 8_000 })
+  await expect(page.locator('textarea[aria-label="Ideas draft"]')).toHaveCount(0)
 }
 
 async function expectPButtonDisabled(locator: Locator): Promise<void> {
@@ -114,6 +115,8 @@ for (const theme of ['light', 'dark'] as const) {
       await expect(page.getByRole('heading', { name: 'Ideas' })).toBeVisible()
       const saveButton = page.locator('[data-testid="ideas-save"]')
       await expectPButtonDisabled(saveButton)
+      await expect(page.locator('[data-testid="ideas-preview-toggle"]')).toContainText('Edit')
+      await page.locator('[data-testid="ideas-preview-toggle"]').click()
       await page.locator('textarea[aria-label="Ideas draft"]').fill('# Polished morning\n\nA calm cockpit surface.')
       await expect(page.locator('[data-testid="ideas-dirty"]')).toBeVisible()
       await expectPButtonEnabled(saveButton)
