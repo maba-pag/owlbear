@@ -108,8 +108,6 @@ function renderCard(task: Task, pendingDRIds: Set<number> = new Set()) {
       task={task}
       pendingDRIds={pendingDRIds}
       onContextMenu={() => {}}
-      onDragStart={() => {}}
-      onDragEnd={() => {}}
     />,
   )
 }

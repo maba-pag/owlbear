@@ -70,8 +70,6 @@ function renderCard(onSelect = vi.fn()) {
       task={TASK_FIXTURE}
       onSelect={onSelect}
       onContextMenu={vi.fn()}
-      onDragStart={vi.fn()}
-      onDragEnd={vi.fn()}
     />,
   )
 }

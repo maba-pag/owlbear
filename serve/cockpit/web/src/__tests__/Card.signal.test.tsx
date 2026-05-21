@@ -59,8 +59,6 @@ function renderCard(task: SignalTask, pendingDRIds: Set<number> = new Set()) {
       // @ts-expect-error prop added by builder #1546
       pendingDRIds={pendingDRIds}
       onContextMenu={() => {}}
-      onDragStart={() => {}}
-      onDragEnd={() => {}}
     />,
   )
 }

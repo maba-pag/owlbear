@@ -44,10 +44,6 @@ function renderColumn(status: string, tasks: Task[]) {
       tasks={tasks}
       priorities={['someday', 'nice-to-have', 'important', 'needed', 'critical']}
       onContextMenu={() => {}}
-      onDragStart={() => {}}
-      onDrop={() => {}}
-      onDragEnd={() => {}}
-      isValidDragTarget={false}
     />,
   )
 }
@@ -216,5 +212,13 @@ describe('Column chrome visual system', () => {
     expect(classes).not.toContain('border-dashed')
     expect(classes).not.toContain('border-contrast-low')
     expect(classes).not.toContain('bg-canvas')
+  })
+
+  it('does not expose drag/drop target state on quiet lanes', () => {
+    const { container } = renderColumn('todo', [makeTask(1, 'todo')])
+    const root = container.querySelector('[data-column="todo"]')
+
+    expect(root?.getAttribute('data-drag-over')).toBeNull()
+    expect(root?.getAttribute('class') ?? '').not.toContain('bg-success-frosted')
   })
 })

@@ -2,7 +2,7 @@
  * PToast success feedback — task #1624
  *
  * Covers:
- *   AC1 — Successful task-move (drag-drop or context-menu) triggers PToast:
+ *   AC1 — Successful task-move through the explicit context menu triggers PToast:
  *          onMutationSuccess called with text containing the formatted target status;
  *          Shell calls useToastManager().addMessage with state='success';
  *          App mounts <PToast /> inside PorscheDesignSystemProvider.
@@ -260,7 +260,7 @@ function stubNeverResolvingFetch() {
 // ════════════════════════════════════════════════════════════════════════════
 // TestFromAC_KanbanBoardMoveMessage
 // AC1: KanbanBoard calls onMutationSuccess with a string containing the target
-//      status name after a successful move (drag-drop and context-menu paths).
+//      status name after a successful context-menu move.
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('TestFromAC_KanbanBoardMoveMessage', () => {
@@ -310,22 +310,6 @@ describe('TestFromAC_KanbanBoardMoveMessage', () => {
     )
   }
 
-  async function dragCard(container: HTMLElement) {
-    await waitFor(() => {
-      expect(
-        container.querySelector('[data-testid="task-card"][data-id="7"]'),
-      ).not.toBeNull()
-    })
-    const card = container.querySelector('[data-testid="task-card"][data-id="7"]')!
-    fireEvent.dragStart(card)
-  }
-
-  function dropOnColumn(container: HTMLElement, status: string) {
-    const col = container.querySelector(`[data-column="${status}"]`)!
-    fireEvent.dragOver(col)
-    fireEvent.drop(col)
-  }
-
   async function openContextMenuAndClickTransition(
     container: HTMLElement,
     targetStatus: string,
@@ -346,20 +330,6 @@ describe('TestFromAC_KanbanBoardMoveMessage', () => {
     )!
     fireEvent.click(item)
   }
-
-  it('drag-drop move calls onMutationSuccess with string containing formatted target status', async () => {
-    stubMoveFetchOk()
-    const spy = vi.fn()
-    const { container } = renderRealBoard({ onMutationSuccess: spy })
-
-    await dragCard(container)
-    dropOnColumn(container, 'todo')
-
-    // Fails RED: currently called as onMutationSuccess?.() with no arguments.
-    await waitFor(() => {
-      expect(spy).toHaveBeenCalledWith(expect.stringContaining('Todo'))
-    })
-  })
 
   it('context-menu transition calls onMutationSuccess with string containing formatted target status', async () => {
     stubMoveFetchOk()

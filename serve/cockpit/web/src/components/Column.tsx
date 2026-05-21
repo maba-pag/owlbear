@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { Card } from './Card'
 import type { Task } from '../hooks/useBoard'
 
@@ -10,10 +10,6 @@ export interface ColumnProps {
   pendingDRIds?: Set<number>
   onSelectTask?: (taskId: number) => void
   onContextMenu: (e: React.MouseEvent, task: Task) => void
-  onDragStart: (status: string, taskId: number, updated: string) => void
-  onDrop: (targetStatus: string) => void
-  onDragEnd: () => void
-  isValidDragTarget: boolean
 }
 
 function toDisplayStatus(status: string): string {
@@ -36,21 +32,12 @@ export function Column({
   pendingDRIds,
   onSelectTask,
   onContextMenu,
-  onDragStart,
-  onDrop,
-  onDragEnd,
-  isValidDragTarget,
 }: ColumnProps) {
-  const [isDragOver, setIsDragOver] = useState(false)
   const bodyRef = useRef<HTMLDivElement>(null)
   const displayStatus = toDisplayStatus(status)
 
   const sorted = [...tasks].sort((a, b) => priorities.indexOf(b.priority) - priorities.indexOf(a.priority))
   const density = sorted.length === 0 ? 'empty' : sorted.length <= 2 ? 'sparse' : 'active'
-
-  const handleCardDragStart = (taskId: number, updated: string) => {
-    onDragStart(status, taskId, updated)
-  }
 
   useEffect(() => {
     const body = bodyRef.current
@@ -97,26 +84,9 @@ export function Column({
       className={[
         'column',
         'flex min-w-[var(--kanban-column-min)] flex-col overflow-hidden rounded-md border border-transparent border-t border-t-contrast-low bg-surface',
-        isDragOver && isValidDragTarget ? 'border-success bg-success-frosted' : '',
       ].join(' ')}
       data-column={status}
       data-density={density}
-      data-drag-over={isDragOver && isValidDragTarget ? 'true' : undefined}
-      onDragOver={(e) => {
-        if (isValidDragTarget) {
-          e.preventDefault()
-          setIsDragOver(true)
-        }
-      }}
-      onDragLeave={() => setIsDragOver(false)}
-      onDrop={(e) => {
-        setIsDragOver(false)
-        if (!isValidDragTarget) {
-          return
-        }
-        e.preventDefault()
-        onDrop(status)
-      }}
     >
       <header className="flex min-h-12 shrink-0 items-center justify-between px-static-sm text-[0.8125rem] font-semibold capitalize text-primary">
         <span>{displayStatus}</span>
@@ -138,8 +108,6 @@ export function Column({
               pendingDRIds={pendingDRIds}
               onSelect={onSelectTask}
               onContextMenu={onContextMenu}
-              onDragStart={handleCardDragStart}
-              onDragEnd={onDragEnd}
             />
           ))
         )}

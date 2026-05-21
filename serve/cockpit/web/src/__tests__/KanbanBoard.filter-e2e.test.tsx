@@ -294,35 +294,6 @@ describe('TestFromAC_FilterBoardIntegration', () => {
     })
   })
 
-  // ─── AC6: Filter change while dragging cancels drag ───────────────────────
-
-  it('changing a filter while dragging cancels the drag and deactivates drop targets', async () => {
-    const { container } = renderBoard()
-    await openFilterPanel(container)
-
-    // Start drag on TASK_ALPHA (backlog); backlog → todo is a valid transition
-    const card = container.querySelector('[data-testid="task-card"][data-id="1"]')!
-    fireEvent.dragStart(card)
-    const todoColumn = container.querySelector('[data-column="todo"]')!
-    fireEvent.dragOver(todoColumn)
-
-    await waitFor(() => {
-      expect(todoColumn.getAttribute('data-drag-over')).toBe('true')
-    })
-
-    // Change text filter — handleFilterChange calls setDragSource(null) → drag cancelled
-    const input = getTextInput(container)
-    fireEvent.change(input, { target: { value: 'alpha' } })
-
-    // Reset drag-over state, then re-enter to verify isValidDragTarget is now false
-    fireEvent.dragLeave(todoColumn)
-    fireEvent.dragOver(todoColumn)
-
-    await waitFor(() => {
-      expect(todoColumn.getAttribute('data-drag-over')).toBeNull()
-    })
-  })
-
   // ─── AC7: Selected tag persists after tag vanishes from task set ──────────
 
   it('selected tag filter persists and board shows 0-result state when tag vanishes from task set', async () => {

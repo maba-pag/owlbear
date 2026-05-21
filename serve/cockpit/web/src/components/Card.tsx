@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { PIcon, PTag, type IconName } from '@porsche-design-system/components-react'
 import { motion } from 'framer-motion'
 import type { Task } from '../hooks/useBoard'
@@ -47,8 +46,6 @@ export interface CardProps {
   selected?: boolean
   onSelect?: (taskId: number) => void
   onContextMenu: (e: React.MouseEvent, task: Task) => void
-  onDragStart: (taskId: number, updated: string) => void
-  onDragEnd: () => void
 }
 
 export function Card({
@@ -57,11 +54,8 @@ export function Card({
   selected = false,
   onSelect,
   onContextMenu,
-  onDragStart,
-  onDragEnd,
 }: CardProps) {
   const signal = computeSignal(task, pendingDRIds)
-  const [dragging, setDragging] = useState(false)
   const previewTags = task.tags.slice(0, TAG_PREVIEW_LIMIT)
   const overflowTags = task.tags.length - previewTags.length
   const updatedAge = formatUpdatedAge(task.updated)
@@ -122,7 +116,6 @@ export function Card({
       data-priority={task.priority}
       data-selected={selected ? 'true' : 'false'}
       data-signal={signal}
-      data-dragging={dragging ? 'true' : 'false'}
       role="button"
       tabIndex={0}
       aria-haspopup="menu"
@@ -139,20 +132,10 @@ export function Card({
         'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]',
         signalBorderClass,
         selected ? 'border-primary bg-frosted inset-ring-2 inset-ring-primary shadow-lg' : '',
-        dragging ? 'opacity-50' : '',
       ].join(' ')}
-      draggable={true}
+      draggable={false}
       onClick={() => onSelect?.(task.id)}
       onKeyDown={handleKeyDown}
-      onDragStart={() => {
-        onSelect?.(task.id)
-        setDragging(true)
-        onDragStart(task.id, task.updated)
-      }}
-      onDragEnd={() => {
-        setDragging(false)
-        onDragEnd()
-      }}
       onContextMenu={(e) => onContextMenu(e, task)}
     >
       <div className="flex min-h-[92px] w-full min-w-0 flex-col gap-static-sm">

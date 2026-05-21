@@ -47,8 +47,6 @@ function renderCard(task: Task) {
     <Card
       task={task}
       onContextMenu={() => {}}
-      onDragStart={() => {}}
-      onDragEnd={() => {}}
     />,
   )
 }

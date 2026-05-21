@@ -25,12 +25,6 @@ interface ArchivalModalState {
   expectedUpdated: string
 }
 
-interface DragSourceState {
-  status: string
-  taskId: number
-  taskUpdated: string
-}
-
 const EMPTY_FILTER: FilterState = {
   text: '',
   priority: '',
@@ -136,7 +130,6 @@ function KanbanBoardContent({
 }: ResolvedKanbanBoardProps) {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [archivalModal, setArchivalModal] = useState<ArchivalModalState | null>(null)
-  const [dragSource, setDragSource] = useState<DragSourceState | null>(null)
   const [filter, setFilter] = useState<FilterState>(EMPTY_FILTER)
   const [panelOpen, setPanelOpen] = useState(false)
   const [filterAnnouncement, setFilterAnnouncement] = useState('')
@@ -235,44 +228,6 @@ function KanbanBoardContent({
     })
   }
 
-  const handleDragStart = (status: string, taskId: number, taskUpdated: string) => {
-    setDragSource({ status, taskId, taskUpdated })
-  }
-
-  const handleDragEnd = () => {
-    setDragSource(null)
-  }
-
-  async function handleDrop(targetStatus: string) {
-    if (!dragSource) {
-      return
-    }
-
-    const { taskId, taskUpdated } = dragSource
-    setDragSource(null)
-
-    try {
-      await moveTask(taskId, { status: targetStatus, updated: taskUpdated })
-      refetchTasks()
-      onMutationSuccess?.(`Task moved to ${formatStatusLabel(targetStatus)}`)
-    } catch (error) {
-      if (error instanceof ApiError) {
-        if (error.status === 409) {
-          refetchTasks()
-        }
-        const fallback = 'Move could not be completed. Try again.'
-        const message = error.message === `Move task request failed with status ${error.status}`
-          ? fallback
-          : error.message
-        onMutationError?.('Move failed', message, 'error')
-        return
-      }
-
-      const networkMessage = error instanceof Error ? error.message : 'Move could not be completed. Check your connection and try again.'
-      onMutationError?.('Move failed', networkMessage, 'error')
-    }
-  }
-
   function handleMenuItemKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault()
@@ -369,7 +324,6 @@ function KanbanBoardContent({
 
   const handleFilterChange = (nextFilter: FilterState) => {
     setContextMenu(null)
-    setDragSource(null)
 
     if (announcementTimerRef.current !== null) {
       window.clearTimeout(announcementTimerRef.current)
@@ -465,13 +419,6 @@ function KanbanBoardContent({
                 pendingDRIds={pendingDRIds}
                 onSelectTask={onSelectTask}
                 onContextMenu={handleContextMenu}
-                onDragStart={handleDragStart}
-                onDrop={handleDrop}
-                onDragEnd={handleDragEnd}
-                isValidDragTarget={
-                  dragSource !== null &&
-                  (board.valid_transitions[dragSource.status] ?? []).includes(name)
-                }
               />
             )
           })}

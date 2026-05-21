@@ -2,14 +2,12 @@
  * KanbanBoard mutation callback wiring (task #1498)
  *
  * Covers:
- *   AC-2 — handleDrop/handleTransitionClick call onMutationError('Move failed', msg, 'error')
+ *   AC-2 — handleTransitionClick calls onMutationError('Move failed', msg, 'error')
  *           on non-2xx responses; data-testid="move-error" plain div removed
- *   AC-6 — handleDrop/handleTransitionClick call onMutationSuccess() after successful 2xx move
+ *   AC-6 — handleTransitionClick calls onMutationSuccess() after successful 2xx move
  *
  * Expected builder changes:
  *   - Add onMutationError / onMutationSuccess props to KanbanBoardProps
- *   - handleDrop: replace setMoveError(...) with onMutationError?.('Move failed', msg, 'error')
- *   - handleDrop 2xx: call onMutationSuccess?.() after refetchTasks()
  *   - handleTransitionClick: replace setMoveError(...) with onMutationError?.('Move failed', ...)
  *   - handleTransitionClick 2xx: call onMutationSuccess?.()
  *   - Remove <div data-testid="move-error"> from render output
@@ -108,24 +106,6 @@ function renderBoard(
   )
 }
 
-// ─── Drag helpers ─────────────────────────────────────────────────────────────
-
-async function dragCard(container: HTMLElement, taskId: number = 7) {
-  await waitFor(() => {
-    expect(
-      container.querySelector(`[data-testid="task-card"][data-id="${taskId}"]`),
-    ).not.toBeNull()
-  })
-  const card = container.querySelector(`[data-testid="task-card"][data-id="${taskId}"]`)!
-  fireEvent.dragStart(card)
-}
-
-function dropOnColumn(container: HTMLElement, status: string) {
-  const col = container.querySelector(`[data-column="${status}"]`)!
-  fireEvent.dragOver(col)
-  fireEvent.drop(col)
-}
-
 async function openContextMenu(container: HTMLElement, taskId: number = 7) {
   await waitFor(() => {
     expect(
@@ -145,49 +125,6 @@ async function openContextMenu(container: HTMLElement, taskId: number = 7) {
 describe('TestFromAC_KanbanBoardMutationCallbacks', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
-  })
-
-  // ─── AC-2: handleDrop calls onMutationError on non-2xx ───────────────────
-
-  describe('AC-2: handleDrop calls onMutationError on failure', () => {
-    it('handleDrop calls onMutationError with "Move failed" on 500 response', async () => {
-      stubMoveFetch({ status: 500 })
-      const spy = vi.fn()
-      const { container } = renderBoard({ onMutationError: spy })
-
-      await dragCard(container)
-      dropOnColumn(container, 'todo')
-
-      await waitFor(() => {
-        expect(spy).toHaveBeenCalledWith('Move failed', expect.any(String), 'error')
-      })
-    })
-
-    it('handleDrop calls onMutationError with "Move failed" on 409 response', async () => {
-      stubMoveFetch({ status: 409 })
-      const spy = vi.fn()
-      const { container } = renderBoard({ onMutationError: spy })
-
-      await dragCard(container)
-      dropOnColumn(container, 'todo')
-
-      await waitFor(() => {
-        expect(spy).toHaveBeenCalledWith('Move failed', expect.any(String), 'error')
-      })
-    })
-
-    it('handleDrop calls onMutationError with "Move failed" on network error', async () => {
-      stubMoveFetch({ network: true })
-      const spy = vi.fn()
-      const { container } = renderBoard({ onMutationError: spy })
-
-      await dragCard(container)
-      dropOnColumn(container, 'todo')
-
-      await waitFor(() => {
-        expect(spy).toHaveBeenCalledWith('Move failed', expect.any(String), 'error')
-      })
-    })
   })
 
   // ─── AC-2: handleTransitionClick calls onMutationError on failure ─────────
@@ -242,13 +179,15 @@ describe('TestFromAC_KanbanBoardMutationCallbacks', () => {
   // ─── AC-2: data-testid="move-error" div removed ──────────────────────────
 
   describe('AC-2: move-error div is removed from DOM', () => {
-    it('does not render data-testid="move-error" div after a failed drop', async () => {
+    it('does not render data-testid="move-error" div after a failed transition move', async () => {
       stubMoveFetch({ status: 500 })
       const spy = vi.fn()
       const { container } = renderBoard({ onMutationError: spy })
 
-      await dragCard(container)
-      dropOnColumn(container, 'todo')
+      await openContextMenu(container)
+      fireEvent.click(
+        container.querySelector('[data-testid="transition-item"][data-status="todo"]')!,
+      )
 
       // Allow async fetch to settle.
       await waitFor(() => {
@@ -263,19 +202,6 @@ describe('TestFromAC_KanbanBoardMutationCallbacks', () => {
   // ─── AC-6: success calls onMutationSuccess ───────────────────────────────
 
   describe('AC-6: successful move calls onMutationSuccess', () => {
-    it('handleDrop calls onMutationSuccess after 2xx response', async () => {
-      stubMoveFetch({ status: 200 })
-      const successSpy = vi.fn()
-      const { container } = renderBoard({ onMutationSuccess: successSpy })
-
-      await dragCard(container)
-      dropOnColumn(container, 'todo')
-
-      await waitFor(() => {
-        expect(successSpy).toHaveBeenCalledTimes(1)
-      })
-    })
-
     it('handleTransitionClick calls onMutationSuccess after 2xx response', async () => {
       stubMoveFetch({ status: 200 })
       const successSpy = vi.fn()

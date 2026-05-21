@@ -355,42 +355,6 @@ describe('TestFromAC_FilterIntegration', () => {
     })
   })
 
-  // AC7 — Filter change cancels active drag — drop targets deactivated (td:1)
-  it('filter change deactivates drop targets by cancelling active drag', async () => {
-    const { container } = renderBoard()
-    // Open panel to capture onFilterChange callback — works with any mount strategy
-    const toggle = container.querySelector('[data-testid="filter-toggle"]')!
-    expect(toggle).not.toBeNull()
-    fireEvent.click(toggle)
-    await waitFor(() => {
-      expect(container.querySelector('[data-testid="filter-panel-stub"]')).not.toBeNull()
-    })
-    // Start drag on TASK_NEEDED (backlog → todo is a valid transition)
-    await waitFor(() => {
-      expect(
-        container.querySelector('[data-testid="task-card"][data-id="1"]'),
-      ).not.toBeNull()
-    })
-    const card = container.querySelector('[data-testid="task-card"][data-id="1"]')!
-    fireEvent.dragStart(card)
-    // Verify the todo column is an active drag target before filter change
-    const todoColumn = container.querySelector('[data-column="todo"]')!
-    fireEvent.dragOver(todoColumn)
-    await waitFor(() => {
-      expect(todoColumn.getAttribute('data-drag-over')).toBe('true')
-    })
-    // Filter change must cancel the drag; drop targets should be deactivated
-    act(() => {
-      capturedOnFilterChange!({ ...EMPTY_FILTER, priority: 'needed' })
-    })
-    // Reset hover state, then re-enter to check isValidDragTarget is now false
-    fireEvent.dragLeave(todoColumn)
-    fireEvent.dragOver(todoColumn)
-    await waitFor(() => {
-      expect(todoColumn.getAttribute('data-drag-over')).toBeNull()
-    })
-  })
-
   // AC8 — Empty filter state shows all tasks (td:1)
   it('empty filter state shows all tasks in their columns', async () => {
     const { container } = renderBoard()

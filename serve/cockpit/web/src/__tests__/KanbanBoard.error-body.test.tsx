@@ -1,12 +1,11 @@
 /**
  * Implement Cockpit frontend error-contract adoption
  *
- * KanbanBoard.tsx gaps — handleDrop and handleTransitionClick both hardcode
- * status-only error strings without reading the response body:
- *   - handleDrop:           setMoveError(`Move failed: ${res.status}`)
+ * KanbanBoard.tsx gaps — handleTransitionClick hardcoded status-only error
+ * strings without reading the response body:
  *   - handleTransitionClick: setMoveError(`Move failed: ${res.status}`)
  *
- * After #1375, both handlers adopt getResponseErrorMessage() so the body
+ * After #1375, the move handler adopts getResponseErrorMessage() so the body
  * message/detail field appears in the move-error element.
  *
  * getResponseErrorMessage() calls.
@@ -125,92 +124,6 @@ function renderBoard(onMutationError?: (heading: string, description: string, st
     </PorscheDesignSystemProvider>,
   )
 }
-
-// ─── AC1/AC2/AC3: handleDrop body extraction ──────────────────────────────────
-//
-// CURRENT: handleDrop sets `Move failed: ${res.status}` — no body parsing.
-// EXPECTED: getResponseErrorMessage() is called; move-error includes body text.
-
-describe('TestFromAC_KanbanBoardDragDropErrorBodyParsing', () => {
-  // FAILS: move-error DOM element no longer exists; onMutationError callback not called with body text.
-  // After fix, onMutationError is called with description containing 'move failed: quota exceeded'.
-  it('handleDrop non-ok {code,message}: onMutationError called with response body message field', async () => {
-    const errorBody = { code: 'QUOTA_ERROR', message: 'move failed: quota exceeded' }
-    vi.stubGlobal('fetch', makeJsonFetch(500, errorBody))
-
-    const mutationErrorSpy = vi.fn()
-    const { container } = renderBoard(mutationErrorSpy)
-
-    const card = container.querySelector('[data-testid="task-card"][data-id="1"]')!
-    fireEvent.dragStart(card)
-
-    const todoCol = container.querySelector('[data-column="todo"]')!
-    fireEvent.drop(todoCol)
-
-    await waitFor(
-      () => {
-        expect(mutationErrorSpy).toHaveBeenCalledWith(
-          'Move failed',
-          expect.stringContaining('quota exceeded'),
-          'error',
-        )
-      },
-      { timeout: 1000 },
-    )
-  })
-
-  // FAILS: same root cause — onMutationError not called with body detail field.
-  // After fix, description contains 'task lock expired during move' from response body.
-  it('handleDrop non-ok {detail}: onMutationError called with response body detail field', async () => {
-    const errorBody = { detail: 'task lock expired during move' }
-    vi.stubGlobal('fetch', makeJsonFetch(422, errorBody))
-
-    const mutationErrorSpy = vi.fn()
-    const { container } = renderBoard(mutationErrorSpy)
-
-    const card = container.querySelector('[data-testid="task-card"][data-id="1"]')!
-    fireEvent.dragStart(card)
-
-    const todoCol = container.querySelector('[data-column="todo"]')!
-    fireEvent.drop(todoCol)
-
-    await waitFor(
-      () => {
-        expect(mutationErrorSpy).toHaveBeenCalledWith(
-          'Move failed',
-          expect.stringContaining('task lock expired during move'),
-          'error',
-        )
-      },
-      { timeout: 1000 },
-    )
-  })
-
-  // FAILS: onMutationError not called at all; no body text parsed.
-  // After fix, description is not the bare status-only fallback string.
-  it('handleDrop non-ok: onMutationError description is not the bare status-only fallback string', async () => {
-    const errorBody = { code: 'ENGINE_LOCK', message: 'engine lock held by builder' }
-    vi.stubGlobal('fetch', makeJsonFetch(500, errorBody))
-
-    const mutationErrorSpy = vi.fn()
-    const { container } = renderBoard(mutationErrorSpy)
-
-    const card = container.querySelector('[data-testid="task-card"][data-id="1"]')!
-    fireEvent.dragStart(card)
-
-    const todoCol = container.querySelector('[data-column="todo"]')!
-    fireEvent.drop(todoCol)
-
-    await waitFor(
-      () => {
-        expect(mutationErrorSpy).toHaveBeenCalled()
-        const [[, description]] = mutationErrorSpy.mock.calls as [[string, string, string]]
-        expect(description).not.toBe('Move failed: 500')
-      },
-      { timeout: 1000 },
-    )
-  })
-})
 
 // ─── AC1/AC2/AC3: handleTransitionClick body extraction ──────────────────────
 //
@@ -338,12 +251,18 @@ describe('TestFromAC_HealthPreservation', () => {
     // Board renders without a health indicator (health is Shell-level, not KanbanBoard-level)
     expect(container.querySelector('[data-health]')).toBeNull()
 
-    // Trigger a drag-drop move that fails
-    const card = container.querySelector('[data-testid="task-card"][data-id="1"]')!
-    fireEvent.dragStart(card)
+    // Trigger an explicit context-menu move that fails.
+    const card = container.querySelector('[data-testid="task-card"][data-id="2"]')!
+    fireEvent.contextMenu(card)
 
-    const todoCol = container.querySelector('[data-column="todo"]')!
-    fireEvent.drop(todoCol)
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="context-menu"]')).not.toBeNull()
+    })
+
+    const transItem = container.querySelector(
+      '[data-testid="transition-item"][data-status="in-progress"]',
+    )!
+    fireEvent.click(transItem)
 
     await waitFor(
       () => {
