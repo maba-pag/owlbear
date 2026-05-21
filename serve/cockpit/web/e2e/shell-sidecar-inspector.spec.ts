@@ -396,6 +396,19 @@ test.describe('TestFromAC_StatusBarNavHierarchy', () => {
     await expect(kanbanButton).toHaveAttribute('title', 'Kanban')
     await expect(kanbanButton.locator('p-icon')).toBeVisible()
     await expect(kanbanButton).not.toContainText('Kanban')
+
+    const buttonBox = await kanbanButton.boundingBox()
+    expect(buttonBox).not.toBeNull()
+    expect(buttonBox!.width).toBeGreaterThanOrEqual(44)
+    expect(buttonBox!.height).toBeGreaterThanOrEqual(44)
+
+    const decisionsButton = navRail.locator('[data-surface="decisions"]')
+    const badgeBox = await decisionsButton.locator('[data-testid="nav-badge"]').boundingBox()
+    const railBox = await navRail.boundingBox()
+    expect(badgeBox).not.toBeNull()
+    expect(railBox).not.toBeNull()
+    expect(badgeBox!.x).toBeGreaterThanOrEqual(railBox!.x)
+    expect(badgeBox!.x + badgeBox!.width).toBeLessThanOrEqual(railBox!.x + railBox!.width + 0.5)
   })
 })
 

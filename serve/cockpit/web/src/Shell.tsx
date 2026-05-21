@@ -60,21 +60,25 @@ const NAV_ICONS: Record<string, IconName> = {
   memory: 'brain',
 }
 
-const CANVAS_BRAND_OVERRIDE_ATTR = 'data-cockpit-brand-override'
+const CANVAS_OVERRIDE_ATTR = 'data-cockpit-canvas-override'
 
-function hideDefaultPdsCanvasBranding(canvas: HTMLElement | null): boolean {
+function applyCockpitCanvasOverrides(canvas: HTMLElement | null): boolean {
   const shadowRoot = canvas?.shadowRoot
   if (!shadowRoot) {
     return false
   }
 
-  if (shadowRoot.querySelector(`[${CANVAS_BRAND_OVERRIDE_ATTR}]`)) {
+  if (shadowRoot.querySelector(`[${CANVAS_OVERRIDE_ATTR}]`)) {
     return true
   }
 
   const style = document.createElement('style')
-  style.setAttribute(CANVAS_BRAND_OVERRIDE_ATTR, '')
-  style.textContent = '.header__crest,.header__wordmark{display:none!important;}'
+  style.setAttribute(CANVAS_OVERRIDE_ATTR, '')
+  style.textContent = [
+    '.header__crest,.header__wordmark{display:none!important;}',
+    '.sidebar--start{padding-inline:var(--cockpit-sidebar-start-padding)!important;}',
+    '.sidebar__header--start{margin-inline:calc(-1 * var(--cockpit-sidebar-start-padding))!important;padding-inline:var(--cockpit-sidebar-start-padding)!important;}',
+  ].join('')
   shadowRoot.append(style)
   return true
 }
@@ -255,16 +259,16 @@ function Shell() {
     let animationFrame = 0
     let attempts = 0
 
-    const applyBrandingOverride = () => {
-      if (hideDefaultPdsCanvasBranding(canvasRef.current) || attempts >= 5) {
+    const applyCanvasOverrides = () => {
+      if (applyCockpitCanvasOverrides(canvasRef.current) || attempts >= 5) {
         return
       }
 
       attempts += 1
-      animationFrame = window.requestAnimationFrame(applyBrandingOverride)
+      animationFrame = window.requestAnimationFrame(applyCanvasOverrides)
     }
 
-    applyBrandingOverride()
+    applyCanvasOverrides()
 
     return () => {
       if (animationFrame !== 0) {
@@ -274,7 +278,8 @@ function Shell() {
   }, [canvasKey])
 
   const canvasStyle = {
-    '--p-canvas-sidebar-start-width': '96px',
+    '--p-canvas-sidebar-start-width': '72px',
+    '--cockpit-sidebar-start-padding': '14px',
   } as CSSProperties
 
   const closeTaskDetail = () => {
@@ -466,7 +471,7 @@ function Shell() {
                   type="button"
                   title={label}
                   className={[
-                    'focus-text relative inline-flex size-10 flex-none items-center justify-center',
+                    'focus-text relative inline-flex size-11 flex-none items-center justify-center',
                     'rounded-full border border-transparent p-0 text-sm font-semibold leading-none',
                     'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]',
                     'transition-[background-color,color,box-shadow,transform] duration-sm',
@@ -491,7 +496,7 @@ function Shell() {
                     <span
                       data-testid="nav-badge"
                       className={[
-                        'absolute -right-0.5 -top-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-surface px-1 shadow-sm',
+                        'absolute right-0 top-0 z-10 inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-surface px-1 shadow-sm',
                         'text-[0.6rem] font-bold leading-none',
                         isActive ? 'bg-surface text-primary' : 'bg-warning text-primary',
                       ].join(' ')}

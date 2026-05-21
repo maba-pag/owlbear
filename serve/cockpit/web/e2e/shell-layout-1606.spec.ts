@@ -104,7 +104,7 @@ test.describe('PCanvas shell layout', () => {
     const sidebarWidth = await shell.evaluate((el) =>
       getComputedStyle(el).getPropertyValue('--p-canvas-sidebar-start-width').trim(),
     )
-    expect(sidebarWidth).toBe('96px')
+    expect(sidebarWidth).toBe('72px')
   })
 
   test('header-end status bar stays visible while the board workspace scrolls', async ({ page }) => {
