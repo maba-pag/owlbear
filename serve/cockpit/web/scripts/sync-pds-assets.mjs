@@ -22,6 +22,21 @@ const ICONS_DIR = join(
   "porsche-design-system",
   "icons",
 );
+const CREST_DIR = join(
+  globalThis.process.cwd(),
+  "public",
+  "porsche-design-system",
+  "crest",
+);
+
+const CREST_FILES = [
+  "porsche-crest.d76137c@1x.png",
+  "porsche-crest.0d0cc89@1x.webp",
+  "porsche-crest.8a292fb@2x.png",
+  "porsche-crest.2245c45@2x.webp",
+  "porsche-crest.18d6f02@3x.png",
+  "porsche-crest.19b4292@3x.webp",
+];
 
 function fail(message) {
   throw new Error(`[sync-pds] ${message}`);
@@ -33,6 +48,14 @@ async function fetchText(url, context) {
     fail(`cdn download failed (${context}): ${url} -> HTTP ${response.status}`);
   }
   return response.text();
+}
+
+async function fetchBytes(url, context) {
+  const response = await fetch(url);
+  if (!response.ok) {
+    fail(`cdn download failed (${context}): ${url} -> HTTP ${response.status}`);
+  }
+  return Buffer.from(await response.arrayBuffer());
 }
 
 function parseCorePath(indexSource) {
@@ -88,8 +111,10 @@ function parseIconFilenameMap(iconSource) {
 async function resetOutputDirs() {
   await rm(COMPONENTS_DIR, { recursive: true, force: true });
   await rm(ICONS_DIR, { recursive: true, force: true });
+  await rm(CREST_DIR, { recursive: true, force: true });
   await mkdir(COMPONENTS_DIR, { recursive: true });
   await mkdir(ICONS_DIR, { recursive: true });
+  await mkdir(CREST_DIR, { recursive: true });
 }
 
 async function main() {
@@ -131,8 +156,16 @@ async function main() {
       await writeFile(join(ICONS_DIR, iconFilename), iconSvg, "utf8");
     }
 
+    for (const crestFilename of CREST_FILES) {
+      const crestUrl = `${cdnBase}/porsche-design-system/crest/${crestFilename}`;
+      const crestBytes = await fetchBytes(crestUrl, `crest ${crestFilename}`);
+      await writeFile(join(CREST_DIR, crestFilename), crestBytes);
+    }
+
+    const syncedComponentCount = componentHashes.size + 1;
     console.log(
-      `[sync-pds] synced ${componentHashes.size + 1} component files and ${iconMap.size} icons`,
+      `[sync-pds] synced ${syncedComponentCount} component files, `
+        + `${iconMap.size} icons, and ${CREST_FILES.length} crest assets`,
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

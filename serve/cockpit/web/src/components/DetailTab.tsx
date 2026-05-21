@@ -56,7 +56,7 @@ function setMetadataAccordionAttrs(element: HTMLElement | null): void {
 
   element.setAttribute('compact', '')
   element.setAttribute('heading', 'Metadata')
-  ;(element as HTMLElement & { open?: boolean }).open = true
+  ;(element as HTMLElement & { open?: boolean }).open = false
   element.removeAttribute('open')
 }
 
@@ -171,8 +171,8 @@ export default function DetailTab({
   const taskSessions = sessions.filter((s) => s.task_id === t.id)
 
   return (
-    <div>
-      <section data-region="sidecar-body">
+    <div className="flex min-w-0 flex-col gap-static-md">
+      <section className="rounded-lg border border-contrast-low bg-canvas p-static-sm" data-region="task-detail-body">
         <PHeading ref={syncHeadingAttrs('h3', 'medium')} size="medium" tag="h3">Details</PHeading>
         <TaskFieldsEditor
           task={t}
@@ -185,47 +185,37 @@ export default function DetailTab({
         />
       </section>
 
-      <section data-region="actions">
-        <PHeading ref={syncHeadingAttrs('h3', 'small')} size="small" tag="h3">Actions</PHeading>
-        <TaskActions
-          key={`${t.id}:${t.updated}`}
-          task={t}
-          backwardTarget={backwardTarget}
-          runMutation={runMutation}
-        />
+      <section className="rounded-lg border border-contrast-low bg-canvas p-static-sm" data-region="actions">
+        <div className="mb-static-xs flex min-w-0 items-center justify-between gap-static-sm">
+          <PHeading ref={syncHeadingAttrs('h3', 'small')} size="small" tag="h3">Actions</PHeading>
+        </div>
+        <div className="flex min-w-0 flex-wrap items-center gap-static-xs">
+          <TaskActions
+            key={`${t.id}:${t.updated}`}
+            task={t}
+            backwardTarget={backwardTarget}
+            runMutation={runMutation}
+          />
+        </div>
       </section>
 
-      <p-accordion ref={setMetadataAccordionAttrs} data-region="sidecar-metadata">
+      <p-accordion className="block rounded-lg border border-contrast-low bg-surface" ref={setMetadataAccordionAttrs} data-region="task-detail-metadata">
         {/* Read-only fields */}
-        <div>
-          <p>
-            <strong>ID:</strong> <span data-testid="field-id">{t.id}</span>
-          </p>
-          <p>
-            <strong>Status:</strong> <span data-testid="field-status">{t.status}</span>
-          </p>
-          <p>
-            <strong>Priority:</strong> <span data-testid="field-priority">{t.priority}</span>
-          </p>
-          <p>
-            <strong>Created:</strong> <span data-testid="field-created">{t.created}</span>
-          </p>
-          <p>
-            <strong>Claimed:</strong> <span data-testid="field-claimed">{String(t.claimed)}</span>
-          </p>
-          <p>
-            <strong>Claimed at:</strong> <span data-testid="field-claimed-at">{t.claimed_at ?? ''}</span>
-          </p>
-          <p>
-            <strong>Dependency status:</strong> <span data-testid="field-dep-status">{t.dep_status ?? ''}</span>
-          </p>
-        </div>
+        <dl className="grid gap-x-static-md gap-y-static-xs text-sm text-primary md:grid-cols-2">
+          <div><dt className="font-semibold text-contrast-high">ID</dt><dd data-testid="field-id">{t.id}</dd></div>
+          <div><dt className="font-semibold text-contrast-high">Status</dt><dd data-testid="field-status">{t.status}</dd></div>
+          <div><dt className="font-semibold text-contrast-high">Priority</dt><dd data-testid="field-priority">{t.priority}</dd></div>
+          <div><dt className="font-semibold text-contrast-high">Created</dt><dd data-testid="field-created">{t.created}</dd></div>
+          <div><dt className="font-semibold text-contrast-high">Claimed</dt><dd data-testid="field-claimed">{String(t.claimed)}</dd></div>
+          <div><dt className="font-semibold text-contrast-high">Claimed at</dt><dd data-testid="field-claimed-at">{t.claimed_at ?? ''}</dd></div>
+          <div><dt className="font-semibold text-contrast-high">Dependency status</dt><dd data-testid="field-dep-status">{t.dep_status ?? ''}</dd></div>
+        </dl>
       </p-accordion>
 
       <PDivider />
 
       {/* History tab button — always visible */}
-      <section data-region="history">
+      <section className="rounded-lg bg-surface" data-region="history">
         <PButton data-testid="history-tab" variant="secondary" onClick={() => void handleHistoryClick()}>
           History
         </PButton>

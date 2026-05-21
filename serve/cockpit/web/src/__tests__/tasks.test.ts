@@ -211,6 +211,27 @@ describe('TestFromAC_GetTask', () => {
     expect((err as ApiError).message).toBe('Stale update rejected')
   })
 
+  it('AC-6: extracts FastAPI validation detail array messages with field names', async () => {
+    vi.stubGlobal('fetch', makeNonOkFetch(422, {
+      detail: [
+        { loc: ['body', 'priority'], msg: 'Input should be a valid string', type: 'string_type' },
+        { loc: ['body', 'depends_on', 0], msg: 'Input should be a valid integer', type: 'int_type' },
+      ],
+    }))
+    const err = await getTask(42).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(ApiError)
+    expect((err as ApiError).message).toBe(
+      'priority: Input should be a valid string; depends_on: Input should be a valid integer',
+    )
+  })
+
+  it('AC-6: falls back for empty FastAPI validation detail arrays', async () => {
+    vi.stubGlobal('fetch', makeNonOkFetch(422, { detail: [] }))
+    const err = await getTask(42).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(ApiError)
+    expect((err as ApiError).message).toBe('Get task request failed with status 422')
+  })
+
   it('AC-6: network error propagates unwrapped — not wrapped in ApiError', async () => {
     vi.stubGlobal('fetch', makeNetworkErrorFetch('Network failure'))
     const err = await getTask(42).catch((e: unknown) => e)

@@ -423,6 +423,49 @@ describe('TestFromAC_KanbanBoard', () => {
         expect(items?.length).toBe(2)
       })
     })
+
+    it('orders context menu transitions by board lane order', async () => {
+      const board = {
+        ...BOARD,
+        valid_transitions: {
+          ...BOARD.valid_transitions,
+          backlog: ['todo', 'research'],
+        },
+      }
+      const { container } = renderBoard({ board, fetchOnMount: false })
+      await waitFor(() => {
+        expect(container.querySelector('[data-testid="task-card"][data-id="1"]')).not.toBeNull()
+      })
+      const card = container.querySelector('[data-testid="task-card"][data-id="1"]')!
+      fireEvent.contextMenu(card)
+      await waitFor(() => {
+        const menu = container.querySelector('[data-testid="context-menu"]')
+        const statuses = Array.from(menu?.querySelectorAll('[data-testid="transition-item"]') ?? [])
+          .map((item) => item.getAttribute('data-status'))
+        expect(statuses).toEqual(['research', 'todo'])
+      })
+    })
+
+    it('labels configured archive transitions as Archive', async () => {
+      const board = {
+        ...BOARD,
+        valid_transitions: {
+          ...BOARD.valid_transitions,
+          backlog: ['todo', 'archived'],
+        },
+      }
+      const { container } = renderBoard({ board, fetchOnMount: false })
+      await waitFor(() => {
+        expect(container.querySelector('[data-testid="task-card"][data-id="1"]')).not.toBeNull()
+      })
+      const card = container.querySelector('[data-testid="task-card"][data-id="1"]')!
+      fireEvent.contextMenu(card)
+      await waitFor(() => {
+        const archiveItem = container.querySelector('[data-testid="transition-item"][data-status="archived"]')
+        expect(archiveItem?.textContent?.trim()).toBe('Archive')
+        expect(archiveItem?.className).toContain('text-error')
+      })
+    })
   })
 
   // ─── AC #962 — dismiss and accessibility ──────────────────────────────────
@@ -478,15 +521,19 @@ describe('TestFromAC_KanbanBoard', () => {
       })
     })
 
-    it('right-clicking a done-status card shows no context menu', async () => {
+    it('right-clicking a done-status card shows an archive-only context menu', async () => {
       const { container } = renderBoard()
       await waitFor(() => {
         expect(container.querySelector('[data-testid="task-card"][data-id="5"]')).not.toBeNull()
       })
       const doneCard = container.querySelector('[data-testid="task-card"][data-id="5"]')!
       fireEvent.contextMenu(doneCard)
-      await new Promise(resolve => setTimeout(resolve, 50))
-      expect(container.querySelector('[data-testid="context-menu"]')).toBeNull()
+      await waitFor(() => {
+        const menu = container.querySelector('[data-testid="context-menu"]')
+        expect(menu).not.toBeNull()
+        const items = Array.from(menu?.querySelectorAll('[role="menuitem"]') ?? [])
+        expect(items.map((item) => item.textContent?.trim())).toEqual(['Archive'])
+      })
     })
   })
 

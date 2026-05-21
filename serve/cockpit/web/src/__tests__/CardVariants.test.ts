@@ -95,12 +95,10 @@ describe('card variant mappings', () => {
     })
 
     it('statusToVariant("backlog") returns "info" — not the invalid "notification"', () => {
-      // FAILS until builder remaps backlog from 'notification' to 'info'
       expect(statusToVariant('backlog')).toBe('info')
     })
 
     it('statusToVariant("review") returns "info" — not the invalid "notification"', () => {
-      // FAILS until builder remaps review from 'notification' to 'info'
       expect(statusToVariant('review')).toBe('info')
     })
   })
@@ -149,9 +147,8 @@ describe('card variant mappings', () => {
       }
     })
 
-    it('priorityToVariant("needed") returns "warning" — not the invalid "notification"', () => {
-      // FAILS until builder remaps needed from 'notification' to 'warning'
-      expect(priorityToVariant('needed')).toBe('warning')
+    it('priorityToVariant("needed") returns "info" — not the invalid "notification"', () => {
+      expect(priorityToVariant('needed')).toBe('info')
     })
   })
 })

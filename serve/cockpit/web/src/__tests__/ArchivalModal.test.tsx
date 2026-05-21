@@ -78,6 +78,16 @@ function getSelect(container: HTMLElement): HTMLElement {
   return el
 }
 
+function getReasonOptions(container: HTMLElement): HTMLElement[] {
+  return Array.from(getSelect(container).querySelectorAll<HTMLElement>('p-select-option'))
+}
+
+function findReasonOption(container: HTMLElement, value: string): HTMLElement | undefined {
+  return getReasonOptions(container).find((option) =>
+    option.getAttribute('value') === value || (option as HTMLElement & { value?: string }).value === value,
+  )
+}
+
 function getRefsInput(container: HTMLElement): HTMLElement {
   const el = container.querySelector('p-input-text') as HTMLElement | null
   if (!el) throw new Error('refs p-input-text not found')
@@ -183,28 +193,18 @@ describe('TestFromAC_ArchivalModal', () => {
   describe('AC4: completed option hidden when taskStatus !== "done"; shown when === "done"', () => {
     it('hides the completed option when taskStatus is "in-progress"', () => {
       const { container } = renderModal({ taskStatus: 'in-progress' })
-      const pSelect = container.querySelector('p-select')
-      const opts = Array.from(pSelect?.querySelectorAll('option') ?? []) as HTMLOptionElement[]
-      const completedOpt = opts.find((o) => o.value === 'completed')
-      // Option must be absent or hidden
-      expect(completedOpt === undefined || completedOpt.hidden).toBe(true)
+      expect(findReasonOption(container, 'completed')).toBeUndefined()
     })
 
     it('shows the completed option when taskStatus is "done"', () => {
       const { container } = renderModal({ taskStatus: 'done' })
-      const pSelect = container.querySelector('p-select')
-      const opts = Array.from(pSelect?.querySelectorAll('option') ?? []) as HTMLOptionElement[]
-      const completedOpt = opts.find((o) => o.value === 'completed')
+      const completedOpt = findReasonOption(container, 'completed')
       expect(completedOpt).not.toBeUndefined()
-      expect(completedOpt?.hidden).toBe(false)
     })
 
     it('hides the completed option when taskStatus is "todo" (boundary: non-done status)', () => {
       const { container } = renderModal({ taskStatus: 'todo' })
-      const pSelect = container.querySelector('p-select')
-      const opts = Array.from(pSelect?.querySelectorAll('option') ?? []) as HTMLOptionElement[]
-      const completedOpt = opts.find((o) => o.value === 'completed')
-      expect(completedOpt === undefined || completedOpt.hidden).toBe(true)
+      expect(findReasonOption(container, 'completed')).toBeUndefined()
     })
   })
 

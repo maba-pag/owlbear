@@ -1,9 +1,12 @@
 import { useEffect, useRef } from 'react'
-import { PButton, PModal, PSpinner, PText } from '@porsche-design-system/components-react'
+import { createPortal } from 'react-dom'
+import { PButton, PButtonPure, PModal, PSpinner, PText } from '@porsche-design-system/components-react'
 import { useCleanupFlow } from '../hooks/useCleanupFlow'
 
 export interface CleanupPanelProps {
+  compact?: boolean
   onSuccess?: () => void
+  portalConfirmDialog?: boolean
 }
 
 function renderSkippedItems(skippedItems: Array<{ path: string; reason: string }>) {
@@ -15,7 +18,7 @@ function renderSkippedItems(skippedItems: Array<{ path: string; reason: string }
   ))
 }
 
-export default function CleanupPanel({ onSuccess }: CleanupPanelProps) {
+export default function CleanupPanel({ compact = false, onSuccess, portalConfirmDialog = false }: CleanupPanelProps) {
   const modalRef = useRef<HTMLElement | null>(null)
   const previousFocusRef = useRef<HTMLElement | null>(null)
   const {
@@ -102,11 +105,12 @@ export default function CleanupPanel({ onSuccess }: CleanupPanelProps) {
   }
 
   if (phase === 'confirming') {
-    return (
+    const dialog = (
       <PModal
         ref={modalRef}
         data-testid="cleanup-confirm-dialog"
         aria-label="Confirm task cleanup"
+        aria={{ role: 'alertdialog', 'aria-label': 'Confirm task cleanup' }}
         tabIndex={-1}
         open
         onDismiss={cancelCleanup}
@@ -114,22 +118,34 @@ export default function CleanupPanel({ onSuccess }: CleanupPanelProps) {
         disableBackdropClick
         dismissButton={false}
       >
-        <PText>
-          This will run maintenance cleanup to release stale claims and archive completed tasks.
-        </PText>
-        <PButton
-          data-testid="cleanup-confirm-btn"
-          onClick={() => {
-            void confirmCleanup()
-          }}
-        >
-          Confirm
-        </PButton>
-        <PButton data-testid="cleanup-cancel-btn" variant="secondary" onClick={cancelCleanup}>
-          Cancel
-        </PButton>
+        <div className="grid max-w-[560px] gap-static-md text-primary">
+          <div className="grid gap-static-xs rounded-lg border border-contrast-low bg-canvas p-static-md">
+            <span className="text-xs font-semibold uppercase text-primary">Workspace cleanup</span>
+            <h2 className="m-0 text-xl font-semibold leading-tight text-primary">Run maintenance cleanup?</h2>
+            <p className="m-0 text-sm leading-normal text-primary">
+              This releases stale claims and archives completed tasks so the board starts from a clean operational state.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-static-xs">
+            <PButton data-testid="cleanup-cancel-btn" variant="secondary" onClick={cancelCleanup}>
+              Cancel
+            </PButton>
+            <PButton
+              data-testid="cleanup-confirm-btn"
+              onClick={() => {
+                void confirmCleanup()
+              }}
+            >
+              Run cleanup
+            </PButton>
+          </div>
+        </div>
       </PModal>
     )
+
+    return portalConfirmDialog && typeof document !== 'undefined'
+      ? createPortal(dialog, document.body)
+      : dialog
   }
 
   if (phase === 'running') {
@@ -186,14 +202,30 @@ export default function CleanupPanel({ onSuccess }: CleanupPanelProps) {
     )
   }
 
+  if (compact) {
+    return (
+      <PButtonPure
+        type="button"
+        icon="delete"
+        hideLabel
+        data-testid="cleanup-button"
+        aria-label="Cleanup"
+        onClick={requestCleanup}
+      >
+        Cleanup
+      </PButtonPure>
+    )
+  }
+
   return (
-    <button
+    <PButton
       type="button"
-      data-pds-exception="status-bar-control"
       data-testid="cleanup-button"
+      variant="secondary"
+      compact
       onClick={requestCleanup}
     >
       Cleanup
-    </button>
+    </PButton>
   )
 }

@@ -91,6 +91,7 @@ export default function TaskActions({
         <PButton
           data-testid="move-backward"
           variant="secondary"
+          compact
           onClick={() => openConfirm('move-backward')}
         >
           Move Backward
@@ -100,6 +101,7 @@ export default function TaskActions({
         <PButton
           data-testid="unclaim-action"
           variant="secondary"
+          compact
           onClick={() => openConfirm('unclaim')}
         >
           Unclaim
@@ -109,6 +111,7 @@ export default function TaskActions({
         <PButton
           data-testid="unblock-action"
           variant="secondary"
+          compact
           onClick={() => openConfirm('unblock')}
         >
           Unblock

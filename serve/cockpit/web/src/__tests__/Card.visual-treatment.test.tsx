@@ -201,6 +201,7 @@ describe('Card signal icon', () => {
     const { container } = renderCard(task)
     const icon = container.querySelector('p-icon[size="xs"][aria-label="deps-unmet"]')
     expect(icon).not.toBeNull()
+    expect((icon as Element & { name?: string }).name ?? icon!.getAttribute('name')).toBe('unlinked')
   })
 
   it('ready signal renders no p-icon element — confirmed by blocked card having p-icon', () => {
@@ -233,18 +234,18 @@ describe('Card signal icon', () => {
 
 describe('Card tag pills', () => {
   // Note: tests use status='in-progress' and priority='critical' — both are known values
-  // that the mapping utility must map to non-secondary variants (per AC-1/2 fallback contract).
-  // This ensures p-tag[compact][variant="secondary"] selects only tag pills, not chips.
+  // that the mapping utility must map away from the fallback variant (per AC-1/2 contract).
+  // This ensures p-tag[compact][variant="primary"] selects only tag pills, not status chips.
 
-  it('one tag renders as exactly one p-tag[compact][variant="secondary"] pill', () => {
+  it('one tag renders as exactly one p-tag[compact][variant="primary"] pill', () => {
     // Current tags are in a single <span> — querySelectorAll returns 0. FAIL.
     const task = makeTask({ id: 1, status: 'in-progress', priority: 'critical', tags: ['frontend'] })
     const { container } = renderCard(task)
-    const tagPills = container.querySelectorAll('p-tag[compact][variant="secondary"]')
+    const tagPills = container.querySelectorAll('p-tag[compact][variant="primary"]')
     expect(tagPills.length).toBe(1)
   })
 
-  it('three tags render exactly three p-tag[compact][variant="secondary"] pills', () => {
+  it('three tags render exactly three p-tag[compact][variant="primary"] pills', () => {
     const task = makeTask({
       id: 1,
       status: 'in-progress',
@@ -252,7 +253,7 @@ describe('Card tag pills', () => {
       tags: ['a', 'b', 'c'],
     })
     const { container } = renderCard(task)
-    const tagPills = container.querySelectorAll('p-tag[compact][variant="secondary"]')
+    const tagPills = container.querySelectorAll('p-tag[compact][variant="primary"]')
     expect(tagPills.length).toBe(3)
   })
 
@@ -264,7 +265,7 @@ describe('Card tag pills', () => {
       tags: ['a', 'b', 'c', 'd'],
     })
     const { container } = renderCard(task)
-    const tagPills = container.querySelectorAll('p-tag[compact][variant="secondary"]')
+    const tagPills = container.querySelectorAll('p-tag[compact][variant="primary"]')
     expect(tagPills.length).toBe(3)
   })
 
@@ -276,7 +277,7 @@ describe('Card tag pills', () => {
       tags: ['frontend', 'backend', 'urgent', 'blocked', 'pds'],
     })
     const { container } = renderCard(task)
-    const tagPills = container.querySelectorAll('p-tag[compact][variant="secondary"]')
+    const tagPills = container.querySelectorAll('p-tag[compact][variant="primary"]')
     expect(tagPills.length).toBe(3)
     const texts = Array.from(tagPills).map((el) => el.textContent?.trim())
     expect(texts).toContain('frontend')
@@ -286,16 +287,16 @@ describe('Card tag pills', () => {
     expect(texts).not.toContain('pds')
   })
 
-  it('zero tags renders no p-tag pill elements with variant="secondary"', () => {
+  it('zero tags renders no p-tag pill elements with variant="primary"', () => {
     // Positive anchor: one-tag case must have a pill first.
     const oneTagTask = makeTask({ id: 99, status: 'in-progress', priority: 'critical', tags: ['x'] })
     const { container: oneTagContainer } = renderCard(oneTagTask)
-    expect(oneTagContainer.querySelectorAll('p-tag[compact][variant="secondary"]').length).toBe(1)
+    expect(oneTagContainer.querySelectorAll('p-tag[compact][variant="primary"]').length).toBe(1)
 
     // Now verify: zero tags → no pills
     const task = makeTask({ id: 1, status: 'in-progress', priority: 'critical', tags: [] })
     const { container } = renderCard(task)
-    expect(container.querySelectorAll('p-tag[compact][variant="secondary"]').length).toBe(0)
+    expect(container.querySelectorAll('p-tag[compact][variant="primary"]').length).toBe(0)
   })
 
   it('overflow count indicator preserved when tags exceed TAG_PREVIEW_LIMIT=3', () => {
@@ -309,7 +310,7 @@ describe('Card tag pills', () => {
     })
     const { container } = renderCard(task)
     // AC-4 anchor — fails now (tags still comma-joined in a span, not individual p-tags)
-    const pills = container.querySelectorAll('p-tag[compact][variant="secondary"]')
+    const pills = container.querySelectorAll('p-tag[compact][variant="primary"]')
     expect(pills.length).toBe(3)
     // Regression guard: overflow indicator preserved alongside tag pills
     const overflow = container.querySelector('[data-testid="card-tag-overflow"]')
@@ -328,13 +329,13 @@ describe('Card tag pills', () => {
     })
     const { container: manyContainer } = renderCard(manyTask)
     // AC-4 anchor — fails now
-    expect(manyContainer.querySelectorAll('p-tag[compact][variant="secondary"]').length).toBe(3)
+    expect(manyContainer.querySelectorAll('p-tag[compact][variant="primary"]').length).toBe(3)
     expect(manyContainer.querySelector('[data-testid="card-tag-overflow"]')).not.toBeNull()
 
     // Main assertion: 3 tags → exactly 3 pills, no overflow
     const task = makeTask({ id: 1, status: 'in-progress', priority: 'critical', tags: ['a', 'b', 'c'] })
     const { container } = renderCard(task)
-    expect(container.querySelectorAll('p-tag[compact][variant="secondary"]').length).toBe(3)
+    expect(container.querySelectorAll('p-tag[compact][variant="primary"]').length).toBe(3)
     expect(container.querySelector('[data-testid="card-tag-overflow"]')).toBeNull()
   })
 })

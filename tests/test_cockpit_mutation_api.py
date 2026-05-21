@@ -1018,8 +1018,9 @@ def mock_view_client(engine_1132: KanbanEngine):
     from owlbear_cockpit.deps import get_view  # noqa: PLC0415  # ImportError → RED
 
     mock_view = mock.MagicMock(spec=CockpitView)
-    # Provide the real engine_1132 so valid_transitions precheck can use it.
-    mock_view.engine = engine_1132
+    # Route prechecks need a real engine by default, while some tests override
+    # specific engine methods such as valid_transitions.
+    mock_view.engine = mock.MagicMock(wraps=engine_1132)
 
     app.dependency_overrides[get_engine] = lambda: engine_1132
     app.dependency_overrides[get_view] = lambda: mock_view

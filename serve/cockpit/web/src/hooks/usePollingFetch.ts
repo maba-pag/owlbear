@@ -3,6 +3,8 @@ import { getResponseErrorMessage } from '../api/errorMessage'
 
 const DEFAULT_INTERVAL_MS = 3000
 
+type PollReason = 'initial' | 'interval' | 'manual'
+
 export interface UsePollingFetchOptions<TPayload> {
   intervalMs?: number
   paused?: boolean
@@ -28,7 +30,7 @@ export function usePollingFetch<TPayload = unknown>(
   const [hasFetched, setHasFetched] = useState(false)
   const isMountedRef = useRef(true)
   const inFlightRef = useRef(false)
-  const pendingPollRef = useRef(false)
+  const pendingPollReasonRef = useRef<PollReason | null>(null)
   const controllerRef = useRef<AbortController | null>(null)
   const pausedRef = useRef(options?.paused ?? false)
 
@@ -44,14 +46,14 @@ export function usePollingFetch<TPayload = unknown>(
   onErrorRef.current = options?.onError
   pausedRef.current = options?.paused ?? false
 
-  const poll = useCallback(async (): Promise<void> => {
+  const poll = useCallback(async (reason: PollReason): Promise<void> => {
     if (inFlightRef.current) {
-      pendingPollRef.current = true
+      pendingPollReasonRef.current = reason
       return
     }
 
     inFlightRef.current = true
-    pendingPollRef.current = false
+    pendingPollReasonRef.current = null
     if (isMountedRef.current) {
       setIsFetching(true)
     }
@@ -91,20 +93,21 @@ export function usePollingFetch<TPayload = unknown>(
         setIsFetching(false)
         setHasFetched(true)
       }
-      if (pendingPollRef.current && isMountedRef.current && !pausedRef.current) {
-        pendingPollRef.current = false
-        void poll()
+      const pendingReason = pendingPollReasonRef.current
+      if (pendingReason !== null && isMountedRef.current && (pendingReason === 'initial' || !pausedRef.current)) {
+        pendingPollReasonRef.current = null
+        void poll(pendingReason)
       }
     }
   }, [url])
 
   useEffect(() => {
     isMountedRef.current = true
-    void poll()
+    void poll('initial')
 
     const intervalId = setInterval(() => {
       if (!pausedRef.current) {
-        void poll()
+        void poll('interval')
       }
     }, intervalMs)
 
@@ -117,7 +120,7 @@ export function usePollingFetch<TPayload = unknown>(
   }, [intervalMs, poll])
 
   const stableRefetch = useCallback(() => {
-    void poll()
+    void poll('manual')
   }, [poll])
 
   return {

@@ -30,6 +30,39 @@ type ControlValueEvent = {
   detail?: { value?: unknown }
 }
 
+function removeNativeCheckboxInputs(root: ParentNode): void {
+  root.querySelectorAll('input[type="checkbox"]').forEach((input) => input.remove())
+}
+
+function watchNativeCheckboxInputs(root: ParentNode): () => void {
+  const observers: MutationObserver[] = []
+  const frameIds: number[] = []
+
+  const cleanup = () => removeNativeCheckboxInputs(root)
+  const observe = (scope: ParentNode) => {
+    const observer = new MutationObserver(cleanup)
+    observer.observe(scope, { childList: true, subtree: true })
+    observers.push(observer)
+  }
+
+  observe(root)
+
+  let frameCount = 0
+  const cleanupFrame = () => {
+    cleanup()
+    frameCount += 1
+    if (frameCount < 10) {
+      frameIds.push(window.requestAnimationFrame(cleanupFrame))
+    }
+  }
+  frameIds.push(window.requestAnimationFrame(cleanupFrame))
+
+  return () => {
+    observers.forEach((observer) => observer.disconnect())
+    frameIds.forEach((frameId) => window.cancelAnimationFrame(frameId))
+  }
+}
+
 function readStringValue(event: ControlValueEvent): string {
   if (typeof event.detail?.value === 'string') {
     return event.detail.value
@@ -111,8 +144,6 @@ export default function FilterPanel({
       return
     }
 
-    blockedElement.querySelector('input[type="checkbox"]')?.remove()
-
     const onBlockedChange = (event: Event) => {
       const customEvent = event as CustomEvent<{ checked?: unknown; value?: unknown }>
       const checkedDetail = customEvent.detail?.checked ?? customEvent.detail?.value
@@ -137,6 +168,15 @@ export default function FilterPanel({
       blockedElement.removeEventListener('update', onBlockedChange)
     }
   }, [filter, onFilterChange, open])
+
+  useEffect(() => {
+    if (!open || !panelRef.current) {
+      return
+    }
+
+    removeNativeCheckboxInputs(panelRef.current)
+    return watchNativeCheckboxInputs(panelRef.current)
+  }, [open])
 
   useEffect(() => {
     if (!open) {
@@ -290,6 +330,7 @@ export default function FilterPanel({
         label="Show only blocked tasks"
         checked={filter.blocked}
         tabIndex={0}
+        onClick={() => onFilterChange({ ...filter, blocked: !filter.blocked })}
       >
         Show only blocked tasks
       </PCheckbox>

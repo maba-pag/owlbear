@@ -1,10 +1,10 @@
 /**
- * Task #1643 — P1-03: Route-conditional sidecar
- * Tests sidecar conditional rendering, navigation state, and grid column adjustment
- * based on the routeConfig entry's `hasSidecar` field.
+ * Task #1643 — P1-03: retired route-conditional sidecar contract
+ * Tests that task detail no longer occupies the PCanvas end sidebar and route
+ * navigation does not restore the old sidecar.
  *
  * Real routeConfig (routes.ts) is intentionally NOT mocked — these are integration
- * tests that lock in the wiring between /decisions and hasSidecar:false suppression.
+ * tests that lock in the no-right-sidecar shell contract.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, fireEvent, waitFor } from '@testing-library/react'
@@ -77,12 +77,11 @@ describe('TestFromAC_SidecarConditional', () => {
     expect(container.querySelector('[data-region="sidecar"]')).toBeNull()
   })
 
-  // ── AC2: navigation removes and restores sidecar ──────────────────────────
+  // ── AC2: navigation keeps the task sidecar retired ───────────────────────
 
-  it('ac2 happy remove: navigating from / to /decisions removes sidecar from DOM', async () => {
+  it('ac2 happy: navigating from / to /decisions keeps sidecar absent', async () => {
     const { container } = renderShellWithNav('/')
-    // Sidecar present at /
-    expect(container.querySelector('[data-region="sidecar"]')).not.toBeNull()
+    expect(container.querySelector('[data-region="sidecar"]')).toBeNull()
     // Navigate to /decisions
     fireEvent.click(container.querySelector('[data-testid="go-decisions"]')!)
     // Sidecar must be absent after navigation
@@ -91,47 +90,38 @@ describe('TestFromAC_SidecarConditional', () => {
     })
   })
 
-  it('ac2 happy restore: navigating from /decisions back to / restores sidecar in DOM', () => {
+  it('ac2 happy: navigating from /decisions back to / does not restore sidecar', () => {
     const { container } = renderShellWithNav('/decisions')
     // Start at /decisions — sidecar absent
     expect(container.querySelector('[data-region="sidecar"]')).toBeNull()
     // Navigate back to /
     fireEvent.click(container.querySelector('[data-testid="go-home"]')!)
-    // Sidecar must be restored
-    expect(container.querySelector('[data-region="sidecar"]')).not.toBeNull()
+    expect(container.querySelector('[data-region="sidecar"]')).toBeNull()
   })
 
-  it('ac2 edge preserve-collapsed: isSidecarCollapsed state persists through / → /decisions → / round-trip', async () => {
+  it('ac2 edge: legacy custom sidecar-collapse control is absent after PCanvas migration', async () => {
     const { container } = renderShellWithNav('/')
-    // Collapse the sidecar at /
-    const toggle = container.querySelector('[data-testid="sidecar-collapse"]') as HTMLButtonElement
-    fireEvent.click(toggle)
-    expect(toggle.getAttribute('aria-expanded')).toBe('false')
-    // Navigate to /decisions — sidecar removed from DOM
+    expect(container.querySelector('[data-testid="sidecar-collapse"]')).toBeNull()
+
     fireEvent.click(container.querySelector('[data-testid="go-decisions"]')!)
     await waitFor(() => {
       expect(container.querySelector('[data-region="sidecar"]')).toBeNull()
     })
-    // Navigate back to / — sidecar restored in its previous collapsed state
+
     fireEvent.click(container.querySelector('[data-testid="go-home"]')!)
     await waitFor(() => {
-      const restoredToggle = container.querySelector('[data-testid="sidecar-collapse"]') as HTMLButtonElement
-      expect(restoredToggle.getAttribute('aria-expanded')).toBe('false')
+      expect(container.querySelector('[data-region="sidecar"]')).toBeNull()
+      expect(container.querySelector('[data-testid="sidecar-collapse"]')).toBeNull()
     })
   })
 
-  // ── AC3: shell grid narrows to 2 columns when sidecar is absent ───────────
+  // ── AC3: shell declares no-right-sidecar layout ───────────────────────────
 
   it('ac3 happy: shell element carries data-no-sidecar attribute on /decisions route', () => {
     const { container } = renderShell('/decisions')
     const shell = container.querySelector('.shell')
     expect(shell).not.toBeNull()
-    // data-no-sidecar drives the CSS --shell-columns override to 2-column layout
     expect(shell!.hasAttribute('data-no-sidecar')).toBe(true)
   })
-
-  // AC3 CSS regression tests removed — Shell.css is replaced by PDS Tailwind
-  // utilities inline in Shell.tsx. Grid column logic for data-no-sidecar is now
-  // enforced by the DOM-based tests above (shell carries data-no-sidecar attr).
 
 })

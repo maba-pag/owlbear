@@ -1,32 +1,11 @@
 /**
- * RED-phase Playwright E2E tests for #1606: P1-09 Shell layout — sticky header + responsive sidebar.
+ * Playwright coverage for the current Cockpit PCanvas shell layout.
  *
- * All tests must FAIL against the current implementation.
- *
- * Current state (before builder implementation):
- *   AC1 — header: className="shell__status-bar", no Tailwind sticky/z-10 classes.
- *           getComputedStyle(header).position === "static" (no explicit position in CSS).
- *   AC2 — sidecar at 768–1023px: grid column = 240px (via @media rule in Shell.css).
- *           At >=1024px sidecar = 360px (GREEN already — regression guard).
- *   AC3 — Shell.css has layout property rules (display, height, overflow, position, z-index).
- *           Shell root className="shell" — no Tailwind utility classes.
- *           Header className="shell__status-bar" — no Tailwind sticky/top-0/z-10 classes.
- *
- * Expected failures (RED evidence):
- *   TestFromAC_StickyHeader — position:static → not sticky; no z-10 class on header.
- *   TestFromAC_ResponsiveSidecar — sidecar=240px at 1023px → outside 40–56px range.
- *   TestFromAC_TailwindCSSStructure — Shell.css has forbidden layout properties;
- *     shell/header have no Tailwind layout utility classes.
- *
- * API mocking: all routes stubbed via page.route() — no real backend required.
- * Proof bundle: behavioral.
+ * The old custom CSS grid sidecar contract is retired. These tests guard the
+ * present top-level shape: PCanvas owns layout, the right sidecar is absent,
+ * the left workspace rail is compact, and task detail opens in a modal.
  */
-import * as fs from 'node:fs'
-import * as path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { test, expect, type Page } from '@playwright/test'
-
-// ─── Constants ─────────────────────────────────────────────────────────────────
 
 const STATUSES = ['research', 'backlog', 'todo', 'in-progress', 'review', 'docs', 'done']
 const PRIORITIES = ['critical', 'needed', 'important', 'nice-to-have', 'someday']
@@ -45,34 +24,44 @@ const BOARD = {
   } as Record<string, string[]>,
 }
 
-const TASKS = STATUSES.map((status, i) => ({
-  id: i + 1,
-  title: `Task in ${status}`,
-  status,
-  priority: PRIORITIES[i % PRIORITIES.length],
+const TASK = {
+  id: 1,
+  title: 'PCanvas layout task',
+  status: 'todo',
+  priority: 'important',
   updated: '2026-05-16T00:00:00+00:00',
   tags: [],
   blocked: false,
   block_reason: null,
   claimed: false,
-}))
+  dep_status: null,
+}
 
-// ─── Shell.css path for AC3 file-content checks ────────────────────────────────
+const TASK_DETAIL = {
+  ...TASK,
+  body: '## Context\n\nTask detail renders in a modal.',
+  created: '2026-05-16T00:00:00+00:00',
+  claimed_at: null,
+  parent: null,
+  depends_on: [] as number[],
+}
 
-const SHELL_CSS_PATH = path.join(
-  path.dirname(fileURLToPath(import.meta.url)),
-  '..',
-  'src',
-  'Shell.css',
-)
+const DECISION = {
+  id: 'dr-route-001',
+  task_id: 1,
+  agent: 'builder',
+  request_type: 'scope-decision',
+  created: '2026-05-20T06:15:00+00:00',
+  title: 'Confirm cockpit routing priority',
+  body_preview: 'Builder needs guidance on whether route polish outranks board internals.',
+  body: '## Context\n\nBuilder needs guidance on whether route polish outranks board internals.\n\n- Route polish affects daily cockpit scanning.\n- Board internals are already green.\n\n## Options\n\nApprove route polish, reject it, or ask for more detail.',
+}
 
-// ─── API stub helper ──────────────────────────────────────────────────────────
+type StubOptions = {
+  decisions?: { count: number; items: typeof DECISION[] }
+}
 
-/**
- * Stub all API routes. Catch-all registered first (LIFO: specific routes registered
- * after take precedence per Playwright route() semantics).
- */
-async function stubApis(page: Page, tasks: object[] = TASKS): Promise<void> {
+async function stubApis(page: Page, options: StubOptions = {}): Promise<void> {
   await page.route('/api/**', (route) => route.fulfill({ status: 200, json: {} }))
   await page.route('/api/events', (route) =>
     route.fulfill({
@@ -85,360 +74,184 @@ async function stubApis(page: Page, tasks: object[] = TASKS): Promise<void> {
       body: '',
     }),
   )
+  await page.route('/api/tasks/scan', (route) => route.fulfill({ json: [] }))
+  await page.route('/api/tasks/1', (route) => route.fulfill({ json: TASK_DETAIL }))
   await page.route('/api/tasks', (route) =>
-    route.fulfill({ json: { tasks, mtime: 1_747_353_600 } }),
+    route.fulfill({ json: { tasks: [TASK], mtime: 1_747_353_600 } }),
   )
   await page.route('/api/board', (route) => route.fulfill({ json: BOARD }))
+  await page.route('/api/decisions/pending', (route) =>
+    route.fulfill({ json: options.decisions ?? { count: 0, items: [] } }),
+  )
+  await page.route('/api/memories', (route) => route.fulfill({ json: { entries: [] } }))
+  await page.route('/api/ideas', (route) => route.fulfill({ json: { content: '# Direct load' } }))
 }
 
-// ─── AC1: Sticky header ───────────────────────────────────────────────────────
-//
-// Contract: header ([data-region="status-bar"]) must have position:sticky so it
-// remains visible when content below it is scrolled, with z-index >= 10 to avoid
-// overlap with scrolled content.
-//
-// RED: .shell__status-bar has no position rule in CSS → computed position = "static".
-// RED: header className = "shell__status-bar" — no Tailwind z-10 class.
-
-test.describe('TestFromAC_StickyHeader', () => {
+test.describe('PCanvas shell layout', () => {
   test.use({ viewport: { width: 1280, height: 800 } })
 
   test.beforeEach(async ({ page }) => {
     await stubApis(page)
     await page.goto('/')
-    await page.locator('[data-region="status-bar"]').waitFor({ state: 'visible' })
+    await page.locator('[data-region="workspace"]').waitFor({ state: 'visible' })
   })
 
-  // RED: getComputedStyle(el).position is "static" — no position set on .shell__status-bar
-  test('header has position:sticky computed style', async ({ page }) => {
-    const position = await page
-      .locator('[data-region="status-bar"]')
-      .evaluate((el) => getComputedStyle(el).position)
-    expect(position, 'status-bar must have position:sticky for robust sticky layout').toBe('sticky')
+  test('PCanvas is the shell root and owns the compact start-sidebar width', async ({ page }) => {
+    const shell = page.locator('p-canvas.shell')
+    await expect(shell).toBeVisible()
+    await expect(shell).toHaveAttribute('data-no-sidecar', '')
+
+    const sidebarWidth = await shell.evaluate((el) =>
+      getComputedStyle(el).getPropertyValue('--p-canvas-sidebar-start-width').trim(),
+    )
+    expect(sidebarWidth).toBe('96px')
   })
 
-  // RED: header className = "shell__status-bar" — no Tailwind z-10 class present
-  test('header has Tailwind z-10 class for stacking context', async ({ page }) => {
-    const classes = await page
-      .locator('[data-region="status-bar"]')
-      .evaluate((el) => el.className)
-    expect(
-      classes,
-      `status-bar className "${classes}" must include Tailwind z-10 class`,
-    ).toContain('z-10')
-  })
-
-  // GREEN regression guard (per AC1 cycle-3 — retain, do not prune): inject tall content into
-  // [data-region="workspace"], scroll workspace past viewport height, assert header remains visible.
-  // Expected: PASS on write (position:sticky + grid layout keeps header visible after workspace scroll).
-  test('header remains visible after workspace is scrolled past viewport height (behavioral regression guard)', async ({
-    page,
-  }) => {
-    // Inject content taller than viewport so [data-region="workspace"] can scroll
+  test('header-end status bar stays visible while the board workspace scrolls', async ({ page }) => {
     await page.locator('[data-region="workspace"]').evaluate((el) => {
-      const div = document.createElement('div')
-      div.style.height = '2000px'
-      el.appendChild(div)
-    })
-    // Scroll workspace past viewport height
-    await page.locator('[data-region="workspace"]').evaluate((el) => {
+      const spacer = document.createElement('div')
+      spacer.style.height = '2000px'
+      el.appendChild(spacer)
       el.scrollTop = 1500
     })
-    // Assert header is still visible after workspace scroll
+
     await expect(page.locator('[data-region="status-bar"]')).toBeVisible()
+    await expect(page.getByRole('img', { name: 'Porsche' })).toBeVisible()
   })
 
-})
-
-// ─── AC2: Responsive sidecar column width ─────────────────────────────────────
-//
-// Contract:
-//   • At viewport width < 1024px (without manual collapse): sidecar grid column
-//     renders 40–56px wide (icon-strip, not full detail panel).
-//   • At viewport width >= 1024px: sidecar renders approximately 360px wide.
-//
-// RED: Shell.css @media(768–1023px) sets grid-template-columns: 56px minmax(0,1fr) 240px
-//      → sidecar = 240px at 1023px viewport — outside the 40–56px required range.
-//
-// Precondition: data-sidecar-collapsed must NOT be set (responsive narrow ≠ manual collapse).
-
-test.describe('TestFromAC_ResponsiveSidecar', () => {
-  // ─── at 1023px: narrow icon-strip sidecar ────────────────────────────────────
-
-  test.describe('at 1023px viewport (below 1024px breakpoint)', () => {
-    test.use({ viewport: { width: 1023, height: 800 } })
-
-    test.beforeEach(async ({ page }) => {
-      await stubApis(page)
-      await page.goto('/')
-      await page.locator('[data-region="status-bar"]').waitFor({ state: 'visible' })
-    })
-
-    // RED: sidecar = 240px at 1023px (via @media 768–1023px rule) — fails 40–56px constraint
-    test('sidecar column is 40–56px wide at 1023px without manual collapse', async ({ page }) => {
-      const collapsed = await page
-        .locator('.shell')
-        .evaluate((el) => el.hasAttribute('data-sidecar-collapsed'))
-      expect(
-        collapsed,
-        'data-sidecar-collapsed must NOT be set — responsive narrow is independent of manual collapse',
-      ).toBe(false)
-
-      const box = await page.locator('[data-region="sidecar"]').boundingBox()
-      expect(box, 'sidecar bounding box must exist at 1023px').not.toBeNull()
-      expect(
-        box!.width,
-        `sidecar width (${box!.width}px) must be at least 40px at 1023px`,
-      ).toBeGreaterThanOrEqual(40)
-      expect(
-        box!.width,
-        `sidecar width (${box!.width}px) must be at most 56px at 1023px`,
-      ).toBeLessThanOrEqual(56)
-    })
-
-    // Boundary: 1023px is 1px below the 1024px cutoff — sidecar must be narrow, not full panel
-    test('sidecar is significantly narrower than desktop width at 1023px (breakpoint boundary)', async ({
-      page,
-    }) => {
-      const collapsed = await page
-        .locator('.shell')
-        .evaluate((el) => el.hasAttribute('data-sidecar-collapsed'))
-      expect(collapsed, 'data-sidecar-collapsed must NOT be set for boundary test').toBe(false)
-
-      const box = await page.locator('[data-region="sidecar"]').boundingBox()
-      expect(box, 'sidecar must have a bounding box at 1023px').not.toBeNull()
-      // Sidecar must NOT be full desktop width (300+px) at 1023px
-      expect(
-        box!.width,
-        `sidecar width (${box!.width}px) must be < 100px at 1023px (icon-strip, not full panel)`,
-      ).toBeLessThan(100)
-    })
+  test('start sidebar contains icon-only workspace navigation', async ({ page }) => {
+    const navRail = page.locator('[slot="sidebar-start"][data-region="nav-rail"]')
+    await expect(navRail).toBeVisible()
+    await expect(navRail.locator('[data-surface="kanban"]')).toHaveAttribute('aria-label', 'Kanban')
+    await expect(navRail.locator('[data-surface="kanban"] p-icon')).toBeVisible()
+    await expect(navRail.locator('[data-surface="kanban"]')).not.toContainText('Kanban')
   })
 
-  // ─── at 1024px: full detail panel ────────────────────────────────────────────
-  //
-  // GREEN already — sidecar = 360px at >=1024px in current CSS.
-  // Included as regression guard: Tailwind migration must preserve desktop sidecar width.
+  test('retired right sidecar and collapse state are absent', async ({ page }) => {
+    await expect(page.locator('[data-region="sidecar"]')).toHaveCount(0)
+    await expect(page.locator('[slot="sidebar-end"]')).toHaveCount(0)
+    await expect(page.locator('[slot="sidebar-end-header"]')).toHaveCount(0)
+    await expect(page.locator('[data-testid="sidecar-collapse"]')).toHaveCount(0)
+    await expect(page.locator('.shell')).not.toHaveAttribute('data-sidecar-collapsed', /.+/)
+  })
 
-  test.describe('at 1024px viewport (at or above 1024px breakpoint)', () => {
-    test.use({ viewport: { width: 1024, height: 800 } })
+  test('task detail opens as a modal without changing shell width', async ({ page }) => {
+    const before = await page.locator('[data-region="workspace"]').boundingBox()
+    expect(before).not.toBeNull()
 
-    test.beforeEach(async ({ page }) => {
-      await stubApis(page)
-      await page.goto('/')
-      await page.locator('[data-region="status-bar"]').waitFor({ state: 'visible' })
-    })
+    await page.locator('[data-testid="task-card"]').click()
+    await expect(page.locator('[data-testid="task-detail-modal"]')).toBeVisible()
+    await expect(page.locator('[data-region="sidecar"]')).toHaveCount(0)
 
-    // GREEN currently (regression guard): sidecar = 360px at 1024px
-    test('sidecar column is approximately 360px wide at 1024px (regression guard)', async ({
-      page,
-    }) => {
-      const collapsed = await page
-        .locator('.shell')
-        .evaluate((el) => el.hasAttribute('data-sidecar-collapsed'))
-      expect(collapsed, 'data-sidecar-collapsed must NOT be set').toBe(false)
-
-      const box = await page.locator('[data-region="sidecar"]').boundingBox()
-      expect(box, 'sidecar bounding box must exist at 1024px').not.toBeNull()
-      expect(
-        box!.width,
-        `sidecar width (${box!.width}px) must be approximately 360px at 1024px`,
-      ).toBeGreaterThanOrEqual(340)
-      expect(
-        box!.width,
-        `sidecar width (${box!.width}px) must be approximately 360px at 1024px`,
-      ).toBeLessThanOrEqual(380)
-    })
+    const after = await page.locator('[data-region="workspace"]').boundingBox()
+    expect(after).not.toBeNull()
+    expect(Math.abs(after!.width - before!.width)).toBeLessThan(1)
   })
 })
 
-// ─── AC3: Tailwind migration — Shell.css structure + layout class enforcement ──
-//
-// Contract:
-//   • Shell layout uses Tailwind utility classes for all layout properties.
-//   • Shell.css retains only grid-template-areas definitions and CSS custom-property
-//     aliases — no layout property rules remain in CSS.
-//   • No inline style={{}} attributes for layout properties on shell elements.
-//
-// RED (DOM checks): shell/header className have no Tailwind layout classes.
-// RED (file checks): Shell.css contains display, height, overflow, position, z-index rules.
-
-test.describe('TestFromAC_TailwindCSSStructure', () => {
-  // ─── DOM: Tailwind classes on shell elements ──────────────────────────────────
-
-  test.use({ viewport: { width: 1280, height: 800 } })
+test.describe('PCanvas shell at narrow laptop width', () => {
+  test.use({ viewport: { width: 768, height: 844 } })
 
   test.beforeEach(async ({ page }) => {
     await stubApis(page)
     await page.goto('/')
-    await page.locator('[data-region="status-bar"]').waitFor({ state: 'visible' })
+    await page.locator('[data-region="workspace"]').waitFor({ state: 'visible' })
   })
 
-  // RED: shell root className="shell" — no Tailwind 'grid' class
-  test('shell root element has Tailwind grid class (display:grid via Tailwind)', async ({
-    page,
-  }) => {
-    const classes = await page.locator('.shell').evaluate((el) => el.className)
-    expect(
-      classes,
-      `shell root className "${classes}" must include Tailwind 'grid' class`,
-    ).toContain('grid')
+  test('no sidecar width is reserved at 768px', async ({ page }) => {
+    await expect(page.locator('[data-region="sidecar"]')).toHaveCount(0)
+    const workspace = await page.locator('[data-region="workspace"]').boundingBox()
+    expect(workspace).not.toBeNull()
+    expect(workspace!.width).toBeGreaterThan(600)
   })
 
-  // RED: shell root has no Tailwind 'h-screen' class (height:100vh in CSS only)
-  test('shell root element has Tailwind h-screen class (height:100vh via Tailwind)', async ({
-    page,
-  }) => {
-    const classes = await page.locator('.shell').evaluate((el) => el.className)
-    expect(
-      classes,
-      `shell root className "${classes}" must include Tailwind 'h-screen' class`,
-    ).toContain('h-screen')
+  test('task detail modal remains inside the viewport at 768px', async ({ page }) => {
+    await page.locator('[data-testid="task-card"]').click()
+    await expect(page.locator('[data-testid="task-detail-modal"]')).toBeVisible()
+
+    const windowBox = await page.locator('[data-region="task-detail-window"]').boundingBox()
+    expect(windowBox).not.toBeNull()
+    expect(windowBox!.x).toBeGreaterThanOrEqual(0)
+    expect(windowBox!.x + windowBox!.width).toBeLessThanOrEqual(768)
+  })
+})
+
+test.describe('PCanvas shell on direct workspace routes', () => {
+  test.use({ viewport: { width: 1440, height: 900 } })
+
+  test('direct Ideas route waits for the shell grid before painting workspace content', async ({ page }) => {
+    await stubApis(page)
+    await page.goto('/ideas')
+    await page.locator('[data-region="ideas-workspace"]').waitFor({ state: 'visible' })
+
+    const workspace = await page.locator('[data-region="workspace"]').boundingBox()
+    const ideas = await page.locator('[data-region="ideas-workspace"]').boundingBox()
+    const statusBar = await page.locator('[data-region="status-bar"]').boundingBox()
+    const editor = await page.locator('[data-testid="ideas-editor-shell"]').boundingBox()
+    const statePanel = await page.locator('[data-testid="ideas-state-panel"]').boundingBox()
+
+    expect(workspace).not.toBeNull()
+    expect(ideas).not.toBeNull()
+    expect(statusBar).not.toBeNull()
+    expect(editor).not.toBeNull()
+    expect(statePanel).not.toBeNull()
+    expect(workspace!.width).toBeGreaterThan(1_000)
+    expect(ideas!.width).toBeGreaterThan(1_000)
+    expect(statusBar!.width).toBeGreaterThan(200)
+    expect(statePanel!.x).toBeGreaterThan(editor!.x + editor!.width)
+    expect(Math.abs(statePanel!.y - editor!.y)).toBeLessThan(4)
+  })
+})
+
+test.describe('PCanvas shell on direct workspace routes at narrow laptop width', () => {
+  test.use({ viewport: { width: 768, height: 844 } })
+
+  test('direct Memory route gives filters enough width at 768px', async ({ page }) => {
+    await stubApis(page)
+    await page.goto('/memories')
+    await page.locator('[data-testid="memory-tab"]').waitFor({ state: 'visible' })
+
+    const panel = await page.locator('[data-testid="memory-filter-panel"]').boundingBox()
+    const stateFilter = await page.locator('p-multi-select[name="state-filter"]').boundingBox()
+    const categoryFilter = await page.locator('p-multi-select[name="category-filter"]').boundingBox()
+    const agentFilter = await page.locator('p-select[name="agent-filter"]').boundingBox()
+    const searchFilter = await page.locator('p-input-search[name="memory-search"]').boundingBox()
+
+    expect(panel).not.toBeNull()
+    expect(stateFilter).not.toBeNull()
+    expect(categoryFilter).not.toBeNull()
+    expect(agentFilter).not.toBeNull()
+    expect(searchFilter).not.toBeNull()
+    expect(panel!.width).toBeGreaterThan(680)
+    expect(stateFilter!.width).toBeGreaterThan(300)
+    expect(categoryFilter!.x).toBeGreaterThan(stateFilter!.x + stateFilter!.width)
+    expect(agentFilter!.y).toBeGreaterThan(stateFilter!.y + stateFilter!.height - 2)
+    expect(Math.abs(searchFilter!.y - agentFilter!.y)).toBeLessThan(2)
   })
 
-  // RED: header has no Tailwind 'sticky' class (position:sticky moved from CSS to Tailwind)
-  test('header element has Tailwind sticky class', async ({ page }) => {
-    const classes = await page
-      .locator('[data-region="status-bar"]')
-      .evaluate((el) => el.className)
-    expect(
-      classes,
-      `status-bar className "${classes}" must include Tailwind 'sticky' class`,
-    ).toContain('sticky')
-  })
+  test('direct Decisions route keeps the resolve modal inside the 768px viewport', async ({ page }) => {
+    await stubApis(page, { decisions: { count: 1, items: [DECISION] } })
+    await page.goto('/decisions')
+    await page.locator('[data-testid="decisions-page"]').waitFor({ state: 'visible' })
+    await page.locator('[data-testid="dr-item-dr-route-001"]').click()
+    await expect(page.locator('[data-testid="resolve-modal"]')).toBeVisible()
 
-  // RED: header has no Tailwind 'top-0' class
-  test('header element has Tailwind top-0 class', async ({ page }) => {
-    const classes = await page
-      .locator('[data-region="status-bar"]')
-      .evaluate((el) => el.className)
-    expect(
-      classes,
-      `status-bar className "${classes}" must include Tailwind 'top-0' class`,
-    ).toContain('top-0')
-  })
+    const surface = await page.locator('[data-testid="resolve-modal-surface"]').boundingBox()
+    const responseSelector = await page.locator('[data-testid="response-selector"]').boundingBox()
+    const notes = await page.locator('[data-testid="resolve-notes"]').boundingBox()
+    const submit = await page.locator('[data-testid="resolve-submit"]').boundingBox()
+    const cancel = await page.locator('[data-testid="resolve-cancel"]').boundingBox()
 
-  // ─── File: Shell.css must not contain layout property rules ──────────────────
-  //
-  // These run in Node.js context — no page parameter needed.
-  // RED: Shell.css currently contains all of the following layout properties.
-
-  // RED: .shell { display: grid } → 'display:' present in current Shell.css
-  test('Shell.css does not contain display property rules', async () => {
-    const css = fs.readFileSync(SHELL_CSS_PATH, 'utf-8')
-    expect(
-      css,
-      'Shell.css must not contain "display:" rules (move display to Tailwind)',
-    ).not.toMatch(/^\s*display\s*:/m)
-  })
-
-  // RED: .shell { height: 100vh } → 'height:' present in current Shell.css
-  test('Shell.css does not contain height property rules', async () => {
-    const css = fs.readFileSync(SHELL_CSS_PATH, 'utf-8')
-    expect(
-      css,
-      'Shell.css must not contain "height:" rules (move height to Tailwind)',
-    ).not.toMatch(/^\s*height\s*:/m)
-  })
-
-  // RED: .shell__workspace { overflow: auto } and others → 'overflow' present in Shell.css
-  test('Shell.css does not contain overflow property rules', async () => {
-    const css = fs.readFileSync(SHELL_CSS_PATH, 'utf-8')
-    expect(
-      css,
-      'Shell.css must not contain "overflow" rules (move overflow to Tailwind)',
-    ).not.toMatch(/^\s*overflow(-[xy])?\s*:/m)
-  })
-
-  // RED: .shell__mobile-sheet--open { position: fixed } → 'position:' present in Shell.css
-  test('Shell.css does not contain position property rules', async () => {
-    const css = fs.readFileSync(SHELL_CSS_PATH, 'utf-8')
-    expect(
-      css,
-      'Shell.css must not contain "position:" rules (move position to Tailwind)',
-    ).not.toMatch(/^\s*position\s*:/m)
-  })
-
-  // RED: .shell__mobile-sheet--open { z-index: 20 } → 'z-index:' present in Shell.css
-  test('Shell.css does not contain z-index property rules', async () => {
-    const css = fs.readFileSync(SHELL_CSS_PATH, 'utf-8')
-    expect(
-      css,
-      'Shell.css must not contain "z-index:" rules (move z-index to Tailwind)',
-    ).not.toMatch(/^\s*z-index\s*:/m)
-  })
-
-  // ─── File: Shell.css remaining banned property families (padding) ─────────────
-  //
-  // AC3 bans 8 CSS property families. Previous tests covered: display, height,
-  // overflow, position, z-index. Width and gap are already compliant (no rules
-  // present in Shell.css). Padding still has a violation: #shell-sidecar-content.
-
-  // RED: #shell-sidecar-content { padding: var(--p-spacing-static-md) } still in Shell.css
-  test('Shell.css does not contain padding property rules', async () => {
-    const css = fs.readFileSync(SHELL_CSS_PATH, 'utf-8')
-    expect(
-      css,
-      'Shell.css must not contain "padding:" rules (move padding to Tailwind)',
-    ).not.toMatch(/^\s*padding(-\w+)?\s*:/m)
-  })
-
-  // RED: Shell.css contains grid-template-columns in .shell base rule and .shell[data-sidecar-collapsed].
-  // Per AC3 cycle-3 refinement: grid-template-columns is newly banned.
-  // Tailwind arbitrary value [grid-template-columns:var(--shell-columns)] already handles binding.
-  test('Shell.css does not contain grid-template-columns property rules', async () => {
-    const css = fs.readFileSync(SHELL_CSS_PATH, 'utf-8')
-    expect(
-      css,
-      'Shell.css must not contain "grid-template-columns:" rules (newly banned per AC3 cycle-3; use Tailwind arbitrary value)',
-    ).not.toMatch(/^\s*grid-template-columns\s*:/m)
-  })
-
-  // RED: Shell.css contains grid-template-rows in .shell base rule.
-  // Per AC3 cycle-3 refinement: grid-template-rows is newly banned.
-  // Tailwind arbitrary value [grid-template-rows:var(--shell-rows)] already handles binding.
-  test('Shell.css does not contain grid-template-rows property rules', async () => {
-    const css = fs.readFileSync(SHELL_CSS_PATH, 'utf-8')
-    expect(
-      css,
-      'Shell.css must not contain "grid-template-rows:" rules (newly banned per AC3 cycle-3; use Tailwind arbitrary value)',
-    ).not.toMatch(/^\s*grid-template-rows\s*:/m)
-  })
-
-  // GREEN regression guard: width is banned; Shell.css currently has no width rules.
-  test('Shell.css does not contain width property rules (regression guard)', async () => {
-    const css = fs.readFileSync(SHELL_CSS_PATH, 'utf-8')
-    expect(
-      css,
-      'Shell.css must not contain "width:" rules (width is banned per AC3)',
-    ).not.toMatch(/^\s*width\s*:/m)
-  })
-
-  // GREEN regression guard: gap is banned; Shell.css currently has no gap rules.
-  test('Shell.css does not contain gap property rules (regression guard)', async () => {
-    const css = fs.readFileSync(SHELL_CSS_PATH, 'utf-8')
-    expect(
-      css,
-      'Shell.css must not contain "gap:" rules (gap is banned per AC3)',
-    ).not.toMatch(/^\s*gap\s*:/m)
-  })
-
-  // GREEN regression guard: .shell root and [data-region] children must have no inline style attribute.
-  // Per AC3: "DOM no-inline-style on .shell and [data-region] children".
-  test('shell root and data-region children have no inline style attributes (regression guard)', async ({
-    page,
-  }) => {
-    const shellStyle = await page.locator('.shell').evaluate((el) => el.getAttribute('style'))
-    expect(shellStyle, 'shell root (.shell) must not have inline style attribute').toBeNull()
-
-    const regionStyles = await page.locator('[data-region]').evaluateAll((els) =>
-      els.map((el) => ({ region: el.getAttribute('data-region'), style: el.getAttribute('style') })),
-    )
-    for (const { region, style } of regionStyles) {
-      expect(
-        style,
-        `[data-region="${region}"] must not have inline style attribute`,
-      ).toBeNull()
+    expect(surface).not.toBeNull()
+    expect(responseSelector).not.toBeNull()
+    expect(notes).not.toBeNull()
+    expect(submit).not.toBeNull()
+    expect(cancel).not.toBeNull()
+    for (const box of [surface, responseSelector, notes, submit, cancel]) {
+      expect(box!.x).toBeGreaterThanOrEqual(0)
+      expect(box!.x + box!.width).toBeLessThanOrEqual(768)
+      expect(box!.y).toBeGreaterThanOrEqual(0)
+      expect(box!.y + box!.height).toBeLessThanOrEqual(844)
     }
   })
 })

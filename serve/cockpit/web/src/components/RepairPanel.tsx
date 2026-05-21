@@ -1,5 +1,6 @@
 import type { RepairOutcome } from '../api/repair'
 import { useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { PButton, PModal, PSpinner, PText } from '@porsche-design-system/components-react'
 import { useRepairFlow } from '../hooks/useRepairFlow'
 import './RepairPanel.css'
@@ -8,6 +9,7 @@ export interface RepairPanelProps {
   corruptionCount: number
   onSuccess?: () => void
   files?: Array<Pick<RepairOutcome, 'file_path' | 'code'>>
+  portalConfirmDialog?: boolean
 }
 
 function renderOutcomeRows(outcomes: RepairOutcome[]) {
@@ -19,7 +21,7 @@ function renderOutcomeRows(outcomes: RepairOutcome[]) {
   ))
 }
 
-export default function RepairPanel({ corruptionCount, onSuccess, files = [] }: RepairPanelProps) {
+export default function RepairPanel({ corruptionCount, onSuccess, files = [], portalConfirmDialog = false }: RepairPanelProps) {
   const modalRef = useRef<HTMLElement | null>(null)
   const previousFocusRef = useRef<HTMLElement | null>(null)
   const {
@@ -118,47 +120,60 @@ export default function RepairPanel({ corruptionCount, onSuccess, files = [] }: 
   }
 
   if (phase === 'confirming') {
-    return (
-      <>
-        <div className="repair-button-placeholder" aria-hidden="true" />
-        <PModal
-          ref={modalRef}
-          className="repair-confirm-modal"
-          data-testid="repair-confirm-dialog"
-          aria-label="Confirm storage repair"
-          tabIndex={-1}
-          open
-          onDismiss={cancelRepair}
-          onKeyDown={handleConfirmDialogKeyDown}
-          disableBackdropClick
-          dismissButton={false}
-        >
-          <PText>
-            This will attempt to repair {requestedCount} corrupted files. Fixed files are restored,
-            quarantined files are moved to the quarantine directory (.owlbear/scratch/quarantine),
-            and failed files remain corrupted. This action can be irreversible and cannot be undone.
-          </PText>
+    const dialog = (
+      <PModal
+        ref={modalRef}
+        data-testid="repair-confirm-dialog"
+        aria-label="Confirm storage repair"
+        aria={{ role: 'alertdialog', 'aria-label': 'Confirm storage repair' }}
+        tabIndex={-1}
+        open
+        onDismiss={cancelRepair}
+        onKeyDown={handleConfirmDialogKeyDown}
+        disableBackdropClick
+        dismissButton={false}
+      >
+        <div className="grid max-w-[640px] gap-static-md text-primary">
+          <div className="grid gap-static-xs rounded-lg border border-contrast-low bg-canvas p-static-md">
+            <span className="text-xs font-semibold uppercase text-primary">Storage repair</span>
+            <h2 className="m-0 text-xl font-semibold leading-tight text-primary">Repair {requestedCount} corrupted files?</h2>
+            <p className="m-0 text-sm leading-normal text-primary">
+              Fixed files are restored, quarantined files move to .owlbear/scratch/quarantine, and failed files remain corrupted. This action can be irreversible.
+            </p>
+          </div>
           {files.length > 0 ? (
-            <ul>
+            <ul className="m-0 grid max-h-[min(32vh,220px)] gap-static-xs overflow-y-auto p-0">
               {files.map((file, index) => (
-                <li key={`${file.file_path}-${file.code}-${index}`}>
-                  <span>{file.file_path}</span>
+                <li key={`${file.file_path}-${file.code}-${index}`} className="grid gap-1 rounded-lg border border-contrast-low bg-surface p-static-sm">
+                  <span className="break-all font-mono text-xs leading-normal text-primary">{file.file_path}</span>
+                  <span className="w-fit rounded-full border border-error bg-error px-static-xs py-1 text-xs font-semibold leading-none text-canvas">{file.code}</span>
                 </li>
               ))}
             </ul>
           ) : null}
-          <PButton
-            data-testid="repair-confirm-button"
-            onClick={() => {
-              void confirmRepair()
-            }}
-          >
-            Confirm
-          </PButton>
-          <PButton data-testid="repair-cancel-btn" variant="secondary" onClick={cancelRepair}>
-            Cancel
-          </PButton>
-        </PModal>
+          <div className="flex flex-wrap items-center justify-end gap-static-xs">
+            <PButton data-testid="repair-cancel-btn" variant="secondary" onClick={cancelRepair}>
+              Cancel
+            </PButton>
+            <PButton
+              data-testid="repair-confirm-button"
+              onClick={() => {
+                void confirmRepair()
+              }}
+            >
+              Run repair
+            </PButton>
+          </div>
+        </div>
+      </PModal>
+    )
+
+    return (
+      <>
+        <div className="repair-button-placeholder" aria-hidden="true" />
+        {portalConfirmDialog && typeof document !== 'undefined'
+          ? createPortal(dialog, document.body)
+          : dialog}
       </>
     )
   }

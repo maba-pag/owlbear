@@ -3,7 +3,7 @@
  *
  * Covers:
  *   AC1 — Successful task-move (drag-drop or context-menu) triggers PToast:
- *          onMutationSuccess called with text containing target status name;
+ *          onMutationSuccess called with text containing the formatted target status;
  *          Shell calls useToastManager().addMessage with state='success';
  *          App mounts <PToast /> inside PorscheDesignSystemProvider.
  *   AC3 — Mutation error/warning paths unchanged: PBanner still renders
@@ -347,7 +347,7 @@ describe('TestFromAC_KanbanBoardMoveMessage', () => {
     fireEvent.click(item)
   }
 
-  it('drag-drop move calls onMutationSuccess with string containing target status', async () => {
+  it('drag-drop move calls onMutationSuccess with string containing formatted target status', async () => {
     stubMoveFetchOk()
     const spy = vi.fn()
     const { container } = renderRealBoard({ onMutationSuccess: spy })
@@ -357,11 +357,11 @@ describe('TestFromAC_KanbanBoardMoveMessage', () => {
 
     // Fails RED: currently called as onMutationSuccess?.() with no arguments.
     await waitFor(() => {
-      expect(spy).toHaveBeenCalledWith(expect.stringContaining('todo'))
+      expect(spy).toHaveBeenCalledWith(expect.stringContaining('Todo'))
     })
   })
 
-  it('context-menu transition calls onMutationSuccess with string containing target status', async () => {
+  it('context-menu transition calls onMutationSuccess with string containing formatted target status', async () => {
     stubMoveFetchOk()
     const spy = vi.fn()
     const { container } = renderRealBoard({ onMutationSuccess: spy })
@@ -370,7 +370,7 @@ describe('TestFromAC_KanbanBoardMoveMessage', () => {
 
     // Fails RED: currently called as onMutationSuccess?.() with no arguments.
     await waitFor(() => {
-      expect(spy).toHaveBeenCalledWith(expect.stringContaining('todo'))
+      expect(spy).toHaveBeenCalledWith(expect.stringContaining('Todo'))
     })
   })
 })

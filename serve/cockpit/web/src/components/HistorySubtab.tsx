@@ -40,14 +40,22 @@ export default function HistorySubtab({ sessions, onSelectTask }: HistorySubtabP
   }
 
   return (
-    <div data-testid="history-view">
+    <div data-testid="history-view" className="grid gap-static-xs">
+      {sessions.length === 0 ? (
+        <p data-testid="history-empty-state" className="m-0 rounded-lg border border-contrast-low bg-surface p-static-sm text-sm text-primary">
+          No history yet
+        </p>
+      ) : null}
       {sessions.map((s, i) => (
         <div
           key={i}
           data-testid="history-session-row"
           data-state={s.state}
           role="button"
+          aria-disabled={s.task_id === null ? 'true' : undefined}
+          aria-label={s.task_id !== null ? `Open task #${s.task_id} history` : 'Session without linked task'}
           tabIndex={0}
+          className="history-session-row grid min-h-12 gap-1 rounded-md border border-contrast-low bg-surface p-static-xs text-sm text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)] sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center"
           onClick={() => navigateToTask(s.task_id)}
           onKeyDown={(event) => {
             if (event.key === 'Enter' || event.key === ' ') {
@@ -56,9 +64,9 @@ export default function HistorySubtab({ sessions, onSelectTask }: HistorySubtabP
             }
           }}
         >
-          <span data-testid="session-agent">{s.agent ?? 'unknown agent'}</span>
-          <span data-testid="session-duration">{formatDuration(s.duration)}</span>
-          <span data-testid="session-outcome">{s.outcome}</span>
+          <span data-testid="session-agent" className="min-w-0 truncate font-semibold">{s.agent ?? 'unknown agent'}</span>
+          <span data-testid="session-duration" className="rounded-full bg-canvas px-static-xs py-1 text-xs font-semibold">{formatDuration(s.duration)}</span>
+          <span data-testid="session-outcome" className="text-xs font-semibold text-primary">{s.outcome ?? s.state}</span>
         </div>
       ))}
     </div>

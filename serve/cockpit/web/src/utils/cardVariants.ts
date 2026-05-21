@@ -1,20 +1,20 @@
 import type { TagVariant } from '@porsche-design-system/components-react'
 
 const STATUS_VARIANTS: Record<string, TagVariant> = {
-  research: 'primary',
+  research: 'secondary',
   backlog: 'info',
-  todo: 'success',
-  'in-progress': 'warning',
+  todo: 'secondary',
+  'in-progress': 'info',
   review: 'info',
   docs: 'secondary',
   done: 'success',
 }
 
 const PRIORITY_VARIANTS: Record<string, TagVariant> = {
-  someday: 'primary',
+  someday: 'secondary',
   'nice-to-have': 'secondary',
-  important: 'warning',
-  needed: 'warning',
+  important: 'info',
+  needed: 'info',
   critical: 'error',
 }
 

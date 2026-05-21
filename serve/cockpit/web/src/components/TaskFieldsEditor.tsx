@@ -72,7 +72,11 @@ export function parseParent(raw: string): { value: number | null; error: string 
 }
 
 function setHideLabelAttr(element: HTMLElement | null): void {
-  element?.setAttribute('hide-label', '')
+  if (!element) {
+    return
+  }
+  element.setAttribute('hide-label', '')
+  ;(element as HTMLElement & { hideLabel?: boolean }).hideLabel = true
 }
 
 function readControlValue(
@@ -212,49 +216,92 @@ export default function TaskFieldsEditor({
   }
 
   return (
-    <>
-      <PInputText
-        ref={setHideLabelAttr}
-        name="title"
-        label="Title"
-        data-field="title"
-        value={title}
-        onChange={(event) => setTitle(readControlValue(event))}
-        onInput={(event) => setTitle(readControlValue(event))}
-      />
-      <PSelect
-        ref={setHideLabelAttr}
-        name="priority"
-        label="Priority"
-        data-field="priority"
-        value={priority}
-        onChange={(event) => setPriority(readControlValue(event))}
-      >
-        {priorities.map((p) => (
-          <PSelectOption key={p} value={p}>{p}</PSelectOption>
-        ))}
-      </PSelect>
-      {task.tags.map((tag) => (
-        <PTag key={tag} data-testid="tag-chip">{tag}</PTag>
-      ))}
-      <PInputText
-        ref={setHideLabelAttr}
-        name="depends_on"
-        label="Depends on"
-        data-field="depends_on"
-        value={dependsOn}
-        onChange={(event) => setDependsOn(readControlValue(event))}
-        onInput={(event) => setDependsOn(readControlValue(event))}
-      />
-      <PInputText
-        ref={setHideLabelAttr}
-        name="parent"
-        label="Parent"
-        data-field="parent"
-        value={parent}
-        onChange={(event) => setParent(readControlValue(event))}
-        onInput={(event) => setParent(readControlValue(event))}
-      />
+    <div className="grid gap-static-sm">
+      <div className="grid gap-static-sm lg:grid-cols-[minmax(0,1fr)_14rem]">
+        <PInputText
+          ref={setHideLabelAttr}
+          name="title"
+          label="Title"
+          data-field="title"
+          value={title}
+          onChange={(event) => setTitle(readControlValue(event))}
+          onInput={(event) => setTitle(readControlValue(event))}
+        />
+        <PSelect
+          ref={setHideLabelAttr}
+          name="priority"
+          label="Priority"
+          data-field="priority"
+          value={priority}
+          onChange={(event) => setPriority(readControlValue(event))}
+        >
+          {priorities.map((p) => (
+            <PSelectOption key={p} value={p}>{p}</PSelectOption>
+          ))}
+        </PSelect>
+      </div>
+
+      {task.tags.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-static-xs">
+          {task.tags.map((tag) => (
+            <PTag key={tag} data-testid="tag-chip" compact>{tag}</PTag>
+          ))}
+        </div>
+      ) : null}
+
+      <section className="rounded-lg border border-contrast-low bg-surface p-static-md">
+        <div className="mb-static-xs flex min-w-0 flex-wrap items-center justify-between gap-static-xs">
+          <span className="text-sm font-semibold text-contrast-high">Brief</span>
+          <PButton
+            data-testid="body-edit-toggle"
+            variant="secondary"
+            compact
+            onClick={() => setEditBody((v) => !v)}
+          >
+            {editBody ? 'Preview' : 'Edit'}
+          </PButton>
+        </div>
+
+        {editBody ? (
+          <PTextarea
+            ref={setHideLabelAttr}
+            name="body"
+            label="Body"
+            data-field="body"
+            value={body}
+            onChange={(event) => setBody(readControlValue(event))}
+            onInput={(event) => setBody(readControlValue(event))}
+          />
+        ) : (
+          <div className="text-sm text-primary">
+            <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>
+              {body}
+            </ReactMarkdown>
+          </div>
+        )}
+      </section>
+
+      <div className="grid gap-static-sm lg:grid-cols-2">
+        <PInputText
+          ref={setHideLabelAttr}
+          name="depends_on"
+          label="Depends on"
+          data-field="depends_on"
+          value={dependsOn}
+          onChange={(event) => setDependsOn(readControlValue(event))}
+          onInput={(event) => setDependsOn(readControlValue(event))}
+        />
+        <PInputText
+          ref={setHideLabelAttr}
+          name="parent"
+          label="Parent"
+          data-field="parent"
+          value={parent}
+          onChange={(event) => setParent(readControlValue(event))}
+          onInput={(event) => setParent(readControlValue(event))}
+        />
+      </div>
+
       {task.blocked && (
         <PInputText
           ref={setHideLabelAttr}
@@ -267,38 +314,14 @@ export default function TaskFieldsEditor({
         />
       )}
 
-      {editBody ? (
-        <PTextarea
-          ref={setHideLabelAttr}
-          name="body"
-          label="Body"
-          data-field="body"
-          value={body}
-          onChange={(event) => setBody(readControlValue(event))}
-          onInput={(event) => setBody(readControlValue(event))}
-        />
-      ) : (
-        <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>
-          {body}
-        </ReactMarkdown>
-      )}
-      <PButton
-        data-testid="body-edit-toggle"
-        variant="secondary"
-        onClick={() => setEditBody((v) => !v)}
-      >
-        Edit
-      </PButton>
-
-      {isDirty && <div data-testid="dirty-indicator">Unsaved changes</div>}
-
-      <PButton data-testid="save-button" onClick={() => void handleSave()}>
-        Save
-      </PButton>
-
-      {saveConfirmed && <div data-testid="save-confirmed">Saved</div>}
-
-      {validationMessage && <div data-testid="validation-message">{validationMessage}</div>}
-    </>
+      <div className="flex min-w-0 flex-wrap items-center gap-static-sm">
+        <PButton data-testid="save-button" onClick={() => void handleSave()}>
+          Save
+        </PButton>
+        {isDirty && <div data-testid="dirty-indicator" className="text-sm font-semibold text-warning">Unsaved changes</div>}
+        {saveConfirmed && <div data-testid="save-confirmed" className="text-sm font-semibold text-success">Saved</div>}
+        {validationMessage && <div data-testid="validation-message" className="rounded-lg border border-warning bg-warning-low p-static-xs text-sm text-primary">{validationMessage}</div>}
+      </div>
+    </div>
   )
 }

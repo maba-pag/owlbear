@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, fireEvent } from '@testing-library/react'
+import { render } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
 import Shell from '../Shell'
@@ -54,9 +54,10 @@ describe('TestFromAC_AppShell', () => {
       expect(container.querySelector('[data-region="workspace"]')).not.toBeNull()
     })
 
-    it('renders sidecar region', () => {
+    it('does not render the retired task sidecar region', () => {
       const { container } = renderShell()
-      expect(container.querySelector('[data-region="sidecar"]')).not.toBeNull()
+      expect(container.querySelector('[data-region="sidecar"]')).toBeNull()
+      expect(container.querySelector('.shell')?.hasAttribute('data-no-sidecar')).toBe(true)
     })
 
     it('renders contextual region (reserved/empty)', () => {
@@ -107,52 +108,26 @@ describe('TestFromAC_AppShell', () => {
       expect(workspace?.textContent?.toLowerCase()).not.toContain('hello')
     })
 
-    it('route "/hello" keeps all 5 grid regions present (shell layout unchanged)', () => {
+    it('route "/hello" keeps shell regions present without restoring the task sidecar', () => {
       const { container } = renderShell('/hello')
       expect(container.querySelector('[data-region="status-bar"]')).not.toBeNull()
       expect(container.querySelector('[data-region="nav-rail"]')).not.toBeNull()
       expect(container.querySelector('[data-region="workspace"]')).not.toBeNull()
-      expect(container.querySelector('[data-region="sidecar"]')).not.toBeNull()
+      expect(container.querySelector('[data-region="sidecar"]')).toBeNull()
       expect(container.querySelector('[data-region="contextual"]')).not.toBeNull()
     })
   })
 
-  describe('Sidecar tabs', () => {
-    it('sidecar region contains a p-tabs element', () => {
+  describe('Task detail surface', () => {
+    it('task detail modal is absent until a task is selected', () => {
       const { container } = renderShell()
-      const sidecar = container.querySelector('[data-region="sidecar"]')
-      expect(sidecar?.querySelector('p-tabs')).not.toBeNull()
+      expect(container.querySelector('[data-testid="task-detail-modal"]')).toBeNull()
     })
 
-    it('sidecar has a Detail tab', () => {
+    it('PCanvas end sidebar slots are not used for task detail', () => {
       const { container } = renderShell()
-      const sidecar = container.querySelector('[data-region="sidecar"]')
-      const tabItems = Array.from(sidecar?.querySelectorAll('p-tabs-item') ?? [])
-      const labels = tabItems.map(el => el.getAttribute('label'))
-      expect(labels).toContain('Detail')
-    })
-
-    it('sidecar has an Activity tab', () => {
-      const { container } = renderShell()
-      const sidecar = container.querySelector('[data-region="sidecar"]')
-      const tabItems = Array.from(sidecar?.querySelectorAll('p-tabs-item') ?? [])
-      const labels = tabItems.map(el => el.getAttribute('label'))
-      expect(labels).toContain('Activity')
-    })
-
-    it('switching to Activity tab shows Activity content area', () => {
-      const { container } = renderShell()
-      const sidecar = container.querySelector('[data-region="sidecar"]') as HTMLElement
-      const tabs = sidecar.querySelector('p-tabs') as HTMLElement
-      fireEvent(tabs, new CustomEvent('tabChange', { detail: { activeTabIndex: 1 }, bubbles: true }))
-      expect(sidecar.querySelector('[data-tab-content="detail"]')?.getAttribute('aria-hidden')).toBe('true')
-      expect(sidecar.querySelector('[data-tab-content="activity"]')?.getAttribute('aria-hidden')).toBe('false')
-    })
-
-    it('Detail tab content area is present on initial render', () => {
-      const { container } = renderShell()
-      const sidecar = container.querySelector('[data-region="sidecar"]')
-      expect(sidecar?.querySelector('[data-tab-content="detail"]')).not.toBeNull()
+      expect(container.querySelector('[slot="sidebar-end"]')).toBeNull()
+      expect(container.querySelector('[slot="sidebar-end-header"]')).toBeNull()
     })
   })
 })
@@ -163,5 +138,13 @@ describe('TestBuilderDiscovered', () => {
     const kanbanBtn = container.querySelector('[data-region="nav-rail"] [data-surface="kanban"]')
     const icon = kanbanBtn?.querySelector('p-icon, svg')
     expect(icon).not.toBeNull()
+  })
+
+  it('nav-rail button keeps its text as tooltip and aria-label instead of visible label text', () => {
+    const { container } = renderShell()
+    const kanbanBtn = container.querySelector('[data-region="nav-rail"] [data-surface="kanban"]')
+    expect(kanbanBtn?.getAttribute('aria-label')).toBe('Kanban')
+    expect(kanbanBtn?.getAttribute('title')).toBe('Kanban')
+    expect(kanbanBtn?.textContent).not.toContain('Kanban')
   })
 })

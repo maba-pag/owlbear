@@ -1,25 +1,26 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   PButton,
+  PInputNumber,
   PInputSearch,
+  PInputText,
   PModal,
   PMultiSelect,
   PMultiSelectOption,
   PSelect,
   PSelectOption,
-  PTag,
   PTextarea,
 } from '@porsche-design-system/components-react'
-import type { TagVariant } from '@porsche-design-system/components-react'
 import ReactMarkdown from 'react-markdown'
 import rehypeSanitize from 'rehype-sanitize'
 import remarkGfm from 'remark-gfm'
-import type { KanbanBoardProps } from '../KanbanBoard'
 import { ApiError } from '../api/errors'
 import { getResponseErrorMessage } from '../api/errorMessage'
+import { MEMORY_PENDING_COUNT_EVENT } from '../hooks/usePendingMemoryCount'
 import { usePollingFetch } from '../hooks/usePollingFetch'
 
 type MemoryState = 'pending' | 'curated' | 'approved' | 'deleted'
+type MemoryStateVariant = 'info' | 'success' | 'primary'
 
 interface MemoryEntry {
   id: string
@@ -56,6 +57,11 @@ interface MemoryFilterState {
   text: string
 }
 
+interface ValidationMessage {
+  field: string
+  message: string
+}
+
 const DEFAULT_STATES: MemoryState[] = ['pending', 'curated', 'approved']
 const STATE_PRIORITY: Record<MemoryState, number> = {
   pending: 0,
@@ -63,11 +69,11 @@ const STATE_PRIORITY: Record<MemoryState, number> = {
   approved: 2,
   deleted: 3,
 }
-const STATE_VARIANTS: Record<MemoryState, TagVariant> = {
-  pending: 'warning',
+const STATE_VARIANTS: Record<MemoryState, MemoryStateVariant> = {
+  pending: 'info',
   curated: 'info',
   approved: 'success',
-  deleted: 'secondary',
+  deleted: 'primary',
 }
 
 const INITIAL_FILTER: MemoryFilterState = {
@@ -171,7 +177,18 @@ function splitCSV(value: string): string[] {
     .filter((item) => item.length > 0)
 }
 
-function parseValidationErrors(payload: unknown): string[] {
+function parseValidationField(loc: unknown): string {
+  if (!Array.isArray(loc)) {
+    return 'form'
+  }
+
+  const field = [...loc]
+    .reverse()
+    .find((part) => typeof part === 'string' && part !== 'body')
+  return typeof field === 'string' && field.trim().length > 0 ? field.trim() : 'form'
+}
+
+function parseValidationErrors(payload: unknown): ValidationMessage[] {
   if (typeof payload !== 'object' || payload === null) {
     return []
   }
@@ -185,12 +202,18 @@ function parseValidationErrors(payload: unknown): string[] {
         return null
       }
       const message = (item as { msg?: unknown }).msg
-      return typeof message === 'string' && message.trim().length > 0 ? message.trim() : null
+      if (typeof message !== 'string' || message.trim().length === 0) {
+        return null
+      }
+      return {
+        field: parseValidationField((item as { loc?: unknown }).loc),
+        message: message.trim(),
+      }
     })
-    .filter((message): message is string => message !== null)
+    .filter((message): message is ValidationMessage => message !== null)
 }
 
-function parseMutationErrorPayload(payload: unknown): { validationMessages: string[]; message: string | null } {
+function parseMutationErrorPayload(payload: unknown): { validationMessages: ValidationMessage[]; message: string | null } {
   const validationMessages = parseValidationErrors(payload)
   if (validationMessages.length > 0) {
     return { validationMessages, message: null }
@@ -211,6 +234,18 @@ function parseMutationErrorPayload(payload: unknown): { validationMessages: stri
   return { validationMessages: [], message: null }
 }
 
+function pendingValue(entry: MemoryEntry | null): number {
+  return entry?.state === 'pending' ? 1 : 0
+}
+
+function emitPendingCountDelta(before: MemoryEntry, after: MemoryEntry | null): void {
+  const delta = pendingValue(after) - pendingValue(before)
+  if (delta === 0) {
+    return
+  }
+  window.dispatchEvent(new CustomEvent(MEMORY_PENDING_COUNT_EVENT, { detail: { delta } }))
+}
+
 function makeInitialDraft(entry: MemoryEntry): MemoryEditPayload {
   return {
     title: entry.title,
@@ -222,7 +257,7 @@ function makeInitialDraft(entry: MemoryEntry): MemoryEditPayload {
   }
 }
 
-function MemoryTab(_props: KanbanBoardProps) {
+function MemoryTab() {
   const [entries, setEntries] = useState<MemoryEntry[]>([])
   const [parseErrors, setParseErrors] = useState(0)
   const [filter, setFilter] = useState<MemoryFilterState>(INITIAL_FILTER)
@@ -231,7 +266,7 @@ function MemoryTab(_props: KanbanBoardProps) {
   const [editDraft, setEditDraft] = useState<MemoryEditPayload | null>(null)
   const [deleteConfirmEntryId, setDeleteConfirmEntryId] = useState<string | null>(null)
   const [mutationErrorByEntryId, setMutationErrorByEntryId] = useState<Record<string, string>>({})
-  const [validationMessages, setValidationMessages] = useState<string[]>([])
+  const [validationMessages, setValidationMessages] = useState<ValidationMessage[]>([])
   const [promotionMessageByEntryId, setPromotionMessageByEntryId] = useState<Record<string, string>>({})
   const [globalMutationMessage, setGlobalMutationMessage] = useState<string | null>(null)
 
@@ -466,7 +501,7 @@ function MemoryTab(_props: KanbanBoardProps) {
   ): Promise<void> => {
     const result = caught as {
       error?: ApiError
-      validationMessages?: string[]
+      validationMessages?: ValidationMessage[]
     }
     const apiError = result.error instanceof ApiError ? result.error : null
     const parsedValidationMessages = Array.isArray(result.validationMessages)
@@ -496,9 +531,12 @@ function MemoryTab(_props: KanbanBoardProps) {
   const handleApprove = async (entry: MemoryEntry): Promise<void> => {
     clearEntryErrors(entry.id)
     try {
-      const payload = (await mutationFetch(`/api/memories/${entry.id}/approve`)) as { entry?: MemoryEntry }
+      const payload = (await mutationFetch(`/api/memories/${entry.id}/approve`, {
+        expected_updated_at: entry.updated_at,
+      })) as { entry?: MemoryEntry }
       if (payload.entry) {
         applyEntryReplace(payload.entry)
+        emitPendingCountDelta(entry, payload.entry)
       }
       void refetch()
     } catch (caught) {
@@ -515,8 +553,11 @@ function MemoryTab(_props: KanbanBoardProps) {
 
       if (entry.state === 'pending') {
         removeEntry(entry.id)
+        emitPendingCountDelta(entry, null)
       } else {
-        applyEntryReplace({ ...entry, state: 'deleted' })
+        const deletedEntry = { ...entry, state: 'deleted' as const }
+        applyEntryReplace(deletedEntry)
+        emitPendingCountDelta(entry, deletedEntry)
       }
       setDeleteConfirmEntryId(null)
       void refetch()
@@ -552,6 +593,7 @@ function MemoryTab(_props: KanbanBoardProps) {
       }
       if (payload.entry) {
         applyEntryReplace(payload.entry)
+        emitPendingCountDelta(entry, payload.entry)
         const promoted = previousState === 'pending' && payload.entry.state === 'curated'
         setPromotionMessageByEntryId((previous) => {
           if (!promoted) {
@@ -591,7 +633,10 @@ function MemoryTab(_props: KanbanBoardProps) {
         </div>
       </header>
 
-      <div>
+      <div
+        className="grid gap-static-sm rounded-lg border border-contrast-low bg-canvas p-static-sm sm:grid-cols-2 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.4fr)]"
+        data-testid="memory-filter-panel"
+      >
         <PMultiSelect
           name="state-filter"
           label="State"
@@ -647,18 +692,18 @@ function MemoryTab(_props: KanbanBoardProps) {
         />
       </div>
 
-      {!hasFetched && isFetching ? <div data-testid="memory-loading" /> : null}
+      {!hasFetched && isFetching ? <div data-testid="memory-loading" role="status">Collecting memory entries...</div> : null}
 
       {parseErrors > 0 ? (
-        <p data-testid="parse-errors-warning">{parseErrors} entries couldn't be read</p>
+        <p data-testid="parse-errors-warning" className="rounded-lg border border-warning bg-warning-low p-static-sm text-primary">{parseErrors} entries couldn't be read</p>
       ) : null}
 
-      {globalMutationMessage ? <p>{globalMutationMessage}</p> : null}
+      {globalMutationMessage ? <p className="rounded-lg border border-success bg-success-low p-static-sm text-primary">{globalMutationMessage}</p> : null}
 
-      {!hasEntries && hasFetched && !isFetching ? <p>No memory entries yet</p> : null}
+      {!hasEntries && hasFetched && !isFetching ? <p className="rounded-lg border border-contrast-low bg-canvas p-static-lg text-center">No memory entries yet</p> : null}
 
       {hasEntries && !hasVisibleEntries ? (
-        <div>
+        <div className="rounded-lg border border-contrast-low bg-canvas p-static-md text-center">
           <p>No entries match your filters</p>
           <PButton data-testid="clear-filters" variant="secondary" compact onClick={resetFilters}>
             Clear filters
@@ -667,10 +712,11 @@ function MemoryTab(_props: KanbanBoardProps) {
       ) : null}
 
       {hasVisibleEntries ? (
-        <ul>
+        <ul className="m-0 flex min-h-0 list-none flex-col gap-static-sm overflow-y-auto p-0 pr-static-xs">
           {visibleEntries.map((entry) => (
-            <li key={entry.id} data-testid="memory-entry">
+            <li key={entry.id} data-testid="memory-entry" className="rounded-lg border border-contrast-low bg-canvas px-static-sm shadow-sm">
               <p-accordion
+                className="block"
                 open={openEntryId === entry.id ? true : undefined}
                 ref={(element) => {
                   if (element) {
@@ -680,113 +726,150 @@ function MemoryTab(_props: KanbanBoardProps) {
                   delete accordionRefs.current[entry.id]
                 }}
               >
-                <div>
-                  <strong data-testid="memory-entry-title">{entry.title}</strong>
-                  <div>
-                    {entry.categories.map((category) => (
-                      <PTag key={`${entry.id}-${category}`} data-testid="memory-entry-category">
-                        {category}
-                      </PTag>
-                    ))}
+                <div slot="summary" className="grid min-w-0 gap-static-sm py-static-sm lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+                  <div className="min-w-0">
+                    <strong data-testid="memory-entry-title" className="block truncate text-base text-primary">{entry.title}</strong>
+                    <span data-testid="memory-entry-agents" className="text-sm text-primary">
+                      {entry.scope_agents.length > 0 ? entry.scope_agents.join(', ') : 'All agents'}
+                    </span>
                   </div>
-                  <span data-testid="memory-entry-confidence">{formatConfidence(entry.confidence)}</span>
-                  <PTag
-                    data-testid="memory-entry-state"
-                    variant={STATE_VARIANTS[entry.state]}
-                  >
-                    {entry.state}
-                  </PTag>
-                  <span data-testid="memory-entry-agents">
-                    {entry.scope_agents.length > 0 ? entry.scope_agents.join(', ') : 'All agents'}
-                  </span>
+                  <div className="flex min-w-0 flex-wrap items-center gap-static-xs lg:justify-end">
+                    {entry.categories.map((category) => (
+                      <span key={`${entry.id}-${category}`} data-testid="memory-entry-category" className="rounded-full border border-contrast-low bg-canvas px-static-xs py-1 text-xs font-semibold text-primary">
+                        {category}
+                      </span>
+                    ))}
+                    <span data-testid="memory-entry-confidence" className="rounded-full border border-contrast-low bg-canvas px-static-xs py-1 text-xs font-semibold text-primary">{formatConfidence(entry.confidence)}</span>
+                    <span
+                      data-testid="memory-entry-state"
+                      className="rounded-full border border-contrast-low bg-canvas px-static-xs py-1 text-xs font-semibold text-primary"
+                      {...{ variant: STATE_VARIANTS[entry.state] }}
+                    >
+                      {entry.state}
+                    </span>
+                  </div>
                 </div>
 
                 {openEntryId === entry.id ? (
-                  <div data-testid="memory-accordion-detail">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[[rehypeSanitize, MEMORY_SANITIZE_SCHEMA]]}>
-                      {entry.content}
-                    </ReactMarkdown>
-                    <p>ID: {entry.id}</p>
-                    <p>Source agent: {entry.source_agent}</p>
-                    <p>Scope agents: {entry.scope_agents.length > 0 ? entry.scope_agents.join(', ') : 'All agents'}</p>
-                    <p>Categories: {entry.categories.join(', ')}</p>
-                    <p>Confidence: {formatConfidence(entry.confidence)}</p>
-                    <p>State: {entry.state}</p>
-                    <p>Created: {entry.created_at}</p>
-                    <p>Updated: {entry.updated_at}</p>
-                    <p>Approved: {entry.approved_at ?? '-'}</p>
+                  <div data-testid="memory-accordion-detail" className="grid gap-static-md border-t border-contrast-low pt-static-md">
+                    <div className="prose prose-sm max-w-none text-primary">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[[rehypeSanitize, MEMORY_SANITIZE_SCHEMA]]}>
+                        {entry.content}
+                      </ReactMarkdown>
+                    </div>
+                    <dl className="grid gap-x-static-md gap-y-static-xs text-sm text-primary md:grid-cols-2 xl:grid-cols-4">
+                      <div><dt className="font-semibold text-primary">ID</dt><dd>{entry.id}</dd></div>
+                      <div><dt className="font-semibold text-primary">Source agent</dt><dd>{entry.source_agent}</dd></div>
+                      <div><dt className="font-semibold text-primary">Scope agents</dt><dd>{entry.scope_agents.length > 0 ? entry.scope_agents.join(', ') : 'All agents'}</dd></div>
+                      <div><dt className="font-semibold text-primary">Categories</dt><dd>{entry.categories.join(', ')}</dd></div>
+                      <div><dt className="font-semibold text-primary">Confidence</dt><dd>{formatConfidence(entry.confidence)}</dd></div>
+                      <div><dt className="font-semibold text-primary">State</dt><dd>{entry.state}</dd></div>
+                      <div><dt className="font-semibold text-primary">Created</dt><dd>{entry.created_at}</dd></div>
+                      <div><dt className="font-semibold text-primary">Updated</dt><dd>{entry.updated_at}</dd></div>
+                      <div><dt className="font-semibold text-primary">Approved</dt><dd>{entry.approved_at ?? '-'}</dd></div>
+                    </dl>
 
-                    {entry.state === 'approved' ? <p>Editing will require re-approval</p> : null}
+                    {entry.state === 'approved' ? <p className="text-sm text-primary">Editing will require re-approval</p> : null}
 
                     {mutationErrorByEntryId[entry.id] ? (
-                      <p data-testid="memory-occ-banner">{mutationErrorByEntryId[entry.id]}</p>
+                      <p data-testid="memory-occ-banner" className="rounded-lg border border-warning bg-warning-low p-static-sm text-primary">{mutationErrorByEntryId[entry.id]}</p>
                     ) : null}
 
-                    {promotionMessageByEntryId[entry.id] ? <p>{promotionMessageByEntryId[entry.id]}</p> : null}
+                    {promotionMessageByEntryId[entry.id] ? <p className="rounded-lg border border-success bg-success-low p-static-sm text-primary">{promotionMessageByEntryId[entry.id]}</p> : null}
 
-                    {entry.state === 'curated' ? (
-                      <PButton type="button" data-testid="memory-approve-btn" compact onClick={() => void handleApprove(entry)}>
-                        Approve
-                      </PButton>
-                    ) : null}
-
-                    {entry.state !== 'deleted' ? (
-                      <>
-                        <PButton type="button" data-testid="memory-edit-btn" compact variant="secondary" onClick={() => startEdit(entry)}>
-                          Edit
+                    <div className="flex flex-wrap items-center gap-static-xs">
+                      {entry.state === 'curated' ? (
+                        <PButton type="button" data-testid="memory-approve-btn" compact onClick={() => void handleApprove(entry)}>
+                          Approve
                         </PButton>
-                        <PButton
-                          type="button"
-                          data-testid="memory-delete-btn"
-                          compact
-                          variant="secondary"
-                          onClick={() => setDeleteConfirmEntryId(entry.id)}
-                        >
-                          Delete
-                        </PButton>
-                      </>
-                    ) : null}
+                      ) : null}
+
+                      {entry.state !== 'deleted' ? (
+                        <>
+                          <PButton type="button" data-testid="memory-edit-btn" compact variant="secondary" onClick={() => startEdit(entry)}>
+                            Edit
+                          </PButton>
+                          <PButton
+                            type="button"
+                            data-testid="memory-delete-btn"
+                            compact
+                            variant="secondary"
+                            onClick={() => setDeleteConfirmEntryId(entry.id)}
+                          >
+                            Delete
+                          </PButton>
+                        </>
+                      ) : null}
+                    </div>
 
                     {editingEntryId === entry.id && editDraft ? (
-                      <div data-testid="memory-edit-form">
-                        <label>
-                          Title
-                          <input
+                      <div data-testid="memory-edit-form" className="grid gap-static-md rounded-lg border border-contrast-low bg-canvas p-static-md">
+                        <div className="flex min-w-0 flex-wrap items-center justify-between gap-static-sm">
+                          <span className="text-sm font-semibold text-primary">Edit memory</span>
+                          <span data-testid="memory-char-counter" className="rounded-full border border-contrast-low bg-canvas px-static-xs py-1 text-xs font-semibold text-primary">
+                            {editDraft.content.length}/{MEMORY_CONTENT_LIMIT}
+                          </span>
+                        </div>
+                        <div className="grid gap-static-sm xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,0.7fr)_minmax(0,1fr)]">
+                          <PInputText
                             name="edit-title"
                             data-testid="edit-title"
+                            label="Title"
+                            compact
                             value={editDraft.title}
                             onChange={(event) => {
-                              const value = event.target.value
+                              const value = readStringValue(event)
+                              setEditDraft((previous) =>
+                                previous ? { ...previous, title: value } : previous,
+                              )
+                            }}
+                            onInput={(event) => {
+                              const value = readStringValue(event)
                               setEditDraft((previous) =>
                                 previous ? { ...previous, title: value } : previous,
                               )
                             }}
                           />
-                        </label>
-                        <label>
-                          Categories
-                          <input
+                          <PInputText
                             name="edit-categories"
+                            label="Categories"
+                            compact
                             value={editDraft.categories.join(', ')}
                             onChange={(event) => {
-                              const value = splitCSV(event.target.value)
+                              const value = splitCSV(readStringValue(event))
+                              setEditDraft((previous) =>
+                                previous ? { ...previous, categories: value } : previous,
+                              )
+                            }}
+                            onInput={(event) => {
+                              const value = splitCSV(readStringValue(event))
                               setEditDraft((previous) =>
                                 previous ? { ...previous, categories: value } : previous,
                               )
                             }}
                           />
-                        </label>
-                        <label>
-                          Confidence
-                          <input
+                          <PInputNumber
                             name="edit-confidence"
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            max="1"
-                            value={editDraft.confidence}
+                            label="Confidence"
+                            compact
+                            controls
+                            step={0.01}
+                            min={0}
+                            max={1}
+                            value={String(editDraft.confidence)}
                             onChange={(event) => {
-                              const value = Number.parseFloat(event.target.value)
+                              const value = Number.parseFloat(readStringValue(event))
+                              setEditDraft((previous) =>
+                                previous
+                                  ? {
+                                      ...previous,
+                                      confidence: Number.isFinite(value) ? value : previous.confidence,
+                                    }
+                                  : previous,
+                              )
+                            }}
+                            onInput={(event) => {
+                              const value = Number.parseFloat(readStringValue(event))
                               setEditDraft((previous) =>
                                 previous
                                   ? {
@@ -797,51 +880,64 @@ function MemoryTab(_props: KanbanBoardProps) {
                               )
                             }}
                           />
-                        </label>
-                        <label>
-                          Scope agents
-                          <input
+                          <PInputText
                             name="edit-scope-agents"
+                            label="Scope agents"
+                            compact
                             value={editDraft.scope_agents.join(', ')}
                             onChange={(event) => {
-                              const value = splitCSV(event.target.value)
+                              const value = splitCSV(readStringValue(event))
+                              setEditDraft((previous) =>
+                                previous ? { ...previous, scope_agents: value } : previous,
+                              )
+                            }}
+                            onInput={(event) => {
+                              const value = splitCSV(readStringValue(event))
                               setEditDraft((previous) =>
                                 previous ? { ...previous, scope_agents: value } : previous,
                               )
                             }}
                           />
-                        </label>
-                        <label>
-                          Content
-                          <PTextarea
-                            name="edit-content"
-                            value={editDraft.content}
-                            maxLength={MEMORY_CONTENT_LIMIT}
-                            onInput={(event) => {
-                              const target = event.target as HTMLTextAreaElement
-                              const value = target.value.slice(0, MEMORY_CONTENT_LIMIT)
-                              setEditDraft((previous) =>
-                                previous ? { ...previous, content: value } : previous,
-                              )
-                            }}
-                          />
-                        </label>
-                        <p data-testid="memory-char-counter">
-                          {editDraft.content.length}/{MEMORY_CONTENT_LIMIT}
-                        </p>
+                        </div>
+                        <PTextarea
+                          name="edit-content"
+                          label="Content"
+                          value={editDraft.content}
+                          maxLength={MEMORY_CONTENT_LIMIT}
+                          onChange={(event) => {
+                            const value = readStringValue(event).slice(0, MEMORY_CONTENT_LIMIT)
+                            setEditDraft((previous) =>
+                              previous ? { ...previous, content: value } : previous,
+                            )
+                          }}
+                          onInput={(event) => {
+                            const value = readStringValue(event).slice(0, MEMORY_CONTENT_LIMIT)
+                            setEditDraft((previous) =>
+                              previous ? { ...previous, content: value } : previous,
+                            )
+                          }}
+                        />
                         {validationMessages.length > 0 ? (
-                          <ul>
-                            {validationMessages.map((message) => (
-                              <li key={message}>{message}</li>
+                          <ul data-testid="memory-validation-errors" className="m-0 grid list-none gap-static-xs rounded-lg border border-warning bg-warning-low p-static-sm text-sm text-primary">
+                            {validationMessages.map(({ field, message }) => (
+                              <li
+                                key={`${field}:${message}`}
+                                data-testid="memory-validation-message"
+                                data-field={field}
+                              >
+                                <strong>{field}</strong>: {message}
+                              </li>
                             ))}
                           </ul>
                         ) : null}
-                        <PButton type="button" data-testid="memory-edit-save-btn" compact onClick={() => void handleEditSave(entry)}>
-                          Save
-                        </PButton>
-                        <PButton type="button" data-testid="memory-edit-cancel-btn" compact variant="secondary" onClick={cancelEdit}>
-                          Cancel
-                        </PButton>
+                        <div className="flex flex-wrap items-center justify-end gap-static-xs">
+                          <PButton type="button" data-testid="memory-edit-cancel-btn" compact variant="secondary" onClick={cancelEdit}>
+                            Cancel
+                          </PButton>
+                          <PButton type="button" data-testid="memory-edit-save-btn" compact onClick={() => void handleEditSave(entry)}>
+                            Save
+                          </PButton>
+                        </div>
                       </div>
                     ) : null}
                   </div>
@@ -862,28 +958,35 @@ function MemoryTab(_props: KanbanBoardProps) {
           dismissButton={false}
           aria-label="Confirm memory deletion"
         >
-          <p>
-            {deleteConfirmEntry.state === 'pending'
-              ? 'This is a permanent hard-delete and cannot be undone.'
-              : 'This will soft-delete the memory and mark it as deleted (removed from view by default).'}
-          </p>
-          <PButton
-            type="button"
-            data-testid="memory-delete-confirm-btn"
-            compact
-            onClick={() => void handleDelete(deleteConfirmEntry)}
-          >
-            Confirm delete
-          </PButton>
-          <PButton
-            type="button"
-            data-testid="memory-delete-cancel-btn"
-            compact
-            variant="secondary"
-            onClick={() => setDeleteConfirmEntryId(null)}
-          >
-            Cancel
-          </PButton>
+          <div className="grid max-w-[520px] gap-static-md">
+            <div className="grid gap-static-xs rounded-lg bg-frosted-soft p-static-md text-primary">
+              <span className="text-xs font-semibold uppercase text-primary">Delete memory</span>
+              <p className="m-0 text-sm leading-normal">
+                {deleteConfirmEntry.state === 'pending'
+                  ? 'This is a permanent hard-delete and cannot be undone.'
+                  : 'This will soft-delete the memory and mark it as deleted.'}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center justify-end gap-static-xs">
+              <PButton
+                type="button"
+                data-testid="memory-delete-cancel-btn"
+                compact
+                variant="secondary"
+                onClick={() => setDeleteConfirmEntryId(null)}
+              >
+                Cancel
+              </PButton>
+              <PButton
+                type="button"
+                data-testid="memory-delete-confirm-btn"
+                compact
+                onClick={() => void handleDelete(deleteConfirmEntry)}
+              >
+                Confirm delete
+              </PButton>
+            </div>
+          </div>
         </PModal>
       ) : null}
     </section>

@@ -65,6 +65,33 @@ async function stubApis(page: Page): Promise<void> {
   await page.route('/api/board', (route) => route.fulfill({ json: BOARD }))
 }
 
+async function getRenderedPButtonTextColor(page: Page, mode: 'dark' | 'light'): Promise<string> {
+  await page.waitForFunction(() => {
+    return Array.from(document.querySelectorAll('p-button')).some((host) =>
+      host.shadowRoot?.querySelector('button') !== null,
+    )
+  }, undefined, { timeout: 8_000 })
+
+  const color = await page.evaluate(() => {
+    for (const host of Array.from(document.querySelectorAll('p-button'))) {
+      const button = host.shadowRoot?.querySelector('button')
+      if (button) {
+        return window.getComputedStyle(button).color
+      }
+    }
+
+    return null
+  })
+
+  expect(
+    color,
+    `p-button shadow root must expose a rendered <button> element in ${mode} mode — ` +
+      'null means the PDS component is not initialized or shadow root is closed',
+  ).not.toBeNull()
+
+  return color!
+}
+
 // ─── AC-5: falsifiable dark-mode proof on PDS shadow DOM ─────────────────────
 
 test.describe('TestFromAC_PdsSchemeClassE2E_1555', () => {
@@ -149,19 +176,7 @@ test.describe('TestFromAC_PdsSchemeClassE2E_1555', () => {
       await page.goto('/')
       await page.locator('[data-region="workspace"]').waitFor({ state: 'visible' })
 
-      const darkColor = await page.evaluate(() => {
-        const host = document.querySelector('p-button')
-        if (!host?.shadowRoot) return null
-        const btn = host.shadowRoot.querySelector('button')
-        if (!btn) return null
-        return window.getComputedStyle(btn).color
-      })
-
-      expect(
-        darkColor,
-        'p-button shadow root must expose a rendered <button> element in dark mode — ' +
-          'null means the PDS component is not initialized or shadow root is closed',
-      ).not.toBeNull()
+      const darkColor = await getRenderedPButtonTextColor(page, 'dark')
 
       // ── Step 2: capture light-mode computed color (separate page, explicit 'light') ─
       // A new page has no registered init scripts. We register a 'light' init script on
@@ -176,19 +191,7 @@ test.describe('TestFromAC_PdsSchemeClassE2E_1555', () => {
         await lightPage.goto('/')
         await lightPage.locator('[data-region="workspace"]').waitFor({ state: 'visible' })
 
-        const lightColor = await lightPage.evaluate(() => {
-          const host = document.querySelector('p-button')
-          if (!host?.shadowRoot) return null
-          const btn = host.shadowRoot.querySelector('button')
-          if (!btn) return null
-          return window.getComputedStyle(btn).color
-        })
-
-        expect(
-          lightColor,
-          'p-button shadow root must expose a rendered <button> element in light mode — ' +
-            'null means the PDS component is not initialized or shadow root is closed',
-        ).not.toBeNull()
+        const lightColor = await getRenderedPButtonTextColor(lightPage, 'light')
 
         // ── Primary assertion: text colors must differ between dark and light ───
         expect(

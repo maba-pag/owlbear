@@ -345,6 +345,14 @@ describe('TestFromAC_ShellPBanner', () => {
       const { container } = renderShell()
 
       await act(async () => {
+        capturedOnSelectTask?.(42)
+      })
+
+      await waitFor(() => {
+        expect(capturedOnTaskUpdated).toBeDefined()
+      })
+
+      await act(async () => {
         capturedOnMutationError?.('Edit failed', 'Server error', 'error')
       })
 

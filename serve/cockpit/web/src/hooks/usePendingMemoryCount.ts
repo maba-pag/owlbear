@@ -1,5 +1,11 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { usePollingFetch } from './usePollingFetch'
+
+export const MEMORY_PENDING_COUNT_EVENT = 'owlbear:memory-pending-count-change'
+
+interface MemoryPendingCountEventDetail {
+  delta?: number
+}
 
 type MemoryState = 'pending' | 'curated' | 'approved' | 'deleted'
 
@@ -42,6 +48,22 @@ export function usePendingMemoryCount(): UsePendingMemoryCountResult {
       setError(caught)
     },
   })
+
+  useEffect(() => {
+    function handlePendingCountChange(event: Event) {
+      const detail = (event as CustomEvent<MemoryPendingCountEventDetail>).detail
+      const delta = typeof detail?.delta === 'number' ? detail.delta : 0
+      if (delta !== 0) {
+        setCount((current) => Math.max(0, current + delta))
+      }
+      refetch()
+    }
+
+    window.addEventListener(MEMORY_PENDING_COUNT_EVENT, handlePendingCountChange)
+    return () => {
+      window.removeEventListener(MEMORY_PENDING_COUNT_EVENT, handlePendingCountChange)
+    }
+  }, [refetch])
 
   return {
     count,

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { PButton } from '@porsche-design-system/components-react'
 import { Column } from './components/Column'
 import ArchivalModal from './components/ArchivalModal'
@@ -35,6 +35,64 @@ const EMPTY_FILTER: FilterState = {
   priority: '',
   tags: [],
   blocked: false,
+}
+
+const CONTEXT_MENU_VIEWPORT_PADDING = 8
+const CONTEXT_MENU_MIN_WIDTH = 160
+const CONTEXT_MENU_ITEM_HEIGHT = 40
+const CONTEXT_MENU_VERTICAL_CHROME = 10
+
+function formatStatusLabel(status: string): string {
+  return status
+    .replace(/-/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase())
+}
+
+function getOrderedTransitionTargets(board: Board, status: string): string[] {
+  const transitionSet = new Set(board.valid_transitions[status] ?? [])
+  return board.statuses
+    .map(({ name }) => name)
+    .filter((name) => name !== 'archived' && transitionSet.has(name))
+}
+
+function shouldShowArchiveAction(status: string): boolean {
+  return status !== 'archived'
+}
+
+function clampContextMenuCoordinates(
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+): { x: number; y: number } {
+  const maxX = Math.max(
+    CONTEXT_MENU_VIEWPORT_PADDING,
+    window.innerWidth - width - CONTEXT_MENU_VIEWPORT_PADDING,
+  )
+  const maxY = Math.max(
+    CONTEXT_MENU_VIEWPORT_PADDING,
+    window.innerHeight - height - CONTEXT_MENU_VIEWPORT_PADDING,
+  )
+
+  return {
+    x: Math.min(Math.max(CONTEXT_MENU_VIEWPORT_PADDING, x), maxX),
+    y: Math.min(Math.max(CONTEXT_MENU_VIEWPORT_PADDING, y), maxY),
+  }
+}
+
+function clampContextMenuPosition(x: number, y: number, menu: HTMLElement): { x: number; y: number } {
+  const rect = menu.getBoundingClientRect()
+  return clampContextMenuCoordinates(
+    x,
+    y,
+    Math.max(CONTEXT_MENU_MIN_WIDTH, rect.width, menu.offsetWidth),
+    Math.max(CONTEXT_MENU_ITEM_HEIGHT, rect.height, menu.offsetHeight),
+  )
+}
+
+function getEstimatedContextMenuHeight(itemCount: number): number {
+  return (itemCount * CONTEXT_MENU_ITEM_HEIGHT) + CONTEXT_MENU_VERTICAL_CHROME
 }
 
 export interface KanbanBoardProps {
@@ -96,10 +154,19 @@ function KanbanBoardContent({
     (filter.blocked ? 1 : 0)
   const hasActiveFilters = activeFilterCount > 0
   const boardTaskCount = hasActiveFilters ? filteredTasks.length : tasks.length
-  const boardTaskLabel = hasActiveFilters ? 'visible' : 'tasks'
+  const boardTaskLabel = hasActiveFilters ? 'matching' : 'tasks'
 
   useEffect(() => {
     if (!contextMenu) return
+
+    const menuElement = menuRef.current
+    if (menuElement) {
+      const nextPosition = clampContextMenuPosition(contextMenu.x, contextMenu.y, menuElement)
+      if (nextPosition.x !== contextMenu.x || nextPosition.y !== contextMenu.y) {
+        setContextMenu((current) => current ? { ...current, ...nextPosition } : current)
+        return
+      }
+    }
 
     function handleMouseDown(e: MouseEvent) {
       if (menuRef.current && menuRef.current.contains(e.target as Node)) return
@@ -107,7 +174,7 @@ function KanbanBoardContent({
       contextMenuOriginRef.current?.focus()
     }
 
-    function handleKeyDown(e: KeyboardEvent) {
+    function handleKeyDown(e: globalThis.KeyboardEvent) {
       if (e.key === 'Escape') {
         setContextMenu(null)
         contextMenuOriginRef.current?.focus()
@@ -146,15 +213,24 @@ function KanbanBoardContent({
 
   const handleContextMenu = (e: React.MouseEvent, task: Task) => {
     e.preventDefault()
-    const transitions = board?.valid_transitions[task.status] ?? []
-    if (transitions.length === 0) return
+    if (!board) return
+    const transitions = getOrderedTransitionTargets(board, task.status)
+    const hasArchiveAction = shouldShowArchiveAction(task.status)
+    if (transitions.length === 0 && !hasArchiveAction) return
+    const itemCount = transitions.length + (hasArchiveAction ? 1 : 0)
+    const position = clampContextMenuCoordinates(
+      e.clientX,
+      e.clientY,
+      CONTEXT_MENU_MIN_WIDTH,
+      getEstimatedContextMenuHeight(itemCount),
+    )
     contextMenuOriginRef.current = e.currentTarget as HTMLElement
     setContextMenu({
       taskId: task.id,
       taskStatus: task.status,
       taskUpdated: task.updated,
-      x: e.clientX,
-      y: e.clientY,
+      x: position.x,
+      y: position.y,
     })
   }
 
@@ -177,13 +253,13 @@ function KanbanBoardContent({
     try {
       await moveTask(taskId, { status: targetStatus, updated: taskUpdated })
       refetchTasks()
-      onMutationSuccess?.(`Task moved to ${targetStatus}`)
+      onMutationSuccess?.(`Task moved to ${formatStatusLabel(targetStatus)}`)
     } catch (error) {
       if (error instanceof ApiError) {
         if (error.status === 409) {
           refetchTasks()
         }
-        const fallback = `Move failed: ${error.status}`
+        const fallback = 'Move could not be completed. Try again.'
         const message = error.message === `Move task request failed with status ${error.status}`
           ? fallback
           : error.message
@@ -191,8 +267,35 @@ function KanbanBoardContent({
         return
       }
 
-      const networkMessage = error instanceof Error ? error.message : 'Move failed: network error'
+      const networkMessage = error instanceof Error ? error.message : 'Move could not be completed. Check your connection and try again.'
       onMutationError?.('Move failed', networkMessage, 'error')
+    }
+  }
+
+  function handleMenuItemKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      event.currentTarget.click()
+      return
+    }
+
+    const menu = event.currentTarget.parentElement
+    if (!menu) return
+    const items = Array.from(menu.querySelectorAll<HTMLElement>('[role="menuitem"]'))
+    const index = items.indexOf(event.currentTarget)
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      items[(index + 1) % items.length]?.focus()
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      items[(index - 1 + items.length) % items.length]?.focus()
+    } else if (event.key === 'Home') {
+      event.preventDefault()
+      items[0]?.focus()
+    } else if (event.key === 'End') {
+      event.preventDefault()
+      items[items.length - 1]?.focus()
     }
   }
 
@@ -203,18 +306,28 @@ function KanbanBoardContent({
   }, {})
 
   if (loading) {
-    return <div data-testid="loading-indicator">Loading…</div>
+    return <div data-testid="loading-indicator" role="status">Preparing board...</div>
   }
 
   if (error) {
-    return <div data-testid="error-message">{error}</div>
+    return <div data-testid="error-message">Board is unavailable. {error}</div>
   }
 
   if (!board) {
     return (
-      <div data-testid="error-message">Failed to load board. Please try again.</div>
+      <div data-testid="error-message">Board is unavailable. Please refresh and try again.</div>
     )
   }
+
+  const contextMenuTransitions = contextMenu
+    ? getOrderedTransitionTargets(board, contextMenu.taskStatus)
+    : []
+  const contextMenuHasArchiveTransition = contextMenu
+    ? (board.valid_transitions[contextMenu.taskStatus] ?? []).includes('archived')
+    : false
+  const contextMenuHasArchiveAction = contextMenu
+    ? shouldShowArchiveAction(contextMenu.taskStatus)
+    : false
 
   async function handleTransitionClick(taskId: number, targetStatus: string, taskStatus: string, updated: string) {
     setContextMenu(null)
@@ -234,13 +347,13 @@ function KanbanBoardContent({
     try {
       await moveTask(taskId, { status: targetStatus, updated })
       refetchTasks()
-      onMutationSuccess?.(`Task moved to ${targetStatus}`)
+      onMutationSuccess?.(`Task moved to ${formatStatusLabel(targetStatus)}`)
     } catch (error) {
       if (error instanceof ApiError) {
         if (error.status === 409) {
           refetchTasks()
         }
-        const fallback = `Move failed: ${error.status}`
+        const fallback = 'Move could not be completed. Try again.'
         const message = error.message === `Move task request failed with status ${error.status}`
           ? fallback
           : error.message
@@ -248,7 +361,7 @@ function KanbanBoardContent({
         return
       }
 
-      const networkMessage = error instanceof Error ? error.message : 'Move failed: network error'
+      const networkMessage = error instanceof Error ? error.message : 'Move could not be completed. Check your connection and try again.'
       onMutationError?.('Move failed', networkMessage, 'error')
     }
   }
@@ -280,19 +393,18 @@ function KanbanBoardContent({
       className="relative flex h-full min-h-0 flex-col [--kanban-column-min:clamp(248px,15vw,280px)]"
       data-testid="kanban-board"
     >
-      <section className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-md border border-contrast-low bg-surface shadow-sm" aria-labelledby="kanban-board-title">
-        <header className="grid min-h-16 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-static-md border-b border-contrast-low bg-frosted-soft px-static-md py-static-sm">
-          <div className="flex min-w-0 flex-col gap-0.5">
-            <span className="text-xs font-semibold uppercase leading-tight text-contrast-high">Kanban</span>
-            <h2 id="kanban-board-title" className="m-0 text-lg font-semibold leading-tight text-primary">Pipeline</h2>
+      <section className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-lg bg-canvas shadow-sm" aria-labelledby="kanban-board-title">
+        <header className="grid min-h-16 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-static-md border-b border-contrast-low bg-canvas px-static-lg py-static-sm">
+          <div className="flex min-w-0 flex-col">
+            <h2 id="kanban-board-title" className="m-0 text-xl font-semibold leading-none text-primary">Kanban</h2>
           </div>
-          <div className="flex min-w-0 items-center gap-static-xs" aria-label="Board summary">
-            <span className="inline-flex min-h-[30px] items-baseline gap-1.5 whitespace-nowrap rounded-full border border-contrast-low bg-surface px-2.5 py-1 text-xs text-primary">
-              <strong className="text-sm font-semibold">{boardTaskCount}</strong>
+          <div className="flex min-w-0 items-center gap-static-sm" aria-label="Board summary">
+            <span className="inline-flex min-h-8 items-baseline gap-1.5 whitespace-nowrap border-l border-contrast-low pl-static-sm text-xs text-primary">
+              <strong className="text-lg font-semibold leading-none text-primary">{boardTaskCount}</strong>
               <span>{boardTaskLabel}</span>
             </span>
-            <span className="inline-flex min-h-[30px] items-baseline gap-1.5 whitespace-nowrap rounded-full border border-contrast-low bg-surface px-2.5 py-1 text-xs text-primary">
-              <strong className="text-sm font-semibold">{board.statuses.length}</strong>
+            <span className="inline-flex min-h-8 items-baseline gap-1.5 whitespace-nowrap border-l border-contrast-low pl-static-sm text-xs text-primary">
+              <strong className="text-lg font-semibold leading-none text-primary">{board.statuses.length}</strong>
               <span>lanes</span>
             </span>
           </div>
@@ -337,7 +449,7 @@ function KanbanBoardContent({
         />
 
         <div
-          className="grid flex-1 min-h-0 gap-static-md overflow-x-auto overflow-y-hidden p-static-md [scrollbar-gutter:stable]"
+          className="grid flex-1 min-h-0 gap-static-sm overflow-x-auto overflow-y-hidden bg-canvas p-static-md [scrollbar-gutter:stable]"
           // inline-justified: grid column count is runtime-driven by board status count.
           style={{
             display: 'grid',
@@ -391,7 +503,7 @@ function KanbanBoardContent({
           // inline-justified: menu anchor coordinates are computed from pointer position.
           style={{ position: 'fixed', top: contextMenu.y, left: contextMenu.x }}
         >
-          {(board.valid_transitions[contextMenu.taskStatus] ?? []).map((target) => (
+          {contextMenuTransitions.map((target) => (
             <div
               key={target}
               data-testid="transition-item"
@@ -399,32 +511,7 @@ function KanbanBoardContent({
               role="menuitem"
               tabIndex={-1}
               className="block w-full cursor-pointer px-3 py-2 text-left text-sm hover:bg-frosted"
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' || event.key === ' ') {
-                  event.preventDefault()
-                  event.currentTarget.click()
-                  return
-                }
-
-                const menu = event.currentTarget.parentElement
-                if (!menu) return
-                const items = Array.from(menu.querySelectorAll<HTMLElement>('[role="menuitem"]'))
-                const index = items.indexOf(event.currentTarget)
-
-                if (event.key === 'ArrowDown') {
-                  event.preventDefault()
-                  items[(index + 1) % items.length]?.focus()
-                } else if (event.key === 'ArrowUp') {
-                  event.preventDefault()
-                  items[(index - 1 + items.length) % items.length]?.focus()
-                } else if (event.key === 'Home') {
-                  event.preventDefault()
-                  items[0]?.focus()
-                } else if (event.key === 'End') {
-                  event.preventDefault()
-                  items[items.length - 1]?.focus()
-                }
-              }}
+              onKeyDown={handleMenuItemKeyDown}
               onClick={() =>
                 void handleTransitionClick(
                   contextMenu.taskId,
@@ -434,13 +521,18 @@ function KanbanBoardContent({
                 )
               }
             >
-              Move to {target}
+              Move to {formatStatusLabel(target)}
             </div>
           ))}
-          {(board.valid_transitions[contextMenu.taskStatus] ?? []).includes('archived') ? null : (
+          {contextMenuHasArchiveAction ? (
             <div
+              {...(contextMenuHasArchiveTransition
+                ? { 'data-testid': 'transition-item', 'data-status': 'archived' }
+                : {})}
               role="menuitem"
-              className="block w-full cursor-pointer px-3 py-2 text-left text-sm hover:bg-frosted"
+              tabIndex={-1}
+              className={`${contextMenuTransitions.length > 0 ? 'border-t border-contrast-low ' : ''}block w-full cursor-pointer px-3 py-2 text-left text-sm text-error hover:bg-frosted`}
+              onKeyDown={handleMenuItemKeyDown}
               onClick={() =>
                 void handleTransitionClick(
                   contextMenu.taskId,
@@ -452,7 +544,7 @@ function KanbanBoardContent({
             >
               Archive
             </div>
-          )}
+          ) : null}
         </div>
       )}
     </div>

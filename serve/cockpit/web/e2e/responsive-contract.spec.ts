@@ -1,8 +1,8 @@
 /**
  * Playwright coverage for the Cockpit responsive contract.
  *
- * Covers scrollable column keyboard focusability at supported viewports and the
- * 320px mobile board-first contract where task detail opens in a p-sheet.
+ * Covers scrollable column keyboard focusability and the supported 768px narrow
+ * laptop contract where task detail opens in a PModal task window.
  * API mocking: all routes stubbed via page.route(); no real backend required.
  */
 import { test, expect, type Page } from '@playwright/test'
@@ -326,21 +326,15 @@ test.describe('TestFromAC_ScrollableRegionFocusability', () => {
   })
 })
 
-// ─── AC-2: Mobile board-first contract — task detail in p-sheet at 320px ───────
+// ─── AC-2: Narrow laptop contract — task detail in PModal at 768px ───────────
 //
-// Contract: at 320x800, after a task card is clicked, task detail must appear inside
-// a p-sheet custom element. The fixed [data-region="sidecar"] aside must NOT be the
-// primary detail container in mobile board-first mode.
-//
-// RED: Shell.tsx has no p-sheet element — task detail always renders in sidecar.
-//      Both tests fail because page.locator('p-sheet') finds nothing.
-//
-// Builder note (AC-2): if GREEN builder (#1572) implements a controlled
-// unsupported/narrow-view state instead of p-sheet, they must update this assertion
-// and document the reason in #1572 task body.
+// Cockpit is a laptop-resident app. The supported narrow contract starts at 768px:
+// the PCanvas start sidebar stays closed, the kanban workbench remains the primary
+// surface, and task detail opens in a PModal task window instead of a phone-only
+// p-sheet or a persistent PCanvas end sidebar.
 
-test.describe('TestFromAC_MobileSheetContract', () => {
-  test.use({ viewport: { width: 320, height: 800 } })
+test.describe('TestFromAC_NarrowLaptopTaskModalContract', () => {
+  test.use({ viewport: { width: 768, height: 844 } })
 
   test.beforeEach(async ({ page }) => {
     await stubApis(page, ONE_TASK)
@@ -348,100 +342,84 @@ test.describe('TestFromAC_MobileSheetContract', () => {
     // Registered after stubApis() catch-all so LIFO gives this route precedence.
     await page.route('/api/tasks/1', (route) => route.fulfill({ json: ONE_TASK_DETAIL }))
     await page.goto('/')
-    // Wait for task card to be in DOM (state: 'attached' — card is 0px wide at 320px
-    // because workspace is 0px with current Shell.css grid)
     await page
       .locator('[data-testid="task-card"]')
       .first()
-      .waitFor({ state: 'attached', timeout: 10_000 })
+      .waitFor({ state: 'visible', timeout: 10_000 })
   })
 
-  // RED: no p-sheet in Shell.tsx → toBeVisible() times out.
-  // force: true is required because workspace is 0px wide at 320px (current broken layout)
-  // and the card element is not considered visible/actionable by Playwright without it.
-  test('p-sheet custom element is visible after task card click at 320x800 (mobile board-first contract)', async ({
+  test('PModal task detail is visible after task card click at 768px', async ({
     page,
   }) => {
-    await page.locator('[data-testid="task-card"]').first().click({ force: true })
+    await page.locator('[data-testid="task-card"]').first().click()
 
-    // Mobile board-first contract (#1560): task detail must render in p-sheet,
-    // NOT in the fixed [data-region="sidecar"] aside.
-    // FAIL: Shell.tsx has no p-sheet — locator never resolves.
+    await expect(page.locator('p-sheet')).toHaveCount(0)
+    await expect(page.locator('[data-region="sidecar"]')).toHaveCount(0)
     await expect(
-      page.locator('p-sheet'),
-      'p-sheet custom element must be present and visible after task card click at 320px — ' +
-        'mobile board-first contract requires sheet-based detail, not the fixed sidecar aside',
+      page.locator('[data-testid="task-detail-modal"]'),
+      'PModal must be the visible task-detail container at the supported 768px narrow viewport',
     ).toBeVisible()
   })
 
-  // RED: p-sheet does not exist → toBeAttached() fails immediately.
-  // Verifies that task detail panel content area is rooted inside p-sheet.
-  test('task detail content area is inside p-sheet after card click at 320x800', async ({
+  test('task detail content area is inside the PModal after card click at 768px', async ({
     page,
   }) => {
-    await page.locator('[data-testid="task-card"]').first().click({ force: true })
+    await page.locator('[data-testid="task-card"]').first().click()
 
-    const pSheet = page.locator('p-sheet')
-    // First: p-sheet must exist — FAIL: Shell.tsx has no p-sheet.
+    const taskModal = page.locator('[data-testid="task-detail-modal"]')
     await expect(
-      pSheet,
-      'p-sheet must be attached to DOM after task card click at 320px',
+      taskModal,
+      'PModal task detail must be attached to DOM after task card click at 768px',
     ).toBeAttached()
 
-    // Second: task detail content area must be inside p-sheet, not in fixed sidecar.
-    // FAIL: previous assertion already fails (unreachable in RED state).
     await expect(
-      pSheet.locator('[data-tab-content="detail"]'),
-      'task detail content area [data-tab-content="detail"] must be inside p-sheet at 320px, ' +
-        'not in fixed [data-region="sidecar"] — mobile board-first contract (#1560)',
+      taskModal.locator('[data-region="task-detail-content"]'),
+      'task detail content area must stay inside the PModal at 768px',
     ).toBeAttached()
   })
 
-  // RETRY: detail-placeholder is present before click and absent after click.
-  // Proves the click caused selectedTaskId to change — not static p-sheet structure.
-  test('detail-placeholder inside p-sheet disappears after task card click at 320x800 (click-dependent selection signal)', async ({
+  test('task detail modal is absent before selection and opens after card click at 768px', async ({
     page,
   }) => {
-    // Before click: selectedTaskId === null -> placeholder present inside p-sheet.
     await expect(
-      page.locator('p-sheet [data-testid="detail-placeholder"]'),
-      'detail-placeholder must be present inside p-sheet before any card click (selectedTaskId === null)',
-    ).toBeAttached()
+      page.locator('[data-testid="task-detail-modal"]'),
+      'task detail modal must not be present before task selection',
+    ).toHaveCount(0)
 
-    // Trigger selection - force:true bypasses 0px-workspace visibility constraint.
-    await page.locator('[data-testid="task-card"]').first().click({ force: true })
+    await page.locator('[data-testid="task-card"]').first().click()
 
-    // After click: selectedTaskId === 1 -> placeholder removed from DOM.
-    // FAILS if the click did not propagate to onSelectTask / if selectedTaskId stays null.
     await expect(
-      page.locator('p-sheet [data-testid="detail-placeholder"]'),
-      'detail-placeholder must be removed from p-sheet DOM after card click - ' +
-        'proves click set selectedTaskId (click-dependent, not static structure)',
-    ).not.toBeAttached()
+      page.locator('[data-testid="task-detail-modal"]'),
+      'task detail modal must open after card click - proves click set selectedTaskId',
+    ).toBeVisible()
   })
 
-  // RETRY: p-sheet heading changes from "No task selected" after card click.
-  // Proves the selected-task signal propagated to the mobile sheet heading.
-  test('p-sheet heading changes from "No task selected" after task card click at 320x800 (click-dependent selection signal)', async ({
+  test('PModal heading contains selected task title after task card click at 768px', async ({
     page,
   }) => {
-    const heading = page.locator('p-sheet [data-region="sidecar-header"] h2')
+    await page.locator('[data-testid="task-card"]').first().click()
 
-    // Before click: default heading text when no task is selected.
     await expect(
-      heading,
-      'p-sheet heading must show "No task selected" before any card click',
-    ).toHaveText('No task selected')
+      page.locator('[data-testid="task-detail-modal"]'),
+      'PModal must display selected task title "Mobile Test Task" after card click — ' +
+        'proves exact task identity propagated to the modal',
+    ).toContainText('Mobile Test Task')
+  })
 
-    // Trigger selection - force:true bypasses 0px-workspace visibility constraint.
-    await page.locator('[data-testid="task-card"]').first().click({ force: true })
+  test('task detail summary chips stack below the title at 768px', async ({ page }) => {
+    await page.locator('[data-testid="task-card"]').first().click()
 
-    // After click: selectedTaskId === 1 -> heading derives from selected task title.
-    // FAILS if click did not set selectedTaskId or heading is not task-identity-specific.
-    await expect(
-      heading,
-      'p-sheet heading must display selected task title "Mobile Test Task" after card click — ' +
-        'proves exact task identity propagated to mobile sheet, not just state change from placeholder',
-    ).toHaveText('Mobile Test Task')
+    const summary = page.locator('[data-testid="task-detail-modal-summary"]')
+    await expect(summary).toBeVisible()
+
+    const headingBox = await summary.locator('p-heading').boundingBox()
+    const firstChipBox = await summary.locator('p-tag').first().boundingBox()
+
+    expect(headingBox).not.toBeNull()
+    expect(firstChipBox).not.toBeNull()
+    expect(
+      firstChipBox!.y,
+      'status chips must sit below the title row at 768px so the modal close affordance stays clear',
+    ).toBeGreaterThanOrEqual(headingBox!.y + headingBox!.height - 2)
   })
 })

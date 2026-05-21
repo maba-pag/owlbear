@@ -6,6 +6,7 @@ import {
   PInputText,
   PModal,
   PSelect,
+  PSelectOption,
   PText,
 } from '@porsche-design-system/components-react'
 import { moveTask } from '../api/tasks'
@@ -348,36 +349,34 @@ export default function ArchivalModal({
     >
       <PHeading ref={setHeadingTagAttr} id={titleId} tag="h2">Archive task</PHeading>
 
-      <label>
-        Reason
-        <PSelect
-          name="archival-reason"
-          ref={reasonSelectRef}
-          value={reason}
-          onChange={(event) => {
-            handleReasonChange(readControlValue(event))
-          }}
-        >
-          <option value="">Select reason</option>
-          {ARCHIVAL_REASONS.map((item) => {
-            if (item === 'completed' && taskStatus !== 'done') {
-              return null
-            }
+      <PSelect
+        name="archival-reason"
+        label="Reason"
+        ref={reasonSelectRef}
+        value={reason}
+        onChange={(event) => {
+          handleReasonChange(readControlValue(event))
+        }}
+      >
+        <PSelectOption value="">Select reason</PSelectOption>
+        {ARCHIVAL_REASONS.map((item) => {
+          if (item === 'completed' && taskStatus !== 'done') {
+            return null
+          }
 
-            return (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            )
-          })}
-        </PSelect>
-      </label>
+          return (
+            <PSelectOption key={item} value={item}>
+              {item}
+            </PSelectOption>
+          )
+        })}
+      </PSelect>
 
       {requiresRefs ? (
-        <label>
-          Refs
+        <div>
           <PInputText
             name="archival-refs"
+            label="Refs"
             placeholder="e.g., 1230, 1229"
             value={refsRaw}
             onChange={(event) => {
@@ -386,7 +385,7 @@ export default function ArchivalModal({
             }}
           />
           <PText>Required — enter at least one task ID</PText>
-        </label>
+        </div>
       ) : null}
 
       <PButton

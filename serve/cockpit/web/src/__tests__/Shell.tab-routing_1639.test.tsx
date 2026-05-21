@@ -1,14 +1,8 @@
 /**
  * Task #1639 — P1-01: Tab routing infrastructure
- * AC1 coverage: Shell renders route components via <Routes> map from routeConfig
+ * AC1 coverage: Shell renders route components from routeConfig
  * AC2 coverage: /decisions route component is called; / renders kanban with existing props
  * AC3 coverage: extra entry in routeConfig renders without modifying Shell.tsx
- *
- * RED phase:
- *   - routes.ts does not exist → vi.mock('../routes') prevents ImportError here, but Shell.tsx
- *     does not import routes yet, so all routing assertions fail (Shell uses hardcoded Route).
- *   - MockKanbanRouteComponent is never called (Shell renders KanbanBoard directly, not via map).
- *   - MockDecisionsComponent and MockCustomComponent are never called (no matching route in Shell).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render } from '@testing-library/react'
@@ -19,29 +13,45 @@ import { PorscheDesignSystemProvider } from '@porsche-design-system/components-r
 // vi.hoisted runs before module imports are evaluated.
 // No JSX — all stubs return null (React.FC<any> is satisfied by () => null).
 
-const { MockKanbanRouteComponent, MockDecisionsComponent, MockCustomComponent, getKanbanRouteProps } =
+const {
+  MockKanbanRouteComponent,
+  MockDecisionsComponent,
+  MockCustomComponent,
+  getKanbanRouteProps,
+  getDecisionsRouteProps,
+  getCustomRouteProps,
+} =
   vi.hoisted(() => {
-    let capturedProps: Record<string, unknown> = {}
+    let capturedKanbanProps: Record<string, unknown> = {}
+    let capturedDecisionsProps: Record<string, unknown> = {}
+    let capturedCustomProps: Record<string, unknown> = {}
 
     const MockKanbanRouteComponent = vi.fn((props: unknown) => {
-      capturedProps = props as Record<string, unknown>
+      capturedKanbanProps = props as Record<string, unknown>
       return null
     })
-    const MockDecisionsComponent = vi.fn(() => null)
-    const MockCustomComponent = vi.fn(() => null)
+    const MockDecisionsComponent = vi.fn((props: unknown) => {
+      capturedDecisionsProps = props as Record<string, unknown>
+      return null
+    })
+    const MockCustomComponent = vi.fn((props: unknown) => {
+      capturedCustomProps = props as Record<string, unknown>
+      return null
+    })
 
     return {
       MockKanbanRouteComponent,
       MockDecisionsComponent,
       MockCustomComponent,
-      getKanbanRouteProps: () => capturedProps,
+      getKanbanRouteProps: () => capturedKanbanProps,
+      getDecisionsRouteProps: () => capturedDecisionsProps,
+      getCustomRouteProps: () => capturedCustomProps,
     }
   })
 
 // ─── Module mocks ─────────────────────────────────────────────────────────────
 
 // Controlled routeConfig: 2 real entries + 1 extension entry (AC3 proof).
-// In GREEN phase, Shell.tsx imports and maps over this config.
 vi.mock('../routes', () => ({
   routeConfig: [
     { path: '/', label: 'Kanban', icon: 'kanban', component: MockKanbanRouteComponent },
@@ -201,11 +211,21 @@ describe('TestFromAC_ShellTabRouting', () => {
     expect(typeof getKanbanRouteProps().refetchTasks).toBe('function')
   })
 
+  it('ac2 regression: decisions route component receives no kanban board props', () => {
+    renderShell('/decisions')
+    expect(getDecisionsRouteProps()).toEqual({})
+  })
+
   // ── AC3: extra routeConfig entry renders without modifying Shell.tsx ───────
 
   it('ac3 happy: extra route entry renders at its path without Shell.tsx modification', () => {
     renderShell('/custom-test')
     expect(MockCustomComponent).toHaveBeenCalled()
+  })
+
+  it('ac3 regression: non-kanban extension route receives no kanban board props', () => {
+    renderShell('/custom-test')
+    expect(getCustomRouteProps()).toEqual({})
   })
 
   it('ac3 happy: kanban route renders when extra entry is present', () => {

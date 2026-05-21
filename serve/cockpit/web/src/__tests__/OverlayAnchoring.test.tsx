@@ -133,6 +133,24 @@ describe('TestFromAC_HealthBadgeTriggerAnchoring', () => {
     // getAnchoredPopoverPosition: left = Math.round(Math.max(16, 4)) = 16
     expect(popover.style.left).toBe('16px')
   })
+
+  it('popover left clamps against the viewport right edge for header triggers', () => {
+    const originalInnerWidth = window.innerWidth
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 500 })
+    try {
+      const { container } = renderHealthBadge()
+      const trigger = container.querySelector('[data-testid="health-badge"]') as HTMLElement
+      trigger.getBoundingClientRect = vi.fn(
+        () =>
+          ({ top: 40, bottom: 60, left: 460, right: 500, width: 40, height: 20, x: 460, y: 40, toJSON: vi.fn() }) as DOMRect,
+      )
+      fireEvent.click(trigger)
+      const popover = container.querySelector('[data-testid="health-badge-popover"]') as HTMLElement
+      expect(popover.style.left).toBe('64px')
+    } finally {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: originalInnerWidth })
+    }
+  })
 })
 
 // ─── AC-1: DRStatusIndicator trigger-anchored positioning ────────────────────
@@ -169,6 +187,24 @@ describe('TestFromAC_DRPopoverTriggerAnchoring', () => {
     const popover = container.querySelector('[data-testid="dr-popover"]') as HTMLElement
     // getAnchoredPopoverPosition: left = Math.round(Math.max(16, 180)) = 180
     expect(popover.style.left).toBe('180px')
+  })
+
+  it('popover left clamps against the viewport right edge for header triggers', () => {
+    const originalInnerWidth = window.innerWidth
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 500 })
+    try {
+      const { container } = renderDRIndicator()
+      const trigger = container.querySelector('[data-testid="dr-indicator"]') as HTMLElement
+      trigger.getBoundingClientRect = vi.fn(
+        () =>
+          ({ top: 20, bottom: 40, left: 460, right: 500, width: 40, height: 20, x: 460, y: 20, toJSON: vi.fn() }) as DOMRect,
+      )
+      fireEvent.click(trigger)
+      const popover = container.querySelector('[data-testid="dr-popover"]') as HTMLElement
+      expect(popover.style.left).toBe('64px')
+    } finally {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: originalInnerWidth })
+    }
   })
 })
 

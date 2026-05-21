@@ -5,11 +5,21 @@
   --custom-signal-claimed: light-dark(hsl(270 58% 46%), hsl(270 80% 70%));
 }
 
-button:focus-visible,
-[role="button"]:focus-visible,
-[role="menuitem"]:focus-visible,
-input:focus-visible,
-a:focus-visible {
+.text-primary,
+.text-contrast-high {
+  color: hsl(240 6% 10%);
+}
+
+html.scheme-dark .text-primary,
+html.scheme-dark .text-contrast-high {
+  color: hsl(0 0% 98%);
+}
+
+html button:focus-visible,
+html [role="button"]:focus-visible,
+html [role="menuitem"]:focus-visible,
+html input:focus-visible,
+html a:focus-visible {
   outline: 2px solid var(--color-focus);
   outline-offset: 2px;
 }

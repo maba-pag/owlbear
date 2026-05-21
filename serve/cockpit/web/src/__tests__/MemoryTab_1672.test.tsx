@@ -541,6 +541,23 @@ describe('TestFromAC_MemoryEditForm', () => {
     expect(titleField).not.toBeNull()
   })
 
+  it('ac3 pds: edit scalar fields use PDS input controls', async () => {
+    const container = await renderWithEntries([makeEntry()])
+    await openAccordion(container)
+    const editBtn = container.querySelector('[data-testid="memory-edit-btn"]')
+    expect(editBtn).not.toBeNull()
+    await act(async () => { fireEvent.click(editBtn!) })
+    await flush()
+    const form = container.querySelector('[data-testid="memory-edit-form"]')
+    expect(form).not.toBeNull()
+    expect(form!.querySelector('p-input-text[name="edit-title"]')).not.toBeNull()
+    expect(form!.querySelector('p-input-text[name="edit-categories"]')).not.toBeNull()
+    expect(form!.querySelector('p-input-number[name="edit-confidence"]')).not.toBeNull()
+    expect(form!.querySelector('p-input-text[name="edit-scope-agents"]')).not.toBeNull()
+    expect(form!.querySelector('p-textarea[name="edit-content"]')).not.toBeNull()
+    expect(form!.querySelector('[data-pds-exception="memory-edit-native-input"]')).toBeNull()
+  })
+
   it('ac3 happy: edit form content field has a character counter with 1024 limit', async () => {
     const container = await renderWithEntries([makeEntry()])
     await openAccordion(container)
@@ -613,6 +630,50 @@ describe('TestFromAC_MemoryEditForm', () => {
     const mutationCall = calls.find(([url]) => url.includes('/edit'))
     const body = JSON.parse((mutationCall?.[1]?.body as string) ?? '{}') as Record<string, unknown>
     expect(body['expected_updated_at']).toBe('2026-03-15T12:00:00Z')
+  })
+
+  it('ac3 pds: edit controls update the save payload from PDS change events', async () => {
+    const entry = makeEntry({
+      id: 'entry-42',
+      state: 'pending',
+      title: 'Original title',
+      categories: ['old'],
+      confidence: 0.82,
+      scope_agents: ['builder'],
+      content: 'Original content',
+      updated_at: '2026-03-15T12:00:00Z',
+    })
+    const fetchMock = makeMutationFetch(200, { entry }, makeApiResponse([entry]))
+    vi.stubGlobal('fetch', fetchMock)
+    let container!: HTMLElement
+    await act(async () => { container = renderMemoryTab().container })
+    await flush()
+    await openAccordion(container)
+    const editBtn = container.querySelector('[data-testid="memory-edit-btn"]')
+    expect(editBtn).not.toBeNull()
+    await act(async () => { fireEvent.click(editBtn!) })
+    await flush()
+    const form = container.querySelector('[data-testid="memory-edit-form"]')!
+    fireEvent(form.querySelector('p-input-text[name="edit-title"]')!, new CustomEvent('input', { detail: { value: 'Updated title' }, bubbles: true }))
+    fireEvent(form.querySelector('p-input-text[name="edit-categories"]')!, new CustomEvent('input', { detail: { value: 'process, ux' }, bubbles: true }))
+    fireEvent(form.querySelector('p-input-number[name="edit-confidence"]')!, new CustomEvent('input', { detail: { value: '0.91' }, bubbles: true }))
+    fireEvent(form.querySelector('p-input-text[name="edit-scope-agents"]')!, new CustomEvent('input', { detail: { value: 'builder, reviewer' }, bubbles: true }))
+    fireEvent(form.querySelector('p-textarea[name="edit-content"]')!, new CustomEvent('input', { detail: { value: 'Updated content' }, bubbles: true }))
+    const saveBtn = container.querySelector('[data-testid="memory-edit-save-btn"]')
+    expect(saveBtn).not.toBeNull()
+    await act(async () => { fireEvent.click(saveBtn!) })
+    await flush()
+    const calls = fetchMock.mock.calls as [string, RequestInit][]
+    const mutationCall = calls.find(([url]) => url.includes('/edit'))
+    const body = JSON.parse((mutationCall?.[1]?.body as string) ?? '{}') as Record<string, unknown>
+    expect(body).toMatchObject({
+      title: 'Updated title',
+      categories: ['process', 'ux'],
+      confidence: 0.91,
+      scope_agents: ['builder', 'reviewer'],
+      content: 'Updated content',
+      expected_updated_at: '2026-03-15T12:00:00Z',
+    })
   })
 
   it('ac3 regression: approve payload includes expected_updated_at matching entry updated_at', async () => {

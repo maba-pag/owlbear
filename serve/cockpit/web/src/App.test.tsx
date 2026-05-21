@@ -18,9 +18,10 @@ describe('TestFromAC_AppShellIntegration', () => {
     expect(container.querySelector('[data-region="workspace"]')).not.toBeNull()
   })
 
-  it('App renders sidecar region (Shell integrated into App)', () => {
+  it('App does not render the retired task sidecar region', () => {
     const { container } = render(<App />)
-    expect(container.querySelector('[data-region="sidecar"]')).not.toBeNull()
+    expect(container.querySelector('[data-region="sidecar"]')).toBeNull()
+    expect(container.querySelector('.shell')?.hasAttribute('data-no-sidecar')).toBe(true)
   })
 
   it('App renders contextual region (Shell integrated into App)', () => {

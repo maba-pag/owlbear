@@ -82,7 +82,8 @@ async function stubApis(page: Page, getMoveMode: () => MoveMode): Promise<void> 
 async function triggerMoveToTodo(page: Page) {
   const taskCard = page.locator('[data-testid="task-card"][data-id="1"]').first()
   await taskCard.waitFor({ state: 'visible', timeout: 8_000 })
-  await taskCard.click({ button: 'right' })
+  await taskCard.focus()
+  await page.keyboard.press('Shift+F10')
 
   const contextMenu = page.locator('[data-testid="context-menu"]')
   await contextMenu.waitFor({ state: 'visible', timeout: 5_000 })

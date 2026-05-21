@@ -126,10 +126,19 @@ export default function ConfirmDialog({
       aria-label={description}
       aria={{ role: 'alertdialog', 'aria-label': description }}
     >
-      <p>{description}</p>
-      {type === 'unblock' && blockReason && <span>{blockReason}</span>}
-      <PButton variant="secondary" onClick={onCancel}>Cancel</PButton>
-      <PButton onClick={onConfirm}>{confirmLabel}</PButton>
+      <div className="grid max-w-[520px] gap-static-md">
+        <div className="grid gap-static-xs rounded-lg bg-frosted-soft p-static-md text-primary">
+          <span className="text-xs font-semibold uppercase text-primary">Confirm action</span>
+          <p className="m-0 text-sm leading-normal">{description}</p>
+          {type === 'unblock' && blockReason ? (
+            <span className="rounded-md border border-contrast-low bg-surface p-static-xs text-sm text-primary">{blockReason}</span>
+          ) : null}
+        </div>
+        <div className="flex flex-wrap items-center justify-end gap-static-xs">
+          <PButton variant="secondary" onClick={onCancel}>Cancel</PButton>
+          <PButton onClick={onConfirm}>{confirmLabel}</PButton>
+        </div>
+      </div>
     </PModal>
   )
 }

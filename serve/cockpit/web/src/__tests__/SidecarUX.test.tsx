@@ -113,24 +113,6 @@ const BOARD: Board = {
   valid_transitions: { todo: ['in-progress'], 'in-progress': ['done'], done: [] },
 }
 
-const TASK_DETAIL = {
-  id: 1,
-  title: 'Test task',
-  status: 'todo',
-  priority: 'important',
-  body: '',
-  updated: '2026-04-28T10:00:00+00:00',
-  created: '2026-04-27T09:00:00+00:00',
-  tags: [],
-  blocked: false,
-  block_reason: null,
-  parent: null,
-  depends_on: [],
-  claimed: false,
-  claimed_at: null,
-  dep_status: null,
-}
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function stubRepairHook(overrides: Partial<UseRepairFlowResult> = {}): UseRepairFlowResult {
@@ -574,7 +556,7 @@ describe('TestFromAC_SessionRowSemanticRoles', () => {
   })
 })
 
-// ─── AC5: ActivityTab subtab hint routing to Shell/DetailTab ─────────────────
+// ─── AC5: Activity is retired from the shell sidecar ─────────────────────────
 
 describe('TestFromAC_SubtabRoutingGap', () => {
   let _attachInternalsDescriptor: PropertyDescriptor | undefined
@@ -610,56 +592,11 @@ describe('TestFromAC_SubtabRoutingGap', () => {
     }
   })
 
-  // AC5: Shell drops the subtab hint at line 238: `(taskId) => setSelectedTaskId(taskId)`.
-  // ActivityTab fires onSelectTask(task_id, 'history') but Shell ignores the second arg.
-  // After #1394 fix: clicking an ActivityTab session row should activate DetailTab's HistorySubtab.
-
-  it('clicking ActivityTab session row activates DetailTab HistorySubtab via "history" subtab hint', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn((url: string) => {
-        if (typeof url === 'string' && url.includes('/api/sessions')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ sessions: [SESSION_RUNNING] }),
-          })
-        }
-        if (typeof url === 'string' && url.match(/\/api\/tasks\/\d+$/)) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve(TASK_DETAIL),
-          })
-        }
-        // Other URLs (scan etc.) hang — useScanPolling is mocked so irrelevant
-        return new Promise<never>(() => {})
-      }),
-    )
-
+  it('Shell does not mount retired ActivityTab session rows by default', () => {
     const { container } = renderShell()
 
-    // Wait for ActivityTab to load its session rows
-    await waitFor(
-      () => {
-        expect(container.querySelector('[data-testid="session-row"]')).not.toBeNull()
-      },
-      { timeout: 1500 },
-    )
-
-    // Click the session row — ActivityTab fires onSelectTask(1, 'history')
-    fireEvent.click(container.querySelector('[data-testid="session-row"]')!)
-
-    // Wait for task 1 to load in DetailTab (Shell fetches /api/tasks/1 after task selected)
-    await waitFor(
-      () => {
-        expect(container.querySelector('[data-testid="field-id"]')).not.toBeNull()
-      },
-      { timeout: 1500 },
-    )
-
-    // After #1394 fix: Shell must forward 'history' hint → DetailTab.showHistory=true →
-    // HistorySubtab renders with data-testid="history-view".
-    // Currently: Shell drops the hint → showHistory remains false → history-view absent → FAILS
-    expect(container.querySelector('[data-testid="history-view"]')).not.toBeNull()
+    expect(container.querySelector('[data-testid="session-row"]')).toBeNull()
+    expect(container.querySelector('[data-testid="activity-tab-stub"]')).toBeNull()
   })
 })
 

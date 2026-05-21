@@ -5,10 +5,10 @@
  *       No RED tests possible (all would be green). Noted in AC coverage table.
  * AC-2: session-row → PButton (ActivityTab); resolve-button → PButton (DRStatusIndicator);
  *       retry button → PButton (ErrorBoundary). data-testid and onClick preserved.
- * AC-3: Shell <h1> → PHeading tag="h1"; both Shell <h2> → PHeading tag="h2";
- *       DetailTab <h3> (Actions) → PHeading tag="h3"; ErrorBoundary <h3> → PHeading tag="h3".
- * AC-4: Raw <button> only where data-pds-exception attribute or Shell sidecar-collapse
- *       (aria-expanded pattern).
+ * AC-3: Shell title uses the PCanvas title slot; Shell no longer renders the
+ *       retired PCanvas sidebar-end-header; DetailTab
+ *       <h3> (Actions) → PHeading tag="h3"; ErrorBoundary <h3> → PHeading tag="h3".
+ * AC-4: Raw <button> only where data-pds-exception attribute applies.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, fireEvent, act } from '@testing-library/react'
@@ -295,7 +295,7 @@ describe('TestFromAC_SimpleSwaps_ErrorBoundaryRetry', () => {
   })
 })
 
-// ─── AC-3: Shell <h1> → PHeading tag="h1" ────────────────────────────────────
+// ─── AC-3: Shell app title → PCanvas title slot ──────────────────────────────
 
 describe('TestFromAC_SimpleSwaps_ShellH1', () => {
   afterEach(() => {
@@ -303,17 +303,18 @@ describe('TestFromAC_SimpleSwaps_ShellH1', () => {
     vi.mocked(usePollingFetch).mockClear()
   })
 
-  it('status-bar renders p-heading (replaces raw <h1>)', () => {
+  it('Shell renders app identity in a visually hidden PCanvas title slot', () => {
     const { container } = renderShell()
-    const statusBar = container.querySelector('[data-region="status-bar"]')
-    expect(statusBar?.querySelector('p-heading')).not.toBeNull()
+    const title = container.querySelector('[slot="title"]')
+    expect(title).not.toBeNull()
+    expect(title?.textContent).toContain('OwlBear Cockpit')
+    expect(title?.classList.contains('sr-only')).toBe(true)
   })
 
-  it('status-bar p-heading has tag="h1"', () => {
+  it('Shell title slot is a non-interactive label owned by PCanvas', () => {
     const { container } = renderShell()
-    const statusBar = container.querySelector('[data-region="status-bar"]')
-    const heading = statusBar?.querySelector('p-heading')
-    expect(heading?.getAttribute('tag')).toBe('h1')
+    const title = container.querySelector('[slot="title"]')
+    expect(title?.tagName.toLowerCase()).toBe('span')
   })
 
   it('no raw <h1> anywhere in Shell', () => {
@@ -321,15 +322,14 @@ describe('TestFromAC_SimpleSwaps_ShellH1', () => {
     expect(container.querySelector('h1')).toBeNull()
   })
 
-  it('status-bar p-heading contains "OwlBear Cockpit"', () => {
+  it('status-bar no longer owns the app title heading after PCanvas migration', () => {
     const { container } = renderShell()
     const statusBar = container.querySelector('[data-region="status-bar"]')
-    const heading = statusBar?.querySelector('p-heading')
-    expect(heading?.textContent).toContain('OwlBear Cockpit')
+    expect(statusBar?.textContent).not.toContain('OwlBear Cockpit')
   })
 })
 
-// ─── AC-3: Shell <h2> → PHeading tag="h2" ────────────────────────────────────
+// ─── AC-3: Shell does not render retired sidebar-end heading ────────────────
 
 describe('TestFromAC_SimpleSwaps_ShellH2', () => {
   afterEach(() => {
@@ -337,30 +337,24 @@ describe('TestFromAC_SimpleSwaps_ShellH2', () => {
     vi.mocked(usePollingFetch).mockClear()
   })
 
-  it('sidecar renders p-heading (replaces raw <h2>)', () => {
+  it('Shell does not render p-heading in the retired PCanvas sidebar-end-header slot', () => {
     const { container } = renderShell()
-    const sidecar = container.querySelector('[data-region="sidecar"]')
-    expect(sidecar?.querySelector('p-heading')).not.toBeNull()
+    expect(container.querySelector('p-heading[slot="sidebar-end-header"]')).toBeNull()
   })
 
-  it('sidecar p-heading has tag="h2"', () => {
+  it('Shell does not render any sidebar-end header slot content', () => {
     const { container } = renderShell()
-    const sidecar = container.querySelector('[data-region="sidecar"]')
-    const heading = sidecar?.querySelector('p-heading')
-    expect(heading?.getAttribute('tag')).toBe('h2')
+    expect(container.querySelector('[slot="sidebar-end-header"]')).toBeNull()
   })
 
-  it('no raw <h2> in Shell sidecar', () => {
+  it('no raw <h2> in Shell light DOM', () => {
     const { container } = renderShell()
-    const sidecar = container.querySelector('[data-region="sidecar"]')
-    expect(sidecar?.querySelector('h2')).toBeNull()
+    expect(container.querySelector('h2')).toBeNull()
   })
 
-  it('sidecar p-heading contains selected task heading text', () => {
+  it('task detail modal is not mounted before task selection', () => {
     const { container } = renderShell()
-    const sidecar = container.querySelector('[data-region="sidecar"]')
-    const heading = sidecar?.querySelector('p-heading')
-    expect(heading?.textContent).toContain('No task selected')
+    expect(container.querySelector('[data-testid="task-detail-modal"]')).toBeNull()
   })
 })
 

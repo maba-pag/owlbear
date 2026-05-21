@@ -6,7 +6,6 @@
  *
  *   anonymous_2  (line  42) – pendingDRItems.find() predicate
  *   anonymous_3  (line  54) – kanbanProps.onSelectTask
- *   anonymous_6  (line  77) – onTabChange event handler
  *   anonymous_11 (line 110) – async task-fetch IIFE
  *   anonymous_12 (line 138) – task-fetch effect cleanup
  *   anonymous_13 (line 228) – DetailTab.onSelectTask
@@ -14,7 +13,6 @@
  *   anonymous_15 (line 241) – DetailTab.onTaskCleared
  *   anonymous_16 (line 243) – inner path inside onTaskCleared
  *   anonymous_17 (line 250) – DetailTab.onTaskUpdated
- *   anonymous_18 (line 271) – ActivityTab.onSelectTask
  *   anonymous_19 (line 283) – ResolveModal.onClose
  *   anonymous_20 (line 284) – ResolveModal.onResolved
  *
@@ -70,16 +68,6 @@ vi.mock('../components/DetailTab', () => ({
       return null
     },
   ),
-}))
-
-// ── ActivityTab: capture onSelectTask ─────────────────────────────────────────
-let capturedActivityOnSelectTask: ((taskId: number, subtab?: string | null) => void) | undefined
-
-vi.mock('../components/ActivityTab', () => ({
-  default: vi.fn((props: { onSelectTask?: (taskId: number, subtab?: string | null) => void }) => {
-    capturedActivityOnSelectTask = props.onSelectTask
-    return null
-  }),
 }))
 
 // ── ResolveModal: capture onClose / onResolved; render sentinel ────────────────
@@ -189,7 +177,6 @@ describe('TestFromAC_ShellCallbacks', () => {
     capturedDetailOnSelectTask = undefined
     capturedDetailOnTaskCleared = undefined
     capturedDetailOnTaskUpdated = undefined
-    capturedActivityOnSelectTask = undefined
     capturedResolveOnClose = undefined
     capturedResolveOnResolved = undefined
     capturedDROnItemClick = undefined
@@ -219,63 +206,23 @@ describe('TestFromAC_ShellCallbacks', () => {
   // ─── anonymous_3: kanbanProps.onSelectTask (line 54) ─────────────────────
 
   describe('kanbanProps.onSelectTask (anonymous_3, line 54)', () => {
-    it('onSelectTask hides detail-placeholder by setting selectedTaskId', () => {
+    it('onSelectTask opens the task detail modal by setting selectedTaskId', () => {
       stubHooks()
       const { container } = renderShell()
-      expect(container.querySelector('[data-testid="detail-placeholder"]')).not.toBeNull()
+      expect(container.querySelector('[data-testid="task-detail-modal"]')).toBeNull()
       act(() => { capturedKanbanOnSelectTask?.(42) })
-      expect(container.querySelector('[data-testid="detail-placeholder"]')).toBeNull()
+      expect(container.querySelector('[data-testid="task-detail-modal"]')).not.toBeNull()
     })
 
     it('onSelectTask clears any prior detailValidationMessage', () => {
       stubHooks()
       const { container } = renderShell()
       // Produce a validation message first via onTaskCleared
+      act(() => { capturedKanbanOnSelectTask?.(42) })
       act(() => { capturedDetailOnTaskCleared?.('Task was moved') })
-      expect(container.querySelector('[data-testid="validation-message"]')).not.toBeNull()
       // Select a task → validation message clears
       act(() => { capturedKanbanOnSelectTask?.(42) })
       expect(container.querySelector('[data-testid="validation-message"]')).toBeNull()
-    })
-  })
-
-  // ─── anonymous_6: onTabChange event handler (line 77) ────────────────────
-
-  describe('onTabChange handler (anonymous_6, line 77)', () => {
-    it('tabChange to index 1 hides detail panel and shows activity panel', () => {
-      stubHooks()
-      const { container } = renderShell()
-      const pTabs = container.querySelector('p-tabs')
-      expect(pTabs).not.toBeNull()
-      act(() => {
-        pTabs!.dispatchEvent(
-          new CustomEvent('tabChange', { detail: { activeTabIndex: 1 } }),
-        )
-      })
-      expect(
-        container.querySelector('[data-tab-content="detail"]')?.getAttribute('aria-hidden'),
-      ).toBe('true')
-      expect(
-        container.querySelector('[data-tab-content="activity"]')?.getAttribute('aria-hidden'),
-      ).toBe('false')
-    })
-
-    it('tabChange to index 0 shows detail panel and hides activity panel', () => {
-      stubHooks()
-      const { container } = renderShell()
-      const pTabs = container.querySelector('p-tabs')!
-      act(() => {
-        pTabs.dispatchEvent(new CustomEvent('tabChange', { detail: { activeTabIndex: 1 } }))
-      })
-      act(() => {
-        pTabs.dispatchEvent(new CustomEvent('tabChange', { detail: { activeTabIndex: 0 } }))
-      })
-      expect(
-        container.querySelector('[data-tab-content="detail"]')?.getAttribute('aria-hidden'),
-      ).toBe('false')
-      expect(
-        container.querySelector('[data-tab-content="activity"]')?.getAttribute('aria-hidden'),
-      ).toBe('true')
     })
   })
 
@@ -299,20 +246,37 @@ describe('TestFromAC_ShellCallbacks', () => {
       })
     })
 
-    it('successful fetch clears the detail-placeholder', async () => {
+    it('successful fetch keeps task detail modal open and removes loading state', async () => {
       stubHooks()
       vi.stubGlobal(
         'fetch',
         vi.fn().mockResolvedValue({
           ok: true,
-          json: vi.fn().mockResolvedValue({ id: 42, title: 'Task 42' }),
+          json: vi.fn().mockResolvedValue({
+            id: 42,
+            title: 'Task 42',
+            status: 'todo',
+            priority: 'needed',
+            body: '',
+            updated: '2026-01-01T00:00:00+00:00',
+            created: '2026-01-01T00:00:00+00:00',
+            tags: [],
+            blocked: false,
+            block_reason: null,
+            claimed: false,
+            claimed_at: null,
+            dep_status: null,
+            parent: null,
+            depends_on: [],
+          }),
         }),
       )
       const { container } = renderShell()
       act(() => { capturedKanbanOnSelectTask?.(42) })
-      // After successful fetch, selectedTask is set; detail-placeholder is hidden
+      // After successful fetch, selectedTask is set and the modal remains open.
       await waitFor(() => {
-        expect(container.querySelector('[data-testid="detail-placeholder"]')).toBeNull()
+        expect(container.querySelector('[data-testid="task-detail-modal"]')).not.toBeNull()
+        expect(container.querySelector('[data-testid="task-detail-loading"]')).toBeNull()
       })
     })
 
@@ -383,43 +347,44 @@ describe('TestFromAC_ShellCallbacks', () => {
   // ─── anonymous_13–17: DetailTab callback functions ───────────────────────
 
   describe('DetailTab callbacks (anonymous_13–17, lines 228–250)', () => {
-    it('DetailTab.onSelectTask hides detail-placeholder (covers anonymous_13)', () => {
+    it('DetailTab.onSelectTask opens task detail modal for the new task (covers anonymous_13)', () => {
       stubHooks()
       const { container } = renderShell()
-      expect(container.querySelector('[data-testid="detail-placeholder"]')).not.toBeNull()
+      act(() => { capturedKanbanOnSelectTask?.(42) })
       act(() => { capturedDetailOnSelectTask?.(99, null) })
-      expect(container.querySelector('[data-testid="detail-placeholder"]')).toBeNull()
+      expect(container.querySelector('[data-testid="task-detail-modal"]')).not.toBeNull()
     })
 
     it('DetailTab.onSelectTask with non-null subtab exercises state functional updater (covers anonymous_14)', () => {
       stubHooks()
       const { container } = renderShell()
       // Pass a real subtab so the (current) => subtab ?? current path executes
+      act(() => { capturedKanbanOnSelectTask?.(42) })
       act(() => { capturedDetailOnSelectTask?.(77, 'activity') })
-      expect(container.querySelector('[data-testid="detail-placeholder"]')).toBeNull()
+      expect(container.querySelector('[data-testid="task-detail-modal"]')).not.toBeNull()
     })
 
-    it('DetailTab.onTaskCleared resets selectedTaskId and shows placeholder (covers anonymous_15)', () => {
+    it('DetailTab.onTaskCleared resets selectedTaskId and closes modal (covers anonymous_15)', () => {
       stubHooks()
       const { container } = renderShell()
       act(() => { capturedKanbanOnSelectTask?.(42) })
-      expect(container.querySelector('[data-testid="detail-placeholder"]')).toBeNull()
+      expect(container.querySelector('[data-testid="task-detail-modal"]')).not.toBeNull()
       act(() => { capturedDetailOnTaskCleared?.(null) })
-      expect(container.querySelector('[data-testid="detail-placeholder"]')).not.toBeNull()
+      expect(container.querySelector('[data-testid="task-detail-modal"]')).toBeNull()
     })
 
-    it('DetailTab.onTaskCleared with non-null message shows validation message (covers anonymous_15 message path)', () => {
+    it('DetailTab.onTaskCleared with non-null message closes modal (covers anonymous_15 message path)', () => {
       stubHooks()
       const { container } = renderShell()
+      act(() => { capturedKanbanOnSelectTask?.(42) })
       act(() => { capturedDetailOnTaskCleared?.('Task archived successfully') })
-      expect(
-        container.querySelector('[data-testid="validation-message"]')?.textContent,
-      ).toContain('Task archived successfully')
+      expect(container.querySelector('[data-testid="task-detail-modal"]')).toBeNull()
     })
 
     it('DetailTab.onTaskUpdated with changed title triggers refetchTasks (covers anonymous_17)', () => {
       const { refetchTasks } = stubHooks()
       renderShell()
+      act(() => { capturedKanbanOnSelectTask?.(42) })
       act(() => {
         capturedDetailOnTaskUpdated?.({
           id: 42,
@@ -436,6 +401,7 @@ describe('TestFromAC_ShellCallbacks', () => {
     it('DetailTab.onTaskUpdated with identical fields still calls refetchTasks when previousTask is null', () => {
       const { refetchTasks } = stubHooks()
       renderShell()
+      act(() => { capturedKanbanOnSelectTask?.(42) })
       act(() => {
         capturedDetailOnTaskUpdated?.({
           id: 1,
@@ -446,18 +412,6 @@ describe('TestFromAC_ShellCallbacks', () => {
         })
       })
       expect(refetchTasks).toHaveBeenCalled()
-    })
-  })
-
-  // ─── anonymous_18: ActivityTab.onSelectTask (line 271) ───────────────────
-
-  describe('ActivityTab.onSelectTask (anonymous_18, line 271)', () => {
-    it('ActivityTab.onSelectTask hides detail-placeholder', () => {
-      stubHooks()
-      const { container } = renderShell()
-      expect(container.querySelector('[data-testid="detail-placeholder"]')).not.toBeNull()
-      act(() => { capturedActivityOnSelectTask?.(77, null) })
-      expect(container.querySelector('[data-testid="detail-placeholder"]')).toBeNull()
     })
   })
 

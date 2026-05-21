@@ -4,6 +4,16 @@
   border-left: 4px solid var(--p-color-contrast-low);
 }
 
+[data-testid='history-session-row']:hover,
+[data-testid='session-row']:hover {
+  background: var(--p-color-frosted);
+}
+
+[data-testid='history-session-row'][aria-disabled='true'],
+[data-testid='session-row'][aria-disabled='true'] {
+  cursor: default;
+}
+
 [data-state="blocked"],
 [data-state="rejected"] {
   border-left: 4px solid var(--p-color-error);

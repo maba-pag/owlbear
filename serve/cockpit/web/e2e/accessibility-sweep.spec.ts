@@ -1,7 +1,7 @@
 /**
  * WCAG 2.1 AA Playwright accessibility sweep for Cockpit surfaces.
  *
- * Covers the board, sidecar detail view, DR and health popovers, FilterPanel,
+ * Covers the board, task detail modal, DR and health popovers, FilterPanel,
  * ResolveModal, ArchivalModal, ConfirmDialog, CleanupPanel, and RepairPanel.
  * Route mocks use Playwright LIFO ordering: catch-all first, specific routes last.
  */
@@ -159,6 +159,11 @@ async function waitForHealthBadge(page: Page): Promise<void> {
     .waitFor({ state: 'visible', timeout: 8_000 })
 }
 
+async function openMaintenanceMenu(page: Page): Promise<void> {
+  await page.locator('[data-testid="maintenance-menu-toggle"]').click()
+  await page.locator('[data-testid="maintenance-menu"]').waitFor({ state: 'visible', timeout: 3_000 })
+}
+
 // ─── AC1: WCAG 2.1 AA axe scans on all required surfaces ─────────────────────
 //
 // All tests use .withTags(WCAG_TAGS) to scope axe to WCAG 2.1 AA rules only.
@@ -193,18 +198,18 @@ test.describe('TestFromAC_WcagSweep', () => {
     expect(results.violations, formatViolations(results.violations)).toEqual([])
   })
 
-  // ── Surface 2: sidecar detail view ────────────────────────────────────────
-  // The sidecar opens when a task card is clicked. The detail panel includes
+  // ── Surface 2: task detail modal ──────────────────────────────────────────
+  // The modal opens when a task card is clicked. The detail panel includes
   // TaskFieldsEditor, TaskActions, and the metadata accordion.
-  test('sidecar detail view passes wcag2.1 aa axe scan (AC1)', async ({ page }) => {
+  test('task detail modal passes wcag2.1 aa axe scan (AC1)', async ({ page }) => {
     const card = page.locator('[data-testid="task-card"]').first()
     await card.waitFor({ state: 'visible', timeout: 5_000 })
     await card.click()
 
-    // Prove sidecar rendered by asserting the title field is visible.
+    // Prove modal rendered by asserting the title field is visible.
     await expect(
       page.locator('[data-field="title"]'),
-      'sidecar [data-field="title"] must be visible before axe scan',
+      'task detail modal [data-field="title"] must be visible before axe scan',
     ).toBeVisible({ timeout: 5_000 })
 
     const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze()
@@ -323,10 +328,10 @@ test.describe('TestFromAC_WcagSweep', () => {
     await card.waitFor({ state: 'visible', timeout: 8_000 })
     await card.click()
 
-    // Wait for sidecar to open with the task detail.
+    // Wait for task detail modal to open.
     await expect(
       page.locator('[data-field="title"]'),
-      'sidecar [data-field="title"] must be visible before clicking move-backward',
+      'task detail modal [data-field="title"] must be visible before clicking move-backward',
     ).toBeVisible({ timeout: 5_000 })
 
     // Click "Move Backward" to open ConfirmDialog.
@@ -347,6 +352,8 @@ test.describe('TestFromAC_WcagSweep', () => {
   // CleanupPanel's confirm dialog opens when the "Cleanup" button is clicked.
   // It renders as a custom div with role="dialog" in the status-bar.
   test('cleanup panel confirm dialog passes wcag2.1 aa axe scan (AC1)', async ({ page }) => {
+    await openMaintenanceMenu(page)
+
     const cleanupButton = page.locator('[data-testid="cleanup-button"]')
     await cleanupButton.waitFor({ state: 'visible', timeout: 5_000 })
     await cleanupButton.click()
@@ -362,8 +369,7 @@ test.describe('TestFromAC_WcagSweep', () => {
   })
 
   // ── Surface 10: RepairPanel confirm dialog ────────────────────────────────
-  // RepairPanel confirm dialog opens from the HealthBadge popover: click health-badge
-  // to open the popover, then click repair-button to trigger the confirming phase.
+  // RepairPanel confirm dialog opens from the maintenance menu after scan issues load.
   //
   // KNOWN RED: `<span data-testid="repair-confirm-btn" onClick>` in RepairPanel.tsx
   // carries a click handler on a non-interactive <span> element. Axe flags this as
@@ -379,8 +385,7 @@ test.describe('TestFromAC_WcagSweep', () => {
       'health-badge must have data-health="red" before clicking to expose repair-button',
     ).toHaveAttribute('data-health', 'red')
 
-    await badge.click()
-    await page.locator('[data-testid="health-badge-popover"]').waitFor({ state: 'visible', timeout: 3_000 })
+    await openMaintenanceMenu(page)
 
     const repairButton = page.locator('[data-testid="repair-button"]')
     await repairButton.waitFor({ state: 'visible', timeout: 3_000 })

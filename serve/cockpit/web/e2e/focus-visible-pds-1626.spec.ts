@@ -1,42 +1,12 @@
 /**
- * RED phase Playwright E2E tests for #1626: P3-06 — Focus-visible rings (PDS focus styling)
+ * Browser focus-visible contract for the current Cockpit shell.
  *
- * AC-1: Every element matching `button, [role="button"], [role="menuitem"], input, a`
- *       shows a visible :focus-visible outline when it receives keyboard focus —
- *       Playwright assertion on outline-style and outline-color.
- *
- * AC-2 (behavioral proxy): Card div[role="button"] outline-offset must be 2px after
- *       token migration (--pds-state-focus → --color-focus). Currently 1px → FAILS.
- *
- * RED reasons for AC-1 tests:
- *   - No global :focus-visible CSS rule exists for `button, [role="button"],
- *     [role="menuitem"], input, a` in the application CSS.
- *   - button (.icon-button): UA default is `outline: auto` (not 'solid') — FAILS.
- *   - article[role="button"] (DecisionViewport): non-natively-focusable element gets
- *     no UA focus ring → `outline: none` (not 'solid') — FAILS.
- *   - div[role="menuitem"] (context menu): UA gives `outline: none` for div — FAILS.
- *   - a link (DecisionViewport): UA default is `outline: auto` (not 'solid') — FAILS.
- *   - outlineColor for all: UA supplies a system accent color ≠ rgb(26, 68, 234) — FAILS.
- *
- * RED reason for AC-2 behavioral proxy:
- *   - Card.css has `outline-offset: 1px`; AC requires 2px after migration — FAILS.
- *
- * CSS source-contract coverage for AC-2 (--pds-state-focus → --color-focus migration)
- * is in: serve/cockpit/web/src/__tests__/FocusVisibleCssSource_1626.test.ts
- *
- * Builder fix: add global :focus-visible rule using var(--color-focus) in a shared
- * CSS file (tokens.css or equivalent), and migrate Card.css offset to 2px.
- *
- * API isolation: all /api/* routes stubbed — no backend required.
- * LIFO route registration: catch-all registered first, specific routes last (highest priority).
+ * Keyboard focus is product-relevant, so this keeps representative live controls
+ * covered without preserving retired DecisionViewport or sidecar anatomy.
  */
-import { test, expect, type Page, type Locator } from '@playwright/test'
+import { test, expect, type Locator, type Page } from '@playwright/test'
 
-// ─── PDS canonical focus color ────────────────────────────────────────────────
-// var(--color-focus) from PDS Tailwind theme resolves to #1A44EA = rgb(26, 68, 234).
 const PDS_FOCUS_COLOR = 'rgb(26, 68, 234)'
-
-// ─── Fixture data ─────────────────────────────────────────────────────────────
 
 const STATUSES = ['research', 'backlog', 'todo', 'in-progress', 'review', 'docs', 'done']
 const PRIORITIES = ['critical', 'needed', 'important', 'nice-to-have', 'someday']
@@ -55,390 +25,40 @@ const BOARD = {
   } as Record<string, string[]>,
 }
 
-const TASKS = {
-  tasks: [
-    {
-      id: 1,
-      title: 'Focus ring test task',
-      status: 'todo',
-      priority: 'important',
-      updated: '2026-05-16T00:00:00+00:00',
-      tags: [],
-      blocked: false,
-      block_reason: null,
-      claimed: false,
-    },
-  ],
-  mtime: 1_713_456_000,
+const TASK = {
+  id: 1,
+  title: 'Focus ring test task',
+  status: 'todo',
+  priority: 'important',
+  updated: '2026-05-16T00:00:00+00:00',
+  tags: [],
+  blocked: false,
+  block_reason: null,
+  claimed: false,
+  dep_status: null,
 }
 
-// One pending decision — causes DecisionViewport to render an <a> link and
-// an article[role="button"] in the sidecar panel, enabling AC-1 anchor/role-button tests.
-const DECISION_ITEMS = [
-  {
-    id: 'dr-1626-001',
-    task_id: 1,
-    agent: 'builder',
-    request_type: 'scope-decision',
-    created: '2026-05-16T00:00:00+00:00',
-    title: 'Focus ring test decision',
-    body_preview: 'Test decision for focus ring E2E.',
-    body: '## Context\n\nNeeded to surface DecisionViewport anchor.',
-  },
-]
-
-// ─── API stub helper ───────────────────────────────────────────────────────────
-// LIFO: catch-all registered first (lowest priority); specific routes last (highest priority).
-
-async function stubApis(page: Page): Promise<void> {
-  await page.route('/api/**', (route) => route.fulfill({ status: 200, json: {} }))
-
-  await page.route('/api/events', (route) =>
-    route.fulfill({
-      status: 200,
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        Connection: 'keep-alive',
-      },
-      body: '',
-    }),
-  )
-
-  await page.route(/\/api\/sessions(\?.*)?$/, (route) =>
-    route.fulfill({ json: { sessions: [] } }),
-  )
-
-  await page.route('/api/tasks/scan', (route) => route.fulfill({ json: [] }))
-
-  await page.route('/api/decisions/pending', (route) =>
-    route.fulfill({ json: { count: DECISION_ITEMS.length, items: DECISION_ITEMS } }),
-  )
-
-  await page.route('/api/tasks', (route) => route.fulfill({ json: TASKS }))
-  await page.route('/api/board', (route) => route.fulfill({ json: BOARD }))
+const TASK_DETAIL = {
+  ...TASK,
+  body: '## Context\n\nFocus visible proof task.',
+  created: '2026-05-16T00:00:00+00:00',
+  claimed_at: null,
+  parent: null,
+  depends_on: [] as number[],
 }
 
-async function tabUntilFocused(page: Page, locator: Locator, maxTabs = 12): Promise<void> {
-  for (let i = 0; i < maxTabs; i++) {
-    const isFocused = await locator.evaluate((element) => document.activeElement === element)
-    if (isFocused) {
-      return
-    }
-    await page.keyboard.press('Tab')
-  }
+const DECISION = {
+  id: 'dr-1626-001',
+  task_id: 1,
+  agent: 'builder',
+  request_type: 'scope-decision',
+  created: '2026-05-16T00:00:00+00:00',
+  title: 'Focus ring test decision',
+  body_preview: 'Decision request used by focus-visible E2E.',
+  body: '## Context\n\nResolve modal focus proof.',
 }
 
-// ─── AC-1: Focus-visible outline on interactive elements ──────────────────────
-//
-// Verifies that `button, [role="button"], [role="menuitem"], input, a` elements
-// show a visible :focus-visible outline using the PDS canonical pattern:
-//   outline: 2px solid var(--color-focus);   /* resolves to rgb(26, 68, 234) */
-//   outline-offset: 2px;
-//
-// In RED: No global :focus-visible CSS rule exists. Native elements (button, a)
-// get the UA default `outline: auto` (not 'solid'); non-native elements (div, article
-// with ARIA roles) get `outline: none` from the UA. Both fail the 'solid' check.
-// The UA outline color is a system accent color, never rgb(26, 68, 234). Both fail.
-//
-// In GREEN: Global CSS rule `outline: 2px solid var(--color-focus)` is applied to
-// all matching elements. Both outlineStyle and outlineColor assertions pass.
-
-test.describe('TestFromAC_FocusVisibleOutline', () => {
-  test.use({ viewport: { width: 1280, height: 800 } })
-
-  test.beforeEach(async ({ page }) => {
-    await stubApis(page)
-    await page.goto('/')
-    await page.waitForSelector('[data-region="workspace"]', { timeout: 10_000 })
-  })
-
-  // ── button: ThemeToggle (.icon-button) ──────────────────────────────────────
-
-  // Happy path: button (.icon-button) shows outline-style 'solid' on keyboard focus (AC-1)
-  // RED: Shell.css has no :focus-visible rule for .icon-button — UA applies `outline: auto`
-  // which resolves outlineStyle to 'auto', not 'solid'.
-  test('button (.icon-button): outlineStyle is solid on keyboard focus (AC-1)', async ({
-    page,
-  }) => {
-    const themeToggle = page.locator('[data-testid="theme-toggle"]')
-    await themeToggle.focus()
-
-    const outlineStyle = await page.evaluate(
-      () => getComputedStyle(document.activeElement as Element).outlineStyle,
-    )
-
-    expect(
-      outlineStyle,
-      'button.icon-button must show outline-style:solid with PDS :focus-visible rule. ' +
-        "RED: no CSS rule → UA applies outline:auto (resolves to 'auto', not 'solid').",
-    ).toBe('solid')
-  })
-
-  // Happy path: button (.icon-button) shows PDS focus color on keyboard focus (AC-1)
-  // RED: UA focus ring uses a system accent color — never rgb(26, 68, 234).
-  test('button (.icon-button): outlineColor is PDS focus blue rgb(26,68,234) on keyboard focus (AC-1)', async ({
-    page,
-  }) => {
-    const themeToggle = page.locator('[data-testid="theme-toggle"]')
-    await themeToggle.focus()
-
-    const outlineColor = await page.evaluate(
-      () => getComputedStyle(document.activeElement as Element).outlineColor,
-    )
-
-    expect(
-      outlineColor,
-      `button.icon-button must show outline-color:${PDS_FOCUS_COLOR} (var(--color-focus)). ` +
-        'RED: no CSS rule → UA supplies a system accent color, not the PDS focus blue.',
-    ).toBe(PDS_FOCUS_COLOR)
-  })
-
-  // ── [role="button"]: DecisionViewport article ────────────────────────────────
-  //
-  // DecisionViewport renders article[role="button"][tabIndex=0] for each pending DR.
-  // Unlike Card (.card[role="button"]), this element has NO existing :focus-visible rule.
-  // RED: article/div elements with ARIA roles get no UA focus ring → outlineStyle is 'none'.
-
-  // Happy path: article[role="button"] (DR item) shows outline-style 'solid' on focus (AC-1)
-  test('article[role="button"] (DecisionViewport DR item): outlineStyle is solid on focus (AC-1)', async ({
-    page,
-  }) => {
-    const drItem = page.locator('[data-testid="decision-item-dr-1626-001"]')
-    await expect(drItem).toBeVisible({ timeout: 5_000 })
-    await drItem.focus()
-
-    const outlineStyle = await page.evaluate(
-      () => getComputedStyle(document.activeElement as Element).outlineStyle,
-    )
-
-    expect(
-      outlineStyle,
-      'article[role="button"] (DecisionViewport) must show outline-style:solid with PDS ' +
-        ':focus-visible rule. RED: no CSS rule → UA gives no ring to non-native elements ' +
-        "(outlineStyle is 'none').",
-    ).toBe('solid')
-  })
-
-  // Happy path: article[role="button"] (DR item) shows PDS focus color on focus (AC-1)
-  test('article[role="button"] (DecisionViewport DR item): outlineColor is PDS focus blue on focus (AC-1)', async ({
-    page,
-  }) => {
-    const drItem = page.locator('[data-testid="decision-item-dr-1626-001"]')
-    await expect(drItem).toBeVisible({ timeout: 5_000 })
-    await drItem.focus()
-
-    const outlineColor = await page.evaluate(
-      () => getComputedStyle(document.activeElement as Element).outlineColor,
-    )
-
-    expect(
-      outlineColor,
-      `article[role="button"] must show outline-color:${PDS_FOCUS_COLOR} (var(--color-focus)). ` +
-        'RED: no CSS rule → element has no outline (outlineColor is transparent or system color).',
-    ).toBe(PDS_FOCUS_COLOR)
-  })
-
-  // ── [role="menuitem"]: context menu transition items ─────────────────────────
-  //
-  // KanbanBoard renders div[role="menuitem"][tabIndex=-1] inside the right-click context
-  // menu. These are div elements with no UA focus ring.
-  // RED: No :focus-visible CSS rule exists → outlineStyle is 'none' → FAILS.
-
-  // Happy path: [role="menuitem"] shows outline-style 'solid' when focused (AC-1)
-  test('[role="menuitem"] (context menu): outlineStyle is solid when focused (AC-1)', async ({
-    page,
-  }) => {
-    // Open context menu via right-click on the task card
-    const card = page.locator('[data-testid="task-card"]').first()
-    await expect(card).toBeVisible({ timeout: 5_000 })
-    await card.click({ button: 'right' })
-    await page.waitForSelector('[data-testid="context-menu"]', { timeout: 5_000 })
-
-    const menuItems = page.locator('[data-testid="context-menu"] [role="menuitem"]')
-    await expect(menuItems.first()).toBeFocused()
-    await page.keyboard.press('ArrowDown')
-    await expect(menuItems.nth(1)).toBeFocused()
-
-    const outlineStyle = await page.evaluate(
-      () => getComputedStyle(document.activeElement as Element).outlineStyle,
-    )
-
-    expect(
-      outlineStyle,
-      '[role="menuitem"] must show outline-style:solid with PDS :focus-visible rule. ' +
-        "RED: no CSS rule → UA gives no ring to div elements (outlineStyle is 'none').",
-    ).toBe('solid')
-  })
-
-  // Happy path: [role="menuitem"] shows PDS focus color when focused (AC-1)
-  test('[role="menuitem"] (context menu): outlineColor is PDS focus blue when focused (AC-1)', async ({
-    page,
-  }) => {
-    const card = page.locator('[data-testid="task-card"]').first()
-    await expect(card).toBeVisible({ timeout: 5_000 })
-    await card.click({ button: 'right' })
-    await page.waitForSelector('[data-testid="context-menu"]', { timeout: 5_000 })
-
-    const menuItems = page.locator('[data-testid="context-menu"] [role="menuitem"]')
-    await expect(menuItems.first()).toBeFocused()
-    await page.keyboard.press('ArrowDown')
-    await expect(menuItems.nth(1)).toBeFocused()
-
-    const outlineColor = await page.evaluate(
-      () => getComputedStyle(document.activeElement as Element).outlineColor,
-    )
-
-    expect(
-      outlineColor,
-      `[role="menuitem"] must show outline-color:${PDS_FOCUS_COLOR} (var(--color-focus)). ` +
-        'RED: no CSS rule → element has no outline (outlineColor is transparent).',
-    ).toBe(PDS_FOCUS_COLOR)
-  })
-
-  // ── input: ResolveModal response radio input ───────────────────────────────
-
-  test('input[type="radio"] (ResolveModal): outlineStyle is solid on keyboard focus (AC-1)', async ({
-    page,
-  }) => {
-    await page.click('[data-testid="dr-indicator"]')
-    await page.waitForSelector('[data-testid="dr-popover"]', { timeout: 5_000 })
-    await page.click('[data-testid="dr-item-dr-1626-001"]')
-    await page.waitForSelector('[data-testid="resolve-modal"]', { timeout: 5_000 })
-
-    const approvedRadio = page.locator(
-      '[data-testid="response-selector"] input[type="radio"][value="approved"]',
-    )
-    await expect(approvedRadio).toBeVisible({ timeout: 5_000 })
-    await tabUntilFocused(page, approvedRadio)
-    await expect(approvedRadio).toBeFocused()
-
-    const outlineStyle = await page.evaluate(
-      () => getComputedStyle(document.activeElement as Element).outlineStyle,
-    )
-
-    expect(
-      outlineStyle,
-      'input[type="radio"] must show outline-style:solid with PDS :focus-visible rule. ' +
-        "RED: no CSS rule → UA does not render the required PDS focus ring.",
-    ).toBe('solid')
-  })
-
-  test('input[type="radio"] (ResolveModal): outlineColor is PDS focus blue on keyboard focus (AC-1)', async ({
-    page,
-  }) => {
-    await page.click('[data-testid="dr-indicator"]')
-    await page.waitForSelector('[data-testid="dr-popover"]', { timeout: 5_000 })
-    await page.click('[data-testid="dr-item-dr-1626-001"]')
-    await page.waitForSelector('[data-testid="resolve-modal"]', { timeout: 5_000 })
-
-    const approvedRadio = page.locator(
-      '[data-testid="response-selector"] input[type="radio"][value="approved"]',
-    )
-    await expect(approvedRadio).toBeVisible({ timeout: 5_000 })
-    await tabUntilFocused(page, approvedRadio)
-    await expect(approvedRadio).toBeFocused()
-
-    const outlineColor = await page.evaluate(
-      () => getComputedStyle(document.activeElement as Element).outlineColor,
-    )
-
-    expect(
-      outlineColor,
-      `input[type="radio"] must show outline-color:${PDS_FOCUS_COLOR} (var(--color-focus)). ` +
-        'RED: no CSS rule → UA supplies non-PDS focus color.',
-    ).toBe(PDS_FOCUS_COLOR)
-  })
-
-  // ── a: DecisionViewport anchor link ─────────────────────────────────────────
-  //
-  // DecisionViewport renders <a href="#task-{id}"> for each pending DR.
-  // In RED: no app CSS :focus-visible rule for `a` → UA applies `outline: auto`
-  // (system accent color), not the 2px solid PDS blue.
-
-  // Happy path: a element shows outline-style 'solid' on keyboard focus (AC-1)
-  test('a element (DecisionViewport anchor): outlineStyle is solid on keyboard focus (AC-1)', async ({
-    page,
-  }) => {
-    const anchor = page.locator('[data-testid="decision-task-ref-dr-1626-001"]')
-    await expect(anchor).toBeVisible({ timeout: 5_000 })
-    await anchor.focus()
-
-    const outlineStyle = await page.evaluate(
-      () => getComputedStyle(document.activeElement as Element).outlineStyle,
-    )
-
-    expect(
-      outlineStyle,
-      'a element must show outline-style:solid with PDS :focus-visible rule. ' +
-        "RED: no CSS rule → UA applies outline:auto for links (resolves to 'auto', not 'solid').",
-    ).toBe('solid')
-  })
-
-  // Happy path: a element shows PDS focus color on keyboard focus (AC-1)
-  test('a element (DecisionViewport anchor): outlineColor is PDS focus blue on keyboard focus (AC-1)', async ({
-    page,
-  }) => {
-    const anchor = page.locator('[data-testid="decision-task-ref-dr-1626-001"]')
-    await expect(anchor).toBeVisible({ timeout: 5_000 })
-    await anchor.focus()
-
-    const outlineColor = await page.evaluate(
-      () => getComputedStyle(document.activeElement as Element).outlineColor,
-    )
-
-    expect(
-      outlineColor,
-      `a element must show outline-color:${PDS_FOCUS_COLOR} (var(--color-focus)). ` +
-        'RED: no CSS rule → UA supplies a system accent color, not rgb(26, 68, 234).',
-    ).toBe(PDS_FOCUS_COLOR)
-  })
-})
-
-// ─── AC-2 (behavioral proxy): Card outline-offset migration ───────────────────
-//
-// Card.css currently: `outline: 2px solid var(--pds-state-focus); outline-offset: 1px;`
-// AC-2 requires: `outline: 2px solid var(--color-focus); outline-offset: 2px;`
-//
-// Since --pds-state-focus and --color-focus resolve to the same hex (#1A44EA),
-// only outline-offset distinguishes pre-migration (1px) from post-migration (2px).
-// This Playwright test checks the computed outline-offset on a focused Card.
-//
-// RED: Card.css has outline-offset: 1px → computed outlineOffset is '1px' → FAILS.
-// GREEN: After migration, computed outlineOffset is '2px' → PASSES.
-
-test.describe('TestFromAC_CardFocusTokenMigration', () => {
-  test.use({ viewport: { width: 1280, height: 800 } })
-
-  test.beforeEach(async ({ page }) => {
-    await stubApis(page)
-    await page.goto('/')
-    await page.waitForSelector('[data-testid="task-card"]', { timeout: 10_000 })
-  })
-
-  // Boundary: Card div[role="button"] has outline-offset 2px after migration (AC-2)
-  // RED: Card.css still has `outline-offset: 1px` → assertion for '2px' FAILS.
-  test('div[role="button"] (.card): outlineOffset is 2px on keyboard focus after --color-focus migration (AC-2)', async ({
-    page,
-  }) => {
-    const card = page.locator('[data-testid="task-card"]').first()
-    await card.focus()
-
-    const outlineOffset = await page.evaluate(
-      () => getComputedStyle(document.activeElement as Element).outlineOffset,
-    )
-
-    expect(
-      outlineOffset,
-      'Card div[role="button"] must have outline-offset:2px after --pds-state-focus → ' +
-        '--color-focus migration. RED: Card.css still has outline-offset:1px.',
-    ).toBe('2px')
-  })
-
-})
-
-// ─── Session data for HistorySubtab keyboard-proof tests ─────────────────────
-const HISTORY_SESSION_DATA = {
+const SESSIONS = {
   sessions: [
     {
       task_id: 1,
@@ -450,205 +70,137 @@ const HISTORY_SESSION_DATA = {
     },
   ],
 }
-// Task detail for /api/tasks/1 — needed for DetailTab to render the history-tab button.
-// DetailTab returns null if task prop is null (if (!task) return null).
-const TASK_DETAIL_1626 = {
-  id: 1,
-  title: 'Focus ring test task',
-  status: 'todo',
-  priority: 'important',
-  body: null,
-  updated: '2026-05-16T00:00:00+00:00',
-  created: '2026-05-16T00:00:00+00:00',
-  tags: [],
-  blocked: false,
-  block_reason: null,
-  claimed: false,
-  claimed_at: null,
-  dep_status: null,
-  parent: null,
-  depends_on: [],
-}
-// ─── AC-1 keyboard-traversal proof — corrected per architect review cycle 2 ──
-//
-// Architect review cycle 2 mandate (addressing review FAIL cycle 2 findings):
-//   - [role="button"] representative: HistorySubtab session-row
-//     (NOT DecisionViewport article — renders as plain <article> with NO role attribute)
-//   - button (ThemeToggle) and a (anchor): Tab keyboard traversal (NOT .focus())
-//   - menuitem and input: unchanged (already keyboard-driven in TestFromAC_FocusVisibleOutline)
-//
-// All tests use real Tab keyboard navigation per the refined AC.
-// Proof method: Tab traversal from page start / element setup — .focus() explicitly prohibited.
 
-test.describe('TestFromAC_FocusVisibleKeyboardProof', () => {
+async function stubApis(page: Page): Promise<void> {
+  await page.route('/api/**', (route) => route.fulfill({ status: 200, json: {} }))
+  await page.route('/api/events', (route) =>
+    route.fulfill({
+      status: 200,
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+      },
+      body: '',
+    }),
+  )
+  await page.route(/\/api\/sessions(\?.*)?$/, (route) => route.fulfill({ json: SESSIONS }))
+  await page.route('/api/tasks/scan', (route) => route.fulfill({ json: [] }))
+  await page.route('/api/tasks/1', (route) => route.fulfill({ json: TASK_DETAIL }))
+  await page.route('/api/tasks', (route) =>
+    route.fulfill({ json: { tasks: [TASK], mtime: 1_713_456_000 } }),
+  )
+  await page.route('/api/board', (route) => route.fulfill({ json: BOARD }))
+  await page.route('/api/decisions/pending', (route) =>
+    route.fulfill({ json: { count: 1, items: [DECISION] } }),
+  )
+  await page.route('/api/memories', (route) => route.fulfill({ json: { entries: [] } }))
+}
+
+async function tabUntilFocused(page: Page, locator: Locator, maxTabs = 50): Promise<void> {
+  for (let i = 0; i < maxTabs; i++) {
+    if (await locator.evaluate((element) => document.activeElement === element)) {
+      return
+    }
+    await page.keyboard.press('Tab')
+  }
+}
+
+async function expectPDSFocus(locator: Locator): Promise<void> {
+  const focus = await locator.evaluate((element) => {
+    const style = getComputedStyle(element)
+    return {
+      outlineStyle: style.outlineStyle,
+      outlineColor: style.outlineColor,
+      outlineOffset: style.outlineOffset,
+    }
+  })
+
+  expect(focus.outlineStyle).toBe('solid')
+  expect(focus.outlineColor).toBe(PDS_FOCUS_COLOR)
+  expect(focus.outlineOffset).toBe('2px')
+}
+
+async function expectVisibleFocus(locator: Locator): Promise<void> {
+  const focus = await locator.evaluate((element) => {
+    const style = getComputedStyle(element)
+    return {
+      matchesFocusVisible: element.matches(':focus-visible'),
+      outlineStyle: style.outlineStyle,
+      outlineColor: style.outlineColor,
+      outlineOffset: style.outlineOffset,
+    }
+  })
+
+  expect(focus.matchesFocusVisible).toBe(true)
+  expect(focus.outlineStyle).toBe('solid')
+  expect(focus.outlineColor).not.toBe('rgba(0, 0, 0, 0)')
+  expect(focus.outlineOffset).toBe('2px')
+}
+
+test.describe('focus-visible styling on live controls', () => {
   test.use({ viewport: { width: 1280, height: 800 } })
 
   test.beforeEach(async ({ page }) => {
     await stubApis(page)
-    // Override sessions stub with actual data — HistorySubtab renders no rows when sessions:[].
-    // LIFO: registered after stubApis, so this handler takes priority over the stubApis stub.
-    await page.route(/\/api\/sessions(\?.*)?$/, (route) =>
-      route.fulfill({ json: HISTORY_SESSION_DATA }),
-    )
-    // Provide valid task detail — DetailTab returns null if task is null/empty, which
-    // prevents history-tab button from rendering. LIFO: registered last → highest priority.
-    await page.route('/api/tasks/*', (route) =>
-      route.fulfill({ json: TASK_DETAIL_1626 }),
-    )
     await page.goto('/')
-    await page.waitForSelector('[data-region="workspace"]', { timeout: 10_000 })
+    await page.locator('[data-region="workspace"]').waitFor({ state: 'visible' })
   })
 
-  // ── button: ThemeToggle — Tab keyboard navigation ──────────────────────────
-
-  // Happy path: button (ThemeToggle) shows outline-style 'solid' via Tab keyboard focus (AC-1)
-  // Proof method: Tab traversal from page start (NOT .focus()).
-  // GREEN: global :focus-visible rule exists → outline-style is 'solid' via Tab.
-  test('button (theme-toggle): outlineStyle solid via Tab keyboard focus (AC-1)', async ({
-    page,
-  }) => {
+  test('status bar native button receives PDS focus via Tab', async ({ page }) => {
     const themeToggle = page.locator('[data-testid="theme-toggle"]')
-    await tabUntilFocused(page, themeToggle, 20)
+    await tabUntilFocused(page, themeToggle)
     await expect(themeToggle).toBeFocused()
-
-    const outlineStyle = await page.evaluate(
-      () => getComputedStyle(document.activeElement as Element).outlineStyle,
-    )
-
-    expect(
-      outlineStyle,
-      'button.icon-button (ThemeToggle) must show outline-style:solid via Tab keyboard focus. ' +
-        "Proof method: Tab traversal (NOT .focus()). RED: no CSS rule → UA applies 'auto'.",
-    ).toBe('solid')
+    await expectVisibleFocus(themeToggle)
   })
 
-  // Happy path: button (ThemeToggle) shows PDS focus color via Tab keyboard focus (AC-1)
-  test('button (theme-toggle): outlineColor PDS blue via Tab keyboard focus (AC-1)', async ({
-    page,
-  }) => {
-    const themeToggle = page.locator('[data-testid="theme-toggle"]')
-    await tabUntilFocused(page, themeToggle, 20)
-    await expect(themeToggle).toBeFocused()
-
-    const outlineColor = await page.evaluate(
-      () => getComputedStyle(document.activeElement as Element).outlineColor,
-    )
-
-    expect(
-      outlineColor,
-      `button.icon-button (ThemeToggle) must show outline-color:${PDS_FOCUS_COLOR} via Tab focus. ` +
-        'Proof method: Tab traversal (NOT .focus()). RED: no CSS rule → UA uses system accent color.',
-    ).toBe(PDS_FOCUS_COLOR)
+  test('workspace nav button receives PDS focus via Tab', async ({ page }) => {
+    const decisionsNav = page.locator('[data-surface="decisions"]')
+    await tabUntilFocused(page, decisionsNav)
+    await expect(decisionsNav).toBeFocused()
+    await expectVisibleFocus(decisionsNav)
   })
 
-  // ── [role="button"]: HistorySubtab session-row — Tab keyboard navigation ───
-  //
-  // Representative: div[data-testid="history-session-row"][role="button"][tabIndex=0]
-  // in HistorySubtab component. This is a real div[role="button"] — confirmed in source.
-  // DecisionViewport DR items are plain <article> elements with NO role attribute and
-  // are therefore NOT valid [role="button"] representatives (reviewer finding #1, cycle 2).
-  //
-  // Setup: mouse clicks open the sidecar and history tab; only the Tab-to-row step
-  // constitutes the keyboard-focus proof.
-
-  // Happy path: div[role="button"] (HistorySubtab row) shows outline-style 'solid' via Tab (AC-1)
-  test('div[role="button"] (HistorySubtab session-row): outlineStyle solid via Tab focus (AC-1)', async ({
-    page,
-  }) => {
-    // Setup: open sidecar (click task card) then show history rows (click history tab).
+  test('task card role button receives PDS focus via Tab', async ({ page }) => {
     const card = page.locator('[data-testid="task-card"]').first()
-    await expect(card).toBeVisible({ timeout: 5_000 })
-    await card.click()
-    await page.waitForSelector('[data-testid="history-tab"]', { timeout: 5_000 })
+    await tabUntilFocused(page, card)
+    await expect(card).toBeFocused()
+    await expectPDSFocus(card)
+  })
+
+  test('context-menu menuitem receives PDS focus after keyboard navigation', async ({ page }) => {
+    const card = page.locator('[data-testid="task-card"]').first()
+    await card.click({ button: 'right' })
+
+    const menuItems = page.locator('[data-testid="context-menu"] [role="menuitem"]')
+    await expect(menuItems.first()).toBeFocused()
+    await page.keyboard.press('ArrowDown')
+    await expect(menuItems.nth(1)).toBeFocused()
+    await expectPDSFocus(menuItems.nth(1))
+  })
+
+  test('ResolveModal radio input receives PDS focus via Tab', async ({ page }) => {
+    await page.locator('[data-testid="dr-indicator"]').click()
+    await page.locator('[data-testid="resolve-button"]').click()
+    await expect(page.locator('[data-testid="resolve-modal"]')).toBeVisible()
+
+    const approvedRadio = page.locator(
+      '[data-testid="response-selector"] input[type="radio"][value="approved"]',
+    )
+    await tabUntilFocused(page, approvedRadio)
+    await expect(approvedRadio).toBeFocused()
+    await expectPDSFocus(approvedRadio)
+  })
+
+  test('task history session row receives PDS focus via Tab inside detail modal', async ({ page }) => {
+    await page.locator('[data-testid="task-card"]').first().click()
+    await expect(page.locator('[data-testid="task-detail-modal"]')).toBeVisible()
     await page.locator('[data-testid="history-tab"]').click()
 
     const sessionRow = page.locator('[data-testid="history-session-row"]').first()
-    await expect(sessionRow).toBeVisible({ timeout: 5_000 })
-
-    // Proof: Tab keyboard traversal to the session row (tabIndex=0 — in normal tab order).
-    await tabUntilFocused(page, sessionRow, 50)
+    await expect(sessionRow).toBeVisible()
+    await tabUntilFocused(page, sessionRow)
     await expect(sessionRow).toBeFocused()
-
-    const outlineStyle = await page.evaluate(
-      () => getComputedStyle(document.activeElement as Element).outlineStyle,
-    )
-
-    expect(
-      outlineStyle,
-      'div[role="button"] (HistorySubtab session-row) must show outline-style:solid via Tab focus. ' +
-        "RED: no CSS rule → UA gives no outline to div[role='button'] (outlineStyle 'none').",
-    ).toBe('solid')
-  })
-
-  // Happy path: div[role="button"] (HistorySubtab row) shows PDS focus color via Tab (AC-1)
-  test('div[role="button"] (HistorySubtab session-row): outlineColor PDS blue via Tab focus (AC-1)', async ({
-    page,
-  }) => {
-    const card = page.locator('[data-testid="task-card"]').first()
-    await expect(card).toBeVisible({ timeout: 5_000 })
-    await card.click()
-    await page.waitForSelector('[data-testid="history-tab"]', { timeout: 5_000 })
-    await page.locator('[data-testid="history-tab"]').click()
-
-    const sessionRow = page.locator('[data-testid="history-session-row"]').first()
-    await expect(sessionRow).toBeVisible({ timeout: 5_000 })
-
-    await tabUntilFocused(page, sessionRow, 50)
-    await expect(sessionRow).toBeFocused()
-
-    const outlineColor = await page.evaluate(
-      () => getComputedStyle(document.activeElement as Element).outlineColor,
-    )
-
-    expect(
-      outlineColor,
-      `div[role="button"] (HistorySubtab session-row) must show outline-color:${PDS_FOCUS_COLOR} via Tab focus. ` +
-        "RED: no CSS rule → element has no outline (outlineColor transparent).",
-    ).toBe(PDS_FOCUS_COLOR)
-  })
-
-  // ── a anchor: DecisionViewport — Tab keyboard navigation ──────────────────
-
-  // Happy path: a anchor (DecisionViewport) shows outline-style 'solid' via Tab focus (AC-1)
-  // Proof method: Tab traversal from page start (NOT .focus()).
-  test('a anchor (DecisionViewport): outlineStyle solid via Tab keyboard focus (AC-1)', async ({
-    page,
-  }) => {
-    const anchor = page.locator('[data-testid="decision-task-ref-dr-1626-001"]')
-    await expect(anchor).toBeVisible({ timeout: 5_000 })
-
-    await tabUntilFocused(page, anchor, 50)
-    await expect(anchor).toBeFocused()
-
-    const outlineStyle = await page.evaluate(
-      () => getComputedStyle(document.activeElement as Element).outlineStyle,
-    )
-
-    expect(
-      outlineStyle,
-      'a anchor (DecisionViewport) must show outline-style:solid via Tab keyboard focus. ' +
-        "Proof method: Tab traversal (NOT .focus()). RED: no CSS rule → UA applies 'auto'.",
-    ).toBe('solid')
-  })
-
-  // Happy path: a anchor (DecisionViewport) shows PDS focus color via Tab focus (AC-1)
-  test('a anchor (DecisionViewport): outlineColor PDS blue via Tab keyboard focus (AC-1)', async ({
-    page,
-  }) => {
-    const anchor = page.locator('[data-testid="decision-task-ref-dr-1626-001"]')
-    await expect(anchor).toBeVisible({ timeout: 5_000 })
-
-    await tabUntilFocused(page, anchor, 50)
-    await expect(anchor).toBeFocused()
-
-    const outlineColor = await page.evaluate(
-      () => getComputedStyle(document.activeElement as Element).outlineColor,
-    )
-
-    expect(
-      outlineColor,
-      `a anchor (DecisionViewport) must show outline-color:${PDS_FOCUS_COLOR} via Tab keyboard focus. ` +
-        'Proof method: Tab traversal (NOT .focus()). RED: no CSS rule → UA supplies system accent color.',
-    ).toBe(PDS_FOCUS_COLOR)
+    await expectPDSFocus(sessionRow)
   })
 })

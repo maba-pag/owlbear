@@ -100,9 +100,10 @@ describe('TestFromAC_MemoryTabRoute', () => {
     expect(paths).toContain('/memories')
   })
 
-  it('ac1 happy: /memories route entry has hasSidecar set to false', () => {
+  it('ac1 happy: /memories route entry has no retired sidecar configuration', () => {
     const entry = routeConfig.find((e) => e.path === '/memories')
-    expect(entry?.hasSidecar).toBe(false)
+    expect(entry).not.toBeUndefined()
+    expect('hasSidecar' in (entry ?? {})).toBe(false)
   })
 
   it('ac1 happy: /memories route entry has label "Memory"', () => {
@@ -576,7 +577,7 @@ describe('TestFromAC_MemoryTabRowRendering', () => {
     expect(confidenceEl?.textContent).toContain('0.85')
   })
 
-  it('ac4 happy: pending state badge uses warning color variant', async () => {
+  it('ac4 happy: pending state badge uses info color variant', async () => {
     const entries = [makeEntry({ state: 'pending' })]
     vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
     let container!: HTMLElement
@@ -587,7 +588,7 @@ describe('TestFromAC_MemoryTabRowRendering', () => {
 
     const badge = container.querySelector('[data-testid="memory-entry-state"]')
     expect(badge).not.toBeNull()
-    expect(readPdsVariant(badge)).toBe('warning')
+    expect(readPdsVariant(badge)).toBe('info')
   })
 
   it('ac4 happy: curated state badge uses info color variant', async () => {
@@ -618,7 +619,7 @@ describe('TestFromAC_MemoryTabRowRendering', () => {
     expect(readPdsVariant(badge)).toBe('success')
   })
 
-  it('ac4 happy: deleted state badge uses secondary color variant', async () => {
+  it('ac4 happy: deleted state badge uses primary color variant', async () => {
     const entries = [makeEntry({ state: 'deleted' })]
     vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
     let container!: HTMLElement
@@ -634,7 +635,7 @@ describe('TestFromAC_MemoryTabRowRendering', () => {
 
     const badge = container.querySelector('[data-testid="memory-entry-state"]')
     expect(badge).not.toBeNull()
-    expect(readPdsVariant(badge)).toBe('secondary')
+    expect(readPdsVariant(badge)).toBe('primary')
   })
 
   it('ac4 happy: scope_agents renders as comma-joined string when non-empty', async () => {

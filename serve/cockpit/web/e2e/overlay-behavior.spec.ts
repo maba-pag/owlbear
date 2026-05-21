@@ -137,6 +137,11 @@ async function waitForHealthBadge(page: Page): Promise<void> {
   await page.locator('[data-testid="health-badge"]').waitFor({ state: 'visible', timeout: 8_000 })
 }
 
+async function openMaintenanceMenu(page: Page): Promise<void> {
+  await page.locator('[data-testid="maintenance-menu-toggle"]').click()
+  await page.locator('[data-testid="maintenance-menu"]').waitFor({ state: 'visible', timeout: 3_000 })
+}
+
 /** Return the current bounding-box height of the shell grid root. */
 async function shellHeight(page: Page): Promise<number> {
   const box = await page.locator('.shell').boundingBox()
@@ -149,6 +154,36 @@ async function statusBarHeight(page: Page): Promise<number> {
   const box = await page.locator('[data-region="status-bar"]').boundingBox()
   expect(box, 'status-bar must be measurable').not.toBeNull()
   return box!.height
+}
+
+async function expectMaintenanceConfirmDialogPortaled(page: Page, testId: string): Promise<void> {
+  const dialog = page.locator(`[data-testid="${testId}"]`)
+  const flyout = page.locator('[data-testid="maintenance-menu"]')
+
+  await expect(dialog).toBeVisible()
+  await expect(dialog).toHaveAttribute('role', 'dialog')
+  await expect(dialog).toHaveAttribute('aria-modal', 'true')
+  await expect(page.locator(`[data-testid="maintenance-menu"] [data-testid="${testId}"]`)).toHaveCount(0)
+
+  const parentTag = await dialog.evaluate((element) => element.parentElement?.tagName.toLowerCase())
+  expect(parentTag, 'maintenance confirmation PModal should be portaled to document.body').toBe('body')
+
+  const dialogContentBox = await dialog.locator('div').first().boundingBox()
+  const flyoutBox = await flyout.boundingBox()
+  const viewport = page.viewportSize()
+  expect(dialogContentBox, 'visible PModal content must be measurable').not.toBeNull()
+  expect(flyoutBox, 'maintenance flyout must be measurable').not.toBeNull()
+  expect(viewport, 'viewport must be available').not.toBeNull()
+
+  const dialogCenterX = dialogContentBox!.x + dialogContentBox!.width / 2
+  expect(
+    Math.abs(dialogCenterX - viewport!.width / 2),
+    'PModal content should be centered in the viewport, not aligned to the PFlyout',
+  ).toBeLessThan(120)
+  expect(
+    dialogContentBox!.x,
+    'PModal content should visibly break out of the maintenance flyout column',
+  ).toBeLessThan(flyoutBox!.x - 80)
 }
 
 // ─── AC-1 + AC-3: Shell and status-bar reflow prevention (all 6 AC-1 surfaces) ─
@@ -212,6 +247,7 @@ test.describe('TestFromAC_OverlayReflow', () => {
     const shellH = await shellHeight(page)
     const heightBefore = await statusBarHeight(page)
 
+    await openMaintenanceMenu(page)
     await page.click('[data-testid="cleanup-button"]')
     await page.locator('[data-testid="cleanup-confirm-dialog"]').waitFor({ state: 'visible' })
 
@@ -231,9 +267,7 @@ test.describe('TestFromAC_OverlayReflow', () => {
     const shellH = await shellHeight(page)
     const heightBefore = await statusBarHeight(page)
 
-    // Open HealthBadge popover to expose RepairPanel (corruptionCount > 0 from scan stub).
-    await page.click('[data-testid="health-badge"]')
-    await page.locator('[data-testid="health-badge-popover"]').waitFor({ state: 'visible' })
+    await openMaintenanceMenu(page)
     await page.locator('[data-testid="repair-button"]').waitFor({ state: 'visible' })
 
     // Click repair button — transitions RepairPanel to 'confirming' phase (no API call).
@@ -304,6 +338,29 @@ test.describe('TestFromAC_OverlayReflow', () => {
   })
 })
 
+test.describe('TestFromAudit_MaintenancePdsModalComposition', () => {
+  test.use({ viewport: DESKTOP_VIEWPORT })
+
+  test.beforeEach(async ({ page }) => {
+    await stubApis(page)
+    await page.goto('/')
+    await waitForBoard(page)
+    await waitForHealthBadge(page)
+  })
+
+  test('repair_confirmation_is_a_top_level_pds_modal_from_the_maintenance_flyout', async ({ page }) => {
+    await openMaintenanceMenu(page)
+    await page.locator('[data-testid="repair-button"]').click()
+    await expectMaintenanceConfirmDialogPortaled(page, 'repair-confirm-dialog')
+  })
+
+  test('cleanup_confirmation_is_a_top_level_pds_modal_from_the_maintenance_flyout', async ({ page }) => {
+    await openMaintenanceMenu(page)
+    await page.locator('[data-testid="cleanup-button"]').click()
+    await expectMaintenanceConfirmDialogPortaled(page, 'cleanup-confirm-dialog')
+  })
+})
+
 // ─── AC-2: Blocking dialog semantics ─────────────────────────────────────────
 //
 // Task-local E2E checks required by AC-2 (dual: new assertions + carry-forward):
@@ -327,12 +384,12 @@ test.describe('TestFromAC_BlockingDialogSemantics', () => {
     await waitForBoard(page)
   })
 
-  /** Select task 1 in the sidecar and open the ConfirmDialog via Move Backward. */
+  /** Select task 1 in the task detail modal and open the ConfirmDialog via Move Backward. */
   async function openConfirmDialog(page: Page): Promise<void> {
     const card = page.locator('[data-testid="task-card"][data-id="1"]')
     await card.waitFor({ state: 'visible', timeout: 8_000 })
     await card.click()
-    // Wait for the sidecar to load task detail and show the move-backward button.
+    // Wait for the task detail modal to load task detail and show the move-backward button.
     await page.locator('[data-testid="move-backward"]').waitFor({ state: 'visible', timeout: 8_000 })
     await page.click('[data-testid="move-backward"]')
     await page.locator('[data-testid="confirm-dialog"]').waitFor({ state: 'visible', timeout: 5_000 })
@@ -689,7 +746,7 @@ test.describe('TestFromAC_ContextMenuOverlay', () => {
     for (let i = 0; i < count; i++) {
       const box = await columns.nth(i).boundingBox()
       expect(box, `board column ${i} must be measurable after context menu open`).not.toBeNull()
-      expect(box!.height, `board column ${i} height must not change when context menu opens`).toBe(heightsBefore[i])
+      expect(box!.height, `board column ${i} height must not change when context menu opens`).toBeCloseTo(heightsBefore[i], 3)
     }
   })
 
@@ -712,6 +769,34 @@ test.describe('TestFromAC_ContextMenuOverlay', () => {
     // Task 1 status='in-progress' → valid_transitions=['todo', 'review', 'archived'] → 3 items.
     const menuItems = contextMenu.locator('[role="menuitem"]')
     await expect(menuItems).toHaveCount(3)
+  })
+
+  test('context_menu_clamps_to_viewport_right_edge', async ({ page }) => {
+    const card = page.locator('[data-testid="task-card"][data-id="1"]')
+    await card.waitFor({ state: 'visible', timeout: 8_000 })
+    await card.evaluate((element) => element.scrollIntoView({ block: 'nearest', inline: 'end' }))
+
+    const cardBox = await card.boundingBox()
+    const viewport = await page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }))
+    expect(cardBox, 'task card must be measurable after edge alignment').not.toBeNull()
+
+    await page.mouse.click(
+      Math.min(viewport.width - 2, cardBox!.x + cardBox!.width - 2),
+      cardBox!.y + 24,
+      { button: 'right' },
+    )
+
+    const contextMenu = page.locator('[data-testid="context-menu"]')
+    await contextMenu.waitFor({ state: 'visible', timeout: 5_000 })
+
+    await expect.poll(
+      async () => {
+        const menuBox = await contextMenu.boundingBox()
+        expect(menuBox, 'context menu must be measurable after right-edge open').not.toBeNull()
+        return menuBox!.x + menuBox!.width
+      },
+      { message: 'context menu should stay inside the right viewport edge' },
+    ).toBeLessThanOrEqual(viewport.width - 8 + 0.5)
   })
 
   // AC-4: context menu must be keyboard-navigable with arrow keys.

@@ -1,7 +1,7 @@
 /**
  * AC-3: Dual-theme WCAG 2.1 AA accessibility sweep — cockpit visual redesign (#1629).
  *
- * Verifies board, sidecar, and modal surfaces produce zero AxeBuilder violations
+ * Verifies board, task detail, and modal surfaces produce zero AxeBuilder violations
  * under both .scheme-light and .scheme-dark document color schemes.
  *
  * Theme injection: localStorage is seeded before page load via addInitScript so the
@@ -10,15 +10,18 @@
  *
  * Surfaces tested per theme (full parity with accessibility-sweep.spec.ts):
  *   1. Board view
- *   2. Sidecar detail view
- *   3. DRStatusIndicator popover
- *   4. HealthBadge popover
- *   5. FilterPanel (open state)
- *   6. ResolveModal (DR resolution modal)
- *   7. ArchivalModal
- *   8. ConfirmDialog
- *   9. CleanupPanel confirm dialog
- *  10. RepairPanel confirm dialog
+ *   2. Ideas workspace
+ *   3. Decisions workspace
+ *   4. Memory workspace
+ *   5. Task detail modal
+ *   6. DRStatusIndicator popover
+ *   7. HealthBadge popover
+ *   8. FilterPanel (open state)
+ *   9. ResolveModal (DR resolution modal)
+ *  10. ArchivalModal
+ *  11. ConfirmDialog
+ *  12. CleanupPanel confirm dialog
+ *  13. RepairPanel confirm dialog
  *
  * Route mocks use Playwright LIFO ordering: catch-all first, specific routes last.
  */
@@ -106,6 +109,35 @@ const PENDING_DRS = [
   },
 ]
 
+const MEMORY_ENTRIES = [
+  {
+    id: 'memory-dualtheme-001',
+    title: 'Morning operator cadence',
+    content: 'Use the top-level cockpit routes to review decisions, memory, and ideas before moving work.',
+    categories: ['process', 'workflow'],
+    confidence: 0.92,
+    state: 'pending',
+    scope_agents: ['builder', 'reviewer'],
+    source_agent: 'auditor',
+    created_at: '2026-05-15T08:00:00+00:00',
+    updated_at: '2026-05-16T08:00:00+00:00',
+    approved_at: null,
+  },
+  {
+    id: 'memory-dualtheme-002',
+    title: 'Keep Cockpit routes dense and direct',
+    content: 'Operational surfaces should prioritize scanning, editing, and decisions over explanatory copy.',
+    categories: ['behaviour'],
+    confidence: 0.88,
+    state: 'curated',
+    scope_agents: ['builder'],
+    source_agent: 'reviewer',
+    created_at: '2026-05-14T08:00:00+00:00',
+    updated_at: '2026-05-15T08:00:00+00:00',
+    approved_at: null,
+  },
+]
+
 /** Provides a corrupted-file scan item so HealthBadge renders red and RepairPanel appears. */
 const SCAN_ITEMS = [
   {
@@ -144,6 +176,16 @@ async function stubApis(page: Page): Promise<void> {
   await page.route('/api/decisions/pending', (route) =>
     route.fulfill({ json: { count: PENDING_DRS.length, items: PENDING_DRS } }),
   )
+  await page.route('/api/ideas', (route) =>
+    route.fulfill({
+      json: {
+        content: '# Morning shape\n\n- [x] Review overnight work\n- [ ] Refine cockpit surfaces',
+      },
+    }),
+  )
+  await page.route('/api/memories', (route) =>
+    route.fulfill({ json: { entries: MEMORY_ENTRIES, parse_errors: 0 } }),
+  )
   await page.route('/api/tasks/scan', (route) => route.fulfill({ json: SCAN_ITEMS }))
   await page.route(/\/api\/tasks\/\d+$/, (route) => route.fulfill({ json: TASK_DETAIL }))
 }
@@ -153,6 +195,18 @@ async function waitForCards(page: Page): Promise<void> {
     .locator('[data-testid="task-card"]')
     .first()
     .waitFor({ state: 'visible', timeout: 8_000 })
+}
+
+async function waitForWorkspaceSettled(page: Page): Promise<void> {
+  await page.waitForFunction(() => {
+    const panels = Array.from(document.querySelectorAll('[data-region="workspace"] > div'))
+    return panels.length === 1 && panels.every((panel) => getComputedStyle(panel).opacity === '1')
+  })
+}
+
+async function openMaintenanceMenu(page: Page): Promise<void> {
+  await page.locator('[data-testid="maintenance-menu-toggle"]').click()
+  await page.locator('[data-testid="maintenance-menu"]').waitFor({ state: 'visible', timeout: 3_000 })
 }
 
 /** Format axe violations into a human-readable string for assertion messages. */
@@ -195,6 +249,7 @@ for (const theme of THEMES) {
       await stubApis(page)
       await page.goto('/')
       await waitForCards(page)
+      await waitForWorkspaceSettled(page)
     })
 
     // ── Surface 1: board view ──────────────────────────────────────────────
@@ -215,9 +270,78 @@ for (const theme of THEMES) {
       expect(results.violations, formatViolations(results.violations)).toEqual([])
     })
 
-    // ── Surface 2: sidecar detail view ────────────────────────────────────
+    // ── Surface 2: Ideas workspace ────────────────────────────────────────
+    // Ideas notebook route — editor shell, state chips, and native textarea.
+    test(`ideas workspace passes wcag2.1 aa under ${theme} theme (AC3)`, async ({ page }) => {
+      await page.goto('/ideas')
+      await expect(
+        page.locator('html'),
+        `html element must carry class scheme-${theme}`,
+      ).toHaveClass(new RegExp(`scheme-${theme}`))
+
+      await expect(
+        page.locator('[data-region="ideas-workspace"]'),
+        'ideas workspace must be visible before axe scan',
+      ).toBeVisible({ timeout: 8_000 })
+      await expect(
+        page.locator('textarea[aria-label="Ideas draft"]'),
+        'ideas textarea must be visible before axe scan',
+      ).toBeVisible({ timeout: 8_000 })
+      await waitForWorkspaceSettled(page)
+
+      const results = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze()
+      expect(results.violations, formatViolations(results.violations)).toEqual([])
+    })
+
+    // ── Surface 3: Decisions workspace ───────────────────────────────────
+    // Decisions route — pending DR list and route-level status summary.
+    test(`decisions workspace passes wcag2.1 aa under ${theme} theme (AC3)`, async ({ page }) => {
+      await page.goto('/decisions')
+      await expect(
+        page.locator('html'),
+        `html element must carry class scheme-${theme}`,
+      ).toHaveClass(new RegExp(`scheme-${theme}`))
+
+      await expect(
+        page.locator('[data-testid="decisions-page"]'),
+        'decisions workspace must be visible before axe scan',
+      ).toBeVisible({ timeout: 8_000 })
+      await expect(
+        page.locator(`[data-testid="dr-item-${PENDING_DRS[0].id}"]`),
+        'at least one pending decision row must be visible before axe scan',
+      ).toBeVisible({ timeout: 8_000 })
+      await waitForWorkspaceSettled(page)
+
+      const results = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze()
+      expect(results.violations, formatViolations(results.violations)).toEqual([])
+    })
+
+    // ── Surface 4: Memory workspace ──────────────────────────────────────
+    // Memory route — filter controls, entry summaries, and state/category chips.
+    test(`memory workspace passes wcag2.1 aa under ${theme} theme (AC3)`, async ({ page }) => {
+      await page.goto('/memories')
+      await expect(
+        page.locator('html'),
+        `html element must carry class scheme-${theme}`,
+      ).toHaveClass(new RegExp(`scheme-${theme}`))
+
+      await expect(
+        page.locator('[data-testid="memory-tab"]'),
+        'memory workspace must be visible before axe scan',
+      ).toBeVisible({ timeout: 8_000 })
+      await expect(
+        page.locator('[data-testid="memory-entry"]').first(),
+        'at least one memory entry must be visible before axe scan',
+      ).toBeVisible({ timeout: 8_000 })
+      await waitForWorkspaceSettled(page)
+
+      const results = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze()
+      expect(results.violations, formatViolations(results.violations)).toEqual([])
+    })
+
+    // ── Surface 5: task detail modal ──────────────────────────────────────
     // Task detail panel — TaskFieldsEditor, TaskActions, metadata accordion.
-    test(`sidecar detail view passes wcag2.1 aa under ${theme} theme (AC3)`, async ({ page }) => {
+    test(`task detail modal passes wcag2.1 aa under ${theme} theme (AC3)`, async ({ page }) => {
       await expect(
         page.locator('html'),
         `html element must carry class scheme-${theme}`,
@@ -229,14 +353,14 @@ for (const theme of THEMES) {
 
       await expect(
         page.locator('[data-field="title"]'),
-        'sidecar [data-field="title"] must be visible before axe scan',
+        'task detail modal [data-field="title"] must be visible before axe scan',
       ).toBeVisible({ timeout: 5_000 })
 
       const results = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze()
       expect(results.violations, formatViolations(results.violations)).toEqual([])
     })
 
-    // ── Surface 3: DRStatusIndicator popover ─────────────────────────────
+    // ── Surface 6: DRStatusIndicator popover ─────────────────────────────
     // The DR popover opens when the dr-indicator button is clicked. Renders a
     // custom fixed-position div with role="dialog" and a list of pending DR items.
     test(`dr status indicator popover passes wcag2.1 aa under ${theme} theme (AC3)`, async ({ page }) => {
@@ -259,7 +383,7 @@ for (const theme of THEMES) {
       expect(results.violations, formatViolations(results.violations)).toEqual([])
     })
 
-    // ── Surface 4: HealthBadge popover ────────────────────────────────────
+    // ── Surface 7: HealthBadge popover ────────────────────────────────────
     // The HealthBadge popover opens when the health-badge button is clicked.
     // Renders a fixed-position div with role="dialog" listing scan issues.
     test(`health badge popover passes wcag2.1 aa under ${theme} theme (AC3)`, async ({ page }) => {
@@ -285,7 +409,7 @@ for (const theme of THEMES) {
       expect(results.violations, formatViolations(results.violations)).toEqual([])
     })
 
-    // ── Surface 5: FilterPanel (open state) ──────────────────────────────
+    // ── Surface 8: FilterPanel (open state) ──────────────────────────────
     // The FilterPanel is visible when panelOpen=true. Contains PDS search,
     // select, and multi-select inputs. Toggled by filter-toggle.
     test(`filter panel open state passes wcag2.1 aa under ${theme} theme (AC3)`, async ({ page }) => {
@@ -307,7 +431,7 @@ for (const theme of THEMES) {
       expect(results.violations, formatViolations(results.violations)).toEqual([])
     })
 
-    // ── Surface 6: ResolveModal (modal surface) ───────────────────────────
+    // ── Surface 9: ResolveModal (modal surface) ───────────────────────────
     // DR resolution modal — opened from DRStatusIndicator popover.
     test(`resolve modal passes wcag2.1 aa under ${theme} theme (AC3)`, async ({ page }) => {
       await expect(
@@ -335,7 +459,7 @@ for (const theme of THEMES) {
       expect(results.violations, formatViolations(results.violations)).toEqual([])
     })
 
-    // ── Surface 7: ArchivalModal ──────────────────────────────────────────
+    // ── Surface 10: ArchivalModal ─────────────────────────────────────────
     // ArchivalModal opens when the user selects "archived" from the task context menu.
     // The context menu appears on right-click of a task card.
     test(`archival modal passes wcag2.1 aa under ${theme} theme (AC3)`, async ({ page }) => {
@@ -364,7 +488,7 @@ for (const theme of THEMES) {
       expect(results.violations, formatViolations(results.violations)).toEqual([])
     })
 
-    // ── Surface 8: ConfirmDialog ──────────────────────────────────────────
+    // ── Surface 11: ConfirmDialog ─────────────────────────────────────────
     // ConfirmDialog opens from TaskActions when "Move Backward" is clicked.
     // The task must be in-progress with a valid backward transition.
     test(`confirm dialog passes wcag2.1 aa under ${theme} theme (AC3)`, async ({ page }) => {
@@ -379,7 +503,7 @@ for (const theme of THEMES) {
 
       await expect(
         page.locator('[data-field="title"]'),
-        'sidecar [data-field="title"] must be visible before clicking move-backward',
+        'task detail modal [data-field="title"] must be visible before clicking move-backward',
       ).toBeVisible({ timeout: 5_000 })
 
       const moveBackwardBtn = page.locator('[data-testid="move-backward"]')
@@ -394,7 +518,7 @@ for (const theme of THEMES) {
       expect(results.violations, formatViolations(results.violations)).toEqual([])
     })
 
-    // ── Surface 9: CleanupPanel confirm dialog ────────────────────────────
+    // ── Surface 12: CleanupPanel confirm dialog ───────────────────────────
     // CleanupPanel confirm dialog opens when the "Cleanup" button is clicked.
     // Renders as a custom div with role="dialog" in the status-bar.
     test(`cleanup panel confirm dialog passes wcag2.1 aa under ${theme} theme (AC3)`, async ({ page }) => {
@@ -402,6 +526,8 @@ for (const theme of THEMES) {
         page.locator('html'),
         `html element must carry class scheme-${theme}`,
       ).toHaveClass(new RegExp(`scheme-${theme}`))
+
+      await openMaintenanceMenu(page)
 
       const cleanupButton = page.locator('[data-testid="cleanup-button"]')
       await cleanupButton.waitFor({ state: 'visible', timeout: 5_000 })
@@ -416,10 +542,8 @@ for (const theme of THEMES) {
       expect(results.violations, formatViolations(results.violations)).toEqual([])
     })
 
-    // ── Surface 10: RepairPanel confirm dialog ────────────────────────────
-    // RepairPanel confirm dialog opens from the HealthBadge popover: click
-    // health-badge to open the popover, then click repair-button to trigger
-    // the confirming phase.
+    // ── Surface 13: RepairPanel confirm dialog ───────────────────────────
+    // RepairPanel confirm dialog opens from the maintenance menu after scan issues load.
     test(`repair panel confirm dialog passes wcag2.1 aa under ${theme} theme (AC3)`, async ({
       page,
     }) => {
@@ -436,10 +560,7 @@ for (const theme of THEMES) {
         'health-badge must have data-health="red" — /api/tasks/scan must have returned items',
       ).toHaveAttribute('data-health', 'red')
 
-      await page.locator('[data-testid="health-badge"]').click()
-      await page
-        .locator('[data-testid="health-badge-popover"]')
-        .waitFor({ state: 'visible', timeout: 3_000 })
+      await openMaintenanceMenu(page)
 
       const repairButton = page.locator('[data-testid="repair-button"]')
       await repairButton.waitFor({ state: 'visible', timeout: 3_000 })

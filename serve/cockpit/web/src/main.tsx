@@ -5,7 +5,7 @@ import './tailwind.css'
 import './custom-tokens.css'
 import App from './App'
 
-const REQUIRED_PDS_ELEMENTS = ['p-button', 'p-icon', 'p-tabs', 'p-tabs-item'] as const
+const REQUIRED_PDS_ELEMENTS = ['p-canvas', 'p-button', 'p-icon', 'p-tabs', 'p-tabs-item'] as const
 
 function applyTokenFallbacks(): void {
   const rootStyle = document.documentElement.style

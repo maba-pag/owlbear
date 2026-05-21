@@ -178,9 +178,6 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
     element?.setAttribute('tag', 'h3')
   }
 
-  function setHideLabelAttr(element: HTMLElement | null): void {
-    element?.setAttribute('hide-label', '')
-  }
 
   function readControlValue(event: ControlValueEvent): string {
     const detailValue = (event.detail as { value?: unknown } | undefined)?.value
@@ -236,99 +233,122 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
       onKeyDown={handleModalKeyDown}
       aria={{ 'aria-label': 'Resolve decision request' }}
     >
-      <PHeading ref={setHeadingTagAttr} tag="h2">{snapshotDR.title}</PHeading>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>{snapshotDR.body ?? ''}</ReactMarkdown>
-
-      <fieldset data-testid="response-selector">
-        <legend>Response</legend>
-        <div data-testid="option-approved">
-          <label>
-            <input
-              type="radio"
-              name="resolve-response"
-              value="approved"
-              checked={response === 'approved'}
-              onChange={handleResponseChange}
-            />
-            approved
-          </label>
-          <PText>Proceed with approval and continue implementation.</PText>
-        </div>
-        <div data-testid="option-rejected">
-          <label>
-            <input
-              type="radio"
-              name="resolve-response"
-              value="rejected"
-              checked={response === 'rejected'}
-              onChange={handleResponseChange}
-            />
-            rejected
-          </label>
-          <PText>Send this request back and stop current progress.</PText>
-        </div>
-        <div data-testid="option-needs-info">
-          <label>
-            <input
-              type="radio"
-              name="resolve-response"
-              value="needs-info"
-              checked={response === 'needs-info'}
-              onChange={handleResponseChange}
-            />
-            needs-info
-          </label>
-          <PText>Ask for more details and wait for clarification.</PText>
-        </div>
-      </fieldset>
-
-      <PTextarea
-        label="Resolution notes"
-        name="resolve-notes"
-        ref={setHideLabelAttr}
-        data-testid="resolve-notes"
-        value={notes}
-        onChange={(event) => setNotes(readControlValue(event))}
-      />
-
-      <PButton
-        ref={(element) => {
-          submitRef.current = element
-        }}
-        type="button"
-        data-testid="resolve-submit"
-        variant="primary"
-        disabled={response === ''}
-        onClick={() => {
-          void handleSubmit()
-        }}
+      <div
+        className="grid max-h-[min(82vh,820px)] w-[min(760px,calc(100vw-6rem))] min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-static-md overflow-hidden text-primary max-md:w-[calc(100vw-12rem)] max-sm:w-[calc(100vw-4rem)]"
+        data-testid="resolve-modal-surface"
       >
-        Submit Decision
-      </PButton>
-      <PButton type="button" data-testid="resolve-cancel" variant="secondary" onClick={requestClose}>
-        Close Modal
-      </PButton>
+        <header className="grid gap-static-xs border-b border-contrast-low pb-static-sm pr-[4.5rem]">
+          <span className="text-xs font-semibold uppercase text-primary">Decision request</span>
+          <PHeading ref={setHeadingTagAttr} tag="h2">{snapshotDR.title}</PHeading>
+          <div className="flex min-w-0 flex-wrap items-center gap-static-xs text-xs font-semibold text-primary">
+            <span className="rounded-full border border-contrast-low bg-canvas px-static-xs py-1">Task #{snapshotDR.task_id}</span>
+            <span className="rounded-full border border-contrast-low bg-canvas px-static-xs py-1">{snapshotDR.agent}</span>
+            <span className="rounded-full border border-contrast-low bg-canvas px-static-xs py-1">{snapshotDR.request_type.replace(/[-_]/g, ' ')}</span>
+          </div>
+        </header>
 
-      {error ? (
-        <PInlineNotification
-          ref={(element) => {
-            inlineNotificationRef.current = element as InlineNotificationHost | null
-            if (!inlineNotificationRef.current) {
-              return
-            }
-            inlineNotificationRef.current.onAction = retryResolve
-            inlineNotificationRef.current.onDismiss = dismissError
-          }}
-          data-testid="resolve-error"
-          state="error"
-          description={error.message}
-          actionLabel={error.retryable ? 'Retry' : undefined}
-          actionIcon={error.retryable ? 'reset' : undefined}
-          onAction={error.retryable ? retryResolve : undefined}
-          actionLoading={isSubmitting}
-          onDismiss={dismissError}
-        />
-      ) : null}
+        <div className="grid min-h-0 gap-static-md overflow-y-auto pr-static-xs">
+          <section className="rounded-lg border border-contrast-low bg-canvas p-static-md text-sm leading-relaxed text-primary [&_h2]:m-0 [&_h2]:mb-static-xs [&_h2]:text-base [&_h2]:font-semibold [&_li]:my-1 [&_p]:my-static-xs [&_ul]:my-static-xs [&_ul]:pl-static-md">
+            <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>{snapshotDR.body ?? ''}</ReactMarkdown>
+          </section>
+
+          <fieldset data-testid="response-selector" className="m-0 grid gap-static-sm border-0 p-0">
+            <legend className="mb-static-xs text-xs font-semibold uppercase text-primary">Response</legend>
+            <div className="grid gap-static-sm sm:grid-cols-3">
+              <div data-testid="option-approved" className="rounded-lg border border-contrast-low bg-canvas p-static-sm">
+                <label className="flex items-center gap-static-xs text-sm font-semibold text-primary">
+                  <input
+                    type="radio"
+                    name="resolve-response"
+                    value="approved"
+                    checked={response === 'approved'}
+                    onChange={handleResponseChange}
+                  />
+                  approved
+                </label>
+                <PText>Proceed with approval and continue implementation.</PText>
+              </div>
+              <div data-testid="option-rejected" className="rounded-lg border border-contrast-low bg-canvas p-static-sm">
+                <label className="flex items-center gap-static-xs text-sm font-semibold text-primary">
+                  <input
+                    type="radio"
+                    name="resolve-response"
+                    value="rejected"
+                    checked={response === 'rejected'}
+                    onChange={handleResponseChange}
+                  />
+                  rejected
+                </label>
+                <PText>Send this request back and stop current progress.</PText>
+              </div>
+              <div data-testid="option-needs-info" className="rounded-lg border border-contrast-low bg-canvas p-static-sm">
+                <label className="flex items-center gap-static-xs text-sm font-semibold text-primary">
+                  <input
+                    type="radio"
+                    name="resolve-response"
+                    value="needs-info"
+                    checked={response === 'needs-info'}
+                    onChange={handleResponseChange}
+                  />
+                  needs-info
+                </label>
+                <PText>Ask for more details and wait for clarification.</PText>
+              </div>
+            </div>
+          </fieldset>
+
+          <PTextarea
+            compact
+            label="Resolution notes"
+            name="resolve-notes"
+            rows={2}
+            data-testid="resolve-notes"
+            value={notes}
+            onChange={(event) => setNotes(readControlValue(event))}
+          />
+
+          {error ? (
+            <PInlineNotification
+              ref={(element) => {
+                inlineNotificationRef.current = element as InlineNotificationHost | null
+                if (!inlineNotificationRef.current) {
+                  return
+                }
+                inlineNotificationRef.current.onAction = retryResolve
+                inlineNotificationRef.current.onDismiss = dismissError
+              }}
+              data-testid="resolve-error"
+              state="error"
+              description={error.message}
+              actionLabel={error.retryable ? 'Retry' : undefined}
+              actionIcon={error.retryable ? 'reset' : undefined}
+              onAction={error.retryable ? retryResolve : undefined}
+              actionLoading={isSubmitting}
+              onDismiss={dismissError}
+            />
+          ) : null}
+        </div>
+
+        <footer className="flex flex-wrap items-center justify-end gap-static-xs border-t border-contrast-low pt-static-sm">
+          <PButton
+            ref={(element) => {
+              submitRef.current = element
+            }}
+            type="button"
+            data-testid="resolve-submit"
+            variant="primary"
+            disabled={response === ''}
+            onClick={() => {
+              void handleSubmit()
+            }}
+          >
+            Submit Decision
+          </PButton>
+          <PButton type="button" data-testid="resolve-cancel" variant="secondary" onClick={requestClose}>
+            Close Modal
+          </PButton>
+        </footer>
+      </div>
     </PModal>
   )
 }
