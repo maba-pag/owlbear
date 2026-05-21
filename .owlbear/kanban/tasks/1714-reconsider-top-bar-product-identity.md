@@ -1,10 +1,10 @@
 ---
 id: 1714
 title: Reconsider top bar product identity
-status: todo
+status: done
 priority: important
 created: 2026-05-21T23:24:05.487044+02:00
-updated: 2026-05-22T00:46:55.776754+02:00
+updated: 2026-05-22T01:29:30+02:00
 tags:
   - cockpit-perfect-ui
   - scope:cockpit-web
@@ -63,3 +63,12 @@ Use this task as a product/audit todo item, not an instruction to hand off to th
 - The status light and theme switcher are visually centered in the title bar; they should sit in the appropriate utility/control area without weakening the product name.
 - Classification: user-observed delivered-work gap, not theoretical.
 - Impact: hurts Cockpit now by making the app identity and utility-control placement feel unfinished.
+
+## Final Evidence - 2026-05-22
+- Classification: observed delivered-work gap, not theoretical. The previous pass removed the inherited Porsche mark, but the visible app identity was still too weak and the status/theme utilities visually sat around the title-bar center.
+- Impact: hurt Cockpit now by making the shell feel unfinished and visually ambiguous; it was not only a future/edge-case risk.
+- Source audit: `PCanvas` uses a three-column header grid (`minmax(0,1fr) auto minmax(0,1fr)`) and renders crest/wordmark in the middle. Hiding those elements left the start/end areas subject to normal grid auto-placement, which allowed the `header-end` controls to occupy the center column.
+- Implementation: renamed the visible product identity to `OwlBear Dashboard`, increased it to the next local type size, kept the hidden title/accessible label aligned to the same name, and pinned the PDS header start/end slots to explicit columns while keeping the hidden crest/wordmark in the center column.
+- Desktop screenshot proof: captured and inspected 1440px light, 1440px dark, and 2560px light screenshots. Metrics after the fix: identity x=96/right=230; utility group x=1320/right=1416 at 1440px, and x=2440/right=2536 at 2560px. That places controls in the right utility area rather than the visual center.
+- Test contract update: replaced the stale E2E expectation that the status bar be wider than 200px with a compact right-anchored utility-area assertion.
+- Validation: `npx vitest run src/__tests__/Shell.test.tsx src/__tests__/Shell.theme-toggle.test.tsx --reporter=dot` passed 2 files / 23 tests. `npx playwright test e2e/shell-layout-1606.spec.ts` passed 11 tests. `npx playwright test e2e/shell-sidecar-inspector.spec.ts --grep "StatusBarNavHierarchy"` passed 5 tests. ESLint on touched shell/test files passed. `npm run build` passed with the existing Vite chunk-size warning. VS Code diagnostics found no errors in touched files. Task scratch artifacts were cleaned after screenshot review.

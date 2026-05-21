@@ -118,6 +118,16 @@ test.describe('PCanvas shell layout', () => {
     await expect(page.locator('[data-region="status-bar"]')).toBeVisible()
     await expect(page.getByTestId('app-identity')).toBeVisible()
     await expect(page.getByRole('img', { name: 'Porsche' })).toHaveCount(0)
+
+    const viewport = page.viewportSize()
+    const identityBox = await page.getByTestId('app-identity').boundingBox()
+    const statusBox = await page.locator('[data-region="status-bar"]').boundingBox()
+
+    expect(viewport).not.toBeNull()
+    expect(identityBox).not.toBeNull()
+    expect(statusBox).not.toBeNull()
+    expect(statusBox!.x + statusBox!.width).toBeGreaterThan(viewport!.width - 96)
+    expect(statusBox!.x).toBeGreaterThan(identityBox!.x + identityBox!.width + 300)
   })
 
   test('start sidebar contains icon-only workspace navigation', async ({ page }) => {
@@ -216,7 +226,8 @@ test.describe('PCanvas shell on direct workspace routes', () => {
     expect(statePanel).not.toBeNull()
     expect(workspace!.width).toBeGreaterThan(1_000)
     expect(ideas!.width).toBeGreaterThan(1_000)
-    expect(statusBar!.width).toBeGreaterThan(200)
+    expect(statusBar!.x + statusBar!.width).toBeGreaterThan(1_340)
+    expect(statusBar!.width).toBeLessThan(180)
     expect(statePanel!.x).toBeGreaterThan(editor!.x + editor!.width)
     expect(Math.abs(statePanel!.y - editor!.y)).toBeLessThan(4)
   })

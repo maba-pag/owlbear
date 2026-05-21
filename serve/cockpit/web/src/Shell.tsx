@@ -75,7 +75,9 @@ function applyCockpitCanvasOverrides(canvas: HTMLElement | null): boolean {
   const style = document.createElement('style')
   style.setAttribute(CANVAS_OVERRIDE_ATTR, '')
   style.textContent = [
-    '.header__crest,.header__wordmark{display:none!important;}',
+    '.header__crest,.header__wordmark{display:none!important;grid-column:2!important;grid-row:1!important;}',
+    '.header__area--start{grid-column:1!important;grid-row:1!important;min-width:0!important;}',
+    '.header__area--end{grid-column:3!important;grid-row:1!important;min-width:0!important;}',
     '.sidebar--start{padding-inline:var(--cockpit-sidebar-start-padding)!important;}',
     '.sidebar__header--start{margin-inline:calc(-1 * var(--cockpit-sidebar-start-padding))!important;padding-inline:var(--cockpit-sidebar-start-padding)!important;}',
   ].join('')
@@ -377,16 +379,16 @@ function Shell() {
         style={canvasStyle}
         onSidebarStartUpdate={onSidebarStartUpdate}
       >
-        <span slot="title" className="sr-only">OwlBear Cockpit</span>
+        <span slot="title" className="sr-only">OwlBear Dashboard</span>
 
         <span
           slot="header-start"
-          className="pointer-events-none flex min-w-0 items-baseline gap-static-xs text-sm font-semibold leading-none text-primary"
+          className="pointer-events-none flex min-w-0 items-baseline gap-static-xs text-base font-semibold leading-none text-primary"
           data-testid="app-identity"
-          aria-label="OwlBear Cockpit"
+          aria-label="OwlBear Dashboard"
         >
           <span className="truncate">OwlBear</span>
-          <span className="hidden sm:inline">Cockpit</span>
+          <span className="hidden md:inline">Dashboard</span>
         </span>
 
         <div

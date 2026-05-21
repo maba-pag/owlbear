@@ -334,10 +334,21 @@ test.describe('TestFromAC_StatusBarNavHierarchy', () => {
   }) => {
     await expect(page.getByTestId('app-identity')).toBeVisible()
     await expect(page.getByTestId('app-identity')).toHaveText(/OwlBear/)
+    await expect(page.getByTestId('app-identity')).toHaveText(/Dashboard/)
     await expect(page.getByRole('img', { name: 'Porsche' })).toHaveCount(0)
     const title = page.locator('[slot="title"]')
-    await expect(title).toHaveText('OwlBear Cockpit')
+    await expect(title).toHaveText('OwlBear Dashboard')
     await expect(title).toHaveClass(/sr-only/)
+
+    const viewport = page.viewportSize()
+    const identityBox = await page.getByTestId('app-identity').boundingBox()
+    const statusBox = await page.locator('[data-region="status-bar"]').boundingBox()
+
+    expect(viewport).not.toBeNull()
+    expect(identityBox).not.toBeNull()
+    expect(statusBox).not.toBeNull()
+    expect(statusBox!.x + statusBox!.width).toBeGreaterThan(viewport!.width - 96)
+    expect(statusBox!.x).toBeGreaterThan(identityBox!.x + identityBox!.width + 300)
   })
 
   test('nav rail active surface has aria-current="page" — regression guard', async ({ page }) => {

@@ -71,9 +71,18 @@ describe('TestFromAC_AppShell', () => {
       const { container } = renderShell()
       const identity = container.querySelector('[data-testid="app-identity"]')
       expect(identity).toHaveAttribute('slot', 'header-start')
-      expect(identity).toHaveAttribute('aria-label', 'OwlBear Cockpit')
+      expect(identity).toHaveAttribute('aria-label', 'OwlBear Dashboard')
       expect(identity?.textContent).toContain('OwlBear')
-      expect(identity?.textContent).toContain('Cockpit')
+      expect(identity?.textContent).toContain('Dashboard')
+    })
+
+    it('pins the hidden PDS brand and utility slots to explicit header columns', () => {
+      const { container } = renderShell()
+      const canvas = container.querySelector('p-canvas.shell')
+      const override = canvas?.shadowRoot?.querySelector('[data-cockpit-canvas-override]')
+
+      expect(override?.textContent).toContain('.header__area--start{grid-column:1')
+      expect(override?.textContent).toContain('.header__area--end{grid-column:3')
     })
 
     it('does not place product identity in the global status bar', () => {
