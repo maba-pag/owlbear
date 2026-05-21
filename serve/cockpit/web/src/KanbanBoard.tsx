@@ -401,10 +401,7 @@ function KanbanBoardContent({
           headingLevel={2}
           summaryLabel="Board summary"
           summary={(
-            <>
-              <WorkspaceHeaderMetric value={boardTaskCount} label={boardTaskLabel} />
-              <WorkspaceHeaderMetric value={board.statuses.length} label="lanes" />
-            </>
+            <WorkspaceHeaderMetric value={boardTaskCount} label={boardTaskLabel} />
           )}
           actions={(
             <>

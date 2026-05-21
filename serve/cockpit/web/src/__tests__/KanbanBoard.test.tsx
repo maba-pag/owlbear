@@ -203,6 +203,20 @@ describe('TestFromAC_KanbanBoard', () => {
     vi.unstubAllGlobals()
   })
 
+  describe('workspace header', () => {
+    it('shows task count and filters without the low-value lane count', async () => {
+      const { container } = renderBoard({ fetchOnMount: false })
+
+      await waitFor(() => {
+        const summary = container.querySelector('[data-testid="workspace-header-summary"]')
+        expect(summary?.textContent).toContain(String(TASKS.tasks.length))
+        expect(summary?.textContent).toContain('tasks')
+        expect(summary?.textContent).not.toContain('lanes')
+        expect(container.querySelector('[data-testid="filter-toggle"]')).not.toBeNull()
+      })
+    })
+  })
+
   // ─── AC #2, #8, #9 — columns ─────────────────────────────────────────────
 
   describe('columns', () => {
