@@ -190,7 +190,7 @@ export function Card({
 
         {task.tags.length > 0 ? (
           <div className={[hasIntegrationCues ? '' : 'mt-auto', 'flex min-w-0 flex-wrap items-center gap-static-xs'].join(' ')}>
-            <span data-testid="card-tags" className="max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-primary" aria-label={`Tags: ${previewTags.join(', ')}`}>
+            <span data-testid="card-tags" className="flex min-w-0 max-w-full flex-wrap items-center gap-static-xs text-primary" aria-label={`Tags: ${previewTags.join(', ')}`}>
               {previewTags.map((tag) => (
                 <PTag
                   key={tag}

@@ -229,6 +229,24 @@ describe('Card tag pills', () => {
     expect(overflow!.textContent).toContain('+2')
   })
 
+  it('tag preview wraps visible pills instead of clipping rendered tags', () => {
+    const task = makeTask({
+      id: 1,
+      status: 'in-progress',
+      priority: 'critical',
+      tags: ['cockpit-perfect-ui', 'scope:cockpit-web', 'ux-feedback', 'kanban', 'visual-system'],
+    })
+    const { container } = renderCard(task)
+    const tagGroup = container.querySelector('[data-testid="card-tags"]')
+    const classes = tagGroup?.getAttribute('class') ?? ''
+
+    expect(tagGroup).not.toBeNull()
+    expect(classes).toContain('flex-wrap')
+    expect(classes).not.toContain('overflow-hidden')
+    expect(classes).not.toContain('whitespace-nowrap')
+    expect(classes).not.toContain('text-ellipsis')
+  })
+
   it('overflow indicator absent when tags are within TAG_PREVIEW_LIMIT', () => {
     // Positive anchor: above-limit case must have both pills AND overflow.
     const manyTask = makeTask({
