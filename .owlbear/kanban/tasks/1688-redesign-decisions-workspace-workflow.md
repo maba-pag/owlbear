@@ -1,10 +1,10 @@
 ---
 id: 1688
 title: Redesign decisions workspace workflow
-status: research
+status: done
 priority: important
 created: 2026-05-21T19:52:44.922500+02:00
-updated: 2026-05-21T19:52:44.922500+02:00
+updated: 2026-05-21T21:53:08.057483+02:00
 tags:
   - cockpit-perfect-ui
   - scope:cockpit-web
@@ -41,3 +41,12 @@ Use this task as a product/audit todo item, not an instruction to hand off to th
 - Define the intended Decisions workspace workflow from notification to resolution.
 - Surface DR context, task link, request type, options, recommendation, and consequences clearly.
 - Replace weak metadata emphasis such as `requested by` if it does not help decision quality.
+
+[[2026-05-21T21:53:03+02:00]]
+## Builder Evidence
+- Classification: observed current page-level product deficiency, not theoretical. The old Decisions route exposed weak metadata (`requested by`) without enough context/options/stakes for actual resolution.
+- Impact: hurt Cockpit now and hurt the route-owned Decisions plan, because `/decisions` is the primary decision-resolution workspace after removing the global DR menu.
+- Implementation: pending DR rows now render a decision brief with request type, task, age/agent, context, options, recommendation, consequence, and a clear Resolution action path into the existing ResolveModal.
+- Design decision: full resolution remains in ResolveModal; the route row previews the decision quality information so the list stays dense and scannable.
+- Screenshot evidence: `.owlbear/scratch/1680-route-decisions-desktop.png`, `.owlbear/scratch/1680-route-decisions-mobile.png`.
+- Validation: `npm test -- --run src/__tests__/DecisionsPage_1688.test.tsx src/__tests__/DecisionsPage_1645.test.tsx src/__tests__/DecisionsTab.integration.test.tsx --reporter=dot` (54 passed); `npm run build` passed with existing Vite chunk-size warning; `npm run test:e2e:all -- e2e/accessibility-sweep.spec.ts --reporter=line` passed on final rerun (10 passed); `npm run test:e2e:all -- e2e/accessibility-dual-theme.spec.ts --reporter=line` (26 passed); `npm run test:e2e:all -- e2e/shell-sidecar-inspector.spec.ts --reporter=line` (18 passed); `npm run test:e2e:all -- e2e/overlay-behavior.spec.ts --reporter=line` (21 passed).

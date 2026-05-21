@@ -3,6 +3,13 @@ import { PIcon, PText } from '@porsche-design-system/components-react'
 import { WorkspaceHeader, WorkspaceHeaderMetric } from '../components/WorkspaceHeader'
 import { useDRState } from '../hooks/CockpitProvider'
 
+type DecisionBrief = {
+  context: string
+  options: string[]
+  recommendation: string | null
+  consequence: string | null
+}
+
 function formatAge(created: string): string {
   const ageMs = Math.max(0, Date.now() - Date.parse(created))
   const ageMinutes = Math.max(1, Math.floor(ageMs / 60_000))
@@ -15,6 +22,86 @@ function formatAge(created: string): string {
 
 function truncatePreview(value: string): string {
   return value.slice(0, 200)
+}
+
+function normalizeWhitespace(value: string): string {
+  return value.replace(/\s+/g, ' ').trim()
+}
+
+function stripMarkdown(value: string): string {
+  return normalizeWhitespace(
+    value
+      .replace(/^#{1,6}\s+/gm, '')
+      .replace(/^[-*+]\s+/gm, '')
+      .replace(/^\d+\.\s+/gm, '')
+      .replace(/[*_`>]/g, ''),
+  )
+}
+
+function extractRawSection(body: string, sectionNames: string[]): string | null {
+  const lines = body.split('\n')
+  const sectionMatcher = new RegExp(`^#{1,6}\\s+(${sectionNames.join('|')})\\s*$`, 'i')
+  let startIndex = -1
+
+  for (const [index, line] of lines.entries()) {
+    if (sectionMatcher.test(line.trim())) {
+      startIndex = index + 1
+      break
+    }
+  }
+
+  if (startIndex === -1) {
+    return null
+  }
+
+  const sectionLines: string[] = []
+  for (let index = startIndex; index < lines.length; index += 1) {
+    if (/^#{1,6}\s+/.test(lines[index].trim())) {
+      break
+    }
+    sectionLines.push(lines[index])
+  }
+
+  const rawText = sectionLines.join('\n').trim()
+  return rawText.length > 0 ? rawText : null
+}
+
+function extractSection(body: string, sectionNames: string[]): string | null {
+  const rawText = extractRawSection(body, sectionNames)
+  if (!rawText) {
+    return null
+  }
+  const text = stripMarkdown(rawText)
+  return text.length > 0 ? text : null
+}
+
+function extractOptions(body: string): string[] {
+  const optionSection = extractRawSection(body, ['Options', 'Choices', 'Alternatives'])
+  if (!optionSection) {
+    return []
+  }
+  const optionLines = optionSection
+    .split('\n')
+    .map((line) => line.match(/^\s*(?:[-*+]|\d+\.)\s+(.+)$/)?.[1] ?? '')
+    .map((option) => stripMarkdown(option))
+    .filter(Boolean)
+  if (optionLines.length > 0) {
+    return optionLines.slice(0, 3)
+  }
+  return [truncatePreview(stripMarkdown(optionSection))]
+}
+
+function getDecisionBrief(item: { body: string; body_preview: string }): DecisionBrief {
+  const context = extractSection(item.body, ['Context', 'Question', 'Decision'])
+    ?? stripMarkdown(item.body_preview || item.body)
+  const recommendation = extractSection(item.body, ['Recommendation', 'Recommended response', 'Proposal'])
+  const consequence = extractSection(item.body, ['Consequence', 'Consequences', 'Impact'])
+  return {
+    context: truncatePreview(context),
+    options: extractOptions(item.body),
+    recommendation: recommendation ? truncatePreview(recommendation) : null,
+    consequence: consequence ? truncatePreview(consequence) : null,
+  }
 }
 
 function formatRequestType(value: string): string {
@@ -54,7 +141,9 @@ function DecisionsPage() {
   } else {
     content = (
       <div className="flex min-h-0 flex-col gap-static-md overflow-y-auto pr-static-xs" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-        {drState.items.map((item) => (
+        {drState.items.map((item) => {
+          const brief = getDecisionBrief(item)
+          return (
           <div
             key={item.id}
             data-testid={`dr-item-${item.id}`}
@@ -72,7 +161,7 @@ function DecisionsPage() {
               }
             }}
           >
-            <article data-testid={item.id} className="grid min-h-[112px] grid-cols-[4px_minmax(0,1fr)] lg:grid-cols-[4px_minmax(0,1fr)_minmax(180px,auto)]">
+            <article data-testid={item.id} className="grid min-h-[148px] grid-cols-[4px_minmax(0,1fr)] lg:grid-cols-[4px_minmax(0,1fr)_minmax(220px,auto)]">
               <span className="bg-warning" aria-hidden="true" />
               <div className="min-w-0 p-static-md">
                 <div className="mb-static-xs flex min-w-0 flex-wrap items-center gap-static-xs">
@@ -83,20 +172,60 @@ function DecisionsPage() {
                     Task #{item.task_id}
                   </span>
                   <span className="text-xs font-semibold text-primary">{formatAge(item.created)}</span>
+                  <span className="text-xs font-semibold text-primary">{item.agent}</span>
                 </div>
                 <h2 className="m-0 text-lg font-semibold leading-tight text-primary">{formatDecisionTitle(item)}</h2>
-                <p className="m-0 max-w-[72ch] pt-static-xs text-sm leading-normal text-primary line-clamp-2">{truncatePreview(item.body_preview)}</p>
+                <div className="mt-static-sm grid gap-static-sm xl:grid-cols-[minmax(0,1fr)_minmax(240px,0.55fr)]">
+                  <section data-testid={`dr-context-${item.id}`} className="grid gap-1 rounded-md border border-contrast-low bg-surface p-static-xs">
+                    <span className="text-xs font-semibold uppercase text-primary">Context</span>
+                    <p className="m-0 text-sm leading-normal text-primary line-clamp-3">{brief.context}</p>
+                  </section>
+                  <section data-testid={`dr-options-${item.id}`} className="grid gap-1 rounded-md border border-contrast-low bg-surface p-static-xs">
+                    <span className="text-xs font-semibold uppercase text-primary">{brief.options.length > 0 ? 'Options' : 'Request'}</span>
+                    {brief.options.length > 0 ? (
+                      <ul className="m-0 grid list-none gap-1 p-0 text-sm leading-normal text-primary">
+                        {brief.options.map((option) => (
+                          <li key={option} className="line-clamp-1">{option}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="m-0 text-sm leading-normal text-primary line-clamp-2">{truncatePreview(item.body_preview)}</p>
+                    )}
+                  </section>
+                </div>
+                {brief.recommendation || brief.consequence ? (
+                  <div className="mt-static-sm grid gap-static-sm lg:grid-cols-2">
+                    {brief.recommendation ? (
+                      <section data-testid={`dr-recommendation-${item.id}`} className="grid gap-1 rounded-md border border-info bg-info-low p-static-xs">
+                        <span className="text-xs font-semibold uppercase text-primary">Recommendation</span>
+                        <p className="m-0 text-sm leading-normal text-primary line-clamp-2">{brief.recommendation}</p>
+                      </section>
+                    ) : null}
+                    {brief.consequence ? (
+                      <section data-testid={`dr-consequence-${item.id}`} className="grid gap-1 rounded-md border border-contrast-low bg-surface p-static-xs">
+                        <span className="text-xs font-semibold uppercase text-primary">Consequence</span>
+                        <p className="m-0 text-sm leading-normal text-primary line-clamp-2">{brief.consequence}</p>
+                      </section>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
-              <div className="flex items-center justify-between gap-static-sm border-t border-contrast-low bg-surface px-static-md py-static-sm text-sm font-semibold text-primary lg:flex-col lg:items-end lg:justify-center lg:border-l lg:border-t-0 lg:text-right">
-                <span className="text-xs font-semibold uppercase leading-tight text-contrast-high">Requested by</span>
-                <span className="flex items-center gap-static-xs">
-                  <span>{item.agent}</span>
+              <div className="col-span-full grid min-w-0 gap-static-xs border-t border-contrast-low bg-surface px-static-md py-static-sm text-sm font-semibold text-primary sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center lg:col-auto lg:flex lg:flex-col lg:items-start lg:justify-center lg:border-l lg:border-t-0">
+                <span className="text-xs font-semibold uppercase leading-tight text-contrast-high">Resolution</span>
+                <div className="flex min-w-0 flex-wrap gap-static-xs text-xs font-semibold text-primary">
+                  <span className="whitespace-nowrap rounded-full border border-contrast-low bg-canvas px-static-xs py-1 leading-none">Approve</span>
+                  <span className="whitespace-nowrap rounded-full border border-contrast-low bg-canvas px-static-xs py-1 leading-none">Needs info</span>
+                  <span className="whitespace-nowrap rounded-full border border-contrast-low bg-canvas px-static-xs py-1 leading-none">Reject</span>
+                </div>
+                <span className="flex items-center gap-static-xs whitespace-nowrap text-primary">
+                  <span>Resolve decision</span>
                   <PIcon name="arrow-right" size="small" color="inherit" aria-hidden="true" />
                 </span>
               </div>
             </article>
           </div>
-        ))}
+          )
+        })}
       </div>
     )
   }
