@@ -189,16 +189,24 @@ describe('TestFromAC_DecisionsPage', () => {
       expect(item!.textContent).toContain(DR_A.agent)
     })
 
-    it('ac1 happy: each item renders the request_type field', () => {
+    it('ac1 happy: each item renders the formatted request type', () => {
       const { container } = renderPage({ items: [DR_A] })
       const item = container.querySelector('[data-testid="dr-item-dr-a-001"]')
-      expect(item!.textContent).toContain(DR_A.request_type)
+      expect(item!.textContent).toContain('Scope Decision')
     })
 
     it('ac1 happy: each item renders the task_id', () => {
       const { container } = renderPage({ items: [DR_A] })
       const item = container.querySelector('[data-testid="dr-item-dr-a-001"]')
       expect(item!.textContent).toContain(String(DR_A.task_id))
+    })
+
+    it('ac1 happy: each item uses the DR title as the primary heading', () => {
+      const { container } = renderPage({ items: [DR_A] })
+      const item = container.querySelector('[data-testid="dr-item-dr-a-001"]')
+      const heading = item!.querySelector('h2')
+      expect(heading).not.toBeNull()
+      expect(heading!.textContent).toBe(DR_A.title)
     })
 
     it('ac1 happy: each item renders body_preview', () => {
@@ -288,11 +296,11 @@ describe('TestFromAC_DecisionsPage', () => {
       expect(container.querySelector('[data-testid="decisions-empty-state"]')).not.toBeNull()
     })
 
-    it('ac2 happy: empty state contains "nothing to decide" message (case-insensitive)', () => {
+    it('ac2 happy: empty state says no decisions are waiting', () => {
       const { container } = renderPage({ items: [], isLoading: false, error: null })
       const emptyState = container.querySelector('[data-testid="decisions-empty-state"]')
       expect(emptyState).not.toBeNull()
-      expect(emptyState!.textContent!.toLowerCase()).toContain('nothing to decide')
+      expect(emptyState!.textContent!.toLowerCase()).toContain('no decisions are waiting')
     })
 
     it('ac2 edge: empty state is absent when isLoading=true — combined with page presence', () => {

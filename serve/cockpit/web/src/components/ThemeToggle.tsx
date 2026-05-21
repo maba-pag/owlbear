@@ -1,3 +1,4 @@
+import { PButtonPure } from '@porsche-design-system/components-react'
 import { useTheme } from '../hooks/useTheme'
 
 const THEME_LABELS = {
@@ -15,20 +16,25 @@ const THEME_LABELS = {
   },
 } as const
 
-export default function ThemeToggle() {
+interface ThemeToggleProps {
+  compact?: boolean
+}
+
+export default function ThemeToggle({ compact = false }: ThemeToggleProps) {
   const { theme, toggle } = useTheme()
   const label = THEME_LABELS[theme]
 
   return (
-    <button
+    <PButtonPure
       type="button"
-      className="icon-button"
+      icon="theme"
+      hideLabel={compact}
+      className="rounded-full bg-canvas px-static-xs py-1"
       data-testid="theme-toggle"
-      data-pds-exception="theme-toggle"
       aria-label={label.ariaLabel}
       onClick={toggle}
     >
       {label.text}
-    </button>
+    </PButtonPure>
   )
 }

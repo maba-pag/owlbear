@@ -8,7 +8,7 @@
  *   — full board with tasks in all 4 operational signal states (ready, blocked,
  *     claimed, deps-unmet); column structure (.column class, <header> direct
  *     child, data-testid="column-body" sibling); Card-level dr-pending via
- *     explicit pendingDRIds prop; data-testid="theme-toggle" button present.
+ *     explicit pendingDRIds prop; data-testid="theme-toggle" PDS button present.
  * AC-2: Component CSS token coverage
  *   — color and semantic token usage follows the migrated PDS/native token map
  *     (--p-color-primary, --pds-background-*, --pds-contrast-*, --pds-notification-*,
@@ -227,11 +227,11 @@ describe('CardDRPendingDirectRender', () => {
 // ─── AC-1: ThemeToggle presence ────────────────────────────────────────────────
 
 describe('ThemeTogglePresence', () => {
-  it('ThemeToggle renders a <button> element with data-testid="theme-toggle"', () => {
+  it('ThemeToggle renders a PDS button-pure element with data-testid="theme-toggle"', () => {
     const { container } = render(<ThemeToggle />)
     const button = container.querySelector('[data-testid="theme-toggle"]')
     expect(button, 'ThemeToggle must render an element with data-testid="theme-toggle"').not.toBeNull()
-    expect(button!.tagName.toLowerCase()).toBe('button')
+    expect(button!.tagName.toLowerCase()).toBe('p-button-pure')
   })
 })
 
@@ -328,14 +328,14 @@ describe('ShellLevelIntegration', () => {
     )
   }
 
-  it('Shell status bar renders data-testid="theme-toggle" button (ThemeToggle mounted in Shell, not only in isolation)', () => {
+  it('Shell status bar renders data-testid="theme-toggle" PDS button (ThemeToggle mounted in Shell, not only in isolation)', () => {
     const { container } = renderShell()
     const toggle = container.querySelector('[data-testid="theme-toggle"]')
     expect(
       toggle,
       'Shell status bar must contain data-testid="theme-toggle" — ThemeToggle must be wired into Shell, not just tested as a standalone component',
     ).not.toBeNull()
-    expect(toggle!.tagName.toLowerCase()).toBe('button')
+    expect(toggle!.tagName.toLowerCase()).toBe('p-button-pure')
   })
 
   it('Shell status bar renders data-testid="dr-indicator" with data-status="attention" when useDRState returns count=2 with items (positive DR routing proof)', () => {

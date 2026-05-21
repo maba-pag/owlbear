@@ -645,3 +645,18 @@ Verification:
 - `npm run build` — passed; known Vite large-chunk warning only.
 - `npm run test:e2e -- e2e/board-scroll.spec.ts` — 3 passed, including the new six-lane 1920x1080 fit guard.
 - Diagnostics: VS Code reports no errors in `KanbanBoard.tsx` or `board-scroll.spec.ts`.
+
+[[2026-05-21T18:36:41+02:00]]
+## Decisions Workspace Queue Evidence
+- Continued the top-down route audit after Kanban. Screenshot classification: the Decisions route was functional but still read like a wireframe at first glance: a framed oversized header, flat outlined rows, and generated `Decision needed for task #...` headings even though each decision request already carries a concrete title.
+- Real observed issue fixed: surfaced the request title as the row heading, kept task/type/age as compact chips, added a warning accent rail for pending decisions, moved requester/action metadata into a consistent right rail, and converted the route header to an unframed workspace heading with a compact waiting count. This improves current scan speed and route polish; it is not a speculative redesign.
+- Dark-theme accessibility finding fixed during verification: after removing the framed header, the route needed an explicit `bg-canvas` surface so dark text had a painted background. The PDS `ThemeToggle` host also now paints a small canvas pill so axe can evaluate the PDS shadow label against the correct dark background.
+- Browser proof after rebuild: `.owlbear/scratch/1672-nav-dock-audit/decisions-1440x1000-full-page.png` and `decisions-dark-1440x1000-full-page.png` show the improved queue in both themes; `nav-dock-summary.json` reports Decisions light/dark overflow `[]` and empty console/page/request/response diagnostics.
+
+## Decisions Workspace Queue Verification
+- `npm test -- --run src/__tests__/DecisionsPage_1645.test.tsx --reporter=dot` — 1 file passed, 29 tests passed.
+- `npm run build` — passed; known Vite large-chunk warning only.
+- `npm run test:e2e:all -- e2e/shell-layout-1606.spec.ts --grep "direct Decisions route" --reporter=line` — 1 passed.
+- `npm run test:e2e:all -- e2e/accessibility-dual-theme.spec.ts --grep "decisions workspace" --reporter=line` — 2 passed after route/theme-toggle background fixes.
+- `npm test -- --run src/__tests__/DecisionsPage_1645.test.tsx src/__tests__/ThemeToggle.test.tsx src/__tests__/BoardVisualDesign.test.tsx --reporter=dot` — 3 files passed, 48 tests passed.
+- Diagnostics: VS Code reports no errors in `DecisionsPage.tsx`, `ThemeToggle.tsx`, or `DecisionsPage_1645.test.tsx`.

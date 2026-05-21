@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render } from '@testing-library/react'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
 import ThemeToggle from '../components/ThemeToggle'
 import { useTheme } from '../hooks/useTheme'
@@ -29,9 +29,9 @@ function renderThemeToggle(theme: ThemeMode = 'light', toggle = vi.fn()) {
 }
 
 function getButtonDescriptor(theme: ThemeMode): string {
-  const { unmount } = renderThemeToggle(theme)
-  const button = screen.getByRole('button')
-  const descriptor = `${button.getAttribute('aria-label') ?? ''}|${button.textContent ?? ''}`
+  const { container, unmount } = renderThemeToggle(theme)
+  const button = container.querySelector('[data-testid="theme-toggle"]')
+  const descriptor = `${button?.getAttribute('aria-label') ?? ''}|${button?.textContent ?? ''}`
   unmount()
   return descriptor
 }
@@ -41,16 +41,19 @@ describe('TestFromAC_ThemeToggle_1540', () => {
     vi.clearAllMocks()
   })
 
-  it('AC-1: renders an accessible button element', () => {
-    renderThemeToggle('light')
+  it('AC-1: renders an accessible PDS button-pure element', () => {
+    const { container } = renderThemeToggle('light')
 
-    expect(screen.getByRole('button')).toBeInTheDocument()
+    const button = container.querySelector('[data-testid="theme-toggle"]')
+    expect(button).toBeInTheDocument()
+    expect(button!.tagName.toLowerCase()).toBe('p-button-pure')
+    expect(button).toHaveAttribute('aria-label', 'Theme mode: light')
   })
 
   it('AC-2: clicking toggle button invokes useTheme().toggle exactly once', () => {
-    const { toggle } = renderThemeToggle('light')
+    const { container, toggle } = renderThemeToggle('light')
 
-    fireEvent.click(screen.getByRole('button'))
+    fireEvent.click(container.querySelector('[data-testid="theme-toggle"]')!)
 
     expect(toggle).toHaveBeenCalledTimes(1)
   })
