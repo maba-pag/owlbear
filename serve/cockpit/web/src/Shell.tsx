@@ -112,12 +112,6 @@ function Shell() {
     }
     return window.matchMedia('(min-width: 1024px)').matches
   })
-  const [isDesktopNavViewport, setIsDesktopNavViewport] = useState(() => {
-    if (typeof window === 'undefined') {
-      return true
-    }
-    return window.matchMedia('(min-width: 1024px)').matches
-  })
   const [isMaintenanceOpen, setIsMaintenanceOpen] = useState(false)
   const [selectedTaskSubtab, setSelectedTaskSubtab] = useState<string | null>(null)
   const [detailValidationMessage, setDetailValidationMessage] = useState<string | null>(null)
@@ -165,7 +159,7 @@ function Shell() {
   const matchedRoute = activeNavIndex >= 0 ? routeConfig[activeNavIndex] : undefined
   const isKanbanRoute = normalizedPathname === '/'
   const isTaskDetailOpen = isKanbanRoute && selectedTaskId !== null
-  const isNavRailOpen = isDesktopNavViewport || isSidebarStartOpen
+  const isNavRailOpen = isSidebarStartOpen
   const canvasKey = isNavRailOpen ? 'nav-open' : 'nav-closed'
   const routeElement = useMemo(() => {
     if (!matchedRoute) {
@@ -205,7 +199,6 @@ function Shell() {
   useEffect(() => {
     const mediaQuery = window.matchMedia('(min-width: 1024px)')
     const handleSidebarViewport = () => {
-      setIsDesktopNavViewport(mediaQuery.matches)
       setIsSidebarStartOpen(mediaQuery.matches)
     }
 
@@ -489,7 +482,7 @@ function Shell() {
           aria-hidden={isNavRailOpen ? undefined : true}
         >
           <div
-            className="flex min-w-0 flex-col items-center gap-1 rounded-full border border-contrast-low bg-frosted-soft p-1 shadow-lg backdrop-blur-sm"
+            className="flex min-w-0 flex-col items-center gap-static-sm rounded-full border border-contrast-low bg-frosted-soft p-static-xs backdrop-blur-sm"
             data-testid="nav-rail-dock"
             aria-label="Workspace switcher"
           >
@@ -512,7 +505,7 @@ function Shell() {
                     'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]',
                     'transition-[background-color,color,box-shadow,transform] duration-sm',
                     isActive
-                      ? 'bg-primary text-canvas shadow-md'
+                      ? 'bg-primary text-canvas'
                       : 'text-contrast-high hover:bg-surface hover:shadow-sm',
                   ].join(' ')}
                   data-surface={route.icon}

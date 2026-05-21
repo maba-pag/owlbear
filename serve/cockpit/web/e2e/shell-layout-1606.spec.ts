@@ -127,6 +127,24 @@ test.describe('PCanvas shell layout', () => {
     await expect(navRail.locator('[data-surface="kanban"]')).not.toContainText('Kanban')
   })
 
+  test('start sidebar close event hides the workspace navigation on desktop', async ({ page }) => {
+    const navRail = page.locator('[slot="sidebar-start"][data-region="nav-rail"]')
+    await expect(navRail).toBeVisible()
+
+    await page.locator('p-canvas.shell').evaluate((element) => {
+      element.dispatchEvent(
+        new CustomEvent('sidebarStartUpdate', {
+          detail: { open: false },
+          bubbles: true,
+        }),
+      )
+    })
+
+    await expect(navRail).not.toBeVisible()
+    await expect(navRail).toHaveAttribute('aria-hidden', 'true')
+    await expect(navRail.locator('[data-surface="kanban"]')).toHaveAttribute('tabindex', '-1')
+  })
+
   test('retired right sidecar and collapse state are absent', async ({ page }) => {
     await expect(page.locator('[data-region="sidecar"]')).toHaveCount(0)
     await expect(page.locator('[slot="sidebar-end"]')).toHaveCount(0)

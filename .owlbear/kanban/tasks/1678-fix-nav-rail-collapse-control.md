@@ -4,7 +4,7 @@ title: Fix nav rail collapse control
 status: research
 priority: important
 created: 2026-05-21T19:51:15.660250+02:00
-updated: 2026-05-21T19:51:15.660250+02:00
+updated: 2026-05-21T20:02:55.814073+02:00
 tags:
   - cockpit-perfect-ui
   - scope:cockpit-web
@@ -39,3 +39,10 @@ Use this task as a product/audit todo item, not an instruction to hand off to th
 - Reproduce the collapse button behavior from the user's path.
 - Decide whether collapse is intended or the control should be removed/changed.
 - If collapse remains, clicking it visibly changes the nav state and stays accessible.
+
+[[2026-05-21T20:02:55+02:00]]
+## Implementation Evidence
+- Classification: confirmed behavior defect in code. Desktop nav visibility was computed as `isDesktopNavViewport || isSidebarStartOpen`, so a PCanvas sidebar-close event could not hide the rail on desktop.
+- Change: made `isSidebarStartOpen` the source of truth for `isNavRailOpen`, while viewport changes still initialize/reset the PCanvas state for desktop vs compact layouts.
+- Regression: added a Playwright guard dispatching `sidebarStartUpdate` with `{ open: false }`; the nav becomes invisible, `aria-hidden="true"`, and its buttons receive `tabindex="-1"`.
+- Verification: `npm run test:e2e:all -- e2e/shell-layout-1606.spec.ts --grep "start sidebar" --reporter=line` passed 2 tests.

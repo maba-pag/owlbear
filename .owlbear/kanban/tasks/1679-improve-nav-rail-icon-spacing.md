@@ -4,7 +4,7 @@ title: Improve nav rail icon spacing
 status: research
 priority: important
 created: 2026-05-21T19:51:24.066039+02:00
-updated: 2026-05-21T19:51:24.066039+02:00
+updated: 2026-05-21T20:03:03.950464+02:00
 tags:
   - cockpit-perfect-ui
   - scope:cockpit-web
@@ -38,3 +38,10 @@ Use this task as a product/audit todo item, not an instruction to hand off to th
 - Measure current hit targets, visual gaps, badge placement, and hover/focus state.
 - Adjust spacing if the dock reads as cramped or accidental.
 - Preserve efficient workspace switching and badge legibility.
+
+[[2026-05-21T20:03:03+02:00]]
+## Implementation Evidence
+- Classification: confirmed current UI issue. The screenshot crop showed the icon group still read as stacked too tightly after removing the heavy shadow.
+- Change: increased the dock item gap from `gap-static-xs` to `gap-static-sm`, keeping 40px icon targets and the compact vertical rail footprint.
+- Screenshot proof: `.owlbear/scratch/1672-nav-dock-audit/root-1440x1000-nav-dock.png` shows clearer separation between controls while preserving badges and active state.
+- Verification: focused Shell/PDS tests passed 94 tests / 3 skipped; focused shell-layout browser tests passed 2.
