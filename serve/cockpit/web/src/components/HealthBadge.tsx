@@ -179,7 +179,7 @@ export default function HealthBadge({ items, status, message, actions, portalPop
         type="button"
         ref={triggerRef}
         className={[
-          'inline-flex size-8 items-center justify-center rounded-full border border-contrast-low bg-frosted-soft p-0 transition-colors duration-sm',
+          'inline-flex size-11 items-center justify-center rounded-full bg-transparent p-0 transition-colors duration-sm',
           'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]',
           health === 'green'
             ? 'hover:bg-surface'

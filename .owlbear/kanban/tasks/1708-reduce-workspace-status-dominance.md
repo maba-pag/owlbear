@@ -1,10 +1,10 @@
 ---
 id: 1708
 title: Reduce workspace status dominance
-status: todo
+status: done
 priority: important
 created: 2026-05-21T23:23:05.244698+02:00
-updated: 2026-05-22T00:56:07.627385+02:00
+updated: 2026-05-22T01:47:00+02:00
 tags:
   - cockpit-perfect-ui
   - scope:cockpit-web
@@ -63,3 +63,11 @@ Use this task as a product/audit todo item, not an instruction to hand off to th
 - Verify whether the light actually changes color across green/yellow/red health states; the current experience has not made that visible.
 - Classification: user-observed delivered-work gap plus behavior-verification question.
 - Impact: hurts Cockpit now if persistent status chrome remains visually heavier than needed or if state color is not visibly truthful.
+
+## Final Evidence - 2026-05-22
+- Classification: observed delivered-work gap plus behavior-verification question, not theoretical. The previous status control was compact but still had a visible circular badge surface around the light.
+- Impact: hurt Cockpit now because the global status indicator still drew more attention than a healthy utility signal should, and the user could not trust the green/yellow/red behavior without explicit proof.
+- Implementation: changed `HealthBadge` to a transparent 44px circular hit target with no persistent border/background; only the traffic-light dot and its state ring remain visible. Kept `aria-label`, `title`, keyboard focus, click popover, and red-state retry behavior intact.
+- State proof: browser captures at 1440px for green, yellow, and red. Metrics showed badge box 44x44, `backgroundColor=rgba(0, 0, 0, 0)`, `borderTopWidth=0px` in all states. Dot classes changed across `bg-success/ring-success-low`, `bg-warning/ring-warning-low`, and `bg-error/ring-error-low`; `data-health` matched green/yellow/red.
+- Screenshot review: inspected green/yellow/red desktop captures. Healthy state now reads as a quiet light only; yellow and red are visibly different. Red still shows `Run check again`, which is appropriate because it is an actionable failure state.
+- Validation: `npx vitest run src/__tests__/HealthBadge.test.tsx src/__tests__/Shell.traffic-light.test.tsx src/__tests__/Shell.test.tsx --reporter=dot` passed 3 files / 66 tests. `npx playwright test e2e/shell-layout-1606.spec.ts --grep "workspace status uses"` passed 1 test. ESLint on touched files passed. `npm run build` passed with the existing Vite chunk-size warning. VS Code diagnostics found no errors in touched files.

@@ -32,10 +32,12 @@ const ITEM_B: ScanItem = {
 
 // Render helper
 
-function renderBadge(items: ScanItem[]) {
+type HealthState = 'green' | 'yellow' | 'red'
+
+function renderBadge(items: ScanItem[], status?: HealthState) {
   return render(
     <PorscheDesignSystemProvider>
-      <HealthBadge items={items} />
+      <HealthBadge items={items} status={status} />
     </PorscheDesignSystemProvider>,
   )
 }
@@ -61,6 +63,22 @@ describe('TestFromAC_HealthBadge', () => {
     expect(badge?.getAttribute('data-health')).toBe('green')
   })
 
+  it('sets data-health="yellow" when items are empty and status is stale', () => {
+    const { container } = renderBadge([], 'yellow')
+    const badge = container.querySelector('[data-testid="health-badge"]')
+    const light = container.querySelector('[data-testid="traffic-light"]')
+    expect(badge?.getAttribute('data-health')).toBe('yellow')
+    expect(light?.getAttribute('data-health')).toBe('yellow')
+  })
+
+  it('sets data-health="red" when items are empty and status has failed', () => {
+    const { container } = renderBadge([], 'red')
+    const badge = container.querySelector('[data-testid="health-badge"]')
+    const light = container.querySelector('[data-testid="traffic-light"]')
+    expect(badge?.getAttribute('data-health')).toBe('red')
+    expect(light?.getAttribute('data-health')).toBe('red')
+  })
+
   it('sets data-health="red" when items is non-empty (single item)', () => {
     const { container } = renderBadge([ITEM_A])
     const badge = container.querySelector('[data-testid="health-badge"]')
@@ -71,6 +89,33 @@ describe('TestFromAC_HealthBadge', () => {
     const { container } = renderBadge([ITEM_A, ITEM_B])
     const badge = container.querySelector('[data-testid="health-badge"]')
     expect(badge?.getAttribute('data-health')).toBe('red')
+  })
+
+  it('keeps the trigger target large without a persistent outer badge surface', () => {
+    const { container } = renderBadge([])
+    const badge = container.querySelector('[data-testid="health-badge"]')
+    expect(badge?.className).toContain('size-11')
+    expect(badge?.className).toContain('bg-transparent')
+    expect(badge?.className).not.toContain('border-contrast-low')
+    expect(badge?.className).not.toContain('bg-frosted-soft')
+  })
+
+  it('renders visibly distinct traffic-light classes for green, yellow, and red states', () => {
+    const green = renderBadge([])
+    const greenClass = green.container.querySelector('[data-testid="traffic-light"]')?.className ?? ''
+    green.unmount()
+
+    const yellow = renderBadge([], 'yellow')
+    const yellowClass = yellow.container.querySelector('[data-testid="traffic-light"]')?.className ?? ''
+    yellow.unmount()
+
+    const red = renderBadge([], 'red')
+    const redClass = red.container.querySelector('[data-testid="traffic-light"]')?.className ?? ''
+    red.unmount()
+
+    expect(greenClass).toContain('bg-success')
+    expect(yellowClass).toContain('bg-warning')
+    expect(redClass).toContain('bg-error')
   })
 
   it('sets aria-label to "Workspace status: OK" when items is empty', () => {
