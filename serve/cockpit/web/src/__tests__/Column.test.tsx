@@ -177,3 +177,21 @@ describe('TestFromAC_ColumnEmptyState', () => {
   // AC-3b: Centering CSS is now enforced inline via PDS Tailwind utilities in Column.tsx.
   // The old Column.css source-inspection test is removed since the CSS file is dead.
 })
+
+describe('Column lane accent visual system', () => {
+  it('uses one neutral lane accent instead of decorative semantic status colors', () => {
+    const statuses = ['research', 'backlog', 'todo', 'in-progress', 'review', 'docs', 'done']
+
+    for (const status of statuses) {
+      const { container, unmount } = renderColumn(status, [])
+      const root = container.querySelector(`[data-column="${status}"]`)
+      const classes = root?.getAttribute('class') ?? ''
+
+      expect(classes).toContain('border-t-contrast-medium')
+      expect(classes).not.toMatch(/border-t-(warning|error|primary|success)/)
+      expect(classes).not.toContain('--custom-signal-claimed')
+
+      unmount()
+    }
+  })
+})

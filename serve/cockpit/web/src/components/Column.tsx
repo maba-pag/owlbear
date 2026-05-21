@@ -28,16 +28,6 @@ function toDisplayStatus(status: string): string {
     .join(' ')
 }
 
-const STATUS_TONE_CLASS: Record<string, string> = {
-  research: 'border-t-warning',
-  backlog: 'border-t-contrast-medium',
-  todo: 'border-t-error',
-  'in-progress': 'border-t-[var(--custom-signal-claimed)]',
-  review: 'border-t-warning',
-  docs: 'border-t-primary',
-  done: 'border-t-success',
-}
-
 export function Column({
   status,
   tasks,
@@ -57,7 +47,6 @@ export function Column({
 
   const sorted = [...tasks].sort((a, b) => priorities.indexOf(b.priority) - priorities.indexOf(a.priority))
   const density = sorted.length === 0 ? 'empty' : sorted.length <= 2 ? 'sparse' : 'active'
-  const statusToneClass = STATUS_TONE_CLASS[status] ?? 'border-t-contrast-medium'
 
   const handleCardDragStart = (taskId: number, updated: string) => {
     onDragStart(status, taskId, updated)
@@ -107,8 +96,7 @@ export function Column({
     <div
       className={[
         'column',
-        'flex min-w-[var(--kanban-column-min)] flex-col overflow-hidden rounded-lg border border-transparent border-t-[3px] bg-surface shadow-sm',
-        statusToneClass,
+        'flex min-w-[var(--kanban-column-min)] flex-col overflow-hidden rounded-lg border border-contrast-low border-t-[3px] border-t-contrast-medium bg-surface shadow-sm',
         isDragOver && isValidDragTarget ? 'border-success bg-success-frosted' : '',
       ].join(' ')}
       data-column={status}
