@@ -187,11 +187,34 @@ describe('Column lane accent visual system', () => {
       const root = container.querySelector(`[data-column="${status}"]`)
       const classes = root?.getAttribute('class') ?? ''
 
-      expect(classes).toContain('border-t-contrast-medium')
+      expect(classes).toContain('border-t-contrast-low')
       expect(classes).not.toMatch(/border-t-(warning|error|primary|success)/)
       expect(classes).not.toContain('--custom-signal-claimed')
 
       unmount()
     }
+  })
+})
+
+describe('Column chrome visual system', () => {
+  it('renders columns as quiet lanes without outer contrast border or shadow chrome', () => {
+    const { container } = renderColumn('todo', [makeTask(1, 'todo')])
+    const root = container.querySelector('[data-column="todo"]')
+    const classes = root?.getAttribute('class') ?? ''
+
+    expect(classes).toContain('border-transparent')
+    expect(classes).not.toContain('border-contrast-low')
+    expect(classes).not.toContain('shadow-sm')
+  })
+
+  it('renders empty states as quiet text instead of dashed boxes', () => {
+    const { container } = renderColumn('research', [])
+    const empty = container.querySelector('[data-testid="empty-column"]')
+    const classes = empty?.getAttribute('class') ?? ''
+
+    expect(empty?.textContent).toBe('No Research tasks')
+    expect(classes).not.toContain('border-dashed')
+    expect(classes).not.toContain('border-contrast-low')
+    expect(classes).not.toContain('bg-canvas')
   })
 })

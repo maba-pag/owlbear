@@ -96,7 +96,7 @@ export function Column({
     <div
       className={[
         'column',
-        'flex min-w-[var(--kanban-column-min)] flex-col overflow-hidden rounded-lg border border-contrast-low border-t-[3px] border-t-contrast-medium bg-surface shadow-sm',
+        'flex min-w-[var(--kanban-column-min)] flex-col overflow-hidden rounded-md border border-transparent border-t border-t-contrast-low bg-surface',
         isDragOver && isValidDragTarget ? 'border-success bg-success-frosted' : '',
       ].join(' ')}
       data-column={status}
@@ -118,20 +118,17 @@ export function Column({
         onDrop(status)
       }}
     >
-      <header className="flex min-h-12 shrink-0 items-center justify-between bg-surface px-static-sm text-[0.8125rem] font-semibold capitalize text-primary">
+      <header className="flex min-h-12 shrink-0 items-center justify-between px-static-sm text-[0.8125rem] font-semibold capitalize text-primary">
         <span>{displayStatus}</span>
         <span className="min-w-6 rounded-full bg-canvas px-2 py-0.5 text-center text-xs font-semibold text-primary" data-testid="column-count">{tasks.length}</span>
       </header>
       <div
         ref={bodyRef}
-        className={[
-          'column-body relative flex min-h-0 min-w-0 flex-1 flex-col gap-static-sm overflow-y-auto p-static-sm',
-          density === 'empty' || density === 'sparse' ? 'bg-surface' : 'bg-canvas',
-        ].join(' ')}
+        className="column-body relative flex min-h-0 min-w-0 flex-1 flex-col gap-static-sm overflow-y-auto p-static-sm"
         data-testid="column-body"
       >
         {sorted.length === 0 ? (
-          <div className="flex min-h-[120px] items-center justify-center rounded-md border border-dashed border-contrast-low bg-canvas p-static-md text-center text-xs text-primary" data-testid="empty-column">{`No ${displayStatus} tasks`}</div>
+          <div className="flex min-h-[120px] items-center justify-center px-static-md py-static-lg text-center text-xs font-medium text-contrast-high" data-testid="empty-column">{`No ${displayStatus} tasks`}</div>
         ) : (
           sorted.map((task) => (
             <Card
