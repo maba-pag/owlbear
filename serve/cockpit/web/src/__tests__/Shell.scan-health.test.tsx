@@ -216,9 +216,9 @@ describe('TestFromAC_ScanHealthStates', () => {
     )
   })
 
-  // AC1 loading: while fetch is in-flight, neither HealthBadge nor scan-error
-  // should be shown (hasLoadedScan=false; scanError=null).
-  it('loading: health-badge and scan-error are absent while scan fetch is in flight', async () => {
+  // AC1 loading: while fetch is in-flight, the compact board-health trigger may
+  // remain visible, but it must not show false-OK text or scan-error copy.
+  it('loading: compact health trigger remains textless while scan fetch is in flight', async () => {
     const fetchMock = vi.fn((url: string, init?: RequestInit) => {
       if (url === '/api/tasks/scan') {
         // Never resolves — keeps scan in isLoading=true state.
@@ -239,8 +239,9 @@ describe('TestFromAC_ScanHealthStates', () => {
       },
       { timeout: 1000 },
     )
-    // While fetch is in-flight: hasLoadedScan=false → no HealthBadge, no scan-error.
-    expect(container.querySelector('[data-testid="health-badge"]')).toBeNull()
+    const badge = container.querySelector('[data-testid="health-badge"]')
+    expect(badge).not.toBeNull()
+    expect(badge?.textContent?.trim()).toBe('')
     expect(container.querySelector('[data-testid="scan-error"]')).toBeNull()
   })
 

@@ -102,10 +102,10 @@ describe('TestFromAC_HealthBadge', () => {
     expect(badge?.getAttribute('aria-label')).toBe('Workspace status: 5 issues')
   })
 
-  it('shows issue count text when items is non-empty', () => {
+  it('keeps issue count available as trigger title when items is non-empty', () => {
     const { container } = renderBadge([ITEM_A, ITEM_B])
     const badge = container.querySelector('[data-testid="health-badge"]')
-    expect(badge?.textContent).toMatch(/2/)
+    expect(badge?.getAttribute('title')).toBe('Workspace status: 2 issues')
   })
 
   it('does not render popover before badge is clicked', () => {
@@ -167,16 +167,18 @@ describe('TestFromAC_HealthBadge', () => {
     expect(() => renderBadge([ITEM_A])).not.toThrow()
   })
 
-  it('shows exact text "1 issues" for single item (not regex match)', () => {
+  it('shows exact text "1 issues" inside the details popover for single item', () => {
     const { container } = renderBadge([ITEM_A])
-    const badge = container.querySelector('[data-testid="health-badge"]')!
-    expect(badge.textContent).toContain('1 issues')
+    fireEvent.click(container.querySelector('[data-testid="health-badge"]')!)
+    const popover = container.querySelector('[data-testid="health-badge-popover"]')!
+    expect(popover.textContent).toContain('1 issues')
   })
 
-  it('shows exact text "2 issues" for two items (not regex match)', () => {
+  it('shows exact text "2 issues" inside the details popover for two items', () => {
     const { container } = renderBadge([ITEM_A, ITEM_B])
-    const badge = container.querySelector('[data-testid="health-badge"]')!
-    expect(badge.textContent).toContain('2 issues')
+    fireEvent.click(container.querySelector('[data-testid="health-badge"]')!)
+    const popover = container.querySelector('[data-testid="health-badge-popover"]')!
+    expect(popover.textContent).toContain('2 issues')
   })
 
   it('does not show "0 issues" text when items is empty', () => {
@@ -246,22 +248,25 @@ describe('TestFromAC_HealthBadge', () => {
     expect(popover.textContent?.trim().length).toBeGreaterThan(0)
   })
 
-  it('badge textContent is exactly "Workspace OK" when items is empty (exact toBe)', () => {
+  it('badge trigger has no persistent text when items is empty', () => {
     const { container } = renderBadge([])
     const badge = container.querySelector('[data-testid="health-badge"]')!
-    expect(badge.textContent).toBe('Workspace OK')
+    expect(badge.textContent?.trim()).toBe('')
+    expect(badge).toHaveAttribute('title', 'Workspace status: OK')
   })
 
-  it('badge textContent is exactly "Workspace 1 issues" for single item (exact toBe)', () => {
+  it('badge trigger has no persistent text for a single issue', () => {
     const { container } = renderBadge([ITEM_A])
     const badge = container.querySelector('[data-testid="health-badge"]')!
-    expect(badge.textContent).toBe('Workspace 1 issues')
+    expect(badge.textContent?.trim()).toBe('')
+    expect(badge).toHaveAttribute('title', 'Workspace status: 1 issues')
   })
 
-  it('badge textContent is exactly "Workspace 2 issues" for two items (exact toBe)', () => {
+  it('badge trigger has no persistent text for two issues', () => {
     const { container } = renderBadge([ITEM_A, ITEM_B])
     const badge = container.querySelector('[data-testid="health-badge"]')!
-    expect(badge.textContent).toBe('Workspace 2 issues')
+    expect(badge.textContent?.trim()).toBe('')
+    expect(badge).toHaveAttribute('title', 'Workspace status: 2 issues')
   })
 
   it('first list row textContent contains ITEM_A file_path, code, and detail (per-row)', () => {

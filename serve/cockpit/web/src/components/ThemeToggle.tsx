@@ -4,14 +4,17 @@ import { useTheme } from '../hooks/useTheme'
 const THEME_LABELS = {
   light: {
     ariaLabel: 'Theme mode: light',
+    shortText: 'L',
     text: 'Light',
   },
   dark: {
     ariaLabel: 'Theme mode: dark',
+    shortText: 'D',
     text: 'Dark',
   },
   auto: {
     ariaLabel: 'Theme mode: auto (OS)',
+    shortText: 'A',
     text: 'Auto',
   },
 } as const
@@ -28,13 +31,28 @@ export default function ThemeToggle({ compact = false }: ThemeToggleProps) {
     <PButtonPure
       type="button"
       icon="theme"
-      hideLabel={compact}
-      className="rounded-full bg-canvas px-static-xs py-1"
+      hideLabel={false}
+      className={[
+        'rounded-full bg-canvas py-1',
+        compact ? 'px-1 text-xs' : 'px-static-xs',
+      ].join(' ')}
       data-testid="theme-toggle"
       aria-label={label.ariaLabel}
+      title={label.ariaLabel}
       onClick={toggle}
     >
-      {label.text}
+      {compact ? (
+        <>
+          <span
+            data-testid="theme-mode-indicator"
+            className="inline-flex size-5 items-center justify-center rounded-full border border-contrast-low bg-frosted-soft text-[0.68rem] font-semibold leading-none text-primary"
+            aria-hidden="true"
+          >
+            {label.shortText}
+          </span>
+          <span className="sr-only">{label.text}</span>
+        </>
+      ) : label.text}
     </PButtonPure>
   )
 }

@@ -1,10 +1,10 @@
 ---
 id: 1712
 title: Shrink top bar theme switcher
-status: research
+status: done
 priority: important
 created: 2026-05-21T23:23:43.267289+02:00
-updated: 2026-05-21T23:23:43.267289+02:00
+updated: 2026-05-21T23:58:48.231933+02:00
 tags:
   - cockpit-perfect-ui
   - scope:cockpit-web
@@ -41,3 +41,12 @@ Use this task as a product/audit todo item, not an instruction to hand off to th
 - Audit ThemeToggle visual weight and discoverability.
 - Design compact mode-state representation for light/dark/auto.
 - Preserve accessible labels, keyboard operation, and clear current mode.
+
+[[2026-05-21T23:58:48+02:00]]
+## Builder Evidence
+- Classification: observed current visual-weight issue, not theoretical. Screenshots showed the full `Auto` label adding another text control to the top-right chrome next to `Workspace OK`.
+- Impact: hurt Cockpit now by letting a utility preference compete with route content; hurt the plan for a premium, quiet cockpit because the top strip read like controls instead of state.
+- Decision: keep the PDS `PButtonPure` theme control but render it compact in Shell: theme icon plus one-character mode indicator (`L`, `D`, `A`) and sr-only full mode text.
+- Implementation: ThemeToggle compact mode now exposes a mode indicator, keeps `aria-label` and `title` for the full state, and preserves the same click/keyboard toggle behavior. Shell now uses compact ThemeToggle.
+- Screenshot evidence: `.owlbear/scratch/1680-route-kanban-desktop.png` and `.owlbear/scratch/1680-route-kanban-mobile.png` show the compact top-right theme icon plus `A` state.
+- Validation: focused Vitest passed (6 files, 97 tests); `npm run build` passed with existing Vite chunk-size warning; E2E passed for board view + workspace status popover accessibility, HealthBadge popover no-reflow, and status-bar control names (4 tests); eslint and diagnostics passed.

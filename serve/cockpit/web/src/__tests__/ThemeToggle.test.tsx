@@ -28,6 +28,22 @@ function renderThemeToggle(theme: ThemeMode = 'light', toggle = vi.fn()) {
   return { ...view, toggle }
 }
 
+function renderCompactThemeToggle(theme: ThemeMode = 'light', toggle = vi.fn()) {
+  mockedUseTheme.mockReturnValue({
+    theme,
+    toggle,
+    isDark: theme === 'dark',
+  })
+
+  const view = render(
+    <PorscheDesignSystemProvider>
+      <ThemeToggle compact />
+    </PorscheDesignSystemProvider>,
+  )
+
+  return { ...view, toggle }
+}
+
 function getButtonDescriptor(theme: ThemeMode): string {
   const { container, unmount } = renderThemeToggle(theme)
   const button = container.querySelector('[data-testid="theme-toggle"]')
@@ -62,5 +78,16 @@ describe('TestFromAC_ThemeToggle_1540', () => {
     const descriptors = [getButtonDescriptor('light'), getButtonDescriptor('dark'), getButtonDescriptor('auto')]
 
     expect(new Set(descriptors).size).toBe(3)
+  })
+
+  it('compact mode shows a one-character mode indicator instead of full persistent text', () => {
+    const { container } = renderCompactThemeToggle('auto')
+    const button = container.querySelector('[data-testid="theme-toggle"]')
+    const indicator = container.querySelector('[data-testid="theme-mode-indicator"]')
+
+    expect(button).toHaveAttribute('aria-label', 'Theme mode: auto (OS)')
+    expect(button).toHaveAttribute('title', 'Theme mode: auto (OS)')
+    expect(indicator?.textContent).toBe('A')
+    expect(indicator?.getAttribute('aria-hidden')).toBe('true')
   })
 })

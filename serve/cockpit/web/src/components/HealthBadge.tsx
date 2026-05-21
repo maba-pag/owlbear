@@ -179,14 +179,13 @@ export default function HealthBadge({ items, status, message, actions, portalPop
         type="button"
         ref={triggerRef}
         className={[
-          'inline-flex min-h-8 items-center rounded-full px-static-xs text-xs font-semibold leading-none transition-colors duration-sm',
-          'gap-static-xs',
+          'inline-flex size-8 items-center justify-center rounded-full border border-contrast-low bg-frosted-soft p-0 transition-colors duration-sm',
           'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]',
           health === 'green'
-            ? 'text-primary hover:bg-surface'
+            ? 'hover:bg-surface'
             : health === 'yellow'
-              ? 'text-primary hover:bg-warning-low'
-              : 'text-primary hover:bg-error-low',
+              ? 'hover:bg-warning-low'
+              : 'hover:bg-error-low',
         ].join(' ')}
         data-pds-exception="status-bar-control"
         data-testid="health-badge"
@@ -195,6 +194,7 @@ export default function HealthBadge({ items, status, message, actions, portalPop
         aria-label={ariaLabel}
         aria-haspopup="dialog"
         aria-expanded={isOpen}
+        title={ariaLabel}
         onClick={togglePopover}
       >
         <span
@@ -208,18 +208,6 @@ export default function HealthBadge({ items, status, message, actions, portalPop
           data-health={health}
           aria-hidden="true"
         />
-        <span className="hidden sm:inline">Workspace</span>
-        {' '}
-        <span
-          className={[
-            'rounded-full border px-static-xs py-1 leading-none',
-            health === 'red' ? 'border-error bg-error-low text-error' :
-            health === 'yellow' ? 'border-warning bg-warning-low text-primary' :
-            'border-contrast-low bg-canvas text-primary',
-          ].join(' ')}
-        >
-          {statusLabel}
-        </span>
       </button>
       {renderedPopover}
     </div>

@@ -93,6 +93,22 @@ describe('TestFromAC_AppShell', () => {
       const statusBar = container.querySelector('[data-region="status-bar"]')
       expect(statusBar?.querySelector('[data-testid="task-count"]')).toBeNull()
     })
+
+    it('keeps healthy workspace status compact in the global status bar', () => {
+      const { container } = renderShell()
+      const statusBar = container.querySelector('[data-region="status-bar"]')
+      const badge = statusBar?.querySelector('[data-testid="health-badge"]')
+      expect(badge?.textContent?.trim()).toBe('')
+      expect(badge).toHaveAttribute('title', 'Workspace status: OK')
+    })
+
+    it('renders compact theme mode indicator in the global status bar', () => {
+      const { container } = renderShell()
+      const statusBar = container.querySelector('[data-region="status-bar"]')
+      const toggle = statusBar?.querySelector('[data-testid="theme-toggle"]')
+      expect(toggle?.querySelector('[data-testid="theme-mode-indicator"]')).not.toBeNull()
+      expect(toggle).toHaveAttribute('aria-label', expect.stringMatching(/Theme mode/))
+    })
   })
 
   describe('Routing', () => {

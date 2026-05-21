@@ -1,10 +1,10 @@
 ---
 id: 1708
 title: Reduce workspace status dominance
-status: research
+status: done
 priority: important
 created: 2026-05-21T23:23:05.244698+02:00
-updated: 2026-05-21T23:23:05.244698+02:00
+updated: 2026-05-21T23:58:38.277497+02:00
 tags:
   - cockpit-perfect-ui
   - scope:cockpit-web
@@ -41,3 +41,12 @@ Use this task as a product/audit todo item, not an instruction to hand off to th
 - Audit the current Workspace Status top-bar value and visual weight.
 - Decide text badge versus compact status light behavior.
 - Preserve discoverability, tooltip/hover text, keyboard access, and dropdown details.
+
+[[2026-05-21T23:58:38+02:00]]
+## Builder Evidence
+- Classification: observed current visual-weight issue, not theoretical. Screenshots showed persistent `Workspace OK` text competing with the route header and Porsche/title balance, especially on mobile where top chrome is scarce.
+- Impact: hurt Cockpit now by giving utility status equal visual weight to primary workspace content; hurt the plan for a quiet operational cockpit because the global status control dominated when healthy.
+- Decision: collapse healthy/persistent workspace status to a compact traffic-light trigger. Keep detailed text available through `aria-label`, `title`, keyboard focus, click, and the existing Workspace Status popover.
+- Implementation: HealthBadge trigger is now a 32px circular status light with no persistent text; scan errors remain available via an accessible `scan-error` status and retry action; popover details and care actions are unchanged.
+- Screenshot evidence: `.owlbear/scratch/1680-route-kanban-desktop.png` and `.owlbear/scratch/1680-route-kanban-mobile.png` show the compact top-right status light.
+- Validation: focused Vitest passed (6 files, 97 tests); `npm run build` passed with existing Vite chunk-size warning; E2E passed for board view + workspace status popover accessibility, HealthBadge popover no-reflow, and status-bar control names (4 tests); eslint and diagnostics passed.

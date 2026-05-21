@@ -337,7 +337,7 @@ function Shell() {
           data-region="status-bar"
           aria-label="Cockpit status and actions"
         >
-          <div className="flex min-w-0 items-center rounded-full border border-contrast-low bg-frosted-soft px-static-xs py-1" aria-label="Workspace status">
+          <div className="flex min-w-0 items-center gap-static-xs" aria-label="Workspace status">
             <span className="inline-flex">
               <HealthBadge
                 items={normalizedItems}
@@ -360,7 +360,7 @@ function Shell() {
               />
             </span>
             {scanError ? (
-              <span className="text-xs text-error whitespace-nowrap" data-testid="scan-error" data-health="error" role="status">
+              <span className="sr-only" data-testid="scan-error" data-health="error" role="status">
                 Workspace check needs attention: {scanError.message}
               </span>
             ) : null}
@@ -379,7 +379,7 @@ function Shell() {
 
           {/* Theme toggle */}
           <div className="flex items-center" aria-label="View settings">
-            <ThemeToggle compact={false} />
+            <ThemeToggle compact />
           </div>
         </div>
 
