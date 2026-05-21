@@ -1,5 +1,6 @@
 import { PIcon, PText } from '@porsche-design-system/components-react'
 
+import { WorkspaceHeader, WorkspaceHeaderMetric } from '../components/WorkspaceHeader'
 import { useDRState } from '../hooks/CockpitProvider'
 
 function formatAge(created: string): string {
@@ -101,17 +102,16 @@ function DecisionsPage() {
   }
 
   return (
-    <section data-testid="decisions-page" className="flex h-full min-h-0 w-full flex-col gap-static-md bg-canvas" style={{ width: '100%' }}>
-      <header className="flex min-w-0 flex-wrap items-end justify-between gap-static-md border-b border-contrast-low pb-static-md">
-        <div className="min-w-0">
-          <h1 className="m-0 text-3xl font-semibold leading-tight text-primary">Decisions</h1>
-        </div>
-        <div className="inline-flex min-h-10 items-baseline gap-static-xs rounded-full border border-contrast-low bg-surface px-static-sm py-static-xs">
-          <span className="text-2xl font-semibold leading-none text-primary">{drState.items.length}</span>
-          <span className="text-sm text-primary">waiting</span>
-        </div>
-      </header>
-      {content}
+    <section data-testid="decisions-page" className="relative flex h-full min-h-0 w-full flex-col overflow-hidden rounded-lg bg-canvas shadow-sm" style={{ width: '100%' }} aria-labelledby="decisions-title">
+      <WorkspaceHeader
+        title="Decisions"
+        titleId="decisions-title"
+        summaryLabel="Decision summary"
+        summary={<WorkspaceHeaderMetric value={drState.items.length} label="waiting" />}
+      />
+      <div className="flex min-h-0 flex-1 flex-col gap-static-md overflow-hidden p-static-md">
+        {content}
+      </div>
     </section>
   )
 }

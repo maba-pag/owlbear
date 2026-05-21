@@ -6,6 +6,7 @@ import rehypeSanitize from 'rehype-sanitize'
 import remarkGfm from 'remark-gfm'
 
 import { fetchIdeas, saveIdeas } from '../api/ideas'
+import { WorkspaceHeader, WorkspaceHeaderMetric, WorkspaceHeaderPill } from '../components/WorkspaceHeader'
 
 type NavigationTransaction = {
   retry: () => void
@@ -352,7 +353,7 @@ function IdeasPage() {
   }
 
   return (
-    <section className="flex h-full min-h-0 flex-col gap-static-md bg-canvas p-static-md text-primary" data-region="ideas-workspace">
+    <section className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-lg bg-canvas text-primary shadow-sm" data-region="ideas-workspace" aria-labelledby="ideas-title">
       {showUnsavedDialog ? (
         <PModal
           data-testid="ideas-unsaved-dialog"
@@ -386,68 +387,64 @@ function IdeasPage() {
           </div>
         </PModal>
       ) : null}
-      <header className="flex min-w-0 flex-wrap items-start justify-between gap-static-md border-b border-contrast-low pb-static-md">
-        <div className="grid min-w-0 gap-static-xs">
-          <span className="text-xs font-semibold uppercase text-primary">Notebook</span>
-          <h1 className="m-0 text-3xl font-semibold leading-tight text-primary">
-            Ideas
-          </h1>
-        </div>
-        <div className="flex min-w-0 flex-wrap items-center justify-end gap-static-xs">
-          <span className="rounded-full border border-contrast-low bg-surface px-static-xs py-1 text-xs font-semibold text-primary">
-            {hasConflict ? 'Conflict' : isDirty ? 'Unsaved' : 'Saved'}
-          </span>
-          <span className="rounded-full border border-contrast-low bg-surface px-static-xs py-1 text-xs font-semibold text-primary">
-            {previewMode ? 'Preview' : 'Edit'}
-          </span>
-          <span className="rounded-full border border-contrast-low bg-surface px-static-xs py-1 text-xs font-semibold text-primary">
-            {formatNumber(wordCount)} words
-          </span>
-        </div>
-      </header>
+      <WorkspaceHeader
+        title="Ideas"
+        titleId="ideas-title"
+        summaryLabel="Notebook summary"
+        summary={(
+          <>
+            <WorkspaceHeaderPill tone={hasConflict ? 'error' : isDirty ? 'info' : 'neutral'}>
+              {hasConflict ? 'Conflict' : isDirty ? 'Unsaved' : 'Saved'}
+            </WorkspaceHeaderPill>
+            <WorkspaceHeaderPill>{previewMode ? 'Preview' : 'Edit'}</WorkspaceHeaderPill>
+            <WorkspaceHeaderMetric value={formatNumber(wordCount)} label="words" />
+          </>
+        )}
+      />
 
-      {hasConflict ? (
-        <div
-          data-testid="ideas-conflict-notice"
-          role="alert"
-          className="flex flex-wrap items-center justify-between gap-static-sm rounded-lg border border-error bg-error-low p-static-md text-primary"
-        >
-          <div className="grid gap-1">
-            <span className="text-sm font-semibold text-primary">Ideas were updated externally.</span>
-            <span className="text-xs text-primary">Choose which version becomes the saved baseline.</span>
+      <div className="flex min-h-0 flex-1 flex-col gap-static-md p-static-md">
+        {hasConflict ? (
+          <div
+            data-testid="ideas-conflict-notice"
+            role="alert"
+            className="flex flex-wrap items-center justify-between gap-static-sm rounded-lg border border-error bg-error-low p-static-md text-primary"
+          >
+            <div className="grid gap-1">
+              <span className="text-sm font-semibold text-primary">Ideas were updated externally.</span>
+              <span className="text-xs text-primary">Choose which version becomes the saved baseline.</span>
+            </div>
+            <div className="flex flex-wrap gap-static-xs">
+              <PButton
+                type="button"
+                data-testid="ideas-conflict-overwrite"
+                variant="secondary"
+                compact
+                onClick={handleConflictOverwrite}
+              >
+                Overwrite
+              </PButton>
+              <PButton
+                type="button"
+                data-testid="ideas-conflict-discard"
+                compact
+                onClick={handleConflictDiscard}
+              >
+                Discard & Reload
+              </PButton>
+            </div>
           </div>
-          <div className="flex flex-wrap gap-static-xs">
-            <PButton
-              type="button"
-              data-testid="ideas-conflict-overwrite"
-              variant="secondary"
-              compact
-              onClick={handleConflictOverwrite}
-            >
-              Overwrite
-            </PButton>
-            <PButton
-              type="button"
-              data-testid="ideas-conflict-discard"
-              compact
-              onClick={handleConflictDiscard}
-            >
-              Discard & Reload
-            </PButton>
+        ) : null}
+        {errorMessage ? (
+          <div
+            data-testid="ideas-error"
+            role="alert"
+            className="rounded-lg border border-error bg-error-low p-static-sm text-sm font-semibold text-primary"
+          >
+            {errorMessage}
           </div>
-        </div>
-      ) : null}
-      {errorMessage ? (
-        <div
-          data-testid="ideas-error"
-          role="alert"
-          className="rounded-lg border border-error bg-error-low p-static-sm text-sm font-semibold text-primary"
-        >
-          {errorMessage}
-        </div>
-      ) : null}
+        ) : null}
 
-      <div className="grid min-h-0 flex-1 gap-static-md lg:grid-cols-[minmax(0,1fr)_minmax(260px,320px)]">
+        <div className="grid min-h-0 flex-1 gap-static-md lg:grid-cols-[minmax(0,1fr)_minmax(260px,320px)]">
         <div data-testid="ideas-editor-shell" className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-contrast-low bg-canvas">
           <div className="flex flex-wrap items-center justify-between gap-static-sm border-b border-contrast-low bg-canvas px-static-md py-static-sm">
             <div className="flex min-w-0 flex-wrap items-center gap-static-xs text-xs font-semibold uppercase text-primary">
@@ -548,6 +545,7 @@ function IdeasPage() {
             </div>
           </div>
         </aside>
+        </div>
       </div>
     </section>
   )

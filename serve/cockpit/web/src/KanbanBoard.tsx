@@ -3,6 +3,7 @@ import { PButton } from '@porsche-design-system/components-react'
 import { Column } from './components/Column'
 import ArchivalModal from './components/ArchivalModal'
 import FilterPanel from './components/FilterPanel'
+import { WorkspaceHeader, WorkspaceHeaderMetric } from './components/WorkspaceHeader'
 import { filterTasks, type FilterState } from './utils/filterTasks'
 import { type Board, type Task } from './hooks/useBoard'
 import { moveTask } from './api/tasks'
@@ -394,47 +395,46 @@ function KanbanBoardContent({
       data-testid="kanban-board"
     >
       <section className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-lg bg-canvas shadow-sm" aria-labelledby="kanban-board-title">
-        <header className="grid min-h-16 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-static-md border-b border-contrast-low bg-canvas px-static-lg py-static-sm">
-          <div className="flex min-w-0 flex-col">
-            <h2 id="kanban-board-title" className="m-0 text-xl font-semibold leading-none text-primary">Kanban</h2>
-          </div>
-          <div className="flex min-w-0 items-center gap-static-sm" aria-label="Board summary">
-            <span className="inline-flex min-h-8 items-baseline gap-1.5 whitespace-nowrap border-l border-contrast-low pl-static-sm text-xs text-primary">
-              <strong className="text-lg font-semibold leading-none text-primary">{boardTaskCount}</strong>
-              <span>{boardTaskLabel}</span>
-            </span>
-            <span className="inline-flex min-h-8 items-baseline gap-1.5 whitespace-nowrap border-l border-contrast-low pl-static-sm text-xs text-primary">
-              <strong className="text-lg font-semibold leading-none text-primary">{board.statuses.length}</strong>
-              <span>lanes</span>
-            </span>
-          </div>
-          <div className="flex min-h-[34px] flex-wrap items-center justify-end gap-static-xs">
-            <PButton
-              ref={filterToggleRef}
-              data-testid="filter-toggle"
-              data-pds-exception="filter-toggle"
-              className="max-w-fit"
-              variant="secondary"
-              compact
-              onClick={() => setPanelOpen((open) => !open)}
-            >
-              Filters
-              {hasActiveFilters ? ` (${activeFilterCount})` : ''}
-            </PButton>
-            <span
-              className="absolute -left-[9999px]"
-              data-testid="filter-result-count-live"
-              aria-live="polite"
-            >
-              {filterAnnouncement}
-            </span>
-            {hasActiveFilters ? (
-              <span className="whitespace-nowrap rounded-full border border-contrast-low bg-frosted-soft px-2 py-0.5 text-xs font-semibold leading-normal text-primary" data-testid="filter-result-count">
-                {filteredTasks.length} / {tasks.length} tasks
+        <WorkspaceHeader
+          title="Kanban"
+          titleId="kanban-board-title"
+          headingLevel={2}
+          summaryLabel="Board summary"
+          summary={(
+            <>
+              <WorkspaceHeaderMetric value={boardTaskCount} label={boardTaskLabel} />
+              <WorkspaceHeaderMetric value={board.statuses.length} label="lanes" />
+            </>
+          )}
+          actions={(
+            <>
+              <PButton
+                ref={filterToggleRef}
+                data-testid="filter-toggle"
+                data-pds-exception="filter-toggle"
+                className="max-w-fit"
+                variant="secondary"
+                compact
+                onClick={() => setPanelOpen((open) => !open)}
+              >
+                Filters
+                {hasActiveFilters ? ` (${activeFilterCount})` : ''}
+              </PButton>
+              <span
+                className="absolute -left-[9999px]"
+                data-testid="filter-result-count-live"
+                aria-live="polite"
+              >
+                {filterAnnouncement}
               </span>
-            ) : null}
-          </div>
-        </header>
+              {hasActiveFilters ? (
+                <span className="whitespace-nowrap rounded-full border border-contrast-low bg-frosted-soft px-2 py-0.5 text-xs font-semibold leading-normal text-primary" data-testid="filter-result-count">
+                  {filteredTasks.length} / {tasks.length} tasks
+                </span>
+              ) : null}
+            </>
+          )}
+        />
 
         <FilterPanel
           filter={filter}
