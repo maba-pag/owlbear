@@ -43,7 +43,7 @@ export function WorkspaceHeader({
       {summary ? (
         <div
           data-testid="workspace-header-summary"
-          className="flex min-w-0 flex-wrap items-center gap-static-sm md:justify-end"
+          className="flex min-w-0 flex-wrap items-center gap-static-sm md:justify-end [&>[data-workspace-header-metric]~[data-workspace-header-metric]]:border-l [&>[data-workspace-header-metric]~[data-workspace-header-metric]]:border-contrast-low [&>[data-workspace-header-metric]~[data-workspace-header-metric]]:pl-static-sm"
           aria-label={summaryLabel}
         >
           {summary}
@@ -64,14 +64,16 @@ export function WorkspaceHeader({
 export function WorkspaceHeaderMetric({ value, label, tone = 'neutral' }: WorkspaceHeaderMetricProps) {
   return (
     <span
+      data-testid="workspace-header-metric"
+      data-workspace-header-metric=""
       className={[
-        'inline-flex min-h-8 items-baseline gap-1.5 whitespace-nowrap border-l border-contrast-low pl-static-sm text-xs',
+        'inline-flex min-h-8 items-baseline gap-1.5 whitespace-nowrap text-xs',
         tone === 'error' ? 'text-error' : 'text-primary',
       ].join(' ')}
     >
       <strong
         className={[
-          'text-lg font-semibold leading-none',
+          'text-base font-semibold leading-none',
           tone === 'error' ? 'text-error' : 'text-primary',
         ].join(' ')}
       >

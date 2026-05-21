@@ -231,6 +231,33 @@ test.describe('PCanvas shell on direct workspace routes', () => {
     expect(statePanel!.x).toBeGreaterThan(editor!.x + editor!.width)
     expect(Math.abs(statePanel!.y - editor!.y)).toBeLessThan(4)
   })
+
+  test('direct Memory route keeps header metrics compact without a leading separator', async ({ page }) => {
+    await stubApis(page)
+    await page.goto('/memories')
+    await page.locator('[data-testid="memory-tab"]').waitFor({ state: 'visible' })
+
+    const metrics = page.locator('[data-testid="workspace-header-metric"]')
+    await expect(metrics).toHaveCount(2)
+
+    const firstMetric = await metrics.nth(0).evaluate((metric) => {
+      const value = metric.querySelector('strong')
+      return {
+        borderLeftWidth: getComputedStyle(metric).borderLeftWidth,
+        valueFontSize: value ? getComputedStyle(value).fontSize : null,
+      }
+    })
+    const secondMetric = await metrics.nth(1).evaluate((metric) => {
+      const value = metric.querySelector('strong')
+      return {
+        borderLeftWidth: getComputedStyle(metric).borderLeftWidth,
+        valueFontSize: value ? getComputedStyle(value).fontSize : null,
+      }
+    })
+
+    expect(firstMetric).toEqual({ borderLeftWidth: '0px', valueFontSize: '16px' })
+    expect(secondMetric).toEqual({ borderLeftWidth: '1px', valueFontSize: '16px' })
+  })
 })
 
 test.describe('PCanvas shell on direct workspace routes at narrow laptop width', () => {

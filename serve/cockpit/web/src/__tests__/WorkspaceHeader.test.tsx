@@ -21,6 +21,8 @@ describe('WorkspaceHeader', () => {
     expect(container.querySelector('#decisions-title')?.textContent).toBe('Decisions')
     expect(container.querySelector('[data-testid="workspace-header-summary"]')?.textContent).toContain('3')
     expect(container.querySelector('[data-testid="workspace-header-summary"]')?.textContent).toContain('waiting')
+    expect(container.querySelector('[data-testid="workspace-header-metric"]')?.className).not.toContain('border-l')
+    expect(container.querySelector('[data-testid="workspace-header-metric"] strong')?.className).toContain('text-base')
   })
 
   it('can render a secondary heading and route actions', () => {
@@ -55,5 +57,28 @@ describe('WorkspaceHeader', () => {
     expect(summary?.textContent).toContain('Unsaved')
     expect(summary?.textContent).toContain('10')
     expect(summary?.textContent).toContain('words')
+  })
+
+  it('only separates a metric when it follows another metric', () => {
+    const { container } = render(
+      <WorkspaceHeader
+        title="Memory"
+        titleId="memory-title"
+        summary={(
+          <>
+            <WorkspaceHeaderMetric value="12" label="entries" />
+            <WorkspaceHeaderMetric value="4" label="shown" />
+          </>
+        )}
+      />,
+    )
+
+    const summary = container.querySelector('[data-testid="workspace-header-summary"]')
+    const metrics = container.querySelectorAll('[data-testid="workspace-header-metric"]')
+
+    expect(summary?.className).toContain('[&>[data-workspace-header-metric]~[data-workspace-header-metric]]:border-l')
+    expect(metrics).toHaveLength(2)
+    expect(metrics[0]?.className).not.toContain('border-l')
+    expect(metrics[1]?.className).not.toContain('border-l')
   })
 })
