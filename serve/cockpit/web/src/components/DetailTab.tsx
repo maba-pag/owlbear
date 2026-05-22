@@ -49,17 +49,6 @@ export interface DetailTabProps {
 
 export type { TaskDetail }
 
-function setMetadataAccordionAttrs(element: HTMLElement | null): void {
-  if (!element) {
-    return
-  }
-
-  element.setAttribute('compact', '')
-  element.setAttribute('heading', 'Metadata')
-  ;(element as HTMLElement & { open?: boolean }).open = false
-  element.removeAttribute('open')
-}
-
 function syncHeadingAttrs(tag: 'h3', size: 'medium' | 'small') {
   return (element: HTMLElement | null): void => {
     if (!element) {
@@ -68,6 +57,14 @@ function syncHeadingAttrs(tag: 'h3', size: 'medium' | 'small') {
     element.setAttribute('tag', tag)
     element.setAttribute('size', size)
   }
+}
+
+function formatClaimed(claimed: boolean): string {
+  return claimed ? 'Yes' : 'No'
+}
+
+function formatOptionalMetadata(value: string | null, fallback: string): string {
+  return value && value.length > 0 ? value : fallback
 }
 
 export default function DetailTab({
@@ -171,6 +168,7 @@ export default function DetailTab({
   }
 
   const taskSessions = sessions.filter((s) => s.task_id === t.id)
+  const hasTaskActions = Boolean(backwardTarget) || t.claimed !== false || t.blocked
 
   return (
     <div className="flex min-w-0 flex-col gap-static-md">
@@ -193,33 +191,40 @@ export default function DetailTab({
           <PHeading ref={syncHeadingAttrs('h3', 'small')} size="small" tag="h3">Actions</PHeading>
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-static-xs">
-          <TaskActions
-            key={`${t.id}:${t.updated}`}
-            task={t}
-            backwardTarget={backwardTarget}
-            runMutation={runMutation}
-          />
+          {hasTaskActions ? (
+            <TaskActions
+              key={`${t.id}:${t.updated}`}
+              task={t}
+              backwardTarget={backwardTarget}
+              runMutation={runMutation}
+            />
+          ) : (
+            <span data-testid="actions-empty-state" className="text-sm text-contrast-high">
+              No direct actions available.
+            </span>
+          )}
         </div>
       </section>
 
-      <p-accordion className="block rounded-lg border border-contrast-low bg-surface" ref={setMetadataAccordionAttrs} data-region="task-detail-metadata">
-        {/* Read-only fields */}
-        <dl className="grid gap-x-static-md gap-y-static-xs text-sm text-primary md:grid-cols-2">
+      <section className="rounded-lg border border-contrast-low bg-canvas p-static-sm" data-region="task-detail-metadata">
+        <div className="mb-static-xs flex min-w-0 items-center justify-between gap-static-sm">
+          <PHeading ref={syncHeadingAttrs('h3', 'small')} size="small" tag="h3">Metadata</PHeading>
+        </div>
+        <dl className="grid gap-x-static-lg gap-y-static-xs text-sm text-primary sm:grid-cols-2 lg:grid-cols-3">
           <div><dt className="font-semibold text-contrast-high">ID</dt><dd data-testid="field-id">{t.id}</dd></div>
           <div><dt className="font-semibold text-contrast-high">Status</dt><dd data-testid="field-status">{t.status}</dd></div>
           <div><dt className="font-semibold text-contrast-high">Priority</dt><dd data-testid="field-priority">{t.priority}</dd></div>
           <div><dt className="font-semibold text-contrast-high">Created</dt><dd data-testid="field-created">{t.created}</dd></div>
-          <div><dt className="font-semibold text-contrast-high">Claimed</dt><dd data-testid="field-claimed">{String(t.claimed)}</dd></div>
-          <div><dt className="font-semibold text-contrast-high">Claimed at</dt><dd data-testid="field-claimed-at">{t.claimed_at ?? ''}</dd></div>
-          <div><dt className="font-semibold text-contrast-high">Dependency status</dt><dd data-testid="field-dep-status">{t.dep_status ?? ''}</dd></div>
+          <div><dt className="font-semibold text-contrast-high">Claimed</dt><dd data-testid="field-claimed">{formatClaimed(t.claimed)}</dd></div>
+          <div><dt className="font-semibold text-contrast-high">Claimed at</dt><dd data-testid="field-claimed-at">{formatOptionalMetadata(t.claimed_at, 'Not claimed')}</dd></div>
+          <div><dt className="font-semibold text-contrast-high">Dependency status</dt><dd data-testid="field-dep-status">{formatOptionalMetadata(t.dep_status, 'None')}</dd></div>
         </dl>
-      </p-accordion>
+      </section>
 
       <PDivider />
 
-      {/* History tab button — always visible */}
-      <section className="rounded-lg bg-surface" data-region="history">
-        <PButton data-testid="history-tab" variant="secondary" onClick={() => void handleHistoryClick()}>
+      <section className="flex min-w-0 items-center justify-start" data-region="history">
+        <PButton data-testid="history-tab" variant="secondary" compact onClick={() => void handleHistoryClick()}>
           History
         </PButton>
       </section>

@@ -64,6 +64,13 @@ const TASK_WITH_DEPS: TaskDetail = {
   parent: 5,
 }
 
+const TASK_ACTIONLESS: TaskDetail = {
+  ...TASK,
+  status: 'research',
+  claimed: false,
+  blocked: false,
+}
+
 const BOARD: Board = {
   statuses: [
     { name: 'research' },
@@ -285,6 +292,13 @@ describe('TestFromAC_DetailTab', () => {
       expect(container.querySelector('input[data-field="status"]')).toBeNull()
       expect(container.querySelector('[data-testid="field-status"]')).not.toBeNull()
     })
+
+    it('actions section explains when no direct actions are available', () => {
+      const { container } = renderDetail(TASK_ACTIONLESS)
+      expect(container.querySelector('[data-testid="actions-empty-state"]')?.textContent).toContain(
+        'No direct actions available.',
+      )
+    })
   })
 
   // ─── Markdown body ─────────────────────────────────────────────────────────
@@ -483,6 +497,14 @@ describe('TestFromAC_DetailTab', () => {
     it('history subtab button is present', () => {
       const { container } = renderDetail()
       expect(container.querySelector('[data-testid="history-tab"]')).not.toBeNull()
+    })
+
+    it('history subtab button is compact secondary chrome', () => {
+      const { container } = renderDetail()
+      const historyTab = container.querySelector('[data-testid="history-tab"]') as
+        | (HTMLElement & { compact?: boolean })
+        | null
+      expect(historyTab?.compact ?? historyTab?.hasAttribute('compact')).toBe(true)
     })
 
     it('clicking history tab fetches GET /api/sessions?filter=all', async () => {

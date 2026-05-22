@@ -6,18 +6,15 @@
  *   Asserted via direct-child selector on DetailTab's root element
  *   (querySelectorAll(':scope > [data-region]') on the root <div>).
  *
- * AC2: task-detail-metadata region is a p-accordion host element
- *   (p-accordion[data-region='task-detail-metadata'][compact][heading='Metadata']);
- *   closed by default (no open attribute);
- *   accordion subtree remains in DOM when closed — proved by querying at least one
- *   field-* testid descendant (PAccordion uses CSS height animation, not conditional render).
+ * AC2: task-detail-metadata region is a static section, not a collapsible control.
+ *   Metadata fields are visible immediately so the section is not an empty/no-op affordance.
  *
  * Cycle 3 revision notes:
  *   - AC2 narrowed from "all field-*" to "at least one field-* testid descendant".
  *     Rationale: PAccordion CSS-visibility contract is proved by any single queryable
  *     descendant — individual field rendering is a separate concern owned by DetailTab.test.tsx.
  *   - AC1 refined: direct-child scoping (not deep query); non-null precondition explicit.
- *   - Accordion HOST pattern: data-region on p-accordion itself (not on a child inside it).
+ *   - Metadata is now a plain section; the prior accordion affordance was removed by #1701.
  *   - Cycle 2 builder (commit 301a886) already reordered sections; all tests now PASS.
  *   - AC2 tests serve as regression guards (implementation already satisfies them).
  */
@@ -131,51 +128,34 @@ describe('DetailTab task detail information architecture', () => {
     })
   })
 
-  // ─── AC2: task-detail-metadata is p-accordion host element ───────────────
-  //
-  // Architect revised AC2 to match existing implementation (accordion HOST
-  // pattern — data-region placed on the p-accordion element itself, not on a
-  // child inside it). These tests are regression guards; all pass against the
-  // current implementation. Builder work for this task is AC1 reordering only.
+  // ─── AC2: task-detail-metadata is static readable content ────────────────
 
-  describe('AC2: task-detail-metadata p-accordion host — attributes and closed-DOM contract', () => {
-    it('element with data-region="task-detail-metadata" is a p-accordion host (accordion IS the metadata region)', () => {
+  describe('AC2: task-detail-metadata is visible static content', () => {
+    it('element with data-region="task-detail-metadata" is a section, not a p-accordion', () => {
       const { container } = renderDetail()
       const metadataEl = container.querySelector('[data-region="task-detail-metadata"]')
       expect(metadataEl).not.toBeNull()
-      expect(metadataEl?.tagName.toLowerCase()).toBe('p-accordion')
+      expect(metadataEl?.tagName.toLowerCase()).toBe('section')
     })
 
-    it('p-accordion[data-region="task-detail-metadata"] has the compact attribute', () => {
+    it('task-detail-metadata does not expose a collapsible accordion affordance', () => {
       const { container } = renderDetail()
-      const accordion = container.querySelector('p-accordion[data-region="task-detail-metadata"]')
-      expect(accordion).not.toBeNull()
-      expect(accordion?.hasAttribute('compact')).toBe(true)
+      expect(container.querySelector('p-accordion[data-region="task-detail-metadata"]')).toBeNull()
     })
 
-    it('p-accordion[data-region="task-detail-metadata"] has heading="Metadata"', () => {
+    it('task-detail-metadata has a visible Metadata heading', () => {
       const { container } = renderDetail()
-      const accordion = container.querySelector('p-accordion[data-region="task-detail-metadata"]')
-      expect(accordion).not.toBeNull()
-      expect(accordion?.getAttribute('heading')).toBe('Metadata')
+      const metadata = container.querySelector('[data-region="task-detail-metadata"]')
+      expect(metadata?.textContent).toContain('Metadata')
     })
 
-    it('p-accordion[data-region="task-detail-metadata"] is closed by default — no open attribute', () => {
+    it('at least one field-* testid descendant is queryable inside metadata', () => {
       const { container } = renderDetail()
-      const accordion = container.querySelector('p-accordion[data-region="task-detail-metadata"]')
-      expect(accordion).not.toBeNull()
-      expect(accordion?.hasAttribute('open')).toBe(false)
-    })
-
-    it('at least one field-* testid descendant is queryable inside the closed accordion (CSS visibility contract)', () => {
-      const { container } = renderDetail()
-      const accordion = container.querySelector('p-accordion[data-region="task-detail-metadata"]')
-      expect(accordion?.hasAttribute('open')).toBe(false)
-      // Querying any one descendant proves PAccordion CSS height animation (not conditional render).
-      // Checks field-id as representative sample — AC2 requires at least one.
+      const metadata = container.querySelector('[data-region="task-detail-metadata"]')
+      // Checks field-id as representative sample — individual field rendering is owned elsewhere.
       expect(
-        accordion?.querySelector('[data-testid="field-id"]'),
-        'field-id must be in accordion DOM when closed',
+        metadata?.querySelector('[data-testid="field-id"]'),
+        'field-id must be in metadata DOM',
       ).not.toBeNull()
     })
   })

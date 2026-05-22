@@ -204,17 +204,24 @@ test.describe('TestFromAC_TaskDetailModalComposition', () => {
   }) => {
     const metadata = page.locator('[data-testid="task-detail-modal"] [data-region="task-detail-metadata"]')
     await expect(metadata).toBeVisible()
-    await expect(page.locator('[data-testid="field-id"]')).toBeHidden()
-
-    await metadata.evaluate((element) => {
-      ;(element as HTMLElement & { open?: boolean }).open = true
-    })
+    await expect(metadata).not.toHaveJSProperty('tagName', 'P-ACCORDION')
+    await expect(page.locator('[data-testid="field-id"]')).toBeVisible()
 
     await expect(metadata.locator('dt', { hasText: /^Status$/ })).toBeVisible()
     await expect(metadata.locator('[data-testid="field-status"]')).toBeVisible()
 
     await expect(metadata.locator('dt', { hasText: /^Priority$/ })).toBeVisible()
     await expect(metadata.locator('[data-testid="field-priority"]')).toBeVisible()
+  })
+
+  test('history control is compact secondary chrome', async ({ page }) => {
+    const history = page.locator('[data-region="history"]')
+    await expect(history).toBeVisible()
+    const historyButton = history.locator('p-button[data-testid="history-tab"]')
+    await expect(historyButton).toBeVisible()
+    expect(await historyButton.evaluate((element) => {
+      return (element as HTMLElement & { compact?: boolean }).compact ?? element.hasAttribute('compact')
+    })).toBe(true)
   })
 
   test('task modal has distinct body section for task description', async ({

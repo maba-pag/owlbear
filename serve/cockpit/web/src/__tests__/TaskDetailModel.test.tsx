@@ -126,7 +126,7 @@ function renderDetail(task: TaskDetail) {
 // ---------------------------------------------------------------------------
 
 describe('TestFromAC_ClaimFieldsOnModel', () => {
-  it('renders field-claimed as "false" for an unclaimed task', () => {
+  it('renders field-claimed as "No" for an unclaimed task', () => {
     /**
      * AC1: DetailTab must surface the `claimed` boolean from TaskDetail so
      * consumers can read claim state without re-deriving it from claimed_at.
@@ -134,29 +134,28 @@ describe('TestFromAC_ClaimFieldsOnModel', () => {
     const { container } = renderDetail(UNCLAIMED_TASK)
     const el = container.querySelector('[data-testid="field-claimed"]')
     expect(el).not.toBeNull()
-    expect(el!.textContent).toBe('false')
+    expect(el!.textContent).toBe('No')
   })
 
-  it('renders field-claimed-at as empty indicator for an unclaimed task', () => {
+  it('renders field-claimed-at as explicit not-claimed copy for an unclaimed task', () => {
     /**
      * AC1 + AC3: claimed_at must be surfaced even when null — the element
-     * must exist with an empty representation, not be absent from DOM.
-     * (null renders as empty string; absence-vs-null enforced at tsc level)
+      * must exist with an explicit representation, not be absent from DOM.
      */
     const { container } = renderDetail(UNCLAIMED_TASK)
     const el = container.querySelector('[data-testid="field-claimed-at"]')
     expect(el).not.toBeNull()
-    expect(el!.textContent).toBe('')
+    expect(el!.textContent).toBe('Not claimed')
   })
 
-  it('renders field-claimed as "true" for a claimed task', () => {
+  it('renders field-claimed as "Yes" for a claimed task', () => {
     /**
      * AC1: claimed must be true when claimed_at is a non-null timestamp.
      */
     const { container } = renderDetail(CLAIMED_TASK)
     const el = container.querySelector('[data-testid="field-claimed"]')
     expect(el).not.toBeNull()
-    expect(el!.textContent).toBe('true')
+    expect(el!.textContent).toBe('Yes')
   })
 
   it('renders field-claimed-at as the ISO timestamp for a claimed task', () => {
@@ -175,15 +174,15 @@ describe('TestFromAC_ClaimFieldsOnModel', () => {
 // ---------------------------------------------------------------------------
 
 describe('TestFromAC_DepStatusOnModel', () => {
-  it('renders field-dep-status as empty indicator for an unconstrained task', () => {
+  it('renders field-dep-status as explicit None indicator for an unconstrained task', () => {
     /**
      * AC2: dep_status must be surfaced even when null — the element must exist.
-     * AC3: explicit null representation (renders as empty string, not absent DOM node).
+     * AC3: explicit null representation (renders as None, not absent DOM node).
      */
     const { container } = renderDetail(UNCLAIMED_TASK)
     const el = container.querySelector('[data-testid="field-dep-status"]')
     expect(el).not.toBeNull()
-    expect(el!.textContent).toBe('')
+    expect(el!.textContent).toBe('None')
   })
 
   it('renders field-dep-status as "blocked" for a dependency-constrained task', () => {
@@ -259,10 +258,10 @@ describe('TestFromAC_FieldElementSensitivity', () => {
      * Uses CLAIMED_DEP_READY_TASK so all three fields carry non-null values.
      */
     const { container } = renderDetail(CLAIMED_DEP_READY_TASK)
-    // field-claimed: element exists with exact boolean string
+    // field-claimed: element exists with exact display value
     const claimedEl = container.querySelector('[data-testid="field-claimed"]')
     expect(claimedEl).not.toBeNull()
-    expect(claimedEl!.textContent).toBe('true')
+    expect(claimedEl!.textContent).toBe('Yes')
     // field-claimed-at: element exists with exact ISO timestamp
     const claimedAtEl = container.querySelector('[data-testid="field-claimed-at"]')
     expect(claimedAtEl).not.toBeNull()
@@ -282,12 +281,12 @@ describe('TestFromAC_StateMatrix', () => {
   it('unclaimed unconstrained task: all three new fields present with correct values', () => {
     /**
      * AC4: Full shape check for the base unclaimed/unconstrained state.
-     * claimed=false, claimed_at=null (renders empty), dep_status=null (renders empty).
+      * claimed=false, claimed_at=null, dep_status=null.
      */
     const { container } = renderDetail(UNCLAIMED_TASK)
-    expect(container.querySelector('[data-testid="field-claimed"]')?.textContent).toBe('false')
-    expect(container.querySelector('[data-testid="field-claimed-at"]')?.textContent).toBe('')
-    expect(container.querySelector('[data-testid="field-dep-status"]')?.textContent).toBe('')
+    expect(container.querySelector('[data-testid="field-claimed"]')?.textContent).toBe('No')
+    expect(container.querySelector('[data-testid="field-claimed-at"]')?.textContent).toBe('Not claimed')
+    expect(container.querySelector('[data-testid="field-dep-status"]')?.textContent).toBe('None')
   })
 
   it('claimed dep-ready task: claimed=true, claimed_at set, dep_status="ready"', () => {
@@ -296,7 +295,7 @@ describe('TestFromAC_StateMatrix', () => {
      * All three fields must surface their non-null values.
      */
     const { container } = renderDetail(CLAIMED_DEP_READY_TASK)
-    expect(container.querySelector('[data-testid="field-claimed"]')?.textContent).toBe('true')
+    expect(container.querySelector('[data-testid="field-claimed"]')?.textContent).toBe('Yes')
     expect(container.querySelector('[data-testid="field-claimed-at"]')?.textContent).toBe(
       CLAIMED_DEP_READY_TASK.claimed_at,
     )
@@ -312,8 +311,8 @@ describe('TestFromAC_StateMatrix', () => {
     // Existing blocked rendering is not regressed:
     expect(container.querySelector('[data-field="block_reason"]')).not.toBeNull()
     // New fields are also present:
-    expect(container.querySelector('[data-testid="field-claimed"]')?.textContent).toBe('false')
-    expect(container.querySelector('[data-testid="field-claimed-at"]')?.textContent).toBe('')
+    expect(container.querySelector('[data-testid="field-claimed"]')?.textContent).toBe('No')
+    expect(container.querySelector('[data-testid="field-claimed-at"]')?.textContent).toBe('Not claimed')
   })
 
   it('dependency-constrained task: dep_status="blocked" alongside depends_on list', () => {
@@ -334,7 +333,7 @@ describe('TestFromAC_StateMatrix', () => {
      * surface their correct values independently.
      */
     const { container } = renderDetail(CLAIMED_BLOCKED_TASK)
-    expect(container.querySelector('[data-testid="field-claimed"]')?.textContent).toBe('true')
+    expect(container.querySelector('[data-testid="field-claimed"]')?.textContent).toBe('Yes')
     expect(container.querySelector('[data-testid="field-claimed-at"]')?.textContent).toBe(
       CLAIMED_BLOCKED_TASK.claimed_at,
     )

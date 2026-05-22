@@ -1,10 +1,10 @@
 ---
 id: 1701
 title: Handle empty task detail sections
-status: research
+status: done
 priority: important
 created: 2026-05-21T20:22:56.770746+02:00
-updated: 2026-05-21T20:22:56.770746+02:00
+updated: 2026-05-22T13:22:00+02:00
 tags:
   - cockpit-perfect-ui
   - scope:cockpit-web
@@ -39,3 +39,22 @@ Use this task as a product/audit todo item, not an instruction to hand off to th
 - Audit Actions and Metadata sections in empty and populated task states.
 - Remove, collapse, or provide meaningful empty states for empty sections.
 - Ensure clickable affordances have visible effects or are not interactive.
+
+## Implementation
+- Added a task-action availability check in the detail modal. Tasks with no backward move, no claim action, and no block action now show `No direct actions available.` instead of an empty action box.
+- Replaced the task-detail Metadata accordion with a static Metadata section so it no longer looks clickable when there is no interactive behavior.
+- Kept Metadata visible because the fields are useful audit context, but made absent values explicit: `Claimed` renders `Yes`/`No`, `Claimed at` renders `Not claimed` when absent, and `Dependency status` renders `None` when absent.
+- Updated unit, browser, and information-architecture coverage for actionless tasks and the static metadata contract.
+
+## Evidence
+- Browser screenshots reviewed for populated light/dark task detail states and an actionless task state.
+- The actionless state now has a readable empty-state sentence instead of a visually empty controls area.
+- Metadata reads as plain task properties, contains no accordion/no-op affordance, and no longer has blank values.
+
+## Validation
+- `npx vitest run src/__tests__/DetailTab.test.tsx src/__tests__/DetailTab.information-architecture.test.tsx src/__tests__/TaskDetailModel.test.tsx src/__tests__/PdsMigration.test.tsx --reporter=dot` — 4 files passed, 157 passed, 4 skipped.
+- `npx playwright test e2e/shell-sidecar-inspector.spec.ts -g "metadata|history control|task modal has identifiable actions|task detail opens in display mode" --project=chromium` — 4 passed.
+- `npx playwright test e2e/lower-sections-screenshot-1701-1702.tmp.spec.ts --project=chromium` — 3 passed; screenshots reviewed before cleanup.
+- `npx eslint src/components/DetailTab.tsx src/__tests__/DetailTab.test.tsx src/__tests__/DetailTab.information-architecture.test.tsx src/__tests__/TaskDetailModel.test.tsx e2e/shell-sidecar-inspector.spec.ts` — passed.
+- `npm run build` — passed; existing Vite/Rolldown chunk-size warning remains.
+- Editor diagnostics for touched files — no errors.
