@@ -64,6 +64,19 @@ const TASK_WITH_DEPS: TaskDetail = {
   parent: 5,
 }
 
+const TASK_WITH_AC: TaskDetail = {
+  ...TASK,
+  ac: [
+    'User can see the acceptance criteria in task detail.',
+    'Missing acceptance criteria has an explicit empty state.',
+  ],
+}
+
+const TASK_WITHOUT_AC: TaskDetail = {
+  ...TASK,
+  ac: [],
+}
+
 const TASK_ACTIONLESS: TaskDetail = {
   ...TASK,
   status: 'research',
@@ -297,6 +310,26 @@ describe('TestFromAC_DetailTab', () => {
       const { container } = renderDetail(TASK_ACTIONLESS)
       expect(container.querySelector('[data-testid="actions-empty-state"]')?.textContent).toContain(
         'No direct actions available.',
+      )
+    })
+
+    it('renders acceptance criteria when task detail provides ac items', () => {
+      const { container } = renderDetail(TASK_WITH_AC)
+      const criteria = container.querySelector('[data-testid="task-ac-list"]')
+      const items = container.querySelectorAll('[data-testid="task-ac-item"]')
+
+      expect(criteria).not.toBeNull()
+      expect(items).toHaveLength(2)
+      expect(items[0]?.textContent).toContain('User can see the acceptance criteria')
+      expect(container.querySelector('[data-testid="task-ac-empty-state"]')).toBeNull()
+    })
+
+    it('renders an explicit acceptance criteria empty state when no ac items exist', () => {
+      const { container } = renderDetail(TASK_WITHOUT_AC)
+
+      expect(container.querySelector('[data-testid="task-ac-list"]')).toBeNull()
+      expect(container.querySelector('[data-testid="task-ac-empty-state"]')?.textContent).toContain(
+        'No acceptance criteria defined.',
       )
     })
   })

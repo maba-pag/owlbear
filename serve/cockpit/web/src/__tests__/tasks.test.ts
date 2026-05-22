@@ -31,6 +31,7 @@ const TASK_DETAIL: TaskDetail = {
   updated: '2026-05-12T00:00:00Z',
   created: '2026-05-01T00:00:00Z',
   body: 'Task body text',
+  ac: ['Acceptance criterion one', 'Acceptance criterion two'],
   tags: ['cockpit', 'frontend'],
   blocked: false,
   block_reason: null,
@@ -49,6 +50,7 @@ const TASK_DETAIL_MINIMAL: TaskDetail = {
   updated: '2026-01-01T00:00:00Z',
   created: '2026-01-01T00:00:00Z',
   body: null,
+  ac: [],
   tags: [],
   blocked: false,
   block_reason: null,
@@ -582,6 +584,13 @@ describe('TestFromAC_TaskDetailInterface', () => {
     vi.stubGlobal('fetch', makeSuccessFetch(TASK_DETAIL_MINIMAL))
     const result = await getTask(1)
     expect(result.body).toBeNull()
+  })
+
+  it('TaskDetail: ac is an array of acceptance criteria', async () => {
+    vi.stubGlobal('fetch', makeSuccessFetch(TASK_DETAIL))
+    const result = await getTask(42)
+    expect(Array.isArray(result.ac)).toBe(true)
+    expect(result.ac).toContain('Acceptance criterion one')
   })
 
   it('TaskDetail: tags is an array', async () => {

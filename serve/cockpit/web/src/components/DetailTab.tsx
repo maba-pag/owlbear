@@ -25,6 +25,7 @@ interface TaskDetail {
   status: string
   priority: string
   body: string | null
+  ac?: string[]
   updated: string
   created: string
   tags: string[]
@@ -169,6 +170,7 @@ export default function DetailTab({
 
   const taskSessions = sessions.filter((s) => s.task_id === t.id)
   const hasTaskActions = Boolean(backwardTarget) || t.claimed !== false || t.blocked
+  const acceptanceCriteria = Array.isArray(t.ac) ? t.ac.filter((item) => item.trim().length > 0) : []
 
   return (
     <div className="flex min-w-0 flex-col gap-static-md">
@@ -184,6 +186,23 @@ export default function DetailTab({
           onSave={handleSave}
           defaultEditing={false}
         />
+      </section>
+
+      <section className="rounded-lg border border-contrast-low bg-canvas p-static-sm" data-region="task-acceptance-criteria">
+        <div className="mb-static-xs flex min-w-0 items-center justify-between gap-static-sm">
+          <PHeading ref={syncHeadingAttrs('h3', 'small')} size="small" tag="h3">Acceptance Criteria</PHeading>
+        </div>
+        {acceptanceCriteria.length > 0 ? (
+          <ul data-testid="task-ac-list" className="m-0 grid list-none gap-static-xs p-0 text-sm text-primary">
+            {acceptanceCriteria.map((item, index) => (
+              <li key={`${index}-${item}`} data-testid="task-ac-item" className="rounded-md border border-contrast-low bg-surface px-static-sm py-static-xs">
+                {item}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <span data-testid="task-ac-empty-state" className="text-sm text-contrast-high">No acceptance criteria defined.</span>
+        )}
       </section>
 
       <section className="rounded-lg border border-contrast-low bg-canvas p-static-sm" data-region="actions">

@@ -9,6 +9,7 @@ export interface TaskDetail {
   updated: string
   created: string
   body: string | null
+  ac?: string[]
   tags: string[]
   blocked: boolean
   block_reason: string | null
