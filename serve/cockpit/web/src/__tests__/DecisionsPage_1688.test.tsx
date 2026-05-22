@@ -51,6 +51,30 @@ const DR_NEWER: PendingDR = {
   title: 'Newest pending decision',
 }
 
+const DR_SAME_CREATED_B: PendingDR = {
+  ...DR_WITH_BRIEF,
+  id: 'dr-1688-b',
+  task_id: 1691,
+  created: '2026-05-21T08:00:00Z',
+  title: 'Same created B',
+}
+
+const DR_SAME_CREATED_A: PendingDR = {
+  ...DR_WITH_BRIEF,
+  id: 'dr-1688-a',
+  task_id: 1692,
+  created: '2026-05-21T08:00:00Z',
+  title: 'Same created A',
+}
+
+const DR_MALFORMED_CREATED: PendingDR = {
+  ...DR_WITH_BRIEF,
+  id: 'dr-1688-malformed',
+  task_id: 1693,
+  created: 'not-a-date',
+  title: 'Malformed created decision',
+}
+
 function renderPage(items: PendingDR[] = [DR_WITH_BRIEF]) {
   mockUseDRState.mockReturnValue({
     count: items.length,
@@ -100,6 +124,18 @@ describe('DecisionsPage workflow brief', () => {
     expect(items.map((item) => item.getAttribute('data-testid'))).toEqual([
       'dr-item-dr-1688-oldest',
       'dr-item-dr-1688-newest',
+    ])
+  })
+
+  it('puts malformed created timestamps last and uses id order for exact timestamp ties', () => {
+    const { container } = renderPage([DR_SAME_CREATED_B, DR_MALFORMED_CREATED, DR_SAME_CREATED_A, DR_OLDER])
+    const items = [...container.querySelectorAll('[data-testid^="dr-item-"]')]
+
+    expect(items.map((item) => item.getAttribute('data-testid'))).toEqual([
+      'dr-item-dr-1688-oldest',
+      'dr-item-dr-1688-a',
+      'dr-item-dr-1688-b',
+      'dr-item-dr-1688-malformed',
     ])
   })
 })

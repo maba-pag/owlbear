@@ -5,15 +5,28 @@ import { WorkspaceHeader, WorkspaceHeaderMetric } from '../components/WorkspaceH
 import { useDRState } from '../hooks/CockpitProvider'
 import { formatAge, formatRequestType, getDecisionBrief } from '../utils/decisionBrief'
 
-function parseCreated(value: string): number {
+function parseCreated(value: string | null | undefined): number {
+  if (typeof value !== 'string') {
+    return Number.MAX_SAFE_INTEGER
+  }
+
   const timestamp = Date.parse(value)
   return Number.isFinite(timestamp) ? timestamp : Number.MAX_SAFE_INTEGER
+}
+
+function comparePendingDecisions(left: { created?: string | null; id: string }, right: { created?: string | null; id: string }): number {
+  const createdDelta = parseCreated(left.created) - parseCreated(right.created)
+  if (createdDelta !== 0) {
+    return createdDelta
+  }
+
+  return left.id.localeCompare(right.id)
 }
 
 function DecisionsPage() {
   const drState = useDRState()
   const sortedItems = useMemo(
-    () => [...drState.items].sort((left, right) => parseCreated(left.created) - parseCreated(right.created)),
+    () => [...drState.items].sort(comparePendingDecisions),
     [drState.items],
   )
   let content

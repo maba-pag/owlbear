@@ -204,7 +204,25 @@ describe('TestFromAC_MemoryTabSort', () => {
     vi.unstubAllGlobals()
   })
 
-  it('ac1 happy: pending entries appear before curated entries regardless of created_at', async () => {
+  it('ac1 happy: higher-confidence entries appear first regardless of state', async () => {
+    const entries = [
+      makeEntry({ id: 'e1', title: 'Lower Confidence Pending', state: 'pending', confidence: 0.45 }),
+      makeEntry({ id: 'e2', title: 'Higher Confidence Approved', state: 'approved', confidence: 0.95 }),
+    ]
+    vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
+    let container!: HTMLElement
+    await act(async () => {
+      container = renderMemoryTab().container
+    })
+    await flush()
+
+    const titles = Array.from(container.querySelectorAll('[data-testid="memory-entry-title"]')).map(
+      (el) => el.textContent,
+    )
+    expect(titles.indexOf('Higher Confidence Approved')).toBeLessThan(titles.indexOf('Lower Confidence Pending'))
+  })
+
+  it('ac1 happy: when confidence ties, pending entries appear before curated entries regardless of created_at', async () => {
     const entries = [
       makeEntry({ id: 'e1', title: 'Curated Entry', state: 'curated', created_at: '2026-01-01T00:00:00Z' }),
       makeEntry({ id: 'e2', title: 'Pending Entry', state: 'pending', created_at: '2026-01-02T00:00:00Z' }),
@@ -222,7 +240,7 @@ describe('TestFromAC_MemoryTabSort', () => {
     expect(titles.indexOf('Pending Entry')).toBeLessThan(titles.indexOf('Curated Entry'))
   })
 
-  it('ac1 happy: within same state, entries sorted by created_at ascending', async () => {
+  it('ac1 happy: when confidence and state tie, entries sorted by created_at ascending', async () => {
     const entries = [
       makeEntry({ id: 'e1', title: 'Later Pending', state: 'pending', created_at: '2026-01-02T00:00:00Z' }),
       makeEntry({ id: 'e2', title: 'Earlier Pending', state: 'pending', created_at: '2026-01-01T00:00:00Z' }),
@@ -238,6 +256,25 @@ describe('TestFromAC_MemoryTabSort', () => {
       (el) => el.textContent,
     )
     expect(titles.indexOf('Earlier Pending')).toBeLessThan(titles.indexOf('Later Pending'))
+  })
+
+  it('ac1 edge: malformed confidence sorts after finite confidence and id breaks complete ties', async () => {
+    const entries = [
+      makeEntry({ id: 'z', title: 'Malformed Confidence Z', confidence: Number.NaN, state: 'pending' }),
+      makeEntry({ id: 'b', title: 'Finite Confidence', confidence: 0.1, state: 'pending' }),
+      makeEntry({ id: 'a', title: 'Malformed Confidence A', confidence: Number.NaN, state: 'pending' }),
+    ]
+    vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
+    let container!: HTMLElement
+    await act(async () => {
+      container = renderMemoryTab().container
+    })
+    await flush()
+
+    const titles = Array.from(container.querySelectorAll('[data-testid="memory-entry-title"]')).map(
+      (el) => el.textContent,
+    )
+    expect(titles).toEqual(['Finite Confidence', 'Malformed Confidence A', 'Malformed Confidence Z'])
   })
 
   it('ac1 boundary: full state priority order is pending < curated < approved < deleted', async () => {

@@ -23,7 +23,7 @@ import type { Task } from '../hooks/useBoard'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function makeTask(id: number, status: string): Task {
+function makeTask(id: number, status: string, overrides: Partial<Task> = {}): Task {
   return {
     id,
     title: `Task ${id}`,
@@ -34,6 +34,8 @@ function makeTask(id: number, status: string): Task {
     blocked: false,
     block_reason: null,
     claimed: false,
+    dep_status: null,
+    ...overrides,
   }
 }
 
@@ -220,5 +222,35 @@ describe('Column chrome visual system', () => {
 
     expect(root?.getAttribute('data-drag-over')).toBeNull()
     expect(root?.getAttribute('class') ?? '').not.toContain('bg-success-frosted')
+  })
+})
+
+describe('Column default task sorting', () => {
+  function renderedTaskIds(container: HTMLElement): string[] {
+    return Array.from(container.querySelectorAll('[data-testid="task-card"]')).map((card) => card.getAttribute('data-id') ?? '')
+  }
+
+  it('sorts cards by semantic priority descending, then updated timestamp descending', () => {
+    const tasks = [
+      makeTask(1, 'todo', { priority: 'needed', updated: '2026-05-22T10:00:00Z' }),
+      makeTask(2, 'todo', { priority: 'critical', updated: '2026-05-21T10:00:00Z' }),
+      makeTask(3, 'todo', { priority: 'critical', updated: '2026-05-22T10:00:00Z' }),
+      makeTask(4, 'todo', { priority: 'someday', updated: '2026-05-23T10:00:00Z' }),
+    ]
+    const { container } = renderColumn('todo', tasks)
+
+    expect(renderedTaskIds(container)).toEqual(['3', '2', '1', '4'])
+  })
+
+  it('puts malformed priority and updated values last while keeping a deterministic id tie-break', () => {
+    const tasks = [
+      makeTask(3, 'todo', { priority: 'unknown', updated: '2026-05-24T10:00:00Z' }),
+      makeTask(2, 'todo', { priority: 'critical', updated: 'not-a-date' }),
+      makeTask(1, 'todo', { priority: 'critical', updated: '2026-05-24T10:00:00Z' }),
+      makeTask(4, 'todo', { priority: 'unknown', updated: '2026-05-24T10:00:00Z' }),
+    ]
+    const { container } = renderColumn('todo', tasks)
+
+    expect(renderedTaskIds(container)).toEqual(['1', '2', '3', '4'])
   })
 })

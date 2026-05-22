@@ -2,6 +2,14 @@ import { useEffect, useRef } from 'react'
 import { Card } from './Card'
 import type { Task } from '../hooks/useBoard'
 
+const PRIORITY_RANK: Record<string, number> = {
+  critical: 5,
+  needed: 4,
+  important: 3,
+  'nice-to-have': 2,
+  someday: 1,
+}
+
 export interface ColumnProps {
   status: string
   tasks: Task[]
@@ -24,6 +32,52 @@ function toDisplayStatus(status: string): string {
     .join(' ')
 }
 
+function priorityRank(priority: string | null | undefined, priorities: string[]): number {
+  if (typeof priority !== 'string') {
+    return -1
+  }
+
+  const normalized = priority.trim().toLowerCase()
+  if (normalized in PRIORITY_RANK) {
+    return PRIORITY_RANK[normalized]
+  }
+
+  const configuredIndex = priorities.indexOf(priority)
+  return configuredIndex >= 0 ? configuredIndex : -1
+}
+
+function updatedTimestamp(updated: string | null | undefined): number {
+  if (typeof updated !== 'string') {
+    return Number.NEGATIVE_INFINITY
+  }
+
+  const parsed = Date.parse(updated)
+  return Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY
+}
+
+function compareDescending(left: number, right: number): number {
+  if (left === right) {
+    return 0
+  }
+  return left > right ? -1 : 1
+}
+
+function compareTasksByDefaultOrder(priorities: string[]) {
+  return (left: Task, right: Task): number => {
+    const priorityDelta = compareDescending(priorityRank(left.priority, priorities), priorityRank(right.priority, priorities))
+    if (priorityDelta !== 0) {
+      return priorityDelta
+    }
+
+    const updatedDelta = compareDescending(updatedTimestamp(left.updated), updatedTimestamp(right.updated))
+    if (updatedDelta !== 0) {
+      return updatedDelta
+    }
+
+    return left.id - right.id
+  }
+}
+
 export function Column({
   status,
   tasks,
@@ -36,7 +90,7 @@ export function Column({
   const bodyRef = useRef<HTMLDivElement>(null)
   const displayStatus = toDisplayStatus(status)
 
-  const sorted = [...tasks].sort((a, b) => priorities.indexOf(b.priority) - priorities.indexOf(a.priority))
+  const sorted = [...tasks].sort(compareTasksByDefaultOrder(priorities))
   const density = sorted.length === 0 ? 'empty' : sorted.length <= 2 ? 'sparse' : 'active'
 
   useEffect(() => {

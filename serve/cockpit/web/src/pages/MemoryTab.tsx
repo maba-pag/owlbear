@@ -140,13 +140,42 @@ function normalizeTimestamp(value: string): number {
   return Number.isNaN(parsed) ? Number.POSITIVE_INFINITY : parsed
 }
 
+function normalizeConfidence(value: number): number {
+  return Number.isFinite(value) ? value : Number.NEGATIVE_INFINITY
+}
+
+function compareDescending(left: number, right: number): number {
+  if (left === right) {
+    return 0
+  }
+  return left > right ? -1 : 1
+}
+
+function compareAscending(left: number, right: number): number {
+  if (left === right) {
+    return 0
+  }
+  return left < right ? -1 : 1
+}
+
 function sortEntries(entries: MemoryEntry[]): MemoryEntry[] {
   return [...entries].sort((left, right) => {
+    const confidenceDelta = compareDescending(normalizeConfidence(left.confidence), normalizeConfidence(right.confidence))
+    if (confidenceDelta !== 0) {
+      return confidenceDelta
+    }
+
     const stateDelta = STATE_PRIORITY[left.state] - STATE_PRIORITY[right.state]
     if (stateDelta !== 0) {
       return stateDelta
     }
-    return normalizeTimestamp(left.created_at) - normalizeTimestamp(right.created_at)
+
+    const createdDelta = compareAscending(normalizeTimestamp(left.created_at), normalizeTimestamp(right.created_at))
+    if (createdDelta !== 0) {
+      return createdDelta
+    }
+
+    return left.id.localeCompare(right.id)
   })
 }
 
