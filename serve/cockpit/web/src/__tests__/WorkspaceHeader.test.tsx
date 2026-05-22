@@ -22,7 +22,7 @@ describe('WorkspaceHeader', () => {
     expect(container.querySelector('[data-testid="workspace-header-summary"]')?.textContent).toContain('3')
     expect(container.querySelector('[data-testid="workspace-header-summary"]')?.textContent).toContain('waiting')
     expect(container.querySelector('[data-testid="workspace-header-metric"]')?.className).not.toContain('border-l')
-    expect(container.querySelector('[data-testid="workspace-header-metric"] strong')?.className).toContain('text-base')
+    expect(container.querySelector('[data-testid="workspace-header-metric"] strong')?.className).toContain('text-lg')
   })
 
   it('can render a secondary heading and route actions', () => {

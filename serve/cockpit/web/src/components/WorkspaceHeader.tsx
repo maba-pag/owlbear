@@ -73,7 +73,7 @@ export function WorkspaceHeaderMetric({ value, label, tone = 'neutral' }: Worksp
     >
       <strong
         className={[
-          'text-base font-semibold leading-none',
+          'text-lg font-semibold leading-none',
           tone === 'error' ? 'text-error' : 'text-primary',
         ].join(' ')}
       >

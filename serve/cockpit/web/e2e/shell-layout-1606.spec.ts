@@ -254,7 +254,7 @@ test.describe('PCanvas shell on direct workspace routes', () => {
     expect(Math.abs(statePanel!.y - editor!.y)).toBeLessThan(4)
   })
 
-  test('direct Memory route keeps header metrics compact without a leading separator', async ({ page }) => {
+  test('direct Memory route keeps restored header metrics without a leading separator', async ({ page }) => {
     await stubApis(page)
     await page.goto('/memories')
     await page.locator('[data-testid="memory-tab"]').waitFor({ state: 'visible' })
@@ -277,8 +277,10 @@ test.describe('PCanvas shell on direct workspace routes', () => {
       }
     })
 
-    expect(firstMetric).toEqual({ borderLeftWidth: '0px', valueFontSize: '16px' })
-    expect(secondMetric).toEqual({ borderLeftWidth: '1px', valueFontSize: '16px' })
+    expect(firstMetric.borderLeftWidth).toBe('0px')
+    expect(secondMetric.borderLeftWidth).toBe('1px')
+    expect(Number.parseFloat(firstMetric.valueFontSize ?? '0')).toBeGreaterThan(20)
+    expect(firstMetric.valueFontSize).toBe(secondMetric.valueFontSize)
   })
 })
 
