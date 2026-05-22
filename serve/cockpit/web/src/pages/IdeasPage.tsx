@@ -6,7 +6,7 @@ import rehypeSanitize from 'rehype-sanitize'
 import remarkGfm from 'remark-gfm'
 
 import { fetchIdeas, saveIdeas } from '../api/ideas'
-import { WorkspaceHeader, WorkspaceHeaderMetric, WorkspaceHeaderPill } from '../components/WorkspaceHeader'
+import { WorkspaceHeader, WorkspaceHeaderPill } from '../components/WorkspaceHeader'
 
 type NavigationTransaction = {
   retry: () => void
@@ -394,10 +394,8 @@ function IdeasPage() {
         summary={(
           <>
             <WorkspaceHeaderPill tone={hasConflict ? 'error' : isDirty ? 'info' : 'neutral'}>
-              {hasConflict ? 'Conflict' : isDirty ? 'Unsaved' : 'Saved'}
+              {hasConflict ? 'Conflict' : isDirty ? 'Unsaved changes' : 'Saved'}
             </WorkspaceHeaderPill>
-            <WorkspaceHeaderPill>{previewMode ? 'Preview' : 'Edit'}</WorkspaceHeaderPill>
-            <WorkspaceHeaderMetric value={formatNumber(wordCount)} label="words" />
           </>
         )}
       />
@@ -448,7 +446,7 @@ function IdeasPage() {
         <div data-testid="ideas-editor-shell" className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-contrast-low bg-canvas">
           <div className="flex flex-wrap items-center justify-between gap-static-sm border-b border-contrast-low bg-canvas px-static-md py-static-sm">
             <div className="flex min-w-0 flex-wrap items-center gap-static-xs text-xs font-semibold uppercase text-primary">
-              <span>{previewMode ? 'Rendered Markdown' : 'Draft'}</span>
+              <span>{previewMode ? 'Markdown preview' : 'Editor'}</span>
               <span aria-hidden="true">/</span>
               <span>{formatNumber(lineCount)} lines</span>
             </div>
@@ -511,24 +509,20 @@ function IdeasPage() {
 
         <aside data-testid="ideas-state-panel" className="grid content-start gap-static-md rounded-lg border border-contrast-low bg-canvas p-static-md text-primary">
           <div className="grid gap-static-xs">
-            <span className="text-xs font-semibold uppercase text-primary">State</span>
+            <span className="text-xs font-semibold uppercase text-primary">Notebook</span>
             <div className="grid gap-static-xs text-sm text-primary">
               <div className="flex justify-between gap-static-md">
-                <span>Draft</span>
+                <span>Changes</span>
                 <span className="font-semibold">{isDirty ? 'Changed' : 'Current'}</span>
               </div>
               <div className="flex justify-between gap-static-md">
                 <span>Sync</span>
                 <span className="font-semibold">{hasConflict ? 'Needs choice' : 'Ready'}</span>
               </div>
-              <div className="flex justify-between gap-static-md">
-                <span>Mode</span>
-                <span className="font-semibold">{previewMode ? 'Preview' : 'Edit'}</span>
-              </div>
             </div>
           </div>
           <div className="grid gap-static-xs rounded-md border border-contrast-low bg-surface p-static-sm text-sm leading-normal text-primary">
-            <span className="text-xs font-semibold uppercase text-primary">Draft Metrics</span>
+            <span className="text-xs font-semibold uppercase text-primary">Writing metrics</span>
             <div className="grid gap-static-xs">
               <div className="flex justify-between gap-static-md">
                 <span>Lines</span>

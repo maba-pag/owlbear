@@ -344,6 +344,36 @@ describe('IdeasPageIntegration_PdsControls', () => {
   })
 })
 
+describe('IdeasPageIntegration_StatusWording', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('keeps the Ideas header summary focused on save state only', async () => {
+    const { container } = await renderLoaded('one two three four five')
+    const summary = container.querySelector('[data-testid="workspace-header-summary"]')
+
+    expect(summary?.textContent).toBe('Saved')
+    expect(summary?.querySelector('[data-testid="workspace-header-metric"]')).toBeNull()
+    expect(summary?.textContent).not.toMatch(/edit|preview|words/i)
+  })
+
+  it('shows unsaved changes as the actionable header state after editing', async () => {
+    const { container } = await renderLoaded('base')
+    fireEvent.change(container.querySelector('textarea')!, { target: { value: 'changed' } })
+
+    const summary = container.querySelector('[data-testid="workspace-header-summary"]')
+    expect(summary?.textContent).toBe('Unsaved changes')
+  })
+
+  it('does not render visible draft wording in the notebook surface', async () => {
+    const { container } = await renderLoaded('base')
+
+    expect(container.textContent).not.toMatch(/\bdraft\b/i)
+    expect(container.querySelector('[data-testid="ideas-state-panel"]')?.textContent).toContain('Writing metrics')
+  })
+})
+
 // ─── AC4: Conflict trigger ────────────────────────────────────────────────────
 //
 // While dirty, visibilitychange re-fetch returning different server content causes
