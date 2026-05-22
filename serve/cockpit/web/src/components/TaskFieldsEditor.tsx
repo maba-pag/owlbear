@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   PButton,
   PInputText,
@@ -33,6 +33,7 @@ export interface TaskFieldsEditorProps {
   serverValidationMessage: string | null
   clearConflictIfTaskChanged: (taskId: number | undefined) => void
   onSave: (payload: TaskEditPayload, conflictDraft: ConflictLocalDraft) => Promise<boolean | void>
+  onDirtyChange?: (dirty: boolean) => void
   defaultEditing?: boolean
 }
 
@@ -204,6 +205,7 @@ export default function TaskFieldsEditor({
   serverValidationMessage,
   clearConflictIfTaskChanged,
   onSave,
+  onDirtyChange,
   defaultEditing,
 }: TaskFieldsEditorProps) {
   const startsEditing = defaultEditing ?? true
@@ -279,6 +281,16 @@ export default function TaskFieldsEditor({
     || parent !== (task.parent !== null ? String(task.parent) : '')
     || (task.blocked && blockReason !== (task.block_reason ?? ''))
   const validationMessage = clientValidationMessage ?? serverValidationMessage
+
+  useLayoutEffect(() => {
+    onDirtyChange?.(isDirty)
+  }, [isDirty, onDirtyChange])
+
+  useEffect(() => {
+    return () => {
+      onDirtyChange?.(false)
+    }
+  }, [onDirtyChange])
 
   function resetDraftFromTask(): void {
     setTitle(task.title)

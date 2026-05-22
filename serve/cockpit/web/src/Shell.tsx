@@ -1,4 +1,4 @@
-import { Suspense, useRef, useEffect, useMemo, useState, type ComponentType, type CSSProperties } from 'react'
+import { Suspense, useCallback, useRef, useEffect, useMemo, useState, type ComponentType, type CSSProperties } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
@@ -141,7 +141,61 @@ function Shell() {
     description: string
     state: 'error' | 'warning'
   } | null>(null)
+  const [isTaskDetailDirty, setIsTaskDetailDirty] = useState(false)
+  const [showTaskDetailUnsavedDialog, setShowTaskDetailUnsavedDialog] = useState(false)
+  const pendingTaskDetailActionRef = useRef<(() => void) | null>(null)
+  const taskDetailStayButtonRef = useRef<HTMLElement | null>(null)
   const toastMockClearedRef = useRef(false)
+
+  const runTaskDetailAction = useCallback((action: () => void) => {
+    pendingTaskDetailActionRef.current = null
+    setShowTaskDetailUnsavedDialog(false)
+    setIsTaskDetailDirty(false)
+    action()
+  }, [])
+
+  const requestTaskDetailAction = useCallback((action: () => void) => {
+    if (!isTaskDetailDirty) {
+      action()
+      return
+    }
+
+    if (pendingTaskDetailActionRef.current !== null) {
+      return
+    }
+
+    pendingTaskDetailActionRef.current = action
+    setShowTaskDetailUnsavedDialog(true)
+  }, [isTaskDetailDirty])
+
+  const confirmTaskDetailLeave = useCallback(() => {
+    const pendingAction = pendingTaskDetailActionRef.current
+    if (pendingAction) {
+      runTaskDetailAction(pendingAction)
+      return
+    }
+
+    setShowTaskDetailUnsavedDialog(false)
+  }, [runTaskDetailAction])
+
+  const cancelTaskDetailLeave = useCallback(() => {
+    pendingTaskDetailActionRef.current = null
+    setShowTaskDetailUnsavedDialog(false)
+  }, [])
+
+  const selectTaskFromBoard = useCallback((taskId: number) => {
+    const action = () => {
+      select(taskId)
+      setDetailValidationMessage(null)
+    }
+
+    if (selectedTaskId === taskId) {
+      action()
+      return
+    }
+
+    requestTaskDetailAction(action)
+  }, [requestTaskDetailAction, select, selectedTaskId])
 
   const kanbanProps = useMemo(
     () => ({
@@ -151,8 +205,7 @@ function Shell() {
       error,
       refetchTasks,
       onSelectTask: (taskId: number) => {
-        select(taskId)
-        setDetailValidationMessage(null)
+        selectTaskFromBoard(taskId)
       },
       onMutationError: (heading: string, description: string, state: 'error' | 'warning') => {
         setBannerError({ heading, description, state })
@@ -169,7 +222,7 @@ function Shell() {
       selectedId: selectedTaskId,
       pendingDRIds: new Set(pendingDRItems.map((dr) => dr.task_id)),
     }),
-    [board, error, loading, pendingDRItems, refetchTasks, select, selectedTaskId, tasks],
+    [board, error, loading, pendingDRItems, refetchTasks, selectTaskFromBoard, selectedTaskId, tasks],
   )
 
   // Compute active nav index from pathname
@@ -182,6 +235,13 @@ function Shell() {
   const isTaskDetailOpen = isKanbanRoute && selectedTaskId !== null
   const isNavRailOpen = isSidebarStartOpen
   const canvasKey = isNavRailOpen ? 'nav-open' : 'nav-closed'
+  const navigateWorkspace = useCallback((path: string) => {
+    if (normalizeRoutePath(path) === normalizedPathname) {
+      return
+    }
+
+    requestTaskDetailAction(() => navigate(path))
+  }, [navigate, normalizedPathname, requestTaskDetailAction])
   const routeElement = useMemo(() => {
     if (!matchedRoute) {
       return null
@@ -216,6 +276,35 @@ function Shell() {
     maybeMockedAddMessage.mockClear?.()
     toastMockClearedRef.current = true
   }, [toastManager])
+
+  useEffect(() => {
+    if (showTaskDetailUnsavedDialog) {
+      taskDetailStayButtonRef.current?.focus()
+    }
+  }, [showTaskDetailUnsavedDialog])
+
+  useEffect(() => {
+    if (!isTaskDetailDirty) {
+      pendingTaskDetailActionRef.current = null
+      setShowTaskDetailUnsavedDialog(false)
+      return
+    }
+
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+    }
+
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => {
+      window.removeEventListener('beforeunload', onBeforeUnload)
+    }
+  }, [isTaskDetailDirty])
+
+  useEffect(() => {
+    if (!isTaskDetailOpen) {
+      setIsTaskDetailDirty(false)
+    }
+  }, [isTaskDetailOpen])
 
   useEffect(() => {
     const mediaQuery = window.matchMedia('(min-width: 1024px)')
@@ -284,11 +373,27 @@ function Shell() {
     '--cockpit-sidebar-start-padding': '14px',
   } as CSSProperties
 
-  const closeTaskDetail = () => {
-    clear()
-    setSelectedTaskSubtab(null)
-    setDetailValidationMessage(null)
-  }
+  const closeTaskDetail = useCallback(() => {
+    requestTaskDetailAction(() => {
+      clear()
+      setSelectedTaskSubtab(null)
+      setDetailValidationMessage(null)
+    })
+  }, [clear, requestTaskDetailAction])
+
+  const selectTaskFromDetail = useCallback((taskId: number, subtab?: string | null) => {
+    const action = () => {
+      select(taskId)
+      setSelectedTaskSubtab((current) => subtab ?? current)
+    }
+
+    if (selectedTaskId === taskId) {
+      action()
+      return
+    }
+
+    requestTaskDetailAction(action)
+  }, [requestTaskDetailAction, select, selectedTaskId])
 
   const onSidebarStartUpdate = (event: CustomEvent<CanvasSidebarStartUpdateEventDetail>) => {
     setIsSidebarStartOpen(event.detail.open)
@@ -333,11 +438,12 @@ function Shell() {
         board={board}
         initialSubtab={selectedTaskSubtab}
         onSelectTask={(taskId, subtab) => {
-          select(taskId)
-          setSelectedTaskSubtab((current) => subtab ?? current)
+          selectTaskFromDetail(taskId, subtab)
         }}
+        onDirtyChange={setIsTaskDetailDirty}
         onTaskCleared={(message) => {
           clear()
+          setIsTaskDetailDirty(false)
           setSelectedTaskSubtab(null)
           setDetailValidationMessage(message ?? null)
         }}
@@ -486,7 +592,7 @@ function Shell() {
                   aria-current={isActive ? 'page' : undefined}
                   aria-label={label}
                   tabIndex={isNavRailOpen ? 0 : -1}
-                  onClick={() => navigate(route.path)}
+                  onClick={() => navigateWorkspace(route.path)}
                 >
                   <PIcon
                     name={NAV_ICONS[route.icon] || 'grid'}
@@ -540,11 +646,11 @@ function Shell() {
         <PModal
           data-testid="task-detail-modal"
           open
-          onDismiss={closeTaskDetail}
+          onDismiss={showTaskDetailUnsavedDialog ? cancelTaskDetailLeave : closeTaskDetail}
           aria={{ 'aria-label': selectedTask ? `Task #${selectedTask.id}: ${selectedTask.title}` : 'Task detail' }}
         >
           <div
-            className="flex max-h-[min(88vh,900px)] w-[min(1040px,calc(100vw-8rem))] min-w-0 flex-col gap-static-md overflow-hidden"
+            className="relative flex max-h-[min(88vh,900px)] w-[min(1040px,calc(100vw-8rem))] min-w-0 flex-col gap-static-md overflow-hidden"
             data-region="task-detail-window"
             data-selected-task-id={selectedTask?.id ?? selectedTaskId ?? undefined}
           >
@@ -582,6 +688,36 @@ function Shell() {
             <div className="min-h-0 overflow-y-auto pr-static-xs" data-region="task-detail-content">
               {taskDetailContent}
             </div>
+            {showTaskDetailUnsavedDialog ? (
+              <div
+                data-testid="task-detail-unsaved-dialog"
+                role="alertdialog"
+                aria-modal="true"
+                aria-labelledby="task-detail-unsaved-title"
+                aria-describedby="task-detail-unsaved-description"
+                className="absolute inset-0 z-30 flex items-center justify-center bg-frosted-soft p-static-lg text-primary backdrop-blur-sm"
+              >
+                <div className="grid w-[min(440px,100%)] gap-static-md rounded-lg border border-contrast-low bg-canvas p-static-md shadow-lg">
+                  <div className="grid gap-static-xs rounded-lg border border-error bg-error-low p-static-md">
+                    <span className="text-xs font-semibold uppercase text-error">Unsaved changes</span>
+                    <h2 id="task-detail-unsaved-title" className="m-0 text-xl font-semibold leading-tight text-primary">
+                      Leave task detail?
+                    </h2>
+                    <p id="task-detail-unsaved-description" className="m-0 text-sm leading-normal text-primary">
+                      You have unsaved changes. Leave anyway?
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap justify-end gap-static-xs">
+                    <PButton type="button" variant="secondary" onClick={confirmTaskDetailLeave}>
+                      Leave
+                    </PButton>
+                    <PButton ref={taskDetailStayButtonRef} type="button" onClick={cancelTaskDetailLeave}>
+                      Cancel
+                    </PButton>
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </div>
         </PModal>
       ) : null}

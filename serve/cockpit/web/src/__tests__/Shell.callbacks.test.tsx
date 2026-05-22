@@ -54,6 +54,7 @@ vi.mock('../KanbanBoard', () => ({
 let capturedDetailOnSelectTask: ((taskId: number, subtab?: string | null) => void) | undefined
 let capturedDetailOnTaskCleared: ((message?: string | null) => void) | undefined
 let capturedDetailOnTaskUpdated: ((task: unknown) => void) | undefined
+let capturedDetailOnDirtyChange: ((dirty: boolean) => void) | undefined
 
 vi.mock('../components/DetailTab', () => ({
   default: vi.fn(
@@ -61,10 +62,12 @@ vi.mock('../components/DetailTab', () => ({
       onSelectTask?: (taskId: number, subtab?: string | null) => void
       onTaskCleared?: (msg?: string | null) => void
       onTaskUpdated?: (task: unknown) => void
+      onDirtyChange?: (dirty: boolean) => void
     }) => {
       capturedDetailOnSelectTask = props.onSelectTask
       capturedDetailOnTaskCleared = props.onTaskCleared
       capturedDetailOnTaskUpdated = props.onTaskUpdated
+      capturedDetailOnDirtyChange = props.onDirtyChange
       return null
     },
   ),
@@ -155,6 +158,25 @@ function renderShell() {
   )
 }
 
+function findDialogAction(dialog: Element, pattern: RegExp): HTMLElement | undefined {
+  return Array.from(dialog.querySelectorAll<HTMLElement>('button, p-button'))
+    .find((button) => pattern.test(button.textContent ?? ''))
+}
+
+function dismissTaskDetailModal(container: HTMLElement): void {
+  const modal = container.querySelector('[data-testid="task-detail-modal"]') as
+    | (HTMLElement & { onDismiss?: () => void })
+    | null
+  expect(modal).not.toBeNull()
+
+  if (typeof modal!.onDismiss === 'function') {
+    modal!.onDismiss()
+    return
+  }
+
+  fireEvent(modal!, new CustomEvent('dismiss', { bubbles: true }))
+}
+
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe('TestFromAC_ShellCallbacks', () => {
@@ -163,6 +185,7 @@ describe('TestFromAC_ShellCallbacks', () => {
     capturedDetailOnSelectTask = undefined
     capturedDetailOnTaskCleared = undefined
     capturedDetailOnTaskUpdated = undefined
+    capturedDetailOnDirtyChange = undefined
     vi.resetAllMocks()
     vi.unstubAllGlobals()
   })
@@ -320,6 +343,71 @@ describe('TestFromAC_ShellCallbacks', () => {
       fireEvent.click(container.querySelector('[data-testid="task-fetch-retry"]')!)
       await waitFor(() => {
         expect(callCount).toBeGreaterThan(1)
+      })
+    })
+
+    describe('task detail unsaved-change guard', () => {
+      it('blocks switching cards while task detail has unsaved edits until the user confirms leaving', () => {
+        stubHooks()
+        const { container } = renderShell()
+        act(() => { capturedKanbanOnSelectTask?.(42) })
+        act(() => { capturedDetailOnDirtyChange?.(true) })
+
+        act(() => { capturedKanbanOnSelectTask?.(99) })
+
+        const dialog = container.querySelector('[data-testid="task-detail-unsaved-dialog"]')
+        expect(dialog).not.toBeNull()
+        expect(container.querySelector('[data-region="task-detail-window"]')?.getAttribute('data-selected-task-id')).toBe('42')
+
+        const cancel = findDialogAction(dialog!, /cancel|stay/i)
+        expect(cancel).not.toBeUndefined()
+        fireEvent.click(cancel!)
+        expect(container.querySelector('[data-testid="task-detail-unsaved-dialog"]')).toBeNull()
+        expect(container.querySelector('[data-region="task-detail-window"]')?.getAttribute('data-selected-task-id')).toBe('42')
+
+        act(() => { capturedKanbanOnSelectTask?.(99) })
+        const secondDialog = container.querySelector('[data-testid="task-detail-unsaved-dialog"]')
+        const leave = findDialogAction(secondDialog!, /leave/i)
+        expect(leave).not.toBeUndefined()
+        fireEvent.click(leave!)
+        expect(container.querySelector('[data-region="task-detail-window"]')?.getAttribute('data-selected-task-id')).toBe('99')
+      })
+
+      it('opens the unsaved-change dialog instead of closing a dirty task detail modal', () => {
+        stubHooks()
+        const { container } = renderShell()
+        act(() => { capturedKanbanOnSelectTask?.(42) })
+        act(() => { capturedDetailOnDirtyChange?.(true) })
+
+        act(() => { dismissTaskDetailModal(container) })
+
+        expect(container.querySelector('[data-testid="task-detail-modal"]')).not.toBeNull()
+        expect(container.querySelector('[data-testid="task-detail-unsaved-dialog"]')).not.toBeNull()
+        expect(container.querySelector('[data-testid="task-detail-modal"] [data-testid="task-detail-unsaved-dialog"]')).not.toBeNull()
+      })
+
+      it('blocks workspace navigation from the nav rail while task detail has unsaved edits', () => {
+        stubHooks()
+        const { container } = renderShell()
+        act(() => { capturedKanbanOnSelectTask?.(42) })
+        act(() => { capturedDetailOnDirtyChange?.(true) })
+
+        fireEvent.click(container.querySelector('[data-surface="ideas"]')!)
+
+        expect(container.querySelector('[data-testid="task-detail-unsaved-dialog"]')).not.toBeNull()
+        expect(container.querySelector('[data-surface="kanban"]')?.getAttribute('aria-current')).toBe('page')
+      })
+
+      it('registers a beforeunload guard while task detail has unsaved edits', () => {
+        stubHooks()
+        renderShell()
+        act(() => { capturedKanbanOnSelectTask?.(42) })
+        act(() => { capturedDetailOnDirtyChange?.(true) })
+
+        const event = new Event('beforeunload', { cancelable: true })
+        window.dispatchEvent(event)
+
+        expect(event.defaultPrevented).toBe(true)
       })
     })
   })

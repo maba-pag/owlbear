@@ -167,6 +167,11 @@ function renderShell(route = '/') {
   )
 }
 
+function findDialogAction(dialog: Element, pattern: RegExp): HTMLElement | undefined {
+  return Array.from(dialog.querySelectorAll<HTMLElement>('button, p-button'))
+    .find((button) => pattern.test(button.textContent ?? ''))
+}
+
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe('TestFromAC_CardSelection_Integration', () => {
@@ -247,9 +252,9 @@ describe('TestFromAC_TaskDetailReinit_Integration', () => {
     vi.clearAllMocks()
   })
 
-  // AC2 integration: title input shows new task's title after editing and switching
+  // AC2 integration: dirty edits ask before switching; confirmed switch reinitialises from the new task
 
-  it('title input re-initialises from new task after editing local state and switching selection', async () => {
+  it('dirty task detail asks before switching, then re-initialises from the new task after Leave', async () => {
     stubFetch({ 42: TASK_42_DETAIL, 99: TASK_99_DETAIL })
     const { container } = renderShell()
 
@@ -261,20 +266,41 @@ describe('TestFromAC_TaskDetailReinit_Integration', () => {
     // Click card 42, wait for fetch to resolve and DetailTab to show task 42's title.
     fireEvent.click(container.querySelector('[data-testid="task-card"][data-id="42"]')!)
     await waitFor(() => {
+      expect(container.querySelector('[data-testid="edit-details-button"]')).not.toBeNull()
+    })
+    fireEvent.click(container.querySelector('[data-testid="edit-details-button"]')!)
+    await waitFor(() => {
+      const editForm = container.querySelector('[data-region="task-detail-edit-form"]') as HTMLElement | null
       const titleInput = container.querySelector<HTMLInputElement>('[data-field="title"]')
+      expect(editForm?.hasAttribute('hidden')).toBe(false)
       expect(titleInput).not.toBeNull()
       expect(titleInput!.value).toBe('Task Forty-Two')
     })
 
     // Simulate user editing the title — mutates DetailTab's local state.
     const titleInput = container.querySelector<HTMLInputElement>('[data-field="title"]')!
-    fireEvent.change(titleInput, { target: { value: 'STALE EDITED VALUE' } })
+    fireEvent(titleInput, new CustomEvent('input', {
+      detail: { value: 'STALE EDITED VALUE' },
+      bubbles: true,
+    }))
     expect(titleInput.value).toBe('STALE EDITED VALUE')
 
-    // Switch selection to task 99 — Shell must force DetailTab remount via key change
-    // and the new instance must initialise its title from task 99's data, NOT from
-    // the stale edited value.
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="dirty-indicator"]')).not.toBeNull()
+    })
+
+    // Switch selection to task 99 — Shell must ask before discarding local edits.
     fireEvent.click(container.querySelector('[data-testid="task-card"][data-id="99"]')!)
+
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="task-detail-unsaved-dialog"]')).not.toBeNull()
+    })
+    expect(container.querySelector<HTMLInputElement>('[data-field="title"]')?.value).toBe('STALE EDITED VALUE')
+
+    const dialog = container.querySelector('[data-testid="task-detail-unsaved-dialog"]')!
+    const leave = findDialogAction(dialog, /leave/i)
+    expect(leave).not.toBeUndefined()
+    fireEvent.click(leave!)
 
     await waitFor(() => {
       const newTitleInput = container.querySelector<HTMLInputElement>('[data-field="title"]')

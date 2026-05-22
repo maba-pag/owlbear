@@ -243,6 +243,30 @@ describe('TestFromAC_DetailTab', () => {
       expect(container.querySelector('[data-testid="dirty-indicator"]')).not.toBeNull()
     })
 
+    it('reports dirty-state changes to the parent shell', async () => {
+      const onDirtyChange = vi.fn()
+      const { container } = render(
+        <PorscheDesignSystemProvider>
+          <DetailTab task={TASK} board={BOARD} onDirtyChange={onDirtyChange} />
+        </PorscheDesignSystemProvider>,
+      )
+
+      const editButton = container.querySelector('[data-testid="edit-details-button"]') as HTMLElement | null
+      expect(editButton).not.toBeNull()
+      fireEvent.click(editButton!)
+      typeIntoPdsField(container, 'p-input-text[data-field="title"]', 'Changed task title')
+
+      await waitFor(() => {
+        expect(onDirtyChange).toHaveBeenLastCalledWith(true)
+      })
+
+      typeIntoPdsField(container, 'p-input-text[data-field="title"]', TASK.title)
+
+      await waitFor(() => {
+        expect(onDirtyChange).toHaveBeenLastCalledWith(false)
+      })
+    })
+
     it('renders a field and command to add a tag', () => {
       const { container } = renderDetail()
       expect(container.querySelector('p-input-text[data-field="new-tag"]')).not.toBeNull()
