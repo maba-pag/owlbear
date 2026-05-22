@@ -112,12 +112,13 @@ describe('TestFromAC_CardSignalAttribute', () => {
 // ─── AC-1 (density retry): Card metadata — id, priority, updated ─────────────
 
 describe('TestFromAC_CardDensityElements', () => {
-  it('card renders id chip showing #{task.id}', () => {
+  it('card renders quiet id metadata showing #{task.id}', () => {
     const task = makeTask({ id: 42 })
     const { container } = renderCard(task)
-    const idChip = container.querySelector('[data-testid="card-id"]')
-    expect(idChip).not.toBeNull()
-    expect(idChip!.textContent).toContain('#42')
+    const idMetadata = container.querySelector('[data-testid="card-id"]')
+    expect(idMetadata).not.toBeNull()
+    expect(idMetadata!.textContent).toContain('#42')
+    expect(idMetadata!.getAttribute('class')).not.toContain('rounded-full')
   })
 
   it('card keeps priority in data and accessible text without rendering a priority chip', () => {
@@ -129,12 +130,12 @@ describe('TestFromAC_CardDensityElements', () => {
     expect(card?.getAttribute('aria-label')).toContain('critical priority')
   })
 
-  it('card renders updated chip with non-empty text', () => {
+  it('card renders updated metadata with non-empty text', () => {
     const task = makeTask({ id: 1, updated: '2026-05-15T10:00:00Z' })
     const { container } = renderCard(task)
-    const updatedChip = container.querySelector('[data-testid="card-updated"]')
-    expect(updatedChip).not.toBeNull()
-    expect(updatedChip!.textContent?.trim().length).toBeGreaterThan(0)
+    const updatedMetadata = container.querySelector('[data-testid="card-updated"]')
+    expect(updatedMetadata).not.toBeNull()
+    expect(updatedMetadata!.textContent?.trim().length).toBeGreaterThan(0)
   })
 
   it('card renders visible title element with correct task title text (AC-1 title fixture)', () => {
@@ -221,12 +222,11 @@ describe('TestFromAC_UpdateRecencyBranches', () => {
 // ─── AC-1/AC-2 (density retry): Cue element rendering and accessibility ───────
 
 describe('TestFromAC_CardCueRendering', () => {
-  it('blocked card renders card-blocked-cue element with accessible text', () => {
+  it('blocked card uses primary signal text without duplicating card-blocked-cue', () => {
     const task = makeTask({ id: 1, blocked: true })
     const { container } = renderCard(task)
-    const cue = container.querySelector('[data-testid="card-blocked-cue"]')
-    expect(cue).not.toBeNull()
-    expect(cue!.textContent?.toLowerCase()).toContain('blocked')
+    expect(container.querySelector('[data-testid="card-signal"]')?.textContent?.toLowerCase()).toContain('blocked')
+    expect(container.querySelector('[data-testid="card-blocked-cue"]')).toBeNull()
   })
 
   it('non-blocked card does not render card-blocked-cue element', () => {
@@ -235,12 +235,11 @@ describe('TestFromAC_CardCueRendering', () => {
     expect(container.querySelector('[data-testid="card-blocked-cue"]')).toBeNull()
   })
 
-  it('claimed card renders card-claimed-cue element with accessible text', () => {
+  it('claimed card uses primary signal text without duplicating card-claimed-cue', () => {
     const task = makeTask({ id: 1, claimed: true })
     const { container } = renderCard(task)
-    const cue = container.querySelector('[data-testid="card-claimed-cue"]')
-    expect(cue).not.toBeNull()
-    expect(cue!.textContent?.toLowerCase()).toContain('claimed')
+    expect(container.querySelector('[data-testid="card-signal"]')?.textContent?.toLowerCase()).toContain('claimed')
+    expect(container.querySelector('[data-testid="card-claimed-cue"]')).toBeNull()
   })
 
   it('non-claimed card does not render card-claimed-cue element', () => {
@@ -249,12 +248,11 @@ describe('TestFromAC_CardCueRendering', () => {
     expect(container.querySelector('[data-testid="card-claimed-cue"]')).toBeNull()
   })
 
-  it('deps-unmet card (dep_status=blocked) renders card-deps-unmet-cue element', () => {
+  it('deps-unmet card uses primary signal text without duplicating card-deps-unmet-cue', () => {
     const task = makeTask({ id: 1, dep_status: 'blocked' })
     const { container } = renderCard(task)
-    const cue = container.querySelector('[data-testid="card-deps-unmet-cue"]')
-    expect(cue).not.toBeNull()
-    expect(cue!.textContent?.toLowerCase()).toMatch(/deps|blocked|depend/)
+    expect(container.querySelector('[data-testid="card-signal"]')?.textContent?.toLowerCase()).toMatch(/deps|depend/)
+    expect(container.querySelector('[data-testid="card-deps-unmet-cue"]')).toBeNull()
   })
 
   it('task with dep_status=null does not render card-deps-unmet-cue element', () => {
@@ -263,12 +261,20 @@ describe('TestFromAC_CardCueRendering', () => {
     expect(container.querySelector('[data-testid="card-deps-unmet-cue"]')).toBeNull()
   })
 
-  it('dr-pending card (task.id in pendingDRIds) renders card-dr-pending-cue element', () => {
+  it('dr-pending card uses primary signal text without duplicating card-dr-pending-cue', () => {
     const task = makeTask({ id: 7 })
     const { container } = renderCard(task, new Set([7]))
-    const cue = container.querySelector('[data-testid="card-dr-pending-cue"]')
+    expect(container.querySelector('[data-testid="card-signal"]')?.textContent?.toLowerCase()).toMatch(/decision/)
+    expect(container.querySelector('[data-testid="card-dr-pending-cue"]')).toBeNull()
+  })
+
+  it('higher-priority decision signal preserves blocked as a secondary cue when both are active', () => {
+    const task = makeTask({ id: 7, blocked: true })
+    const { container } = renderCard(task, new Set([7]))
+    expect(container.querySelector('[data-testid="card-signal"]')?.textContent?.toLowerCase()).toContain('decision')
+    const cue = container.querySelector('[data-testid="card-blocked-cue"]')
     expect(cue).not.toBeNull()
-    expect(cue!.textContent?.toLowerCase()).toMatch(/decision|dr|pending/)
+    expect(cue!.textContent?.toLowerCase()).toContain('blocked')
   })
 
   it('task not in pendingDRIds does not render card-dr-pending-cue element', () => {

@@ -1,4 +1,4 @@
-import { PIcon, PTag, type IconName } from '@porsche-design-system/components-react'
+import { PIcon, type IconName } from '@porsche-design-system/components-react'
 import { motion } from 'framer-motion'
 import type { Task } from '../hooks/useBoard'
 import { computeSignal, type CardSignal } from '../utils/computeSignal'
@@ -19,6 +19,10 @@ const SIGNAL_LABEL: Record<string, string> = {
 }
 
 const TAG_PREVIEW_LIMIT = 3
+
+function isRedundantDecisionTag(tag: string, signal: CardSignal): boolean {
+  return signal === 'dr-pending' && tag.trim().toLowerCase() === 'active-decision'
+}
 
 function formatUpdatedAge(updated: string): string {
   const updatedAt = Date.parse(updated)
@@ -56,15 +60,22 @@ export function Card({
   onContextMenu,
 }: CardProps) {
   const signal = computeSignal(task, pendingDRIds)
-  const previewTags = task.tags.slice(0, TAG_PREVIEW_LIMIT)
-  const overflowTags = task.tags.length - previewTags.length
+  const visibleTags = task.tags.filter((tag) => !isRedundantDecisionTag(tag, signal))
+  const previewTags = visibleTags.slice(0, TAG_PREVIEW_LIMIT)
+  const overflowTags = visibleTags.length - previewTags.length
   const updatedAge = formatUpdatedAge(task.updated)
   const signalLabel = signal.replace('-', ' ')
   const displaySignalLabel = SIGNAL_LABEL[signal] ?? signalLabel
   const signalIconName = SIGNAL_ICON_NAME[signal]
   const hasVisibleSignal = signal !== 'ready' && signal !== 'unknown'
-  const hasIntegrationCues =
-    task.blocked || task.claimed || task.dep_status === 'blocked' || pendingDRIds.has(task.id)
+  const secondaryCues = [
+    { key: 'blocked', show: task.blocked && signal !== 'blocked', testId: 'card-blocked-cue', label: 'Blocked', className: 'text-error' },
+    { key: 'claimed', show: task.claimed && signal !== 'claimed', testId: 'card-claimed-cue', label: 'Claimed', className: 'text-contrast-high' },
+    { key: 'deps-unmet', show: task.dep_status === 'blocked' && signal !== 'deps-unmet', testId: 'card-deps-unmet-cue', label: 'Dependencies blocked', className: 'text-contrast-high' },
+    { key: 'dr-pending', show: pendingDRIds.has(task.id) && signal !== 'dr-pending', testId: 'card-dr-pending-cue', label: 'Decision pending', className: 'text-contrast-high' },
+  ]
+  const visibleSecondaryCues = secondaryCues.filter((cue) => cue.show)
+  const hasSecondaryCues = visibleSecondaryCues.length > 0
 
   function openContextMenu(event: React.KeyboardEvent<HTMLDivElement>) {
     event.preventDefault()
@@ -141,7 +152,7 @@ export function Card({
       <div className="flex min-h-[92px] w-full min-w-0 flex-col gap-static-sm">
         <div className="flex min-w-0 items-start justify-between gap-static-xs" aria-hidden="true">
           <div className="flex min-w-0 flex-wrap items-center gap-static-xs">
-            <span data-testid="card-id" className="rounded-full border border-contrast-low bg-surface px-2 py-px font-mono text-[0.72rem] leading-normal text-primary">
+            <span data-testid="card-id" className="font-mono text-[0.72rem] font-medium leading-normal text-contrast-high">
               #{task.id}
             </span>
             {hasVisibleSignal ? (
@@ -171,49 +182,36 @@ export function Card({
           {task.title}
         </span>
 
-        {hasIntegrationCues ? (
-          <div className="mt-auto flex min-w-0 flex-wrap items-center gap-static-xs border-t border-contrast-low pt-static-xs">
-            {task.blocked ? (
-              <span data-testid="card-blocked-cue" className="rounded-full bg-surface px-2 py-px text-[0.72rem] font-medium text-error">Blocked</span>
-            ) : null}
-            {task.claimed ? (
-              <span data-testid="card-claimed-cue" className="rounded-full bg-surface px-2 py-px text-[0.72rem] font-medium text-primary">Claimed</span>
-            ) : null}
-            {task.dep_status === 'blocked' ? (
-              <span data-testid="card-deps-unmet-cue" className="rounded-full bg-surface px-2 py-px text-[0.72rem] font-medium text-primary">Dependencies blocked</span>
-            ) : null}
-            {pendingDRIds.has(task.id) ? (
-              <span data-testid="card-dr-pending-cue" className="rounded-full bg-surface px-2 py-px text-[0.72rem] font-medium text-primary">Decision pending</span>
-            ) : null}
+        {hasSecondaryCues ? (
+          <div className="mt-auto flex min-w-0 flex-wrap items-center gap-x-static-xs gap-y-1 border-t border-contrast-low pt-static-xs">
+            {visibleSecondaryCues.map((cue) => (
+              <span key={cue.key} data-testid={cue.testId} className={["text-[0.72rem] font-semibold leading-normal", cue.className].join(' ')}>
+                {cue.label}
+              </span>
+            ))}
           </div>
         ) : null}
 
-        {task.tags.length > 0 ? (
-          <div className={[hasIntegrationCues ? '' : 'mt-auto', 'flex min-w-0 flex-wrap items-center gap-static-xs'].join(' ')}>
-            <span data-testid="card-tags" className="flex min-w-0 max-w-full flex-wrap items-center gap-static-xs text-primary" aria-label={`Tags: ${previewTags.join(', ')}`}>
-              {previewTags.map((tag) => (
-                <PTag
-                  key={tag}
-                  compact
-                  variant="secondary"
-                  ref={(element) => {
-                    if (element) {
-                      element.setAttribute('compact', '')
-                      element.setAttribute('variant', 'secondary')
-                    }
-                  }}
+        {visibleTags.length > 0 ? (
+          <div className={[hasSecondaryCues ? '' : 'mt-auto', 'flex min-w-0 flex-wrap items-center gap-x-static-xs gap-y-1'].join(' ')}>
+            <span data-testid="card-tags" className="flex min-w-0 max-w-full flex-wrap items-center gap-x-1.5 gap-y-1 text-[0.72rem] leading-normal text-contrast-high" aria-label={`Tags: ${previewTags.join(', ')}`}>
+              {previewTags.map((tag, index) => (
+                <span
+                  key={`${tag}-${index}`}
+                  className="inline-flex max-w-full items-center gap-x-1.5 truncate"
                 >
-                  {tag}
-                </PTag>
+                  {index > 0 ? <span aria-hidden="true" className="shrink-0 text-contrast-medium">/</span> : null}
+                  <span data-testid="card-tag" className="truncate">{tag}</span>
+                </span>
               ))}
             </span>
             {overflowTags > 0 ? (
               <span
                 data-testid="card-tag-overflow"
-                className="rounded-full border border-contrast-low px-2 py-px text-[0.72rem] leading-normal text-contrast-high"
+                className="text-[0.72rem] leading-normal text-contrast-high"
                 aria-label={`${overflowTags} more tags`}
               >
-                +{overflowTags}
+                +{overflowTags} tags
               </span>
             ) : null}
           </div>

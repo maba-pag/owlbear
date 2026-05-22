@@ -7,11 +7,11 @@
  *   AC-2: Ready/default cards do not render a signal chip; exceptional signals do.
  *   AC-3: Signal icon renders as <p-icon size="xs" aria-label={signal}> for
  *         dr-pending, blocked, claimed, deps-unmet; no p-icon element in DOM when signal is ready
- *   AC-4: Each visible tag (up to TAG_PREVIEW_LIMIT=3) renders as individual
- *         <PTag compact variant="secondary">; overflow count indicator preserved
- *   AC-5: Existing state cue text spans (Blocked, Claimed, Dependencies blocked,
- *         Decision pending) preserved unchanged
- *   AC-6: No inline hex color values in Card output; source imports PTag from PDS
+ *   AC-4: Each visible tag (up to TAG_PREVIEW_LIMIT=3) renders as quiet text
+ *         metadata; overflow count indicator preserved without pill styling
+ *   AC-5: Primary card signals are not duplicated as secondary cue text; lower
+ *         precedence cues remain visible when they add new information
+ *   AC-6: No inline hex color values in Card output; source keeps PDS icons
  *
  * Regression focus:
  *   - No redundant status or priority bubbles on Kanban cards.
@@ -149,17 +149,18 @@ describe('Card signal icon', () => {
   })
 })
 
-// ─── AC-4: Tags render as individual PTag elements ───────────────────────────
+// ─── AC-4: Tags render as quiet metadata text ────────────────────────────────
 
-describe('Card tag pills', () => {
-  it('one tag renders as exactly one p-tag[compact][variant="secondary"] pill', () => {
+describe('Card tag metadata', () => {
+  it('one tag renders as exactly one quiet metadata text item', () => {
     const task = makeTask({ id: 1, status: 'in-progress', priority: 'critical', tags: ['frontend'] })
     const { container } = renderCard(task)
-    const tagPills = container.querySelectorAll('p-tag[compact][variant="secondary"]')
-    expect(tagPills.length).toBe(1)
+    const tags = container.querySelectorAll('[data-testid="card-tag"]')
+    expect(tags.length).toBe(1)
+    expect(container.querySelector('p-tag')).toBeNull()
   })
 
-  it('three tags render exactly three p-tag[compact][variant="secondary"] pills', () => {
+  it('three tags render exactly three metadata text items', () => {
     const task = makeTask({
       id: 1,
       status: 'in-progress',
@@ -167,11 +168,11 @@ describe('Card tag pills', () => {
       tags: ['a', 'b', 'c'],
     })
     const { container } = renderCard(task)
-    const tagPills = container.querySelectorAll('p-tag[compact][variant="secondary"]')
-    expect(tagPills.length).toBe(3)
+    const tags = container.querySelectorAll('[data-testid="card-tag"]')
+    expect(tags.length).toBe(3)
   })
 
-  it('four tags render exactly three tag pills (TAG_PREVIEW_LIMIT=3 caps display)', () => {
+  it('four tags render exactly three tag text items (TAG_PREVIEW_LIMIT=3 caps display)', () => {
     const task = makeTask({
       id: 1,
       status: 'in-progress',
@@ -179,11 +180,11 @@ describe('Card tag pills', () => {
       tags: ['a', 'b', 'c', 'd'],
     })
     const { container } = renderCard(task)
-    const tagPills = container.querySelectorAll('p-tag[compact][variant="secondary"]')
-    expect(tagPills.length).toBe(3)
+    const tags = container.querySelectorAll('[data-testid="card-tag"]')
+    expect(tags.length).toBe(3)
   })
 
-  it('five tags render three tag pills showing the first three tag names', () => {
+  it('five tags render three text tags showing the first three tag names', () => {
     const task = makeTask({
       id: 1,
       status: 'in-progress',
@@ -191,9 +192,9 @@ describe('Card tag pills', () => {
       tags: ['frontend', 'backend', 'urgent', 'blocked', 'pds'],
     })
     const { container } = renderCard(task)
-    const tagPills = container.querySelectorAll('p-tag[compact][variant="secondary"]')
-    expect(tagPills.length).toBe(3)
-    const texts = Array.from(tagPills).map((el) => el.textContent?.trim())
+    const tags = container.querySelectorAll('[data-testid="card-tag"]')
+    expect(tags.length).toBe(3)
+    const texts = Array.from(tags).map((el) => el.textContent?.trim())
     expect(texts).toContain('frontend')
     expect(texts).toContain('backend')
     expect(texts).toContain('urgent')
@@ -201,16 +202,16 @@ describe('Card tag pills', () => {
     expect(texts).not.toContain('pds')
   })
 
-  it('zero tags renders no p-tag pill elements with variant="secondary"', () => {
-    // Positive anchor: one-tag case must have a pill first.
+  it('zero tags renders no tag text elements', () => {
+    // Positive anchor: one-tag case must have a tag first.
     const oneTagTask = makeTask({ id: 99, status: 'in-progress', priority: 'critical', tags: ['x'] })
     const { container: oneTagContainer } = renderCard(oneTagTask)
-    expect(oneTagContainer.querySelectorAll('p-tag[compact][variant="secondary"]').length).toBe(1)
+    expect(oneTagContainer.querySelectorAll('[data-testid="card-tag"]').length).toBe(1)
 
-    // Now verify: zero tags → no pills
+    // Now verify: zero tags → no tag metadata
     const task = makeTask({ id: 1, status: 'in-progress', priority: 'critical', tags: [] })
     const { container } = renderCard(task)
-    expect(container.querySelectorAll('p-tag[compact][variant="secondary"]').length).toBe(0)
+    expect(container.querySelectorAll('[data-testid="card-tag"]').length).toBe(0)
   })
 
   it('overflow count indicator preserved when tags exceed TAG_PREVIEW_LIMIT=3', () => {
@@ -221,15 +222,15 @@ describe('Card tag pills', () => {
       tags: ['a', 'b', 'c', 'd', 'e'],
     })
     const { container } = renderCard(task)
-    const pills = container.querySelectorAll('p-tag[compact][variant="secondary"]')
-    expect(pills.length).toBe(3)
-    // Regression guard: overflow indicator preserved alongside tag pills
+    const tags = container.querySelectorAll('[data-testid="card-tag"]')
+    expect(tags.length).toBe(3)
+    // Regression guard: overflow indicator preserved alongside tag metadata
     const overflow = container.querySelector('[data-testid="card-tag-overflow"]')
     expect(overflow).not.toBeNull()
-    expect(overflow!.textContent).toContain('+2')
+    expect(overflow!.textContent).toContain('+2 tags')
   })
 
-  it('tag preview wraps visible pills instead of clipping rendered tags', () => {
+  it('tag preview wraps visible metadata text instead of clipping rendered tags', () => {
     const task = makeTask({
       id: 1,
       status: 'in-progress',
@@ -248,7 +249,7 @@ describe('Card tag pills', () => {
   })
 
   it('overflow indicator absent when tags are within TAG_PREVIEW_LIMIT', () => {
-    // Positive anchor: above-limit case must have both pills AND overflow.
+    // Positive anchor: above-limit case must have both tag metadata AND overflow.
     const manyTask = makeTask({
       id: 99,
       status: 'in-progress',
@@ -256,50 +257,81 @@ describe('Card tag pills', () => {
       tags: ['a', 'b', 'c', 'd'],
     })
     const { container: manyContainer } = renderCard(manyTask)
-    expect(manyContainer.querySelectorAll('p-tag[compact][variant="secondary"]').length).toBe(3)
+    expect(manyContainer.querySelectorAll('[data-testid="card-tag"]').length).toBe(3)
     expect(manyContainer.querySelector('[data-testid="card-tag-overflow"]')).not.toBeNull()
 
-    // Main assertion: 3 tags → exactly 3 pills, no overflow
+    // Main assertion: 3 tags → exactly 3 text tags, no overflow
     const task = makeTask({ id: 1, status: 'in-progress', priority: 'critical', tags: ['a', 'b', 'c'] })
     const { container } = renderCard(task)
-    expect(container.querySelectorAll('p-tag[compact][variant="secondary"]').length).toBe(3)
+    expect(container.querySelectorAll('[data-testid="card-tag"]').length).toBe(3)
     expect(container.querySelector('[data-testid="card-tag-overflow"]')).toBeNull()
+  })
+
+  it('hides active-decision from normal tags when a pending decision signal is already visible', () => {
+    const task = makeTask({
+      id: 7,
+      tags: ['active-decision', 'frontend', 'backend'],
+    })
+    const { container } = renderCard(task, new Set([7]))
+    const tags = container.querySelector('[data-testid="card-tags"]')
+    const tagTexts = Array.from(container.querySelectorAll('[data-testid="card-tag"]')).map((el) => el.textContent?.trim())
+
+    expect(container.querySelector('[data-testid="card-signal"]')?.textContent).toContain('Decision')
+    expect(tags?.textContent).not.toContain('active-decision')
+    expect(tagTexts).toEqual(['frontend', 'backend'])
+  })
+
+  it('keeps active-decision as ordinary metadata when there is no pending decision signal', () => {
+    const task = makeTask({
+      id: 7,
+      tags: ['active-decision', 'frontend'],
+    })
+    const { container } = renderCard(task)
+    const tagTexts = Array.from(container.querySelectorAll('[data-testid="card-tag"]')).map((el) => el.textContent?.trim())
+
+    expect(container.querySelector('[data-testid="card-signal"]')).toBeNull()
+    expect(tagTexts).toEqual(['active-decision', 'frontend'])
   })
 })
 
-// ─── AC-5: Existing state cue text spans preserved unchanged (regression guard) ─
+// ─── AC-5: Secondary cues avoid duplicating the primary signal ───────────────
 
-describe('Card cue text preservation', () => {
-  it('blocked card retains card-blocked-cue span with text "Blocked"', () => {
+describe('Card cue text hierarchy', () => {
+  it('blocked card uses the primary signal without duplicating a blocked secondary cue', () => {
     const task = makeTask({ id: 1, blocked: true, status: 'todo' })
     const { container } = renderCard(task)
+    expect(container.querySelector('[data-testid="card-signal"]')?.textContent).toContain('Blocked')
+    expect(container.querySelector('[data-testid="card-blocked-cue"]')).toBeNull()
+  })
+
+  it('claimed card uses the primary signal without duplicating a claimed secondary cue', () => {
+    const task = makeTask({ id: 1, claimed: true, status: 'in-progress' })
+    const { container } = renderCard(task)
+    expect(container.querySelector('[data-testid="card-signal"]')?.textContent).toContain('Claimed')
+    expect(container.querySelector('[data-testid="card-claimed-cue"]')).toBeNull()
+  })
+
+  it('deps-unmet card uses the primary signal without duplicating a dependency secondary cue', () => {
+    const task = makeTask({ id: 1, dep_status: 'blocked', status: 'todo' })
+    const { container } = renderCard(task)
+    expect(container.querySelector('[data-testid="card-signal"]')?.textContent).toContain('Dependencies')
+    expect(container.querySelector('[data-testid="card-deps-unmet-cue"]')).toBeNull()
+  })
+
+  it('dr-pending card uses the primary signal without duplicating a decision secondary cue', () => {
+    const task = makeTask({ id: 7, status: 'todo' })
+    const { container } = renderCard(task, new Set([7]))
+    expect(container.querySelector('[data-testid="card-signal"]')?.textContent).toContain('Decision')
+    expect(container.querySelector('[data-testid="card-dr-pending-cue"]')).toBeNull()
+  })
+
+  it('higher-priority decision signal still shows a blocked secondary cue when the task is also blocked', () => {
+    const task = makeTask({ id: 7, status: 'todo', blocked: true })
+    const { container } = renderCard(task, new Set([7]))
+    expect(container.querySelector('[data-testid="card-signal"]')?.textContent).toContain('Decision')
     const cue = container.querySelector('[data-testid="card-blocked-cue"]')
     expect(cue).not.toBeNull()
     expect(cue!.textContent?.trim()).toBe('Blocked')
-  })
-
-  it('claimed card retains card-claimed-cue span with text "Claimed"', () => {
-    const task = makeTask({ id: 1, claimed: true, status: 'in-progress' })
-    const { container } = renderCard(task)
-    const cue = container.querySelector('[data-testid="card-claimed-cue"]')
-    expect(cue).not.toBeNull()
-    expect(cue!.textContent?.trim()).toBe('Claimed')
-  })
-
-  it('deps-unmet card retains card-deps-unmet-cue span with text "Dependencies blocked"', () => {
-    const task = makeTask({ id: 1, dep_status: 'blocked', status: 'todo' })
-    const { container } = renderCard(task)
-    const cue = container.querySelector('[data-testid="card-deps-unmet-cue"]')
-    expect(cue).not.toBeNull()
-    expect(cue!.textContent?.trim()).toBe('Dependencies blocked')
-  })
-
-  it('dr-pending card retains card-dr-pending-cue span with text "Decision pending"', () => {
-    const task = makeTask({ id: 7, status: 'todo' })
-    const { container } = renderCard(task, new Set([7]))
-    const cue = container.querySelector('[data-testid="card-dr-pending-cue"]')
-    expect(cue).not.toBeNull()
-    expect(cue!.textContent?.trim()).toBe('Decision pending')
   })
 })
 
@@ -312,10 +344,10 @@ describe('Card color token usage', () => {
     expect(src).not.toContain('eslint-disable no-restricted-syntax')
   })
 
-  it('Card.tsx source imports PTag from @porsche-design-system/components-react', () => {
+  it('Card.tsx source imports PIcon from @porsche-design-system/components-react', () => {
     const cardSrcPath = resolve(__dirname, '../components/Card.tsx')
     const src = readFileSync(cardSrcPath, 'utf-8')
-    expect(src).toContain('PTag')
+    expect(src).toContain('PIcon')
     expect(src).toContain('@porsche-design-system/components-react')
   })
 
@@ -324,7 +356,7 @@ describe('Card color token usage', () => {
     // in JSX style props.
     const cardSrcPath = resolve(__dirname, '../components/Card.tsx')
     const src = readFileSync(cardSrcPath, 'utf-8')
-    expect(src).toContain('PTag')
+    expect(src).toContain('PIcon')
     const hexPattern = /#[0-9a-fA-F]{3,8}\b/g
     const matches = src.match(hexPattern) ?? []
     expect(matches).toHaveLength(0)

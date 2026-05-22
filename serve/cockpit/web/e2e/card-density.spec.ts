@@ -95,7 +95,7 @@ const TASK_DR_PENDING = {
   title: 'DR-pending task',
   status: 'todo',
   priority: 'needed',
-  tags: [],
+  tags: ['active-decision', 'frontend'],
   blocked: false,
   block_reason: null,
   claimed: false,
@@ -206,11 +206,9 @@ async function loadBoard(
 
 // --- AC-1 | Card rendering fixtures — id, priority, tags, state cues ---------
 
-test.describe('AC-1 | Card rendering fixtures — id, priority, tags, state cues', () => {
+test.describe('AC-1 | Card rendering fixtures — id, priority, tags, state signals', () => {
   test('card displays task id as a visible element', async ({ page }) => {
     await loadBoard(page)
-    // Post-remediation: visible task-id element on card.
-    // Currently: task id only in data-id attribute on root div — no visible element — FAILS.
     const card = page.locator('[data-testid="task-card"][data-id="1"]')
     await card.waitFor({ state: 'visible', timeout: 6_000 })
     await expect(card.locator('[data-testid="card-id"]')).toBeVisible({ timeout: 2_000 })
@@ -227,8 +225,6 @@ test.describe('AC-1 | Card rendering fixtures — id, priority, tags, state cues
 
   test('card with tags displays tag preview', async ({ page }) => {
     await loadBoard(page)
-    // Post-remediation: tag preview element rendered for tasks with non-empty tags.
-    // Currently: no tag preview on card — FAILS.
     const card = page.locator('[data-testid="task-card"][data-id="1"]')
     await card.waitFor({ state: 'visible', timeout: 6_000 })
     await expect(card.locator('[data-testid="card-tags"]')).toBeVisible({ timeout: 2_000 })
@@ -237,48 +233,52 @@ test.describe('AC-1 | Card rendering fixtures — id, priority, tags, state cues
   test('card with five tags shows overflow indicator', async ({ page }) => {
     await loadBoard(page)
     // Task 6 has 5 tags — exceeds any reasonable preview slot limit.
-    // Post-remediation: overflow indicator visible when tags exceed preview limit.
-    // Currently: no tag preview or overflow element — FAILS.
     const card = page.locator('[data-testid="task-card"][data-id="6"]')
     await card.waitFor({ state: 'visible', timeout: 6_000 })
     await expect(card.locator('[data-testid="card-tag-overflow"]')).toBeVisible({ timeout: 2_000 })
   })
 
-  test('blocked card shows blocked cue element', async ({ page }) => {
+  test('blocked card shows blocked primary signal without duplicate cue text', async ({ page }) => {
     await loadBoard(page)
-    // Post-remediation: visible blocked cue (text label or icon) on card with blocked=true.
-    // Currently: blocked state only in data-signal="blocked" — no cue element — FAILS.
     const card = page.locator('[data-testid="task-card"][data-id="2"]')
     await card.waitFor({ state: 'visible', timeout: 6_000 })
-    await expect(card.locator('[data-testid="card-blocked-cue"]')).toBeVisible({ timeout: 2_000 })
+    await expect(card.locator('[data-testid="card-signal"]')).toContainText('Blocked', { timeout: 2_000 })
+    await expect(card.locator('[data-testid="card-blocked-cue"]')).toHaveCount(0)
   })
 
-  test('claimed card shows claimed cue element', async ({ page }) => {
+  test('claimed card shows claimed primary signal without duplicate cue text', async ({ page }) => {
     await loadBoard(page)
-    // Post-remediation: visible claimed cue on card with claimed=true.
-    // Currently: claimed state only in data-signal="claimed" — no cue element — FAILS.
     const card = page.locator('[data-testid="task-card"][data-id="3"]')
     await card.waitFor({ state: 'visible', timeout: 6_000 })
-    await expect(card.locator('[data-testid="card-claimed-cue"]')).toBeVisible({ timeout: 2_000 })
+    await expect(card.locator('[data-testid="card-signal"]')).toContainText('Claimed', { timeout: 2_000 })
+    await expect(card.locator('[data-testid="card-claimed-cue"]')).toHaveCount(0)
   })
 
-  test('deps-unmet card shows deps-unmet cue element', async ({ page }) => {
+  test('deps-unmet card shows dependency primary signal without duplicate cue text', async ({ page }) => {
     await loadBoard(page)
-    // Post-remediation: visible deps-unmet cue on card with dep_status='blocked'.
-    // Currently: deps-unmet only in data-signal="deps-unmet" — no cue element — FAILS.
     const card = page.locator('[data-testid="task-card"][data-id="4"]')
     await card.waitFor({ state: 'visible', timeout: 6_000 })
-    await expect(card.locator('[data-testid="card-deps-unmet-cue"]')).toBeVisible({ timeout: 2_000 })
+    await expect(card.locator('[data-testid="card-signal"]')).toContainText('Dependencies', { timeout: 2_000 })
+    await expect(card.locator('[data-testid="card-deps-unmet-cue"]')).toHaveCount(0)
   })
 
-  test('dr-pending card shows dr-pending cue element', async ({ page }) => {
+  test('dr-pending card shows decision primary signal without duplicate cue text', async ({ page }) => {
     await loadBoard(page, PENDING_DR_FOR_TASK_5)
     // Shell.tsx builds pendingDRIds = new Set([5]) from decisions/pending items[].task_id.
-    // Post-remediation: visible dr-pending cue on card when task has a pending DR.
-    // Currently: dr-pending only in data-signal="dr-pending" — no cue element — FAILS.
     const card = page.locator('[data-testid="task-card"][data-id="5"]')
     await card.waitFor({ state: 'visible', timeout: 6_000 })
-    await expect(card.locator('[data-testid="card-dr-pending-cue"]')).toBeVisible({ timeout: 2_000 })
+    await expect(card.locator('[data-testid="card-signal"]')).toContainText('Decision', { timeout: 2_000 })
+    await expect(card.locator('[data-testid="card-dr-pending-cue"]')).toHaveCount(0)
+  })
+
+  test('dr-pending card hides duplicate active-decision tag while preserving normal tags', async ({ page }) => {
+    await loadBoard(page, PENDING_DR_FOR_TASK_5)
+    const card = page.locator('[data-testid="task-card"][data-id="5"]')
+    await card.waitFor({ state: 'visible', timeout: 6_000 })
+    const tags = card.locator('[data-testid="card-tags"]')
+    await expect(tags).toBeVisible({ timeout: 2_000 })
+    await expect(tags).not.toContainText('active-decision')
+    await expect(tags).toContainText('frontend')
   })
 
   // AC-1 retry gap-fill (#1570): title element visible + correct text in browser
@@ -316,70 +316,56 @@ test.describe('AC-1 | Card rendering fixtures — id, priority, tags, state cues
 test.describe('AC-2 | Accessibility — blocked, claimed, deps-unmet, dr-pending without color', () => {
   test('blocked card has accessible state text not relying on rail color alone', async ({ page }) => {
     await loadBoard(page)
-    // Post-remediation: blocked cue element contains text with "blocked" for AT users.
-    // Currently: no cue element exists — FAILS at visibility check.
     const card = page.locator('[data-testid="task-card"][data-id="2"]')
     await card.waitFor({ state: 'visible', timeout: 6_000 })
-    const cue = card.locator('[data-testid="card-blocked-cue"]')
-    await expect(cue).toBeVisible({ timeout: 2_000 })
-    const text = await cue.textContent()
+    const signal = card.locator('[data-testid="card-signal"]')
+    await expect(signal).toBeVisible({ timeout: 2_000 })
+    const text = await signal.textContent()
     expect(text?.toLowerCase()).toContain('blocked')
   })
 
   test('claimed card has accessible state text not relying on rail color alone', async ({ page }) => {
     await loadBoard(page)
-    // Post-remediation: claimed cue element contains text with "claimed" for AT users.
-    // Currently: no cue element exists — FAILS at visibility check.
     const card = page.locator('[data-testid="task-card"][data-id="3"]')
     await card.waitFor({ state: 'visible', timeout: 6_000 })
-    const cue = card.locator('[data-testid="card-claimed-cue"]')
-    await expect(cue).toBeVisible({ timeout: 2_000 })
-    const text = await cue.textContent()
+    const signal = card.locator('[data-testid="card-signal"]')
+    await expect(signal).toBeVisible({ timeout: 2_000 })
+    const text = await signal.textContent()
     expect(text?.toLowerCase()).toContain('claimed')
   })
 
   test('deps-unmet card has accessible state text not relying on rail color alone', async ({ page }) => {
     await loadBoard(page)
-    // Post-remediation: deps-unmet cue element contains text conveying dependency state.
-    // Currently: no cue element exists — FAILS at visibility check.
     const card = page.locator('[data-testid="task-card"][data-id="4"]')
     await card.waitFor({ state: 'visible', timeout: 6_000 })
-    const cue = card.locator('[data-testid="card-deps-unmet-cue"]')
-    await expect(cue).toBeVisible({ timeout: 2_000 })
-    const text = await cue.textContent()
-    expect(text?.toLowerCase()).toMatch(/deps|blocked|depend/)
+    const signal = card.locator('[data-testid="card-signal"]')
+    await expect(signal).toBeVisible({ timeout: 2_000 })
+    const text = await signal.textContent()
+    expect(text?.toLowerCase()).toMatch(/deps|depend/)
   })
 
   test('dr-pending card has accessible state text not relying on rail color alone', async ({ page }) => {
     await loadBoard(page, PENDING_DR_FOR_TASK_5)
-    // Post-remediation: dr-pending cue element contains text about pending decision.
-    // Currently: no cue element exists — FAILS at visibility check.
     const card = page.locator('[data-testid="task-card"][data-id="5"]')
     await card.waitFor({ state: 'visible', timeout: 6_000 })
-    const cue = card.locator('[data-testid="card-dr-pending-cue"]')
-    await expect(cue).toBeVisible({ timeout: 2_000 })
-    const text = await cue.textContent()
-    expect(text?.toLowerCase()).toMatch(/decision|dr|pending/)
+    const signal = card.locator('[data-testid="card-signal"]')
+    await expect(signal).toBeVisible({ timeout: 2_000 })
+    const text = await signal.textContent()
+    expect(text?.toLowerCase()).toMatch(/decision/)
   })
 })
 
-// --- AC-3 | Baseline failing evidence — cards currently title-only -----------
+// --- AC-3 | Regression guards — cards expose scan-critical metadata ----------
 
-test.describe('AC-3 | Baseline failing evidence — pre-remediation title-only baseline', () => {
-  // The violation catalogue above (═══ block) is the primary AC-3 artifact.
-  // These tests assert the post-remediation contract and fail against the current
-  // title-only Card.tsx, establishing machine-readable failing baseline evidence.
-
-  test('baseline: card exposes task id beyond data attribute (proves title-only gap)', async ({ page }) => {
+test.describe('AC-3 | Regression guards — card metadata remains visible', () => {
+  test('card exposes task id beyond the root data attribute', async ({ page }) => {
     await loadBoard(page)
-    // Card.tsx renders only <span data-testid="card-title">. data-id="1" is on the
-    // root div but no visible id element exists — FAILS, confirming title-only state.
     const card = page.locator('[data-testid="task-card"][data-id="1"]')
     await card.waitFor({ state: 'visible', timeout: 6_000 })
     await expect(card.locator('[data-testid="card-id"]')).toBeVisible({ timeout: 2_000 })
   })
 
-  test('baseline: card exposes priority via data and accessible text without chip noise', async ({ page }) => {
+  test('card exposes priority via data and accessible text without chip noise', async ({ page }) => {
     await loadBoard(page)
     const card = page.locator('[data-testid="task-card"][data-id="1"]')
     await card.waitFor({ state: 'visible', timeout: 6_000 })
@@ -394,9 +380,6 @@ test.describe('AC-3 | Baseline failing evidence — pre-remediation title-only b
 test.describe('AC-4 | Update recency metadata using updated field from TaskSummary', () => {
   test('card shows update recency element derived from updated timestamp', async ({ page }) => {
     await loadBoard(page)
-    // TaskSummary.updated is available on /api/tasks (not created — list-endpoint-only).
-    // Post-remediation: card renders [data-testid="card-updated"] with age text.
-    // Currently: updated field not rendered on card — FAILS.
     const card = page.locator('[data-testid="task-card"][data-id="1"]')
     await card.waitFor({ state: 'visible', timeout: 6_000 })
     await expect(card.locator('[data-testid="card-updated"]')).toBeVisible({ timeout: 2_000 })
@@ -404,8 +387,6 @@ test.describe('AC-4 | Update recency metadata using updated field from TaskSumma
 
   test('update recency element contains non-empty accessible text (not color-only)', async ({ page }) => {
     await loadBoard(page)
-    // Post-remediation: recency element has visible text — not rendered via color alone.
-    // Currently: element absent — FAILS at visibility check.
     const card = page.locator('[data-testid="task-card"][data-id="1"]')
     await card.waitFor({ state: 'visible', timeout: 6_000 })
     const updatedEl = card.locator('[data-testid="card-updated"]')
@@ -416,9 +397,6 @@ test.describe('AC-4 | Update recency metadata using updated field from TaskSumma
 
   test('stale card shows update recency for old updated timestamp', async ({ page }) => {
     await loadBoard(page)
-    // Task 7: updated='2026-01-01T00:00:00+00:00' — months before test date (2026-05-14).
-    // Post-remediation: stale card renders recency indication.
-    // Currently: no recency element rendered — FAILS.
     const card = page.locator('[data-testid="task-card"][data-id="7"]')
     await card.waitFor({ state: 'visible', timeout: 6_000 })
     await expect(card.locator('[data-testid="card-updated"]')).toBeVisible({ timeout: 2_000 })
@@ -426,8 +404,6 @@ test.describe('AC-4 | Update recency metadata using updated field from TaskSumma
 
   test('update recency shows relative age text not raw ISO timestamp string', async ({ page }) => {
     await loadBoard(page)
-    // Post-remediation: human-readable age (e.g., "2h", "3d", "just now") not raw ISO.
-    // Currently: element absent — FAILS at visibility check.
     const card = page.locator('[data-testid="task-card"][data-id="1"]')
     await card.waitFor({ state: 'visible', timeout: 6_000 })
     const updatedEl = card.locator('[data-testid="card-updated"]')

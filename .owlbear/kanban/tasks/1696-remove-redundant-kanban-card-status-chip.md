@@ -1,10 +1,10 @@
 ---
 id: 1696
 title: Remove redundant kanban card status chip
-status: todo
+status: done
 priority: important
 created: 2026-05-21T20:21:45.242959+02:00
-updated: 2026-05-22T00:56:14.765749+02:00
+updated: 2026-05-22T13:59:22+02:00
 tags:
   - cockpit-perfect-ui
   - scope:cockpit-web
@@ -60,3 +60,11 @@ Use this task as a product/audit todo item, not an instruction to hand off to th
 - The task number probably should not be in a bubble; it can read as structural metadata instead of a chip.
 - Classification: user-observed card-density issue, not theoretical.
 - Impact: hurts Cockpit now by making cards feel heavier and less scannable than the desired operational surface.
+
+[[2026-05-22T13:59:22+02:00]]
+## Builder Evidence
+- Classification: observed current card-density issue from 2560px Cockpit screenshots, not a theoretical test concern.
+- Implementation: demoted the task ID from a rounded chip to quiet monospaced metadata; replaced normal PDS tag pills with plain inline metadata text and subtle slash separators; made tag overflow quiet text (`+N tags`) instead of another pill.
+- Signal preservation: retained the primary exceptional signal badge and PDS icon for blocked, claimed, dependency, and decision-pending states while removing redundant secondary cue duplication.
+- Screenshot evidence: `.owlbear/scratch/1716-wide-cockpit/kanban-viewport.png` at 2560x1440 shows the updated Kanban card hierarchy with quieter IDs and tags.
+- Validation: `npx vitest run src/__tests__/Card.visual-treatment.test.tsx src/__tests__/Card.signal.test.tsx src/__tests__/CardSignalModel.test.tsx src/__tests__/BoardVisualDesign.test.tsx --reporter=dot` (86 passed); `npx playwright test e2e/card-density.spec.ts --project=chromium` (21 passed); `npx eslint src/components/Card.tsx src/__tests__/Card.visual-treatment.test.tsx src/__tests__/Card.signal.test.tsx e2e/card-density.spec.ts` passed; `npm run build` passed with existing chunk-size warning; editor diagnostics clean for touched frontend files.
