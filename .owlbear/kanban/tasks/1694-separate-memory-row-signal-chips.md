@@ -1,10 +1,10 @@
 ---
 id: 1694
 title: Separate memory row signal chips
-status: research
+status: done
 priority: important
 created: 2026-05-21T19:53:32.451580+02:00
-updated: 2026-05-21T19:53:32.451580+02:00
+updated: 2026-05-22T15:16:27+02:00
 tags:
   - cockpit-perfect-ui
   - scope:cockpit-web
@@ -39,3 +39,10 @@ Use this task as a product/audit todo item, not an instruction to hand off to th
 - Audit current row chip grouping and color semantics.
 - Visually separate tags, confidence, and state by grouping, placement, or tone.
 - Use state differences where they improve scan speed without becoming noisy.
+
+## Builder Evidence
+- Product audit: categories now stay with the row context in `memory-entry-category-group`, while confidence and workflow state render in a separate `memory-entry-signal-group` with a desktop divider.
+- Trust/workflow distinction: confidence now carries an explicit `Confidence` label, and state uses PDS `PTag` variants (`pending=info`, `curated=secondary`, `approved=success`, `deleted=primary`) instead of sharing the same neutral chip treatment.
+- Regression coverage: focused row signal tests passed (`6 passed, 45 skipped`); broader Memory route/detail suites passed (`128 passed`).
+- Quality gates: diagnostics clean for `MemoryTab.tsx` and `MemoryTab_1671.test.tsx`; ESLint passed for both files; `npm run build` passed with the known Vite chunk-size warning.
+- Screenshot proof: `.owlbear/scratch/1716-wide-cockpit/memory-row-signals-1694.png`; browser capture reported 0 console errors, 0 page errors, 0 request failures, and 0 response errors.

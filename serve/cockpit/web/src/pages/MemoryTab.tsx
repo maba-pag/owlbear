@@ -9,8 +9,10 @@ import {
   PMultiSelectOption,
   PSelect,
   PSelectOption,
+  PTag,
   PTextarea,
 } from '@porsche-design-system/components-react'
+import type { TagVariant } from '@porsche-design-system/components-react'
 import ReactMarkdown from 'react-markdown'
 import rehypeSanitize from 'rehype-sanitize'
 import remarkGfm from 'remark-gfm'
@@ -21,7 +23,6 @@ import { MEMORY_PENDING_COUNT_EVENT } from '../hooks/usePendingMemoryCount'
 import { usePollingFetch } from '../hooks/usePollingFetch'
 
 type MemoryState = 'pending' | 'curated' | 'approved' | 'deleted'
-type MemoryStateVariant = 'info' | 'success' | 'primary'
 
 interface MemoryEntry {
   id: string
@@ -70,11 +71,20 @@ const STATE_PRIORITY: Record<MemoryState, number> = {
   approved: 2,
   deleted: 3,
 }
-const STATE_VARIANTS: Record<MemoryState, MemoryStateVariant> = {
+const STATE_VARIANTS: Record<MemoryState, TagVariant> = {
   pending: 'info',
-  curated: 'info',
+  curated: 'secondary',
   approved: 'success',
   deleted: 'primary',
+}
+function syncTagVariantAttr(variant: TagVariant) {
+  return (element: HTMLElement | null) => {
+    if (!element) {
+      return
+    }
+    element.setAttribute('compact', '')
+    element.setAttribute('variant', variant)
+  }
 }
 
 const INITIAL_FILTER: MemoryFilterState = {
@@ -764,27 +774,36 @@ function MemoryTab() {
                   delete accordionRefs.current[entry.id]
                 }}
               >
-                <div slot="summary" className="grid min-w-0 gap-static-sm py-static-sm lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+                <div slot="summary" className="grid min-w-0 gap-static-sm py-static-sm lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
                   <div className="min-w-0">
                     <strong data-testid="memory-entry-title" className="block truncate text-base text-primary">{entry.title}</strong>
-                    <span data-testid="memory-entry-agents" className="text-sm text-primary">
-                      {entry.scope_agents.length > 0 ? entry.scope_agents.join(', ') : 'All agents'}
-                    </span>
-                  </div>
-                  <div className="flex min-w-0 flex-wrap items-center gap-static-xs lg:justify-end">
-                    {entry.categories.map((category) => (
-                      <span key={`${entry.id}-${category}`} data-testid="memory-entry-category" className="rounded-full border border-contrast-low bg-canvas px-static-xs py-1 text-xs font-semibold text-primary">
-                        {category}
+                    <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-static-sm gap-y-static-xs">
+                      <span data-testid="memory-entry-agents" className="text-sm text-contrast-high">
+                        {entry.scope_agents.length > 0 ? entry.scope_agents.join(', ') : 'All agents'}
                       </span>
-                    ))}
-                    <span data-testid="memory-entry-confidence" className="rounded-full border border-contrast-low bg-canvas px-static-xs py-1 text-xs font-semibold text-primary">{formatConfidence(entry.confidence)}</span>
-                    <span
+                      <span data-testid="memory-entry-category-group" className="flex min-w-0 flex-wrap items-center gap-static-xs">
+                        {entry.categories.map((category) => (
+                          <span key={`${entry.id}-${category}`} data-testid="memory-entry-category" className="rounded-full border border-contrast-low bg-canvas px-static-xs py-1 text-xs font-medium text-contrast-high">
+                            {category}
+                          </span>
+                        ))}
+                      </span>
+                    </div>
+                  </div>
+                  <div data-testid="memory-entry-signal-group" className="flex min-w-0 flex-wrap items-center gap-static-xs text-xs lg:justify-end lg:border-l lg:border-contrast-low lg:pl-static-sm">
+                    <span data-testid="memory-entry-confidence" className="inline-flex items-center gap-1 rounded-full border border-contrast-low bg-surface px-static-xs py-1 font-semibold text-primary" aria-label={`Confidence: ${formatConfidence(entry.confidence)}`}>
+                      <span className="font-medium text-contrast-high">Confidence</span>
+                      <span>{formatConfidence(entry.confidence)}</span>
+                    </span>
+                    <PTag
+                      compact
                       data-testid="memory-entry-state"
-                      className="rounded-full border border-contrast-low bg-canvas px-static-xs py-1 text-xs font-semibold text-primary"
-                      {...{ variant: STATE_VARIANTS[entry.state] }}
+                      variant={STATE_VARIANTS[entry.state]}
+                      ref={syncTagVariantAttr(STATE_VARIANTS[entry.state])}
+                      aria-label={`State: ${entry.state}`}
                     >
                       {entry.state}
-                    </span>
+                    </PTag>
                   </div>
                 </div>
 

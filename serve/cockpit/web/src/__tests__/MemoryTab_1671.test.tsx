@@ -694,6 +694,34 @@ describe('TestFromAC_MemoryTabRowRendering', () => {
     expect(confidenceEl?.textContent).toContain('0.85')
   })
 
+  it('ac4 polish: row separates content categories from confidence and state signals', async () => {
+    const entries = [makeEntry({ categories: ['behaviour', 'pitfall'], confidence: 0.91, state: 'curated' })]
+    vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
+    let container!: HTMLElement
+    await act(async () => {
+      container = renderMemoryTab().container
+    })
+    await flush()
+
+    const row = container.querySelector('[data-testid="memory-entry"]')
+    const categoryGroup = row?.querySelector('[data-testid="memory-entry-category-group"]')
+    const signalGroup = row?.querySelector('[data-testid="memory-entry-signal-group"]')
+    const categories = Array.from(row?.querySelectorAll('[data-testid="memory-entry-category"]') ?? [])
+    const confidenceEl = row?.querySelector('[data-testid="memory-entry-confidence"]')
+    const stateEl = row?.querySelector('[data-testid="memory-entry-state"]')
+
+    expect(categoryGroup).not.toBeNull()
+    expect(signalGroup).not.toBeNull()
+    expect(categories).toHaveLength(2)
+    expect(categories.every((category) => categoryGroup?.contains(category))).toBe(true)
+    expect(signalGroup?.contains(confidenceEl)).toBe(true)
+    expect(signalGroup?.contains(stateEl)).toBe(true)
+    expect(categoryGroup?.contains(confidenceEl)).toBe(false)
+    expect(categoryGroup?.contains(stateEl)).toBe(false)
+    expect(signalGroup?.className).toContain('lg:border-l')
+    expect(confidenceEl?.textContent).toContain('Confidence')
+  })
+
   it('ac4 happy: pending state badge uses info color variant', async () => {
     const entries = [makeEntry({ state: 'pending' })]
     vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
@@ -708,7 +736,7 @@ describe('TestFromAC_MemoryTabRowRendering', () => {
     expect(readPdsVariant(badge)).toBe('info')
   })
 
-  it('ac4 happy: curated state badge uses info color variant', async () => {
+  it('ac4 happy: curated state badge uses secondary color variant', async () => {
     const entries = [makeEntry({ state: 'curated' })]
     vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
     let container!: HTMLElement
@@ -719,7 +747,7 @@ describe('TestFromAC_MemoryTabRowRendering', () => {
 
     const badge = container.querySelector('[data-testid="memory-entry-state"]')
     expect(badge).not.toBeNull()
-    expect(readPdsVariant(badge)).toBe('info')
+    expect(readPdsVariant(badge)).toBe('secondary')
   })
 
   it('ac4 happy: approved state badge uses success color variant', async () => {
