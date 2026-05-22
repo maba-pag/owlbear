@@ -4,7 +4,7 @@ import {
   PInputText,
   PSelect,
   PSelectOption,
-  PTag,
+  PTagDismissible,
   PTextarea,
 } from '@porsche-design-system/components-react'
 import ReactMarkdown from 'react-markdown'
@@ -18,6 +18,7 @@ export type TaskEditPayload = Record<string, unknown> & {
   title: string
   priority: string
   body: string
+  tags: string[]
   depends_on: number[]
   parent: number | null
   block_reason: string | null
@@ -102,6 +103,34 @@ function readControlValue(
   return ''
 }
 
+function areTagListsEqual(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) {
+    return false
+  }
+
+  return left.every((tag, index) => tag === right[index])
+}
+
+function normalizeTag(raw: string): string {
+  return raw.trim()
+}
+
+function validateTag(tag: string, currentTags: string[]): string | null {
+  if (tag.length === 0) {
+    return 'Enter a tag before adding it.'
+  }
+
+  if (/[,\s]/.test(tag)) {
+    return 'Tags must be a single token without spaces or commas.'
+  }
+
+  if (currentTags.includes(tag)) {
+    return 'That tag is already on this task.'
+  }
+
+  return null
+}
+
 export default function TaskFieldsEditor({
   task,
   priorities,
@@ -115,6 +144,9 @@ export default function TaskFieldsEditor({
   const [title, setTitle] = useState(task.title)
   const [priority, setPriority] = useState(task.priority)
   const [body, setBody] = useState(task.body ?? '')
+  const [editableTags, setEditableTags] = useState(task.tags)
+  const [newTag, setNewTag] = useState('')
+  const [tagValidationMessage, setTagValidationMessage] = useState<string | null>(null)
   const [saveConfirmed, setSaveConfirmed] = useState(false)
   const [dependsOn, setDependsOn] = useState(task.depends_on.join(', '))
   const [parent, setParent] = useState(task.parent !== null ? String(task.parent) : '')
@@ -130,21 +162,27 @@ export default function TaskFieldsEditor({
       setTitle(conflictLocalDraft.title)
       setPriority(conflictLocalDraft.priority)
       setBody(conflictLocalDraft.body)
+      setEditableTags(conflictLocalDraft.tags)
       setDependsOn(conflictLocalDraft.dependsOn)
       setParent(conflictLocalDraft.parent)
       setBlockReason(conflictLocalDraft.blockReason)
+      setNewTag('')
+      setTagValidationMessage(null)
       return
     }
 
     setTitle(task.title)
     setPriority(task.priority)
     setBody(task.body ?? '')
+    setEditableTags(task.tags)
     if (isTaskSwitch) {
       setSaveConfirmed(false)
     }
     setDependsOn(task.depends_on.join(', '))
     setParent(task.parent !== null ? String(task.parent) : '')
     setBlockReason(task.block_reason ?? '')
+    setNewTag('')
+    setTagValidationMessage(null)
     clearConflictIfTaskChanged(task.id)
   }, [task.id, task.updated, conflictLocalDraft, conflictRemoteTaskId, clearConflictIfTaskChanged, task])
 
@@ -163,13 +201,55 @@ export default function TaskFieldsEditor({
     title !== task.title
     || priority !== task.priority
     || body !== (task.body ?? '')
+    || !areTagListsEqual(editableTags, task.tags)
+    || normalizeTag(newTag).length > 0
     || dependsOn !== task.depends_on.join(', ')
     || parent !== (task.parent !== null ? String(task.parent) : '')
     || (task.blocked && blockReason !== (task.block_reason ?? ''))
   const validationMessage = clientValidationMessage ?? serverValidationMessage
 
+  function addTagFromInput(): string[] | null {
+    const tag = normalizeTag(newTag)
+    const validation = validateTag(tag, editableTags)
+
+    if (validation !== null) {
+      setTagValidationMessage(validation)
+      return null
+    }
+
+    const nextTags = [...editableTags, tag]
+    setEditableTags(nextTags)
+    setNewTag('')
+    setTagValidationMessage(null)
+    return nextTags
+  }
+
+  function removeTag(tagToRemove: string): void {
+    setEditableTags((currentTags) => currentTags.filter((tag) => tag !== tagToRemove))
+    setTagValidationMessage(null)
+  }
+
+  function tagsForSave(): string[] | null {
+    const pendingTag = normalizeTag(newTag)
+    if (pendingTag.length === 0) {
+      return editableTags
+    }
+
+    const validation = validateTag(pendingTag, editableTags)
+    if (validation !== null) {
+      setTagValidationMessage(validation)
+      return null
+    }
+
+    return [...editableTags, pendingTag]
+  }
+
   async function handleSave() {
     if (clientValidationMessage !== null) {
+      return
+    }
+    const nextTags = tagsForSave()
+    if (nextTags === null) {
       return
     }
     const shouldShowSaveConfirmed = isDirty
@@ -178,6 +258,7 @@ export default function TaskFieldsEditor({
       title,
       priority,
       body,
+      tags: nextTags,
       dependsOn,
       parent,
       blockReason,
@@ -189,12 +270,16 @@ export default function TaskFieldsEditor({
         title,
         priority,
         body,
+        tags: nextTags,
         depends_on: parsedDependsOn.values,
         parent: parsedParent.value,
         block_reason: task.blocked ? blockReason : null,
       }, conflictDraft)
 
       if (shouldShowSaveConfirmed && mutationSucceeded !== false) {
+        setEditableTags(nextTags)
+        setNewTag('')
+        setTagValidationMessage(null)
         setSaveConfirmed(true)
         if (saveConfirmedTimerRef.current !== null) {
           window.clearTimeout(saveConfirmedTimerRef.current)
@@ -241,13 +326,61 @@ export default function TaskFieldsEditor({
         </PSelect>
       </div>
 
-      {task.tags.length > 0 ? (
-        <div className="flex flex-wrap items-center gap-static-xs">
-          {task.tags.map((tag) => (
-            <PTag key={tag} data-testid="tag-chip" compact>{tag}</PTag>
-          ))}
+      <section className="grid gap-static-xs" data-region="task-detail-tags">
+        <div className="flex min-w-0 flex-wrap items-center gap-static-xs">
+          <span className="text-sm font-semibold text-contrast-high">Tags</span>
+          {editableTags.length > 0 ? (
+            <div className="flex min-w-0 flex-wrap items-center gap-static-xs" data-testid="tag-chip-list">
+              {editableTags.map((tag) => (
+                <PTagDismissible
+                  key={tag}
+                  data-testid="tag-chip"
+                  data-tag={tag}
+                  compact
+                  label={tag}
+                  aria={{ 'aria-label': `Remove tag ${tag}` }}
+                  onClick={() => removeTag(tag)}
+                />
+              ))}
+            </div>
+          ) : (
+            <span data-testid="no-tags" className="text-sm text-contrast-high">No tags</span>
+          )}
         </div>
-      ) : null}
+        <div className="grid gap-static-xs sm:grid-cols-[minmax(0,1fr)_auto]">
+          <PInputText
+            ref={setHideLabelAttr}
+            name="new_tag"
+            label="Add tag"
+            data-field="new-tag"
+            value={newTag}
+            onChange={(event) => setNewTag(readControlValue(event))}
+            onInput={(event) => setNewTag(readControlValue(event))}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                addTagFromInput()
+              }
+            }}
+          />
+          <PButton
+            type="button"
+            data-testid="add-tag-button"
+            variant="secondary"
+            icon="plus"
+            compact
+            disabled={normalizeTag(newTag).length === 0}
+            onClick={() => addTagFromInput()}
+          >
+            Add
+          </PButton>
+        </div>
+        {tagValidationMessage ? (
+          <div data-testid="tag-validation-message" className="text-sm font-semibold text-warning" role="status">
+            {tagValidationMessage}
+          </div>
+        ) : null}
+      </section>
 
       <section className="rounded-lg border border-contrast-low bg-surface p-static-md">
         <div className="mb-static-xs flex min-w-0 flex-wrap items-center justify-between gap-static-xs">

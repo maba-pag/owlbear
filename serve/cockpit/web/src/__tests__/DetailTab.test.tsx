@@ -145,6 +145,12 @@ function clickConfirm(container: HTMLElement): void {
   fireEvent.click(confirmBtn!)
 }
 
+function typeIntoPdsField(container: HTMLElement, selector: string, value: string): void {
+  const field = container.querySelector(selector) as HTMLElement | null
+  expect(field).not.toBeNull()
+  fireEvent(field!, new CustomEvent('input', { detail: { value }, bubbles: true }))
+}
+
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe('TestFromAC_DetailTab', () => {
@@ -174,12 +180,45 @@ describe('TestFromAC_DetailTab', () => {
       expect(container.querySelector('[data-field="priority"]')).not.toBeNull()
     })
 
-    it('renders each tag as a chip element', () => {
+    it('renders each tag as a dismissible chip element', () => {
       const { container } = renderDetail()
-      // All chips must be p-tag hosts — not div wrappers — per reviewer finding #2.
-      // Fails until builder renders every chip (including index > 0) as PTag with data-testid="tag-chip".
-      const chips = container.querySelectorAll('p-tag[data-testid="tag-chip"]')
+      const chips = container.querySelectorAll('p-tag-dismissible[data-testid="tag-chip"]')
       expect(chips.length).toBe(2)
+      expect(container.querySelector('p-tag[data-testid="tag-chip"]')).toBeNull()
+      expect(chips[0]).toHaveAttribute('data-tag', 'bug')
+    })
+
+    it('removes a tag from the edit surface when its chip is dismissed', () => {
+      const { container } = renderDetail()
+      const bugChip = container.querySelector('p-tag-dismissible[data-tag="bug"]') as HTMLElement | null
+      expect(bugChip).not.toBeNull()
+
+      fireEvent.click(bugChip!)
+
+      expect(container.querySelector('p-tag-dismissible[data-tag="bug"]')).toBeNull()
+      expect(container.querySelector('p-tag-dismissible[data-tag="frontend"]')).not.toBeNull()
+      expect(container.querySelector('[data-testid="dirty-indicator"]')).not.toBeNull()
+    })
+
+    it('renders a field and command to add a tag', () => {
+      const { container } = renderDetail()
+      expect(container.querySelector('p-input-text[data-field="new-tag"]')).not.toBeNull()
+      expect(container.querySelector('[data-testid="add-tag-button"]')).not.toBeNull()
+    })
+
+    it('adds a new tag as a dismissible chip', () => {
+      const { container } = renderDetail()
+      typeIntoPdsField(container, 'p-input-text[data-field="new-tag"]', 'scope:cockpit')
+      const addButton = container.querySelector('[data-testid="add-tag-button"]') as HTMLElement | null
+      expect(addButton).not.toBeNull()
+
+      fireEvent.click(addButton!)
+
+      expect(container.querySelector('p-tag-dismissible[data-tag="scope:cockpit"]')).not.toBeNull()
+      const input = container.querySelector('p-input-text[data-field="new-tag"]') as
+        | (HTMLElement & { value?: string })
+        | null
+      expect(input?.value ?? input?.getAttribute('value')).toBe('')
     })
 
     it('renders depends_on field control', () => {
@@ -301,6 +340,34 @@ describe('TestFromAC_DetailTab', () => {
           const [, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
           const body = JSON.parse(options.body as string) as Record<string, unknown>
           expect(body).toHaveProperty('updated', TASK.updated)
+        },
+        { timeout: 500 },
+      )
+    })
+
+    it('save request body includes the edited tag list', async () => {
+      const updatedTask = { ...TASK, tags: ['frontend', 'scope:cockpit'] }
+      const fetchMock = vi.fn(() =>
+        Promise.resolve({ ok: true, json: () => Promise.resolve(updatedTask) }),
+      )
+      vi.stubGlobal('fetch', fetchMock)
+      const { container } = renderDetail()
+
+      const bugChip = container.querySelector('p-tag-dismissible[data-tag="bug"]') as HTMLElement | null
+      expect(bugChip).not.toBeNull()
+      fireEvent.click(bugChip!)
+      typeIntoPdsField(container, 'p-input-text[data-field="new-tag"]', 'scope:cockpit')
+
+      const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
+      expect(saveBtn).not.toBeNull()
+      fireEvent.click(saveBtn!)
+
+      await waitFor(
+        () => {
+          const [, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+          const body = JSON.parse(options.body as string) as Record<string, unknown>
+          expect(body).toHaveProperty('tags')
+          expect(body.tags).toEqual(['frontend', 'scope:cockpit'])
         },
         { timeout: 500 },
       )
