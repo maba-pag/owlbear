@@ -645,8 +645,8 @@ describe('TestFromAC_CoverageProof', () => {
     vi.unstubAllGlobals()
   })
 
-  // Covers: HistorySubtab duration ?? '—' — non-null branch
-  it('HistorySubtab renders numeric duration when duration is not null', () => {
+  // Covers: fractional duration values from session records.
+  it('HistorySubtab formats fractional seconds as readable minutes', () => {
     const session = {
       task_id: 10,
       state: 'released',
@@ -658,7 +658,7 @@ describe('TestFromAC_CoverageProof', () => {
     const { container } = renderHistorySubtab([session])
     const el = container.querySelector('[data-testid="session-duration"]')
     expect(el).not.toBeNull()
-    expect(el!.textContent).toBe('120.5')
+    expect(el!.textContent).toBe('2m')
   })
 
   // Covers: HistorySubtab onSelectTask?.() — undefined branch

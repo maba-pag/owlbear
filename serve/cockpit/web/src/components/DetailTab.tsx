@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   PButton,
   PDivider,
@@ -112,6 +112,7 @@ export default function DetailTab({
   })
   const [showHistory, setShowHistory] = useState(false)
   const [sessions, setSessions] = useState<Session[]>([])
+  const historyRegionRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     if (initialSubtab !== 'history' || task === null) {
@@ -120,6 +121,17 @@ export default function DetailTab({
 
     setShowHistory(true)
   }, [initialSubtab, task])
+
+  useEffect(() => {
+    if (!showHistory && initialSubtab !== 'history') {
+      return undefined
+    }
+
+    const frameId = requestAnimationFrame(() => {
+      historyRegionRef.current?.scrollIntoView({ block: 'nearest' })
+    })
+    return () => cancelAnimationFrame(frameId)
+  }, [initialSubtab, sessions.length, showHistory, task?.id])
 
   if (!task) return null
 
@@ -250,7 +262,9 @@ export default function DetailTab({
 
       {/* History subtab */}
       {(showHistory || initialSubtab === 'history') && (
-        <HistorySubtab sessions={taskSessions} onSelectTask={onSelectTask} />
+        <div ref={historyRegionRef} data-region="task-history-events">
+          <HistorySubtab sessions={taskSessions} taskId={t.id} createdAt={t.created} onSelectTask={onSelectTask} />
+        </div>
       )}
 
       {/* Conflict modal */}

@@ -1,14 +1,17 @@
+[data-testid='history-created-row'],
 [data-testid='history-session-row'],
 [data-testid='session-row'] {
   cursor: pointer;
   border-left: 4px solid var(--p-color-contrast-low);
 }
 
+[data-testid='history-created-row']:hover,
 [data-testid='history-session-row']:hover,
 [data-testid='session-row']:hover {
   background: var(--p-color-frosted);
 }
 
+[data-testid='history-created-row'][aria-disabled='true'],
 [data-testid='history-session-row'][aria-disabled='true'],
 [data-testid='session-row'][aria-disabled='true'] {
   cursor: default;

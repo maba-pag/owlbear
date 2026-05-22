@@ -586,6 +586,59 @@ describe('TestFromAC_DetailTab', () => {
       )
     })
 
+    it('history includes task creation as the first event with a readable timestamp', async () => {
+      const fetchMock = vi.fn((url: string) => {
+        if (url.includes('/api/sessions')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(SESSIONS_SINGLE) })
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(TASK) })
+      })
+      vi.stubGlobal('fetch', fetchMock)
+      const { container } = renderDetail()
+      const historyTab = container.querySelector('[data-testid="history-tab"]') as HTMLElement | null
+      expect(historyTab).not.toBeNull()
+      fireEvent.click(historyTab!)
+      await waitFor(
+        () => {
+          const rows = container.querySelectorAll('[data-testid="history-created-row"], [data-testid="history-session-row"]')
+          expect(rows.length).toBe(2)
+          expect(rows[0]?.getAttribute('data-state')).toBe('created')
+          expect(rows[0]?.querySelector('[data-testid="session-agent"]')?.textContent).toBe('Task created')
+          expect(rows[0]?.querySelector('[data-testid="session-outcome"]')?.textContent).toBe('Created')
+          const timestamp = rows[0]?.querySelector('[data-testid="session-started-at"]')
+          expect(timestamp?.getAttribute('data-timestamp')).toBe(TASK.created)
+          expect(timestamp?.textContent).toContain('2026')
+          expect(timestamp?.textContent).not.toBe(TASK.created)
+        },
+        { timeout: 500 },
+      )
+    })
+
+    it('history session row shows a readable started timestamp', async () => {
+      const fetchMock = vi.fn((url: string) => {
+        if (url.includes('/api/sessions')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(SESSIONS_SINGLE) })
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(TASK) })
+      })
+      vi.stubGlobal('fetch', fetchMock)
+      const { container } = renderDetail()
+      const historyTab = container.querySelector('[data-testid="history-tab"]') as HTMLElement | null
+      expect(historyTab).not.toBeNull()
+      fireEvent.click(historyTab!)
+      await waitFor(
+        () => {
+          const rows = container.querySelectorAll('[data-testid="history-session-row"]')
+          expect(rows.length).toBe(1)
+          const timestamp = rows[0]?.querySelector('[data-testid="session-started-at"]')
+          expect(timestamp?.getAttribute('data-timestamp')).toBe(SESSIONS_SINGLE.sessions[0].started_at)
+          expect(timestamp?.textContent).toContain('2026')
+          expect(timestamp?.textContent).not.toBe(SESSIONS_SINGLE.sessions[0].started_at)
+        },
+        { timeout: 500 },
+      )
+    })
+
     it('history session row shows agent name', async () => {
       const fetchMock = vi.fn((url: string) => {
         if (url.includes('/api/sessions')) {

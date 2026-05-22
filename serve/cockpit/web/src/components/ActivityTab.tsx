@@ -12,20 +12,18 @@ export interface ActivityTabProps {
 type FilterType = 'all' | 'active' | 'blocked' | 'stuck' | 'released'
 
 function formatDuration(duration: number | null): string {
-  if (duration === null || Number.isNaN(duration)) {
+  if (duration === null || !Number.isFinite(duration)) {
     return '\u2014'
   }
-  if (!Number.isInteger(duration)) {
-    return String(duration)
+  const seconds = Math.max(0, Math.floor(duration))
+  if (seconds < 60) {
+    return `${seconds}s`
   }
-  if (duration < 60) {
-    return `${Math.max(0, Math.floor(duration))}s`
+  if (seconds < 3600) {
+    return `${Math.floor(seconds / 60)}m`
   }
-  if (duration < 3600) {
-    return `${Math.floor(duration / 60)}m`
-  }
-  const hours = Math.floor(duration / 3600)
-  const minutes = Math.floor((duration % 3600) / 60)
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
   return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`
 }
 
