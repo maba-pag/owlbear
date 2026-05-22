@@ -75,6 +75,10 @@ describe('TestFromAC_BodyPreviewToggle', () => {
       </PorscheDesignSystemProvider>,
     )
 
+    const editDetails = container.querySelector('[data-testid="edit-details-button"]') as HTMLElement | null
+    expect(editDetails).not.toBeNull()
+    fireEvent.click(editDetails!)
+
     // Step 1: enter edit mode — body-edit-toggle click sets editBody = true
     const toggle = container.querySelector('[data-testid="body-edit-toggle"]') as HTMLElement | null
     expect(toggle).not.toBeNull()

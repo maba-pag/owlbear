@@ -138,6 +138,12 @@ function renderDetailTab(task: TaskDetail = TASK) {
   )
 }
 
+function openDetailEditor(container: HTMLElement): void {
+  const editButton = container.querySelector('[data-testid="edit-details-button"]') as HTMLElement | null
+  expect(editButton).not.toBeNull()
+  fireEvent.click(editButton!)
+}
+
 function renderResolveModal() {
   return render(
     <PorscheDesignSystemProvider>
@@ -246,6 +252,7 @@ describe('TestFromAC_PdsMigration_Buttons', () => {
   describe('AC1: DetailTab action buttons use PButton', () => {
     it('save button is p-button', () => {
       const { container } = renderDetailTab()
+      openDetailEditor(container)
       expect(container.querySelector('p-button[data-testid="save-button"]')).not.toBeNull()
     })
 
@@ -256,6 +263,7 @@ describe('TestFromAC_PdsMigration_Buttons', () => {
 
     it('body-edit-toggle is p-button', () => {
       const { container } = renderDetailTab()
+      openDetailEditor(container)
       expect(container.querySelector('p-button[data-testid="body-edit-toggle"]')).not.toBeNull()
     })
 
@@ -375,6 +383,7 @@ describe('TestFromAC_PdsMigration_Buttons', () => {
   describe('AC1 variant: DetailTab — save=primary, all other action buttons=secondary (PDS v4: tertiary removed)', () => {
     it('save-button has variant="primary" (default action)', () => {
       const { container } = renderDetailTab()
+      openDetailEditor(container)
       const el = container.querySelector('p-button[data-testid="save-button"]')
       expect((el as HTMLElement & { variant: string }).variant).toBe('primary')
     })
@@ -387,6 +396,7 @@ describe('TestFromAC_PdsMigration_Buttons', () => {
 
     it('body-edit-toggle has variant="secondary"', () => {
       const { container } = renderDetailTab()
+      openDetailEditor(container)
       const el = container.querySelector('p-button[data-testid="body-edit-toggle"]')
       expect((el as HTMLElement & { variant: string }).variant).toBe('secondary')
     })
@@ -709,6 +719,7 @@ describe('TestFromAC_PdsMigration_FormControls', () => {
   describe('AC4 happy: DetailTab body textarea uses PTextarea in edit mode', () => {
     it('renders p-textarea for body when edit mode is active', () => {
       const { container } = renderDetailTab()
+      openDetailEditor(container)
       const toggleBtn = container.querySelector('[data-testid="body-edit-toggle"]')
       if (toggleBtn) fireEvent.click(toggleBtn)
       expect(container.querySelector('p-textarea[data-field="body"]')).not.toBeNull()
@@ -716,6 +727,7 @@ describe('TestFromAC_PdsMigration_FormControls', () => {
 
     it('renders no raw <textarea data-field="body"> in edit mode', () => {
       const { container } = renderDetailTab()
+      openDetailEditor(container)
       const toggleBtn = container.querySelector('[data-testid="body-edit-toggle"]')
       if (toggleBtn) fireEvent.click(toggleBtn)
       expect(container.querySelector('textarea[data-field="body"]')).toBeNull()
@@ -739,18 +751,21 @@ describe('TestFromAC_PdsMigration_FormControls', () => {
   describe('AC4 boundary: DetailTab inputs keep visible labels', () => {
     it('p-input-text for title does not hide its label', () => {
       const { container } = renderDetailTab()
+      openDetailEditor(container)
       const el = container.querySelector('p-input-text[data-field="title"]')
       expect(el?.hasAttribute('hide-label')).toBe(false)
     })
 
     it('p-select for priority does not hide its label', () => {
       const { container } = renderDetailTab()
+      openDetailEditor(container)
       const el = container.querySelector('p-select[data-field="priority"]')
       expect(el?.hasAttribute('hide-label')).toBe(false)
     })
 
     it('p-textarea for body in edit mode does not hide its label', () => {
       const { container } = renderDetailTab()
+      openDetailEditor(container)
       const toggleBtn = container.querySelector('[data-testid="body-edit-toggle"]')
       if (toggleBtn) fireEvent.click(toggleBtn)
       const el = container.querySelector('p-textarea[data-field="body"]')
@@ -759,18 +774,21 @@ describe('TestFromAC_PdsMigration_FormControls', () => {
 
     it('p-input-text for depends_on does not hide its label', () => {
       const { container } = renderDetailTab()
+      openDetailEditor(container)
       const el = container.querySelector('p-input-text[data-field="depends_on"]')
       expect(el?.hasAttribute('hide-label')).toBe(false)
     })
 
     it('p-input-text for parent does not hide its label', () => {
       const { container } = renderDetailTab()
+      openDetailEditor(container)
       const el = container.querySelector('p-input-text[data-field="parent"]')
       expect(el?.hasAttribute('hide-label')).toBe(false)
     })
 
     it('p-input-text for block_reason does not hide its label when task is blocked', () => {
       const { container } = renderDetailTab(TASK_BLOCKED)
+      openDetailEditor(container)
       const el = container.querySelector('p-input-text[data-field="block_reason"]')
       expect(el?.hasAttribute('hide-label')).toBe(false)
     })

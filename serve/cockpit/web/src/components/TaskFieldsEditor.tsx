@@ -4,6 +4,7 @@ import {
   PInputText,
   PSelect,
   PSelectOption,
+  PTag,
   PTagDismissible,
   PTextarea,
 } from '@porsche-design-system/components-react'
@@ -32,6 +33,7 @@ export interface TaskFieldsEditorProps {
   serverValidationMessage: string | null
   clearConflictIfTaskChanged: (taskId: number | undefined) => void
   onSave: (payload: TaskEditPayload, conflictDraft: ConflictLocalDraft) => Promise<boolean | void>
+  defaultEditing?: boolean
 }
 
 export function parseDependsOn(raw: string): { values: number[]; error: string | null } {
@@ -123,6 +125,77 @@ function validateTag(tag: string, currentTags: string[]): string | null {
   return null
 }
 
+function TaskFieldsDisplay({
+  task,
+  taskBodyLabel,
+  onEdit,
+}: {
+  task: TaskDetail
+  taskBodyLabel: string
+  onEdit: () => void
+}) {
+  const body = task.body ?? ''
+  const hasRelations = task.depends_on.length > 0 || task.parent !== null || task.blocked
+
+  return (
+    <div className="grid gap-static-sm" data-testid="task-detail-display">
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-static-sm">
+        <div className="flex min-w-0 flex-wrap items-center gap-static-xs">
+          <span className="text-sm font-semibold text-contrast-high">Tags</span>
+          {task.tags.length > 0 ? (
+            task.tags.map((tag) => (
+              <PTag key={tag} compact data-testid="display-tag-chip" data-tag={tag}>{tag}</PTag>
+            ))
+          ) : (
+            <span data-testid="display-no-tags" className="text-sm text-contrast-high">No tags</span>
+          )}
+        </div>
+        <PButton
+          data-testid="edit-details-button"
+          variant="secondary"
+          icon="edit"
+          compact
+          onClick={onEdit}
+        >
+          Edit details
+        </PButton>
+      </div>
+
+      <section className="rounded-lg border border-contrast-low bg-surface p-static-md" data-region="task-body-preview">
+        <div className="mb-static-xs text-sm font-semibold text-contrast-high">{taskBodyLabel}</div>
+        <div className="text-sm text-primary">
+          <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>
+            {body}
+          </ReactMarkdown>
+        </div>
+      </section>
+
+      {hasRelations ? (
+        <dl className="grid gap-static-sm text-sm text-primary md:grid-cols-3" data-region="task-relations-summary">
+          {task.depends_on.length > 0 ? (
+            <div>
+              <dt className="font-semibold text-contrast-high">Depends on</dt>
+              <dd>{task.depends_on.join(', ')}</dd>
+            </div>
+          ) : null}
+          {task.parent !== null ? (
+            <div>
+              <dt className="font-semibold text-contrast-high">Parent</dt>
+              <dd>{task.parent}</dd>
+            </div>
+          ) : null}
+          {task.blocked ? (
+            <div>
+              <dt className="font-semibold text-contrast-high">Block reason</dt>
+              <dd>{task.block_reason ?? 'Blocked'}</dd>
+            </div>
+          ) : null}
+        </dl>
+      ) : null}
+    </div>
+  )
+}
+
 export default function TaskFieldsEditor({
   task,
   priorities,
@@ -131,7 +204,10 @@ export default function TaskFieldsEditor({
   serverValidationMessage,
   clearConflictIfTaskChanged,
   onSave,
+  defaultEditing,
 }: TaskFieldsEditorProps) {
+  const startsEditing = defaultEditing ?? true
+  const [isEditing, setIsEditing] = useState(startsEditing)
   const [editBody, setEditBody] = useState(false)
   const [title, setTitle] = useState(task.title)
   const [priority, setPriority] = useState(task.priority)
@@ -152,6 +228,7 @@ export default function TaskFieldsEditor({
     previousTaskIdRef.current = task.id
 
     if (conflictLocalDraft && conflictRemoteTaskId === task.id) {
+      setIsEditing(true)
       setTitle(conflictLocalDraft.title)
       setPriority(conflictLocalDraft.priority)
       setBody(conflictLocalDraft.body)
@@ -169,7 +246,9 @@ export default function TaskFieldsEditor({
     setBody(task.body ?? '')
     setEditableTags(task.tags)
     if (isTaskSwitch) {
+      setIsEditing(startsEditing)
       setSaveConfirmed(false)
+      setEditBody(false)
     }
     setDependsOn(task.depends_on.join(', '))
     setParent(task.parent !== null ? String(task.parent) : '')
@@ -177,7 +256,7 @@ export default function TaskFieldsEditor({
     setNewTag('')
     setTagValidationMessage(null)
     clearConflictIfTaskChanged(task.id)
-  }, [task.id, task.updated, conflictLocalDraft, conflictRemoteTaskId, clearConflictIfTaskChanged, task])
+  }, [task.id, task.updated, conflictLocalDraft, conflictRemoteTaskId, clearConflictIfTaskChanged, task, startsEditing])
 
   useEffect(() => {
     return () => {
@@ -200,6 +279,20 @@ export default function TaskFieldsEditor({
     || parent !== (task.parent !== null ? String(task.parent) : '')
     || (task.blocked && blockReason !== (task.block_reason ?? ''))
   const validationMessage = clientValidationMessage ?? serverValidationMessage
+
+  function resetDraftFromTask(): void {
+    setTitle(task.title)
+    setPriority(task.priority)
+    setBody(task.body ?? '')
+    setEditableTags(task.tags)
+    setDependsOn(task.depends_on.join(', '))
+    setParent(task.parent !== null ? String(task.parent) : '')
+    setBlockReason(task.block_reason ?? '')
+    setNewTag('')
+    setTagValidationMessage(null)
+    setSaveConfirmed(false)
+    setEditBody(false)
+  }
 
   function addTagFromInput(): string[] | null {
     const tag = normalizeTag(newTag)
@@ -288,13 +381,36 @@ export default function TaskFieldsEditor({
           saveConfirmedTimerRef.current = null
         }
       }
+
+      if (mutationSucceeded !== false && !startsEditing) {
+        setIsEditing(false)
+        setEditBody(false)
+      }
     } catch {
       setSaveConfirmed(false)
     }
   }
 
+  function handleCancelEdit(): void {
+    resetDraftFromTask()
+    setIsEditing(false)
+  }
+
   return (
     <div className="grid gap-static-sm">
+      {!isEditing ? (
+        <TaskFieldsDisplay
+          task={task}
+          taskBodyLabel={taskBodyLabel}
+          onEdit={() => setIsEditing(true)}
+        />
+      ) : null}
+
+      <div
+        className={isEditing ? 'grid gap-static-sm' : 'hidden'}
+        data-region="task-detail-edit-form"
+        hidden={!isEditing}
+      >
       <div className="grid gap-static-sm lg:grid-cols-[minmax(0,1fr)_14rem]">
         <PInputText
           name="title"
@@ -437,9 +553,15 @@ export default function TaskFieldsEditor({
         <PButton data-testid="save-button" onClick={() => void handleSave()}>
           Save
         </PButton>
+        {!startsEditing ? (
+          <PButton data-testid="cancel-edit-button" variant="secondary" onClick={handleCancelEdit}>
+            Cancel
+          </PButton>
+        ) : null}
         {isDirty && <div data-testid="dirty-indicator" className="text-sm font-semibold text-warning">Unsaved changes</div>}
         {saveConfirmed && <div data-testid="save-confirmed" className="text-sm font-semibold text-success">Saved</div>}
         {validationMessage && <div data-testid="validation-message" className="rounded-lg border border-warning bg-warning-low p-static-xs text-sm text-primary">{validationMessage}</div>}
+      </div>
       </div>
     </div>
   )

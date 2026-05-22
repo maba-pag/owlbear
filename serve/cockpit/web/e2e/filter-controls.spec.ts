@@ -131,7 +131,9 @@ async function openFilterPanel(page: Page): Promise<void> {
 
 async function openTaskEditor(page: Page): Promise<void> {
   await page.click('[data-testid="task-card"][data-id="2"]')
-  await page.locator('[data-field="priority"]').waitFor({ state: 'attached', timeout: 6_000 })
+  await page.locator('[data-testid="edit-details-button"]').waitFor({ state: 'visible', timeout: 6_000 })
+  await page.click('[data-testid="edit-details-button"]')
+  await page.locator('[data-field="priority"]').waitFor({ state: 'visible', timeout: 6_000 })
 }
 
 // --- AC-1 | Filter workflow via PDS control selectors -----------------------
@@ -447,11 +449,11 @@ test.describe('AC-4 | Task-editor PDS compliance assertions', () => {
     await expect(page.locator('p-select[name="priority"]')).toBeVisible({ timeout: 4_000 })
   })
 
-  test('(b.1) tag chips render as p-tag[data-testid="tag-chip"] elements', async ({ page }) => {
-    // PDS metadata/status chip contract: required p-tag.
+  test('(b.1) editable tag chips render as p-tag-dismissible[data-testid="tag-chip"] elements', async ({ page }) => {
+    // Editable task tags must use dismissible PDS chips so users can remove them.
     // TASK_BETA has tags ["frontend", "backend"] so chip elements will render.
-    // Uses .first() to avoid strict-mode failure when both chips are p-tag hosts.
-    await expect(page.locator('p-tag[data-testid="tag-chip"]').first()).toBeVisible({ timeout: 2_000 })
+    // Uses .first() to avoid strict-mode failure when both chips are dismissible hosts.
+    await expect(page.locator('p-tag-dismissible[data-testid="tag-chip"]').first()).toBeVisible({ timeout: 2_000 })
   })
 
   test('(b.2) no legacy span[data-testid="tag-chip"] chips survive (dual-render falsifiability)', async ({ page }) => {
@@ -464,16 +466,15 @@ test.describe('AC-4 | Task-editor PDS compliance assertions', () => {
     await expect(page.locator('span[data-testid="tag-chip"]')).toHaveCount(0)
   })
 
-  test('(b.3) all task tag chips are p-tag hosts — no div wrappers (multi-chip coverage)', async ({ page }) => {
-    // Reviewer finding #2: first chip was PTag but chips at index > 0 used div[data-testid="tag-chip"]
-    // wrapping an inner PTag, so only the first chip registered as p-tag[data-testid="tag-chip"].
-    // Contract: every chip host must be a direct p-tag element, regardless of position.
+  test('(b.3) all editable task tag chips are dismissible PDS hosts — no div wrappers', async ({ page }) => {
+    // Reviewer finding #2: first chip was PDS but chips at index > 0 used div[data-testid="tag-chip"]
+    // wrapping an inner PDS chip, so only the first chip registered as the expected host.
+    // Contract: every editable chip host must be a direct p-tag-dismissible element.
     // Uses count equality to avoid strict-mode issues with multiple matching elements.
-    // Fails until builder renders all chips (including index > 0) as PTag with data-testid="tag-chip".
     const total = await page.locator('[data-testid="tag-chip"]').count()
-    const ptag = await page.locator('p-tag[data-testid="tag-chip"]').count()
+    const dismissiblePdsTags = await page.locator('p-tag-dismissible[data-testid="tag-chip"]').count()
     expect(total).toBeGreaterThan(0)
-    expect(ptag).toBe(total)
+    expect(dismissiblePdsTags).toBe(total)
   })
 
   test('[presence] title field: p-input-text[name="title"] is in the DOM', async ({ page }) => {

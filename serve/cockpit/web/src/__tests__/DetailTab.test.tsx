@@ -161,6 +161,29 @@ describe('TestFromAC_DetailTab', () => {
   // ─── Editable fields ───────────────────────────────────────────────────────
 
   describe('editable fields', () => {
+    it('opens in display mode with edit controls hidden behind an explicit action', () => {
+      const { container } = renderDetail()
+      expect(container.querySelector('[data-testid="task-detail-display"]')).not.toBeNull()
+      expect(container.querySelector('[data-testid="edit-details-button"]')).not.toBeNull()
+
+      const editForm = container.querySelector('[data-region="task-detail-edit-form"]') as HTMLElement | null
+      expect(editForm).not.toBeNull()
+      expect(editForm?.hasAttribute('hidden')).toBe(true)
+    })
+
+    it('clicking Edit details reveals the editable controls', () => {
+      const { container } = renderDetail()
+      const editButton = container.querySelector('[data-testid="edit-details-button"]') as HTMLElement | null
+      expect(editButton).not.toBeNull()
+      fireEvent.click(editButton!)
+
+      const editForm = container.querySelector('[data-region="task-detail-edit-form"]') as HTMLElement | null
+      expect(editForm).not.toBeNull()
+      expect(editForm?.hasAttribute('hidden')).toBe(false)
+      expect(container.querySelector('p-input-text[data-field="title"]')).not.toBeNull()
+      expect(container.querySelector('p-select[data-field="priority"]')).not.toBeNull()
+    })
+
     it('renders title as an input field', () => {
       const { container } = renderDetail()
       expect(container.querySelector('p-input-text[data-field="title"]')).not.toBeNull()

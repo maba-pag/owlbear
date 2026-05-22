@@ -168,6 +168,11 @@ async function expectTaskEditorLabelContract(page: Page): Promise<void> {
   }
 }
 
+async function openTaskDetailEditor(page: Page): Promise<void> {
+  await page.locator('[data-testid="edit-details-button"]').click()
+  await expect(page.locator('[data-region="task-detail-edit-form"]')).toBeVisible()
+}
+
 // ─── AC-1: Task detail modal composition ────────────────────────────────────
 //
 // RED targets:
@@ -236,6 +241,21 @@ test.describe('TestFromAC_TaskDetailModalComposition', () => {
     )
   })
 
+  test('task detail opens in display mode with explicit edit affordance', async ({
+    page,
+  }) => {
+    const details = page.locator('[data-region="task-detail-body"]')
+    await expect(details).toContainText('Task details')
+    await expect(details.locator('[data-testid="task-detail-display"]')).toBeVisible()
+    await expect(details.locator('[data-testid="edit-details-button"]')).toBeVisible()
+    await expect(details.locator('p-input-text[data-field="title"]')).toBeHidden()
+    await expect(details.locator('p-select[data-field="priority"]')).toBeHidden()
+
+    await openTaskDetailEditor(page)
+    await expect(details.locator('p-input-text[data-field="title"]')).toBeVisible()
+    await expect(details.locator('p-select[data-field="priority"]')).toBeVisible()
+  })
+
   test('task modal has identifiable history region', async ({
     page,
   }) => {
@@ -271,6 +291,7 @@ test.describe('TestFromAC_TaskDetailModalComposition', () => {
   test('task editor labels remain visible after priority and body mode interactions', async ({
     page,
   }) => {
+    await openTaskDetailEditor(page)
     await expectTaskEditorLabelContract(page)
 
     await page.locator('p-select[data-field="priority"]').evaluate((element) => {
@@ -300,6 +321,7 @@ test.describe('TestFromAC_TaskDetailModalComposition', () => {
     await expect(details).toContainText('Task body')
     await expect(details).not.toContainText('Brief')
 
+    await openTaskDetailEditor(page)
     await page.locator('[data-testid="body-edit-toggle"]').click()
     await expect(details).not.toContainText('Brief')
     const bodyTextarea = page.locator('p-textarea[data-field="body"]')

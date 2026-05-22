@@ -175,7 +175,7 @@ export default function DetailTab({
   return (
     <div className="flex min-w-0 flex-col gap-static-md">
       <section className="rounded-lg border border-contrast-low bg-canvas p-static-sm" data-region="task-detail-body">
-        <PHeading ref={syncHeadingAttrs('h3', 'medium')} size="medium" tag="h3">Details</PHeading>
+        <PHeading ref={syncHeadingAttrs('h3', 'medium')} size="medium" tag="h3">Task details</PHeading>
         <TaskFieldsEditor
           task={t}
           priorities={board?.priorities ?? []}
@@ -184,6 +184,7 @@ export default function DetailTab({
           serverValidationMessage={serverValidationMessage}
           clearConflictIfTaskChanged={clearConflictIfTaskChanged}
           onSave={handleSave}
+          defaultEditing={false}
         />
       </section>
 
