@@ -71,9 +71,12 @@ describe('TestFromAC_AppShell', () => {
       const { container } = renderShell()
       const identity = container.querySelector('[data-testid="app-identity"]')
       expect(identity).toHaveAttribute('slot', 'header-start')
-      expect(identity).toHaveAttribute('aria-label', 'OwlBear Dashboard')
+      expect(identity).toHaveAttribute('aria-label', 'OwlBear Cockpit')
+      expect(identity?.className).toContain('absolute')
+      expect(identity?.className).toContain('text-lg')
       expect(identity?.textContent).toContain('OwlBear')
-      expect(identity?.textContent).toContain('Dashboard')
+      expect(identity?.textContent).toContain('Cockpit')
+      expect(identity?.querySelector('span:last-child')?.className).toContain('text-[var(--p-color-contrast-medium)]')
     })
 
     it('pins the hidden PDS brand and utility slots to explicit header columns', () => {

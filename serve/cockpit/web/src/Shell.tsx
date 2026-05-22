@@ -379,16 +379,16 @@ function Shell() {
         style={canvasStyle}
         onSidebarStartUpdate={onSidebarStartUpdate}
       >
-        <span slot="title" className="sr-only">OwlBear Dashboard</span>
+        <span slot="title" className="sr-only">OwlBear Cockpit</span>
 
         <span
           slot="header-start"
-          className="pointer-events-none flex min-w-0 items-baseline gap-static-xs text-base font-semibold leading-none text-primary"
+          className="pointer-events-none absolute left-1/2 top-1/2 z-10 flex min-w-0 -translate-x-1/2 -translate-y-1/2 items-baseline gap-static-xs whitespace-nowrap text-lg font-semibold leading-none text-primary"
           data-testid="app-identity"
-          aria-label="OwlBear Dashboard"
+          aria-label="OwlBear Cockpit"
         >
           <span className="truncate">OwlBear</span>
-          <span className="hidden md:inline">Dashboard</span>
+          <span className="hidden font-medium text-[var(--p-color-contrast-medium)] md:inline">Cockpit</span>
         </span>
 
         <div

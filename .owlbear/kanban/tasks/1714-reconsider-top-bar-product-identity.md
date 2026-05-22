@@ -4,7 +4,7 @@ title: Reconsider top bar product identity
 status: done
 priority: important
 created: 2026-05-21T23:24:05.487044+02:00
-updated: 2026-05-22T01:29:30+02:00
+updated: 2026-05-22T11:42:16+02:00
 tags:
   - cockpit-perfect-ui
   - scope:cockpit-web
@@ -72,3 +72,20 @@ Use this task as a product/audit todo item, not an instruction to hand off to th
 - Desktop screenshot proof: captured and inspected 1440px light, 1440px dark, and 2560px light screenshots. Metrics after the fix: identity x=96/right=230; utility group x=1320/right=1416 at 1440px, and x=2440/right=2536 at 2560px. That places controls in the right utility area rather than the visual center.
 - Test contract update: replaced the stale E2E expectation that the status bar be wider than 200px with a compact right-anchored utility-area assertion.
 - Validation: `npx vitest run src/__tests__/Shell.test.tsx src/__tests__/Shell.theme-toggle.test.tsx --reporter=dot` passed 2 files / 23 tests. `npx playwright test e2e/shell-layout-1606.spec.ts` passed 11 tests. `npx playwright test e2e/shell-sidecar-inspector.spec.ts --grep "StatusBarNavHierarchy"` passed 5 tests. ESLint on touched shell/test files passed. `npm run build` passed with the existing Vite chunk-size warning. VS Code diagnostics found no errors in touched files. Task scratch artifacts were cleaned after screenshot review.
+
+
+## Reopened User Feedback - 2026-05-22 Later
+- The current `OwlBear Dashboard` identity is too boring and small after the last fix.
+- User preferred the earlier prettier treatment with stronger logo-line presence, a slightly gray secondary word, and more central visual balance; suggested `text-lg` scale and contrast treatment as directional input, not exact spec.
+- Classification: user-observed delivered-work regression, not theoretical.
+- Impact: hurts Cockpit now because the global product identity is the first-frame orientation point for the whole cockpit and currently feels under-designed.
+- Product direction: make the logo/title line larger and more intentional while keeping utility controls in the correct right-side area and avoiding the inherited Porsche mark.
+
+## Final Evidence - 2026-05-22 Later
+- Classification: observed delivered-work regression, not theoretical. The previous `OwlBear Dashboard` line was functional but read like a small label, not a polished product identity.
+- Impact: hurt Cockpit now because every route opens under this top chrome; weak identity made the whole workspace feel unfinished.
+- Implementation: changed the visible and accessible product name to `OwlBear Cockpit`, centered the identity over the PCanvas workspace/header area, restored a larger `text-lg` scale, and split the wordmark treatment so `OwlBear` stays primary while `Cockpit` uses the PDS contrast-medium token at lighter weight. Kept the PDS crest/wordmark hidden and the utility controls pinned to the right header slot.
+- Browser geometry proof: Playwright screenshot run captured 1440px light, 1440px dark, and 2560px light views. Metrics showed identity center equals workspace/header center (`756` at 1440px, `1316` at 2560px), utility controls remain at the far right (`statusRight=1416` at 1440px, `2536` at 2560px), and the real app identity font size is larger (`25.904px` at 1440px, `28.48px` at 2560px).
+- Screenshot review: inspected the light/dark 1440px and light 2560px captures. The result reads as a centered product wordmark, `Cockpit` is visibly secondary, and the status/theme controls do not compete with the brand line. Scratch captures/logs were removed after recording evidence.
+- Validation: `npx vitest run src/__tests__/Shell.test.tsx src/__tests__/Shell.theme-toggle.test.tsx src/__tests__/PdsSimpleSwaps.test.tsx --reporter=dot` passed 3 files / 52 tests. Focused Playwright shell checks passed 3 tests. ESLint on touched shell/test files passed. `npm run build` passed with the existing Vite chunk-size warning. VS Code diagnostics found no errors in touched files.
+
