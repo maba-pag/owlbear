@@ -13,8 +13,8 @@ const STATUS_VARIANTS: Record<string, TagVariant> = {
 const PRIORITY_VARIANTS: Record<string, TagVariant> = {
   someday: 'secondary',
   'nice-to-have': 'secondary',
-  important: 'info',
-  needed: 'info',
+  important: 'secondary',
+  needed: 'warning',
   critical: 'error',
 }
 

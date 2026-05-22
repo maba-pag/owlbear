@@ -111,7 +111,7 @@ export function Card({
     signal === 'claimed' ? 'border-l-[var(--custom-signal-claimed)]' :
     signal === 'deps-unmet' ? 'border-l-contrast-medium' :
     signal === 'ready' && task.priority === 'critical' ? 'border-l-error' :
-    signal === 'ready' && (task.priority === 'needed' || task.priority === 'important') ? 'border-l-warning' :
+    signal === 'ready' && task.priority === 'needed' ? 'border-l-warning' :
     'border-l-contrast-medium'
 
   return (

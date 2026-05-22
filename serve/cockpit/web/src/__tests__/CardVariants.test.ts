@@ -147,8 +147,16 @@ describe('card variant mappings', () => {
       }
     })
 
-    it('priorityToVariant("needed") returns "info" — not the invalid "notification"', () => {
-      expect(priorityToVariant('needed')).toBe('info')
+    it('priorityToVariant("important") returns neutral secondary, not blue info', () => {
+      expect(priorityToVariant('important')).toBe('secondary')
+    })
+
+    it('priorityToVariant("needed") returns warning for the first escalation priority', () => {
+      expect(priorityToVariant('needed')).toBe('warning')
+    })
+
+    it('priorityToVariant("critical") returns error for the highest escalation priority', () => {
+      expect(priorityToVariant('critical')).toBe('error')
     })
   })
 })
