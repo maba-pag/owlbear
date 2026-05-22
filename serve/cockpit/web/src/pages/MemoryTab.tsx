@@ -346,8 +346,10 @@ function MemoryTab() {
     }
 
     element.addEventListener('update', onUpdate)
+    element.addEventListener('change', onUpdate)
     return () => {
       element.removeEventListener('update', onUpdate)
+      element.removeEventListener('change', onUpdate)
     }
   }, [])
 
@@ -362,8 +364,10 @@ function MemoryTab() {
     }
 
     element.addEventListener('update', onUpdate)
+    element.addEventListener('change', onUpdate)
     return () => {
       element.removeEventListener('update', onUpdate)
+      element.removeEventListener('change', onUpdate)
     }
   }, [])
 

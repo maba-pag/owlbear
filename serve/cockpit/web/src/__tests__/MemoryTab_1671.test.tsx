@@ -357,6 +357,35 @@ describe('TestFromAC_MemoryTabFilters', () => {
     expect(titles).not.toContain('Deleted Entry')
   })
 
+  it('ac2 regression: PDS change event on state filter controls visible states and shown count', async () => {
+    const entries = [
+      makeEntry({ id: 'e1', title: 'Pending Entry', state: 'pending' }),
+      makeEntry({ id: 'e2', title: 'Curated Entry', state: 'curated' }),
+      makeEntry({ id: 'e3', title: 'Approved Entry', state: 'approved' }),
+      makeEntry({ id: 'e4', title: 'Deleted Entry', state: 'deleted' }),
+    ]
+    vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
+    let container!: HTMLElement
+    await act(async () => {
+      container = renderMemoryTab().container
+    })
+    await flush()
+
+    const stateFilter = container.querySelector('[name="state-filter"]')
+    fireEvent(stateFilter!, new CustomEvent('change', { detail: { value: ['deleted'] }, bubbles: true }))
+    await flush()
+
+    const titles = Array.from(container.querySelectorAll('[data-testid="memory-entry-title"]')).map(
+      (el) => el.textContent,
+    )
+    expect(titles).toEqual(['Deleted Entry'])
+
+    const metrics = Array.from(container.querySelectorAll('[data-testid="workspace-header-metric"]')).map(
+      (el) => el.textContent,
+    )
+    expect(metrics).toContain('1shown')
+  })
+
   it('ac2 happy: category filter is populated from distinct categories across all entries', async () => {
     const entries = [
       makeEntry({ id: 'e1', categories: ['behaviour', 'pitfall'], state: 'pending' }),
