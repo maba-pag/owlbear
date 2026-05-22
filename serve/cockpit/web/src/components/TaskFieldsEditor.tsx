@@ -145,6 +145,7 @@ export default function TaskFieldsEditor({
   const [blockReason, setBlockReason] = useState(task.block_reason ?? '')
   const saveConfirmedTimerRef = useRef<number | null>(null)
   const previousTaskIdRef = useRef(task.id)
+  const taskBodyLabel = 'Task body'
 
   useEffect(() => {
     const isTaskSwitch = previousTaskIdRef.current !== task.id
@@ -372,8 +373,8 @@ export default function TaskFieldsEditor({
       </section>
 
       <section className="rounded-lg border border-contrast-low bg-surface p-static-md">
-        <div className="mb-static-xs flex min-w-0 flex-wrap items-center justify-between gap-static-xs">
-          <span className="text-sm font-semibold text-contrast-high">Brief</span>
+        <div className={`mb-static-xs flex min-w-0 flex-wrap items-center gap-static-xs ${editBody ? 'justify-end' : 'justify-between'}`}>
+          {editBody ? null : <span className="text-sm font-semibold text-contrast-high">{taskBodyLabel}</span>}
           <PButton
             data-testid="body-edit-toggle"
             variant="secondary"
@@ -387,7 +388,7 @@ export default function TaskFieldsEditor({
         {editBody ? (
           <PTextarea
             name="body"
-            label="Body"
+            label={taskBodyLabel}
             data-field="body"
             value={body}
             onChange={(event) => setBody(readControlValue(event))}

@@ -289,6 +289,23 @@ describe('TestFromAC_DetailTab', () => {
       expect(container.querySelector('[data-testid="body-edit-toggle"]')).not.toBeNull()
     })
 
+    it('uses consistent task body labeling across preview and edit modes', () => {
+      const { container } = renderDetail()
+      expect(container.textContent).toContain('Task body')
+      expect(container.textContent).not.toContain('Brief')
+
+      const toggle = container.querySelector('[data-testid="body-edit-toggle"]') as HTMLElement | null
+      expect(toggle).not.toBeNull()
+      fireEvent.click(toggle!)
+
+      const textarea = container.querySelector('p-textarea[data-field="body"]') as
+        | (HTMLElement & { label?: string })
+        | null
+      expect(textarea).not.toBeNull()
+      expect(textarea?.label ?? textarea?.getAttribute('label')).toBe('Task body')
+      expect(container.textContent).not.toContain('Brief')
+    })
+
     it('clicking edit-mode toggle reveals a textarea for body editing', () => {
       const { container } = renderDetail()
       const toggle = container.querySelector('[data-testid="body-edit-toggle"]') as HTMLElement | null

@@ -284,13 +284,29 @@ test.describe('TestFromAC_TaskDetailModalComposition', () => {
     const bodyLabel = await bodyTextarea.evaluate((element) => {
       return (element as HTMLElement & { label?: string }).label ?? element.getAttribute('label')
     })
-    expect(bodyLabel).toBe('Body')
+    expect(bodyLabel).toBe('Task body')
     expect(await bodyTextarea.evaluate((element) => element.hasAttribute('hide-label'))).toBe(false)
     await expectTaskEditorLabelContract(page)
 
     await page.locator('[data-testid="body-edit-toggle"]').click()
     await expect(page.locator('p-textarea[data-field="body"]')).toHaveCount(0)
     await expectTaskEditorLabelContract(page)
+  })
+
+  test('task body uses consistent copy between preview and edit mode', async ({
+    page,
+  }) => {
+    const details = page.locator('[data-region="task-detail-body"]')
+    await expect(details).toContainText('Task body')
+    await expect(details).not.toContainText('Brief')
+
+    await page.locator('[data-testid="body-edit-toggle"]').click()
+    await expect(details).not.toContainText('Brief')
+    const bodyTextarea = page.locator('p-textarea[data-field="body"]')
+    const bodyLabel = await bodyTextarea.evaluate((element) => {
+      return (element as HTMLElement & { label?: string }).label ?? element.getAttribute('label')
+    })
+    expect(bodyLabel).toBe('Task body')
   })
 })
 
