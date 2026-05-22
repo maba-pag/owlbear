@@ -90,13 +90,13 @@ test.describe('Memory state filter', () => {
 
     const titles = page.getByTestId('memory-entry-title')
     await expect(titles).toHaveText(['Pending Memory', 'Curated Memory', 'Approved Memory'])
-    await expect(page.getByTestId('workspace-header-metric').nth(1)).toHaveText(/3\s*shown/)
+    await expect(page.getByTestId('workspace-header-metric')).toHaveText(/3\s*of\s*4\s*shown/)
 
     await page.locator('p-multi-select[name="state-filter"]').evaluate((element) => {
       element.dispatchEvent(new CustomEvent('change', { detail: { value: ['deleted'] }, bubbles: true }))
     })
 
     await expect(titles).toHaveText(['Deleted Memory'])
-    await expect(page.getByTestId('workspace-header-metric').nth(1)).toHaveText(/1\s*shown/)
+    await expect(page.getByTestId('workspace-header-metric')).toHaveText(/1\s*of\s*4\s*shown/)
   })
 })

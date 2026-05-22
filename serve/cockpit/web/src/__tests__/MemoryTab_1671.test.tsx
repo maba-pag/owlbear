@@ -92,6 +92,12 @@ function readPdsVariant(element: Element | null): string | undefined {
   return (element as (Element & { variant?: string }) | null)?.variant ?? element?.getAttribute('variant') ?? undefined
 }
 
+function readMetricTexts(container: HTMLElement): string[] {
+  return Array.from(container.querySelectorAll('[data-testid="workspace-header-metric"]')).map(
+    (el) => el.textContent?.replace(/\s+/g, '') ?? '',
+  )
+}
+
 // ─── AC1: Route registration ──────────────────────────────────────────────────
 
 describe('TestFromAC_MemoryTabRoute', () => {
@@ -380,10 +386,55 @@ describe('TestFromAC_MemoryTabFilters', () => {
     )
     expect(titles).toEqual(['Deleted Entry'])
 
-    const metrics = Array.from(container.querySelectorAll('[data-testid="workspace-header-metric"]')).map(
-      (el) => el.textContent,
-    )
-    expect(metrics).toContain('1shown')
+    expect(readMetricTexts(container)).toEqual(['1of4shown'])
+  })
+
+  it('ac2 polish: summary reads visible of total when default state filter hides deleted entries', async () => {
+    const entries = [
+      makeEntry({ id: 'e1', title: 'Pending Entry', state: 'pending' }),
+      makeEntry({ id: 'e2', title: 'Curated Entry', state: 'curated' }),
+      makeEntry({ id: 'e3', title: 'Approved Entry', state: 'approved' }),
+      makeEntry({ id: 'e4', title: 'Deleted Entry', state: 'deleted' }),
+    ]
+    vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
+    let container!: HTMLElement
+    await act(async () => {
+      container = renderMemoryTab().container
+    })
+    await flush()
+
+    expect(readMetricTexts(container)).toEqual(['3of4shown'])
+  })
+
+  it('ac2 polish: summary collapses to total count when every entry is visible', async () => {
+    const entries = [
+      makeEntry({ id: 'e1', title: 'Pending Entry', state: 'pending' }),
+      makeEntry({ id: 'e2', title: 'Curated Entry', state: 'curated' }),
+    ]
+    vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
+    let container!: HTMLElement
+    await act(async () => {
+      container = renderMemoryTab().container
+    })
+    await flush()
+
+    expect(readMetricTexts(container)).toEqual(['2entries'])
+  })
+
+  it('ac2 polish: parse errors remain visible alongside the compact count', async () => {
+    const entries = [
+      makeEntry({ id: 'e1', title: 'Pending Entry', state: 'pending' }),
+      makeEntry({ id: 'e2', title: 'Deleted Entry', state: 'deleted' }),
+    ]
+    vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries, 2)))
+    let container!: HTMLElement
+    await act(async () => {
+      container = renderMemoryTab().container
+    })
+    await flush()
+
+    expect(readMetricTexts(container)).toEqual(['1of2shown'])
+    expect(container.querySelector('[data-testid="workspace-header-summary"]')?.textContent).toContain('2 unreadable')
   })
 
   it('ac2 happy: category filter is populated from distinct categories across all entries', async () => {

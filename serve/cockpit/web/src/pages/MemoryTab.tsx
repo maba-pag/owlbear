@@ -436,6 +436,9 @@ function MemoryTab() {
 
   const hasEntries = entries.length > 0
   const hasVisibleEntries = visibleEntries.length > 0
+  const memoryCountMetric = visibleEntries.length === entries.length
+    ? <WorkspaceHeaderMetric value={entries.length} label={entries.length === 1 ? 'entry' : 'entries'} />
+    : <WorkspaceHeaderMetric value={`${visibleEntries.length} of ${entries.length}`} label="shown" />
 
   useEffect(() => {
     const entriesToBind = Object.entries(accordionRefs.current)
@@ -661,8 +664,7 @@ function MemoryTab() {
         summaryLabel="Memory summary"
         summary={(
           <>
-            <WorkspaceHeaderMetric value={entries.length} label="entries" />
-            <WorkspaceHeaderMetric value={visibleEntries.length} label="shown" />
+            {memoryCountMetric}
             {parseErrors > 0 ? <WorkspaceHeaderPill tone="error">{parseErrors} unreadable</WorkspaceHeaderPill> : null}
           </>
         )}
