@@ -31,15 +31,15 @@ export const routeConfig: RouteConfigEntry[] = [
     component: DecisionsPage,
   },
   {
-    path: '/ideas',
-    label: 'Ideas',
-    icon: 'ideas',
-    component: IdeasPage,
-  },
-  {
     path: '/memories',
     label: 'Memory',
     icon: 'memory',
     component: MemoryTab,
+  },
+  {
+    path: '/ideas',
+    label: 'Ideas',
+    icon: 'ideas',
+    component: IdeasPage,
   },
 ]

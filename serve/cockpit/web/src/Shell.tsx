@@ -54,10 +54,10 @@ function syncTagVariantAttr(variant: string) {
 }
 
 const NAV_ICONS: Record<string, IconName> = {
-  kanban: 'grid',
-  decisions: 'document',
-  ideas: 'edit',
+  kanban: 'steering-wheel',
+  decisions: 'route',
   memory: 'brain',
+  ideas: 'user-manual',
 }
 
 const CANVAS_OVERRIDE_ATTR = 'data-cockpit-canvas-override'

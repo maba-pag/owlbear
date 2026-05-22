@@ -349,4 +349,28 @@ describe('ShellLevelIntegration', () => {
     expect(container.querySelector('[data-testid="dr-indicator"]')).toBeNull()
     expect(container.querySelector('[data-surface="decisions"] [data-testid="nav-badge"]')).toBeNull()
   })
+
+  it('Shell renders the #1717 nav order and Porsche icon mapping', () => {
+    const { container } = renderShell()
+    const controls = Array.from(container.querySelectorAll('[data-region="nav-rail"] [data-surface]'))
+    expect(controls.map((control) => control.getAttribute('data-surface'))).toEqual([
+      'kanban',
+      'decisions',
+      'memory',
+      'ideas',
+    ])
+
+    const expectedIcons = new Map([
+      ['kanban', 'steering-wheel'],
+      ['decisions', 'route'],
+      ['memory', 'brain'],
+      ['ideas', 'user-manual'],
+    ])
+
+    for (const control of controls) {
+      const surface = control.getAttribute('data-surface') ?? ''
+      const icon = control.querySelector('p-icon') as (Element & { name?: string }) | null
+      expect(icon?.name ?? icon?.getAttribute('name')).toBe(expectedIcons.get(surface))
+    }
+  })
 })
