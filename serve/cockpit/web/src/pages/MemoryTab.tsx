@@ -790,21 +790,23 @@ function MemoryTab() {
 
                 {openEntryId === entry.id ? (
                   <div data-testid="memory-accordion-detail" className="grid gap-static-md border-t border-contrast-low pt-static-md">
-                    <div className="prose prose-sm max-w-none text-primary">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[[rehypeSanitize, MEMORY_SANITIZE_SCHEMA]]}>
-                        {entry.content}
-                      </ReactMarkdown>
+                    <div data-testid="memory-content-panel" className="rounded-md border border-contrast-low bg-surface p-static-md text-base leading-relaxed text-primary shadow-sm">
+                      <div className="prose max-w-none text-base leading-relaxed text-primary">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[[rehypeSanitize, MEMORY_SANITIZE_SCHEMA]]}>
+                          {entry.content}
+                        </ReactMarkdown>
+                      </div>
                     </div>
-                    <dl className="grid gap-x-static-md gap-y-static-xs text-sm text-primary md:grid-cols-2 xl:grid-cols-4">
-                      <div><dt className="font-semibold text-primary">ID</dt><dd>{entry.id}</dd></div>
-                      <div><dt className="font-semibold text-primary">Source agent</dt><dd>{entry.source_agent}</dd></div>
-                      <div><dt className="font-semibold text-primary">Scope agents</dt><dd>{entry.scope_agents.length > 0 ? entry.scope_agents.join(', ') : 'All agents'}</dd></div>
-                      <div><dt className="font-semibold text-primary">Categories</dt><dd>{entry.categories.join(', ')}</dd></div>
-                      <div><dt className="font-semibold text-primary">Confidence</dt><dd>{formatConfidence(entry.confidence)}</dd></div>
-                      <div><dt className="font-semibold text-primary">State</dt><dd>{entry.state}</dd></div>
-                      <div><dt className="font-semibold text-primary">Created</dt><dd>{entry.created_at}</dd></div>
-                      <div><dt className="font-semibold text-primary">Updated</dt><dd>{entry.updated_at}</dd></div>
-                      <div><dt className="font-semibold text-primary">Approved</dt><dd>{entry.approved_at ?? '-'}</dd></div>
+                    <dl data-testid="memory-metadata-grid" className="grid gap-x-static-md gap-y-static-xs border-t border-contrast-low pt-static-sm text-xs leading-normal text-contrast-high md:grid-cols-2 xl:grid-cols-4">
+                      <div className="min-w-0"><dt className="font-semibold text-contrast-high">ID</dt><dd className="m-0 break-words text-primary">{entry.id}</dd></div>
+                      <div className="min-w-0"><dt className="font-semibold text-contrast-high">Source agent</dt><dd className="m-0 break-words text-primary">{entry.source_agent}</dd></div>
+                      <div className="min-w-0"><dt className="font-semibold text-contrast-high">Scope agents</dt><dd className="m-0 break-words text-primary">{entry.scope_agents.length > 0 ? entry.scope_agents.join(', ') : 'All agents'}</dd></div>
+                      <div className="min-w-0"><dt className="font-semibold text-contrast-high">Categories</dt><dd className="m-0 break-words text-primary">{entry.categories.join(', ')}</dd></div>
+                      <div className="min-w-0"><dt className="font-semibold text-contrast-high">Confidence</dt><dd className="m-0 break-words text-primary">{formatConfidence(entry.confidence)}</dd></div>
+                      <div className="min-w-0"><dt className="font-semibold text-contrast-high">State</dt><dd className="m-0 break-words text-primary">{entry.state}</dd></div>
+                      <div className="min-w-0"><dt className="font-semibold text-contrast-high">Created</dt><dd className="m-0 break-words text-primary">{entry.created_at}</dd></div>
+                      <div className="min-w-0"><dt className="font-semibold text-contrast-high">Updated</dt><dd className="m-0 break-words text-primary">{entry.updated_at}</dd></div>
+                      <div className="min-w-0"><dt className="font-semibold text-contrast-high">Approved</dt><dd className="m-0 break-words text-primary">{entry.approved_at ?? '-'}</dd></div>
                     </dl>
 
                     {entry.state === 'approved' ? <p className="text-sm text-primary">Editing will require re-approval</p> : null}

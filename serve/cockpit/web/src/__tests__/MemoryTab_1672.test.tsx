@@ -255,6 +255,24 @@ describe('TestFromAC_MemoryAccordion', () => {
     expect(markdownEl?.textContent).toContain('Bold')
   })
 
+  it('ac1 polish: memory content is the primary detail block before secondary metadata', async () => {
+    const container = await renderWithEntries([makeEntry({ content: 'Primary memory text' })])
+    await openAccordion(container)
+
+    const detail = container.querySelector('[data-testid="memory-accordion-detail"]')
+    const contentPanel = container.querySelector('[data-testid="memory-content-panel"]')
+    const metadataGrid = container.querySelector('[data-testid="memory-metadata-grid"]')
+    expect(contentPanel).not.toBeNull()
+    expect(metadataGrid).not.toBeNull()
+
+    const detailChildren = Array.from(detail?.children ?? [])
+    expect(detailChildren.indexOf(contentPanel!)).toBeLessThan(detailChildren.indexOf(metadataGrid!))
+    expect(contentPanel?.className).toContain('bg-surface')
+    expect(contentPanel?.className).toContain('text-base')
+    expect(metadataGrid?.className).toContain('text-xs')
+    expect(metadataGrid?.className).toContain('text-contrast-high')
+  })
+
   it('ac1 happy: accordion detail shows source_agent metadata field', async () => {
     const container = await renderWithEntries([makeEntry({ source_agent: 'my-agent' })])
     await openAccordion(container)

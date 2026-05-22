@@ -1,10 +1,10 @@
 ---
 id: 1693
 title: Emphasize memory detail content
-status: research
+status: done
 priority: important
 created: 2026-05-21T19:53:24.732852+02:00
-updated: 2026-05-21T19:53:24.732852+02:00
+updated: 2026-05-22T15:05:00+02:00
 tags:
   - cockpit-perfect-ui
   - scope:cockpit-web
@@ -39,3 +39,10 @@ Use this task as a product/audit todo item, not an instruction to hand off to th
 - Audit detail view hierarchy between content and metadata.
 - Make memory content the primary visual block in expanded rows.
 - Keep metadata scannable but secondary.
+
+## Builder Evidence
+- Product audit: expanded Memory rows now render the markdown memory body first in a bordered `memory-content-panel` with larger body rhythm, then render provenance fields in a compact secondary `memory-metadata-grid`.
+- Metadata remains available for ID, source agent, scope agents, categories, confidence, state, created, updated, and approved timestamps without sharing the same visual block as the memory text.
+- Regression coverage: focused detail hierarchy test passed (`9 passed, 68 skipped`); broader Memory route/detail suites passed (`127 passed`).
+- Quality gates: diagnostics clean for `MemoryTab.tsx` and `MemoryTab_1672.test.tsx`; ESLint passed for both files; `npm run build` passed with the known Vite chunk-size warning.
+- Screenshot proof: `.owlbear/scratch/1716-wide-cockpit/memory-detail-content-1693.png`; browser capture reported 0 console errors, 0 page errors, 0 request failures, and 0 response errors.
