@@ -7,7 +7,7 @@
  * AC3 (td:1): standalone <p> → <PText> in ArchivalModal error, DRStatusIndicator
  *              empty state, HealthBadge empty state, ArchivalModal refs hint
  * AC4 (td:2): form controls → PInputText/PSelect/PTextarea in DetailTab,
- *              ArchivalModal, ResolveModal; hideLabel where no visible label
+ *              ArchivalModal, ResolveModal; visible labels where they anchor form fields
  * AC5/AC6 (td:0): Card/Column and KanbanBoard context menu — not tested here
  *
  */
@@ -734,45 +734,45 @@ describe('TestFromAC_PdsMigration_FormControls', () => {
     })
   })
 
-  // ─ Edge: hideLabel on unlabeled inputs ───────────────────────────────────
+  // ─ Boundary: DetailTab fields keep visible labels ───────────────────────
 
-  describe('AC4 edge: hideLabel on DetailTab inputs without visible labels', () => {
-    it('p-input-text for title has hide-label attribute (no visible label)', () => {
+  describe('AC4 boundary: DetailTab inputs keep visible labels', () => {
+    it('p-input-text for title does not hide its label', () => {
       const { container } = renderDetailTab()
       const el = container.querySelector('p-input-text[data-field="title"]')
-      expect(el?.hasAttribute('hide-label')).toBe(true)
+      expect(el?.hasAttribute('hide-label')).toBe(false)
     })
 
-    it('p-select for priority has hide-label attribute (no visible label)', () => {
+    it('p-select for priority does not hide its label', () => {
       const { container } = renderDetailTab()
       const el = container.querySelector('p-select[data-field="priority"]')
-      expect(el?.hasAttribute('hide-label')).toBe(true)
+      expect(el?.hasAttribute('hide-label')).toBe(false)
     })
 
-    it('p-textarea for body in edit mode has hide-label attribute', () => {
+    it('p-textarea for body in edit mode does not hide its label', () => {
       const { container } = renderDetailTab()
       const toggleBtn = container.querySelector('[data-testid="body-edit-toggle"]')
       if (toggleBtn) fireEvent.click(toggleBtn)
       const el = container.querySelector('p-textarea[data-field="body"]')
-      expect(el?.hasAttribute('hide-label')).toBe(true)
+      expect(el?.hasAttribute('hide-label')).toBe(false)
     })
 
-    it('p-input-text for depends_on has hide-label attribute (no visible label)', () => {
+    it('p-input-text for depends_on does not hide its label', () => {
       const { container } = renderDetailTab()
       const el = container.querySelector('p-input-text[data-field="depends_on"]')
-      expect(el?.hasAttribute('hide-label')).toBe(true)
+      expect(el?.hasAttribute('hide-label')).toBe(false)
     })
 
-    it('p-input-text for parent has hide-label attribute (no visible label)', () => {
+    it('p-input-text for parent does not hide its label', () => {
       const { container } = renderDetailTab()
       const el = container.querySelector('p-input-text[data-field="parent"]')
-      expect(el?.hasAttribute('hide-label')).toBe(true)
+      expect(el?.hasAttribute('hide-label')).toBe(false)
     })
 
-    it('p-input-text for block_reason has hide-label attribute when task is blocked', () => {
+    it('p-input-text for block_reason does not hide its label when task is blocked', () => {
       const { container } = renderDetailTab(TASK_BLOCKED)
       const el = container.querySelector('p-input-text[data-field="block_reason"]')
-      expect(el?.hasAttribute('hide-label')).toBe(true)
+      expect(el?.hasAttribute('hide-label')).toBe(false)
     })
   })
 

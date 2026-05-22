@@ -148,6 +148,26 @@ async function navigateAndSelectTask(page: Page): Promise<void> {
   await expect(page.locator('[data-region="task-detail-body"]')).toBeVisible({ timeout: 8_000 })
 }
 
+async function expectTaskEditorLabelContract(page: Page): Promise<void> {
+  const controls = [
+    { selector: 'p-input-text[data-field="title"]', label: 'Title' },
+    { selector: 'p-select[data-field="priority"]', label: 'Priority' },
+    { selector: 'p-input-text[data-field="new-tag"]', label: 'Add tag' },
+    { selector: 'p-input-text[data-field="depends_on"]', label: 'Depends on' },
+    { selector: 'p-input-text[data-field="parent"]', label: 'Parent' },
+  ]
+
+  for (const control of controls) {
+    const host = page.locator(control.selector)
+    await expect(host).toBeVisible()
+    const label = await host.evaluate((element) => {
+      return (element as HTMLElement & { label?: string }).label ?? element.getAttribute('label')
+    })
+    expect(label).toBe(control.label)
+    expect(await host.evaluate((element) => element.hasAttribute('hide-label'))).toBe(false)
+  }
+}
+
 // ─── AC-1: Task detail modal composition ────────────────────────────────────
 //
 // RED targets:
@@ -246,6 +266,31 @@ test.describe('TestFromAC_TaskDetailModalComposition', () => {
       )
       .first()
     await expect(actionsRegion).toBeVisible()
+  })
+
+  test('task editor labels remain visible after priority and body mode interactions', async ({
+    page,
+  }) => {
+    await expectTaskEditorLabelContract(page)
+
+    await page.locator('p-select[data-field="priority"]').evaluate((element) => {
+      element.dispatchEvent(new CustomEvent('change', { detail: { value: 'needed' }, bubbles: true }))
+    })
+    await expectTaskEditorLabelContract(page)
+
+    await page.locator('[data-testid="body-edit-toggle"]').click()
+    await expect(page.locator('p-textarea[data-field="body"]')).toBeVisible()
+    const bodyTextarea = page.locator('p-textarea[data-field="body"]')
+    const bodyLabel = await bodyTextarea.evaluate((element) => {
+      return (element as HTMLElement & { label?: string }).label ?? element.getAttribute('label')
+    })
+    expect(bodyLabel).toBe('Body')
+    expect(await bodyTextarea.evaluate((element) => element.hasAttribute('hide-label'))).toBe(false)
+    await expectTaskEditorLabelContract(page)
+
+    await page.locator('[data-testid="body-edit-toggle"]').click()
+    await expect(page.locator('p-textarea[data-field="body"]')).toHaveCount(0)
+    await expectTaskEditorLabelContract(page)
   })
 })
 

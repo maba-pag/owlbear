@@ -72,14 +72,6 @@ export function parseParent(raw: string): { value: number | null; error: string 
   return { value: parsed, error: null }
 }
 
-function setHideLabelAttr(element: HTMLElement | null): void {
-  if (!element) {
-    return
-  }
-  element.setAttribute('hide-label', '')
-  ;(element as HTMLElement & { hideLabel?: boolean }).hideLabel = true
-}
-
 function readControlValue(
   event: {
     target?: EventTarget | null
@@ -304,7 +296,6 @@ export default function TaskFieldsEditor({
     <div className="grid gap-static-sm">
       <div className="grid gap-static-sm lg:grid-cols-[minmax(0,1fr)_14rem]">
         <PInputText
-          ref={setHideLabelAttr}
           name="title"
           label="Title"
           data-field="title"
@@ -313,7 +304,6 @@ export default function TaskFieldsEditor({
           onInput={(event) => setTitle(readControlValue(event))}
         />
         <PSelect
-          ref={setHideLabelAttr}
           name="priority"
           label="Priority"
           data-field="priority"
@@ -349,7 +339,6 @@ export default function TaskFieldsEditor({
         </div>
         <div className="grid gap-static-xs sm:grid-cols-[minmax(0,1fr)_auto]">
           <PInputText
-            ref={setHideLabelAttr}
             name="new_tag"
             label="Add tag"
             data-field="new-tag"
@@ -397,7 +386,6 @@ export default function TaskFieldsEditor({
 
         {editBody ? (
           <PTextarea
-            ref={setHideLabelAttr}
             name="body"
             label="Body"
             data-field="body"
@@ -416,7 +404,6 @@ export default function TaskFieldsEditor({
 
       <div className="grid gap-static-sm lg:grid-cols-2">
         <PInputText
-          ref={setHideLabelAttr}
           name="depends_on"
           label="Depends on"
           data-field="depends_on"
@@ -425,7 +412,6 @@ export default function TaskFieldsEditor({
           onInput={(event) => setDependsOn(readControlValue(event))}
         />
         <PInputText
-          ref={setHideLabelAttr}
           name="parent"
           label="Parent"
           data-field="parent"
@@ -437,7 +423,6 @@ export default function TaskFieldsEditor({
 
       {task.blocked && (
         <PInputText
-          ref={setHideLabelAttr}
           name="block_reason"
           label="Block reason"
           data-field="block_reason"
