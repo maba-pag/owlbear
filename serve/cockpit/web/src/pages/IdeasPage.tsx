@@ -460,13 +460,13 @@ function IdeasPage() {
 
         <div className="grid min-h-0 flex-1 gap-static-md lg:grid-cols-[minmax(0,1fr)_minmax(260px,320px)]">
         <div data-testid="ideas-editor-shell" className="relative flex min-h-0 flex-col overflow-hidden rounded-lg border border-contrast-low bg-canvas">
-          <div className="flex flex-wrap items-center justify-between gap-static-sm border-b border-contrast-low bg-canvas px-static-md py-static-sm">
+          <div data-testid="ideas-editor-toolbar" className="flex flex-wrap items-start justify-start gap-static-sm border-b border-contrast-low bg-canvas px-static-sm py-static-sm sm:items-center sm:justify-between sm:px-static-md">
             <div className="flex min-w-0 flex-wrap items-center gap-static-xs text-xs font-semibold uppercase text-primary">
               <span>{previewMode ? 'Markdown preview' : 'Editor'}</span>
               <span aria-hidden="true">/</span>
               <span>{formatNumber(lineCount)} lines</span>
             </div>
-            <div className="flex flex-wrap items-center gap-static-xs">
+            <div data-testid="ideas-toolbar-actions" className="flex w-full min-w-0 flex-wrap items-center gap-static-xs sm:w-auto sm:justify-end">
               {isDirty ? (
                 <span data-testid="ideas-dirty" className="rounded-full bg-info-low px-static-xs py-1 text-xs font-semibold text-primary">
                   Unsaved changes
