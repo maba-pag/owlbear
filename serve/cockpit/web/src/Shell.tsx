@@ -149,6 +149,8 @@ function Shell() {
   const [showTaskDetailUnsavedDialog, setShowTaskDetailUnsavedDialog] = useState(false)
   const pendingTaskDetailActionRef = useRef<(() => void) | null>(null)
   const taskDetailStayButtonRef = useRef<HTMLElement | null>(null)
+  const taskDetailContentRef = useRef<HTMLDivElement | null>(null)
+  const [taskDetailCanScrollDown, setTaskDetailCanScrollDown] = useState(false)
   const toastMockClearedRef = useRef(false)
 
   const runTaskDetailAction = useCallback((action: () => void) => {
@@ -185,6 +187,13 @@ function Shell() {
   const cancelTaskDetailLeave = useCallback(() => {
     pendingTaskDetailActionRef.current = null
     setShowTaskDetailUnsavedDialog(false)
+  }, [])
+
+  const updateTaskDetailScrollCue = useCallback(() => {
+    const content = taskDetailContentRef.current
+    setTaskDetailCanScrollDown(Boolean(
+      content && content.scrollHeight - content.scrollTop - content.clientHeight > 1,
+    ))
   }, [])
 
   const selectTaskFromBoard = useCallback((taskId: number) => {
@@ -309,6 +318,21 @@ function Shell() {
       setIsTaskDetailDirty(false)
     }
   }, [isTaskDetailOpen])
+
+  useEffect(() => {
+    updateTaskDetailScrollCue()
+
+    const content = taskDetailContentRef.current
+    if (!isTaskDetailOpen || !content || typeof ResizeObserver === 'undefined') {
+      return
+    }
+
+    const observer = new ResizeObserver(updateTaskDetailScrollCue)
+    observer.observe(content)
+    return () => {
+      observer.disconnect()
+    }
+  }, [detailValidationMessage, isTaskDetailOpen, selectedTask?.updated, selectedTaskError, updateTaskDetailScrollCue])
 
   useEffect(() => {
     const mediaQuery = window.matchMedia('(min-width: 1024px)')
@@ -654,7 +678,7 @@ function Shell() {
           aria={{ 'aria-label': selectedTask ? `Task #${selectedTask.id}: ${selectedTask.title}` : 'Task detail' }}
         >
           <div
-            className="relative flex max-h-[min(84vh,820px)] w-[min(1040px,calc(100vw-8rem))] min-w-0 flex-col gap-static-md overflow-hidden"
+            className="relative flex h-[min(84vh,820px)] max-h-[min(84vh,820px)] w-[min(1040px,calc(100vw-8rem))] min-w-0 flex-col gap-static-md overflow-hidden"
             data-region="task-detail-window"
             data-selected-task-id={selectedTask?.id ?? selectedTaskId ?? undefined}
           >
@@ -689,8 +713,17 @@ function Shell() {
                 </div>
               ) : null}
             </header>
-            <div className="min-h-0 overflow-y-auto pr-static-xs" data-region="task-detail-content">
-              {taskDetailContent}
+            <div className="relative min-h-0 flex-1 overflow-hidden" data-testid="task-detail-scroll-shell">
+              <div ref={taskDetailContentRef} onScroll={updateTaskDetailScrollCue} className="absolute inset-0 min-h-0 overflow-x-hidden overflow-y-auto pb-static-lg pr-static-xs" data-region="task-detail-content">
+                {taskDetailContent}
+              </div>
+              {taskDetailCanScrollDown ? (
+                <div
+                  aria-hidden="true"
+                  data-testid="task-detail-scroll-cue"
+                  className="pointer-events-none absolute inset-x-0 bottom-0 h-10 [background:linear-gradient(to_bottom,transparent,var(--p-color-canvas))]"
+                />
+              ) : null}
             </div>
             {showTaskDetailUnsavedDialog ? (
               <div

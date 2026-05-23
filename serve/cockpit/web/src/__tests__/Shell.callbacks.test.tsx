@@ -223,12 +223,40 @@ describe('TestFromAC_ShellCallbacks', () => {
       act(() => { capturedKanbanOnSelectTask?.(42) })
 
       const detailWindow = container.querySelector('[data-region="task-detail-window"]')
-      const detailContent = container.querySelector('[data-region="task-detail-content"]')
+      const detailShell = container.querySelector('[data-testid="task-detail-scroll-shell"]')
+      const detailContent = container.querySelector('[data-region="task-detail-content"]') as HTMLElement | null
 
       expect(detailWindow?.className).toContain('max-h-[min(84vh,820px)]')
+      expect(detailWindow?.className).toContain('h-[min(84vh,820px)]')
       expect(detailWindow?.className).toContain('overflow-hidden')
+      expect(detailShell?.className).toContain('overflow-hidden')
+      expect(detailContent?.className).toContain('absolute')
+      expect(detailContent?.className).toContain('inset-0')
       expect(detailContent?.className).toContain('min-h-0')
+      expect(detailContent?.className).toContain('overflow-x-hidden')
       expect(detailContent?.className).toContain('overflow-y-auto')
+      expect(detailContent?.className).toContain('pb-static-lg')
+    })
+
+    it('task detail scroll cue appears only while more modal content remains below', () => {
+      stubHooks()
+      const { container } = renderShell()
+      act(() => { capturedKanbanOnSelectTask?.(42) })
+
+      const detailContent = container.querySelector('[data-region="task-detail-content"]') as HTMLElement | null
+      expect(detailContent).not.toBeNull()
+      Object.defineProperties(detailContent!, {
+        clientHeight: { configurable: true, value: 300 },
+        scrollHeight: { configurable: true, value: 900 },
+        scrollTop: { configurable: true, value: 0, writable: true },
+      })
+
+      act(() => { fireEvent.scroll(detailContent!) })
+      expect(container.querySelector('[data-testid="task-detail-scroll-cue"]')).not.toBeNull()
+
+      detailContent!.scrollTop = 600
+      act(() => { fireEvent.scroll(detailContent!) })
+      expect(container.querySelector('[data-testid="task-detail-scroll-cue"]')).toBeNull()
     })
 
     it('onSelectTask clears any prior detailValidationMessage', () => {
