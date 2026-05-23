@@ -97,6 +97,7 @@ describe('TestFromAC_AppShell', () => {
       expect(canvas?.className).toContain('overflow-hidden')
       expect(override?.textContent).toContain(':host{height:100dvh')
       expect(override?.textContent).toContain('.root{height:100dvh')
+      expect(override?.textContent).toContain('.root{height:100dvh!important;min-height:0!important;overflow:clip')
       expect(override?.textContent).toContain('.main{min-height:0')
     })
 

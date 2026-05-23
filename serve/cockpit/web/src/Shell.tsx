@@ -75,9 +75,9 @@ function applyCockpitCanvasOverrides(canvas: HTMLElement | null): boolean {
   const style = document.createElement('style')
   style.setAttribute(CANVAS_OVERRIDE_ATTR, '')
   style.textContent = [
-    ':host{height:100dvh!important;max-height:100dvh!important;overflow:hidden!important;}',
-    '.root{height:100dvh!important;min-height:0!important;overflow:hidden!important;}',
-    '.main{min-height:0!important;overflow:hidden!important;}',
+    ':host{height:100dvh!important;max-height:100dvh!important;overflow:clip!important;}',
+    '.root{height:100dvh!important;min-height:0!important;overflow:clip!important;}',
+    '.main{min-height:0!important;overflow:clip!important;}',
     '.header{background:var(--p-color-canvas)!important;color:var(--p-color-contrast-high)!important;}',
     '.header__crest,.header__wordmark{display:none!important;grid-column:2!important;grid-row:1!important;}',
     '.header__area--start{grid-column:1!important;grid-row:1!important;min-width:0!important;}',
@@ -86,6 +86,15 @@ function applyCockpitCanvasOverrides(canvas: HTMLElement | null): boolean {
     '.sidebar__header--start{margin-inline:calc(-1 * var(--cockpit-sidebar-start-padding))!important;padding-inline:var(--cockpit-sidebar-start-padding)!important;}',
   ].join('')
   shadowRoot.append(style)
+  const canvasRoot = shadowRoot.querySelector<HTMLElement>('.root')
+  if (canvasRoot) {
+    if (typeof canvasRoot.scrollTo === 'function') {
+      canvasRoot.scrollTo({ left: 0, top: 0 })
+    } else {
+      canvasRoot.scrollLeft = 0
+      canvasRoot.scrollTop = 0
+    }
+  }
   return true
 }
 
