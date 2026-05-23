@@ -146,6 +146,7 @@ function Shell() {
     state: 'error' | 'warning'
   } | null>(null)
   const [isTaskDetailDirty, setIsTaskDetailDirty] = useState(false)
+  const [isTaskDetailEditing, setIsTaskDetailEditing] = useState(false)
   const [showTaskDetailUnsavedDialog, setShowTaskDetailUnsavedDialog] = useState(false)
   const pendingTaskDetailActionRef = useRef<(() => void) | null>(null)
   const taskDetailStayButtonRef = useRef<HTMLElement | null>(null)
@@ -316,6 +317,7 @@ function Shell() {
   useEffect(() => {
     if (!isTaskDetailOpen) {
       setIsTaskDetailDirty(false)
+      setIsTaskDetailEditing(false)
     }
   }, [isTaskDetailOpen])
 
@@ -469,9 +471,11 @@ function Shell() {
           selectTaskFromDetail(taskId, subtab)
         }}
         onDirtyChange={setIsTaskDetailDirty}
+        onEditingChange={setIsTaskDetailEditing}
         onTaskCleared={(message) => {
           clear()
           setIsTaskDetailDirty(false)
+          setIsTaskDetailEditing(false)
           setSelectedTaskSubtab(null)
           setDetailValidationMessage(message ?? null)
         }}
@@ -717,7 +721,7 @@ function Shell() {
               <div ref={taskDetailContentRef} onScroll={updateTaskDetailScrollCue} className="absolute inset-0 min-h-0 overflow-x-hidden overflow-y-auto pb-static-lg pr-static-xs" data-region="task-detail-content">
                 {taskDetailContent}
               </div>
-              {taskDetailCanScrollDown ? (
+              {taskDetailCanScrollDown && !isTaskDetailEditing ? (
                 <div
                   aria-hidden="true"
                   data-testid="task-detail-scroll-cue"

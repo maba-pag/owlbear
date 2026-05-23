@@ -204,6 +204,21 @@ describe('TestFromAC_DetailTab', () => {
       expect(container.querySelector('p-select[data-field="priority"]')).not.toBeNull()
     })
 
+    it('keeps edit save and cancel controls in a sticky action bar', () => {
+      const { container } = renderDetail()
+      const editButton = container.querySelector('[data-testid="edit-details-button"]') as HTMLElement | null
+      expect(editButton).not.toBeNull()
+      fireEvent.click(editButton!)
+
+      const actions = container.querySelector('[data-testid="task-detail-edit-actions"]') as HTMLElement | null
+      expect(actions).not.toBeNull()
+      expect(actions?.className).toContain('sticky')
+      expect(actions?.className).toContain('bottom-0')
+      expect(actions?.className).toContain('bg-canvas')
+      expect(actions?.querySelector('[data-testid="save-button"]')).not.toBeNull()
+      expect(actions?.querySelector('[data-testid="cancel-edit-button"]')).not.toBeNull()
+    })
+
     it('renders title as an input field', () => {
       const { container } = renderDetail()
       expect(container.querySelector('p-input-text[data-field="title"]')).not.toBeNull()

@@ -32,6 +32,7 @@ export interface TaskFieldsEditorProps {
   clearConflictIfTaskChanged: (taskId: number | undefined) => void
   onSave: (payload: TaskEditPayload, conflictDraft: ConflictLocalDraft) => Promise<boolean | void>
   onDirtyChange?: (dirty: boolean) => void
+  onEditingChange?: (editing: boolean) => void
   defaultEditing?: boolean
 }
 
@@ -200,6 +201,7 @@ export default function TaskFieldsEditor({
   clearConflictIfTaskChanged,
   onSave,
   onDirtyChange,
+  onEditingChange,
   defaultEditing,
 }: TaskFieldsEditorProps) {
   const startsEditing = defaultEditing ?? true
@@ -279,6 +281,16 @@ export default function TaskFieldsEditor({
   useLayoutEffect(() => {
     onDirtyChange?.(isDirty)
   }, [isDirty, onDirtyChange])
+
+  useEffect(() => {
+    onEditingChange?.(isEditing)
+  }, [isEditing, onEditingChange])
+
+  useEffect(() => {
+    return () => {
+      onEditingChange?.(false)
+    }
+  }, [onEditingChange])
 
   useEffect(() => {
     return () => {
@@ -551,7 +563,10 @@ export default function TaskFieldsEditor({
         />
       )}
 
-      <div className="flex min-w-0 flex-wrap items-center gap-static-sm">
+      <div
+        data-testid="task-detail-edit-actions"
+        className="sticky bottom-0 z-20 flex min-w-0 flex-wrap items-center gap-static-sm border-t border-contrast-low bg-canvas px-static-xs py-static-sm shadow-lg"
+      >
         <PButton data-testid="save-button" onClick={() => void handleSave()}>
           Save
         </PButton>

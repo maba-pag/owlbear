@@ -46,6 +46,7 @@ export interface DetailTabProps {
   onTaskCleared?: (message?: string) => void
   onMutationError?: (heading: string, description: string, state: 'error' | 'warning') => void
   onDirtyChange?: (dirty: boolean) => void
+  onEditingChange?: (editing: boolean) => void
   initialSubtab?: string | null
 }
 
@@ -77,6 +78,7 @@ export default function DetailTab({
   onTaskCleared,
   onMutationError,
   onDirtyChange,
+  onEditingChange,
   initialSubtab,
 }: DetailTabProps) {
   const {
@@ -199,6 +201,7 @@ export default function DetailTab({
           clearConflictIfTaskChanged={clearConflictIfTaskChanged}
           onSave={handleSave}
           onDirtyChange={onDirtyChange}
+          onEditingChange={onEditingChange}
           defaultEditing={false}
         />
       </section>

@@ -55,6 +55,7 @@ let capturedDetailOnSelectTask: ((taskId: number, subtab?: string | null) => voi
 let capturedDetailOnTaskCleared: ((message?: string | null) => void) | undefined
 let capturedDetailOnTaskUpdated: ((task: unknown) => void) | undefined
 let capturedDetailOnDirtyChange: ((dirty: boolean) => void) | undefined
+let capturedDetailOnEditingChange: ((editing: boolean) => void) | undefined
 
 vi.mock('../components/DetailTab', () => ({
   default: vi.fn(
@@ -63,11 +64,13 @@ vi.mock('../components/DetailTab', () => ({
       onTaskCleared?: (msg?: string | null) => void
       onTaskUpdated?: (task: unknown) => void
       onDirtyChange?: (dirty: boolean) => void
+      onEditingChange?: (editing: boolean) => void
     }) => {
       capturedDetailOnSelectTask = props.onSelectTask
       capturedDetailOnTaskCleared = props.onTaskCleared
       capturedDetailOnTaskUpdated = props.onTaskUpdated
       capturedDetailOnDirtyChange = props.onDirtyChange
+      capturedDetailOnEditingChange = props.onEditingChange
       return null
     },
   ),
@@ -186,6 +189,7 @@ describe('TestFromAC_ShellCallbacks', () => {
     capturedDetailOnTaskCleared = undefined
     capturedDetailOnTaskUpdated = undefined
     capturedDetailOnDirtyChange = undefined
+    capturedDetailOnEditingChange = undefined
     vi.resetAllMocks()
     vi.unstubAllGlobals()
   })
@@ -257,6 +261,29 @@ describe('TestFromAC_ShellCallbacks', () => {
       detailContent!.scrollTop = 600
       act(() => { fireEvent.scroll(detailContent!) })
       expect(container.querySelector('[data-testid="task-detail-scroll-cue"]')).toBeNull()
+    })
+
+    it('task detail scroll cue hides while the edit action bar owns the modal bottom', () => {
+      stubHooks()
+      const { container } = renderShell()
+      act(() => { capturedKanbanOnSelectTask?.(42) })
+
+      const detailContent = container.querySelector('[data-region="task-detail-content"]') as HTMLElement | null
+      expect(detailContent).not.toBeNull()
+      Object.defineProperties(detailContent!, {
+        clientHeight: { configurable: true, value: 300 },
+        scrollHeight: { configurable: true, value: 900 },
+        scrollTop: { configurable: true, value: 0, writable: true },
+      })
+
+      act(() => { fireEvent.scroll(detailContent!) })
+      expect(container.querySelector('[data-testid="task-detail-scroll-cue"]')).not.toBeNull()
+
+      act(() => { capturedDetailOnEditingChange?.(true) })
+      expect(container.querySelector('[data-testid="task-detail-scroll-cue"]')).toBeNull()
+
+      act(() => { capturedDetailOnEditingChange?.(false) })
+      expect(container.querySelector('[data-testid="task-detail-scroll-cue"]')).not.toBeNull()
     })
 
     it('onSelectTask clears any prior detailValidationMessage', () => {
