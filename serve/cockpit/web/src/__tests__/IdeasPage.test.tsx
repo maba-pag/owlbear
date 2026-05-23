@@ -394,8 +394,12 @@ describe('IdeasPageIntegration_PdsControls', () => {
 
   it('renders editor commands as PDS buttons while keeping the markdown textarea native', async () => {
     const { container } = await renderLoaded('base')
-    expect(container.querySelector('[data-testid="ideas-preview-toggle"]')?.tagName.toLowerCase()).toBe('p-button')
-    expect(container.querySelector('[data-testid="ideas-save"]')?.tagName.toLowerCase()).toBe('p-button')
+    const previewToggle = container.querySelector<HTMLElement & { icon?: string }>('[data-testid="ideas-preview-toggle"]')
+    const saveButton = container.querySelector<HTMLElement & { icon?: string }>('[data-testid="ideas-save"]')
+    expect(previewToggle?.tagName.toLowerCase()).toBe('p-button')
+    expect(saveButton?.tagName.toLowerCase()).toBe('p-button')
+    expect(previewToggle?.icon).toBe('view')
+    expect(saveButton?.icon).toBe('save')
     expect(container.querySelector('textarea')?.getAttribute('data-pds-exception')).toBe('ideas-markdown-editor')
   })
 

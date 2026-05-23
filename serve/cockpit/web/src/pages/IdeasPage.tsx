@@ -1,6 +1,6 @@
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { UNSAFE_NavigationContext } from 'react-router'
-import { PButton, PIcon, PModal } from '@porsche-design-system/components-react'
+import { PButton, PModal } from '@porsche-design-system/components-react'
 import MarkdownPreview from '../components/MarkdownPreview'
 
 import { fetchIdeas, saveIdeas } from '../api/ideas'
@@ -477,24 +477,24 @@ function IdeasPage() {
                 data-testid="ideas-preview-toggle"
                 variant="secondary"
                 compact
+                icon={previewMode ? 'edit' : 'view'}
                 onClick={() => {
                   setPreviewMode((value) => !value)
                 }}
               >
-                <PIcon name={previewMode ? 'edit' : 'view'} color="inherit" size="small" aria-hidden="true" />
                 {previewMode ? 'Edit' : 'Preview'}
               </PButton>
               <PButton
                 type="button"
                 data-testid="ideas-save"
                 compact
+                icon="save"
                 onClick={() => {
                   void handleSave()
                 }}
                 disabled={saveDisabled}
                 aria-disabled={saveDisabled ? 'true' : undefined}
               >
-                <PIcon name="save" color="inherit" size="small" aria-hidden="true" />
                 {saving ? 'Saving...' : 'Save'}
               </PButton>
             </div>
