@@ -399,6 +399,16 @@ describe('IdeasPageIntegration_PdsControls', () => {
     expect(container.querySelector('textarea')?.getAttribute('data-pds-exception')).toBe('ideas-markdown-editor')
   })
 
+  it('lets the native editor textarea shrink inside the bounded shell on narrow viewports', async () => {
+    const { container } = await renderLoaded('draft\n'.repeat(80))
+    const shellClass = container.querySelector('[data-testid="ideas-editor-shell"]')?.getAttribute('class') ?? ''
+    const textareaClass = container.querySelector('textarea')?.getAttribute('class') ?? ''
+
+    expect(shellClass).toContain('overflow-hidden')
+    expect(textareaClass).toContain('min-h-0')
+    expect(textareaClass).not.toContain('min-h-[420px]')
+  })
+
   it('renders the unsaved navigation confirmation with PModal', async () => {
     const { container } = await renderLoaded('base')
     fireEvent.change(container.querySelector('textarea')!, { target: { value: 'unsaved' } })

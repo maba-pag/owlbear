@@ -514,7 +514,7 @@ function IdeasPage() {
               value={content}
               aria-label="Ideas draft"
               data-pds-exception="ideas-markdown-editor"
-              className="min-h-[420px] flex-1 resize-none border-0 bg-canvas p-static-md font-mono text-sm leading-relaxed text-primary outline-none focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-[var(--color-focus)]"
+              className="min-h-0 flex-1 resize-none border-0 bg-canvas p-static-md font-mono text-sm leading-relaxed text-primary outline-none focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-[var(--color-focus)]"
               onChange={(event) => {
                 setContent(event.target.value)
               }}
