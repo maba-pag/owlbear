@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   PButton,
   PHeading,
@@ -55,11 +55,18 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
   const [notes, setNotes] = useState('')
   const [error, setError] = useState<ResolveErrorState | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [resolveBodyCanScrollDown, setResolveBodyCanScrollDown] = useState(false)
   const modalRef = useRef<HTMLElement | null>(null)
+  const resolveBodyRef = useRef<HTMLDivElement | null>(null)
   const previousFocusRef = useRef<HTMLElement | null>(null)
   const closeRequestedRef = useRef(false)
   const submitRef = useRef<HTMLElement | null>(null)
   const inlineNotificationRef = useRef<InlineNotificationHost | null>(null)
+
+  const updateResolveBodyScrollCue = useCallback(() => {
+    const body = resolveBodyRef.current
+    setResolveBodyCanScrollDown(Boolean(body && body.scrollHeight - body.scrollTop - body.clientHeight > 1))
+  }, [])
 
   function requestClose() {
     if (closeRequestedRef.current) {
@@ -115,8 +122,39 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
 
   if (!snapshotDR) return null
 
-  const brief = getDecisionBrief(snapshotDR)
-  const fullRequestBody = getDecisionBodyMarkdown(snapshotDR) || snapshotDR.body || ''
+  const snapshotBody = snapshotDR.body ?? ''
+  const briefSource = { ...snapshotDR, body: snapshotBody }
+  const brief = getDecisionBrief(briefSource)
+  const fullRequestBody = getDecisionBodyMarkdown(briefSource) || snapshotBody
+
+  useEffect(() => {
+    updateResolveBodyScrollCue()
+  }, [error, fullRequestBody, response, updateResolveBodyScrollCue])
+
+  useEffect(() => {
+    const body = resolveBodyRef.current
+    if (!body) {
+      return
+    }
+
+    updateResolveBodyScrollCue()
+    if (typeof ResizeObserver === 'undefined') {
+      return
+    }
+
+    const observer = new ResizeObserver(updateResolveBodyScrollCue)
+    observer.observe(body)
+    return () => {
+      observer.disconnect()
+    }
+  }, [updateResolveBodyScrollCue])
+
+  useEffect(() => {
+    window.addEventListener('resize', updateResolveBodyScrollCue)
+    return () => {
+      window.removeEventListener('resize', updateResolveBodyScrollCue)
+    }
+  }, [updateResolveBodyScrollCue])
 
   useEffect(() => {
     previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
@@ -251,8 +289,14 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
           </div>
         </header>
 
-        <div className="grid min-h-0 gap-static-md overflow-y-auto pr-static-xs">
-          <section data-testid="resolve-request-summary" className="grid gap-static-sm rounded-lg border border-contrast-low bg-canvas p-static-md">
+        <div className="relative min-h-0 overflow-hidden">
+          <div
+            ref={resolveBodyRef}
+            data-testid="resolve-scroll-body"
+            className="grid h-full min-h-0 gap-static-md overflow-y-auto pb-static-sm pr-static-xs"
+            onScroll={updateResolveBodyScrollCue}
+          >
+            <section data-testid="resolve-request-summary" className="grid gap-static-sm rounded-lg border border-contrast-low bg-canvas p-static-md">
             {brief.isStructured ? (
               <>
                 {brief.context ? (
@@ -305,9 +349,9 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
                 ) : null}
               </div>
             ) : null}
-          </section>
+            </section>
 
-          <fieldset data-testid="response-selector" className="m-0 grid gap-static-sm border-0 p-0">
+            <fieldset data-testid="response-selector" className="m-0 grid gap-static-sm border-0 p-0">
             <legend className="mb-static-xs text-xs font-semibold uppercase text-primary">Response</legend>
             <div className="grid gap-static-sm sm:grid-cols-3">
               <div data-testid="option-approved" className="rounded-lg border border-contrast-low bg-canvas p-static-sm">
@@ -350,41 +394,49 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
                 <PText>Ask for more details and wait for clarification.</PText>
               </div>
             </div>
-          </fieldset>
+            </fieldset>
 
-          <details data-testid="resolve-full-request" className="rounded-lg border border-contrast-low bg-canvas p-static-sm text-primary">
-            <summary className="cursor-pointer text-xs font-semibold uppercase leading-tight text-contrast-high">Full request</summary>
-            <MarkdownPreview className="mt-static-sm text-sm">{fullRequestBody}</MarkdownPreview>
-          </details>
+            <details data-testid="resolve-full-request" className="rounded-lg border border-contrast-low bg-canvas p-static-sm text-primary">
+              <summary className="cursor-pointer text-xs font-semibold uppercase leading-tight text-contrast-high">Full request</summary>
+              <MarkdownPreview className="mt-static-sm text-sm">{fullRequestBody}</MarkdownPreview>
+            </details>
 
-          <PTextarea
-            compact
-            label="Resolution notes"
-            name="resolve-notes"
-            rows={2}
-            data-testid="resolve-notes"
-            value={notes}
-            onChange={(event) => setNotes(readControlValue(event))}
-          />
+            <PTextarea
+              compact
+              label="Resolution notes"
+              name="resolve-notes"
+              rows={2}
+              data-testid="resolve-notes"
+              value={notes}
+              onChange={(event) => setNotes(readControlValue(event))}
+            />
 
-          {error ? (
-            <PInlineNotification
-              ref={(element) => {
-                inlineNotificationRef.current = element as InlineNotificationHost | null
-                if (!inlineNotificationRef.current) {
-                  return
-                }
-                inlineNotificationRef.current.onAction = retryResolve
-                inlineNotificationRef.current.onDismiss = dismissError
-              }}
-              data-testid="resolve-error"
-              state="error"
-              description={error.message}
-              actionLabel={error.retryable ? 'Retry' : undefined}
-              actionIcon={error.retryable ? 'reset' : undefined}
-              onAction={error.retryable ? retryResolve : undefined}
-              actionLoading={isSubmitting}
-              onDismiss={dismissError}
+            {error ? (
+              <PInlineNotification
+                ref={(element) => {
+                  inlineNotificationRef.current = element as InlineNotificationHost | null
+                  if (!inlineNotificationRef.current) {
+                    return
+                  }
+                  inlineNotificationRef.current.onAction = retryResolve
+                  inlineNotificationRef.current.onDismiss = dismissError
+                }}
+                data-testid="resolve-error"
+                state="error"
+                description={error.message}
+                actionLabel={error.retryable ? 'Retry' : undefined}
+                actionIcon={error.retryable ? 'reset' : undefined}
+                onAction={error.retryable ? retryResolve : undefined}
+                actionLoading={isSubmitting}
+                onDismiss={dismissError}
+              />
+            ) : null}
+          </div>
+          {resolveBodyCanScrollDown ? (
+            <div
+              aria-hidden="true"
+              data-testid="resolve-scroll-cue"
+              className="pointer-events-none absolute inset-x-0 bottom-0 h-10 [background:linear-gradient(to_bottom,transparent,var(--p-color-canvas))]"
             />
           ) : null}
         </div>

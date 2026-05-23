@@ -218,6 +218,35 @@ describe('TestFromAC_ResolveModalUX', () => {
     expect(pTextEls.length).toBeGreaterThanOrEqual(3)
   })
 
+  it('shows a resolver body continuation cue while more inputs continue below', () => {
+    const { container } = renderModal()
+    const body = container.querySelector('[data-testid="resolve-scroll-body"]') as HTMLElement | null
+    expect(body).not.toBeNull()
+    Object.defineProperty(body!, 'scrollHeight', { configurable: true, value: 900 })
+    Object.defineProperty(body!, 'clientHeight', { configurable: true, value: 360 })
+    Object.defineProperty(body!, 'scrollTop', { configurable: true, value: 0 })
+
+    fireEvent.scroll(body!)
+
+    const cue = container.querySelector('[data-testid="resolve-scroll-cue"]')
+    expect(cue).not.toBeNull()
+    expect(cue?.getAttribute('class') ?? '').toContain('absolute')
+    expect(cue?.getAttribute('class') ?? '').toContain('bottom-0')
+  })
+
+  it('hides the resolver body continuation cue at the bottom', () => {
+    const { container } = renderModal()
+    const body = container.querySelector('[data-testid="resolve-scroll-body"]') as HTMLElement | null
+    expect(body).not.toBeNull()
+    Object.defineProperty(body!, 'scrollHeight', { configurable: true, value: 900 })
+    Object.defineProperty(body!, 'clientHeight', { configurable: true, value: 360 })
+    Object.defineProperty(body!, 'scrollTop', { configurable: true, value: 540 })
+
+    fireEvent.scroll(body!)
+
+    expect(container.querySelector('[data-testid="resolve-scroll-cue"]')).toBeNull()
+  })
+
   // ─── AC5 (td:2): Keyboard / focus behavior ───────────────────────────────
   //
   // Current code: no focus management, no Escape handler → all FAIL
