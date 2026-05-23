@@ -88,6 +88,18 @@ describe('TestFromAC_AppShell', () => {
       expect(override?.textContent).toContain('.header__area--end{grid-column:3')
     })
 
+    it('bounds the PDS canvas shell to the viewport instead of page content height', () => {
+      const { container } = renderShell()
+      const canvas = container.querySelector('p-canvas.shell')
+      const override = canvas?.shadowRoot?.querySelector('[data-cockpit-canvas-override]')
+
+      expect(canvas?.className).toContain('h-dvh')
+      expect(canvas?.className).toContain('overflow-hidden')
+      expect(override?.textContent).toContain(':host{height:100dvh')
+      expect(override?.textContent).toContain('.root{height:100dvh')
+      expect(override?.textContent).toContain('.main{min-height:0')
+    })
+
     it('does not place product identity in the global status bar', () => {
       const { container } = renderShell()
       const statusBar = container.querySelector('[data-region="status-bar"]')
@@ -131,12 +143,13 @@ describe('TestFromAC_AppShell', () => {
       expect(badge).toHaveAttribute('title', 'Workspace status: OK')
     })
 
-    it('renders compact theme mode indicator in the global status bar', () => {
+    it('renders compact theme mode control in the global status bar', () => {
       const { container } = renderShell()
       const statusBar = container.querySelector('[data-region="status-bar"]')
       const toggle = statusBar?.querySelector('[data-testid="theme-toggle"]')
-      expect(toggle?.querySelector('[data-testid="theme-mode-indicator"]')).not.toBeNull()
       expect(toggle).toHaveAttribute('aria-label', expect.stringMatching(/Theme mode/))
+      expect(toggle).toHaveAttribute('aria-haspopup', 'menu')
+      expect(toggle).toHaveAttribute('title', expect.stringMatching(/Theme mode/))
     })
   })
 

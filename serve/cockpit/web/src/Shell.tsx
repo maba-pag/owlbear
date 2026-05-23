@@ -75,6 +75,9 @@ function applyCockpitCanvasOverrides(canvas: HTMLElement | null): boolean {
   const style = document.createElement('style')
   style.setAttribute(CANVAS_OVERRIDE_ATTR, '')
   style.textContent = [
+    ':host{height:100dvh!important;max-height:100dvh!important;overflow:hidden!important;}',
+    '.root{height:100dvh!important;min-height:0!important;overflow:hidden!important;}',
+    '.main{min-height:0!important;overflow:hidden!important;}',
     '.header{background:var(--p-color-canvas)!important;color:var(--p-color-contrast-high)!important;}',
     '.header__crest,.header__wordmark{display:none!important;grid-column:2!important;grid-row:1!important;}',
     '.header__area--start{grid-column:1!important;grid-row:1!important;min-width:0!important;}',
@@ -478,7 +481,7 @@ function Shell() {
       <PCanvas
         key={canvasKey}
         ref={canvasRef}
-        className="shell font-sans text-primary"
+        className="shell h-dvh max-h-dvh overflow-hidden font-sans text-primary"
         background="canvas"
         data-no-sidecar=""
         sidebarStartOpen={isNavRailOpen}
