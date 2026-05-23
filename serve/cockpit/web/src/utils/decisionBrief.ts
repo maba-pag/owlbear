@@ -7,15 +7,27 @@ export type DecisionBriefSource = {
 
 export type DecisionBrief = {
   title: string
-  context: string
+  summary: string
+  context: string | null
   options: string[]
   recommendation: string | null
   consequence: string | null
-  request: string
+  request: string | null
+  isStructured: boolean
 }
 
 function truncatePreview(value: string): string {
-  return value.slice(0, 200)
+  const text = value.trim()
+  if (text.length <= 200) {
+    return text
+  }
+
+  const hardCut = text.slice(0, 200)
+  const lastSpace = hardCut.lastIndexOf(' ')
+  if (lastSpace >= 140) {
+    return `${hardCut.slice(0, lastSpace).trimEnd()}...`
+  }
+  return hardCut
 }
 
 function normalizeWhitespace(value: string): string {
@@ -104,7 +116,7 @@ function extractSection(body: string, sectionNames: string[]): string | null {
   return text.length > 0 ? text : null
 }
 
-function extractOptions(body: string): string[] {
+function extractSectionOptions(body: string): string[] {
   const optionSection = extractRawSection(body, ['Options', 'Choices', 'Alternatives'])
   if (!optionSection) {
     return []
@@ -119,6 +131,69 @@ function extractOptions(body: string): string[] {
     return optionLines.slice(0, 4)
   }
   return [truncatePreview(stripMarkdown(optionSection))]
+}
+
+function extractInlineOptions(value: string): string[] {
+  const match = value.match(/\bOptions? to (?:evaluate|consider|choose from):\s*(.+?)(?:\.\s|$)/i)
+  if (!match) {
+    return []
+  }
+  return match[1]
+    .split(/\s*,\s*|\s+or\s+/i)
+    .map((option) => stripMarkdown(option).replace(/^(?:or|and)\s+/i, '').trim())
+    .filter(Boolean)
+    .slice(0, 4)
+}
+
+function formatPlainTitle(value: string, fallback: string): string {
+  const withoutLeadIn = value.replace(
+    /^(?:decision\s+(?:needed|required|request)(?:\s+later)?|decision)\s*:\s*/i,
+    '',
+  ).trim()
+  const withoutTimingClause = withoutLeadIn.replace(
+    /\s+(?:after|before|once|when)\s+#?\d+.*$/i,
+    '',
+  ).trim()
+  const sentence = withoutTimingClause.match(/^(.+?[.!?])(?:\s|$)/)?.[1] ?? withoutTimingClause
+  let title = sentence.replace(/[.!?:;]+$/g, '').trim()
+  if (!title) {
+    return fallback
+  }
+  if (title.length > 88) {
+    title = `${title.slice(0, 85).trimEnd()}...`
+  }
+  return `${title.charAt(0).toUpperCase()}${title.slice(1)}`
+}
+
+function firstContentLine(body: string): string | null {
+  return body.split('\n').find((line) => line.trim().length > 0)?.trim() ?? null
+}
+
+function selectFallbackText(bodyText: string, preview: string): string {
+  if (preview && bodyText.startsWith(preview)) {
+    return bodyText
+  }
+  return preview || bodyText
+}
+
+function stripPlainSummaryLeadIn(value: string, title: string): string {
+  const withoutLeadIn = value.replace(
+    /^(?:decision\s+(?:needed|required|request)(?:\s+later)?|decision)\s*:\s*/i,
+    '',
+  ).trim()
+  const titleText = title.toLowerCase()
+  let summary = withoutLeadIn
+  if (titleText && withoutLeadIn.toLowerCase().startsWith(titleText)) {
+    summary = withoutLeadIn.slice(title.length).replace(/^[\s:;,.!?-]+/, '').trim()
+  }
+
+  summary = summary
+    .replace(/\bOptions? to (?:evaluate|consider|choose from):\s*.+?(?:\.\s|$)/i, '')
+    .replace(/^after\s+/i, 'Resolve after ')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  return summary ? `${summary.charAt(0).toUpperCase()}${summary.slice(1)}` : value
 }
 
 export function formatAge(created: string): string {
@@ -140,9 +215,19 @@ export function formatRequestType(value: string): string {
     .replace(/\b\w/g, (letter) => letter.toUpperCase())
 }
 
-export function formatDecisionTitle(item: { title: string; task_id: number }): string {
-  const title = item.title.trim()
-  return title || `Decision needed for task #${item.task_id}`
+export function formatDecisionTitle(item: { title: string; task_id: number; body?: string }): string {
+  const fallback = `Decision needed for task #${item.task_id}`
+  const title = stripMarkdown(item.title.trim())
+  if (!title) {
+    return fallback
+  }
+
+  const firstLine = firstContentLine(item.body ?? '')
+  if (firstLine && !firstLine.startsWith('#') && stripMarkdown(firstLine) === title) {
+    return formatPlainTitle(title, fallback)
+  }
+
+  return title.length > 88 ? `${title.slice(0, 85).trimEnd()}...` : title
 }
 
 export function getDecisionBodyMarkdown(item: DecisionBriefSource): string {
@@ -153,17 +238,23 @@ export function getDecisionBrief(item: DecisionBriefSource): DecisionBrief {
   const title = formatDecisionTitle(item)
   const body = getDecisionBodyMarkdown(item)
   const preview = removeTitleOnlyPreview(item.body_preview || '', title)
-  const fallbackText = preview || stripMarkdown(body || item.body)
-  const context = extractSection(body, ['Context', 'Question', 'Decision', 'Request'])
-    ?? fallbackText
+  const fallbackText = selectFallbackText(stripMarkdown(body || item.body), preview)
+  const context = extractSection(body, ['Context', 'Question', 'Decision'])
+  const request = extractSection(body, ['Request'])
   const recommendation = extractSection(body, ['Recommendation', 'Recommended response', 'Proposal'])
   const consequence = extractSection(body, ['Consequence', 'Consequences', 'Impact'])
+  const sectionOptions = extractSectionOptions(body)
+  const isStructured = Boolean(context || request || sectionOptions.length > 0 || recommendation || consequence)
+  const options = sectionOptions.length > 0 ? sectionOptions : extractInlineOptions(fallbackText)
+  const summary = context ?? request ?? stripPlainSummaryLeadIn(fallbackText, title)
   return {
     title,
-    context: truncatePreview(context),
-    options: extractOptions(body),
+    summary: truncatePreview(summary),
+    context: context ? truncatePreview(context) : null,
+    options,
     recommendation: recommendation ? truncatePreview(recommendation) : null,
     consequence: consequence ? truncatePreview(consequence) : null,
-    request: truncatePreview(fallbackText),
+    request: request ? truncatePreview(request) : null,
+    isStructured,
   }
 }

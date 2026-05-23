@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { PIcon, PText } from '@porsche-design-system/components-react'
+import { PIcon, PTag, PText } from '@porsche-design-system/components-react'
 
 import { WorkspaceHeader, WorkspaceHeaderMetric } from '../components/WorkspaceHeader'
 import { useDRState } from '../hooks/CockpitProvider'
@@ -61,7 +61,7 @@ function DecisionsPage() {
             role="button"
             tabIndex={0}
             aria-label={`Open decision request ${item.id} for task ${item.task_id}`}
-            className="group overflow-hidden rounded-lg border border-contrast-low bg-canvas text-primary shadow-sm transition-[border-color,box-shadow] duration-sm hover:border-primary hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]"
+            className="group relative overflow-hidden rounded-lg border border-contrast-low bg-canvas text-primary shadow-sm transition-[border-color,box-shadow] duration-sm hover:border-primary hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]"
             onClick={() => {
               drState.setSelectedDRId(item.id)
             }}
@@ -72,43 +72,77 @@ function DecisionsPage() {
               }
             }}
           >
-            <article data-testid={item.id} className="grid min-h-[132px] grid-cols-[4px_minmax(0,1fr)] lg:grid-cols-[4px_minmax(0,1fr)_minmax(220px,auto)]">
-              <span className="bg-warning" aria-hidden="true" />
-              <div className="min-w-0 p-static-md">
+            <article data-testid={item.id} className="grid min-h-[124px] gap-static-sm p-static-md pl-[calc(var(--spacing-static-md)+4px)]">
+              <span className="absolute inset-y-0 left-0 w-1 bg-warning" aria-hidden="true" />
+              <div className="min-w-0">
                 <div className="mb-static-xs flex min-w-0 flex-wrap items-center gap-static-xs">
-                  <span className="rounded-full border border-contrast-low bg-surface px-static-xs py-1 text-xs font-semibold text-primary">
+                  <PTag compact variant="secondary">
                     {formatRequestType(item.request_type)}
-                  </span>
-                  <span className="rounded-full border border-contrast-low bg-surface px-static-xs py-1 text-xs font-semibold text-primary">
+                  </PTag>
+                  <PTag compact variant="secondary">
                     Task #{item.task_id}
+                  </PTag>
+                  <span className="text-xs font-semibold text-contrast-high">{formatAge(item.created)}</span>
+                  <span className="text-xs font-semibold text-contrast-high">{item.agent}</span>
+                </div>
+                <div className="flex min-w-0 flex-wrap items-start justify-between gap-static-sm">
+                  <h2 className="m-0 min-w-0 text-base font-semibold leading-tight text-primary">{brief.title}</h2>
+                  <span className="inline-flex items-center gap-static-xs whitespace-nowrap text-sm font-semibold text-primary">
+                    <span>Open resolver</span>
+                    <PIcon name="arrow-right" size="small" color="inherit" aria-hidden="true" />
                   </span>
-                  <span className="text-xs font-semibold text-primary">{formatAge(item.created)}</span>
-                  <span className="text-xs font-semibold text-primary">{item.agent}</span>
                 </div>
-                <h2 className="m-0 text-base font-semibold leading-tight text-primary">{brief.title}</h2>
-                <div className="mt-static-sm grid gap-static-sm xl:grid-cols-[minmax(0,1fr)_minmax(280px,0.58fr)]">
-                  <section data-testid={`dr-context-${item.id}`} className="grid min-w-0 gap-1 border-t border-contrast-low pt-static-xs">
-                    <span className="text-xs font-semibold uppercase leading-tight text-contrast-high">Context</span>
-                    <p className="m-0 text-sm leading-normal text-primary line-clamp-3">{brief.context}</p>
-                  </section>
-                  <section data-testid={`dr-options-${item.id}`} className="grid min-w-0 gap-1 border-t border-contrast-low pt-static-xs">
-                    <span className="text-xs font-semibold uppercase leading-tight text-contrast-high">{brief.options.length > 0 ? 'Options' : 'Request'}</span>
+                {brief.isStructured ? (
+                  <div className="mt-static-sm grid gap-static-sm xl:grid-cols-[minmax(0,1fr)_minmax(280px,0.58fr)]">
+                    {brief.context ? (
+                      <section data-testid={`dr-context-${item.id}`} className="grid min-w-0 content-start gap-1 border-t border-contrast-low pt-static-xs">
+                        <span className="text-xs font-semibold uppercase leading-tight text-contrast-high">Context</span>
+                        <p className="m-0 text-sm leading-normal text-primary line-clamp-3">{brief.context}</p>
+                      </section>
+                    ) : null}
+                    {brief.options.length > 0 || brief.request ? (
+                      <section data-testid={`dr-options-${item.id}`} className="grid min-w-0 content-start gap-1 border-t border-contrast-low pt-static-xs">
+                        <span className="text-xs font-semibold uppercase leading-tight text-contrast-high">{brief.options.length > 0 ? 'Options' : 'Request'}</span>
+                        {brief.options.length > 0 ? (
+                          <ol className="m-0 grid list-none gap-1 p-0 text-sm leading-normal text-primary">
+                            {brief.options.map((option, optionIndex) => (
+                              <li key={option} className="grid min-w-0 grid-cols-[1.5rem_minmax(0,1fr)] gap-static-xs">
+                                <span className="inline-flex size-5 items-center justify-center rounded-full border border-contrast-low bg-surface text-xs font-semibold leading-none text-primary">
+                                  {optionIndex + 1}
+                                </span>
+                                <span className="min-w-0 line-clamp-1">{option}</span>
+                              </li>
+                            ))}
+                          </ol>
+                        ) : (
+                          <p className="m-0 text-sm leading-normal text-primary line-clamp-2">{brief.request}</p>
+                        )}
+                      </section>
+                    ) : null}
+                  </div>
+                ) : (
+                  <div className="mt-static-sm grid gap-static-sm xl:grid-cols-[minmax(0,1fr)_minmax(280px,0.58fr)]">
+                    <section data-testid={`dr-summary-${item.id}`} className="grid min-w-0 content-start gap-1 border-t border-contrast-low pt-static-xs">
+                      <span className="text-xs font-semibold uppercase leading-tight text-contrast-high">Summary</span>
+                      <p className="m-0 text-sm leading-normal text-primary line-clamp-3">{brief.summary}</p>
+                    </section>
                     {brief.options.length > 0 ? (
-                      <ol className="m-0 grid list-none gap-1 p-0 text-sm leading-normal text-primary">
-                        {brief.options.map((option, optionIndex) => (
-                          <li key={option} className="grid min-w-0 grid-cols-[1.5rem_minmax(0,1fr)] gap-static-xs">
-                            <span className="inline-flex size-5 items-center justify-center rounded-full border border-contrast-low bg-surface text-xs font-semibold leading-none text-primary">
-                              {optionIndex + 1}
-                            </span>
-                            <span className="min-w-0 line-clamp-1">{option}</span>
-                          </li>
-                        ))}
-                      </ol>
-                    ) : (
-                      <p className="m-0 text-sm leading-normal text-primary line-clamp-2">{brief.request}</p>
-                    )}
-                  </section>
-                </div>
+                      <section data-testid={`dr-options-${item.id}`} className="grid min-w-0 content-start gap-1 border-t border-contrast-low pt-static-xs">
+                        <span className="text-xs font-semibold uppercase leading-tight text-contrast-high">Options</span>
+                        <ol className="m-0 grid list-none gap-1 p-0 text-sm leading-normal text-primary">
+                          {brief.options.map((option, optionIndex) => (
+                            <li key={option} className="grid min-w-0 grid-cols-[1.5rem_minmax(0,1fr)] gap-static-xs">
+                              <span className="inline-flex size-5 items-center justify-center rounded-full border border-contrast-low bg-surface text-xs font-semibold leading-none text-primary">
+                                {optionIndex + 1}
+                              </span>
+                              <span className="min-w-0 line-clamp-1">{option}</span>
+                            </li>
+                          ))}
+                        </ol>
+                      </section>
+                    ) : null}
+                  </div>
+                )}
                 {brief.recommendation || brief.consequence ? (
                   <div className="mt-static-sm grid gap-static-sm lg:grid-cols-2">
                     {brief.recommendation ? (
@@ -125,16 +159,6 @@ function DecisionsPage() {
                     ) : null}
                   </div>
                 ) : null}
-              </div>
-              <div className="col-span-full grid min-w-0 content-center gap-static-xs border-t border-contrast-low bg-surface px-static-md py-static-sm text-sm text-primary sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center lg:col-auto lg:flex lg:flex-col lg:items-start lg:justify-center lg:border-l lg:border-t-0">
-                <div className="grid min-w-0 gap-1">
-                  <span className="text-xs font-semibold uppercase leading-tight text-contrast-high">Decision</span>
-                  <span className="text-sm leading-normal text-primary">Choose the response in the resolver.</span>
-                </div>
-                <span className="inline-flex items-center gap-static-xs whitespace-nowrap text-sm font-semibold text-primary">
-                  <span>Open resolver</span>
-                  <PIcon name="arrow-right" size="small" color="inherit" aria-hidden="true" />
-                </span>
               </div>
             </article>
           </div>

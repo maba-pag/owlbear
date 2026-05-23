@@ -354,6 +354,32 @@ class TestFromAC_PendingDecisions:
         assert len(item["body_preview"]) <= 200
         assert item["body"].startswith(item["body_preview"])
 
+    def test_pending_plain_paragraph_title_is_not_entire_request(
+        self,
+        client: TestClient,
+        decisions_dir: Path,
+    ) -> None:
+        """Plain decision paragraphs get a compact title while body/preview stay intact."""
+        body = (
+            "Decision needed later: choose ownership model for knowledge source lifecycle after #1556 "
+            "and #1557 complete. Default should be continue with the current owner until the lifecycle "
+            "flow is explicit."
+        )
+        _write_pending_dr(
+            decisions_dir,
+            stem="1558-decision",
+            task_id=1558,
+            body=body,
+        )
+
+        response = client.get("/api/decisions/pending")
+
+        assert response.status_code == 200
+        item = response.json()["items"][0]
+        assert item["title"] == "Choose ownership model for knowledge source lifecycle"
+        assert item["body"] == body
+        assert item["body_preview"] == body[:200]
+
     def test_pending_empty_returns_zero_and_empty_items(self, client: TestClient) -> None:
         """Empty pending directory returns the empty response shape."""
         response = client.get("/api/decisions/pending")

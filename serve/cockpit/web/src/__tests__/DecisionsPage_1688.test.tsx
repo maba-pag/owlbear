@@ -75,6 +75,19 @@ const DR_MALFORMED_CREATED: PendingDR = {
   title: 'Malformed created decision',
 }
 
+const UNSTRUCTURED_BODY = 'Decision needed later: choose ownership model for knowledge source lifecycle after #1556 and #1557 complete. Options to evaluate: MCP tools, manifest workflow, Cockpit surface, or hybrid. Default should be continue with the current owner until the lifecycle flow is explicit.'
+
+const DR_UNSTRUCTURED: PendingDR = {
+  id: 'dr-1688-plain',
+  task_id: 1558,
+  agent: 'copilot',
+  request_type: 'decision',
+  created: '2026-05-14T08:00:00Z',
+  title: UNSTRUCTURED_BODY,
+  body_preview: UNSTRUCTURED_BODY.slice(0, 200),
+  body: UNSTRUCTURED_BODY,
+}
+
 function renderPage(items: PendingDR[] = [DR_WITH_BRIEF]) {
   mockUseDRState.mockReturnValue({
     count: items.length,
@@ -108,6 +121,18 @@ describe('DecisionsPage workflow brief', () => {
     const { container } = renderPage()
     expect(container.querySelector('[data-testid="dr-recommendation-dr-1688-001"]')?.textContent).toContain('decision brief')
     expect(container.querySelector('[data-testid="dr-consequence-dr-1688-001"]')?.textContent).toContain('primary decision workflow')
+  })
+
+  it('renders unstructured plain decisions as summary plus inline options instead of duplicated context', () => {
+    const { container } = renderPage([DR_UNSTRUCTURED])
+    const item = container.querySelector('[data-testid="dr-item-dr-1688-plain"]')
+    const heading = item?.querySelector('h2')
+
+    expect(heading?.textContent).toBe('Choose ownership model for knowledge source lifecycle')
+    expect(container.querySelector('[data-testid="dr-summary-dr-1688-plain"]')?.textContent).toContain('Resolve after #1556')
+    expect(container.querySelector('[data-testid="dr-options-dr-1688-plain"]')?.textContent).toContain('manifest workflow')
+    expect(container.querySelector('[data-testid="dr-options-dr-1688-plain"]')?.textContent).toContain('hybrid')
+    expect(container.querySelector('[data-testid="dr-context-dr-1688-plain"]')).toBeNull()
   })
 
   it('replaces requested-by emphasis with the actual resolver path', () => {

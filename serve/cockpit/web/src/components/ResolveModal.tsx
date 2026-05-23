@@ -255,10 +255,27 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
 
         <div className="grid min-h-0 gap-static-md overflow-y-auto pr-static-xs">
           <section data-testid="resolve-request-summary" className="grid gap-static-sm rounded-lg border border-contrast-low bg-canvas p-static-md">
-            <div className="grid gap-1">
-              <span className="text-xs font-semibold uppercase leading-tight text-contrast-high">Context</span>
-              <p className="m-0 text-sm leading-relaxed text-primary">{brief.context}</p>
-            </div>
+            {brief.isStructured ? (
+              <>
+                {brief.context ? (
+                  <div className="grid gap-1">
+                    <span className="text-xs font-semibold uppercase leading-tight text-contrast-high">Context</span>
+                    <p className="m-0 text-sm leading-relaxed text-primary">{brief.context}</p>
+                  </div>
+                ) : null}
+                {brief.request ? (
+                  <div className="grid gap-1">
+                    <span className="text-xs font-semibold uppercase leading-tight text-contrast-high">Request</span>
+                    <p className="m-0 text-sm leading-relaxed text-primary">{brief.request}</p>
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <div className="grid gap-1">
+                <span className="text-xs font-semibold uppercase leading-tight text-contrast-high">Summary</span>
+                <p className="m-0 text-sm leading-relaxed text-primary">{brief.summary}</p>
+              </div>
+            )}
             {brief.options.length > 0 ? (
               <div className="grid gap-1">
                 <span className="text-xs font-semibold uppercase leading-tight text-contrast-high">Options</span>
@@ -339,7 +356,7 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
 
           <details data-testid="resolve-full-request" className="rounded-lg border border-contrast-low bg-canvas p-static-sm text-primary">
             <summary className="cursor-pointer text-xs font-semibold uppercase leading-tight text-contrast-high">Full request</summary>
-            <section className="mt-static-sm text-sm leading-relaxed text-primary [&_h2]:m-0 [&_h2]:mb-static-xs [&_h2]:text-base [&_h2]:font-semibold [&_li]:my-1 [&_p]:my-static-xs [&_ul]:my-static-xs [&_ul]:pl-static-md">
+            <section className="mt-static-sm text-sm leading-relaxed text-primary [&_h2]:m-0 [&_h2]:mb-static-xs [&_h2]:text-base [&_h2]:font-semibold [&_li]:my-1 [&_ol]:my-static-xs [&_ol]:list-decimal [&_ol]:pl-static-md [&_p]:my-static-xs [&_ul]:my-static-xs [&_ul]:list-disc [&_ul]:pl-static-md">
               <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>{fullRequestBody}</ReactMarkdown>
             </section>
           </details>

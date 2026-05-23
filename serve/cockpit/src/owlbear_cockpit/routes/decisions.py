@@ -19,6 +19,8 @@ from owlbear_kanban.errors import ConcurrencyError
 router = APIRouter()
 
 _DECISION_ID_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]*$")
+_PLAIN_TITLE_MAX_CHARS = 88
+_PLAIN_TITLE_ELLIPSIS_CHARS = _PLAIN_TITLE_MAX_CHARS - 3
 
 _DecisionsDir = Annotated[Path, Depends(get_decisions_dir)]
 _Engine = Annotated[object, Depends(get_engine)]
@@ -53,6 +55,27 @@ class PendingDRResponse(BaseModel):
     items: list[PendingDRItem]
 
 
+def _format_plain_title(line: str, fallback: str) -> str:
+    title = re.sub(r"\s+", " ", line).strip()
+    title = re.sub(
+        r"^(?:decision\s+(?:needed|required|request)(?:\s+later)?|decision)\s*:\s*",
+        "",
+        title,
+        flags=re.IGNORECASE,
+    ).strip()
+    title = re.split(r"\s+(?:after|before|once|when)\s+#?\d+", title, maxsplit=1, flags=re.IGNORECASE)[0].strip()
+
+    sentence_match = re.match(r"(.+?[.!?])(?:\s|$)", title)
+    if sentence_match:
+        title = sentence_match.group(1).rstrip(".!?").strip()
+
+    if not title:
+        return fallback
+    if len(title) > _PLAIN_TITLE_MAX_CHARS:
+        title = f"{title[:_PLAIN_TITLE_ELLIPSIS_CHARS].rstrip()}..."
+    return f"{title[:1].upper()}{title[1:]}"
+
+
 def _extract_title(body: str, fallback: str) -> str:
     """Extract a title from the first markdown heading, else fallback."""
     for line in body.splitlines():
@@ -61,7 +84,7 @@ def _extract_title(body: str, fallback: str) -> str:
             continue
         if stripped.startswith("#"):
             return stripped.lstrip("#").strip() or fallback
-        return stripped  # pragma: no cover - title without markdown heading
+        return _format_plain_title(stripped, fallback)
     return fallback  # pragma: no cover - empty body fallback
 
 
