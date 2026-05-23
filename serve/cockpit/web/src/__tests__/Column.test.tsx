@@ -17,7 +17,7 @@
  * Column.css is created by impl task #1547.
  */
 import { describe, it, expect } from 'vitest'
-import { render } from '@testing-library/react'
+import { fireEvent, render } from '@testing-library/react'
 import { Column } from '../components/Column'
 import type { Task } from '../hooks/useBoard'
 
@@ -126,6 +126,14 @@ describe('TestFromAC_ColumnOverflow', () => {
     ).toBe(true)
   })
 
+  it('column-body is a vertical-only scroll surface', () => {
+    const { container } = renderColumn('todo', [makeTask(1, 'todo'), makeTask(2, 'todo')])
+    const body = container.querySelector('[data-testid="column-body"]') as HTMLElement | null
+    expect(body, 'column-body must exist').not.toBeNull()
+    expect(body?.className).toContain('overflow-x-hidden')
+    expect(body?.className).toContain('overflow-y-auto')
+  })
+
   // AC-2b: Overflow CSS is now enforced inline via PDS Tailwind utilities in Column.tsx.
   // The old Column.css source-inspection tests are removed since the CSS file is dead.
 })
@@ -222,6 +230,37 @@ describe('Column chrome visual system', () => {
 
     expect(root?.getAttribute('data-drag-over')).toBeNull()
     expect(root?.getAttribute('class') ?? '').not.toContain('bg-success-frosted')
+  })
+
+  it('shows a subtle scroll cue while additional cards continue below the visible body', () => {
+    const tasks = Array.from({ length: 6 }, (_, index) => makeTask(index + 1, 'done'))
+    const { container } = renderColumn('done', tasks)
+    const body = container.querySelector('[data-testid="column-body"]') as HTMLElement | null
+    expect(body).not.toBeNull()
+    Object.defineProperty(body, 'scrollHeight', { configurable: true, value: 800 })
+    Object.defineProperty(body, 'clientHeight', { configurable: true, value: 300 })
+    Object.defineProperty(body, 'scrollTop', { configurable: true, value: 0 })
+
+    fireEvent.scroll(body!)
+
+    const cue = container.querySelector('[data-testid="column-scroll-cue"]')
+    expect(cue).not.toBeNull()
+    expect(cue?.getAttribute('class') ?? '').toContain('absolute')
+    expect(cue?.getAttribute('class') ?? '').toContain('bottom-0')
+  })
+
+  it('hides the scroll cue when the column body reaches the bottom', () => {
+    const tasks = Array.from({ length: 6 }, (_, index) => makeTask(index + 1, 'done'))
+    const { container } = renderColumn('done', tasks)
+    const body = container.querySelector('[data-testid="column-body"]') as HTMLElement | null
+    expect(body).not.toBeNull()
+    Object.defineProperty(body, 'scrollHeight', { configurable: true, value: 800 })
+    Object.defineProperty(body, 'clientHeight', { configurable: true, value: 300 })
+    Object.defineProperty(body, 'scrollTop', { configurable: true, value: 500 })
+
+    fireEvent.scroll(body!)
+
+    expect(container.querySelector('[data-testid="column-scroll-cue"]')).toBeNull()
   })
 })
 

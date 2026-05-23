@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Card } from './Card'
 import type { Task } from '../hooks/useBoard'
 
@@ -88,10 +88,16 @@ export function Column({
   onContextMenu,
 }: ColumnProps) {
   const bodyRef = useRef<HTMLDivElement>(null)
+  const [canScrollDown, setCanScrollDown] = useState(false)
   const displayStatus = toDisplayStatus(status)
 
   const sorted = [...tasks].sort(compareTasksByDefaultOrder(priorities))
   const density = sorted.length === 0 ? 'empty' : sorted.length <= 2 ? 'sparse' : 'active'
+
+  const updateScrollCue = useCallback(() => {
+    const body = bodyRef.current
+    setCanScrollDown(Boolean(body && body.scrollHeight - body.scrollTop - body.clientHeight > 1))
+  }, [])
 
   useEffect(() => {
     const body = bodyRef.current
@@ -109,17 +115,21 @@ export function Column({
     }
 
     syncFocusableState()
+    updateScrollCue()
 
     const observer = new ResizeObserver(() => {
       syncFocusableState()
+      updateScrollCue()
     })
 
     const onWindowResize = () => {
       syncFocusableState()
+      updateScrollCue()
     }
 
     const styleObserver = new MutationObserver(() => {
       syncFocusableState()
+      updateScrollCue()
     })
 
     observer.observe(body)
@@ -131,13 +141,13 @@ export function Column({
       window.removeEventListener('resize', onWindowResize)
       styleObserver.disconnect()
     }
-  }, [tasks.length])
+  }, [tasks.length, updateScrollCue])
 
   return (
     <div
       className={[
         'column',
-        'flex min-w-[var(--kanban-column-min)] flex-col overflow-hidden rounded-md border border-transparent border-t border-t-contrast-low bg-surface',
+        'relative flex min-w-[var(--kanban-column-min)] flex-col overflow-hidden rounded-md border border-transparent border-t border-t-contrast-low bg-surface',
       ].join(' ')}
       data-column={status}
       data-density={density}
@@ -148,8 +158,9 @@ export function Column({
       </header>
       <div
         ref={bodyRef}
-        className="column-body relative flex min-h-0 min-w-0 flex-1 flex-col gap-static-sm overflow-y-auto p-static-sm"
+        className="column-body relative flex min-h-0 min-w-0 flex-1 flex-col gap-static-sm overflow-x-hidden overflow-y-auto p-static-sm"
         data-testid="column-body"
+        onScroll={updateScrollCue}
       >
         {sorted.length === 0 ? (
           <div className="flex min-h-[120px] items-center justify-center px-static-md py-static-lg text-center text-xs font-medium text-contrast-high" data-testid="empty-column">{`No ${displayStatus} tasks`}</div>
@@ -166,6 +177,13 @@ export function Column({
           ))
         )}
       </div>
+      {canScrollDown ? (
+        <div
+          aria-hidden="true"
+          data-testid="column-scroll-cue"
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-8 [background:linear-gradient(to_bottom,transparent,var(--p-color-surface))]"
+        />
+      ) : null}
     </div>
   )
 }
