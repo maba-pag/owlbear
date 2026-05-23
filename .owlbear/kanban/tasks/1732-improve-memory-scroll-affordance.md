@@ -2,12 +2,12 @@
 id: 1732
 title: Improve Memory scroll affordance
 status: done
-priority: medium
+priority: important
 type: bug
 created: 2026-05-23T03:47:09+0200
 updated: 2026-05-23T03:54:38+0200
 assignee: copilot
-labels:
+tags:
   - cockpit
   - memory
   - layout

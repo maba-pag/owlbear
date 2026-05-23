@@ -2,12 +2,12 @@
 id: 1728
 title: Cockpit post-markdown visual sweep
 status: done
-priority: medium
+priority: important
 type: task
 created: 2026-05-23T03:24:04+0200
 updated: 2026-05-23T03:33:11+0200
 assignee: copilot
-labels:
+tags:
   - cockpit
   - visual-audit
   - ux

@@ -2,12 +2,12 @@
 id: 1731
 title: Cockpit post-layout visual sweep
 status: done
-priority: medium
+priority: important
 type: task
 created: 2026-05-23T03:45:25+0200
 updated: 2026-05-23T03:54:38+0200
 assignee: copilot
-labels:
+tags:
   - cockpit
   - visual-audit
   - ux

@@ -2,12 +2,12 @@
 id: 1730
 title: Remove Kanban clipped leading column sliver
 status: done
-priority: medium
+priority: important
 type: bug
 created: 2026-05-23T03:36:07+0200
 updated: 2026-05-23T03:43:44+0200
 assignee: copilot
-labels:
+tags:
   - cockpit
   - kanban
   - layout

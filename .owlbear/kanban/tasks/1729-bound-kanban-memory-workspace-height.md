@@ -2,12 +2,12 @@
 id: 1729
 title: Bound Kanban and Memory workspace height
 status: done
-priority: high
+priority: needed
 type: bug
 created: 2026-05-23T03:26:48+0200
 updated: 2026-05-23T03:33:11+0200
 assignee: copilot
-labels:
+tags:
   - cockpit
   - layout
   - ux-feedback
