@@ -587,6 +587,44 @@ describe('TestFromAC_MemoryEditForm', () => {
     expect(container.querySelector('[data-testid="memory-char-counter"]')).not.toBeNull()
   })
 
+  it('ac3 polish: edit save and cancel controls stay in a sticky action bar', async () => {
+    const container = await renderWithEntries([makeEntry()])
+    await openAccordion(container)
+    const editBtn = container.querySelector('[data-testid="memory-edit-btn"]')
+    expect(editBtn).not.toBeNull()
+    await act(async () => { fireEvent.click(editBtn!) })
+    await flush()
+
+    const actions = container.querySelector('[data-testid="memory-edit-actions"]')
+    expect(actions).not.toBeNull()
+    expect(actions?.className).toContain('sticky')
+    expect(actions?.className).toContain('top-0')
+    expect(actions?.className).toContain('bg-canvas')
+    expect(actions?.querySelector('[data-testid="memory-edit-cancel-btn"]')).not.toBeNull()
+    expect(actions?.querySelector('[data-testid="memory-edit-save-btn"]')).not.toBeNull()
+  })
+
+  it('ac3 polish: edit mode hides the list scroll cue behind sticky actions', async () => {
+    const container = await renderWithEntries([makeEntry()])
+    const list = container.querySelector('[data-testid="memory-list-scroll-shell"] ul') as HTMLElement | null
+    expect(list).not.toBeNull()
+    Object.defineProperty(list, 'scrollHeight', { configurable: true, value: 500 })
+    Object.defineProperty(list, 'clientHeight', { configurable: true, value: 100 })
+    Object.defineProperty(list, 'scrollTop', { configurable: true, value: 0 })
+
+    await act(async () => { fireEvent.scroll(list!) })
+    await flush()
+    expect(container.querySelector('[data-testid="memory-list-scroll-cue"]')).not.toBeNull()
+
+    await openAccordion(container)
+    const editBtn = container.querySelector('[data-testid="memory-edit-btn"]')
+    expect(editBtn).not.toBeNull()
+    await act(async () => { fireEvent.click(editBtn!) })
+    await flush()
+
+    expect(container.querySelector('[data-testid="memory-list-scroll-cue"]')).toBeNull()
+  })
+
   it('ac3 boundary: character counter limit is 1024 characters for content field', async () => {
     const container = await renderWithEntries([makeEntry()])
     await openAccordion(container)

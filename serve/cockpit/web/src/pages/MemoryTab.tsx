@@ -896,11 +896,24 @@ function MemoryTab() {
 
                     {editingEntryId === entry.id && editDraft ? (
                       <div data-testid="memory-edit-form" className="grid gap-static-md rounded-lg border border-contrast-low bg-canvas p-static-md">
-                        <div className="flex min-w-0 flex-wrap items-center justify-between gap-static-sm">
-                          <span className="text-sm font-semibold text-primary">Edit memory</span>
-                          <span data-testid="memory-char-counter" className="rounded-full border border-contrast-low bg-canvas px-static-xs py-1 text-xs font-semibold text-primary">
-                            {editDraft.content.length}/{MEMORY_CONTENT_LIMIT}
-                          </span>
+                        <div
+                          data-testid="memory-edit-actions"
+                          className="sticky top-0 z-20 -mx-static-md -mt-static-md flex min-w-0 flex-wrap items-center justify-between gap-static-sm border-b border-contrast-low bg-canvas px-static-md py-static-sm shadow-lg"
+                        >
+                          <div className="flex min-w-0 flex-wrap items-center gap-static-sm">
+                            <span className="text-sm font-semibold text-primary">Edit memory</span>
+                            <span data-testid="memory-char-counter" className="rounded-full border border-contrast-low bg-canvas px-static-xs py-1 text-xs font-semibold text-primary">
+                              {editDraft.content.length}/{MEMORY_CONTENT_LIMIT}
+                            </span>
+                          </div>
+                          <div className="flex min-w-0 flex-wrap items-center gap-static-xs">
+                            <PButton type="button" data-testid="memory-edit-cancel-btn" compact variant="secondary" onClick={cancelEdit}>
+                              Cancel
+                            </PButton>
+                            <PButton type="button" data-testid="memory-edit-save-btn" compact onClick={() => void handleEditSave(entry)}>
+                              Save
+                            </PButton>
+                          </div>
                         </div>
                         <div className="grid gap-static-sm xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,0.7fr)_minmax(0,1fr)]">
                           <PInputText
@@ -1022,14 +1035,6 @@ function MemoryTab() {
                             ))}
                           </ul>
                         ) : null}
-                        <div className="flex flex-wrap items-center justify-end gap-static-xs">
-                          <PButton type="button" data-testid="memory-edit-cancel-btn" compact variant="secondary" onClick={cancelEdit}>
-                            Cancel
-                          </PButton>
-                          <PButton type="button" data-testid="memory-edit-save-btn" compact onClick={() => void handleEditSave(entry)}>
-                            Save
-                          </PButton>
-                        </div>
                       </div>
                     ) : null}
                   </div>
@@ -1038,7 +1043,7 @@ function MemoryTab() {
             </li>
           ))}
         </ul>
-        {memoryListCanScrollDown ? (
+        {memoryListCanScrollDown && editingEntryId === null ? (
           <div
             aria-hidden="true"
             data-testid="memory-list-scroll-cue"
