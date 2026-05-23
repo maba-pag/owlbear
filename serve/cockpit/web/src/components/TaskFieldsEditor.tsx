@@ -8,10 +8,8 @@ import {
   PTagDismissible,
   PTextarea,
 } from '@porsche-design-system/components-react'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
-import rehypeSanitize from 'rehype-sanitize'
 import type { TaskDetail } from './DetailTab'
+import MarkdownPreview from './MarkdownPreview'
 import type { ConflictLocalDraft } from '../hooks/useConflictDraft'
 
 export type TaskEditPayload = Record<string, unknown> & {
@@ -164,11 +162,7 @@ function TaskFieldsDisplay({
 
       <section className="rounded-lg border border-contrast-low bg-surface p-static-md" data-region="task-body-preview">
         <div className="mb-static-xs text-sm font-semibold text-contrast-high">{taskBodyLabel}</div>
-        <div className="text-sm text-primary">
-          <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>
-            {body}
-          </ReactMarkdown>
-        </div>
+        <MarkdownPreview className="text-sm">{body}</MarkdownPreview>
       </section>
 
       {hasRelations ? (
@@ -523,11 +517,7 @@ export default function TaskFieldsEditor({
             onInput={(event) => setBody(readControlValue(event))}
           />
         ) : (
-          <div className="text-sm text-primary">
-            <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>
-              {body}
-            </ReactMarkdown>
-          </div>
+          <MarkdownPreview className="text-sm">{body}</MarkdownPreview>
         )}
       </section>
 

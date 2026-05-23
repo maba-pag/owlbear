@@ -1,7 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import ReactMarkdown from 'react-markdown'
-import rehypeSanitize from 'rehype-sanitize'
-import remarkGfm from 'remark-gfm'
 import {
   PButton,
   PHeading,
@@ -15,6 +12,7 @@ import type { PendingDR } from '../hooks/usePendingDRs'
 import { resolveDR } from '../api/decisions'
 import { ApiError } from '../api/errors'
 import { formatAge, formatRequestType, getDecisionBodyMarkdown, getDecisionBrief } from '../utils/decisionBrief'
+import MarkdownPreview from './MarkdownPreview'
 
 const TAB_FOCUSABLE_SELECTOR = [
   'button:not([disabled])',
@@ -356,9 +354,7 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
 
           <details data-testid="resolve-full-request" className="rounded-lg border border-contrast-low bg-canvas p-static-sm text-primary">
             <summary className="cursor-pointer text-xs font-semibold uppercase leading-tight text-contrast-high">Full request</summary>
-            <section className="mt-static-sm text-sm leading-relaxed text-primary [&_h2]:m-0 [&_h2]:mb-static-xs [&_h2]:text-base [&_h2]:font-semibold [&_li]:my-1 [&_ol]:my-static-xs [&_ol]:list-decimal [&_ol]:pl-static-md [&_p]:my-static-xs [&_ul]:my-static-xs [&_ul]:list-disc [&_ul]:pl-static-md">
-              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>{fullRequestBody}</ReactMarkdown>
-            </section>
+            <MarkdownPreview className="mt-static-sm text-sm">{fullRequestBody}</MarkdownPreview>
           </details>
 
           <PTextarea

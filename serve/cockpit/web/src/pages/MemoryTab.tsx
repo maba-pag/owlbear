@@ -13,11 +13,10 @@ import {
   PTextarea,
 } from '@porsche-design-system/components-react'
 import type { TagVariant } from '@porsche-design-system/components-react'
-import ReactMarkdown from 'react-markdown'
 import rehypeSanitize from 'rehype-sanitize'
-import remarkGfm from 'remark-gfm'
 import { ApiError } from '../api/errors'
 import { getResponseErrorMessage } from '../api/errorMessage'
+import MarkdownPreview from '../components/MarkdownPreview'
 import { WorkspaceHeader, WorkspaceHeaderMetric, WorkspaceHeaderPill } from '../components/WorkspaceHeader'
 import { MEMORY_PENDING_COUNT_EVENT } from '../hooks/usePendingMemoryCount'
 import { usePollingFetch } from '../hooks/usePollingFetch'
@@ -810,11 +809,9 @@ function MemoryTab() {
                 {openEntryId === entry.id ? (
                   <div data-testid="memory-accordion-detail" className="grid gap-static-md border-t border-contrast-low pt-static-md">
                     <div data-testid="memory-content-panel" className="rounded-md border border-contrast-low bg-surface p-static-md text-base leading-relaxed text-primary shadow-sm">
-                      <div className="prose max-w-none text-base leading-relaxed text-primary">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[[rehypeSanitize, MEMORY_SANITIZE_SCHEMA]]}>
-                          {entry.content}
-                        </ReactMarkdown>
-                      </div>
+                      <MarkdownPreview className="text-base" rehypePlugins={[[rehypeSanitize, MEMORY_SANITIZE_SCHEMA]]}>
+                        {entry.content}
+                      </MarkdownPreview>
                     </div>
                     <dl data-testid="memory-metadata-grid" className="grid gap-x-static-md gap-y-static-xs border-t border-contrast-low pt-static-sm text-xs leading-normal text-contrast-high md:grid-cols-2 xl:grid-cols-4">
                       <div className="min-w-0"><dt className="font-semibold text-contrast-high">ID</dt><dd className="m-0 break-words text-primary">{entry.id}</dd></div>

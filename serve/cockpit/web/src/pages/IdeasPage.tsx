@@ -1,9 +1,7 @@
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { UNSAFE_NavigationContext } from 'react-router'
 import { PButton, PIcon, PModal } from '@porsche-design-system/components-react'
-import ReactMarkdown from 'react-markdown'
-import rehypeSanitize from 'rehype-sanitize'
-import remarkGfm from 'remark-gfm'
+import MarkdownPreview from '../components/MarkdownPreview'
 
 import { fetchIdeas, saveIdeas } from '../api/ideas'
 import { WorkspaceHeader, WorkspaceHeaderPill } from '../components/WorkspaceHeader'
@@ -484,14 +482,12 @@ function IdeasPage() {
             </div>
           </div>
           {previewMode ? (
-            <div
+            <MarkdownPreview
               data-testid="ideas-preview"
-              className="min-h-0 flex-1 overflow-auto p-static-md text-primary [&_blockquote]:border-l-4 [&_blockquote]:border-contrast-low [&_blockquote]:pl-static-sm [&_code]:rounded-sm [&_code]:bg-canvas [&_code]:px-1 [&_h1]:mb-static-sm [&_h1]:text-xl [&_h1]:font-semibold [&_h2]:mb-static-xs [&_h2]:text-lg [&_h2]:font-semibold [&_li]:my-1 [&_p]:my-static-xs [&_pre]:overflow-auto [&_pre]:rounded-lg [&_pre]:bg-canvas [&_pre]:p-static-sm [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-contrast-low [&_td]:p-static-xs [&_th]:border [&_th]:border-contrast-low [&_th]:p-static-xs [&_ul]:pl-static-lg"
+              className="min-h-0 flex-1 overflow-auto p-static-md"
             >
-              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>
-                {content}
-              </ReactMarkdown>
-            </div>
+              {content}
+            </MarkdownPreview>
           ) : (
             <textarea
               ref={textareaRef}
