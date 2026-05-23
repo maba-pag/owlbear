@@ -1,10 +1,10 @@
 ---
 id: 1677
 title: Polish nav dock shadow treatment
-status: research
+status: done
 priority: important
 created: 2026-05-21T19:51:06.666942+02:00
-updated: 2026-05-21T20:02:46.915348+02:00
+updated: 2026-05-23T01:27:54+02:00
 tags:
   - cockpit-perfect-ui
   - scope:cockpit-web
@@ -46,3 +46,8 @@ Use this task as a product/audit todo item, not an instruction to hand off to th
 - Change: removed the dock shadow and active-item shadow while preserving the rounded frosted custom rail surface, because PDS v4 does not provide a dense vertical app-rail primitive with badges.
 - Screenshot proof: `.owlbear/scratch/1672-nav-dock-audit/root-1440x1000-nav-dock.png` after the change shows the dock without the top/bottom halo effect.
 - Verification: `npm run test:e2e:all -- e2e/shell-layout-1606.spec.ts --grep "start sidebar" --reporter=line` passed 2 tests; `npm test -- --run src/__tests__/Shell.test.tsx src/__tests__/PdsMigration.test.tsx --reporter=dot` passed 94 tests / 3 skipped.
+
+[[2026-05-23T01:27:54+02:00]]
+## Status Reconciliation
+- Re-audit: this task already had implementation evidence and verification but was still marked `research`.
+- Current classification: done. No additional product change was needed before continuing with the newer Cockpit polish feedback.

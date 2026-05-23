@@ -1,4 +1,4 @@
-import { PIcon, type IconName } from '@porsche-design-system/components-react'
+import { PIcon, PTag, type IconName } from '@porsche-design-system/components-react'
 import { motion } from 'framer-motion'
 import type { Task } from '../hooks/useBoard'
 import { computeSignal, type CardSignal } from '../utils/computeSignal'
@@ -17,8 +17,6 @@ const SIGNAL_LABEL: Record<string, string> = {
   claimed: 'Claimed',
   'deps-unmet': 'Dependencies',
 }
-
-const TAG_PREVIEW_LIMIT = 3
 
 function isRedundantDecisionTag(tag: string, signal: CardSignal): boolean {
   return signal === 'dr-pending' && tag.trim().toLowerCase() === 'active-decision'
@@ -61,8 +59,6 @@ export function Card({
 }: CardProps) {
   const signal = computeSignal(task, pendingDRIds)
   const visibleTags = task.tags.filter((tag) => !isRedundantDecisionTag(tag, signal))
-  const previewTags = visibleTags.slice(0, TAG_PREVIEW_LIMIT)
-  const overflowTags = visibleTags.length - previewTags.length
   const updatedAge = formatUpdatedAge(task.updated)
   const signalLabel = signal.replace('-', ' ')
   const displaySignalLabel = SIGNAL_LABEL[signal] ?? signalLabel
@@ -194,26 +190,19 @@ export function Card({
 
         {visibleTags.length > 0 ? (
           <div className={[hasSecondaryCues ? '' : 'mt-auto', 'flex min-w-0 flex-wrap items-center gap-x-static-xs gap-y-1'].join(' ')}>
-            <span data-testid="card-tags" className="flex min-w-0 max-w-full flex-wrap items-center gap-x-1.5 gap-y-1 text-[0.72rem] leading-normal text-contrast-high" aria-label={`Tags: ${previewTags.join(', ')}`}>
-              {previewTags.map((tag, index) => (
-                <span
+            <span data-testid="card-tags" className="flex min-w-0 max-w-full flex-wrap items-center gap-1" aria-label={`Tags: ${visibleTags.join(', ')}`}>
+              {visibleTags.map((tag, index) => (
+                <PTag
                   key={`${tag}-${index}`}
-                  className="inline-flex max-w-full items-center gap-x-1.5 truncate"
+                  compact
+                  variant="secondary"
+                  data-testid="card-tag"
+                  className="max-w-full"
                 >
-                  {index > 0 ? <span aria-hidden="true" className="shrink-0 text-contrast-medium">/</span> : null}
-                  <span data-testid="card-tag" className="truncate">{tag}</span>
-                </span>
+                  {tag}
+                </PTag>
               ))}
             </span>
-            {overflowTags > 0 ? (
-              <span
-                data-testid="card-tag-overflow"
-                className="text-[0.72rem] leading-normal text-contrast-high"
-                aria-label={`${overflowTags} more tags`}
-              >
-                +{overflowTags} tags
-              </span>
-            ) : null}
           </div>
         ) : null}
       </div>

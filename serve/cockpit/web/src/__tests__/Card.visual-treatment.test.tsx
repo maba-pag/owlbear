@@ -7,15 +7,15 @@
  *   AC-2: Ready/default cards do not render a signal chip; exceptional signals do.
  *   AC-3: Signal icon renders as <p-icon size="xs" aria-label={signal}> for
  *         dr-pending, blocked, claimed, deps-unmet; no p-icon element in DOM when signal is ready
- *   AC-4: Each visible tag (up to TAG_PREVIEW_LIMIT=3) renders as quiet text
- *         metadata; overflow count indicator preserved without pill styling
+ *   AC-4: Each non-redundant tag renders as compact PDS chip metadata; cards
+ *         grow for useful tag content instead of hiding it behind overflow text
  *   AC-5: Primary card signals are not duplicated as secondary cue text; lower
  *         precedence cues remain visible when they add new information
  *   AC-6: No inline hex color values in Card output; source keeps PDS icons
  *
  * Regression focus:
  *   - No redundant status or priority bubbles on Kanban cards.
- *   - Ordinary tags stay secondary/grey so they do not compete with alerts.
+ *   - Ordinary tags stay secondary/grey but remain visible as useful chips.
  *   - Exceptional operational cues remain visible and perceivable without color alone.
  */
 import { describe, it, expect } from 'vitest'
@@ -167,18 +167,19 @@ describe('Card signal icon', () => {
   })
 })
 
-// ─── AC-4: Tags render as quiet metadata text ────────────────────────────────
+// ─── AC-4: Tags render as compact metadata chips ─────────────────────────────
 
 describe('Card tag metadata', () => {
-  it('one tag renders as exactly one quiet metadata text item', () => {
+  it('one tag renders as exactly one compact PDS chip', () => {
     const task = makeTask({ id: 1, status: 'in-progress', priority: 'critical', tags: ['frontend'] })
     const { container } = renderCard(task)
     const tags = container.querySelectorAll('[data-testid="card-tag"]')
     expect(tags.length).toBe(1)
-    expect(container.querySelector('p-tag')).toBeNull()
+    expect(tags[0]?.tagName.toLowerCase()).toBe('p-tag')
+    expect(tags[0]?.textContent?.trim()).toBe('frontend')
   })
 
-  it('three tags render exactly three metadata text items', () => {
+  it('three tags render exactly three compact PDS chips', () => {
     const task = makeTask({
       id: 1,
       status: 'in-progress',
@@ -190,7 +191,7 @@ describe('Card tag metadata', () => {
     expect(tags.length).toBe(3)
   })
 
-  it('four tags render exactly three tag text items (TAG_PREVIEW_LIMIT=3 caps display)', () => {
+  it('four tags render all four tag chips instead of generic overflow text', () => {
     const task = makeTask({
       id: 1,
       status: 'in-progress',
@@ -199,10 +200,11 @@ describe('Card tag metadata', () => {
     })
     const { container } = renderCard(task)
     const tags = container.querySelectorAll('[data-testid="card-tag"]')
-    expect(tags.length).toBe(3)
+    expect(tags.length).toBe(4)
+    expect(container.querySelector('[data-testid="card-tag-overflow"]')).toBeNull()
   })
 
-  it('five tags render three text tags showing the first three tag names', () => {
+  it('five tags render all five exact tag names', () => {
     const task = makeTask({
       id: 1,
       status: 'in-progress',
@@ -211,13 +213,13 @@ describe('Card tag metadata', () => {
     })
     const { container } = renderCard(task)
     const tags = container.querySelectorAll('[data-testid="card-tag"]')
-    expect(tags.length).toBe(3)
+    expect(tags.length).toBe(5)
     const texts = Array.from(tags).map((el) => el.textContent?.trim())
     expect(texts).toContain('frontend')
     expect(texts).toContain('backend')
     expect(texts).toContain('urgent')
-    expect(texts).not.toContain('blocked')
-    expect(texts).not.toContain('pds')
+    expect(texts).toContain('blocked')
+    expect(texts).toContain('pds')
   })
 
   it('zero tags renders no tag text elements', () => {
@@ -232,7 +234,7 @@ describe('Card tag metadata', () => {
     expect(container.querySelectorAll('[data-testid="card-tag"]').length).toBe(0)
   })
 
-  it('overflow count indicator preserved when tags exceed TAG_PREVIEW_LIMIT=3', () => {
+  it('does not render a tag overflow indicator when tags exceed three', () => {
     const task = makeTask({
       id: 1,
       status: 'in-progress',
@@ -241,14 +243,12 @@ describe('Card tag metadata', () => {
     })
     const { container } = renderCard(task)
     const tags = container.querySelectorAll('[data-testid="card-tag"]')
-    expect(tags.length).toBe(3)
-    // Regression guard: overflow indicator preserved alongside tag metadata
+    expect(tags.length).toBe(5)
     const overflow = container.querySelector('[data-testid="card-tag-overflow"]')
-    expect(overflow).not.toBeNull()
-    expect(overflow!.textContent).toContain('+2 tags')
+    expect(overflow).toBeNull()
   })
 
-  it('tag preview wraps visible metadata text instead of clipping rendered tags', () => {
+  it('tag row wraps visible chips instead of clipping rendered tags', () => {
     const task = makeTask({
       id: 1,
       status: 'in-progress',
@@ -266,8 +266,8 @@ describe('Card tag metadata', () => {
     expect(classes).not.toContain('text-ellipsis')
   })
 
-  it('overflow indicator absent when tags are within TAG_PREVIEW_LIMIT', () => {
-    // Positive anchor: above-limit case must have both tag metadata AND overflow.
+  it('overflow indicator absent for both short and long tag lists', () => {
+    // Positive anchor: above-three case must render every tag.
     const manyTask = makeTask({
       id: 99,
       status: 'in-progress',
@@ -275,10 +275,10 @@ describe('Card tag metadata', () => {
       tags: ['a', 'b', 'c', 'd'],
     })
     const { container: manyContainer } = renderCard(manyTask)
-    expect(manyContainer.querySelectorAll('[data-testid="card-tag"]').length).toBe(3)
-    expect(manyContainer.querySelector('[data-testid="card-tag-overflow"]')).not.toBeNull()
+    expect(manyContainer.querySelectorAll('[data-testid="card-tag"]').length).toBe(4)
+    expect(manyContainer.querySelector('[data-testid="card-tag-overflow"]')).toBeNull()
 
-    // Main assertion: 3 tags → exactly 3 text tags, no overflow
+    // Main assertion: 3 tags -> exactly 3 chips, no overflow
     const task = makeTask({ id: 1, status: 'in-progress', priority: 'critical', tags: ['a', 'b', 'c'] })
     const { container } = renderCard(task)
     expect(container.querySelectorAll('[data-testid="card-tag"]').length).toBe(3)
