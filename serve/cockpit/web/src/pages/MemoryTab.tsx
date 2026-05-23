@@ -329,6 +329,7 @@ function MemoryTab() {
   const searchFilterRef = useRef<HTMLElement | null>(null)
   const memoryListRef = useRef<HTMLUListElement | null>(null)
   const accordionRefs = useRef<Record<string, HTMLElement>>({})
+  const memoryEditActionsRef = useRef<HTMLDivElement | null>(null)
 
   const { isFetching, hasFetched, refetch } = usePollingFetch<MemoriesResponse>('/api/memories', {
     paused: true,
@@ -483,6 +484,17 @@ function MemoryTab() {
       observer.disconnect()
     }
   }, [openEntryId, updateMemoryListScrollCue, visibleEntries.length])
+
+  useEffect(() => {
+    if (editingEntryId === null) {
+      return
+    }
+
+    window.requestAnimationFrame(() => {
+      memoryEditActionsRef.current?.scrollIntoView({ block: 'start', inline: 'nearest' })
+      updateMemoryListScrollCue()
+    })
+  }, [editingEntryId, updateMemoryListScrollCue])
 
   useEffect(() => {
     const entriesToBind = Object.entries(accordionRefs.current)
@@ -897,6 +909,7 @@ function MemoryTab() {
                     {editingEntryId === entry.id && editDraft ? (
                       <div data-testid="memory-edit-form" className="grid gap-static-md rounded-lg border border-contrast-low bg-canvas p-static-md">
                         <div
+                          ref={memoryEditActionsRef}
                           data-testid="memory-edit-actions"
                           className="sticky top-0 z-20 -mx-static-md -mt-static-md flex min-w-0 flex-wrap items-center justify-between gap-static-sm border-b border-contrast-low bg-canvas px-static-md py-static-sm shadow-lg"
                         >

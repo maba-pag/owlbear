@@ -604,6 +604,34 @@ describe('TestFromAC_MemoryEditForm', () => {
     expect(actions?.querySelector('[data-testid="memory-edit-save-btn"]')).not.toBeNull()
   })
 
+  it('ac3 polish: entering edit mode scrolls the sticky action bar into view', async () => {
+    const scrollIntoView = vi.fn()
+    const originalRequestAnimationFrame = window.requestAnimationFrame
+    const originalScrollIntoView = HTMLElement.prototype.scrollIntoView
+    window.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+      callback(0)
+      return 0
+    }) as typeof window.requestAnimationFrame
+    HTMLElement.prototype.scrollIntoView = scrollIntoView
+
+    try {
+      const container = await renderWithEntries([makeEntry()])
+      await openAccordion(container)
+      const editBtn = container.querySelector('[data-testid="memory-edit-btn"]')
+      expect(editBtn).not.toBeNull()
+
+      await act(async () => { fireEvent.click(editBtn!) })
+      await flush()
+
+      const actions = container.querySelector('[data-testid="memory-edit-actions"]') as HTMLElement | null
+      expect(actions).not.toBeNull()
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start', inline: 'nearest' })
+    } finally {
+      window.requestAnimationFrame = originalRequestAnimationFrame
+      HTMLElement.prototype.scrollIntoView = originalScrollIntoView
+    }
+  })
+
   it('ac3 polish: edit mode hides the list scroll cue behind sticky actions', async () => {
     const container = await renderWithEntries([makeEntry()])
     const list = container.querySelector('[data-testid="memory-list-scroll-shell"] ul') as HTMLElement | null
