@@ -604,18 +604,46 @@ describe('TestFromAC_MemoryEditForm', () => {
     expect(actions?.querySelector('[data-testid="memory-edit-save-btn"]')).not.toBeNull()
   })
 
-  it('ac3 polish: entering edit mode scrolls the sticky action bar into view', async () => {
+  it('ac3 polish: entering edit mode scrolls the sticky action bar into view without horizontal page movement', async () => {
     const scrollIntoView = vi.fn()
+    const scrollTo = vi.fn()
     const originalRequestAnimationFrame = window.requestAnimationFrame
     const originalScrollIntoView = HTMLElement.prototype.scrollIntoView
+    const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect
+    const rectAt = (top: number): DOMRect => ({
+      x: 0,
+      y: top,
+      top,
+      bottom: top + 20,
+      left: 0,
+      right: 100,
+      width: 100,
+      height: 20,
+      toJSON: () => ({}),
+    }) as DOMRect
+
     window.requestAnimationFrame = ((callback: FrameRequestCallback) => {
       callback(0)
       return 0
     }) as typeof window.requestAnimationFrame
     HTMLElement.prototype.scrollIntoView = scrollIntoView
+    HTMLElement.prototype.getBoundingClientRect = function getBoundingClientRect() {
+      if (this.parentElement?.getAttribute('data-testid') === 'memory-list-scroll-shell') {
+        return rectAt(50)
+      }
+      if (this.getAttribute('data-testid') === 'memory-edit-actions') {
+        return rectAt(250)
+      }
+      return originalGetBoundingClientRect.call(this)
+    }
 
     try {
       const container = await renderWithEntries([makeEntry()])
+      const list = container.querySelector('[data-testid="memory-list-scroll-shell"] ul') as HTMLElement | null
+      expect(list).not.toBeNull()
+      Object.defineProperty(list!, 'scrollTop', { configurable: true, value: 20, writable: true })
+      list!.scrollTo = scrollTo
+
       await openAccordion(container)
       const editBtn = container.querySelector('[data-testid="memory-edit-btn"]')
       expect(editBtn).not.toBeNull()
@@ -625,10 +653,12 @@ describe('TestFromAC_MemoryEditForm', () => {
 
       const actions = container.querySelector('[data-testid="memory-edit-actions"]') as HTMLElement | null
       expect(actions).not.toBeNull()
-      expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start', inline: 'nearest' })
+      expect(scrollTo).toHaveBeenCalledWith({ top: 220, left: 0 })
+      expect(scrollIntoView).not.toHaveBeenCalled()
     } finally {
       window.requestAnimationFrame = originalRequestAnimationFrame
       HTMLElement.prototype.scrollIntoView = originalScrollIntoView
+      HTMLElement.prototype.getBoundingClientRect = originalGetBoundingClientRect
     }
   })
 
@@ -638,7 +668,8 @@ describe('TestFromAC_MemoryEditForm', () => {
     expect(list).not.toBeNull()
     Object.defineProperty(list, 'scrollHeight', { configurable: true, value: 500 })
     Object.defineProperty(list, 'clientHeight', { configurable: true, value: 100 })
-    Object.defineProperty(list, 'scrollTop', { configurable: true, value: 0 })
+    Object.defineProperty(list, 'scrollTop', { configurable: true, value: 0, writable: true })
+    Object.defineProperty(list, 'scrollLeft', { configurable: true, value: 0, writable: true })
 
     await act(async () => { fireEvent.scroll(list!) })
     await flush()

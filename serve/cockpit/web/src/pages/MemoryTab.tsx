@@ -491,7 +491,21 @@ function MemoryTab() {
     }
 
     window.requestAnimationFrame(() => {
-      memoryEditActionsRef.current?.scrollIntoView({ block: 'start', inline: 'nearest' })
+      const list = memoryListRef.current
+      const editActions = memoryEditActionsRef.current
+
+      if (list && editActions) {
+        const listRect = list.getBoundingClientRect()
+        const actionsRect = editActions.getBoundingClientRect()
+        const top = Math.max(0, list.scrollTop + actionsRect.top - listRect.top)
+
+        if (typeof list.scrollTo === 'function') {
+          list.scrollTo({ top, left: 0 })
+        } else {
+          list.scrollTop = top
+          list.scrollLeft = 0
+        }
+      }
       updateMemoryListScrollCue()
     })
   }, [editingEntryId, updateMemoryListScrollCue])
