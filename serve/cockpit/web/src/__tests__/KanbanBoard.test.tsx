@@ -434,6 +434,70 @@ describe('TestFromAC_KanbanBoard', () => {
         }
       }
     })
+
+    it('aligns the active work lane directly when mobile width cannot fit the context column', async () => {
+      const activeOnlyTask = { ...TASKS.tasks[2], id: 102, status: 'in-progress' }
+      const scrollTo = vi.fn()
+      const scrollToDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollTo')
+      const scrollWidthDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollWidth')
+      const clientWidthDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth')
+      const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect
+      const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function getMockRect() {
+        const element = this as HTMLElement
+        if (element.getAttribute('data-testid') === 'kanban-column-strip') {
+          return makeRect(0, 356)
+        }
+
+        const status = element.getAttribute('data-column')
+        const statusIndex = BOARD.statuses.findIndex(({ name }) => name === status)
+        if (statusIndex >= 0) {
+          const left = statusIndex * 300
+          return makeRect(left, left + 280)
+        }
+
+        return originalGetBoundingClientRect.call(this)
+      })
+
+      Object.defineProperty(HTMLElement.prototype, 'scrollTo', { configurable: true, value: scrollTo })
+      Object.defineProperty(HTMLElement.prototype, 'scrollWidth', {
+        configurable: true,
+        get() {
+          return (this as HTMLElement).getAttribute('data-testid') === 'kanban-column-strip' ? 2200 : 0
+        },
+      })
+      Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
+        configurable: true,
+        get() {
+          return (this as HTMLElement).getAttribute('data-testid') === 'kanban-column-strip' ? 356 : 0
+        },
+      })
+
+      try {
+        renderBoard({ tasks: [activeOnlyTask], fetchOnMount: false })
+
+        await waitFor(() => {
+          expect(scrollTo).toHaveBeenCalled()
+        })
+        expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({ left: 900, behavior: 'auto' }))
+      } finally {
+        rectSpy.mockRestore()
+        if (scrollToDescriptor) {
+          Object.defineProperty(HTMLElement.prototype, 'scrollTo', scrollToDescriptor)
+        } else {
+          delete (HTMLElement.prototype as Partial<HTMLElement>).scrollTo
+        }
+        if (scrollWidthDescriptor) {
+          Object.defineProperty(HTMLElement.prototype, 'scrollWidth', scrollWidthDescriptor)
+        } else {
+          delete (HTMLElement.prototype as Partial<HTMLElement>).scrollWidth
+        }
+        if (clientWidthDescriptor) {
+          Object.defineProperty(HTMLElement.prototype, 'clientWidth', clientWidthDescriptor)
+        } else {
+          delete (HTMLElement.prototype as Partial<HTMLElement>).clientWidth
+        }
+      }
+    })
   })
 
   // ─── AC #3, #4, #5, #6 — cards ───────────────────────────────────────────

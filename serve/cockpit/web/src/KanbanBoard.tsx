@@ -327,17 +327,25 @@ function KanbanBoardContent({
     const stripRect = columnStrip.getBoundingClientRect()
     const targetRect = targetColumn.getBoundingClientRect()
     const paddingLeft = Number.parseFloat(getComputedStyle(columnStrip).paddingLeft) || 0
+    const contextDesiredLeadLeft = initialLeadStatusIndex <= 0 ? stripRect.left + paddingLeft : stripRect.left
     const leadRect = leadColumn.getBoundingClientRect()
-    const desiredLeadLeft = initialLeadStatusIndex <= 0 ? stripRect.left + paddingLeft : stripRect.left
-    const leadAligned = Math.abs(leadRect.left - desiredLeadLeft) <= INITIAL_ALIGNMENT_EDGE_TOLERANCE
+    const contextScrollDelta = leadRect.left - contextDesiredLeadLeft
+    const projectedTargetLeft = targetRect.left - contextScrollDelta
+    const projectedTargetRight = targetRect.right - contextScrollDelta
+    const contextKeepsTargetVisible = projectedTargetLeft >= stripRect.left && projectedTargetRight <= stripRect.right
+    const alignmentColumn = contextKeepsTargetVisible ? leadColumn : targetColumn
+    const alignmentStatusIndex = contextKeepsTargetVisible ? initialLeadStatusIndex : firstNonEmptyStatusIndex
+    const alignmentRect = alignmentColumn.getBoundingClientRect()
+    const desiredAlignmentLeft = alignmentStatusIndex <= 0 ? stripRect.left + paddingLeft : stripRect.left
+    const alignmentSatisfied = Math.abs(alignmentRect.left - desiredAlignmentLeft) <= INITIAL_ALIGNMENT_EDGE_TOLERANCE
     const targetFullyVisible = targetRect.left >= stripRect.left && targetRect.right <= stripRect.right
-    if (leadAligned && targetFullyVisible) {
+    if (alignmentSatisfied && targetFullyVisible) {
       return
     }
 
-    const nextScrollLeft = Math.max(0, columnStrip.scrollLeft + leadRect.left - desiredLeadLeft)
+    const nextScrollLeft = Math.max(0, columnStrip.scrollLeft + alignmentRect.left - desiredAlignmentLeft)
     columnStrip.scrollTo({ left: nextScrollLeft, behavior: 'auto' })
-  }, [firstNonEmptyStatus, initialLeadStatus, initialLeadStatusIndex, statusOccupancySignature])
+  }, [firstNonEmptyStatus, firstNonEmptyStatusIndex, initialLeadStatus, initialLeadStatusIndex, statusOccupancySignature])
 
   if (loading) {
     return <div data-testid="loading-indicator" role="status">Preparing board...</div>
