@@ -30,7 +30,9 @@ function IdeasPage() {
   const [saving, setSaving] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
+  const [ideasCanScrollDown, setIdeasCanScrollDown] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const previewRef = useRef<HTMLDivElement | null>(null)
   const pendingTransitionRef = useRef<(() => void) | null>(null)
   const contentRef = useRef('')
   const lastSavedContentRef = useRef('')
@@ -50,9 +52,25 @@ function IdeasPage() {
   }, [content])
   const saveDisabled = !isDirty || saving || hasConflict
 
+  const updateIdeasScrollCue = useCallback(() => {
+    const surface = previewMode ? previewRef.current : textareaRef.current
+    setIdeasCanScrollDown(Boolean(surface && surface.scrollHeight - surface.scrollTop - surface.clientHeight > 1))
+  }, [previewMode])
+
   useEffect(() => {
     contentRef.current = content
   }, [content])
+
+  useEffect(() => {
+    updateIdeasScrollCue()
+  }, [content, loading, previewMode, updateIdeasScrollCue])
+
+  useEffect(() => {
+    window.addEventListener('resize', updateIdeasScrollCue)
+    return () => {
+      window.removeEventListener('resize', updateIdeasScrollCue)
+    }
+  }, [updateIdeasScrollCue])
 
   useEffect(() => {
     lastSavedContentRef.current = lastSavedContent
@@ -441,7 +459,7 @@ function IdeasPage() {
         ) : null}
 
         <div className="grid min-h-0 flex-1 gap-static-md lg:grid-cols-[minmax(0,1fr)_minmax(260px,320px)]">
-        <div data-testid="ideas-editor-shell" className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-contrast-low bg-canvas">
+        <div data-testid="ideas-editor-shell" className="relative flex min-h-0 flex-col overflow-hidden rounded-lg border border-contrast-low bg-canvas">
           <div className="flex flex-wrap items-center justify-between gap-static-sm border-b border-contrast-low bg-canvas px-static-md py-static-sm">
             <div className="flex min-w-0 flex-wrap items-center gap-static-xs text-xs font-semibold uppercase text-primary">
               <span>{previewMode ? 'Markdown preview' : 'Editor'}</span>
@@ -482,12 +500,14 @@ function IdeasPage() {
             </div>
           </div>
           {previewMode ? (
-            <MarkdownPreview
+            <div
+              ref={previewRef}
               data-testid="ideas-preview"
               className="min-h-0 flex-1 overflow-auto p-static-md"
+              onScroll={updateIdeasScrollCue}
             >
-              {content}
-            </MarkdownPreview>
+              <MarkdownPreview>{content}</MarkdownPreview>
+            </div>
           ) : (
             <textarea
               ref={textareaRef}
@@ -498,9 +518,17 @@ function IdeasPage() {
               onChange={(event) => {
                 setContent(event.target.value)
               }}
+              onScroll={updateIdeasScrollCue}
               placeholder="Capture ideas here..."
             />
           )}
+          {ideasCanScrollDown ? (
+            <div
+              aria-hidden="true"
+              data-testid="ideas-scroll-cue"
+              className="pointer-events-none absolute inset-x-0 bottom-0 h-10 [background:linear-gradient(to_bottom,transparent,var(--p-color-canvas))]"
+            />
+          ) : null}
         </div>
 
         <aside data-testid="ideas-state-panel" className="grid content-start gap-static-md rounded-lg border border-contrast-low bg-canvas p-static-md text-primary">

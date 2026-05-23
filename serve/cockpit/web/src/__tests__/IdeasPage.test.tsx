@@ -84,6 +84,17 @@ async function enterEditMode(container: HTMLElement): Promise<void> {
 }
 
 /** Render in router context and wait for GET /api/ideas to settle. */
+async function renderPreviewLoaded(content: string): Promise<ReturnType<typeof renderInRouter>> {
+  vi.stubGlobal('fetch', makeGetOkFetch(content))
+  let result!: ReturnType<typeof renderInRouter>
+  await act(async () => {
+    result = renderInRouter()
+  })
+  await flush()
+  return result
+}
+
+/** Render in router context and wait for GET /api/ideas to settle. */
 async function renderLoaded(content: string): Promise<ReturnType<typeof renderInRouter>> {
   vi.stubGlobal('fetch', makeGetOkFetch(content))
   let result!: ReturnType<typeof renderInRouter>
@@ -282,6 +293,60 @@ describe('IdeasPageIntegration_PreviewAfterSave', () => {
   it('ac2 boundary: preview toggle is present immediately after a successful save', async () => {
     const { container } = await renderAfterSave('initial', 'edited')
     expect(container.querySelector('[data-testid="ideas-preview-toggle"]')).not.toBeNull()
+  })
+})
+
+describe('IdeasPageIntegration_ScrollAffordance', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('shows a subtle continuation cue when the markdown preview has more content below', async () => {
+    const { container } = await renderPreviewLoaded('# Notes\n\n'.repeat(20))
+    const preview = container.querySelector('[data-testid="ideas-preview"]') as HTMLElement | null
+    expect(preview).not.toBeNull()
+    Object.defineProperty(preview!, 'scrollHeight', { configurable: true, value: 800 })
+    Object.defineProperty(preview!, 'clientHeight', { configurable: true, value: 300 })
+    Object.defineProperty(preview!, 'scrollTop', { configurable: true, value: 0 })
+
+    await act(async () => {
+      fireEvent.scroll(preview!)
+    })
+
+    const cue = container.querySelector('[data-testid="ideas-scroll-cue"]')
+    expect(cue).not.toBeNull()
+    expect(cue?.getAttribute('class') ?? '').toContain('absolute')
+    expect(cue?.getAttribute('class') ?? '').toContain('bottom-0')
+  })
+
+  it('hides the continuation cue when the active Ideas surface reaches the bottom', async () => {
+    const { container } = await renderPreviewLoaded('# Notes\n\n'.repeat(20))
+    const preview = container.querySelector('[data-testid="ideas-preview"]') as HTMLElement | null
+    expect(preview).not.toBeNull()
+    Object.defineProperty(preview!, 'scrollHeight', { configurable: true, value: 800 })
+    Object.defineProperty(preview!, 'clientHeight', { configurable: true, value: 300 })
+    Object.defineProperty(preview!, 'scrollTop', { configurable: true, value: 500 })
+
+    await act(async () => {
+      fireEvent.scroll(preview!)
+    })
+
+    expect(container.querySelector('[data-testid="ideas-scroll-cue"]')).toBeNull()
+  })
+
+  it('tracks the native editor textarea as the active Ideas scroll surface', async () => {
+    const { container } = await renderLoaded('draft\n'.repeat(80))
+    const textarea = container.querySelector('textarea') as HTMLTextAreaElement | null
+    expect(textarea).not.toBeNull()
+    Object.defineProperty(textarea!, 'scrollHeight', { configurable: true, value: 1200 })
+    Object.defineProperty(textarea!, 'clientHeight', { configurable: true, value: 400 })
+    Object.defineProperty(textarea!, 'scrollTop', { configurable: true, value: 0 })
+
+    await act(async () => {
+      fireEvent.scroll(textarea!)
+    })
+
+    expect(container.querySelector('[data-testid="ideas-scroll-cue"]')).not.toBeNull()
   })
 })
 
