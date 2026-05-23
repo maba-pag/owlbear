@@ -200,7 +200,7 @@ test.describe('PCanvas shell layout', () => {
   })
 })
 
-test.describe('PCanvas shell at minimum desktop width', () => {
+test.describe('PCanvas shell at 1280px desktop width', () => {
   test.use({ viewport: { width: 1280, height: 800 } })
 
   test.beforeEach(async ({ page }) => {
@@ -224,6 +224,53 @@ test.describe('PCanvas shell at minimum desktop width', () => {
     expect(windowBox).not.toBeNull()
     expect(windowBox!.x).toBeGreaterThanOrEqual(0)
     expect(windowBox!.x + windowBox!.width).toBeLessThanOrEqual(1280)
+  })
+})
+
+test.describe('PCanvas modal containment at desktop floor', () => {
+  test.use({ viewport: { width: 1024, height: 900 } })
+
+  test('task detail modal remains inside the 1024px viewport', async ({ page }) => {
+    await stubApis(page)
+    await page.goto('/')
+    await page.locator('[data-region="workspace"]').waitFor({ state: 'visible' })
+    await page.locator('[data-testid="task-card"]').click()
+    await expect(page.locator('[data-testid="task-detail-modal"]')).toBeVisible()
+
+    const viewport = page.viewportSize()
+    const windowBox = await page.locator('[data-region="task-detail-window"]').boundingBox()
+    const editButtonBox = await page.locator('[data-testid="edit-details-button"]').boundingBox()
+
+    expect(viewport).not.toBeNull()
+    for (const box of [windowBox, editButtonBox]) {
+      expect(box).not.toBeNull()
+      expect(box!.x).toBeGreaterThanOrEqual(0)
+      expect(box!.x + box!.width).toBeLessThanOrEqual(viewport!.width)
+      expect(box!.y).toBeGreaterThanOrEqual(0)
+      expect(box!.y + box!.height).toBeLessThanOrEqual(viewport!.height)
+    }
+  })
+
+  test('direct Decisions route keeps the resolve modal inside the 1024px viewport', async ({ page }) => {
+    await stubApis(page, { decisions: { count: 1, items: [DECISION] } })
+    await page.goto('/decisions')
+    await page.locator('[data-testid="decisions-page"]').waitFor({ state: 'visible' })
+    await page.locator('[data-testid="dr-item-dr-route-001"]').click()
+    await expect(page.locator('[data-testid="resolve-modal"]')).toBeVisible()
+
+    const viewport = page.viewportSize()
+    const surface = await page.locator('[data-testid="resolve-modal-surface"]').boundingBox()
+    const submit = await page.locator('[data-testid="resolve-submit"]').boundingBox()
+    const cancel = await page.locator('[data-testid="resolve-cancel"]').boundingBox()
+
+    expect(viewport).not.toBeNull()
+    for (const box of [surface, submit, cancel]) {
+      expect(box).not.toBeNull()
+      expect(box!.x).toBeGreaterThanOrEqual(0)
+      expect(box!.x + box!.width).toBeLessThanOrEqual(viewport!.width)
+      expect(box!.y).toBeGreaterThanOrEqual(0)
+      expect(box!.y + box!.height).toBeLessThanOrEqual(viewport!.height)
+    }
   })
 })
 

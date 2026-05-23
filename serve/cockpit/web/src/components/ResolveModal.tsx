@@ -275,7 +275,7 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
       aria={{ 'aria-label': 'Resolve decision request' }}
     >
       <div
-        className="grid max-h-[min(84vh,820px)] w-[min(920px,calc(100vw-8rem))] min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-static-md overflow-hidden text-primary"
+        className="grid max-h-[min(84vh,820px)] w-[min(920px,calc(100vw-4rem))] min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-static-md overflow-hidden text-primary md:w-[min(920px,calc(100vw-12rem))]"
         data-testid="resolve-modal-surface"
       >
         <header className="grid gap-static-xs border-b border-contrast-low pb-static-sm pr-[4.5rem]">
