@@ -64,6 +64,7 @@ interface ValidationMessage {
 }
 
 const DEFAULT_STATES: MemoryState[] = ['pending', 'curated', 'approved']
+const ALL_AGENTS_SCOPE = '*'
 const STATE_PRIORITY: Record<MemoryState, number> = {
   pending: 0,
   curated: 1,
@@ -198,8 +199,20 @@ function includesText(entry: MemoryEntry, loweredSearch: string): boolean {
   )
 }
 
+function isAllAgentsScope(scopeAgents: string[]): boolean {
+  return scopeAgents.length === 0 || scopeAgents.includes(ALL_AGENTS_SCOPE)
+}
+
+function formatScopeAgents(scopeAgents: string[]): string {
+  return isAllAgentsScope(scopeAgents) ? 'All agents' : scopeAgents.join(', ')
+}
+
+function toFilterableScopeAgents(scopeAgents: string[]): string[] {
+  return scopeAgents.filter((agent) => agent !== ALL_AGENTS_SCOPE)
+}
+
 function matchesAgent(entry: MemoryEntry, selectedAgent: string): boolean {
-  if (!selectedAgent || entry.scope_agents.length === 0) {
+  if (!selectedAgent || isAllAgentsScope(entry.scope_agents)) {
     return true
   }
   return entry.scope_agents.includes(selectedAgent)
@@ -425,7 +438,7 @@ function MemoryTab() {
     [deleteConfirmEntryId, entries],
   )
   const agentOptions = useMemo(
-    () => toDistinctSortedValues(entries.flatMap((entry) => entry.scope_agents)),
+    () => toDistinctSortedValues(entries.flatMap((entry) => toFilterableScopeAgents(entry.scope_agents))),
     [entries],
   )
 
@@ -778,7 +791,7 @@ function MemoryTab() {
                     <strong data-testid="memory-entry-title" className="block truncate text-base text-primary">{entry.title}</strong>
                     <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-static-sm gap-y-static-xs">
                       <span data-testid="memory-entry-agents" className="text-sm text-contrast-high">
-                        {entry.scope_agents.length > 0 ? entry.scope_agents.join(', ') : 'All agents'}
+                        {formatScopeAgents(entry.scope_agents)}
                       </span>
                       <span data-testid="memory-entry-category-group" className="flex min-w-0 flex-wrap items-center gap-static-xs">
                         {entry.categories.map((category) => (
@@ -816,7 +829,7 @@ function MemoryTab() {
                     <dl data-testid="memory-metadata-grid" className="grid gap-x-static-md gap-y-static-xs border-t border-contrast-low pt-static-sm text-xs leading-normal text-contrast-high md:grid-cols-2 xl:grid-cols-4">
                       <div className="min-w-0"><dt className="font-semibold text-contrast-high">ID</dt><dd className="m-0 break-words text-primary">{entry.id}</dd></div>
                       <div className="min-w-0"><dt className="font-semibold text-contrast-high">Source agent</dt><dd className="m-0 break-words text-primary">{entry.source_agent}</dd></div>
-                      <div className="min-w-0"><dt className="font-semibold text-contrast-high">Scope agents</dt><dd className="m-0 break-words text-primary">{entry.scope_agents.length > 0 ? entry.scope_agents.join(', ') : 'All agents'}</dd></div>
+                      <div className="min-w-0"><dt className="font-semibold text-contrast-high">Scope agents</dt><dd className="m-0 break-words text-primary">{formatScopeAgents(entry.scope_agents)}</dd></div>
                       <div className="min-w-0"><dt className="font-semibold text-contrast-high">Categories</dt><dd className="m-0 break-words text-primary">{entry.categories.join(', ')}</dd></div>
                       <div className="min-w-0"><dt className="font-semibold text-contrast-high">Confidence</dt><dd className="m-0 break-words text-primary">{formatConfidence(entry.confidence)}</dd></div>
                       <div className="min-w-0"><dt className="font-semibold text-contrast-high">State</dt><dd className="m-0 break-words text-primary">{entry.state}</dd></div>

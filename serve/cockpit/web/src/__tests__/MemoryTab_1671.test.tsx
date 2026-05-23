@@ -483,6 +483,25 @@ describe('TestFromAC_MemoryTabFilters', () => {
     expect(new Set(values).size).toBe(values.length)
   })
 
+  it('ac2 edge: agent wildcard is omitted from filter options', async () => {
+    const entries = [
+      makeEntry({ id: 'e1', scope_agents: ['*'], state: 'pending' }),
+      makeEntry({ id: 'e2', scope_agents: ['builder'], state: 'pending' }),
+    ]
+    vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
+    let container!: HTMLElement
+    await act(async () => {
+      container = renderMemoryTab().container
+    })
+    await flush()
+
+    const agentFilter = container.querySelector('[name="agent-filter"]')
+    expect(agentFilter).not.toBeNull()
+    const values = Array.from(agentFilter!.querySelectorAll('p-select-option')).map((el) => readHostValue(el))
+    expect(values).not.toContain('*')
+    expect(values).toContain('builder')
+  })
+
   it('ac2 happy: text search control (PInputSearch) is present', async () => {
     vi.stubGlobal('fetch', makeOkFetch())
     let container!: HTMLElement
@@ -514,6 +533,29 @@ describe('TestFromAC_MemoryTabFilters', () => {
       (el) => el.textContent,
     )
     expect(titles).toContain('Global Entry')
+    expect(titles).not.toContain('Builder Only')
+  })
+
+  it('ac2 edge: entry with wildcard scope_agents always passes the agent filter', async () => {
+    const entries = [
+      makeEntry({ id: 'e1', title: 'Wildcard Entry', scope_agents: ['*'], state: 'pending' }),
+      makeEntry({ id: 'e2', title: 'Builder Only', scope_agents: ['builder'], state: 'pending' }),
+    ]
+    vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
+    let container!: HTMLElement
+    await act(async () => {
+      container = renderMemoryTab().container
+    })
+    await flush()
+
+    const agentFilter = container.querySelector('[name="agent-filter"]')
+    fireEvent(agentFilter!, new CustomEvent('update', { detail: { value: 'reviewer' }, bubbles: true }))
+    await flush()
+
+    const titles = Array.from(container.querySelectorAll('[data-testid="memory-entry-title"]')).map(
+      (el) => el.textContent,
+    )
+    expect(titles).toContain('Wildcard Entry')
     expect(titles).not.toContain('Builder Only')
   })
 })
@@ -801,6 +843,19 @@ describe('TestFromAC_MemoryTabRowRendering', () => {
 
   it('ac4 edge: empty scope_agents array renders the string "All agents"', async () => {
     const entries = [makeEntry({ scope_agents: [], state: 'pending' })]
+    vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
+    let container!: HTMLElement
+    await act(async () => {
+      container = renderMemoryTab().container
+    })
+    await flush()
+
+    const agentsEl = container.querySelector('[data-testid="memory-entry-agents"]')
+    expect(agentsEl?.textContent).toBe('All agents')
+  })
+
+  it('ac4 edge: wildcard scope_agents renders the string "All agents"', async () => {
+    const entries = [makeEntry({ scope_agents: ['*'], state: 'pending' })]
     vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
     let container!: HTMLElement
     await act(async () => {
