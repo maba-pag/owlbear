@@ -531,34 +531,34 @@ function IdeasPage() {
           ) : null}
         </div>
 
-        <aside data-testid="ideas-state-panel" className="grid content-start gap-static-md rounded-lg border border-contrast-low bg-canvas p-static-md text-primary">
+        <aside data-testid="ideas-state-panel" className="grid min-w-0 content-start gap-static-md overflow-hidden rounded-lg border border-contrast-low bg-canvas p-static-md text-primary">
           <div className="grid gap-static-xs">
             <span className="text-xs font-semibold uppercase text-primary">Notebook</span>
             <div className="grid gap-static-xs text-sm text-primary">
-              <div className="flex justify-between gap-static-md">
-                <span>Changes</span>
-                <span className="font-semibold">{isDirty ? 'Changed' : 'Current'}</span>
+              <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-x-static-sm">
+                <span className="min-w-0">Changes</span>
+                <span className="min-w-0 break-words text-left font-semibold sm:text-right">{isDirty ? 'Changed' : 'Current'}</span>
               </div>
-              <div className="flex justify-between gap-static-md">
-                <span>Sync</span>
-                <span className="font-semibold">{hasConflict ? 'Needs choice' : 'Ready'}</span>
+              <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-x-static-sm">
+                <span className="min-w-0">Sync</span>
+                <span className="min-w-0 break-words text-left font-semibold sm:text-right">{hasConflict ? 'Needs choice' : 'Ready'}</span>
               </div>
             </div>
           </div>
           <div className="grid gap-static-xs rounded-md border border-contrast-low bg-surface p-static-sm text-sm leading-normal text-primary">
             <span className="text-xs font-semibold uppercase text-primary">Writing metrics</span>
             <div className="grid gap-static-xs">
-              <div className="flex justify-between gap-static-md">
-                <span>Lines</span>
-                <span className="font-semibold">{formatNumber(lineCount)}</span>
+              <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-x-static-sm">
+                <span className="min-w-0">Lines</span>
+                <span className="min-w-0 break-words text-left font-semibold sm:text-right">{formatNumber(lineCount)}</span>
               </div>
-              <div className="flex justify-between gap-static-md">
-                <span>Words</span>
-                <span className="font-semibold">{formatNumber(wordCount)}</span>
+              <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-x-static-sm">
+                <span className="min-w-0">Words</span>
+                <span className="min-w-0 break-words text-left font-semibold sm:text-right">{formatNumber(wordCount)}</span>
               </div>
-              <div className="flex justify-between gap-static-md">
-                <span>Characters</span>
-                <span className="font-semibold">{formatNumber(content.length)}</span>
+              <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-x-static-sm">
+                <span className="min-w-0">Characters</span>
+                <span className="min-w-0 break-words text-left font-semibold sm:text-right">{formatNumber(content.length)}</span>
               </div>
             </div>
           </div>
