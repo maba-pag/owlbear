@@ -325,13 +325,16 @@ describe('TestFromAC_KanbanBoard', () => {
       })
 
       try {
-        renderBoard({ tasks: [doneOnlyTask], fetchOnMount: false })
+        const { container } = renderBoard({ tasks: [doneOnlyTask], fetchOnMount: false })
 
         await waitFor(() => {
           expect(scrollTo).toHaveBeenCalled()
         })
         expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({ behavior: 'auto' }))
         expect((scrollTo.mock.calls[0][0] as ScrollToOptions).left).toBeGreaterThan(0)
+        expect(container.querySelector('[data-testid="kanban-column-strip"]')?.className).toContain(
+          'pr-[calc(var(--spacing-static-md)*2+var(--spacing-static-sm))]',
+        )
       } finally {
         rectSpy.mockRestore()
         if (scrollToDescriptor) {

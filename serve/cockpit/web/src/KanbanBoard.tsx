@@ -475,7 +475,7 @@ function KanbanBoardContent({
         <div
           ref={columnStripRef}
           data-testid="kanban-column-strip"
-          className="grid flex-1 min-h-0 gap-static-sm overflow-x-auto overflow-y-hidden bg-canvas p-static-md [scrollbar-gutter:stable]"
+          className="grid flex-1 min-h-0 gap-static-sm overflow-x-auto overflow-y-hidden bg-canvas py-static-md pl-static-md pr-[calc(var(--spacing-static-md)*2+var(--spacing-static-sm))] [scrollbar-gutter:stable]"
           // inline-justified: grid column count is runtime-driven by board status count.
           style={{
             display: 'grid',
