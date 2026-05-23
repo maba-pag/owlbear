@@ -230,8 +230,12 @@ describe('TestFromAC_ShellCallbacks', () => {
       const detailShell = container.querySelector('[data-testid="task-detail-scroll-shell"]')
       const detailContent = container.querySelector('[data-region="task-detail-content"]') as HTMLElement | null
 
-      expect(detailWindow?.className).toContain('max-h-[min(84vh,820px)]')
-      expect(detailWindow?.className).toContain('h-[min(84vh,820px)]')
+      expect(detailWindow?.className).toContain('max-h-[min(84dvh,820px)]')
+      expect(detailWindow?.className).toContain('h-[min(84dvh,820px)]')
+      expect(detailWindow?.className).toContain('w-[min(1040px,calc(100vw-4rem))]')
+      expect(detailWindow?.className).toContain('md:h-[min(84vh,820px)]')
+      expect(detailWindow?.className).toContain('md:max-h-[min(84vh,820px)]')
+      expect(detailWindow?.className).toContain('md:w-[min(1040px,calc(100vw-8rem))]')
       expect(detailWindow?.className).toContain('overflow-hidden')
       expect(detailShell?.className).toContain('overflow-hidden')
       expect(detailContent?.className).toContain('absolute')

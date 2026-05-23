@@ -415,7 +415,7 @@ export default function TaskFieldsEditor({
   }
 
   return (
-    <div className="grid gap-static-sm">
+    <div className="grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-static-sm">
       {!isEditing ? (
         <TaskFieldsDisplay
           task={task}
@@ -425,14 +425,15 @@ export default function TaskFieldsEditor({
       ) : null}
 
       <div
-        className={isEditing ? 'grid gap-static-sm' : 'hidden'}
+        className={isEditing ? 'grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-static-sm' : 'hidden'}
         data-region="task-detail-edit-form"
         hidden={!isEditing}
       >
-      <div className="grid gap-static-sm lg:grid-cols-[minmax(0,1fr)_14rem]">
+      <div className="grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-static-sm lg:grid-cols-[minmax(0,1fr)_14rem]">
         <PInputText
           name="title"
           label="Title"
+          className="min-w-0"
           data-field="title"
           value={title}
           onChange={(event) => setTitle(readControlValue(event))}
@@ -441,6 +442,7 @@ export default function TaskFieldsEditor({
         <PSelect
           name="priority"
           label="Priority"
+          className="min-w-0"
           data-field="priority"
           value={priority}
           onChange={(event) => setPriority(readControlValue(event))}
@@ -451,7 +453,7 @@ export default function TaskFieldsEditor({
         </PSelect>
       </div>
 
-      <section className="grid gap-static-xs" data-region="task-detail-tags">
+      <section className="grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-static-xs" data-region="task-detail-tags">
         <div className="flex min-w-0 flex-wrap items-center gap-static-xs">
           <span className="text-sm font-semibold text-contrast-high">Tags</span>
           {editableTags.length > 0 ? (
@@ -472,10 +474,11 @@ export default function TaskFieldsEditor({
             <span data-testid="no-tags" className="text-sm text-contrast-high">No tags</span>
           )}
         </div>
-        <div className="grid gap-static-xs sm:grid-cols-[minmax(0,1fr)_auto]">
+        <div className="grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-static-xs sm:grid-cols-[minmax(0,1fr)_auto]">
           <PInputText
             name="new_tag"
             label="Add tag"
+            className="min-w-0"
             data-field="new-tag"
             value={newTag}
             onChange={(event) => setNewTag(readControlValue(event))}
@@ -492,6 +495,7 @@ export default function TaskFieldsEditor({
             data-testid="add-tag-button"
             variant="secondary"
             icon="plus"
+            className="min-w-0"
             compact
             disabled={normalizeTag(newTag).length === 0}
             onClick={() => addTagFromInput()}
@@ -505,6 +509,23 @@ export default function TaskFieldsEditor({
           </div>
         ) : null}
       </section>
+
+      <div
+        data-testid="task-detail-edit-actions"
+        className="flex w-full min-w-0 max-w-full flex-wrap items-center gap-static-sm border-t border-contrast-low bg-canvas px-static-xs py-static-sm md:sticky md:bottom-0 md:z-20 md:shadow-lg"
+      >
+        <PButton data-testid="save-button" onClick={() => void handleSave()}>
+          Save
+        </PButton>
+        {!startsEditing ? (
+          <PButton data-testid="cancel-edit-button" variant="secondary" onClick={handleCancelEdit}>
+            Cancel
+          </PButton>
+        ) : null}
+        {isDirty && <div data-testid="dirty-indicator" className="text-sm font-semibold text-warning">Unsaved changes</div>}
+        {saveConfirmed && <div data-testid="save-confirmed" className="text-sm font-semibold text-success">Saved</div>}
+        {validationMessage && <div data-testid="validation-message" className="rounded-lg border border-warning bg-warning-low p-static-xs text-sm text-primary">{validationMessage}</div>}
+      </div>
 
       <section className="rounded-lg border border-contrast-low bg-surface p-static-md">
         <div className={`mb-static-xs flex min-w-0 flex-wrap items-center gap-static-xs ${editBody ? 'justify-end' : 'justify-between'}`}>
@@ -523,6 +544,7 @@ export default function TaskFieldsEditor({
           <PTextarea
             name="body"
             label={taskBodyLabel}
+            className="min-w-0"
             data-field="body"
             value={body}
             onChange={(event) => setBody(readControlValue(event))}
@@ -533,10 +555,11 @@ export default function TaskFieldsEditor({
         )}
       </section>
 
-      <div className="grid gap-static-sm lg:grid-cols-2">
+      <div className="grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-static-sm lg:grid-cols-2">
         <PInputText
           name="depends_on"
           label="Depends on"
+          className="min-w-0"
           data-field="depends_on"
           value={dependsOn}
           onChange={(event) => setDependsOn(readControlValue(event))}
@@ -545,6 +568,7 @@ export default function TaskFieldsEditor({
         <PInputText
           name="parent"
           label="Parent"
+          className="min-w-0"
           data-field="parent"
           value={parent}
           onChange={(event) => setParent(readControlValue(event))}
@@ -556,6 +580,7 @@ export default function TaskFieldsEditor({
         <PInputText
           name="block_reason"
           label="Block reason"
+          className="min-w-0"
           data-field="block_reason"
           value={blockReason}
           onChange={(event) => setBlockReason(readControlValue(event))}
@@ -563,22 +588,6 @@ export default function TaskFieldsEditor({
         />
       )}
 
-      <div
-        data-testid="task-detail-edit-actions"
-        className="sticky bottom-0 z-20 flex min-w-0 flex-wrap items-center gap-static-sm border-t border-contrast-low bg-canvas px-static-xs py-static-sm shadow-lg"
-      >
-        <PButton data-testid="save-button" onClick={() => void handleSave()}>
-          Save
-        </PButton>
-        {!startsEditing ? (
-          <PButton data-testid="cancel-edit-button" variant="secondary" onClick={handleCancelEdit}>
-            Cancel
-          </PButton>
-        ) : null}
-        {isDirty && <div data-testid="dirty-indicator" className="text-sm font-semibold text-warning">Unsaved changes</div>}
-        {saveConfirmed && <div data-testid="save-confirmed" className="text-sm font-semibold text-success">Saved</div>}
-        {validationMessage && <div data-testid="validation-message" className="rounded-lg border border-warning bg-warning-low p-static-xs text-sm text-primary">{validationMessage}</div>}
-      </div>
       </div>
     </div>
   )

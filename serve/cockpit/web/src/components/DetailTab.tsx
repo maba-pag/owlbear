@@ -189,8 +189,8 @@ export default function DetailTab({
   const acceptanceCriteria = Array.isArray(t.ac) ? t.ac.filter((item) => item.trim().length > 0) : []
 
   return (
-    <div className="flex min-w-0 flex-col gap-static-md">
-      <section className="rounded-lg border border-contrast-low bg-canvas p-static-sm" data-region="task-detail-body">
+    <div className="flex w-full min-w-0 flex-col gap-static-md">
+      <section className="rounded-lg border border-contrast-low bg-canvas p-static-xs sm:p-static-sm" data-region="task-detail-body">
         <PHeading ref={syncHeadingAttrs('h3', 'medium')} size="medium" tag="h3">Task details</PHeading>
         <TaskFieldsEditor
           task={t}
