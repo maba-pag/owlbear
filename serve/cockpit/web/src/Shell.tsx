@@ -76,7 +76,7 @@ function applyCockpitCanvasOverrides(canvas: HTMLElement | null): boolean {
   style.setAttribute(CANVAS_OVERRIDE_ATTR, '')
   style.textContent = [
     ':host{height:100dvh!important;max-height:100dvh!important;overflow:clip!important;}',
-    '.root{height:100dvh!important;min-height:0!important;overflow:clip!important;}',
+    '.root{height:100dvh!important;min-height:0!important;overflow:visible!important;}',
     '.main{min-height:0!important;overflow:clip!important;}',
     '.header{background:var(--p-color-canvas)!important;color:var(--p-color-contrast-high)!important;}',
     '.header__crest,.header__wordmark{display:none!important;grid-column:2!important;grid-row:1!important;}',

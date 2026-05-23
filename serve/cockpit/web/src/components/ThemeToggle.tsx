@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import { createPortal } from 'react-dom'
-import { PButtonPure, PIcon } from '@porsche-design-system/components-react'
+import { PButton, PButtonPure, PIcon } from '@porsche-design-system/components-react'
 import { useTheme } from '../hooks/useTheme'
 import type { Theme } from '../hooks/useTheme'
 
@@ -159,24 +159,38 @@ export default function ThemeToggle({ compact = false }: ThemeToggleProps) {
 
   return (
     <>
-      <PButtonPure
-        ref={triggerRef}
-        type="button"
-        icon="theme"
-        hideLabel={compact}
-        className={[
-          'rounded-full bg-canvas py-1',
-          compact ? 'px-1' : 'px-static-xs',
-        ].join(' ')}
-        data-testid="theme-toggle"
-        aria-label={compact ? `${label.ariaLabel}; open theme menu` : label.ariaLabel}
-        aria-haspopup={compact ? 'menu' : undefined}
-        aria-expanded={compact ? String(isMenuOpen) : undefined}
-        title={compact ? `${label.ariaLabel}; open theme menu` : label.ariaLabel}
-        onClick={handleTriggerClick}
-      >
-        {label.text}
-      </PButtonPure>
+      {compact ? (
+        <PButton
+          ref={triggerRef}
+          type="button"
+          data-testid="theme-toggle"
+          variant="secondary"
+          compact
+          hideLabel
+          icon="theme"
+          className="inline-flex size-11 items-center justify-center"
+          aria-label={`${label.ariaLabel}; open theme menu`}
+          aria-haspopup="menu"
+          aria-expanded={isMenuOpen ? 'true' : 'false'}
+          title={`${label.ariaLabel}; open theme menu`}
+          onClick={handleTriggerClick}
+        >
+          Theme
+        </PButton>
+      ) : (
+        <PButtonPure
+          ref={triggerRef}
+          type="button"
+          icon="theme"
+          className="rounded-full bg-canvas px-static-xs py-1"
+          data-testid="theme-toggle"
+          aria-label={label.ariaLabel}
+          title={label.ariaLabel}
+          onClick={handleTriggerClick}
+        >
+          {label.text}
+        </PButtonPure>
+      )}
       {compact ? menu : null}
     </>
   )
