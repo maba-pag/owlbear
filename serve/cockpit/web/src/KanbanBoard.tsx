@@ -36,6 +36,8 @@ const CONTEXT_MENU_VIEWPORT_PADDING = 8
 const CONTEXT_MENU_MIN_WIDTH = 160
 const CONTEXT_MENU_ITEM_HEIGHT = 40
 const CONTEXT_MENU_VERTICAL_CHROME = 10
+const INITIAL_ALIGNMENT_CONTEXT_COLUMNS = 1
+const INITIAL_ALIGNMENT_EDGE_TOLERANCE = 1
 
 function formatStatusLabel(status: string): string {
   return status
@@ -283,13 +285,20 @@ function KanbanBoardContent({
     acc[task.status].push(task)
     return acc
   }, {})
-  const firstNonEmptyStatus = board?.statuses.find(({ name }) => (tasksByStatus[name]?.length ?? 0) > 0)?.name ?? null
+  const firstNonEmptyStatusIndex = board?.statuses.findIndex(({ name }) => (tasksByStatus[name]?.length ?? 0) > 0) ?? -1
+  const firstNonEmptyStatus = firstNonEmptyStatusIndex >= 0 ? board?.statuses[firstNonEmptyStatusIndex]?.name ?? null : null
+  const initialLeadStatusIndex = firstNonEmptyStatusIndex >= 0
+    ? Math.max(0, firstNonEmptyStatusIndex - INITIAL_ALIGNMENT_CONTEXT_COLUMNS)
+    : -1
+  const initialLeadStatus = firstNonEmptyStatusIndex >= 0
+    ? board?.statuses[initialLeadStatusIndex]?.name ?? firstNonEmptyStatus
+    : null
   const statusOccupancySignature = board
     ? board.statuses.map(({ name }) => `${name}:${tasksByStatus[name]?.length ?? 0}`).join('|')
     : ''
 
   useEffect(() => {
-    if (!firstNonEmptyStatus || statusOccupancySignature === lastAutoAlignedSignatureRef.current) {
+    if (!firstNonEmptyStatus || !initialLeadStatus || statusOccupancySignature === lastAutoAlignedSignatureRef.current) {
       return
     }
 
@@ -303,23 +312,32 @@ function KanbanBoardContent({
       return
     }
 
-    const targetColumn = Array.from(columnStrip.querySelectorAll<HTMLElement>('[data-column]'))
+    const columns = Array.from(columnStrip.querySelectorAll<HTMLElement>('[data-column]'))
+    const targetColumn = columns
       .find((column) => column.dataset.column === firstNonEmptyStatus)
+    const leadColumn = columns
+      .find((column) => column.dataset.column === initialLeadStatus)
     if (!targetColumn) {
+      return
+    }
+    if (!leadColumn) {
       return
     }
 
     const stripRect = columnStrip.getBoundingClientRect()
     const targetRect = targetColumn.getBoundingClientRect()
+    const paddingLeft = Number.parseFloat(getComputedStyle(columnStrip).paddingLeft) || 0
+    const leadRect = leadColumn.getBoundingClientRect()
+    const desiredLeadLeft = initialLeadStatusIndex <= 0 ? stripRect.left + paddingLeft : stripRect.left
+    const leadAligned = Math.abs(leadRect.left - desiredLeadLeft) <= INITIAL_ALIGNMENT_EDGE_TOLERANCE
     const targetFullyVisible = targetRect.left >= stripRect.left && targetRect.right <= stripRect.right
-    if (targetFullyVisible) {
+    if (leadAligned && targetFullyVisible) {
       return
     }
 
-    const paddingLeft = Number.parseFloat(getComputedStyle(columnStrip).paddingLeft) || 0
-    const nextScrollLeft = Math.max(0, columnStrip.scrollLeft + targetRect.left - stripRect.left - paddingLeft)
+    const nextScrollLeft = Math.max(0, columnStrip.scrollLeft + leadRect.left - desiredLeadLeft)
     columnStrip.scrollTo({ left: nextScrollLeft, behavior: 'auto' })
-  }, [firstNonEmptyStatus, statusOccupancySignature])
+  }, [firstNonEmptyStatus, initialLeadStatus, initialLeadStatusIndex, statusOccupancySignature])
 
   if (loading) {
     return <div data-testid="loading-indicator" role="status">Preparing board...</div>

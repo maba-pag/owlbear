@@ -1,10 +1,10 @@
 ---
 id: 1735
 title: Improve Kanban active-work initial positioning
-status: in-progress
+status: done
 priority: needed
 created: 2026-05-23T04:24:00+0200
-updated: 2026-05-23T04:24:00+0200
+updated: 2026-05-23T04:37:00+0200
 tags:
   - cockpit-perfect-ui
   - scope:cockpit-web
@@ -38,3 +38,11 @@ The post-memory visual sweep now shows the repaired task ledger, but the Kanban 
 - Classification: observed current usability issue.
 - Current harm: the primary task board opens with the user's current in-progress work visually de-emphasized behind empty setup lanes.
 - Product value: improving first-glance task focus makes Cockpit more useful for exactly the ongoing polish workflow.
+
+## Evidence After Fix
+- Kanban initial alignment now keeps one leading context lane before the first non-empty work lane, unless the first lane itself is the first non-empty lane.
+- Screenshot: `.owlbear/scratch/1716-wide-cockpit/1735-kanban-active-position-after.png`.
+- Metrics: `.owlbear/scratch/1716-wide-cockpit/1735-kanban-active-position-after-metrics.json` reports document height 1000px, strip `overflowX: auto`, In Progress visible with task count 1, Done visible with task count 58, and `leadingFragment: null`.
+- Focused Vitest passed: `src/__tests__/KanbanBoard.test.tsx`, 40 tests.
+- ESLint passed for `src/KanbanBoard.tsx` and `src/__tests__/KanbanBoard.test.tsx`.
+- `npm run build` passed with the existing Vite chunk-size warning.
