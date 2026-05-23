@@ -13,7 +13,7 @@ import { test, expect, type Page } from '@playwright/test'
 const STATUSES = ['research', 'backlog', 'todo', 'in-progress', 'review', 'docs', 'done']
 const PRIORITIES = ['critical', 'needed', 'important', 'nice-to-have', 'someday']
 
-/** Desktop viewport consistent with ≥1024px requirement from AC-1. */
+/** Desktop viewport consistent with the 1200px minimum proof width. */
 const DESKTOP_VIEWPORT = { width: 1280, height: 800 }
 
 // ─── Fixture data ────────────────────────────────────────────────────────────

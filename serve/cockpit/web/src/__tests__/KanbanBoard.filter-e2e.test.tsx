@@ -272,6 +272,25 @@ describe('TestFromAC_FilterBoardIntegration', () => {
     })
   })
 
+  it('header names active filter constraints so filtered boards are explainable', async () => {
+    const { container } = renderBoard()
+    await openFilterPanel(container)
+
+    const input = getTextInput(container)
+    fireEvent.change(input, { target: { value: 'alpha' } })
+
+    const pSelect = getPrioritySelect(container)
+    fireEvent(pSelect, new CustomEvent('change', { detail: { value: 'needed' }, bubbles: true }))
+
+    await waitFor(() => {
+      const summary = container.querySelector('[data-testid="active-filter-summary"]')
+      expect(summary).not.toBeNull()
+      expect(summary!.textContent).toContain('Search: alpha')
+      expect(summary!.textContent).toContain('Priority: Needed')
+      expect(container.querySelectorAll('[data-testid="active-filter-chip"]')).toHaveLength(2)
+    })
+  })
+
   // ─── AC5: Filter change while context menu open dismisses menu ────────────
 
   it('changing a filter while a context menu is open dismisses the context menu', async () => {

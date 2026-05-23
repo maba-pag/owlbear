@@ -95,7 +95,7 @@ async function stubApis(page: Page): Promise<void> {
 // Builder fix (#1575): add tabIndex={0} to the column-body div in Column.tsx.
 
 test.describe('TestFromAC_ColumnBodyFocusability', () => {
-  test.use({ viewport: { width: 1024, height: 600 } })
+  test.use({ viewport: { width: 1280, height: 720 } })
 
   test.beforeEach(async ({ page }) => {
     await stubApis(page)

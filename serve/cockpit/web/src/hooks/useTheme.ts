@@ -37,6 +37,7 @@ export function applyTheme(): ResolvedTheme {
 interface UseThemeResult {
   theme: Theme
   toggle: () => void
+  selectTheme: (theme: Theme) => void
   isDark: boolean
 }
 
@@ -101,5 +102,5 @@ export function useTheme(): UseThemeResult {
     [theme, systemPrefersDark],
   )
 
-  return { theme, toggle, isDark }
+  return { theme, toggle, selectTheme: setTheme, isDark }
 }

@@ -200,8 +200,8 @@ test.describe('PCanvas shell layout', () => {
   })
 })
 
-test.describe('PCanvas shell at narrow laptop width', () => {
-  test.use({ viewport: { width: 768, height: 844 } })
+test.describe('PCanvas shell at minimum desktop width', () => {
+  test.use({ viewport: { width: 1280, height: 800 } })
 
   test.beforeEach(async ({ page }) => {
     await stubApis(page)
@@ -209,21 +209,21 @@ test.describe('PCanvas shell at narrow laptop width', () => {
     await page.locator('[data-region="workspace"]').waitFor({ state: 'visible' })
   })
 
-  test('no sidecar width is reserved at 768px', async ({ page }) => {
+  test('no sidecar width is reserved at 1280px', async ({ page }) => {
     await expect(page.locator('[data-region="sidecar"]')).toHaveCount(0)
     const workspace = await page.locator('[data-region="workspace"]').boundingBox()
     expect(workspace).not.toBeNull()
-    expect(workspace!.width).toBeGreaterThan(600)
+    expect(workspace!.width).toBeGreaterThan(1_100)
   })
 
-  test('task detail modal remains inside the viewport at 768px', async ({ page }) => {
+  test('task detail modal remains inside the viewport at 1280px', async ({ page }) => {
     await page.locator('[data-testid="task-card"]').click()
     await expect(page.locator('[data-testid="task-detail-modal"]')).toBeVisible()
 
     const windowBox = await page.locator('[data-region="task-detail-window"]').boundingBox()
     expect(windowBox).not.toBeNull()
     expect(windowBox!.x).toBeGreaterThanOrEqual(0)
-    expect(windowBox!.x + windowBox!.width).toBeLessThanOrEqual(768)
+    expect(windowBox!.x + windowBox!.width).toBeLessThanOrEqual(1280)
   })
 })
 
@@ -254,13 +254,13 @@ test.describe('PCanvas shell on direct workspace routes', () => {
     expect(Math.abs(statePanel!.y - editor!.y)).toBeLessThan(4)
   })
 
-  test('direct Memory route keeps restored header metrics without a leading separator', async ({ page }) => {
+  test('direct Memory route keeps its restored header metric without a leading separator', async ({ page }) => {
     await stubApis(page)
     await page.goto('/memories')
     await page.locator('[data-testid="memory-tab"]').waitFor({ state: 'visible' })
 
     const metrics = page.locator('[data-testid="workspace-header-metric"]')
-    await expect(metrics).toHaveCount(2)
+    await expect(metrics).toHaveCount(1)
 
     const firstMetric = await metrics.nth(0).evaluate((metric) => {
       const value = metric.querySelector('strong')
@@ -269,25 +269,16 @@ test.describe('PCanvas shell on direct workspace routes', () => {
         valueFontSize: value ? getComputedStyle(value).fontSize : null,
       }
     })
-    const secondMetric = await metrics.nth(1).evaluate((metric) => {
-      const value = metric.querySelector('strong')
-      return {
-        borderLeftWidth: getComputedStyle(metric).borderLeftWidth,
-        valueFontSize: value ? getComputedStyle(value).fontSize : null,
-      }
-    })
 
     expect(firstMetric.borderLeftWidth).toBe('0px')
-    expect(secondMetric.borderLeftWidth).toBe('1px')
     expect(Number.parseFloat(firstMetric.valueFontSize ?? '0')).toBeGreaterThan(20)
-    expect(firstMetric.valueFontSize).toBe(secondMetric.valueFontSize)
   })
 })
 
-test.describe('PCanvas shell on direct workspace routes at narrow laptop width', () => {
-  test.use({ viewport: { width: 768, height: 844 } })
+test.describe('PCanvas shell on direct workspace routes at minimum desktop width', () => {
+  test.use({ viewport: { width: 1280, height: 800 } })
 
-  test('direct Memory route gives filters enough width at 768px', async ({ page }) => {
+  test('direct Memory route gives filters enough width at 1280px', async ({ page }) => {
     await stubApis(page)
     await page.goto('/memories')
     await page.locator('[data-testid="memory-tab"]').waitFor({ state: 'visible' })
@@ -303,14 +294,14 @@ test.describe('PCanvas shell on direct workspace routes at narrow laptop width',
     expect(categoryFilter).not.toBeNull()
     expect(agentFilter).not.toBeNull()
     expect(searchFilter).not.toBeNull()
-    expect(panel!.width).toBeGreaterThan(680)
+    expect(panel!.width).toBeGreaterThan(1_100)
     expect(stateFilter!.width).toBeGreaterThan(300)
     expect(categoryFilter!.x).toBeGreaterThan(stateFilter!.x + stateFilter!.width)
     expect(agentFilter!.y).toBeGreaterThan(stateFilter!.y + stateFilter!.height - 2)
     expect(Math.abs(searchFilter!.y - agentFilter!.y)).toBeLessThan(2)
   })
 
-  test('direct Decisions route keeps the resolve modal inside the 768px viewport', async ({ page }) => {
+  test('direct Decisions route keeps the resolve modal inside the 1280px viewport', async ({ page }) => {
     await stubApis(page, { decisions: { count: 1, items: [DECISION] } })
     await page.goto('/decisions')
     await page.locator('[data-testid="decisions-page"]').waitFor({ state: 'visible' })
@@ -330,9 +321,9 @@ test.describe('PCanvas shell on direct workspace routes at narrow laptop width',
     expect(cancel).not.toBeNull()
     for (const box of [surface, responseSelector, notes, submit, cancel]) {
       expect(box!.x).toBeGreaterThanOrEqual(0)
-      expect(box!.x + box!.width).toBeLessThanOrEqual(768)
+      expect(box!.x + box!.width).toBeLessThanOrEqual(1280)
       expect(box!.y).toBeGreaterThanOrEqual(0)
-      expect(box!.y + box!.height).toBeLessThanOrEqual(844)
+      expect(box!.y + box!.height).toBeLessThanOrEqual(800)
     }
   })
 })

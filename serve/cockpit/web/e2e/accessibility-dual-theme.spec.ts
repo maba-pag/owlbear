@@ -210,6 +210,29 @@ async function openWorkspaceStatus(page: Page): Promise<void> {
   await page.locator('[data-testid="health-badge-popover"]').waitFor({ state: 'visible', timeout: 3_000 })
 }
 
+async function showIdeasEditor(page: Page): Promise<void> {
+  const textarea = page.locator('textarea[aria-label="Ideas draft"]')
+  if (await textarea.isVisible()) {
+    return
+  }
+
+  await page.locator('[data-testid="ideas-preview-toggle"]').click()
+  await textarea.waitFor({ state: 'visible', timeout: 5_000 })
+}
+
+async function openTaskDetail(page: Page): Promise<void> {
+  const card = page.locator('[data-testid="task-card"]').first()
+  await card.waitFor({ state: 'visible', timeout: 5_000 })
+  await card.click()
+  await page.locator('[data-testid="task-detail-modal"]').waitFor({ state: 'visible', timeout: 5_000 })
+}
+
+async function openTaskDetailEditor(page: Page): Promise<void> {
+  await openTaskDetail(page)
+  await page.locator('[data-testid="edit-details-button"]').click()
+  await page.locator('[data-field="title"]').waitFor({ state: 'visible', timeout: 5_000 })
+}
+
 /** Format axe violations into a human-readable string for assertion messages. */
 function formatViolations(
   violations: Array<{
@@ -240,7 +263,7 @@ const THEMES = ['light', 'dark'] as const
 
 for (const theme of THEMES) {
   test.describe(`CockpitVisualRedesignDualTheme_${theme}`, () => {
-    test.use({ viewport: { width: 1024, height: 768 } })
+    test.use({ viewport: { width: 1280, height: 800 } })
 
     test.beforeEach(async ({ page }) => {
       // Seed theme before app loads so useTheme() reads the correct value from storage.
@@ -284,6 +307,7 @@ for (const theme of THEMES) {
         page.locator('[data-region="ideas-workspace"]'),
         'ideas workspace must be visible before axe scan',
       ).toBeVisible({ timeout: 8_000 })
+      await showIdeasEditor(page)
       await expect(
         page.locator('textarea[aria-label="Ideas draft"]'),
         'ideas textarea must be visible before axe scan',
@@ -348,9 +372,7 @@ for (const theme of THEMES) {
         `html element must carry class scheme-${theme}`,
       ).toHaveClass(new RegExp(`scheme-${theme}`))
 
-      const card = page.locator('[data-testid="task-card"]').first()
-      await card.waitFor({ state: 'visible', timeout: 5_000 })
-      await card.click()
+      await openTaskDetailEditor(page)
 
       await expect(
         page.locator('[data-field="title"]'),
@@ -491,13 +513,11 @@ for (const theme of THEMES) {
         `html element must carry class scheme-${theme}`,
       ).toHaveClass(new RegExp(`scheme-${theme}`))
 
-      const card = page.locator('[data-testid="task-card"][data-id="1"]')
-      await card.waitFor({ state: 'visible', timeout: 8_000 })
-      await card.click()
+      await openTaskDetail(page)
 
       await expect(
-        page.locator('[data-field="title"]'),
-        'task detail modal [data-field="title"] must be visible before clicking move-backward',
+        page.locator('[data-testid="task-detail-modal"]'),
+        'task detail modal must be visible before clicking move-backward',
       ).toBeVisible({ timeout: 5_000 })
 
       const moveBackwardBtn = page.locator('[data-testid="move-backward"]')

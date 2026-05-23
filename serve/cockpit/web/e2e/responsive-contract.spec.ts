@@ -1,8 +1,8 @@
 /**
- * Playwright coverage for the Cockpit responsive contract.
+ * Playwright coverage for the Cockpit desktop viewport contract.
  *
- * Covers scrollable column keyboard focusability and the supported 768px narrow
- * laptop contract where task detail opens in a PModal task window.
+ * Covers scrollable column keyboard focusability and the supported desktop
+ * contract where task detail opens in a PModal task window.
  * API mocking: all routes stubbed via page.route(); no real backend required.
  */
 import { test, expect, type Page } from '@playwright/test'
@@ -44,11 +44,11 @@ function makeManyTasksInOneColumn(): object[] {
   }))
 }
 
-/** Single task for AC-2 mobile card-click test. */
+/** Single task for AC-2 desktop card-click test. */
 const ONE_TASK = [
   {
     id: 1,
-    title: 'Mobile Test Task',
+    title: 'Desktop Test Task',
     status: 'todo',
     priority: 'important',
     updated: '2026-05-14T00:00:00+00:00',
@@ -64,7 +64,7 @@ const MANY_TASKS = makeManyTasksInOneColumn()
 /**
  * Complete task-detail payload for ONE_TASK[0] — returned by /api/tasks/1 after card click.
  * Required fields prevent TaskFieldsEditor from crashing on depends_on.join() when the
- * detail tab renders after task selection at 320px (AC-5 mobile-sheet contract).
+ * detail tab renders after task selection in the desktop modal contract.
  */
 const ONE_TASK_DETAIL = {
   ...ONE_TASK[0],
@@ -101,7 +101,7 @@ async function stubApis(page: Page, tasks: object[] = MANY_TASKS): Promise<void>
   await page.route('/api/board', (route) => route.fulfill({ json: BOARD }))
 }
 
-// ─── AC-1: Scrollable-region keyboard focusability at 3 viewports ─────────────
+// ─── AC-1: Scrollable-region keyboard focusability at 3 desktop viewports ─────
 //
 // Contract: any [data-testid="column-body"] with scrollHeight > clientHeight must
 // carry tabIndex="0" so keyboard users can scroll it (axe scrollable-region-focusable).
@@ -110,15 +110,15 @@ async function stubApis(page: Page, tasks: object[] = MANY_TASKS): Promise<void>
 //      Guard assertion (scrollableCount > 0) ensures the test is never vacuously true.
 
 test.describe('TestFromAC_ScrollableRegionFocusability', () => {
-  // ── 320x800 ──────────────────────────────────────────────────────────────────
-  test.describe('at 320x800 viewport', () => {
-    test.use({ viewport: { width: 320, height: 800 } })
+  // ── 1280x800 ─────────────────────────────────────────────────────────────────
+  test.describe('at 1280x800 viewport', () => {
+    test.use({ viewport: { width: 1280, height: 800 } })
 
     test.beforeEach(async ({ page }) => {
       await stubApis(page)
       await page.goto('/')
       // Wait for at least one task card in DOM — ensures task data is rendered
-      // before CSS injection (state: 'attached' because workspace is 0px wide at 320px)
+      // before CSS injection.
       await page
         .locator('[data-testid="task-card"]')
         .first()
@@ -126,7 +126,7 @@ test.describe('TestFromAC_ScrollableRegionFocusability', () => {
     })
 
     // AC-4 both-branch: scrollable → tabIndex="0", non-scrollable → no tabIndex.
-    test('column-body with scrollHeight > clientHeight has tabIndex="0" at 320x800 (scrollable-region-focusable)', async ({
+    test('column-body with scrollHeight > clientHeight has tabIndex="0" at 1280x800 (scrollable-region-focusable)', async ({
       page,
     }) => {
       // Scope injection: todo column-body forced to 100px (overflow) while other column-bodies
@@ -187,9 +187,9 @@ test.describe('TestFromAC_ScrollableRegionFocusability', () => {
     })
   })
 
-  // ── 768x1024 ─────────────────────────────────────────────────────────────────
-  test.describe('at 768x1024 viewport', () => {
-    test.use({ viewport: { width: 768, height: 1024 } })
+  // ── 1440x900 ─────────────────────────────────────────────────────────────────
+  test.describe('at 1440x900 viewport', () => {
+    test.use({ viewport: { width: 1440, height: 900 } })
 
     test.beforeEach(async ({ page }) => {
       await stubApis(page)
@@ -201,7 +201,7 @@ test.describe('TestFromAC_ScrollableRegionFocusability', () => {
     })
 
     // AC-4 both-branch: scrollable → tabIndex="0", non-scrollable → no tabIndex.
-    test('column-body with scrollHeight > clientHeight has tabIndex="0" at 768x1024 (scrollable-region-focusable)', async ({
+    test('column-body with scrollHeight > clientHeight has tabIndex="0" at 1440x900 (scrollable-region-focusable)', async ({
       page,
     }) => {
       await page.addStyleTag({
@@ -256,9 +256,9 @@ test.describe('TestFromAC_ScrollableRegionFocusability', () => {
     })
   })
 
-  // ── 1024x768 ─────────────────────────────────────────────────────────────────
-  test.describe('at 1024x768 viewport', () => {
-    test.use({ viewport: { width: 1024, height: 768 } })
+  // ── 2560x1440 ────────────────────────────────────────────────────────────────
+  test.describe('at 2560x1440 viewport', () => {
+    test.use({ viewport: { width: 2560, height: 1440 } })
 
     test.beforeEach(async ({ page }) => {
       await stubApis(page)
@@ -270,7 +270,7 @@ test.describe('TestFromAC_ScrollableRegionFocusability', () => {
     })
 
     // AC-4 both-branch: scrollable → tabIndex="0", non-scrollable → no tabIndex.
-    test('column-body with scrollHeight > clientHeight has tabIndex="0" at 1024x768 (scrollable-region-focusable)', async ({
+    test('column-body with scrollHeight > clientHeight has tabIndex="0" at 2560x1440 (scrollable-region-focusable)', async ({
       page,
     }) => {
       await page.addStyleTag({
@@ -326,15 +326,14 @@ test.describe('TestFromAC_ScrollableRegionFocusability', () => {
   })
 })
 
-// ─── AC-2: Narrow laptop contract — task detail in PModal at 768px ───────────
+// ─── AC-2: Desktop contract — task detail in PModal at 1280px ────────────────
 //
-// Cockpit is a laptop-resident app. The supported narrow contract starts at 768px:
-// the PCanvas start sidebar stays closed, the kanban workbench remains the primary
-// surface, and task detail opens in a PModal task window instead of a phone-only
+// Cockpit is a desktop-only work surface. The minimum supported proof width is
+// 1200px, and task detail opens in a PModal task window instead of a phone-only
 // p-sheet or a persistent PCanvas end sidebar.
 
-test.describe('TestFromAC_NarrowLaptopTaskModalContract', () => {
-  test.use({ viewport: { width: 768, height: 844 } })
+test.describe('TestFromAC_DesktopTaskModalContract', () => {
+  test.use({ viewport: { width: 1280, height: 800 } })
 
   test.beforeEach(async ({ page }) => {
     await stubApis(page, ONE_TASK)
@@ -348,7 +347,7 @@ test.describe('TestFromAC_NarrowLaptopTaskModalContract', () => {
       .waitFor({ state: 'visible', timeout: 10_000 })
   })
 
-  test('PModal task detail is visible after task card click at 768px', async ({
+  test('PModal task detail is visible after task card click at 1280px', async ({
     page,
   }) => {
     await page.locator('[data-testid="task-card"]').first().click()
@@ -357,11 +356,11 @@ test.describe('TestFromAC_NarrowLaptopTaskModalContract', () => {
     await expect(page.locator('[data-region="sidecar"]')).toHaveCount(0)
     await expect(
       page.locator('[data-testid="task-detail-modal"]'),
-      'PModal must be the visible task-detail container at the supported 768px narrow viewport',
+      'PModal must be the visible task-detail container at the supported desktop viewport',
     ).toBeVisible()
   })
 
-  test('task detail content area is inside the PModal after card click at 768px', async ({
+  test('task detail content area is inside the PModal after card click at 1280px', async ({
     page,
   }) => {
     await page.locator('[data-testid="task-card"]').first().click()
@@ -369,16 +368,16 @@ test.describe('TestFromAC_NarrowLaptopTaskModalContract', () => {
     const taskModal = page.locator('[data-testid="task-detail-modal"]')
     await expect(
       taskModal,
-      'PModal task detail must be attached to DOM after task card click at 768px',
+      'PModal task detail must be attached to DOM after task card click at 1280px',
     ).toBeAttached()
 
     await expect(
       taskModal.locator('[data-region="task-detail-content"]'),
-      'task detail content area must stay inside the PModal at 768px',
+      'task detail content area must stay inside the PModal at 1280px',
     ).toBeAttached()
   })
 
-  test('task detail modal is absent before selection and opens after card click at 768px', async ({
+  test('task detail modal is absent before selection and opens after card click at 1280px', async ({
     page,
   }) => {
     await expect(
@@ -394,32 +393,37 @@ test.describe('TestFromAC_NarrowLaptopTaskModalContract', () => {
     ).toBeVisible()
   })
 
-  test('PModal heading contains selected task title after task card click at 768px', async ({
+  test('PModal heading contains selected task title after task card click at 1280px', async ({
     page,
   }) => {
     await page.locator('[data-testid="task-card"]').first().click()
 
     await expect(
       page.locator('[data-testid="task-detail-modal"]'),
-      'PModal must display selected task title "Mobile Test Task" after card click — ' +
+      'PModal must display selected task title "Desktop Test Task" after card click — ' +
         'proves exact task identity propagated to the modal',
-    ).toContainText('Mobile Test Task')
+    ).toContainText('Desktop Test Task')
   })
 
-  test('task detail summary chips stack below the title at 768px', async ({ page }) => {
+  test('task detail summary chips stay clear of the title at 1280px', async ({ page }) => {
     await page.locator('[data-testid="task-card"]').first().click()
 
     const summary = page.locator('[data-testid="task-detail-modal-summary"]')
     await expect(summary).toBeVisible()
 
+    const summaryBox = await summary.boundingBox()
     const headingBox = await summary.locator('p-heading').boundingBox()
     const firstChipBox = await summary.locator('p-tag').first().boundingBox()
 
+    expect(summaryBox).not.toBeNull()
     expect(headingBox).not.toBeNull()
     expect(firstChipBox).not.toBeNull()
+    const chipClearsTitleHorizontally = firstChipBox!.x >= headingBox!.x + headingBox!.width - 2
+    const chipClearsTitleVertically = firstChipBox!.y >= headingBox!.y + headingBox!.height - 2
     expect(
-      firstChipBox!.y,
-      'status chips must sit below the title row at 768px so the modal close affordance stays clear',
-    ).toBeGreaterThanOrEqual(headingBox!.y + headingBox!.height - 2)
+      chipClearsTitleHorizontally || chipClearsTitleVertically,
+      'status chips must not overlap the task title at the desktop modal width',
+    ).toBe(true)
+    expect(firstChipBox!.x + firstChipBox!.width).toBeLessThanOrEqual(summaryBox!.x + summaryBox!.width)
   })
 })

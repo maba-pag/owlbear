@@ -364,10 +364,12 @@ test.describe('AC-2 | FilterPanel PDS compliance assertions', () => {
 
   test('(b.2) blocked toggle: no native input[type="checkbox"] present in filter panel (dual-render falsifiability)', async ({ page }) => {
     // Absence assertion for AC-2(b): PDS host presence alone is not falsifiable against a
-    // dual-render state. FilterPanel.tsx keeps an aria-hidden native input[type="checkbox"] fallback
-    // alongside p-checkbox. Both must be absent for the contract to hold.
-    // FAILS until builder removes the hidden native checkbox fallback.
-    await expect(page.locator('#filter-panel input[type="checkbox"]')).toHaveCount(0, { timeout: 2_000 })
+    // dual-render state. Playwright locators pierce PDS shadow DOM, and PDS p-checkbox uses
+    // an internal native checkbox there. This assertion intentionally checks the host light DOM
+    // only: duplicate fallback UI would be a light-DOM child, while PDS internals are allowed.
+    const lightDomCheckboxCount = await page.locator('#filter-panel p-checkbox[name="blocked-filter"]')
+      .evaluate((checkbox) => checkbox.querySelectorAll('input[type="checkbox"]').length)
+    expect(lightDomCheckboxCount).toBe(0)
   })
 
   test('(c) priority select uses p-select-option children, not native option', async ({ page }) => {

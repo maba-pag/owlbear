@@ -1,10 +1,10 @@
 ---
 id: 1712
 title: Shrink top bar theme switcher
-status: todo
+status: done
 priority: important
 created: 2026-05-21T23:23:43.267289+02:00
-updated: 2026-05-22T00:47:04.722393+02:00
+updated: 2026-05-22T23:24:25+02:00
 tags:
   - cockpit-perfect-ui
   - scope:cockpit-web
@@ -63,3 +63,17 @@ Use this task as a product/audit todo item, not an instruction to hand off to th
 - Automatic mode needs a visibly distinct state, and the solution should be discussed before implementation.
 - Classification: user-observed delivered-work gap, not theoretical.
 - Impact: hurts Cockpit now because the current compact control is ambiguous.
+
+## Completion Evidence - 2026-05-22
+- User decision: implement an icon-only top-bar trigger that opens a mode menu, and fix the observed dark-mode header contrast as part of the same theme/top-bar work.
+- Product value: the top bar now stays quiet during normal work, while explicit Light, Dark, and Auto choices remain visible on demand. This removes the ambiguous bare `A` badge without returning to persistent text in the chrome.
+- Implementation: compact `ThemeToggle` keeps a PDS `PButtonPure` trigger with full `aria-label`, `title`, `aria-haspopup`, and explicit `aria-expanded`. The trigger opens a focused `menuitemradio` list with one checked mode and closes on Escape, outside click, or selection. Non-compact ThemeToggle still preserves the previous click-to-cycle behavior.
+- Dark contrast fix: the Cockpit PCanvas header shadow override now aligns the header surface and text with PDS canvas/contrast tokens, so the centered `OwlBear Cockpit` identity has correct contrast in dark mode.
+- Screenshot evidence at 2560x1440: `.owlbear/scratch/1716-wide-cockpit/theme-switcher-light-menu.png`, `.owlbear/scratch/1716-wide-cockpit/theme-switcher-dark-menu.png`, and `.owlbear/scratch/1716-wide-cockpit/theme-switcher-auto-menu.png`.
+
+## Verification - 2026-05-22
+- `npx vitest run src/__tests__/ThemeToggle.test.tsx --reporter=json --outputFile=/Users/markus/Projects/owlbear-dev/.owlbear/scratch/1712-vitest-theme-toggle.json` -> 5 tests passed.
+- `npx vitest run src/__tests__/ThemeToggle.test.tsx src/__tests__/ThemeBootstrap.test.ts src/__tests__/PdsColorSchemeBridge.test.ts --reporter=json --outputFile=/Users/markus/Projects/owlbear-dev/.owlbear/scratch/1712-vitest-theme.json` -> passed.
+- `npm run test:e2e:all -- e2e/accessibility-dual-theme.spec.ts --reporter=json > /Users/markus/Projects/owlbear-dev/.owlbear/scratch/1712-dual-theme.json` -> 26 expected, 0 unexpected.
+- `npx eslint src/components/ThemeToggle.tsx src/hooks/useTheme.ts src/Shell.tsx src/__tests__/ThemeToggle.test.tsx e2e/accessibility-dual-theme.spec.ts e2e/pds-scheme-dark.spec.ts` -> passed.
+- `npm run build` -> passed; existing Vite chunk-size warning only.

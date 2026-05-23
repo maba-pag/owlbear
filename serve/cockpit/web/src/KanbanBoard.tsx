@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from 'react'
-import { PButton } from '@porsche-design-system/components-react'
+import { PButton, PTag } from '@porsche-design-system/components-react'
 import { Column } from './components/Column'
 import ArchivalModal from './components/ArchivalModal'
 import FilterPanel from './components/FilterPanel'
@@ -42,6 +42,26 @@ function formatStatusLabel(status: string): string {
     .replace(/-/g, ' ')
     .trim()
     .replace(/\b\w/g, (letter) => letter.toUpperCase())
+}
+
+function getActiveFilterLabels(filter: FilterState): string[] {
+  const labels: string[] = []
+  const searchText = filter.text.trim()
+
+  if (searchText) {
+    labels.push(`Search: ${searchText}`)
+  }
+  if (filter.priority) {
+    labels.push(`Priority: ${formatStatusLabel(filter.priority)}`)
+  }
+  if (filter.tags.length > 0) {
+    labels.push(`Tags: ${filter.tags.join(', ')}`)
+  }
+  if (filter.blocked) {
+    labels.push('Blocked only')
+  }
+
+  return labels
 }
 
 function getOrderedTransitionTargets(board: Board, status: string): string[] {
@@ -147,6 +167,7 @@ function KanbanBoardContent({
     (filter.tags.length > 0 ? 1 : 0) +
     (filter.blocked ? 1 : 0)
   const hasActiveFilters = activeFilterCount > 0
+  const activeFilterLabels = getActiveFilterLabels(filter)
   const boardTaskCount = hasActiveFilters ? filteredTasks.length : tasks.length
   const boardTaskLabel = hasActiveFilters ? 'matching' : 'tasks'
 
@@ -381,6 +402,19 @@ function KanbanBoardContent({
               {hasActiveFilters ? (
                 <span className="whitespace-nowrap rounded-full border border-contrast-low bg-frosted-soft px-2 py-0.5 text-xs font-semibold leading-normal text-primary" data-testid="filter-result-count">
                   {filteredTasks.length} / {tasks.length} tasks
+                </span>
+              ) : null}
+              {activeFilterLabels.length > 0 ? (
+                <span
+                  className="flex min-w-0 flex-wrap items-center gap-static-xs"
+                  data-testid="active-filter-summary"
+                  aria-label="Active filters"
+                >
+                  {activeFilterLabels.map((label) => (
+                    <PTag key={label} compact variant="secondary" data-testid="active-filter-chip" className="max-w-[18rem] truncate">
+                      {label}
+                    </PTag>
+                  ))}
                 </span>
               ) : null}
             </>

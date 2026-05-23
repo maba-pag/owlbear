@@ -165,6 +165,15 @@ async function openWorkspaceStatus(page: Page): Promise<void> {
   await page.locator('[data-testid="health-badge-popover"]').waitFor({ state: 'visible', timeout: 3_000 })
 }
 
+async function openTaskDetailEditor(page: Page): Promise<void> {
+  const card = page.locator('[data-testid="task-card"]').first()
+  await card.waitFor({ state: 'visible', timeout: 5_000 })
+  await card.click()
+  await page.locator('[data-testid="task-detail-modal"]').waitFor({ state: 'visible', timeout: 5_000 })
+  await page.locator('[data-testid="edit-details-button"]').click()
+  await page.locator('[data-field="title"]').waitFor({ state: 'visible', timeout: 5_000 })
+}
+
 // ─── AC1: WCAG 2.1 AA axe scans on all required surfaces ─────────────────────
 //
 // All tests use .withTags(WCAG_TAGS) to scope axe to WCAG 2.1 AA rules only.
@@ -177,7 +186,7 @@ async function openWorkspaceStatus(page: Page): Promise<void> {
 //     at runtime cause failures until the builder remediates them.
 
 test.describe('TestFromAC_WcagSweep', () => {
-  test.use({ viewport: { width: 1024, height: 768 } })
+  test.use({ viewport: { width: 1280, height: 800 } })
 
   test.beforeEach(async ({ page }) => {
     await stubApis(page)
@@ -187,7 +196,7 @@ test.describe('TestFromAC_WcagSweep', () => {
 
   // ── Surface 1: board view ──────────────────────────────────────────────────
   // The board view is the primary surface. Cards, columns, status-bar controls,
-  // and the filter toggle must all pass WCAG 2.1 AA at 1024px.
+  // and the filter toggle must all pass WCAG 2.1 AA at the minimum desktop width.
   test('board view passes wcag2.1 aa axe scan (AC1)', async ({ page }) => {
     // Assert at least one card is rendered — no silent empty-board false-green.
     await expect(
@@ -203,9 +212,7 @@ test.describe('TestFromAC_WcagSweep', () => {
   // The modal opens when a task card is clicked. The detail panel includes
   // TaskFieldsEditor, TaskActions, and the metadata accordion.
   test('task detail modal passes wcag2.1 aa axe scan (AC1)', async ({ page }) => {
-    const card = page.locator('[data-testid="task-card"]').first()
-    await card.waitFor({ state: 'visible', timeout: 5_000 })
-    await card.click()
+    await openTaskDetailEditor(page)
 
     // Prove modal rendered by asserting the title field is visible.
     await expect(
@@ -319,8 +326,8 @@ test.describe('TestFromAC_WcagSweep', () => {
 
     // Wait for task detail modal to open.
     await expect(
-      page.locator('[data-field="title"]'),
-      'task detail modal [data-field="title"] must be visible before clicking move-backward',
+      page.locator('[data-testid="task-detail-modal"]'),
+      'task detail modal must be visible before clicking move-backward',
     ).toBeVisible({ timeout: 5_000 })
 
     // Click "Move Backward" to open ConfirmDialog.

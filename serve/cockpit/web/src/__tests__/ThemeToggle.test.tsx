@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { fireEvent, render } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
 import ThemeToggle from '../components/ThemeToggle'
 import { useTheme } from '../hooks/useTheme'
@@ -12,10 +12,11 @@ type ThemeMode = 'light' | 'dark' | 'auto'
 
 const mockedUseTheme = vi.mocked(useTheme)
 
-function renderThemeToggle(theme: ThemeMode = 'light', toggle = vi.fn()) {
+function renderThemeToggle(theme: ThemeMode = 'light', toggle = vi.fn(), selectTheme = vi.fn()) {
   mockedUseTheme.mockReturnValue({
     theme,
     toggle,
+    selectTheme,
     isDark: theme === 'dark',
   })
 
@@ -25,13 +26,14 @@ function renderThemeToggle(theme: ThemeMode = 'light', toggle = vi.fn()) {
     </PorscheDesignSystemProvider>,
   )
 
-  return { ...view, toggle }
+  return { ...view, toggle, selectTheme }
 }
 
-function renderCompactThemeToggle(theme: ThemeMode = 'light', toggle = vi.fn()) {
+function renderCompactThemeToggle(theme: ThemeMode = 'light', toggle = vi.fn(), selectTheme = vi.fn()) {
   mockedUseTheme.mockReturnValue({
     theme,
     toggle,
+    selectTheme,
     isDark: theme === 'dark',
   })
 
@@ -41,7 +43,7 @@ function renderCompactThemeToggle(theme: ThemeMode = 'light', toggle = vi.fn()) 
     </PorscheDesignSystemProvider>,
   )
 
-  return { ...view, toggle }
+  return { ...view, toggle, selectTheme }
 }
 
 function getButtonDescriptor(theme: ThemeMode): string {
@@ -80,14 +82,31 @@ describe('TestFromAC_ThemeToggle_1540', () => {
     expect(new Set(descriptors).size).toBe(3)
   })
 
-  it('compact mode shows a one-character mode indicator instead of full persistent text', () => {
+  it('compact mode renders an icon-only trigger instead of a letter badge', () => {
     const { container } = renderCompactThemeToggle('auto')
     const button = container.querySelector('[data-testid="theme-toggle"]')
-    const indicator = container.querySelector('[data-testid="theme-mode-indicator"]')
 
-    expect(button).toHaveAttribute('aria-label', 'Theme mode: auto (OS)')
-    expect(button).toHaveAttribute('title', 'Theme mode: auto (OS)')
-    expect(indicator?.textContent).toBe('A')
-    expect(indicator?.getAttribute('aria-hidden')).toBe('true')
+    expect(button).toHaveAttribute('aria-label', 'Theme mode: auto (OS); open theme menu')
+    expect(button).toHaveAttribute('title', 'Theme mode: auto (OS); open theme menu')
+    expect(button).toHaveAttribute('aria-haspopup', 'menu')
+    expect(button).toHaveAttribute('aria-expanded', 'false')
+    expect(container.querySelector('[data-testid="theme-mode-indicator"]')).toBeNull()
+  })
+
+  it('compact mode opens a mode menu and selects an explicit theme', () => {
+    const { container, toggle, selectTheme } = renderCompactThemeToggle('auto')
+    const button = container.querySelector('[data-testid="theme-toggle"]')!
+
+    fireEvent.click(button)
+
+    expect(toggle).not.toHaveBeenCalled()
+    expect(button).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByTestId('theme-mode-menu')).toHaveAttribute('role', 'menu')
+    expect(screen.getByTestId('theme-mode-option-auto')).toHaveAttribute('aria-checked', 'true')
+
+    fireEvent.click(screen.getByTestId('theme-mode-option-dark'))
+
+    expect(selectTheme).toHaveBeenCalledWith('dark')
+    expect(screen.queryByTestId('theme-mode-menu')).toBeNull()
   })
 })
