@@ -96,6 +96,20 @@ const TASKS = {
   mtime: 1713456000,
 }
 
+function makeRect(left: number, right: number): DOMRect {
+  return {
+    x: left,
+    y: 0,
+    left,
+    right,
+    top: 0,
+    bottom: 800,
+    width: right - left,
+    height: 800,
+    toJSON: () => ({}),
+  } as DOMRect
+}
+
 // ─── Fetch stub helpers ───────────────────────────────────────────────────────
 
 function stubFetchSuccess() {
@@ -271,6 +285,71 @@ describe('TestFromAC_KanbanBoard', () => {
         const emptyState = researchCol?.querySelector('[data-testid="empty-column"]')
         expect(emptyState?.textContent?.trim().length).toBeGreaterThan(0)
       })
+    })
+
+    it('auto-aligns the strip to the first non-empty column when leading columns are empty', async () => {
+      const doneOnlyTask = { ...TASKS.tasks[4], id: 99, status: 'done' }
+      const scrollTo = vi.fn()
+      const scrollToDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollTo')
+      const scrollWidthDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollWidth')
+      const clientWidthDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth')
+      const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect
+      const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function getMockRect() {
+        const element = this as HTMLElement
+        if (element.getAttribute('data-testid') === 'kanban-column-strip') {
+          return makeRect(0, 700)
+        }
+
+        const status = element.getAttribute('data-column')
+        const statusIndex = BOARD.statuses.findIndex(({ name }) => name === status)
+        if (statusIndex >= 0) {
+          const left = statusIndex * 300
+          return makeRect(left, left + 280)
+        }
+
+        return originalGetBoundingClientRect.call(this)
+      })
+
+      Object.defineProperty(HTMLElement.prototype, 'scrollTo', { configurable: true, value: scrollTo })
+      Object.defineProperty(HTMLElement.prototype, 'scrollWidth', {
+        configurable: true,
+        get() {
+          return (this as HTMLElement).getAttribute('data-testid') === 'kanban-column-strip' ? 2200 : 0
+        },
+      })
+      Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
+        configurable: true,
+        get() {
+          return (this as HTMLElement).getAttribute('data-testid') === 'kanban-column-strip' ? 700 : 0
+        },
+      })
+
+      try {
+        renderBoard({ tasks: [doneOnlyTask], fetchOnMount: false })
+
+        await waitFor(() => {
+          expect(scrollTo).toHaveBeenCalled()
+        })
+        expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({ behavior: 'auto' }))
+        expect((scrollTo.mock.calls[0][0] as ScrollToOptions).left).toBeGreaterThan(0)
+      } finally {
+        rectSpy.mockRestore()
+        if (scrollToDescriptor) {
+          Object.defineProperty(HTMLElement.prototype, 'scrollTo', scrollToDescriptor)
+        } else {
+          delete (HTMLElement.prototype as Partial<HTMLElement>).scrollTo
+        }
+        if (scrollWidthDescriptor) {
+          Object.defineProperty(HTMLElement.prototype, 'scrollWidth', scrollWidthDescriptor)
+        } else {
+          delete (HTMLElement.prototype as Partial<HTMLElement>).scrollWidth
+        }
+        if (clientWidthDescriptor) {
+          Object.defineProperty(HTMLElement.prototype, 'clientWidth', clientWidthDescriptor)
+        } else {
+          delete (HTMLElement.prototype as Partial<HTMLElement>).clientWidth
+        }
+      }
     })
   })
 

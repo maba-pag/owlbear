@@ -158,6 +158,8 @@ function KanbanBoardContent({
   const announcementTimerRef = useRef<number | null>(null)
   const contextMenuOriginRef = useRef<HTMLElement | null>(null)
   const archivalReturnFocusRef = useRef<HTMLElement | null>(null)
+  const columnStripRef = useRef<HTMLDivElement | null>(null)
+  const lastAutoAlignedSignatureRef = useRef<string | null>(null)
 
   const filteredTasks = filterTasks(tasks, filter)
   const availableTags = [...new Set(tasks.flatMap((task) => task.tags))]
@@ -281,6 +283,43 @@ function KanbanBoardContent({
     acc[task.status].push(task)
     return acc
   }, {})
+  const firstNonEmptyStatus = board?.statuses.find(({ name }) => (tasksByStatus[name]?.length ?? 0) > 0)?.name ?? null
+  const statusOccupancySignature = board
+    ? board.statuses.map(({ name }) => `${name}:${tasksByStatus[name]?.length ?? 0}`).join('|')
+    : ''
+
+  useEffect(() => {
+    if (!firstNonEmptyStatus || statusOccupancySignature === lastAutoAlignedSignatureRef.current) {
+      return
+    }
+
+    const columnStrip = columnStripRef.current
+    if (!columnStrip) {
+      return
+    }
+
+    lastAutoAlignedSignatureRef.current = statusOccupancySignature
+    if (columnStrip.scrollWidth <= columnStrip.clientWidth) {
+      return
+    }
+
+    const targetColumn = Array.from(columnStrip.querySelectorAll<HTMLElement>('[data-column]'))
+      .find((column) => column.dataset.column === firstNonEmptyStatus)
+    if (!targetColumn) {
+      return
+    }
+
+    const stripRect = columnStrip.getBoundingClientRect()
+    const targetRect = targetColumn.getBoundingClientRect()
+    const targetFullyVisible = targetRect.left >= stripRect.left && targetRect.right <= stripRect.right
+    if (targetFullyVisible) {
+      return
+    }
+
+    const paddingLeft = Number.parseFloat(getComputedStyle(columnStrip).paddingLeft) || 0
+    const nextScrollLeft = Math.max(0, columnStrip.scrollLeft + targetRect.left - stripRect.left - paddingLeft)
+    columnStrip.scrollTo({ left: nextScrollLeft, behavior: 'auto' })
+  }, [firstNonEmptyStatus, statusOccupancySignature])
 
   if (loading) {
     return <div data-testid="loading-indicator" role="status">Preparing board...</div>
@@ -434,6 +473,8 @@ function KanbanBoardContent({
         />
 
         <div
+          ref={columnStripRef}
+          data-testid="kanban-column-strip"
           className="grid flex-1 min-h-0 gap-static-sm overflow-x-auto overflow-y-hidden bg-canvas p-static-md [scrollbar-gutter:stable]"
           // inline-justified: grid column count is runtime-driven by board status count.
           style={{
