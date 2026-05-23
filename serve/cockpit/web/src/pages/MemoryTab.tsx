@@ -726,14 +726,15 @@ function MemoryTab() {
         )}
       />
 
-      <div className="flex min-h-0 flex-1 flex-col gap-static-md p-static-md">
+      <div className="flex min-h-0 flex-1 flex-col gap-static-md px-static-sm py-static-md sm:p-static-md">
       <div
-        className="grid gap-static-sm rounded-lg border border-contrast-low bg-canvas p-static-sm sm:grid-cols-2 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.4fr)]"
+        className="grid gap-static-sm rounded-lg border border-contrast-low bg-canvas px-static-xs py-static-sm sm:grid-cols-2 sm:p-static-sm lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.4fr)]"
         data-testid="memory-filter-panel"
       >
         <PMultiSelect
           name="state-filter"
           label="State"
+          className="block w-full min-w-0 max-w-full"
           value={filter.states}
           ref={(element) => {
             stateFilterRef.current = element as unknown as HTMLElement | null
@@ -748,6 +749,7 @@ function MemoryTab() {
         <PMultiSelect
           name="category-filter"
           label="Category"
+          className="block w-full min-w-0 max-w-full"
           value={filter.categories}
           ref={(element) => {
             categoryFilterRef.current = element as unknown as HTMLElement | null
@@ -763,6 +765,7 @@ function MemoryTab() {
         <PSelect
           name="agent-filter"
           label="Agent"
+          className="block w-full min-w-0 max-w-full"
           value={filter.agent}
           ref={(element) => {
             agentFilterRef.current = element as unknown as HTMLElement | null
@@ -779,6 +782,7 @@ function MemoryTab() {
         <PInputSearch
           name="memory-search"
           label="Search"
+          className="block w-full min-w-0 max-w-full"
           value={filter.text}
           ref={(element) => {
             searchFilterRef.current = element as unknown as HTMLElement | null
