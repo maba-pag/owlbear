@@ -654,7 +654,7 @@ function Shell() {
           aria={{ 'aria-label': selectedTask ? `Task #${selectedTask.id}: ${selectedTask.title}` : 'Task detail' }}
         >
           <div
-            className="relative flex max-h-[min(88vh,900px)] w-[min(1040px,calc(100vw-8rem))] min-w-0 flex-col gap-static-md overflow-hidden"
+            className="relative flex max-h-[min(84vh,820px)] w-[min(1040px,calc(100vw-8rem))] min-w-0 flex-col gap-static-md overflow-hidden"
             data-region="task-detail-window"
             data-selected-task-id={selectedTask?.id ?? selectedTaskId ?? undefined}
           >

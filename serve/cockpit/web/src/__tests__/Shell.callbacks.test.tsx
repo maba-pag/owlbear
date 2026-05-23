@@ -217,6 +217,20 @@ describe('TestFromAC_ShellCallbacks', () => {
       expect(container.querySelector('[data-testid="task-detail-modal"]')).not.toBeNull()
     })
 
+    it('task detail modal uses bounded viewport height with internal content scrolling', () => {
+      stubHooks()
+      const { container } = renderShell()
+      act(() => { capturedKanbanOnSelectTask?.(42) })
+
+      const detailWindow = container.querySelector('[data-region="task-detail-window"]')
+      const detailContent = container.querySelector('[data-region="task-detail-content"]')
+
+      expect(detailWindow?.className).toContain('max-h-[min(84vh,820px)]')
+      expect(detailWindow?.className).toContain('overflow-hidden')
+      expect(detailContent?.className).toContain('min-h-0')
+      expect(detailContent?.className).toContain('overflow-y-auto')
+    })
+
     it('onSelectTask clears any prior detailValidationMessage', () => {
       stubHooks()
       const { container } = renderShell()
