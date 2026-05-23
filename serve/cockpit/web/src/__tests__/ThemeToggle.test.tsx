@@ -109,4 +109,30 @@ describe('TestFromAC_ThemeToggle_1540', () => {
     expect(selectTheme).toHaveBeenCalledWith('dark')
     expect(screen.queryByTestId('theme-mode-menu')).toBeNull()
   })
+
+  it('compact mode does not restore trigger focus after pointer option selection', () => {
+    const { container, selectTheme } = renderCompactThemeToggle('auto')
+    const button = container.querySelector('[data-testid="theme-toggle"]') as HTMLElement
+    const focusSpy = vi.spyOn(button, 'focus')
+
+    fireEvent.click(button)
+    fireEvent.click(screen.getByTestId('theme-mode-option-dark'), { detail: 1 })
+
+    expect(selectTheme).toHaveBeenCalledWith('dark')
+    expect(focusSpy).not.toHaveBeenCalled()
+    focusSpy.mockRestore()
+  })
+
+  it('compact mode restores trigger focus after keyboard option activation', () => {
+    const { container, selectTheme } = renderCompactThemeToggle('auto')
+    const button = container.querySelector('[data-testid="theme-toggle"]') as HTMLElement
+    const focusSpy = vi.spyOn(button, 'focus')
+
+    fireEvent.click(button)
+    fireEvent.click(screen.getByTestId('theme-mode-option-dark'), { detail: 0 })
+
+    expect(selectTheme).toHaveBeenCalledWith('dark')
+    expect(focusSpy).toHaveBeenCalledTimes(1)
+    focusSpy.mockRestore()
+  })
 })

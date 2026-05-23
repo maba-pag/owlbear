@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { PButtonPure, PIcon } from '@porsche-design-system/components-react'
 import { useTheme } from '../hooks/useTheme'
@@ -113,10 +113,12 @@ export default function ThemeToggle({ compact = false }: ThemeToggleProps) {
     }
   }
 
-  function chooseTheme(nextTheme: Theme) {
+  function chooseTheme(nextTheme: Theme, shouldRestoreTriggerFocus: boolean) {
     selectTheme(nextTheme)
     setIsMenuOpen(false)
-    triggerRef.current?.focus()
+    if (shouldRestoreTriggerFocus) {
+      triggerRef.current?.focus()
+    }
   }
 
   const menu = isMenuOpen ? createPortal(
@@ -142,7 +144,7 @@ export default function ThemeToggle({ compact = false }: ThemeToggleProps) {
             aria-checked={isSelected}
             data-testid={`theme-mode-option-${option}`}
             className="flex w-full items-center gap-static-xs rounded-sm px-static-xs py-static-xs text-left text-primary hover:bg-frosted-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--p-color-state-focus)]"
-            onClick={() => chooseTheme(option)}
+            onClick={(event: ReactMouseEvent<HTMLButtonElement>) => chooseTheme(option, event.detail === 0)}
           >
             <span className="inline-flex size-4 shrink-0 items-center justify-center" aria-hidden="true">
               {isSelected ? <PIcon name="check" size="x-small" /> : null}
