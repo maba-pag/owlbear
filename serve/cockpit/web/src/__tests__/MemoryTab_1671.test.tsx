@@ -764,6 +764,24 @@ describe('TestFromAC_MemoryTabRowRendering', () => {
     expect(confidenceEl?.textContent).toContain('Confidence')
   })
 
+  it('ac4 polish: entry list is a vertical-only scroll surface with a cue shell', async () => {
+    const entries = [makeEntry({ title: 'Scrollable Memory', state: 'pending' })]
+    vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
+    let container!: HTMLElement
+    await act(async () => {
+      container = renderMemoryTab().container
+    })
+    await flush()
+
+    const shell = container.querySelector('[data-testid="memory-list-scroll-shell"]')
+    const list = shell?.querySelector('ul')
+
+    expect(shell?.className).toContain('overflow-hidden')
+    expect(list?.className).toContain('overflow-x-hidden')
+    expect(list?.className).toContain('overflow-y-auto')
+    expect(list?.className).toContain('pb-static-lg')
+  })
+
   it('ac4 happy: pending state badge uses info color variant', async () => {
     const entries = [makeEntry({ state: 'pending' })]
     vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))

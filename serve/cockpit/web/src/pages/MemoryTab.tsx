@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   PButton,
   PInputNumber,
@@ -321,11 +321,13 @@ function MemoryTab() {
   const [validationMessages, setValidationMessages] = useState<ValidationMessage[]>([])
   const [promotionMessageByEntryId, setPromotionMessageByEntryId] = useState<Record<string, string>>({})
   const [globalMutationMessage, setGlobalMutationMessage] = useState<string | null>(null)
+  const [memoryListCanScrollDown, setMemoryListCanScrollDown] = useState(false)
 
   const stateFilterRef = useRef<HTMLElement | null>(null)
   const categoryFilterRef = useRef<HTMLElement | null>(null)
   const agentFilterRef = useRef<HTMLElement | null>(null)
   const searchFilterRef = useRef<HTMLElement | null>(null)
+  const memoryListRef = useRef<HTMLUListElement | null>(null)
   const accordionRefs = useRef<Record<string, HTMLElement>>({})
 
   const { isFetching, hasFetched, refetch } = usePollingFetch<MemoriesResponse>('/api/memories', {
@@ -461,6 +463,26 @@ function MemoryTab() {
   const memoryCountMetric = visibleEntries.length === entries.length
     ? <WorkspaceHeaderMetric value={entries.length} label={entries.length === 1 ? 'entry' : 'entries'} />
     : <WorkspaceHeaderMetric value={`${visibleEntries.length} of ${entries.length}`} label="shown" />
+
+  const updateMemoryListScrollCue = useCallback(() => {
+    const list = memoryListRef.current
+    setMemoryListCanScrollDown(Boolean(list && list.scrollHeight - list.scrollTop - list.clientHeight > 1))
+  }, [])
+
+  useEffect(() => {
+    updateMemoryListScrollCue()
+
+    const list = memoryListRef.current
+    if (!list || typeof ResizeObserver === 'undefined') {
+      return
+    }
+
+    const observer = new ResizeObserver(updateMemoryListScrollCue)
+    observer.observe(list)
+    return () => {
+      observer.disconnect()
+    }
+  }, [openEntryId, updateMemoryListScrollCue, visibleEntries.length])
 
   useEffect(() => {
     const entriesToBind = Object.entries(accordionRefs.current)
@@ -772,21 +794,22 @@ function MemoryTab() {
       ) : null}
 
       {hasVisibleEntries ? (
-        <ul className="m-0 flex min-h-0 list-none flex-col gap-static-sm overflow-y-auto p-0 pr-static-xs">
-          {visibleEntries.map((entry) => (
-            <li key={entry.id} data-testid="memory-entry" className="rounded-lg border border-contrast-low bg-canvas px-static-sm shadow-sm">
-              <p-accordion
-                className="block"
-                open={openEntryId === entry.id ? true : undefined}
-                ref={(element) => {
-                  if (element) {
-                    accordionRefs.current[entry.id] = element as unknown as HTMLElement
-                    return
-                  }
-                  delete accordionRefs.current[entry.id]
-                }}
-              >
-                <div slot="summary" className="grid min-w-0 gap-static-sm py-static-sm lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+        <div data-testid="memory-list-scroll-shell" className="relative min-h-0 flex-1 overflow-hidden">
+          <ul ref={memoryListRef} onScroll={updateMemoryListScrollCue} className="m-0 flex h-full min-h-0 list-none flex-col gap-static-sm overflow-x-hidden overflow-y-auto p-0 pb-static-lg pr-static-xs">
+            {visibleEntries.map((entry) => (
+              <li key={entry.id} data-testid="memory-entry" className="rounded-lg border border-contrast-low bg-canvas px-static-sm shadow-sm">
+                <p-accordion
+                  className="block"
+                  open={openEntryId === entry.id ? true : undefined}
+                  ref={(element) => {
+                    if (element) {
+                      accordionRefs.current[entry.id] = element as unknown as HTMLElement
+                      return
+                    }
+                    delete accordionRefs.current[entry.id]
+                  }}
+                >
+                  <div slot="summary" className="grid min-w-0 gap-static-sm py-static-sm lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
                   <div className="min-w-0">
                     <strong data-testid="memory-entry-title" className="block truncate text-base text-primary">{entry.title}</strong>
                     <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-static-sm gap-y-static-xs">
@@ -1015,6 +1038,14 @@ function MemoryTab() {
             </li>
           ))}
         </ul>
+        {memoryListCanScrollDown ? (
+          <div
+            aria-hidden="true"
+            data-testid="memory-list-scroll-cue"
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-10 [background:linear-gradient(to_bottom,transparent,var(--p-color-canvas))]"
+          />
+        ) : null}
+        </div>
       ) : null}
 
       {deleteConfirmEntry ? (
