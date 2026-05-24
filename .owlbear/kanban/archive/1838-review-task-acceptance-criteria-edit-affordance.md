@@ -1,10 +1,10 @@
 ---
 id: 1838
 title: Review task acceptance criteria edit affordance
-status: done
+status: archived
 priority: important
 created: 2026-05-24T12:39:41.796906+02:00
-updated: 2026-05-24T18:10:51+02:00
+updated: 2026-05-24T23:32:21.768933+02:00
 tags:
   - scope:cockpit-web
   - detail-tab
@@ -23,7 +23,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Observation

@@ -1,10 +1,10 @@
 ---
 id: 1834
 title: Review MemoryTab page-owned mutation API client
-status: done
+status: archived
 priority: important
 created: 2026-05-24T12:05:05.086598+02:00
-updated: 2026-05-24T17:49:32+02:00
+updated: 2026-05-24T23:32:49.433010+02:00
 tags:
   - scope:cockpit-web
   - memory
@@ -23,7 +23,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Observation

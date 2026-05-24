@@ -4,7 +4,7 @@ title: Review DetailTab save action stack trace error
 status: done
 priority: important
 created: 2026-05-24T11:24:06.544691+02:00
-updated: 2026-05-24T17:49:32+02:00
+updated: 2026-05-24T23:25:35.075188+02:00
 tags:
   - scope:cockpit-web
   - detail-tab
@@ -18,7 +18,7 @@ ac:
   - Any approved change preserves task edit/save behavior.
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-24T23:25:35.075188+02:00
 archival_reason:
 archival_refs: []
 ---

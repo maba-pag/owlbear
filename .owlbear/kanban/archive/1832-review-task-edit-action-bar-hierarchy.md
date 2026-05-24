@@ -4,7 +4,7 @@ title: Review task edit action bar hierarchy
 status: done
 priority: important
 created: 2026-05-24T11:55:10.047697+02:00
-updated: 2026-05-24T17:49:32+02:00
+updated: 2026-05-24T23:25:36.635362+02:00
 tags:
   - scope:cockpit-web
   - ux
@@ -22,7 +22,7 @@ ac:
     guard, and save behavior.
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-24T23:25:36.635362+02:00
 archival_reason:
 archival_refs: []
 ---

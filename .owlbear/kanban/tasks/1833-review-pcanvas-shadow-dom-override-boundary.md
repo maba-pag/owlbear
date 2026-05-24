@@ -4,7 +4,7 @@ title: Review PCanvas shadow DOM override boundary
 status: done
 priority: important
 created: 2026-05-24T11:59:04.211544+02:00
-updated: 2026-05-24T17:49:32+02:00
+updated: 2026-05-24T23:25:35.826238+02:00
 tags:
   - scope:cockpit-web
   - pds
@@ -23,7 +23,7 @@ ac:
     tabs.
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-24T23:25:35.826238+02:00
 archival_reason:
 archival_refs: []
 ---

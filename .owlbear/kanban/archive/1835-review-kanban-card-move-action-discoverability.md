@@ -1,10 +1,10 @@
 ---
 id: 1835
 title: Review Kanban card move action discoverability
-status: done
+status: archived
 priority: important
 created: 2026-05-24T12:17:30.160637+02:00
-updated: 2026-05-24T17:49:32+02:00
+updated: 2026-05-24T23:32:28.233151+02:00
 tags:
   - scope:cockpit-web
   - kanban
@@ -23,7 +23,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Observation

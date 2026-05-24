@@ -1,10 +1,10 @@
 ---
 id: 1836
 title: Review Ideas conflict notice decision context
-status: done
+status: archived
 priority: important
 created: 2026-05-24T12:24:57.808395+02:00
-updated: 2026-05-24T17:49:32+02:00
+updated: 2026-05-24T23:32:34.759873+02:00
 tags:
   - scope:cockpit-web
   - ideas
@@ -23,7 +23,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Observation
