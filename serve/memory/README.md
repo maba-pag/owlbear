@@ -54,6 +54,10 @@ Pydantic `BaseModel` representing a single markdown-backed memory entry.
 | `categories` | `list[MemoryCategory]` | At least one required |
 | `confidence` | `float` | Range 0.7–1.0 |
 | `state` | `MemoryState` | Default: `pending` |
+| `outstanding_count` | `int` | Default: `0`; incremented by assessment tool when entry was outstanding |
+| `unremarkable_count` | `int` | Default: `0`; incremented by assessment tool when entry was unremarkable |
+| `didnt_use_count` | `int` | Default: `0`; incremented by assessment tool when entry was skipped |
+| `score` | `float` | Default: `0.0`; initialized to `confidence` on `save()` |
 | `scope_agents` | `list[str]` | Default: `[]` |
 | `source_agent` | `str` | Non-blank; frozen after creation |
 | `created_at` | `str` | Timezone-aware ISO 8601 timestamp |
@@ -140,11 +144,29 @@ that need to read or mutate memory entries.
 engine = MemoryEngine(memory_dir)   # memory_dir created if absent
 ```
 
+#### Scoring Constants
+
+| Constant | Value | Meaning |
+|----------|-------|---------|
+| `OUTSTANDING_BOOST` | `0.1` | Score boost per outstanding assessment |
+| `UNREMARKABLE_PENALTY` | `0.01` | Score penalty per unremarkable assessment |
+| `STALE_THRESHOLD` | `50` | Total assessments above which an entry is considered stale |
+
+#### `compute_score(confidence, outstanding_count, unremarkable_count) → float`
+
+Computes a memory entry score:
+
+```
+score = confidence + (outstanding_count × OUTSTANDING_BOOST) − (unremarkable_count × UNREMARKABLE_PENALTY)
+```
+
+Exported from the `owlbear_memory` package top-level.
+
 | Method | Signature | Notes |
 |--------|-----------|-------|
 | `get_entries()` | `() → list[MemoryEntry]` | Reparsed only when directory mtime changes |
 | `get_entry(id)` | `(str) → MemoryEntry` | Raises `NotFoundError` |
-| `save(...)` | `(title, content, categories, confidence, source_agent, scope_agents) → MemoryEntry` | Creates pending entry; no OCC |
+| `save(...)` | `(title, content, categories, confidence, source_agent, scope_agents) → MemoryEntry` | Creates pending entry; initializes `score = confidence`, all counters to `0`; no OCC |
 | `approve(id, expected_updated_at)` | `(str, str) → MemoryEntry` | curated → approved; raises `TransitionError` / `ConcurrencyError` |
 | `edit(id, fields, expected_updated_at)` | `(str, EditPayload, str) → MemoryEntry` | State-machine rules apply; raises `TransitionError` / `ConcurrencyError` |
 | `delete(id, expected_updated_at)` | `(str, str) → MemoryEntry` | Hard-delete for pending, soft-delete for curated/approved; raises `TransitionError` / `ConcurrencyError` |

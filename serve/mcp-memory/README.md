@@ -69,6 +69,10 @@ All mutating tools return a `hint` field describing the transition or action tak
 | `categories` | list[str] | One or more from: `domain-knowledge`, `behaviour`, `pitfall`, `process`, `tool-usage`, `goal`, `personality`, `preference`, `env-context` |
 | `confidence` | float | `[0.7, 1.0]` inclusive |
 | `state` | str | `pending` (default), `curated`, `approved`, `deleted` |
+| `outstanding_count` | int | Default `0`; incremented by assessment tool when entry was outstanding |
+| `unremarkable_count` | int | Default `0`; incremented by assessment tool when entry was unremarkable |
+| `didnt_use_count` | int | Default `0`; incremented by assessment tool when entry was skipped |
+| `score` | float | Default `0.0`; initialized to `confidence` on creation |
 | `source_agent` | str | Required; immutable provenance marker |
 | `scope_agents` | list[str] | Agent visibility scope; defaults to `[source_agent]` on creation |
 | `created_at` | str | UTC timestamp |

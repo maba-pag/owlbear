@@ -2,6 +2,13 @@
 
 External repos and resources studied during OwlBear development.
 
+## Memory Assessment Counters and Score Computation (Task #1841)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Stack Overflow reputation system | <https://stackoverflow.com/help/whats-reputation> | Asymmetric +10/−2 additive scoring model — validated 10:1 ratio for outstanding/unremarkable counters | `.owlbear/research/memory-assessment-counters-score.md` | 2026-05-24 |
+| Reddit hot ranking (Wilson score) | <https://medium.com/hacking-and-gonzo/how-reddit-ranking-algorithms-work-ef111e33d0d9> | Confidence-based community ranking — validated conservative confidence-anchored scoring approach | `.owlbear/research/memory-assessment-counters-score.md` | 2026-05-24 |
+
 ## Remove Source MCP Tool (Task #1652)
 
 | Source | URL | What | Where Used | Date |
