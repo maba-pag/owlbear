@@ -7,7 +7,7 @@
  * Covers:
  *   AC1 — Filtered tasks appear in correct status columns
  *   AC2 — Empty columns after filtering show "No tasks" placeholder
- *   AC3 — Result count updates correctly ("0 / N tasks", "M / N tasks")
+ *   AC3 — Header metric updates correctly ("0 / N tasks", "M / N tasks")
  *   AC4 — Toggle badge reflects active filter count ("Filter (2)")
  *   AC5 — Filter change while context menu open dismisses menu
  *   AC6 — Filter change while dragging cancels drag
@@ -218,9 +218,9 @@ describe('TestFromAC_FilterBoardIntegration', () => {
     })
   })
 
-  // ─── AC3: Result count updates correctly ─────────────────────────────────
+  // ─── AC3: Header metric updates correctly ────────────────────────────────
 
-  it('result count shows "M / N tasks" when a filter matches some tasks', async () => {
+  it('header metric shows "M / N tasks" when a filter matches some tasks', async () => {
     const { container } = renderBoard()
     await openFilterPanel(container)
 
@@ -229,13 +229,14 @@ describe('TestFromAC_FilterBoardIntegration', () => {
     fireEvent(pSelect, new CustomEvent('change', { detail: { value: 'needed' }, bubbles: true }))
 
     await waitFor(() => {
-      const countEl = container.querySelector('[data-testid="filter-result-count"]')
-      expect(countEl).not.toBeNull()
-      expect(countEl!.textContent).toMatch(/^2 \/ 3 tasks$/)
+      const summary = container.querySelector('[data-testid="workspace-header-summary"]')
+      expect(summary?.textContent).toContain('2 / 3')
+      expect(summary?.textContent).toContain('tasks')
+      expect(container.querySelector('[data-testid="filter-result-count"]')).toBeNull()
     })
   })
 
-  it('result count shows "0 / N tasks" when no tasks match the filter', async () => {
+  it('header metric shows "0 / N tasks" when no tasks match the filter', async () => {
     const { container } = renderBoard()
     await openFilterPanel(container)
 
@@ -244,9 +245,10 @@ describe('TestFromAC_FilterBoardIntegration', () => {
     fireEvent.change(input, { target: { value: 'zzz' } })
 
     await waitFor(() => {
-      const countEl = container.querySelector('[data-testid="filter-result-count"]')
-      expect(countEl).not.toBeNull()
-      expect(countEl!.textContent).toMatch(/^0 \/ 3 tasks$/)
+      const summary = container.querySelector('[data-testid="workspace-header-summary"]')
+      expect(summary?.textContent).toContain('0 / 3')
+      expect(summary?.textContent).toContain('tasks')
+      expect(container.querySelector('[data-testid="filter-result-count"]')).toBeNull()
     })
   })
 
@@ -306,7 +308,8 @@ describe('TestFromAC_FilterBoardIntegration', () => {
     await waitFor(() => {
       const tagsControl = getTagsControl(container) as Element & { value?: unknown }
       expect(tagsControl.value).toEqual(['alpha'])
-      expect(container.querySelector('[data-testid="filter-result-count"]')?.textContent).toMatch(/^2 \/ 3 tasks$/)
+      expect(container.querySelector('[data-testid="workspace-header-summary"]')?.textContent).toContain('2 / 3')
+      expect(container.querySelector('[data-testid="filter-result-count"]')).toBeNull()
       expect(container.querySelector('[data-testid="active-filter-summary"]')?.textContent).toContain('Tags: alpha')
       expect(container.querySelector('[data-testid="task-card"][data-id="1"]')).not.toBeNull()
       expect(container.querySelector('[data-testid="task-card"][data-id="3"]')).not.toBeNull()
@@ -346,7 +349,7 @@ describe('TestFromAC_FilterBoardIntegration', () => {
     //   2. User selects 'alpha' tag via the real PMultiSelect update event
     //   3. Board re-renders with tasks that no longer contain 'alpha' (only TASK_BETA)
     //   4. Filter state is NOT auto-cleared: filter.tags still = ['alpha']
-    //   5. Result count shows "0 / 1 tasks"; toggle badge shows "Filters (1)"
+    //   5. Header metric shows "0 / 1 tasks"; toggle badge shows "Filters (1)"
     const { container, rerender } = renderBoard([TASK_ALPHA, TASK_BETA])
     await openFilterPanel(container)
 
@@ -376,9 +379,10 @@ describe('TestFromAC_FilterBoardIntegration', () => {
 
     await waitFor(() => {
       // filter.tags = ['alpha'] persists; TASK_BETA lacks 'alpha' tag → 0 of 1 tasks match
-      const countEl = container.querySelector('[data-testid="filter-result-count"]')
-      expect(countEl).not.toBeNull()
-      expect(countEl!.textContent).toMatch(/^0 \/ 1 tasks$/)
+      const summary = container.querySelector('[data-testid="workspace-header-summary"]')
+      expect(summary?.textContent).toContain('0 / 1')
+      expect(summary?.textContent).toContain('tasks')
+      expect(container.querySelector('[data-testid="filter-result-count"]')).toBeNull()
 
       // Toggle badge still shows active filter dimension (tags)
       const toggle = container.querySelector('[data-testid="filter-toggle"]')!
@@ -425,7 +429,7 @@ describe('TestFromAC_FilterBoardIntegration', () => {
       expect(
         container.querySelector('[data-column="todo"] [data-testid="task-card"][data-id="3"]'),
       ).not.toBeNull()
-      // Result count hidden — no active filters
+      // Filtered ratio hidden — no active filters
       expect(container.querySelector('[data-testid="filter-result-count"]')).toBeNull()
     })
   })
@@ -438,7 +442,8 @@ describe('TestFromAC_FilterBoardIntegration', () => {
     fireEvent(pSelect, new CustomEvent('change', { detail: { value: 'someday' }, bubbles: true }))
 
     await waitFor(() => {
-      expect(container.querySelector('[data-testid="filter-result-count"]')?.textContent).toMatch(/^1 \/ 3 tasks$/)
+      expect(container.querySelector('[data-testid="workspace-header-summary"]')?.textContent).toContain('1 / 3')
+      expect(container.querySelector('[data-testid="filter-result-count"]')).toBeNull()
       expect(getHeaderClearButton(container)).not.toBeNull()
     })
 

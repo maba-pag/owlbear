@@ -199,18 +199,18 @@ test.describe('AC-1 | Filter workflow via PDS control selectors', () => {
     await expect(page.locator('[data-testid="filter-toggle"]')).toContainText('(1)')
   })
 
-  test('result count displays filtered/total ratio when priority filter applied via PDS control', async ({ page }) => {
+  test('header metric displays filtered/total ratio when priority filter applied via PDS control', async ({ page }) => {
     await loadBoard(page)
     await openFilterPanel(page)
     // Trigger priority filter via PDS evaluate contract.
-    // Currently: no onInput handler -- filter unchanged -- result count absent -- FAILS.
     await page.locator('#filter-panel p-select[name="priority-filter"]').evaluate((el) => {
       el.dispatchEvent(new CustomEvent('change', { detail: { value: 'critical' }, bubbles: true }))
     })
-    await expect(page.locator('[data-testid="filter-result-count"]')).toBeVisible({ timeout: 2_000 })
+    await expect(page.locator('[data-testid="workspace-header-summary"]')).toContainText(/1\s*\/\s*3\s*tasks/, { timeout: 2_000 })
+    await expect(page.locator('[data-testid="filter-result-count"]')).not.toBeVisible()
   })
 
-  test('clearing all filters removes badge count and hides result count', async ({ page }) => {
+  test('clearing all filters removes badge count and restores full task count', async ({ page }) => {
     await loadBoard(page)
     await openFilterPanel(page)
     // Trigger priority filter via PDS evaluate contract.
@@ -218,13 +218,13 @@ test.describe('AC-1 | Filter workflow via PDS control selectors', () => {
       el.dispatchEvent(new CustomEvent('change', { detail: { value: 'critical' }, bubbles: true }))
     })
     // Guard against vacuous pass: verify filter WAS applied before testing clear.
-    // Currently: no onInput handler -- filter unchanged -- count absent -- FAILS here.
-    await expect(page.locator('[data-testid="filter-result-count"]')).toBeVisible({ timeout: 2_000 })
-    // After correct implementation: clear removes badge and hides result count.
+    await expect(page.locator('[data-testid="workspace-header-summary"]')).toContainText(/1\s*\/\s*3\s*tasks/, { timeout: 2_000 })
+    // Clear removes badge and restores the full header task count.
     // PDS-host-scoped selector required: generic [data-testid="filter-reset"] would pass green
     // against a native button reusing the same test-id.
     await page.click('p-button[data-testid="filter-reset"]')
     await expect(page.locator('[data-testid="filter-toggle"]')).not.toContainText('(')
+    await expect(page.locator('[data-testid="workspace-header-summary"]')).toContainText(/3\s*tasks/)
     await expect(page.locator('[data-testid="filter-result-count"]')).not.toBeVisible()
   })
 
@@ -319,15 +319,16 @@ test.describe('AC-1 | Filter workflow via PDS control selectors', () => {
     await expect(page.locator('[data-testid="task-card"][data-id="3"]')).toBeVisible({ timeout: 2_000 })
   })
 
-  test('result count text shows correct ratio value, not just presence', async ({ page }) => {
-    // Existing test only asserts toBeVisible. Assert the displayed text is the correct ratio.
+  test('header metric text shows correct ratio value, not just presence', async ({ page }) => {
+    // Assert the displayed text is the correct ratio.
     // priority=critical: 1 matching task (task 1) out of 3 total → "1 / 3 tasks".
     await loadBoard(page)
     await openFilterPanel(page)
     await page.locator('#filter-panel p-select[name="priority-filter"]').evaluate((el) => {
       el.dispatchEvent(new CustomEvent('change', { detail: { value: 'critical' }, bubbles: true }))
     })
-    await expect(page.locator('[data-testid="filter-result-count"]')).toContainText('1 / 3 tasks', { timeout: 2_000 })
+    await expect(page.locator('[data-testid="workspace-header-summary"]')).toContainText(/1\s*\/\s*3\s*tasks/, { timeout: 2_000 })
+    await expect(page.locator('[data-testid="filter-result-count"]')).not.toBeVisible()
   })
 })
 

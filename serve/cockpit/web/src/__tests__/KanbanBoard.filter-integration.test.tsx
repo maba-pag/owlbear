@@ -7,7 +7,7 @@
  *   AC3 — Filter state changes cause filtered tasks to appear in correct columns (td:2)
  *   AC4 — availableTags computed from full (unfiltered) task set — set-membership,
  *          order-insensitive (td:1)
- *   AC5 — Result count displays "N / M tasks" when filter is active (td:1)
+ *   AC5 — Header metric displays "N / M tasks" when filter is active (td:1)
  *   AC6 — Filter change dismisses open context menu (td:1)
  *   AC7 — Filter change cancels active drag — drop targets deactivated (td:1)
  *   AC8 — Empty filter state shows all tasks (td:1)
@@ -303,8 +303,8 @@ describe('TestFromAC_FilterIntegration', () => {
     })
   })
 
-  // AC5 — Result count shows "N / M tasks" when filter is active (td:1)
-  it('shows result count element with filtered and total counts when filter is active', async () => {
+  // AC5 — Header metric shows "N / M tasks" when filter is active (td:1)
+  it('uses the header metric as the single visible filtered count', async () => {
     const { container } = renderBoard()
     // Open panel to capture onFilterChange callback — works with any mount strategy
     const toggle = container.querySelector('[data-testid="filter-toggle"]')!
@@ -317,10 +317,10 @@ describe('TestFromAC_FilterIntegration', () => {
       capturedOnFilterChange!({ ...EMPTY_FILTER, priority: 'needed' })
     })
     await waitFor(() => {
-      const countEl = container.querySelector('[data-testid="filter-result-count"]')
-      expect(countEl).not.toBeNull()
-      // Must match exact "N / M tasks" contract: 1 task matches priority=needed, 3 total
-      expect(countEl!.textContent).toMatch(/^1 \/ 3 tasks$/)
+      const summary = container.querySelector('[data-testid="workspace-header-summary"]')
+      expect(summary?.textContent).toContain('1 / 3')
+      expect(summary?.textContent).toContain('tasks')
+      expect(container.querySelector('[data-testid="filter-result-count"]')).toBeNull()
     })
   })
 

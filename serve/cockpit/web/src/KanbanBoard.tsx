@@ -155,8 +155,8 @@ function KanbanBoardContent({
     (filter.blocked ? 1 : 0)
   const hasActiveFilters = activeFilterCount > 0
   const activeFilterLabels = getActiveFilterLabels(filter)
-  const boardTaskCount = hasActiveFilters ? filteredTasks.length : tasks.length
-  const boardTaskLabel = hasActiveFilters ? 'matching' : 'tasks'
+  const boardTaskCount = hasActiveFilters ? `${filteredTasks.length} / ${tasks.length}` : tasks.length
+  const boardTaskLabel = 'tasks'
 
   useEffect(() => {
     if (!contextMenu) return
@@ -432,18 +432,6 @@ function KanbanBoardContent({
           )}
           actions={(
             <>
-              <PButton
-                ref={filterToggleRef}
-                data-testid="filter-toggle"
-                data-pds-exception="filter-toggle"
-                className="max-w-fit"
-                variant="secondary"
-                compact
-                onClick={() => setPanelOpen((open) => !open)}
-              >
-                Filters
-                {hasActiveFilters ? ` (${activeFilterCount})` : ''}
-              </PButton>
               <span
                 className="absolute -left-[9999px]"
                 data-testid="filter-result-count-live"
@@ -451,22 +439,6 @@ function KanbanBoardContent({
               >
                 {filterAnnouncement}
               </span>
-              {hasActiveFilters ? (
-                <span className="whitespace-nowrap rounded-full border border-contrast-low bg-frosted-soft px-2 py-0.5 text-xs font-semibold leading-normal text-primary" data-testid="filter-result-count">
-                  {filteredTasks.length} / {tasks.length} tasks
-                </span>
-              ) : null}
-              {hasActiveFilters ? (
-                <PButton
-                  type="button"
-                  data-testid="filter-clear-active"
-                  variant="secondary"
-                  compact
-                  onClick={clearFilters}
-                >
-                  Clear filters
-                </PButton>
-              ) : null}
               {activeFilterLabels.length > 0 ? (
                 <span
                   className="flex min-w-0 flex-wrap items-center gap-static-xs"
@@ -479,6 +451,29 @@ function KanbanBoardContent({
                     </PTag>
                   ))}
                 </span>
+              ) : null}
+              <PButton
+                ref={filterToggleRef}
+                data-testid="filter-toggle"
+                data-pds-exception="filter-toggle"
+                className="max-w-fit"
+                variant="secondary"
+                compact
+                onClick={() => setPanelOpen((open) => !open)}
+              >
+                Filters
+                {hasActiveFilters ? ` (${activeFilterCount})` : ''}
+              </PButton>
+              {hasActiveFilters ? (
+                <PButton
+                  type="button"
+                  data-testid="filter-clear-active"
+                  variant="secondary"
+                  compact
+                  onClick={clearFilters}
+                >
+                  Clear filters
+                </PButton>
               ) : null}
             </>
           )}
