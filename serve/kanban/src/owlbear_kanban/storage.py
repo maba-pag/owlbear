@@ -23,8 +23,11 @@ Re-exported types:
 
 from __future__ import annotations
 
+import contextlib
+import fcntl
 import io
 import re
+import threading
 from datetime import datetime
 from pathlib import Path  # noqa: TC003
 from typing import TYPE_CHECKING, Any, cast
@@ -35,7 +38,7 @@ from ruamel.yaml.comments import CommentedMap
 from ruamel.yaml.scalarstring import PlainScalarString
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterator
 
     from ruamel.yaml import YAML
 
@@ -66,6 +69,8 @@ from owlbear_kanban.storage_io import atomic_write
 # YAML timestamp/bool tags used to preserve frontmatter fidelity.
 _TIMESTAMP_TAG = "tag:yaml.org,2002:timestamp"
 _BOOL_TAG = "tag:yaml.org,2002:bool"
+_ALLOCATION_LOCKS: dict[Path, threading.Lock] = {}
+_ALLOCATION_LOCKS_MUTEX = threading.Lock()
 
 
 class YAML12SafeLoader(yaml.SafeLoader):
@@ -88,6 +93,28 @@ def _make_yaml() -> YAML:
     from owlbear_kanban.yaml_rt import make_yaml  # noqa: PLC0415
 
     return make_yaml()
+
+
+def _allocation_thread_lock(kanban_dir: Path) -> threading.Lock:
+    key = kanban_dir.resolve()
+    with _ALLOCATION_LOCKS_MUTEX:
+        lock = _ALLOCATION_LOCKS.get(key)
+        if lock is None:
+            lock = threading.Lock()
+            _ALLOCATION_LOCKS[key] = lock
+        return lock
+
+
+@contextlib.contextmanager
+def _allocation_lock(kanban_dir: Path) -> Iterator[None]:
+    thread_lock = _allocation_thread_lock(kanban_dir)
+    lock_path = kanban_dir / ".next_id.lock"
+    with thread_lock, lock_path.open("a", encoding="utf-8") as lock_file:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
 
 def _load_yaml12_frontmatter(frontmatter_str: str, *, path: Path) -> dict[str, Any]:
@@ -551,31 +578,32 @@ def allocate_next_id(
     When ``write_task_fn`` is ``None``, the function persists the last issued
     id in ``.next_id`` so repeated allocation-only calls remain distinct.
     """
-    id_path = kanban_dir / ".next_id"
-    max_id = 0
-    for path in [*list_task_files(kanban_dir), *list_archive_files(kanban_dir)]:
-        try:
-            file_id = int(path.stem.split("-", 1)[0])
-        except ValueError:
-            continue
-        max_id = max(max_id, file_id)
+    with _allocation_lock(kanban_dir):
+        id_path = kanban_dir / ".next_id"
+        max_id = 0
+        for path in [*list_task_files(kanban_dir), *list_archive_files(kanban_dir)]:
+            try:
+                file_id = int(path.stem.split("-", 1)[0])
+            except ValueError:
+                continue
+            max_id = max(max_id, file_id)
 
-    last_allocated = 0
-    try:
-        text = id_path.read_text(encoding="utf-8").strip()
-        if text:
-            last_allocated = int(text)
-    except (OSError, ValueError):
         last_allocated = 0
+        try:
+            text = id_path.read_text(encoding="utf-8").strip()
+            if text:
+                last_allocated = int(text)
+        except (OSError, ValueError):
+            last_allocated = 0
 
-    if write_task_fn is not None:
-        new_id = max_id + 1
-        write_task_fn(new_id)
+        if write_task_fn is not None:
+            new_id = max_id + 1
+            write_task_fn(new_id)
+            return new_id
+
+        new_id = max(max_id, last_allocated) + 1
+        id_path.write_text(f"{new_id}\n", encoding="utf-8")
         return new_id
-
-    new_id = max(max_id, last_allocated) + 1
-    id_path.write_text(f"{new_id}\n", encoding="utf-8")
-    return new_id
 
 
 # ---------------------------------------------------------------------------

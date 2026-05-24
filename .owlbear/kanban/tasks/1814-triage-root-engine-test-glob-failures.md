@@ -41,6 +41,7 @@ Triage only. Do not change product code or broad historical regression tests wit
 - Result after #1817: 11 failed, 529 passed.
 - Result after #1818: 5 failed, 535 passed.
 - Result after #1819: 3 failed, 537 passed.
+- Result after #1820: 2 failed, 538 passed.
 
 ## Failure Groups
 - #1815: 38 accessor-migration grouped-config/source-inspection failures in `tests/test_engine_accessor_migration.py` (resolved in #1815).
@@ -48,8 +49,8 @@ Triage only. Do not change product code or broad historical regression tests wit
 - #1817: 3 validation-push predicate/error-code failures in `tests/test_engine_validation_push.py` (resolved in #1817).
 - #1818: 6 engine coverage failures around edit-task mutation returns and board-config deep-copy behavior (resolved in #1818).
 - #1819: 2 config path validation failures around symlink escape refresh and nested archive directory movement (resolved in #1819).
-- #1820: 1 scan-based ID allocation concurrency failure in `tests/test_engine_1443.py`.
+- #1820: 1 scan-based ID allocation concurrency failure in `tests/test_engine_1443.py` (resolved in #1820).
 - #1821: 2 Kanban board split static/source-layout failures in `tests/test_kanban_board_split.py`.
 
 ## Recommendation
-Continue with #1820 or #1821.
+Continue with #1821.
