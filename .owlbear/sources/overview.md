@@ -2,6 +2,13 @@
 
 External repos and resources studied during OwlBear development.
 
+## Recall Explore/Challenge Slots (Task #1843)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Milvus — exploration vs exploitation in recommendations | <https://milvus.io/ai-quick-reference/how-do-you-balance-exploration-and-exploitation-in-recommendations> | Epsilon-greedy fixed-fraction exploration — validated fixed-slot allocation design over probabilistic approaches | `.owlbear/research/memory-recall-explore-challenge-slots.md` | 2026-05-25 |
+| Shaped.ai — Explore vs Exploit | <https://www.shaped.ai/blog/explore-vs-exploit> | Diversity slot reservation in recommendation systems — confirmed value of deterministic exploration allocation | `.owlbear/research/memory-recall-explore-challenge-slots.md` | 2026-05-25 |
+
 ## Memory Assessment Counters and Score Computation (Task #1841)
 
 | Source | URL | What | Where Used | Date |
