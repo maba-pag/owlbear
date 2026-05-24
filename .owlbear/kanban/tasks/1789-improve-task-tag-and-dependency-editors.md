@@ -1,10 +1,10 @@
 ---
 id: 1789
 title: Improve task tag and dependency editors
-status: research
+status: done
 priority: important
 created: 2026-05-24T01:57:03.668567+02:00
-updated: 2026-05-24T03:09:50.702199+02:00
+updated: 2026-05-24T05:32:07.304032+02:00
 tags:
   - cockpit-perfect-ui
   - scope:cockpit-web
@@ -24,6 +24,7 @@ ac:
     adapted for a single value.
   - Tag input avoids misleading natural-language spellcheck behavior unless 
     later evidence says otherwise.
+proof_bundle: behavioral+reader
 blocked: false
 block_reason:
 claimed_at:
@@ -54,3 +55,15 @@ User chose `Compact chip adders`. Tags, dependencies, and parent should use a co
 
 ## Discussion Note
 Tags are token-like, so spellcheck should likely be disabled for tag input. Dependencies and parent are task references and should not require users to guess comma/space syntax.
+
+[[2026-05-24T05:32:02+02:00]]
+## Implementation Proof
+- Implemented compact chip adders for tags, dependencies, and parent in the task detail editor.
+- Preserved existing save payload and conflict-draft contracts for `depends_on` and `parent`.
+- Focused tests passed: `npm test -- --run src/__tests__/DetailTab.test.tsx src/__tests__/DetailTab.valid-edits.test.tsx src/__tests__/DetailTab.invalid-parent.test.tsx src/__tests__/DetailTab.edit-payload.test.tsx src/__tests__/DetailTab.conflict-resolution.test.tsx src/__tests__/SaveConfirmed_1624.test.tsx` -> 143 passed, 1 skipped.
+- Lint passed: `npx eslint src/components/TaskFieldsEditor.tsx src/__tests__/DetailTab.test.tsx`.
+- Build passed: `npm run build` (known Vite chunk-size warning only).
+- Reader proof screenshot: `.owlbear/scratch/1716-wide-cockpit/1789-task-structured-editors-1024.png` at the 1024 support floor, showing tag chips/add flow, dependency chips/add flow, parent chip/clear flow, and Save/Cancel below the structured fields.
+
+[[2026-05-24T05:32:07+02:00]]
+Completed compact chip adder implementation for tags, dependencies, and parent. Verified focused editor/payload/conflict/save-confirmation suites, ESLint, production build, and 1024 screenshot proof.

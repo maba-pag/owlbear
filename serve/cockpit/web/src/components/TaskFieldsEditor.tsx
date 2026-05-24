@@ -45,22 +45,44 @@ export interface TaskReferenceSummary {
   status: string
 }
 
+function formatTaskIds(ids: number[]): string {
+  return ids.join(', ')
+}
+
+function normalizeTaskIdToken(token: string): string {
+  return token.startsWith('#') ? token.slice(1) : token
+}
+
+function mergeTaskIds(existing: number[], additions: number[]): number[] {
+  const seen = new Set(existing)
+  const merged = [...existing]
+  additions.forEach((id) => {
+    if (!seen.has(id)) {
+      seen.add(id)
+      merged.push(id)
+    }
+  })
+  return merged
+}
+
 export function parseDependsOn(raw: string): { values: number[]; error: string | null } {
   const tokens = raw
-    .split(',')
+    .split(/[\s,]+/)
     .map((value) => value.trim())
     .filter((value) => value.length > 0)
   const values: number[] = []
 
   for (const token of tokens) {
-    const parsed = Number(token)
+    const parsed = Number(normalizeTaskIdToken(token))
     if (!Number.isInteger(parsed) || parsed < 0) {
       return {
         values: [],
-        error: 'Dependencies must be a comma-separated list of non-negative integers.',
+        error: 'Dependencies must be task IDs separated with commas or spaces.',
       }
     }
-    values.push(parsed)
+    if (!values.includes(parsed)) {
+      values.push(parsed)
+    }
   }
 
   return { values, error: null }
@@ -72,7 +94,7 @@ export function parseParent(raw: string): { value: number | null; error: string 
     return { value: null, error: null }
   }
 
-  const parsed = Number(trimmed)
+  const parsed = Number(normalizeTaskIdToken(trimmed))
   if (!Number.isInteger(parsed) || parsed < 0) {
     return {
       value: null,
@@ -132,6 +154,11 @@ function validateTag(tag: string, currentTags: string[]): string | null {
   }
 
   return null
+}
+
+function formatReferenceLabel(taskId: number, referenceById: Map<number, TaskReferenceSummary>): string {
+  const summary = referenceById.get(taskId)
+  return summary ? `#${taskId} ${summary.title}` : `#${taskId}`
 }
 
 function TaskReferenceChip({
@@ -304,6 +331,7 @@ export default function TaskFieldsEditor({
   const [body, setBody] = useState(task.body ?? '')
   const [editableTags, setEditableTags] = useState(task.tags)
   const [newTag, setNewTag] = useState('')
+  const [newDependency, setNewDependency] = useState('')
   const [tagValidationMessage, setTagValidationMessage] = useState<string | null>(null)
   const [saveConfirmed, setSaveConfirmed] = useState(false)
   const [dependsOn, setDependsOn] = useState(task.depends_on.join(', '))
@@ -324,6 +352,7 @@ export default function TaskFieldsEditor({
       setBody(conflictLocalDraft.body)
       setEditableTags(conflictLocalDraft.tags)
       setDependsOn(conflictLocalDraft.dependsOn)
+      setNewDependency('')
       setParent(conflictLocalDraft.parent)
       setBlockReason(conflictLocalDraft.blockReason)
       setNewTag('')
@@ -344,6 +373,7 @@ export default function TaskFieldsEditor({
     setParent(task.parent !== null ? String(task.parent) : '')
     setBlockReason(task.block_reason ?? '')
     setNewTag('')
+    setNewDependency('')
     setTagValidationMessage(null)
     clearConflictIfTaskChanged(task.id)
   }, [task.id, task.updated, conflictLocalDraft, conflictRemoteTaskId, clearConflictIfTaskChanged, task, startsEditing])
@@ -358,13 +388,19 @@ export default function TaskFieldsEditor({
 
   const parsedParent = useMemo(() => parseParent(parent), [parent])
   const parsedDependsOn = useMemo(() => parseDependsOn(dependsOn), [dependsOn])
-  const clientValidationMessage = parsedParent.error ?? parsedDependsOn.error
+  const parsedPendingDependencies = useMemo(() => parseDependsOn(newDependency), [newDependency])
+  const clientValidationMessage = parsedParent.error ?? parsedDependsOn.error ?? parsedPendingDependencies.error
+  const referenceById = useMemo(
+    () => new Map((taskReferences ?? []).map((reference) => [reference.id, reference])),
+    [taskReferences],
+  )
   const isDirty =
     title !== task.title
     || priority !== task.priority
     || body !== (task.body ?? '')
     || !areTagListsEqual(editableTags, task.tags)
     || normalizeTag(newTag).length > 0
+    || newDependency.trim().length > 0
     || dependsOn !== task.depends_on.join(', ')
     || parent !== (task.parent !== null ? String(task.parent) : '')
     || (task.blocked && blockReason !== (task.block_reason ?? ''))
@@ -399,6 +435,7 @@ export default function TaskFieldsEditor({
     setParent(task.parent !== null ? String(task.parent) : '')
     setBlockReason(task.block_reason ?? '')
     setNewTag('')
+    setNewDependency('')
     setTagValidationMessage(null)
     setSaveConfirmed(false)
     setEditBody(false)
@@ -425,6 +462,29 @@ export default function TaskFieldsEditor({
     setTagValidationMessage(null)
   }
 
+  function addDependencyFromInput(): void {
+    const pending = newDependency.trim()
+    if (pending.length === 0 || parsedPendingDependencies.error !== null) {
+      return
+    }
+
+    const nextDependencies = mergeTaskIds(parsedDependsOn.values, parsedPendingDependencies.values)
+    setDependsOn(formatTaskIds(nextDependencies))
+    setNewDependency('')
+  }
+
+  function removeDependency(taskId: number): void {
+    setDependsOn(formatTaskIds(parsedDependsOn.values.filter((id) => id !== taskId)))
+  }
+
+  function dependenciesForSave(): number[] | null {
+    if (parsedDependsOn.error !== null || parsedPendingDependencies.error !== null) {
+      return null
+    }
+
+    return mergeTaskIds(parsedDependsOn.values, parsedPendingDependencies.values)
+  }
+
   function tagsForSave(): string[] | null {
     const pendingTag = normalizeTag(newTag)
     if (pendingTag.length === 0) {
@@ -448,6 +508,10 @@ export default function TaskFieldsEditor({
     if (nextTags === null) {
       return
     }
+    const nextDependencies = dependenciesForSave()
+    if (nextDependencies === null) {
+      return
+    }
     const shouldShowSaveConfirmed = isDirty
 
     const conflictDraft: ConflictLocalDraft = {
@@ -455,7 +519,7 @@ export default function TaskFieldsEditor({
       priority,
       body,
       tags: nextTags,
-      dependsOn,
+      dependsOn: formatTaskIds(nextDependencies),
       parent,
       blockReason,
     }
@@ -467,14 +531,16 @@ export default function TaskFieldsEditor({
         priority,
         body,
         tags: nextTags,
-        depends_on: parsedDependsOn.values,
+        depends_on: nextDependencies,
         parent: parsedParent.value,
         block_reason: task.blocked ? blockReason : null,
       }, conflictDraft)
 
       if (shouldShowSaveConfirmed && mutationSucceeded !== false) {
         setEditableTags(nextTags)
+        setDependsOn(formatTaskIds(nextDependencies))
         setNewTag('')
+        setNewDependency('')
         setTagValidationMessage(null)
         setSaveConfirmed(true)
         if (saveConfirmedTimerRef.current !== null) {
@@ -569,10 +635,12 @@ export default function TaskFieldsEditor({
         </div>
         <div className="grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-static-xs sm:grid-cols-[minmax(0,1fr)_auto]">
           <PInputText
+            ref={(element) => element?.setAttribute('spellcheck', 'false')}
             name="new_tag"
             label="Add tag"
             className="min-w-0"
             data-field="new-tag"
+            spellCheck={false}
             value={newTag}
             onChange={(event) => setNewTag(readControlValue(event))}
             onInput={(event) => setNewTag(readControlValue(event))}
@@ -588,7 +656,7 @@ export default function TaskFieldsEditor({
             data-testid="add-tag-button"
             variant="secondary"
             icon="plus"
-            className="min-w-0"
+            className="min-w-0 self-end"
             compact
             disabled={normalizeTag(newTag).length === 0}
             onClick={() => addTagFromInput()}
@@ -602,23 +670,6 @@ export default function TaskFieldsEditor({
           </div>
         ) : null}
       </section>
-
-      <div
-        data-testid="task-detail-edit-actions"
-        className="flex w-full min-w-0 max-w-full flex-wrap items-center gap-static-sm border-t border-contrast-low bg-canvas px-static-xs py-static-sm md:sticky md:bottom-0 md:z-20 md:shadow-lg"
-      >
-        <PButton data-testid="save-button" onClick={() => void handleSave()}>
-          Save
-        </PButton>
-        {!startsEditing ? (
-          <PButton data-testid="cancel-edit-button" variant="secondary" onClick={handleCancelEdit}>
-            Cancel
-          </PButton>
-        ) : null}
-        {isDirty && <div data-testid="dirty-indicator" className="text-sm font-semibold text-warning">Unsaved changes</div>}
-        {saveConfirmed && <div data-testid="save-confirmed" className="text-sm font-semibold text-success">Saved</div>}
-        {validationMessage && <div data-testid="validation-message" className="rounded-lg border border-warning bg-warning-low p-static-xs text-sm text-primary">{validationMessage}</div>}
-      </div>
 
       <section className="rounded-lg border border-contrast-low bg-surface p-static-md">
         <div className="mb-static-xs flex min-w-0 flex-wrap items-center justify-end gap-static-xs">
@@ -648,26 +699,99 @@ export default function TaskFieldsEditor({
         )}
       </section>
 
-      <div className="grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-static-sm lg:grid-cols-2">
-        <PInputText
-          name="depends_on"
-          label="Depends on"
-          className="min-w-0"
-          data-field="depends_on"
-          value={dependsOn}
-          onChange={(event) => setDependsOn(readControlValue(event))}
-          onInput={(event) => setDependsOn(readControlValue(event))}
-        />
-        <PInputText
-          name="parent"
-          label="Parent"
-          className="min-w-0"
-          data-field="parent"
-          value={parent}
-          onChange={(event) => setParent(readControlValue(event))}
-          onInput={(event) => setParent(readControlValue(event))}
-        />
-      </div>
+      <section className="grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-static-sm lg:grid-cols-2" data-region="task-reference-editors">
+        <div className="grid min-w-0 gap-static-xs" data-region="dependency-editor">
+          <div className="flex min-w-0 flex-wrap items-center gap-static-xs">
+            <span className="text-sm font-semibold text-contrast-high">Depends on</span>
+            {parsedDependsOn.values.length > 0 ? (
+              <div className="flex min-w-0 flex-wrap items-center gap-static-xs" data-testid="dependency-chip-list">
+                {parsedDependsOn.values.map((taskId) => (
+                  <PTagDismissible
+                    key={taskId}
+                    data-testid="dependency-chip"
+                    data-reference-id={taskId}
+                    compact
+                    label={formatReferenceLabel(taskId, referenceById)}
+                    aria={{ 'aria-label': `Remove dependency ${taskId}` }}
+                    onClick={() => removeDependency(taskId)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <span data-testid="no-dependencies" className="text-sm text-contrast-high">No dependencies</span>
+            )}
+          </div>
+          <div className="grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-static-xs sm:grid-cols-[minmax(0,1fr)_auto]">
+            <PInputText
+              name="depends_on"
+              label="Add dependency ID"
+              className="min-w-0"
+              data-field="depends_on"
+              value={newDependency}
+              onChange={(event) => setNewDependency(readControlValue(event))}
+              onInput={(event) => setNewDependency(readControlValue(event))}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  addDependencyFromInput()
+                }
+              }}
+            />
+            <PButton
+              type="button"
+              data-testid="add-dependency-button"
+              variant="secondary"
+              icon="plus"
+              className="min-w-0 self-end"
+              compact
+              disabled={newDependency.trim().length === 0}
+              onClick={addDependencyFromInput}
+            >
+              Add
+            </PButton>
+          </div>
+        </div>
+
+        <div className="grid min-w-0 gap-static-xs" data-region="parent-editor">
+          <div className="flex min-w-0 flex-wrap items-center gap-static-xs">
+            <span className="text-sm font-semibold text-contrast-high">Parent</span>
+            {parsedParent.value !== null && parsedParent.error === null ? (
+              <PTagDismissible
+                data-testid="parent-chip"
+                data-reference-id={parsedParent.value}
+                compact
+                label={formatReferenceLabel(parsedParent.value, referenceById)}
+                aria={{ 'aria-label': `Clear parent ${parsedParent.value}` }}
+                onClick={() => setParent('')}
+              />
+            ) : (
+              <span data-testid="no-parent" className="text-sm text-contrast-high">No parent</span>
+            )}
+          </div>
+          <div className="grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-static-xs sm:grid-cols-[minmax(0,1fr)_auto]">
+            <PInputText
+              name="parent"
+              label="Set parent ID"
+              className="min-w-0"
+              data-field="parent"
+              value={parent}
+              onChange={(event) => setParent(readControlValue(event))}
+              onInput={(event) => setParent(readControlValue(event))}
+            />
+            <PButton
+              type="button"
+              data-testid="clear-parent-button"
+              variant="secondary"
+              className="min-w-0 self-end"
+              compact
+              disabled={parent.trim().length === 0}
+              onClick={() => setParent('')}
+            >
+              Clear
+            </PButton>
+          </div>
+        </div>
+      </section>
 
       {task.blocked && (
         <PInputText
@@ -680,6 +804,23 @@ export default function TaskFieldsEditor({
           onInput={(event) => setBlockReason(readControlValue(event))}
         />
       )}
+
+      <div
+        data-testid="task-detail-edit-actions"
+        className="flex w-full min-w-0 max-w-full flex-wrap items-center gap-static-sm border-t border-contrast-low bg-canvas px-static-xs py-static-sm md:sticky md:bottom-0 md:z-20 md:shadow-lg"
+      >
+        <PButton data-testid="save-button" onClick={() => void handleSave()}>
+          Save
+        </PButton>
+        {!startsEditing ? (
+          <PButton data-testid="cancel-edit-button" variant="secondary" onClick={handleCancelEdit}>
+            Cancel
+          </PButton>
+        ) : null}
+        {isDirty && <div data-testid="dirty-indicator" className="text-sm font-semibold text-warning">Unsaved changes</div>}
+        {saveConfirmed && <div data-testid="save-confirmed" className="text-sm font-semibold text-success">Saved</div>}
+        {validationMessage && <div data-testid="validation-message" className="rounded-lg border border-warning bg-warning-low p-static-xs text-sm text-primary">{validationMessage}</div>}
+      </div>
 
       </div>
     </div>

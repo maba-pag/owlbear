@@ -335,14 +335,90 @@ describe('TestFromAC_DetailTab', () => {
       expect(input?.value ?? input?.getAttribute('value')).toBe('')
     })
 
+    it('tag adder is compactly aligned and disables spellcheck for tag tokens', () => {
+      const { container } = renderDetail()
+      const tagInput = container.querySelector('p-input-text[data-field="new-tag"]') as HTMLElement | null
+      const addButton = container.querySelector('[data-testid="add-tag-button"]') as HTMLElement | null
+      expect(tagInput).not.toBeNull()
+      expect(addButton).not.toBeNull()
+      expect(tagInput?.getAttribute('spellcheck')).toBe('false')
+      expect(addButton?.className).toContain('self-end')
+    })
+
     it('renders depends_on field control', () => {
       const { container } = renderDetail(TASK_WITH_DEPS)
       expect(container.querySelector('[data-field="depends_on"]')).not.toBeNull()
     })
 
+    it('dependency editor adds pasted task references as removable chips and saves them as integers', async () => {
+      const fetchMock = vi.fn(() =>
+        Promise.resolve({ ok: true, json: () => Promise.resolve({ ...TASK_WITH_DEPS, depends_on: [10, 20, 30] }) }),
+      )
+      vi.stubGlobal('fetch', fetchMock)
+      const { container } = renderDetail(TASK_WITH_DEPS)
+
+      expect(container.querySelectorAll('[data-testid="dependency-chip"]')).toHaveLength(2)
+      typeIntoPdsField(container, 'p-input-text[data-field="depends_on"]', '#30')
+      fireEvent.click(container.querySelector('[data-testid="add-dependency-button"]')!)
+
+      expect(container.querySelector('[data-testid="dependency-chip"][data-reference-id="30"]')).not.toBeNull()
+      fireEvent.click(container.querySelector('[data-testid="save-button"]')!)
+
+      await waitFor(
+        () => {
+          const [, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+          const body = JSON.parse(options.body as string) as Record<string, unknown>
+          expect(body['depends_on']).toEqual([10, 20, 30])
+        },
+        { timeout: 500 },
+      )
+    })
+
+    it('dependency chips can remove a dependency before save', async () => {
+      const fetchMock = vi.fn(() =>
+        Promise.resolve({ ok: true, json: () => Promise.resolve({ ...TASK_WITH_DEPS, depends_on: [20] }) }),
+      )
+      vi.stubGlobal('fetch', fetchMock)
+      const { container } = renderDetail(TASK_WITH_DEPS)
+
+      fireEvent.click(container.querySelector('[data-testid="dependency-chip"][data-reference-id="10"]')!)
+      fireEvent.click(container.querySelector('[data-testid="save-button"]')!)
+
+      await waitFor(
+        () => {
+          const [, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+          const body = JSON.parse(options.body as string) as Record<string, unknown>
+          expect(body['depends_on']).toEqual([20])
+        },
+        { timeout: 500 },
+      )
+    })
+
     it('renders parent field control', () => {
       const { container } = renderDetail(TASK_WITH_DEPS)
       expect(container.querySelector('[data-field="parent"]')).not.toBeNull()
+    })
+
+    it('parent editor renders a single removable task-reference chip', async () => {
+      const fetchMock = vi.fn(() =>
+        Promise.resolve({ ok: true, json: () => Promise.resolve({ ...TASK_WITH_DEPS, parent: null }) }),
+      )
+      vi.stubGlobal('fetch', fetchMock)
+      const { container } = renderDetail(TASK_WITH_DEPS)
+
+      expect(container.querySelector('[data-testid="parent-chip"][data-reference-id="5"]')).not.toBeNull()
+      fireEvent.click(container.querySelector('[data-testid="parent-chip"]')!)
+      expect(container.querySelector('[data-testid="no-parent"]')).not.toBeNull()
+      fireEvent.click(container.querySelector('[data-testid="save-button"]')!)
+
+      await waitFor(
+        () => {
+          const [, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+          const body = JSON.parse(options.body as string) as Record<string, unknown>
+          expect(body['parent']).toBeNull()
+        },
+        { timeout: 500 },
+      )
     })
 
     it('renders parent and dependency references as navigable chips with title and status', () => {

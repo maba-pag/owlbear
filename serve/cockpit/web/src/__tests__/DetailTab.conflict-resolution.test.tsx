@@ -418,11 +418,11 @@ describe('TestFromAC_ConflictLocalEditsPreserved', () => {
     )
   })
 
-  it('depends_on_preserved_in_form_after_409_refetch_and_parent_rerender', async () => {
+  it('depends_on_preserved_as_chips_after_409_refetch_and_parent_rerender', async () => {
     /**
-     * AC1 (edge): depends_on must survive the useEffect reset.
-     * User sets depends_on to '1, 2'; SERVER_TASK.depends_on is [] → resets to ''.
-     * Without fix: useEffect resets dependsOn to ''.
+    * AC1 (edge): depends_on must survive the useEffect reset.
+    * User adds dependencies '1, 2'; SERVER_TASK.depends_on is [] → resets to [].
+    * Without fix: useEffect resets dependency chips to none.
      * Spy closes the false-green path: suppressing onTaskUpdated avoids useEffect reset.
      */
     vi.stubGlobal('fetch', mockConflictThenRefetch(SERVER_TASK))
@@ -435,8 +435,10 @@ describe('TestFromAC_ConflictLocalEditsPreserved', () => {
     expect(onTaskUpdatedSpy).toHaveBeenCalledWith(
       expect.objectContaining({ updated: SERVER_TASK.updated }),
     )
-    // BUG: useEffect resets depends_on to '' (SERVER_TASK.depends_on = [])
-    expect(getFieldValue(container, 'p-input-text[data-field="depends_on"]')).toBe('1, 2')
+    // BUG: useEffect resets dependency chips to none (SERVER_TASK.depends_on = [])
+    expect(container.querySelector('[data-testid="dependency-chip"][data-reference-id="1"]')).not.toBeNull()
+    expect(container.querySelector('[data-testid="dependency-chip"][data-reference-id="2"]')).not.toBeNull()
+    expect(getFieldValue(container, 'p-input-text[data-field="depends_on"]')).toBe('')
   })
 
   it('parent_preserved_in_form_after_409_refetch_and_parent_rerender', async () => {
