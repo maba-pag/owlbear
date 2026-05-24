@@ -256,9 +256,15 @@ describe('Card tag metadata', () => {
       tags: ['cockpit-perfect-ui', 'scope:cockpit-web', 'ux-feedback', 'kanban', 'visual-system'],
     })
     const { container } = renderCard(task)
+    const card = container.querySelector('[data-testid="task-card"]')
     const tagGroup = container.querySelector('[data-testid="card-tags"]')
+    const cardClasses = card?.getAttribute('class') ?? ''
     const classes = tagGroup?.getAttribute('class') ?? ''
 
+    expect(card).not.toBeNull()
+    expect(cardClasses).toContain('shrink-0')
+    expect(cardClasses).not.toContain('overflow-hidden')
+    expect(cardClasses).not.toMatch(/(?:^|\s)(?:h|max-h)-/)
     expect(tagGroup).not.toBeNull()
     expect(classes).toContain('flex-wrap')
     expect(classes).not.toContain('overflow-hidden')

@@ -131,7 +131,7 @@ export function Card({
       }
       className={[
         'card',
-        'relative flex min-h-[116px] items-start overflow-hidden rounded-lg border border-transparent border-l-[6px] bg-canvas',
+        'relative flex min-h-[116px] shrink-0 items-start rounded-lg border border-transparent border-l-[6px] bg-canvas',
         'px-static-sm pb-static-sm pt-static-sm text-xs leading-normal',
         'cursor-pointer shadow-sm',
         'transition-[box-shadow,background-color,border-color,transform] duration-sm',

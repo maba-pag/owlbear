@@ -1,10 +1,10 @@
 ---
 id: 1785
 title: Auto-expand Kanban cards to show all tags
-status: research
+status: done
 priority: important
 created: 2026-05-24T01:57:03.560862+02:00
-updated: 2026-05-24T02:06:42.264437+02:00
+updated: 2026-05-24T03:58:56.244104+02:00
 tags:
   - cockpit-perfect-ui
   - scope:cockpit-web
@@ -17,6 +17,7 @@ depends_on:
 ac:
   - All visible Kanban lanes use the same card tag visibility rule.
   - Cards grow vertically to show all tags rather than cutting tag rows off.
+proof_bundle: behavioral+reader
 blocked: false
 block_reason:
 claimed_at:
@@ -46,3 +47,12 @@ User chose: show all tags, auto-height cards, no lane-specific differences. Card
 
 ## Note
 Done is not technically the final status; it is the last visible board lane. Archived exists after Done and should not be forgotten in status-language or workflow design, though it does not change this tag-display decision.
+
+[[2026-05-24T03:58:47+02:00]]
+
+## Implementation Proof
+Implemented in Cockpit web. Kanban cards now avoid root content clipping and do not flex-shrink inside the column, so wrapped tag rows define the card's actual height and the column scrolls instead of compressing tags.
+
+Proof metrics for task #1785: card height `175`, CSS overflow `visible`, flex shrink `0`, tag count `5`, overflow indicator count `0`, and all tags inside the card bounds.
+
+Proof screenshot: `.owlbear/scratch/1716-wide-cockpit/1785-kanban-card-tags-after.png`

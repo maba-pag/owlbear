@@ -296,14 +296,12 @@ describe('TestFromAC_CardCueRendering', () => {
     expect(container.querySelector('[data-testid="card-tag-overflow"]')).toBeNull()
   })
 
-  it('task with more than 3 tags renders card-tag-overflow indicator with correct count', () => {
-    // TAG_PREVIEW_LIMIT = 3 → 5 tags → overflow = 5 - 3 = 2
+  it('task with more than 3 tags renders all tags without overflow indicator', () => {
     const task = makeTask({ id: 1, tags: ['a', 'b', 'c', 'd', 'e'] })
     const { container } = renderCard(task)
     expect(container.querySelector('[data-testid="card-tags"]')).not.toBeNull()
-    const overflow = container.querySelector('[data-testid="card-tag-overflow"]')
-    expect(overflow).not.toBeNull()
-    expect(overflow!.textContent).toContain('+2')
+    expect(container.querySelector('[data-testid="card-tag-overflow"]')).toBeNull()
+    expect(container.querySelectorAll('[data-testid="card-tag"]').length).toBe(5)
   })
 
   // AC-2 retry gap-fill (#1570): tag preview text contains actual tag names
@@ -318,8 +316,7 @@ describe('TestFromAC_CardCueRendering', () => {
     expect(tagsEl!.textContent).toContain('backend')
   })
 
-  it('task with 5 tags renders card-tags element showing only first 3 tag names in text content', () => {
-    // TAG_PREVIEW_LIMIT = 3 → previewTags = ['a', 'b', 'c']; 'd' and 'e' are overflow-only
+  it('task with 5 tags renders card-tags element showing every tag name in text content', () => {
     const task = makeTask({ id: 1, tags: ['a', 'b', 'c', 'd', 'e'] })
     const { container } = renderCard(task)
     const tagsEl = container.querySelector('[data-testid="card-tags"]')
@@ -328,7 +325,7 @@ describe('TestFromAC_CardCueRendering', () => {
     expect(text).toContain('a')
     expect(text).toContain('b')
     expect(text).toContain('c')
-    expect(text).not.toContain('d')
-    expect(text).not.toContain('e')
+    expect(text).toContain('d')
+    expect(text).toContain('e')
   })
 })
