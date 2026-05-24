@@ -1,0 +1,42 @@
+---
+id: 1833
+title: Review PCanvas shadow DOM override boundary
+status: research
+priority: important
+created: 2026-05-24T11:59:04.211544+02:00
+updated: 2026-05-24T11:59:04.211544+02:00
+tags:
+  - scope:cockpit-web
+  - pds
+  - api-boundary
+  - shell
+  - discussion
+parent: 1773
+depends_on: []
+ac:
+  - Inventory every current PCanvas shadow-root dependency and the visible 
+    behavior it protects.
+  - Decide whether each dependency is intentional, replaceable by public PDS 
+    API, or should be isolated behind a dedicated adapter.
+  - Any approved change preserves OwlBear header identity, nav rail behavior, 
+    theme compatibility, and viewport containment across the current Cockpit 
+    tabs.
+blocked: false
+block_reason:
+claimed_at:
+archival_reason:
+archival_refs: []
+---
+## Observation
+Cockpit Shell currently customizes Porsche Design System `PCanvas` by reaching into the component shadow root. `applyCockpitCanvasOverrides()` injects a `<style>` tag into `canvas.shadowRoot`, targets internal class names such as `.root`, `.main`, `.header`, `.header__crest`, `.header__wordmark`, `.header__area--start`, `.header__area--end`, `.sidebar--start`, and `.sidebar__header--start`, then queries the private `.root` node to reset scroll position.
+
+## Evidence
+- Code surface: `serve/cockpit/web/src/Shell.tsx` (`applyCockpitCanvasOverrides`, `CANVAS_OVERRIDE_ATTR`, and the `canvasKey` effect that retries the shadow override).
+- Related bootstrap surface: `serve/cockpit/web/src/main.tsx` intentionally uses a `document.porscheDesignSystem.cdn` property trap from earlier #1496, so PDS bootstrap has known non-public integration points.
+- Historical context: archived #1714 explicitly chose to keep `PCanvas` while hiding inherited PDS crest/wordmark via focused shadow-root override; archived #1764 later traced a layout shift to the PCanvas shadow `.root` becoming a horizontal scroll container.
+
+## Observed User Impact
+This is not a screenshot-only defect; it is a fragility risk in a core shell dependency. A PDS v4 patch that renames internal shadow classes or changes its shadow scroll container could silently break header identity, nav positioning, viewport containment, or scroll reset behavior across every Cockpit tab. The current code also spreads PDS private knowledge through Shell instead of isolating it behind a clear adapter boundary.
+
+## Boundary
+This is an audit finding only. Do not implement without explicit user approval. The review should decide whether to keep the override with stronger containment/tests, replace it with supported PDS APIs/slots/tokens if available, or move the shell away from private PCanvas internals for the affected layout concerns.
