@@ -259,6 +259,14 @@ describe('TestFromAC_KanbanBoard', () => {
       })
     })
 
+    it('uses a slower-growing column minimum so wide desktop can show seven equal lanes', async () => {
+      const { container } = renderBoard({ fetchOnMount: false })
+      await waitFor(() => {
+        const board = container.querySelector('[data-testid="kanban-board"]')
+        expect(board?.className).toContain('[--kanban-column-min:clamp(248px,12.5vw,280px)]')
+      })
+    })
+
     it('shows correct task count in column header', async () => {
       const { container } = renderBoard()
       await waitFor(() => {

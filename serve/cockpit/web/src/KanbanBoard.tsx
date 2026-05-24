@@ -418,7 +418,7 @@ function KanbanBoardContent({
 
   return (
     <div
-      className="relative flex h-full min-h-0 flex-col [--kanban-column-min:clamp(248px,15vw,280px)]"
+      className="relative flex h-full min-h-0 flex-col [--kanban-column-min:clamp(248px,12.5vw,280px)]"
       data-testid="kanban-board"
     >
       <section className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-lg bg-canvas shadow-sm" aria-labelledby="kanban-board-title">
