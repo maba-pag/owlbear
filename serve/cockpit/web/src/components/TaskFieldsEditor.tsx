@@ -11,6 +11,7 @@ import {
 import type { TaskDetail } from './DetailTab'
 import MarkdownPreview from './MarkdownPreview'
 import type { ConflictLocalDraft } from '../hooks/useConflictDraft'
+import { formatStatusLabel } from '../utils/taskTransitions'
 
 export type TaskEditPayload = Record<string, unknown> & {
   updated: string
@@ -26,14 +27,22 @@ export type TaskEditPayload = Record<string, unknown> & {
 export interface TaskFieldsEditorProps {
   task: TaskDetail
   priorities: string[]
+  taskReferences?: TaskReferenceSummary[]
   conflictLocalDraft: ConflictLocalDraft | null
   conflictRemoteTaskId: number | null
   serverValidationMessage: string | null
   clearConflictIfTaskChanged: (taskId: number | undefined) => void
   onSave: (payload: TaskEditPayload, conflictDraft: ConflictLocalDraft) => Promise<boolean | void>
+  onSelectTask?: (taskId: number) => void
   onDirtyChange?: (dirty: boolean) => void
   onEditingChange?: (editing: boolean) => void
   defaultEditing?: boolean
+}
+
+export interface TaskReferenceSummary {
+  id: number
+  title: string
+  status: string
 }
 
 export function parseDependsOn(raw: string): { values: number[]; error: string | null } {
@@ -125,15 +134,82 @@ function validateTag(tag: string, currentTags: string[]): string | null {
   return null
 }
 
+function TaskReferenceChip({
+  taskId,
+  summary,
+  relationLabel,
+  onSelectTask,
+}: {
+  taskId: number
+  summary: TaskReferenceSummary | undefined
+  relationLabel: 'Dependency' | 'Parent'
+  onSelectTask?: (taskId: number) => void
+}) {
+  const statusLabel = summary ? formatStatusLabel(summary.status) : 'Unavailable'
+  const chipClassName = [
+    'inline-flex min-h-8 max-w-full items-center gap-static-xs rounded-full border px-static-sm py-1 text-xs font-semibold leading-none',
+    summary
+      ? 'border-contrast-low bg-canvas text-primary hover:bg-frosted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]'
+      : 'border-warning bg-warning-low text-primary',
+  ].join(' ')
+  const content = (
+    <>
+      <span className="shrink-0 font-mono">#{taskId}</span>
+      {summary ? <span className="min-w-0 max-w-[14rem] truncate">{summary.title}</span> : null}
+      <span className="shrink-0 rounded-full bg-frosted-soft px-2 py-px text-[0.68rem] uppercase leading-none text-contrast-high">
+        {statusLabel}
+      </span>
+    </>
+  )
+
+  if (summary && onSelectTask) {
+    return (
+      <button
+        type="button"
+        data-testid="task-reference-chip"
+        data-reference-id={taskId}
+        data-reference-kind={relationLabel.toLowerCase()}
+        data-reference-state="available"
+        className={chipClassName}
+        aria-label={`Open ${relationLabel.toLowerCase()} task #${taskId}: ${summary.title}`}
+        onClick={() => onSelectTask(taskId)}
+      >
+        {content}
+      </button>
+    )
+  }
+
+  return (
+    <span
+      data-testid="task-reference-chip"
+      data-reference-id={taskId}
+      data-reference-kind={relationLabel.toLowerCase()}
+      data-reference-state={summary ? 'available' : 'unavailable'}
+      className={chipClassName}
+      aria-label={summary ? `${relationLabel} task #${taskId}: ${summary.title}` : `${relationLabel} task #${taskId} is unavailable`}
+    >
+      {content}
+    </span>
+  )
+}
+
 function TaskFieldsDisplay({
   task,
   onEdit,
+  taskReferences = [],
+  onSelectTask,
 }: {
   task: TaskDetail
   onEdit: () => void
+  taskReferences?: TaskReferenceSummary[]
+  onSelectTask?: (taskId: number) => void
 }) {
   const body = task.body ?? ''
   const hasRelations = task.depends_on.length > 0 || task.parent !== null || task.blocked
+  const referenceById = useMemo(
+    () => new Map(taskReferences.map((reference) => [reference.id, reference])),
+    [taskReferences],
+  )
 
   return (
     <div className="grid gap-static-sm" data-testid="task-detail-display">
@@ -168,13 +244,30 @@ function TaskFieldsDisplay({
           {task.depends_on.length > 0 ? (
             <div>
               <dt className="font-semibold text-contrast-high">Depends on</dt>
-              <dd>{task.depends_on.join(', ')}</dd>
+              <dd className="mt-1 flex min-w-0 flex-wrap gap-static-xs" data-testid="task-dependency-references">
+                {task.depends_on.map((taskId) => (
+                  <TaskReferenceChip
+                    key={taskId}
+                    taskId={taskId}
+                    summary={referenceById.get(taskId)}
+                    relationLabel="Dependency"
+                    onSelectTask={onSelectTask}
+                  />
+                ))}
+              </dd>
             </div>
           ) : null}
           {task.parent !== null ? (
             <div>
               <dt className="font-semibold text-contrast-high">Parent</dt>
-              <dd>{task.parent}</dd>
+              <dd className="mt-1 flex min-w-0 flex-wrap gap-static-xs" data-testid="task-parent-reference">
+                <TaskReferenceChip
+                  taskId={task.parent}
+                  summary={referenceById.get(task.parent)}
+                  relationLabel="Parent"
+                  onSelectTask={onSelectTask}
+                />
+              </dd>
             </div>
           ) : null}
           {task.blocked ? (
@@ -192,11 +285,13 @@ function TaskFieldsDisplay({
 export default function TaskFieldsEditor({
   task,
   priorities,
+  taskReferences,
   conflictLocalDraft,
   conflictRemoteTaskId,
   serverValidationMessage,
   clearConflictIfTaskChanged,
   onSave,
+  onSelectTask,
   onDirtyChange,
   onEditingChange,
   defaultEditing,
@@ -416,6 +511,8 @@ export default function TaskFieldsEditor({
       {!isEditing ? (
         <TaskFieldsDisplay
           task={task}
+          taskReferences={taskReferences}
+          onSelectTask={onSelectTask}
           onEdit={() => setIsEditing(true)}
         />
       ) : null}

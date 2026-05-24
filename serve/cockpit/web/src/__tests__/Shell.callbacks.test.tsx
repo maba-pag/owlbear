@@ -180,6 +180,32 @@ function dismissTaskDetailModal(container: HTMLElement): void {
   fireEvent(modal!, new CustomEvent('dismiss', { bubbles: true }))
 }
 
+function stubTaskFetchForIds(): void {
+  vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+    const id = Number(String(input).match(/\/api\/tasks\/(\d+)/)?.[1] ?? 0)
+    return Promise.resolve({
+      ok: true,
+      json: vi.fn().mockResolvedValue({
+        id,
+        title: `Task ${id}`,
+        status: 'todo',
+        priority: 'needed',
+        body: '',
+        updated: '2026-01-01T00:00:00+00:00',
+        created: '2026-01-01T00:00:00+00:00',
+        tags: [],
+        blocked: false,
+        block_reason: null,
+        claimed: false,
+        claimed_at: null,
+        dep_status: null,
+        parent: null,
+        depends_on: [],
+      }),
+    })
+  }))
+}
+
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe('TestFromAC_ShellCallbacks', () => {
@@ -503,6 +529,28 @@ describe('TestFromAC_ShellCallbacks', () => {
       act(() => { capturedKanbanOnSelectTask?.(42) })
       act(() => { capturedDetailOnSelectTask?.(77, 'activity') })
       expect(container.querySelector('[data-testid="task-detail-modal"]')).not.toBeNull()
+    })
+
+    it('DetailTab reference navigation exposes a modal back action', async () => {
+      stubHooks()
+      stubTaskFetchForIds()
+      const { container } = renderShell()
+
+      act(() => { capturedKanbanOnSelectTask?.(42) })
+      await waitFor(() => {
+        expect(container.querySelector('[data-region="task-detail-window"]')?.getAttribute('data-selected-task-id')).toBe('42')
+      })
+
+      act(() => { capturedDetailOnSelectTask?.(99, null) })
+      await waitFor(() => {
+        expect(container.querySelector('[data-region="task-detail-window"]')?.getAttribute('data-selected-task-id')).toBe('99')
+        expect(container.querySelector('[data-testid="task-detail-back"]')).not.toBeNull()
+      })
+
+      fireEvent.click(container.querySelector('[data-testid="task-detail-back"]')!)
+      await waitFor(() => {
+        expect(container.querySelector('[data-region="task-detail-window"]')?.getAttribute('data-selected-task-id')).toBe('42')
+      })
     })
 
     it('DetailTab.onTaskCleared resets selectedTaskId and closes modal (covers anonymous_15)', () => {

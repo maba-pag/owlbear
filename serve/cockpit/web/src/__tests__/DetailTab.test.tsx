@@ -64,6 +64,18 @@ const TASK_WITH_DEPS: TaskDetail = {
   parent: 5,
 }
 
+const TASK_WITH_MISSING_REF: TaskDetail = {
+  ...TASK,
+  depends_on: [10, 404],
+  parent: 999,
+}
+
+const TASK_REFERENCES = [
+  { id: 5, title: 'Parent rollout', status: 'backlog' },
+  { id: 10, title: 'API contract', status: 'todo' },
+  { id: 20, title: 'UX proof', status: 'in-progress' },
+]
+
 const TASK_WITH_AC: TaskDetail = {
   ...TASK,
   ac: [
@@ -331,6 +343,53 @@ describe('TestFromAC_DetailTab', () => {
     it('renders parent field control', () => {
       const { container } = renderDetail(TASK_WITH_DEPS)
       expect(container.querySelector('[data-field="parent"]')).not.toBeNull()
+    })
+
+    it('renders parent and dependency references as navigable chips with title and status', () => {
+      const onSelectTask = vi.fn()
+      const { container } = render(
+        <PorscheDesignSystemProvider>
+          <DetailTab
+            task={TASK_WITH_DEPS}
+            taskReferences={TASK_REFERENCES}
+            onSelectTask={onSelectTask}
+          />
+        </PorscheDesignSystemProvider>,
+      )
+
+      const chips = container.querySelectorAll('[data-testid="task-reference-chip"]')
+      expect(chips).toHaveLength(3)
+      expect(container.querySelector('[data-reference-kind="parent"][data-reference-id="5"]')?.textContent).toContain('Parent rollout')
+      expect(container.querySelector('[data-reference-kind="dependency"][data-reference-id="10"]')?.textContent).toContain('API contract')
+      expect(container.querySelector('[data-reference-kind="dependency"][data-reference-id="20"]')?.textContent).toContain('In Progress')
+
+      fireEvent.click(container.querySelector('[data-reference-kind="parent"][data-reference-id="5"]')!)
+      expect(onSelectTask).toHaveBeenCalledWith(5)
+    })
+
+    it('renders missing parent and dependency references as unavailable chips', () => {
+      const onSelectTask = vi.fn()
+      const { container } = render(
+        <PorscheDesignSystemProvider>
+          <DetailTab
+            task={TASK_WITH_MISSING_REF}
+            taskReferences={[TASK_REFERENCES[1]]}
+            onSelectTask={onSelectTask}
+          />
+        </PorscheDesignSystemProvider>,
+      )
+
+      const missingParent = container.querySelector('[data-reference-kind="parent"][data-reference-id="999"]')
+      const missingDependency = container.querySelector('[data-reference-kind="dependency"][data-reference-id="404"]')
+      expect(missingParent?.getAttribute('data-reference-state')).toBe('unavailable')
+      expect(missingDependency?.getAttribute('data-reference-state')).toBe('unavailable')
+      expect(missingParent?.textContent).toContain('Unavailable')
+      expect(missingDependency?.textContent).toContain('Unavailable')
+
+      fireEvent.click(missingParent!)
+      fireEvent.click(missingDependency!)
+      expect(onSelectTask).not.toHaveBeenCalledWith(999)
+      expect(onSelectTask).not.toHaveBeenCalledWith(404)
     })
 
     it('renders block_reason field control when task is blocked', () => {

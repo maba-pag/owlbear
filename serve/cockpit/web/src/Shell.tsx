@@ -156,6 +156,7 @@ function Shell() {
   } | null>(null)
   const [isTaskDetailDirty, setIsTaskDetailDirty] = useState(false)
   const [isTaskDetailEditing, setIsTaskDetailEditing] = useState(false)
+  const [taskDetailBackStack, setTaskDetailBackStack] = useState<number[]>([])
   const [showTaskDetailUnsavedDialog, setShowTaskDetailUnsavedDialog] = useState(false)
   const pendingTaskDetailActionRef = useRef<(() => void) | null>(null)
   const taskDetailStayButtonRef = useRef<HTMLElement | null>(null)
@@ -208,6 +209,7 @@ function Shell() {
 
   const selectTaskFromBoard = useCallback((taskId: number) => {
     const action = () => {
+      setTaskDetailBackStack([])
       select(taskId)
       setDetailValidationMessage(null)
     }
@@ -415,6 +417,7 @@ function Shell() {
   const closeTaskDetail = useCallback(() => {
     requestTaskDetailAction(() => {
       clear()
+      setTaskDetailBackStack([])
       setSelectedTaskSubtab(null)
       setDetailValidationMessage(null)
     })
@@ -422,8 +425,12 @@ function Shell() {
 
   const selectTaskFromDetail = useCallback((taskId: number, subtab?: string | null) => {
     const action = () => {
+      if (selectedTaskId !== null && selectedTaskId !== taskId) {
+        setTaskDetailBackStack((current) => [...current, selectedTaskId])
+      }
       select(taskId)
       setSelectedTaskSubtab((current) => subtab ?? current)
+      setDetailValidationMessage(null)
     }
 
     if (selectedTaskId === taskId) {
@@ -433,6 +440,20 @@ function Shell() {
 
     requestTaskDetailAction(action)
   }, [requestTaskDetailAction, select, selectedTaskId])
+
+  const navigateTaskDetailBack = useCallback(() => {
+    const previousTaskId = taskDetailBackStack[taskDetailBackStack.length - 1]
+    if (previousTaskId === undefined) {
+      return
+    }
+
+    requestTaskDetailAction(() => {
+      setTaskDetailBackStack((current) => current.slice(0, -1))
+      select(previousTaskId)
+      setSelectedTaskSubtab(null)
+      setDetailValidationMessage(null)
+    })
+  }, [requestTaskDetailAction, select, taskDetailBackStack])
 
   const onSidebarStartUpdate = (event: CustomEvent<CanvasSidebarStartUpdateEventDetail>) => {
     setIsSidebarStartOpen(event.detail.open)
@@ -475,6 +496,7 @@ function Shell() {
         key={selectedTaskId ?? -1}
         task={selectedTask}
         board={board}
+        taskReferences={tasks}
         initialSubtab={selectedTaskSubtab}
         onSelectTask={(taskId, subtab) => {
           selectTaskFromDetail(taskId, subtab)
@@ -483,6 +505,7 @@ function Shell() {
         onEditingChange={setIsTaskDetailEditing}
         onTaskCleared={(message) => {
           clear()
+          setTaskDetailBackStack([])
           setIsTaskDetailDirty(false)
           setIsTaskDetailEditing(false)
           setSelectedTaskSubtab(null)
@@ -709,6 +732,18 @@ function Shell() {
               </div>
               {selectedTask ? (
                 <div className="flex w-full min-w-0 flex-wrap items-center justify-start gap-static-xs lg:w-auto lg:justify-end">
+                  {taskDetailBackStack.length > 0 ? (
+                    <PButton
+                      type="button"
+                      data-testid="task-detail-back"
+                      variant="secondary"
+                      icon="arrow-left"
+                      compact
+                      onClick={navigateTaskDetailBack}
+                    >
+                      Back
+                    </PButton>
+                  ) : null}
                   <PTag
                     compact
                     variant={statusToVariant(selectedTask.status)}

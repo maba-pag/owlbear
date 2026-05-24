@@ -11,6 +11,7 @@ import TaskActions from './TaskActions'
 import TaskFieldsEditor, {
   parseDependsOn,
   parseParent,
+  type TaskReferenceSummary,
   type TaskEditPayload,
 } from './TaskFieldsEditor'
 import type { Board } from '../hooks/useBoard'
@@ -43,6 +44,7 @@ interface TaskDetail {
 export interface DetailTabProps {
   task: TaskDetail | null
   board?: Board | null
+  taskReferences?: TaskReferenceSummary[]
   onTaskUpdated?: (task: TaskDetail) => void
   onSelectTask?: (taskId: number, subtab?: string) => void
   onTaskCleared?: (message?: string) => void
@@ -75,6 +77,7 @@ function formatOptionalMetadata(value: string | null, fallback: string): string 
 export default function DetailTab({
   task,
   board,
+  taskReferences = [],
   onTaskUpdated,
   onSelectTask,
   onTaskCleared,
@@ -198,11 +201,13 @@ export default function DetailTab({
         <TaskFieldsEditor
           task={t}
           priorities={board?.priorities ?? []}
+          taskReferences={taskReferences}
           conflictLocalDraft={conflictLocalDraft}
           conflictRemoteTaskId={conflictRemoteTask?.id ?? null}
           serverValidationMessage={serverValidationMessage}
           clearConflictIfTaskChanged={clearConflictIfTaskChanged}
           onSave={handleSave}
+          onSelectTask={(taskId) => onSelectTask?.(taskId)}
           onDirtyChange={onDirtyChange}
           onEditingChange={onEditingChange}
           defaultEditing={false}
