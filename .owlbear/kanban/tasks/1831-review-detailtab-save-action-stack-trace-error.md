@@ -23,3 +23,8 @@ archival_reason:
 archival_refs: []
 ---
 Found during #1825 full Vitest verification. DetailTab.test.tsx has a residual save-action failure reported as STACK_TRACE_ERROR. The failure needs triage separate from the Ideas router blocker.
+
+## User Decision
+Approved direction: product-first triage.
+
+Implementation direction: reproduce the actual mouse-driven task edit/save flow. If saving is broken, fix the product behavior. If the product behavior works and the failure is a test harness/jsdom/PDS artifact, fix or remove the bad test.

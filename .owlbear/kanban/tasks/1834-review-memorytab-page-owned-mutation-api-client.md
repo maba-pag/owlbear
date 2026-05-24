@@ -39,3 +39,8 @@ This is primarily a maintainability and boundary risk rather than a current visu
 
 ## Boundary
 This is an audit finding only. Do not implement without explicit user approval. The review should decide whether Memory should gain a `src/api/memories.ts` module and whether list polling/error parsing should also be standardized, while preserving the current 409 refresh, 404 removal, 422 field-message, pending-badge delta, and promotion-message behavior.
+
+## User Decision
+Approved direction: extract Memory approve/edit/delete mutation transport and error translation into a dedicated frontend API client module, while keeping page-owned UI state and interaction flow in `MemoryTab`.
+
+Implementation must preserve the current Memory UX, OCC handling, validation field messages, 404 removal behavior, pending-count updates, and promotion messaging.

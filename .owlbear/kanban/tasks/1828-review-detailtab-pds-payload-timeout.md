@@ -33,3 +33,8 @@ The full Cockpit frontend suite reported a timeout in the PdsMigration DetailTab
 
 ## Boundary
 Treat this as a possible stale or flaky test first. Verify the actual DetailTab edit workflow and emitted payload before changing product code.
+
+## User Decision
+Decision: remove or fix the test if it is buggy; tests follow the product. Do not change product code just to satisfy a stale PDS/jsdom timeout.
+
+Implementation direction: verify the actual mouse-driven title/priority edit-save workflow and emitted payload. If the product behavior works, adjust/delete the failing test. If the product behavior is broken, fix the product path.

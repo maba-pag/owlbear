@@ -41,3 +41,8 @@ Ideas is a shared notebook. In a real external-edit conflict, the user is forced
 
 ## Boundary
 This is an audit finding only. Do not implement without explicit user approval. The review should decide whether the conflict state needs an inline comparison, remote preview, timestamp/context copy, or a different save/merge flow.
+
+## User Decision
+Approved direction: change the Ideas conflict model to a save-time disk-change check. When the user tries to save and the file on disk changed since the Ideas page loaded, prompt the user to choose one of three actions: overwrite the file, load the file from disk, or cancel the save.
+
+This should replace blind conflict decisions. Implementation should protect the local draft, avoid silent overwrite/discard, and use an API/data contract that can reliably detect the on-disk version at save time.

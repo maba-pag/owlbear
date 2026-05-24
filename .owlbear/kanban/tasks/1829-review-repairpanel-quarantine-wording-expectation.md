@@ -33,3 +33,8 @@ The full Cockpit frontend suite reported a SidecarUX failure around RepairPanel 
 
 ## Boundary
 Treat this as a copy/test-alignment review. The product copy already names the concrete destination path; decide whether to adjust the test wording, product text, or no-op.
+
+## User Decision
+Approved direction: make a tiny copy improvement by adding an explicit `folder` or `path` word while keeping the concrete destination `.owlbear/kanban/quarantine`.
+
+Implementation should stay minimal and preserve the exact destination path. Tests should follow the resulting product copy.

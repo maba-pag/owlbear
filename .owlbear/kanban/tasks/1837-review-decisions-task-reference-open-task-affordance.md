@@ -42,3 +42,8 @@ Decision requests are tied to work items. Before approving, rejecting, or asking
 
 ## Boundary
 This is an audit finding only. Do not implement without explicit user approval. The review should decide whether Decisions needs a direct open-task affordance, a stronger task context preview, or whether the full request body is intentionally sufficient.
+
+## User Decision
+Approved direction: task references in Decisions should open the associated task. Prefer opening the task on top of the current context, matching the task-detail behavior where parent/dependency tasks open on top. If that is not feasible, fall back to opening/selecting the task in the normal task-detail location.
+
+Implementation must preserve the current decision brief/resolver flow and avoid losing any in-progress resolution notes or resolver state unexpectedly.

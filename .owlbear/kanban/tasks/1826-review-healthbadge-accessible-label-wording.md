@@ -33,3 +33,8 @@ The full Cockpit frontend suite reported a KeyboardA11y failure: the HealthBadge
 
 ## Boundary
 Treat this as a product/accessibility wording question, not a test-as-spec mandate. Decide whether the visible/assistive label should say workspace status, health, issues, or a clearer combined phrase before implementation.
+
+## User Decision
+Decision: do not spend effort on accessibility or keyboard usability that does not fit the actual single-user, mouse-driven Cockpit workflow. Keep any change minimal and only resolve wording that is contradictory or required for the product to work.
+
+Implementation direction: do not add broad accessibility work from this task. If the current HealthBadge wording is not product-confusing, keep it and adjust/delete stale test expectations rather than treating the test regex as authority.

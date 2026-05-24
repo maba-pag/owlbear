@@ -41,3 +41,8 @@ Moving tasks is a core board workflow. After drag/drop removal, the primary boar
 
 ## Boundary
 This is an audit finding only. Do not implement without explicit user approval. The review should decide whether the board should add a compact visible action/menu affordance on cards, surface move actions in another standard place, or intentionally keep the current hidden context-menu pattern.
+
+## User Decision
+Decision: keep the current hidden card context-menu pattern. Do not add a visible card action/menu affordance from this task.
+
+The existing right-click and keyboard context-menu behavior, plus task-detail actions, remain the intended move/archive paths for now.

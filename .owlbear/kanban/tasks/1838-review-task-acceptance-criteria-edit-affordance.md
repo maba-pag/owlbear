@@ -42,3 +42,8 @@ Acceptance criteria are the task contract users and agents use to decide whether
 
 ## Boundary
 This is an audit finding only. Do not implement without explicit user approval. The review should decide whether AC editing belongs in Cockpit task edit mode, whether body-only editing is intentional, or whether the API should expose a structured acceptance-criteria mutation.
+
+## User Decision
+Approved direction: implement structured acceptance-criteria editing in Cockpit task detail.
+
+Implementation should treat AC as structured task contract data, not ad hoc body text, and must preserve existing title, priority, body, tag, dependency, parent, block-reason, and save/conflict behavior.

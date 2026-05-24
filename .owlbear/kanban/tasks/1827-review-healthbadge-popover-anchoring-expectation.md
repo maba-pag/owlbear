@@ -33,3 +33,8 @@ The full Cockpit frontend suite reported an OverlayAnchoring failure: the Health
 
 ## Boundary
 Treat this as an overlay positioning behavior review. Verify current runtime anchoring before deciding whether product code or the test expectation should change.
+
+## User Decision
+Decision: choose the behavior that is best for the product, not what the test expected. Tests are a TDD/build tool and are not authoritative product spec.
+
+Implementation direction: keep or change HealthBadge popover anchoring based on actual runtime usability and visual behavior. If the current viewport-safe behavior is best for Cockpit, adjust or delete the stale trigger-left test expectation.

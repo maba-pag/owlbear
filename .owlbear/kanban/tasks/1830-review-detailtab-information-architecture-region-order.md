@@ -23,3 +23,8 @@ archival_reason:
 archival_refs: []
 ---
 Found during #1825 full Vitest verification. DetailTab.information-architecture.test.tsx has two residual failures around direct-child data-region ordering. The product decision should resolve whether the current metadata/body/action/history order is intentional before implementation.
+
+## User Decision
+Approved direction: set a core-first DetailTab information architecture order.
+
+Implementation should prioritize the task work contract before secondary information: core fields/body first, then acceptance criteria, actions, metadata, and history. Tests should follow that product contract instead of enforcing stale or incidental DOM structure.

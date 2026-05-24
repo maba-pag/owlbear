@@ -40,3 +40,8 @@ This is not a screenshot-only defect; it is a fragility risk in a core shell dep
 
 ## Boundary
 This is an audit finding only. Do not implement without explicit user approval. The review should decide whether to keep the override with stronger containment/tests, replace it with supported PDS APIs/slots/tokens if available, or move the shell away from private PCanvas internals for the affected layout concerns.
+
+## User Decision
+Approved direction: research the public Porsche Design System v4 path first, then try a bounded implementation/prototype that does not overwrite or destroy the current solution. Benchmark the candidate against the current shadow-DOM override for the visible shell behaviors it protects.
+
+If a limited number of attempts does not produce a working, clearly better public/owned-layout path, keep the current solution and document why it remains the best available compromise for now.

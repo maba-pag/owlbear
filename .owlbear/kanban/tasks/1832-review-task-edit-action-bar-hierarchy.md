@@ -40,3 +40,8 @@ Task editing is a primary Cockpit workflow, but this state gives the save contro
 
 ## Boundary
 This is an audit finding only. Do not implement without explicit user approval. The task should evaluate whether task edit actions should be normalized toward the compact toolbar/header treatment used elsewhere, while preserving the existing unsaved-change and save/cancel behavior.
+
+## User Decision
+Approved direction: implement a compact toolbar/header action area for the task edit state. Save and Cancel should remain visible and reachable, but the current standalone action strip should stop dominating the field hierarchy.
+
+Implementation must preserve dirty-state signaling, unsaved-navigation protection, save/cancel behavior, and the existing task edit payload semantics.
