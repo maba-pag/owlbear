@@ -2,6 +2,13 @@
 
 External repos and resources studied during OwlBear development.
 
+## Slot-Efficiency Auto-Stale Transition (Task #1844)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Wikipedia — Cache replacement policies (LFU, SIEVE) | <https://en.wikipedia.org/wiki/Cache_replacement_policies> | LFU ratio-based eviction and SIEVE quick-demotion patterns — validated proportional threshold approach for stale detection | `.owlbear/research/slot-efficiency-auto-stale-transition.md` | 2026-05-25 |
+| Redis LFU eviction policy | <https://redis.io/blog/lfu-vs-lru-how-to-choose-the-right-cache-eviction-policy/> | Frequency-counter-based demotion — confirmed ratio of engagement counters to non-use is standard cache pattern | `.owlbear/research/slot-efficiency-auto-stale-transition.md` | 2026-05-25 |
+
 ## Recall Explore/Challenge Slots (Task #1843)
 
 | Source | URL | What | Where Used | Date |
