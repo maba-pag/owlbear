@@ -10,10 +10,13 @@ import logging
 import os
 import re
 from datetime import UTC, datetime
+from io import StringIO
 from pathlib import Path
 from typing import Protocol
 
 from ruamel.yaml import YAML
+
+from .errors import ConcurrencyError
 
 LOGGER = logging.getLogger(__name__)
 
@@ -69,6 +72,27 @@ def _append_summary(engine: DecisionEngine, task_id: int | str, response: str, b
     """Append a compact DR summary to the task body."""
     summary = canonical_summary(response, body)
     engine.edit_task(task_id, append_body=summary)
+
+
+def _append_response_section(body: str, response: str, notes: str | None) -> str:
+    """Append a response section to an existing DR body."""
+    suffix_lines = ["## Response", f"- response: {response}"]
+    if notes is not None:
+        suffix_lines.append(notes)
+    suffix = "\n".join(suffix_lines)
+    cleaned_body = body.rstrip("\n")
+    if cleaned_body:
+        return f"{cleaned_body}\n\n{suffix}\n"
+    return f"{suffix}\n"
+
+
+def _rewrite_response(path: Path, meta: dict[str, object], body: str) -> None:
+    """Persist updated frontmatter and body to a DR file."""
+    yaml = YAML()
+    stream = StringIO()
+    yaml.dump(meta, stream)
+    frontmatter = stream.getvalue().rstrip("\n")
+    path.write_text(f"---\n{frontmatter}\n---\n{body}", encoding="utf-8", newline="\n")
 
 
 def _resolve_decisions_dir(engine: DecisionEngine) -> Path:
@@ -158,6 +182,45 @@ def create_dr(  # noqa: PLR0913
         raise
 
     return candidate
+
+
+def resolve_decision(
+    path: Path,
+    response: str,
+    engine: DecisionEngine,
+    *,
+    notes: str | None = None,
+    resolved_by: str = "unknown",
+) -> Path:
+    """Resolve one pending DR file and return the moved path.
+
+    Raises:
+        ConcurrencyError: DR is already resolved (response is not pending).
+    """
+    meta, body = parse_dr(path)
+    current_response = str(meta.get("response", "pending"))
+    if current_response != "pending":
+        msg = f"Decision {path.name!r} is already resolved"
+        code = "ERR_STALE"
+        raise ConcurrencyError(code, msg)
+
+    updated = dict(meta)
+    updated["response"] = response
+    updated["resolved_by"] = resolved_by
+    body_with_response = _append_response_section(body, response, notes)
+    _rewrite_response(path, updated, body_with_response)
+
+    task_id = updated.get("task_id")
+    try:
+        _append_summary(engine, task_id, response, body)
+        if response in {"approved", "rejected"}:
+            engine.edit_task(task_id, blocked=False)
+    except FileNotFoundError:
+        # Legacy callers may resolve DRs that point outside the active engine.
+        pass
+
+    resolved_dir = path.parent.parent / "resolved"
+    return move_to_resolved(path, resolved_dir)
 
 
 def resolve_pending_drs(
