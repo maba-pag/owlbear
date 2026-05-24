@@ -2,12 +2,13 @@
 
 Covers AC lines with (td:1) — smoke tests only:
 - AC#1 (td:1): Card component and CardProps extracted to components/Card.tsx;
-               PRIORITY_COLORS co-located there (Card's only consumer);
+               priority rail semantics live in Card without the removed
+               PRIORITY_COLORS inline style map;
                Task imported from ../hooks/useBoard
 - AC#2 (td:1): Column component and ColumnProps extracted to components/Column.tsx;
                imports Card from ./Card and Task from ../hooks/useBoard
-- AC#4 (td:1): Card.tsx and Column.tsx introduce no React.memo/useMemo/useCallback
-               (React Compiler handles memoisation automatically)
+- AC#4 (td:1): Card.tsx and Column.tsx introduce no React.memo/useMemo render wrappers
+               (React Compiler handles render memoisation automatically)
 """
 
 from __future__ import annotations
@@ -28,13 +29,14 @@ class TestFromAC_CardExtraction:
             "to serve/cockpit/web/src/components/Card.tsx"
         )
 
-    def test_card_tsx_has_priority_colors(self) -> None:
-        """PRIORITY_COLORS must be co-located in Card.tsx (Card is its only consumer)."""
+    def test_card_tsx_has_priority_rail_semantics_without_priority_colors_map(self) -> None:
+        """Card.tsx keeps priority rail semantics without the removed PRIORITY_COLORS map."""
         src = (_COMPONENTS / "Card.tsx").read_text()
-        assert "PRIORITY_COLORS" in src, (
-            "PRIORITY_COLORS not found in Card.tsx — move the constant from "
-            "KanbanBoard.tsx to Card.tsx (Card is its only consumer)"
-        )
+        assert "PRIORITY_COLORS" not in src, "Card.tsx must not reintroduce the old inline priority color map"
+        assert "data-priority" in src, "Card.tsx must keep priority available for tests and accessibility"
+        assert "border-l-error" in src, "Card.tsx must keep critical priority/error rail semantics"
+        assert "border-l-warning" in src, "Card.tsx must keep needed priority/warning rail semantics"
+        assert "border-l-contrast-medium" in src, "Card.tsx must keep neutral fallback rail semantics"
 
     def test_card_tsx_imports_task_from_useboard(self) -> None:
         """Card.tsx must import the Task type from ../hooks/useBoard."""
@@ -70,10 +72,11 @@ class TestFromAC_ColumnExtraction:
         )
 
 
-class TestFromAC_NoMemoWrappers:
-    """Smoke tests for AC#4: Card.tsx and Column.tsx must not introduce memo wrappers.
+class TestFromAC_NoRenderMemoWrappers:
+    """Smoke tests for AC#4: Card.tsx and Column.tsx must not introduce render memo wrappers.
 
-    React Compiler handles memoisation automatically — manual wrappers must not be added.
+    React Compiler handles render memoisation automatically. useCallback remains
+    allowed for DOM event/effect coordination where it has behavioral value.
     See also: test_cockpit_react_compiler_1015.py (TestFromAC_KanbanBoardMemoRemoval).
     """
 
@@ -90,15 +93,12 @@ class TestFromAC_NoMemoWrappers:
             "Card.tsx uses useCallback — React Compiler handles memoisation automatically; remove the wrapper"
         )
 
-    def test_column_tsx_no_memo_wrappers(self) -> None:
-        """Column.tsx must not use React.memo, useMemo, or useCallback."""
+    def test_column_tsx_no_render_memo_wrappers(self) -> None:
+        """Column.tsx must not use React.memo or useMemo render wrappers."""
         src = (_COMPONENTS / "Column.tsx").read_text()
         assert "React.memo" not in src, (
             "Column.tsx uses React.memo — React Compiler handles memoisation automatically; remove the wrapper"
         )
         assert "useMemo" not in src, (
             "Column.tsx uses useMemo — React Compiler handles memoisation automatically; remove the wrapper"
-        )
-        assert "useCallback" not in src, (
-            "Column.tsx uses useCallback — React Compiler handles memoisation automatically; remove the wrapper"
         )
