@@ -49,8 +49,9 @@ class TestFromAC_KanbanInitExports:
         """AC1: CorruptionError must appear in owlbear_kanban.__all__."""
         assert "CorruptionError" in owlbear_kanban.__all__
 
-    def test_dunder_all_new_additions_are_exactly_five_symbols(self) -> None:
-        """AC1: the only additions to __all__ beyond existing 6 are exactly the 5 new symbols."""
+    def test_dunder_all_new_additions_are_exactly_six_symbols(self) -> None:
+        """AC1 + #1867: the only additions to __all__ beyond the original 5 are exactly 6 symbols
+        (5 from task #1213 + atomic_write from task #1867)."""
         existing = {
             "BoardConfig",
             "KanbanEngine",
@@ -64,6 +65,7 @@ class TestFromAC_KanbanInitExports:
             "NotFoundError",
             "ConcurrencyError",
             "CorruptionError",
+            "atomic_write",
         }
         actual_new = set(owlbear_kanban.__all__) - existing
         assert actual_new == expected_new
@@ -205,22 +207,27 @@ class TestFromAC_TestFileSurgery:
     """AC2: test_init_exports_1213.py updated to reflect the export removal."""
 
     def test_positive_pick_dispatchable_test_removed(self) -> None:
-        """AC2: test_pick_dispatchable_in_dunder_all must be deleted from test_init_exports_1213.py."""
-        test_file = pathlib.Path(__file__).parent / "test_init_exports_1213.py"
-        content = test_file.read_text(encoding="utf-8")
-        assert "def test_pick_dispatchable_in_dunder_all" not in content
+        """AC2: no line in the merged test file defines test_pick_dispatchable_in_dunder_all
+        as a function (test_init_exports_1213.py was merged into test_init_exports.py;
+        the positive test was never re-added)."""
+        test_file = pathlib.Path(__file__).parent / "test_init_exports.py"
+        lines = test_file.read_text(encoding="utf-8").splitlines()
+        assert not any(
+            line.strip().startswith("def test_pick_dispatchable_in_dunder_all")
+            for line in lines
+        )
 
     def test_negative_assertion_present(self) -> None:
-        """AC2: negative assertion must exist in test_init_exports_1213.py."""
-        test_file = pathlib.Path(__file__).parent / "test_init_exports_1213.py"
+        """AC2: negative assertion for pick_dispatchable must exist in the merged test file."""
+        test_file = pathlib.Path(__file__).parent / "test_init_exports.py"
         content = test_file.read_text(encoding="utf-8")
         assert '"pick_dispatchable" not in owlbear_kanban.__all__' in content
 
     def test_existing_set_pruned_of_pick_dispatchable(self) -> None:
-        """AC2: the 'existing' baseline set in test_init_exports_1213.py must not list pick_dispatchable."""
-        test_file = pathlib.Path(__file__).parent / "test_init_exports_1213.py"
+        """AC2: the 'existing' baseline set in the merged test file must not list pick_dispatchable."""
+        test_file = pathlib.Path(__file__).parent / "test_init_exports.py"
         content = test_file.read_text(encoding="utf-8")
         match = re.search(r"existing\s*=\s*\{([^}]+)\}", content, re.DOTALL)
-        assert match is not None, "existing set not found in test_init_exports_1213.py"
+        assert match is not None, "existing set not found in test_init_exports.py"
         existing_body = match.group(1)
         assert "pick_dispatchable" not in existing_body
