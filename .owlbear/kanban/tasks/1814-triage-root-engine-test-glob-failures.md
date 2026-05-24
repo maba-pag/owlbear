@@ -37,9 +37,10 @@ Triage only. Do not change product code or broad historical regression tests wit
 - Command: `uv run pytest tests/test_engine_*.py tests/test_kanban_*.py -q --tb=no`
 - Result after #1813: 72 failed, 532 passed.
 - Result after #1816: 52 failed, 540 passed.
+- Result after #1815: 14 failed, 526 passed.
 
 ## Failure Groups
-- #1815: 38 accessor-migration grouped-config/source-inspection failures in `tests/test_engine_accessor_migration.py`.
+- #1815: 38 accessor-migration grouped-config/source-inspection failures in `tests/test_engine_accessor_migration.py` (resolved in #1815).
 - #1816: 20 dispatch validation, lazy `agent_map`, and MCP `pick_tasks` error-surface failures across `tests/test_engine_dispatch_validation.py` and `tests/test_engine_lazy_agent_map.py` (resolved in #1816).
 - #1817: 3 validation-push predicate/error-code failures in `tests/test_engine_validation_push.py`.
 - #1818: 6 engine coverage failures around edit-task mutation returns and board-config deep-copy behavior.
@@ -48,4 +49,4 @@ Triage only. Do not change product code or broad historical regression tests wit
 - #1821: 2 Kanban board split static/source-layout failures in `tests/test_kanban_board_split.py`.
 
 ## Recommendation
-Start with #1816 or #1815. #1816 is more likely to affect runtime dispatch/MCP behavior; #1815 is larger but appears heavily structural and may mostly be stale test architecture.
+Continue with #1817, #1818, #1819, #1820, or #1821. #1817 is the smallest runtime-validation slice; #1818 is the largest remaining root test cluster.
