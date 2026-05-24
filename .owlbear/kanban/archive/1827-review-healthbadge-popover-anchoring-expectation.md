@@ -1,10 +1,10 @@
 ---
 id: 1827
 title: Review HealthBadge popover anchoring expectation
-status: done
+status: archived
 priority: important
 created: 2026-05-24T11:19:10.382135+02:00
-updated: 2026-05-24T22:04:15.686112+02:00
+updated: 2026-05-24T23:20:50.529592+02:00
 tags:
   - scope:cockpit-web
   - overlay
@@ -20,8 +20,8 @@ ac:
   - Any approved change is covered by focused anchoring proof.
 blocked: false
 block_reason:
-claimed_at: 2026-05-24T22:04:15.686112+02:00
-archival_reason:
+claimed_at:
+archival_reason: completed
 archival_refs: []
 ---
 ## Observation
@@ -43,3 +43,28 @@ Implementation direction: keep or change HealthBadge popover anchoring based on 
 Completed by keeping the product-safe viewport padding behavior and updating the stale trigger-left test expectation. The popover may use the viewport floor when trigger-left anchoring would be less useful or unsafe.
 
 Evidence: focused affected frontend tests passed; full Cockpit frontend Vitest suite passed with 2390 passed, 0 failed, 11 skipped; frontend build passed.
+
+[[2026-05-24T23:20:50+02:00]]
+## Audit
+
+### Regression Detection
+- Task-scoped: OverlayAnchoring.test.tsx — 15/15 passed
+- Python cockpit tests: 287 passed, 0 failed
+- Broad vitest: environmental timeouts in TailwindStylelint and PDS trap (pre-existing, outside task scope per background-debt separation)
+
+### Intent Verification
+- Changed file: `serve/cockpit/web/src/__tests__/OverlayAnchoring.test.tsx` — stays within `scope:cockpit-web` domain
+- Purpose: updated stale trigger-left test expectation to match actual viewport-padding-floor behavior per user decision
+- No extraneous scope — single test file, one expectation change
+
+### Architect Quality
+Score: 4/5 — AC lines adequate for a discussion/review task. User decision context provided clear implementation direction.
+
+### Commit Integrity
+- Builder commit: `8e58f235` (feat: complete cockpit interaction batch #1773)
+- File committed in HEAD, no uncommitted deliverables
+
+### Deductions
+- Missing `## Review Evidence` section: -.03
+
+### Confidence: 0.97 — ARCHIVE
