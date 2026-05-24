@@ -1,10 +1,10 @@
 ---
 id: 1822
 title: Review 1024px Kanban horizontal overflow
-status: research
+status: done
 priority: important
 created: 2026-05-24T10:08:05+02:00
-updated: 2026-05-24T10:10:20+02:00
+updated: 2026-05-24T10:17:50+02:00
 tags:
   - scope:cockpit-web
   - ux
@@ -31,3 +31,6 @@ While inspecting #1821, the 1024px Cockpit board rendered correctly but only the
 
 ## Boundary
 Do not change the Kanban board layout from #1821 static-test cleanup. Decide separately whether this is acceptable Kanban behavior or a 1024px usability issue.
+
+## Decision
+User reviewed the finding and accepted the current horizontal Kanban behavior as acceptable/no-op at 1024px.

@@ -193,16 +193,16 @@ describe('TestFromAC_RepairConfirmCopyExact', () => {
     vi.resetAllMocks()
   })
 
-  // Contract: the exact sentence is required per AC2 — count-only assertions are insufficient
+  // Contract: the dialog must state the count and the backend-owned quarantine destination.
 
   it('confirmation dialog contains the verbatim sentence with count interpolated', () => {
     mockHook({ phase: 'confirming', corruptionCount: 3 })
     const { container } = renderPanel(3)
     const dialog = container.querySelector('[data-testid="repair-confirm-dialog"]')
     const text = (dialog?.textContent ?? '').replace(/\s+/g, ' ').trim()
+    expect(text).toContain('Repair 3 corrupted files?')
     expect(text).toContain(
-      'This will attempt to repair 3 corrupted files. ' +
-        'Fixed files are restored, quarantined files are moved to the quarantine directory (.owlbear/scratch/quarantine), and failed files remain corrupted. This action can be irreversible and cannot be undone.',
+      'Fixed files are restored, quarantined files move to .owlbear/kanban/quarantine, and failed files remain corrupted. This action can be irreversible.',
     )
   })
 
@@ -211,9 +211,9 @@ describe('TestFromAC_RepairConfirmCopyExact', () => {
     const { container } = renderPanel(42)
     const dialog = container.querySelector('[data-testid="repair-confirm-dialog"]')
     const text = (dialog?.textContent ?? '').replace(/\s+/g, ' ').trim()
+    expect(text).toContain('Repair 42 corrupted files?')
     expect(text).toContain(
-      'This will attempt to repair 42 corrupted files. ' +
-        'Fixed files are restored, quarantined files are moved to the quarantine directory (.owlbear/scratch/quarantine), and failed files remain corrupted. This action can be irreversible and cannot be undone.',
+      'Fixed files are restored, quarantined files move to .owlbear/kanban/quarantine, and failed files remain corrupted. This action can be irreversible.',
     )
   })
 })

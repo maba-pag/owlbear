@@ -4,7 +4,7 @@ title: Repair kanban list_sessions active filter failures
 status: done
 priority: important
 created: 2026-05-24T09:10:04+02:00
-updated: 2026-05-24T09:20:20+02:00
+updated: 2026-05-24T10:32:41+02:00
 tags:
   - scope:kanban-engine
   - test-failure
@@ -14,8 +14,8 @@ depends_on: []
 ac:
   - The default `list_sessions` filter returns running and stuck sessions from valid log lines.
   - Invalid JSON activity-log lines are skipped without dropping later valid session entries.
-  - `serve/kanban/tests/test_list_sessions.py::TestFromAC_ListSessions::test_default_filter_returns_running_and_stuck_only` passes.
-  - The `TestFromAC_EngineListSessions` coverage tests for active sessions and invalid JSON pass.
+  - "`serve/kanban/tests/test_list_sessions.py::TestFromAC_ListSessions::test_default_filter_returns_running_and_stuck_only` passes."
+  - "The `TestFromAC_EngineListSessions` coverage tests for active sessions and invalid JSON pass."
 blocked: false
 block_reason:
 claimed_at:
@@ -45,3 +45,6 @@ Removed the current-task-claim pruning from the public `list_sessions()` read pa
 - `uv run pytest serve/kanban/tests/ -q --tb=short` -> 1358 passed.
 - `uv run pytest tests/test_engine_activity_session.py serve/kanban/tests/test_engine_activity.py tests/test_engine_cockpit_view.py -q --tb=short` -> 88 passed.
 - `uv run ruff check serve/kanban/src/owlbear_kanban/engine.py` -> all checks passed.
+
+## Maintenance
+Quoted the `ac` entries that contain leading inline-code markers so the task frontmatter remains valid YAML.

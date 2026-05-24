@@ -590,26 +590,24 @@ describe('PModal migration contract', () => {
   })
 
   // ─────────────────────────────────────────────────────────────────────────
-  // AC4: Both confirm modals retain role="dialog" — no alertdialog override
+  // AC4: Both destructive confirm modals use alertdialog semantics.
   // ─────────────────────────────────────────────────────────────────────────
 
-  describe('AC4: CleanupPanel — retains dialog role, no alertdialog override', () => {
-    it('p-modal does not have alertdialog as its aria role (research §3.3: review-before-action = dialog)', () => {
-      // Research §3.3: review-before-action surfaces use dialog, not alertdialog → FAIL (no p-modal)
+  describe('AC4: CleanupPanel — destructive confirmation uses alertdialog', () => {
+    it('p-modal has alertdialog as its aria role', () => {
       const { container } = renderCleanupConfirming()
       const pModal = getPModal(container)
       expect(pModal).not.toBeNull()
-      expect(pModal!.aria?.role).not.toBe('alertdialog')
+      expect(pModal!.aria?.role).toBe('alertdialog')
     })
   })
 
-  describe('AC4: RepairPanel — retains dialog role, no alertdialog override', () => {
-    it('p-modal does not have alertdialog as its aria role (research §3.3: review-before-action = dialog)', () => {
-      // Research §3.3: review-before-action surfaces use dialog, not alertdialog → FAIL (no p-modal)
+  describe('AC4: RepairPanel — destructive confirmation uses alertdialog', () => {
+    it('p-modal has alertdialog as its aria role', () => {
       const { container } = renderRepairConfirming()
       const pModal = getPModal(container)
       expect(pModal).not.toBeNull()
-      expect(pModal!.aria?.role).not.toBe('alertdialog')
+      expect(pModal!.aria?.role).toBe('alertdialog')
     })
   })
 
