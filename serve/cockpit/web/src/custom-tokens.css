@@ -1,34 +1,4 @@
-/* Custom tokens bundled locally for runtime availability and signal styling. */
+/* Custom signal token for card border — no PDS equivalent at this opacity. */
 :root {
-  /* Keep border contrast token available at runtime without CDN-loaded PDS globals. */
-  --p-color-contrast-low: light-dark(hsl(240 5.3% 14.9% / 0.5), hsl(240 12.5% 96.9% / 0.45));
-  --custom-signal-claimed: light-dark(hsl(270 58% 46%), hsl(270 80% 70%));
   --custom-signal-deps-unmet: light-dark(hsl(240 6% 7% / 0.18), hsl(240 13% 97% / 0.16));
-}
-
-.text-primary,
-.text-contrast-high {
-  color: hsl(240 6% 10%);
-}
-
-html.scheme-dark .text-primary,
-html.scheme-dark .text-contrast-high {
-  color: hsl(0 0% 98%);
-}
-
-html button:focus-visible,
-html [role="button"]:focus-visible,
-html [role="menuitem"]:focus-visible,
-html input:focus-visible,
-html a:focus-visible {
-  outline: 2px solid var(--color-focus);
-  outline-offset: 2px;
-}
-
-[data-testid^="decision-task-ref-"]:focus,
-[data-testid^="decision-task-ref-"]:focus-visible,
-p-link-pure:focus,
-p-link-pure:focus-visible {
-  outline: 2px solid var(--color-focus);
-  outline-offset: 2px;
 }

@@ -104,7 +104,7 @@ export function Card({
   const signalBorderClass =
     signal === 'blocked' ? 'border-l-error' :
     signal === 'dr-pending' ? 'border-l-warning' :
-    signal === 'claimed' ? 'border-l-[var(--custom-signal-claimed)]' :
+    signal === 'claimed' ? 'border-l-info' :
     signal === 'deps-unmet' ? 'border-l-[var(--custom-signal-deps-unmet)]' :
     signal === 'ready' && task.priority === 'critical' ? 'border-l-contrast-higher' :
     signal === 'ready' && task.priority === 'important' ? 'border-l-contrast-high' :

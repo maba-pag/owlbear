@@ -112,15 +112,15 @@ function collectCssFiles(dir: string): string[] {
 // ─── AC-1: custom-tokens.css exists with retained custom token ────────────────
 
 describe('TestFromAC_TokensCssGlobalStylesImport_1555', () => {
-  it('AC-1: custom-tokens.css declares --custom-signal-claimed', () => {
+  it('AC-1: custom-tokens.css declares --custom-signal-deps-unmet', () => {
     const content = readFileSync(CUSTOM_TOKENS_CSS_PATH, 'utf-8')
-    expect(content).toContain('--custom-signal-claimed')
+    expect(content).toContain('--custom-signal-deps-unmet')
   })
 
-  it('AC-1: custom-tokens.css declares exactly three custom properties (--p-color-contrast-low + --custom-signal-claimed + --custom-signal-deps-unmet)', () => {
+  it('AC-1: custom-tokens.css declares exactly one custom property (--custom-signal-deps-unmet)', () => {
     const content = readFileSync(CUSTOM_TOKENS_CSS_PATH, 'utf-8')
     const declarations = [...content.matchAll(/--[a-z][a-z0-9-]*\s*:/g)]
-    expect(declarations).toHaveLength(3)
+    expect(declarations).toHaveLength(1)
   })
 })
 

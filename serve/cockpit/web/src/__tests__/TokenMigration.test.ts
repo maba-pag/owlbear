@@ -88,25 +88,25 @@ describe('token file migration', () => {
     ).toBe(true)
   })
 
-  it('AC-2: custom-tokens.css declares the --custom-signal-claimed property', () => {
+  it('AC-2: custom-tokens.css declares the --custom-signal-deps-unmet property', () => {
     expect(existsSync(CUSTOM_TOKENS_CSS_PATH), 'custom-tokens.css must exist').toBe(true)
     const css = readFileSync(CUSTOM_TOKENS_CSS_PATH, 'utf-8')
     expect(
       css,
-      'custom-tokens.css must declare --custom-signal-claimed (the sole custom-keep token)',
-    ).toMatch(/--custom-signal-claimed\s*:/)
+      'custom-tokens.css must declare --custom-signal-deps-unmet (sole custom property)',
+    ).toMatch(/--custom-signal-deps-unmet\s*:/)
   })
 
-  it('AC-2: custom-tokens.css declares exactly three custom properties', () => {
+  it('AC-2: custom-tokens.css declares exactly one custom property', () => {
     expect(existsSync(CUSTOM_TOKENS_CSS_PATH), 'custom-tokens.css must exist').toBe(true)
     const css = readFileSync(CUSTOM_TOKENS_CSS_PATH, 'utf-8')
     const cssNoComments = css.replace(/\/\*[\s\S]*?\*\//g, '')
     const declarations = [...cssNoComments.matchAll(/--[a-z][a-z0-9-]*\s*:/g)]
     expect(
       declarations.length,
-      `custom-tokens.css must declare exactly 3 custom properties, found ${declarations.length}: ` +
+      `custom-tokens.css must declare exactly 1 custom property, found ${declarations.length}: ` +
         declarations.map((m) => m[0].replace(':', '')).join(', '),
-    ).toBe(3)
+    ).toBe(1)
   })
 
   it('AC-2: custom-tokens.css contains no --pds-* declarations (old namespace fully replaced)', () => {
@@ -190,13 +190,13 @@ describe('migrated token test coverage', () => {
     ).not.toMatch(/\[data-theme\s*=\s*["']dark["']\]\s*block/)
   })
 
-  it('AC-4: Card.tsx source uses --custom-signal-claimed for claimed signal border', () => {
+  it('AC-4: Card.tsx source uses border-l-info for claimed signal border', () => {
     const cardPath = resolve(TESTS_DIR, '..', 'components', 'Card.tsx')
     expect(existsSync(cardPath), 'Card.tsx must exist').toBe(true)
     const source = readFileSync(cardPath, 'utf-8')
     expect(
       source,
-      'Card.tsx must use --custom-signal-claimed token for claimed signal border (PDS has no purple)',
-    ).toMatch(/--custom-signal-claimed/)
+      'Card.tsx must use border-l-info for claimed signal border (PDS info = blue)',
+    ).toMatch(/border-l-info/)
   })
 })
