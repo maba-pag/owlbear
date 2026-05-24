@@ -251,21 +251,15 @@ class TestFromAC_PickTasksFilter:
         assert 1 not in ids, "Task 1 has dep_status='blocked' (dep on wontfix-archived #99) — must be excluded"
         assert 2 in ids, "Task 2 has no blocking dep — must be included"
 
-    def test_no_intra_wave_dep_edges_across_all_waves(self, tmp_path: Path) -> None:
-        """No two tasks in the same wave may have a dep edge (in either direction).
-
-        Tasks 1 and 2 both have todo status (no dep_status blocker).  Task 1
-        depends on task 2.  With wave_size=2 and max_waves=2 the naive chunking
-        implementation puts both in wave 0, violating the dep-disjointness constraint.
-        The correct implementation must separate them into different waves.
-        """
+    def test_active_dep_consumer_excluded_before_wave_assembly(self, tmp_path: Path) -> None:
+        """Tasks with active unresolved dependencies are filtered before wave assembly."""
         board = _make_board(tmp_path)
         _write_task(board, task_id=1, status="todo", depends_on="[2]")
         _write_task(board, task_id=2, status="todo")
         engine = KanbanEngine(board, activity_log=False)
         resp = engine.agent_view().pick_tasks(wave_size=2, max_waves=2)
         ids = _all_ids(resp)
-        assert {1, 2} == ids, "Both tasks should be dispatched"
+        assert ids == {2}, "Task 1 has dep_status='blocked' and must be excluded before wave assembly"
         for wave in resp.waves:
             wave_ids = {entry.id for entry in wave.tasks}
             assert not ({1, 2} <= wave_ids), (
@@ -334,41 +328,20 @@ class TestFromAC_PickTasksSort:
 class TestFromAC_PickTasksWaveAssembly:
     """Greedy wave assembly enforces size, dep-disjointness, and agent-compat constraints."""
 
-    def test_dep_disjointness_splits_dependent_tasks_into_different_waves(self, tmp_path: Path) -> None:
-        """No wave contains a task and its dependency simultaneously (dep-disjointness).
-
-        Setup: task 1 depends on task 2 (both todo, no dep_status blocker since
-        task 2 is active, not archived).  wave_size=2, max_waves=2.
-
-        Naive chunking: wave 0 = [task 1, task 2] — violates dep-disjointness.
-        Correct:        wave 0 = [task 1],  wave 1 = [task 2] (or any separation).
-        """
+    def test_active_dep_consumer_not_dispatched_to_wave(self, tmp_path: Path) -> None:
+        """A task depending on an active task is excluded as dep_status='blocked'."""
         board = _make_board(tmp_path)
         _write_task(board, task_id=1, status="todo", depends_on="[2]")
         _write_task(board, task_id=2, status="todo")
         engine = KanbanEngine(board, activity_log=False)
         resp = engine.agent_view().pick_tasks(wave_size=2, max_waves=2)
-        assert {1, 2} == _all_ids(resp), "Both tasks should be dispatched"
+        assert _all_ids(resp) == {2}, "Only the active dependency itself should be dispatched"
         for wave in resp.waves:
             wave_ids = {e.id for e in wave.tasks}
             assert not ({1, 2} <= wave_ids), f"Dep-disjointness violated: tasks 1 and 2 are in same wave {wave_ids}"
 
-    def test_task_dropped_when_dep_conflict_and_max_waves_exhausted(self, tmp_path: Path) -> None:
-        """A task not fitting any wave due to dep conflict is dropped when max_waves reached.
-
-        Setup: task 1 depends on task 2 (both todo).  Task 3 has no deps.
-        wave_size=2, max_waves=1 → only 1 wave allowed.
-
-        Greedy assembly:
-          - Task 1 → wave 0 (empty, fits)
-          - Task 2 → wave 0 has task 1 (dep edge 1→2 or 2→1) → conflict; no wave fits;
-            max_waves=1 → task 2 DROPPED.
-          - Task 3 → wave 0 has 1 task (space ≤ wave_size=2), no dep conflict → placed.
-        Result: wave 0 = [task 1, task 3].  Task 2 is absent.
-
-        Current code (no dep check): wave 0 = [task 1, task 2]; task 3 not selected
-        (max_items = wave_size * max_waves = 2 x 1 = 2, so selected = [task1, task2]).
-        """
+    def test_active_dep_consumer_excluded_and_clean_tasks_fill_wave(self, tmp_path: Path) -> None:
+        """Filtering a blocked dependency consumer still lets clean tasks fill the wave."""
         board = _make_board(tmp_path)
         _write_task(board, task_id=1, status="todo", depends_on="[2]")
         _write_task(board, task_id=2, status="todo")
@@ -377,9 +350,8 @@ class TestFromAC_PickTasksWaveAssembly:
         resp = engine.agent_view().pick_tasks(wave_size=2, max_waves=1)
         assert len(resp.waves) == 1
         wave_ids = {e.id for e in resp.waves[0].tasks}
-        # Task 2 must be dropped; task 3 must be in wave with task 1
-        assert 2 not in wave_ids, f"Task 2 should be dropped (dep conflict, max_waves exhausted); got wave {wave_ids}"
-        assert 3 in wave_ids, f"Task 3 has no dep conflict and should fill the remaining slot; got {wave_ids}"
+        assert 1 not in wave_ids, f"Task 1 has dep_status='blocked' and must be excluded; got wave {wave_ids}"
+        assert wave_ids == {2, 3}, f"Clean tasks should fill the wave after task 1 is excluded; got {wave_ids}"
 
     def test_incompatible_agent_buckets_go_to_different_waves(self, tmp_path: Path) -> None:
         """With PRODUCT_TOPOLOGY, agent_compatibility is always empty — all agents are compatible.

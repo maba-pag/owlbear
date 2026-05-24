@@ -634,6 +634,49 @@ class KanbanEngine:
 
         return status
 
+    def project_dep_status(
+        self,
+        task: Task,
+        *,
+        active_ids: set[int] | None = None,
+        archived_reasons: dict[int, str | None] | None = None,
+    ) -> str | None:
+        """Return the read-time ``dep_status`` projection for *task*.
+
+        Callers that already have a full active/archive snapshot can pass it in
+        to avoid repeated file lookups. Single-task projections can omit the
+        snapshot and let the engine resolve the task's dependency IDs directly.
+        """
+        if (active_ids is None) != (archived_reasons is None):
+            msg = "active_ids and archived_reasons must be provided together"
+            raise ValueError(msg)
+
+        if active_ids is None or archived_reasons is None:
+            active_ids, archived_reasons = self._dep_status_context_for_task(task)
+
+        return self._compute_dep_status(
+            task,
+            active_ids=active_ids,
+            archived_reasons=archived_reasons,
+        )
+
+    def _dep_status_context_for_task(self, task: Task) -> tuple[set[int], dict[int, str | None]]:
+        active_ids: set[int] = set()
+        archived_reasons: dict[int, str | None] = {}
+
+        for dep_id in task.depends_on or []:
+            try:
+                dep_task = self.show_task(str(dep_id))
+            except (FileNotFoundError, CorruptionError, ValueError, KeyError):
+                continue
+
+            if dep_task.status == "archived":
+                archived_reasons[dep_id] = dep_task.archival_reason
+            else:
+                active_ids.add(dep_id)
+
+        return active_ids, archived_reasons
+
     # ------------------------------------------------------------------
     # Read operations
     # ------------------------------------------------------------------
@@ -808,7 +851,7 @@ class KanbanEngine:
         summaries: list[TaskSummary] = []
         for task in tasks:
             projected = task.model_dump()
-            projected["dep_status"] = self._compute_dep_status(
+            projected["dep_status"] = self.project_dep_status(
                 task,
                 active_ids=all_active_ids,
                 archived_reasons=archived_reasons,

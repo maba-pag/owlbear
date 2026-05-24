@@ -137,7 +137,7 @@ class TestFromAC_DirectDepLookup:
         assert resp.dep_status is None, "No deps → dep_status must be None (not computed via list_tasks)"
 
     def test_no_list_tasks_for_active_dep(self, tmp_path: Path) -> None:
-        """Active dep: dep_status='ok' computed via direct show_task, not list_tasks."""
+        """Active dep: dep_status='blocked' computed via direct show_task, not list_tasks."""
         kanban_dir = _make_board(tmp_path)
         _write_task(kanban_dir, task_id=1, title="Consumer", depends_on="[2]")
         _write_task(kanban_dir, task_id=2, title="ActiveDep", status="todo")
@@ -145,7 +145,7 @@ class TestFromAC_DirectDepLookup:
         view.engine.list_tasks(archived=False)  # warm the _id_to_filename index
         with mock.patch.object(view.engine, "list_tasks", side_effect=_raise_list_tasks_called):
             resp = view.show_task(1)
-        assert resp.dep_status == "ok", f"Active dep → dep_status must be 'ok' but got {resp.dep_status!r}"
+        assert resp.dep_status == "blocked", f"Active dep → dep_status must be 'blocked' but got {resp.dep_status!r}"
 
     def test_no_list_tasks_for_archived_completed_dep(self, tmp_path: Path) -> None:
         """Archived-completed dep: dep_status='ok' without list_tasks."""
@@ -485,8 +485,8 @@ class TestFromAC_CockpitViewRegression:
         assert isinstance(resp, ShowTaskResponse), (
             "CockpitView.show_task must still return ShowTaskResponse after refactor"
         )
-        assert resp.dep_status == "ok", (
-            f"CockpitView.show_task: active dep → dep_status must be 'ok', got {resp.dep_status!r}"
+        assert resp.dep_status == "blocked", (
+            f"CockpitView.show_task: active dep → dep_status must be 'blocked', got {resp.dep_status!r}"
         )
 
     def test_cockpit_view_show_task_accepts_section_parameter(self, tmp_path: Path) -> None:

@@ -790,9 +790,9 @@ class TestFromAC_EngineListTasks:
         _write_task(board, task_id=2)
         engine = KanbanEngine(board, activity_log=False)
         result = engine.list_tasks(sort="id")
-        # task 1 depends on task 2 (active) → dep_status = "ok"
+        # task 1 depends on task 2 (active/unresolved) → dep_status = "blocked"
         task1 = next(t for t in result if t.id == 1)
-        assert task1.dep_status == "ok"
+        assert task1.dep_status == "blocked"
 
     def test_tasks_dir_missing_returns_empty(self, tmp_path: Path) -> None:
         board = _make_board(tmp_path)

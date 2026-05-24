@@ -234,24 +234,7 @@ class AgentView:
         if isinstance(payload.get("body"), list):
             payload["body"] = None
 
-        active_ids: set[int] = set()
-        archived_reasons: dict[int, str | None] = {}
-        for dep_id in task.depends_on or []:
-            try:
-                dep_task = self.engine.show_task(str(dep_id))
-            except (FileNotFoundError, CorruptionError, ValueError, KeyError):
-                continue
-
-            if dep_task.status == "archived":
-                archived_reasons[dep_id] = dep_task.archival_reason
-            else:
-                active_ids.add(dep_id)
-
-        payload["dep_status"] = self.engine._compute_dep_status(  # noqa: SLF001
-            task,
-            active_ids=active_ids,
-            archived_reasons=archived_reasons,
-        )
+        payload["dep_status"] = self.engine.project_dep_status(task)
 
         guidance: list[str] = []
         missing_sections: list[str] | None = None
@@ -944,7 +927,7 @@ class AgentView:
                 else:
                     active_ids.add(dep_id)
 
-            dep_status = self.engine._compute_dep_status(  # noqa: SLF001
+            dep_status = self.engine.project_dep_status(
                 task_record,
                 active_ids=active_ids,
                 archived_reasons=archived_reasons,

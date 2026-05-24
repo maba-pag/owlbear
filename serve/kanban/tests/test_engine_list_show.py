@@ -8,7 +8,7 @@ AC coverage:
   AC-par-none — list_tasks(parent=N) excludes tasks with no parent
   AC-par-miss — list_tasks(parent=999) → empty list (no match)
   AC-ids-par  — list_tasks(ids=[...], parent=N) → ValidationError(ERR_IDS_EXCLUSIVE)
-  AC-dep-ok   — show_task dep_status="ok" when dep is active (§3.3 every read)
+    AC-dep-act  — show_task dep_status="blocked" when dep is active (§3.3 every read)
   AC-dep-blk  — show_task dep_status="blocked" when dep archived w/ "dropped" (§3.3)
   AC-dep-rdr  — show_task dep_status="redirect" when dep archived w/ "duplicate" (§3.3)
 All tests FAIL (RED phase).
@@ -228,15 +228,17 @@ class TestFromAC_ShowTaskDepStatus:
     the task's dependencies at the time of the read — it is not persisted.
     """
 
-    def test_show_task_dep_status_ok_when_dep_is_active(self, tmp_path: Path) -> None:
-        """dep_status='ok' when all deps are active (§3.3)."""
+    def test_show_task_dep_status_blocked_when_dep_is_active(self, tmp_path: Path) -> None:
+        """dep_status='blocked' when deps are active and unresolved (§3.3)."""
         kanban_dir = _make_board(tmp_path)
         _write_task(kanban_dir, task_id=1, title="Consumer", depends_on="[2]")
         _write_task(kanban_dir, task_id=2, title="ActiveDep", status="research")
         view = _make_agent_view(kanban_dir)
         resp = view.show_task(1)
         assert isinstance(resp, ShowTaskResponse)
-        assert resp.dep_status == "ok", f"All deps active; §3.3 requires dep_status='ok' but got {resp.dep_status!r}"
+        assert resp.dep_status == "blocked", (
+            f"Active deps are unresolved; §3.3 requires dep_status='blocked' but got {resp.dep_status!r}"
+        )
 
     def test_show_task_dep_status_blocked_when_dep_archived_dropped(self, tmp_path: Path) -> None:
         """dep_status='blocked' when dep is archived with reason 'dropped' (§3.3)."""

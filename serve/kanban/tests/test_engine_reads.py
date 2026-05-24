@@ -420,9 +420,8 @@ class TestFromAC_ShowTaskSectionConcat:
 
 # ---------------------------------------------------------------------------
 # AC14 — dep_status per §3.3: active dep in different status bucket
-# Expectation: dep_status="ok" when dep is active, regardless of status filter.
-# Current state: active_ids built from filtered result only → dep in different
-# status not found → dep_status="blocked" (wrong). Test FAILS.
+# Expectation: dep_status="blocked" when dep is active and unresolved,
+# regardless of status filter.
 # ---------------------------------------------------------------------------
 
 
@@ -431,15 +430,11 @@ class TestFromAC_DepStatus:
     not just those passing the current status filter.
     """
 
-    def test_dep_status_ok_when_dep_active_in_different_status(self, tmp_path: Path) -> None:
+    def test_dep_status_blocked_when_dep_active_in_different_status(self, tmp_path: Path) -> None:
         """Task A (todo) depends on task B (research). Both active.
 
-        list_tasks(status='todo') must return A with dep_status='ok'.
-        §3.3: 'All deps active' → 'ok', regardless of the status filter applied.
-
-        Current bug: active_ids is built from the filtered result only.
-        B (research) is not in the filtered result, so the engine checks
-        archived_reasons for B, finds it absent, and returns 'blocked'.
+        list_tasks(status='todo') must return A with dep_status='blocked'.
+        §3.3: active deps are unresolved, regardless of the status filter applied.
         """
         kanban_dir = _make_board(tmp_path)
         _write_task(kanban_dir, task_id=1, title="A", status="todo", depends_on="[2]")
@@ -448,8 +443,8 @@ class TestFromAC_DepStatus:
         resp = view.list_tasks(status="todo")
         task_a = next((t for t in resp.tasks if t.id == 1), None)
         assert task_a is not None, "Task A (todo) must appear in filtered result"
-        assert task_a.dep_status == "ok", (
-            f"Dep B is active (research); §3.3 requires dep_status='ok' but got {task_a.dep_status!r}"
+        assert task_a.dep_status == "blocked", (
+            f"Dep B is active (research); §3.3 requires dep_status='blocked' but got {task_a.dep_status!r}"
         )
 
     def test_dep_status_blocked_when_dep_archived_dropped(self, tmp_path: Path) -> None:
@@ -534,10 +529,10 @@ class TestFromAC_DepStatus:
             f"expected 'blocked' but got {task_a.dep_status!r}"
         )
 
-    def test_dep_status_redirect_beats_ok_with_mixed_deps(self, tmp_path: Path) -> None:
-        """Task with two deps: one archived/duplicate (→redirect), one active (→ok).
+    def test_dep_status_blocked_beats_redirect_with_mixed_active_deps(self, tmp_path: Path) -> None:
+        """Task with two deps: one archived/duplicate (→redirect), one active (→blocked).
 
-        §3.3 precedence: redirect > ok → result must be 'redirect'.
+        §3.3 precedence: blocked > redirect → result must be 'blocked'.
         """
         kanban_dir = _make_board(tmp_path)
         _write_task(kanban_dir, task_id=1, title="A", status="todo", depends_on="[2, 3]")
@@ -554,8 +549,8 @@ class TestFromAC_DepStatus:
         resp = view.list_tasks(status="todo")
         task_a = next((t for t in resp.tasks if t.id == 1), None)
         assert task_a is not None
-        assert task_a.dep_status == "redirect", (
-            f"Mixed deps (duplicate+active); §3.3 redirect > ok → expected 'redirect' but got {task_a.dep_status!r}"
+        assert task_a.dep_status == "blocked", (
+            f"Mixed deps (duplicate+active); §3.3 blocked > redirect → expected 'blocked' but got {task_a.dep_status!r}"
         )
 
 
