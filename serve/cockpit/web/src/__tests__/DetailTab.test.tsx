@@ -368,6 +368,7 @@ describe('TestFromAC_DetailTab', () => {
       expect(tagInput?.placeholder ?? tagInput?.getAttribute('placeholder')).toBe('Add tags')
       expect(tagInput?.compact).toBe(true)
       expect(addButton?.compact).toBe(true)
+      expect(addButton?.textContent?.trim()).toBe('Add')
     })
 
     it('places the tag add row before the dismissible tag chips', () => {
@@ -409,9 +410,25 @@ describe('TestFromAC_DetailTab', () => {
       expect(addButton?.className).toContain('self-end')
     })
 
-    it('renders depends_on field control', () => {
+    it('renders compact dependency input row before dependency chips', () => {
       const { container } = renderDetail(TASK_WITH_DEPS)
-      expect(container.querySelector('[data-field="depends_on"]')).not.toBeNull()
+      const editor = container.querySelector('[data-region="dependency-editor"]')
+      const inputRow = container.querySelector('p-input-text[data-field="depends_on"]')?.parentElement
+      const input = container.querySelector('p-input-text[data-field="depends_on"]') as
+        | (HTMLElement & { compact?: unknown; label?: string; placeholder?: string })
+        | null
+      const addButton = container.querySelector('[data-testid="add-dependency-button"]') as HTMLElement & { compact?: unknown } | null
+      const chipList = container.querySelector('[data-testid="dependency-chip-list"]')
+      expect(editor).not.toBeNull()
+      expect(inputRow).not.toBeNull()
+      expect(input).not.toBeNull()
+      expect(addButton).not.toBeNull()
+      expect(chipList).not.toBeNull()
+      expect(input?.label ?? input?.getAttribute('label')).toBe('Dependencies')
+      expect(input?.placeholder ?? input?.getAttribute('placeholder')).toBe('Add dependency ID')
+      expect(input?.compact).toBe(true)
+      expect(addButton?.compact).toBe(true)
+      expect(inputRow!.compareDocumentPosition(chipList!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     })
 
     it('dependency editor adds pasted task references as removable chips and saves them as integers', async () => {
@@ -458,9 +475,25 @@ describe('TestFromAC_DetailTab', () => {
       )
     })
 
-    it('renders parent field control', () => {
+    it('renders compact parent input row before the parent chip', () => {
       const { container } = renderDetail(TASK_WITH_DEPS)
-      expect(container.querySelector('[data-field="parent"]')).not.toBeNull()
+      const editor = container.querySelector('[data-region="parent-editor"]')
+      const inputRow = container.querySelector('p-input-text[data-field="parent"]')?.parentElement
+      const input = container.querySelector('p-input-text[data-field="parent"]') as
+        | (HTMLElement & { compact?: unknown; label?: string; placeholder?: string })
+        | null
+      const clearButton = container.querySelector('[data-testid="clear-parent-button"]') as HTMLElement & { compact?: unknown } | null
+      const chipList = container.querySelector('[data-testid="parent-chip-list"]')
+      expect(editor).not.toBeNull()
+      expect(inputRow).not.toBeNull()
+      expect(input).not.toBeNull()
+      expect(clearButton).not.toBeNull()
+      expect(chipList).not.toBeNull()
+      expect(input?.label ?? input?.getAttribute('label')).toBe('Parent')
+      expect(input?.placeholder ?? input?.getAttribute('placeholder')).toBe('Set parent ID')
+      expect(input?.compact).toBe(true)
+      expect(clearButton?.compact).toBe(true)
+      expect(inputRow!.compareDocumentPosition(chipList!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     })
 
     it('parent editor renders a single removable task-reference chip', async () => {

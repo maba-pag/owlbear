@@ -669,7 +669,7 @@ export default function TaskFieldsEditor({
             disabled={normalizeTag(newTag).length === 0}
             onClick={() => addTagFromInput()}
           >
-            Add tag
+            Add
           </PButton>
         </div>
         {editableTags.length > 0 ? (
@@ -726,30 +726,12 @@ export default function TaskFieldsEditor({
 
       <section className="grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-static-sm lg:grid-cols-2" data-region="task-reference-editors">
         <div className="grid min-w-0 gap-static-xs" data-region="dependency-editor">
-          <div className="flex min-w-0 flex-wrap items-center gap-static-xs">
-            <span className="text-sm font-semibold text-contrast-high">Depends on</span>
-            {parsedDependsOn.values.length > 0 ? (
-              <div className="flex min-w-0 flex-wrap items-center gap-static-xs" data-testid="dependency-chip-list">
-                {parsedDependsOn.values.map((taskId) => (
-                  <PTagDismissible
-                    key={taskId}
-                    data-testid="dependency-chip"
-                    data-reference-id={taskId}
-                    compact
-                    label={formatReferenceLabel(taskId, referenceById)}
-                    aria={{ 'aria-label': `Remove dependency ${taskId}` }}
-                    onClick={() => removeDependency(taskId)}
-                  />
-                ))}
-              </div>
-            ) : (
-              <span data-testid="no-dependencies" className="text-sm text-contrast-high">No dependencies</span>
-            )}
-          </div>
           <div className="grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-static-xs sm:grid-cols-[minmax(0,1fr)_auto]">
             <PInputText
               name="depends_on"
-              label="Add dependency ID"
+              label="Dependencies"
+              placeholder="Add dependency ID"
+              compact
               className="min-w-0"
               data-field="depends_on"
               value={newDependency}
@@ -775,28 +757,32 @@ export default function TaskFieldsEditor({
               Add
             </PButton>
           </div>
+          {parsedDependsOn.values.length > 0 ? (
+            <div className="flex min-w-0 flex-wrap items-center gap-static-xs" data-testid="dependency-chip-list">
+              {parsedDependsOn.values.map((taskId) => (
+                <PTagDismissible
+                  key={taskId}
+                  data-testid="dependency-chip"
+                  data-reference-id={taskId}
+                  compact
+                  label={formatReferenceLabel(taskId, referenceById)}
+                  aria={{ 'aria-label': `Remove dependency ${taskId}` }}
+                  onClick={() => removeDependency(taskId)}
+                />
+              ))}
+            </div>
+          ) : (
+            <span data-testid="no-dependencies" className="text-sm text-contrast-high">No dependencies</span>
+          )}
         </div>
 
         <div className="grid min-w-0 gap-static-xs" data-region="parent-editor">
-          <div className="flex min-w-0 flex-wrap items-center gap-static-xs">
-            <span className="text-sm font-semibold text-contrast-high">Parent</span>
-            {parsedParent.value !== null && parsedParent.error === null ? (
-              <PTagDismissible
-                data-testid="parent-chip"
-                data-reference-id={parsedParent.value}
-                compact
-                label={formatReferenceLabel(parsedParent.value, referenceById)}
-                aria={{ 'aria-label': `Clear parent ${parsedParent.value}` }}
-                onClick={() => setParent('')}
-              />
-            ) : (
-              <span data-testid="no-parent" className="text-sm text-contrast-high">No parent</span>
-            )}
-          </div>
           <div className="grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-static-xs sm:grid-cols-[minmax(0,1fr)_auto]">
             <PInputText
               name="parent"
-              label="Set parent ID"
+              label="Parent"
+              placeholder="Set parent ID"
+              compact
               className="min-w-0"
               data-field="parent"
               value={parent}
@@ -815,6 +801,20 @@ export default function TaskFieldsEditor({
               Clear
             </PButton>
           </div>
+          {parsedParent.value !== null && parsedParent.error === null ? (
+            <div className="flex min-w-0 flex-wrap items-center gap-static-xs" data-testid="parent-chip-list">
+              <PTagDismissible
+                data-testid="parent-chip"
+                data-reference-id={parsedParent.value}
+                compact
+                label={formatReferenceLabel(parsedParent.value, referenceById)}
+                aria={{ 'aria-label': `Clear parent ${parsedParent.value}` }}
+                onClick={() => setParent('')}
+              />
+            </div>
+          ) : (
+            <span data-testid="no-parent" className="text-sm text-contrast-high">No parent</span>
+          )}
         </div>
       </section>
 
