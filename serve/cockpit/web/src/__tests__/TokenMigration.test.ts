@@ -97,16 +97,16 @@ describe('token file migration', () => {
     ).toMatch(/--custom-signal-claimed\s*:/)
   })
 
-  it('AC-2: custom-tokens.css declares exactly two custom properties (--custom-signal-claimed + --p-color-contrast-low)', () => {
+  it('AC-2: custom-tokens.css declares exactly three custom properties', () => {
     expect(existsSync(CUSTOM_TOKENS_CSS_PATH), 'custom-tokens.css must exist').toBe(true)
     const css = readFileSync(CUSTOM_TOKENS_CSS_PATH, 'utf-8')
     const cssNoComments = css.replace(/\/\*[\s\S]*?\*\//g, '')
     const declarations = [...cssNoComments.matchAll(/--[a-z][a-z0-9-]*\s*:/g)]
     expect(
       declarations.length,
-      `custom-tokens.css must declare exactly 2 custom properties, found ${declarations.length}: ` +
+      `custom-tokens.css must declare exactly 3 custom properties, found ${declarations.length}: ` +
         declarations.map((m) => m[0].replace(':', '')).join(', '),
-    ).toBe(2)
+    ).toBe(3)
   })
 
   it('AC-2: custom-tokens.css contains no --pds-* declarations (old namespace fully replaced)', () => {

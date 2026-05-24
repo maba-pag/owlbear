@@ -105,10 +105,12 @@ export function Card({
     signal === 'blocked' ? 'border-l-error' :
     signal === 'dr-pending' ? 'border-l-warning' :
     signal === 'claimed' ? 'border-l-[var(--custom-signal-claimed)]' :
-    signal === 'deps-unmet' ? 'border-l-contrast-medium' :
-    signal === 'ready' && task.priority === 'critical' ? 'border-l-error' :
-    signal === 'ready' && task.priority === 'needed' ? 'border-l-warning' :
-    'border-l-contrast-medium'
+    signal === 'deps-unmet' ? 'border-l-[var(--custom-signal-deps-unmet)]' :
+    signal === 'ready' && task.priority === 'critical' ? 'border-l-contrast-higher' :
+    signal === 'ready' && task.priority === 'important' ? 'border-l-contrast-high' :
+    signal === 'ready' && task.priority === 'needed' ? 'border-l-contrast-medium' :
+    signal === 'ready' && task.priority === 'nice' ? 'border-l-contrast-low' :
+    'border-l-contrast-lower'
 
   return (
     <motion.div

@@ -1,8 +1,9 @@
-/* Custom tokens bundled locally for runtime availability and claimed-signal styling. */
+/* Custom tokens bundled locally for runtime availability and signal styling. */
 :root {
   /* Keep border contrast token available at runtime without CDN-loaded PDS globals. */
   --p-color-contrast-low: light-dark(hsl(240 5.3% 14.9% / 0.5), hsl(240 12.5% 96.9% / 0.45));
   --custom-signal-claimed: light-dark(hsl(270 58% 46%), hsl(270 80% 70%));
+  --custom-signal-deps-unmet: light-dark(hsl(240 6% 7% / 0.18), hsl(240 13% 97% / 0.16));
 }
 
 .text-primary,

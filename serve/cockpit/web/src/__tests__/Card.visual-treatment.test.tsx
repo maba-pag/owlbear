@@ -93,22 +93,22 @@ describe('Card metadata declutter', () => {
     expect(container.querySelector('[data-testid="card-signal"]')).toBeNull()
   })
 
-  it('ready important cards use a neutral rail instead of warning or info color semantics', () => {
+  it('ready important cards use contrast-high border rail', () => {
     const task = makeTask({ id: 1, priority: 'important' })
     const { container } = renderCard(task)
     const card = container.querySelector('[data-testid="task-card"]')
     expect(card).not.toBeNull()
-    expect(card!.getAttribute('class')).toContain('border-l-contrast-medium')
+    expect(card!.getAttribute('class')).toContain('border-l-contrast-high')
     expect(card!.getAttribute('class')).not.toContain('border-l-warning')
     expect(card!.getAttribute('class')).not.toContain('border-l-error')
   })
 
-  it('ready needed cards use warning rail semantics', () => {
+  it('ready needed cards use contrast-medium border rail', () => {
     const task = makeTask({ id: 1, priority: 'needed' })
     const { container } = renderCard(task)
     const card = container.querySelector('[data-testid="task-card"]')
     expect(card).not.toBeNull()
-    expect(card!.getAttribute('class')).toContain('border-l-warning')
+    expect(card!.getAttribute('class')).toContain('border-l-contrast-medium')
   })
 })
 
