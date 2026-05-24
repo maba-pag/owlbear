@@ -161,6 +161,7 @@ function Shell() {
   const pendingTaskDetailActionRef = useRef<(() => void) | null>(null)
   const taskDetailStayButtonRef = useRef<HTMLElement | null>(null)
   const taskDetailContentRef = useRef<HTMLDivElement | null>(null)
+  const [taskDetailActionPortalTarget, setTaskDetailActionPortalTarget] = useState<HTMLDivElement | null>(null)
   const [taskDetailCanScrollDown, setTaskDetailCanScrollDown] = useState(false)
   const toastMockClearedRef = useRef(false)
 
@@ -503,6 +504,7 @@ function Shell() {
         }}
         onDirtyChange={setIsTaskDetailDirty}
         onEditingChange={setIsTaskDetailEditing}
+        actionPortalTarget={taskDetailActionPortalTarget}
         onTaskCleared={(message) => {
           clear()
           setTaskDetailBackStack([])
@@ -761,6 +763,12 @@ function Shell() {
                 </div>
               ) : null}
             </header>
+            <div
+              ref={setTaskDetailActionPortalTarget}
+              data-testid="task-detail-action-host"
+              className={isTaskDetailEditing ? 'flex-none' : 'hidden'}
+              aria-hidden={isTaskDetailEditing ? undefined : true}
+            />
             <div className="relative min-h-0 flex-1 overflow-hidden" data-testid="task-detail-scroll-shell">
               <div ref={taskDetailContentRef} onScroll={updateTaskDetailScrollCue} className="absolute inset-0 min-h-0 overflow-x-hidden overflow-y-auto pb-static-lg pr-static-xs" data-region="task-detail-content">
                 {taskDetailContent}

@@ -51,6 +51,7 @@ export interface DetailTabProps {
   onMutationError?: (heading: string, description: string, state: 'error' | 'warning') => void
   onDirtyChange?: (dirty: boolean) => void
   onEditingChange?: (editing: boolean) => void
+  actionPortalTarget?: HTMLElement | null
   initialSubtab?: string | null
 }
 
@@ -84,6 +85,7 @@ export default function DetailTab({
   onMutationError,
   onDirtyChange,
   onEditingChange,
+  actionPortalTarget,
   initialSubtab,
 }: DetailTabProps) {
   const {
@@ -210,6 +212,7 @@ export default function DetailTab({
           onSelectTask={(taskId) => onSelectTask?.(taskId)}
           onDirtyChange={onDirtyChange}
           onEditingChange={onEditingChange}
+          actionPortalTarget={actionPortalTarget}
           defaultEditing={false}
         />
       </section>

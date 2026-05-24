@@ -236,7 +236,7 @@ describe('TestFromAC_DetailTab', () => {
       expect(container.querySelector('p-select[data-field="priority"]')).not.toBeNull()
     })
 
-    it('keeps edit save and cancel controls in a sticky action bar', () => {
+    it('keeps edit save and cancel controls in a top sticky action bar', () => {
       const { container } = renderDetail()
       const editButton = container.querySelector('[data-testid="edit-details-button"]') as HTMLElement | null
       expect(editButton).not.toBeNull()
@@ -245,10 +245,52 @@ describe('TestFromAC_DetailTab', () => {
       const actions = container.querySelector('[data-testid="task-detail-edit-actions"]') as HTMLElement | null
       expect(actions).not.toBeNull()
       expect(actions?.className).toContain('sticky')
-      expect(actions?.className).toContain('bottom-0')
+      expect(actions?.className).toContain('top-0')
+      expect(actions?.className).not.toContain('bottom-0')
       expect(actions?.className).toContain('bg-canvas')
+      expect(actions?.className).toContain('border-b')
       expect(actions?.querySelector('[data-testid="save-button"]')).not.toBeNull()
       expect(actions?.querySelector('[data-testid="cancel-edit-button"]')).not.toBeNull()
+    })
+
+    it('places sticky edit actions before the editable fields', () => {
+      const { container } = renderDetail()
+      const editButton = container.querySelector('[data-testid="edit-details-button"]') as HTMLElement | null
+      expect(editButton).not.toBeNull()
+      fireEvent.click(editButton!)
+
+      const editForm = container.querySelector('[data-region="task-detail-edit-form"]')
+      const actions = container.querySelector('[data-testid="task-detail-edit-actions"]')
+      const titleGrid = container.querySelector('p-input-text[data-field="title"]')?.parentElement
+      expect(editForm).not.toBeNull()
+      expect(actions).not.toBeNull()
+      expect(titleGrid).not.toBeNull()
+      expect(Array.from(editForm!.children).indexOf(actions as Element)).toBeLessThan(
+        Array.from(editForm!.children).indexOf(titleGrid as Element),
+      )
+    })
+
+    it('can render edit actions into a modal action host outside the form scroll content', () => {
+      const actionHost = document.createElement('div')
+      document.body.appendChild(actionHost)
+
+      try {
+        const { container } = render(
+          <PorscheDesignSystemProvider>
+            <DetailTab task={TASK} actionPortalTarget={actionHost} />
+          </PorscheDesignSystemProvider>,
+        )
+        const editButton = container.querySelector('[data-testid="edit-details-button"]') as HTMLElement | null
+        expect(editButton).not.toBeNull()
+        fireEvent.click(editButton!)
+
+        expect(actionHost.querySelector('[data-testid="task-detail-edit-actions"]')).not.toBeNull()
+        expect(container.querySelector('[data-region="task-detail-edit-form"] [data-testid="task-detail-edit-actions"]')).toBeNull()
+        expect(actionHost.querySelector('[data-testid="save-button"]')).not.toBeNull()
+        expect(actionHost.querySelector('[data-testid="cancel-edit-button"]')).not.toBeNull()
+      } finally {
+        actionHost.remove()
+      }
     })
 
     it('renders title as an input field', () => {

@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   PButton,
   PInputText,
@@ -36,6 +37,7 @@ export interface TaskFieldsEditorProps {
   onSelectTask?: (taskId: number) => void
   onDirtyChange?: (dirty: boolean) => void
   onEditingChange?: (editing: boolean) => void
+  actionPortalTarget?: HTMLElement | null
   defaultEditing?: boolean
 }
 
@@ -321,6 +323,7 @@ export default function TaskFieldsEditor({
   onSelectTask,
   onDirtyChange,
   onEditingChange,
+  actionPortalTarget,
   defaultEditing,
 }: TaskFieldsEditorProps) {
   const startsEditing = defaultEditing ?? true
@@ -572,6 +575,27 @@ export default function TaskFieldsEditor({
     setIsEditing(false)
   }
 
+  const editActions = (
+    <div
+      data-testid="task-detail-edit-actions"
+      className={actionPortalTarget
+        ? 'flex w-full min-w-0 max-w-full flex-wrap items-center gap-static-sm rounded-lg border border-contrast-low bg-canvas p-static-sm shadow-sm'
+        : 'sticky top-0 z-20 flex w-full min-w-0 max-w-full flex-wrap items-center gap-static-sm border-b border-contrast-low bg-canvas px-static-xs py-static-sm shadow-sm'}
+    >
+      <PButton data-testid="save-button" onClick={() => void handleSave()}>
+        Save
+      </PButton>
+      {!startsEditing ? (
+        <PButton data-testid="cancel-edit-button" variant="secondary" onClick={handleCancelEdit}>
+          Cancel
+        </PButton>
+      ) : null}
+      {isDirty && <div data-testid="dirty-indicator" className="text-sm font-semibold text-warning">Unsaved changes</div>}
+      {saveConfirmed && <div data-testid="save-confirmed" className="text-sm font-semibold text-success">Saved</div>}
+      {validationMessage && <div data-testid="validation-message" className="rounded-lg border border-warning bg-warning-low p-static-xs text-sm text-primary">{validationMessage}</div>}
+    </div>
+  )
+
   return (
     <div className="grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-static-sm">
       {!isEditing ? (
@@ -588,6 +612,8 @@ export default function TaskFieldsEditor({
         data-region="task-detail-edit-form"
         hidden={!isEditing}
       >
+      {actionPortalTarget ? createPortal(editActions, actionPortalTarget) : editActions}
+
       <div className="grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-static-sm lg:grid-cols-[minmax(0,1fr)_14rem]">
         <PInputText
           name="title"
@@ -803,23 +829,6 @@ export default function TaskFieldsEditor({
           onInput={(event) => setBlockReason(readControlValue(event))}
         />
       )}
-
-      <div
-        data-testid="task-detail-edit-actions"
-        className="flex w-full min-w-0 max-w-full flex-wrap items-center gap-static-sm border-t border-contrast-low bg-canvas px-static-xs py-static-sm md:sticky md:bottom-0 md:z-20 md:shadow-lg"
-      >
-        <PButton data-testid="save-button" onClick={() => void handleSave()}>
-          Save
-        </PButton>
-        {!startsEditing ? (
-          <PButton data-testid="cancel-edit-button" variant="secondary" onClick={handleCancelEdit}>
-            Cancel
-          </PButton>
-        ) : null}
-        {isDirty && <div data-testid="dirty-indicator" className="text-sm font-semibold text-warning">Unsaved changes</div>}
-        {saveConfirmed && <div data-testid="save-confirmed" className="text-sm font-semibold text-success">Saved</div>}
-        {validationMessage && <div data-testid="validation-message" className="rounded-lg border border-warning bg-warning-low p-static-xs text-sm text-primary">{validationMessage}</div>}
-      </div>
 
       </div>
     </div>
