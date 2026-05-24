@@ -55,6 +55,16 @@ describe('TestFromAC_ResolveModalUX', () => {
     vi.clearAllMocks()
   })
 
+  it('sizes the resolver surface with room for PDS modal chrome', () => {
+    const { container } = renderModal()
+    const surface = container.querySelector('[data-testid="resolve-modal-surface"]') as HTMLElement | null
+    expect(surface).not.toBeNull()
+    expect(surface?.className).toContain('w-[min(920px,calc(100vw-18.5rem))]')
+    expect(surface?.className).toContain('max-w-full')
+    expect(surface?.className).not.toContain('calc(100vw-4rem)')
+    expect(surface?.className).not.toContain('calc(100vw-12rem)')
+  })
+
   // ─── AC2 (td:2): Structural description elements (not word-count checks) ─────
   //
   // Refined AC2: tests verify a structurally separate p-text description element
