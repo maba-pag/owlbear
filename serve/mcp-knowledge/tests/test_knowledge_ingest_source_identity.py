@@ -1,6 +1,7 @@
-"""Failing tests for task #1556: Repair knowledge ingestion source identity contract.
+"""Durable tests for knowledge ingestion source identity across mcp-knowledge flows.
 
-TDD RED phase — all 14 tests fail until the builder repairs the five confirmed bugs:
+Originally promoted from archived task #1556. These tests cover the confirmed source
+identity regressions across ingest, refresh, batching, and search paths:
   1. ingest_text uses legacy insert_document branch → source_id dropped from document row
   2. Auto-created KnowledgeSource has wrong scope ("global") and enrich=False
   3. IngestPipeline.ingest (refresh path) never passes source_id to insert_document

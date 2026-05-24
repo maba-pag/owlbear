@@ -184,6 +184,9 @@ def _insert_edge(  # noqa: PLR0913
     """Insert an edge between two entity records and return its id."""
     eid = edge_id or str(uuid.uuid4())
     now = _now_iso()
+    if document_id is None:
+        row = conn.execute("SELECT document_id FROM entities WHERE id = ?", (source_entity_id,)).fetchone()
+        document_id = row[0] if row is not None else ""
     conn.execute(
         "INSERT INTO edges "
         "(id, source_id, target_id, relation, document_id, weight, metadata, created_at, scope) "
@@ -316,7 +319,7 @@ class TestFromAC_GetConsolidationCandidates:
         entity_a_id = _insert_entity(conn, name="PyTorch", document_id=doc_a)
         entity_b_id = _insert_entity(conn, name="PyTorch", document_id=doc_b)
         # Insert a cross-source edge between the two entity records
-        _insert_edge(conn, source_entity_id=entity_a_id, target_entity_id=entity_b_id)
+        _insert_edge(conn, source_entity_id=entity_a_id, target_entity_id=entity_b_id, relation="same_as")
 
         ctx = _make_mcp_ctx(conn)
         candidates = await get_consolidation_candidates(ctx, limit=20)
@@ -924,22 +927,22 @@ class TestFromAC_ExactProofs:
                 {
                     "source_id": entity_a_id,
                     "target_id": entity_b_id,
-                    "relation": "exact_match_proof",
+                    "relation": "same_as",
                 }
             ],
         )
 
         row = conn.execute(
             "SELECT source_id, target_id, relation FROM edges WHERE source_id = ? AND target_id = ? AND relation = ?",
-            (entity_a_id, entity_b_id, "exact_match_proof"),
+            (entity_a_id, entity_b_id, "same_as"),
         ).fetchone()
         assert row is not None, (
             f"Expected edge row (source_id={entity_a_id!r}, "
-            f"target_id={entity_b_id!r}, relation='exact_match_proof') — not found in DB"
+            f"target_id={entity_b_id!r}, relation='same_as') — not found in DB"
         )
         assert row[0] == entity_a_id, f"source_id mismatch: {row[0]!r} != {entity_a_id!r}"
         assert row[1] == entity_b_id, f"target_id mismatch: {row[1]!r} != {entity_b_id!r}"
-        assert row[2] == "exact_match_proof", f"relation mismatch: {row[2]!r}"
+        assert row[2] == "same_as", f"relation mismatch: {row[2]!r}"
 
     @pytest.mark.asyncio
     async def test_ac5_exact_reviewed_pairs_row_content_after_dismissal(self, conn: sqlite3.Connection) -> None:
@@ -1140,7 +1143,7 @@ class TestFromAC_Cycle4Proofs:
         e1_id = min(entity_a_id, entity_b_id)
         e2_id = max(entity_a_id, entity_b_id)
         # Insert ONLY the reverse-direction edge (e2 → e1)
-        _insert_edge(conn, source_entity_id=e2_id, target_entity_id=e1_id)
+        _insert_edge(conn, source_entity_id=e2_id, target_entity_id=e1_id, relation="same_as")
 
         ctx = _make_mcp_ctx(conn)
         candidates = await get_consolidation_candidates(ctx, limit=20)

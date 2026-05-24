@@ -125,10 +125,10 @@ class TestFromAC_SchemaAndModel:
         assert "last_checked_at" in columns
 
     def test_schema_version_is_14(self) -> None:
-        """_SCHEMA_VERSION constant is bumped to 14."""
+        """_SCHEMA_VERSION constant is bumped to 15."""
         import owlbear_knowledge.schema as _schema  # noqa: PLC0415
 
-        assert _schema._SCHEMA_VERSION == 14  # noqa: SLF001 — currently 13, fails
+        assert _schema._SCHEMA_VERSION == 15  # noqa: SLF001
 
     def test_migrate_v13_to_v14_is_defined(self) -> None:
         """_migrate_v13_to_v14 function exists on the schema module."""
@@ -175,10 +175,10 @@ class TestFromAC_SchemaAndModel:
         assert "last_checked_at" in KnowledgeSourceStore._SELECT_COLS  # noqa: SLF001
 
     def test_select_cols_last_checked_at_at_index_13(self) -> None:
-        """last_checked_at is appended at column index 13 (0-based) in _SELECT_COLS."""
+        """last_checked_at is at column index 14 after refreshable was added."""
         cols = [c.strip() for c in KnowledgeSourceStore._SELECT_COLS.split(",")]  # noqa: SLF001
-        assert len(cols) >= 14  # currently 13 columns — fails
-        assert cols[13] == "last_checked_at"
+        assert len(cols) >= 15
+        assert cols[14] == "last_checked_at"
 
     def test_store_create_persists_last_checked_at_value(self) -> None:
         """create() writes last_checked_at to the DB."""

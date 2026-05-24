@@ -11,10 +11,12 @@
  * Use descriptive describe names; do NOT use TestFromAC_ prefix here.
  */
 
+import { Suspense, type ComponentType } from 'react'
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, fireEvent, act, waitFor } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider, useNavigate } from 'react-router'
 import IdeasPage from '../pages/IdeasPage'
+import { routeConfig } from '../routes'
 
 // ─── Fetch mock factories ──────────────────────────────────────────────────────
 
@@ -49,6 +51,41 @@ function makeGetOkFetch(content: string) {
   )
 }
 
+/** GET succeeds; PUT fails with the provided status. */
+function makeGetOkPutErrorFetch(content: string, putStatus = 500) {
+  const updatedAt = timestampMinutesAgo(3)
+  return vi.fn((_url: string, init?: RequestInit) => {
+    if (init?.method === 'PUT') {
+      return Promise.resolve({
+        ok: false,
+        status: putStatus,
+        json: () => Promise.resolve({ detail: 'Save failed' }),
+      })
+    }
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ content, updated_at: updatedAt }),
+    })
+  })
+}
+
+/** GET fails with a non-2xx response. */
+function makeGetErrorFetch(status = 500) {
+  return vi.fn(() =>
+    Promise.resolve({
+      ok: false,
+      status,
+      json: () => Promise.resolve({ detail: 'Server error' }),
+    }),
+  )
+}
+
+/** GET never resolves, keeping IdeasPage in its loading state. */
+function makeGetPendingFetch() {
+  return vi.fn(() => new Promise<never>(() => {}))
+}
+
 // ─── Navigation helper ────────────────────────────────────────────────────────
 
 function NavButton({ to, testId }: { to: string; testId: string }) {
@@ -57,6 +94,16 @@ function NavButton({ to, testId }: { to: string; testId: string }) {
 }
 
 // ─── Render helpers ───────────────────────────────────────────────────────────
+
+function renderIdeasPage(element = <IdeasPage />) {
+  const router = createMemoryRouter([
+    { path: '/ideas', element },
+  ], { initialEntries: ['/ideas'] })
+
+  return render(
+    <RouterProvider router={router} />,
+  )
+}
 
 function renderInRouter() {
   const router = createMemoryRouter([
@@ -116,6 +163,15 @@ async function renderLoaded(content: string): Promise<ReturnType<typeof renderIn
   })
   await flush()
   await enterEditMode(result.container)
+  return result
+}
+
+async function renderDirty(
+  initialContent: string,
+  newContent: string,
+): Promise<ReturnType<typeof renderInRouter>> {
+  const result = await renderLoaded(initialContent)
+  fireEvent.change(result.container.querySelector('textarea')!, { target: { value: newContent } })
   return result
 }
 
@@ -562,5 +618,200 @@ describe('IdeasPageIntegration_SaveTimeConflict', () => {
     expect(putBodies[1]).toMatchObject({ content: 'user edits', force: true })
     expect(container.querySelector('[data-testid="ideas-conflict-notice"]')).toBeNull()
     expect(container.querySelector('[data-testid="ideas-dirty"]')).toBeNull()
+  })
+})
+
+describe('IdeasPageIntegration_RouteWiring', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('keeps the /ideas route wired with the expected label, icon, and lazy component', () => {
+    const entry = routeConfig.find((route) => route.path === '/ideas')
+
+    expect(entry?.label).toBe('Ideas')
+    expect(entry?.icon).toBe('ideas')
+    expect((entry?.component as { $$typeof?: symbol })?.$$typeof).toBe(Symbol.for('react.lazy'))
+  })
+
+  it('binds the lazy /ideas route to IdeasPage-specific loading DOM', async () => {
+    vi.stubGlobal('fetch', makeGetPendingFetch())
+    const entry = routeConfig.find((route) => route.path === '/ideas')
+    const RouteComponent = entry!.component as unknown as ComponentType<Record<string, never>>
+    let container!: HTMLElement
+
+    await act(async () => {
+      container = renderIdeasPage(
+        <Suspense fallback={<div>Suspense fallback</div>}>
+          <RouteComponent />
+        </Suspense>,
+      ).container
+    })
+    await flush()
+
+    expect(container.querySelector('[data-testid="ideas-loading"]')).not.toBeNull()
+  })
+})
+
+describe('IdeasPageIntegration_LoadingAndEditorContracts', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('shows ideas-loading and keeps the textarea out of the DOM while GET /api/ideas is pending', async () => {
+    vi.stubGlobal('fetch', makeGetPendingFetch())
+    let container!: HTMLElement
+
+    await act(async () => {
+      container = renderIdeasPage().container
+    })
+
+    expect(container.querySelector('[data-testid="ideas-loading"]')).not.toBeNull()
+    expect(container.querySelector('textarea')).toBeNull()
+  })
+
+  it('keeps the markdown textarea placeholder text stable in edit mode', async () => {
+    const { container } = await renderLoaded('')
+    expect(container.querySelector('textarea')?.getAttribute('placeholder')).toBe('Capture ideas here...')
+  })
+})
+
+describe('IdeasPageIntegration_MarkdownPreviewContracts', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('renders GFM tables in preview mode', async () => {
+    const { container } = await renderPreviewLoaded('| col1 | col2 |\n|------|------|\n| a | b |')
+    expect(container.querySelector('[data-testid="ideas-preview"] table')).not.toBeNull()
+  })
+
+  it('sanitizes raw script tags out of the preview output', async () => {
+    const { container } = await renderPreviewLoaded('<script>alert("xss")</script>safe text')
+    expect(container.querySelector('[data-testid="ideas-preview"] script')).toBeNull()
+  })
+
+  it('preserves user-edited markdown across a preview toggle round-trip', async () => {
+    const { container } = await renderPreviewLoaded('original')
+    await enterEditMode(container)
+    fireEvent.change(container.querySelector('textarea')!, { target: { value: 'edited by user' } })
+
+    await act(async () => {
+      fireEvent.click(container.querySelector('[data-testid="ideas-preview-toggle"]')!)
+    })
+    await flush()
+
+    await act(async () => {
+      fireEvent.click(container.querySelector('[data-testid="ideas-preview-toggle"]')!)
+    })
+    await flush()
+
+    expect(container.querySelector('textarea')?.value).toBe('edited by user')
+  })
+})
+
+describe('IdeasPageIntegration_SaveErrorRecovery', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('renders ideas-error and keeps the editor hidden when GET /api/ideas fails', async () => {
+    vi.stubGlobal('fetch', makeGetErrorFetch(500))
+    let container!: HTMLElement
+
+    await act(async () => {
+      container = renderIdeasPage().container
+    })
+    await flush()
+
+    expect(container.querySelector('[data-testid="ideas-error"]')).not.toBeNull()
+    expect(container.querySelector('textarea')).toBeNull()
+  })
+
+  it('preserves the draft and re-enables save after a failed PUT', async () => {
+    const fetchMock = makeGetOkPutErrorFetch('original text')
+    vi.stubGlobal('fetch', fetchMock)
+    let container!: HTMLElement
+
+    await act(async () => {
+      container = renderIdeasPage().container
+    })
+    await flush()
+    await enterEditMode(container)
+    fireEvent.change(container.querySelector('textarea')!, { target: { value: 'modified text' } })
+
+    await act(async () => {
+      fireEvent.click(container.querySelector('[data-testid="ideas-save"]')!)
+    })
+    await flush()
+
+    expect(container.querySelector('textarea')?.value).toBe('modified text')
+    expect(container.querySelector<HTMLButtonElement>('[data-testid="ideas-save"]')?.disabled).toBe(false)
+  })
+
+  it('issues a second PUT when Cmd+S retries after a failed save', async () => {
+    const fetchMock = makeGetOkPutErrorFetch('original text')
+    vi.stubGlobal('fetch', fetchMock)
+    let container!: HTMLElement
+
+    await act(async () => {
+      container = renderIdeasPage().container
+    })
+    await flush()
+    await enterEditMode(container)
+    fireEvent.change(container.querySelector('textarea')!, { target: { value: 'modified text' } })
+
+    await act(async () => {
+      fireEvent.keyDown(document, { key: 's', code: 'KeyS', metaKey: true })
+    })
+    await flush()
+
+    await act(async () => {
+      fireEvent.keyDown(document, { key: 's', code: 'KeyS', metaKey: true })
+    })
+    await flush()
+
+    const putCalls = fetchMock.mock.calls.filter(
+      ([, init]: [string, RequestInit | undefined]) => init?.method === 'PUT',
+    )
+    expect(putCalls.length).toBe(2)
+    expect(putCalls[1][0]).toBe('/api/ideas')
+  })
+})
+
+describe('IdeasPageIntegration_UnsavedUnloadGuard', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('shows the required unsaved-changes wording when dirty navigation is blocked', async () => {
+    const { container } = await renderDirty('base', 'unsaved')
+    fireEvent.click(container.querySelector('[data-testid="nav-home"]')!)
+
+    await waitFor(() => {
+      const dialog = container.querySelector('[role="alertdialog"]')
+      expect(dialog).not.toBeNull()
+      expect(dialog?.textContent).toContain('You have unsaved changes. Leave anyway?')
+    })
+  })
+
+  it('prevents beforeunload while dirty and stops doing so after unmount', async () => {
+    const result = await renderDirty('initial', 'changed')
+    const dirtyEvent = new Event('beforeunload', { cancelable: true })
+    window.dispatchEvent(dirtyEvent)
+    expect(dirtyEvent.defaultPrevented).toBe(true)
+
+    result.unmount()
+
+    const afterUnmountEvent = new Event('beforeunload', { cancelable: true })
+    window.dispatchEvent(afterUnmountEvent)
+    expect(afterUnmountEvent.defaultPrevented).toBe(false)
+  })
+
+  it('does not prevent beforeunload after a successful save clears dirty state', async () => {
+    await renderAfterSave('initial', 'saved edits')
+    const event = new Event('beforeunload', { cancelable: true })
+    window.dispatchEvent(event)
+    expect(event.defaultPrevented).toBe(false)
   })
 })

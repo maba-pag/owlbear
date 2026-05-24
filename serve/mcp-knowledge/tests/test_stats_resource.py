@@ -6,10 +6,10 @@ all tests fail until the builder adds the resource registration.
 
 from __future__ import annotations
 
-import owlbear_mcp_knowledge.server as server_module
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
+import owlbear_mcp_knowledge.server as server_module
 
 from owlbear_mcp_knowledge.server import mcp
 
@@ -58,15 +58,11 @@ class TestFromAC_KnowledgeStatsResource:
         )
 
         mock_gs = MagicMock()
+        mock_gs.get_counts.return_value = (5, 10, 15)
         ctx = MagicMock()
         ctx.request_context.lifespan_context = MagicMock(graph_store=mock_gs)
 
-        with patch(
-            "owlbear_mcp_knowledge.server.asyncio.to_thread",
-            new_callable=AsyncMock,
-            return_value=(5, 10, 15),
-        ):
-            result = await handler(ctx)
+        result = await handler(ctx)
 
         assert isinstance(result, str)
         assert "Knowledge base:" in result
@@ -84,12 +80,12 @@ class TestFromAC_KnowledgeStatsResource:
         """knowledge_stats_resource() returns counts from graph_store, not hardcoded zeros."""
         from owlbear_mcp_knowledge.server import knowledge_stats_resource
 
-        with patch(
-            "owlbear_mcp_knowledge.server.asyncio.to_thread",
-            new_callable=AsyncMock,
-            return_value=(7, 42, 99),
-        ):
-            result = await knowledge_stats_resource()
+        mock_gs = MagicMock()
+        mock_gs.get_counts.return_value = (7, 42, 99)
+        ctx = MagicMock()
+        ctx.request_context.lifespan_context = MagicMock(graph_store=mock_gs)
+
+        result = await knowledge_stats_resource(ctx)
 
         assert isinstance(result, str)
         assert "7 documents" in result, (
@@ -127,11 +123,7 @@ class TestFromAC_StatsResourceNotHardcoded:
         ctx = MagicMock()
         ctx.request_context.lifespan_context = MagicMock(graph_store=mock_gs)
 
-        async def real_to_thread(fn, *args, **kwargs):  # type: ignore[no-untyped-def]
-            return fn(*args, **kwargs)
-
-        with patch("owlbear_mcp_knowledge.server.asyncio.to_thread", side_effect=real_to_thread):
-            result = await knowledge_stats_resource(ctx)
+        result = await knowledge_stats_resource(ctx)
 
         assert "3 documents" in result, (
             f"Expected '3 documents' (from graph_store.get_counts) but got: {result!r}. "
@@ -141,15 +133,10 @@ class TestFromAC_StatsResourceNotHardcoded:
         assert "55 edges" in result
 
     @pytest.mark.asyncio
-    async def test_stats_resource_asyncio_to_thread_called_with_get_counts(
+    async def test_stats_resource_calls_get_counts(
         self,
     ) -> None:
-        """asyncio.to_thread must be invoked with gs.get_counts, not a hardcoded lambda.
-
-        Captures what asyncio.to_thread was called with and asserts that the
-        callable is gs.get_counts. Hardcoded lambda: (0,0,0) would fail this check.
-        Fails currently because knowledge_stats_resource() takes 0 params.
-        """
+        """knowledge_stats_resource must call gs.get_counts, not use a hardcoded lambda."""
         from owlbear_mcp_knowledge.server import knowledge_stats_resource
 
         mock_gs = MagicMock()
@@ -157,23 +144,9 @@ class TestFromAC_StatsResourceNotHardcoded:
         ctx = MagicMock()
         ctx.request_context.lifespan_context = MagicMock(graph_store=mock_gs)
 
-        captured: list[object] = []
+        await knowledge_stats_resource(ctx)
 
-        async def capture_to_thread(fn, *args, **kwargs):  # type: ignore[no-untyped-def]
-            captured.append(fn)
-            return fn(*args, **kwargs)
-
-        with patch(
-            "owlbear_mcp_knowledge.server.asyncio.to_thread",
-            side_effect=capture_to_thread,
-        ):
-            await knowledge_stats_resource(ctx)
-
-        assert len(captured) == 1, "Expected asyncio.to_thread to be called exactly once."
-        assert captured[0] is mock_gs.get_counts, (
-            f"asyncio.to_thread was called with {captured[0]!r}, expected gs.get_counts. "
-            "The resource handler must not use a hardcoded lambda."
-        )
+        mock_gs.get_counts.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -210,16 +183,7 @@ class TestFromAC_StatsResourceRegisteredBridge:
         mock_gs.get_counts.return_value = (5, 10, 15)
         mock_app_ctx = MagicMock(graph_store=mock_gs)
 
-        async def real_to_thread(fn, *args, **kwargs):  # type: ignore[no-untyped-def]
-            return fn(*args, **kwargs)
-
-        with (
-            patch(
-                "owlbear_mcp_knowledge.server.asyncio.to_thread",
-                side_effect=real_to_thread,
-            ),
-            patch.object(server_module, "_app_context", mock_app_ctx, create=True),
-        ):
+        with patch.object(server_module, "_app_context", mock_app_ctx, create=True):
             result = await server_module._knowledge_stats_bridge()
 
         assert "5 documents" in result, (
@@ -232,49 +196,32 @@ class TestFromAC_StatsResourceRegisteredBridge:
         assert "15 edges" in result
 
     @pytest.mark.asyncio
-    async def test_bridge_asyncio_to_thread_callable_is_not_constant_lambda(
+    async def test_bridge_calls_graph_store_counts(
         self,
     ) -> None:
-        """asyncio.to_thread in _knowledge_stats_bridge must receive gs.get_counts, not a lambda.
-
-        Captures the fn argument passed to asyncio.to_thread, then calls it to check
-        whether it returns the hardcoded tuple (0,0,0). A constant lambda is the bug;
-        a bound mock method (gs.get_counts) returns non-zero test data.
-
-        FAILS currently: _knowledge_stats_bridge passes lambda: (0,0,0) to asyncio.to_thread.
-        captured_fn() == (0,0,0) → assertion fails.
-        Builder must pass _app_context.graph_store.get_counts instead.
-        """
+        """_knowledge_stats_bridge must call _app_context.graph_store.get_counts."""
         mock_gs = MagicMock()
         mock_gs.get_counts.return_value = (3, 6, 9)
         mock_app_ctx = MagicMock(graph_store=mock_gs)
 
-        captured_fns: list[object] = []
-
-        async def capturing_to_thread(fn, *_args, **_kwargs):  # type: ignore[no-untyped-def]
-            captured_fns.append(fn)
-            return (3, 6, 9)
-
-        with (
-            patch(
-                "owlbear_mcp_knowledge.server.asyncio.to_thread",
-                side_effect=capturing_to_thread,
-            ),
-            patch.object(server_module, "_app_context", mock_app_ctx, create=True),
-        ):
+        with patch.object(server_module, "_app_context", mock_app_ctx, create=True):
             await server_module._knowledge_stats_bridge()
 
-        assert captured_fns, "_knowledge_stats_bridge did not call asyncio.to_thread"
-        actual_fn = captured_fns[0]
-        # Call the captured callable; if it's the hardcoded lambda it returns (0,0,0).
-        # If it's mock_gs.get_counts it returns (3,6,9) — not the constant.
-        try:
-            call_result = actual_fn()
-        except (TypeError, AttributeError):
-            # fn is a bound method that raised — not a constant lambda; PASS.
-            return
-        assert call_result != (0, 0, 0), (
-            f"asyncio.to_thread was called with a callable that returns {call_result!r}. "
-            "This matches the hardcoded lambda: (0,0,0) bug in _knowledge_stats_bridge. "
-            "Builder must pass _app_context.graph_store.get_counts to asyncio.to_thread."
-        )
+        mock_gs.get_counts.assert_called_once()
+
+
+class TestStatsResourceFallbacks:
+    """Fallback branches for stats helpers return the zero-count contract."""
+
+    @pytest.mark.asyncio
+    async def test_bridge_returns_zero_counts_when_app_context_missing(self) -> None:
+        with patch.object(server_module, "_app_context", None, create=True):
+            result = await server_module._knowledge_stats_bridge()
+
+        assert result == "Knowledge base: 0 documents, 0 entities, 0 edges"
+
+    @pytest.mark.asyncio
+    async def test_knowledge_stats_resource_without_ctx_returns_zero_counts(self) -> None:
+        result = await server_module.knowledge_stats_resource()
+
+        assert result == "Knowledge base: 0 documents, 0 entities, 0 edges"

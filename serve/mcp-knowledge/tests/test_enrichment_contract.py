@@ -18,6 +18,8 @@ from owlbear_mcp_knowledge.server import (
     _MAX_ENRICHMENT_BATCH_SIZE,
     get_consolidation_candidates,
     get_next_batch,
+    get_stats,
+    retry_failed_enrichment,
     store_enrichment,
 )
 
@@ -630,18 +632,21 @@ async def test_get_next_batch_normalizes_nullable_string_fields(conn: sqlite3.Co
 
     batch = await get_next_batch(_ctx(conn), limit=10)
 
-    assert batch == [
-        {
-            "chunk_id": chunk_id,
-            "text": "chunk text",
-            "doc_title": "",
-            "section_path": None,
-            "source_name": "Source",
-            "document_id": document_id,
-            "source_id": source_id,
-            "scope": "global",
-        }
-    ]
+    assert len(batch) == 1
+    assert batch[0] == {
+        "chunk_id": chunk_id,
+        "text": "chunk text",
+        "doc_title": "",
+        "section_path": None,
+        "source_name": "Source",
+        "document_id": document_id,
+        "source_id": source_id,
+        "scope": "global",
+        "claim_token": batch[0]["claim_token"],
+        "claimed_at": batch[0]["claimed_at"],
+    }
+    assert batch[0]["claim_token"]
+    assert batch[0]["claimed_at"]
 
 
 @pytest.mark.asyncio
@@ -670,3 +675,194 @@ async def test_get_next_batch_caps_excessive_limits(conn: sqlite3.Connection) ->
     assert len(batch) == _MAX_ENRICHMENT_BATCH_SIZE
     claimed = conn.execute("SELECT COUNT(*) FROM chunks WHERE enrichment_state = 'claimed'").fetchone()[0]
     assert claimed == _MAX_ENRICHMENT_BATCH_SIZE
+
+
+@pytest.mark.asyncio
+async def test_phase1_claim_token_required_for_token_bearing_claim(conn: sqlite3.Connection) -> None:
+    source_id = _insert_source(conn, "Source")
+    document_id = _insert_document(conn, source_id)
+    chunk_id = _insert_chunk(conn, document_id, state="pending")
+
+    batch = await get_next_batch(_ctx(conn), limit=1)
+    assert batch[0]["chunk_id"] == chunk_id
+    assert batch[0]["claim_token"]
+
+    with pytest.raises(ToolError, match="claim_token is required"):
+        await store_enrichment(
+            _ctx(conn),
+            chunk_id=chunk_id,
+            entities=[{"name": "Alpha", "entity_type": "concept"}],
+            edges=[],
+        )
+
+    state, token = conn.execute(
+        "SELECT enrichment_state, claim_token FROM chunks WHERE id = ?",
+        (chunk_id,),
+    ).fetchone()
+    assert state == "claimed"
+    assert token == batch[0]["claim_token"]
+
+
+@pytest.mark.asyncio
+async def test_phase1_store_with_matching_claim_token_clears_lease(conn: sqlite3.Connection) -> None:
+    source_id = _insert_source(conn, "Source")
+    document_id = _insert_document(conn, source_id)
+    chunk_id = _insert_chunk(conn, document_id, state="pending")
+
+    batch = await get_next_batch(_ctx(conn), limit=1)
+    await store_enrichment(
+        _ctx(conn),
+        chunk_id=chunk_id,
+        claim_token=batch[0]["claim_token"],
+        entities=[{"name": "Alpha", "entity_type": "concept"}],
+        edges=[],
+    )
+
+    state, token, error = conn.execute(
+        "SELECT enrichment_state, claim_token, enrichment_error FROM chunks WHERE id = ?",
+        (chunk_id,),
+    ).fetchone()
+    assert (state, token, error) == ("enriched", None, None)
+
+
+@pytest.mark.asyncio
+async def test_phase1_failed_matching_claim_records_diagnostics(conn: sqlite3.Connection) -> None:
+    source_id = _insert_source(conn, "Source")
+    document_id = _insert_document(conn, source_id)
+    chunk_id = _insert_chunk(conn, document_id, state="pending")
+
+    batch = await get_next_batch(_ctx(conn), limit=1)
+    with pytest.raises(ToolError):
+        await store_enrichment(
+            _ctx(conn),
+            chunk_id=chunk_id,
+            claim_token=batch[0]["claim_token"],
+            entities=[{"name": "Bad", "entity_type": "not_an_entity_type"}],
+            edges=[],
+        )
+
+    state, token, error, attempts = conn.execute(
+        """
+        SELECT enrichment_state, claim_token, enrichment_error, enrichment_attempts
+        FROM chunks WHERE id = ?
+        """,
+        (chunk_id,),
+    ).fetchone()
+    assert state == "failed"
+    assert token is None
+    assert error
+    assert attempts == 1
+
+
+@pytest.mark.asyncio
+async def test_retry_failed_enrichment_resets_failed_chunks(conn: sqlite3.Connection) -> None:
+    source_id = _insert_source(conn, "Source")
+    document_id = _insert_document(conn, source_id)
+    chunk_id = _insert_chunk(conn, document_id, state="failed")
+    conn.execute(
+        "UPDATE chunks SET enrichment_error = 'bad payload', enrichment_attempts = 2 WHERE id = ?",
+        (chunk_id,),
+    )
+    conn.commit()
+
+    result = await retry_failed_enrichment(_ctx(conn), chunk_ids=[chunk_id])
+
+    assert result == {"reset": 1, "remaining_failed": 0}
+    state, error = conn.execute(
+        "SELECT enrichment_state, enrichment_error FROM chunks WHERE id = ?",
+        (chunk_id,),
+    ).fetchone()
+    assert (state, error) == ("pending", None)
+
+
+@pytest.mark.asyncio
+async def test_retry_failed_enrichment_resets_scoped_failed_chunks(conn: sqlite3.Connection) -> None:
+    source_a = _insert_source(conn, "Source A", scope="team-a")
+    source_b = _insert_source(conn, "Source B", scope="team-b")
+    document_a = _insert_document(conn, source_a, scope="team-a")
+    document_b = _insert_document(conn, source_b, scope="team-b")
+    chunk_a = _insert_chunk(conn, document_a, state="failed", scope="team-a")
+    chunk_b = _insert_chunk(conn, document_b, state="failed", scope="team-b")
+    conn.execute(
+        "UPDATE chunks SET enrichment_error = 'bad payload' WHERE id IN (?, ?)",
+        (chunk_a, chunk_b),
+    )
+    conn.commit()
+
+    result = await retry_failed_enrichment(_ctx(conn), scopes=["team-a"], limit=10)
+
+    assert result == {"reset": 1, "remaining_failed": 1}
+    rows = conn.execute(
+        "SELECT id, enrichment_state FROM chunks WHERE id IN (?, ?)",
+        (chunk_a, chunk_b),
+    ).fetchall()
+    states = {row[0]: row[1] for row in rows}
+    assert states[chunk_a] == "pending"
+    assert states[chunk_b] == "failed"
+
+
+@pytest.mark.asyncio
+async def test_retry_failed_enrichment_limit_without_scope_resets_only_limited_rows(
+    conn: sqlite3.Connection,
+) -> None:
+    source_id = _insert_source(conn, "Source")
+    document_id = _insert_document(conn, source_id)
+    chunk_a = _insert_chunk(conn, document_id, state="failed", index=0)
+    chunk_b = _insert_chunk(conn, document_id, state="failed", index=1)
+    conn.execute(
+        "UPDATE chunks SET enrichment_error = 'bad payload' WHERE id IN (?, ?)",
+        (chunk_a, chunk_b),
+    )
+    conn.commit()
+
+    result = await retry_failed_enrichment(_ctx(conn), limit=1)
+
+    assert result == {"reset": 1, "remaining_failed": 1}
+    pending_count = conn.execute(
+        "SELECT COUNT(*) FROM chunks WHERE enrichment_state = 'pending'",
+    ).fetchone()[0]
+    failed_count = conn.execute(
+        "SELECT COUNT(*) FROM chunks WHERE enrichment_state = 'failed'",
+    ).fetchone()[0]
+    assert pending_count == 1
+    assert failed_count == 1
+
+
+@pytest.mark.asyncio
+async def test_retry_failed_enrichment_rolls_back_when_update_raises() -> None:
+    conn = MagicMock()
+
+    def _execute(sql: str, params: object = ()) -> MagicMock:  # noqa: ARG001
+        if sql in {"PRAGMA busy_timeout = 5000", "BEGIN IMMEDIATE"}:
+            return MagicMock()
+        msg = "forced retry failure"
+        raise sqlite3.OperationalError(msg)
+
+    conn.execute.side_effect = _execute
+    ctx = MagicMock()
+    ctx.request_context.lifespan_context.conn = conn
+
+    with pytest.raises(sqlite3.OperationalError, match="forced retry failure"):
+        await retry_failed_enrichment(ctx, chunk_ids=["chunk-1"])
+
+    conn.rollback.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_get_stats_exposes_enrichment_queue_state_counts(conn: sqlite3.Connection) -> None:
+    source_id = _insert_source(conn, "Source")
+    document_id = _insert_document(conn, source_id)
+    _insert_chunk(conn, document_id, state="pending")
+    _insert_chunk(conn, document_id, state="claimed")
+    _insert_chunk(conn, document_id, state="failed")
+    _insert_chunk(conn, document_id, state="enriched")
+    ctx = _ctx(conn)
+    ctx.request_context.lifespan_context.graph_store = GraphStore(conn)
+
+    stats = await get_stats(ctx)
+
+    assert stats["chunks_pending"] == 1
+    assert stats["chunks_claimed"] == 1
+    assert stats["chunks_failed"] == 1
+    assert stats["chunks_enriched"] == 1
+    assert stats["chunks_claimable"] == 1

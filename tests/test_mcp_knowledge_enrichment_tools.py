@@ -134,6 +134,17 @@ def _insert_chunk(  # noqa: PLR0913
     return cid
 
 
+def _claim_chunk(conn: sqlite3.Connection, chunk_id: str, token: str | None = None) -> str:
+    """Mark a chunk claimed and return the matching claim token."""
+    claim_token = token or uuid.uuid4().hex
+    conn.execute(
+        "UPDATE chunks SET enrichment_state='claimed', claimed_at=?, claimed_by='pytest', claim_token=? WHERE id=?",
+        (_now_iso(), claim_token, chunk_id),
+    )
+    conn.commit()
+    return claim_token
+
+
 def _insert_entity(  # noqa: PLR0913
     conn: sqlite3.Connection,
     *,
@@ -596,7 +607,9 @@ class TestFromAC_StoreEnrichment:
             }
         ]
         ctx = _make_mcp_ctx(conn)
-        await store_enrichment(ctx, chunk_id=chunk_id, entities=entities, edges=[])
+        await store_enrichment(
+            ctx, chunk_id=chunk_id, claim_token=_claim_chunk(conn, chunk_id), entities=entities, edges=[]
+        )
 
         rows = conn.execute("SELECT name FROM entities WHERE id = ?", (entity_id,)).fetchall()
         assert len(rows) == 1, f"UPSERT must produce exactly one row, got {len(rows)}"
@@ -614,14 +627,16 @@ class TestFromAC_StoreEnrichment:
             {
                 "id": new_entity_id,
                 "name": "BrandNewEntity",
-                "entity_type": "technology",
+                "entity_type": "tool",
                 "description": "Created by store_enrichment",
                 "document_id": doc_id,
                 "chunk_id": chunk_id,
             }
         ]
         ctx = _make_mcp_ctx(conn)
-        await store_enrichment(ctx, chunk_id=chunk_id, entities=entities, edges=[])
+        await store_enrichment(
+            ctx, chunk_id=chunk_id, claim_token=_claim_chunk(conn, chunk_id), entities=entities, edges=[]
+        )
 
         row = conn.execute("SELECT name FROM entities WHERE id = ?", (new_entity_id,)).fetchone()
         assert row is not None, "New entity must be inserted by store_enrichment"
@@ -648,9 +663,13 @@ class TestFromAC_StoreEnrichment:
         }
         ctx = _make_mcp_ctx(conn)
         # First call — inserts edge, marks chunk_a enriched
-        await store_enrichment(ctx, chunk_id=chunk_a, entities=[], edges=[edge])
+        await store_enrichment(
+            ctx, chunk_id=chunk_a, claim_token=_claim_chunk(conn, chunk_a), entities=[], edges=[edge]
+        )
         # Second call on different chunk, same edge — must be ignored, not error
-        await store_enrichment(ctx, chunk_id=chunk_b, entities=[], edges=[edge])
+        await store_enrichment(
+            ctx, chunk_id=chunk_b, claim_token=_claim_chunk(conn, chunk_b), entities=[], edges=[edge]
+        )
 
     @pytest.mark.asyncio
     async def test_duplicate_edge_results_in_single_row(self, conn: sqlite3.Connection) -> None:
@@ -665,17 +684,21 @@ class TestFromAC_StoreEnrichment:
         edge = {
             "source_id": ent_a,
             "target_id": ent_b,
-            "relation": "causes",
+            "relation": "related_to",
             "document_id": doc_id,
             "weight": 0.8,
         }
         ctx = _make_mcp_ctx(conn)
-        await store_enrichment(ctx, chunk_id=chunk_a, entities=[], edges=[edge])
-        await store_enrichment(ctx, chunk_id=chunk_b, entities=[], edges=[edge])
+        await store_enrichment(
+            ctx, chunk_id=chunk_a, claim_token=_claim_chunk(conn, chunk_a), entities=[], edges=[edge]
+        )
+        await store_enrichment(
+            ctx, chunk_id=chunk_b, claim_token=_claim_chunk(conn, chunk_b), entities=[], edges=[edge]
+        )
 
         count = conn.execute(
             "SELECT count(*) FROM edges WHERE source_id=? AND target_id=? AND relation=? AND document_id=?",
-            (ent_a, ent_b, "causes", doc_id),
+            (ent_a, ent_b, "related_to", doc_id),
         ).fetchone()[0]
         assert count == 1, f"Expected exactly 1 edge row after duplicate insert, got {count}"
 
@@ -689,7 +712,7 @@ class TestFromAC_StoreEnrichment:
         chunk_id = _insert_chunk(conn, document_id=doc_id, enrichment_state="claimed")
 
         ctx = _make_mcp_ctx(conn)
-        await store_enrichment(ctx, chunk_id=chunk_id, entities=[], edges=[])
+        await store_enrichment(ctx, chunk_id=chunk_id, claim_token=_claim_chunk(conn, chunk_id), entities=[], edges=[])
 
         row = conn.execute("SELECT enrichment_state FROM chunks WHERE id=?", (chunk_id,)).fetchone()
         assert row is not None
@@ -703,7 +726,7 @@ class TestFromAC_StoreEnrichment:
         chunk_id = _insert_chunk(conn, document_id=doc_id)
 
         ctx = _make_mcp_ctx(conn)
-        await store_enrichment(ctx, chunk_id=chunk_id, entities=[], edges=[])
+        await store_enrichment(ctx, chunk_id=chunk_id, claim_token=_claim_chunk(conn, chunk_id), entities=[], edges=[])
         result = await get_next_batch(ctx, limit=10)
 
         returned_ids = {_get_chunk_field(r, "chunk_id") for r in result}
@@ -739,34 +762,36 @@ class TestFromAC_StoreEnrichment:
         chunk_id_b = str(uuid.uuid4())
         setup_conn.execute(
             "INSERT INTO chunks "
-            "(id, document_id, chunk_index, content, metadata, created_at, scope, enrichment_state) "
-            "VALUES (?, ?, 0, 'chunk-a', '{}', ?, 'global', 'claimed')",
-            (chunk_id_a, did, now),
+            "(id, document_id, chunk_index, content, metadata, created_at, scope, enrichment_state, "
+            "claimed_at, claimed_by, claim_token) "
+            "VALUES (?, ?, 0, 'chunk-a', '{}', ?, 'global', 'claimed', ?, 'pytest', 'token-a')",
+            (chunk_id_a, did, now, now),
         )
         setup_conn.execute(
             "INSERT INTO chunks "
-            "(id, document_id, chunk_index, content, metadata, created_at, scope, enrichment_state) "
-            "VALUES (?, ?, 1, 'chunk-b', '{}', ?, 'global', 'claimed')",
-            (chunk_id_b, did, now),
+            "(id, document_id, chunk_index, content, metadata, created_at, scope, enrichment_state, "
+            "claimed_at, claimed_by, claim_token) "
+            "VALUES (?, ?, 1, 'chunk-b', '{}', ?, 'global', 'claimed', ?, 'pytest', 'token-b')",
+            (chunk_id_b, did, now, now),
         )
         setup_conn.commit()
         setup_conn.close()
 
         errors: list[Exception] = []
 
-        def _write_chunk(chunk_id: str) -> None:
+        def _write_chunk(chunk_id: str, claim_token: str) -> None:
             c = sqlite3.connect(db_path)
             c.execute("PRAGMA journal_mode=WAL")
             ctx = _make_mcp_ctx(c)
             try:
-                asyncio.run(store_enrichment(ctx, chunk_id=chunk_id, entities=[], edges=[]))
+                asyncio.run(store_enrichment(ctx, chunk_id=chunk_id, claim_token=claim_token, entities=[], edges=[]))
             except Exception as exc:  # noqa: BLE001
                 errors.append(exc)
             finally:
                 c.close()
 
-        t1 = threading.Thread(target=_write_chunk, args=(chunk_id_a,))
-        t2 = threading.Thread(target=_write_chunk, args=(chunk_id_b,))
+        t1 = threading.Thread(target=_write_chunk, args=(chunk_id_a, "token-a"))
+        t2 = threading.Thread(target=_write_chunk, args=(chunk_id_b, "token-b"))
         t1.start()
         t2.start()
         t1.join(timeout=10)
@@ -801,34 +826,36 @@ class TestFromAC_StoreEnrichment:
         chunk_id_b = str(uuid.uuid4())
         setup_conn.execute(
             "INSERT INTO chunks "
-            "(id, document_id, chunk_index, content, metadata, created_at, scope, enrichment_state) "
-            "VALUES (?, ?, 0, 'a', '{}', ?, 'global', 'claimed')",
-            (chunk_id_a, did, now),
+            "(id, document_id, chunk_index, content, metadata, created_at, scope, enrichment_state, "
+            "claimed_at, claimed_by, claim_token) "
+            "VALUES (?, ?, 0, 'a', '{}', ?, 'global', 'claimed', ?, 'pytest', 'token-a')",
+            (chunk_id_a, did, now, now),
         )
         setup_conn.execute(
             "INSERT INTO chunks "
-            "(id, document_id, chunk_index, content, metadata, created_at, scope, enrichment_state) "
-            "VALUES (?, ?, 1, 'b', '{}', ?, 'global', 'claimed')",
-            (chunk_id_b, did, now),
+            "(id, document_id, chunk_index, content, metadata, created_at, scope, enrichment_state, "
+            "claimed_at, claimed_by, claim_token) "
+            "VALUES (?, ?, 1, 'b', '{}', ?, 'global', 'claimed', ?, 'pytest', 'token-b')",
+            (chunk_id_b, did, now, now),
         )
         setup_conn.commit()
         setup_conn.close()
 
         errors: list[Exception] = []
 
-        def _write_chunk(chunk_id: str) -> None:
+        def _write_chunk(chunk_id: str, claim_token: str) -> None:
             c = sqlite3.connect(db_path)
             c.execute("PRAGMA journal_mode=WAL")
             ctx = _make_mcp_ctx(c)
             try:
-                asyncio.run(store_enrichment(ctx, chunk_id=chunk_id, entities=[], edges=[]))
+                asyncio.run(store_enrichment(ctx, chunk_id=chunk_id, claim_token=claim_token, entities=[], edges=[]))
             except Exception as exc:  # noqa: BLE001
                 errors.append(exc)
             finally:
                 c.close()
 
-        t1 = threading.Thread(target=_write_chunk, args=(chunk_id_a,))
-        t2 = threading.Thread(target=_write_chunk, args=(chunk_id_b,))
+        t1 = threading.Thread(target=_write_chunk, args=(chunk_id_a, "token-a"))
+        t2 = threading.Thread(target=_write_chunk, args=(chunk_id_b, "token-b"))
         t1.start()
         t2.start()
         t1.join(timeout=10)

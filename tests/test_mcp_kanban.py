@@ -230,6 +230,49 @@ class TestLifecycleErrorHelper:
 
         assert len(helper_calls) == 1
 
+
+class TestSharedArchivalHelperDurable:
+    """move_task and end_work both delegate archival checks to the shared helper."""
+
+    def test_shared_archival_validation_helper_exists_in_server_module(self) -> None:
+        assert hasattr(_server_mod, "_validate_archival_constraints")
+
+    @pytest.mark.asyncio
+    async def test_move_task_invokes_shared_archival_validation_helper(
+        self,
+        app_ctx_with_mock_view: tuple[AppContext, MagicMock],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        app_ctx, _mock_view = app_ctx_with_mock_view
+        calls: list[object] = []
+
+        def tracking_helper(*args: object, **kwargs: object) -> None:
+            calls.append((args, kwargs))
+
+        monkeypatch.setattr(_server_mod, "_validate_archival_constraints", tracking_helper)
+
+        await move_task(_make_ctx(app_ctx), id="1", status="in-progress")
+
+        assert calls
+
+    @pytest.mark.asyncio
+    async def test_end_work_invokes_shared_archival_validation_helper(
+        self,
+        app_ctx_with_mock_view: tuple[AppContext, MagicMock],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        app_ctx, _mock_view = app_ctx_with_mock_view
+        calls: list[object] = []
+
+        def tracking_helper(*args: object, **kwargs: object) -> None:
+            calls.append((args, kwargs))
+
+        monkeypatch.setattr(_server_mod, "_validate_archival_constraints", tracking_helper)
+
+        await end_work(_make_ctx(app_ctx), id="1", outcome="success", note="done")
+
+        assert calls
+
     @pytest.mark.asyncio
     async def test_end_work_routes_kanban_errors_via_shared_helper(
         self,

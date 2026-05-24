@@ -148,7 +148,8 @@ class TestFromAC_IntegrityExtraction:
         _insert_document(conn, "doc-a")
         _insert_chunk(conn, "chunk-a", "doc-a")
         _insert_entity(conn, "entity-a", "doc-a")
-        _insert_edge(conn, "edge-a", "entity-a", None, "doc-a")
+        _insert_entity(conn, "entity-b", "doc-a")
+        _insert_edge(conn, "edge-a", "entity-a", "entity-b", "doc-a")
         _insert_document_status(conn, "doc-a")
 
         result = audit_integrity(conn)

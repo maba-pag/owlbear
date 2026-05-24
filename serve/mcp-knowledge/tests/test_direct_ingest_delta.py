@@ -139,9 +139,9 @@ async def test_anonymous_text_ingest_creates_claimable_inline_source(
     )
 
     source_row = conn.execute(
-        "SELECT id, name, source_type, fetch_method, enabled, enrich FROM knowledge_sources"
+        "SELECT id, name, source_type, fetch_method, enabled, refreshable, enrich FROM knowledge_sources"
     ).fetchone()
-    assert source_row[1:] == ("Jeff sent x.pdf", "inline", "inline", 0, 1)
+    assert source_row[1:] == ("Jeff sent x.pdf", "inline", "inline", 1, 0, 1)
     assert conn.execute("SELECT source_id FROM documents").fetchone()[0] == source_row[0]
     batch = await get_next_batch(_ctx(app_ctx), limit=1)
     assert len(batch) == 1
@@ -285,10 +285,10 @@ async def test_plain_metadata_source_label_creates_inline_source(
     doc_source_id = conn.execute("SELECT source_id FROM documents").fetchone()[0]
     assert doc_source_id is not None
     source_row = conn.execute(
-        "SELECT name, source_type, fetch_method, enabled, config FROM knowledge_sources"
+        "SELECT name, source_type, fetch_method, enabled, refreshable, config FROM knowledge_sources"
     ).fetchone()
-    assert source_row[:4] == ("Manual Doc", "inline", "inline", 0)
-    assert json.loads(source_row[4])["source"] == "manual upload"
+    assert source_row[:5] == ("Manual Doc", "inline", "inline", 1, 0)
+    assert json.loads(source_row[5])["source"] == "manual upload"
     assert conn.execute("SELECT source FROM document_status").fetchone()[0] == "manual upload"
 
 

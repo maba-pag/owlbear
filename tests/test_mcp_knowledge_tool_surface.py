@@ -1,8 +1,8 @@
 """Tests for task #1334: Tool surface validation (8 active, inactive removed, stubs registered).
 
 AC coverage:
-  - AC1: exactly 8 tools in mcp._tool_manager.list_tools() at import time
-  - AC2: active tool set contains all 8 expected names
+    - AC1: exactly 10 tools in mcp._tool_manager.list_tools() at import time
+    - AC2: active tool set contains all 10 expected names
          (search_knowledge, list_sources, get_stats, ingest_document, refresh_source,
           get_next_batch, get_consolidation_candidates, store_enrichment)
   - AC3: removed tools absent from tool list
@@ -43,7 +43,7 @@ def _registered_tool_names() -> frozenset[str]:
 
 
 # ---------------------------------------------------------------------------
-# Expected tool surface (post-#1335)
+# Expected tool surface
 # ---------------------------------------------------------------------------
 
 _ACTIVE_TOOLS = frozenset(
@@ -53,7 +53,9 @@ _ACTIVE_TOOLS = frozenset(
         "get_stats",
         "ingest_document",
         "refresh_source",
+        "remove_source",
         "get_next_batch",
+        "retry_failed_enrichment",
         "get_consolidation_candidates",
         "store_enrichment",
     }
@@ -77,26 +79,26 @@ _REMOVED_TOOLS = frozenset(
 class TestFromAC_ToolSurfaceValidation:
     """Contract tests for the mcp-knowledge tool surface after phase-4 cleanup (#1334)."""
 
-    # -- AC1: Exactly 8 tools registered ------------------------------------
+    # -- AC1: Exactly 10 tools registered -----------------------------------
 
     def test_exactly_eight_tools_registered(self) -> None:
-        """AC1: mcp._tool_manager.list_tools() must return exactly 8 tools at import time.
+        """AC1: mcp._tool_manager.list_tools() must return exactly 10 tools at import time.
 
         FAILS in RED: current server has 16 registered tools.
         PASSES in GREEN after #1335 removes 5 deprecated tools and 4 scope-stub decorators,
         and registers get_consolidation_candidates.
         """
         tool_names = _registered_tool_names()
-        assert len(tool_names) == 8, (
-            f"Expected exactly 8 registered tools, got {len(tool_names)}: {sorted(tool_names)!r}. "
+        assert len(tool_names) == 10, (
+            f"Expected exactly 10 registered tools, got {len(tool_names)}: {sorted(tool_names)!r}. "
             "After #1335: remove @mcp.tool() from list_entities, bookmark_source, list_bookmarks, "
             "update_bookmark_tags, consolidate_knowledge; and register get_consolidation_candidates."
         )
 
-    # -- AC2: All 8 active tools present ------------------------------------
+    # -- AC2: All 10 active tools present -----------------------------------
 
     def test_all_active_tools_present(self) -> None:
-        """AC2: tool list must contain all 8 active tool names.
+        """AC2: tool list must contain all 10 active tool names.
 
         FAILS in RED: get_consolidation_candidates is currently a bare function,
         not registered with @mcp.tool().

@@ -15,6 +15,8 @@ dependencies.
 from __future__ import annotations
 
 import ast
+import re
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -59,6 +61,22 @@ def _owlbear_root(name: str | None) -> str | None:
         return None
     root = name.split(".")[0]
     return root if root in _ALL_NAMESPACES else None
+
+
+_OWLBEAR_DEP_RE = re.compile(r"^owlbear-([a-z][a-z0-9-]*)(\[.*?\])?")
+
+
+def _owlbear_deps_from_manifest(manifest_path: Path) -> set[str]:
+    """Return the owlbear namespace deps declared in a package manifest."""
+    with manifest_path.open("rb") as manifest_file:
+        data = tomllib.load(manifest_file)
+    deps: list[str] = data.get("project", {}).get("dependencies", [])
+    result: set[str] = set()
+    for dep in deps:
+        match = _OWLBEAR_DEP_RE.match(dep.strip())
+        if match:
+            result.add("owlbear_" + match.group(1).replace("-", "_"))
+    return result
 
 
 def _scan_file(
@@ -233,6 +251,22 @@ class TestFromAC_AllowedImportsSchema:
         discovered = _discover_namespaces(serve_root)
         extra = set(ALLOWED_IMPORTS) - discovered
         assert not extra, f"ALLOWED_IMPORTS has keys for non-existent namespaces: {sorted(extra)}"
+
+
+class TestAllowedImportsManifestAlignment:
+    """Selected ALLOWED_IMPORTS entries exactly match workspace manifests."""
+
+    def test_owlbear_memory_allowed_imports_matches_manifest(self, project_root: Path) -> None:
+        manifest = project_root / "serve" / "memory" / "pyproject.toml"
+        assert ALLOWED_IMPORTS["owlbear_memory"] == _owlbear_deps_from_manifest(manifest)
+
+    def test_owlbear_mcp_memory_allowed_imports_matches_manifest(self, project_root: Path) -> None:
+        manifest = project_root / "serve" / "mcp-memory" / "pyproject.toml"
+        assert ALLOWED_IMPORTS["owlbear_mcp_memory"] == _owlbear_deps_from_manifest(manifest)
+
+    def test_owlbear_cockpit_allowed_imports_matches_manifest(self, project_root: Path) -> None:
+        manifest = project_root / "serve" / "cockpit" / "pyproject.toml"
+        assert ALLOWED_IMPORTS["owlbear_cockpit"] == _owlbear_deps_from_manifest(manifest)
 
 
 # ---------------------------------------------------------------------------

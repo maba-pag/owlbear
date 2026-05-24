@@ -16,10 +16,12 @@ embeddings required. Tests fail with ImportError until builder creates server.py
 
 from __future__ import annotations
 
+import sqlite3
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from owlbear_knowledge.schema import init_db
 
 # ---------------------------------------------------------------------------
 # Import targets — will raise ImportError until builder creates server.py (RED)
@@ -88,6 +90,16 @@ def _make_mcp_ctx(app_ctx: Any = None) -> MagicMock:
     mcp_ctx = MagicMock()
     mcp_ctx.request_context.lifespan_context = app_ctx or _make_app_context()
     return mcp_ctx
+
+
+def _make_stats_ctx(counts: tuple[int, int, int]) -> MagicMock:
+    """Return an MCP context whose GraphStore reports the provided counts."""
+    graph_store = MagicMock()
+    graph_store.get_counts.return_value = counts
+    app_ctx = _make_app_context(graph_store=graph_store)
+    app_ctx.conn = sqlite3.connect(":memory:")
+    init_db(app_ctx.conn)
+    return _make_mcp_ctx(app_ctx)
 
 
 # ---------------------------------------------------------------------------
@@ -435,9 +447,7 @@ class TestFromAC_GetStats:
     @pytest.mark.asyncio
     async def test_returns_knowledge_base_prefix(self) -> None:
         """get_stats returns a dict with 'documents', 'entities', 'edges' keys."""
-        with patch("owlbear_mcp_knowledge.server.asyncio.to_thread", new_callable=AsyncMock) as mock_t:
-            mock_t.return_value = (3, 7, 5)
-            output = await get_stats(_make_mcp_ctx())
+        output = await get_stats(_make_stats_ctx((3, 7, 5)))
 
         assert isinstance(output, dict)
         assert "documents" in output
@@ -447,9 +457,7 @@ class TestFromAC_GetStats:
     @pytest.mark.asyncio
     async def test_return_format_contains_all_three_counts(self) -> None:
         """Returned dict contains correct count values from get_counts()."""
-        with patch("owlbear_mcp_knowledge.server.asyncio.to_thread", new_callable=AsyncMock) as mock_t:
-            mock_t.return_value = (5, 12, 7)
-            output = await get_stats(_make_mcp_ctx())
+        output = await get_stats(_make_stats_ctx((5, 12, 7)))
 
         assert output["documents"] == 5
         assert output["entities"] == 12
@@ -460,29 +468,28 @@ class TestFromAC_GetStats:
         self,
     ) -> None:
         """Returned dict has 'documents', 'entities', and 'edges' keys."""
-        with patch("owlbear_mcp_knowledge.server.asyncio.to_thread", new_callable=AsyncMock) as mock_t:
-            mock_t.return_value = (0, 0, 0)
-            output = await get_stats(_make_mcp_ctx())
+        output = await get_stats(_make_stats_ctx((0, 0, 0)))
 
         assert "documents" in output
         assert "entities" in output
         assert "edges" in output
 
     @pytest.mark.asyncio
-    async def test_calls_get_counts_via_asyncio_to_thread(self) -> None:
-        """get_stats uses asyncio.to_thread to call GraphStore.get_counts (synchronous)."""
-        with patch("owlbear_mcp_knowledge.server.asyncio.to_thread", new_callable=AsyncMock) as mock_t:
-            mock_t.return_value = (0, 0, 0)
-            await get_stats(_make_mcp_ctx())
+    async def test_calls_get_counts_directly(self) -> None:
+        """get_stats calls GraphStore.get_counts on the same SQLite thread."""
+        graph_store = MagicMock()
+        graph_store.get_counts.return_value = (0, 0, 0)
+        app_ctx = _make_app_context(graph_store=graph_store)
+        app_ctx.conn = sqlite3.connect(":memory:")
+        init_db(app_ctx.conn)
+        await get_stats(_make_mcp_ctx(app_ctx))
 
-        mock_t.assert_called_once()
+        graph_store.get_counts.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_counts_order_is_documents_entities_edges(self) -> None:
         """Counts map correctly: documents=first, entities=second, edges=third."""
-        with patch("owlbear_mcp_knowledge.server.asyncio.to_thread", new_callable=AsyncMock) as mock_t:
-            mock_t.return_value = (2, 300, 40)
-            output = await get_stats(_make_mcp_ctx())
+        output = await get_stats(_make_stats_ctx((2, 300, 40)))
 
         assert output["documents"] == 2
         assert output["entities"] == 300
@@ -627,18 +634,14 @@ class TestFromAC_GetStatsStructured:
     @pytest.mark.asyncio
     async def test_returns_dict(self) -> None:
         """get_stats returns a dict (not str)."""
-        with patch("owlbear_mcp_knowledge.server.asyncio.to_thread", new_callable=AsyncMock) as mock_t:
-            mock_t.return_value = (3, 7, 5)
-            result = await get_stats(_make_mcp_ctx())
+        result = await get_stats(_make_stats_ctx((3, 7, 5)))
 
         assert isinstance(result, dict)
 
     @pytest.mark.asyncio
     async def test_dict_has_documents_entities_edges_keys(self) -> None:
         """Returned dict has exactly 'documents', 'entities', 'edges' keys."""
-        with patch("owlbear_mcp_knowledge.server.asyncio.to_thread", new_callable=AsyncMock) as mock_t:
-            mock_t.return_value = (1, 2, 3)
-            result = await get_stats(_make_mcp_ctx())
+        result = await get_stats(_make_stats_ctx((1, 2, 3)))
 
         assert isinstance(result, dict)
         assert "documents" in result  # type: ignore[operator]
@@ -648,9 +651,7 @@ class TestFromAC_GetStatsStructured:
     @pytest.mark.asyncio
     async def test_dict_values_are_int(self) -> None:
         """All values in the returned dict are int."""
-        with patch("owlbear_mcp_knowledge.server.asyncio.to_thread", new_callable=AsyncMock) as mock_t:
-            mock_t.return_value = (5, 10, 15)
-            result = await get_stats(_make_mcp_ctx())
+        result = await get_stats(_make_stats_ctx((5, 10, 15)))
 
         for key in ("documents", "entities", "edges"):
             assert isinstance(result[key], int), f"{key!r} should be int"  # type: ignore[index]
@@ -658,36 +659,28 @@ class TestFromAC_GetStatsStructured:
     @pytest.mark.asyncio
     async def test_documents_matches_first_count(self) -> None:
         """'documents' maps to the first value from get_counts()."""
-        with patch("owlbear_mcp_knowledge.server.asyncio.to_thread", new_callable=AsyncMock) as mock_t:
-            mock_t.return_value = (42, 0, 0)
-            result = await get_stats(_make_mcp_ctx())
+        result = await get_stats(_make_stats_ctx((42, 0, 0)))
 
         assert result["documents"] == 42  # type: ignore[index]
 
     @pytest.mark.asyncio
     async def test_entities_matches_second_count(self) -> None:
         """'entities' maps to the second value from get_counts()."""
-        with patch("owlbear_mcp_knowledge.server.asyncio.to_thread", new_callable=AsyncMock) as mock_t:
-            mock_t.return_value = (0, 77, 0)
-            result = await get_stats(_make_mcp_ctx())
+        result = await get_stats(_make_stats_ctx((0, 77, 0)))
 
         assert result["entities"] == 77  # type: ignore[index]
 
     @pytest.mark.asyncio
     async def test_edges_matches_third_count(self) -> None:
         """'edges' maps to the third value from get_counts()."""
-        with patch("owlbear_mcp_knowledge.server.asyncio.to_thread", new_callable=AsyncMock) as mock_t:
-            mock_t.return_value = (0, 0, 99)
-            result = await get_stats(_make_mcp_ctx())
+        result = await get_stats(_make_stats_ctx((0, 0, 99)))
 
         assert result["edges"] == 99  # type: ignore[index]
 
     @pytest.mark.asyncio
     async def test_all_three_values_correct_simultaneously(self) -> None:
         """All three count values are mapped correctly from get_counts() in a single call."""
-        with patch("owlbear_mcp_knowledge.server.asyncio.to_thread", new_callable=AsyncMock) as mock_t:
-            mock_t.return_value = (11, 22, 33)
-            result = await get_stats(_make_mcp_ctx())
+        result = await get_stats(_make_stats_ctx((11, 22, 33)))
 
         assert result["documents"] == 11  # type: ignore[index]
         assert result["entities"] == 22  # type: ignore[index]

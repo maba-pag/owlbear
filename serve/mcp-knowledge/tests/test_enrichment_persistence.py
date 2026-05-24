@@ -1,4 +1,6 @@
-"""Tests for manual enrichment graph persistence contract — task #1557.
+"""Durable tests for manual enrichment graph persistence contracts.
+
+Originally promoted from archived task #1557.
 
 Covers AC-1 through AC-6:
 - AC-1: get_next_batch must return provenance fields (document_id, source_id, scope)

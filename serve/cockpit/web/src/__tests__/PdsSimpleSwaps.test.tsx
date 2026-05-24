@@ -16,11 +16,15 @@ import { MemoryRouter } from 'react-router'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
 import ActivityTab from '../components/ActivityTab'
 import DRStatusIndicator from '../components/DRStatusIndicator'
+import DecisionViewport from '../components/DecisionViewport'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import DetailTab, { type TaskDetail } from '../components/DetailTab'
+import TaskFieldsEditor from '../components/TaskFieldsEditor'
 import Shell from '../Shell'
 import { CockpitProvider } from '../hooks/CockpitProvider'
+import type { PendingDR } from '../hooks/usePendingDRs'
 import { usePollingFetch } from '../hooks/usePollingFetch'
+import type { TaskFieldsEditorProps } from '../components/TaskFieldsEditor'
 
 // ─── Module mocks ─────────────────────────────────────────────────────────────
 
@@ -70,6 +74,24 @@ const TASK: TaskDetail = {
   depends_on: [],
 }
 
+const TASK_FIELDS: TaskDetail = {
+  id: 42,
+  title: 'Fix login bug',
+  status: 'todo',
+  priority: 'important',
+  body: 'Some body text.',
+  updated: '2026-05-01T12:00:00+00:00',
+  created: '2026-05-01T10:00:00+00:00',
+  tags: ['bug'],
+  blocked: false,
+  block_reason: null,
+  claimed: false,
+  claimed_at: null,
+  dep_status: null,
+  parent: null,
+  depends_on: [],
+}
+
 const DR_PENDING = {
   id: 'dr-001',
   task_id: 42,
@@ -78,6 +100,28 @@ const DR_PENDING = {
   created: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
   title: 'Should we use approach A?',
   body_preview: 'Context...',
+}
+
+const DR_A: PendingDR = {
+  id: 'dr-1634-a',
+  task_id: 42,
+  agent: 'builder',
+  request_type: 'scope-decision',
+  created: new Date(Date.now() - 2 * 3_600_000).toISOString(),
+  title: 'Should we refactor the cache?',
+  body: '## Context\n\nSome context.',
+  body_preview: 'Consider architectural simplification.',
+}
+
+const DR_B: PendingDR = {
+  id: 'dr-1634-b',
+  task_id: 99,
+  agent: 'architect',
+  request_type: 'user-action',
+  created: new Date(Date.now() - 25 * 3_600_000).toISOString(),
+  title: 'Confirm scope change.',
+  body: '## Scope\n\nPhase 2 scope.',
+  body_preview: 'Confirm the feature boundary.',
 }
 
 // ─── Render helpers ────────────────────────────────────────────────────────────
@@ -118,6 +162,41 @@ function renderDetailTab(task: TaskDetail = TASK) {
   return render(
     <PorscheDesignSystemProvider>
       <DetailTab task={task} />
+    </PorscheDesignSystemProvider>,
+  )
+}
+
+function renderTaskFieldsEditor(overrides: Partial<TaskFieldsEditorProps> = {}) {
+  const defaults: TaskFieldsEditorProps = {
+    task: TASK_FIELDS,
+    priorities: ['someday', 'needed', 'important', 'critical'],
+    conflictLocalDraft: null,
+    conflictRemoteTaskId: null,
+    serverValidationMessage: null,
+    clearConflictIfTaskChanged: vi.fn(),
+    onSave: vi.fn().mockResolvedValue(undefined),
+  }
+  return render(
+    <PorscheDesignSystemProvider>
+      <TaskFieldsEditor {...defaults} {...overrides} />
+    </PorscheDesignSystemProvider>,
+  )
+}
+
+function renderDecisionViewport({
+  items = [] as PendingDR[],
+  isLoading = false,
+  error = null as Error | null,
+  onItemClick = vi.fn(),
+} = {}) {
+  return render(
+    <PorscheDesignSystemProvider>
+      <DecisionViewport
+        items={items}
+        isLoading={isLoading}
+        error={error}
+        onItemClick={onItemClick}
+      />
     </PorscheDesignSystemProvider>,
   )
 }
@@ -421,5 +500,51 @@ describe('TestFromAC_SimpleSwaps_ErrorBoundaryH3', () => {
     const { container } = renderErrorBoundaryInError()
     const heading = container.querySelector('p-heading')
     expect(heading?.textContent).toContain('Something went wrong')
+  })
+})
+
+describe('TestFromAC_PdsSimpleSwaps_TaskFieldsEditor', () => {
+  afterEach(() => {
+    vi.resetAllMocks()
+  })
+
+  it('TaskFieldsEditor p-select renders p-select-option children with no native OPTION elements', () => {
+    const { container } = renderTaskFieldsEditor()
+    const pSelect = container.querySelector('p-select')
+    expect(pSelect).not.toBeNull()
+    expect(pSelect?.querySelector('p-select-option')).not.toBeNull()
+    const nativeCount = Array.from(pSelect?.children ?? []).filter((child) => child.tagName === 'OPTION').length
+    expect(nativeCount).toBe(0)
+  })
+})
+
+describe('TestFromAC_PdsSimpleSwaps_DecisionViewport', () => {
+  afterEach(() => {
+    vi.resetAllMocks()
+  })
+
+  it('DecisionViewport task-ref renders as p-link-pure with href on the host and icon none', () => {
+    const onItemClick = vi.fn()
+    const { container } = renderDecisionViewport({ items: [DR_A], onItemClick })
+    const taskRef = container.querySelector('[data-testid="decision-task-ref-dr-1634-a"]')
+
+    expect(taskRef).not.toBeNull()
+    expect(taskRef?.tagName.toLowerCase()).toBe('p-link-pure')
+    expect(taskRef?.getAttribute('href')).toMatch(/^#task-\d+$/)
+    expect(taskRef?.getAttribute('icon')).toBe('none')
+
+    fireEvent.click(taskRef!)
+    expect(onItemClick).toHaveBeenCalledWith('dr-1634-a')
+  })
+
+  it('each DecisionViewport task-ref element is p-link-pure with href preserved on the host', () => {
+    const { container } = renderDecisionViewport({ items: [DR_A, DR_B] })
+    const taskRefs = container.querySelectorAll('[data-testid^="decision-task-ref-"]')
+
+    expect(taskRefs.length).toBe(2)
+    for (const taskRef of Array.from(taskRefs)) {
+      expect(taskRef.tagName.toLowerCase()).toBe('p-link-pure')
+      expect(taskRef.getAttribute('href')).toMatch(/^#task-\d+$/)
+    }
   })
 })
