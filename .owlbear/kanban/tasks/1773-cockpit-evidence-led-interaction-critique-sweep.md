@@ -61,6 +61,12 @@ User approved implementing #1780 after the effort estimate. The modal containmen
 ## Reframe After #1780
 User challenged the width focus. Corrected interpretation: viewport containment is only a guardrail. The next #1773 pass should prioritize general Cockpit UX quality: task selection, information hierarchy, repeated workflows, edit confidence, decision resolution clarity, memory triage, ideas capture, keyboard/focus affordance, loading/error/empty states, and whether each tab's intended job is obvious and efficient at supported desktop widths.
 
+[[2026-05-24T10:59:00+02:00]]
+## Reframe After #1824
+User rejected another 1024px-first finding as the wrong focus for #1773. Small viewport checks remain occasional guardrails only. Continue the sweep by examining real Cockpit UX and implementation quality: methods used, private calls instead of API boundaries, information users need to act, actions users naturally want to take, standardization between tabs/pages, size and compactness, font sizes and hierarchy, and overall UI/UX fitness.
+
+#1824 was closed as no-op because the finding framing over-centered the support floor instead of broader product quality.
+
 [[2026-05-24T01:57:30+02:00]]
 ## User Feedback Capture
 User provided general UX feedback and clarified priorities. Created/refined tasks:

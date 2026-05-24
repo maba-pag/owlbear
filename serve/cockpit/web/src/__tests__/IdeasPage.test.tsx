@@ -13,7 +13,7 @@
 
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, fireEvent, act, waitFor } from '@testing-library/react'
-import { MemoryRouter, Routes, Route, useNavigate } from 'react-router'
+import { createMemoryRouter, RouterProvider, useNavigate } from 'react-router'
 import IdeasPage from '../pages/IdeasPage'
 
 // ─── Fetch mock factories ──────────────────────────────────────────────────────
@@ -59,14 +59,21 @@ function NavButton({ to, testId }: { to: string; testId: string }) {
 // ─── Render helpers ───────────────────────────────────────────────────────────
 
 function renderInRouter() {
+  const router = createMemoryRouter([
+    {
+      path: '/ideas',
+      element: (
+        <>
+          <IdeasPage />
+          <NavButton to="/" testId="nav-home" />
+        </>
+      ),
+    },
+    { path: '/', element: <div data-testid="home-page">Home</div> },
+  ], { initialEntries: ['/ideas'] })
+
   return render(
-    <MemoryRouter initialEntries={['/ideas']}>
-      <Routes>
-        <Route path="/ideas" element={<IdeasPage />} />
-        <Route path="/" element={<div data-testid="home-page">Home</div>} />
-      </Routes>
-      <NavButton to="/" testId="nav-home" />
-    </MemoryRouter>,
+    <RouterProvider router={router} />,
   )
 }
 
@@ -390,6 +397,39 @@ describe('IdeasPageIntegration_GuardAfterSave', () => {
     await waitFor(() => {
       expect(container.querySelector('[role="alertdialog"]')).not.toBeNull()
     })
+  })
+
+  it('keeps the user on Ideas when cancelling a dirty navigation', async () => {
+    const { container } = await renderLoaded('base')
+    fireEvent.change(container.querySelector('textarea')!, { target: { value: 'unsaved' } })
+    fireEvent.click(container.querySelector('[data-testid="nav-home"]')!)
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="ideas-unsaved-dialog"]')).not.toBeNull()
+    })
+
+    fireEvent.click(container.querySelector('[data-testid="ideas-unsaved-cancel"]')!)
+
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="ideas-unsaved-dialog"]')).toBeNull()
+    })
+    expect(container.querySelector('[data-testid="ideas-editor-shell"]')).not.toBeNull()
+    expect(container.querySelector('[data-testid="home-page"]')).toBeNull()
+  })
+
+  it('continues the blocked navigation when the user confirms leaving Ideas', async () => {
+    const { container } = await renderLoaded('base')
+    fireEvent.change(container.querySelector('textarea')!, { target: { value: 'unsaved' } })
+    fireEvent.click(container.querySelector('[data-testid="nav-home"]')!)
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="ideas-unsaved-dialog"]')).not.toBeNull()
+    })
+
+    fireEvent.click(container.querySelector('[data-testid="ideas-unsaved-leave"]')!)
+
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="home-page"]')).not.toBeNull()
+    })
+    expect(container.querySelector('[data-testid="ideas-unsaved-dialog"]')).toBeNull()
   })
 })
 

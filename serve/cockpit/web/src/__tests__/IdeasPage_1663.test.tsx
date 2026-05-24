@@ -14,6 +14,7 @@
 
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, fireEvent, act } from '@testing-library/react'
+import { createMemoryRouter, RouterProvider } from 'react-router'
 import IdeasPage from '../pages/IdeasPage'
 
 // ─── Fetch mock ────────────────────────────────────────────────────────────────
@@ -38,9 +39,12 @@ async function flush() {
 
 async function renderLoaded(content = '') {
   vi.stubGlobal('fetch', makeGetOkFetch(content))
+  const router = createMemoryRouter([
+    { path: '/ideas', element: <IdeasPage /> },
+  ], { initialEntries: ['/ideas'] })
   let container!: HTMLElement
   await act(async () => {
-    container = render(<IdeasPage />).container
+    container = render(<RouterProvider router={router} />).container
   })
   await flush()
   return container

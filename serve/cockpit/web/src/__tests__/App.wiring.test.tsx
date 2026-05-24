@@ -3,7 +3,7 @@
  *
  * Tests for task #1504: Implement CockpitProvider and slim Shell.tsx
  *
- * AC-8:  App.tsx provider order: PorscheDesignSystemProvider > BrowserRouter >
+ * AC-8:  App.tsx provider order: PorscheDesignSystemProvider > data router >
  *        EventSourceProvider > CockpitProvider > ErrorBoundary > Shell
  * AC-9:  Shell.tsx has zero direct calls to useBoard, usePendingDRs, or
  *        useScanPolling; retains only layout and hook-based composition via

@@ -35,7 +35,7 @@
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, fireEvent, act } from '@testing-library/react'
-import { MemoryRouter, Routes, Route } from 'react-router'
+import { createMemoryRouter, RouterProvider } from 'react-router'
 import IdeasPage from '../pages/IdeasPage'
 
 // ─── Fetch mock factories ──────────────────────────────────────────────────────
@@ -67,12 +67,12 @@ function makeNetworkErrorFetch() {
 // ─── Render helpers ──────────────────────────────────────────────────────────
 
 function renderInRouter() {
+  const router = createMemoryRouter([
+    { path: '/ideas', element: <IdeasPage /> },
+  ], { initialEntries: ['/ideas'] })
+
   return render(
-    <MemoryRouter initialEntries={['/ideas']}>
-      <Routes>
-        <Route path="/ideas" element={<IdeasPage />} />
-      </Routes>
-    </MemoryRouter>,
+    <RouterProvider router={router} />,
   )
 }
 

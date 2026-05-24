@@ -1,5 +1,5 @@
-import { type ReactNode } from 'react'
-import { BrowserRouter } from 'react-router'
+import { useMemo, type ReactNode } from 'react'
+import { createBrowserRouter, RouterProvider } from 'react-router'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
 import Shell from './Shell'
 import { ErrorBoundary } from './components/ErrorBoundary'
@@ -15,18 +15,27 @@ const EventSourceProvider =
     ? EventSourceProviderModule.EventSourceProvider
     : PassthroughProvider
 
+function CockpitRuntime() {
+  return (
+    <EventSourceProvider url="/api/events">
+      <CockpitProvider>
+        <ErrorBoundary label="Cockpit">
+          <Shell />
+        </ErrorBoundary>
+      </CockpitProvider>
+    </EventSourceProvider>
+  )
+}
+
 function App() {
+  const router = useMemo(
+    () => createBrowserRouter([{ path: '*', element: <CockpitRuntime /> }]),
+    [],
+  )
+
   return (
     <PorscheDesignSystemProvider>
-      <BrowserRouter>
-        <EventSourceProvider url="/api/events">
-          <CockpitProvider>
-            <ErrorBoundary label="Cockpit">
-              <Shell />
-            </ErrorBoundary>
-          </CockpitProvider>
-        </EventSourceProvider>
-      </BrowserRouter>
+      <RouterProvider router={router} />
     </PorscheDesignSystemProvider>
   )
 }

@@ -16,7 +16,7 @@
 
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, fireEvent, act, waitFor } from '@testing-library/react'
-import { BrowserRouter, MemoryRouter, Routes, Route, useNavigate } from 'react-router'
+import { createMemoryRouter, RouterProvider, useNavigate } from 'react-router'
 import IdeasPage from '../pages/IdeasPage'
 
 // ─── Fetch mock helpers ───────────────────────────────────────────────────────
@@ -43,14 +43,21 @@ function NavButton({ to, testId }: { to: string; testId: string }) {
 // ─── Render helpers ───────────────────────────────────────────────────────────
 
 function renderInRouter() {
+  const router = createMemoryRouter([
+    {
+      path: '/ideas',
+      element: (
+        <>
+          <IdeasPage />
+          <NavButton to="/" testId="nav-home" />
+        </>
+      ),
+    },
+    { path: '/', element: <div data-testid="home-page">Home</div> },
+  ], { initialEntries: ['/ideas'] })
+
   return render(
-    <MemoryRouter initialEntries={['/ideas']}>
-      <Routes>
-        <Route path="/ideas" element={<IdeasPage />} />
-        <Route path="/" element={<div data-testid="home-page">Home</div>} />
-      </Routes>
-      <NavButton to="/" testId="nav-home" />
-    </MemoryRouter>,
+    <RouterProvider router={router} />,
   )
 }
 
@@ -302,61 +309,45 @@ describe('TestFromAC_EventListenerCleanup', () => {
   })
 })
 
-// ─── AC1/AC3: BrowserRouter surface proof (retry: reviewer finding #1) ────────
+// ─── AC1/AC3: Data-router surface proof ──────────────────────────────────────
 //
-// The reviewer found that existing tests only exercise MemoryRouter + useNavigate.
-// Production runs under BrowserRouter (App.tsx:21-29). These tests prove the
-// navigator-patching blocking mechanism works on the actual BrowserRouter navigator
-// (createBrowserHistory object), which has a different object identity from
-// createMemoryHistory. BrowserRouter provides navigator.block = undefined,
-// so the same push/replace/go patching fallback applies — but this must be
-// empirically verified on that surface rather than assumed from MemoryRouter parity.
+// Cockpit uses React Router's public blocker API, which is available on data
+// routers. These tests keep the production surface aligned with App.tsx instead
+// of relying on BrowserRouter navigator patching.
 
-describe('TestFromAC_BrowserRouterSurface', () => {
-  afterEach(async () => {
+describe('TestFromAC_DataRouterSurface', () => {
+  afterEach(() => {
     vi.unstubAllGlobals()
-    // Reset window.location to avoid cross-test URL pollution from BrowserRouter
-    window.history.pushState({}, '', '/')
   })
 
-  async function renderInBrowserRouter(content = 'initial content') {
-    // BrowserRouter reads window.location — set up /ideas before rendering
-    window.history.pushState({}, '', '/ideas')
+  async function renderInDataRouter(content = 'initial content') {
     vi.stubGlobal('fetch', makeGetOkFetch(content))
     let result!: ReturnType<typeof render>
     await act(async () => {
-      result = render(
-        <BrowserRouter>
-          <Routes>
-            <Route path="/ideas" element={<IdeasPage />} />
-            <Route path="/" element={<div data-testid="home-page">Home</div>} />
-          </Routes>
-          <NavButton to="/" testId="nav-home" />
-        </BrowserRouter>,
-      )
+      result = renderInRouter()
     })
     await flush()
     await enterEditMode(result.container)
     return result
   }
 
-  async function renderDirtyBrowser(initial = 'initial', dirty = 'changed') {
-    const result = await renderInBrowserRouter(initial)
+  async function renderDirtyDataRouter(initial = 'initial', dirty = 'changed') {
+    const result = await renderInDataRouter(initial)
     const textarea = result.container.querySelector('textarea')!
     fireEvent.change(textarea, { target: { value: dirty } })
     return result
   }
 
-  it('ac1 browser-router: alertdialog renders when dirty and useNavigate triggers route change under BrowserRouter', async () => {
-    const { container } = await renderDirtyBrowser()
+  it('ac1 data-router: alertdialog renders when dirty and useNavigate triggers route change', async () => {
+    const { container } = await renderDirtyDataRouter()
     fireEvent.click(container.querySelector('[data-testid="nav-home"]')!)
     await waitFor(() => {
       expect(container.querySelector('[role="alertdialog"]')).not.toBeNull()
     })
   })
 
-  it('ac1 browser-router: dialog text is correct under BrowserRouter', async () => {
-    const { container } = await renderDirtyBrowser()
+  it('ac1 data-router: dialog text is correct', async () => {
+    const { container } = await renderDirtyDataRouter()
     fireEvent.click(container.querySelector('[data-testid="nav-home"]')!)
     await waitFor(() => {
       const dialog = container.querySelector('[role="alertdialog"]')
@@ -365,8 +356,8 @@ describe('TestFromAC_BrowserRouterSurface', () => {
     })
   })
 
-  it('ac1 browser-router: proceed button completes navigation under BrowserRouter', async () => {
-    const { container } = await renderDirtyBrowser()
+  it('ac1 data-router: proceed button completes navigation', async () => {
+    const { container } = await renderDirtyDataRouter()
     fireEvent.click(container.querySelector('[data-testid="nav-home"]')!)
     await waitFor(() => {
       expect(container.querySelector('[role="alertdialog"]')).not.toBeNull()
@@ -381,8 +372,8 @@ describe('TestFromAC_BrowserRouterSurface', () => {
     expect(container.querySelector('[role="alertdialog"]')).toBeNull()
   })
 
-  it('ac1 browser-router: cancel dismisses dialog and keeps user on IdeasPage under BrowserRouter', async () => {
-    const { container } = await renderDirtyBrowser()
+  it('ac1 data-router: cancel dismisses dialog and keeps user on IdeasPage', async () => {
+    const { container } = await renderDirtyDataRouter()
     fireEvent.click(container.querySelector('[data-testid="nav-home"]')!)
     await waitFor(() => {
       expect(container.querySelector('[role="alertdialog"]')).not.toBeNull()
@@ -398,8 +389,8 @@ describe('TestFromAC_BrowserRouterSurface', () => {
     expect(container.querySelector('[data-testid="home-page"]')).toBeNull()
   })
 
-  it('ac3 browser-router: clean navigation proceeds without dialog under BrowserRouter', async () => {
-    const { container } = await renderInBrowserRouter('same content')
+  it('ac3 data-router: clean navigation proceeds without dialog', async () => {
+    const { container } = await renderInDataRouter('same content')
     fireEvent.click(container.querySelector('[data-testid="nav-home"]')!)
     await waitFor(() => {
       expect(container.querySelector('[data-testid="home-page"]')).not.toBeNull()

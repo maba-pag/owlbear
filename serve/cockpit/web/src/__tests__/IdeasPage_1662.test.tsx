@@ -26,6 +26,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, fireEvent, act } from '@testing-library/react'
 import { Suspense, type ComponentType } from 'react'
+import { createMemoryRouter, RouterProvider } from 'react-router'
 import { routeConfig } from '../routes'
 import IdeasPage from '../pages/IdeasPage'
 
@@ -92,8 +93,16 @@ function makeGetPendingFetch() {
 
 // ─── Render helper ────────────────────────────────────────────────────────────
 
+function renderWithDataRouter(element = <IdeasPage />) {
+  const router = createMemoryRouter([
+    { path: '/ideas', element },
+  ], { initialEntries: ['/ideas'] })
+
+  return render(<RouterProvider router={router} />)
+}
+
 function renderIdeasPage() {
-  return render(<IdeasPage />)
+  return renderWithDataRouter()
 }
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
@@ -183,7 +192,7 @@ describe('TestFromAC_IdeasPageRoute', () => {
     const RouteComponent = entry!.component as unknown as ComponentType<Record<string, never>>
     let container!: HTMLElement
     await act(async () => {
-      const result = render(
+      const result = renderWithDataRouter(
         <Suspense fallback={<div>Suspense fallback</div>}>
           <RouteComponent />
         </Suspense>,

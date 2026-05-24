@@ -1,21 +1,10 @@
-import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import { UNSAFE_NavigationContext } from 'react-router'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useBeforeUnload, useBlocker } from 'react-router'
 import { PButton, PModal } from '@porsche-design-system/components-react'
 import MarkdownPreview from '../components/MarkdownPreview'
 
 import { fetchIdeas, saveIdeas } from '../api/ideas'
 import { WorkspaceHeader } from '../components/WorkspaceHeader'
-
-type NavigationTransaction = {
-  retry: () => void
-}
-
-type BlockNavigator = {
-  block?: (blocker: (tx: NavigationTransaction) => void) => () => void
-  push?: (to: string, state?: unknown) => void
-  replace?: (to: string, state?: unknown) => void
-  go?: (delta: number) => void
-}
 
 type IdeasConflictSnapshot = {
   content: string
@@ -68,15 +57,13 @@ function IdeasPage() {
   const [ideasCanScrollDown, setIdeasCanScrollDown] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const previewRef = useRef<HTMLDivElement | null>(null)
-  const pendingTransitionRef = useRef<(() => void) | null>(null)
   const contentRef = useRef('')
   const lastSavedContentRef = useRef('')
   const stayButtonRef = useRef<HTMLElement | null>(null)
-  const navigationContext = useContext(UNSAFE_NavigationContext)
 
   const isDirty = useMemo(() => content !== lastSavedContent, [content, lastSavedContent])
   const hasConflict = conflictSnapshot !== null
-  const navigator = (navigationContext?.navigator ?? {}) as BlockNavigator
+  const navigationBlocker = useBlocker(isDirty)
   const lineCount = useMemo(
     () => (content.length === 0 ? 0 : content.split(/\r\n|\r|\n/).length),
     [content],
@@ -264,118 +251,31 @@ function IdeasPage() {
   }, [conflictSnapshot])
 
   useEffect(() => {
+    setShowUnsavedDialog(navigationBlocker.state === 'blocked')
+  }, [navigationBlocker.state])
+
+  useBeforeUnload(useCallback((event: BeforeUnloadEvent) => {
     if (!isDirty) {
-      pendingTransitionRef.current = null
-      setShowUnsavedDialog(false)
       return
     }
 
-    if (!navigator.block) {
-      return
-    }
-
-    const unblock = navigator.block((tx) => {
-      if (pendingTransitionRef.current !== null) {
-        return
-      }
-      pendingTransitionRef.current = () => {
-        unblock()
-        tx.retry()
-      }
-      setShowUnsavedDialog(true)
-    })
-
-    return () => {
-      unblock()
-      pendingTransitionRef.current = null
-      setShowUnsavedDialog(false)
-    }
-  }, [isDirty, navigator])
-
-  useEffect(() => {
-    if (!isDirty || navigator.block) {
-      return
-    }
-
-    const originalPush = navigator.push
-    const originalReplace = navigator.replace
-    const originalGo = navigator.go
-
-    const queueTransition = (retry: () => void) => {
-      if (pendingTransitionRef.current !== null) {
-        return
-      }
-      pendingTransitionRef.current = retry
-      setShowUnsavedDialog(true)
-    }
-
-    if (originalPush) {
-      navigator.push = (to, state) => {
-        queueTransition(() => {
-          originalPush(to, state)
-        })
-      }
-    }
-
-    if (originalReplace) {
-      navigator.replace = (to, state) => {
-        queueTransition(() => {
-          originalReplace(to, state)
-        })
-      }
-    }
-
-    if (originalGo) {
-      navigator.go = (delta) => {
-        queueTransition(() => {
-          originalGo(delta)
-        })
-      }
-    }
-
-    return () => {
-      if (originalPush) {
-        navigator.push = originalPush
-      }
-      if (originalReplace) {
-        navigator.replace = originalReplace
-      }
-      if (originalGo) {
-        navigator.go = originalGo
-      }
-      pendingTransitionRef.current = null
-      setShowUnsavedDialog(false)
-    }
-  }, [isDirty, navigator])
-
-  useEffect(() => {
-    if (!isDirty) {
-      pendingTransitionRef.current = null
-      setShowUnsavedDialog(false)
-      return
-    }
-
-    const onBeforeUnload = (event: BeforeUnloadEvent) => {
-      event.preventDefault()
-    }
-
-    window.addEventListener('beforeunload', onBeforeUnload)
-    return () => {
-      window.removeEventListener('beforeunload', onBeforeUnload)
-    }
-  }, [isDirty])
+    event.preventDefault()
+    event.returnValue = ''
+  }, [isDirty]))
 
   const handleLeavePage = useCallback(() => {
-    const proceed = pendingTransitionRef.current
-    pendingTransitionRef.current = null
     setShowUnsavedDialog(false)
-    proceed?.()
-  }, [])
+    if (navigationBlocker.state === 'blocked') {
+      navigationBlocker.proceed()
+    }
+  }, [navigationBlocker])
 
   const handleStayOnPage = useCallback(() => {
-    pendingTransitionRef.current = null
     setShowUnsavedDialog(false)
-  }, [])
+    if (navigationBlocker.state === 'blocked') {
+      navigationBlocker.reset()
+    }
+  }, [navigationBlocker])
 
   if (loading) {
     return (
@@ -434,10 +334,10 @@ function IdeasPage() {
               </p>
             </div>
             <div className="flex flex-wrap justify-end gap-static-xs">
-              <PButton type="button" variant="secondary" onClick={handleLeavePage}>
+              <PButton type="button" data-testid="ideas-unsaved-leave" variant="secondary" onClick={handleLeavePage}>
                 Leave
               </PButton>
-              <PButton ref={stayButtonRef} type="button" onClick={handleStayOnPage}>
+              <PButton ref={stayButtonRef} type="button" data-testid="ideas-unsaved-cancel" onClick={handleStayOnPage}>
                 Cancel
               </PButton>
             </div>

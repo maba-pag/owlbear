@@ -1,7 +1,7 @@
 /**
  *
  * AC6 (td:1): <EventSourceProvider url="/api/events"> wraps <Shell /> in App.tsx
- *             inside <BrowserRouter>.
+ *             inside the app router.
  *
  * Strategy: vi.mock intercepts App's import of EventSourceProvider with a spy.
  * If EventSourceProvider is not yet added to App.tsx (RED), the spy is never
@@ -77,7 +77,7 @@ describe('TestFromAC_AppWiring', () => {
   // ─── AC6: EventSourceProvider wraps Shell in App.tsx ────────────────────
 
   describe('AC6: EventSourceProvider wraps Shell with url="/api/events" in App.tsx', () => {
-    it('App renders EventSourceProvider with url="/api/events" wrapping Shell inside BrowserRouter', () => {
+    it('App renders EventSourceProvider with url="/api/events" wrapping Shell inside the app router', () => {
       render(<App />)
 
       // EventSourceProvider must have been rendered with the correct url prop.
@@ -98,10 +98,10 @@ describe('TestFromAC_AppWiring', () => {
       expect(isValidElement(boundaryChildren)).toBe(true)
       expect((boundaryChildren as { type: { name?: string } }).type.name).toBe('Shell')
 
-      // BrowserRouter wraps the provider — Shell uses Routes/Route which require
+      // The data router wraps the provider — Shell uses router hooks which require
       // router context. Rendering completes without a router context error,
-      // proving BrowserRouter is ancestral to Shell.
-      // (Without BrowserRouter, Shell would throw "useHref() may be used only in
+      // proving the app router is ancestral to Shell.
+      // (Without a router, Shell would throw "useHref() may be used only in
       // the context of a <Router>" during render.)
     })
   })
