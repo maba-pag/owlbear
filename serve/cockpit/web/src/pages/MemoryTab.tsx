@@ -943,9 +943,6 @@ function MemoryTab() {
                         >
                           <div className="flex min-w-0 flex-wrap items-center gap-static-sm">
                             <span className="text-sm font-semibold text-primary">Edit memory</span>
-                            <span data-testid="memory-char-counter" className="rounded-full border border-contrast-low bg-canvas px-static-xs py-1 text-xs font-semibold text-primary">
-                              {editDraft.content.length}/{MEMORY_CONTENT_LIMIT}
-                            </span>
                           </div>
                           <div className="flex min-w-0 flex-wrap items-center gap-static-xs">
                             <PButton type="button" data-testid="memory-edit-cancel-btn" compact variant="secondary" onClick={cancelEdit}>
@@ -1049,6 +1046,7 @@ function MemoryTab() {
                           name="edit-content"
                           label="Content"
                           value={editDraft.content}
+                          counter
                           maxLength={MEMORY_CONTENT_LIMIT}
                           onChange={(event) => {
                             const value = readStringValue(event).slice(0, MEMORY_CONTENT_LIMIT)

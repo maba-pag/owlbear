@@ -591,7 +591,7 @@ describe('TestFromAC_MemoryEditForm', () => {
     expect(form!.querySelector('[data-pds-exception="memory-edit-native-input"]')).toBeNull()
   })
 
-  it('ac3 happy: edit form content field has a character counter with 1024 limit', async () => {
+  it('ac3 happy: edit form content field uses the PDS character counter', async () => {
     const container = await renderWithEntries([makeEntry()])
     await openAccordion(container)
     const editBtn = container.querySelector('[data-testid="memory-edit-btn"]')
@@ -599,7 +599,10 @@ describe('TestFromAC_MemoryEditForm', () => {
       await act(async () => { fireEvent.click(editBtn) })
       await flush()
     }
-    expect(container.querySelector('[data-testid="memory-char-counter"]')).not.toBeNull()
+    const contentField = container.querySelector('p-textarea[name="edit-content"]') as (HTMLElement & { counter?: boolean }) | null
+    expect(contentField).not.toBeNull()
+    expect(contentField?.counter).toBe(true)
+    expect(container.querySelector('[data-testid="memory-char-counter"]')).toBeNull()
   })
 
   it('ac3 polish: edit save and cancel controls stay in a sticky action bar', async () => {
@@ -707,8 +710,9 @@ describe('TestFromAC_MemoryEditForm', () => {
       await act(async () => { fireEvent.click(editBtn) })
       await flush()
     }
-    const counter = container.querySelector('[data-testid="memory-char-counter"]')
-    expect(counter?.textContent).toContain('1024')
+    const contentField = container.querySelector('p-textarea[name="edit-content"]') as (HTMLElement & { maxLength?: number }) | null
+    expect(contentField).not.toBeNull()
+    expect(contentField?.maxLength).toBe(1024)
   })
 
   it('ac3 happy: save sends POST to /api/memories/{id}/edit', async () => {

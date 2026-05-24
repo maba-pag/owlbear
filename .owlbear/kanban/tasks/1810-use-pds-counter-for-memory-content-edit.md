@@ -1,10 +1,10 @@
 ---
 id: 1810
 title: Use PDS counter for memory content edit
-status: research
+status: done
 priority: important
 created: 2026-05-24T08:08:57+02:00
-updated: 2026-05-24T08:08:57+02:00
+updated: 2026-05-24T08:19:42+02:00
 tags:
   - cockpit-perfect-ui
   - scope:cockpit-web
@@ -38,3 +38,10 @@ The current separate counter likely predates or bypasses PDS built-in counter su
 
 ## Boundary
 Discussion task only. Do not implement until explicitly approved.
+
+[[2026-05-24T08:19:42+02:00]]
+## User Approval
+User approved implementing the PDS counter cleanup now.
+
+[[2026-05-24T08:19:42+02:00]]
+Implemented `counter` on the Memory edit `PTextarea` and removed the separate sticky-header character counter chip. The content field remains multiline and capped at 1024 characters. Verification: focused Memory suite passed (81 tests), ESLint passed for changed Memory files, and production build passed with the known Vite chunk-size warning only. Screenshot proof: `.owlbear/scratch/1716-wide-cockpit/1810-memory-edit-form-element-1024.png`, showing the native textarea counter (`125/1024`) and no duplicate header chip.
