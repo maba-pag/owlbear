@@ -354,6 +354,16 @@ class TestFromAC_SharedRequiredFields:
         with pytest.raises(ValidationError):
             ActionRequest(**{**_ACTION_BASE, "created_at": "24/05/2026"})
 
+    def test_timezone_less_created_at_on_decision_raises(self) -> None:
+        # Valid ISO 8601 format but no timezone — must be rejected (AC5 refinement)
+        with pytest.raises(ValidationError):
+            DecisionRequest(**{**_DECISION_BASE, "created_at": "2026-05-23T12:00:00"})
+
+    def test_timezone_less_created_at_on_action_raises(self) -> None:
+        # Valid ISO 8601 format but no timezone — must be rejected (AC5 refinement)
+        with pytest.raises(ValidationError):
+            ActionRequest(**{**_ACTION_BASE, "created_at": "2026-05-23T12:00:00"})
+
     def test_resolution_defaults_to_all_none_when_absent(self) -> None:
         req = DecisionRequest(**_DECISION_BASE)
         assert req.resolution is not None
