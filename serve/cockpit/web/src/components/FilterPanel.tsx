@@ -113,8 +113,10 @@ export default function FilterPanel({
     }
 
     tagsElement.addEventListener('update', onUpdate)
+    tagsElement.addEventListener('change', onUpdate)
     return () => {
       tagsElement.removeEventListener('update', onUpdate)
+      tagsElement.removeEventListener('change', onUpdate)
     }
   }, [filter, onFilterChange, open])
 

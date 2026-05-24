@@ -295,6 +295,25 @@ describe('TestFromAC_FilterBoardIntegration', () => {
     })
   })
 
+  it('tag filter change event persists selection and filters matching cards', async () => {
+    const { container } = renderBoard()
+    await openFilterPanel(container)
+
+    const pMultiSelect = getTagsControl(container) as Element & { value?: unknown }
+    expect(pMultiSelect).not.toBeNull()
+    fireEvent(pMultiSelect, new CustomEvent('change', { bubbles: true, detail: { value: ['alpha'] } }))
+
+    await waitFor(() => {
+      const tagsControl = getTagsControl(container) as Element & { value?: unknown }
+      expect(tagsControl.value).toEqual(['alpha'])
+      expect(container.querySelector('[data-testid="filter-result-count"]')?.textContent).toMatch(/^2 \/ 3 tasks$/)
+      expect(container.querySelector('[data-testid="active-filter-summary"]')?.textContent).toContain('Tags: alpha')
+      expect(container.querySelector('[data-testid="task-card"][data-id="1"]')).not.toBeNull()
+      expect(container.querySelector('[data-testid="task-card"][data-id="3"]')).not.toBeNull()
+      expect(container.querySelector('[data-testid="task-card"][data-id="2"]')).toBeNull()
+    })
+  })
+
   // ─── AC5: Filter change while context menu open dismisses menu ────────────
 
   it('changing a filter while a context menu is open dismisses the context menu', async () => {

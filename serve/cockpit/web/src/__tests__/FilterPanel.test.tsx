@@ -340,6 +340,15 @@ describe('TestFromAC_FilterPanel', () => {
       expect(onFilterChange).toHaveBeenCalledWith({ ...emptyFilter, tags: ['bug'] })
     })
 
+    it('tag selection handles the PDS change event with updated tags array', () => {
+      const onFilterChange = vi.fn()
+      const { container } = renderPanel({ filter: emptyFilter, onFilterChange, availableTags: TAGS })
+      const tagsControl = getTagsControl(container) as Element
+      fireEvent(tagsControl, new CustomEvent('change', { bubbles: true, detail: { value: ['bug'] } }))
+      expect(onFilterChange).toHaveBeenCalledTimes(1)
+      expect(onFilterChange).toHaveBeenCalledWith({ ...emptyFilter, tags: ['bug'] })
+    })
+
     it('clearing tag selection fires onFilterChange with tags: []', () => {
       const onFilterChange = vi.fn()
       const { container } = renderPanel({
