@@ -50,6 +50,10 @@ class MemoryEntry(BaseModel):
     confidence: float = Field(ge=0.7, le=1.0)
     state: MemoryState = MemoryState.PENDING
     content: str
+    outstanding_count: int = 0
+    unremarkable_count: int = 0
+    didnt_use_count: int = 0
+    score: float = 0.0
     scope_agents: list[str] = Field(default_factory=list)
     source_agent: str = Field(frozen=True)
     created_at: str

@@ -14,6 +14,17 @@ from owlbear_memory.models import MemoryCategory, MemoryEntry, MemoryState
 
 _LOGGER = logging.getLogger(__name__)
 
+OUTSTANDING_BOOST = 0.1
+UNREMARKABLE_PENALTY = 0.01
+STALE_THRESHOLD = 50
+
+
+def compute_score(confidence: float, outstanding_count: int, unremarkable_count: int) -> float:
+    """Compute score from confidence and assessment counters."""
+    return confidence + (outstanding_count * OUTSTANDING_BOOST) - (
+        unremarkable_count * UNREMARKABLE_PENALTY
+    )
+
 
 class EditPayload(TypedDict, total=False):
     """Editable entry fields for MemoryEngine.edit()."""
@@ -213,6 +224,10 @@ class MemoryEngine:
             categories=categories,
             confidence=confidence,
             state=MemoryState.PENDING,
+            outstanding_count=0,
+            unremarkable_count=0,
+            didnt_use_count=0,
+            score=confidence,
             scope_agents=scope_agents,
             source_agent=source_agent,
             created_at=now,
