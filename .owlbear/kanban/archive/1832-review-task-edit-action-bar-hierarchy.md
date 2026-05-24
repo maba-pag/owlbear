@@ -4,7 +4,7 @@ title: Review task edit action bar hierarchy
 status: archived
 priority: important
 created: 2026-05-24T11:55:10.047697+02:00
-updated: 2026-05-24T23:25:36.635362+02:00
+updated: 2026-05-24T23:35:08.539262+02:00
 tags:
   - scope:cockpit-web
   - ux
@@ -22,7 +22,7 @@ ac:
     guard, and save behavior.
 blocked: false
 block_reason:
-claimed_at: 2026-05-24T23:25:36.635362+02:00
+claimed_at:
 archival_reason: completed
 archival_refs: []
 ---
@@ -50,3 +50,28 @@ Implementation must preserve dirty-state signaling, unsaved-navigation protectio
 Completed by compacting the task edit action area into a lighter toolbar/header treatment while keeping Save and Cancel visible. Dirty-state signaling, save/cancel behavior, unsaved-change plumbing, and existing payload semantics were preserved.
 
 Evidence: DetailTab focused suite passed; affected bundle passed; full Cockpit frontend Vitest suite passed with 2390 passed, 0 failed, 11 skipped; frontend build passed.
+
+[[2026-05-24T23:35:08+02:00]]
+## Audit
+### Regression Detection
+- quality-runner mode full: 1671 passed, 0 failed, 6 skipped; lint clean (ruff + eslint)
+- regression verdict: PASS
+
+### Intent Verification
+- scope alignment: PASS (changed files `TaskFieldsEditor.tsx`, `Shell.tsx`, `DetailTab.tsx` all within `serve/cockpit/web/` — matches `scope:cockpit-web` tag)
+- purpose match: PASS (implementation compacts task edit action area per user-approved direction)
+- extraneous scope: none (batch commit includes sibling task changes tracked separately)
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 4/5
+AC 2–3 are specific and verifiable. AC 1 is a soft "re-evaluate" but appropriate for a discussion-tagged task requiring user approval before implementation.
+
+### Commit Integrity
+- upstream commit presence: PASS (`8e58f235` feat: complete cockpit interaction batch #1773; `114fc26d` docs: track task edit hierarchy audit finding #1832)
+- kanban commit packaging: pending (this step)
+
+### Deduction Breakdown
+- Missing reviewer evidence section: -.03
+
+### Confidence: .97
+### Action: archive
