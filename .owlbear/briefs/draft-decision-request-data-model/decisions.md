@@ -92,3 +92,137 @@
 - User: "I need the confidence value per option... the higher the difference the faster I decide"
 - User: "only block when creating a dr/ar, and unblock when its solved after writing the resolution to the task body"
 - User: "I wouldn't see a good reason to not have one data model for the lifecycle"
+
+## D4 — 2026-05-24 — Action Resolution States
+
+**Status quo:** No structured resolution states for actions.
+**Decision to make:** What terminal states should action requests have?
+
+**Options considered:**
+
+- A: `done` + `rejected` — minimal pair, nuance via free_text
+- B: `done` + `failed` + `rejected` — distinguishes try-and-fail from refusal
+- C: `done-success` + `done-problems` + `rejected` — most expressive
+
+**Chosen:** A — `done` + `rejected`
+
+**Rejected:**
+
+- B/C: Free text covers "completed-with-issues" nuance. More states increase agent interpretation complexity for minimal single-user value.
+
+**Source inputs:**
+
+- User: "done + rejected"
+- Data stance: minimal terminal pair
+- Enduser stance: "completed-with-issues" covered by free_text on done
+
+## D5 — 2026-05-24 — needs-info Modeling
+
+**Status quo:** Synthesis recommended needs-info as notes[] list (request stays pending, task stays blocked).
+**Decision to make:** How should "I need more info" work?
+
+**Options considered:**
+
+- A: Notes list — request stays pending, task stays blocked
+- B: needs-info as resolution status — task unblocks, agent sees it
+- C: Notes list + separate cancel button
+
+**Chosen:** B — `needs-info` as a resolution status that unblocks the task
+
+**Rationale:** If task stays blocked (A), no agent picks it up to see the note — workflow dead end. With B, the agent picks up the unblocked task, reads the needs-info resolution + free_text, then either creates a fresh DR with better context or proceeds differently. Clean cycle: create → block → resolve (approved/rejected/needs-info) → unblock → agent acts.
+
+**Implications:**
+
+- Decision resolution statuses: `approved`, `rejected`, `needs-info`
+- Action resolution statuses: `done`, `rejected`, `needs-info`
+- All resolutions unblock the task (conditional on no sibling pending requests)
+- Eliminates the `notes[]` list concept entirely — free_text on resolution carries the message
+- `approved` requires `selected_option_id`; `rejected` and `needs-info` do not
+
+**Source inputs:**
+
+- User: identified workflow dead-end with notes approach
+- User: "what if that info leads the agent to think this DR is obsolete?"
+
+## D6 — 2026-05-24 — Quick-Confirm Mode
+
+**Status quo:** Not designed yet.
+**Decision to make:** Should Cockpit pre-select the recommended option when confidence spread is large?
+
+**Chosen:** Deferred — not in scope for this work.
+
+**Rationale:** Pre-selection could signal "already decided." Confidence is visually clear enough that saving 0.5 seconds of selection doesn't justify the implementation and tuning cost. Model supports it naturally if added later.
+
+**Source inputs:**
+
+- User: "pre-selection could signal 'this has already been decided'"
+
+## D7 — 2026-05-24 — Panel Synthesis Convergences (adopted)
+
+The following positions from synthesis.md are adopted as design constraints:
+
+- UUID4 filenames (`{request_id}.md`)
+- Single engine writer — no layer writes DR files except engine
+- Pydantic `extra="forbid"` with kind-discriminated cross-field validation
+- Decisions require ≥2 options; actions have 0 options
+- Confidence 0.0–1.0 per option, independent (not sum-to-1)
+- At most one `recommended=True` per request
+- `free_text` always available on resolution (optional, never hidden)
+- ID-tagged summary written to task body (`<!-- dr:{request_id} -->` for idempotency)
+- `create_request` → `task.blocked=True`; `resolve_request` → conditional unblock (sibling check)
+- Malformed files surfaced as error objects, never silently dropped
+- Slug-format option IDs: `^[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$` (max 63 chars)
+- Resolved files immutable (audit trail)
+- Sweep kept as crash-recovery/power-user fallback only
+- No MCP resolve tool (human-only for now; gate conditions documented)
+- Max 10 options per request
+- Option label max 120 chars, rationale max 500 chars
+- Resolution atomicity: rename-as-check + marker idempotency
+
+## D8 — 2026-05-24 — Resolution Model Simplification (supersedes D4, D5)
+
+**Status quo:** D4 defined action states (done/rejected), D5 defined needs-info as a resolution status. Both assumed an `approved/rejected/needs-info/done` status enum.
+**Decision to make:** Is a status enum needed at all?
+
+**User insight:** "Why is approved and rejected even the options if the intent is to have the user choose between options with optional free text?"
+
+**Options considered:**
+
+- A: Keep status enum (approved/rejected/needs-info for decisions; done/rejected/needs-info for actions)
+- B: Two lifecycle states (resolved + returned/needs-info)
+- C: Binary lifecycle (pending → resolved), answer is just a payload
+
+**Chosen:** C — resolution is just a payload, no status enum
+
+**Resolution payload (both kinds):**
+```yaml
+resolution:
+  selected_option_id: "hybrid"  # nullable — null if custom answer or action
+  free_text: "context here"     # nullable — custom answer, notes, or action outcome
+  resolved_by: "user"
+  resolved_at: "2026-05-24T15:30:00+02:00"
+```
+
+**Semantics derived from content, not status:**
+- Decision + option_id present = structured answer from menu
+- Decision + option_id absent + free_text = custom answer ("none of these, here's what I want")
+- Action + free_text = outcome report, refusal explanation, or info request
+- Any + minimal/empty content = implicit dismissal
+- "Needs-info" = resolve with free_text explaining gap → task unblocks → agent reads → creates new DR
+
+**Rationale:**
+- Agent can't edit existing DRs, so "returned for rework" has no consumer — agent creates new DR
+- "Dismissed" is just resolved with negative free_text
+- Status enum was borrowed from PR-review mental model; this is a choice form
+- Simpler model = fewer agent interpretation rules, simpler Cockpit UI (one submit button)
+- Lifecycle is filesystem: file in pending/ = not answered, file in resolved/ = answered
+
+**Rejected:**
+- A: Status enum adds artificial categories to what is fundamentally "pick or type → submit"
+- B: "returned" has no consumer since agents can't edit existing DRs
+
+**Source inputs:**
+- User: "why is approved and rejected even the options?"
+- User: "needs info doesn't need returned, that is resolved too"
+- User: "dismissed is also just resolved with a negative message in free text"
+- User: "an agent cannot edit an existing DR, it would just create a new one"
