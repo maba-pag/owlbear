@@ -428,13 +428,11 @@ describe('IdeasPageIntegration_StatusWording', () => {
     vi.unstubAllGlobals()
   })
 
-  it('keeps the Ideas header summary focused on save state only', async () => {
+  it('omits the Ideas header summary when the notebook is clean', async () => {
     const { container } = await renderLoaded('one two three four five')
     const summary = container.querySelector('[data-testid="workspace-header-summary"]')
 
-    expect(summary?.textContent).toBe('Saved')
-    expect(summary?.querySelector('[data-testid="workspace-header-metric"]')).toBeNull()
-    expect(summary?.textContent).not.toMatch(/edit|preview|words/i)
+    expect(summary).toBeNull()
   })
 
   it('shows unsaved changes as the actionable header state after editing', async () => {

@@ -51,6 +51,11 @@ function IdeasPage() {
     return words?.length ?? 0
   }, [content])
   const saveDisabled = !isDirty || saving || hasConflict
+  const headerSummary = hasConflict ? (
+    <WorkspaceHeaderPill tone="error">Conflict</WorkspaceHeaderPill>
+  ) : isDirty ? (
+    <WorkspaceHeaderPill tone="info">Unsaved changes</WorkspaceHeaderPill>
+  ) : null
 
   const updateIdeasScrollCue = useCallback(() => {
     const surface = previewMode ? previewRef.current : textareaRef.current
@@ -407,13 +412,7 @@ function IdeasPage() {
         title="Ideas"
         titleId="ideas-title"
         summaryLabel="Notebook summary"
-        summary={(
-          <>
-            <WorkspaceHeaderPill tone={hasConflict ? 'error' : isDirty ? 'info' : 'neutral'}>
-              {hasConflict ? 'Conflict' : isDirty ? 'Unsaved changes' : 'Saved'}
-            </WorkspaceHeaderPill>
-          </>
-        )}
+        summary={headerSummary}
       />
 
       <div className="flex min-h-0 flex-1 flex-col gap-static-md p-static-md">

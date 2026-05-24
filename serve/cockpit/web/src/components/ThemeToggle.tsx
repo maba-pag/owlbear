@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import { createPortal } from 'react-dom'
-import { PButton, PButtonPure, PIcon } from '@porsche-design-system/components-react'
+import { PButtonPure, PIcon } from '@porsche-design-system/components-react'
 import { useTheme } from '../hooks/useTheme'
 import type { Theme } from '../hooks/useTheme'
 
@@ -160,15 +160,14 @@ export default function ThemeToggle({ compact = false }: ThemeToggleProps) {
   return (
     <>
       {compact ? (
-        <PButton
+        <PButtonPure
           ref={triggerRef}
           type="button"
           data-testid="theme-toggle"
-          variant="secondary"
-          compact
           hideLabel
           icon="theme"
-          className="inline-flex size-11 items-center justify-center"
+          active={isMenuOpen}
+          className="inline-flex size-11 items-center justify-center rounded-full bg-transparent"
           aria-label={`${label.ariaLabel}; open theme menu`}
           aria-haspopup="menu"
           aria-expanded={isMenuOpen ? 'true' : 'false'}
@@ -176,7 +175,7 @@ export default function ThemeToggle({ compact = false }: ThemeToggleProps) {
           onClick={handleTriggerClick}
         >
           Theme
-        </PButton>
+        </PButtonPure>
       ) : (
         <PButtonPure
           ref={triggerRef}

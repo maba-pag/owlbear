@@ -398,9 +398,10 @@ describe('TestFromAC_DetailTab', () => {
       expect(container.querySelector('[data-testid="body-edit-toggle"]')).not.toBeNull()
     })
 
-    it('uses consistent task body labeling across preview and edit modes', () => {
+    it('keeps the body region unlabeled visually while preserving the textarea label', () => {
       const { container } = renderDetail()
-      expect(container.textContent).toContain('Task body')
+      expect(container.textContent).not.toContain('Task details')
+      expect(container.textContent).not.toContain('Task body')
       expect(container.textContent).not.toContain('Brief')
 
       const toggle = container.querySelector('[data-testid="body-edit-toggle"]') as HTMLElement | null
@@ -408,10 +409,11 @@ describe('TestFromAC_DetailTab', () => {
       fireEvent.click(toggle!)
 
       const textarea = container.querySelector('p-textarea[data-field="body"]') as
-        | (HTMLElement & { label?: string })
+        | (HTMLElement & { hideLabel?: boolean; label?: string })
         | null
       expect(textarea).not.toBeNull()
-      expect(textarea?.label ?? textarea?.getAttribute('label')).toBe('Task body')
+      expect(textarea?.label ?? textarea?.getAttribute('label')).toBe('Body')
+      expect(textarea?.hideLabel ?? textarea?.hasAttribute('hide-label')).toBe(true)
       expect(container.textContent).not.toContain('Brief')
     })
 

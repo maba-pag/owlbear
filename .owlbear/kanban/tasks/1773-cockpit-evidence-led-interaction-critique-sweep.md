@@ -4,7 +4,7 @@ title: Cockpit evidence-led interaction critique sweep
 status: research
 priority: important
 created: 2026-05-24T00:33:26.614960+02:00
-updated: 2026-05-24T01:08:20.424709+02:00
+updated: 2026-05-24T01:57:30.041901+02:00
 tags:
   - cockpit-perfect-ui
   - scope:cockpit-web
@@ -56,3 +56,26 @@ Result: no horizontal document overflow, no console messages, and no request fai
 [[2026-05-24T01:08:20+02:00]]
 ## #1780 Follow-Through
 User approved implementing #1780 after the effort estimate. The modal containment fix is complete and #1780 is done. Post-fix proof at 1024/1200 shows task detail and Decision resolver modal surfaces and primary actions fully inside the viewport. Remaining desktop sweep flags are long edit-form height metrics with primary controls visible and are not current #1780 bugs.
+
+[[2026-05-24T01:15:04+02:00]]
+## Reframe After #1780
+User challenged the width focus. Corrected interpretation: viewport containment is only a guardrail. The next #1773 pass should prioritize general Cockpit UX quality: task selection, information hierarchy, repeated workflows, edit confidence, decision resolution clarity, memory triage, ideas capture, keyboard/focus affordance, loading/error/empty states, and whether each tab's intended job is obvious and efficient at supported desktop widths.
+
+[[2026-05-24T01:57:30+02:00]]
+## User Feedback Capture
+User provided general UX feedback and clarified priorities. Created/refined tasks:
+- #1781: proof-readiness / route transition fade artifact.
+- #1782: closed as loading/capture artifact, not product issue.
+- #1783: closed; horizontal Kanban scrolling is acceptable.
+- #1784: broadened to task and decision detail modal frame/content overhang.
+- #1785: Kanban cards should vertically expand or otherwise show all tags intentionally.
+- #1786: theme switcher should be round and transparent at rest.
+- #1787: task detail should clarify move/archive actions.
+- #1788: task detail hierarchy/labels need discussion.
+- #1789: task tag/dependency editors need clearer structured input.
+- #1790: dependency status data contract must be verified; no direct filesystem interaction.
+- #1791: Kanban filters should align with trigger and expose clear filters.
+- #1792: Decisions need metadata and reduced agent prominence.
+- #1793: Ideas header status pill may be redundant; consider saved recency.
+
+All are discussion tasks only. No implementation is approved by this feedback alone.

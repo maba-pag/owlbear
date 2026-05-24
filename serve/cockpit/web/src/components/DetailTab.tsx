@@ -191,7 +191,6 @@ export default function DetailTab({
   return (
     <div className="flex w-full min-w-0 flex-col gap-static-md">
       <section className="rounded-lg border border-contrast-low bg-canvas p-static-xs sm:p-static-sm" data-region="task-detail-body">
-        <PHeading ref={syncHeadingAttrs('h3', 'medium')} size="medium" tag="h3">Task details</PHeading>
         <TaskFieldsEditor
           task={t}
           priorities={board?.priorities ?? []}

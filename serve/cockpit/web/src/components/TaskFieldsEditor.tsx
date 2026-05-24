@@ -127,11 +127,9 @@ function validateTag(tag: string, currentTags: string[]): string | null {
 
 function TaskFieldsDisplay({
   task,
-  taskBodyLabel,
   onEdit,
 }: {
   task: TaskDetail
-  taskBodyLabel: string
   onEdit: () => void
 }) {
   const body = task.body ?? ''
@@ -162,7 +160,6 @@ function TaskFieldsDisplay({
       </div>
 
       <section className="rounded-lg border border-contrast-low bg-surface p-static-md" data-region="task-body-preview">
-        <div className="mb-static-xs text-sm font-semibold text-contrast-high">{taskBodyLabel}</div>
         <MarkdownPreview className="text-sm">{body}</MarkdownPreview>
       </section>
 
@@ -219,7 +216,7 @@ export default function TaskFieldsEditor({
   const [blockReason, setBlockReason] = useState(task.block_reason ?? '')
   const saveConfirmedTimerRef = useRef<number | null>(null)
   const previousTaskIdRef = useRef(task.id)
-  const taskBodyLabel = 'Task body'
+  const bodyFieldLabel = 'Body'
 
   useEffect(() => {
     const isTaskSwitch = previousTaskIdRef.current !== task.id
@@ -419,7 +416,6 @@ export default function TaskFieldsEditor({
       {!isEditing ? (
         <TaskFieldsDisplay
           task={task}
-          taskBodyLabel={taskBodyLabel}
           onEdit={() => setIsEditing(true)}
         />
       ) : null}
@@ -528,8 +524,7 @@ export default function TaskFieldsEditor({
       </div>
 
       <section className="rounded-lg border border-contrast-low bg-surface p-static-md">
-        <div className={`mb-static-xs flex min-w-0 flex-wrap items-center gap-static-xs ${editBody ? 'justify-end' : 'justify-between'}`}>
-          {editBody ? null : <span className="text-sm font-semibold text-contrast-high">{taskBodyLabel}</span>}
+        <div className="mb-static-xs flex min-w-0 flex-wrap items-center justify-end gap-static-xs">
           <PButton
             data-testid="body-edit-toggle"
             variant="secondary"
@@ -543,7 +538,8 @@ export default function TaskFieldsEditor({
         {editBody ? (
           <PTextarea
             name="body"
-            label={taskBodyLabel}
+            label={bodyFieldLabel}
+            hideLabel
             className="min-w-0"
             data-field="body"
             value={body}
