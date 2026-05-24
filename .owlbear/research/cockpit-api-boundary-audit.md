@@ -32,8 +32,6 @@ Scope: Cockpit backend (`serve/cockpit/`) imports and filesystem access into `ow
 | Cockpit → owlbear_kanban models | **Acceptable** | Direct submodule import is repo-standard (used by mcp-kanban too) |
 | Cockpit → kanban decisions (read) | **Acceptable** | `deps.py` explicitly provides path; `parse_dr` is the module's purpose |
 | Cockpit → kanban decisions (write) | **VIOLATION** | `path.write_text()` + `move_to_resolved()` = lifecycle ownership |
-| Cockpit → kanban `storage_io` | **Minor hygiene** | Generic utility; Cockpit owns `ideas.md` |
-| Cockpit → events path hardcoding | **Config-drift risk** | `"archive"` hardcoded; configurable via `config.paths.archive_dir` |
 
 ### Finding 1: Decision Resolution Lifecycle (Substantive)
 
@@ -43,36 +41,18 @@ The kanban `decisions.py` module already has helpers (`parse_dr`, `canonical_sum
 
 **Risk:** Any change to DR file format, frontmatter schema, or storage layout requires coordinated changes in both packages.
 
-### Finding 2: Events Route Hardcodes Configurable Path (Config-Drift)
+### Scope Stop (AC 3 Compliance)
 
-`routes/events.py` constructs `kanban_dir / "archive"` for SSE file-watching. The engine stores this as `self._archive_dir` (private) derived from `config.paths.archive_dir` (defaults to `"archive"` but is configurable). If archive_dir config changes, SSE events for archived tasks silently stop working.
-
-`decisions/` and `activity.jsonl` paths are topology-fixed (not configurable) — those hardcodings are safe.
-
-**Fix options:** Engine already exposes `board_config()` publicly. Cockpit could derive from `engine.board_config().paths.archive_dir`, or engine could add a public `archive_dir` property.
-
-### Finding 3: `atomic_write` Import (Export Hygiene)
-
-`routes/ideas.py` imports `atomic_write` from `owlbear_kanban.storage_io` (not in `__all__`). This is a generic crash-safe file-write utility, not kanban domain logic. Cockpit legitimately owns `ideas.md`.
-
-**Risk:** Minimal. The utility is stable, stateless, and has no kanban-domain coupling.
+Per AC 3 and user direction, this audit stops at Finding 1. Additional observations discovered during the broad inventory pass are intentionally parked outside this task and are not part of this deliverable.
 
 ## 4. Recommendation
 
 **Fix Finding 1** by adding a `resolve_decision(path, response, notes, engine)` function to `owlbear_kanban.decisions` that owns the full rewrite-move-side-effect sequence. Cockpit calls it instead of performing the lifecycle itself.
 
-**Fix Finding 2** by either:
-- (a) Adding a public `archive_dir` property to `KanbanEngine`, or
-- (b) Cockpit reads `engine.board_config().paths.archive_dir` (already available)
+Confidence: 0.80 (post-challenge).
 
-**Accept Finding 3** — promote `atomic_write` to `__all__` if desired, but current usage is low-risk and intentional.
-
-Confidence: 0.80 (post-challenge — originally 0.78, recalibrated after challenger correctly narrowed the decision write issue and dismissed models concern).
-
-Challenge: reconsider → revised severity hierarchy; dropped Finding 4 (models) as non-violation per repo convention; narrowed Finding 1 to write-side only; recalibrated Finding 3 to hygiene-only.
+Challenge: reconsider -> narrowed the final recommendation to decision write-side coupling only.
 
 ## 5. Follow-up Tasks
 
-1. **Kanban: expose `resolve_decision()` in decisions module** — encapsulate rewrite+move+side-effects (T1 — refactor within existing module)
-2. **Cockpit: delegate decision resolution to kanban's new API** — remove `path.write_text()` and direct file manipulation (T1 — refactor)
-3. **Events route: use `board_config().paths.archive_dir`** — replace hardcoded `"archive"` (T1 — config-drift fix)
+1. **Kanban + Cockpit: expose and consume `resolve_decision()` boundary API** — encapsulate rewrite+move+side-effects in kanban and delegate from cockpit (T1 — boundary refactor)
