@@ -255,22 +255,37 @@ describe('TestFromAC_MemoryAccordion', () => {
     expect(markdownEl?.textContent).toContain('Bold')
   })
 
-  it('ac1 polish: memory content is the primary detail block before secondary metadata', async () => {
+  it('ac1 polish: memory content is the primary detail block before the framed metadata section', async () => {
     const container = await renderWithEntries([makeEntry({ content: 'Primary memory text' })])
     await openAccordion(container)
 
     const detail = container.querySelector('[data-testid="memory-accordion-detail"]')
     const contentPanel = container.querySelector('[data-testid="memory-content-panel"]')
+    const metadataSection = container.querySelector('[data-testid="memory-metadata-section"]')
     const metadataGrid = container.querySelector('[data-testid="memory-metadata-grid"]')
     expect(contentPanel).not.toBeNull()
+    expect(metadataSection).not.toBeNull()
     expect(metadataGrid).not.toBeNull()
 
     const detailChildren = Array.from(detail?.children ?? [])
-    expect(detailChildren.indexOf(contentPanel!)).toBeLessThan(detailChildren.indexOf(metadataGrid!))
+    expect(detailChildren.indexOf(contentPanel!)).toBeLessThan(detailChildren.indexOf(metadataSection!))
     expect(contentPanel?.className).toContain('bg-surface')
     expect(contentPanel?.className).toContain('text-base')
-    expect(metadataGrid?.className).toContain('text-xs')
-    expect(metadataGrid?.className).toContain('text-contrast-high')
+    expect(metadataSection?.className).toContain('border')
+    expect(metadataSection?.textContent).toContain('Metadata')
+    expect(metadataGrid?.className).toContain('text-sm')
+    expect(metadataGrid?.className).not.toContain('border-t')
+  })
+
+  it('ac1 polish: expanded memory detail keeps bottom padding after actions', async () => {
+    const container = await renderWithEntries([makeEntry({ state: 'curated' })])
+    await openAccordion(container)
+
+    const detail = container.querySelector('[data-testid="memory-accordion-detail"]')
+    const actions = container.querySelector('[data-testid="memory-detail-actions"]')
+    expect(detail).not.toBeNull()
+    expect(actions).not.toBeNull()
+    expect(detail?.className).toContain('pb-static-md')
   })
 
   it('ac1 happy: accordion detail shows source_agent metadata field', async () => {

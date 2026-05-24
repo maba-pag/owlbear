@@ -293,7 +293,7 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
       aria={{ 'aria-label': 'Resolve decision request' }}
     >
       <div
-        className="grid max-h-[min(84vh,820px)] w-[min(1440px,calc(100vw-18.5rem))] max-w-full min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-static-md overflow-hidden text-primary"
+        className="grid max-h-[min(84vh,820px)] w-[min(1280px,calc(100vw-18.5rem))] max-w-full min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-static-md overflow-hidden text-primary"
         data-testid="resolve-modal-surface"
       >
         <header className="grid gap-static-xs border-b border-contrast-low pb-static-sm pr-[4.5rem]">
@@ -368,13 +368,15 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
             ) : null}
             </section>
 
-            <section data-testid="resolve-decision-metadata" className="grid gap-static-sm rounded-lg border border-contrast-low bg-canvas p-static-md">
-              <span className="text-xs font-semibold uppercase leading-tight text-contrast-high">Decision Metadata</span>
-              <dl className="m-0 grid min-w-0 gap-static-xs text-xs text-primary sm:grid-cols-2 lg:grid-cols-3">
+            <section data-testid="resolve-decision-metadata" className="rounded-lg border border-contrast-low bg-canvas p-static-sm">
+              <div className="mb-static-xs flex min-w-0 items-center justify-between gap-static-sm">
+                <PHeading size="small" tag="h3">Metadata</PHeading>
+              </div>
+              <dl className="m-0 grid min-w-0 gap-x-static-lg gap-y-static-xs text-sm text-primary sm:grid-cols-2 lg:grid-cols-3">
                 {metadataItems.map((item) => (
-                  <div key={item.testId} data-testid={item.testId} className="grid min-w-0 gap-1 border-t border-contrast-low pt-static-xs">
-                    <dt className="font-semibold uppercase leading-tight text-contrast-high">{item.label}</dt>
-                    <dd className="m-0 min-w-0 break-words leading-normal text-primary">{item.value}</dd>
+                  <div key={item.testId} data-testid={item.testId} className="min-w-0">
+                    <dt className="font-semibold text-contrast-high">{item.label}</dt>
+                    <dd className="m-0 min-w-0 break-words text-primary">{item.value}</dd>
                   </div>
                 ))}
               </dl>

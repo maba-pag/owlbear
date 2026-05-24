@@ -258,7 +258,7 @@ describe('TestFromAC_ShellCallbacks', () => {
 
       expect(detailWindow?.className).toContain('max-h-[min(84dvh,820px)]')
       expect(detailWindow?.className).toContain('h-[min(84dvh,820px)]')
-      expect(detailWindow?.className).toContain('w-[min(1440px,calc(100vw-18.5rem))]')
+      expect(detailWindow?.className).toContain('w-[min(1280px,calc(100vw-18.5rem))]')
       expect(detailWindow?.className).toContain('max-w-full')
       expect(detailWindow?.className).toContain('md:h-[min(84vh,820px)]')
       expect(detailWindow?.className).toContain('md:max-h-[min(84vh,820px)]')

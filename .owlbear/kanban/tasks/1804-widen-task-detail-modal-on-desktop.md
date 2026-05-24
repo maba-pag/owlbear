@@ -4,7 +4,7 @@ title: Widen task detail modal on desktop
 status: done
 priority: important
 created: 2026-05-24T06:42:36.487319+02:00
-updated: 2026-05-24T07:27:42.305749+02:00
+updated: 2026-05-24T07:48:02+02:00
 tags:
   - cockpit-perfect-ui
   - scope:cockpit-web
@@ -70,3 +70,7 @@ Implemented approved 1440px desktop cap for both task detail and decision resolv
 [[2026-05-24T07:27:42+02:00]]
 ## Follow-up Correction
 After commit review, the committed modal cap was found to be `1280px` while the user-approved/task-recorded cap was `1440px`. Corrected task detail and resolver classes/tests to `min(1440px, calc(100vw - 18.5rem))` and reran focused modal tests, ESLint, build, and geometry. Current geometry: 728px at 1024 and 1383.5px at 2000/2560 for both task and resolver, all inside frame.
+
+[[2026-05-24T07:48:02+02:00]]
+## Latest User Correction
+User clarified that they intentionally changed the preferred desktop cap from `1440px` to `1280px` because `1440px` looked poor. Restored task detail and decision resolver modal surfaces/tests to `min(1280px, calc(100vw - 18.5rem))`. Current package keeps the 1024px support-floor frame guard while honoring the final 1280px cap.

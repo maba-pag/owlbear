@@ -126,6 +126,10 @@ describe('TestFromAC_ResolveModal', () => {
       expect(headerMeta?.textContent).not.toContain(DR_FIXTURE.agent)
 
       expect(metadata).not.toBeNull()
+      expect(metadata?.className).toContain('border')
+      expect(metadata?.textContent).toContain('Metadata')
+      expect(metadata?.querySelector('dl')?.className).toContain('text-sm')
+      expect(metadata?.querySelector('dl')?.className).not.toContain('border-t')
       expect(container.querySelector('[data-testid="resolve-metadata-agent"]')?.textContent).toContain(DR_FIXTURE.agent)
       expect(container.querySelector('[data-testid="resolve-metadata-source"]')?.textContent).toContain(DR_FIXTURE.id)
       expect(container.querySelector('[data-testid="resolve-metadata-created"]')?.textContent).toContain(DR_FIXTURE.created)

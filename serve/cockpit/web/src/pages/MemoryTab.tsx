@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   PButton,
+  PHeading,
   PInputNumber,
   PInputSearch,
   PInputText,
@@ -877,23 +878,28 @@ function MemoryTab() {
                 </div>
 
                 {openEntryId === entry.id ? (
-                  <div data-testid="memory-accordion-detail" className="grid gap-static-md border-t border-contrast-low pt-static-md">
+                  <div data-testid="memory-accordion-detail" className="grid gap-static-md border-t border-contrast-low pb-static-md pt-static-md">
                     <div data-testid="memory-content-panel" className="rounded-md border border-contrast-low bg-surface p-static-md text-base leading-relaxed text-primary shadow-sm">
                       <MarkdownPreview className="text-base" rehypePlugins={[[rehypeSanitize, MEMORY_SANITIZE_SCHEMA]]}>
                         {entry.content}
                       </MarkdownPreview>
                     </div>
-                    <dl data-testid="memory-metadata-grid" className="grid gap-x-static-md gap-y-static-xs border-t border-contrast-low pt-static-sm text-xs leading-normal text-contrast-high md:grid-cols-2 xl:grid-cols-4">
-                      <div className="min-w-0"><dt className="font-semibold text-contrast-high">ID</dt><dd className="m-0 break-words text-primary">{entry.id}</dd></div>
-                      <div className="min-w-0"><dt className="font-semibold text-contrast-high">Source agent</dt><dd className="m-0 break-words text-primary">{entry.source_agent}</dd></div>
-                      <div className="min-w-0"><dt className="font-semibold text-contrast-high">Scope agents</dt><dd className="m-0 break-words text-primary">{formatScopeAgents(entry.scope_agents)}</dd></div>
-                      <div className="min-w-0"><dt className="font-semibold text-contrast-high">Categories</dt><dd className="m-0 break-words text-primary">{entry.categories.join(', ')}</dd></div>
-                      <div className="min-w-0"><dt className="font-semibold text-contrast-high">Confidence</dt><dd className="m-0 break-words text-primary">{formatConfidence(entry.confidence)}</dd></div>
-                      <div className="min-w-0"><dt className="font-semibold text-contrast-high">State</dt><dd className="m-0 break-words text-primary">{entry.state}</dd></div>
-                      <div className="min-w-0"><dt className="font-semibold text-contrast-high">Created</dt><dd className="m-0 break-words text-primary">{entry.created_at}</dd></div>
-                      <div className="min-w-0"><dt className="font-semibold text-contrast-high">Updated</dt><dd className="m-0 break-words text-primary">{entry.updated_at}</dd></div>
-                      <div className="min-w-0"><dt className="font-semibold text-contrast-high">Approved</dt><dd className="m-0 break-words text-primary">{entry.approved_at ?? '-'}</dd></div>
-                    </dl>
+                    <section data-testid="memory-metadata-section" className="rounded-lg border border-contrast-low bg-canvas p-static-sm">
+                      <div className="mb-static-xs flex min-w-0 items-center justify-between gap-static-sm">
+                        <PHeading size="small" tag="h3">Metadata</PHeading>
+                      </div>
+                      <dl data-testid="memory-metadata-grid" className="grid gap-x-static-lg gap-y-static-xs text-sm text-primary sm:grid-cols-2 lg:grid-cols-3">
+                        <div className="min-w-0"><dt className="font-semibold text-contrast-high">ID</dt><dd className="m-0 break-words text-primary">{entry.id}</dd></div>
+                        <div className="min-w-0"><dt className="font-semibold text-contrast-high">Source agent</dt><dd className="m-0 break-words text-primary">{entry.source_agent}</dd></div>
+                        <div className="min-w-0"><dt className="font-semibold text-contrast-high">Scope agents</dt><dd className="m-0 break-words text-primary">{formatScopeAgents(entry.scope_agents)}</dd></div>
+                        <div className="min-w-0"><dt className="font-semibold text-contrast-high">Categories</dt><dd className="m-0 break-words text-primary">{entry.categories.join(', ')}</dd></div>
+                        <div className="min-w-0"><dt className="font-semibold text-contrast-high">Confidence</dt><dd className="m-0 break-words text-primary">{formatConfidence(entry.confidence)}</dd></div>
+                        <div className="min-w-0"><dt className="font-semibold text-contrast-high">State</dt><dd className="m-0 break-words text-primary">{entry.state}</dd></div>
+                        <div className="min-w-0"><dt className="font-semibold text-contrast-high">Created</dt><dd className="m-0 break-words text-primary">{entry.created_at}</dd></div>
+                        <div className="min-w-0"><dt className="font-semibold text-contrast-high">Updated</dt><dd className="m-0 break-words text-primary">{entry.updated_at}</dd></div>
+                        <div className="min-w-0"><dt className="font-semibold text-contrast-high">Approved</dt><dd className="m-0 break-words text-primary">{entry.approved_at ?? '-'}</dd></div>
+                      </dl>
+                    </section>
 
                     {entry.state === 'approved' ? <p className="text-sm text-primary">Editing will require re-approval</p> : null}
 
@@ -903,7 +909,7 @@ function MemoryTab() {
 
                     {promotionMessageByEntryId[entry.id] ? <p className="rounded-lg border border-success bg-success-low p-static-sm text-primary">{promotionMessageByEntryId[entry.id]}</p> : null}
 
-                    <div className="flex flex-wrap items-center gap-static-xs">
+                    <div data-testid="memory-detail-actions" className="flex flex-wrap items-center gap-static-xs">
                       {entry.state === 'curated' ? (
                         <PButton type="button" data-testid="memory-approve-btn" compact onClick={() => void handleApprove(entry)}>
                           Approve

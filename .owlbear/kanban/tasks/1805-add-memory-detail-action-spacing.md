@@ -1,10 +1,10 @@
 ---
 id: 1805
 title: Add memory detail action spacing
-status: research
+status: done
 priority: needed
 created: 2026-05-24T06:42:43.178804+02:00
-updated: 2026-05-24T07:18:12.380900+02:00
+updated: 2026-05-24T07:48:02+02:00
 tags:
   - cockpit-perfect-ui
   - scope:cockpit-web
@@ -26,7 +26,7 @@ ac:
 proof_bundle: behavioral+reader
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-24T07:33:35.967033+02:00
 archival_reason:
 archival_refs: []
 ---
@@ -51,3 +51,6 @@ Metrics from the expanded curated memory detail:
 - `gapFromActionsToDetailBottom` measured as `0` inside `[data-testid="memory-accordion-detail"]`.
 
 Interpretation: the action row is the final element of the detail content with no explicit bottom padding. Any visible whitespace below comes from the surrounding accordion/card shell rather than an intentional detail footer treatment.
+
+[[2026-05-24T07:48:02+02:00]]
+Implemented `pb-static-md` on the expanded Memory detail so the action row has intentional breathing room above the lower detail edge. Verified via focused Memory/Decision/Shell suites (213 tests passed), ESLint, production build, and real-click screenshot proof at `.owlbear/scratch/1716-wide-cockpit/1809-memory-click-open-1024.png`. Metrics now show `gapFromActionsToDetailBottom: 16` with Approve/Edit/Delete visible.
