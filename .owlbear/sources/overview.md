@@ -16,6 +16,13 @@ External repos and resources studied during OwlBear development.
 | Milvus — exploration vs exploitation in recommendations | <https://milvus.io/ai-quick-reference/how-do-you-balance-exploration-and-exploitation-in-recommendations> | Epsilon-greedy fixed-fraction exploration — validated fixed-slot allocation design over probabilistic approaches | `.owlbear/research/memory-recall-explore-challenge-slots.md` | 2026-05-25 |
 | Shaped.ai — Explore vs Exploit | <https://www.shaped.ai/blog/explore-vs-exploit> | Diversity slot reservation in recommendation systems — confirmed value of deterministic exploration allocation | `.owlbear/research/memory-recall-explore-challenge-slots.md` | 2026-05-25 |
 
+## Score Migration — Initialization from Confidence (Task #1842)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Sanity.io — General migration principles | <https://www.sanity.io/learn/course/refactoring-content/general-migration-principles> | Idempotent migration script design — incremental complexity, error handling | `.owlbear/research/memory-score-migration-1842.md` | 2026-05-25 |
+| editfrontmatter (PyPI) | <https://pypi.org/project/editfrontmatter/> | Batch YAML frontmatter update patterns — field-presence detection approach | `.owlbear/research/memory-score-migration-1842.md` | 2026-05-25 |
+
 ## Memory Assessment Counters and Score Computation (Task #1841)
 
 | Source | URL | What | Where Used | Date |
