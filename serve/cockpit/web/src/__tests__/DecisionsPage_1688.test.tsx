@@ -143,6 +143,14 @@ describe('DecisionsPage workflow brief', () => {
     expect(item?.textContent).toContain('Open resolver')
   })
 
+  it('keeps agent attribution out of the primary card metadata', () => {
+    const { container } = renderPage()
+    const primaryMeta = container.querySelector('[data-testid="dr-primary-meta-dr-1688-001"]')
+    expect(primaryMeta?.textContent).toContain('Scope Decision')
+    expect(primaryMeta?.textContent).toContain('Task #1688')
+    expect(primaryMeta?.textContent).not.toContain('builder')
+  })
+
   it('sorts pending decisions oldest first by created timestamp', () => {
     const { container } = renderPage([DR_NEWER, DR_OLDER])
     const items = [...container.querySelectorAll('[data-testid^="dr-item-"]')]

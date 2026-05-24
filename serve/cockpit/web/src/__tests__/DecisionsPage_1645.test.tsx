@@ -2,7 +2,7 @@
  * Task #1645 — P2-01: Decisions list page with empty state
  *
  * AC1: DecisionsPage renders a full-width single-column list of pending DRs from
- *      useDRState().items; each list item displays agent, request_type, relative age
+ *      useDRState().items; each list item displays request_type, relative age
  *      (d/h/m format matching DecisionViewport formatAge), task_id, and body_preview
  *      (truncated to 200 characters); the root element retains data-testid='decisions-page'
  * AC2: When useDRState().items is empty AND isLoading is false AND error is null,
@@ -182,11 +182,13 @@ describe('TestFromAC_DecisionsPage', () => {
       expect(container.querySelector('[data-testid="dr-item-dr-b-002"]')).not.toBeNull()
     })
 
-    it('ac1 happy: each item renders the agent field', () => {
+    it('ac1 polish: primary metadata does not render the agent field', () => {
       const { container } = renderPage({ items: [DR_A] })
-      const item = container.querySelector('[data-testid="dr-item-dr-a-001"]')
-      expect(item).not.toBeNull()
-      expect(item!.textContent).toContain(DR_A.agent)
+      const primaryMeta = container.querySelector('[data-testid="dr-primary-meta-dr-a-001"]')
+      expect(primaryMeta).not.toBeNull()
+      expect(primaryMeta!.textContent).toContain('Scope Decision')
+      expect(primaryMeta!.textContent).toContain('Task #100')
+      expect(primaryMeta!.textContent).not.toContain(DR_A.agent)
     })
 
     it('ac1 happy: each item renders the formatted request type', () => {

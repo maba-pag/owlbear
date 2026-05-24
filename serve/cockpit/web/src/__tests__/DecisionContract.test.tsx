@@ -382,8 +382,8 @@ describe('TestFromAC_BodyContractAndErrorChain', () => {
       .toContain('Proceed with approach A.')
   })
 
-  // AC2: all AC2-required fields (id, task_id, agent, request_type, created, title,
-  // body_preview, body) are present in hook output items passed through Shell.
+  // AC2: required decision fields flow into the Decisions route; agent attribution
+  // is available in resolver metadata rather than the primary list row.
   it('hook output items render required fields on the Decisions route', async () => {
     const drWithAllFields: PendingDR & { body: string } = {
       id: 'dr-all-fields',
@@ -412,7 +412,7 @@ describe('TestFromAC_BodyContractAndErrorChain', () => {
     const item = container.querySelector('[data-testid="dr-item-dr-all-fields"]')!
     expect(item.textContent).toContain('Scope boundary decision')
     expect(item.textContent).toContain('Task #202')
-    expect(item.textContent).toContain('builder')
+    expect(item.querySelector('[data-testid="dr-primary-meta-dr-all-fields"]')?.textContent).not.toContain('builder')
     expect(item.textContent).toContain('Builder requests scope clarification...')
   })
 

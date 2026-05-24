@@ -1,10 +1,10 @@
 ---
 id: 1792
 title: Add decision metadata and reduce agent prominence
-status: research
+status: done
 priority: important
 created: 2026-05-24T01:57:03.845485+02:00
-updated: 2026-05-24T03:14:27.959215+02:00
+updated: 2026-05-24T05:42:02.960983+02:00
 tags:
   - cockpit-perfect-ui
   - scope:cockpit-web
@@ -22,6 +22,7 @@ ac:
   - Agent attribution is moved out of the primary Decision list/detail line and 
     into metadata.
   - Decision detail metadata is added using available decision fields.
+proof_bundle: behavioral+reader
 blocked: false
 block_reason:
 claimed_at:
@@ -48,3 +49,15 @@ Decision review should focus first on the decision, options, context, and action
 [[2026-05-24T03:14:27+02:00]]
 ## Decision
 User selected `Move agent to metadata`. Decision list/detail primary rows should prioritize decision content and essential workflow context; agent/source attribution belongs in a Decision Metadata section instead of the most prominent line.
+
+[[2026-05-24T05:41:57+02:00]]
+## Implementation Proof
+- Moved decision agent attribution out of the Decisions list primary metadata row; cards now foreground request type, task, age, title, context/options, and resolver path.
+- Moved resolver header attribution out of the first line and added a Decision Metadata section with task, request type, created timestamp/age, agent, and source ID.
+- Focused tests passed: `npm test -- --run src/__tests__/DecisionsPage_1688.test.tsx src/__tests__/DecisionsPage_1645.test.tsx src/__tests__/ResolveModal.test.tsx src/__tests__/ResolveModalSnapshot_1647.test.tsx src/__tests__/DecisionContract.test.tsx` -> 58 passed, 3 skipped.
+- Lint passed: `npx eslint src/pages/DecisionsPage.tsx src/components/ResolveModal.tsx src/__tests__/DecisionsPage_1688.test.tsx src/__tests__/DecisionsPage_1645.test.tsx src/__tests__/ResolveModal.test.tsx src/__tests__/DecisionContract.test.tsx`.
+- Build passed: `npm run build` (known Vite chunk-size warning only).
+- Reader proof screenshot: `.owlbear/scratch/1716-wide-cockpit/1792-decision-metadata-1024.png` at the 1024 support floor, showing the resolver header without agent and the Decision Metadata section with agent/source attribution.
+
+[[2026-05-24T05:42:02+02:00]]
+Completed Decision Metadata hierarchy: list/header primary rows no longer emphasize agent attribution, resolver metadata contains task/type/created/agent/source ID, focused tests/lint/build passed, and 1024 screenshot proof captured.

@@ -114,6 +114,24 @@ describe('TestFromAC_ResolveModal', () => {
     })
   })
 
+  describe('AC2b: decision metadata hierarchy', () => {
+    it('moves agent out of the modal header and into decision metadata', () => {
+      const { container } = renderModal()
+      const headerMeta = container.querySelector('[data-testid="resolve-header-meta"]')
+      const metadata = container.querySelector('[data-testid="resolve-decision-metadata"]')
+
+      expect(headerMeta).not.toBeNull()
+      expect(headerMeta?.textContent).toContain('Task #42')
+      expect(headerMeta?.textContent).toContain('Decision')
+      expect(headerMeta?.textContent).not.toContain(DR_FIXTURE.agent)
+
+      expect(metadata).not.toBeNull()
+      expect(container.querySelector('[data-testid="resolve-metadata-agent"]')?.textContent).toContain(DR_FIXTURE.agent)
+      expect(container.querySelector('[data-testid="resolve-metadata-source"]')?.textContent).toContain(DR_FIXTURE.id)
+      expect(container.querySelector('[data-testid="resolve-metadata-created"]')?.textContent).toContain(DR_FIXTURE.created)
+    })
+  })
+
   // ─── AC3: Optional notes textarea accepts freeform markdown ──────────────
 
   describe('AC3: optional notes textarea accepts freeform markdown', () => {

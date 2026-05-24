@@ -75,7 +75,7 @@ function DecisionsPage() {
             <article data-testid={item.id} className="grid min-h-[124px] gap-static-sm p-static-md pl-[calc(var(--spacing-static-md)+4px)]">
               <span className="absolute inset-y-0 left-0 w-1 bg-warning" aria-hidden="true" />
               <div className="min-w-0">
-                <div className="mb-static-xs flex min-w-0 flex-wrap items-center gap-static-xs">
+                <div data-testid={`dr-primary-meta-${item.id}`} className="mb-static-xs flex min-w-0 flex-wrap items-center gap-static-xs">
                   <PTag compact variant="secondary">
                     {formatRequestType(item.request_type)}
                   </PTag>
@@ -83,7 +83,6 @@ function DecisionsPage() {
                     Task #{item.task_id}
                   </PTag>
                   <span className="text-xs font-semibold text-contrast-high">{formatAge(item.created)}</span>
-                  <span className="text-xs font-semibold text-contrast-high">{item.agent}</span>
                 </div>
                 <div className="flex min-w-0 flex-wrap items-start justify-between gap-static-sm">
                   <h2 className="m-0 min-w-0 text-base font-semibold leading-tight text-primary">{brief.title}</h2>

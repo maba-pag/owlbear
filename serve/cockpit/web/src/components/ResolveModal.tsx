@@ -4,6 +4,7 @@ import {
   PHeading,
   PInlineNotification,
   PModal,
+  PTag,
   PText,
   PTextarea,
 } from '@porsche-design-system/components-react'
@@ -47,6 +48,16 @@ interface ResolveErrorState {
 interface InlineNotificationHost extends HTMLElement {
   onAction?: () => void
   onDismiss?: () => void
+}
+
+function formatOptionalMetadata(value: string): string {
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : 'Unspecified'
+}
+
+function formatCreatedMetadata(created: string): string {
+  const trimmed = created.trim()
+  return trimmed.length > 0 ? `${trimmed} (${formatAge(trimmed)})` : 'Unspecified'
 }
 
 export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalProps) {
@@ -126,6 +137,13 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
   const briefSource = { ...snapshotDR, body: snapshotBody }
   const brief = getDecisionBrief(briefSource)
   const fullRequestBody = getDecisionBodyMarkdown(briefSource) || snapshotBody
+  const metadataItems = [
+    { label: 'Task', value: `#${snapshotDR.task_id}`, testId: 'resolve-metadata-task' },
+    { label: 'Request type', value: formatRequestType(snapshotDR.request_type), testId: 'resolve-metadata-request-type' },
+    { label: 'Created', value: formatCreatedMetadata(snapshotDR.created), testId: 'resolve-metadata-created' },
+    { label: 'Agent', value: formatOptionalMetadata(snapshotDR.agent), testId: 'resolve-metadata-agent' },
+    { label: 'Source ID', value: formatOptionalMetadata(snapshotDR.id), testId: 'resolve-metadata-source' },
+  ]
 
   useEffect(() => {
     updateResolveBodyScrollCue()
@@ -281,10 +299,9 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
         <header className="grid gap-static-xs border-b border-contrast-low pb-static-sm pr-[4.5rem]">
           <span className="text-xs font-semibold uppercase text-primary">Decision request</span>
           <PHeading ref={setHeadingTagAttr} size="small" tag="h3">{brief.title}</PHeading>
-          <div className="flex min-w-0 flex-wrap items-center gap-static-xs text-xs font-semibold text-primary">
-            <span className="rounded-full border border-contrast-low bg-canvas px-static-xs py-1">Task #{snapshotDR.task_id}</span>
-            <span className="rounded-full border border-contrast-low bg-canvas px-static-xs py-1">{snapshotDR.agent}</span>
-            <span className="rounded-full border border-contrast-low bg-canvas px-static-xs py-1">{formatRequestType(snapshotDR.request_type)}</span>
+          <div data-testid="resolve-header-meta" className="flex min-w-0 flex-wrap items-center gap-static-xs text-xs font-semibold text-primary">
+            <PTag compact variant="secondary">Task #{snapshotDR.task_id}</PTag>
+            <PTag compact variant="secondary">{formatRequestType(snapshotDR.request_type)}</PTag>
             <span className="text-xs font-semibold text-contrast-high">{formatAge(snapshotDR.created)}</span>
           </div>
         </header>
@@ -349,6 +366,18 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
                 ) : null}
               </div>
             ) : null}
+            </section>
+
+            <section data-testid="resolve-decision-metadata" className="grid gap-static-sm rounded-lg border border-contrast-low bg-canvas p-static-md">
+              <span className="text-xs font-semibold uppercase leading-tight text-contrast-high">Decision Metadata</span>
+              <dl className="m-0 grid min-w-0 gap-static-xs text-xs text-primary sm:grid-cols-2 lg:grid-cols-3">
+                {metadataItems.map((item) => (
+                  <div key={item.testId} data-testid={item.testId} className="grid min-w-0 gap-1 border-t border-contrast-low pt-static-xs">
+                    <dt className="font-semibold uppercase leading-tight text-contrast-high">{item.label}</dt>
+                    <dd className="m-0 min-w-0 break-words leading-normal text-primary">{item.value}</dd>
+                  </div>
+                ))}
+              </dl>
             </section>
 
             <fieldset data-testid="response-selector" className="m-0 grid gap-static-sm border-0 p-0">
