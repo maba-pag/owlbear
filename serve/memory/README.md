@@ -85,6 +85,9 @@ Pydantic `BaseModel` representing a single markdown-backed memory entry.
 | `pending` | Newly created, awaiting curation |
 | `curated` | Reviewed and refined |
 | `approved` | Accepted for active use |
+| `contested` | Under dispute; visible in recall; edit blocked — use `resolve()` to return to approved |
+| `disputed` | Challenged as incorrect; excluded from recall; edit blocked — use `resolve()` to return to approved |
+| `stale` | Flagged as potentially outdated; excluded from recall; edit blocked — use `resolve()` to return to approved |
 | `deleted` | Logically deleted (file may still exist) |
 
 ---
@@ -168,8 +171,9 @@ Exported from the `owlbear_memory` package top-level.
 | `get_entry(id)` | `(str) → MemoryEntry` | Raises `NotFoundError` |
 | `save(...)` | `(title, content, categories, confidence, source_agent, scope_agents) → MemoryEntry` | Creates pending entry; initializes `score = confidence`, all counters to `0`; no OCC |
 | `approve(id, expected_updated_at)` | `(str, str) → MemoryEntry` | curated → approved; raises `TransitionError` / `ConcurrencyError` |
-| `edit(id, fields, expected_updated_at)` | `(str, EditPayload, str) → MemoryEntry` | State-machine rules apply; raises `TransitionError` / `ConcurrencyError` |
-| `delete(id, expected_updated_at)` | `(str, str) → MemoryEntry` | Hard-delete for pending, soft-delete for curated/approved; raises `TransitionError` / `ConcurrencyError` |
+| `resolve(id, expected_updated_at)` | `(str, str) → MemoryEntry` | contested/disputed/stale → approved; sets `approved_at`; raises `TransitionError` / `ConcurrencyError` |
+| `edit(id, fields, expected_updated_at)` | `(str, EditPayload, str) → MemoryEntry` | State-machine rules apply; blocked from contested/disputed/stale; raises `TransitionError` / `ConcurrencyError` |
+| `delete(id, expected_updated_at)` | `(str, str) → MemoryEntry` | Hard-delete for pending, soft-delete for curated/approved/contested/disputed/stale; raises `TransitionError` / `ConcurrencyError` |
 | `load()` | `() → list[MemoryEntry]` | Force full reparse; skips malformed files (lenient) |
 
 #### State Machine
@@ -184,11 +188,18 @@ Exported from the `owlbear_memory` package top-level.
 | `curated` | `delete` | `deleted` | Soft-delete |
 | `approved` | `edit` | `curated` | Clears `approved_at` |
 | `approved` | `delete` | `deleted` | Soft-delete |
+| `contested` | `resolve` | `approved` | Sets `approved_at` |
+| `disputed` | `resolve` | `approved` | Sets `approved_at` |
+| `stale` | `resolve` | `approved` | Sets `approved_at` |
+| `contested` | `delete` | `deleted` | Soft-delete |
+| `disputed` | `delete` | `deleted` | Soft-delete |
+| `stale` | `delete` | `deleted` | Soft-delete |
+| `contested`/`disputed`/`stale` | `edit` | — | Raises `TransitionError`; use `resolve()` first |
 | any | `approve`/`edit`/`delete` when `deleted` | — | Raises `TransitionError` |
 
 #### OCC
 
-All mutation methods (`approve`, `edit`, `delete`) accept `expected_updated_at` (str).
+All mutation methods (`approve`, `resolve`, `edit`, `delete`) accept `expected_updated_at` (str).
 If this value does not match the on-disk `entry.updated_at`, `ConcurrencyError` is
 raised. `save()` creates new entries and does not require an OCC token.
 

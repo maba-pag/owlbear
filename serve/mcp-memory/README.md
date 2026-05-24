@@ -38,12 +38,21 @@ pending ──[curate with scope]──► curated ──[approve]──► appr
    │                               │  ▲                    │
    │                               │  └──[curate edit]─────┘
    └──[delete: hard]               └──[delete: soft → deleted]
+
+contested ──[resolve*]──► approved    [delete: soft → deleted]
+disputed  ──[resolve*]──► approved    [delete: soft → deleted]
+stale     ──[resolve*]──► approved    [delete: soft → deleted]
+
+* resolve() is a MemoryEngine method; no MCP tool is exposed yet.
 ```
 
 - **pending** → invisible to `recall_memory`, not committed to git
 - **curated** → visible to scoped agents, committable
 - **approved** → highest-trust retrieval priority, committable
-- **deleted** → soft-deleted (curated/approved) or hard-deleted from disk (pending)
+- **contested** → visible to `recall_memory` (rank = curated); `curate_memory` (edit) blocked; delete soft-deletes
+- **disputed** → excluded from `recall_memory`; `curate_memory` (edit) blocked; delete soft-deletes
+- **stale** → excluded from `recall_memory`; `curate_memory` (edit) blocked; delete soft-deletes
+- **deleted** → soft-deleted (curated/approved/contested/disputed/stale) or hard-deleted from disk (pending)
 
 ## Tools
 
@@ -53,8 +62,8 @@ pending ──[curate with scope]──► curated ──[approve]──► appr
 | `list_memories` | List metadata sorted by curation priority; filters: `states`, `categories`, `scope_agents` |
 | `read_memory` | Read one full entry by `entry_id`; errors on deleted entries |
 | `recall_memory` | Body-only markdown blocks scoped to one agent; approved before curated; default limit 20 |
-| `curate_memory` | Mutate fields + auto-promote `pending→curated` (when scope provided) or auto-downgrade `approved→curated` |
-| `delete_memory` | Hard-delete pending (file removed); soft-delete curated/approved (state→deleted) |
+| `curate_memory` | Mutate fields + auto-promote `pending→curated` (when scope provided) or auto-downgrade `approved→curated`; raises `TransitionError` for contested/disputed/stale (use resolve first) |
+| `delete_memory` | Hard-delete pending (file removed); soft-delete curated/approved/contested/disputed/stale (state→deleted) |
 | `approve_memory` | Promote `curated→approved`; user-initiated only (not exposed to any agent) |
 
 All mutating tools return a `hint` field describing the transition or action taken.
@@ -68,7 +77,7 @@ All mutating tools return a `hint` field describing the transition or action tak
 | `content` | str | Markdown body (max 1024 chars at MCP layer) |
 | `categories` | list[str] | One or more from: `domain-knowledge`, `behaviour`, `pitfall`, `process`, `tool-usage`, `goal`, `personality`, `preference`, `env-context` |
 | `confidence` | float | `[0.7, 1.0]` inclusive |
-| `state` | str | `pending` (default), `curated`, `approved`, `deleted` |
+| `state` | str | `pending` (default), `curated`, `approved`, `contested`, `disputed`, `stale`, `deleted` |
 | `outstanding_count` | int | Default `0`; incremented by assessment tool when entry was outstanding |
 | `unremarkable_count` | int | Default `0`; incremented by assessment tool when entry was unremarkable |
 | `didnt_use_count` | int | Default `0`; incremented by assessment tool when entry was skipped |
