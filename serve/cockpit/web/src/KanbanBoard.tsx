@@ -412,6 +412,10 @@ function KanbanBoardContent({
     setFilter(nextFilter)
   }
 
+  const clearFilters = () => {
+    handleFilterChange(EMPTY_FILTER)
+  }
+
   return (
     <div
       className="relative flex h-full min-h-0 flex-col [--kanban-column-min:clamp(248px,15vw,280px)]"
@@ -451,6 +455,17 @@ function KanbanBoardContent({
                 <span className="whitespace-nowrap rounded-full border border-contrast-low bg-frosted-soft px-2 py-0.5 text-xs font-semibold leading-normal text-primary" data-testid="filter-result-count">
                   {filteredTasks.length} / {tasks.length} tasks
                 </span>
+              ) : null}
+              {hasActiveFilters ? (
+                <PButton
+                  type="button"
+                  data-testid="filter-clear-active"
+                  variant="secondary"
+                  compact
+                  onClick={clearFilters}
+                >
+                  Clear filters
+                </PButton>
               ) : null}
               {activeFilterLabels.length > 0 ? (
                 <span

@@ -232,4 +232,12 @@ describe('FilterPanel flex layout', () => {
       '.filter-panel CSS block must contain align-items: flex-end',
     ).toBe(true)
   })
+
+  it('FilterPanel.css anchors the panel to the right header edge', () => {
+    const css = fs.readFileSync(FILTER_PANEL_CSS, 'utf-8')
+    expect(
+      /\.filter-panel\s*\{[^}]*right\s*:\s*var\(--p-spacing-static-lg\)/s.test(css),
+      '.filter-panel CSS block must anchor with right: var(--p-spacing-static-lg)',
+    ).toBe(true)
+  })
 })

@@ -1,10 +1,10 @@
 ---
 id: 1791
 title: Align Kanban filters with trigger and clear action
-status: research
+status: done
 priority: important
 created: 2026-05-24T01:57:03.822491+02:00
-updated: 2026-05-24T03:13:48.686029+02:00
+updated: 2026-05-24T05:02:21.030304+02:00
 tags:
   - cockpit-perfect-ui
   - scope:cockpit-web
@@ -24,6 +24,7 @@ ac:
   - Kanban filter UI uses an anchored popover/menu pattern rather than a 
     left-aligned full-width panel, unless proof shows the popover cannot hold 
     the controls well.
+proof_bundle: behavioral+reader
 blocked: false
 block_reason:
 claimed_at:
@@ -49,3 +50,26 @@ Filters are a repeated board workflow. Users should understand which controls be
 [[2026-05-24T03:13:48+02:00]]
 ## Decision
 User prefers trying a popover pattern for Kanban filters, similar in interaction feel to the workspace status/health menu: anchored to the Filter trigger, dismissible, and spatially connected to the right-side header controls. Active filters should still have an accessible Clear filters action outside the popover.
+
+## Implementation Proof
+- Changed the Kanban filter panel from a left-aligned board panel to a right-anchored popover under the header action cluster.
+- Added a header-level `Clear filters` action that appears while filters are active and works even after the popover is closed.
+- Kept the existing in-popover `Clear all` action and PDS controls intact.
+
+## Verification
+- `npm test -- --run src/__tests__/KanbanBoard.filter-e2e.test.tsx src/__tests__/FilterPanel.pds-controls.test.tsx` — 28 passed.
+- `npm test -- --run src/__tests__/KanbanBoard.filter-integration.test.tsx src/__tests__/FilterAccessibility.test.tsx src/__tests__/FilterAccessibilityPanel.test.tsx src/__tests__/FilterPanel.test.tsx` — 73 passed.
+- `npx eslint src/KanbanBoard.tsx src/__tests__/KanbanBoard.filter-e2e.test.tsx src/__tests__/FilterPanel.pds-controls.test.tsx` — passed.
+- `npm run build` — passed with the known Vite chunk-size warning.
+- `git diff --check` for the #1791 files — passed.
+
+## Visual Proof
+- `.owlbear/scratch/1716-wide-cockpit/1791-kanban-filter-popover-1024.png`
+- `.owlbear/scratch/1716-wide-cockpit/1791-kanban-filter-popover-1440.png`
+
+## Screenshot Metrics
+- 1024 viewport: panel left 248, right 968, width 720; result count `1 / 3 tasks`; active chip `Priority: Critical`.
+- 1440 viewport: panel left 664, right 1384, width 720; result count `1 / 3 tasks`; active chip `Priority: Critical`.
+
+[[2026-05-24T05:02:21+02:00]]
+Implemented the approved Kanban filter popover polish: right-anchored filter panel, active-state Clear filters action outside the popover, focused behavioral/source tests, lint/build, and screenshots at 1024 and 1440.

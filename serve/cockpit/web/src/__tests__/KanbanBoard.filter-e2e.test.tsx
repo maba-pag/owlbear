@@ -114,6 +114,10 @@ function getResetButton(container: HTMLElement): Element | null {
   return container.querySelector('[data-testid="filter-reset"]')
 }
 
+function getHeaderClearButton(container: HTMLElement): Element | null {
+  return container.querySelector('[data-testid="filter-clear-active"]')
+}
+
 // ─── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('TestFromAC_FilterBoardIntegration', () => {
@@ -404,6 +408,37 @@ describe('TestFromAC_FilterBoardIntegration', () => {
       ).not.toBeNull()
       // Result count hidden — no active filters
       expect(container.querySelector('[data-testid="filter-result-count"]')).toBeNull()
+    })
+  })
+
+  it('header clear action resets active filters while the panel is closed', async () => {
+    const { container } = renderBoard()
+    await openFilterPanel(container)
+
+    const pSelect = getPrioritySelect(container)
+    fireEvent(pSelect, new CustomEvent('change', { detail: { value: 'someday' }, bubbles: true }))
+
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="filter-result-count"]')?.textContent).toMatch(/^1 \/ 3 tasks$/)
+      expect(getHeaderClearButton(container)).not.toBeNull()
+    })
+
+    const toggle = container.querySelector('[data-testid="filter-toggle"]')!
+    fireEvent.click(toggle)
+    await waitFor(() => {
+      expect(container.querySelector('#filter-panel')).toBeNull()
+    })
+
+    const clearButton = getHeaderClearButton(container)
+    expect(clearButton).not.toBeNull()
+    fireEvent.click(clearButton!)
+
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="filter-result-count"]')).toBeNull()
+      expect(getHeaderClearButton(container)).toBeNull()
+      expect(container.querySelector('[data-column="backlog"] [data-testid="task-card"][data-id="1"]')).not.toBeNull()
+      expect(container.querySelector('[data-column="backlog"] [data-testid="task-card"][data-id="2"]')).not.toBeNull()
+      expect(container.querySelector('[data-column="todo"] [data-testid="task-card"][data-id="3"]')).not.toBeNull()
     })
   })
 

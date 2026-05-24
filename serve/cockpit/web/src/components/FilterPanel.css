@@ -1,10 +1,12 @@
 .filter-panel {
   position: absolute;
   z-index: 6;
-  top: calc(var(--p-spacing-static-md) + 42px);
-  left: var(--p-spacing-static-md);
-  width: min(760px, calc(100% - (var(--p-spacing-static-md) * 2)));
+  top: calc(4rem + var(--p-spacing-static-xs));
+  right: var(--p-spacing-static-lg);
+  width: min(720px, calc(100% - (var(--p-spacing-static-lg) * 2)));
+  max-height: min(64vh, 480px);
   box-sizing: border-box;
+  overflow-y: auto;
   background: var(--p-color-surface);
   border: 1px solid var(--p-color-contrast-low);
   border-radius: var(--p-radius-md);
@@ -14,6 +16,7 @@
   gap: var(--p-spacing-static-sm);
   align-items: flex-end;
   padding: var(--p-spacing-static-md);
+  transform-origin: top right;
 }
 
 .filter-panel__search {
@@ -39,6 +42,7 @@
 @media (max-width: 767px) {
   .filter-panel {
     top: calc(var(--p-spacing-static-sm) + 42px);
+    right: var(--p-spacing-static-sm);
     left: var(--p-spacing-static-sm);
     width: calc(100% - (var(--p-spacing-static-sm) * 2));
     max-height: min(56vh, 420px);
