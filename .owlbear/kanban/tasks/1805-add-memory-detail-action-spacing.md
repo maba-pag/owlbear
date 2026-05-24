@@ -4,7 +4,7 @@ title: Add memory detail action spacing
 status: research
 priority: needed
 created: 2026-05-24T06:42:43.178804+02:00
-updated: 2026-05-24T06:42:43.178804+02:00
+updated: 2026-05-24T07:18:12.380900+02:00
 tags:
   - cockpit-perfect-ui
   - scope:cockpit-web
@@ -41,3 +41,13 @@ Memory triage should feel calm and deliberate; cramped action spacing makes the 
 
 ## Boundary
 Discussion task only. Do not implement until explicitly approved. Clarify the desired comparison surface if needed before coding.
+
+[[2026-05-24T07:18:12+02:00]]
+## Evidence
+Captured current expanded Memory detail proof at `.owlbear/scratch/1716-wide-cockpit/1805-memory-detail-spacing-current-1024.png`.
+
+Metrics from the expanded curated memory detail:
+- Approve/Edit/Delete buttons were visible.
+- `gapFromActionsToDetailBottom` measured as `0` inside `[data-testid="memory-accordion-detail"]`.
+
+Interpretation: the action row is the final element of the detail content with no explicit bottom padding. Any visible whitespace below comes from the surrounding accordion/card shell rather than an intentional detail footer treatment.
