@@ -1,10 +1,10 @@
 ---
 id: 1840
 title: 'P2-01: State machine — contested, disputed, stale states'
-status: research
+status: backlog
 priority: critical
 created: 2026-05-24T19:00:51.542397+02:00
-updated: 2026-05-24T19:00:51.542397+02:00
+updated: 2026-05-24T22:03:27.789216+02:00
 tags:
   - phase-2
   - scope:memory
@@ -49,3 +49,18 @@ Add three new lifecycle states to the memory engine and define their recall visi
 
 ## Domain
 serve/memory/
+
+
+## Research
+- Research doc: .owlbear/research/memory-state-machine-contested-disputed-stale.md
+- Sources: 7 studied, 5 high-relevance
+- Recommendation: T1 implementation following existing patterns — standalone resolve() method, enum extension, recall filter update (confidence: 0.90)
+
+[[2026-05-24T22:03:27+02:00]]
+## Research
+- Research doc: .owlbear/research/memory-state-machine-contested-disputed-stale.md
+- Validated: T1 trivial extension, no architectural risk
+- Implementation approach: (1) extend MemoryState enum in both packages, (2) extend _state_rank_for_list — contested=1, disputed/stale=3, (3) add CONTESTED to recall visible set, (4) standalone resolve() method on MemoryEngine (contested/disputed/stale → approved), (5) block edit() from new states, (6) allow delete() soft-delete
+- Prior art: Wikipedia flag→dispute→resolve model, KG two-source confirmation
+- Confidence: 0.90
+- Challenge: SKIP — trivial T1 extension

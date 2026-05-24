@@ -1,10 +1,10 @@
 ---
 id: 1773
 title: Cockpit evidence-led interaction critique sweep
-status: done
+status: archived
 priority: important
 created: 2026-05-24T00:33:26.614960+02:00
-updated: 2026-05-24T18:10:51+02:00
+updated: 2026-05-24T22:03:37.428989+02:00
 tags:
   - cockpit-perfect-ui
   - scope:cockpit-web
@@ -17,19 +17,19 @@ depends_on:
 ac:
   - 'Fresh screenshots cover representative Cockpit tab interactions across mobile
     and desktop widths after #1772.'
-  - Every observed potential improvement is immediately captured as its own
+  - Every observed potential improvement is immediately captured as its own 
     kanban task, then refined or closed if later evidence clears it.
-  - Findings distinguish observed current harm from theoretical risk and record
+  - Findings distinguish observed current harm from theoretical risk and record 
     value, context, and uncertainty.
-  - No implementation changes are made until the user explicitly approves a
+  - No implementation changes are made until the user explicitly approves a 
     selected finding.
-  - The sweep ends by presenting one candidate improvement at a time through
+  - The sweep ends by presenting one candidate improvement at a time through 
     askQuestions for discussion.
 proof_bundle: smoke
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Purpose
@@ -94,3 +94,28 @@ User approved the #1826-#1838 implementation batch. All child tasks were attempt
 - `.owlbear/scratch/1773-decisions-open-task.png`
 
 The screenshot pass found two real defects before closeout: Decisions task references dispatched an open-task event but the Shell only rendered task detail on the Kanban route, and the structured AC editor could leak into display mode through the portal. Both were fixed and covered by focused Vitest/Playwright proof. Remaining observed screens are acceptable for this sweep. Next work should start as a new user-approved Cockpit sweep or a specific follow-up task.
+
+[[2026-05-24T22:03:37+02:00]]
+## Audit
+### Regression Detection
+- quality-runner mode full: 1076 passed, 0 failed, 9 skipped; pytest/ruff/eslint/vitest all exit 0
+- regression verdict: PASS
+
+### Intent Verification
+- scope alignment: PASS (all changed files in serve/cockpit/ and serve/cockpit/web/ — Cockpit domain only)
+- purpose match: PASS (evidence-led sweep creating follow-up tasks, inline fixes for two real defects found during closeout, user-approved batch implementation)
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 4/5
+Well-crafted process-oriented ACs for a discussion/analysis task. All five criteria are specific and testable. Minor gap: AC#1 references "mobile and desktop widths" but the sweep was reframed to desktop-only after user feedback; AC could have been updated to reflect the pivot.
+
+### Commit Integrity
+- upstream commit presence: PASS (8e58f235 feat: complete cockpit interaction batch (#1773, cockpit); 32c9e0ae docs: close cockpit sweep tasks (#1773, kanban))
+- kanban commit packaging: PASS (kanban commit only touches .owlbear/kanban/tasks/ files)
+
+### Deduction Breakdown
+- Missing reviewer evidence section: -.03 (discussion-tagged task with smoke proof bundle; body contains extensive timestamped evidence but no formal ## Review section)
+
+### Confidence: 0.97
+### Action: archive
