@@ -4,7 +4,7 @@ title: Widen task detail modal on desktop
 status: done
 priority: important
 created: 2026-05-24T06:42:36.487319+02:00
-updated: 2026-05-24T07:15:07.555723+02:00
+updated: 2026-05-24T07:27:42.305749+02:00
 tags:
   - cockpit-perfect-ui
   - scope:cockpit-web
@@ -66,3 +66,7 @@ User approved widening both task detail and decision resolver modal surfaces to 
 
 [[2026-05-24T07:15:07+02:00]]
 Implemented approved 1440px desktop cap for both task detail and decision resolver modal surfaces while preserving the `calc(100vw - 18.5rem)` frame guard. Focused modal suites passed (76 tests). ESLint passed for changed modal files/tests. Production build passed with the known Vite chunk-size warning only. Screenshot proof: `.owlbear/scratch/1716-wide-cockpit/1804-task-detail-wide-1024.png`, `.owlbear/scratch/1716-wide-cockpit/1804-task-detail-wide-2000.png`, `.owlbear/scratch/1716-wide-cockpit/1804-resolve-wide-1024.png`, `.owlbear/scratch/1716-wide-cockpit/1804-resolve-wide-2000.png`. Geometry proof: task and resolver widths were 728px at 1024, 1032.84px at 1440, 1383.5px at 2000, and 1383.5px at 2560; all remained inside the PDS frame and viewport.
+
+[[2026-05-24T07:27:42+02:00]]
+## Follow-up Correction
+After commit review, the committed modal cap was found to be `1280px` while the user-approved/task-recorded cap was `1440px`. Corrected task detail and resolver classes/tests to `min(1440px, calc(100vw - 18.5rem))` and reran focused modal tests, ESLint, build, and geometry. Current geometry: 728px at 1024 and 1383.5px at 2000/2560 for both task and resolver, all inside frame.
