@@ -205,6 +205,14 @@ def _write_archived_task(
     return path
 
 
+def _with_review_required_ac_predicate(config: Any) -> Any:
+    config.policy.status_predicates["review"] = {
+        "type": "required_sections",
+        "sections": ["## AC"],
+    }
+    return config
+
+
 # ---------------------------------------------------------------------------
 # AC1 — KanbanEngine.validate_body_size(body: str) -> None
 # ---------------------------------------------------------------------------
@@ -511,8 +519,8 @@ class TestFromAC_ValidateStatusPredicate:
 
     def test_archived_status_always_passes(self, tmp_path: Path) -> None:
         """Predicate check for 'archived' must be skipped (always passes)."""
-        engine = KanbanEngine(_make_board(tmp_path, config=_PREDICATE_CONFIG))
-        config = engine.board_config()
+        engine = KanbanEngine(_make_board(tmp_path))
+        config = _with_review_required_ac_predicate(engine.board_config())
         # No body at all — should still pass for 'archived' regardless of predicates
         engine.validate_status_predicate(
             target_status="archived",
@@ -522,8 +530,8 @@ class TestFromAC_ValidateStatusPredicate:
 
     def test_satisfied_predicate_passes(self, tmp_path: Path) -> None:
         """Body containing the required section must not raise."""
-        engine = KanbanEngine(_make_board(tmp_path, config=_PREDICATE_CONFIG))
-        config = engine.board_config()
+        engine = KanbanEngine(_make_board(tmp_path))
+        config = _with_review_required_ac_predicate(engine.board_config())
         body = "## AC\nSome acceptance criteria here."
         engine.validate_status_predicate(
             target_status="review",
@@ -533,8 +541,8 @@ class TestFromAC_ValidateStatusPredicate:
 
     def test_unsatisfied_predicate_raises(self, tmp_path: Path) -> None:
         """Body missing required section must raise ERR_PREDICATE_FAILED."""
-        engine = KanbanEngine(_make_board(tmp_path, config=_PREDICATE_CONFIG))
-        config = engine.board_config()
+        engine = KanbanEngine(_make_board(tmp_path))
+        config = _with_review_required_ac_predicate(engine.board_config())
         body = "No sections here at all."
         with pytest.raises(ValidationError) as exc_info:
             engine.validate_status_predicate(
@@ -663,14 +671,15 @@ class TestFromAC_EngineMoveValidation:
             engine.move_task("100", "archived", archival_reason=None)
         assert exc_info.value.code == "ERR_ARCHIVAL_REASON_REQUIRED"
 
-    def test_move_to_predicate_status_unmet_raises(self, tmp_path: Path) -> None:
-        """KanbanEngine.move_task to 'review' with missing required section raises."""
+    def test_move_to_ignores_config_file_predicate_and_succeeds(self, tmp_path: Path) -> None:
+        """Product topology owns predicates, so config-file predicates do not block moves."""
         board = _make_board(tmp_path, config=_PREDICATE_CONFIG)
         _write_task(board, 100, "Task", body="No AC section here.")
         engine = KanbanEngine(board)
-        with pytest.raises(ValidationError) as exc_info:
-            engine.move_task("100", "review")
-        assert exc_info.value.code == "ERR_PREDICATE_FAILED"
+
+        moved = engine.move_task("100", "review")
+
+        assert moved.status == "review"
 
 
 # ---------------------------------------------------------------------------
@@ -808,8 +817,8 @@ class TestFromAC_ErrorCodesPreserved:
 
     def test_validate_predicate_failed_code_and_message(self, tmp_path: Path) -> None:
         """ERR_PREDICATE_FAILED code and message with status name preserved."""
-        engine = KanbanEngine(_make_board(tmp_path, config=_PREDICATE_CONFIG))
-        config = engine.board_config()
+        engine = KanbanEngine(_make_board(tmp_path))
+        config = _with_review_required_ac_predicate(engine.board_config())
         with pytest.raises(ValidationError) as exc_info:
             engine.validate_status_predicate(
                 target_status="review",
