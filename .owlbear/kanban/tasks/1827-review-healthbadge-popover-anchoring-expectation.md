@@ -4,7 +4,7 @@ title: Review HealthBadge popover anchoring expectation
 status: done
 priority: important
 created: 2026-05-24T11:19:10.382135+02:00
-updated: 2026-05-24T17:49:32+02:00
+updated: 2026-05-24T22:04:15.686112+02:00
 tags:
   - scope:cockpit-web
   - overlay
@@ -13,14 +13,14 @@ tags:
 parent: 1773
 depends_on: []
 ac:
-  - HealthBadge popover runtime position is verified against the actual trigger
+  - HealthBadge popover runtime position is verified against the actual trigger 
     geometry.
-  - The decision records whether the product should anchor to trigger-left or
+  - The decision records whether the product should anchor to trigger-left or 
     use the viewport padding floor.
   - Any approved change is covered by focused anchoring proof.
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-24T22:04:15.686112+02:00
 archival_reason:
 archival_refs: []
 ---

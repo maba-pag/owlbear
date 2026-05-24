@@ -4,7 +4,7 @@ title: Review DetailTab PDS payload timeout
 status: done
 priority: important
 created: 2026-05-24T11:19:10.398096+02:00
-updated: 2026-05-24T17:49:32+02:00
+updated: 2026-05-24T22:04:12.196724+02:00
 tags:
   - scope:cockpit-web
   - pds
@@ -13,14 +13,14 @@ tags:
 parent: 1773
 depends_on: []
 ac:
-  - DetailTab title/priority edit behavior is verified with the current PDS
+  - DetailTab title/priority edit behavior is verified with the current PDS 
     controls.
-  - The decision distinguishes product regression from stale/flaky test
+  - The decision distinguishes product regression from stale/flaky test 
     behavior.
   - Any approved change preserves edit POST payload correctness.
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-24T22:04:12.196724+02:00
 archival_reason:
 archival_refs: []
 ---
