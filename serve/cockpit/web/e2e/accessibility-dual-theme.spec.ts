@@ -505,8 +505,7 @@ for (const theme of THEMES) {
     })
 
     // ── Surface 11: ConfirmDialog ─────────────────────────────────────────
-    // ConfirmDialog opens from TaskActions when "Move Backward" is clicked.
-    // The task must be in-progress with a valid backward transition.
+    // ConfirmDialog opens from the current TaskActions confirmation surface.
     test(`confirm dialog passes wcag2.1 aa under ${theme} theme (AC3)`, async ({ page }) => {
       await expect(
         page.locator('html'),
@@ -517,12 +516,12 @@ for (const theme of THEMES) {
 
       await expect(
         page.locator('[data-testid="task-detail-modal"]'),
-        'task detail modal must be visible before clicking move-backward',
+        'task detail modal must be visible before clicking unclaim',
       ).toBeVisible({ timeout: 5_000 })
 
-      const moveBackwardBtn = page.locator('[data-testid="move-backward"]')
-      await moveBackwardBtn.waitFor({ state: 'visible', timeout: 5_000 })
-      await moveBackwardBtn.click()
+      const unclaimBtn = page.locator('[data-testid="unclaim-action"]')
+      await unclaimBtn.waitFor({ state: 'visible', timeout: 5_000 })
+      await unclaimBtn.click()
 
       await page
         .locator('[data-testid="confirm-dialog"]')

@@ -317,8 +317,7 @@ test.describe('TestFromAC_WcagSweep', () => {
   })
 
   // ── Surface 8: ConfirmDialog ──────────────────────────────────────────────
-  // ConfirmDialog opens from the TaskActions component when "Move Backward" is clicked.
-  // The task must be in-progress with a valid backward transition (todo ∈ valid_transitions).
+  // ConfirmDialog opens from the current TaskActions confirmation surface.
   test('confirm dialog passes wcag2.1 aa axe scan (AC1)', async ({ page }) => {
     const card = page.locator('[data-testid="task-card"][data-id="1"]')
     await card.waitFor({ state: 'visible', timeout: 8_000 })
@@ -327,13 +326,12 @@ test.describe('TestFromAC_WcagSweep', () => {
     // Wait for task detail modal to open.
     await expect(
       page.locator('[data-testid="task-detail-modal"]'),
-      'task detail modal must be visible before clicking move-backward',
+      'task detail modal must be visible before clicking unclaim',
     ).toBeVisible({ timeout: 5_000 })
 
-    // Click "Move Backward" to open ConfirmDialog.
-    const moveBackwardBtn = page.locator('[data-testid="move-backward"]')
-    await moveBackwardBtn.waitFor({ state: 'visible', timeout: 5_000 })
-    await moveBackwardBtn.click()
+    const unclaimBtn = page.locator('[data-testid="unclaim-action"]')
+    await unclaimBtn.waitFor({ state: 'visible', timeout: 5_000 })
+    await unclaimBtn.click()
 
     // ConfirmDialog must be open — no conditional skip.
     await page

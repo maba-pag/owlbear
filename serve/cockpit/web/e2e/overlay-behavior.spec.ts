@@ -361,14 +361,13 @@ test.describe('TestFromAC_BlockingDialogSemantics', () => {
     await waitForBoard(page)
   })
 
-  /** Select task 1 in the task detail modal and open the ConfirmDialog via Move Backward. */
+  /** Select task 1 in the task detail modal and open the ConfirmDialog via Unclaim. */
   async function openConfirmDialog(page: Page): Promise<void> {
     const card = page.locator('[data-testid="task-card"][data-id="1"]')
     await card.waitFor({ state: 'visible', timeout: 8_000 })
     await card.click()
-    // Wait for the task detail modal to load task detail and show the move-backward button.
-    await page.locator('[data-testid="move-backward"]').waitFor({ state: 'visible', timeout: 8_000 })
-    await page.click('[data-testid="move-backward"]')
+    await page.locator('[data-testid="unclaim-action"]').waitFor({ state: 'visible', timeout: 8_000 })
+    await page.click('[data-testid="unclaim-action"]')
     await page.locator('[data-testid="confirm-dialog"]').waitFor({ state: 'visible', timeout: 5_000 })
   }
 
@@ -600,11 +599,11 @@ test.describe('TestFromAC_BlockingDialogSemantics', () => {
     const card = page.locator('[data-testid="task-card"][data-id="1"]')
     await card.waitFor({ state: 'visible', timeout: 8_000 })
     await card.click()
-    const moveBackward = page.locator('[data-testid="move-backward"]')
-    await moveBackward.waitFor({ state: 'visible', timeout: 8_000 })
-    // Focus the move-backward button — previousFocusRef captures this on dialog mount.
-    await moveBackward.focus()
-    await moveBackward.click()
+    const unclaim = page.locator('[data-testid="unclaim-action"]')
+    await unclaim.waitFor({ state: 'visible', timeout: 8_000 })
+    // Focus the Unclaim button — previousFocusRef captures this on dialog mount.
+    await unclaim.focus()
+    await unclaim.click()
     await page.locator('[data-testid="confirm-dialog"]').waitFor({ state: 'visible', timeout: 5_000 })
 
     // Close via Cancel — unmounts dialog → previousFocusRef.current?.focus() restores trigger.
@@ -613,11 +612,9 @@ test.describe('TestFromAC_BlockingDialogSemantics', () => {
     await cancelBtn.click()
     await page.locator('[data-testid="confirm-dialog"]').waitFor({ state: 'hidden', timeout: 5_000 })
 
-    // GREEN: ConfirmDialog.tsx previousFocusRef stores document.activeElement on mount
-    // and calls .focus() on cleanup — focus must return to the move-backward trigger.
     await expect(
-      moveBackward,
-      'Focus must return to the move-backward trigger after ConfirmDialog closes',
+      unclaim,
+      'Focus must return to the unclaim trigger after ConfirmDialog closes',
     ).toBeFocused()
   })
 

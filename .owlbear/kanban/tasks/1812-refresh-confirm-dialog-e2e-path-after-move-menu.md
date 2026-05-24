@@ -1,10 +1,10 @@
 ---
 id: 1812
 title: Refresh ConfirmDialog e2e path after move menu
-status: research
+status: done
 priority: important
 created: 2026-05-24T08:49:00+02:00
-updated: 2026-05-24T08:49:00+02:00
+updated: 2026-05-24T10:43:16+02:00
 tags:
   - scope:cockpit-web
   - test-harness
@@ -37,3 +37,14 @@ This appears to be stale e2e harness drift rather than a #1781 readiness issue. 
 
 ## Decision Needed
 Decide whether to repair the stale ConfirmDialog e2e path next, likely by opening a current confirmation action rather than restoring the old move-backward button.
+
+## Decision
+User selected this task for implementation after #1823.
+
+## Resolution
+Refreshed ConfirmDialog E2E openers to use the current `unclaim-action` confirmation path instead of the removed `[data-testid="move-backward"]` button. No product UI behavior was changed.
+
+## Verification
+- `npx playwright test e2e/accessibility-dual-theme.spec.ts --project=chromium -g "confirm dialog passes"` -> 6 passed.
+- `npx playwright test e2e/accessibility-sweep.spec.ts --project=chromium -g "confirm dialog passes"` -> 3 passed.
+- `npx playwright test e2e/overlay-behavior.spec.ts --project=chromium -g "confirm_dialog_has_role_dialog_and_aria_modal|confirm_dialog_tab_focus_cycles_within_dialog|confirm_dialog_focus_returned_to_trigger_after_close"` -> 3 passed.
