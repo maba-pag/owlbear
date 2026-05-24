@@ -284,6 +284,7 @@ export default function FilterPanel({
         className="filter-panel__search"
         name="search-filter"
         label="Search tasks"
+        compact
         role="textbox"
         aria-label="Search tasks"
         tabIndex={0}
@@ -293,6 +294,7 @@ export default function FilterPanel({
         className="filter-panel__priority"
         name="priority-filter"
         label="Priority"
+        compact
         value={filter.priority}
         tabIndex={0}
         onChange={(event) => onFilterChange({ ...filter, priority: readStringValue(event as ControlValueEvent) })}
@@ -310,6 +312,7 @@ export default function FilterPanel({
           className="filter-panel__tags"
           name="tags-filter"
           label="Tags"
+          compact
           data-testid="filter-tags"
           value={filter.tags}
           tabIndex={0}
@@ -330,6 +333,7 @@ export default function FilterPanel({
         className="filter-panel__blocked"
         name="blocked-filter"
         label="Show only blocked tasks"
+        compact
         checked={filter.blocked}
         tabIndex={0}
         onClick={() => onFilterChange({ ...filter, blocked: !filter.blocked })}

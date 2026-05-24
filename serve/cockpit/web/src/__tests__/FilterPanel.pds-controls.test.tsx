@@ -131,6 +131,24 @@ describe('FilterPanel PCheckbox wrapper', () => {
   })
 })
 
+describe('FilterPanel compact PDS controls', () => {
+  it('uses compact variants for every filter field', () => {
+    const { container } = renderPanel()
+    type WithCompact = Element & { compact?: unknown }
+    const compactControls = [
+      container.querySelector('p-input-search'),
+      container.querySelector('p-select'),
+      container.querySelector('[data-testid="filter-tags"]'),
+      container.querySelector('p-checkbox'),
+    ]
+
+    compactControls.forEach((control) => {
+      expect(control).not.toBeNull()
+      expect((control as WithCompact).compact).toBe(true)
+    })
+  })
+})
+
 // ─── AC2: PSelect uses PSelectOption children (not native <option>) ───────────
 
 describe('FilterPanel PSelect options', () => {
