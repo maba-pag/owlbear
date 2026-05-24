@@ -2254,24 +2254,7 @@ class KanbanEngine:
         if self._activity_log_path is None or not self._activity_log_path.exists():
             return []
         sessions = self._derive_sessions()
-        if filter == "active":
-            sessions = self._filter_active_sessions_by_current_task_state(sessions)
         return _apply_session_filter(sessions, filter)
-
-    def _filter_active_sessions_by_current_task_state(
-        self,
-        sessions: list[SessionRecord],
-    ) -> list[SessionRecord]:
-        """Drop open log-derived sessions that no longer match task claim state."""
-        task_cache: dict[int, Task | None] = {}
-        filtered: list[SessionRecord] = []
-        for session in sessions:
-            if session.state not in _SESSION_FILTER_STATES["active"]:
-                filtered.append(session)
-                continue
-            if self._session_matches_current_claim(session, task_cache):
-                filtered.append(session)
-        return filtered
 
     def _session_matches_current_claim(
         self,
