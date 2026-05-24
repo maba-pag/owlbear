@@ -1,10 +1,10 @@
 ---
 id: 1781
 title: Stabilize Cockpit UX sweep against route transition fade
-status: research
+status: done
 priority: important
 created: 2026-05-24T01:17:30.229704+02:00
-updated: 2026-05-24T01:56:07.037784+02:00
+updated: 2026-05-24T08:49:00+02:00
 tags:
   - cockpit-perfect-ui
   - scope:cockpit-web
@@ -21,6 +21,7 @@ ac:
     entries/content rather than faded transition frames.
   - Product UX tasks are created only from stable evidence, not transition 
     artifacts.
+proof_bundle: smoke
 blocked: false
 block_reason:
 claimed_at:
@@ -47,3 +48,18 @@ Before filing product UX tasks from faded screenshots, run focused probes that w
 [[2026-05-24T01:56:07+02:00]]
 ## User Feedback
 User confirmed the faded look is a strong signal of screenshots being taken too early. Treat this as proof-readiness/tooling, not product UX. Keep using stable route-content waits before filing product tasks from screenshots.
+
+[[2026-05-24T08:49:00+02:00]]
+## Resolution Evidence
+Implemented a reusable Cockpit Playwright proof-readiness helper that waits for the workspace route wrapper to have exactly one panel, opacity `1`, zero settled translate transform, no route-loading fallback, visible route-specific content, and stable geometry/style across consecutive animation frames.
+
+Added focused #1781 Playwright coverage for Memory and Ideas routes. The focused proof test confirms both routes wait for final rendered content before screenshot capture.
+
+Stable 1024px screenshot evidence:
+- `.owlbear/scratch/1716-wide-cockpit/1781-proof-memory-steady-1024.png`
+- `.owlbear/scratch/1716-wide-cockpit/1781-proof-ideas-steady-1024.png`
+- `.owlbear/scratch/1716-wide-cockpit/1781-proof-readiness-metrics.json`
+
+Metrics report for both `/memories` and `/ideas`: `panelCount=1`, `panelOpacity=1`, `panelTransform=none`, `panelTranslateY=0`, `routeContentVisible=true`, `routeLoadingVisible=false`, `transformSettled=true`, `stableAcrossFrames=true`, and `ready=true`.
+
+During broader verification, the unrelated dual-theme accessibility sweep exposed stale ConfirmDialog e2e coverage that still waits for the removed `[data-testid="move-backward"]` path. Follow-up task #1812 records that harness repair separately so product UX findings continue to come from stable evidence.
