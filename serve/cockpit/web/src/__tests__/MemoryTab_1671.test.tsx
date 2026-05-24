@@ -92,6 +92,10 @@ function readPdsVariant(element: Element | null): string | undefined {
   return (element as (Element & { variant?: string }) | null)?.variant ?? element?.getAttribute('variant') ?? undefined
 }
 
+function readPdsCompact(element: Element | null): boolean {
+  return Boolean((element as (Element & { compact?: boolean }) | null)?.compact ?? element?.hasAttribute('compact'))
+}
+
 function readMetricTexts(container: HTMLElement): string[] {
   return Array.from(container.querySelectorAll('[data-testid="workspace-header-metric"]')).map(
     (el) => el.textContent?.replace(/\s+/g, '') ?? '',
@@ -324,6 +328,30 @@ describe('TestFromAC_MemoryTabFilters', () => {
     })
     await flush()
     expect(container.querySelector('[name="state-filter"]')).not.toBeNull()
+  })
+
+  it('ac2 happy: memory filter controls use compact PDS sizing while keeping labels', async () => {
+    vi.stubGlobal('fetch', makeOkFetch())
+    let container!: HTMLElement
+    await act(async () => {
+      container = renderMemoryTab().container
+    })
+    await flush()
+
+    const panel = container.querySelector('[data-testid="memory-filter-panel"]')
+    const controls = [
+      container.querySelector('[name="state-filter"]'),
+      container.querySelector('[name="category-filter"]'),
+      container.querySelector('[name="agent-filter"]'),
+      container.querySelector('[name="memory-search"]'),
+    ]
+
+    expect(panel?.className).toContain('gap-static-xs')
+    controls.forEach((control) => {
+      expect(control).not.toBeNull()
+      expect(readPdsCompact(control)).toBe(true)
+      expect((control as (Element & { label?: string }) | null)?.label ?? control?.getAttribute('label')).toMatch(/State|Category|Agent|Search/)
+    })
   })
 
   it('ac2 happy: default state filter shows pending, curated, and approved entries', async () => {

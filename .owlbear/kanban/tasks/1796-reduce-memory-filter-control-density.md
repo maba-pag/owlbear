@@ -1,10 +1,10 @@
 ---
 id: 1796
 title: Reduce Memory filter control density
-status: research
+status: done
 priority: important
 created: 2026-05-24T03:13:48.718875+02:00
-updated: 2026-05-24T03:27:28.695837+02:00
+updated: 2026-05-24T04:07:06.883870+02:00
 tags:
   - cockpit-perfect-ui
   - scope:cockpit-web
@@ -20,6 +20,7 @@ ac:
     vertical bulk.
   - The memory list gains useful visible space at supported desktop widths.
   - No implementation begins until the user approves this task.
+proof_bundle: behavioral+reader
 blocked: false
 block_reason:
 claimed_at:
@@ -44,4 +45,13 @@ Memory triage depends on scanning many entries. Compact filters would free more 
 
 ## Discussion Decision
 Keep Memory filters always visible, but reduce their vertical bulk with compact sizing and tighter spacing. Use PDS compact variants where available while preserving accessible labels and the ability to scan/filter quickly.
+
+[[2026-05-24T04:06:56+02:00]]
+
+## Implementation Proof
+Implemented in Cockpit web. Memory filters remain always visible, but the state/category multi-selects, agent select, and search input now use PDS compact sizing with tighter filter-panel padding and gaps.
+
+Proof metrics at 1280px: filter panel height `142`, four filter controls present, each control has `compact=true`, and labels remain visible (`State`, `Category`, `Agent`, `Search`).
+
+Proof screenshot: `.owlbear/scratch/1716-wide-cockpit/1796-memory-filters-after.png`
 
