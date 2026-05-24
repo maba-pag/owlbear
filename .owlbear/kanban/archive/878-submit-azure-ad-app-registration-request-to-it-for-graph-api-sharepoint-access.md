@@ -1,7 +1,7 @@
 ---
 id: 878
 title: Submit Azure AD app registration request to IT for Graph API SharePoint access
-status: backlog
+status: archived
 priority: someday
 created: '2026-04-14T19:30:42.941518+00:00'
 updated: '2026-04-15T20:28:25.222321+00:00'

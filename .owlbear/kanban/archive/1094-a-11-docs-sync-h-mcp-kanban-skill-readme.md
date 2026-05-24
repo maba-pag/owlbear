@@ -1,7 +1,7 @@
 ---
 id: 1094
 title: 'A-11: docs sync — h-mcp-kanban skill + README'
-status: done
+status: archived
 priority: needed
 created: 2026-04-21 10:55:00.686129+00:00
 updated: 2026-04-28T20:18:30.574073+00:00

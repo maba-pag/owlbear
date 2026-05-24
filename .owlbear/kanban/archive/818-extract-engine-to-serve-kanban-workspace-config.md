@@ -1,7 +1,7 @@
 ---
 id: 818
 title: Extract engine to serve/kanban/ + workspace config
-status: done
+status: archived
 priority: critical
 created: '2026-04-10T21:22:28.674120+00:00'
 updated: '2026-04-15T22:49:16.969145+00:00'

@@ -1,7 +1,7 @@
 ---
 id: 1832
 title: Review task edit action bar hierarchy
-status: done
+status: archived
 priority: important
 created: 2026-05-24T11:55:10.047697+02:00
 updated: 2026-05-24T23:25:36.635362+02:00
@@ -23,7 +23,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at: 2026-05-24T23:25:36.635362+02:00
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Observation

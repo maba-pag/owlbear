@@ -1,7 +1,7 @@
 ---
 id: 782
 title: Tests — owlbear_browser package scaffold and CDP launcher
-status: docs
+status: archived
 priority: needed
 created: '2026-04-10T12:30:44.020270+00:00'
 updated: '2026-04-14T01:13:00.839947+00:00'

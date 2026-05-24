@@ -1,7 +1,7 @@
 ---
 id: 1169
 title: Fix mcp-kanban README server label
-status: done
+status: archived
 priority: important
 created: 2026-04-28T20:08:43.209516+00:00
 updated: 2026-04-28T21:34:37.715525+00:00

@@ -1,7 +1,7 @@
 ---
 id: 888
 title: Port Copilot device-flow auth from Graphicator for LLMExtractor
-status: done
+status: archived
 priority: important
 created: '2026-04-15T15:00:20.217031+00:00'
 updated: '2026-04-15T23:06:50.752606+00:00'
