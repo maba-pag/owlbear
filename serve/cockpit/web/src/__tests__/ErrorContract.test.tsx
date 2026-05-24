@@ -251,6 +251,21 @@ function renderDetail(task: TaskDetail = TASK) {
   )
 }
 
+async function clickMoveTarget(container: HTMLElement, targetStatus: string): Promise<void> {
+  const moveTrigger = container.querySelector('[data-testid="task-detail-move-menu-trigger"]') as HTMLElement | null
+  expect(moveTrigger).not.toBeNull()
+  fireEvent.click(moveTrigger!)
+  await waitFor(
+    () => expect(container.querySelector('[data-testid="task-detail-move-menu"]')).not.toBeNull(),
+    { timeout: 500 },
+  )
+  const target = container.querySelector(
+    `[data-testid="task-detail-move-target"][data-status="${targetStatus}"]`,
+  ) as HTMLElement | null
+  expect(target).not.toBeNull()
+  fireEvent.click(target!)
+}
+
 // ─── AC1: Error envelope parsing — both shapes across all flows ───────────────
 //
 // td:2 → multiple tests per flow, covering both {code,message} and {detail} shapes.
@@ -577,12 +592,11 @@ describe('TestFromAC_ErrorRenderingAndRetry', () => {
 
   // FAILS: handleConfirm calls runMutation('/api/tasks/{id}/move', ...).
   // runMutation for non-422/409/404 status does not set validationMessage.
-  it('DetailTab move-backward mutation 500: validation-message rendered with response text', async () => {
+  it('DetailTab move menu mutation 500: validation-message rendered with response text', async () => {
     const errorBody = { code: 'ENGINE_ERROR', message: 'move blocked: task locked by reviewer' }
     vi.stubGlobal('fetch', makeJsonFetch(500, errorBody))
     const { container } = renderDetail()
-    fireEvent.click(container.querySelector('[data-testid="move-backward"]')!)
-    fireEvent.click(container.querySelector('[data-testid="confirm-dialog-confirm"]')!)
+    await clickMoveTarget(container, 'todo')
     await waitFor(
       () => {
         const msg = container.querySelector('[data-testid="validation-message"]')

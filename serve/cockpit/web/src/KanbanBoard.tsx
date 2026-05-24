@@ -5,6 +5,7 @@ import ArchivalModal from './components/ArchivalModal'
 import FilterPanel from './components/FilterPanel'
 import { WorkspaceHeader, WorkspaceHeaderMetric } from './components/WorkspaceHeader'
 import { filterTasks, type FilterState } from './utils/filterTasks'
+import { formatStatusLabel, getOrderedTransitionTargets, shouldShowArchiveAction } from './utils/taskTransitions'
 import { type Board, type Task } from './hooks/useBoard'
 import { moveTask } from './api/tasks'
 import { ApiError } from './api/errors'
@@ -39,13 +40,6 @@ const CONTEXT_MENU_VERTICAL_CHROME = 10
 const INITIAL_ALIGNMENT_CONTEXT_COLUMNS = 1
 const INITIAL_ALIGNMENT_EDGE_TOLERANCE = 1
 
-function formatStatusLabel(status: string): string {
-  return status
-    .replace(/-/g, ' ')
-    .trim()
-    .replace(/\b\w/g, (letter) => letter.toUpperCase())
-}
-
 function getActiveFilterLabels(filter: FilterState): string[] {
   const labels: string[] = []
   const searchText = filter.text.trim()
@@ -64,17 +58,6 @@ function getActiveFilterLabels(filter: FilterState): string[] {
   }
 
   return labels
-}
-
-function getOrderedTransitionTargets(board: Board, status: string): string[] {
-  const transitionSet = new Set(board.valid_transitions[status] ?? [])
-  return board.statuses
-    .map(({ name }) => name)
-    .filter((name) => name !== 'archived' && transitionSet.has(name))
-}
-
-function shouldShowArchiveAction(status: string): boolean {
-  return status !== 'archived'
 }
 
 function clampContextMenuCoordinates(

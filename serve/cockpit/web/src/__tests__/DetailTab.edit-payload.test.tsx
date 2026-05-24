@@ -129,6 +129,21 @@ function clickConfirm(container: HTMLElement): void {
   fireEvent.click(confirmBtn!)
 }
 
+async function clickMoveTarget(container: HTMLElement, targetStatus: string): Promise<void> {
+  const moveTrigger = container.querySelector('[data-testid="task-detail-move-menu-trigger"]') as HTMLElement | null
+  expect(moveTrigger).not.toBeNull()
+  fireEvent.click(moveTrigger!)
+  await waitFor(
+    () => expect(container.querySelector('[data-testid="task-detail-move-menu"]')).not.toBeNull(),
+    { timeout: 500 },
+  )
+  const target = container.querySelector(
+    `[data-testid="task-detail-move-target"][data-status="${targetStatus}"]`,
+  ) as HTMLElement | null
+  expect(target).not.toBeNull()
+  fireEvent.click(target!)
+}
+
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 // ---------------------------------------------------------------------------
@@ -342,7 +357,7 @@ describe('TestFromAC_DetailTabActions', () => {
     )
   })
 
-  it('move-backward confirmation POSTs to the move endpoint', async () => {
+  it('move menu POSTs to the move endpoint', async () => {
     /**
      * AC5: move-backward → POST /api/tasks/{id}/move.
      *
@@ -355,16 +370,7 @@ describe('TestFromAC_DetailTabActions', () => {
     vi.stubGlobal('fetch', fetchMock)
     const { container } = renderDetailWithBoard(TASK)
 
-    const moveBackBtn = container.querySelector('[data-testid="move-backward"]') as HTMLElement | null
-    expect(moveBackBtn).not.toBeNull()
-    fireEvent.click(moveBackBtn!)
-
-    await waitFor(
-      () => expect(container.querySelector('[data-testid="confirm-dialog"]')).not.toBeNull(),
-      { timeout: 500 },
-    )
-
-    clickConfirm(container)
+    await clickMoveTarget(container, 'todo')
 
     await waitFor(
       () => {
@@ -377,7 +383,7 @@ describe('TestFromAC_DetailTabActions', () => {
     )
   })
 
-  it('move-backward sends the previous pipeline status in the request body', async () => {
+  it('move menu sends the selected pipeline status in the request body', async () => {
     /**
      * AC5: target status derived from pipeline-order (previous status from
      * valid_transitions or board status list).
@@ -393,16 +399,7 @@ describe('TestFromAC_DetailTabActions', () => {
     vi.stubGlobal('fetch', fetchMock)
     const { container } = renderDetailWithBoard(TASK, BOARD)
 
-    const moveBackBtn = container.querySelector('[data-testid="move-backward"]') as HTMLElement | null
-    expect(moveBackBtn).not.toBeNull()
-    fireEvent.click(moveBackBtn!)
-
-    await waitFor(
-      () => expect(container.querySelector('[data-testid="confirm-dialog"]')).not.toBeNull(),
-      { timeout: 500 },
-    )
-
-    clickConfirm(container)
+    await clickMoveTarget(container, 'todo')
 
     await waitFor(
       () => {

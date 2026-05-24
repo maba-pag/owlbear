@@ -1,10 +1,10 @@
 ---
 id: 1787
 title: Clarify task detail move and archive actions
-status: research
+status: done
 priority: important
 created: 2026-05-24T01:57:03.618227+02:00
-updated: 2026-05-24T02:59:23.361606+02:00
+updated: 2026-05-24T04:54:04.820623+02:00
 tags:
   - cockpit-perfect-ui
   - scope:cockpit-web
@@ -24,6 +24,7 @@ ac:
   - Task detail move targets are based on the same valid-transition model used 
     by the board context menu.
   - Task detail Archive reuses the existing archival modal flow.
+proof_bundle: behavioral+reader
 blocked: false
 block_reason:
 claimed_at:
@@ -55,3 +56,14 @@ User chose `Move menu + Archive`, with a preference to reuse the existing board 
 - Reuse the same valid-transition source as the board context menu.
 - Reuse `ArchivalModal` for archive reason/refs instead of posting archived directly.
 - Avoid direct filesystem writes; all moves/archive calls stay API/engine-backed.
+
+[[2026-05-24T04:51:24+02:00]]
+## Implementation Proof
+- Task detail now uses the same valid-transition model as the board context menu via shared transition helpers.
+- Replaced the asymmetric `Move Backward` action with a `Move` menu listing valid engine/API transition targets for the selected task status. Research tasks now expose forward movement from task detail.
+- Added a task-detail `Archive` action that opens the existing `ArchivalModal` flow; archival still posts through `/api/tasks/{id}/move` with archival reason/refs rather than direct file writes.
+- Verification: focused DetailTab/Kanban archive tests passed (`121 passed, 1 skipped`); focused ESLint passed; `npm run build` passed with the known chunk-size warning.
+- Screenshot proof: `.owlbear/scratch/1716-wide-cockpit/1787-task-detail-move-menu.png` shows task #1787 with Move targets Backlog/Todo/In Progress/Review/Docs/Done plus Archive; `.owlbear/scratch/1716-wide-cockpit/1787-task-detail-archive-modal.png` shows the existing Archive task modal opened from detail.
+
+[[2026-05-24T04:54:04+02:00]]
+Completed #1787. Task detail now exposes a valid-transition Move menu and Archive action using the existing archival modal/API flow. Proof screenshots and verification are recorded in the implementation note.

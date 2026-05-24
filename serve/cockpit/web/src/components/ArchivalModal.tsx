@@ -9,7 +9,7 @@ import {
   PSelectOption,
   PText,
 } from '@porsche-design-system/components-react'
-import { moveTask } from '../api/tasks'
+import { moveTask, type TaskDetail } from '../api/tasks'
 import { ApiError } from '../api/errors'
 
 const TAB_FOCUSABLE_SELECTOR = [
@@ -45,6 +45,7 @@ interface ArchivalModalProps {
   returnFocusTo?: HTMLElement | null
   onClose: () => void
   onRefresh: () => void
+  onArchived?: (task: TaskDetail) => void
 }
 
 const REASONS_REQUIRING_REFS: ReadonlySet<ArchivalReason> = new Set(['deprecated', 'duplicate'])
@@ -92,6 +93,7 @@ export default function ArchivalModal({
   returnFocusTo = null,
   onClose,
   onRefresh,
+  onArchived,
 }: ArchivalModalProps) {
   const titleId = useId()
   const modalRef = useRef<HTMLElement | null>(null)
@@ -294,13 +296,14 @@ export default function ArchivalModal({
     }
 
     try {
-      await moveTask(taskId, {
+      const archivedTask = await moveTask(taskId, {
         status: 'archived',
         updated: expectedUpdated,
         archival_reason: reason,
         archival_refs: refsResult.values,
       })
       setError(null)
+      onArchived?.(archivedTask)
       onRefresh()
       onClose()
     } catch (error) {

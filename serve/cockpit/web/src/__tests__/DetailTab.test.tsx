@@ -84,6 +84,11 @@ const TASK_ACTIONLESS: TaskDetail = {
   blocked: false,
 }
 
+const TASK_ARCHIVED_ACTIONLESS: TaskDetail = {
+  ...TASK_ACTIONLESS,
+  status: 'archived',
+}
+
 const BOARD: Board = {
   statuses: [
     { name: 'research' },
@@ -163,6 +168,21 @@ function clickConfirm(container: HTMLElement): void {
   const confirmBtn = btns[btns.length - 1] as HTMLElement | null
   expect(confirmBtn).not.toBeNull()
   fireEvent.click(confirmBtn!)
+}
+
+async function clickMoveTarget(container: HTMLElement, targetStatus: string): Promise<void> {
+  const moveTrigger = container.querySelector('[data-testid="task-detail-move-menu-trigger"]') as HTMLElement | null
+  expect(moveTrigger).not.toBeNull()
+  fireEvent.click(moveTrigger!)
+  await waitFor(
+    () => expect(container.querySelector('[data-testid="task-detail-move-menu"]')).not.toBeNull(),
+    { timeout: 500 },
+  )
+  const target = container.querySelector(
+    `[data-testid="task-detail-move-target"][data-status="${targetStatus}"]`,
+  ) as HTMLElement | null
+  expect(target).not.toBeNull()
+  fireEvent.click(target!)
 }
 
 function typeIntoPdsField(container: HTMLElement, selector: string, value: string): void {
@@ -346,7 +366,7 @@ describe('TestFromAC_DetailTab', () => {
     })
 
     it('actions section explains when no direct actions are available', () => {
-      const { container } = renderDetail(TASK_ACTIONLESS)
+      const { container } = renderDetail(TASK_ARCHIVED_ACTIONLESS)
       expect(container.querySelector('[data-testid="actions-empty-state"]')?.textContent).toContain(
         'No direct actions available.',
       )
@@ -1036,21 +1056,14 @@ describe('TestBuilderDiscovered', () => {
       )
     })
 
-    it('move-backward sends previous pipeline status in the request body', async () => {
+    it('move menu sends the selected pipeline status in the request body', async () => {
       const fetchMock = vi.fn(() =>
         Promise.resolve({ ok: true, json: () => Promise.resolve(TASK) }),
       )
       vi.stubGlobal('fetch', fetchMock)
       // TASK.status = 'todo'; previous status in BOARD is 'backlog'
       const { container } = renderDetailWithBoard(TASK, BOARD)
-      const moveBackBtn = container.querySelector('[data-testid="move-backward"]') as HTMLElement | null
-      expect(moveBackBtn).not.toBeNull()
-      fireEvent.click(moveBackBtn!)
-      await waitFor(
-        () => expect(container.querySelector('[data-testid="confirm-dialog"]')).not.toBeNull(),
-        { timeout: 500 },
-      )
-      clickConfirm(container)
+      await clickMoveTarget(container, 'backlog')
       await waitFor(
         () => {
           const moveCalls = fetchMock.mock.calls.filter(([url]) =>
@@ -1062,6 +1075,34 @@ describe('TestBuilderDiscovered', () => {
           // TASK.status = 'todo' → previous status in BOARD is 'backlog'
           expect(body).toHaveProperty('status', 'backlog')
         },
+        { timeout: 500 },
+      )
+    })
+
+    it('research tasks expose a forward move target in task detail', async () => {
+      const { container } = renderDetailWithBoard(TASK_ACTIONLESS, BOARD)
+
+      const moveTrigger = container.querySelector('[data-testid="task-detail-move-menu-trigger"]') as HTMLElement | null
+      expect(moveTrigger).not.toBeNull()
+      fireEvent.click(moveTrigger!)
+
+      await waitFor(
+        () => {
+          expect(container.querySelector('[data-testid="task-detail-move-target"][data-status="backlog"]')).not.toBeNull()
+        },
+        { timeout: 500 },
+      )
+    })
+
+    it('task detail archive action opens the archival modal flow', async () => {
+      const { container } = renderDetailWithBoard(TASK_ACTIONLESS, BOARD)
+
+      const archiveAction = container.querySelector('[data-testid="task-detail-archive-action"]') as HTMLElement | null
+      expect(archiveAction).not.toBeNull()
+      fireEvent.click(archiveAction!)
+
+      await waitFor(
+        () => expect(container.querySelector('[data-testid="archival-modal"]')).not.toBeNull(),
         { timeout: 500 },
       )
     })

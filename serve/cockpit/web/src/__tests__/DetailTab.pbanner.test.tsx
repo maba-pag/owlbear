@@ -158,6 +158,21 @@ function renderDetail(
   )
 }
 
+async function clickMoveTarget(container: HTMLElement, targetStatus: string): Promise<void> {
+  const moveTrigger = container.querySelector('[data-testid="task-detail-move-menu-trigger"]') as HTMLElement | null
+  expect(moveTrigger).not.toBeNull()
+  fireEvent.click(moveTrigger!)
+  await waitFor(
+    () => expect(container.querySelector('[data-testid="task-detail-move-menu"]')).not.toBeNull(),
+    { timeout: 500 },
+  )
+  const target = container.querySelector(
+    `[data-testid="task-detail-move-target"][data-status="${targetStatus}"]`,
+  ) as HTMLElement | null
+  expect(target).not.toBeNull()
+  fireEvent.click(target!)
+}
+
 function clickConfirm(container: HTMLElement) {
   const dialog = container.querySelector('[data-testid="confirm-dialog"]')
   expect(dialog).not.toBeNull()
@@ -234,14 +249,13 @@ describe('TestFromAC_DetailTabMutationCallbacks', () => {
       })
     })
 
-    it('move-backward action uses heading "Move failed" on failure', async () => {
+    it('move menu action uses heading "Move failed" on failure', async () => {
       stubEditFetch({ status: 500 })
       const spy = vi.fn()
       // TASK status=todo, board has todo→backlog valid transition → backwardTarget = 'backlog'
       const { container } = renderDetail(TASK, { onMutationError: spy })
 
-      fireEvent.click(container.querySelector('[data-testid="move-backward"]')!)
-      clickConfirm(container)
+      await clickMoveTarget(container, 'backlog')
 
       await waitFor(() => {
         expect(spy).toHaveBeenCalledWith('Move failed', expect.any(String), 'error')

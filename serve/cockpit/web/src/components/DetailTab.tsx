@@ -6,6 +6,7 @@ import {
 } from '@porsche-design-system/components-react'
 import HistorySubtab, { type Session } from './HistorySubtab'
 import ConflictBanner from './ConflictBanner'
+import ArchivalModal from './ArchivalModal'
 import TaskActions from './TaskActions'
 import TaskFieldsEditor, {
   parseDependsOn,
@@ -18,6 +19,7 @@ import {
   type ConflictLocalDraft,
 } from '../hooks/useConflictDraft'
 import { useTaskMutation } from '../hooks/useTaskMutation'
+import { getOrderedTransitionTargets, shouldShowArchiveAction } from '../utils/taskTransitions'
 
 interface TaskDetail {
   id: number
@@ -97,7 +99,6 @@ export default function DetailTab({
   } = useConflictDraft()
   const {
     serverValidationMessage,
-    previousStatus,
     runMutation,
   } = useTaskMutation({
     taskId: task?.id ?? 0,
@@ -116,7 +117,9 @@ export default function DetailTab({
   })
   const [showHistory, setShowHistory] = useState(false)
   const [sessions, setSessions] = useState<Session[]>([])
+  const [archiveModalOpen, setArchiveModalOpen] = useState(false)
   const historyRegionRef = useRef<HTMLDivElement | null>(null)
+  const archiveReturnFocusRef = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
     if (initialSubtab !== 'history' || task === null) {
@@ -140,7 +143,8 @@ export default function DetailTab({
   if (!task) return null
 
   const t = task
-  const backwardTarget = previousStatus(t.status)
+  const moveTargets = board ? getOrderedTransitionTargets(board, t.status) : []
+  const canArchive = shouldShowArchiveAction(t.status)
 
   async function handleSave(payload: TaskEditPayload, conflictDraft: ConflictLocalDraft) {
     return runMutation(`/api/tasks/${t.id}/edit`, payload, {
@@ -185,7 +189,7 @@ export default function DetailTab({
   }
 
   const taskSessions = sessions.filter((s) => s.task_id === t.id)
-  const hasTaskActions = Boolean(backwardTarget) || t.claimed !== false || t.blocked
+  const hasTaskActions = moveTargets.length > 0 || canArchive || t.claimed !== false || t.blocked
   const acceptanceCriteria = Array.isArray(t.ac) ? t.ac.filter((item) => item.trim().length > 0) : []
 
   return (
@@ -231,8 +235,13 @@ export default function DetailTab({
             <TaskActions
               key={`${t.id}:${t.updated}`}
               task={t}
-              backwardTarget={backwardTarget}
+              moveTargets={moveTargets}
+              canArchive={canArchive}
               runMutation={runMutation}
+              onArchive={(returnFocusTo) => {
+                archiveReturnFocusRef.current = returnFocusTo
+                setArchiveModalOpen(true)
+              }}
             />
           ) : (
             <span data-testid="actions-empty-state" className="text-sm text-contrast-high">
@@ -258,6 +267,18 @@ export default function DetailTab({
       </section>
 
       <PDivider />
+
+      {archiveModalOpen ? (
+        <ArchivalModal
+          taskId={t.id}
+          taskStatus={t.status}
+          expectedUpdated={t.updated}
+          returnFocusTo={archiveReturnFocusRef.current}
+          onClose={() => setArchiveModalOpen(false)}
+          onRefresh={() => undefined}
+          onArchived={onTaskUpdated}
+        />
+      ) : null}
 
       <section className="flex min-w-0 items-center justify-start" data-region="history">
         <PButton data-testid="history-tab" variant="secondary" compact onClick={() => void handleHistoryClick()}>
