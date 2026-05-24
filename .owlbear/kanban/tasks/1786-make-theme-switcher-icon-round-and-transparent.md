@@ -4,7 +4,7 @@ title: Make theme switcher icon round and transparent
 status: done
 priority: important
 created: 2026-05-24T01:57:03.588400+02:00
-updated: 2026-05-24T03:42:59.290020+02:00
+updated: 2026-05-24T04:34:09.250853+02:00
 tags:
   - cockpit-perfect-ui
   - scope:cockpit-web
@@ -62,4 +62,16 @@ User locked the `PButtonPure` solution for the theme switcher. Health-status par
 Implemented in Cockpit web as part of the approved small polish package. Compact theme trigger now uses PDS `PButtonPure` instead of secondary `PButton`; proof metrics show `p-button-pure`, 44x44 target, transparent rest background, and menu semantics preserved.
 
 Proof screenshot: `.owlbear/scratch/1716-wide-cockpit/1786-theme-toggle-after.png`
+
+[[2026-05-24T04:22:03+02:00]]
+
+## Reopen Note
+User review found the compact theme button still looks wrong: the round hit box appears too large, the icon is visually off-center as if hidden text still affects layout, and the adjacent health indicator hover/click area also feels too large. Fix direction: tighten and center the actual icon triggers visually, not just satisfy DOM size metrics.
+
+[[2026-05-24T04:33:58+02:00]]
+## Completion Note
+- Replaced the compact theme trigger with a tightly sized 32px icon-only status-bar button using the PDS `PIcon` theme glyph, avoiding the hidden-label offset that made the icon appear left-weighted.
+- Tightened the workspace health trigger from the oversized 44px hover target to the same 32px compact footprint and reduced the traffic-light halo.
+- Verification: `npm test -- --run src/__tests__/IdeasPage.test.tsx src/__tests__/ThemeToggle.test.tsx src/__tests__/HealthBadge.test.tsx src/__tests__/BoardVisualDesign.test.tsx src/__tests__/Shell.test.tsx`; focused ESLint; `npm run build`.
+- Screenshot proof: `.owlbear/scratch/1716-wide-cockpit/1786-status-controls-theme-hover-updated.png` and `.owlbear/scratch/1716-wide-cockpit/1786-status-controls-health-hover-updated.png`; Playwright metrics show both controls at 32x32 and both icon/dot center deltas at `{dx: 0, dy: 0}`.
 

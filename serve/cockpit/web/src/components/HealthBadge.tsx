@@ -179,7 +179,7 @@ export default function HealthBadge({ items, status, message, actions, portalPop
         type="button"
         ref={triggerRef}
         className={[
-          'inline-flex size-11 items-center justify-center rounded-full bg-transparent p-0 transition-colors duration-sm',
+          'inline-flex size-8 items-center justify-center rounded-full border-0 bg-transparent p-0 transition-colors duration-sm',
           'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]',
           health === 'green'
             ? 'hover:bg-surface'
@@ -200,9 +200,9 @@ export default function HealthBadge({ items, status, message, actions, portalPop
         <span
           className={[
             'size-2.5 flex-none rounded-full',
-            health === 'red' ? 'bg-error ring-3 ring-error-low' :
-            health === 'yellow' ? 'bg-warning ring-3 ring-warning-low' :
-            'bg-success ring-3 ring-success-low',
+            health === 'red' ? 'bg-error ring-2 ring-error-low' :
+            health === 'yellow' ? 'bg-warning ring-2 ring-warning-low' :
+            'bg-success ring-2 ring-success-low',
           ].join(' ')}
           data-testid="traffic-light"
           data-health={health}

@@ -11,6 +11,7 @@ AC coverage:
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 from unittest.mock import patch
@@ -92,12 +93,20 @@ class TestFromAC_IdeasGet:
         assert "content" in body
         assert isinstance(body["content"], str)
 
+    def test_get_returns_updated_at_when_file_exists(self, client_with_file: TestClient) -> None:
+        """Response body includes the persisted file mtime for saved-recency UI."""
+        response = client_with_file.get("/api/ideas")
+        assert response.status_code == 200
+        updated_at = response.json()["updated_at"]
+        assert isinstance(updated_at, str)
+        assert datetime.fromisoformat(updated_at).tzinfo is not None
+
     def test_get_returns_empty_string_when_file_absent(self, client: TestClient) -> None:
         """Edge: GET /api/ideas returns {"content": ""} when file does not exist."""
         response = client.get("/api/ideas")
         assert response.status_code == 200
         body = response.json()
-        assert body == {"content": ""}
+        assert body == {"content": "", "updated_at": None}
 
     def test_get_returns_200_when_file_absent(self, client: TestClient) -> None:
         """Edge: missing file is not a 404 — returns 200 with empty content."""
@@ -127,7 +136,8 @@ class TestFromAC_IdeasGet:
             app.dependency_overrides.clear()
 
         assert response.status_code == 200
-        assert response.json() == {"content": ""}
+        assert response.json()["content"] == ""
+        assert isinstance(response.json()["updated_at"], str)
 
 
 # ---------------------------------------------------------------------------
@@ -191,6 +201,12 @@ class TestFromAC_IdeasPut:
         response = client_with_file.put("/api/ideas", json={"content": "something"})
         assert response.status_code == 204
         assert not response.content
+
+    def test_put_exposes_saved_mtime_header(self, client: TestClient) -> None:
+        """Boundary: successful writes expose saved-recency metadata without a body."""
+        response = client.put("/api/ideas", json={"content": "timestamped"})
+        assert response.status_code == 204
+        assert datetime.fromisoformat(response.headers["x-ideas-updated-at"]).tzinfo is not None
 
 
 # ---------------------------------------------------------------------------

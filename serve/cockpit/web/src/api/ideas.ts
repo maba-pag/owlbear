@@ -3,6 +3,7 @@ import { ApiError } from './errors'
 
 interface IdeasResponse {
   content: string
+  updated_at?: string | null
 }
 
 export async function fetchIdeas(): Promise<IdeasResponse> {
@@ -21,7 +22,7 @@ export async function fetchIdeas(): Promise<IdeasResponse> {
   return (await response.json()) as IdeasResponse
 }
 
-export async function saveIdeas(content: string): Promise<void> {
+export async function saveIdeas(content: string): Promise<string | null> {
   const response = await fetch('/api/ideas', {
     method: 'PUT',
     headers: {
@@ -37,4 +38,8 @@ export async function saveIdeas(content: string): Promise<void> {
     )
     throw new ApiError(response.status, errorMessage)
   }
+
+  return typeof response.headers?.get === 'function'
+    ? response.headers.get('x-ideas-updated-at')
+    : null
 }

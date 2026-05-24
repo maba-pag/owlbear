@@ -91,10 +91,10 @@ describe('TestFromAC_HealthBadge', () => {
     expect(badge?.getAttribute('data-health')).toBe('red')
   })
 
-  it('keeps the trigger target large without a persistent outer badge surface', () => {
+  it('keeps the trigger compact without a persistent outer badge surface', () => {
     const { container } = renderBadge([])
     const badge = container.querySelector('[data-testid="health-badge"]')
-    expect(badge?.className).toContain('size-11')
+    expect(badge?.className).toContain('size-8')
     expect(badge?.className).toContain('bg-transparent')
     expect(badge?.className).not.toContain('border-contrast-low')
     expect(badge?.className).not.toContain('bg-frosted-soft')

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 
@@ -20,6 +21,7 @@ class IdeasResponse(BaseModel):
     """Response payload for GET /ideas."""
 
     content: str
+    updated_at: str | None = None
 
 
 class IdeasUpdateRequest(BaseModel):
@@ -30,6 +32,14 @@ class IdeasUpdateRequest(BaseModel):
     content: str
 
 
+def _ideas_updated_at(ideas_path: Path) -> str | None:
+    try:
+        mtime = ideas_path.stat().st_mtime
+    except FileNotFoundError:
+        return None
+    return datetime.fromtimestamp(mtime, tz=UTC).isoformat()
+
+
 @router.get("/ideas", response_model=IdeasResponse)
 def get_ideas(ideas_path: _IdeasPath) -> IdeasResponse:
     """Return the current shared ideas markdown, or empty content when absent."""
@@ -37,11 +47,13 @@ def get_ideas(ideas_path: _IdeasPath) -> IdeasResponse:
         content = ideas_path.read_text(encoding="utf-8")
     except FileNotFoundError:
         content = ""
-    return IdeasResponse(content=content)
+    return IdeasResponse(content=content, updated_at=_ideas_updated_at(ideas_path))
 
 
 @router.put("/ideas", status_code=status.HTTP_204_NO_CONTENT)
 def put_ideas(req: IdeasUpdateRequest, ideas_path: _IdeasPath) -> Response:
     """Persist shared ideas markdown using atomic write semantics."""
     atomic_write(ideas_path, req.content)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    updated_at = _ideas_updated_at(ideas_path)
+    headers = {"X-Ideas-Updated-At": updated_at} if updated_at else None
+    return Response(status_code=status.HTTP_204_NO_CONTENT, headers=headers)

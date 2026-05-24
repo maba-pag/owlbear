@@ -160,22 +160,26 @@ export default function ThemeToggle({ compact = false }: ThemeToggleProps) {
   return (
     <>
       {compact ? (
-        <PButtonPure
-          ref={triggerRef}
+        <button
+          ref={(node) => {
+            triggerRef.current = node
+          }}
           type="button"
           data-testid="theme-toggle"
-          hideLabel
-          icon="theme"
-          active={isMenuOpen}
-          className="inline-flex size-11 items-center justify-center rounded-full bg-transparent"
+          data-pds-exception="status-bar-control"
+          className={[
+            'inline-flex size-8 items-center justify-center rounded-full border-0 bg-transparent p-0 text-primary transition-colors duration-sm',
+            'hover:bg-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]',
+            isMenuOpen ? 'bg-surface' : '',
+          ].join(' ')}
           aria-label={`${label.ariaLabel}; open theme menu`}
           aria-haspopup="menu"
           aria-expanded={isMenuOpen ? 'true' : 'false'}
           title={`${label.ariaLabel}; open theme menu`}
           onClick={handleTriggerClick}
         >
-          Theme
-        </PButtonPure>
+          <PIcon name="theme" size="small" aria-hidden="true" />
+        </button>
       ) : (
         <PButtonPure
           ref={triggerRef}

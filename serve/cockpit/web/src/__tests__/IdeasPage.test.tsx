@@ -18,8 +18,13 @@ import IdeasPage from '../pages/IdeasPage'
 
 // ─── Fetch mock factories ──────────────────────────────────────────────────────
 
-/** GET resolves with content; PUT resolves 204. */
+function timestampMinutesAgo(minutes: number): string {
+  return new Date(Date.now() - minutes * 60_000).toISOString()
+}
+
+/** GET resolves with content and saved metadata; PUT resolves 204. */
 function makeGetOkPutOkFetch(content: string) {
+  const updatedAt = timestampMinutesAgo(3)
   return vi.fn((_url: string, init?: RequestInit) => {
     if (init?.method === 'PUT') {
       return Promise.resolve({ ok: true, status: 204, json: () => Promise.resolve(null) })
@@ -27,18 +32,19 @@ function makeGetOkPutOkFetch(content: string) {
     return Promise.resolve({
       ok: true,
       status: 200,
-      json: () => Promise.resolve({ content }),
+      json: () => Promise.resolve({ content, updated_at: updatedAt }),
     })
   })
 }
 
-/** GET only — resolves with content. */
+/** GET only — resolves with content and saved metadata. */
 function makeGetOkFetch(content: string) {
+  const updatedAt = timestampMinutesAgo(3)
   return vi.fn((_url: string, _init?: RequestInit) =>
     Promise.resolve({
       ok: true,
       status: 200,
-      json: () => Promise.resolve({ content }),
+      json: () => Promise.resolve({ content, updated_at: updatedAt }),
     }),
   )
 }
@@ -435,12 +441,21 @@ describe('IdeasPageIntegration_StatusWording', () => {
     expect(summary).toBeNull()
   })
 
-  it('shows unsaved changes as the actionable header state after editing', async () => {
+  it('keeps unsaved changes out of the Ideas header after editing', async () => {
     const { container } = await renderLoaded('base')
     fireEvent.change(container.querySelector('textarea')!, { target: { value: 'changed' } })
 
     const summary = container.querySelector('[data-testid="workspace-header-summary"]')
-    expect(summary?.textContent).toBe('Unsaved changes')
+    expect(summary).toBeNull()
+    expect(container.querySelector('[data-testid="ideas-dirty"]')?.textContent).toBe('Unsaved changes')
+  })
+
+  it('shows the last saved recency in the notebook state panel', async () => {
+    const { container } = await renderLoaded('base')
+
+    const statePanel = container.querySelector('[data-testid="ideas-state-panel"]')
+    expect(statePanel?.textContent).toContain('Last saved')
+    expect(container.querySelector('[data-testid="ideas-last-saved"]')?.textContent).toBe('3m ago')
   })
 
   it('does not render visible draft wording in the notebook surface', async () => {

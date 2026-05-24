@@ -4,7 +4,7 @@ import { PButton, PModal } from '@porsche-design-system/components-react'
 import MarkdownPreview from '../components/MarkdownPreview'
 
 import { fetchIdeas, saveIdeas } from '../api/ideas'
-import { WorkspaceHeader, WorkspaceHeaderPill } from '../components/WorkspaceHeader'
+import { WorkspaceHeader } from '../components/WorkspaceHeader'
 
 type NavigationTransaction = {
   retry: () => void
@@ -17,15 +17,50 @@ type BlockNavigator = {
   go?: (delta: number) => void
 }
 
+type IdeasConflictSnapshot = {
+  content: string
+  updatedAt: string | null
+}
+
 function formatNumber(value: number): string {
   return new Intl.NumberFormat('en').format(value)
+}
+
+function formatLastSavedAt(updatedAt: string | null): string {
+  if (!updatedAt) {
+    return 'Not saved yet'
+  }
+
+  const timestamp = Date.parse(updatedAt)
+  if (!Number.isFinite(timestamp)) {
+    return 'Saved recently'
+  }
+
+  const elapsedMs = Math.max(0, Date.now() - timestamp)
+  const elapsedMinutes = Math.floor(elapsedMs / 60_000)
+  if (elapsedMinutes < 1) {
+    return 'just now'
+  }
+
+  if (elapsedMinutes < 60) {
+    return `${elapsedMinutes}m ago`
+  }
+
+  const elapsedHours = Math.floor(elapsedMinutes / 60)
+  if (elapsedHours < 24) {
+    return `${elapsedHours}h ago`
+  }
+
+  const elapsedDays = Math.floor(elapsedHours / 24)
+  return `${elapsedDays}d ago`
 }
 
 function IdeasPage() {
   const [content, setContent] = useState('')
   const [previewMode, setPreviewMode] = useState(true)
   const [lastSavedContent, setLastSavedContent] = useState('')
-  const [conflictContent, setConflictContent] = useState<string | null>(null)
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null)
+  const [conflictSnapshot, setConflictSnapshot] = useState<IdeasConflictSnapshot | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -40,7 +75,7 @@ function IdeasPage() {
   const navigationContext = useContext(UNSAFE_NavigationContext)
 
   const isDirty = useMemo(() => content !== lastSavedContent, [content, lastSavedContent])
-  const hasConflict = conflictContent !== null
+  const hasConflict = conflictSnapshot !== null
   const navigator = (navigationContext?.navigator ?? {}) as BlockNavigator
   const lineCount = useMemo(
     () => (content.length === 0 ? 0 : content.split(/\r\n|\r|\n/).length),
@@ -51,11 +86,7 @@ function IdeasPage() {
     return words?.length ?? 0
   }, [content])
   const saveDisabled = !isDirty || saving || hasConflict
-  const headerSummary = hasConflict ? (
-    <WorkspaceHeaderPill tone="error">Conflict</WorkspaceHeaderPill>
-  ) : isDirty ? (
-    <WorkspaceHeaderPill tone="info">Unsaved changes</WorkspaceHeaderPill>
-  ) : null
+  const lastSavedLabel = useMemo(() => formatLastSavedAt(lastSavedAt), [lastSavedAt])
 
   const updateIdeasScrollCue = useCallback(() => {
     const surface = previewMode ? previewRef.current : textareaRef.current
@@ -92,6 +123,7 @@ function IdeasPage() {
         }
         setContent(response.content)
         setLastSavedContent(response.content)
+        setLastSavedAt(response.updated_at ?? null)
         setErrorMessage(null)
       } catch (error) {
         if (cancelled) {
@@ -132,8 +164,9 @@ function IdeasPage() {
 
     setSaving(true)
     try {
-      await saveIdeas(content)
+      const updatedAt = await saveIdeas(content)
       setLastSavedContent(content)
+      setLastSavedAt(updatedAt ?? new Date().toISOString())
       setErrorMessage(null)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to save ideas'
@@ -159,14 +192,15 @@ function IdeasPage() {
             return
           }
 
-          setConflictContent(null)
+          setConflictSnapshot(null)
           setContent(response.content)
           setLastSavedContent(response.content)
+          setLastSavedAt(response.updated_at ?? null)
           return
         }
 
         if (response.content !== triggerLastSaved) {
-          setConflictContent(response.content)
+          setConflictSnapshot({ content: response.content, updatedAt: response.updated_at ?? null })
         }
       } catch {
         // Background refetch failure is intentionally silent.
@@ -209,23 +243,25 @@ function IdeasPage() {
   }, [handleSave, hasConflict, isDirty])
 
   const handleConflictOverwrite = useCallback(() => {
-    if (conflictContent === null) {
+    if (conflictSnapshot === null) {
       return
     }
 
-    setLastSavedContent(conflictContent)
-    setConflictContent(null)
-  }, [conflictContent])
+    setLastSavedContent(conflictSnapshot.content)
+    setLastSavedAt(conflictSnapshot.updatedAt)
+    setConflictSnapshot(null)
+  }, [conflictSnapshot])
 
   const handleConflictDiscard = useCallback(() => {
-    if (conflictContent === null) {
+    if (conflictSnapshot === null) {
       return
     }
 
-    setContent(conflictContent)
-    setLastSavedContent(conflictContent)
-    setConflictContent(null)
-  }, [conflictContent])
+    setContent(conflictSnapshot.content)
+    setLastSavedContent(conflictSnapshot.content)
+    setLastSavedAt(conflictSnapshot.updatedAt)
+    setConflictSnapshot(null)
+  }, [conflictSnapshot])
 
   useEffect(() => {
     if (!isDirty) {
@@ -411,8 +447,6 @@ function IdeasPage() {
       <WorkspaceHeader
         title="Ideas"
         titleId="ideas-title"
-        summaryLabel="Notebook summary"
-        summary={headerSummary}
       />
 
       <div className="flex min-h-0 flex-1 flex-col gap-static-md p-static-md">
@@ -541,6 +575,10 @@ function IdeasPage() {
               <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-x-static-sm">
                 <span className="min-w-0">Sync</span>
                 <span className="min-w-0 break-words text-left font-semibold sm:text-right">{hasConflict ? 'Needs choice' : 'Ready'}</span>
+              </div>
+              <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-x-static-sm">
+                <span className="min-w-0">Last saved</span>
+                <span data-testid="ideas-last-saved" className="min-w-0 break-words text-left font-semibold sm:text-right">{lastSavedLabel}</span>
               </div>
             </div>
           </div>

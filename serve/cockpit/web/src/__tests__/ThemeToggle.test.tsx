@@ -82,18 +82,17 @@ describe('TestFromAC_ThemeToggle_1540', () => {
     expect(new Set(descriptors).size).toBe(3)
   })
 
-  it('compact mode renders a PDS icon trigger', () => {
+  it('compact mode renders a centered icon trigger', () => {
     const { container } = renderCompactThemeToggle('auto')
-    const button = container.querySelector<HTMLElement & { hideLabel?: boolean; icon?: string }>('[data-testid="theme-toggle"]')
+    const button = container.querySelector<HTMLElement>('[data-testid="theme-toggle"]')
 
-    expect(button!.tagName.toLowerCase()).toBe('p-button')
+    expect(button!.tagName.toLowerCase()).toBe('button')
     expect(button).toHaveAttribute('aria-label', 'Theme mode: auto (OS); open theme menu')
     expect(button).toHaveAttribute('title', 'Theme mode: auto (OS); open theme menu')
     expect(button).toHaveAttribute('aria-haspopup', 'menu')
     expect(button).toHaveAttribute('aria-expanded', 'false')
-    expect(button?.icon).toBe('theme')
-    expect(button?.hideLabel).toBe(true)
-    expect(button?.className).toContain('size-11')
+    expect(button?.className).toContain('size-8')
+    expect(button?.querySelector('p-icon')).not.toBeNull()
     expect(container.querySelector('[data-testid="theme-mode-indicator"]')).toBeNull()
   })
 

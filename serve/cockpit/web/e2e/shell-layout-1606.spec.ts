@@ -130,7 +130,7 @@ test.describe('PCanvas shell layout', () => {
     expect(statusBox!.x).toBeGreaterThan(identityBox!.x + identityBox!.width + 300)
   })
 
-  test('workspace status uses a transparent 44px target with a visible state light', async ({ page }) => {
+  test('workspace status uses a compact transparent target with a visible state light', async ({ page }) => {
     const badge = page.locator('[data-testid="health-badge"]')
     const light = page.locator('[data-testid="traffic-light"]')
     await expect(badge).toBeVisible()
@@ -146,8 +146,10 @@ test.describe('PCanvas shell layout', () => {
     })
 
     expect(badgeBox).not.toBeNull()
-    expect(badgeBox!.width).toBeGreaterThanOrEqual(44)
-    expect(badgeBox!.height).toBeGreaterThanOrEqual(44)
+    expect(badgeBox!.width).toBeGreaterThanOrEqual(30)
+    expect(badgeBox!.width).toBeLessThanOrEqual(36)
+    expect(badgeBox!.height).toBeGreaterThanOrEqual(30)
+    expect(badgeBox!.height).toBeLessThanOrEqual(36)
     expect(style).toEqual({ backgroundColor: 'rgba(0, 0, 0, 0)', borderTopWidth: '0px' })
     await expect(light).toHaveAttribute('data-health', 'green')
   })
