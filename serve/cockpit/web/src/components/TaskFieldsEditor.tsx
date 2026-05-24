@@ -613,31 +613,13 @@ export default function TaskFieldsEditor({
       </div>
 
       <section className="grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-static-xs" data-region="task-detail-tags">
-        <div className="flex min-w-0 flex-wrap items-center gap-static-xs">
-          <span className="text-sm font-semibold text-contrast-high">Tags</span>
-          {editableTags.length > 0 ? (
-            <div className="flex min-w-0 flex-wrap items-center gap-static-xs" data-testid="tag-chip-list">
-              {editableTags.map((tag) => (
-                <PTagDismissible
-                  key={tag}
-                  data-testid="tag-chip"
-                  data-tag={tag}
-                  compact
-                  label={tag}
-                  aria={{ 'aria-label': `Remove tag ${tag}` }}
-                  onClick={() => removeTag(tag)}
-                />
-              ))}
-            </div>
-          ) : (
-            <span data-testid="no-tags" className="text-sm text-contrast-high">No tags</span>
-          )}
-        </div>
-        <div className="grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-static-xs sm:grid-cols-[minmax(0,1fr)_auto]">
+        <div className="grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-static-xs sm:grid-cols-[minmax(0,1fr)_auto]" data-testid="tag-editor-row">
           <PInputText
             ref={(element) => element?.setAttribute('spellcheck', 'false')}
             name="new_tag"
-            label="Add tag"
+            label="Tags"
+            placeholder="Add tags"
+            compact
             className="min-w-0"
             data-field="new-tag"
             spellCheck={false}
@@ -661,9 +643,26 @@ export default function TaskFieldsEditor({
             disabled={normalizeTag(newTag).length === 0}
             onClick={() => addTagFromInput()}
           >
-            Add
+            Add tag
           </PButton>
         </div>
+        {editableTags.length > 0 ? (
+          <div className="flex min-w-0 flex-wrap items-center gap-static-xs" data-testid="tag-chip-list">
+            {editableTags.map((tag) => (
+              <PTagDismissible
+                key={tag}
+                data-testid="tag-chip"
+                data-tag={tag}
+                compact
+                label={tag}
+                aria={{ 'aria-label': `Remove tag ${tag}` }}
+                onClick={() => removeTag(tag)}
+              />
+            ))}
+          </div>
+        ) : (
+          <span data-testid="no-tags" className="text-sm text-contrast-high">No tags</span>
+        )}
         {tagValidationMessage ? (
           <div data-testid="tag-validation-message" className="text-sm font-semibold text-warning" role="status">
             {tagValidationMessage}

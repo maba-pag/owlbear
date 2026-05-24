@@ -316,8 +316,30 @@ describe('TestFromAC_DetailTab', () => {
 
     it('renders a field and command to add a tag', () => {
       const { container } = renderDetail()
-      expect(container.querySelector('p-input-text[data-field="new-tag"]')).not.toBeNull()
-      expect(container.querySelector('[data-testid="add-tag-button"]')).not.toBeNull()
+      const tagInput = container.querySelector('p-input-text[data-field="new-tag"]') as
+        | (HTMLElement & { compact?: unknown; label?: string; placeholder?: string })
+        | null
+      const addButton = container.querySelector('[data-testid="add-tag-button"]') as HTMLElement & { compact?: unknown } | null
+      expect(tagInput).not.toBeNull()
+      expect(addButton).not.toBeNull()
+      expect(tagInput?.label ?? tagInput?.getAttribute('label')).toBe('Tags')
+      expect(tagInput?.placeholder ?? tagInput?.getAttribute('placeholder')).toBe('Add tags')
+      expect(tagInput?.compact).toBe(true)
+      expect(addButton?.compact).toBe(true)
+    })
+
+    it('places the tag add row before the dismissible tag chips', () => {
+      const { container } = renderDetail()
+      const editor = container.querySelector('[data-region="task-detail-tags"]')
+      const addRow = container.querySelector('[data-testid="tag-editor-row"]')
+      const chipList = container.querySelector('[data-testid="tag-chip-list"]')
+      expect(editor).not.toBeNull()
+      expect(addRow).not.toBeNull()
+      expect(chipList).not.toBeNull()
+      expect(Array.from(editor!.children).indexOf(addRow as Element)).toBeLessThan(
+        Array.from(editor!.children).indexOf(chipList as Element),
+      )
+      expect(addRow!.compareDocumentPosition(chipList!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     })
 
     it('adds a new tag as a dismissible chip', () => {
