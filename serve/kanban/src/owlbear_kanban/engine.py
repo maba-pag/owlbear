@@ -520,6 +520,11 @@ class KanbanEngine:
         return self._tasks_dir
 
     @property
+    def archive_dir(self) -> Path:
+        """Configured archive directory for the active board."""
+        return self._archive_dir
+
+    @property
     def kanban_dir(self) -> Path:
         """Root kanban directory for the active board."""
         return self._kanban_dir

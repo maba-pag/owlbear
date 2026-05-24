@@ -131,7 +131,7 @@ async def events(request: Request, engine: _Engine) -> EventSourceResponse:
             return
 
         tasks_dir = _resolve(engine.tasks_dir)
-        archive_dir = _resolve(kanban_dir / "archive")
+        archive_dir = _resolve(engine.archive_dir)
         decisions_pending_dir = _resolve(kanban_dir / "decisions" / "pending")
         activity_path = _resolve(kanban_dir / "activity.jsonl")
         watch_filter = _build_watch_filter(
