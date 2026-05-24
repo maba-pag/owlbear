@@ -166,10 +166,13 @@ class RefreshOrchestrator:
             RefreshResult with per-status counters.
 
         Raises:
-            ValueError: If the source is disabled.
+            ValueError: If the source is disabled or not refreshable.
         """
         if not source.enabled:
             msg = f"Source {source.id!r} is disabled"
+            raise ValueError(msg)
+        if not source.refreshable:
+            msg = f"Source {source.id!r} is not refreshable"
             raise ValueError(msg)
 
         if source.source_type == SourceType.URL_LIST:
@@ -190,7 +193,7 @@ class RefreshOrchestrator:
         scope: str | None = None,
         cancel: CancelSignal | None = None,
     ) -> list[RefreshResult]:
-        """Refresh all enabled sources sorted by priority descending.
+        """Refresh all enabled and refreshable sources sorted by priority descending.
 
         Args:
             scope: Optional scope filter forwarded to store.list_all.
@@ -200,7 +203,7 @@ class RefreshOrchestrator:
             List of RefreshResult, one per processed source.
         """
         sources: list[KnowledgeSource] = self._store.list_all(scope)
-        enabled = [s for s in sources if s.enabled]
+        enabled = [s for s in sources if s.enabled and s.refreshable]
         ordered = sorted(enabled, key=lambda s: s.priority, reverse=True)
 
         results: list[RefreshResult] = []

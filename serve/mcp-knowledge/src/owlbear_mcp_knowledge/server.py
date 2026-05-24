@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from uuid import uuid4
 
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
@@ -38,7 +39,7 @@ from ._consolidation import (
     _fetch_consolidation_candidate_rows,
     _persist_phase2_enrichment,
 )
-from ._enrichment import _clear_failed_chunk_claim, _persist_phase1_enrichment
+from ._enrichment import _mark_failed_chunk_claim, _persist_phase1_enrichment
 from ._helpers import (
     _extract_section_path,
     _normalize_batch_limit,
@@ -57,9 +58,11 @@ from ._helpers import (
 from ._types import (
     _DEFAULT_KB_PATH,
     _DEFAULT_QDRANT_PATH,
+    _MAX_ENRICHMENT_BATCH_SIZE,
     ConsolidationCandidate,
     EnrichmentChunk,
     EntityInfo,
+    RetryEnrichmentResult,
     SearchResult,
     SourceInfo,
     StatsResult,
@@ -115,6 +118,7 @@ async def get_next_batch(ctx: Context, limit: int = 10) -> list[EnrichmentChunk]
     limit = _normalize_batch_limit(limit)
     now = datetime.now(tz=UTC)
     now_iso = now.isoformat()
+    claim_token = uuid4().hex
 
     conn.execute("PRAGMA busy_timeout = 5000")
     conn.execute("BEGIN IMMEDIATE")
@@ -153,12 +157,12 @@ async def get_next_batch(ctx: Context, limit: int = 10) -> list[EnrichmentChunk]
             chunk_ids = [row[0] for row in rows]
             placeholders = ",".join("?" for _ in chunk_ids)
             update_sql = (
-                "UPDATE chunks SET enrichment_state='claimed', claimed_at=? "  # noqa: S608
+                "UPDATE chunks SET enrichment_state='claimed', claimed_at=?, claim_token=? "  # noqa: S608
                 f"WHERE id IN ({placeholders})"
             )
             conn.execute(
                 update_sql,
-                (now_iso, *chunk_ids),
+                (now_iso, claim_token, *chunk_ids),
             )
         conn.commit()
     except Exception:
@@ -175,17 +179,20 @@ async def get_next_batch(ctx: Context, limit: int = 10) -> list[EnrichmentChunk]
             "document_id": row[5],
             "source_id": row[6],
             "scope": row[7] if isinstance(row[7], str) and row[7] else "global",
+            "claim_token": claim_token,
+            "claimed_at": now_iso,
         }
         for row in rows
     ]
 
 
-async def store_enrichment(
+async def store_enrichment(  # noqa: PLR0913
     ctx: Context,
     chunk_id: str | None = None,
     entities: list[dict[str, Any]] | None = None,
     edges: list[dict[str, Any]] | None = None,
     candidate_id: str | None = None,
+    claim_token: str | None = None,
 ) -> None:
     """Persist enrichment results for phase-1 chunks or phase-2 candidates."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
@@ -221,20 +228,129 @@ async def store_enrichment(
         _persist_phase1_enrichment(
             conn,
             chunk_id=chunk_id,
+            claim_token=claim_token,
             entities=entity_rows,
             edges=edge_rows,
             now_iso=now_iso,
         )
-    except Exception:
+    except Exception as exc:
         conn.rollback()
         conn.execute("BEGIN IMMEDIATE")
         try:
-            _clear_failed_chunk_claim(conn, chunk_id=chunk_id)
+            _mark_failed_chunk_claim(
+                conn,
+                chunk_id=chunk_id,
+                claim_token=claim_token,
+                reason=str(exc),
+                now_iso=now_iso,
+            )
             conn.commit()
         except sqlite3.Error:
             conn.rollback()
         raise
     conn.commit()
+
+
+async def retry_failed_enrichment(
+    ctx: Context,
+    chunk_ids: list[str] | None = None,
+    limit: int = 100,
+    scopes: list[str] | None = None,
+) -> RetryEnrichmentResult:
+    """Reset failed enrichment chunks to pending so workers can retry them."""
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    conn = app_ctx.conn
+    scope_values = _normalize_scope_list(scopes)
+    normalized_chunk_ids = [chunk_id.strip() for chunk_id in chunk_ids or [] if chunk_id.strip()]
+
+    conn.execute("PRAGMA busy_timeout = 5000")
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        if normalized_chunk_ids:
+            reset_count = 0
+            for chunk_id in normalized_chunk_ids:
+                cur = conn.execute(
+                    """
+                    UPDATE chunks
+                    SET enrichment_state='pending',
+                        claimed_at=NULL,
+                        claimed_by=NULL,
+                        claim_token=NULL,
+                        enrichment_error=NULL,
+                        last_enrichment_error_at=NULL
+                    WHERE enrichment_state='failed'
+                      AND id = ?
+                    """,
+                    (chunk_id,),
+                )
+                reset_count += max(cur.rowcount, 0)
+        else:
+            limit = _normalize_batch_limit(limit)
+            if scope_values:
+                conn.execute("CREATE TEMP TABLE IF NOT EXISTS retry_failed_enrichment_scopes(scope TEXT NOT NULL)")
+                conn.execute("DELETE FROM retry_failed_enrichment_scopes")
+                conn.executemany(
+                    "INSERT INTO retry_failed_enrichment_scopes(scope) VALUES (?)",
+                    [(scope,) for scope in scope_values],
+                )
+                cur = conn.execute(
+                    """
+                    UPDATE chunks
+                    SET enrichment_state='pending',
+                        claimed_at=NULL,
+                        claimed_by=NULL,
+                        claim_token=NULL,
+                        enrichment_error=NULL,
+                        last_enrichment_error_at=NULL
+                    WHERE id IN (
+                        SELECT c.id
+                        FROM chunks AS c
+                        JOIN documents AS d ON d.id = c.document_id
+                        JOIN knowledge_sources AS ks ON ks.id = d.source_id
+                        WHERE c.enrichment_state = 'failed'
+                          AND ks.enabled = 1
+                          AND ks.enrich = 1
+                          AND COALESCE(d.scope, 'global') IN (
+                              SELECT scope FROM retry_failed_enrichment_scopes
+                          )
+                        ORDER BY c.created_at ASC, c.id ASC
+                        LIMIT ?
+                    )
+                    """,
+                    (limit,),
+                )
+            else:
+                cur = conn.execute(
+                    """
+                    UPDATE chunks
+                    SET enrichment_state='pending',
+                        claimed_at=NULL,
+                        claimed_by=NULL,
+                        claim_token=NULL,
+                        enrichment_error=NULL,
+                        last_enrichment_error_at=NULL
+                    WHERE id IN (
+                        SELECT c.id
+                        FROM chunks AS c
+                        JOIN documents AS d ON d.id = c.document_id
+                        JOIN knowledge_sources AS ks ON ks.id = d.source_id
+                        WHERE c.enrichment_state = 'failed'
+                          AND ks.enabled = 1
+                          AND ks.enrich = 1
+                        ORDER BY c.created_at ASC, c.id ASC
+                        LIMIT ?
+                    )
+                    """,
+                    (limit,),
+                )
+            reset_count = max(cur.rowcount, 0)
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
+    failed_row = conn.execute("SELECT COUNT(*) FROM chunks WHERE enrichment_state = 'failed'").fetchone()
+    return {"reset": reset_count, "remaining_failed": int(failed_row[0] if failed_row is not None else 0)}
 
 
 def init_db(path: str) -> sqlite3.Connection:
@@ -356,8 +472,12 @@ get_consolidation_candidates = mcp.tool(annotations=ToolAnnotations(readOnlyHint
     get_consolidation_candidates
 )
 store_enrichment = mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))(store_enrichment)
+retry_failed_enrichment = mcp.tool(
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True)
+)(retry_failed_enrichment)
 
 __all__ = [
+    "_MAX_ENRICHMENT_BATCH_SIZE",
     "AppContext",
     "_apply_tool_exclusions",
     "app_lifespan",
@@ -369,6 +489,7 @@ __all__ = [
     "mcp",
     "refresh_source",
     "remove_source",
+    "retry_failed_enrichment",
     "search_knowledge",
     "select_content_fetcher",
 ]
@@ -434,6 +555,8 @@ async def list_sources(ctx: Context, scope: str | None = None) -> list[SourceInf
             "last_checked_at": s.last_checked_at,
             "last_error": _sanitize_error(s.last_error),
             "enabled": s.enabled,
+            "refreshable": s.refreshable,
+            "enrich": s.enrich,
             "fetch_method": s.fetch_method,
         }
         for s in sources
@@ -516,6 +639,32 @@ async def get_stats(ctx: Context) -> StatsResult:
     total_sources = conn.execute("SELECT COUNT(*) FROM knowledge_sources").fetchone()[0]
     total_chunks = conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
     enriched_chunks = conn.execute("SELECT COUNT(*) FROM chunks WHERE enrichment_state = 'enriched'").fetchone()[0]
+    state_counts = {
+        str(row[0] or "pending"): int(row[1])
+        for row in conn.execute(
+            "SELECT COALESCE(enrichment_state, 'pending'), COUNT(*) FROM chunks GROUP BY enrichment_state"
+        ).fetchall()
+    }
+    now_iso = datetime.now(tz=UTC).isoformat()
+    claimable_row = conn.execute(
+        """
+        SELECT COUNT(*)
+        FROM chunks AS c
+        JOIN documents AS d ON d.id = c.document_id
+        JOIN knowledge_sources AS ks ON ks.id = d.source_id
+        WHERE ks.enabled = 1
+          AND ks.enrich = 1
+          AND (
+            c.enrichment_state = 'pending'
+            OR (
+                c.enrichment_state = 'claimed'
+                AND c.claimed_at IS NOT NULL
+                AND (strftime('%s', ?) - strftime('%s', c.claimed_at)) > 600
+            )
+          )
+        """,
+        (now_iso,),
+    ).fetchone()
     chunks_enriched_ratio = float(enriched_chunks) / float(total_chunks) if total_chunks else 0.0
     consolidation_candidates_remaining = _count_consolidation_candidates(conn)
 
@@ -525,6 +674,11 @@ async def get_stats(ctx: Context) -> StatsResult:
         "edges": edge_count,
         "total_sources": total_sources,
         "total_chunks": total_chunks,
+        "chunks_pending": state_counts.get("pending", 0),
+        "chunks_claimed": state_counts.get("claimed", 0),
+        "chunks_failed": state_counts.get("failed", 0),
+        "chunks_enriched": state_counts.get("enriched", 0),
+        "chunks_claimable": int(claimable_row[0] if claimable_row is not None else 0),
         "chunks_enriched_ratio": chunks_enriched_ratio,
         "consolidation_candidates_remaining": consolidation_candidates_remaining,
     }

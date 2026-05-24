@@ -16,5 +16,6 @@ Each decision item must include: status quo, problem, options with pro/con/risk/
 ## What this does
 
 - Ingests new content or refreshes an existing source.
+- Treats inline direct text as searchable and enrichable but non-refreshable; refresh only registered sources marked `refreshable=true`.
 - Applies HTTP-first validation flow and asks for confirmation when fetched content looks suspicious.
 - Reports knowledge-base status so you can decide whether to start enrichment.

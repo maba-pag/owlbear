@@ -29,7 +29,8 @@ or placeholder pages, and preserve enough context for downstream enrichment work
 - Use `read/readFile` for local text paths, `markitdown/*` for document conversion, `web` and `ddgs/search_text` / `ddgs/extract_content` for URLs, `vscode/askQuestions` for user validation, and `ob-knowledge/*` tools for knowledge-base reads/writes.
 - Apply D9 validation: HTTP-first fetch, present a short preview, and require user confirmation when page identity is uncertain.
 - Keep ingestion focused: ingest/refresh sources and report stats; do not run enrichment worker loops here.
-- Preserve source traceability by passing source metadata whenever available.
+- Preserve source traceability by passing `source_url` or URL/file metadata whenever available; anonymous inline sources are searchable and enrichable but not refreshable.
+- Use `list_sources` lifecycle flags: refresh only sources with `enabled=true` and `refreshable=true`, and treat `enrich=false` as intentionally excluded from enrichment queues.
 
 </critical_rules>
 

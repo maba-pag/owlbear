@@ -25,6 +25,7 @@ All enrichment operations use the `ob-knowledge` MCP server tools:
 |------|---------|
 | `get_stats` | Check enrichment pipeline status — chunks pending, enriched, consolidation candidates |
 | `get_next_batch` | Claim up to N pending chunks for Phase 1 enrichment (returns chunk text + metadata) |
+| `retry_failed_enrichment` | Reset failed Phase 1 chunks to pending after correcting the cause |
 | `store_enrichment` | Persist extracted entities and edges for a chunk (Phase 1) or consolidation candidate (Phase 2) |
 | `get_consolidation_candidates` | Retrieve cross-source entity pairs for Phase 2 |
 
@@ -32,11 +33,14 @@ All enrichment operations use the `ob-knowledge` MCP server tools:
 
 Call `get_stats` to understand the current state:
 
-- `chunks_pending_enrichment`: Number of chunks waiting for Phase 1
+- `chunks_claimable`: Number of pending or stale-claimed chunks currently claimable for Phase 1
+- `chunks_pending`: Number of chunks waiting for Phase 1
+- `chunks_claimed`: Number of chunks currently leased by workers
+- `chunks_failed`: Number of chunks that failed a Phase 1 write and require review/reset
 - `chunks_enriched`: Number of chunks already processed
 - `consolidation_candidates_remaining`: Number of cross-source pairs waiting for Phase 2
 
-If no chunks are pending and no consolidation candidates exist, enrichment is complete.
+If `chunks_failed` is non-zero, inspect the failure cause before retrying. If no chunks are claimable or failed and no consolidation candidates exist, enrichment is complete.
 
 ## Step 2 — Phase 1: Entity and Edge Extraction
 
@@ -55,6 +59,9 @@ Each chunk includes:
 - `source_name`: Knowledge source name
 - `document_id`: Parent document ID
 - `source_id`: Knowledge source ID
+- `scope`: Knowledge scope
+- `claim_token`: Lease token for this batch claim; required when storing results
+- `claimed_at`: Lease timestamp
 
 ### 2b — Extract Entities
 
@@ -99,6 +106,7 @@ Call `store_enrichment` with the chunk_id, entities list, and edges list:
 ```
 store_enrichment(
     chunk_id="<chunk_id>",
+    claim_token="<claim_token>",
     entities=[
         {"name": "Azure DevOps", "entity_type": "system", "description": "...", "importance": 0.8},
         ...
@@ -110,7 +118,7 @@ store_enrichment(
 )
 ```
 
-Repeat for all chunks in the batch, then call `get_next_batch` for the next batch.
+Repeat for all chunks in the batch, pairing each `chunk_id` with the exact `claim_token` returned by `get_next_batch`, then call `get_next_batch` for the next batch. If a store call fails for the current claim, the server records diagnostics and moves that chunk to `failed`; correct the payload/extractor issue before calling `retry_failed_enrichment`.
 
 ## Step 3 — Phase 2: Cross-Source Consolidation
 
@@ -142,7 +150,7 @@ Read both context chunks. Determine if the entities refer to the same real-world
 store_enrichment(
     candidate_id="<candidate_id>",
     edges=[
-        {"source_id": "<entity_id_a>", "target_id": "<entity_id_b>", "relation": "same_as", "weight": 0.9}
+        {"relation": "same_as", "weight": 0.9}
     ]
 )
 ```
@@ -151,7 +159,9 @@ store_enrichment(
 
 Call `get_stats` again. Confirm:
 
-- `chunks_pending_enrichment` is 0
+- `chunks_pending` is 0
+- `chunks_claimable` is 0
+- `chunks_failed` is 0, or failures are intentionally deferred with a recorded reason
 - `consolidation_candidates_remaining` is 0
 
 ## Batch Size Guidance
@@ -167,4 +177,6 @@ Call `get_stats` again. Confirm:
 - **Entity name drift**: Same concept gets different names across batches. Before extracting, review recently stored entities (visible in prior batch results) and reuse canonical names.
 - **Over-extraction**: Not every noun is a meaningful entity. Skip generic terms and focus on domain-specific concepts that would help an agent answer questions.
 - **Stale claims**: If enrichment is interrupted, claimed chunks become stale after 10 minutes and are automatically reclaimed by the next `get_next_batch` call.
+- **Lease tokens**: Store every Phase 1 chunk with the `claim_token` returned by `get_next_batch`. Missing or stale tokens are rejected so parallel workers cannot overwrite one another.
+- **Failed chunks**: Failed Phase 1 writes stay in `failed` until `retry_failed_enrichment` resets them. Do not blindly reset; fix the cause first.
 - **Empty chunks**: Some chunks may contain only boilerplate (headers, footers, navigation). Store an empty entities/edges list to mark them as enriched rather than leaving them pending.

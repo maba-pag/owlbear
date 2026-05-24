@@ -48,16 +48,17 @@ class KnowledgeSourceStore:
             config=self._load_config(row[5]),  # type: ignore[arg-type]
             scope=row[6],  # type: ignore[arg-type]
             enabled=bool(row[7]),
-            priority=row[8],  # type: ignore[arg-type]
-            last_refreshed_at=row[9],  # type: ignore[arg-type]
-            last_error=row[10],  # type: ignore[arg-type]
-            created_at=row[11],  # type: ignore[arg-type]
-            updated_at=row[12],  # type: ignore[arg-type]
-            last_checked_at=row[13],  # type: ignore[arg-type]
+            refreshable=bool(row[8]),
+            priority=row[9],  # type: ignore[arg-type]
+            last_refreshed_at=row[10],  # type: ignore[arg-type]
+            last_error=row[11],  # type: ignore[arg-type]
+            created_at=row[12],  # type: ignore[arg-type]
+            updated_at=row[13],  # type: ignore[arg-type]
+            last_checked_at=row[14],  # type: ignore[arg-type]
         )
 
     _SELECT_COLS = (
-        "id, name, source_type, fetch_method, enrich, config, scope, enabled, priority,"
+        "id, name, source_type, fetch_method, enrich, config, scope, enabled, refreshable, priority,"
         " last_refreshed_at, last_error, created_at, updated_at, last_checked_at"
     )
 
@@ -86,9 +87,9 @@ class KnowledgeSourceStore:
         """Insert *source* into the ``knowledge_sources`` table."""
         self._conn.execute(
             "INSERT INTO knowledge_sources"
-            " (id, name, source_type, fetch_method, enrich, config, scope, enabled, priority,"
+            " (id, name, source_type, fetch_method, enrich, config, scope, enabled, refreshable, priority,"
             "  last_refreshed_at, last_error, created_at, updated_at, last_checked_at)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 source.id,
                 source.name,
@@ -98,6 +99,7 @@ class KnowledgeSourceStore:
                 self._dump_config(source.config),
                 source.scope,
                 int(source.enabled),
+                int(source.refreshable),
                 source.priority,
                 source.last_refreshed_at,
                 source.last_error,
@@ -139,7 +141,7 @@ class KnowledgeSourceStore:
         cur = self._conn.execute(
             "UPDATE knowledge_sources SET"
             " name = ?, source_type = ?, fetch_method = ?, enrich = ?, config = ?, scope = ?,"
-            " enabled = ?, priority = ?, last_refreshed_at = ?,"
+            " enabled = ?, refreshable = ?, priority = ?, last_refreshed_at = ?,"
             " last_error = ?, created_at = ?, updated_at = ?, last_checked_at = ?"
             " WHERE id = ?",
             (
@@ -150,6 +152,7 @@ class KnowledgeSourceStore:
                 self._dump_config(source.config),
                 source.scope,
                 int(source.enabled),
+                int(source.refreshable),
                 source.priority,
                 source.last_refreshed_at,
                 source.last_error,

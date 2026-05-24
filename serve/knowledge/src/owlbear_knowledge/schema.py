@@ -20,7 +20,7 @@ __all__ = ("audit_integrity", "init_db")
 # Constants
 # ---------------------------------------------------------------------------
 
-_SCHEMA_VERSION: int = 14
+_SCHEMA_VERSION: int = 15
 """Current schema version written to the ``schema_version`` table."""
 
 _SCOPE_TABLES: tuple[str, ...] = (
@@ -89,7 +89,12 @@ CREATE TABLE IF NOT EXISTS chunks (
     scope         TEXT DEFAULT 'global',
     consolidated  INTEGER DEFAULT 0,
     enrichment_state TEXT DEFAULT 'pending',
-    claimed_at    TEXT
+    claimed_at    TEXT,
+    claimed_by    TEXT,
+    claim_token   TEXT,
+    enrichment_error TEXT,
+    enrichment_attempts INTEGER DEFAULT 0,
+    last_enrichment_error_at TEXT
 )
 """
 
@@ -116,6 +121,7 @@ CREATE TABLE IF NOT EXISTS knowledge_sources (
     config            TEXT NOT NULL,
     scope             TEXT DEFAULT 'global',
     enabled           INTEGER DEFAULT 1,
+    refreshable       INTEGER DEFAULT 1,
     priority          INTEGER DEFAULT 0,
     last_refreshed_at TEXT,
     last_checked_at   TEXT,
@@ -421,6 +427,29 @@ def _migrate_v13_to_v14(conn: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_v14_to_v15(conn: sqlite3.Connection) -> None:
+    """Migrate a v14 database to v15 — source refreshability and enrichment leases."""
+    tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'").fetchall()}
+    if "chunks" in tables:
+        for ddl in (
+            "ALTER TABLE chunks ADD COLUMN claimed_by TEXT",
+            "ALTER TABLE chunks ADD COLUMN claim_token TEXT",
+            "ALTER TABLE chunks ADD COLUMN enrichment_error TEXT",
+            "ALTER TABLE chunks ADD COLUMN enrichment_attempts INTEGER DEFAULT 0",
+            "ALTER TABLE chunks ADD COLUMN last_enrichment_error_at TEXT",
+        ):
+            with contextlib.suppress(sqlite3.OperationalError):
+                conn.execute(ddl)
+    if "knowledge_sources" in tables:
+        with contextlib.suppress(sqlite3.OperationalError):
+            conn.execute("ALTER TABLE knowledge_sources ADD COLUMN refreshable INTEGER DEFAULT 1")
+        conn.execute("UPDATE knowledge_sources SET refreshable = 0 WHERE source_type = 'inline'")
+    conn.execute(
+        "UPDATE schema_version SET version = ?, applied_at = ?",
+        (15, datetime.now(tz=UTC).isoformat()),
+    )
+
+
 def _apply_migrations(conn: sqlite3.Connection, current: int) -> None:
     """Apply all pending schema migrations starting from *current* version."""
     migrations: tuple[tuple[int, callable], ...] = (
@@ -437,6 +466,7 @@ def _apply_migrations(conn: sqlite3.Connection, current: int) -> None:
         (12, _migrate_v11_to_v12),
         (13, _migrate_v12_to_v13),
         (14, _migrate_v13_to_v14),
+        (15, _migrate_v14_to_v15),
     )
     for target_version, migration in migrations:
         if current < target_version:
@@ -455,7 +485,7 @@ def init_db(conn: sqlite3.Connection) -> None:
     connection is safe and will not duplicate data or raise errors.
 
     If the database contains an older schema, it is automatically migrated
-    through v2-v14.
+    through v2-v15.
 
     Args:
         conn (sqlite3.Connection): An open :class:`sqlite3.Connection`.  Works with both
@@ -533,6 +563,9 @@ def init_db(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_source_pages_source_id ON source_pages(source_id)")
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_sources_name_scope ON knowledge_sources(name, scope)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_knowledge_sources_scope ON knowledge_sources(scope)")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_chunks_enrichment_state_claimed_at ON chunks(enrichment_state, claimed_at)"
+    )
     conn.execute(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_edges_d17_unique ON edges(source_id, target_id, relation, document_id)"
     )

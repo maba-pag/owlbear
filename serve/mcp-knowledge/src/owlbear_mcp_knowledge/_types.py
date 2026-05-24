@@ -60,6 +60,8 @@ class SourceInfo(TypedDict):
     last_checked_at: str | None
     last_error: str | None
     enabled: bool
+    refreshable: bool
+    enrich: bool
     fetch_method: str
 
 
@@ -79,6 +81,11 @@ class StatsResult(TypedDict):
     edges: int
     total_sources: int
     total_chunks: int
+    chunks_pending: int
+    chunks_claimed: int
+    chunks_failed: int
+    chunks_enriched: int
+    chunks_claimable: int
     chunks_enriched_ratio: float
     consolidation_candidates_remaining: int
 
@@ -94,6 +101,15 @@ class EnrichmentChunk(TypedDict):
     document_id: str
     source_id: str
     scope: str
+    claim_token: str
+    claimed_at: str
+
+
+class RetryEnrichmentResult(TypedDict):
+    """Result of resetting failed enrichment chunks for retry."""
+
+    reset: int
+    remaining_failed: int
 
 
 class ConsolidationCandidate(TypedDict):

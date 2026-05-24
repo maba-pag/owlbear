@@ -31,6 +31,7 @@ class _ChunkProvenance:
     scope: str
     state: str
     chunk_id: str
+    claim_token: str
 
 
 def _resolve_or_create_chunk_entity(
@@ -200,11 +201,16 @@ def _resolve_phase1_edge_endpoints(
     return source_id, target_id
 
 
-def _load_chunk_provenance(conn: sqlite3.Connection, *, chunk_id: str) -> _ChunkProvenance:
+def _load_chunk_provenance(
+    conn: sqlite3.Connection,
+    *,
+    chunk_id: str,
+    claim_token: str | None,
+) -> _ChunkProvenance:
     """Load chunk/document/source identity required for phase-1 persistence."""
     row = conn.execute(
         """
-        SELECT d.id, d.source_id, d.scope, c.enrichment_state
+        SELECT d.id, d.source_id, d.scope, c.enrichment_state, c.claim_token
         FROM chunks AS c
         JOIN documents AS d ON d.id = c.document_id
         JOIN knowledge_sources AS ks ON ks.id = d.source_id
@@ -221,9 +227,21 @@ def _load_chunk_provenance(conn: sqlite3.Connection, *, chunk_id: str) -> _Chunk
     if state == "enriched":
         msg = "chunk is already enriched"
         raise ToolError(msg)
-    if state not in {"pending", "claimed"}:
-        msg = "chunk is not pending or claimed"
+    if state == "failed":
+        msg = "chunk is failed; reset it before retrying enrichment"
         raise ToolError(msg)
+    if state != "claimed":
+        msg = "chunk must be claimed before storing enrichment"
+        raise ToolError(msg)
+    stored_claim_token = row[4] if isinstance(row[4], str) else ""
+    supplied_claim_token = claim_token.strip() if isinstance(claim_token, str) else ""
+    if stored_claim_token:
+        if not supplied_claim_token:
+            msg = "claim_token is required for phase-1 enrichment"
+            raise ToolError(msg)
+        if stored_claim_token != supplied_claim_token:
+            msg = "claim_token does not match current chunk lease"
+            raise ToolError(msg)
     if not isinstance(row[0], str) or not isinstance(row[1], str):
         msg = "chunk provenance could not be resolved"
         raise ToolError(msg)
@@ -235,35 +253,56 @@ def _load_chunk_provenance(conn: sqlite3.Connection, *, chunk_id: str) -> _Chunk
         scope=scope,
         state=state,
         chunk_id=chunk_id,
+        claim_token=stored_claim_token,
     )
 
 
-def _clear_failed_chunk_claim(conn: sqlite3.Connection, *, chunk_id: str) -> None:
-    """Release stale claim for a failed phase-1 write attempt."""
+def _mark_failed_chunk_claim(
+    conn: sqlite3.Connection,
+    *,
+    chunk_id: str,
+    claim_token: str | None,
+    reason: str,
+    now_iso: str,
+) -> None:
+    """Record a failed phase-1 write attempt for the current chunk lease."""
+    supplied_claim_token = claim_token.strip() if isinstance(claim_token, str) else ""
     row = conn.execute(
-        "SELECT enrichment_state FROM chunks WHERE id = ?",
+        "SELECT enrichment_state, claim_token FROM chunks WHERE id = ?",
         (chunk_id,),
     ).fetchone()
     if row is None:
         return
-    if row[0] != "claimed":
+    stored_claim_token = row[1] if isinstance(row[1], str) else ""
+    if row[0] != "claimed" or stored_claim_token != supplied_claim_token:
         return
     conn.execute(
-        "UPDATE chunks SET enrichment_state='failed', claimed_at=NULL WHERE id = ?",
-        (chunk_id,),
+        """
+        UPDATE chunks
+        SET enrichment_state='failed',
+            claimed_at=NULL,
+            claimed_by=NULL,
+            claim_token=NULL,
+            enrichment_error=?,
+            enrichment_attempts=COALESCE(enrichment_attempts, 0) + 1,
+            last_enrichment_error_at=?
+        WHERE id = ? AND COALESCE(claim_token, '') = ?
+        """,
+        (reason, now_iso, chunk_id, supplied_claim_token),
     )
 
 
-def _persist_phase1_enrichment(
+def _persist_phase1_enrichment(  # noqa: PLR0913
     conn: sqlite3.Connection,
     *,
     chunk_id: str,
+    claim_token: str | None,
     entities: list[dict[str, Any]],
     edges: list[dict[str, Any]],
     now_iso: str,
 ) -> None:
     """Persist phase-1 extraction output using server-derived provenance."""
-    provenance = _load_chunk_provenance(conn, chunk_id=chunk_id)
+    provenance = _load_chunk_provenance(conn, chunk_id=chunk_id, claim_token=claim_token)
 
     first_entity_id: str | None = None
     for entity in entities:
@@ -363,6 +402,15 @@ def _persist_phase1_enrichment(
         )
 
     conn.execute(
-        "UPDATE chunks SET enrichment_state='enriched', claimed_at=NULL WHERE id = ?",
+        """
+        UPDATE chunks
+        SET enrichment_state='enriched',
+            claimed_at=NULL,
+            claimed_by=NULL,
+            claim_token=NULL,
+            enrichment_error=NULL,
+            last_enrichment_error_at=NULL
+        WHERE id = ?
+        """,
         (chunk_id,),
     )

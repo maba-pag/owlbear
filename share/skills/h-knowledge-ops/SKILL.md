@@ -35,7 +35,7 @@ Ingest a text document into the knowledge base.
 
 Returns: document ID, chunk count, entity count, edge count, status, and warnings when automatic graph extraction partially fails.
 
-Behavior: direct text ingestion uses the same source/status delta detection as registered source refresh. When `source_url` is supplied, unchanged content returns `status: skipped`; changed content replaces the prior document for that source and scope. `http`/`https` URLs register as web sources; `file://` URLs and plain local paths register as file sources. If `source_url` is omitted, `metadata.url` is promoted to the same source-linked path; URL/file-like `metadata.source` values are also promoted. Plain labels and anonymous direct text create disabled `inline` source rows so chunks retain provenance and remain enrichment-claimable without being refreshable.
+Behavior: direct text ingestion uses the same source/status delta detection as registered source refresh. When `source_url` is supplied, unchanged content returns `status: skipped`; changed content replaces the prior document for that source and scope. `http`/`https` URLs register as web sources; `file://` URLs and plain local paths register as file sources. If `source_url` is omitted, `metadata.url` is promoted to the same source-linked path; URL/file-like `metadata.source` values are also promoted. Plain labels and anonymous direct text create `inline` source rows that are active and enrichment-eligible but not refreshable.
 
 If document/chunk/vector persistence succeeds but automatic per-chunk graph extraction fails for some chunks, ingestion returns `status: partial`, stores successful extraction results against their original chunk IDs, and surfaces warnings. Treat `partial` as searchable content with incomplete automatic graph extraction.
 
@@ -47,7 +47,7 @@ List all registered knowledge sources.
 |-------|------|---------|-------|
 | `scope` | str | None | Filter by scope; omit for all |
 
-Returns: `list[dict]` — `[{"id": str, "name": str, "source_type": str, "scope": str}, ...]`; `[]` if no sources. Use `id` as the `source_id` for `refresh_source`.
+Returns: `list[dict]` — source rows with `id`, `name`, `source_type`, `scope`, `last_refreshed_at`, `last_checked_at`, `last_error`, `enabled`, `refreshable`, `enrich`, and `fetch_method`; `[]` if no sources. Use `id` as the `source_id` for `refresh_source` only when `refreshable` is true.
 
 ### refresh_source
 
@@ -57,15 +57,25 @@ Trigger re-ingestion of a registered knowledge source by source ID.
 |-------|------|---------|-------|
 | `source_id` | str | required | Registered source ID to refresh |
 
-Returns: refresh result dict on success — `{"source_id": str, "refreshed": int, "partial": int, "skipped": int, "failed": int, "errors": list[str], "warnings": list[str]}` — or an `error: ...` string when refresh infrastructure is unavailable. Raises `ToolError` when the source store is unavailable or the source ID is unknown.
+Returns: refresh result dict on success — `{"source_id": str, "refreshed": int, "partial": int, "skipped": int, "failed": int, "errors": list[str], "warnings": list[str]}` — or an `error: ...` string when refresh infrastructure is unavailable, the source is disabled, or the source is not refreshable. Raises `ToolError` when the source store is unavailable or the source ID is unknown.
+
+### remove_source
+
+Delete a registered source and cascade its documents/chunks/graph rows after vector deletion succeeds.
+
+| Param | Type | Default | Notes |
+|-------|------|---------|-------|
+| `source_id` | str | required | Registered source ID to remove |
+
+Returns: deletion counts. This is destructive; use only when intentionally decommissioning stale or incorrect source content.
 
 ### get_stats
 
 Get knowledge base summary statistics. No parameters.
 
-Returns: `dict[str, int]` — `{"documents": int, "entities": int, "edges": int}`
+Returns: `dict` with corpus counts and enrichment queue state: `documents`, `entities`, `edges`, `total_sources`, `total_chunks`, `chunks_pending`, `chunks_claimed`, `chunks_failed`, `chunks_enriched`, `chunks_claimable`, `chunks_enriched_ratio`, and `consolidation_candidates_remaining`.
 
-**Resource:** `knowledge://stats` — same format as `get_stats`, readable as MCP resource.
+**Resource:** `knowledge://stats` — human-readable summary string, e.g. `Knowledge base: 12 documents, 34 entities, 56 edges`.
 
 ### get_next_batch
 
@@ -75,7 +85,7 @@ Atomically claim a batch of chunks ready for Phase 1 enrichment.
 |-------|------|---------|-------|
 | `limit` | int | 10 | Maximum chunks to claim |
 
-Returns: `list[dict]` — `[{"chunk_id": str, "text": str, "doc_title": str, "section_path": str | null, "source_name": str | null, "document_id": str, "source_id": str, "scope": str}, ...]`.
+Returns: `list[dict]` — `[{"chunk_id": str, "text": str, "doc_title": str, "section_path": str | null, "source_name": str | null, "document_id": str, "source_id": str, "scope": str, "claim_token": str, "claimed_at": str}, ...]`.
 
 Behavior:
 
@@ -83,7 +93,20 @@ Behavior:
 - Excludes chunks from sources with enrichment disabled.
 - Excludes orphan chunks whose documents have missing/NULL source links.
 - Updates claimed chunks inside an immediate SQLite transaction.
+- Each returned batch has a lease `claim_token`; pass the exact token back to `store_enrichment` for every Phase 1 chunk from that batch.
 - Empty list means no Phase 1 work is currently available.
+
+### retry_failed_enrichment
+
+Reset failed Phase 1 chunks back to pending so workers can retry them.
+
+| Param | Type | Default | Notes |
+|-------|------|---------|-------|
+| `chunk_ids` | list[str] \| null | null | Specific failed chunks to reset; when supplied, only these IDs are considered |
+| `limit` | int | 100 | Maximum failed chunks to reset when `chunk_ids` is omitted |
+| `scopes` | list[str] \| null | null | Optional scope filter when resetting by queue order |
+
+Returns: `{"reset": int, "remaining_failed": int}`. Use after inspecting `get_stats().chunks_failed`; it only resets chunks in `failed` state and does not alter already enriched chunks.
 
 ### get_consolidation_candidates
 
@@ -107,12 +130,14 @@ Persist Phase 1 extraction results or Phase 2 consolidation outcomes.
 | `entities` | list[dict] | None | Entities to upsert for Phase 1 |
 | `edges` | list[dict] | None | Edges to insert for Phase 1 or Phase 2 |
 | `candidate_id` | str | None | Required for Phase 2 consolidation persistence |
+| `claim_token` | str | None | Required for Phase 1 chunks returned by `get_next_batch` |
 
 Returns: `None` on success.
 
 Behavior:
 
-- Phase 1: pass `chunk_id` with optional `entities` and `edges`; the server derives `document_id`, `source_id`, and `scope` from the claimed chunk/document/source, stamps those values onto persisted rows, and marks the chunk `enriched` only after successful persistence.
+- Phase 1: pass `chunk_id`, `claim_token`, and optional `entities` and `edges`; the server derives `document_id`, `source_id`, and `scope` from the claimed chunk/document/source, stamps those values onto persisted rows, and marks the chunk `enriched` only after successful persistence.
+- Phase 1 leases are fenced: missing or stale `claim_token` values raise `ToolError`. A failed write attempt on the current claim records diagnostics, increments attempts, clears the lease, and moves the chunk to `failed` until `retry_failed_enrichment` resets it.
 - Phase 2: pass `candidate_id`; if `edges` is non-empty, endpoints are derived from `entity_id_a`/`entity_id_b` implied by the candidate. If no edges are needed, the pair is marked reviewed so it is not returned again.
 - If neither `candidate_id` nor `chunk_id` is provided, the tool raises `ToolError`.
 
@@ -141,13 +166,15 @@ Only the tools documented in this reference are agent-callable MCP tools. Treat 
 | Ingest a document | `ingest_document` | Pass text content + optional metadata |
 | List registered sources | `list_sources` | Filter by `scope` |
 | Refresh a registered source | `refresh_source` | Re-ingests one source by source ID |
+| Remove a registered source | `remove_source` | Destructive cascade delete after vector cleanup |
 | Get KB statistics | `get_stats` | Also available as resource `knowledge://stats` |
 | Claim Phase 1 enrichment work | `get_next_batch` | Pulls and leases chunks atomically |
-| Store Phase 1 enrichment | `store_enrichment` | Pass `chunk_id`; marks chunk enriched |
+| Retry failed Phase 1 chunks | `retry_failed_enrichment` | Resets failed chunks to pending |
+| Store Phase 1 enrichment | `store_enrichment` | Pass `chunk_id` and `claim_token`; marks chunk enriched |
 | Claim Phase 2 consolidation work | `get_consolidation_candidates` | Returns unresolved cross-source pairs |
 | Store Phase 2 consolidation | `store_enrichment` | Pass `candidate_id`; stores edges or marks reviewed |
 
-Direct-ingested sources listed by `list_sources` can be passed to `refresh_source`. Local file sources refresh from the workspace file path, while web sources refresh through the configured fetch method.
+Sources listed by `list_sources` can be passed to `refresh_source` only when `refreshable=true`. Local file sources refresh from the workspace file path, web sources refresh through the configured fetch method, and inline direct-text sources are searchable/enrichable but intentionally non-refreshable.
 
 ## Scope Conventions
 
@@ -211,12 +238,14 @@ Six-step process for adding, updating, and removing knowledge sources. See `.owl
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `OWLBEAR_KB_PATH` | `store/knowledge/knowledge.db` | Path to SQLite knowledge database |
+| `OWLBEAR_KB_PATH` | `.owlbear/knowledge/local.db` | Path to SQLite knowledge database |
 | `KNOWLEDGE_TOOLS_EXCLUDE` | _(unset)_ | Comma-separated tool names to remove |
 
-`KNOWLEDGE_TOOLS_EXCLUDE` accepts registered tool names such as `search_knowledge`, `ingest_document`, `list_sources`, `get_stats`, `refresh_source`, `get_next_batch`, `get_consolidation_candidates`, and `store_enrichment`. Unknown names silently ignored.
+`KNOWLEDGE_TOOLS_EXCLUDE` accepts registered tool names such as `search_knowledge`, `ingest_document`, `list_sources`, `get_stats`, `refresh_source`, `remove_source`, `get_next_batch`, `retry_failed_enrichment`, `get_consolidation_candidates`, and `store_enrichment`. Unknown names silently ignored.
 
 ## Known Gotchas
 
 - **Always set `scope`** to `project:{id}` when a project is active; use `global` otherwise.
 - **Search before ingesting** to avoid duplicates — the dedup is by content hash, not by topic.
+- **Keep Phase 1 lease tokens paired with chunks**. A `claim_token` belongs to the batch lease that returned it; do not reuse tokens across batches or sessions.
+- **Failed chunks stay failed until reset**. If `chunks_failed` is non-zero, inspect the cause, then call `retry_failed_enrichment` only when the extractor/payload issue has been corrected.

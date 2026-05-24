@@ -121,6 +121,7 @@ class KnowledgeSource(BaseModel):
     config: dict[str, Any] = Field(default_factory=dict)
     scope: str = "global"
     enabled: bool = True
+    refreshable: bool = True
     priority: int = 0
     last_refreshed_at: str | None = None
     last_checked_at: str | None = None
