@@ -101,6 +101,7 @@ class CockpitView:
         timestamp: bool = False,
         priority: str = "",
         parent: int | None | object = _FIELD_UNSET,
+        ac: list[str] | None = None,
         add_dep: list[int] | None = None,
         remove_dep: list[int] | None = None,
         add_tag: list[str] | None = None,
@@ -130,6 +131,8 @@ class CockpitView:
             )
         if parent is not _FIELD_UNSET:
             kwargs["parent"] = parent
+        if ac is not None:
+            kwargs["ac"] = ac
         if add_dep is not None:
             kwargs["add_deps"] = add_dep
         if remove_dep is not None:

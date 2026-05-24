@@ -374,6 +374,15 @@ test.describe('TestFromAC_DecisionRouteComposition', () => {
     await expect(modal).toBeVisible()
     await expect(modal).toContainText('Confirm caching strategy')
   })
+
+  test('task references open the task detail overlay from Decisions', async ({ page }) => {
+    await page.locator('[data-testid="dr-open-task-dr-1562-001"]').click()
+    const modal = page.locator('[data-testid="task-detail-modal"]')
+
+    await expect(modal).toBeVisible()
+    await expect(modal).toContainText('Implement cache layer')
+    await expect(page.locator('[data-testid="decisions-page"]')).toBeVisible()
+  })
 })
 
 // ─── AC-3: Keyboard modal close / no sidecar collapse ───────────────────────

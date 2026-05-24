@@ -63,6 +63,7 @@ class EditRequest(BaseModel):
     priority: str | None = None
     depends_on: list[int] | None = None
     parent: int | None = None
+    ac: list[str] | None = None
     block_reason: str | None = None
     body: str | None = None
 
@@ -99,6 +100,7 @@ def _task_to_single(task: Any) -> SingleTaskResponse:  # noqa: ANN401
         tags=task.tags or [],
         blocked=task.blocked,
         block_reason=task.block_reason,
+        ac=getattr(task, "ac", []) or [],
         parent=task.parent,
         depends_on=task.depends_on or [],
         claimed_at=getattr(task, "claimed_at", None),
@@ -180,6 +182,8 @@ def _build_edit_kwargs(req: EditRequest, task: Any | None = None) -> dict[str, A
         kwargs["priority"] = req.priority
     if "parent" in fields:
         kwargs["parent"] = req.parent
+    if "ac" in fields and req.ac is not None:
+        kwargs["ac"] = req.ac
     if "body" in fields and req.body is not None:
         kwargs["body"] = req.body
 

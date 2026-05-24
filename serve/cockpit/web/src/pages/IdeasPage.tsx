@@ -3,7 +3,7 @@ import { useBeforeUnload, useBlocker } from 'react-router'
 import { PButton, PModal } from '@porsche-design-system/components-react'
 import MarkdownPreview from '../components/MarkdownPreview'
 
-import { fetchIdeas, saveIdeas } from '../api/ideas'
+import { fetchIdeas, IdeasSaveConflictError, saveIdeas } from '../api/ideas'
 import { WorkspaceHeader } from '../components/WorkspaceHeader'
 
 type IdeasConflictSnapshot = {
@@ -151,17 +151,23 @@ function IdeasPage() {
 
     setSaving(true)
     try {
-      const updatedAt = await saveIdeas(content)
+      const updatedAt = await saveIdeas(content, { expectedUpdatedAt: lastSavedAt })
       setLastSavedContent(content)
       setLastSavedAt(updatedAt ?? new Date().toISOString())
+      setConflictSnapshot(null)
       setErrorMessage(null)
     } catch (error) {
+      if (error instanceof IdeasSaveConflictError) {
+        setConflictSnapshot({ content: error.content, updatedAt: error.updatedAt })
+        setErrorMessage(null)
+        return
+      }
       const message = error instanceof Error ? error.message : 'Failed to save ideas'
       setErrorMessage(message)
     } finally {
       setSaving(false)
     }
-  }, [content, hasConflict, isDirty, loading, saving])
+  }, [content, hasConflict, isDirty, lastSavedAt, loading, saving])
 
   useEffect(() => {
     const refetchIdeas = async () => {
@@ -179,15 +185,10 @@ function IdeasPage() {
             return
           }
 
-          setConflictSnapshot(null)
           setContent(response.content)
           setLastSavedContent(response.content)
           setLastSavedAt(response.updated_at ?? null)
           return
-        }
-
-        if (response.content !== triggerLastSaved) {
-          setConflictSnapshot({ content: response.content, updatedAt: response.updated_at ?? null })
         }
       } catch {
         // Background refetch failure is intentionally silent.
@@ -229,17 +230,27 @@ function IdeasPage() {
     }
   }, [handleSave, hasConflict, isDirty])
 
-  const handleConflictOverwrite = useCallback(() => {
+  const handleConflictOverwrite = useCallback(async () => {
     if (conflictSnapshot === null) {
       return
     }
 
-    setLastSavedContent(conflictSnapshot.content)
-    setLastSavedAt(conflictSnapshot.updatedAt)
-    setConflictSnapshot(null)
-  }, [conflictSnapshot])
+    setSaving(true)
+    try {
+      const updatedAt = await saveIdeas(content, { expectedUpdatedAt: conflictSnapshot.updatedAt, force: true })
+      setLastSavedContent(content)
+      setLastSavedAt(updatedAt ?? new Date().toISOString())
+      setConflictSnapshot(null)
+      setErrorMessage(null)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to save ideas'
+      setErrorMessage(message)
+    } finally {
+      setSaving(false)
+    }
+  }, [conflictSnapshot, content])
 
-  const handleConflictDiscard = useCallback(() => {
+  const handleConflictLoad = useCallback(() => {
     if (conflictSnapshot === null) {
       return
     }
@@ -248,7 +259,12 @@ function IdeasPage() {
     setLastSavedContent(conflictSnapshot.content)
     setLastSavedAt(conflictSnapshot.updatedAt)
     setConflictSnapshot(null)
+    setErrorMessage(null)
   }, [conflictSnapshot])
+
+  const handleConflictCancel = useCallback(() => {
+    setConflictSnapshot(null)
+  }, [])
 
   useEffect(() => {
     setShowUnsavedDialog(navigationBlocker.state === 'blocked')
@@ -357,8 +373,8 @@ function IdeasPage() {
             className="flex flex-wrap items-center justify-between gap-static-sm rounded-lg border border-error bg-error-low p-static-md text-primary"
           >
             <div className="grid gap-1">
-              <span className="text-sm font-semibold text-primary">Ideas were updated externally.</span>
-              <span className="text-xs text-primary">Choose which version becomes the saved baseline.</span>
+              <span className="text-sm font-semibold text-primary">Ideas changed on disk.</span>
+              <span className="text-xs text-primary">Overwrite the file, load the disk version, or cancel and keep editing.</span>
             </div>
             <div className="flex flex-wrap gap-static-xs">
               <PButton
@@ -366,17 +382,28 @@ function IdeasPage() {
                 data-testid="ideas-conflict-overwrite"
                 variant="secondary"
                 compact
-                onClick={handleConflictOverwrite}
+                onClick={() => {
+                  void handleConflictOverwrite()
+                }}
               >
                 Overwrite
               </PButton>
               <PButton
                 type="button"
-                data-testid="ideas-conflict-discard"
+                data-testid="ideas-conflict-load"
+                variant="secondary"
                 compact
-                onClick={handleConflictDiscard}
+                onClick={handleConflictLoad}
               >
-                Discard & Reload
+                Load from disk
+              </PButton>
+              <PButton
+                type="button"
+                data-testid="ideas-conflict-cancel"
+                compact
+                onClick={handleConflictCancel}
+              >
+                Cancel
               </PButton>
             </div>
           </div>

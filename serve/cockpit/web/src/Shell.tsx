@@ -26,6 +26,7 @@ import type { KanbanBoardProps } from './KanbanBoard'
 import { routeConfig } from './routes'
 import { priorityToVariant, statusToVariant } from './utils/cardVariants'
 import { formatPriority, formatStatus } from './utils/format'
+import { OPEN_TASK_DETAIL_EVENT, readOpenTaskDetailEvent } from './utils/openTaskDetail'
 
 function isHealthBadgeItem(item: ScanPollingItem): item is HealthBadgeItem {
   return item.code !== null && item.detail !== null && item.file_path !== null
@@ -156,6 +157,7 @@ function Shell() {
   } | null>(null)
   const [isTaskDetailDirty, setIsTaskDetailDirty] = useState(false)
   const [isTaskDetailEditing, setIsTaskDetailEditing] = useState(false)
+  const [isTaskDetailRouteOverlayOpen, setIsTaskDetailRouteOverlayOpen] = useState(false)
   const [taskDetailBackStack, setTaskDetailBackStack] = useState<number[]>([])
   const [showTaskDetailUnsavedDialog, setShowTaskDetailUnsavedDialog] = useState(false)
   const pendingTaskDetailActionRef = useRef<(() => void) | null>(null)
@@ -210,6 +212,7 @@ function Shell() {
 
   const selectTaskFromBoard = useCallback((taskId: number) => {
     const action = () => {
+      setIsTaskDetailRouteOverlayOpen(false)
       setTaskDetailBackStack([])
       select(taskId)
       setDetailValidationMessage(null)
@@ -258,7 +261,7 @@ function Shell() {
   )
   const matchedRoute = activeNavIndex >= 0 ? routeConfig[activeNavIndex] : undefined
   const isKanbanRoute = normalizedPathname === '/'
-  const isTaskDetailOpen = isKanbanRoute && selectedTaskId !== null
+  const isTaskDetailOpen = selectedTaskId !== null && (isKanbanRoute || isTaskDetailRouteOverlayOpen)
   const isNavRailOpen = isSidebarStartOpen
   const canvasKey = isNavRailOpen ? 'nav-open' : 'nav-closed'
   const navigateWorkspace = useCallback((path: string) => {
@@ -266,7 +269,10 @@ function Shell() {
       return
     }
 
-    requestTaskDetailAction(() => navigate(path))
+    requestTaskDetailAction(() => {
+      setIsTaskDetailRouteOverlayOpen(false)
+      navigate(path)
+    })
   }, [navigate, normalizedPathname, requestTaskDetailAction])
   const routeElement = useMemo(() => {
     if (!matchedRoute) {
@@ -418,6 +424,7 @@ function Shell() {
   const closeTaskDetail = useCallback(() => {
     requestTaskDetailAction(() => {
       clear()
+      setIsTaskDetailRouteOverlayOpen(false)
       setTaskDetailBackStack([])
       setSelectedTaskSubtab(null)
       setDetailValidationMessage(null)
@@ -426,6 +433,7 @@ function Shell() {
 
   const selectTaskFromDetail = useCallback((taskId: number, subtab?: string | null) => {
     const action = () => {
+      setIsTaskDetailRouteOverlayOpen(true)
       if (selectedTaskId !== null && selectedTaskId !== taskId) {
         setTaskDetailBackStack((current) => [...current, selectedTaskId])
       }
@@ -455,6 +463,21 @@ function Shell() {
       setDetailValidationMessage(null)
     })
   }, [requestTaskDetailAction, select, taskDetailBackStack])
+
+  useEffect(() => {
+    const handleOpenTaskDetail = (event: Event) => {
+      const taskId = readOpenTaskDetailEvent(event)
+      if (taskId === null) {
+        return
+      }
+      selectTaskFromDetail(taskId)
+    }
+
+    window.addEventListener(OPEN_TASK_DETAIL_EVENT, handleOpenTaskDetail)
+    return () => {
+      window.removeEventListener(OPEN_TASK_DETAIL_EVENT, handleOpenTaskDetail)
+    }
+  }, [selectTaskFromDetail])
 
   const onSidebarStartUpdate = (event: CustomEvent<CanvasSidebarStartUpdateEventDetail>) => {
     setIsSidebarStartOpen(event.detail.open)
@@ -766,7 +789,7 @@ function Shell() {
             <div
               ref={setTaskDetailActionPortalTarget}
               data-testid="task-detail-action-host"
-              className={isTaskDetailEditing ? 'flex-none' : 'hidden'}
+              className={isTaskDetailEditing ? '-mt-static-md flex-none rounded-b-lg border-x border-b border-contrast-low bg-canvas' : 'hidden'}
               aria-hidden={isTaskDetailEditing ? undefined : true}
             />
             <div className="relative min-h-0 flex-1 overflow-hidden" data-testid="task-detail-scroll-shell">

@@ -154,32 +154,6 @@ function setVisibilityState(state: 'visible' | 'hidden'): void {
   })
 }
 
-async function fireVisibilityVisible(): Promise<void> {
-  setVisibilityState('visible')
-  await act(async () => {
-    document.dispatchEvent(new Event('visibilitychange'))
-  })
-  await flush()
-}
-
-/**
- * Render loaded, make content dirty, then trigger a visibilitychange refetch
- * returning fetchedContent (which differs from baseline). Resolves with the
- * container after conflict state is set.
- */
-async function renderInConflict(
-  initialContent: string,
-  dirtyContent: string,
-  fetchedContent: string,
-): Promise<HTMLElement> {
-  const { container } = await renderLoaded(initialContent)
-  const textarea = container.querySelector('textarea')!
-  fireEvent.change(textarea, { target: { value: dirtyContent } })
-  vi.stubGlobal('fetch', makeGetOkFetch(fetchedContent))
-  await fireVisibilityVisible()
-  return container
-}
-
 // ─── AC1: End-to-end save flow ────────────────────────────────────────────────
 //
 // IdeasPage loads content from GET /api/ideas, user edits textarea,
@@ -506,167 +480,87 @@ describe('IdeasPageIntegration_StatusWording', () => {
   })
 })
 
-// ─── AC4: Conflict trigger ────────────────────────────────────────────────────
-//
-// While dirty, visibilitychange re-fetch returning different server content causes
-// conflict notice (data-testid="ideas-conflict-notice") to appear with Overwrite
-// and Discard & Reload buttons.
-
-describe('IdeasPageIntegration_ConflictTrigger', () => {
+describe('IdeasPageIntegration_SaveTimeConflict', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     setVisibilityState('visible')
   })
 
-  it('ac4 happy: conflict notice appears when dirty and re-fetch returns different server content', async () => {
-    const container = await renderInConflict('baseline', 'user edits', 'server version')
-    expect(container.querySelector('[data-testid="ideas-conflict-notice"]')).not.toBeNull()
-  })
-
-  it('ac4 happy: conflict notice contains an Overwrite button', async () => {
-    const container = await renderInConflict('baseline', 'user edits', 'server version')
-    expect(container.querySelector('[data-testid="ideas-conflict-overwrite"]')).not.toBeNull()
-  })
-
-  it('ac4 happy: conflict notice contains a Discard & Reload button', async () => {
-    const container = await renderInConflict('baseline', 'user edits', 'server version')
-    expect(container.querySelector('[data-testid="ideas-conflict-discard"]')).not.toBeNull()
-  })
-
-  it('ac4 edge: no conflict notice when content is clean at visibilitychange time', async () => {
-    const { container } = await renderLoaded('baseline')
-    // Content is NOT edited — clean state
-    vi.stubGlobal('fetch', makeGetOkFetch('server version'))
-    await fireVisibilityVisible()
-    expect(container.querySelector('[data-testid="ideas-conflict-notice"]')).toBeNull()
-  })
-
-  it('ac4 boundary: conflict notice appears even when dirty content differs from baseline by one word', async () => {
-    const container = await renderInConflict('word1 word2', 'word1 word3', 'word1 word4')
-    expect(container.querySelector('[data-testid="ideas-conflict-notice"]')).not.toBeNull()
-  })
-})
-
-// ─── AC5: Conflict — Overwrite ───────────────────────────────────────────────
-//
-// Clicking Overwrite: dismisses notice, updates last-saved baseline to server
-// content, keeps textarea content unchanged, dirty indicator remains visible,
-// save button re-enables.
-
-describe('IdeasPageIntegration_ConflictOverwrite', () => {
-  afterEach(() => {
-    vi.unstubAllGlobals()
-    setVisibilityState('visible')
-  })
-
-  async function clickOverwrite(container: HTMLElement): Promise<void> {
-    const btn = container.querySelector<HTMLButtonElement>('[data-testid="ideas-conflict-overwrite"]')!
-    await act(async () => {
-      fireEvent.click(btn)
+  function makeSaveConflictFetch() {
+    const loadedAt = '2026-05-24T09:00:00+00:00'
+    const diskAt = '2026-05-24T09:05:00+00:00'
+    return vi.fn((_url: string, init?: RequestInit) => {
+      if (init?.method === 'PUT') {
+        const body = JSON.parse(init.body as string) as Record<string, unknown>
+        if (body.force === true) {
+          return Promise.resolve({ ok: true, status: 204, headers: new Headers({ 'x-ideas-updated-at': '2026-05-24T09:06:00+00:00' }), json: () => Promise.resolve(null) })
+        }
+        return Promise.resolve({
+          ok: false,
+          status: 409,
+          json: () => Promise.resolve({ content: 'disk version', updated_at: diskAt }),
+        })
+      }
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ content: 'baseline', updated_at: loadedAt }) })
     })
-    await flush()
   }
 
-  it('ac5 happy: clicking Overwrite dismisses the conflict notice', async () => {
-    const container = await renderInConflict('baseline', 'user edits', 'server version')
-    await clickOverwrite(container)
-    expect(container.querySelector('[data-testid="ideas-conflict-notice"]')).toBeNull()
-  })
-
-  it('ac5 happy: textarea content is unchanged after clicking Overwrite', async () => {
-    const container = await renderInConflict('baseline', 'user edits', 'server version')
-    await clickOverwrite(container)
-    expect(container.querySelector('textarea')?.value).toBe('user edits')
-  })
-
-  it('ac5 happy: dirty indicator remains visible after clicking Overwrite', async () => {
-    const container = await renderInConflict('baseline', 'user edits', 'server version')
-    await clickOverwrite(container)
-    expect(container.querySelector('[data-testid="ideas-dirty"]')).not.toBeNull()
-  })
-
-  it('ac5 happy: save button is re-enabled after clicking Overwrite', async () => {
-    const container = await renderInConflict('baseline', 'user edits', 'server version')
-    await clickOverwrite(container)
-    const saveBtn = container.querySelector<HTMLButtonElement>('[data-testid="ideas-save"]')
-    expect(saveBtn?.disabled).toBe(false)
-  })
-
-  it('ac5 happy: last-saved baseline is updated to server content after Overwrite', async () => {
-    // Proof: after overwrite, typing server content into textarea makes state clean
-    // (save button disabled). If baseline were NOT updated, typing server content
-    // would still differ from old baseline → save stays enabled → assertion fails.
-    const container = await renderInConflict('baseline', 'user edits', 'server version')
-    await clickOverwrite(container)
-    const textarea = container.querySelector('textarea')!
-    fireEvent.change(textarea, { target: { value: 'server version' } })
-    const saveBtn = container.querySelector<HTMLButtonElement>('[data-testid="ideas-save"]')
-    expect(saveBtn?.disabled).toBe(true)
-  })
-})
-
-// ─── AC6: Conflict — Discard ──────────────────────────────────────────────────
-//
-// Clicking Discard & Reload: dismisses notice, sets textarea value and baseline
-// to server content, dirty indicator disappears, save button disables.
-
-describe('IdeasPageIntegration_ConflictDiscard', () => {
-  afterEach(() => {
-    vi.unstubAllGlobals()
-    setVisibilityState('visible')
-  })
-
-  async function clickDiscard(container: HTMLElement): Promise<void> {
-    const btn = container.querySelector<HTMLButtonElement>('[data-testid="ideas-conflict-discard"]')!
+  async function renderAfterSaveConflict(): Promise<{ container: HTMLElement; fetchMock: ReturnType<typeof vi.fn> }> {
+    const fetchMock = makeSaveConflictFetch()
+    vi.stubGlobal('fetch', fetchMock)
+    let result!: ReturnType<typeof renderInRouter>
     await act(async () => {
-      fireEvent.click(btn)
+      result = renderInRouter()
     })
     await flush()
-  }
-
-  it('ac6 happy: clicking Discard & Reload dismisses the conflict notice', async () => {
-    const container = await renderInConflict('baseline', 'user edits', 'server version')
-    await clickDiscard(container)
-    expect(container.querySelector('[data-testid="ideas-conflict-notice"]')).toBeNull()
-  })
-
-  it('ac6 happy: textarea value is set to server content after Discard & Reload', async () => {
-    const container = await renderInConflict('baseline', 'user edits', 'server version')
-    await clickDiscard(container)
-    expect(container.querySelector('textarea')?.value).toBe('server version')
-  })
-
-  it('ac6 happy: dirty indicator disappears after Discard & Reload', async () => {
-    const container = await renderInConflict('baseline', 'user edits', 'server version')
-    await clickDiscard(container)
-    expect(container.querySelector('[data-testid="ideas-dirty"]')).toBeNull()
-  })
-
-  it('ac6 happy: save button is disabled after Discard & Reload', async () => {
-    const container = await renderInConflict('baseline', 'user edits', 'server version')
-    await clickDiscard(container)
-    const saveBtn = container.querySelector<HTMLButtonElement>('[data-testid="ideas-save"]')
-    expect(saveBtn?.disabled).toBe(true)
-  })
-
-  it('ac6 cross-feature: navigation proceeds without alertdialog after Discard clears dirty state', async () => {
-    // Cross-feature: conflict resolution (#1665) + navigation guard (#1664)
-    // After discard, isDirty=false → guard does not block navigation.
-    const { container } = await renderLoaded('baseline')
+    await enterEditMode(result.container)
+    const { container } = result
     fireEvent.change(container.querySelector('textarea')!, { target: { value: 'user edits' } })
-    vi.stubGlobal('fetch', makeGetOkFetch('server version'))
-    await fireVisibilityVisible()
-
-    // Conflict notice must be showing before discard
-    expect(container.querySelector('[data-testid="ideas-conflict-notice"]')).not.toBeNull()
-
-    await clickDiscard(container)
-
-    // Navigate — guard must NOT block (clean after discard)
-    fireEvent.click(container.querySelector('[data-testid="nav-home"]')!)
-    await waitFor(() => {
-      expect(container.querySelector('[data-testid="home-page"]')).not.toBeNull()
+    await act(async () => {
+      fireEvent.click(container.querySelector('[data-testid="ideas-save"]')!)
     })
-    expect(container.querySelector('[role="alertdialog"]')).toBeNull()
+    await flush()
+    return { container, fetchMock }
+  }
+
+  it('shows overwrite, load, and cancel choices when save detects a disk change', async () => {
+    const { container } = await renderAfterSaveConflict()
+    expect(container.querySelector('[data-testid="ideas-conflict-notice"]')).not.toBeNull()
+    expect(container.querySelector('[data-testid="ideas-conflict-overwrite"]')).not.toBeNull()
+    expect(container.querySelector('[data-testid="ideas-conflict-load"]')).not.toBeNull()
+    expect(container.querySelector('[data-testid="ideas-conflict-cancel"]')).not.toBeNull()
+  })
+
+  it('cancel keeps the local draft dirty and re-enables save', async () => {
+    const { container } = await renderAfterSaveConflict()
+    fireEvent.click(container.querySelector('[data-testid="ideas-conflict-cancel"]')!)
+    await flush()
+    expect(container.querySelector('[data-testid="ideas-conflict-notice"]')).toBeNull()
+    expect(container.querySelector('textarea')?.value).toBe('user edits')
+    expect(container.querySelector('[data-testid="ideas-dirty"]')).not.toBeNull()
+    expect(container.querySelector<HTMLButtonElement>('[data-testid="ideas-save"]')?.disabled).toBe(false)
+  })
+
+  it('load from disk replaces the draft and clears dirty state', async () => {
+    const { container } = await renderAfterSaveConflict()
+    fireEvent.click(container.querySelector('[data-testid="ideas-conflict-load"]')!)
+    await flush()
+    expect(container.querySelector('textarea')?.value).toBe('disk version')
+    expect(container.querySelector('[data-testid="ideas-dirty"]')).toBeNull()
+    expect(container.querySelector<HTMLButtonElement>('[data-testid="ideas-save"]')?.disabled).toBe(true)
+  })
+
+  it('overwrite sends a forced save with the local draft', async () => {
+    const { container, fetchMock } = await renderAfterSaveConflict()
+    await act(async () => {
+      fireEvent.click(container.querySelector('[data-testid="ideas-conflict-overwrite"]')!)
+    })
+    await flush()
+    const putBodies = fetchMock.mock.calls
+      .filter(([, init]: [string, RequestInit | undefined]) => init?.method === 'PUT')
+      .map(([, init]: [string, RequestInit]) => JSON.parse(init.body as string) as Record<string, unknown>)
+    expect(putBodies[1]).toMatchObject({ content: 'user edits', force: true })
+    expect(container.querySelector('[data-testid="ideas-conflict-notice"]')).toBeNull()
+    expect(container.querySelector('[data-testid="ideas-dirty"]')).toBeNull()
   })
 })

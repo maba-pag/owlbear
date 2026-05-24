@@ -208,6 +208,47 @@ class TestFromAC_IdeasPut:
         assert response.status_code == 204
         assert datetime.fromisoformat(response.headers["x-ideas-updated-at"]).tzinfo is not None
 
+    def test_put_with_matching_expected_updated_at_writes(self, client_with_file: TestClient) -> None:
+        """Save-time OCC: matching expected_updated_at permits the write."""
+        loaded = client_with_file.get("/api/ideas").json()
+        response = client_with_file.put(
+            "/api/ideas",
+            json={"content": "Updated ideas.", "expected_updated_at": loaded["updated_at"]},
+        )
+        assert response.status_code == 204
+
+    def test_put_with_stale_expected_updated_at_returns_conflict(
+        self,
+        client_with_file: TestClient,
+    ) -> None:
+        """Save-time OCC: stale expected_updated_at returns disk content for user choice."""
+        response = client_with_file.put(
+            "/api/ideas",
+            json={"content": "Local draft.", "expected_updated_at": "2000-01-01T00:00:00+00:00"},
+        )
+        assert response.status_code == 409
+        body = response.json()
+        assert body["code"] == "IDEAS_CONFLICT"
+        assert body["content"] == "# My Ideas\n\nSome idea here."
+        assert isinstance(body["updated_at"], str)
+
+    def test_put_force_overwrites_despite_stale_expected_updated_at(
+        self,
+        client_with_file: TestClient,
+        ideas_file: Path,
+    ) -> None:
+        """Overwrite choice: force bypasses stale expected_updated_at."""
+        response = client_with_file.put(
+            "/api/ideas",
+            json={
+                "content": "Forced local draft.",
+                "expected_updated_at": "2000-01-01T00:00:00+00:00",
+                "force": True,
+            },
+        )
+        assert response.status_code == 204
+        assert ideas_file.read_text(encoding="utf-8") == "Forced local draft."
+
 
 # ---------------------------------------------------------------------------
 # AC3: get_ideas_path DI dependency

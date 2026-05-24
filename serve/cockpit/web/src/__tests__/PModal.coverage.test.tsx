@@ -534,16 +534,15 @@ describe('ResolveModal branch coverage', () => {
   })
 
   // ─── handleModalKeyDown: Tab cycling ──────────────────────────────────────
-  // ResolveModal focusable order: radio[approved], radio[rejected], radio[needs-info],
-  // p-button[submit], p-button[cancel].  first = approved radio, last = cancel p-button.
+  // ResolveModal focusable order starts with the task reference button, then
+  // radio[approved], radio[rejected], radio[needs-info], submit, cancel.
 
   it('Tab when active is the last focusable element wraps focus to the first', () => {
     const { container } = renderResolveModal()
     const pModal = container.querySelector('p-modal') as HTMLElement
-    const radios = Array.from(container.querySelectorAll('input[type="radio"]')) as HTMLElement[]
     const pButtons = Array.from(container.querySelectorAll('p-button')) as HTMLElement[]
 
-    const first = radios[0]
+    const first = container.querySelector('[data-testid="resolve-open-task"]') as HTMLElement
     const last = pButtons[pButtons.length - 1]
     const focusSpy = vi.spyOn(first, 'focus')
 
@@ -559,10 +558,9 @@ describe('ResolveModal branch coverage', () => {
   it('Shift+Tab when active is the first focusable element wraps focus to the last', () => {
     const { container } = renderResolveModal()
     const pModal = container.querySelector('p-modal') as HTMLElement
-    const radios = Array.from(container.querySelectorAll('input[type="radio"]')) as HTMLElement[]
     const pButtons = Array.from(container.querySelectorAll('p-button')) as HTMLElement[]
 
-    const first = radios[0]
+    const first = container.querySelector('[data-testid="resolve-open-task"]') as HTMLElement
     const last = pButtons[pButtons.length - 1]
     const focusSpy = vi.spyOn(last, 'focus')
 
@@ -633,8 +631,8 @@ describe('ResolveModal branch coverage', () => {
   it('getFocusableElements excludes disabled elements in ResolveModal Tab wrapping', () => {
     const { container } = renderResolveModal()
     const pModal = container.querySelector('p-modal') as HTMLElement
-    const radios = Array.from(container.querySelectorAll('input[type="radio"]')) as HTMLElement[]
     const pButtons = Array.from(container.querySelectorAll('p-button')) as HTMLElement[]
+    const first = container.querySelector('[data-testid="resolve-open-task"]') as HTMLElement
 
     // Inject a native button with disabled attribute — selector matches but filter excludes it
     const disabledBtn = document.createElement('button')
@@ -642,7 +640,7 @@ describe('ResolveModal branch coverage', () => {
     pModal.appendChild(disabledBtn)
 
     vi.spyOn(document, 'activeElement', 'get').mockReturnValue(pButtons[pButtons.length - 1])
-    const firstFocusSpy = vi.spyOn(radios[0], 'focus')
+    const firstFocusSpy = vi.spyOn(first, 'focus')
     fireEvent.keyDown(pModal, { key: 'Tab', shiftKey: false })
     expect(firstFocusSpy).toHaveBeenCalledOnce()
 
@@ -652,8 +650,8 @@ describe('ResolveModal branch coverage', () => {
   it('getFocusableElements excludes aria-hidden elements in ResolveModal Tab wrapping', () => {
     const { container } = renderResolveModal()
     const pModal = container.querySelector('p-modal') as HTMLElement
-    const radios = Array.from(container.querySelectorAll('input[type="radio"]')) as HTMLElement[]
     const pButtons = Array.from(container.querySelectorAll('p-button')) as HTMLElement[]
+    const first = container.querySelector('[data-testid="resolve-open-task"]') as HTMLElement
 
     // Inject a native button with aria-hidden="true" — selector matches but filter excludes it
     const hiddenBtn = document.createElement('button')
@@ -661,7 +659,7 @@ describe('ResolveModal branch coverage', () => {
     pModal.appendChild(hiddenBtn)
 
     vi.spyOn(document, 'activeElement', 'get').mockReturnValue(pButtons[pButtons.length - 1])
-    const firstFocusSpy = vi.spyOn(radios[0], 'focus')
+    const firstFocusSpy = vi.spyOn(first, 'focus')
     fireEvent.keyDown(pModal, { key: 'Tab', shiftKey: false })
     expect(firstFocusSpy).toHaveBeenCalledOnce()
 
@@ -908,21 +906,21 @@ describe('ResolveModal branch coverage', () => {
     // it matches `[tabindex]:not([tabindex="-1"])` but is filtered by hasAttribute('disabled').
     const { container } = renderResolveModal()
     const pModal = container.querySelector('p-modal') as HTMLElement
-    const radios = Array.from(container.querySelectorAll('input[type="radio"]')) as HTMLElement[]
     const pButtons = Array.from(container.querySelectorAll('p-button')) as HTMLElement[]
+    const first = container.querySelector('[data-testid="resolve-open-task"]') as HTMLElement
 
     const disabledTabEl = document.createElement('div')
     disabledTabEl.setAttribute('tabindex', '0')
     disabledTabEl.setAttribute('disabled', '')
     pModal.appendChild(disabledTabEl)
 
-    // Mock active element to last p-button — Tab wraps to first radio (not disabledTabEl)
+    // Mock active element to last p-button — Tab wraps to the first task button (not disabledTabEl)
     vi.spyOn(document, 'activeElement', 'get').mockReturnValue(pButtons[pButtons.length - 1])
-    const firstFocusSpy = vi.spyOn(radios[0], 'focus')
+    const firstFocusSpy = vi.spyOn(first, 'focus')
 
     fireEvent.keyDown(pModal, { key: 'Tab', shiftKey: false })
 
-    // Focus wraps to first radio, confirming disabled tabindex element was filtered
+    // Focus wraps to first task button, confirming disabled tabindex element was filtered
     expect(firstFocusSpy).toHaveBeenCalledOnce()
 
     pModal.removeChild(disabledTabEl)

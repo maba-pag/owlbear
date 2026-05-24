@@ -873,13 +873,14 @@ describe('TestFromAC_PdsMigration_DetailTabPayload', () => {
       const { container } = renderDetailTab()
       // Override the hanging-promise stub set by renderDetailTab
       vi.stubGlobal('fetch', mockFetch)
+      openDetailEditor(container)
 
       const titleInput = container.querySelector('p-input-text[data-field="title"]')!
       fireEvent(titleInput, new CustomEvent('change', { detail: { value: 'Updated title' }, bubbles: true }))
 
       const saveBtn = container.querySelector('p-button[data-testid="save-button"]')!
       fireEvent.click(saveBtn)
-      await new Promise((r) => setTimeout(r, 0))
+      await vi.waitFor(() => expect(mockFetch).toHaveBeenCalledOnce())
 
       const [, callOptions] = mockFetch.mock.calls[0]
       const payload = JSON.parse((callOptions as RequestInit).body as string) as Record<string, unknown>
@@ -892,13 +893,14 @@ describe('TestFromAC_PdsMigration_DetailTabPayload', () => {
       )
       const { container } = renderDetailTab()
       vi.stubGlobal('fetch', mockFetch)
+      openDetailEditor(container)
 
       const prioritySelect = container.querySelector('p-select[data-field="priority"]')!
       fireEvent(prioritySelect, new CustomEvent('change', { detail: { value: 'critical' }, bubbles: true }))
 
       const saveBtn = container.querySelector('p-button[data-testid="save-button"]')!
       fireEvent.click(saveBtn)
-      await new Promise((r) => setTimeout(r, 0))
+      await vi.waitFor(() => expect(mockFetch).toHaveBeenCalledOnce())
 
       const [, callOptions] = mockFetch.mock.calls[0]
       const payload = JSON.parse((callOptions as RequestInit).body as string) as Record<string, unknown>
@@ -911,6 +913,7 @@ describe('TestFromAC_PdsMigration_DetailTabPayload', () => {
       )
       const { container } = renderDetailTab()
       vi.stubGlobal('fetch', mockFetch)
+      openDetailEditor(container)
 
       const titleInput = container.querySelector('p-input-text[data-field="title"]')!
       fireEvent(titleInput, new CustomEvent('change', { detail: { value: 'New task title' }, bubbles: true }))
@@ -920,7 +923,7 @@ describe('TestFromAC_PdsMigration_DetailTabPayload', () => {
 
       const saveBtn = container.querySelector('p-button[data-testid="save-button"]')!
       fireEvent.click(saveBtn)
-      await new Promise((r) => setTimeout(r, 0))
+      await vi.waitFor(() => expect(mockFetch).toHaveBeenCalledOnce())
 
       const [, callOptions] = mockFetch.mock.calls[0]
       const payload = JSON.parse((callOptions as RequestInit).body as string) as Record<string, unknown>

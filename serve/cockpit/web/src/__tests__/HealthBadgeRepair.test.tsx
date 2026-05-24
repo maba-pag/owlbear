@@ -202,7 +202,7 @@ describe('TestFromAC_RepairConfirmCopyExact', () => {
     const text = (dialog?.textContent ?? '').replace(/\s+/g, ' ').trim()
     expect(text).toContain('Repair 3 corrupted files?')
     expect(text).toContain(
-      'Fixed files are restored, quarantined files move to .owlbear/kanban/quarantine, and failed files remain corrupted. This action can be irreversible.',
+      'Fixed files are restored, quarantined files move to the quarantine folder .owlbear/kanban/quarantine, and failed files remain corrupted. This action can be irreversible.',
     )
   })
 
@@ -213,7 +213,7 @@ describe('TestFromAC_RepairConfirmCopyExact', () => {
     const text = (dialog?.textContent ?? '').replace(/\s+/g, ' ').trim()
     expect(text).toContain('Repair 42 corrupted files?')
     expect(text).toContain(
-      'Fixed files are restored, quarantined files move to .owlbear/kanban/quarantine, and failed files remain corrupted. This action can be irreversible.',
+      'Fixed files are restored, quarantined files move to the quarantine folder .owlbear/kanban/quarantine, and failed files remain corrupted. This action can be irreversible.',
     )
   })
 })

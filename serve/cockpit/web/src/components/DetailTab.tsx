@@ -123,6 +123,8 @@ export default function DetailTab({
   const [showHistory, setShowHistory] = useState(false)
   const [sessions, setSessions] = useState<Session[]>([])
   const [archiveModalOpen, setArchiveModalOpen] = useState(false)
+  const [isEditingTask, setIsEditingTask] = useState(false)
+  const [acceptanceCriteriaPortalTarget, setAcceptanceCriteriaPortalTarget] = useState<HTMLElement | null>(null)
   const historyRegionRef = useRef<HTMLDivElement | null>(null)
   const archiveReturnFocusRef = useRef<HTMLElement | null>(null)
 
@@ -163,6 +165,7 @@ export default function DetailTab({
       title: t.title,
       priority: t.priority,
       body: t.body,
+      ac: t.ac ?? [],
       tags: t.tags,
       dependsOn: t.depends_on.join(', '),
       parent: t.parent !== null ? String(t.parent) : '',
@@ -177,6 +180,7 @@ export default function DetailTab({
       title: draft.title,
       priority: draft.priority,
       body: draft.body,
+      ac: draft.ac,
       tags: draft.tags,
       depends_on: forceDependsOn.values,
       parent: forceParent.value,
@@ -211,8 +215,12 @@ export default function DetailTab({
           onSave={handleSave}
           onSelectTask={(taskId) => onSelectTask?.(taskId)}
           onDirtyChange={onDirtyChange}
-          onEditingChange={onEditingChange}
+          onEditingChange={(editing) => {
+            setIsEditingTask(editing)
+            onEditingChange?.(editing)
+          }}
           actionPortalTarget={actionPortalTarget}
+          acceptanceCriteriaPortalTarget={acceptanceCriteriaPortalTarget}
           defaultEditing={false}
         />
       </section>
@@ -221,17 +229,21 @@ export default function DetailTab({
         <div className="mb-static-xs flex min-w-0 items-center justify-between gap-static-sm">
           <PHeading ref={syncHeadingAttrs('h3', 'small')} size="small" tag="h3">Acceptance Criteria</PHeading>
         </div>
-        {acceptanceCriteria.length > 0 ? (
-          <ul data-testid="task-ac-list" className="m-0 grid list-none gap-static-xs p-0 text-sm text-primary">
-            {acceptanceCriteria.map((item, index) => (
-              <li key={`${index}-${item}`} data-testid="task-ac-item" className="rounded-md border border-contrast-low bg-surface px-static-sm py-static-xs">
-                {item}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <span data-testid="task-ac-empty-state" className="text-sm text-contrast-high">No acceptance criteria defined.</span>
-        )}
+        <div ref={setAcceptanceCriteriaPortalTarget} className="grid gap-static-xs">
+          {!isEditingTask ? (
+            acceptanceCriteria.length > 0 ? (
+              <ul data-testid="task-ac-list" className="m-0 grid list-none gap-static-xs p-0 text-sm text-primary">
+                {acceptanceCriteria.map((item, index) => (
+                  <li key={`${index}-${item}`} data-testid="task-ac-item" className="rounded-md border border-contrast-low bg-surface px-static-sm py-static-xs">
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <span data-testid="task-ac-empty-state" className="text-sm text-contrast-high">No acceptance criteria defined.</span>
+            )
+          ) : null}
+        </div>
       </section>
 
       <section className="rounded-lg border border-contrast-low bg-canvas p-static-sm" data-region="actions">

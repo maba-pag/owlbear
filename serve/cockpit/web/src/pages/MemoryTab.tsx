@@ -16,53 +16,27 @@ import {
 } from '@porsche-design-system/components-react'
 import type { TagVariant } from '@porsche-design-system/components-react'
 import rehypeSanitize from 'rehype-sanitize'
-import { ApiError } from '../api/errors'
-import { getResponseErrorMessage } from '../api/errorMessage'
+import {
+  approveMemory,
+  deleteMemory,
+  editMemory,
+  MemoryMutationError,
+  type MemoriesResponse,
+  type MemoryEditPayload,
+  type MemoryEntry,
+  type MemoryState,
+  type ValidationMessage,
+} from '../api/memories'
 import MarkdownPreview from '../components/MarkdownPreview'
 import { WorkspaceHeader, WorkspaceHeaderMetric, WorkspaceHeaderPill } from '../components/WorkspaceHeader'
 import { MEMORY_PENDING_COUNT_EVENT } from '../hooks/usePendingMemoryCount'
 import { usePollingFetch } from '../hooks/usePollingFetch'
-
-type MemoryState = 'pending' | 'curated' | 'approved' | 'deleted'
-
-interface MemoryEntry {
-  id: string
-  title: string
-  content: string
-  categories: string[]
-  confidence: number
-  state: MemoryState
-  scope_agents: string[]
-  source_agent: string
-  created_at: string
-  updated_at: string
-  approved_at: string | null
-}
-
-interface MemoryEditPayload {
-  title: string
-  categories: string[]
-  confidence: number
-  scope_agents: string[]
-  content: string
-  expected_updated_at: string
-}
-
-interface MemoriesResponse {
-  entries?: MemoryEntry[]
-  parse_errors?: number
-}
 
 interface MemoryFilterState {
   states: MemoryState[]
   categories: string[]
   agent: string
   text: string
-}
-
-interface ValidationMessage {
-  field: string
-  message: string
 }
 
 const DEFAULT_STATES: MemoryState[] = ['pending', 'curated', 'approved']
@@ -241,63 +215,6 @@ function mergeListValues(existing: string[], additions: string[]): string[] {
     }
   })
   return merged
-}
-
-function parseValidationField(loc: unknown): string {
-  if (!Array.isArray(loc)) {
-    return 'form'
-  }
-
-  const field = [...loc]
-    .reverse()
-    .find((part) => typeof part === 'string' && part !== 'body')
-  return typeof field === 'string' && field.trim().length > 0 ? field.trim() : 'form'
-}
-
-function parseValidationErrors(payload: unknown): ValidationMessage[] {
-  if (typeof payload !== 'object' || payload === null) {
-    return []
-  }
-  const detail = (payload as { detail?: unknown }).detail
-  if (!Array.isArray(detail)) {
-    return []
-  }
-  return detail
-    .map((item) => {
-      if (typeof item !== 'object' || item === null) {
-        return null
-      }
-      const message = (item as { msg?: unknown }).msg
-      if (typeof message !== 'string' || message.trim().length === 0) {
-        return null
-      }
-      return {
-        field: parseValidationField((item as { loc?: unknown }).loc),
-        message: message.trim(),
-      }
-    })
-    .filter((message): message is ValidationMessage => message !== null)
-}
-
-function parseMutationErrorPayload(payload: unknown): { validationMessages: ValidationMessage[]; message: string | null } {
-  const validationMessages = parseValidationErrors(payload)
-  if (validationMessages.length > 0) {
-    return { validationMessages, message: null }
-  }
-
-  if (typeof payload === 'object' && payload !== null) {
-    const detail = (payload as { detail?: unknown }).detail
-    if (typeof detail === 'string' && detail.trim().length > 0) {
-      return { validationMessages: [], message: detail.trim() }
-    }
-
-    const message = (payload as { message?: unknown }).message
-    if (typeof message === 'string' && message.trim().length > 0) {
-      return { validationMessages: [], message: message.trim() }
-    }
-  }
-
-  return { validationMessages: [], message: null }
 }
 
 function pendingValue(entry: MemoryEntry | null): number {
@@ -590,46 +507,13 @@ function MemoryTab() {
     setMutationErrorByEntryId((previous) => ({ ...previous, [entryId]: message }))
   }
 
-  const mutationFetch = async (url: string, body?: Record<string, unknown>): Promise<unknown> => {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body ?? {}),
-    })
-
-    if (!response.ok) {
-      let payload: unknown
-      try {
-        payload = (await response.json()) as unknown
-      } catch {
-        payload = null
-      }
-
-      const parsed = parseMutationErrorPayload(payload)
-      const message =
-        parsed.message ??
-        (await getResponseErrorMessage(response, `Memory mutation failed with status ${response.status}`))
-      const error = new ApiError(response.status, message)
-      throw { error, payload, validationMessages: parsed.validationMessages }
-    }
-
-    return (await response.json()) as unknown
-  }
-
   const handleMutationFailure = async (
     entry: MemoryEntry,
     caught: unknown,
   ): Promise<void> => {
-    const result = caught as {
-      error?: ApiError
-      validationMessages?: ValidationMessage[]
-    }
-    const apiError = result.error instanceof ApiError ? result.error : null
-    const parsedValidationMessages = Array.isArray(result.validationMessages)
-      ? result.validationMessages
-      : []
+    const mutationError = caught instanceof MemoryMutationError ? caught : null
+    const apiError = mutationError?.apiError ?? null
+    const parsedValidationMessages = mutationError?.validationMessages ?? []
 
     if (apiError?.status === 409) {
       setEntryError(entry.id, 'Entry was modified — refreshing')
@@ -654,9 +538,7 @@ function MemoryTab() {
   const handleApprove = async (entry: MemoryEntry): Promise<void> => {
     clearEntryErrors(entry.id)
     try {
-      const payload = (await mutationFetch(`/api/memories/${entry.id}/approve`, {
-        expected_updated_at: entry.updated_at,
-      })) as { entry?: MemoryEntry }
+      const payload = await approveMemory(entry.id, entry.updated_at)
       if (payload.entry) {
         applyEntryReplace(payload.entry)
         emitPendingCountDelta(entry, payload.entry)
@@ -670,9 +552,7 @@ function MemoryTab() {
   const handleDelete = async (entry: MemoryEntry): Promise<void> => {
     clearEntryErrors(entry.id)
     try {
-      await mutationFetch(`/api/memories/${entry.id}/delete`, {
-        expected_updated_at: entry.updated_at,
-      })
+      await deleteMemory(entry.id, entry.updated_at)
 
       if (entry.state === 'pending') {
         removeEntry(entry.id)
@@ -743,9 +623,7 @@ function MemoryTab() {
         categories: mergeListValues(editDraft.categories, splitCSV(newCategory)),
         scope_agents: mergeListValues(editDraft.scope_agents, splitCSV(newScopeAgent)),
       }
-      const payload = (await mutationFetch(`/api/memories/${entry.id}/edit`, draftForSave as unknown as Record<string, unknown>)) as {
-        entry?: MemoryEntry
-      }
+      const payload = await editMemory(entry.id, draftForSave)
       if (payload.entry) {
         applyEntryReplace(payload.entry)
         emitPendingCountDelta(entry, payload.entry)

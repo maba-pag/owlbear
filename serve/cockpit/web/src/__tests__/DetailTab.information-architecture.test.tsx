@@ -98,11 +98,11 @@ function getDirectChildRegions(container: HTMLElement): (string | null)[] {
 describe('DetailTab task detail information architecture', () => {
   // ─── AC1: Section DOM order via direct-child selector ─────────────────────
 
-  describe('AC1: exactly four direct-child data-region sections in correct DOM order', () => {
-    it('sections appear in exact order: task-detail-body, actions, task-detail-metadata, history', () => {
+  describe('AC1: core-first direct-child data-region sections in product order', () => {
+    it('sections appear in exact order: task-detail-body, task-acceptance-criteria, actions, task-detail-metadata, history', () => {
       const { container } = renderDetail()
       const regions = getDirectChildRegions(container)
-      expect(regions).toEqual(['task-detail-body', 'actions', 'task-detail-metadata', 'history'])
+      expect(regions).toEqual(['task-detail-body', 'task-acceptance-criteria', 'actions', 'task-detail-metadata', 'history'])
     })
 
     it('task-detail-body is the first direct-child data-region section', () => {
@@ -111,20 +111,23 @@ describe('DetailTab task detail information architecture', () => {
       expect(regions[0]).toBe('task-detail-body')
     })
 
-    it('actions appears before task-detail-metadata in the direct-child data-region list', () => {
+    it('acceptance criteria and actions appear before task-detail-metadata in the direct-child data-region list', () => {
       const { container } = renderDetail()
       const regions = getDirectChildRegions(container)
+      const acIdx = regions.indexOf('task-acceptance-criteria')
       const actionsIdx = regions.indexOf('actions')
       const metaIdx = regions.indexOf('task-detail-metadata')
+      expect(acIdx).toBeGreaterThanOrEqual(0)
       expect(actionsIdx).toBeGreaterThanOrEqual(0)
       expect(metaIdx).toBeGreaterThanOrEqual(0)
+      expect(acIdx).toBeLessThan(actionsIdx)
       expect(actionsIdx).toBeLessThan(metaIdx)
     })
 
-    it('blocked task has same four direct-child data-region sections in correct order', () => {
+    it('blocked task has same direct-child data-region sections in correct order', () => {
       const { container } = renderDetail(TASK_BLOCKED)
       const regions = getDirectChildRegions(container)
-      expect(regions).toEqual(['task-detail-body', 'actions', 'task-detail-metadata', 'history'])
+      expect(regions).toEqual(['task-detail-body', 'task-acceptance-criteria', 'actions', 'task-detail-metadata', 'history'])
     })
   })
 

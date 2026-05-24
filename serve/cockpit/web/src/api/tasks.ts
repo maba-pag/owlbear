@@ -34,6 +34,7 @@ export interface EditRequest {
   priority?: string | null
   depends_on?: number[] | null
   parent?: number | null
+  ac?: string[] | null
   block_reason?: string | null
   body?: string | null
 }

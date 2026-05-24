@@ -286,6 +286,16 @@ class TestFromAC_EditTask:
         assert response.status_code == 200
         assert response.json()["body"] == new_body
 
+    def test_edit_ac_returns_200(self, client: TestClient, engine: KanbanEngine) -> None:
+        """Edit allowlisted field 'ac' returns 200 with structured acceptance criteria."""
+        task = engine.show_task("1")
+        response = client.post(
+            "/api/tasks/1/edit",
+            json={"updated": task.updated, "ac": ["First criterion", "Second criterion"]},
+        )
+        assert response.status_code == 200
+        assert response.json()["ac"] == ["First criterion", "Second criterion"]
+
     def test_edit_status_field_rejected_422(self, client: TestClient, engine: KanbanEngine) -> None:
         """Non-allowlisted field 'status' (highest-value bypass target) → 422."""
         task = engine.show_task("1")

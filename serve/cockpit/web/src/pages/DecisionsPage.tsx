@@ -1,9 +1,10 @@
 import { useMemo } from 'react'
-import { PIcon, PTag, PText } from '@porsche-design-system/components-react'
+import { PButton, PIcon, PTag, PText } from '@porsche-design-system/components-react'
 
 import { WorkspaceHeader, WorkspaceHeaderMetric } from '../components/WorkspaceHeader'
 import { useDRState } from '../hooks/CockpitProvider'
 import { formatAge, formatRequestType, getDecisionBrief } from '../utils/decisionBrief'
+import { openTaskDetail } from '../utils/openTaskDetail'
 
 function parseCreated(value: string | null | undefined): number {
   if (typeof value !== 'string') {
@@ -79,9 +80,21 @@ function DecisionsPage() {
                   <PTag compact variant="secondary">
                     {formatRequestType(item.request_type)}
                   </PTag>
-                  <PTag compact variant="secondary">
+                  <PButton
+                    type="button"
+                    data-testid={`dr-open-task-${item.id}`}
+                    variant="secondary"
+                    compact
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      openTaskDetail(item.task_id)
+                    }}
+                    onKeyDown={(event) => {
+                      event.stopPropagation()
+                    }}
+                  >
                     Task #{item.task_id}
-                  </PTag>
+                  </PButton>
                   <span className="text-xs font-semibold text-contrast-high">{formatAge(item.created)}</span>
                 </div>
                 <div className="flex min-w-0 flex-wrap items-start justify-between gap-static-sm">

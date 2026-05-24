@@ -108,7 +108,7 @@ describe('TestFromAC_HealthBadgeTriggerAnchoring', () => {
     expect(popover.style.top).toBe('68px')
   })
 
-  it('popover left is anchored to trigger left with padding floor: left = round(max(16, trigger.left))', () => {
+  it('popover left keeps the full popover inside the viewport padding floor', () => {
     const { container } = renderHealthBadge()
     const trigger = container.querySelector('[data-testid="health-badge"]') as HTMLElement
     trigger.getBoundingClientRect = vi.fn(
@@ -117,8 +117,7 @@ describe('TestFromAC_HealthBadgeTriggerAnchoring', () => {
     )
     fireEvent.click(trigger)
     const popover = container.querySelector('[data-testid="health-badge-popover"]') as HTMLElement
-    // getAnchoredPopoverPosition: left = Math.round(Math.max(16, 200)) = 200
-    expect(popover.style.left).toBe('200px')
+    expect(popover.style.left).toBe('16px')
   })
 
   it('popover left applies viewport-padding floor (16px) when trigger.left < 16', () => {

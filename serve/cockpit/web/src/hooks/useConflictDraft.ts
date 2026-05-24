@@ -5,6 +5,7 @@ export interface ConflictLocalDraft {
   priority: string
   body: string
   tags: string[]
+  ac: string[]
   dependsOn: string
   parent: string
   blockReason: string
@@ -16,6 +17,7 @@ export interface ConflictRemoteTask {
   priority: string
   body: string | null
   tags: string[]
+  ac?: string[]
   depends_on: number[]
   parent: number | null
   block_reason: string | null
@@ -39,7 +41,7 @@ export interface UseConflictDraftResult {
   clearConflictIfTaskChanged: (taskId: number | undefined) => void
 }
 
-const CONFLICT_FIELDS = ['title', 'priority', 'body', 'tags', 'depends_on', 'parent', 'block_reason']
+const CONFLICT_FIELDS = ['title', 'priority', 'body', 'tags', 'ac', 'depends_on', 'parent', 'block_reason']
 
 export function useConflictDraft(): UseConflictDraftResult {
   const [showConflict, setShowConflict] = useState(false)
@@ -53,6 +55,7 @@ export function useConflictDraft(): UseConflictDraftResult {
       priority: conflictRemoteTask?.priority ?? '',
       body: conflictRemoteTask?.body ?? '',
       tags: (conflictRemoteTask?.tags ?? []).join(', '),
+      ac: (conflictRemoteTask?.ac ?? []).join('\n'),
       depends_on: (conflictRemoteTask?.depends_on ?? []).join(', '),
       parent:
         conflictRemoteTask?.parent !== null && conflictRemoteTask?.parent !== undefined
@@ -69,6 +72,7 @@ export function useConflictDraft(): UseConflictDraftResult {
       priority: conflictLocalDraft?.priority ?? '',
       body: conflictLocalDraft?.body ?? '',
       tags: (conflictLocalDraft?.tags ?? []).join(', '),
+      ac: (conflictLocalDraft?.ac ?? []).join('\n'),
       depends_on: conflictLocalDraft?.dependsOn ?? '',
       parent: conflictLocalDraft?.parent ?? '',
       block_reason: conflictLocalDraft?.blockReason ?? '',

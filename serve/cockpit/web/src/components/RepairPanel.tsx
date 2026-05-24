@@ -138,7 +138,7 @@ export default function RepairPanel({ corruptionCount, onSuccess, files = [], po
             <span className="text-xs font-semibold uppercase text-primary">Storage repair</span>
             <h2 className="m-0 text-xl font-semibold leading-tight text-primary">Repair {requestedCount} corrupted files?</h2>
             <PText className="m-0 text-sm leading-normal text-primary">
-              Fixed files are restored, quarantined files move to .owlbear/kanban/quarantine, and failed files remain corrupted. This action can be irreversible.
+              Fixed files are restored, quarantined files move to the quarantine folder .owlbear/kanban/quarantine, and failed files remain corrupted. This action can be irreversible.
             </PText>
           </div>
           {files.length > 0 ? (

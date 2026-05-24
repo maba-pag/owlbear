@@ -19,6 +19,7 @@ export type TaskEditPayload = Record<string, unknown> & {
   title: string
   priority: string
   body: string
+  ac: string[]
   tags: string[]
   depends_on: number[]
   parent: number | null
@@ -38,6 +39,7 @@ export interface TaskFieldsEditorProps {
   onDirtyChange?: (dirty: boolean) => void
   onEditingChange?: (editing: boolean) => void
   actionPortalTarget?: HTMLElement | null
+  acceptanceCriteriaPortalTarget?: HTMLElement | null
   defaultEditing?: boolean
 }
 
@@ -130,12 +132,16 @@ function readControlValue(
   return ''
 }
 
-function areTagListsEqual(left: string[], right: string[]): boolean {
+function areStringListsEqual(left: string[], right: string[]): boolean {
   if (left.length !== right.length) {
     return false
   }
 
-  return left.every((tag, index) => tag === right[index])
+  return left.every((item, index) => item === right[index])
+}
+
+function normalizeAcceptanceCriteria(items: string[] | undefined): string[] {
+  return (items ?? []).map((item) => item.trim()).filter((item) => item.length > 0)
 }
 
 function normalizeTag(raw: string): string {
@@ -324,6 +330,7 @@ export default function TaskFieldsEditor({
   onDirtyChange,
   onEditingChange,
   actionPortalTarget,
+  acceptanceCriteriaPortalTarget,
   defaultEditing,
 }: TaskFieldsEditorProps) {
   const startsEditing = defaultEditing ?? true
@@ -332,6 +339,8 @@ export default function TaskFieldsEditor({
   const [title, setTitle] = useState(task.title)
   const [priority, setPriority] = useState(task.priority)
   const [body, setBody] = useState(task.body ?? '')
+  const [acceptanceCriteria, setAcceptanceCriteria] = useState(() => normalizeAcceptanceCriteria(task.ac))
+  const [newAcceptanceCriterion, setNewAcceptanceCriterion] = useState('')
   const [editableTags, setEditableTags] = useState(task.tags)
   const [newTag, setNewTag] = useState('')
   const [newDependency, setNewDependency] = useState('')
@@ -353,6 +362,8 @@ export default function TaskFieldsEditor({
       setTitle(conflictLocalDraft.title)
       setPriority(conflictLocalDraft.priority)
       setBody(conflictLocalDraft.body)
+      setAcceptanceCriteria(conflictLocalDraft.ac)
+      setNewAcceptanceCriterion('')
       setEditableTags(conflictLocalDraft.tags)
       setDependsOn(conflictLocalDraft.dependsOn)
       setNewDependency('')
@@ -366,6 +377,8 @@ export default function TaskFieldsEditor({
     setTitle(task.title)
     setPriority(task.priority)
     setBody(task.body ?? '')
+    setAcceptanceCriteria(normalizeAcceptanceCriteria(task.ac))
+    setNewAcceptanceCriterion('')
     setEditableTags(task.tags)
     if (isTaskSwitch) {
       setIsEditing(startsEditing)
@@ -401,7 +414,9 @@ export default function TaskFieldsEditor({
     title !== task.title
     || priority !== task.priority
     || body !== (task.body ?? '')
-    || !areTagListsEqual(editableTags, task.tags)
+    || !areStringListsEqual(acceptanceCriteria, normalizeAcceptanceCriteria(task.ac))
+    || newAcceptanceCriterion.trim().length > 0
+    || !areStringListsEqual(editableTags, task.tags)
     || normalizeTag(newTag).length > 0
     || newDependency.trim().length > 0
     || dependsOn !== task.depends_on.join(', ')
@@ -433,6 +448,8 @@ export default function TaskFieldsEditor({
     setTitle(task.title)
     setPriority(task.priority)
     setBody(task.body ?? '')
+    setAcceptanceCriteria(normalizeAcceptanceCriteria(task.ac))
+    setNewAcceptanceCriterion('')
     setEditableTags(task.tags)
     setDependsOn(task.depends_on.join(', '))
     setParent(task.parent !== null ? String(task.parent) : '')
@@ -463,6 +480,29 @@ export default function TaskFieldsEditor({
   function removeTag(tagToRemove: string): void {
     setEditableTags((currentTags) => currentTags.filter((tag) => tag !== tagToRemove))
     setTagValidationMessage(null)
+  }
+
+  function addAcceptanceCriterion(): void {
+    const item = newAcceptanceCriterion.trim()
+    if (item.length === 0) {
+      return
+    }
+    setAcceptanceCriteria((current) => [...current, item])
+    setNewAcceptanceCriterion('')
+  }
+
+  function updateAcceptanceCriterion(index: number, value: string): void {
+    setAcceptanceCriteria((current) => current.map((item, itemIndex) => (itemIndex === index ? value : item)))
+  }
+
+  function removeAcceptanceCriterion(index: number): void {
+    setAcceptanceCriteria((current) => current.filter((_item, itemIndex) => itemIndex !== index))
+  }
+
+  function acceptanceCriteriaForSave(): string[] {
+    const pending = newAcceptanceCriterion.trim()
+    const nextCriteria = normalizeAcceptanceCriteria(acceptanceCriteria)
+    return pending.length > 0 ? [...nextCriteria, pending] : nextCriteria
   }
 
   function addDependencyFromInput(): void {
@@ -516,11 +556,13 @@ export default function TaskFieldsEditor({
       return
     }
     const shouldShowSaveConfirmed = isDirty
+    const nextAcceptanceCriteria = acceptanceCriteriaForSave()
 
     const conflictDraft: ConflictLocalDraft = {
       title,
       priority,
       body,
+      ac: nextAcceptanceCriteria,
       tags: nextTags,
       dependsOn: formatTaskIds(nextDependencies),
       parent,
@@ -533,6 +575,7 @@ export default function TaskFieldsEditor({
         title,
         priority,
         body,
+        ac: nextAcceptanceCriteria,
         tags: nextTags,
         depends_on: nextDependencies,
         parent: parsedParent.value,
@@ -541,6 +584,8 @@ export default function TaskFieldsEditor({
 
       if (shouldShowSaveConfirmed && mutationSucceeded !== false) {
         setEditableTags(nextTags)
+        setAcceptanceCriteria(nextAcceptanceCriteria)
+        setNewAcceptanceCriterion('')
         setDependsOn(formatTaskIds(nextDependencies))
         setNewTag('')
         setNewDependency('')
@@ -573,26 +618,99 @@ export default function TaskFieldsEditor({
   function handleCancelEdit(): void {
     resetDraftFromTask()
     setIsEditing(false)
+    onEditingChange?.(false)
+  }
+
+  function startEditing(): void {
+    setIsEditing(true)
+    onEditingChange?.(true)
   }
 
   const editActions = (
     <div
       data-testid="task-detail-edit-actions"
       className={actionPortalTarget
-        ? 'flex w-full min-w-0 max-w-full flex-wrap items-center gap-static-sm rounded-lg border border-contrast-low bg-canvas p-static-sm shadow-sm'
+        ? 'flex w-full min-w-0 max-w-full flex-wrap items-center justify-end gap-static-xs bg-canvas px-static-sm py-static-xs'
         : 'sticky top-0 z-20 flex w-full min-w-0 max-w-full flex-wrap items-center gap-static-sm border-b border-contrast-low bg-canvas px-static-xs py-static-sm shadow-sm'}
     >
-      <PButton data-testid="save-button" onClick={() => void handleSave()}>
+      {isDirty && <div data-testid="dirty-indicator" className="mr-auto text-xs font-semibold text-warning">Unsaved changes</div>}
+      {saveConfirmed && <div data-testid="save-confirmed" className="mr-auto text-xs font-semibold text-success">Saved</div>}
+      {validationMessage && <div data-testid="validation-message" className="mr-auto rounded-md border border-warning bg-warning-low px-static-xs py-1 text-xs text-primary">{validationMessage}</div>}
+      <PButton data-testid="save-button" compact onClick={() => void handleSave()}>
         Save
       </PButton>
       {!startsEditing ? (
-        <PButton data-testid="cancel-edit-button" variant="secondary" onClick={handleCancelEdit}>
+        <PButton data-testid="cancel-edit-button" compact variant="secondary" onClick={handleCancelEdit}>
           Cancel
         </PButton>
       ) : null}
-      {isDirty && <div data-testid="dirty-indicator" className="text-sm font-semibold text-warning">Unsaved changes</div>}
-      {saveConfirmed && <div data-testid="save-confirmed" className="text-sm font-semibold text-success">Saved</div>}
-      {validationMessage && <div data-testid="validation-message" className="rounded-lg border border-warning bg-warning-low p-static-xs text-sm text-primary">{validationMessage}</div>}
+    </div>
+  )
+
+  const acceptanceCriteriaEditor = (
+    <div data-testid="task-ac-editor" className="grid gap-static-sm">
+      <div className="grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-static-xs sm:grid-cols-[minmax(0,1fr)_auto]">
+        <PInputText
+          name="new_acceptance_criterion"
+          label="Acceptance criteria"
+          placeholder="Add criterion"
+          compact
+          className="min-w-0"
+          data-field="new-ac"
+          value={newAcceptanceCriterion}
+          onChange={(event) => setNewAcceptanceCriterion(readControlValue(event))}
+          onInput={(event) => setNewAcceptanceCriterion(readControlValue(event))}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault()
+              addAcceptanceCriterion()
+            }
+          }}
+        />
+        <PButton
+          type="button"
+          data-testid="add-ac-button"
+          variant="secondary"
+          icon="plus"
+          className="min-w-0 self-end"
+          compact
+          disabled={newAcceptanceCriterion.trim().length === 0}
+          onClick={addAcceptanceCriterion}
+        >
+          Add
+        </PButton>
+      </div>
+      {acceptanceCriteria.length > 0 ? (
+        <ul data-testid="task-ac-edit-list" className="m-0 grid list-none gap-static-xs p-0">
+          {acceptanceCriteria.map((item, index) => (
+            <li key={`${index}-${item}`} className="grid min-w-0 gap-static-xs rounded-md border border-contrast-low bg-surface p-static-xs sm:grid-cols-[minmax(0,1fr)_auto]">
+              <PInputText
+                name={`acceptance_criterion_${index}`}
+                label={`Criterion ${index + 1}`}
+                compact
+                className="min-w-0"
+                data-testid="task-ac-input"
+                data-ac-index={index}
+                value={item}
+                onChange={(event) => updateAcceptanceCriterion(index, readControlValue(event))}
+                onInput={(event) => updateAcceptanceCriterion(index, readControlValue(event))}
+              />
+              <PButton
+                type="button"
+                data-testid="remove-ac-button"
+                variant="secondary"
+                compact
+                className="self-end"
+                onClick={() => removeAcceptanceCriterion(index)}
+              >
+                Remove
+              </PButton>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <span data-testid="task-ac-empty-state" className="text-sm text-contrast-high">No acceptance criteria defined.</span>
+      )}
     </div>
   )
 
@@ -603,7 +721,7 @@ export default function TaskFieldsEditor({
           task={task}
           taskReferences={taskReferences}
           onSelectTask={onSelectTask}
-          onEdit={() => setIsEditing(true)}
+          onEdit={startEditing}
         />
       ) : null}
 
@@ -723,6 +841,8 @@ export default function TaskFieldsEditor({
           <MarkdownPreview className="text-sm">{body}</MarkdownPreview>
         )}
       </section>
+
+      {acceptanceCriteriaPortalTarget ? (isEditing ? createPortal(acceptanceCriteriaEditor, acceptanceCriteriaPortalTarget) : null) : acceptanceCriteriaEditor}
 
       <section className="grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-static-sm lg:grid-cols-2" data-region="task-reference-editors">
         <div className="grid min-w-0 gap-static-xs" data-region="dependency-editor">

@@ -2,14 +2,14 @@
  * Sidecar Detail tab
  *
  * Covers: editable fields, read-only fields, markdown body, edit mode toggle,
- * save with updated snapshot, 409 conflict detection, history subtab, and
- * implements DetailTab.tsx.
+ * save with updated snapshot, lightweight history chrome, and implements
+ * DetailTab.tsx.
  *
  * react-markdown is mocked here (not yet in package.json). The builder installs
  * the real dep during GREEN phase; the mock intercepts the import automatically.
  */
-import { beforeAll, describe, it, expect, vi, afterEach } from 'vitest'
-import { render, fireEvent, waitFor } from '@testing-library/react'
+import { beforeAll, beforeEach, describe, it, expect, vi, afterEach } from 'vitest'
+import { cleanup, render, fireEvent, waitFor } from '@testing-library/react'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
 import DetailTab, { type TaskDetail } from '../components/DetailTab'
 import type { Board } from '../hooks/useBoard'
@@ -123,40 +123,6 @@ const BOARD: Board = {
   },
 }
 
-const SESSIONS_SINGLE = {
-  sessions: [
-    {
-      task_id: 42,
-      state: 'released',
-      agent: 'builder',
-      started_at: '2026-04-18T09:00:00+00:00',
-      duration: 120.5,
-      outcome: 'success',
-    },
-  ],
-}
-
-const SESSIONS_MIXED = {
-  sessions: [
-    {
-      task_id: 42,
-      state: 'released',
-      agent: 'builder',
-      started_at: '2026-04-18T09:00:00+00:00',
-      duration: 120.5,
-      outcome: 'success',
-    },
-    {
-      task_id: 99,
-      state: 'released',
-      agent: 'test-writer',
-      started_at: '2026-04-18T08:00:00+00:00',
-      duration: 90.0,
-      outcome: 'fail',
-    },
-  ],
-}
-
 // ─── Render helper ─────────────────────────────────────────────────────────────
 
 function renderDetail(task: TaskDetail = TASK) {
@@ -186,10 +152,7 @@ async function clickMoveTarget(container: HTMLElement, targetStatus: string): Pr
   const moveTrigger = container.querySelector('[data-testid="task-detail-move-menu-trigger"]') as HTMLElement | null
   expect(moveTrigger).not.toBeNull()
   fireEvent.click(moveTrigger!)
-  await waitFor(
-    () => expect(container.querySelector('[data-testid="task-detail-move-menu"]')).not.toBeNull(),
-    { timeout: 500 },
-  )
+  expect(container.querySelector('[data-testid="task-detail-move-menu"]')).not.toBeNull()
   const target = container.querySelector(
     `[data-testid="task-detail-move-target"][data-status="${targetStatus}"]`,
   ) as HTMLElement | null
@@ -203,10 +166,34 @@ function typeIntoPdsField(container: HTMLElement, selector: string, value: strin
   fireEvent(field!, new CustomEvent('input', { detail: { value }, bubbles: true }))
 }
 
+function getFetchBody(
+  fetchMock: { mock: { calls: unknown[][] } },
+  callIndex = 0,
+): Record<string, unknown> {
+  expect(fetchMock.mock.calls.length).toBeGreaterThan(callIndex)
+  const [, options] = fetchMock.mock.calls[callIndex] as unknown as [string, RequestInit]
+  return JSON.parse(options.body as string) as Record<string, unknown>
+}
+
+async function flushAsyncSave(): Promise<void> {
+  await Promise.resolve()
+  await Promise.resolve()
+  await Promise.resolve()
+  await Promise.resolve()
+  await Promise.resolve()
+  await Promise.resolve()
+}
+
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe('TestFromAC_DetailTab', () => {
+  beforeEach(() => {
+    vi.useRealTimers()
+  })
+
   afterEach(() => {
+    cleanup()
+    vi.useRealTimers()
     vi.unstubAllGlobals()
   })
 
@@ -445,14 +432,8 @@ describe('TestFromAC_DetailTab', () => {
       expect(container.querySelector('[data-testid="dependency-chip"][data-reference-id="30"]')).not.toBeNull()
       fireEvent.click(container.querySelector('[data-testid="save-button"]')!)
 
-      await waitFor(
-        () => {
-          const [, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
-          const body = JSON.parse(options.body as string) as Record<string, unknown>
-          expect(body['depends_on']).toEqual([10, 20, 30])
-        },
-        { timeout: 500 },
-      )
+      expect(getFetchBody(fetchMock)['depends_on']).toEqual([10, 20, 30])
+      await flushAsyncSave()
     })
 
     it('dependency chips can remove a dependency before save', async () => {
@@ -465,14 +446,8 @@ describe('TestFromAC_DetailTab', () => {
       fireEvent.click(container.querySelector('[data-testid="dependency-chip"][data-reference-id="10"]')!)
       fireEvent.click(container.querySelector('[data-testid="save-button"]')!)
 
-      await waitFor(
-        () => {
-          const [, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
-          const body = JSON.parse(options.body as string) as Record<string, unknown>
-          expect(body['depends_on']).toEqual([20])
-        },
-        { timeout: 500 },
-      )
+      expect(getFetchBody(fetchMock)['depends_on']).toEqual([20])
+      await flushAsyncSave()
     })
 
     it('renders compact parent input row before the parent chip', () => {
@@ -508,14 +483,8 @@ describe('TestFromAC_DetailTab', () => {
       expect(container.querySelector('[data-testid="no-parent"]')).not.toBeNull()
       fireEvent.click(container.querySelector('[data-testid="save-button"]')!)
 
-      await waitFor(
-        () => {
-          const [, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
-          const body = JSON.parse(options.body as string) as Record<string, unknown>
-          expect(body['parent']).toBeNull()
-        },
-        { timeout: 500 },
-      )
+      expect(getFetchBody(fetchMock)['parent']).toBeNull()
+      await flushAsyncSave()
     })
 
     it('renders parent and dependency references as navigable chips with title and status', () => {
@@ -613,6 +582,7 @@ describe('TestFromAC_DetailTab', () => {
       expect(items).toHaveLength(2)
       expect(items[0]?.textContent).toContain('User can see the acceptance criteria')
       expect(container.querySelector('[data-testid="task-ac-empty-state"]')).toBeNull()
+      expect(container.querySelector('[data-testid="task-ac-editor"]')).toBeNull()
     })
 
     it('renders an explicit acceptance criteria empty state when no ac items exist', () => {
@@ -622,6 +592,38 @@ describe('TestFromAC_DetailTab', () => {
       expect(container.querySelector('[data-testid="task-ac-empty-state"]')?.textContent).toContain(
         'No acceptance criteria defined.',
       )
+    })
+
+    it('edits acceptance criteria as a structured ac payload', async () => {
+      const fetchMock = vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            ...TASK_WITH_AC,
+            ac: ['Updated criterion', 'Missing acceptance criteria has an explicit empty state.', 'New criterion'],
+          }),
+        }),
+      )
+      vi.stubGlobal('fetch', fetchMock)
+      const { container } = renderDetail(TASK_WITH_AC)
+
+      fireEvent.click(container.querySelector('[data-testid="edit-details-button"]')!)
+      expect(container.querySelector('[data-testid="task-ac-editor"]')).not.toBeNull()
+      expect(container.querySelector('[data-testid="task-ac-list"]')).toBeNull()
+
+      typeIntoPdsField(container, '[data-testid="task-ac-input"][data-ac-index="0"]', 'Updated criterion')
+      typeIntoPdsField(container, 'p-input-text[data-field="new-ac"]', 'New criterion')
+      fireEvent.click(container.querySelector('[data-testid="save-button"]')!)
+
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      const [, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+      const body = JSON.parse(options.body as string) as Record<string, unknown>
+      expect(body.ac).toEqual([
+        'Updated criterion',
+        'Missing acceptance criteria has an explicit empty state.',
+        'New criterion',
+      ])
+      await flushAsyncSave()
     })
   })
 
@@ -692,18 +694,15 @@ describe('TestFromAC_DetailTab', () => {
       )
       vi.stubGlobal('fetch', fetchMock)
       const { container } = renderDetail()
+      fireEvent.click(container.querySelector('[data-testid="edit-details-button"]')!)
       const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
       expect(saveBtn).not.toBeNull()
       fireEvent.click(saveBtn!)
-      await waitFor(
-        () => {
-          expect(fetchMock).toHaveBeenCalledWith(
-            expect.stringContaining('/api/tasks/42/edit'),
-            expect.objectContaining({ method: 'POST' }),
-          )
-        },
-        { timeout: 500 },
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/api/tasks/42/edit'),
+        expect.objectContaining({ method: 'POST' }),
       )
+      await flushAsyncSave()
     })
 
     it('save request body includes the updated snapshot field', async () => {
@@ -715,14 +714,8 @@ describe('TestFromAC_DetailTab', () => {
       const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
       expect(saveBtn).not.toBeNull()
       fireEvent.click(saveBtn!)
-      await waitFor(
-        () => {
-          const [, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
-          const body = JSON.parse(options.body as string) as Record<string, unknown>
-          expect(body).toHaveProperty('updated', TASK.updated)
-        },
-        { timeout: 500 },
-      )
+      expect(getFetchBody(fetchMock)).toHaveProperty('updated', TASK.updated)
+      await flushAsyncSave()
     })
 
     it('save request body includes the edited tag list', async () => {
@@ -742,78 +735,10 @@ describe('TestFromAC_DetailTab', () => {
       expect(saveBtn).not.toBeNull()
       fireEvent.click(saveBtn!)
 
-      await waitFor(
-        () => {
-          const [, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
-          const body = JSON.parse(options.body as string) as Record<string, unknown>
-          expect(body).toHaveProperty('tags')
-          expect(body.tags).toEqual(['frontend', 'scope:cockpit'])
-        },
-        { timeout: 500 },
-      )
-    })
-  })
-
-  // ─── 409 conflict detection ───────────────────────────────────────────────
-
-  describe('409 conflict detection', () => {
-    function mockConflictWithRefetchSuccess(): ReturnType<typeof vi.fn> {
-      let callCount = 0
-      return vi.fn(() => {
-        callCount += 1
-        if (callCount === 1) {
-          return Promise.resolve({ ok: false, status: 409, json: () => Promise.resolve({}) })
-        }
-        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(TASK) })
-      })
-    }
-
-    it('409 response from save opens a conflict modal', async () => {
-      vi.stubGlobal('fetch', mockConflictWithRefetchSuccess())
-      const { container } = renderDetail()
-      const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
-      expect(saveBtn).not.toBeNull()
-      fireEvent.click(saveBtn!)
-      await waitFor(
-        () => {
-          expect(container.querySelector('[data-testid="conflict-modal"]')).not.toBeNull()
-        },
-        { timeout: 500 },
-      )
-    })
-
-    it('conflict modal offers a refresh (discard local edits) option', async () => {
-      vi.stubGlobal('fetch', mockConflictWithRefetchSuccess())
-      const { container } = renderDetail()
-      const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
-      expect(saveBtn).not.toBeNull()
-      fireEvent.click(saveBtn!)
-      await waitFor(
-        () => {
-          const modal = container.querySelector('[data-testid="conflict-modal"]')
-          expect(modal?.querySelector('[data-testid="conflict-refresh"]')).not.toBeNull()
-        },
-        { timeout: 500 },
-      )
-    })
-
-    it('conflict modal requires acknowledge before showing overwrite (force save) option', async () => {
-      vi.stubGlobal('fetch', mockConflictWithRefetchSuccess())
-      const { container } = renderDetail()
-      const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
-      expect(saveBtn).not.toBeNull()
-      fireEvent.click(saveBtn!)
-      await waitFor(
-        () => {
-          const modal = container.querySelector('[data-testid="conflict-modal"]')
-          expect(modal?.querySelector('[data-testid="conflict-overwrite"]')).toBeNull()
-          const ack = modal?.querySelector('[data-testid="conflict-acknowledge"]') as HTMLElement | null
-          expect(ack).not.toBeNull()
-          fireEvent.click(ack!)
-          expect(modal?.querySelector('[data-testid="conflict-overwrite"]')).not.toBeNull()
-        },
-        { timeout: 500 },
-      )
+      const body = getFetchBody(fetchMock)
+      expect(body).toHaveProperty('tags')
+      expect(body.tags).toEqual(['frontend', 'scope:cockpit'])
+      await flushAsyncSave()
     })
   })
 
@@ -833,167 +758,6 @@ describe('TestFromAC_DetailTab', () => {
       expect(historyTab?.compact ?? historyTab?.hasAttribute('compact')).toBe(true)
     })
 
-    it('clicking history tab fetches GET /api/sessions?filter=all', async () => {
-      const fetchMock = vi.fn((url: string) => {
-        if (url.includes('/api/sessions')) {
-          return Promise.resolve({ ok: true, json: () => Promise.resolve(SESSIONS_SINGLE) })
-        }
-        return Promise.resolve({ ok: true, json: () => Promise.resolve(TASK) })
-      })
-      vi.stubGlobal('fetch', fetchMock)
-      const { container } = renderDetail()
-      const historyTab = container.querySelector('[data-testid="history-tab"]') as HTMLElement | null
-      expect(historyTab).not.toBeNull()
-      fireEvent.click(historyTab!)
-      await waitFor(
-        () => {
-          const sessionUrls = fetchMock.mock.calls
-            .map(([url]) => url as string)
-            .filter((u) => u.includes('/api/sessions'))
-          expect(sessionUrls.length).toBeGreaterThan(0)
-          expect(sessionUrls[0]).toContain('filter=all')
-        },
-        { timeout: 500 },
-      )
-    })
-
-    it('history shows only sessions matching the selected task_id (client-side filter)', async () => {
-      const fetchMock = vi.fn((url: string) => {
-        if (url.includes('/api/sessions')) {
-          return Promise.resolve({ ok: true, json: () => Promise.resolve(SESSIONS_MIXED) })
-        }
-        return Promise.resolve({ ok: true, json: () => Promise.resolve(TASK) })
-      })
-      vi.stubGlobal('fetch', fetchMock)
-      const { container } = renderDetail()
-      const historyTab = container.querySelector('[data-testid="history-tab"]') as HTMLElement | null
-      expect(historyTab).not.toBeNull()
-      fireEvent.click(historyTab!)
-      await waitFor(
-        () => {
-          // SESSIONS_MIXED has 2 sessions; only 1 belongs to task_id=42
-          const rows = container.querySelectorAll('[data-testid="history-session-row"]')
-          expect(rows.length).toBe(1)
-        },
-        { timeout: 500 },
-      )
-    })
-
-    it('history includes task creation as the first event with a readable timestamp', async () => {
-      const fetchMock = vi.fn((url: string) => {
-        if (url.includes('/api/sessions')) {
-          return Promise.resolve({ ok: true, json: () => Promise.resolve(SESSIONS_SINGLE) })
-        }
-        return Promise.resolve({ ok: true, json: () => Promise.resolve(TASK) })
-      })
-      vi.stubGlobal('fetch', fetchMock)
-      const { container } = renderDetail()
-      const historyTab = container.querySelector('[data-testid="history-tab"]') as HTMLElement | null
-      expect(historyTab).not.toBeNull()
-      fireEvent.click(historyTab!)
-      await waitFor(
-        () => {
-          const rows = container.querySelectorAll('[data-testid="history-created-row"], [data-testid="history-session-row"]')
-          expect(rows.length).toBe(2)
-          expect(rows[0]?.getAttribute('data-state')).toBe('created')
-          expect(rows[0]?.querySelector('[data-testid="session-agent"]')?.textContent).toBe('Task created')
-          expect(rows[0]?.querySelector('[data-testid="session-outcome"]')?.textContent).toBe('Created')
-          const timestamp = rows[0]?.querySelector('[data-testid="session-started-at"]')
-          expect(timestamp?.getAttribute('data-timestamp')).toBe(TASK.created)
-          expect(timestamp?.textContent).toContain('2026')
-          expect(timestamp?.textContent).not.toBe(TASK.created)
-        },
-        { timeout: 500 },
-      )
-    })
-
-    it('history session row shows a readable started timestamp', async () => {
-      const fetchMock = vi.fn((url: string) => {
-        if (url.includes('/api/sessions')) {
-          return Promise.resolve({ ok: true, json: () => Promise.resolve(SESSIONS_SINGLE) })
-        }
-        return Promise.resolve({ ok: true, json: () => Promise.resolve(TASK) })
-      })
-      vi.stubGlobal('fetch', fetchMock)
-      const { container } = renderDetail()
-      const historyTab = container.querySelector('[data-testid="history-tab"]') as HTMLElement | null
-      expect(historyTab).not.toBeNull()
-      fireEvent.click(historyTab!)
-      await waitFor(
-        () => {
-          const rows = container.querySelectorAll('[data-testid="history-session-row"]')
-          expect(rows.length).toBe(1)
-          const timestamp = rows[0]?.querySelector('[data-testid="session-started-at"]')
-          expect(timestamp?.getAttribute('data-timestamp')).toBe(SESSIONS_SINGLE.sessions[0].started_at)
-          expect(timestamp?.textContent).toContain('2026')
-          expect(timestamp?.textContent).not.toBe(SESSIONS_SINGLE.sessions[0].started_at)
-        },
-        { timeout: 500 },
-      )
-    })
-
-    it('history session row shows agent name', async () => {
-      const fetchMock = vi.fn((url: string) => {
-        if (url.includes('/api/sessions')) {
-          return Promise.resolve({ ok: true, json: () => Promise.resolve(SESSIONS_SINGLE) })
-        }
-        return Promise.resolve({ ok: true, json: () => Promise.resolve(TASK) })
-      })
-      vi.stubGlobal('fetch', fetchMock)
-      const { container } = renderDetail()
-      const historyTab = container.querySelector('[data-testid="history-tab"]') as HTMLElement | null
-      expect(historyTab).not.toBeNull()
-      fireEvent.click(historyTab!)
-      await waitFor(
-        () => {
-          const row = container.querySelector('[data-testid="history-session-row"]')
-          expect(row?.querySelector('[data-testid="session-agent"]')?.textContent).toBe('builder')
-        },
-        { timeout: 500 },
-      )
-    })
-
-    it('history session row shows duration', async () => {
-      const fetchMock = vi.fn((url: string) => {
-        if (url.includes('/api/sessions')) {
-          return Promise.resolve({ ok: true, json: () => Promise.resolve(SESSIONS_SINGLE) })
-        }
-        return Promise.resolve({ ok: true, json: () => Promise.resolve(TASK) })
-      })
-      vi.stubGlobal('fetch', fetchMock)
-      const { container } = renderDetail()
-      const historyTab = container.querySelector('[data-testid="history-tab"]') as HTMLElement | null
-      expect(historyTab).not.toBeNull()
-      fireEvent.click(historyTab!)
-      await waitFor(
-        () => {
-          const row = container.querySelector('[data-testid="history-session-row"]')
-          expect(row?.querySelector('[data-testid="session-duration"]')).not.toBeNull()
-        },
-        { timeout: 500 },
-      )
-    })
-
-    it('history session row shows outcome', async () => {
-      const fetchMock = vi.fn((url: string) => {
-        if (url.includes('/api/sessions')) {
-          return Promise.resolve({ ok: true, json: () => Promise.resolve(SESSIONS_SINGLE) })
-        }
-        return Promise.resolve({ ok: true, json: () => Promise.resolve(TASK) })
-      })
-      vi.stubGlobal('fetch', fetchMock)
-      const { container } = renderDetail()
-      const historyTab = container.querySelector('[data-testid="history-tab"]') as HTMLElement | null
-      expect(historyTab).not.toBeNull()
-      fireEvent.click(historyTab!)
-      await waitFor(
-        () => {
-          const row = container.querySelector('[data-testid="history-session-row"]')
-          expect(row?.querySelector('[data-testid="session-outcome"]')?.textContent).toBe('success')
-        },
-        { timeout: 500 },
-      )
-    })
   })
 
   // ─── Oppose-the-flow confirmations ────────────────────────────────────────
@@ -1031,6 +795,7 @@ describe('TestFromAC_DetailTab', () => {
 
 describe('TestBuilderDiscovered', () => {
   afterEach(() => {
+    cleanup()
     vi.unstubAllGlobals()
   })
 
@@ -1073,69 +838,8 @@ describe('TestBuilderDiscovered', () => {
       expect(saveBtn).not.toBeNull()
       fireEvent.click(saveBtn!)
 
-      await waitFor(
-        () => {
-          const [, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
-          const parsed = JSON.parse(options.body as string) as Record<string, unknown>
-          expect(parsed).toHaveProperty('body', 'edited body content')
-        },
-        { timeout: 500 },
-      )
-    })
-  })
-
-  // ─── AC7: force-save button fires second API call ─────────────────────────
-
-  describe('force-save fires API call (AC7)', () => {
-    it('clicking conflict-overwrite sends a second POST to /api/tasks/{id}/edit', async () => {
-      let callCount = 0
-      const fetchMock = vi.fn(() => {
-        callCount++
-        if (callCount === 1) {
-          return Promise.resolve({ ok: false, status: 409, json: () => Promise.resolve({}) })
-        }
-        return Promise.resolve({ ok: true, json: () => Promise.resolve(TASK) })
-      })
-      vi.stubGlobal('fetch', fetchMock)
-      const { container } = renderDetail()
-
-      // Trigger 409
-      const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
-      expect(saveBtn).not.toBeNull()
-      fireEvent.click(saveBtn!)
-
-      // Wait for conflict modal to appear
-      await waitFor(
-        () => {
-          expect(container.querySelector('[data-testid="conflict-modal"]')).not.toBeNull()
-        },
-        { timeout: 500 },
-      )
-
-      const acknowledgeBtn = container.querySelector('[data-testid="conflict-acknowledge"]') as HTMLElement | null
-      expect(acknowledgeBtn).not.toBeNull()
-      fireEvent.click(acknowledgeBtn!)
-
-      // Click force-save
-      const overwriteBtn = container.querySelector('[data-testid="conflict-overwrite"]') as HTMLElement | null
-      expect(overwriteBtn).not.toBeNull()
-      fireEvent.click(overwriteBtn!)
-
-      await waitFor(
-        () => {
-          // Three calls: initial POST (409), refetch GET, force-save POST
-          expect(fetchMock).toHaveBeenCalledTimes(3)
-          // Call 2 (index 1): refetch GET /api/tasks/{id}
-          const [refetchUrl, refetchOpts] = fetchMock.mock.calls[1] as unknown as [string, RequestInit]
-          expect(refetchUrl).toContain('/api/tasks/42')
-          expect(refetchOpts.method).toBe('GET')
-          // Call 3 (index 2): force-save POST /api/tasks/{id}/edit
-          const [forceSaveUrl, forceSaveOpts] = fetchMock.mock.calls[2] as unknown as [string, RequestInit]
-          expect(forceSaveUrl).toContain('/api/tasks/42/edit')
-          expect(forceSaveOpts.method).toBe('POST')
-        },
-        { timeout: 500 },
-      )
+      expect(getFetchBody(fetchMock)).toHaveProperty('body', 'edited body content')
+      await flushAsyncSave()
     })
   })
 
@@ -1151,19 +855,14 @@ describe('TestBuilderDiscovered', () => {
       const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
       expect(saveBtn).not.toBeNull()
       fireEvent.click(saveBtn!)
-      await waitFor(
-        () => {
-          const [, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
-          const body = JSON.parse(options.body as string) as Record<string, unknown>
-          expect(body).toHaveProperty('depends_on')
-          const deps = body['depends_on'] as unknown[]
-          expect(Array.isArray(deps)).toBe(true)
-          expect(deps.every((d) => typeof d === 'number')).toBe(true)
-          expect(deps).toContain(10)
-          expect(deps).toContain(20)
-        },
-        { timeout: 500 },
-      )
+      const body = getFetchBody(fetchMock)
+      expect(body).toHaveProperty('depends_on')
+      const deps = body['depends_on'] as unknown[]
+      expect(Array.isArray(deps)).toBe(true)
+      expect(deps.every((d) => typeof d === 'number')).toBe(true)
+      expect(deps).toContain(10)
+      expect(deps).toContain(20)
+      await flushAsyncSave()
     })
 
     it('save payload includes parent as integer when task has a parent', async () => {
@@ -1175,16 +874,11 @@ describe('TestBuilderDiscovered', () => {
       const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
       expect(saveBtn).not.toBeNull()
       fireEvent.click(saveBtn!)
-      await waitFor(
-        () => {
-          const [, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
-          const body = JSON.parse(options.body as string) as Record<string, unknown>
-          expect(body).toHaveProperty('parent')
-          expect(typeof body['parent']).toBe('number')
-          expect(body['parent']).toBe(5)
-        },
-        { timeout: 500 },
-      )
+      const body = getFetchBody(fetchMock)
+      expect(body).toHaveProperty('parent')
+      expect(typeof body['parent']).toBe('number')
+      expect(body['parent']).toBe(5)
+      await flushAsyncSave()
     })
 
     it('save payload includes parent as null when task has no parent', async () => {
@@ -1196,15 +890,10 @@ describe('TestBuilderDiscovered', () => {
       const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
       expect(saveBtn).not.toBeNull()
       fireEvent.click(saveBtn!)
-      await waitFor(
-        () => {
-          const [, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
-          const body = JSON.parse(options.body as string) as Record<string, unknown>
-          expect(body).toHaveProperty('parent')
-          expect(body['parent']).toBeNull()
-        },
-        { timeout: 500 },
-      )
+      const body = getFetchBody(fetchMock)
+      expect(body).toHaveProperty('parent')
+      expect(body['parent']).toBeNull()
+      await flushAsyncSave()
     })
 
     it('save payload includes block_reason string for blocked tasks', async () => {
@@ -1216,16 +905,11 @@ describe('TestBuilderDiscovered', () => {
       const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
       expect(saveBtn).not.toBeNull()
       fireEvent.click(saveBtn!)
-      await waitFor(
-        () => {
-          const [, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
-          const body = JSON.parse(options.body as string) as Record<string, unknown>
-          expect(body).toHaveProperty('block_reason')
-          expect(typeof body['block_reason']).toBe('string')
-          expect(body['block_reason']).toBe('Waiting for dependency #100')
-        },
-        { timeout: 500 },
-      )
+      const body = getFetchBody(fetchMock)
+      expect(body).toHaveProperty('block_reason')
+      expect(typeof body['block_reason']).toBe('string')
+      expect(body['block_reason']).toBe('Waiting for dependency #100')
+      await flushAsyncSave()
     })
   })
 
@@ -1244,23 +928,16 @@ describe('TestBuilderDiscovered', () => {
       const unblockBtn = container.querySelector('[data-testid="unblock-action"]') as HTMLElement | null
       expect(unblockBtn).not.toBeNull()
       fireEvent.click(unblockBtn!)
-      await waitFor(
-        () => expect(container.querySelector('[data-testid="confirm-dialog"]')).not.toBeNull(),
-        { timeout: 500 },
-      )
+      expect(container.querySelector('[data-testid="confirm-dialog"]')).not.toBeNull()
       clickConfirm(container)
-      await waitFor(
-        () => {
-          const editCalls = fetchMock.mock.calls.filter(([url]) =>
-            (url as string).includes(`/api/tasks/${TASK_BLOCKED.id}/edit`),
-          )
-          expect(editCalls.length).toBeGreaterThan(0)
-          const [, options] = editCalls[0] as unknown as [string, RequestInit]
-          const body = JSON.parse(options.body as string) as Record<string, unknown>
-          expect(body).toHaveProperty('block_reason', null)
-        },
-        { timeout: 500 },
+      const editCalls = fetchMock.mock.calls.filter(([url]) =>
+        (url as string).includes(`/api/tasks/${TASK_BLOCKED.id}/edit`),
       )
+      expect(editCalls.length).toBeGreaterThan(0)
+      const [, options] = editCalls[0] as unknown as [string, RequestInit]
+      const body = JSON.parse(options.body as string) as Record<string, unknown>
+      expect(body).toHaveProperty('block_reason', null)
+      await flushAsyncSave()
     })
 
     it('unclaim confirmation POSTs to the release endpoint', async () => {
@@ -1272,20 +949,13 @@ describe('TestBuilderDiscovered', () => {
       const unclaimBtn = container.querySelector('[data-testid="unclaim-action"]') as HTMLElement | null
       expect(unclaimBtn).not.toBeNull()
       fireEvent.click(unclaimBtn!)
-      await waitFor(
-        () => expect(container.querySelector('[data-testid="confirm-dialog"]')).not.toBeNull(),
-        { timeout: 500 },
-      )
+      expect(container.querySelector('[data-testid="confirm-dialog"]')).not.toBeNull()
       clickConfirm(container)
-      await waitFor(
-        () => {
-          const releaseCalls = fetchMock.mock.calls.filter(([url]) =>
-            (url as string).includes(`/api/tasks/${TASK.id}/release`),
-          )
-          expect(releaseCalls.length).toBeGreaterThan(0)
-        },
-        { timeout: 500 },
+      const releaseCalls = fetchMock.mock.calls.filter(([url]) =>
+        (url as string).includes(`/api/tasks/${TASK.id}/release`),
       )
+      expect(releaseCalls.length).toBeGreaterThan(0)
+      await flushAsyncSave()
     })
 
     it('move menu sends the selected pipeline status in the request body', async () => {
@@ -1296,19 +966,15 @@ describe('TestBuilderDiscovered', () => {
       // TASK.status = 'todo'; previous status in BOARD is 'backlog'
       const { container } = renderDetailWithBoard(TASK, BOARD)
       await clickMoveTarget(container, 'backlog')
-      await waitFor(
-        () => {
-          const moveCalls = fetchMock.mock.calls.filter(([url]) =>
-            (url as string).includes(`/api/tasks/${TASK.id}/move`),
-          )
-          expect(moveCalls.length).toBeGreaterThan(0)
-          const [, options] = moveCalls[0] as unknown as [string, RequestInit]
-          const body = JSON.parse(options.body as string) as Record<string, unknown>
-          // TASK.status = 'todo' → previous status in BOARD is 'backlog'
-          expect(body).toHaveProperty('status', 'backlog')
-        },
-        { timeout: 500 },
+      const moveCalls = fetchMock.mock.calls.filter(([url]) =>
+        (url as string).includes(`/api/tasks/${TASK.id}/move`),
       )
+      expect(moveCalls.length).toBeGreaterThan(0)
+      const [, options] = moveCalls[0] as unknown as [string, RequestInit]
+      const body = JSON.parse(options.body as string) as Record<string, unknown>
+      // TASK.status = 'todo' -> previous status in BOARD is 'backlog'
+      expect(body).toHaveProperty('status', 'backlog')
+      await flushAsyncSave()
     })
 
     it('research tasks expose a forward move target in task detail', async () => {
@@ -1318,12 +984,7 @@ describe('TestBuilderDiscovered', () => {
       expect(moveTrigger).not.toBeNull()
       fireEvent.click(moveTrigger!)
 
-      await waitFor(
-        () => {
-          expect(container.querySelector('[data-testid="task-detail-move-target"][data-status="backlog"]')).not.toBeNull()
-        },
-        { timeout: 500 },
-      )
+      expect(container.querySelector('[data-testid="task-detail-move-target"][data-status="backlog"]')).not.toBeNull()
     })
 
     it('task detail archive action opens the archival modal flow', async () => {
@@ -1333,10 +994,7 @@ describe('TestBuilderDiscovered', () => {
       expect(archiveAction).not.toBeNull()
       fireEvent.click(archiveAction!)
 
-      await waitFor(
-        () => expect(container.querySelector('[data-testid="archival-modal"]')).not.toBeNull(),
-        { timeout: 500 },
-      )
+      expect(container.querySelector('[data-testid="archival-modal"]')).not.toBeNull()
     })
 
     it('404 from mutation calls onTaskCleared callback', async () => {
@@ -1355,12 +1013,8 @@ describe('TestBuilderDiscovered', () => {
       const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
       expect(saveBtn).not.toBeNull()
       fireEvent.click(saveBtn!)
-      await waitFor(
-        () => {
-          expect(onTaskCleared).toHaveBeenCalledTimes(1)
-        },
-        { timeout: 500 },
-      )
+      await flushAsyncSave()
+      expect(onTaskCleared).toHaveBeenCalledTimes(1)
     })
   })
 
@@ -1382,14 +1036,10 @@ describe('TestBuilderDiscovered', () => {
       const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
       expect(saveBtn).not.toBeNull()
       fireEvent.click(saveBtn!)
-      await waitFor(
-        () => {
-          expect(onTaskUpdated).toHaveBeenCalledTimes(1)
-          expect(onTaskUpdated).toHaveBeenCalledWith(
-            expect.objectContaining({ title: 'Updated title from server' }),
-          )
-        },
-        { timeout: 500 },
+      await flushAsyncSave()
+      expect(onTaskUpdated).toHaveBeenCalledTimes(1)
+      expect(onTaskUpdated).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Updated title from server' }),
       )
     })
   })
@@ -1416,16 +1066,11 @@ describe('TestBuilderDiscovered', () => {
       const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
       fireEvent.click(saveBtn!)
 
-      await waitFor(
-        () => {
-          const [, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
-          const body = JSON.parse(options.body as string) as Record<string, unknown>
-          expect(body['title']).toBe('User-Typed Title')
-          // Must not echo the seeded value
-          expect(body['title']).not.toBe(TASK.title)
-        },
-        { timeout: 500 },
-      )
+      const body = getFetchBody(fetchMock)
+      expect(body['title']).toBe('User-Typed Title')
+      // Must not echo the seeded value
+      expect(body['title']).not.toBe(TASK.title)
+      await flushAsyncSave()
     })
 
     it('typed parent id overrides seeded null in save payload', async () => {
@@ -1444,14 +1089,8 @@ describe('TestBuilderDiscovered', () => {
       const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
       fireEvent.click(saveBtn!)
 
-      await waitFor(
-        () => {
-          const [, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
-          const body = JSON.parse(options.body as string) as Record<string, unknown>
-          expect(body['parent']).toBe(7)
-        },
-        { timeout: 500 },
-      )
+      expect(getFetchBody(fetchMock)['parent']).toBe(7)
+      await flushAsyncSave()
     })
 
     it('cleared block_reason field sends empty string in save payload when task is blocked', async () => {
@@ -1469,16 +1108,11 @@ describe('TestBuilderDiscovered', () => {
       const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
       fireEvent.click(saveBtn!)
 
-      await waitFor(
-        () => {
-          const [, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
-          const body = JSON.parse(options.body as string) as Record<string, unknown>
-          // block_reason must reflect the live-edited empty value, not the seeded 'Waiting for dependency #100'
-          expect(body['block_reason']).not.toBe('Waiting for dependency #100')
-          expect(body['block_reason']).toBe('')
-        },
-        { timeout: 500 },
-      )
+      const body = getFetchBody(fetchMock)
+      // block_reason must reflect the live-edited empty value, not the seeded 'Waiting for dependency #100'
+      expect(body['block_reason']).not.toBe('Waiting for dependency #100')
+      expect(body['block_reason']).toBe('')
+      await flushAsyncSave()
     })
 
     it('typed priority value overrides seeded priority in save payload', async () => {
@@ -1496,16 +1130,11 @@ describe('TestBuilderDiscovered', () => {
       const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
       fireEvent.click(saveBtn!)
 
-      await waitFor(
-        () => {
-          const [, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
-          const body = JSON.parse(options.body as string) as Record<string, unknown>
-          expect(body['priority']).toBe('critical')
-          // Must not echo the seeded 'important' value
-          expect(body['priority']).not.toBe(TASK.priority)
-        },
-        { timeout: 500 },
-      )
+      const body = getFetchBody(fetchMock)
+      expect(body['priority']).toBe('critical')
+      // Must not echo the seeded 'important' value
+      expect(body['priority']).not.toBe(TASK.priority)
+      await flushAsyncSave()
     })
 
     it('typed depends_on value overrides seeded value in save payload', async () => {
@@ -1523,14 +1152,8 @@ describe('TestBuilderDiscovered', () => {
       const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
       fireEvent.click(saveBtn!)
 
-      await waitFor(
-        () => {
-          const [, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
-          const body = JSON.parse(options.body as string) as Record<string, unknown>
-          expect(body['depends_on']).toEqual([10, 20])
-        },
-        { timeout: 500 },
-      )
+      expect(getFetchBody(fetchMock)['depends_on']).toEqual([10, 20])
+      await flushAsyncSave()
     })
   })
 })

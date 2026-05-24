@@ -13,6 +13,7 @@ import type { PendingDR } from '../hooks/usePendingDRs'
 import { resolveDR } from '../api/decisions'
 import { ApiError } from '../api/errors'
 import { formatAge, formatRequestType, getDecisionBodyMarkdown, getDecisionBrief } from '../utils/decisionBrief'
+import { openTaskDetail } from '../utils/openTaskDetail'
 import MarkdownPreview from './MarkdownPreview'
 
 const TAB_FOCUSABLE_SELECTOR = [
@@ -48,6 +49,13 @@ interface ResolveErrorState {
 interface InlineNotificationHost extends HTMLElement {
   onAction?: () => void
   onDismiss?: () => void
+}
+
+interface ResolveMetadataItem {
+  label: string
+  value: string
+  testId: string
+  taskId?: number
 }
 
 function formatOptionalMetadata(value: string): string {
@@ -137,8 +145,8 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
   const briefSource = { ...snapshotDR, body: snapshotBody }
   const brief = getDecisionBrief(briefSource)
   const fullRequestBody = getDecisionBodyMarkdown(briefSource) || snapshotBody
-  const metadataItems = [
-    { label: 'Task', value: `#${snapshotDR.task_id}`, testId: 'resolve-metadata-task' },
+  const metadataItems: ResolveMetadataItem[] = [
+    { label: 'Task', value: `#${snapshotDR.task_id}`, testId: 'resolve-metadata-task', taskId: snapshotDR.task_id },
     { label: 'Request type', value: formatRequestType(snapshotDR.request_type), testId: 'resolve-metadata-request-type' },
     { label: 'Created', value: formatCreatedMetadata(snapshotDR.created), testId: 'resolve-metadata-created' },
     { label: 'Agent', value: formatOptionalMetadata(snapshotDR.agent), testId: 'resolve-metadata-agent' },
@@ -300,7 +308,15 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
           <span className="text-xs font-semibold uppercase text-primary">Decision request</span>
           <PHeading ref={setHeadingTagAttr} size="small" tag="h3">{brief.title}</PHeading>
           <div data-testid="resolve-header-meta" className="flex min-w-0 flex-wrap items-center gap-static-xs text-xs font-semibold text-primary">
-            <PTag compact variant="secondary">Task #{snapshotDR.task_id}</PTag>
+            <PButton
+              type="button"
+              data-testid="resolve-open-task"
+              variant="secondary"
+              compact
+              onClick={() => openTaskDetail(snapshotDR.task_id)}
+            >
+              Task #{snapshotDR.task_id}
+            </PButton>
             <PTag compact variant="secondary">{formatRequestType(snapshotDR.request_type)}</PTag>
             <span className="text-xs font-semibold text-contrast-high">{formatAge(snapshotDR.created)}</span>
           </div>
@@ -376,7 +392,19 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
                 {metadataItems.map((item) => (
                   <div key={item.testId} data-testid={item.testId} className="min-w-0">
                     <dt className="font-semibold text-contrast-high">{item.label}</dt>
-                    <dd className="m-0 min-w-0 break-words text-primary">{item.value}</dd>
+                    <dd className="m-0 min-w-0 break-words text-primary">
+                      {typeof item.taskId === 'number' ? (
+                        <PButton
+                          type="button"
+                          data-testid="resolve-metadata-open-task"
+                          variant="secondary"
+                          compact
+                          onClick={() => openTaskDetail(item.taskId!)}
+                        >
+                          {item.value}
+                        </PButton>
+                      ) : item.value}
+                    </dd>
                   </div>
                 ))}
               </dl>
