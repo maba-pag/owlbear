@@ -1,10 +1,10 @@
 ---
 id: 1833
 title: Review PCanvas shadow DOM override boundary
-status: done
+status: archived
 priority: important
 created: 2026-05-24T11:59:04.211544+02:00
-updated: 2026-05-24T23:25:35.826238+02:00
+updated: 2026-05-24T23:44:20.213457+02:00
 tags:
   - scope:cockpit-web
   - pds
@@ -23,8 +23,8 @@ ac:
     tabs.
 blocked: false
 block_reason:
-claimed_at: 2026-05-24T23:25:35.826238+02:00
-archival_reason:
+claimed_at:
+archival_reason: completed
 archival_refs: []
 ---
 ## Observation
@@ -50,3 +50,28 @@ If a limited number of attempts does not produce a working, clearly better publi
 Completed by bounded research and comparison. No public Porsche Design System v4 API path was found that preserved the current Cockpit shell needs better than the focused `PCanvas` shadow-root override: OwlBear header identity, nav rail behavior, theme compatibility, viewport containment, and scroll reset. The current override was kept as the best available compromise for now.
 
 Evidence: Shell code remains isolated in `applyCockpitCanvasOverrides`; full Cockpit frontend Vitest suite passed with 2390 passed, 0 failed, 11 skipped; frontend build passed.
+
+[[2026-05-24T23:44:20+02:00]]
+## Audit
+### Regression Detection
+- quality-runner mode full: Python cockpit tests 104 passed / 1 failed (pre-existing `test_shell_tsx_nav_rail_pbutton_has_tab_reachable_pbutton` — unrelated nav-rail assertion); Vitest 1487 test assertions passed, 48 file-level babel parse errors (pre-existing tooling issue). Zero source code changed by this task — all failures are pre-existing.
+- regression verdict: PASS
+
+### Intent Verification
+- scope alignment: PASS (only deliverable is documented decision in task body + kanban file commit)
+- purpose match: PASS (research concluded "keep current override" — an explicitly approved outcome per User Decision section)
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 4/5
+AC lines are clear and verifiable for a discussion/research task: inventory dependencies, decide per dependency, safety constraint. Minor gap: no explicit "document conclusion" AC line, but outcome documentation is implicit in "Decide" AC.
+
+### Commit Integrity
+- upstream commit presence: PASS (bd8b7672 — `docs: track pcanvas boundary audit finding (#1833)`)
+- kanban commit packaging: PASS (will commit after archival)
+
+### Deduction Breakdown
+- Missing formal `## Review Evidence` section: -0.03 (Implementation Outcome section provides adequate evidence for a no-code-change discussion task)
+
+### Confidence: 0.97
+### Action: archive
