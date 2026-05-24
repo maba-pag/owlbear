@@ -1,10 +1,10 @@
 ---
 id: 1838
 title: Review task acceptance criteria edit affordance
-status: research
+status: done
 priority: important
 created: 2026-05-24T12:39:41.796906+02:00
-updated: 2026-05-24T12:39:41.796906+02:00
+updated: 2026-05-24T18:10:51+02:00
 tags:
   - scope:cockpit-web
   - detail-tab
@@ -47,3 +47,13 @@ This is an audit finding only. Do not implement without explicit user approval. 
 Approved direction: implement structured acceptance-criteria editing in Cockpit task detail.
 
 Implementation should treat AC as structured task contract data, not ad hoc body text, and must preserve existing title, priority, body, tag, dependency, parent, block-reason, and save/conflict behavior.
+
+## Implementation Outcome
+Completed with structured acceptance-criteria editing in task detail edit mode. The frontend sends `ac` as a structured array, the Cockpit mutation route accepts it, and the view passes it through to the kanban engine rather than treating criteria as body text.
+
+Evidence: backend Cockpit ideas/mutation tests passed with 184 passed, including AC edit coverage; full Cockpit frontend Vitest suite passed with 2390 passed, 0 failed, 11 skipped; frontend build passed.
+
+## Screenshot Follow-Up
+Post-implementation screenshot capture showed the AC editor portal leaking into display mode and duplicating the criteria surface. Fixed by rendering the portal-backed AC editor only while task edit mode is active, while preserving the hidden edit form structure used by existing jsdom coverage.
+
+Additional evidence: focused DetailTab/Shell Vitest proof passed with 77 passed, 1 skipped; refreshed screenshot `.owlbear/scratch/1773-task-detail-ac-edit.png` shows only the edit-mode AC editor, and `.owlbear/scratch/1773-decisions-open-task.png` shows display-mode AC without duplicate edit controls.

@@ -1,10 +1,10 @@
 ---
 id: 1828
 title: Review DetailTab PDS payload timeout
-status: research
+status: done
 priority: important
 created: 2026-05-24T11:19:10.398096+02:00
-updated: 2026-05-24T11:19:10.398096+02:00
+updated: 2026-05-24T17:49:32+02:00
 tags:
   - scope:cockpit-web
   - pds
@@ -38,3 +38,8 @@ Treat this as a possible stale or flaky test first. Verify the actual DetailTab 
 Decision: remove or fix the test if it is buggy; tests follow the product. Do not change product code just to satisfy a stale PDS/jsdom timeout.
 
 Implementation direction: verify the actual mouse-driven title/priority edit-save workflow and emitted payload. If the product behavior works, adjust/delete the failing test. If the product behavior is broken, fix the product path.
+
+## Implementation Outcome
+Completed as stale/flaky test harness cleanup. DetailTab save payload assertions now inspect the synchronously dispatched request body instead of relying on timer-backed waits that became unstable under PDS/jsdom full-suite load.
+
+Evidence: DetailTab focused suite passed; affected bundle passed; full Cockpit frontend Vitest suite passed with 2390 passed, 0 failed, 11 skipped.

@@ -1,10 +1,10 @@
 ---
 id: 1831
 title: Review DetailTab save action stack trace error
-status: research
+status: done
 priority: important
 created: 2026-05-24T11:24:06.544691+02:00
-updated: 2026-05-24T11:24:06.544691+02:00
+updated: 2026-05-24T17:49:32+02:00
 tags:
   - scope:cockpit-web
   - detail-tab
@@ -28,3 +28,8 @@ Found during #1825 full Vitest verification. DetailTab.test.tsx has a residual s
 Approved direction: product-first triage.
 
 Implementation direction: reproduce the actual mouse-driven task edit/save flow. If saving is broken, fix the product behavior. If the product behavior works and the failure is a test harness/jsdom/PDS artifact, fix or remove the bad test.
+
+## Implementation Outcome
+Completed as test harness cleanup. The actual save flow remained intact; the stale duplicate conflict/history/action checks in the legacy DetailTab file were reduced or made deterministic because dedicated conflict and history suites already cover those behaviors.
+
+Evidence: DetailTab focused suite passed with 63 passed, 1 skipped; affected bundle passed with 126 passed, 1 skipped; full Cockpit frontend Vitest suite passed with 2390 passed, 0 failed, 11 skipped.

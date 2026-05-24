@@ -1,10 +1,10 @@
 ---
 id: 1773
 title: Cockpit evidence-led interaction critique sweep
-status: research
+status: done
 priority: important
 created: 2026-05-24T00:33:26.614960+02:00
-updated: 2026-05-24T01:57:30.041901+02:00
+updated: 2026-05-24T18:10:51+02:00
 tags:
   - cockpit-perfect-ui
   - scope:cockpit-web
@@ -85,3 +85,12 @@ User provided general UX feedback and clarified priorities. Created/refined task
 - #1793: Ideas header status pill may be redundant; consider saved recency.
 
 All are discussion tasks only. No implementation is approved by this feedback alone.
+
+[[2026-05-24T18:10:51+02:00]]
+## Approved Batch Follow-Through
+User approved the #1826-#1838 implementation batch. All child tasks were attempted and marked done. Post-implementation screenshot evidence was captured from the rebuilt Cockpit frontend:
+- `.owlbear/scratch/1773-task-detail-ac-edit.png`
+- `.owlbear/scratch/1773-ideas-save-conflict.png`
+- `.owlbear/scratch/1773-decisions-open-task.png`
+
+The screenshot pass found two real defects before closeout: Decisions task references dispatched an open-task event but the Shell only rendered task detail on the Kanban route, and the structured AC editor could leak into display mode through the portal. Both were fixed and covered by focused Vitest/Playwright proof. Remaining observed screens are acceptable for this sweep. Next work should start as a new user-approved Cockpit sweep or a specific follow-up task.

@@ -1,10 +1,10 @@
 ---
 id: 1837
 title: Review Decisions task reference open-task affordance
-status: research
+status: done
 priority: important
 created: 2026-05-24T12:32:00.730098+02:00
-updated: 2026-05-24T12:32:00.730098+02:00
+updated: 2026-05-24T18:10:51+02:00
 tags:
   - scope:cockpit-web
   - decisions
@@ -47,3 +47,13 @@ This is an audit finding only. Do not implement without explicit user approval. 
 Approved direction: task references in Decisions should open the associated task. Prefer opening the task on top of the current context, matching the task-detail behavior where parent/dependency tasks open on top. If that is not feasible, fall back to opening/selecting the task in the normal task-detail location.
 
 Implementation must preserve the current decision brief/resolver flow and avoid losing any in-progress resolution notes or resolver state unexpectedly.
+
+## Implementation Outcome
+Completed by adding an `openTaskDetail` event bridge and wiring Decisions task references to open the associated task through the Shell task-detail stack. The resolver flow remains intact, and task-reference clicks stop propagation so they do not accidentally open the resolver list item.
+
+Evidence: full Cockpit frontend Vitest suite passed with 2390 passed, 0 failed, 11 skipped; frontend build passed; editor diagnostics reported no errors in touched frontend files.
+
+## Screenshot Follow-Up
+Post-implementation screenshot capture showed the task-reference click dispatching correctly but not opening the modal from `/decisions`, because Shell only rendered task detail on the Kanban route. Fixed by allowing cross-route task-reference overlays while preserving normal Kanban card selection behavior.
+
+Additional evidence: focused Playwright proof `task references open the task detail overlay from Decisions` passed; refreshed screenshot `.owlbear/scratch/1773-decisions-open-task.png` shows the task detail overlay on top of the Decisions route without leaking edit controls.

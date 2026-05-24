@@ -1,10 +1,10 @@
 ---
 id: 1836
 title: Review Ideas conflict notice decision context
-status: research
+status: done
 priority: important
 created: 2026-05-24T12:24:57.808395+02:00
-updated: 2026-05-24T12:24:57.808395+02:00
+updated: 2026-05-24T17:49:32+02:00
 tags:
   - scope:cockpit-web
   - ideas
@@ -46,3 +46,8 @@ This is an audit finding only. Do not implement without explicit user approval. 
 Approved direction: change the Ideas conflict model to a save-time disk-change check. When the user tries to save and the file on disk changed since the Ideas page loaded, prompt the user to choose one of three actions: overwrite the file, load the file from disk, or cancel the save.
 
 This should replace blind conflict decisions. Implementation should protect the local draft, avoid silent overwrite/discard, and use an API/data contract that can reliably detect the on-disk version at save time.
+
+## Implementation Outcome
+Completed by changing Ideas to a save-time disk-change check. The backend accepts `expected_updated_at` and `force`; stale saves return a 409 conflict with current disk content. The frontend offers overwrite, load from disk, or cancel while preserving the local draft.
+
+Evidence: focused Ideas tests passed earlier in the implementation pass; backend Cockpit ideas/mutation tests passed with 184 passed; full Cockpit frontend Vitest suite passed with 2390 passed, 0 failed, 11 skipped; frontend build passed.

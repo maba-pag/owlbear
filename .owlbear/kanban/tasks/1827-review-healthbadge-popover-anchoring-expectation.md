@@ -1,10 +1,10 @@
 ---
 id: 1827
 title: Review HealthBadge popover anchoring expectation
-status: research
+status: done
 priority: important
 created: 2026-05-24T11:19:10.382135+02:00
-updated: 2026-05-24T11:19:10.382135+02:00
+updated: 2026-05-24T17:49:32+02:00
 tags:
   - scope:cockpit-web
   - overlay
@@ -38,3 +38,8 @@ Treat this as an overlay positioning behavior review. Verify current runtime anc
 Decision: choose the behavior that is best for the product, not what the test expected. Tests are a TDD/build tool and are not authoritative product spec.
 
 Implementation direction: keep or change HealthBadge popover anchoring based on actual runtime usability and visual behavior. If the current viewport-safe behavior is best for Cockpit, adjust or delete the stale trigger-left test expectation.
+
+## Implementation Outcome
+Completed by keeping the product-safe viewport padding behavior and updating the stale trigger-left test expectation. The popover may use the viewport floor when trigger-left anchoring would be less useful or unsafe.
+
+Evidence: focused affected frontend tests passed; full Cockpit frontend Vitest suite passed with 2390 passed, 0 failed, 11 skipped; frontend build passed.

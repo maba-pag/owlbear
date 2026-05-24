@@ -1,10 +1,10 @@
 ---
 id: 1833
 title: Review PCanvas shadow DOM override boundary
-status: research
+status: done
 priority: important
 created: 2026-05-24T11:59:04.211544+02:00
-updated: 2026-05-24T11:59:04.211544+02:00
+updated: 2026-05-24T17:49:32+02:00
 tags:
   - scope:cockpit-web
   - pds
@@ -45,3 +45,8 @@ This is an audit finding only. Do not implement without explicit user approval. 
 Approved direction: research the public Porsche Design System v4 path first, then try a bounded implementation/prototype that does not overwrite or destroy the current solution. Benchmark the candidate against the current shadow-DOM override for the visible shell behaviors it protects.
 
 If a limited number of attempts does not produce a working, clearly better public/owned-layout path, keep the current solution and document why it remains the best available compromise for now.
+
+## Implementation Outcome
+Completed by bounded research and comparison. No public Porsche Design System v4 API path was found that preserved the current Cockpit shell needs better than the focused `PCanvas` shadow-root override: OwlBear header identity, nav rail behavior, theme compatibility, viewport containment, and scroll reset. The current override was kept as the best available compromise for now.
+
+Evidence: Shell code remains isolated in `applyCockpitCanvasOverrides`; full Cockpit frontend Vitest suite passed with 2390 passed, 0 failed, 11 skipped; frontend build passed.

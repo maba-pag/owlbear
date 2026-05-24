@@ -1,10 +1,10 @@
 ---
 id: 1826
 title: Review HealthBadge accessible label wording
-status: research
+status: done
 priority: important
 created: 2026-05-24T11:19:10.363983+02:00
-updated: 2026-05-24T11:19:10.363983+02:00
+updated: 2026-05-24T17:49:32+02:00
 tags:
   - scope:cockpit-web
   - a11y
@@ -38,3 +38,8 @@ Treat this as a product/accessibility wording question, not a test-as-spec manda
 Decision: do not spend effort on accessibility or keyboard usability that does not fit the actual single-user, mouse-driven Cockpit workflow. Keep any change minimal and only resolve wording that is contradictory or required for the product to work.
 
 Implementation direction: do not add broad accessibility work from this task. If the current HealthBadge wording is not product-confusing, keep it and adjust/delete stale test expectations rather than treating the test regex as authority.
+
+## Implementation Outcome
+Completed per user decision. No product wording change was needed for the mouse-driven Cockpit workflow; the stale keyboard/accessibility test surface was removed instead of treating its regex as product spec.
+
+Evidence: full Cockpit frontend Vitest suite passed with 2390 passed, 0 failed, 11 skipped; frontend build passed; backend Cockpit ideas/mutation tests passed.

@@ -1,10 +1,10 @@
 ---
 id: 1834
 title: Review MemoryTab page-owned mutation API client
-status: research
+status: done
 priority: important
 created: 2026-05-24T12:05:05.086598+02:00
-updated: 2026-05-24T12:05:05.086598+02:00
+updated: 2026-05-24T17:49:32+02:00
 tags:
   - scope:cockpit-web
   - memory
@@ -44,3 +44,8 @@ This is an audit finding only. Do not implement without explicit user approval. 
 Approved direction: extract Memory approve/edit/delete mutation transport and error translation into a dedicated frontend API client module, while keeping page-owned UI state and interaction flow in `MemoryTab`.
 
 Implementation must preserve the current Memory UX, OCC handling, validation field messages, 404 removal behavior, pending-count updates, and promotion messaging.
+
+## Implementation Outcome
+Completed by extracting Memory approve/edit/delete mutation transport and error translation into `src/api/memories.ts`, while keeping page-owned UI state and interaction flow in `MemoryTab`.
+
+Evidence: full Cockpit frontend Vitest suite passed with 2390 passed, 0 failed, 11 skipped; frontend build passed; editor diagnostics reported no errors in `MemoryTab.tsx`.

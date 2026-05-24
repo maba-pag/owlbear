@@ -1,10 +1,10 @@
 ---
 id: 1835
 title: Review Kanban card move action discoverability
-status: research
+status: done
 priority: important
 created: 2026-05-24T12:17:30.160637+02:00
-updated: 2026-05-24T12:17:30.160637+02:00
+updated: 2026-05-24T17:49:32+02:00
 tags:
   - scope:cockpit-web
   - kanban
@@ -46,3 +46,8 @@ This is an audit finding only. Do not implement without explicit user approval. 
 Decision: keep the current hidden card context-menu pattern. Do not add a visible card action/menu affordance from this task.
 
 The existing right-click and keyboard context-menu behavior, plus task-detail actions, remain the intended move/archive paths for now.
+
+## Implementation Outcome
+Completed by explicit no-op decision. No visible card action/menu affordance was added; the existing hidden card context-menu pattern and task-detail actions remain the intended move/archive paths.
+
+Evidence: no code change required for this task. Full Cockpit frontend Vitest suite passed with 2390 passed, 0 failed, 11 skipped.

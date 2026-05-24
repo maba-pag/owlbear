@@ -1,10 +1,10 @@
 ---
 id: 1832
 title: Review task edit action bar hierarchy
-status: research
+status: done
 priority: important
 created: 2026-05-24T11:55:10.047697+02:00
-updated: 2026-05-24T11:55:10.047697+02:00
+updated: 2026-05-24T17:49:32+02:00
 tags:
   - scope:cockpit-web
   - ux
@@ -45,3 +45,8 @@ This is an audit finding only. Do not implement without explicit user approval. 
 Approved direction: implement a compact toolbar/header action area for the task edit state. Save and Cancel should remain visible and reachable, but the current standalone action strip should stop dominating the field hierarchy.
 
 Implementation must preserve dirty-state signaling, unsaved-navigation protection, save/cancel behavior, and the existing task edit payload semantics.
+
+## Implementation Outcome
+Completed by compacting the task edit action area into a lighter toolbar/header treatment while keeping Save and Cancel visible. Dirty-state signaling, save/cancel behavior, unsaved-change plumbing, and existing payload semantics were preserved.
+
+Evidence: DetailTab focused suite passed; affected bundle passed; full Cockpit frontend Vitest suite passed with 2390 passed, 0 failed, 11 skipped; frontend build passed.

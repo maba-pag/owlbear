@@ -1,10 +1,10 @@
 ---
 id: 1829
 title: Review RepairPanel quarantine wording expectation
-status: research
+status: done
 priority: important
 created: 2026-05-24T11:19:10.413939+02:00
-updated: 2026-05-24T11:19:10.413939+02:00
+updated: 2026-05-24T17:49:32+02:00
 tags:
   - scope:cockpit-web
   - repair
@@ -38,3 +38,8 @@ Treat this as a copy/test-alignment review. The product copy already names the c
 Approved direction: make a tiny copy improvement by adding an explicit `folder` or `path` word while keeping the concrete destination `.owlbear/kanban/quarantine`.
 
 Implementation should stay minimal and preserve the exact destination path. Tests should follow the resulting product copy.
+
+## Implementation Outcome
+Completed with the minimal copy improvement: the confirmation text now says quarantined files move to the quarantine folder `.owlbear/kanban/quarantine`, preserving the concrete destination path.
+
+Evidence: HealthBadgeRepair focused test file passed; affected bundle passed; full Cockpit frontend Vitest suite passed with 2390 passed, 0 failed, 11 skipped.
