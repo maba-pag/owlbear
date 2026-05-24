@@ -1,10 +1,10 @@
 ---
 id: 1819
-title: Triage kanban config path validation tests
-status: research
+title: Repair kanban config path validation tests
+status: done
 priority: important
 created: 2026-05-24T09:23:21+02:00
-updated: 2026-05-24T09:23:21+02:00
+updated: 2026-05-24T09:57:33+02:00
 tags:
   - scope:kanban-engine
   - security
@@ -28,3 +28,18 @@ The #1814 root glob has two failures in `tests/test_kanban_config_path_validatio
 
 ## Boundary
 Treat this as security-sensitive. Do not relax path containment without explicit approval and focused proof.
+
+## Decision
+User approved implementing #1819. The failures were stale runtime-topology expectations, not an observed path-containment defect:
+- `refresh_config()` should still reject a symlink escape on the canonical product `tasks/` path. The repaired test now proves that real defense.
+- Storage runtime ignores config-file path overrides because `PRODUCT_TOPOLOGY` owns `tasks_dir` and `archive_dir`; the nested archive test now asserts moves go to product `archive/`.
+
+No path containment was relaxed.
+
+## Verification
+- `uv run ruff check tests/test_kanban_config_path_validation.py` — passed.
+- `uv run pytest tests/test_kanban_config_path_validation.py -q --tb=short` — 22 passed.
+- `uv run pytest tests/test_engine_*.py tests/test_kanban_*.py -q --tb=no` — 3 failed, 537 passed.
+
+## Remaining
+The root glob remains red due to #1820 and #1821.

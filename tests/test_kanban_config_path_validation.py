@@ -217,13 +217,12 @@ class TestFromAC_RuntimeDefense:
         with pytest.raises(PermissionError):
             validate_path_containment(kanban_dir, tasks_link)
 
-    def test_refresh_config_rejects_symlink_escape(self, tmp_path: Path) -> None:
-        """AC2 — refresh_config validates derived paths after rebinding.
+    def test_refresh_config_rejects_product_tasks_symlink_escape(self, tmp_path: Path) -> None:
+        """AC2 — refresh_config validates the product-owned tasks path.
 
-        After refresh_config rebinds _tasks_dir to a symlinked directory that resolves
-        outside kanban_dir, PermissionError must be raised — not silently accepted.
-        This proves that the runtime resolve-level defense is active after a config reload,
-        not only at engine construction time.
+        Config-file path overrides are ignored by PRODUCT_TOPOLOGY, but the runtime
+        resolve-level defense must still catch the canonical tasks/ directory if it
+        becomes a symlink that escapes kanban_dir after engine construction.
         """
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
@@ -240,15 +239,11 @@ class TestFromAC_RuntimeDefense:
         # Precondition: engine constructed successfully with valid config.
         assert engine.tasks_dir == kanban_dir / "tasks"
 
-        # Create a symlink "alt-tasks" inside kanban_dir that resolves outside the board.
-        alt_tasks_link = kanban_dir / "alt-tasks"
-        alt_tasks_link.symlink_to(outside_dir)
+        # Replace the canonical product tasks/ directory with a symlink escape.
+        (kanban_dir / "tasks").rmdir()
+        (kanban_dir / "tasks").symlink_to(outside_dir)
 
-        # Update config.yml so tasks_dir names the symlink.
-        updated_config = _STORAGE_BOARD_CONFIG_YAML.replace("  tasks_dir: tasks", "  tasks_dir: alt-tasks")
-        (kanban_dir / "config.yml").write_text(updated_config, encoding="utf-8")
-
-        # refresh_config must detect that alt-tasks resolves outside kanban_dir.
+        # refresh_config must detect that tasks/ resolves outside kanban_dir.
         with pytest.raises(PermissionError):
             engine.refresh_config()
 
@@ -332,18 +327,17 @@ class TestFromAC_BoardConfigIntegration:
 
         assert result == []
 
-    def test_move_to_archive_with_nested_subdir(self, tmp_path: Path) -> None:
-        """AC5 — move_to_archive places task files in a nested archive subdirectory.
+    def test_move_to_archive_uses_product_archive_when_config_requests_nested_subdir(self, tmp_path: Path) -> None:
+        """AC5 — move_to_archive uses PRODUCT_TOPOLOGY.archive_dir at runtime.
 
-        Proves that the archive_dir path derivation works for non-default relative
-        subdirectories: a task file is moved to kanban_dir/sub/archive/ and the
-        directory is created automatically.
+        Direct BoardConfig validation still accepts nested relative archive paths,
+        but storage runtime ignores config-file topology and moves to archive/.
         """
         from owlbear_kanban.storage import move_to_archive  # noqa: PLC0415
 
         kanban_dir = tmp_path / "board"
         kanban_dir.mkdir()
-        config_yaml = _STORAGE_BOARD_CONFIG_YAML.replace("  archive_dir: archive", "  archive_dir: sub/archive")
+        config_yaml = "schema: grouped\nnext_id: 1\npaths:\n  archive_dir: sub/archive\n"
         (kanban_dir / "config.yml").write_text(config_yaml, encoding="utf-8")
 
         tasks_dir = kanban_dir / "tasks"
@@ -353,7 +347,8 @@ class TestFromAC_BoardConfigIntegration:
 
         archived_path = move_to_archive(1, kanban_dir)
 
-        expected_archive_dir = kanban_dir / "sub" / "archive"
+        expected_archive_dir = kanban_dir / "archive"
         assert archived_path.parent == expected_archive_dir
         assert archived_path.name == "1-test-task.md"
         assert archived_path.exists()
+        assert not (kanban_dir / "sub" / "archive").exists()
