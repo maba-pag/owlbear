@@ -129,6 +129,7 @@ class TestFromAC_EngineEditTaskFieldMutations:
     def test_parent_mutation_reflected_on_returned_task(self, tmp_path: Path) -> None:
         board = _make_board(tmp_path)
         _write_task(board, task_id=1, parent="null")
+        _write_task(board, task_id=99, title="Parent")
         engine = KanbanEngine(board, activity_log=False)
         result = engine.edit_task("1", parent=99)
         assert result.parent == 99
@@ -160,6 +161,8 @@ class TestFromAC_EngineEditTaskFieldMutations:
     def test_add_deps_merges_with_existing(self, tmp_path: Path) -> None:
         board = _make_board(tmp_path)
         _write_task(board, task_id=1, depends_on="[2]")
+        _write_task(board, task_id=2, title="Existing Dependency")
+        _write_task(board, task_id=3, title="New Dependency")
         engine = KanbanEngine(board, activity_log=False)
         result = engine.edit_task("1", add_deps=[3])
         # sorted list equality proves membership AND that 3 appears exactly once
@@ -169,6 +172,7 @@ class TestFromAC_EngineEditTaskFieldMutations:
         """Adding a dep that already exists must not duplicate it."""
         board = _make_board(tmp_path)
         _write_task(board, task_id=1, depends_on="[2]")
+        _write_task(board, task_id=2, title="Existing Dependency")
         engine = KanbanEngine(board, activity_log=False)
         result = engine.edit_task("1", add_deps=[2])
         assert result.depends_on.count(2) == 1
@@ -282,18 +286,18 @@ class TestFromAC_EngineProperties:
         covers all mutable nesting levels, not just the top-level list."""
         board = _make_board(tmp_path)
         engine = KanbanEngine(board, activity_log=False)
-        original_agent_map_keys = set(engine.board_config().agent_map.keys())
-        original_agent_types_keys = set(engine.board_config().agent_types.keys())
+        original_agent_map_keys = set(engine.board_config().agents.agent_map.keys())
+        original_agent_types_keys = set(engine.board_config().agents.agent_types.keys())
 
         config_copy = engine.board_config()
-        config_copy.agent_map["INJECTED"] = ["injected-agent"]
-        config_copy.agent_types["INJECTED"] = "injected-type"
+        config_copy.agents.agent_map["INJECTED"] = "injected-agent"
+        config_copy.agents.agent_types["INJECTED"] = "injected-type"
 
         next_config = engine.board_config()
-        assert set(next_config.agent_map.keys()) == original_agent_map_keys, (
+        assert set(next_config.agents.agent_map.keys()) == original_agent_map_keys, (
             "agent_map mutation leaked into engine state (shallow-copy regression)"
         )
-        assert set(next_config.agent_types.keys()) == original_agent_types_keys, (
+        assert set(next_config.agents.agent_types.keys()) == original_agent_types_keys, (
             "agent_types mutation leaked into engine state (shallow-copy regression)"
         )
 
@@ -301,36 +305,34 @@ class TestFromAC_EngineProperties:
         """Mutating a nested dict in the returned config must not affect engine state."""
         board = _make_board(tmp_path)
         engine = KanbanEngine(board, activity_log=False)
-        original_agent_map = engine.board_config().agent_map.copy()
+        original_agent_map = engine.board_config().agents.agent_map.copy()
 
         config_copy = engine.board_config()
-        config_copy.agent_map["INJECTED_KEY"] = ["injected_value"]
+        config_copy.agents.agent_map["INJECTED_KEY"] = "injected_value"
 
         # Engine's next board_config() call must still return unmodified agent_map
-        assert "INJECTED_KEY" not in engine.board_config().agent_map
-        assert engine.board_config().agent_map == original_agent_map
+        assert "INJECTED_KEY" not in engine.board_config().agents.agent_map
+        assert engine.board_config().agents.agent_map == original_agent_map
 
     def test_board_config_deep_copy_existing_nested_list_is_isolated(self, tmp_path: Path) -> None:
-        """Mutating a pre-existing nested list value inside agent_map on the returned copy
+        """Mutating a pre-existing nested list in a returned config submodel
         must not affect engine state — proves model_copy(deep=True) isolates existing
-        nested mutable values, not just top-level containers or newly-inserted keys.
+        nested mutable values, not just newly-inserted keys.
 
         A shallow copy would alias the same list object, causing this test to fail.
         """
         board = _make_board(tmp_path)
         engine = KanbanEngine(board, activity_log=False)
 
-        # Fixture sets agent_map["research"] = [] (an existing nested list)
         config_copy = engine.board_config()
-        assert "research" in config_copy.agent_map, "fixture sanity: research key required"
-        original_list = list(config_copy.agent_map["research"])  # snapshot before mutation
+        original_list = list(config_copy.policy.non_impl_tags)
 
         # Mutate the existing nested list in the returned copy
-        config_copy.agent_map["research"].append("INJECTED_AGENT")
+        config_copy.policy.non_impl_tags.append("INJECTED_TAG")
 
         # A shallow copy would share the same list reference, leaking the mutation
         fresh = engine.board_config()
-        assert fresh.agent_map["research"] == original_list, (
+        assert fresh.policy.non_impl_tags == original_list, (
             "Mutating an existing nested list in the returned copy leaked into engine state "
             "(shallow-copy regression: pre-existing nested list was aliased, not deep-copied)"
         )
