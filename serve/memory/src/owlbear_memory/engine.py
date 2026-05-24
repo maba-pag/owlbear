@@ -121,6 +121,25 @@ class MemoryEngine:
         )
         return self._write_updated_entry(updated)
 
+    def resolve(self, entry_id: str, expected_updated_at: str) -> MemoryEntry:
+        """Transition contested/disputed/stale entry to approved after OCC check."""
+        entry = self.get_entry(entry_id)
+        self._validate_occ(entry, expected_updated_at)
+
+        if entry.state not in {MemoryState.CONTESTED, MemoryState.DISPUTED, MemoryState.STALE}:
+            msg = f"resolve() not allowed from state {entry.state}"
+            raise TransitionError(msg)
+
+        now = self._now_iso()
+        updated = entry.model_copy(
+            update={
+                "state": MemoryState.APPROVED,
+                "approved_at": now,
+                "updated_at": now,
+            }
+        )
+        return self._write_updated_entry(updated)
+
     def edit(self, entry_id: str, fields: EditPayload, expected_updated_at: str) -> MemoryEntry:
         """Apply field updates with state-machine and OCC constraints."""
         entry = self.get_entry(entry_id)
@@ -128,6 +147,9 @@ class MemoryEngine:
 
         if entry.state == MemoryState.DELETED:
             msg = "edit() not allowed from state deleted"
+            raise TransitionError(msg)
+        if entry.state in {MemoryState.CONTESTED, MemoryState.DISPUTED, MemoryState.STALE}:
+            msg = f"edit() not allowed from state {entry.state}; resolve first"
             raise TransitionError(msg)
 
         target_state = entry.state

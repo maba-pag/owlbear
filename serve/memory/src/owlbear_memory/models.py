@@ -29,6 +29,9 @@ class MemoryState(enum.StrEnum):
     PENDING = "pending"
     CURATED = "curated"
     APPROVED = "approved"
+    CONTESTED = "contested"
+    DISPUTED = "disputed"
+    STALE = "stale"
     DELETED = "deleted"
 
 

@@ -114,7 +114,7 @@ def _metadata_dict(entry: MemoryEntry) -> dict[str, object]:
 def _state_rank_for_list(state: MemoryState) -> int:
     if state == MemoryState.PENDING:
         return 0
-    if state == MemoryState.CURATED:
+    if state in {MemoryState.CURATED, MemoryState.CONTESTED}:
         return 1
     if state == MemoryState.APPROVED:
         return 2
@@ -189,6 +189,9 @@ async def list_memories(
             MemoryState.PENDING,
             MemoryState.CURATED,
             MemoryState.APPROVED,
+            MemoryState.CONTESTED,
+            MemoryState.DISPUTED,
+            MemoryState.STALE,
         }
     )
     category_filter = set(coerced_categories or [])
@@ -251,8 +254,13 @@ async def recall_memory(
     state_rank = {
         MemoryState.APPROVED: 0,
         MemoryState.CURATED: 1,
+        MemoryState.CONTESTED: 1,
     }
-    entries = [entry for entry in engine.get_entries() if entry.state in {MemoryState.APPROVED, MemoryState.CURATED}]
+    entries = [
+        entry
+        for entry in engine.get_entries()
+        if entry.state in {MemoryState.APPROVED, MemoryState.CURATED, MemoryState.CONTESTED}
+    ]
     entries = [
         entry for entry in entries if entry.scope_agents and (agent in entry.scope_agents or "*" in entry.scope_agents)
     ]
