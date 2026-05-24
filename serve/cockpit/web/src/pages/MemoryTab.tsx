@@ -11,6 +11,7 @@ import {
   PSelect,
   PSelectOption,
   PTag,
+  PTagDismissible,
   PTextarea,
 } from '@porsche-design-system/components-react'
 import type { TagVariant } from '@porsche-design-system/components-react'
@@ -230,6 +231,18 @@ function splitCSV(value: string): string[] {
     .filter((item) => item.length > 0)
 }
 
+function mergeListValues(existing: string[], additions: string[]): string[] {
+  const seen = new Set(existing)
+  const merged = [...existing]
+  additions.forEach((item) => {
+    if (!seen.has(item)) {
+      seen.add(item)
+      merged.push(item)
+    }
+  })
+  return merged
+}
+
 function parseValidationField(loc: unknown): string {
   if (!Array.isArray(loc)) {
     return 'form'
@@ -317,6 +330,8 @@ function MemoryTab() {
   const [openEntryId, setOpenEntryId] = useState<string | null>(null)
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null)
   const [editDraft, setEditDraft] = useState<MemoryEditPayload | null>(null)
+  const [newCategory, setNewCategory] = useState('')
+  const [newScopeAgent, setNewScopeAgent] = useState('')
   const [deleteConfirmEntryId, setDeleteConfirmEntryId] = useState<string | null>(null)
   const [mutationErrorByEntryId, setMutationErrorByEntryId] = useState<Record<string, string>>({})
   const [validationMessages, setValidationMessages] = useState<ValidationMessage[]>([])
@@ -678,12 +693,39 @@ function MemoryTab() {
     clearEntryErrors(entry.id)
     setEditingEntryId(entry.id)
     setEditDraft(makeInitialDraft(entry))
+    setNewCategory('')
+    setNewScopeAgent('')
   }
 
   const cancelEdit = () => {
     setEditingEntryId(null)
     setEditDraft(null)
+    setNewCategory('')
+    setNewScopeAgent('')
     setValidationMessages([])
+  }
+
+  const addDraftListValues = (field: 'categories' | 'scope_agents', rawValue: string) => {
+    const additions = splitCSV(rawValue)
+    if (additions.length === 0) {
+      return
+    }
+
+    setEditDraft((previous) => previous
+      ? { ...previous, [field]: mergeListValues(previous[field], additions) }
+      : previous)
+
+    if (field === 'categories') {
+      setNewCategory('')
+    } else {
+      setNewScopeAgent('')
+    }
+  }
+
+  const removeDraftListValue = (field: 'categories' | 'scope_agents', value: string) => {
+    setEditDraft((previous) => previous
+      ? { ...previous, [field]: previous[field].filter((item) => item !== value) }
+      : previous)
   }
 
   const handleEditSave = async (entry: MemoryEntry): Promise<void> => {
@@ -696,7 +738,12 @@ function MemoryTab() {
 
     const previousState = entry.state
     try {
-      const payload = (await mutationFetch(`/api/memories/${entry.id}/edit`, editDraft as unknown as Record<string, unknown>)) as {
+      const draftForSave = {
+        ...editDraft,
+        categories: mergeListValues(editDraft.categories, splitCSV(newCategory)),
+        scope_agents: mergeListValues(editDraft.scope_agents, splitCSV(newScopeAgent)),
+      }
+      const payload = (await mutationFetch(`/api/memories/${entry.id}/edit`, draftForSave as unknown as Record<string, unknown>)) as {
         entry?: MemoryEntry
       }
       if (payload.entry) {
@@ -717,6 +764,8 @@ function MemoryTab() {
       }
       setEditingEntryId(null)
       setEditDraft(null)
+      setNewCategory('')
+      setNewScopeAgent('')
       void refetch()
     } catch (caught) {
       await handleMutationFailure(entry, caught)
@@ -973,24 +1022,6 @@ function MemoryTab() {
                               )
                             }}
                           />
-                          <PInputText
-                            name="edit-categories"
-                            label="Categories"
-                            compact
-                            value={editDraft.categories.join(', ')}
-                            onChange={(event) => {
-                              const value = splitCSV(readStringValue(event))
-                              setEditDraft((previous) =>
-                                previous ? { ...previous, categories: value } : previous,
-                              )
-                            }}
-                            onInput={(event) => {
-                              const value = splitCSV(readStringValue(event))
-                              setEditDraft((previous) =>
-                                previous ? { ...previous, categories: value } : previous,
-                              )
-                            }}
-                          />
                           <PInputNumber
                             name="edit-confidence"
                             label="Confidence"
@@ -1023,24 +1054,107 @@ function MemoryTab() {
                               )
                             }}
                           />
-                          <PInputText
-                            name="edit-scope-agents"
-                            label="Scope agents"
-                            compact
-                            value={editDraft.scope_agents.join(', ')}
-                            onChange={(event) => {
-                              const value = splitCSV(readStringValue(event))
-                              setEditDraft((previous) =>
-                                previous ? { ...previous, scope_agents: value } : previous,
-                              )
-                            }}
-                            onInput={(event) => {
-                              const value = splitCSV(readStringValue(event))
-                              setEditDraft((previous) =>
-                                previous ? { ...previous, scope_agents: value } : previous,
-                              )
-                            }}
-                          />
+                        </div>
+                        <div className="grid gap-static-sm md:grid-cols-2">
+                          <section className="grid min-w-0 gap-static-xs" data-testid="memory-category-editor">
+                            <div className="grid min-w-0 gap-static-xs sm:grid-cols-[minmax(0,1fr)_auto]">
+                              <PInputText
+                                name="new-memory-category"
+                                label="Categories"
+                                placeholder="Add category"
+                                compact
+                                className="min-w-0"
+                                value={newCategory}
+                                onChange={(event) => setNewCategory(readStringValue(event))}
+                                onInput={(event) => setNewCategory(readStringValue(event))}
+                                onKeyDown={(event) => {
+                                  if (event.key === 'Enter') {
+                                    event.preventDefault()
+                                    addDraftListValues('categories', newCategory)
+                                  }
+                                }}
+                              />
+                              <PButton
+                                type="button"
+                                data-testid="memory-add-category-button"
+                                variant="secondary"
+                                icon="plus"
+                                className="min-w-0 self-end"
+                                compact
+                                disabled={newCategory.trim().length === 0}
+                                onClick={() => addDraftListValues('categories', newCategory)}
+                              >
+                                Add
+                              </PButton>
+                            </div>
+                            {editDraft.categories.length > 0 ? (
+                              <div className="flex min-w-0 flex-wrap items-center gap-static-xs" data-testid="memory-category-chip-list">
+                                {editDraft.categories.map((category) => (
+                                  <PTagDismissible
+                                    key={category}
+                                    data-testid="memory-category-chip"
+                                    data-category={category}
+                                    compact
+                                    label={category}
+                                    aria={{ 'aria-label': `Remove category ${category}` }}
+                                    onClick={() => removeDraftListValue('categories', category)}
+                                  />
+                                ))}
+                              </div>
+                            ) : (
+                              <span data-testid="memory-no-categories" className="text-sm text-contrast-high">No categories</span>
+                            )}
+                          </section>
+
+                          <section className="grid min-w-0 gap-static-xs" data-testid="memory-scope-agent-editor">
+                            <div className="grid min-w-0 gap-static-xs sm:grid-cols-[minmax(0,1fr)_auto]">
+                              <PInputText
+                                name="new-memory-scope-agent"
+                                label="Scope agents"
+                                placeholder="Add scope agent"
+                                compact
+                                className="min-w-0"
+                                value={newScopeAgent}
+                                onChange={(event) => setNewScopeAgent(readStringValue(event))}
+                                onInput={(event) => setNewScopeAgent(readStringValue(event))}
+                                onKeyDown={(event) => {
+                                  if (event.key === 'Enter') {
+                                    event.preventDefault()
+                                    addDraftListValues('scope_agents', newScopeAgent)
+                                  }
+                                }}
+                              />
+                              <PButton
+                                type="button"
+                                data-testid="memory-add-scope-agent-button"
+                                variant="secondary"
+                                icon="plus"
+                                className="min-w-0 self-end"
+                                compact
+                                disabled={newScopeAgent.trim().length === 0}
+                                onClick={() => addDraftListValues('scope_agents', newScopeAgent)}
+                              >
+                                Add
+                              </PButton>
+                            </div>
+                            {editDraft.scope_agents.length > 0 ? (
+                              <div className="flex min-w-0 flex-wrap items-center gap-static-xs" data-testid="memory-scope-agent-chip-list">
+                                {editDraft.scope_agents.map((agent) => (
+                                  <PTagDismissible
+                                    key={agent}
+                                    data-testid="memory-scope-agent-chip"
+                                    data-scope-agent={agent}
+                                    compact
+                                    label={agent}
+                                    aria={{ 'aria-label': `Remove scope agent ${agent}` }}
+                                    onClick={() => removeDraftListValue('scope_agents', agent)}
+                                  />
+                                ))}
+                              </div>
+                            ) : (
+                              <span data-testid="memory-no-scope-agents" className="text-sm text-contrast-high">No scope agents</span>
+                            )}
+                          </section>
                         </div>
                         <PTextarea
                           name="edit-content"

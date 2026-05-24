@@ -584,11 +584,35 @@ describe('TestFromAC_MemoryEditForm', () => {
     const form = container.querySelector('[data-testid="memory-edit-form"]')
     expect(form).not.toBeNull()
     expect(form!.querySelector('p-input-text[name="edit-title"]')).not.toBeNull()
-    expect(form!.querySelector('p-input-text[name="edit-categories"]')).not.toBeNull()
     expect(form!.querySelector('p-input-number[name="edit-confidence"]')).not.toBeNull()
-    expect(form!.querySelector('p-input-text[name="edit-scope-agents"]')).not.toBeNull()
+    expect(form!.querySelector('p-input-text[name="new-memory-category"]')).not.toBeNull()
+    expect(form!.querySelector('p-input-text[name="new-memory-scope-agent"]')).not.toBeNull()
+    expect(form!.querySelector('[data-testid="memory-category-chip-list"]')).not.toBeNull()
+    expect(form!.querySelector('[data-testid="memory-scope-agent-chip-list"]')).not.toBeNull()
     expect(form!.querySelector('p-textarea[name="edit-content"]')).not.toBeNull()
     expect(form!.querySelector('[data-pds-exception="memory-edit-native-input"]')).toBeNull()
+  })
+
+  it('ac3 pds: categories and scope agents use add and dismissible tag editors', async () => {
+    const container = await renderWithEntries([makeEntry({ categories: ['old'], scope_agents: ['*'] })])
+    await openAccordion(container)
+    const editBtn = container.querySelector('[data-testid="memory-edit-btn"]')
+    expect(editBtn).not.toBeNull()
+    await act(async () => { fireEvent.click(editBtn!) })
+    await flush()
+
+    const form = container.querySelector('[data-testid="memory-edit-form"]')!
+    expect(form.querySelector('[data-testid="memory-category-chip"][data-category="old"]')).not.toBeNull()
+    expect(form.querySelector('[data-testid="memory-scope-agent-chip"][data-scope-agent="*"]')).not.toBeNull()
+
+    fireEvent(form.querySelector('p-input-text[name="new-memory-category"]')!, new CustomEvent('input', { detail: { value: 'process' }, bubbles: true }))
+    await act(async () => { fireEvent.click(form.querySelector('[data-testid="memory-add-category-button"]')!) })
+    await flush()
+    expect(form.querySelector('[data-testid="memory-category-chip"][data-category="process"]')).not.toBeNull()
+
+    await act(async () => { fireEvent.click(form.querySelector('[data-testid="memory-scope-agent-chip"][data-scope-agent="*"]')!) })
+    await flush()
+    expect(form.querySelector('[data-testid="memory-scope-agent-chip"][data-scope-agent="*"]')).toBeNull()
   })
 
   it('ac3 happy: edit form content field uses the PDS character counter', async () => {
@@ -789,9 +813,12 @@ describe('TestFromAC_MemoryEditForm', () => {
     await flush()
     const form = container.querySelector('[data-testid="memory-edit-form"]')!
     fireEvent(form.querySelector('p-input-text[name="edit-title"]')!, new CustomEvent('input', { detail: { value: 'Updated title' }, bubbles: true }))
-    fireEvent(form.querySelector('p-input-text[name="edit-categories"]')!, new CustomEvent('input', { detail: { value: 'process, ux' }, bubbles: true }))
+    await act(async () => { fireEvent.click(form.querySelector('[data-testid="memory-category-chip"][data-category="old"]')!) })
+    fireEvent(form.querySelector('p-input-text[name="new-memory-category"]')!, new CustomEvent('input', { detail: { value: 'process, ux' }, bubbles: true }))
+    await act(async () => { fireEvent.click(form.querySelector('[data-testid="memory-add-category-button"]')!) })
     fireEvent(form.querySelector('p-input-number[name="edit-confidence"]')!, new CustomEvent('input', { detail: { value: '0.91' }, bubbles: true }))
-    fireEvent(form.querySelector('p-input-text[name="edit-scope-agents"]')!, new CustomEvent('input', { detail: { value: 'builder, reviewer' }, bubbles: true }))
+    fireEvent(form.querySelector('p-input-text[name="new-memory-scope-agent"]')!, new CustomEvent('input', { detail: { value: 'reviewer' }, bubbles: true }))
+    await act(async () => { fireEvent.click(form.querySelector('[data-testid="memory-add-scope-agent-button"]')!) })
     fireEvent(form.querySelector('p-textarea[name="edit-content"]')!, new CustomEvent('input', { detail: { value: 'Updated content' }, bubbles: true }))
     const saveBtn = container.querySelector('[data-testid="memory-edit-save-btn"]')
     expect(saveBtn).not.toBeNull()
