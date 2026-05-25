@@ -620,6 +620,15 @@ Two endpoints handle Decision Request (DR) lifecycle. These routes use `get_deci
 | `GET /api/decisions/pending` | Reads `decisions/pending/*.md`, parses YAML frontmatter, returns `{count, items[{id, task_id (int), agent, request_type, created, title, body, body_preview}]}`. Only items with frontmatter `response == "pending"` are included. Items that fail schema validation (e.g. missing or non-coercible `task_id`) are silently excluded; `count` reflects only successfully validated items. Returns `{count: 0, items: []}` when the directory is empty or missing. |
 | `POST /api/decisions/{id}/resolve` | Accepts `{response: "approved"\|"needs-info"\|"rejected", notes?: string (max 10,000 chars)}`. Immediately: appends the canonical `## Decision Request` summary to the linked task, unblocks the task for `approved`/`rejected` responses, and moves the DR file from `pending/` to `resolved/`. Returns `{id, response}` on success. Returns 404 (`{detail}`) for unknown or already-cockpit-resolved ids. Returns 409 (`{code, message}`) for DRs resolved by another agent (still in `resolved/`). Returns 422 (`{detail}`) for malformed ids or `notes` exceeding 10,000 characters. |
 
+## Requests API
+
+Two endpoints handle the structured-request lifecycle (decision requests and action requests created via `mcp-kanban`). These routes use `get_engine` (the same `KanbanEngine` DI callable from `deps.py`) and live in `routes/requests.py`.
+
+| Route | Behaviour |
+|-------|----------|
+| `GET /api/requests/pending` | Calls `engine.sweep_requests()` in a broad try/except (logs WARNING on failure, continues). Then calls `engine.list_requests(status="pending")` and returns a JSON array. Each item: `{request_id, task_id, kind, title, summary, agent, created_at, options: [{option_id, label, confidence, recommended, rationale}], body}`. Response model has `extra="forbid"`. |
+| `POST /api/requests/{id}/resolve` | Accepts `{selected_option_id: str\|null, free_text: str\|null, kind: "decision"\|"action"\|null}` (extra fields forbidden). Validates UUID4 format (422 `detail="Invalid request id"`), canonicalizes to lowercase before engine delegation. Bare-Complete normalization: when both fields are null and `kind="action"`, normalizes `free_text` to `""`; when both null and kind absent or `"decision"`, returns 422 `"decision requests require selected_option_id or free_text"`. Delegates to `engine.resolve_request(canonical_id, selected_option_id, free_text)`. Returns 200 `{request_id, task_id, kind, title, resolved_at}`. Errors: `NotFoundError` → 404, `ValidationError` → 422, both via shared app exception handler returning `{code, message}`. |
+
 ## Memory API
 
 Four endpoints expose `MemoryEngine` read and OCC mutation operations. These routes use `get_memory_engine` (a separate DI callable in `deps.py`) — not the CockpitView facade.
