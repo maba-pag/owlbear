@@ -71,3 +71,33 @@
 **Source inputs:**
 
 - User provided concrete scenarios from real corporate knowledge needs.
+
+## D4 — 2026-05-25 — Enrichment Placement
+
+**Chosen:** B — Separate peer module (6 engine modules total)
+
+**Rejected:** A (embed in Graph) — enrichment is unvalidated, will undergo rewrites. Isolation means those changes don't cascade into Graph/Query.
+
+## D5 — 2026-05-25 — Persistence Layer
+
+**Chosen:** A — No persistence module. Each data-owning module exclusively owns its tables.
+
+**Rejected:** B (separate persistence module) — dilutes exclusive ownership clarity, risks becoming shared-dependency god-module.
+
+## D6 — 2026-05-25 — Schema Migration Strategy
+
+**Chosen:** A — Table prefix convention (`content_*`, `graph_*`, `source_*`, `enrich_*`) + per-module migration dirs + CI enforcement.
+
+**Rejected:** B (implicit) — ownership drift is the problem being solved; enforcement must be structural.
+
+## D7 — 2026-05-25 — Wish System
+
+**Chosen:** A — Include in Sources module. One Protocol method (`register_wish`), one status field. Closes end-to-end story tracing.
+
+**Rejected:** B (defer) — trivial cost, but absence leaves consumer UX unspecified.
+
+## D8 — 2026-05-25 — Content-Pipeline Processing Scope
+
+**Chosen:** A — Internal to Content module. Chunking/embedding are encapsulated implementation details.
+
+**Rejected:** B (separate processing module) — over-engineering for single-user laptop system. Trust boundary already handled by ContentFetcher protocol + content_safety wrapper.

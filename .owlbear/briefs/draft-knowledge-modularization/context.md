@@ -69,4 +69,4 @@ The kanban module demonstrates the target layering:
 
 ## Status
 
-Phase 1 — M2 complete, early challenge lane complete, research bridge next
+Phase 2 — M5 complete. Brief approved. Proceeding to M6 handoff.
