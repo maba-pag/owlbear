@@ -249,6 +249,7 @@ class MemoryEngine:
                 update={
                     "state": MemoryState.CONTESTED,
                     "contested_by_task": task_id,
+                    "approved_at": None,
                     "updated_at": self._now_iso(),
                 }
             )
