@@ -538,6 +538,26 @@ Accessibility and responsive state after #1396:
   nav-badge sync after pending-state mutations, approved-state delete confirmation
   (soft-delete dialog branch), and approved-entry edit downgrade to curated).
 
+- #1857 wires the resolver frontend to the structured Requests API. `usePendingDRs.ts`
+  switches its fetch target from `GET /api/decisions/pending` to `GET /api/requests/pending`
+  (bare JSON array of `PendingRequestResponse` items) and normalizes the response into
+  the existing `PendingDR` shape via `normalizePendingDRItem()` (`request_id` → `id`,
+  `created_at` → `created`, plus `summary`, `kind`, and `options` passthrough). The resolve
+  client in `decisions.ts` switches from `POST /api/decisions/{id}/resolve` to
+  `POST /api/requests/{id}/resolve` with body `{selected_option_id, free_text, kind}`.
+  `ResolveModal.tsx` renders structured `title` and `summary` directly from the snapshot
+  (`snapshotDR.title`, `snapshotDR.summary`) inside `[data-testid="resolve-request-summary"]`
+  — `getDecisionBrief()` is not used for title or summary derivation. Decision-kind
+  requests render each `options[].label` as a selectable `[data-testid="resolve-option-{option_id}"]`
+  control; action-kind requests render a "Complete" submit button. On HTTP 200, the modal
+  closes and `usePendingDRs` refetches. Verified by
+  `serve/cockpit/web/src/__tests__/ResolveWiring_1857.test.tsx` (40 tests — AC1 hook URL,
+  bare-array normalization, summary DOM disambiguator; AC2 decision-kind and action-kind
+  resolve POST payload; AC3 option controls and Complete button branching),
+  `serve/cockpit/web/src/__tests__/usePendingDRs.test.ts` (updated endpoint URL and
+  fixture shape), and `serve/cockpit/web/src/__tests__/ResolveModal.test.tsx` (updated
+  field contract and resolve payload assertions).
+
 ## Product Boundary
 
 Cockpit steering owns viewing, editing, moving/archiving, user blocks, health/admin,
@@ -587,7 +607,7 @@ Decision behavior after #1385 and #1389:
 
 - Backend decision lifecycle is canonical: resolution appends the task summary,
   moves decision files to `resolved/`, and applies unblock semantics per response.
-- Frontend decision UX after #1645 and #1648: the `/decisions` tab (`DecisionsPage`) is the primary path; `DRStatusIndicator` in the status bar → `ResolveModal` is the secondary (route-independent Shell-level) path. `DecisionViewport` is no longer rendered in the sidecar.
+- Frontend decision UX after #1645, #1648, and #1857: the `/decisions` tab (`DecisionsPage`) is the primary path; `DRStatusIndicator` in the status bar → `ResolveModal` is the secondary (route-independent Shell-level) path. `DecisionViewport` is no longer rendered in the sidecar. As of #1857, `usePendingDRs` fetches from `GET /api/requests/pending` (Requests API) and `ResolveModal` renders structured `title`, `summary`, and `options` fields — not the legacy Decisions API or body-parsed extraction.
 
 ## Error Envelope
 
