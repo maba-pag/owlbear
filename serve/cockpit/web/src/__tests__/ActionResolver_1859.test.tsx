@@ -337,10 +337,13 @@ describe('TestFromAC_ActionResolver', () => {
       const bodyEl = container.querySelector('[data-testid="resolve-action-body"]')
       expect(bodyEl).not.toBeNull()
 
-      // Enter notes with surrounding whitespace — must be trimmed in the payload.
+      // Enter notes via PDS CustomEvent detail.value path (p-textarea web component contract).
       const notesEl = container.querySelector('[data-testid="resolve-notes"]') as HTMLElement | null
       expect(notesEl).not.toBeNull()
-      fireEvent.change(notesEl!, { target: { value: '  migration complete  ' } })
+      fireEvent(
+        notesEl!,
+        new CustomEvent('change', { detail: { value: '  migration complete  ' }, bubbles: true }),
+      )
 
       const submitBtn = container.querySelector('[data-testid="resolve-submit"]') as HTMLElement | null
       expect(submitBtn).not.toBeNull()
