@@ -1,10 +1,10 @@
 ---
 id: 1868
 title: 'Kanban: add resolve_decision() to decisions module with unit tests'
-status: done
+status: archived
 priority: important
 created: 2026-05-25T00:20:38.487099+02:00
-updated: 2026-05-25T04:21:23.395027+02:00
+updated: 2026-05-25T04:50:27.813656+02:00
 tags:
   - scope:kanban
   - boundary-audit
@@ -37,7 +37,7 @@ proof_bundle: behavioral
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 Add `resolve_decision(path, response, engine, *, notes=None, resolved_by="unknown")` to `owlbear_kanban.decisions`. The function encapsulates: parse DR → validate pending → update frontmatter (response, resolved_by) → append response section to body → persist rewrite → append canonical_summary to task → unblock task (if approved/rejected) → move_to_resolved(). Raises ConcurrencyError("ERR_STALE") if not pending. Returns resolved Path.
@@ -272,3 +272,30 @@ None — no task-caused documentation drift detected.
 
 ### Scratch Cleanup
 No `.owlbear/scratch/1868-*` files found.
+
+[[2026-05-25T04:50:27+02:00]]
+## Audit
+### Regression Detection
+- quality-runner mode full: 4980 passed, 126 failed (all pre-existing from unrelated tasks: test_cockpit_view.py, test_server.py, test_dead_code_sweep.py, etc.)
+- kanban domain scoped: 1464 passed, 2 failed (same 2 pre-existing from task 1181, documented by builder as unchanged)
+- regression verdict: PASS (no new failures introduced)
+
+### Intent Verification
+- scope alignment: PASS (builder commit c270ac0e only touched serve/kanban/src/owlbear_kanban/decisions.py; test-writer commits only touched tests/test_decisions_1868.py)
+- purpose match: PASS (extracts domain logic from cockpit routes into kanban.decisions module, correct layering direction)
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 4/5
+Original 11 AC lines were atomic and testable but AC5 and AC7 required 2 refinement cycles driven by reviewer feedback to achieve proof-precise wording. Final AC quality is excellent. Score reflects the necessary mid-task iteration.
+
+### Commit Integrity
+- upstream commit presence: PASS (35d00c0c test-writer, c270ac0e builder, cd3552fc test-writer retry, 1a87f5d3 test-writer retry 2)
+- builder commit scope: PASS (only decisions.py)
+- kanban commit packaging: pending (this commit)
+
+### Deduction Breakdown
+None applied. All criteria clean.
+
+### Confidence: 1.00
+### Action: archive
