@@ -1,10 +1,10 @@
 ---
 id: 1855
 title: 'P1-05: MCP tools — create_request, list_requests, show_request'
-status: review
+status: backlog
 priority: needed
 created: 2026-05-24T20:58:39.096212+02:00
-updated: 2026-05-25T12:20:49.877558+02:00
+updated: 2026-05-25T13:24:21.801043+02:00
 tags:
   - phase-1
   - scope:mcp-kanban
@@ -37,9 +37,8 @@ ac:
     (b) list_requests tests must assert engine mock receives explicit non-default
     status when caller passes one.'
 proof_bundle: behavioral
-blocked: true
-block_reason: 'Reviewer loop (4+ dispatches): AC1-AC3 response-shape proof gaps. Architect
-  must tighten AC to require full model_dump field assertion before re-entering pipeline.'
+blocked: false
+block_reason:
 claimed_at:
 archival_reason:
 archival_refs: []
