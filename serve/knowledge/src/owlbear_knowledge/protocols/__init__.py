@@ -1,0 +1,168 @@
+"""Knowledge module protocol surface — public re-exports.
+
+Import from this package for all boundary types and Protocol interfaces:
+
+    from owlbear_knowledge.protocols import (
+        SourceStore,
+        ContentStore,
+        GraphStore,
+        EnrichmentEngine,
+        IngestPipeline,
+        QueryService,
+    )
+"""
+
+from owlbear_knowledge.protocols.common import (
+    BoundaryModel,
+    JsonValue,
+    Metadata,
+    canonicalize_name,
+)
+from owlbear_knowledge.protocols.content import (
+    ContentChunk,
+    ContentIngestRequest,
+    ContentIngestResult,
+    ContentIngestState,
+    ContentPurgeResult,
+    ContentSearchQuery,
+    ContentSearchResult,
+    ContentStats,
+    ContentStore,
+)
+from owlbear_knowledge.protocols.enrichment import (
+    ClaimedChunk,
+    EdgeInferenceReport,
+    EnrichmentEngine,
+    EnrichmentPurgeResult,
+    EnrichmentState,
+    EnrichmentStats,
+    ResetResult,
+    StoreExtractionResult,
+)
+from owlbear_knowledge.protocols.graph import (
+    AdjacencyQuery,
+    EdgeInput,
+    EdgeRecord,
+    EntityInput,
+    EntityKind,
+    EntityQuery,
+    EntityRecord,
+    EvidenceInput,
+    EvidenceRecord,
+    GraphStats,
+    GraphStore,
+    PurgeEvidenceResult,
+    RelationKind,
+    TraversalPath,
+    TraversalQuery,
+)
+from owlbear_knowledge.protocols.ingest import (
+    IngestFailure,
+    IngestPipeline,
+    IngestRequest,
+    IngestResult,
+    IngestStatus,
+    PurgeReport,
+    RefreshRequest,
+    RefreshResult,
+)
+from owlbear_knowledge.protocols.query import (
+    AggregateStats,
+    GraphContext,
+    Provenance,
+    QueryContext,
+    QueryContextRequest,
+    QueryRequest,
+    QueryResponse,
+    QueryResult,
+    QueryService,
+)
+from owlbear_knowledge.protocols.sources import (
+    FetchTransport,
+    SourceDeletionInfo,
+    SourceHealth,
+    SourceHealthReport,
+    SourceKind,
+    SourceRecord,
+    SourceRegistration,
+    SourceState,
+    SourceStats,
+    SourceStore,
+    SourceUpdate,
+    SourceWish,
+)
+
+__all__ = [
+    # common
+    "BoundaryModel",
+    "JsonValue",
+    "Metadata",
+    "canonicalize_name",
+    # sources
+    "FetchTransport",
+    "SourceDeletionInfo",
+    "SourceHealth",
+    "SourceHealthReport",
+    "SourceKind",
+    "SourceRecord",
+    "SourceRegistration",
+    "SourceState",
+    "SourceStats",
+    "SourceStore",
+    "SourceUpdate",
+    "SourceWish",
+    # content
+    "ContentChunk",
+    "ContentIngestRequest",
+    "ContentIngestResult",
+    "ContentIngestState",
+    "ContentPurgeResult",
+    "ContentSearchQuery",
+    "ContentSearchResult",
+    "ContentStats",
+    "ContentStore",
+    # graph
+    "AdjacencyQuery",
+    "EdgeInput",
+    "EdgeRecord",
+    "EntityInput",
+    "EntityKind",
+    "EntityQuery",
+    "EntityRecord",
+    "EvidenceInput",
+    "EvidenceRecord",
+    "GraphStats",
+    "GraphStore",
+    "PurgeEvidenceResult",
+    "RelationKind",
+    "TraversalPath",
+    "TraversalQuery",
+    # enrichment
+    "ClaimedChunk",
+    "EdgeInferenceReport",
+    "EnrichmentEngine",
+    "EnrichmentPurgeResult",
+    "EnrichmentState",
+    "EnrichmentStats",
+    "ResetResult",
+    "StoreExtractionResult",
+    # ingest
+    "IngestFailure",
+    "IngestPipeline",
+    "IngestRequest",
+    "IngestResult",
+    "IngestStatus",
+    "PurgeReport",
+    "RefreshRequest",
+    "RefreshResult",
+    # query
+    "AggregateStats",
+    "GraphContext",
+    "Provenance",
+    "QueryContext",
+    "QueryContextRequest",
+    "QueryRequest",
+    "QueryResponse",
+    "QueryResult",
+    "QueryService",
+]
