@@ -612,3 +612,80 @@ class TestFromAC_ContentStore:
 
         assert result.content_hash != ""
         assert len(result.content_hash) == 64  # SHA-256 hex digest
+
+    # ------------------------------------------------------------------ AC1 retry
+    # Retry-safe vector repair after post-commit Qdrant failure
+
+    @pytest.mark.asyncio
+    async def test_ingest_retry_after_qdrant_failure_writes_vectors(
+        self, mock_embed: MagicMock
+    ) -> None:
+        """AC1: retrying ingest after a post-commit Qdrant failure must write vectors.
+
+        When Qdrant fails after SQLite commits the document, the document record
+        exists with the same content_hash. A subsequent retry with identical content
+        MUST write vectors rather than short-circuiting through UNCHANGED
+        (which leaves vectors permanently unrepaired and violates the retry contract).
+        """
+        db = sqlite3.connect(":memory:")
+        chunker = TextChunker(target_tokens=50)
+        req = _make_request()
+
+        # Step 1: first ingest — SQLite commits, then Qdrant fails
+        failing_vectors = MagicMock()
+        failing_vectors.upsert = MagicMock(side_effect=RuntimeError("qdrant down"))
+        s = ContentStore(
+            db=db,
+            vector_store=failing_vectors,
+            embedding_provider=mock_embed,
+            chunker=chunker,
+        )
+        s.ensure_tables()
+        with pytest.raises(RuntimeError):
+            await s.ingest(req)
+
+        # Step 2: retry — Qdrant back online, same DB (document_id+hash already committed)
+        retry_vectors = MagicMock()
+        s2 = ContentStore(
+            db=db,
+            vector_store=retry_vectors,
+            embedding_provider=mock_embed,
+            chunker=chunker,
+        )
+        await s2.ingest(req)
+
+        # Vectors MUST be written — current UNCHANGED short-circuit skips all writes,
+        # leaving the document permanently without vector representation.
+        assert retry_vectors.called, (
+            "AC1 retry contract violated: second ingest after Qdrant failure must write "
+            "vectors to reach consistent state — UNCHANGED short-circuit leaves vectors "
+            "unrepaired"
+        )
+
+    # ------------------------------------------------------------------ AC5 metadata
+    # get_document metadata round-trip proof
+
+    @pytest.mark.asyncio
+    async def test_get_document_returns_request_metadata(
+        self, store: ContentStore
+    ) -> None:
+        """AC5: get_document returns ContentDocument whose metadata matches the request.
+
+        Explicit round-trip proof: metadata supplied in ContentIngestRequest must be
+        retrievable via get_document() without loss or mutation.
+        """
+        from owlbear_knowledge.protocols.content import ContentIngestRequest  # noqa: PLC0415
+
+        req = ContentIngestRequest(
+            source_id="src-meta-rt",
+            title="Metadata Round-trip Doc",
+            text="Metadata round-trip test content. " * 4,
+            scope="global",
+            metadata={"author": "tester", "priority": 1},
+        )
+        result = await store.ingest(req)
+
+        doc = store.get_document(result.document_id)
+
+        assert doc is not None
+        assert doc.metadata == {"author": "tester", "priority": 1}
