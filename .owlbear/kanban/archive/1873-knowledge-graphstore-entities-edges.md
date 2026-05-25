@@ -1,10 +1,10 @@
 ---
 id: 1873
 title: 'Knowledge: GraphStore — entities & edges'
-status: done
+status: archived
 priority: needed
 created: 2026-05-25T19:03:25.225852+02:00
-updated: 2026-05-26T00:34:39.117665+02:00
+updated: 2026-05-26T00:53:21.874105+02:00
 tags:
   - knowledge
   - layer-1
@@ -45,7 +45,7 @@ proof_bundle: behavioral
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Objective
@@ -380,3 +380,24 @@ Re-review triggered by reviewer FAIL (cycle 2) routing task back to backlog. Two
 
 ### Verdict
 DONE #1873 -> done | docs gate passed
+
+[[2026-05-26T00:53:21+02:00]]
+## Audit
+
+### Regression Detection
+quality-runner full report: 40 passed, 0 failed in knowledge domain scope. Lint violations (31 total) are all pre-existing in `protocols/` files not touched by this task — no regressions introduced by #1873.
+
+### Intent Verification
+Changed files: `stores/graph.py`, `stores/__init__.py`, `tests/test_graph_store_1873.py`. All within Knowledge/Graph domain. Implementation addresses stated purpose (entity+edge CRUD with canonical identity, upsert semantics, adjacency queries). No extraneous scope.
+
+### Architect Quality
+Score: 4/5. Final AC (9 lines) is protocol-exact with explicit input→output pairs and error conditions. Required 2 review cycles + re-architecture to reach this quality — initial AC was too vague for discriminating proof, but architect responded well to feedback and produced specific, verifiable criteria.
+
+### Commit Integrity
+Builder: `5709b162` (feat). Test-writer: `c97c0714`, `88328318`, `72a5ba95` (test). All committed with proper format and task ID reference. No uncommitted deliverables.
+
+### Deduction Breakdown
+- No deductions. Tests green, intent aligned, AC quality 4/5 (deduction threshold is ≤3), reviewer evidence detailed and present, commits clean.
+
+### Confidence: 1.00
+### Action: ARCHIVE
