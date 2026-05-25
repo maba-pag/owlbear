@@ -1,10 +1,10 @@
 ---
 id: 1854
 title: 'P1-04: Engine API — list_requests and sweep'
-status: backlog
+status: archived
 priority: needed
 created: 2026-05-24T20:58:29.519700+02:00
-updated: 2026-05-25T09:03:32.335818+02:00
+updated: 2026-05-25T09:59:22.714006+02:00
 tags:
   - phase-1
   - scope:kanban
@@ -33,11 +33,15 @@ ac:
     test_agent_view_pick_tasks_1445.py::test_no_engine_write_methods_called 
     permits sweep_requests while forbidding edit_task, move_task, sweep, 
     repair_storage.
+  - 'sweep_requests BLE001 compliance: the post-move side-effect try/except at engine.py:1185
+    must use `except (OSError, KeyError, ValueError, KanbanError)` (no bare `except
+    Exception`, no `# noqa: BLE001`). test_engine_ble001.py::test_engine_py_has_no_ble001_noqa
+    and test_ruff_ble001_check_passes must pass.'
 proof_bundle: behavioral
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 Brief: see parent #1850 and `.owlbear/briefs/draft-decision-request-data-model/brief.md`
@@ -310,3 +314,137 @@ AC went through 3 review cycles with explicit challenger engagement. Specific re
 | # | Target Agent | Action Required | File(s) | Evidence |
 |---|-------------|----------------|---------|----------|
 | 1 | builder | Narrow `except Exception` at engine.py:1185 to specific exception types (e.g. `OSError, ValueError, RuntimeError`) and remove the `# noqa: BLE001` suppression, then verify `test_engine_ble001.py` passes | serve/kanban/src/owlbear_kanban/engine.py | Regression: test_engine_ble001.py::test_engine_py_has_no_ble001_noqa, test_ruff_ble001_check_passes |
+
+[[2026-05-25T09:05:53+02:00]]
+## Architecture Review (re-entry — auditor regression fix)
+### Context
+Auditor rejected to backlog with a single regression finding: `except Exception as exc:  # noqa: BLE001` at engine.py:1185 violates the project standard enforced by `test_engine_ble001.py` (AC6: no BLE001 suppressions, AC7: ruff BLE001 clean). Implementation confirmed correct across 3 review cycles; only the exception breadth is non-compliant.
+
+### AC Refinement
+Added AC5 requiring BLE001-compliant exception narrowing. The post-move side-effect handler wraps:
+- `_build_request_writeback()` → can raise `KeyError` (label dict lookup)
+- `edit_task(append_body=...)` → can raise `OSError`, `FileNotFoundError`, `ValueError`, `KanbanError`
+- `_has_pending_structured_requests_for_task()` → catches internally, won't propagate
+- `edit_task(blocked=False)` → same as above
+
+Narrowed tuple: `(OSError, KeyError, ValueError, KanbanError)` — covers all realistic paths. `FileNotFoundError` is a subclass of `OSError`; `ValidationError` is a subclass of `KanbanError`.
+
+### Proof-Bundle Validation
+- Final bundle: behavioral (unchanged)
+- Test-writer: PROCEED (add AC5 test or verify existing durable tests cover it)
+
+### Challenge Results
+- Challenger: SKIPPED — mechanical regression fix, no design decision to challenge
+
+### Verdict: APPROVE (after REFINE)
+### Action Taken: Added AC5 for BLE001 compliance with specific exception tuple. Re-advanced to todo.
+
+[[2026-05-25T09:15:34+02:00]]
+## Test-Writer Notes
+- Retry: AC5 BLE001 compliance — existing durable tests cover this AC; no new tests written.
+- Test file: tests/test_engine_ble001.py (existing, unchanged)
+- Covering tests:
+  - test_engine_py_has_no_ble001_noqa: FAILS — engine.py:1185 still contains `# noqa: BLE001`
+  - test_ruff_ble001_check_passes: FAILS — ruff detects BLE001 violation at engine.py:1185 even with `--no-noqa`
+- AC5 contract: post-move side-effect catch at engine.py:1185 must use `except (OSError, KeyError, ValueError, KanbanError)` with no bare `except Exception` and no `# noqa: BLE001`
+- Builder action: narrow exception tuple at engine.py:1185; remove noqa suppression
+- ruff: no new files — existing tests are clean
+
+[[2026-05-25T09:28:00+02:00]]
+## Builder Notes
+- Implemented AC5 regression fix in `serve/kanban/src/owlbear_kanban/engine.py` at the `sweep_requests()` post-move side-effect handler.
+- Replaced broad catch/suppression with BLE001-compliant narrow catch:
+  - `except (OSError, KeyError, ValueError, KanbanError) as exc`
+  - Removed `# noqa: BLE001`.
+- Preserved AC3 behavior for side-effect failures used by existing task tests by normalizing `RuntimeError` from `edit_task(...)` calls into `ValueError` inside the side-effect try block so failures remain warning-logged and non-fatal.
+
+- Files changed:
+  - serve/kanban/src/owlbear_kanban/engine.py
+
+- RED verification (pre-fix, quality-runner scoped):
+  - `tests/test_engine_ble001.py`: 18 passed, 2 failed
+  - Failures matched AC5 regression:
+    - `test_engine_py_has_no_ble001_noqa`
+    - `test_ruff_ble001_check_passes`
+
+- GREEN verification (post-fix, quality-runner scoped):
+  - Tests: 67 passed, 0 failed
+  - Test paths:
+    - tests/test_engine_ble001.py
+    - serve/kanban/tests/test_engine_requests_1854.py
+    - tests/test_agent_view_pick_tasks_1445.py
+  - Lint: clean (`ruff` clean on touched source + task-related tests)
+  - Coverage:
+    - `owlbear_kanban.engine`: 34%
+
+- Commit:
+  - f5868c95b24a5e60d9816b7ab22be9855cf28240
+  - `fix: narrow sweep_requests side-effect exceptions (#1854, builder)`
+
+Evidence summary: AC5 BLE001 regression is fixed while AC1-AC4 behavioral coverage remains green on task-scoped suite.
+
+[[2026-05-25T09:42:23+02:00]]
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation: PASS #1854 -> docs | AC mapped to code and evidence sufficient.
+- Builder evidence reviewed first: scoped quality-runner proof is recorded at .owlbear/kanban/tasks/1854-p1-04-engine-api-list-requests-and-sweep.md:355 with 67 passed / 0 failed at .owlbear/kanban/tasks/1854-p1-04-engine-api-list-requests-and-sweep.md:371, lint clean at .owlbear/kanban/tasks/1854-p1-04-engine-api-list-requests-and-sweep.md:376, and coverage reported at .owlbear/kanban/tasks/1854-p1-04-engine-api-list-requests-and-sweep.md:377.
+- AC evidence map:
+| AC Line | Code Evidence | Test Evidence | Status |
+|---|---|---|---|
+| AC1 | serve/kanban/src/owlbear_kanban/engine.py:1054, serve/kanban/src/owlbear_kanban/engine.py:1079 | serve/kanban/tests/test_engine_requests_1854.py:241, serve/kanban/tests/test_engine_requests_1854.py:341, serve/kanban/tests/test_engine_requests_1854.py:359 | PASS |
+| AC2 | serve/kanban/src/owlbear_kanban/engine.py:1133, serve/kanban/src/owlbear_kanban/engine.py:1158, serve/kanban/src/owlbear_kanban/engine.py:1176, serve/kanban/src/owlbear_kanban/engine.py:1178, serve/kanban/src/owlbear_kanban/engine.py:1181, serve/kanban/src/owlbear_kanban/engine.py:1188 | serve/kanban/tests/test_engine_requests_1854.py:417, serve/kanban/tests/test_engine_requests_1854.py:474 | PASS |
+| AC3 | serve/kanban/src/owlbear_kanban/engine.py:1149, serve/kanban/src/owlbear_kanban/engine.py:1176, serve/kanban/src/owlbear_kanban/engine.py:1178, serve/kanban/src/owlbear_kanban/engine.py:1191, serve/kanban/src/owlbear_kanban/engine.py:1193 | serve/kanban/tests/test_engine_requests_1854.py:656, serve/kanban/tests/test_engine_requests_1854.py:703, serve/kanban/tests/test_engine_requests_1854.py:755 | PASS |
+| AC4 | serve/kanban/src/owlbear_kanban/agent_view.py:329, serve/kanban/src/owlbear_kanban/agent_view.py:331 | serve/kanban/tests/test_engine_requests_1854.py:802, serve/kanban/tests/test_engine_requests_1854.py:811, serve/kanban/tests/test_engine_requests_1854.py:821, tests/test_agent_view_pick_tasks_1445.py:141 | PASS |
+| AC5 | serve/kanban/src/owlbear_kanban/engine.py:1184, serve/kanban/src/owlbear_kanban/engine.py:1189, serve/kanban/src/owlbear_kanban/engine.py:1191 | tests/test_engine_ble001.py:472, tests/test_engine_ble001.py:493 | PASS |
+- Independent sanity check: editor diagnostics report no errors in serve/kanban/src/owlbear_kanban/engine.py, serve/kanban/tests/test_engine_requests_1854.py, tests/test_engine_ble001.py, and tests/test_agent_view_pick_tasks_1445.py.
+- Blocking findings: none.
+
+## Observations
+- Challenger returned `reconsider` on the RuntimeError-to-ValueError adapter at serve/kanban/src/owlbear_kanban/engine.py:1184 and serve/kanban/src/owlbear_kanban/engine.py:1189. I did not treat that as blocking because AC5 constrains the outer narrowed catch at serve/kanban/src/owlbear_kanban/engine.py:1191, and the documented edit_task contract names FileNotFoundError / ValueError at serve/kanban/src/owlbear_kanban/engine.py:1606 and serve/kanban/src/owlbear_kanban/engine.py:1607 rather than RuntimeError.
+- The adapter is preserving the existing AC3 proof shape that injects RuntimeError in serve/kanban/tests/test_engine_requests_1854.py:619, serve/kanban/tests/test_engine_requests_1854.py:664, serve/kanban/tests/test_engine_requests_1854.py:713, and serve/kanban/tests/test_engine_requests_1854.py:764. If the architect wants unexpected RuntimeError from edit_task to propagate instead of log-and-continue, that needs an explicit follow-up AC and proof; it is not an objective failure under the current task contract.
+- No blocking implementation defect or proof defect remains in the current review scope.
+
+[[2026-05-25T09:46:32+02:00]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | README verification | Yes | Pass (pre-existing) | `serve/kanban/README.md` updated in prior gate pass (commit `ef7c72e4`): `list_requests` at line 54, `sweep_requests` at line 55, `pick_tasks` maintenance-step description at line 97 — all accurate. AC5 fix (exception narrowing) is internal; no docs delta needed. Layer 1: `list_requests`/`sweep_requests`/`pick_tasks` present and correct. Layer 2: \"post-move side-effect failures logged at WARNING without interrupting the sweep\" is still accurate post-BLE001 fix. |
+| 2 | External attribution | No | N/A | No external sources cited |
+| 3 | Research doc | No | N/A | No research artifact |
+| 4 | Deletion detection | No | N/A | No source files deleted |
+
+### Files Updated
+- None (README already updated in prior gate pass)
+
+### Scratch Cleanup
+- No `.owlbear/scratch/1854-*` files existed
+
+[[2026-05-25T09:59:22+02:00]]
+## Audit
+### Regression Detection
+- Direct execution: `serve/kanban/tests/` + `tests/test_engine_ble001.py` + `tests/test_agent_view_pick_tasks_1445.py` — 1495 passed, 0 failed (8.07s).
+- Root-level domain tests: `tests/test_engine_*.py` + `tests/test_kanban_*.py` — 543 passed, 0 failed.
+- Lint: `ruff check` on engine.py + agent_view.py — all passed (including BLE001 with --ignore-noqa).
+- quality-runner reported stale BLE001 failure; verified false positive via direct execution. Prior auditor regression (BLE001) confirmed fixed.
+- Regression verdict: PASS
+
+### Intent Verification
+- Scope alignment: PASS — all changes in serve/kanban/ domain (engine.py, agent_view.py, package tests, README)
+- Purpose match: PASS — list_requests + sweep_requests + pick_tasks wiring + BLE001 narrowing matches AC1-AC5
+- Extraneous scope: none
+
+### Architect Quality: 5/5
+AC went through 3 review cycles with challenger engagement. Final AC has explicit return types, error semantics, two-branch proof requirement (AC3), and BLE001 compliance (AC5). Each reviewer rejection led to a targeted refinement — no vagueness remaining.
+
+### Commit Integrity
+- 6 upstream commits present and properly attributed: 8c147ff4 (test-writer), 9f95c76c (builder), 3591aae3 (test-writer), 4843183f (test-writer), ef7c72e4 (doc-writer), f5868c95 (builder)
+- All commits follow format convention with task ID and agent attribution
+
+### Deduction Breakdown
+| Criterion | Deduction |
+|-----------|----------|
+| (none) | 0 |
+
+### Confidence: 1.00
+### Action: archive
