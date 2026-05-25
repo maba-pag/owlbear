@@ -20,11 +20,16 @@ const DR_ITEM: PendingDR = {
   request_type: 'scope-decision',
   created: '2026-04-30T10:00:00Z',
   title: 'Should we proceed with approach A?',
+  summary: 'Builder encountered a fork in the road...',
+  kind: 'decision',
+  options: [],
+  body: '',
   body_preview: 'Builder encountered a fork in the road...',
 }
 
-const PENDING_RESPONSE = { count: 1, items: [DR_ITEM] }
-const EMPTY_RESPONSE = { count: 0, items: [] }
+// Bare-array format returned by GET /api/requests/pending (new contract from #1856)
+const PENDING_RESPONSE = [DR_ITEM]
+const EMPTY_RESPONSE: PendingDR[] = []
 
 function makeFetch(response: unknown, ok = true) {
   return vi.fn(() =>
@@ -44,13 +49,13 @@ describe('TestFromAC_usePendingDRs', () => {
 
   // ─── AC: Test polling hook fetches /api/decisions/pending on interval ──────
 
-  describe('AC1: GET fetch to /api/decisions/pending on mount', () => {
-    it('fetches /api/decisions/pending on mount', async () => {
+  describe('AC1: GET fetch to /api/requests/pending on mount', () => {
+    it('fetches /api/requests/pending on mount', async () => {
       const fetchMock = makeFetch(PENDING_RESPONSE)
       vi.stubGlobal('fetch', fetchMock)
       renderHook(() => usePendingDRs())
       await act(async () => {})
-      expect(fetchMock).toHaveBeenCalledWith('/api/decisions/pending', expect.anything())
+      expect(fetchMock).toHaveBeenCalledWith('/api/requests/pending', expect.anything())
     })
 
     it('uses HTTP method GET for the pending DR fetch', async () => {
@@ -59,7 +64,7 @@ describe('TestFromAC_usePendingDRs', () => {
       renderHook(() => usePendingDRs())
       await act(async () => {})
       expect(fetchMock).toHaveBeenCalledWith(
-        '/api/decisions/pending',
+        '/api/requests/pending',
         expect.objectContaining({ method: 'GET' }),
       )
     })

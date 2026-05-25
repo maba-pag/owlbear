@@ -33,8 +33,11 @@ interface PendingDRWithBody {
   request_type: string
   created: string
   title: string
-  body_preview: string
+  summary: string
+  kind: 'decision' | 'action'
+  options: { option_id: string; label: string; confidence: number; recommended: boolean; rationale: string }[]
   body: string
+  body_preview: string
 }
 
 const DR_FIXTURE: PendingDRWithBody = {
@@ -44,8 +47,14 @@ const DR_FIXTURE: PendingDRWithBody = {
   request_type: 'decision',
   created: '2026-04-30T14:30:00+02:00',
   title: 'Scope question',
-  body_preview: 'Context: Should we include X?',
+  summary: 'Should we include X?',
+  kind: 'decision',
+  options: [
+    { option_id: 'opt-yes', label: 'Yes — include it', confidence: 0.8, recommended: true, rationale: '' },
+    { option_id: 'opt-no', label: 'No — defer it', confidence: 0.6, recommended: false, rationale: '' },
+  ],
   body: '## Context\n\nShould we include X?\n\n## Options\n\n1. Yes\n2. No',
+  body_preview: 'Context: Should we include X?',
 }
 
 // ─── Render helper ─────────────────────────────────────────────────────────────
@@ -83,34 +92,25 @@ describe('TestFromAC_ResolveModal', () => {
     })
   })
 
-  // ─── AC2: Response selector offers approved, rejected, needs-info ─────────
+  // ─── AC2: Response selector renders structured option controls ───────────
 
-  describe('AC2: response selector offers approved, rejected, needs-info', () => {
-    it('renders a response-selector with all three resolution options visible', () => {
+  describe('AC2: response selector renders structured option controls for decision-kind request', () => {
+    it('renders one selectable control per options[] entry identified by resolve-option-{option_id}', () => {
       const { container } = renderModal()
-      const selector = container.querySelector('[data-testid="response-selector"]')
-      expect(selector).not.toBeNull()
-      const text = selector?.textContent?.toLowerCase() ?? ''
-      expect(text).toContain('approve')
-      expect(text).toContain('reject')
-      expect(text).toContain('needs info')
+      const optYes = container.querySelector('[data-testid="resolve-option-opt-yes"]')
+      const optNo = container.querySelector('[data-testid="resolve-option-opt-no"]')
+      expect(optYes).not.toBeNull()
+      expect(optNo).not.toBeNull()
+      expect(optYes?.textContent).toContain('Yes — include it')
+      expect(optNo?.textContent).toContain('No — defer it')
     })
 
-    it('response-selector contains exactly three options and does not include completed', () => {
+    it('response-selector does not render approve/reject/needs-info radio inputs', () => {
       const { container } = renderModal()
       const selector = container.querySelector('[data-testid="response-selector"]')
       expect(selector).not.toBeNull()
-      // Check radio inputs — completed must not appear as an option
       const radios = selector?.querySelectorAll('input[type="radio"]')
-      const values = Array.from(radios ?? []).map((r) => (r as HTMLInputElement).value)
-      expect(values).not.toContain('completed')
-      // Selector text must not include the word 'completed' as an option label
-      const text = selector?.textContent?.toLowerCase() ?? ''
-      expect(text).not.toContain('completed')
-      // Exactly 3 choices offered
-      if (radios && radios.length > 0) {
-        expect(radios).toHaveLength(3)
-      }
+      expect(radios?.length ?? 0).toBe(0)
     })
   })
 
@@ -147,28 +147,20 @@ describe('TestFromAC_ResolveModal', () => {
     })
   })
 
-  // ─── AC4: Submit calls POST /api/decisions/{id}/resolve with payload ──────
+  // ─── AC4: Submit calls POST /api/requests/{id}/resolve with new payload ──
 
-  describe('AC4: submit calls POST /api/decisions/{id}/resolve with response + notes', () => {
-    it('clicking submit sends POST to /api/decisions/{id}/resolve with response and notes in the body', async () => {
+  describe('AC4: submit calls POST /api/requests/{id}/resolve with selected_option_id and kind', () => {
+    it('clicking an option then submit sends POST to /api/requests/{id}/resolve with selected_option_id, free_text, and kind', async () => {
       const fetchMock = vi.fn(() =>
         Promise.resolve({ ok: true, json: () => Promise.resolve({}) }),
       )
       vi.stubGlobal('fetch', fetchMock)
       const { container } = renderModal()
 
-      // Select a NON-default response option to prove the selected value is transmitted
-      const radio = container.querySelector(
-        '[data-testid="response-selector"] input[value="rejected"]',
-      ) as HTMLInputElement | null
-      const selectEl = container.querySelector(
-        '[data-testid="response-selector"] select',
-      ) as HTMLSelectElement | null
-      if (radio) {
-        fireEvent.click(radio)
-      } else if (selectEl) {
-        fireEvent.change(selectEl, { target: { value: 'rejected' } })
-      }
+      // Select the second option to prove the chosen value is transmitted (not a default)
+      const optNo = container.querySelector('[data-testid="resolve-option-opt-no"]') as HTMLElement | null
+      expect(optNo).not.toBeNull()
+      fireEvent.click(optNo!)
 
       // Enter notes
       const notes = container.querySelector('[data-testid="resolve-notes"]') as HTMLTextAreaElement | null
@@ -182,14 +174,14 @@ describe('TestFromAC_ResolveModal', () => {
       await waitFor(
         () => {
           expect(fetchMock).toHaveBeenCalledWith(
-            expect.stringContaining('/api/decisions/42-scope-question/resolve'),
+            expect.stringContaining('/api/requests/42-scope-question/resolve'),
             expect.objectContaining({ method: 'POST' }),
           )
           const [, opts] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
           const payload = JSON.parse(opts.body as string) as Record<string, unknown>
-          // Exact value proof — hardcoding 'approved' (default) would fail this assertion
-          expect(payload.response).toBe('rejected')
-          expect(payload).toHaveProperty('notes', 'Looks good to me.')
+          expect(payload.selected_option_id).toBe('opt-no')
+          expect(payload.kind).toBe('decision')
+          expect(payload.free_text).toBe('Looks good to me.')
         },
         { timeout: 500 },
       )
@@ -207,6 +199,11 @@ describe('TestFromAC_ResolveModal', () => {
       const onClose = vi.fn()
       const onResolved = vi.fn()
       const { container } = renderModal(DR_FIXTURE, onClose, onResolved)
+
+      // Decision kind: select an option first so submit is enabled
+      const optYes = container.querySelector('[data-testid="resolve-option-opt-yes"]') as HTMLElement | null
+      expect(optYes).not.toBeNull()
+      fireEvent.click(optYes!)
 
       const submitBtn = container.querySelector('[data-testid="resolve-submit"]') as HTMLElement | null
       expect(submitBtn).not.toBeNull()
@@ -232,6 +229,11 @@ describe('TestFromAC_ResolveModal', () => {
       )
       const { container } = renderModal()
 
+      // Decision kind: select an option first so submit triggers the fetch
+      const optYes = container.querySelector('[data-testid="resolve-option-opt-yes"]') as HTMLElement | null
+      expect(optYes).not.toBeNull()
+      fireEvent.click(optYes!)
+
       const submitBtn = container.querySelector('[data-testid="resolve-submit"]') as HTMLElement | null
       expect(submitBtn).not.toBeNull()
       fireEvent.click(submitBtn!)
@@ -254,6 +256,11 @@ describe('TestFromAC_ResolveModal', () => {
         ),
       )
       const { container } = renderModal()
+
+      // Decision kind: select an option first so submit triggers the fetch
+      const optYes = container.querySelector('[data-testid="resolve-option-opt-yes"]') as HTMLElement | null
+      expect(optYes).not.toBeNull()
+      fireEvent.click(optYes!)
 
       const submitBtn = container.querySelector('[data-testid="resolve-submit"]') as HTMLElement | null
       expect(submitBtn).not.toBeNull()

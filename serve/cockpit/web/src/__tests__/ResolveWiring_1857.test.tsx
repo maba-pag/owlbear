@@ -211,4 +211,94 @@ describe('TestFromAC_ResolveWiring', () => {
       expect(completeBtn).toBeDefined()
     }
   })
+
+  // ─── Retry-AC1: normalization of bare-array PendingRequestResponse ────────
+  // Proves that the hook correctly maps request_id→id and created_at→created
+  // from the real backend bare-array shape (PendingRequestResponse with request_id).
+
+  describe('retry-AC1: bare-array PendingRequestResponse normalization', () => {
+    beforeEach(() => {
+      vi.useFakeTimers()
+    })
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('hook normalizes request_id→id and created_at→created from bare-array backend fixture', async () => {
+      const rawItem = {
+        request_id: 'req-normalize-001',
+        task_id: 42,
+        kind: 'decision' as const,
+        title: 'Approve approach B?',
+        summary: 'Should we proceed with approach B?',
+        agent: 'builder',
+        created_at: '2026-05-25T10:00:00Z',
+        options: [
+          { option_id: 'opt-a', label: 'Yes, proceed', confidence: 0.9, recommended: true, rationale: '' },
+        ],
+        body: 'Full detail text here.',
+      }
+      const fetchMock = vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve([rawItem]),
+        }),
+      )
+      vi.stubGlobal('fetch', fetchMock)
+
+      const { result } = renderHook(() => usePendingDRs())
+      await act(async () => {})
+
+      expect(result.current.items).toHaveLength(1)
+      const item = result.current.items[0]
+      // request_id maps to id
+      expect(item.id).toBe('req-normalize-001')
+      // created_at maps to created
+      expect(item.created).toBe('2026-05-25T10:00:00Z')
+      // other fields preserved
+      expect(item.title).toBe('Approve approach B?')
+      expect(item.summary).toBe('Should we proceed with approach B?')
+      expect(item.kind).toBe('decision')
+    })
+  })
+
+  // ─── Retry-AC2: action-kind submit ────────────────────────────────────────
+  // Proves POST /api/requests/{id}/resolve is called with kind:"action" and
+  // selected_option_id:null when the user clicks "Complete" on an action request.
+
+  it('retry-AC2: action kind Complete button submits POST /api/requests/{id}/resolve with kind:action and selected_option_id:null', async () => {
+    const fetchMock = vi.fn(() =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ request_id: DR_ACTION.id }),
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const onResolved = vi.fn()
+    const { container } = renderModal(DR_ACTION, vi.fn(), onResolved)
+
+    // Action kind: "Complete" button must be rendered and enabled (no option selection needed)
+    const completeBtn = Array.from(
+      container.querySelectorAll<HTMLElement>('[data-testid="resolve-submit"]'),
+    ).find((el) => el.textContent?.includes('Complete'))
+    expect(completeBtn).toBeDefined()
+
+    fireEvent.click(completeBtn!)
+
+    await waitFor(() => {
+      const resolveCall = fetchMock.mock.calls.find((c) =>
+        String(c[0]).includes('/resolve'),
+      )
+      expect(String(resolveCall?.[0])).toContain('/api/requests/')
+      const body = JSON.parse((resolveCall?.[1] as RequestInit).body as string) as Record<string, unknown>
+      expect(body).toMatchObject({
+        selected_option_id: null,
+        kind: 'action',
+      })
+      expect(onResolved).toHaveBeenCalled()
+    })
+  })
 })
