@@ -2,6 +2,14 @@
 
 External repos and resources studied during OwlBear development.
 
+## ContentStore — Ingest & Dedup (Task #1871)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Qdrant Points API | <https://qdrant.tech/documentation/manage-data/points/> | Batch upsert, filter-based deletion, idempotent point operations, UUID point IDs | `.owlbear/research/1871-contentstore-ingest-dedup.md` | 2026-05-25 |
+| LangChain Indexing API | <https://github.com/langchain-ai/langchain/blob/master/libs/core/langchain_core/indexing/api.py> | Content+metadata dual hash, RecordManager, cleanup modes | `.owlbear/research/1871-contentstore-ingest-dedup.md` | 2026-05-25 |
+| LightRAG | <https://github.com/HKUDS/LightRAG/blob/main/lightrag/lightrag.py> | MD5 content-addressed doc IDs (compute_mdhash_id), DocStatusStorage, comprehensive delete cascades | `.owlbear/research/1871-contentstore-ingest-dedup.md` | 2026-05-25 |
+
 ## Slot-Efficiency Auto-Stale Transition (Task #1844)
 
 | Source | URL | What | Where Used | Date |
