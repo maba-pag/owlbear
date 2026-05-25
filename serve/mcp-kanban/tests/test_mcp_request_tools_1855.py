@@ -1075,3 +1075,138 @@ class TestFromAC_ResponseShapeContracts:
             f"show_request result is missing RequestRecord keys: {missing!r}; "
             f"got keys: {set(result.keys())!r}"
         )
+
+
+# ---------------------------------------------------------------------------
+# AC6+AC7 — Value equality contracts (full payload equality, not key presence)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ValueEqualityContracts:
+    """AC6+AC7 value-equality proof — returned dicts must equal model_dump() exactly, not merely share keys."""
+
+    # -- AC6: create_request non-normalized path (guidance=[]) ---------------
+
+    @pytest.mark.asyncio
+    async def test_create_request_success_full_value_equality_non_normalized(
+        self, app_ctx: AppContext
+    ) -> None:
+        """AC6: create_request result must equal fake_record.model_dump() | {'guidance': []} exactly."""
+        import owlbear_mcp_kanban.server as server_mod  # noqa: PLC0415
+
+        fn = getattr(server_mod, "create_request", None)
+        assert callable(fn), "owlbear_mcp_kanban.server.create_request must exist"
+
+        ctx = _make_mcp_ctx(app_ctx)
+        fake_record = _make_request_record(task_id=1, kind="action")
+        app_ctx.engine.create_request = MagicMock(return_value=fake_record)
+
+        result = await fn(
+            ctx,
+            task_id="1",
+            kind="action",
+            title="Value Equality Test",
+            summary="No normalization.",
+            agent="builder",
+            body="Clean body with actual\nnewlines only.",  # real newlines, no literal \n
+        )
+
+        expected = fake_record.model_dump() | {"guidance": []}
+        assert result == expected, (
+            f"create_request result must equal model_dump() merged with guidance=[]; "
+            f"diff keys: {set(result.keys()) ^ set(expected.keys())}; "
+            f"wrong values: {[(k, result.get(k), expected.get(k)) for k in expected if result.get(k) != expected.get(k)]!r}"
+        )
+
+    # -- AC6: create_request normalization path (guidance non-empty) ---------
+
+    @pytest.mark.asyncio
+    async def test_create_request_normalization_path_full_value_equality(
+        self, app_ctx: AppContext
+    ) -> None:
+        r"""AC6: normalization-path result must equal fake_record.model_dump() on all record fields + non-empty guidance."""
+        import owlbear_mcp_kanban.server as server_mod  # noqa: PLC0415
+
+        fn = getattr(server_mod, "create_request", None)
+        assert callable(fn), "owlbear_mcp_kanban.server.create_request must exist"
+
+        ctx = _make_mcp_ctx(app_ctx)
+        fake_record = _make_request_record(task_id=1, kind="action")
+        app_ctx.engine.create_request = MagicMock(return_value=fake_record)
+
+        result = await fn(
+            ctx,
+            task_id="1",
+            kind="action",
+            title="Norm Value Test",
+            summary="Has escapes.",
+            agent="builder",
+            body=r"Line one\nLine two\nLine three",  # literal \n — triggers normalization
+        )
+
+        # All 10 record fields must match model_dump() exactly.
+        expected_record_fields = fake_record.model_dump()
+        result_record_fields = {k: v for k, v in result.items() if k != "guidance"}
+        assert result_record_fields == expected_record_fields, (
+            f"create_request normalization path: record fields must equal model_dump(); "
+            f"wrong values: {[(k, result_record_fields.get(k), expected_record_fields.get(k)) for k in expected_record_fields if result_record_fields.get(k) != expected_record_fields.get(k)]!r}"
+        )
+        # guidance must be non-empty after normalization.
+        guidance = result.get("guidance")
+        assert isinstance(guidance, list), (
+            f"create_request normalization path: guidance must be a list; got {guidance!r}"
+        )
+        assert len(guidance) > 0, (
+            f"create_request normalization path: guidance must be non-empty; got {guidance!r}"
+        )
+
+    # -- AC7: list_requests full value equality per item ---------------------
+
+    @pytest.mark.asyncio
+    async def test_list_requests_success_full_value_equality(self, app_ctx: AppContext) -> None:
+        """AC7: each item in list_requests result must equal fake_record.model_dump(exclude={'body'}) exactly."""
+        import owlbear_mcp_kanban.server as server_mod  # noqa: PLC0415
+
+        fn = getattr(server_mod, "list_requests", None)
+        assert callable(fn), "owlbear_mcp_kanban.server.list_requests must exist"
+
+        ctx = _make_mcp_ctx(app_ctx)
+        fake_record = _make_request_record(task_id=1, kind="action", body="## Hidden body content")
+        app_ctx.engine.list_requests = MagicMock(return_value=[fake_record])
+
+        result = await fn(ctx, status="pending")
+
+        assert isinstance(result, list), f"list_requests must return a list, got {result!r}"
+        assert len(result) == 1, f"list_requests must return one item, got {len(result)!r}"
+        expected_item = fake_record.model_dump(exclude={"body"})
+        actual_item = result[0]
+        assert actual_item == expected_item, (
+            f"list_requests item must equal model_dump(exclude={{'body'}}) exactly; "
+            f"wrong values: {[(k, actual_item.get(k), expected_item.get(k)) for k in expected_item if actual_item.get(k) != expected_item.get(k)]!r}"
+        )
+
+    # -- AC7: show_request full value equality --------------------------------
+
+    @pytest.mark.asyncio
+    async def test_show_request_success_full_value_equality(self, app_ctx: AppContext) -> None:
+        """AC7: show_request result must equal fake_record.model_dump() exactly (full value equality)."""
+        import owlbear_mcp_kanban.server as server_mod  # noqa: PLC0415
+
+        fn = getattr(server_mod, "show_request", None)
+        assert callable(fn), "owlbear_mcp_kanban.server.show_request must exist"
+
+        ctx = _make_mcp_ctx(app_ctx)
+        fake_record = _make_request_record(
+            task_id=1,
+            kind="action",
+            body="## Full body visible\nWith nested content.",
+        )
+        app_ctx.engine.get_request = MagicMock(return_value=fake_record)
+
+        result = await fn(ctx, request_id=_VALID_REQUEST_UUID)
+
+        expected = fake_record.model_dump()
+        assert result == expected, (
+            f"show_request result must equal model_dump() exactly; "
+            f"wrong values: {[(k, result.get(k), expected.get(k)) for k in expected if result.get(k) != expected.get(k)]!r}"
+        )
