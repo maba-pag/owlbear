@@ -67,7 +67,7 @@ class ResolveResponse(BaseModel):
     resolved_at: str | None
 
 
-def _validate_request_id(request_id: str) -> None:
+def _validate_request_id(request_id: str) -> str:
     try:
         parsed = UUID(request_id)
     except ValueError as exc:
@@ -75,6 +75,8 @@ def _validate_request_id(request_id: str) -> None:
 
     if parsed.version != _UUID4_VERSION or str(parsed) != request_id.lower():
         raise HTTPException(status_code=422, detail="Invalid request id")
+
+    return str(parsed)
 
 
 def _to_pending_response(record: object) -> PendingRequestResponse:
@@ -121,7 +123,7 @@ def resolve_request(
     engine: _Engine,
 ) -> ResolveResponse:
     """Resolve a request by id."""
-    _validate_request_id(request_id)
+    canonical_request_id = _validate_request_id(request_id)
 
     selected_option_id = req.selected_option_id
     free_text = req.free_text
@@ -135,7 +137,7 @@ def resolve_request(
                 detail="decision requests require selected_option_id or free_text",
             )
 
-    resolved = engine.resolve_request(request_id, selected_option_id, free_text)
+    resolved = engine.resolve_request(canonical_request_id, selected_option_id, free_text)
     return ResolveResponse(
         request_id=resolved.request_id,
         task_id=resolved.task_id,
