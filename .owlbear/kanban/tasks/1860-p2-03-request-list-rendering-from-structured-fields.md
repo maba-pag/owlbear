@@ -1,10 +1,10 @@
 ---
 id: 1860
 title: 'P2-03: Request list rendering from structured fields'
-status: todo
+status: backlog
 priority: needed
 created: 2026-05-24T20:59:27.659879+02:00
-updated: 2026-05-26T00:19:34.821290+02:00
+updated: 2026-05-26T01:45:04.875756+02:00
 tags:
   - phase-2
   - scope:cockpit-web
@@ -164,3 +164,86 @@ Note: File committed as part of SHA 276606aa alongside #1859 file (terminal stag
 - Safety/security review is clean for this task slice. The page change is display-only, introduces no new dependency, and no unsanitized input reaches shell, path, template, or storage operations.
 - quality-runner could not complete expanded coverage capture because vitest coverage collection was interrupted twice. The builder-reported scoped coverage for src/pages/DecisionsPage.tsx remains 61.42%, so the retry should preserve a focused coverage summary after the durable-suite curation.
 - If the retry only updates tests and all updated suites pass against the current source, the builder-skip path is available under the pipeline protocol.
+
+[[2026-05-26T00:45:14+02:00]]
+## Test-Writer Notes
+- Retry: curated stale durable DecisionsPage suites per reviewer Required Follow-up 1 and 2.
+- Files updated: serve/cockpit/web/src/__tests__/DecisionsPage_1645.test.tsx, serve/cockpit/web/src/__tests__/DecisionsPage_1688.test.tsx
+- Changes in 1645: added kind/summary/options to all 7 fixtures; updated 5 stale assertions (Scope Decision→Decision/Action kind badge, body_preview→summary, agent not-shown→agent shown, body_preview truncation tests→summary-rendered and decision/action kind boundary test, empty-state copy→"No pending requests"); removed unused DR_EXACT_200_PREVIEW fixture and BODY_PREVIEW_EXACTLY_200 constant.
+- Changes in 1688: added kind/summary/options to DR_WITH_BRIEF (with two structured options) and DR_UNSTRUCTURED (kind='action'); replaced 5 stale body-parsing tests with structured-field contract tests (dr-context absent, dr-options from item.options, dr-recommendation/dr-consequence absent, item.summary for action-kind, agent attribution shown in primary meta).
+- quality-runner (scoped, all 3 suites): 53 passed, 0 failed; ESLint clean.
+- DecisionsPage.tsx coverage: 71.42%.
+- Builder skip: test-only retry, all 53 tests green against current implementation.
+- Commit: 161f1368
+
+[[2026-05-26T01:01:33+02:00]]
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation: PASS #1860 to docs | AC mapped to code and evidence sufficient.
+- Builder and retry evidence reviewed first: quality-runner scoped proof for the retry reports 53 passed, 0 failed, ESLint clean, and DecisionsPage.tsx coverage 71.42%.
+- Blocking findings: none.
+
+| AC Line | Code Evidence | Test Evidence | Status |
+|---|---|---|---|
+| AC1 | serve/cockpit/web/src/pages/DecisionsPage.tsx:47 sorts the current items list once; serve/cockpit/web/src/pages/DecisionsPage.tsx:97 renders the kind badge from item.kind; serve/cockpit/web/src/pages/DecisionsPage.tsx:114 renders created via formatAge(item.created); serve/cockpit/web/src/pages/DecisionsPage.tsx:137 renders confidence-bar-{option_id} from item.options. The same card body renders item.title, item.summary, item.agent, and option count in the surrounding block. | serve/cockpit/web/src/__tests__/DecisionsPage_1860.test.tsx:160, :168, :178, :188, :204, :213, :220, :229 assert kind badge, summary, agent attribution, confidence-bar widths, 0 and 100 percent boundaries, and option count. serve/cockpit/web/src/__tests__/DecisionsPage_1645.test.tsx:191, :222, :244 confirm primary metadata, summary rendering, and relative-age formatting. serve/cockpit/web/src/__tests__/DecisionsPage_1688.test.tsx:120, :134, :150 confirm structured options, action-kind summary rendering, and agent attribution in durable coverage. | PASS |
+| AC2 | serve/cockpit/web/src/pages/DecisionsPage.tsx:83 and :88 preserve setSelectedDRId(item.id) for click and keyboard activation. serve/cockpit/web/src/Shell.tsx:842-848 still renders ResolveModal from selectedDR and clears selection on close or resolve. serve/cockpit/web/src/components/ResolveModal.tsx:151-157 renders the resolved request title in the modal header. | serve/cockpit/web/src/__tests__/DecisionsPage_1860.test.tsx:240 asserts card click calls setSelectedDRId with the item id. serve/cockpit/web/src/__tests__/DecisionsTab.integration.test.tsx:384, :395, :403 assert DecisionsPage click opens the Shell-level modal and passes the correct DR. serve/cockpit/web/src/__tests__/ResolveModalSnapshot_1647.test.tsx:213, :229, :231, :249-251 assert the open modal shows the clicked DR title and preserves that title across SSE updates. | PASS |
+| AC3 | serve/cockpit/web/src/pages/DecisionsPage.tsx:47 preserves oldest-first sort and serve/cockpit/web/src/pages/DecisionsPage.tsx:67 renders the exact empty-state copy "No pending requests". The current component body no longer renders dr-context, dr-recommendation, or dr-consequence sections. | serve/cockpit/web/src/__tests__/DecisionsPage_1860.test.tsx:254, :264, :277, :283, :289 assert the exact empty-state copy, oldest-first ordering, and removal of the old brief sections. serve/cockpit/web/src/__tests__/DecisionsPage_1645.test.tsx:307 confirms the durable empty-state copy. serve/cockpit/web/src/__tests__/DecisionsPage_1688.test.tsx:115, :128, :158 confirm the body-parsed sections stay absent and sorting remains oldest-first. | PASS |
+
+## Observations
+- The stale durable DecisionsPage proof surface that caused the previous rejection is now consistent with the refined structured-field contract.
+- Safety and security review is clean for this slice. The page remains display-only and the reviewed changes introduce no new dependency or input-handling surface.
+- Challenger cross-check returned reconsider on fractional confidence-width coverage and the 71.42% coverage summary. Those are not blocking here: the task's Architecture Review already accepted Math.round handling for confidence-bar degradation, and the reviewer contract for a behavioral bundle requires scoped tests, lint, and a coverage summary, all of which are present. A future hardening pass could add one non-round-tripping confidence case if the exact width formula becomes user-visible.
+
+[[2026-05-26T01:21:45+02:00]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | README verification | Yes | Updated | `serve/cockpit/web/src/pages/DecisionsPage.tsx` maps to `serve/cockpit/README.md` via convention. #1860 entry was absent; added after #1857 entry (line 561). Decision UX summary cross-reference updated to include #1860 (line 625). |
+| 2 | External attribution | No | N/A | No external sources influenced this implementation; display-only structured-field migration from internal `PendingDR` shape. |
+| 3 | Research doc | No | N/A | No research artifact exists for this task. |
+| 4 | Deletion detection | No | N/A | No source files deleted; one source file modified (`DecisionsPage.tsx`) and two durable test files updated. No orphaned references created. |
+
+### Verification Layers
+- Layer 1 — grep confirmed: `#1860` present at lines 561 and 571; `getDecisionBrief()` removal documented at line 566 and 625; `confidence-bar` testid at lines 565 and 572; `item.kind`/`item.summary`/`item.agent`/`"No pending requests"` at lines 563, 568, and 625; decision UX summary updated at line 625.
+- Layer 2 — editorial review clean: #1860 entry accurately describes kind badge, structured fields, confidence bars, `getDecisionBrief()` removal, empty-state copy, sort order, durable suite curation; no contradiction with #1857 (resolver side) or #1645 (original list scaffold); test count (15 task-scoped + 53 total durable), coverage (71.42%), and ESLint status match review evidence.
+
+### Files Updated
+- `serve/cockpit/README.md` — added #1860 entry after #1857; updated decision UX summary to include #1860.
+
+### Scratch Files Cleaned
+- None (no `1860-*` scratch files existed)
+
+Commit: be5687a8
+
+[[2026-05-26T01:45:04+02:00]]
+## Audit
+### Regression Detection
+- quality-runner mode full: 2358 passed, 43 failed, 11 skipped. 42 failures are pre-existing (PInlineNotification, ErrorContract, MemoryTab from unrelated tasks). 1 failure is directly attributable to #1860: DecisionContract.test.tsx:415 asserts item.agent ("builder") is NOT in primary meta, but AC1 explicitly adds agent attribution. Test was last touched by #1792 (1861bda3) before #1860's builder commit (dd45af54).
+- regression verdict: FAIL (1 attributable stale-test regression)
+
+### Intent Verification
+- scope alignment: PASS (changes confined to serve/cockpit/web/src/pages/DecisionsPage.tsx + durable test curation + README)
+- purpose match: PASS (structured-field rendering replaces body-parsed card layout per AC)
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 4/5
+AC was specific after refinement (testids, field sources, width formula). Minor gap: AC and retry scope did not mandate curation of ALL contract tests asserting the old rendering shape, only those explicitly named by the reviewer. DecisionContract.test.tsx is a 3rd file encoding the pre-structured-field contract that was missed.
+
+### Commit Integrity
+- upstream commit presence: PASS (dd45af54 builder, 161f1368 test-writer retry, be5687a8 doc-writer)
+- kanban commit packaging: deferred (reject path)
+
+### Deduction Breakdown
+| Criterion | Deduction |
+|-----------|----------|
+| Regression: DecisionContract.test.tsx:415 fails due to #1860 agent-attribution change | -.10 |
+
+### Confidence: .90
+### Action: reject to backlog
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | test-writer | Curate DecisionContract.test.tsx:415 stale assertion: update to expect agent attribution per AC1 structured-field contract (item.agent now rendered in card) | serve/cockpit/web/src/__tests__/DecisionContract.test.tsx | Regression: line 415 asserts not.toContain("builder") but AC1 renders item.agent; quality-runner full-suite failure |
