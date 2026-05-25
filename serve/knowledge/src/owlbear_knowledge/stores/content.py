@@ -58,12 +58,22 @@ class ContentStore(ContentStoreProtocol):
                 uri TEXT,
                 scope TEXT NOT NULL,
                 content_hash TEXT NOT NULL,
+                vectors_synced INTEGER NOT NULL DEFAULT 1,
                 trusted INTEGER NOT NULL,
                 metadata_json TEXT NOT NULL DEFAULT '{}',
                 ingested_at TEXT NOT NULL
             )
             """
         )
+        # Backfill compatibility for databases created before vectors_synced existed.
+        document_columns = {
+            row[1] for row in self._db.execute("PRAGMA table_info(content_documents)").fetchall()
+        }
+        if "vectors_synced" not in document_columns:
+            self._db.execute(
+                "ALTER TABLE content_documents "
+                "ADD COLUMN vectors_synced INTEGER NOT NULL DEFAULT 1"
+            )
         self._db.execute(
             """
             CREATE TABLE IF NOT EXISTS content_chunks (
@@ -102,12 +112,24 @@ class ContentStore(ContentStoreProtocol):
         document_id = self._document_id_for(request)
         content_hash = compute_content_hash(request.text)
         existing_doc = self._db.execute(
-            "SELECT document_id, content_hash, ingested_at FROM content_documents WHERE document_id = ?",
+            "SELECT document_id, content_hash, ingested_at, vectors_synced "
+            "FROM content_documents WHERE document_id = ?",
             (document_id,),
         ).fetchone()
 
         if existing_doc is not None and existing_doc["content_hash"] == content_hash:
             chunk_ids = self._chunk_ids_for_document(document_id)
+            if not bool(existing_doc["vectors_synced"]):
+                existing_chunk_rows = self._existing_chunks_for_document(document_id)
+                chunk_texts = [row[1] for row in existing_chunk_rows]
+                if chunk_texts:
+                    embeddings = self._embedding_provider.embed(chunk_texts)
+                    self._upsert_vectors(
+                        tuple(row[0] for row in existing_chunk_rows),
+                        embeddings,
+                        scope=request.scope,
+                    )
+                self._mark_vectors_synced(document_id)
             return ContentIngestResult(
                 document_id=document_id,
                 source_id=request.source_id,
@@ -139,14 +161,16 @@ class ContentStore(ContentStoreProtocol):
             self._db.execute(
                 """
                 INSERT INTO content_documents (
-                    document_id, source_id, title, uri, scope, content_hash, trusted, metadata_json, ingested_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    document_id, source_id, title, uri, scope, content_hash,
+                    vectors_synced, trusted, metadata_json, ingested_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(document_id) DO UPDATE SET
                     source_id = excluded.source_id,
                     title = excluded.title,
                     uri = excluded.uri,
                     scope = excluded.scope,
                     content_hash = excluded.content_hash,
+                    vectors_synced = excluded.vectors_synced,
                     trusted = excluded.trusted,
                     metadata_json = excluded.metadata_json,
                     ingested_at = excluded.ingested_at
@@ -158,6 +182,7 @@ class ContentStore(ContentStoreProtocol):
                     request.uri,
                     request.scope,
                     content_hash,
+                    0,
                     int(request.trusted),
                     json.dumps(request.metadata),
                     now_iso,
@@ -197,6 +222,7 @@ class ContentStore(ContentStoreProtocol):
         else:
             state = ContentIngestState.CREATED
         self._upsert_vectors(new_chunk_ids, embeddings, scope=request.scope)
+        self._mark_vectors_synced(document_id)
 
         return ContentIngestResult(
             document_id=document_id,
@@ -294,6 +320,21 @@ class ContentStore(ContentStoreProtocol):
             (document_id,),
         ).fetchall()
         return tuple(row["id"] for row in rows)
+
+    def _existing_chunks_for_document(self, document_id: str) -> list[tuple[str, str]]:
+        rows = self._db.execute(
+            "SELECT id, text FROM content_chunks "
+            "WHERE document_id = ? ORDER BY chunk_index ASC, id ASC",
+            (document_id,),
+        ).fetchall()
+        return [(str(row["id"]), str(row["text"])) for row in rows]
+
+    def _mark_vectors_synced(self, document_id: str) -> None:
+        with self._db:
+            self._db.execute(
+                "UPDATE content_documents SET vectors_synced = 1 WHERE document_id = ?",
+                (document_id,),
+            )
 
     def _upsert_vectors(
         self,
