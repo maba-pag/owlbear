@@ -87,6 +87,7 @@ All mutating tools return a `hint` field describing the transition or action tak
 | `created_at` | str | UTC timestamp |
 | `updated_at` | str | UTC timestamp |
 | `approved_at` | str \| null | Set on approve, cleared on downgrade/delete |
+| `contested_by_task` | str \| null | Task ID of the first factually-wrong confirmation; null until first confirmation; cleared on resolve |
 
 ## Configuration
 

@@ -63,6 +63,7 @@ Pydantic `BaseModel` representing a single markdown-backed memory entry.
 | `created_at` | `str` | Timezone-aware ISO 8601 timestamp |
 | `updated_at` | `str` | Timezone-aware ISO 8601 timestamp |
 | `approved_at` | `str \| None` | Timezone-aware ISO 8601 timestamp; optional |
+| `contested_by_task` | `str \| None` | Task ID that triggered the first factually-wrong confirmation; `None` until first confirmation; cleared on `resolve()` |
 
 ### `MemoryCategory` (StrEnum)
 
@@ -182,6 +183,7 @@ Exported from the `owlbear_memory` package top-level. Used internally by `Memory
 | `save(...)` | `(title, content, categories, confidence, source_agent, scope_agents) → MemoryEntry` | Creates pending entry; initializes `score = confidence`, all counters to `0`; no OCC |
 | `approve(id, expected_updated_at)` | `(str, str) → MemoryEntry` | curated → approved; raises `TransitionError` / `ConcurrencyError` |
 | `resolve(id, expected_updated_at)` | `(str, str) → MemoryEntry` | contested/disputed/stale → approved; sets `approved_at`; raises `TransitionError` / `ConcurrencyError` |
+| `record_factually_wrong(id, task_id, expected_updated_at)` | `(str, str, str \| None) → MemoryEntry` | approved/curated → contested (stores `contested_by_task`, clears `approved_at`); contested + same `task_id` → no-op; contested + different `task_id` → disputed; raises `ValidationError` (empty/whitespace `task_id`), `TransitionError` (non-voteable state), `ConcurrencyError` (OCC mismatch, evaluated before state guard) |
 | `edit(id, fields, expected_updated_at)` | `(str, EditPayload, str) → MemoryEntry` | State-machine rules apply; blocked from contested/disputed/stale; raises `TransitionError` / `ConcurrencyError` |
 | `delete(id, expected_updated_at)` | `(str, str) → MemoryEntry` | Hard-delete for pending, soft-delete for curated/approved/contested/disputed/stale; raises `TransitionError` / `ConcurrencyError` |
 | `try_stale_transition(entry)` | `(MemoryEntry) → MemoryEntry` | Calls `check_slot_efficiency`; when True and state in {approved, curated, contested}, writes state=stale with refreshed updated_at. Returns unchanged entry (no error) when predicate is False or state is ineligible. No OCC. Logs INFO on transition. |
@@ -198,6 +200,10 @@ Exported from the `owlbear_memory` package top-level. Used internally by `Memory
 | `curated` | `approve` | `approved` | Sets `approved_at` |
 | `curated` | `edit` | `curated` | Field update only |
 | `curated` | `delete` | `deleted` | Soft-delete |
+| `approved` | `record_factually_wrong` | `contested` | Stores `contested_by_task`; clears `approved_at` |
+| `curated` | `record_factually_wrong` | `contested` | Stores `contested_by_task` |
+| `contested` | `record_factually_wrong` (same `task_id`) | `contested` | No-op; returns entry unchanged |
+| `contested` | `record_factually_wrong` (different `task_id`) | `disputed` | Excluded from recall; clears `contested_by_task` |
 | `approved` | `edit` | `curated` | Clears `approved_at` |
 | `approved` | `delete` | `deleted` | Soft-delete |
 | `contested` | `resolve` | `approved` | Sets `approved_at` |
@@ -214,7 +220,8 @@ Exported from the `owlbear_memory` package top-level. Used internally by `Memory
 #### OCC
 
 All mutation methods (`approve`, `resolve`, `edit`, `delete`) accept `expected_updated_at` (str).
-If this value does not match the on-disk `entry.updated_at`, `ConcurrencyError` is
+`record_factually_wrong` also accepts `expected_updated_at` but it is optional (`str | None`); pass `None` to skip the OCC check.
+If a non-`None` value does not match the on-disk `entry.updated_at`, `ConcurrencyError` is
 raised. `save()` creates new entries and does not require an OCC token.
 
 #### Lenient Read
