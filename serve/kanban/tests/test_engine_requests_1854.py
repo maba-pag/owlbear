@@ -28,6 +28,11 @@ AC coverage:
         test_sweep_skips_pydantic_validation_failure_no_raise
         test_sweep_includes_request_id_when_writeback_raises
         test_sweep_continues_after_writeback_error
+        test_sweep_includes_request_id_when_unblock_raises
+        test_sweep_move_preserved_when_unblock_raises_resolved_exists
+        test_sweep_move_preserved_when_unblock_raises_pending_absent
+        test_sweep_unblock_failure_logs_warning
+        test_sweep_continues_after_unblock_error
   AC4 → TestFromAC_PickTasksSweepWiring:
         test_pick_tasks_calls_sweep_requests
         test_pick_tasks_continues_when_sweep_raises
@@ -688,6 +693,100 @@ class TestFromAC_SweepErrorHandling:
             result = engine.sweep_requests()
 
         # Both request IDs must appear in the result
+        assert rid_a in result
+        assert rid_b in result
+
+    # ------------------------------------------------------------------
+    # AC3b — unblock-failure branch (write-back succeeds, unblock raises)
+    # ------------------------------------------------------------------
+
+    def test_sweep_includes_request_id_when_unblock_raises(self, tmp_path: Path) -> None:
+        """AC3b error: if unblock edit_task raises after successful write-back, request_id is still returned."""
+        engine, kanban_dir = _make_engine(tmp_path, 42)
+        engine.edit_task("42", blocked=True, block_reason="DR pending")
+        _, rid = _write_request_file(
+            kanban_dir, task_id=42, kind="action", free_text="Done."
+        )
+
+        # First call (write-back) succeeds; second call (unblock) raises.
+        with patch.object(
+            engine, "edit_task", side_effect=[None, RuntimeError("unblock failed")]
+        ):
+            result = engine.sweep_requests()
+
+        assert rid in result
+
+    def test_sweep_move_preserved_when_unblock_raises_resolved_exists(
+        self, tmp_path: Path
+    ) -> None:
+        """AC3b error: resolved file exists in decisions/resolved/ even when unblock raises."""
+        engine, kanban_dir = _make_engine(tmp_path, 42)
+        engine.edit_task("42", blocked=True, block_reason="DR pending")
+        _, rid = _write_request_file(
+            kanban_dir, task_id=42, kind="action", free_text="Done."
+        )
+
+        with patch.object(
+            engine, "edit_task", side_effect=[None, RuntimeError("unblock failed")]
+        ):
+            engine.sweep_requests()
+
+        resolved_path = kanban_dir / "decisions" / "resolved" / f"{rid}.md"
+        assert resolved_path.exists()
+
+    def test_sweep_move_preserved_when_unblock_raises_pending_absent(
+        self, tmp_path: Path
+    ) -> None:
+        """AC3b error: pending file is removed from decisions/pending/ even when unblock raises."""
+        engine, kanban_dir = _make_engine(tmp_path, 42)
+        engine.edit_task("42", blocked=True, block_reason="DR pending")
+        _, rid = _write_request_file(
+            kanban_dir, task_id=42, kind="action", free_text="Done."
+        )
+
+        with patch.object(
+            engine, "edit_task", side_effect=[None, RuntimeError("unblock failed")]
+        ):
+            engine.sweep_requests()
+
+        pending_path = kanban_dir / "decisions" / "pending" / f"{rid}.md"
+        assert not pending_path.exists()
+
+    def test_sweep_unblock_failure_logs_warning(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """AC3b error: unblock failure after successful write-back emits a WARNING-level log."""
+        engine, kanban_dir = _make_engine(tmp_path, 42)
+        engine.edit_task("42", blocked=True, block_reason="DR pending")
+        _write_request_file(kanban_dir, task_id=42, kind="action", free_text="Done.")
+
+        with patch.object(
+            engine, "edit_task", side_effect=[None, RuntimeError("unblock failed")]
+        ), caplog.at_level(logging.WARNING, logger="owlbear_kanban.engine"):
+            engine.sweep_requests()
+
+        assert any(r.levelno == logging.WARNING for r in caplog.records)
+
+    def test_sweep_continues_after_unblock_error(self, tmp_path: Path) -> None:
+        """AC3b error: when first file's unblock raises, second file is still processed."""
+        engine, kanban_dir = _make_engine(tmp_path, 42, 99)
+        engine.edit_task("42", blocked=True, block_reason="DR pending")
+        engine.edit_task("99", blocked=True, block_reason="DR pending")
+
+        rid_a = "00000000-0000-4000-8000-aaaaaaaaaaaa"
+        rid_b = "ffffffff-ffff-4fff-bfff-ffffffffffff"
+        _write_request_file(kanban_dir, request_id=rid_a, task_id=42, kind="action", free_text="A.")
+        _write_request_file(kanban_dir, request_id=rid_b, task_id=99, kind="action", free_text="B.")
+
+        # Four edit_task calls during sweep: writeback(42), unblock(42), writeback(99), unblock(99).
+        # unblock(42) → call 2 → fails; remaining calls succeed.
+        with patch.object(
+            engine,
+            "edit_task",
+            side_effect=[None, RuntimeError("unblock 42 failed"), None, None],
+        ):
+            result = engine.sweep_requests()
+
         assert rid_a in result
         assert rid_b in result
 
