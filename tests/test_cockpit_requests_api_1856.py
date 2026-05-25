@@ -335,6 +335,44 @@ class TestFromAC_GetRequestsPending:
         item = resp.json()[0]
         assert "resolution" not in item
 
+    def test_normal_path_calls_sweep_requests_once(
+        self, mock_engine: MagicMock, mock_client: TestClient
+    ) -> None:
+        """AC1 interaction: GET calls engine.sweep_requests() on the normal (non-exception) path."""
+        mock_engine.list_requests.return_value = []
+
+        mock_client.get("/api/requests/pending")
+
+        mock_engine.sweep_requests.assert_called_once_with()
+
+    def test_normal_path_delegates_list_requests_with_pending_status(
+        self, mock_engine: MagicMock, mock_client: TestClient
+    ) -> None:
+        """AC1 interaction: GET delegates to engine.list_requests(status='pending') — not an unfiltered call."""
+        mock_engine.list_requests.return_value = []
+
+        mock_client.get("/api/requests/pending")
+
+        mock_engine.list_requests.assert_called_once_with(status="pending")
+
+    def test_sweep_failure_emits_warning_log_record(
+        self,
+        mock_engine: MagicMock,
+        mock_client: TestClient,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """AC1 edge: sweep exception → WARNING log record is emitted (not silently swallowed)."""
+        import logging  # noqa: PLC0415
+
+        mock_engine.sweep_requests.side_effect = OSError("disk error")
+        mock_engine.list_requests.return_value = []
+
+        with caplog.at_level(logging.WARNING, logger="owlbear_cockpit.routes.requests"):
+            mock_client.get("/api/requests/pending")
+
+        warning_records = [r for r in caplog.records if r.levelno >= logging.WARNING]
+        assert warning_records, "Expected at least one WARNING log record from sweep failure"
+
 
 # ---------------------------------------------------------------------------
 # AC2: POST /api/requests/{id}/resolve
@@ -480,6 +518,34 @@ class TestFromAC_PostRequestsResolve:
         )
 
         assert resp.status_code == 422
+
+    def test_resolve_decision_passes_request_id_and_option_id_to_engine(
+        self, mock_engine: MagicMock, mock_client: TestClient
+    ) -> None:
+        """AC2 interaction: POST delegates resolve_request with submitted request_id, selected_option_id, free_text."""
+        rid = str(uuid.uuid4())
+        mock_engine.resolve_request.return_value = _make_resolved_decision_record(request_id=rid)
+
+        mock_client.post(
+            f"/api/requests/{rid}/resolve",
+            json={"selected_option_id": "option-a", "free_text": None, "kind": "decision"},
+        )
+
+        mock_engine.resolve_request.assert_called_once_with(rid, "option-a", None)
+
+    def test_resolve_action_passes_request_id_and_free_text_to_engine(
+        self, mock_engine: MagicMock, mock_client: TestClient
+    ) -> None:
+        """AC2 interaction: POST delegates resolve_request with submitted request_id, selected_option_id, free_text for action."""
+        rid = str(uuid.uuid4())
+        mock_engine.resolve_request.return_value = _make_resolved_action_record(request_id=rid)
+
+        mock_client.post(
+            f"/api/requests/{rid}/resolve",
+            json={"selected_option_id": None, "free_text": "done", "kind": "action"},
+        )
+
+        mock_engine.resolve_request.assert_called_once_with(rid, None, "done")
 
 
 # ---------------------------------------------------------------------------
