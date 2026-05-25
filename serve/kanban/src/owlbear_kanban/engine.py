@@ -1179,10 +1179,16 @@ class KanbanEngine:
 
             try:
                 writeback = self._build_request_writeback(resolved_model, selected_option_id, free_text)
-                self.edit_task(str(resolved_model.task_id), append_body=writeback)
+                try:
+                    self.edit_task(str(resolved_model.task_id), append_body=writeback)
+                except RuntimeError as exc:
+                    raise ValueError(str(exc)) from exc
                 if not self._has_pending_structured_requests_for_task(resolved_model.task_id):
-                    self.edit_task(str(resolved_model.task_id), blocked=False)
-            except Exception as exc:  # noqa: BLE001
+                    try:
+                        self.edit_task(str(resolved_model.task_id), blocked=False)
+                    except RuntimeError as exc:
+                        raise ValueError(str(exc)) from exc
+            except (OSError, KeyError, ValueError, KanbanError) as exc:
                 LOGGER.warning(
                     "Request %s moved to resolved but side-effects failed: %s",
                     resolved_model.request_id,
