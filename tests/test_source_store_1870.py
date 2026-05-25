@@ -172,6 +172,29 @@ class TestFromAC_RegisterSource:
         assert store.get_source(a.id) is not None
         assert store.get_source(b.id) is not None
 
+    def test_raises_valueerror_on_kind_config_mismatch(self, store: SqliteSourceStore) -> None:
+        mismatch = SourceRegistration(
+            name="mismatch-source",
+            kind=SourceKind.URL_LIST,
+            fetch_method=FetchTransport.HTTP,
+            config=FileGlobConfig(patterns=("**/*.md",)),
+            scope="global",
+        )
+        with pytest.raises(ValueError):
+            store.register_source(mismatch)
+
+    def test_mismatch_does_not_persist(self, store: SqliteSourceStore) -> None:
+        mismatch = SourceRegistration(
+            name="mismatch-source",
+            kind=SourceKind.URL_LIST,
+            fetch_method=FetchTransport.HTTP,
+            config=FileGlobConfig(patterns=("**/*.md",)),
+            scope="global",
+        )
+        with pytest.raises(ValueError):
+            store.register_source(mismatch)
+        assert store.list_sources() == ()
+
 
 # ---------------------------------------------------------------------------
 # AC-2: register_wish
