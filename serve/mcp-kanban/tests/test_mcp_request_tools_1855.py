@@ -793,3 +793,178 @@ class TestFromAC_PickTasksAnnotationFix:
             f"pick_tasks docstring must not contain 'Read-only' (tool writes via sweep_requests); "
             f"current docstring: {doc!r}"
         )
+
+
+# ---------------------------------------------------------------------------
+# AC5 — Delegation proof contracts
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_DelegationContracts:
+    """AC5 delegation proof contracts — full parameter forwarding verification."""
+
+    # -- AC5(a): create_request full parameter forwarding --------------------
+
+    @pytest.mark.asyncio
+    async def test_create_request_engine_receives_all_positional_params(self, app_ctx: AppContext) -> None:
+        """AC5(a): create_request forwards task_id, kind, title, summary, agent all to engine."""
+        import owlbear_mcp_kanban.server as server_mod  # noqa: PLC0415
+
+        fn = getattr(server_mod, "create_request", None)
+        assert callable(fn), "owlbear_mcp_kanban.server.create_request must exist"
+
+        ctx = _make_mcp_ctx(app_ctx)
+        fake_record = _make_request_record(task_id=1, kind="decision")
+        mock_create = MagicMock(return_value=fake_record)
+        app_ctx.engine.create_request = mock_create
+
+        await fn(
+            ctx,
+            task_id="1",
+            kind="decision",
+            title="Unique Title Value",
+            summary="Unique Summary Value",
+            agent="reviewer",
+            body="Plain body.",
+        )
+
+        mock_create.assert_called_once()
+        pos = list(mock_create.call_args.args)
+        kw = mock_create.call_args.kwargs
+        # task_id as int at position 0, or keyword
+        assert pos[0] == 1 or kw.get("task_id") == 1, (
+            f"task_id=1 (int) must be forwarded; call was {mock_create.call_args}"
+        )
+        assert pos[1] == "decision" or kw.get("kind") == "decision", (
+            f"kind='decision' must be forwarded; call was {mock_create.call_args}"
+        )
+        assert pos[2] == "Unique Title Value" or kw.get("title") == "Unique Title Value", (
+            f"title='Unique Title Value' must be forwarded; call was {mock_create.call_args}"
+        )
+        assert pos[3] == "Unique Summary Value" or kw.get("summary") == "Unique Summary Value", (
+            f"summary='Unique Summary Value' must be forwarded; call was {mock_create.call_args}"
+        )
+        assert pos[4] == "reviewer" or kw.get("agent") == "reviewer", (
+            f"agent='reviewer' must be forwarded; call was {mock_create.call_args}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_create_request_engine_receives_options_kwarg(self, app_ctx: AppContext) -> None:
+        """AC5(a): options is forwarded as-is when provided."""
+        import owlbear_mcp_kanban.server as server_mod  # noqa: PLC0415
+
+        fn = getattr(server_mod, "create_request", None)
+        assert callable(fn), "owlbear_mcp_kanban.server.create_request must exist"
+
+        ctx = _make_mcp_ctx(app_ctx)
+        fake_record = _make_request_record(task_id=1, kind="decision")
+        mock_create = MagicMock(return_value=fake_record)
+        app_ctx.engine.create_request = mock_create
+
+        options_val = [{"id": "opt-alpha", "label": "Alpha"}, {"id": "opt-beta", "label": "Beta"}]
+        await fn(
+            ctx,
+            task_id="1",
+            kind="decision",
+            title="Decision Title",
+            summary="Pick one",
+            agent="builder",
+            options=options_val,
+        )
+
+        mock_create.assert_called_once()
+        forwarded_options = mock_create.call_args.kwargs.get("options")
+        assert forwarded_options == options_val, (
+            f"options must be forwarded unchanged to engine, got {forwarded_options!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_create_request_normalization_forwards_normalized_body_not_raw(
+        self, app_ctx: AppContext
+    ) -> None:
+        r"""AC5(a): normalized body (actual \n chars) is forwarded to engine, not the raw escaped string."""
+        import owlbear_mcp_kanban.server as server_mod  # noqa: PLC0415
+
+        fn = getattr(server_mod, "create_request", None)
+        assert callable(fn), "owlbear_mcp_kanban.server.create_request must exist"
+
+        ctx = _make_mcp_ctx(app_ctx)
+        fake_record = _make_request_record(task_id=1)
+        mock_create = MagicMock(return_value=fake_record)
+        app_ctx.engine.create_request = mock_create
+
+        raw_body = r"Line one\nLine two\nLine three"  # literal \n sequences
+        expected_normalized = "Line one\nLine two\nLine three"  # actual newlines after normalization
+
+        await fn(
+            ctx,
+            task_id="1",
+            kind="action",
+            title="Test",
+            summary="Summary",
+            agent="builder",
+            body=raw_body,
+        )
+
+        mock_create.assert_called_once()
+        forwarded_body = mock_create.call_args.kwargs.get("body")
+        assert forwarded_body == expected_normalized, (
+            f"engine must receive normalized body with real newlines, not raw escaped string; "
+            f"expected {expected_normalized!r}, got {forwarded_body!r}"
+        )
+        # Raw body must NOT be forwarded
+        assert forwarded_body != raw_body, (
+            f"raw escaped body {raw_body!r} must not be forwarded — normalization must apply first"
+        )
+
+    # -- AC5(b): list_requests explicit status forwarding --------------------
+
+    @pytest.mark.asyncio
+    async def test_list_requests_explicit_resolved_status_forwarded_to_engine(
+        self, app_ctx: AppContext
+    ) -> None:
+        """AC5(b): when caller passes status='resolved', engine receives exactly 'resolved'."""
+        import owlbear_mcp_kanban.server as server_mod  # noqa: PLC0415
+
+        fn = getattr(server_mod, "list_requests", None)
+        assert callable(fn), "owlbear_mcp_kanban.server.list_requests must exist"
+
+        ctx = _make_mcp_ctx(app_ctx)
+        mock_list = MagicMock(return_value=[])
+        app_ctx.engine.list_requests = mock_list
+
+        await fn(ctx, status="resolved")
+
+        mock_list.assert_called_once()
+        call_args = mock_list.call_args
+        forwarded_status = call_args.args[0] if call_args.args else call_args.kwargs.get("status")
+        assert forwarded_status == "resolved", (
+            f"explicit status='resolved' must be forwarded to engine as 'resolved', "
+            f"got {forwarded_status!r} — an adapter that always sends the default would false-green the prior test"
+        )
+
+    @pytest.mark.asyncio
+    async def test_list_requests_explicit_all_status_forwarded_to_engine(
+        self, app_ctx: AppContext
+    ) -> None:
+        """AC5(b): when caller passes status='all', engine receives exactly 'all' (not default 'pending')."""
+        import owlbear_mcp_kanban.server as server_mod  # noqa: PLC0415
+
+        fn = getattr(server_mod, "list_requests", None)
+        assert callable(fn), "owlbear_mcp_kanban.server.list_requests must exist"
+
+        ctx = _make_mcp_ctx(app_ctx)
+        mock_list = MagicMock(return_value=[])
+        app_ctx.engine.list_requests = mock_list
+
+        app_ctx.engine.list_requests.side_effect = None  # ensure no leftover side_effect
+        app_ctx.engine.list_requests = MagicMock(return_value=[])
+
+        await fn(ctx, status="all")
+
+        app_ctx.engine.list_requests.assert_called_once()
+        call_args = app_ctx.engine.list_requests.call_args
+        forwarded_status = call_args.args[0] if call_args.args else call_args.kwargs.get("status")
+        assert forwarded_status == "all", (
+            f"explicit status='all' must be forwarded as 'all' to engine, got {forwarded_status!r}"
+        )
