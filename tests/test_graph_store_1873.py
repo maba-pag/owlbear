@@ -493,3 +493,133 @@ class TestFromAC_GraphStore:
 
         result = store.upsert_edge(_mk_edge(entity_a.id, entity_b.id))
         assert not inspect.isawaitable(result), "upsert_edge must be synchronous"
+
+    # ---- Retry-gap tests (reviewer round 1) --------------------------------
+
+    # AC1+AC2 gap: prove entity_type is part of the identity key
+
+    def test_upsert_entity_same_name_different_type_yields_distinct_ids(
+        self, store: SqliteGraphStore
+    ) -> None:
+        """AC1+AC2: same canonical name under two different entity_types produces distinct IDs.
+
+        Proves that entity_type is a required component of the identity key; an
+        implementation that used only canonical_name would produce the same ID for
+        both calls and fail this assertion.
+        """
+        e_concept = store.upsert_entity(_mk_entity("Python", entity_type=EntityType.CONCEPT))
+        e_tech = store.upsert_entity(_mk_entity("Python", entity_type=EntityType.TECHNOLOGY))
+        assert e_concept.id != e_tech.id
+
+    # AC4 gap: get_entity must hydrate alias_names from graph_aliases
+
+    def test_get_entity_returns_alias_names_when_aliases_exist(
+        self, store: SqliteGraphStore, db: sqlite3.Connection
+    ) -> None:
+        """AC4: get_entity populates alias_names when graph_aliases table exists and has rows.
+
+        Distinct from the AC5 alias-search path: this verifies that get_entity itself
+        reads and returns current alias_names, not just that aliases are searchable.
+        """
+        entity = store.upsert_entity(
+            _mk_entity("PostgreSQL", entity_type=EntityType.TECHNOLOGY)
+        )
+        db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS graph_aliases (
+                id TEXT PRIMARY KEY,
+                entity_id TEXT NOT NULL,
+                alias_name TEXT NOT NULL,
+                canonical_alias TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        now = datetime.now(tz=UTC).isoformat()
+        alias_id = str(uuid.uuid4())
+        db.execute(
+            "INSERT INTO graph_aliases VALUES (?, ?, ?, ?, ?)",
+            (alias_id, entity.id, "Postgres", canonicalize_name("Postgres"), now),
+        )
+        db.commit()
+
+        result = store.get_entity(entity.id)
+        assert result is not None
+        assert "Postgres" in result.alias_names
+
+    # AC7 gap: graph_edges composite uniqueness and FK declarations
+
+    def test_graph_edges_has_unique_constraint_on_composite_key(
+        self, db: sqlite3.Connection
+    ) -> None:
+        """AC7: graph_edges enforces UNIQUE(source_entity_id, target_entity_id, relation_type).
+
+        Uses PRAGMA index_list to confirm a unique index exists on graph_edges.
+        """
+        SqliteGraphStore(db).ensure_tables()
+        cursor = db.execute("PRAGMA index_list(graph_edges)")
+        indexes = cursor.fetchall()
+        has_unique = any(idx[2] == 1 for idx in indexes)
+        assert has_unique, "graph_edges must declare a UNIQUE composite index"
+
+    def test_graph_edges_declares_foreign_keys_to_graph_entities(
+        self, db: sqlite3.Connection
+    ) -> None:
+        """AC7: graph_edges FK constraints reference graph_entities for source and target.
+
+        Uses PRAGMA foreign_key_list to inspect declared FK constraints.
+        """
+        SqliteGraphStore(db).ensure_tables()
+        cursor = db.execute("PRAGMA foreign_key_list(graph_edges)")
+        fks = cursor.fetchall()
+        referenced_tables = {fk[2] for fk in fks}
+        assert "graph_entities" in referenced_tables, (
+            "graph_edges must declare FOREIGN KEY constraints referencing graph_entities"
+        )
+
+    # AC8 gap: BEGIN IMMEDIATE must be used explicitly in both upsert paths
+
+    def test_upsert_entity_executes_begin_immediate_transaction(
+        self, db: sqlite3.Connection
+    ) -> None:
+        """AC8: upsert_entity issues BEGIN IMMEDIATE, not the weaker BEGIN/BEGIN DEFERRED.
+
+        Uses sqlite3.Connection.set_trace_callback to record every SQL statement
+        issued during the upsert. If the implementation uses BEGIN or BEGIN DEFERRED,
+        the assertion fails.
+        """
+        executed_sql: list[str] = []
+        s = SqliteGraphStore(db)
+        s.ensure_tables()
+        db.set_trace_callback(executed_sql.append)
+        try:
+            s.upsert_entity(_mk_entity("TxnTest"))
+        finally:
+            db.set_trace_callback(None)
+        assert any("BEGIN IMMEDIATE" in sql for sql in executed_sql), (
+            "upsert_entity must use BEGIN IMMEDIATE, not BEGIN or BEGIN DEFERRED"
+        )
+
+    def test_upsert_edge_executes_begin_immediate_transaction(
+        self, db: sqlite3.Connection
+    ) -> None:
+        """AC8: upsert_edge issues BEGIN IMMEDIATE, not the weaker BEGIN/BEGIN DEFERRED.
+
+        Uses sqlite3.Connection.set_trace_callback to record every SQL statement
+        issued during the upsert. If the implementation uses BEGIN or BEGIN DEFERRED,
+        the assertion fails.
+        """
+        s_setup = SqliteGraphStore(db)
+        s_setup.ensure_tables()
+        e_a = s_setup.upsert_entity(_mk_entity("Alpha", entity_type=EntityType.CONCEPT))
+        e_b = s_setup.upsert_entity(_mk_entity("Beta", entity_type=EntityType.TECHNOLOGY))
+
+        executed_sql: list[str] = []
+        db.set_trace_callback(executed_sql.append)
+        try:
+            s_setup.upsert_edge(_mk_edge(e_a.id, e_b.id))
+        finally:
+            db.set_trace_callback(None)
+        assert any("BEGIN IMMEDIATE" in sql for sql in executed_sql), (
+            "upsert_edge must use BEGIN IMMEDIATE, not BEGIN or BEGIN DEFERRED"
+        )
