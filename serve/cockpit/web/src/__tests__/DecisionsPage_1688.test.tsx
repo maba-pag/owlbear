@@ -16,8 +16,14 @@ const DR_WITH_BRIEF: PendingDR = {
   task_id: 1688,
   agent: 'builder',
   request_type: 'scope-decision',
+  kind: 'decision',
   created: '2026-05-21T08:00:00Z',
   title: 'Confirm Decisions workspace shape',
+  summary: 'Builder needs a decision on the Decisions workspace shape.',
+  options: [
+    { option_id: 'opt-keep', label: 'Keep the thin notification list.', confidence: 0.3, recommended: false, rationale: '' },
+    { option_id: 'opt-brief', label: 'Show a decision brief before opening the modal.', confidence: 0.7, recommended: true, rationale: '' },
+  ],
   body_preview: 'Builder needs a decision on the Decisions workspace shape.',
   body: [
     '## Context',
@@ -82,8 +88,11 @@ const DR_UNSTRUCTURED: PendingDR = {
   task_id: 1558,
   agent: 'copilot',
   request_type: 'decision',
+  kind: 'action',
   created: '2026-05-14T08:00:00Z',
   title: UNSTRUCTURED_BODY,
+  summary: 'Evaluate ownership model options after #1556 and #1557 complete.',
+  options: [],
   body_preview: UNSTRUCTURED_BODY.slice(0, 200),
   body: UNSTRUCTURED_BODY,
 }
@@ -103,35 +112,30 @@ function renderPage(items: PendingDR[] = [DR_WITH_BRIEF]) {
 }
 
 describe('DecisionsPage workflow brief', () => {
-  it('surfaces markdown context as a distinct decision brief section', () => {
+  it('no longer renders dr-context section from body parsing — AC3 replaces with structured fields', () => {
     const { container } = renderPage()
-    const context = container.querySelector('[data-testid="dr-context-dr-1688-001"]')
-    expect(context?.textContent).toContain('Context')
-    expect(context?.textContent).toContain('without guessing')
+    expect(container.querySelector('[data-testid="dr-context-dr-1688-001"]')).toBeNull()
   })
 
-  it('surfaces numbered markdown options without flattening them into one hidden blob', () => {
+  it('renders structured options from item.options in the dr-options section', () => {
     const { container } = renderPage()
     const options = container.querySelector('[data-testid="dr-options-dr-1688-001"]')
-    expect(options?.textContent).toContain('Keep the thin notification list')
-    expect(options?.textContent).toContain('Show a decision brief')
+    expect(options).not.toBeNull()
+    expect(options?.textContent).toContain('Keep the thin notification list.')
+    expect(options?.textContent).toContain('Show a decision brief before opening the modal.')
   })
 
-  it('surfaces recommendation and consequence when the DR body provides them', () => {
+  it('no longer renders dr-recommendation and dr-consequence sections — AC3 removes body-parsed layout', () => {
     const { container } = renderPage()
-    expect(container.querySelector('[data-testid="dr-recommendation-dr-1688-001"]')?.textContent).toContain('decision brief')
-    expect(container.querySelector('[data-testid="dr-consequence-dr-1688-001"]')?.textContent).toContain('primary decision workflow')
+    expect(container.querySelector('[data-testid="dr-recommendation-dr-1688-001"]')).toBeNull()
+    expect(container.querySelector('[data-testid="dr-consequence-dr-1688-001"]')).toBeNull()
   })
 
-  it('renders unstructured plain decisions as summary plus inline options instead of duplicated context', () => {
+  it('renders item.summary for action-kind items instead of body-parsed sections', () => {
     const { container } = renderPage([DR_UNSTRUCTURED])
     const item = container.querySelector('[data-testid="dr-item-dr-1688-plain"]')
-    const heading = item?.querySelector('h2')
-
-    expect(heading?.textContent).toBe('Choose ownership model for knowledge source lifecycle')
-    expect(container.querySelector('[data-testid="dr-summary-dr-1688-plain"]')?.textContent).toContain('Resolve after #1556')
-    expect(container.querySelector('[data-testid="dr-options-dr-1688-plain"]')?.textContent).toContain('manifest workflow')
-    expect(container.querySelector('[data-testid="dr-options-dr-1688-plain"]')?.textContent).toContain('hybrid')
+    expect(item?.textContent).toContain(DR_UNSTRUCTURED.summary)
+    // No dr-context section for action-kind items
     expect(container.querySelector('[data-testid="dr-context-dr-1688-plain"]')).toBeNull()
   })
 
@@ -143,12 +147,12 @@ describe('DecisionsPage workflow brief', () => {
     expect(item?.textContent).toContain('Open resolver')
   })
 
-  it('keeps agent attribution out of the primary card metadata', () => {
+  it('shows agent attribution in primary card metadata', () => {
     const { container } = renderPage()
     const primaryMeta = container.querySelector('[data-testid="dr-primary-meta-dr-1688-001"]')
-    expect(primaryMeta?.textContent).toContain('Scope Decision')
+    expect(primaryMeta?.textContent).toContain('Decision')
     expect(primaryMeta?.textContent).toContain('Task #1688')
-    expect(primaryMeta?.textContent).not.toContain('builder')
+    expect(primaryMeta?.textContent).toContain('builder')
   })
 
   it('sorts pending decisions oldest first by created timestamp', () => {

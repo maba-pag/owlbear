@@ -47,15 +47,17 @@ import DecisionsPage from '../pages/DecisionsPage'
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
 const BODY_PREVIEW_OVER_200 = 'X'.repeat(201)
-const BODY_PREVIEW_EXACTLY_200 = 'Y'.repeat(200)
 
 const DR_A: PendingDR = {
   id: 'dr-a-001',
   task_id: 100,
   agent: 'builder',
   request_type: 'scope-decision',
+  kind: 'decision',
   created: new Date(Date.now() - 30 * 60_000).toISOString(), // ~30 min ago
   title: 'Scope decision A',
+  summary: 'Preview text for DR A — a short preview that is well within limits.',
+  options: [],
   body: 'Full body text for DR A',
   body_preview: 'Preview text for DR A — a short preview that is well within limits.',
 }
@@ -65,8 +67,11 @@ const DR_B: PendingDR = {
   task_id: 200,
   agent: 'architect',
   request_type: 'user-action',
+  kind: 'action',
   created: new Date(Date.now() - 3 * 3_600_000).toISOString(), // ~3h ago
   title: 'User action B',
+  summary: 'Preview text for DR B — another short, distinct preview.',
+  options: [],
   body: 'Full body text for DR B',
   body_preview: 'Preview text for DR B — another short, distinct preview.',
 }
@@ -76,21 +81,13 @@ const DR_LONG_PREVIEW: PendingDR = {
   task_id: 300,
   agent: 'reviewer',
   request_type: 'scope-decision',
+  kind: 'decision',
   created: new Date(Date.now() - 60_000).toISOString(),
   title: 'Long preview DR',
+  summary: BODY_PREVIEW_OVER_200,
+  options: [],
   body: 'Full body',
   body_preview: BODY_PREVIEW_OVER_200,
-}
-
-const DR_EXACT_200_PREVIEW: PendingDR = {
-  id: 'dr-exact-001',
-  task_id: 400,
-  agent: 'test-writer',
-  request_type: 'user-action',
-  created: new Date(Date.now() - 60_000).toISOString(),
-  title: 'Exact 200 preview DR',
-  body: 'Full body',
-  body_preview: BODY_PREVIEW_EXACTLY_200,
 }
 
 // Fixed timestamp for age format tests
@@ -101,8 +98,11 @@ const DR_RECENT: PendingDR = {
   task_id: 500,
   agent: 'builder',
   request_type: 'scope-decision',
+  kind: 'decision',
   created: new Date(FIXED_NOW - 45 * 60_000).toISOString(), // 45 min ago → "45m ago"
   title: 'Recent DR',
+  summary: 'recent preview',
+  options: [],
   body: 'body',
   body_preview: 'recent preview',
 }
@@ -112,8 +112,11 @@ const DR_HOURS: PendingDR = {
   task_id: 501,
   agent: 'builder',
   request_type: 'scope-decision',
+  kind: 'decision',
   created: new Date(FIXED_NOW - 90 * 60_000).toISOString(), // 90 min ago → "1h ago"
   title: 'Hours DR',
+  summary: 'hours preview',
+  options: [],
   body: 'body',
   body_preview: 'hours preview',
 }
@@ -123,8 +126,11 @@ const DR_DAYS: PendingDR = {
   task_id: 502,
   agent: 'builder',
   request_type: 'scope-decision',
+  kind: 'decision',
   created: new Date(FIXED_NOW - 48 * 3_600_000).toISOString(), // 48h ago → "2d ago"
   title: 'Days DR',
+  summary: 'days preview',
+  options: [],
   body: 'body',
   body_preview: 'days preview',
 }
@@ -182,19 +188,21 @@ describe('TestFromAC_DecisionsPage', () => {
       expect(container.querySelector('[data-testid="dr-item-dr-b-002"]')).not.toBeNull()
     })
 
-    it('ac1 polish: primary metadata does not render the agent field', () => {
+    it('ac1 polish: primary metadata shows kind badge and agent attribution', () => {
       const { container } = renderPage({ items: [DR_A] })
       const primaryMeta = container.querySelector('[data-testid="dr-primary-meta-dr-a-001"]')
       expect(primaryMeta).not.toBeNull()
-      expect(primaryMeta!.textContent).toContain('Scope Decision')
+      expect(primaryMeta!.textContent).toContain('Decision')
       expect(primaryMeta!.textContent).toContain('Task #100')
-      expect(primaryMeta!.textContent).not.toContain(DR_A.agent)
+      expect(primaryMeta!.textContent).toContain(DR_A.agent)
     })
 
-    it('ac1 happy: each item renders the formatted request type', () => {
-      const { container } = renderPage({ items: [DR_A] })
-      const item = container.querySelector('[data-testid="dr-item-dr-a-001"]')
-      expect(item!.textContent).toContain('Scope Decision')
+    it('ac1 happy: each item renders the kind badge (Decision / Action)', () => {
+      const { container } = renderPage({ items: [DR_A, DR_B] })
+      const itemA = container.querySelector('[data-testid="dr-item-dr-a-001"]')
+      const itemB = container.querySelector('[data-testid="dr-item-dr-b-002"]')
+      expect(itemA!.textContent).toContain('Decision')
+      expect(itemB!.textContent).toContain('Action')
     })
 
     it('ac1 happy: each item renders the task_id', () => {
@@ -211,28 +219,26 @@ describe('TestFromAC_DecisionsPage', () => {
       expect(heading!.textContent).toBe(DR_A.title)
     })
 
-    it('ac1 happy: each item renders body_preview', () => {
+    it('ac1 happy: each item renders item.summary as the card preview text', () => {
       const { container } = renderPage({ items: [DR_A] })
       const item = container.querySelector('[data-testid="dr-item-dr-a-001"]')
-      expect(item!.textContent).toContain(DR_A.body_preview)
+      expect(item!.textContent).toContain(DR_A.summary)
     })
 
-    it('ac1 edge: body_preview truncated to 200 chars when longer than 200 chars', () => {
+    it('ac1 edge: item.summary is rendered in full without truncation by the component', () => {
       const { container } = renderPage({ items: [DR_LONG_PREVIEW] })
       const item = container.querySelector('[data-testid="dr-long-001"]')
       expect(item).not.toBeNull()
-      // First 200 chars of the overlong preview must appear
-      expect(item!.textContent).toContain(BODY_PREVIEW_OVER_200.slice(0, 200))
-      // The full 201-char string must NOT appear (201st char must be cut)
-      expect(item!.textContent).not.toContain(BODY_PREVIEW_OVER_200)
+      // The full summary text must appear — component does not truncate
+      expect(item!.textContent).toContain(DR_LONG_PREVIEW.summary)
     })
 
-    it('ac1 boundary: body_preview not truncated when exactly 200 chars', () => {
-      const { container } = renderPage({ items: [DR_EXACT_200_PREVIEW] })
-      const item = container.querySelector('[data-testid="dr-exact-001"]')
-      expect(item).not.toBeNull()
-      // All 200 chars must appear — no truncation at the boundary
-      expect(item!.textContent).toContain(BODY_PREVIEW_EXACTLY_200)
+    it('ac1 boundary: decision-kind items render dr-options section; action-kind items do not', () => {
+      const { container } = renderPage({ items: [DR_A, DR_B] })
+      // DR_A is kind:'decision' — dr-options section present
+      expect(container.querySelector('[data-testid="dr-options-dr-a-001"]')).not.toBeNull()
+      // DR_B is kind:'action' — dr-options section absent
+      expect(container.querySelector('[data-testid="dr-options-dr-b-002"]')).toBeNull()
     })
 
     it('ac1 happy: each item renders a relative age in d/h/m format', () => {
@@ -298,11 +304,11 @@ describe('TestFromAC_DecisionsPage', () => {
       expect(container.querySelector('[data-testid="decisions-empty-state"]')).not.toBeNull()
     })
 
-    it('ac2 happy: empty state says no decisions are waiting', () => {
+    it('ac2 happy: empty state shows "No pending requests"', () => {
       const { container } = renderPage({ items: [], isLoading: false, error: null })
       const emptyState = container.querySelector('[data-testid="decisions-empty-state"]')
       expect(emptyState).not.toBeNull()
-      expect(emptyState!.textContent!.toLowerCase()).toContain('no decisions are waiting')
+      expect(emptyState!.textContent).toContain('No pending requests')
     })
 
     it('ac2 edge: empty state is absent when isLoading=true — combined with page presence', () => {
