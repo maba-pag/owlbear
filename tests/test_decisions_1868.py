@@ -190,8 +190,27 @@ class TestFromAC_ResolveDecision:
 
         text = resolved.read_text(encoding="utf-8")
         # The section must follow the ## Response header
-        response_section = text[text.index("## Response"):]
+        response_section = text[text.index("## Response") :]
         assert "rejected" in response_section
+
+    def test_original_dr_body_preserved_before_response_section(self, tmp_path: Path) -> None:
+        """AC4: original DR body content is preserved and appears before the ## Response section.
+
+        An implementation that replaced the body with only the Response section
+        would satisfy the two weaker AC4 tests above but fail this one.
+        """
+        pending_dir = _make_pending_dir(tmp_path)
+        # _write_dr writes "## Question\nShould we proceed?\n" as the body
+        path = _write_dr(pending_dir)
+        engine = _mock_engine()
+
+        resolved = resolve_decision(path, "approved", engine)
+
+        text = resolved.read_text(encoding="utf-8")
+        response_idx = text.index("## Response")
+        content_before_response = text[:response_idx]
+        # Original body content must survive in the file and appear before ## Response
+        assert "Should we proceed?" in content_before_response
 
     # ------------------------------------------------------------------
     # AC5 — notes handling
@@ -255,9 +274,7 @@ class TestFromAC_ResolveDecision:
         resolve_decision(path, "approved", engine)
 
         # At least one call must have append_body keyword
-        append_calls = [
-            c for c in engine.edit_task.call_args_list if "append_body" in c.kwargs
-        ]
+        append_calls = [c for c in engine.edit_task.call_args_list if "append_body" in c.kwargs]
         assert len(append_calls) >= 1
 
     def test_canonical_summary_content_correct(self, tmp_path: Path) -> None:
@@ -270,9 +287,7 @@ class TestFromAC_ResolveDecision:
         resolve_decision(path, "approved", engine)
 
         expected_summary = canonical_summary("approved", original_body)
-        append_calls = [
-            c for c in engine.edit_task.call_args_list if "append_body" in c.kwargs
-        ]
+        append_calls = [c for c in engine.edit_task.call_args_list if "append_body" in c.kwargs]
         actual_append = append_calls[0].kwargs["append_body"]
         assert actual_append == expected_summary
 
@@ -299,10 +314,7 @@ class TestFromAC_ResolveDecision:
 
         resolve_decision(path, "approved", engine)
 
-        unblock_calls = [
-            c for c in engine.edit_task.call_args_list
-            if c.kwargs.get("blocked") is False
-        ]
+        unblock_calls = [c for c in engine.edit_task.call_args_list if c.kwargs.get("blocked") is False]
         assert len(unblock_calls) >= 1
         assert unblock_calls[0].args[0] == 42
 
@@ -314,10 +326,7 @@ class TestFromAC_ResolveDecision:
 
         resolve_decision(path, "rejected", engine)
 
-        unblock_calls = [
-            c for c in engine.edit_task.call_args_list
-            if c.kwargs.get("blocked") is False
-        ]
+        unblock_calls = [c for c in engine.edit_task.call_args_list if c.kwargs.get("blocked") is False]
         assert len(unblock_calls) >= 1
 
     # ------------------------------------------------------------------
@@ -332,10 +341,7 @@ class TestFromAC_ResolveDecision:
 
         resolve_decision(path, "needs-info", engine)
 
-        unblock_calls = [
-            c for c in engine.edit_task.call_args_list
-            if c.kwargs.get("blocked") is False
-        ]
+        unblock_calls = [c for c in engine.edit_task.call_args_list if c.kwargs.get("blocked") is False]
         assert len(unblock_calls) == 0
 
     # ------------------------------------------------------------------
@@ -371,6 +377,35 @@ class TestFromAC_ResolveDecision:
 
         # Must not raise even when the unblock call fails with FileNotFoundError
         resolve_decision(path, "approved", engine)
+
+    def test_resolution_returns_resolved_path_when_edit_task_raises_fnf(self, tmp_path: Path) -> None:
+        """AC10: resolve_decision returns a resolved Path even when engine.edit_task raises FileNotFoundError.
+
+        Non-propagation alone permits early-exit after swallowing the error.
+        This test proves the function continues to completion and returns the resolved path.
+        """
+        pending_dir = _make_pending_dir(tmp_path)
+        path = _write_dr(pending_dir, task_id=42)
+        engine = _mock_engine()
+        engine.edit_task.side_effect = FileNotFoundError("task not in engine")
+
+        result = resolve_decision(path, "approved", engine)
+
+        expected_resolved_dir = path.parent.parent / "resolved"
+        assert isinstance(result, Path)
+        assert result.parent == expected_resolved_dir
+
+    def test_pending_file_removed_when_edit_task_raises_fnf(self, tmp_path: Path) -> None:
+        """AC10: pending file is removed (moved to resolved) even when engine.edit_task raises FileNotFoundError."""
+        pending_dir = _make_pending_dir(tmp_path)
+        path = _write_dr(pending_dir, task_id=42)
+        original_pending_path = path
+        engine = _mock_engine()
+        engine.edit_task.side_effect = FileNotFoundError("task not in engine")
+
+        resolve_decision(path, "approved", engine)
+
+        assert not original_pending_path.exists()
 
     # ------------------------------------------------------------------
     # AC11 — returns resolved Path in .../resolved/
