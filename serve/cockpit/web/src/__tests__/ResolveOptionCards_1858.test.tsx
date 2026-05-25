@@ -179,6 +179,15 @@ describe('TestFromAC_OptionCards', () => {
       expect(alphaCard).not.toBeNull()
       expect(alphaCard?.textContent).toContain('Best performance characteristics')
     })
+
+    it('does not render any rationale text in the option card when rationale is empty string (omit-if-empty clause)', () => {
+      const { container } = renderModal(DR_DECISION)
+      const betaCard = container.querySelector('[data-testid="resolve-option-opt-beta"]')
+      expect(betaCard).not.toBeNull()
+      // opt-beta: rationale='', recommended=false — card must show only the label text.
+      // This test fails if a fallback (e.g. "–", "None") is rendered for empty rationale.
+      expect(betaCard!.textContent?.trim()).toBe('Beta approach')
+    })
   })
 
   describe('AC1: recommended badge', () => {
