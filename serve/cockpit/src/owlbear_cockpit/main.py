@@ -30,6 +30,7 @@ from owlbear_cockpit.routes.ideas import router as ideas_router
 from owlbear_cockpit.routes.memory import router as memory_router
 from owlbear_cockpit.routes.mutation import router as mutation_router
 from owlbear_cockpit.routes.read import router as read_router
+from owlbear_cockpit.routes.requests import router as requests_router
 from owlbear_kanban.errors import (
     ConcurrencyError,
     ConfigError,
@@ -45,6 +46,7 @@ app = FastAPI(title="OwlBear Cockpit")
 app.include_router(read_router, prefix="/api")
 app.include_router(mutation_router, prefix="/api")
 app.include_router(decisions_router, prefix="/api")
+app.include_router(requests_router, prefix="/api")
 app.include_router(events_router, prefix="/api")
 app.include_router(ideas_router, prefix="/api")
 app.include_router(memory_router, prefix="/api")
