@@ -2,6 +2,14 @@
 
 External repos and resources studied during OwlBear development.
 
+## GraphStore — Entities & Edges (Task #1873)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| SQLite UPSERT docs | <https://www.sqlite.org/lang_upsert.html> | ON CONFLICT DO UPDATE syntax, excluded.* references, uniqueness constraint requirements | `.owlbear/research/1873-graphstore-entities-edges.md` | 2026-05-25 |
+| LightRAG graph storage | <https://github.com/HKUDS/LightRAG> | Entity upsert patterns across SQLite/Postgres/Neo4j backends, compute_mdhash_id for deterministic IDs, MERGE semantics | `.owlbear/research/1873-graphstore-entities-edges.md` | 2026-05-25 |
+| Claude Cookbook KG guide | <https://platform.claude.com/cookbook/capabilities-knowledge-graph-guide> | Canonical name → alias resolution pattern, entity deduplication via canonical identity | `.owlbear/research/1873-graphstore-entities-edges.md` | 2026-05-25 |
+
 ## EnrichmentStore — Queue State Machine (Task #1875)
 
 | Source | URL | What | Where Used | Date |
