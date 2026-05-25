@@ -1,10 +1,10 @@
 ---
 id: 1845
 title: 'P2-06: Confirmation cycle — factually-wrong to contested/disputed'
-status: done
+status: archived
 priority: needed
 created: 2026-05-24T19:01:24.983062+02:00
-updated: 2026-05-25T05:44:13.456466+02:00
+updated: 2026-05-25T05:57:21.300355+02:00
 tags:
   - phase-2
   - scope:memory
@@ -34,7 +34,7 @@ proof_bundle: behavioral
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 Brief: see parent #1839
@@ -312,3 +312,28 @@ No scratch files created for this task.
 
 ### Verdict
 DONE #1845 -> done | docs gate passed
+
+[[2026-05-25T05:57:21+02:00]]
+## Audit
+### Regression Detection
+- quality-runner mode full: memory-domain 180 passed / 0 failed. Full-suite failures (20 listed) are pre-existing in unrelated domains (test_cockpit_view.py FileNotFoundError for archived test files; test_server.py TypeError in mcp-kanban). Lint violations in serve/knowledge/ (unrelated).
+- regression verdict: PASS
+
+### Intent Verification
+- scope alignment: PASS (all changed files in serve/memory/ and serve/mcp-memory/ matching stated domain)
+- purpose match: PASS (confirmation cycle for factually-wrong assessments implemented as designed)
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 4/5
+ACs are specific with state preconditions, exact error types, and ordering clauses. One gap (approved_at clearing on downgrade) caught by reviewer in cycle 2 and promptly addressed in architect re-review. Normal iterative refinement for a multi-state-transition feature.
+
+### Commit Integrity
+- upstream commit presence: PASS (adde92bd feat, 6c3474ce fix, 552e7b68 docs)
+- kanban commit packaging: pending (this archival)
+
+### Deduction Breakdown
+No deductions. Memory-domain regression clean, intent aligned, AC quality 4/5, reviewer evidence thorough (PASS with full AC map), commits present.
+
+### Confidence: 1.00
+### Action: archive
