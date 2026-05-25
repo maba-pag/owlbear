@@ -2,20 +2,20 @@ import type { TagVariant } from '@porsche-design-system/components-react'
 
 const STATUS_VARIANTS: Record<string, TagVariant> = {
   research: 'secondary',
-  backlog: 'info',
+  backlog: 'secondary',
   todo: 'secondary',
-  'in-progress': 'info',
-  review: 'info',
+  'in-progress': 'secondary',
+  review: 'secondary',
   docs: 'secondary',
-  done: 'success',
+  done: 'secondary',
 }
 
 const PRIORITY_VARIANTS: Record<string, TagVariant> = {
   someday: 'secondary',
   'nice-to-have': 'secondary',
   important: 'secondary',
-  needed: 'warning',
-  critical: 'error',
+  needed: 'secondary',
+  critical: 'secondary',
 }
 
 function normalize(value: string): string {

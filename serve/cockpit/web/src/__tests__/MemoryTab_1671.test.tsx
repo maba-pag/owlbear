@@ -789,7 +789,7 @@ describe('TestFromAC_MemoryTabRowRendering', () => {
     expect(categoryGroup?.contains(confidenceEl)).toBe(false)
     expect(categoryGroup?.contains(stateEl)).toBe(false)
     expect(signalGroup?.className).toContain('lg:border-l')
-    expect(confidenceEl?.textContent).toContain('Confidence')
+    expect(confidenceEl?.textContent).toMatch(/\d/)
   })
 
   it('ac4 polish: entry list is a vertical-only scroll surface with a cue shell', async () => {
@@ -821,10 +821,10 @@ describe('TestFromAC_MemoryTabRowRendering', () => {
 
     const badge = container.querySelector('[data-testid="memory-entry-state"]')
     expect(badge).not.toBeNull()
-    expect(readPdsVariant(badge)).toBe('info')
+    expect(readPdsVariant(badge)).toBe('warning-frosted')
   })
 
-  it('ac4 happy: curated state badge uses secondary color variant', async () => {
+  it('ac4 happy: curated state badge uses info-frosted color variant', async () => {
     const entries = [makeEntry({ state: 'curated' })]
     vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
     let container!: HTMLElement
@@ -835,10 +835,10 @@ describe('TestFromAC_MemoryTabRowRendering', () => {
 
     const badge = container.querySelector('[data-testid="memory-entry-state"]')
     expect(badge).not.toBeNull()
-    expect(readPdsVariant(badge)).toBe('secondary')
+    expect(readPdsVariant(badge)).toBe('info-frosted')
   })
 
-  it('ac4 happy: approved state badge uses success color variant', async () => {
+  it('ac4 happy: approved state badge uses success-frosted color variant', async () => {
     const entries = [makeEntry({ state: 'approved' })]
     vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
     let container!: HTMLElement
@@ -849,10 +849,10 @@ describe('TestFromAC_MemoryTabRowRendering', () => {
 
     const badge = container.querySelector('[data-testid="memory-entry-state"]')
     expect(badge).not.toBeNull()
-    expect(readPdsVariant(badge)).toBe('success')
+    expect(readPdsVariant(badge)).toBe('success-frosted')
   })
 
-  it('ac4 happy: deleted state badge uses primary color variant', async () => {
+  it('ac4 happy: deleted state badge uses error-frosted color variant', async () => {
     const entries = [makeEntry({ state: 'deleted' })]
     vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
     let container!: HTMLElement
@@ -868,7 +868,7 @@ describe('TestFromAC_MemoryTabRowRendering', () => {
 
     const badge = container.querySelector('[data-testid="memory-entry-state"]')
     expect(badge).not.toBeNull()
-    expect(readPdsVariant(badge)).toBe('primary')
+    expect(readPdsVariant(badge)).toBe('error-frosted')
   })
 
   it('ac4 happy: scope_agents renders as comma-joined string when non-empty', async () => {

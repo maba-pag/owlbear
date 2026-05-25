@@ -48,10 +48,10 @@ const STATE_PRIORITY: Record<MemoryState, number> = {
   deleted: 3,
 }
 const STATE_VARIANTS: Record<MemoryState, TagVariant> = {
-  pending: 'info',
-  curated: 'secondary',
-  approved: 'success',
-  deleted: 'primary',
+  pending: 'warning-frosted',
+  curated: 'info-frosted',
+  approved: 'success-frosted',
+  deleted: 'error-frosted',
 }
 function syncTagVariantAttr(variant: TagVariant) {
   return (element: HTMLElement | null) => {
@@ -780,18 +780,17 @@ function MemoryTab() {
                       </span>
                       <span data-testid="memory-entry-category-group" className="flex min-w-0 flex-wrap items-center gap-static-xs">
                         {entry.categories.map((category) => (
-                          <span key={`${entry.id}-${category}`} data-testid="memory-entry-category" className="rounded-full border border-contrast-low bg-canvas px-static-xs py-1 text-xs font-medium text-contrast-high">
+                          <PTag key={`${entry.id}-${category}`} compact data-testid="memory-entry-category" variant="secondary">
                             {category}
-                          </span>
+                          </PTag>
                         ))}
                       </span>
                     </div>
                   </div>
                   <div data-testid="memory-entry-signal-group" className="flex min-w-0 flex-wrap items-center gap-static-xs text-xs lg:justify-end lg:border-l lg:border-contrast-low lg:pl-static-sm">
-                    <span data-testid="memory-entry-confidence" className="inline-flex items-center gap-1 rounded-full border border-contrast-low bg-surface px-static-xs py-1 font-semibold text-primary" aria-label={`Confidence: ${formatConfidence(entry.confidence)}`}>
-                      <span className="font-medium text-contrast-high">Confidence</span>
-                      <span>{formatConfidence(entry.confidence)}</span>
-                    </span>
+                    <PTag compact data-testid="memory-entry-confidence" variant="secondary" aria-label={`Confidence: ${formatConfidence(entry.confidence)}`}>
+                      {formatConfidence(entry.confidence)}
+                    </PTag>
                     <PTag
                       compact
                       data-testid="memory-entry-state"

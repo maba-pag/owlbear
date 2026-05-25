@@ -94,12 +94,12 @@ describe('card variant mappings', () => {
       }
     })
 
-    it('statusToVariant("backlog") returns "info" — not the invalid "notification"', () => {
-      expect(statusToVariant('backlog')).toBe('info')
+    it('statusToVariant("backlog") returns "secondary" — uniform neutral for all statuses', () => {
+      expect(statusToVariant('backlog')).toBe('secondary')
     })
 
-    it('statusToVariant("review") returns "info" — not the invalid "notification"', () => {
-      expect(statusToVariant('review')).toBe('info')
+    it('statusToVariant("review") returns "secondary" — uniform neutral for all statuses', () => {
+      expect(statusToVariant('review')).toBe('secondary')
     })
   })
 
@@ -151,12 +151,12 @@ describe('card variant mappings', () => {
       expect(priorityToVariant('important')).toBe('secondary')
     })
 
-    it('priorityToVariant("needed") returns warning for the first escalation priority', () => {
-      expect(priorityToVariant('needed')).toBe('warning')
+    it('priorityToVariant("needed") returns secondary — uniform neutral for all priorities', () => {
+      expect(priorityToVariant('needed')).toBe('secondary')
     })
 
-    it('priorityToVariant("critical") returns error for the highest escalation priority', () => {
-      expect(priorityToVariant('critical')).toBe('error')
+    it('priorityToVariant("critical") returns secondary — uniform neutral for all priorities', () => {
+      expect(priorityToVariant('critical')).toBe('secondary')
     })
   })
 })
