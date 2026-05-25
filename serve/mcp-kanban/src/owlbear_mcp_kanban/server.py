@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal
+from uuid import UUID
 
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
@@ -58,19 +59,23 @@ __all__ = [
     "_show_validated",
     "app_lifespan",
     "create_dr",
+    "create_request",
     "create_task",
     "edit_task",
     "end_work",
+    "list_requests",
     "list_tasks",
     "mcp",
     "move_task",
     "parse_task_id",
     "pick_tasks",
+    "show_request",
     "show_task",
     "start_work",
 ]
 
 _DEFAULT_KANBAN_DIR = Path(".owlbear/kanban")
+_UUID4_VERSION = 4
 _NORM_GUIDANCE = (
     "Literal \\n sequences were normalized to actual newlines. "
     "To keep a literal \\n in files, send \\\\n in JSON input."
@@ -151,6 +156,18 @@ def _raise_tool_error(code: str, message: str) -> None:
 def _raise_param_validation(message: str) -> None:
     """Raise parameter validation errors using the MCP error envelope format."""
     _raise_tool_error("ERR_PARAM_VALIDATION", message)
+
+
+def _require_uuid4(value: str, *, field: str) -> str:
+    """Validate value is UUID4 text and return the original value."""
+    try:
+        parsed = UUID(value)
+    except (TypeError, ValueError) as exc:
+        _raise_param_validation(f"{field} must be a valid UUID4")
+        raise AssertionError from exc
+    if parsed.version != _UUID4_VERSION:
+        _raise_param_validation(f"{field} must be a valid UUID4")
+    return value
 
 
 def _raise_not_found(message: str = "Task not found") -> None:
@@ -438,6 +455,76 @@ async def create_dr(
     return response
 
 
+@mcp.tool(annotations=ToolAnnotations(destructiveHint=False))
+async def create_request(  # noqa: PLR0913
+    ctx: Context,
+    task_id: str | int,
+    kind: str,
+    title: str,
+    summary: str,
+    agent: str,
+    options: list[dict[str, object]] | None = None,
+    body: str = "",
+) -> dict[str, object]:
+    """Create a pending request and return its structured payload."""
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    parsed_task_id = parse_task_id(task_id, field="task_id")
+    normalized_body, body_changed = _normalize_escaped_newlines(body)
+    try:
+        created = await asyncio.to_thread(
+            app_ctx.engine.create_request,
+            parsed_task_id,
+            kind,
+            title,
+            summary,
+            agent,
+            options=options,
+            body=normalized_body,
+        )
+    except KanbanError as exc:
+        _map_kanban_error(exc)
+    except PydanticValidationError as exc:
+        _raise_param_validation(str(exc))
+    payload = created.model_dump()
+    payload["guidance"] = _append_norm_guidance([], changed=body_changed)
+    return payload
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
+async def list_requests(
+    ctx: Context,
+    status: str = "pending",
+    task_id: str | int | None = None,
+) -> list[dict[str, object]]:
+    """List request records by status and optional task filter."""
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    parsed_task_id = parse_task_id(task_id, field="task_id") if task_id is not None else None
+    try:
+        records = await asyncio.to_thread(
+            app_ctx.engine.list_requests,
+            status,
+            task_id=parsed_task_id,
+        )
+    except KanbanError as exc:
+        _map_kanban_error(exc)
+    return [record.model_dump(exclude={"body"}) for record in records]
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
+async def show_request(
+    ctx: Context,
+    request_id: str,
+) -> dict[str, object]:
+    """Show a single request record with full detail."""
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    validated_request_id = _require_uuid4(request_id, field="request_id")
+    try:
+        record = await asyncio.to_thread(app_ctx.engine.get_request, validated_request_id)
+    except KanbanError as exc:
+        _map_kanban_error(exc)
+    return record.model_dump()
+
+
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False, idempotentHint=False))
 async def move_task(
     ctx: Context,
@@ -659,14 +746,14 @@ async def end_work(  # noqa: PLR0913, C901
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True))
 async def pick_tasks(
     ctx: Context,
     *,
     wave_size: int | None = None,
     max_waves: int = 3,
 ) -> PickTasksResponse:
-    """Read-only task selection for dispatch planning (idempotent).
+    """Task selection for dispatch planning (idempotent).
 
     wave_size defaults to engine configuration when omitted.
     """
