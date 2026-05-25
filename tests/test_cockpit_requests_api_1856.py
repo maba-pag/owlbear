@@ -662,3 +662,63 @@ class TestFromAC_RouteWiring:
         assert requests_file.exists(), (
             "routes/requests.py does not exist — builder must create it and register it in main.py"
         )
+
+
+# ---------------------------------------------------------------------------
+# AC3 retry: Error envelope proof + UUID4 canonicalization
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ErrorEnvelopeAndCanonicalization:
+    """AC3: ValidationError → shared envelope {code, message}; uppercase UUID4 → canonical lowercase delegation."""
+
+    def test_engine_already_resolved_returns_422_with_envelope_code(
+        self, mock_engine: MagicMock, mock_client: TestClient
+    ) -> None:
+        """AC3 error: engine ValidationError(ERR_ALREADY_RESOLVED) → 422 response body code=='ERR_ALREADY_RESOLVED'."""
+        rid = str(uuid.uuid4())
+        mock_engine.resolve_request.side_effect = ValidationError(
+            code="ERR_ALREADY_RESOLVED", user_message="already resolved"
+        )
+
+        resp = mock_client.post(
+            f"/api/requests/{rid}/resolve",
+            json={"selected_option_id": None, "free_text": "done", "kind": "action"},
+        )
+
+        assert resp.status_code == 422
+        body = resp.json()
+        assert body.get("code") == "ERR_ALREADY_RESOLVED", (
+            f"Expected envelope code='ERR_ALREADY_RESOLVED', got {body!r}"
+        )
+
+    def test_uppercase_uuid4_canonicalized_to_lowercase_for_engine(
+        self, mock_engine: MagicMock, mock_client: TestClient
+    ) -> None:
+        """AC3 regression: uppercase UUID4 accepted, but engine.resolve_request receives lowercase canonical form."""
+        rid_lower = str(uuid.uuid4())
+        rid_upper = rid_lower.upper()
+        mock_engine.resolve_request.return_value = _make_resolved_action_record(request_id=rid_lower)
+
+        mock_client.post(
+            f"/api/requests/{rid_upper}/resolve",
+            json={"selected_option_id": None, "free_text": "done", "kind": "action"},
+        )
+
+        # Engine must receive the lowercase canonical id, not the original uppercase path param
+        mock_engine.resolve_request.assert_called_once_with(rid_lower, None, "done")
+
+    def test_uppercase_uuid4_accepted_returns_200(
+        self, mock_engine: MagicMock, mock_client: TestClient
+    ) -> None:
+        """AC3 regression: uppercase UUID4 is not rejected by the API (canonicalized → 200)."""
+        rid_lower = str(uuid.uuid4())
+        rid_upper = rid_lower.upper()
+        mock_engine.resolve_request.return_value = _make_resolved_action_record(request_id=rid_lower)
+
+        resp = mock_client.post(
+            f"/api/requests/{rid_upper}/resolve",
+            json={"selected_option_id": None, "free_text": "done", "kind": "action"},
+        )
+
+        assert resp.status_code == 200
