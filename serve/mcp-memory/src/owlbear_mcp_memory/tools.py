@@ -23,6 +23,7 @@ __all__ = [
     "SLOT_CHALLENGE",
     "SLOT_EXPLORE",
     "approve_memory",
+    "assess_memories",
     "curate_memory",
     "delete_memory",
     "list_memories",
@@ -33,6 +34,16 @@ __all__ = [
 
 SLOT_EXPLORE = 2
 SLOT_CHALLENGE = 2
+_ASSESSMENT_BUCKETS = (
+    "outstanding",
+    "unremarkable",
+    "didnt_use",
+    "factually_wrong",
+)
+
+
+def _allowed_assessment_values() -> str:
+    return ", ".join(_ASSESSMENT_BUCKETS)
 
 
 def _engine_from_ctx(ctx: Context) -> MemoryEngine:
@@ -446,3 +457,51 @@ async def approve_memory(ctx: Context, *, entry_id: str) -> dict[str, Any]:
     """Compatibility alias for approving curated memory entries."""
     approved = await _approve_entry(ctx, entry_id=entry_id)
     return _with_hint(approved, "Entry approved. Now visible to scoped agents.")
+
+
+async def assess_memories(
+    ctx: Context,
+    *,
+    assessments: list[dict[str, str]],
+    task_id: str,
+) -> dict[str, list[dict[str, object]]]:
+    """Process batch assessment submissions with per-entry success/failure results."""
+    if not assessments:
+        msg = "assessments must be non-empty"
+        raise ToolError(msg)
+
+    if not task_id.strip():
+        msg = "task_id must be non-empty"
+        raise ToolError(msg)
+
+    for assessment in assessments:
+        bucket = assessment["bucket"]
+        if bucket not in _ASSESSMENT_BUCKETS:
+            msg = f"Invalid bucket {bucket!r}. Allowed values: {_allowed_assessment_values()}."
+            raise ToolError(msg)
+
+    engine = _engine_from_ctx(ctx)
+    results: list[dict[str, object]] = []
+
+    for assessment in assessments:
+        entry_id = assessment["entry_id"]
+        bucket = assessment["bucket"]
+        try:
+            current = engine.get_entry(entry_id)
+            if bucket == "factually_wrong":
+                engine.record_factually_wrong(
+                    entry_id,
+                    task_id,
+                    expected_updated_at=current.updated_at,
+                )
+            else:
+                engine.record_assessment(
+                    entry_id,
+                    bucket,
+                    expected_updated_at=current.updated_at,
+                )
+            results.append({"entry_id": entry_id, "success": True})
+        except (NotFoundError, TransitionError, ConcurrencyError, ValidationError) as exc:
+            results.append({"entry_id": entry_id, "success": False, "error": str(exc)})
+
+    return {"results": results}

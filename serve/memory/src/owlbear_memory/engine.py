@@ -272,6 +272,51 @@ class MemoryEngine:
         msg = f"record_factually_wrong() not allowed from state {entry.state}"
         raise TransitionError(msg)
 
+    def record_assessment(
+        self,
+        entry_id: str,
+        bucket: str,
+        expected_updated_at: str | None = None,
+    ) -> MemoryEntry:
+        """Record counter-based assessments and recompute score."""
+        entry = self.get_entry(entry_id)
+
+        if expected_updated_at is not None:
+            self._validate_occ(entry, expected_updated_at)
+
+        if entry.state not in {MemoryState.APPROVED, MemoryState.CURATED, MemoryState.CONTESTED}:
+            msg = f"record_assessment() not allowed from state {entry.state}"
+            raise TransitionError(msg)
+
+        outstanding_count = entry.outstanding_count
+        unremarkable_count = entry.unremarkable_count
+        didnt_use_count = entry.didnt_use_count
+
+        if bucket == "outstanding":
+            outstanding_count += 1
+        elif bucket == "unremarkable":
+            unremarkable_count += 1
+        elif bucket == "didnt_use":
+            didnt_use_count += 1
+        else:
+            msg = "bucket must be one of: outstanding, unremarkable, didnt_use"
+            raise ValidationError(msg)
+
+        updated = entry.model_copy(
+            update={
+                "outstanding_count": outstanding_count,
+                "unremarkable_count": unremarkable_count,
+                "didnt_use_count": didnt_use_count,
+                "score": compute_score(entry.confidence, outstanding_count, unremarkable_count),
+                "updated_at": self._now_iso(),
+            }
+        )
+        updated = self._write_updated_entry(updated)
+
+        if check_slot_efficiency(updated):
+            return self.try_stale_transition(updated)
+        return updated
+
     def save(  # noqa: PLR0913
         self,
         title: str,
