@@ -331,6 +331,48 @@ class TestFromAC_CreateRequest:
         r2 = engine.create_request(task_id, "action", "T2", "S2", "agent")
         assert r1.request_id != r2.request_id
 
+    def test_create_request_decision_returns_options(self, tmp_path: Path) -> None:
+        """AC1: create_request for decision kind returns options list on returned object."""
+        engine, _, task_id = _make_engine(tmp_path)
+        result = engine.create_request(
+            task_id,
+            "decision",
+            "Title",
+            "Summary",
+            "agent",
+            options=_OPTIONS_VALID,
+        )
+        assert len(result.options) == 2
+        assert result.options[0].option_id == "option-a"
+        assert result.options[0].recommended is True
+        assert result.options[1].option_id == "option-b"
+        assert result.options[1].recommended is False
+
+    def test_create_request_action_returns_empty_options(self, tmp_path: Path) -> None:
+        """AC1: create_request for action kind returns empty options list."""
+        engine, _, task_id = _make_engine(tmp_path)
+        result = engine.create_request(
+            task_id,
+            "action",
+            "Title",
+            "Summary",
+            "agent",
+        )
+        assert result.options == []
+
+    def test_create_request_returns_resolution_with_null_fields(self, tmp_path: Path) -> None:
+        """AC1: create_request returns object with resolution.selected_option_id and free_text null."""
+        engine, _, task_id = _make_engine(tmp_path)
+        result = engine.create_request(
+            task_id,
+            "action",
+            "Title",
+            "Summary",
+            "agent",
+        )
+        assert result.resolution.selected_option_id is None
+        assert result.resolution.free_text is None
+
     # -----------------------------------------------------------------------
     # AC2 — file format: frontmatter, resolution block, resolved_at absent
     # -----------------------------------------------------------------------
@@ -613,3 +655,41 @@ class TestFromAC_GetRequest:
         result = engine.get_request(rid)
         assert result.kind == "action"
         assert result.options == []
+
+    def test_get_request_returns_summary_agent_created_at(self, tmp_path: Path) -> None:
+        """AC4: get_request returns summary, agent, and created_at from the stored file."""
+        kanban_dir = _make_board(tmp_path)
+        engine = KanbanEngine(kanban_dir, activity_log=False)
+        _path, rid = _write_request_file(kanban_dir, subdir="pending", kind="action")
+
+        result = engine.get_request(rid)
+        assert result.summary == "A test summary."
+        assert result.agent == "test-agent"
+        # created_at must be a tz-aware ISO 8601 string matching the stored value
+        parsed = datetime.fromisoformat(result.created_at)
+        assert parsed.tzinfo is not None
+        assert result.created_at == "2026-05-24T12:00:00+02:00"
+
+    def test_get_request_decision_returns_options(self, tmp_path: Path) -> None:
+        """AC4: get_request returns the full options list for a decision request."""
+        kanban_dir = _make_board(tmp_path)
+        engine = KanbanEngine(kanban_dir, activity_log=False)
+        _path, rid = _write_request_file(kanban_dir, subdir="pending", kind="decision")
+
+        result = engine.get_request(rid)
+        assert len(result.options) == 2
+        assert result.options[0].option_id == "option-a"
+        assert result.options[0].confidence == pytest.approx(0.7)
+        assert result.options[0].recommended is True
+        assert result.options[1].option_id == "option-b"
+        assert result.options[1].recommended is False
+
+    def test_get_request_returns_resolution(self, tmp_path: Path) -> None:
+        """AC4: get_request returns the resolution block from the stored file."""
+        kanban_dir = _make_board(tmp_path)
+        engine = KanbanEngine(kanban_dir, activity_log=False)
+        _path, rid = _write_request_file(kanban_dir, subdir="pending", kind="action")
+
+        result = engine.get_request(rid)
+        assert result.resolution.selected_option_id is None
+        assert result.resolution.free_text is None
