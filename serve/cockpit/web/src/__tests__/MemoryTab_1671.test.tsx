@@ -778,16 +778,13 @@ describe('TestFromAC_MemoryTabRowRendering', () => {
     const signalGroup = row?.querySelector('[data-testid="memory-entry-signal-group"]')
     const categories = Array.from(row?.querySelectorAll('[data-testid="memory-entry-category"]') ?? [])
     const confidenceEl = row?.querySelector('[data-testid="memory-entry-confidence"]')
-    const stateEl = row?.querySelector('[data-testid="memory-entry-state"]')
 
     expect(categoryGroup).not.toBeNull()
     expect(signalGroup).not.toBeNull()
     expect(categories).toHaveLength(2)
     expect(categories.every((category) => categoryGroup?.contains(category))).toBe(true)
     expect(signalGroup?.contains(confidenceEl)).toBe(true)
-    expect(signalGroup?.contains(stateEl)).toBe(true)
     expect(categoryGroup?.contains(confidenceEl)).toBe(false)
-    expect(categoryGroup?.contains(stateEl)).toBe(false)
     expect(signalGroup?.className).toContain('lg:border-l')
     expect(confidenceEl?.textContent).toMatch(/\d/)
   })
@@ -810,7 +807,7 @@ describe('TestFromAC_MemoryTabRowRendering', () => {
     expect(list?.className).toContain('pb-static-lg')
   })
 
-  it('ac4 happy: pending state badge uses info color variant', async () => {
+  it('ac4 happy: pending entry has warning left border', async () => {
     const entries = [makeEntry({ state: 'pending' })]
     vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
     let container!: HTMLElement
@@ -819,12 +816,12 @@ describe('TestFromAC_MemoryTabRowRendering', () => {
     })
     await flush()
 
-    const badge = container.querySelector('[data-testid="memory-entry-state"]')
-    expect(badge).not.toBeNull()
-    expect(readPdsVariant(badge)).toBe('warning-frosted')
+    const entry = container.querySelector('[data-testid="memory-entry"]')
+    expect(entry).not.toBeNull()
+    expect(entry?.className).toContain('border-l-warning')
   })
 
-  it('ac4 happy: curated state badge uses info-frosted color variant', async () => {
+  it('ac4 happy: curated entry has info left border', async () => {
     const entries = [makeEntry({ state: 'curated' })]
     vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
     let container!: HTMLElement
@@ -833,12 +830,12 @@ describe('TestFromAC_MemoryTabRowRendering', () => {
     })
     await flush()
 
-    const badge = container.querySelector('[data-testid="memory-entry-state"]')
-    expect(badge).not.toBeNull()
-    expect(readPdsVariant(badge)).toBe('info-frosted')
+    const entry = container.querySelector('[data-testid="memory-entry"]')
+    expect(entry).not.toBeNull()
+    expect(entry?.className).toContain('border-l-info')
   })
 
-  it('ac4 happy: approved state badge uses success-frosted color variant', async () => {
+  it('ac4 happy: approved entry has success left border', async () => {
     const entries = [makeEntry({ state: 'approved' })]
     vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
     let container!: HTMLElement
@@ -847,12 +844,12 @@ describe('TestFromAC_MemoryTabRowRendering', () => {
     })
     await flush()
 
-    const badge = container.querySelector('[data-testid="memory-entry-state"]')
-    expect(badge).not.toBeNull()
-    expect(readPdsVariant(badge)).toBe('success-frosted')
+    const entry = container.querySelector('[data-testid="memory-entry"]')
+    expect(entry).not.toBeNull()
+    expect(entry?.className).toContain('border-l-success')
   })
 
-  it('ac4 happy: deleted state badge uses error-frosted color variant', async () => {
+  it('ac4 happy: deleted entry has error left border', async () => {
     const entries = [makeEntry({ state: 'deleted' })]
     vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
     let container!: HTMLElement
@@ -866,9 +863,9 @@ describe('TestFromAC_MemoryTabRowRendering', () => {
     fireEvent(stateFilter!, new CustomEvent('update', { detail: { value: [] }, bubbles: true }))
     await flush()
 
-    const badge = container.querySelector('[data-testid="memory-entry-state"]')
-    expect(badge).not.toBeNull()
-    expect(readPdsVariant(badge)).toBe('error-frosted')
+    const entry = container.querySelector('[data-testid="memory-entry"]')
+    expect(entry).not.toBeNull()
+    expect(entry?.className).toContain('border-l-error')
   })
 
   it('ac4 happy: scope_agents renders as comma-joined string when non-empty', async () => {

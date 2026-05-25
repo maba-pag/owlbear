@@ -14,7 +14,6 @@ import {
   PTagDismissible,
   PTextarea,
 } from '@porsche-design-system/components-react'
-import type { TagVariant } from '@porsche-design-system/components-react'
 import rehypeSanitize from 'rehype-sanitize'
 import {
   approveMemory,
@@ -47,20 +46,11 @@ const STATE_PRIORITY: Record<MemoryState, number> = {
   approved: 2,
   deleted: 3,
 }
-const STATE_VARIANTS: Record<MemoryState, TagVariant> = {
-  pending: 'warning-frosted',
-  curated: 'info-frosted',
-  approved: 'success-frosted',
-  deleted: 'error-frosted',
-}
-function syncTagVariantAttr(variant: TagVariant) {
-  return (element: HTMLElement | null) => {
-    if (!element) {
-      return
-    }
-    element.setAttribute('compact', '')
-    element.setAttribute('variant', variant)
-  }
+const STATE_BORDERS: Record<MemoryState, string> = {
+  pending: 'border-l-warning',
+  curated: 'border-l-info',
+  approved: 'border-l-success',
+  deleted: 'border-l-error',
 }
 
 const INITIAL_FILTER: MemoryFilterState = {
@@ -759,7 +749,7 @@ function MemoryTab() {
         <div data-testid="memory-list-scroll-shell" className="relative min-h-0 flex-1 overflow-hidden">
           <ul ref={memoryListRef} onScroll={updateMemoryListScrollCue} className="m-0 flex h-full min-h-0 list-none flex-col gap-static-sm overflow-x-hidden overflow-y-auto p-0 pb-static-lg pr-static-xs">
             {visibleEntries.map((entry) => (
-              <li key={entry.id} data-testid="memory-entry" className="rounded-lg border border-contrast-low bg-canvas px-static-sm shadow-sm">
+              <li key={entry.id} data-testid="memory-entry" className={`rounded-lg border border-l-4 border-contrast-low bg-canvas px-static-sm shadow-sm ${STATE_BORDERS[entry.state]}`}>
                 <p-accordion
                   className="block"
                   open={openEntryId === entry.id ? true : undefined}
@@ -790,15 +780,6 @@ function MemoryTab() {
                   <div data-testid="memory-entry-signal-group" className="flex min-w-0 flex-wrap items-center gap-static-xs text-xs lg:justify-end lg:border-l lg:border-contrast-low lg:pl-static-sm">
                     <PTag compact data-testid="memory-entry-confidence" variant="secondary" aria-label={`Confidence: ${formatConfidence(entry.confidence)}`}>
                       {formatConfidence(entry.confidence)}
-                    </PTag>
-                    <PTag
-                      compact
-                      data-testid="memory-entry-state"
-                      variant={STATE_VARIANTS[entry.state]}
-                      ref={syncTagVariantAttr(STATE_VARIANTS[entry.state])}
-                      aria-label={`State: ${entry.state}`}
-                    >
-                      {entry.state}
                     </PTag>
                   </div>
                 </div>

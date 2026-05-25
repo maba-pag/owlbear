@@ -1223,10 +1223,8 @@ describe('TestFromAC_MemoryLocalUpdate', () => {
       fireEvent(stateFilter, new CustomEvent('update', { detail: { value: [] }, bubbles: true }))
       await flush()
     }
-    const stateBadges = Array.from(container.querySelectorAll('[data-testid="memory-entry-state"]')).map(
-      (el) => el.textContent,
-    )
-    expect(stateBadges).toContain('deleted')
+    const entries = Array.from(container.querySelectorAll('[data-testid="memory-entry"]'))
+    expect(entries.some((el) => el.className.includes('border-l-error'))).toBe(true)
   })
 
   it('ac5 happy: mutation failure leaves local state unchanged (no optimistic update)', async () => {
@@ -1246,9 +1244,9 @@ describe('TestFromAC_MemoryLocalUpdate', () => {
       (el) => el.textContent,
     )
     expect(titles).toContain('Should Stay')
-    // State badge must remain 'curated' (not changed optimistically)
-    const stateBadge = container.querySelector('[data-testid="memory-entry-state"]')
-    expect(stateBadge?.textContent).toBe('curated')
+    // State border must remain 'curated' (not changed optimistically)
+    const entryEl = container.querySelector('[data-testid="memory-entry"]')
+    expect(entryEl?.className).toContain('border-l-info')
   })
 
   it('ac5 edge: no list-level loading spinner appears during mutation — entries stay visible', async () => {
@@ -1306,8 +1304,8 @@ describe('TestFromAC_MemoryStatePromotion', () => {
       await act(async () => { fireEvent.click(saveBtn) })
       await flush()
     }
-    const stateBadge = container.querySelector('[data-testid="memory-entry-state"]')
-    expect(stateBadge?.textContent).toBe('curated')
+    const entryEl = container.querySelector('[data-testid="memory-entry"]')
+    expect(entryEl?.className).toContain('border-l-info')
   })
 
   it('ac6 happy: state promotion shows inline note "Promoted to curated — scope agents assigned"', async () => {
@@ -1714,8 +1712,8 @@ describe('TestFromAC_MemoryApprovedEditDowngrade', () => {
     expect(saveBtn).not.toBeNull()
     await act(async () => { fireEvent.click(saveBtn!) })
     await flush()
-    const stateBadge = container.querySelector('[data-testid="memory-entry-state"]')
-    expect(stateBadge?.textContent).toBe('curated')
+    const entryEl = container.querySelector('[data-testid="memory-entry"]')
+    expect(entryEl?.className).toContain('border-l-info')
   })
 
   it('ac8 retry: state badge is NOT approved after saving edit of approved entry', async () => {
@@ -1734,8 +1732,8 @@ describe('TestFromAC_MemoryApprovedEditDowngrade', () => {
     expect(saveBtn).not.toBeNull()
     await act(async () => { fireEvent.click(saveBtn!) })
     await flush()
-    const stateBadge = container.querySelector('[data-testid="memory-entry-state"]')
-    expect(stateBadge?.textContent).not.toBe('approved')
+    const entryEl = container.querySelector('[data-testid="memory-entry"]')
+    expect(entryEl?.className).not.toContain('border-l-success')
   })
 
   it('ac8 retry: Approve button appears after approved-entry edit downgrades state to curated', async () => {
