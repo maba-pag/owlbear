@@ -1051,6 +1051,41 @@ class KanbanEngine:
             user_message=f"request '{request_id}' not found",
         )
 
+    def list_requests(self, status: str = "pending", task_id: int | None = None) -> list[RequestRecord]:
+        """List structured request files by status and optional task filter."""
+        if status not in {"pending", "resolved", "all"}:
+            raise ValidationError(
+                code="ERR_INVALID_STATUS",
+                user_message="status must be one of: pending, resolved, all",
+            )
+
+        decisions_dir = self._kanban_dir / "decisions"
+        subdirs = ("pending", "resolved") if status == "all" else (status,)
+
+        records: list[RequestRecord] = []
+        for subdir in subdirs:
+            request_dir = decisions_dir / subdir
+            if not request_dir.exists():
+                continue
+
+            for candidate in request_dir.glob("*.md"):
+                validate_path_containment(self._kanban_dir, candidate)
+                if not self._request_is_structured_pending(candidate):
+                    continue
+                try:
+                    frontmatter, body = self._parse_request_file(candidate)
+                    request_model = Request.model_validate(frontmatter)
+                except (OSError, ValueError, TypeError, YAMLError, PydanticValidationError) as exc:
+                    LOGGER.warning("Skipping invalid request file %s: %s", candidate, exc)
+                    continue
+
+                if task_id is not None and request_model.task_id != task_id:
+                    continue
+                records.append(RequestRecord.from_request(request_model, body))
+
+        records.sort(key=lambda record: (record.created_at, record.request_id))
+        return records
+
     @staticmethod
     def _request_is_structured_pending(path: Path) -> bool:
         """Return True when *path* has the UUID4 filename used by structured requests."""
@@ -1094,6 +1129,67 @@ class KanbanEngine:
             if frontmatter.get("task_id") == task_id:
                 return True
         return False
+
+    def sweep_requests(self) -> list[str]:
+        """Resolve manually-completed structured pending requests and return moved IDs."""
+        pending_dir = self._kanban_dir / "decisions" / "pending"
+        if not pending_dir.exists():
+            return []
+
+        resolved_ids: list[str] = []
+        for pending_path in sorted(pending_dir.glob("*.md")):
+            validate_path_containment(self._kanban_dir, pending_path)
+            if not self._request_is_structured_pending(pending_path):
+                continue
+
+            try:
+                frontmatter, body = self._parse_request_file(pending_path)
+                request_model = Request.model_validate(frontmatter)
+            except (OSError, ValueError, TypeError, YAMLError, PydanticValidationError) as exc:
+                LOGGER.warning("Skipping invalid request file %s: %s", pending_path, exc)
+                continue
+
+            selected_option_id = request_model.resolution.selected_option_id
+            free_text = request_model.resolution.free_text
+            if selected_option_id is None and free_text is None:
+                continue
+
+            resolution_payload = request_model.resolution.model_dump()
+            resolution_payload["resolved_at"] = datetime.now().astimezone().isoformat()
+
+            request_payload = request_model.model_dump()
+            request_payload["resolution"] = resolution_payload
+            resolved_model = Request.model_validate(request_payload)
+
+            resolved_path = self._kanban_dir / "decisions" / "resolved" / f"{resolved_model.request_id}.md"
+            validate_path_containment(self._kanban_dir, resolved_path)
+            resolved_path.parent.mkdir(parents=True, exist_ok=True)
+
+            content = self._serialize_request_content(
+                resolved_model,
+                body,
+                include_resolved_at=True,
+            )
+            fd = os.open(resolved_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+            with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
+                handle.write(content)
+            pending_path.unlink()
+
+            resolved_ids.append(resolved_model.request_id)
+
+            try:
+                writeback = self._build_request_writeback(resolved_model, selected_option_id, free_text)
+                self.edit_task(str(resolved_model.task_id), append_body=writeback)
+                if not self._has_pending_structured_requests_for_task(resolved_model.task_id):
+                    self.edit_task(str(resolved_model.task_id), blocked=False)
+            except Exception as exc:  # noqa: BLE001
+                LOGGER.warning(
+                    "Request %s moved to resolved but side-effects failed: %s",
+                    resolved_model.request_id,
+                    exc,
+                )
+
+        return resolved_ids
 
     def resolve_request(
         self,
