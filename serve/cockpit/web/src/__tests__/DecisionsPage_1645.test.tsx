@@ -420,6 +420,38 @@ describe('TestFromAC_DecisionsPage', () => {
         'List container must have gap >= 16px defined in inline style or CSS file',
       ).toBe(true)
     })
+
+    it('ac3 boundary: list container uses an effective layout mechanism for gap (display flex or grid)', () => {
+      // Gap tokens alone can false-green if display is not a layout mode that applies gap.
+      const { container } = renderPage({ items: [DR_A, DR_B] })
+      const page = container.querySelector('[data-testid="decisions-page"]')!
+      const drItems = [...page.querySelectorAll('[data-testid^="dr-item-"]')]
+      expect(drItems.length).toBe(2)
+
+      const listContainer = drItems[0].parentElement as HTMLElement
+      expect(listContainer).not.toBeNull()
+
+      // Attempt 1: inline style
+      if (listContainer.style.display) {
+        expect(['flex', 'grid']).toContain(listContainer.style.display)
+        return
+      }
+
+      // Attempt 2: CSS file fallback
+      const pagesDir = resolve(webSrcDir, 'pages')
+      let cssContent = ''
+      try {
+        const cssFiles = readdirSync(pagesDir).filter(
+          (f) =>
+            f.toLowerCase().includes('decision') && (f.endsWith('.css') || f.endsWith('.scss')),
+        )
+        cssContent = cssFiles.map((f) => readFileSync(resolve(pagesDir, f), 'utf8')).join('\n')
+      } catch {
+        // pagesDir not readable — will fail the assertion below
+      }
+
+      expect(/display:\s*(flex|grid)/.test(cssContent)).toBe(true)
+    })
   })
 
   // ─── AC4: Root width 100% and list container column direction ────────────────

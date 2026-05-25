@@ -1758,3 +1758,198 @@ describe('TestFromAC_MemoryApprovedEditDowngrade', () => {
     expect(container.querySelector('[data-testid="memory-approve-btn"]')).not.toBeNull()
   })
 })
+
+// ─── AC1 (cycle-3): Exhaustive metadata field proof ───────────────────────────
+//
+// Reviewer gap: task-local proof would not fail if the accordion detail dropped
+// id, scope_agents, categories, state, or the approved_at '-' fallback.
+// The prior retry proved approved_at (date present) but not the other fields or
+// the null fallback.  Source renders all 9 metadata fields at MemoryTab.tsx:701-709.
+
+describe('TestFromAC_MemoryMetadataFields', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('ac1 cycle3: accordion detail renders the entry id value', async () => {
+    const container = await renderWithEntries([makeEntry({ id: 'unique-entry-id-99' })])
+    await openAccordion(container)
+    const detail = container.querySelector('[data-testid="memory-accordion-detail"]')
+    expect(detail?.textContent).toContain('unique-entry-id-99')
+  })
+
+  it('ac1 cycle3: accordion detail renders scope_agents as comma-joined list when non-empty', async () => {
+    const container = await renderWithEntries([
+      makeEntry({ scope_agents: ['builder', 'reviewer'] }),
+    ])
+    await openAccordion(container)
+    const detail = container.querySelector('[data-testid="memory-accordion-detail"]')
+    expect(detail?.textContent).toContain('builder')
+    expect(detail?.textContent).toContain('reviewer')
+  })
+
+  it('ac1 cycle3: accordion detail renders "All agents" for scope_agents when list is empty', async () => {
+    const container = await renderWithEntries([makeEntry({ scope_agents: [] })])
+    await openAccordion(container)
+    const detail = container.querySelector('[data-testid="memory-accordion-detail"]')
+    expect(detail?.textContent).toContain('All agents')
+  })
+
+  it('ac1 cycle3: accordion detail renders categories as comma-joined list', async () => {
+    const container = await renderWithEntries([
+      makeEntry({ categories: ['behaviour', 'pitfall'] }),
+    ])
+    await openAccordion(container)
+    const detail = container.querySelector('[data-testid="memory-accordion-detail"]')
+    expect(detail?.textContent).toContain('behaviour')
+    expect(detail?.textContent).toContain('pitfall')
+  })
+
+  it('ac1 cycle3: accordion detail renders the entry state value', async () => {
+    const container = await renderWithEntries([makeEntry({ state: 'curated' })])
+    await openAccordion(container)
+    const detail = container.querySelector('[data-testid="memory-accordion-detail"]')
+    // Source: <p>State: {entry.state}</p> → must contain state within the detail element
+    expect(detail?.textContent).toContain('State:')
+    expect(detail?.textContent).toContain('curated')
+  })
+
+  it('ac1 cycle3: accordion detail renders "-" for approved_at when null', async () => {
+    const container = await renderWithEntries([makeEntry({ approved_at: null })])
+    await openAccordion(container)
+    const detail = container.querySelector('[data-testid="memory-accordion-detail"]')
+    // Source: <p>Approved: {entry.approved_at ?? '-'}</p>
+    expect(detail?.textContent).toContain('Approved: -')
+  })
+})
+
+// ─── AC3 (cycle-3): Edit form field controls ──────────────────────────────────
+//
+// Reviewer gap: existing edit-form tests cover title and char counter only.
+// AC3 enumerates 5 controls: title/categories/confidence/scope_agents/content.
+// Three of the five are unproven: categories, confidence, scope_agents.
+
+describe('TestFromAC_MemoryEditFormControls', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  async function openEditForm(container: HTMLElement) {
+    await openAccordion(container)
+    const editBtn = container.querySelector<HTMLElement>('[data-testid="memory-edit-btn"]')
+    expect(editBtn).not.toBeNull()
+    await act(async () => {
+      fireEvent.click(editBtn!)
+    })
+    await flush()
+  }
+
+  it('ac3 cycle3: edit form contains a categories input', async () => {
+    const container = await renderWithEntries([makeEntry()])
+    await openEditForm(container)
+    const form = container.querySelector('[data-testid="memory-edit-form"]')
+    expect(form).not.toBeNull()
+    expect(form!.querySelector('input[name="edit-categories"]')).not.toBeNull()
+  })
+
+  it('ac3 cycle3: edit form contains a confidence input of type number', async () => {
+    const container = await renderWithEntries([makeEntry()])
+    await openEditForm(container)
+    const form = container.querySelector('[data-testid="memory-edit-form"]')
+    expect(form).not.toBeNull()
+    const confidenceInput = form!.querySelector<HTMLInputElement>('input[name="edit-confidence"]')
+    expect(confidenceInput).not.toBeNull()
+    expect(confidenceInput!.type).toBe('number')
+  })
+
+  it('ac3 cycle3: edit form contains a scope_agents input', async () => {
+    const container = await renderWithEntries([makeEntry()])
+    await openEditForm(container)
+    const form = container.querySelector('[data-testid="memory-edit-form"]')
+    expect(form).not.toBeNull()
+    expect(form!.querySelector('input[name="edit-scope-agents"]')).not.toBeNull()
+  })
+})
+
+// ─── AC3 (cycle-3): Nav badge hidden at zero pending count ────────────────────
+//
+// Reviewer gap: existing suite only tests the positive (count > 0) path.
+// When pending count is 0, [data-testid="nav-badge"] must NOT appear on the
+// memory nav button (Shell uses {badgeCount > 0 ? <span ...> : null}).
+
+describe('TestFromAC_MemoryNavBadgeZero', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('ac3 cycle3: memory nav button has no nav-badge when pending count is 0', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_url: string, init?: RequestInit) => {
+        if (typeof _url === 'string' && _url.includes('/api/memories')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve(makeApiResponse([])),
+          })
+        }
+        return new Promise<never>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () =>
+            reject(new DOMException('Aborted', 'AbortError')),
+          )
+        })
+      }),
+    )
+    vi.mocked(usePendingDRs).mockReturnValue({
+      count: 0,
+      items: [],
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    })
+    const { container } = renderShell('/')
+    await flush()
+    const btn = memoryBtn(container)
+    expect(btn).not.toBeNull()
+    // When count is 0, Shell renders null for the badge span — it must be absent
+    expect(btn!.querySelector('[data-testid="nav-badge"]')).toBeNull()
+  })
+})
+
+// ─── AC4 (cycle-3): OCC banner exact copy with em-dash ───────────────────────
+//
+// Reviewer gap: existing tests assert the substring 'Entry was modified' which
+// passes even when the source uses an ASCII hyphen instead of the AC-specified
+// em-dash (U+2014). This test asserts the EXACT string from the AC.
+//
+// RED expectation: FAILS against the current source because MemoryTab.tsx:477
+// emits 'Entry was modified - refreshing' (ASCII hyphen '-').
+// Builder must change that literal to 'Entry was modified \u2014 refreshing'.
+
+describe('TestFromAC_MemoryOCCExactCopy', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('ac4 cycle3: 409 OCC banner text matches exact AC string with em-dash (U+2014)', async () => {
+    const entry = makeEntry({ id: 'e1', state: 'curated' })
+    vi.stubGlobal('fetch', makeMutationFetch(409, { detail: 'conflict' }, makeApiResponse([entry])))
+    let container!: HTMLElement
+    await act(async () => {
+      container = renderMemoryTab().container
+    })
+    await flush()
+    await openAccordion(container)
+    const approveBtn = container.querySelector('[data-testid="memory-approve-btn"]')
+    if (approveBtn) {
+      await act(async () => {
+        fireEvent.click(approveBtn)
+      })
+      await flush()
+    }
+    const banner = container.querySelector('[data-testid="memory-occ-banner"]')
+    // AC specifies em-dash: 'Entry was modified \u2014 refreshing'
+    // Source currently uses hyphen — this test intentionally fails until builder fixes the literal
+    expect(banner?.textContent).toBe('Entry was modified \u2014 refreshing')
+  })
+})
