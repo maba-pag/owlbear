@@ -522,3 +522,140 @@ class TestFromAC_ResolveRequest:
         assert task42.blocked is False, (
             "Structured request for a different task_id must not prevent unblocking"
         )
+
+    # -----------------------------------------------------------------------
+    # Retry-gap tests — AC1: resolved-file field assertions (Findings 1+2)
+    # -----------------------------------------------------------------------
+
+    def test_resolved_file_has_selected_option_id_serialized(self, tmp_path: Path) -> None:
+        """AC1 (retry): resolved file frontmatter has selected_option_id matching the resolved option."""
+        engine, kanban_dir = _make_engine(tmp_path, 42)
+        _, rid = _write_request_file(kanban_dir, task_id=42, kind="decision")
+        engine.edit_task("42", blocked=True, block_reason="DR pending")
+
+        engine.resolve_request(rid, "option-a", None)
+
+        resolved_path = kanban_dir / "decisions" / "resolved" / f"{rid}.md"
+        fm = _parse_frontmatter(resolved_path)
+        assert fm["resolution"]["selected_option_id"] == "option-a"
+
+    def test_resolved_file_has_free_text_serialized_action(self, tmp_path: Path) -> None:
+        """AC1 (retry): resolved file frontmatter has free_text matching the provided action outcome."""
+        engine, kanban_dir = _make_engine(tmp_path, 42)
+        _, rid = _write_request_file(kanban_dir, task_id=42, kind="action")
+        engine.edit_task("42", blocked=True, block_reason="DR pending")
+
+        engine.resolve_request(rid, None, "My action outcome.")
+
+        resolved_path = kanban_dir / "decisions" / "resolved" / f"{rid}.md"
+        fm = _parse_frontmatter(resolved_path)
+        assert fm["resolution"]["free_text"] == "My action outcome."
+
+    def test_resolved_file_has_free_text_serialized_decision(self, tmp_path: Path) -> None:
+        """AC1 (retry): resolved file frontmatter has free_text for decision+text-only variant."""
+        engine, kanban_dir = _make_engine(tmp_path, 42)
+        _, rid = _write_request_file(kanban_dir, task_id=42, kind="decision")
+        engine.edit_task("42", blocked=True, block_reason="DR pending")
+
+        engine.resolve_request(rid, None, "Decision rationale.")
+
+        resolved_path = kanban_dir / "decisions" / "resolved" / f"{rid}.md"
+        fm = _parse_frontmatter(resolved_path)
+        assert fm["resolution"]["free_text"] == "Decision rationale."
+
+    def test_resolved_at_bounded_to_current_time(self, tmp_path: Path) -> None:
+        """AC1 (retry): resolved_at in the returned record is bounded to the current resolution time (not stale)."""
+        engine, kanban_dir = _make_engine(tmp_path, 42)
+        _, rid = _write_request_file(kanban_dir, task_id=42, kind="action")
+        engine.edit_task("42", blocked=True, block_reason="DR pending")
+
+        before = datetime.now().astimezone()
+        result = engine.resolve_request(rid, None, "Done.")
+        after = datetime.now().astimezone()
+
+        resolved_at = datetime.fromisoformat(result.resolution.resolved_at)
+        assert before <= resolved_at <= after, (
+            f"resolved_at {resolved_at} must be between {before} and {after}"
+        )
+
+    # -----------------------------------------------------------------------
+    # Retry-gap tests — AC4: exact write-back blocks (Finding 3)
+    # -----------------------------------------------------------------------
+
+    def test_writeback_decision_option_only_exact_block(self, tmp_path: Path) -> None:
+        """AC4 (retry): variant 1 write-back is exactly '## DR: {title}\\n- **Selected:** {label}', no extra lines."""
+        engine, kanban_dir = _make_engine(tmp_path, 42)
+        _, rid = _write_request_file(kanban_dir, task_id=42, kind="decision")
+        engine.edit_task("42", blocked=True, block_reason="DR pending")
+
+        engine.resolve_request(rid, "option-a", None)
+
+        task = engine.show_task("42")
+        exact_block = "## DR: Test Request\n- **Selected:** Option Alpha"
+        assert exact_block in task.body
+        # Variant 1 must not contain Notes or Answer lines
+        assert "**Notes:**" not in task.body
+        assert "**Answer:**" not in task.body
+
+    def test_writeback_decision_option_and_text_exact_block(self, tmp_path: Path) -> None:
+        """AC4 (retry): variant 2 write-back includes selected label + notes line; no Answer line."""
+        engine, kanban_dir = _make_engine(tmp_path, 42)
+        _, rid = _write_request_file(kanban_dir, task_id=42, kind="decision")
+        engine.edit_task("42", blocked=True, block_reason="DR pending")
+
+        engine.resolve_request(rid, "option-b", "Some extra context.")
+
+        task = engine.show_task("42")
+        exact_block = (
+            "## DR: Test Request\n"
+            "- **Selected:** Option Beta\n"
+            "- **Notes:** Some extra context."
+        )
+        assert exact_block in task.body
+        # Variant 2 must not contain Answer line
+        assert "**Answer:**" not in task.body
+
+    def test_writeback_decision_text_only_exact_block(self, tmp_path: Path) -> None:
+        """AC4 (retry): variant 3 write-back is exactly '## DR: {title}\\n- **Answer:** {free_text}'; no Selected line."""
+        engine, kanban_dir = _make_engine(tmp_path, 42)
+        _, rid = _write_request_file(kanban_dir, task_id=42, kind="decision")
+        engine.edit_task("42", blocked=True, block_reason="DR pending")
+
+        engine.resolve_request(rid, None, "Free-text answer here.")
+
+        task = engine.show_task("42")
+        exact_block = "## DR: Test Request\n- **Answer:** Free-text answer here."
+        assert exact_block in task.body
+        # Variant 3 must not contain Selected or Notes lines
+        assert "**Selected:**" not in task.body
+        assert "**Notes:**" not in task.body
+
+    def test_writeback_action_exact_block(self, tmp_path: Path) -> None:
+        """AC4 (retry): variant 4 write-back is exactly '## AR: {title}\\n- **Outcome:** {free_text}'; no DR header."""
+        engine, kanban_dir = _make_engine(tmp_path, 42)
+        _, rid = _write_request_file(kanban_dir, task_id=42, kind="action")
+        engine.edit_task("42", blocked=True, block_reason="DR pending")
+
+        engine.resolve_request(rid, None, "Action outcome text.")
+
+        task = engine.show_task("42")
+        exact_block = "## AR: Test Request\n- **Outcome:** Action outcome text."
+        assert exact_block in task.body
+        # Variant 4 must not contain DR header, Selected, or Answer lines
+        assert "## DR:" not in task.body
+        assert "**Selected:**" not in task.body
+        assert "**Answer:**" not in task.body
+
+    def test_writeback_appends_not_replaces_existing_body(self, tmp_path: Path) -> None:
+        """AC4 (retry): write-back is appended to existing task body content, not replacing it."""
+        engine, kanban_dir = _make_engine(tmp_path, 42)
+        _, rid = _write_request_file(kanban_dir, task_id=42, kind="action")
+        engine.edit_task("42", blocked=True, block_reason="DR pending")
+
+        engine.resolve_request(rid, None, "Action done.")
+
+        task = engine.show_task("42")
+        # Pre-existing body text from the task template must still be present
+        assert "Body text." in task.body
+        # The write-back block must also be present
+        assert "## AR: Test Request" in task.body
