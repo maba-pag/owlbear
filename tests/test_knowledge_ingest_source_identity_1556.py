@@ -1908,20 +1908,12 @@ class TestFromAC_ReplaceOnChangeFailureCleanup:
         conn.commit()
 
     @pytest.mark.asyncio
-    async def test_replace_on_change_failure_leaves_no_orphaned_document(
+    async def test_replace_on_change_failure_preserves_original_document(
         self,
         conn: sqlite3.Connection,
         store_components: dict,
     ) -> None:
-        """Replacement document row must be cleaned up when store_chunks fails.
-
-        Fails because ingest() commits the replacement document row via
-        insert_document() before store_chunks() is called.  When store_chunks
-        raises, the except Exception block returns status='failed' but does not
-        call delete_document_data(replacement_doc_id) — leaving an orphaned row
-        in the documents table.  AC-8: 'persistence contains no document row for
-        the replacement doc_id'.
-        """
+        """Replacement failure must clean up the replacement while preserving the last good document."""
         self._seed_url_list_source(conn)
         pipeline: IngestPipeline = store_components["pipeline"]
 
@@ -2009,9 +2001,9 @@ class TestFromAC_ReplaceOnChangeFailureCleanup:
             source="https://example.test/doc",  # same URL triggers replace-on-change
             metadata={"source_type": "url_list"},
         )
-        # Inject failure at store_extractions — AFTER the following have committed:
-        #   delete_document_data(v1_id), insert_document(v2_id), store_chunks(v2_id),
-        #   store_embeddings(v2_chunks). store_extractions raises before entity/edge writes.
+        # Inject failure at store_extractions after the replacement document,
+        # chunks, and embeddings are staged. The replacement must be cleaned up
+        # while the original remains available.
         with patch.object(
             store_components["doc_store"],
             "store_extractions",

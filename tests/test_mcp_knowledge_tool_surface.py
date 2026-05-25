@@ -1,10 +1,11 @@
-"""Tests for task #1334: Tool surface validation (8 active, inactive removed, stubs registered).
+"""Tests for task #1334: Tool surface validation (active tools, inactive removed, stubs registered).
 
 AC coverage:
     - AC1: exactly 10 tools in mcp._tool_manager.list_tools() at import time
     - AC2: active tool set contains all 10 expected names
          (search_knowledge, list_sources, get_stats, ingest_document, refresh_source,
-          get_next_batch, get_consolidation_candidates, store_enrichment)
+            remove_source, get_next_batch, get_consolidation_candidates, store_enrichment,
+          retry_failed_enrichment)
   - AC3: removed tools absent from tool list
          (list_entities, bookmark_source, list_bookmarks, update_bookmark_tags, consolidate_knowledge)
 
@@ -58,6 +59,7 @@ _ACTIVE_TOOLS = frozenset(
         "retry_failed_enrichment",
         "get_consolidation_candidates",
         "store_enrichment",
+        "retry_failed_enrichment",
     }
 )
 

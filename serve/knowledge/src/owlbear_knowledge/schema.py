@@ -126,6 +126,7 @@ CREATE TABLE IF NOT EXISTS knowledge_sources (
     last_refreshed_at TEXT,
     last_checked_at   TEXT,
     last_error        TEXT,
+    refreshable       INTEGER NOT NULL DEFAULT 1,
     created_at        TEXT NOT NULL,
     updated_at        TEXT NOT NULL
 )

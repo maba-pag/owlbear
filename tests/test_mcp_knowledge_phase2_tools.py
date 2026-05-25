@@ -311,7 +311,7 @@ class TestFromAC_GetConsolidationCandidates:
 
     @pytest.mark.asyncio
     async def test_entity_with_cross_source_edge_excluded_from_candidates(self, conn: sqlite3.Connection) -> None:
-        """AC2 edge: entity pair with existing cross-source edge is excluded."""
+        """AC2 edge: entity pair with existing same_as edge is excluded."""
         source_a = _insert_source(conn, name="Source A")
         source_b = _insert_source(conn, name="Source B")
         doc_a = _insert_document(conn, source_id=source_a)
@@ -325,7 +325,7 @@ class TestFromAC_GetConsolidationCandidates:
         candidates = await get_consolidation_candidates(ctx, limit=20)
 
         names = [_get_field(c, "entity_name") for c in candidates]
-        assert "PyTorch" not in names, f"Expected 'PyTorch' excluded (cross-source edge exists), got: {names}"
+        assert "PyTorch" not in names, f"Expected 'PyTorch' excluded (same_as edge exists), got: {names}"
 
     @pytest.mark.asyncio
     async def test_entity_with_reviewed_pairs_entry_excluded_from_candidates(self, conn: sqlite3.Connection) -> None:
@@ -1150,7 +1150,7 @@ class TestFromAC_Cycle4Proofs:
 
         names = [c["entity_name"] for c in candidates]
         assert "ReverseEdgeEntity" not in names, (
-            "Expected 'ReverseEdgeEntity' excluded because a reverse-direction cross-source "
+            "Expected 'ReverseEdgeEntity' excluded because a reverse-direction same_as "
             "edge (e2→e1) exists — but it appeared in candidates. "
             "This proves the OR branch at server.py:234 is required.\n"
             f"Got candidates: {names}"

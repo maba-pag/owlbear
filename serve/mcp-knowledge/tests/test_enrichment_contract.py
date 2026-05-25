@@ -35,9 +35,13 @@ def _now() -> str:
     return datetime.now(tz=UTC).isoformat()
 
 
+_CLAIM_TOKEN = "claim-token"
+
+
 def _ctx(conn: sqlite3.Connection) -> MagicMock:
     ctx = MagicMock()
     ctx.request_context.lifespan_context.conn = conn
+    ctx.request_context.lifespan_context.graph_store = GraphStore(conn)
     return ctx
 
 
@@ -82,10 +86,10 @@ def _insert_chunk(
     now = _now()
     conn.execute(
         """
-        INSERT INTO chunks (id, document_id, chunk_index, content, metadata, created_at, scope, enrichment_state)
-        VALUES (?, ?, ?, 'chunk text', '{}', ?, ?, ?)
+        INSERT INTO chunks (id, document_id, chunk_index, content, metadata, created_at, scope, enrichment_state, claim_token)
+        VALUES (?, ?, ?, 'chunk text', '{}', ?, ?, ?, ?)
         """,
-        (chunk_id, document_id, index, now, scope, state),
+        (chunk_id, document_id, index, now, scope, state, _CLAIM_TOKEN if state == "claimed" else None),
     )
     conn.commit()
     return chunk_id
@@ -122,6 +126,7 @@ async def test_phase1_name_only_edges_create_readable_default_entities(conn: sql
     await store_enrichment(
         _ctx(conn),
         chunk_id=chunk_id,
+        claim_token=_CLAIM_TOKEN,
         entities=[],
         edges=[{"source_name": "Azure DevOps", "target_name": "CI/CD Pipeline", "relation": "hosts"}],
     )
@@ -350,6 +355,7 @@ async def test_phase1_unknown_relation_fails_without_enriching_chunk(conn: sqlit
         await store_enrichment(
             _ctx(conn),
             chunk_id=chunk_id,
+            claim_token=_CLAIM_TOKEN,
             entities=[],
             edges=[{"source_name": "A", "target_name": "B", "relation": "not_a_relation"}],
         )
@@ -369,6 +375,7 @@ async def test_phase1_rejects_chunks_when_source_enrichment_is_disabled(conn: sq
         await store_enrichment(
             _ctx(conn),
             chunk_id=chunk_id,
+            claim_token=_CLAIM_TOKEN,
             entities=[{"name": "Alpha", "entity_type": "concept"}],
             edges=[],
         )
@@ -389,6 +396,7 @@ async def test_phase1_rejects_chunks_when_source_is_disabled(conn: sqlite3.Conne
         await store_enrichment(
             _ctx(conn),
             chunk_id=chunk_id,
+            claim_token=_CLAIM_TOKEN,
             entities=[{"name": "Alpha", "entity_type": "concept"}],
             edges=[],
         )
@@ -408,6 +416,7 @@ async def test_phase1_rejects_failed_chunks_without_persistence(conn: sqlite3.Co
         await store_enrichment(
             _ctx(conn),
             chunk_id=chunk_id,
+            claim_token=_CLAIM_TOKEN,
             entities=[{"name": "Alpha", "entity_type": "concept"}],
             edges=[],
         )
@@ -427,6 +436,7 @@ async def test_store_enrichment_rejects_ambiguous_mode_without_persistence(conn:
         await store_enrichment(
             _ctx(conn),
             chunk_id=chunk_id,
+            claim_token=_CLAIM_TOKEN,
             candidate_id="not-a-real-candidate",
             entities=[],
             edges=[],
@@ -446,6 +456,7 @@ async def test_phase1_invalid_entity_optional_fields_fail_before_persistence(con
         await store_enrichment(
             _ctx(conn),
             chunk_id=chunk_id,
+            claim_token=_CLAIM_TOKEN,
             entities=[{"name": "Bad Entity", "entity_type": "concept", "metadata": [], "importance": 5}],
         )
 
@@ -465,6 +476,7 @@ async def test_phase1_invalid_edge_weight_fails_before_persistence(conn: sqlite3
         await store_enrichment(
             _ctx(conn),
             chunk_id=chunk_id,
+            claim_token=_CLAIM_TOKEN,
             entities=[
                 {"id": "entity-a", "name": "A", "entity_type": "concept"},
                 {"id": "entity-b", "name": "B", "entity_type": "concept"},
@@ -489,6 +501,7 @@ async def test_phase1_non_object_edge_payload_rolls_back_and_releases_claim(conn
         await store_enrichment(
             _ctx(conn),
             chunk_id=chunk_id,
+            claim_token=_CLAIM_TOKEN,
             entities=[{"id": "entity-a", "name": "A", "entity_type": "concept"}],
             edges=["not-an-object"],  # type: ignore[list-item]
         )
@@ -498,6 +511,118 @@ async def test_phase1_non_object_edge_payload_rolls_back_and_releases_claim(conn
     assert state == ("failed", None)
     assert conn.execute("SELECT COUNT(*) FROM entities").fetchone()[0] == 0
     assert conn.execute("SELECT COUNT(*) FROM edges").fetchone()[0] == 0
+
+
+@pytest.mark.asyncio
+async def test_phase1_failure_records_error_and_attempt_count(conn: sqlite3.Connection) -> None:
+    source_id = _insert_source(conn, "Source")
+    document_id = _insert_document(conn, source_id)
+    chunk_id = _insert_chunk(conn, document_id)
+
+    with pytest.raises(ToolError):
+        await store_enrichment(
+            _ctx(conn),
+            chunk_id=chunk_id,
+            claim_token=_CLAIM_TOKEN,
+            entities=[{"name": "Bad Entity", "entity_type": "not_real"}],
+        )
+
+    row = conn.execute(
+        """
+        SELECT enrichment_state, claimed_at, claim_token, enrichment_attempts, enrichment_error,
+               last_enrichment_error_at
+        FROM chunks WHERE id = ?
+        """,
+        (chunk_id,),
+    ).fetchone()
+    assert row[0:4] == ("failed", None, None, 1)
+    assert "unsupported entity_type" in row[4]
+    assert row[5] is not None
+
+
+@pytest.mark.asyncio
+async def test_phase1_rejects_missing_claim_token_without_marking_failed(conn: sqlite3.Connection) -> None:
+    source_id = _insert_source(conn, "Source")
+    document_id = _insert_document(conn, source_id)
+    chunk_id = _insert_chunk(conn, document_id)
+
+    with pytest.raises(ToolError, match="claim_token is required"):
+        await store_enrichment(
+            _ctx(conn),
+            chunk_id=chunk_id,
+            entities=[{"name": "Alpha", "entity_type": "concept"}],
+        )
+
+    row = conn.execute(
+        "SELECT enrichment_state, claim_token, enrichment_attempts, enrichment_error FROM chunks WHERE id = ?",
+        (chunk_id,),
+    ).fetchone()
+    assert row == ("claimed", _CLAIM_TOKEN, 0, None)
+
+
+@pytest.mark.asyncio
+async def test_phase1_rejects_stale_claim_token_without_marking_failed(conn: sqlite3.Connection) -> None:
+    source_id = _insert_source(conn, "Source")
+    document_id = _insert_document(conn, source_id)
+    chunk_id = _insert_chunk(conn, document_id)
+
+    with pytest.raises(ToolError, match="claim_token does not match"):
+        await store_enrichment(
+            _ctx(conn),
+            chunk_id=chunk_id,
+            claim_token="stale-token",
+            entities=[{"name": "Alpha", "entity_type": "concept"}],
+        )
+
+    row = conn.execute(
+        "SELECT enrichment_state, claim_token, enrichment_attempts, enrichment_error FROM chunks WHERE id = ?",
+        (chunk_id,),
+    ).fetchone()
+    assert row == ("claimed", _CLAIM_TOKEN, 0, None)
+
+
+@pytest.mark.asyncio
+async def test_get_stats_exposes_enrichment_queue_state_counts(conn: sqlite3.Connection) -> None:
+    source_id = _insert_source(conn, "Source")
+    document_id = _insert_document(conn, source_id)
+    _insert_chunk(conn, document_id, state="pending", index=0)
+    _insert_chunk(conn, document_id, state="claimed", index=1)
+    _insert_chunk(conn, document_id, state="failed", index=2)
+    _insert_chunk(conn, document_id, state="enriched", index=3)
+
+    stats = await get_stats(_ctx(conn))
+
+    assert stats["chunks_pending"] == 1
+    assert stats["chunks_claimed"] == 1
+    assert stats["chunks_failed"] == 1
+    assert stats["chunks_enriched"] == 1
+    assert stats["chunks_claimable"] == 1
+
+
+@pytest.mark.asyncio
+async def test_retry_failed_enrichment_resets_failed_chunks_to_pending(conn: sqlite3.Connection) -> None:
+    source_id = _insert_source(conn, "Source")
+    document_id = _insert_document(conn, source_id)
+    failed_chunk = _insert_chunk(conn, document_id, state="failed")
+    _insert_chunk(conn, document_id, state="enriched")
+    conn.execute(
+        """
+        UPDATE chunks
+        SET enrichment_error='bad payload', enrichment_attempts=2, last_enrichment_error_at=?
+        WHERE id = ?
+        """,
+        (_now(), failed_chunk),
+    )
+    conn.commit()
+
+    result = await retry_failed_enrichment(_ctx(conn), chunk_ids=[failed_chunk])
+
+    assert result == {"reset": 1, "remaining_failed": 0}
+    row = conn.execute(
+        "SELECT enrichment_state, enrichment_error, enrichment_attempts, last_enrichment_error_at FROM chunks WHERE id = ?",
+        (failed_chunk,),
+    ).fetchone()
+    assert row == ("pending", None, 2, None)
 
 
 @pytest.mark.asyncio
@@ -535,6 +660,7 @@ async def test_phase1_rejects_entity_id_from_another_chunk(conn: sqlite3.Connect
         await store_enrichment(
             _ctx(conn),
             chunk_id=chunk_b,
+            claim_token=_CLAIM_TOKEN,
             entities=[{"id": existing_entity_id, "name": "Moved", "entity_type": "concept"}],
         )
 
@@ -559,6 +685,7 @@ async def test_phase1_allows_same_scope_cross_document_edge_endpoint_id(conn: sq
     await store_enrichment(
         _ctx(conn),
         chunk_id=chunk_b,
+        claim_token=_CLAIM_TOKEN,
         entities=[{"id": "local-entity", "name": "Local", "entity_type": "concept"}],
         edges=[{"source_id": existing_entity_id, "target_id": "local-entity", "relation": "related_to"}],
     )
@@ -582,6 +709,7 @@ async def test_phase1_allows_same_chunk_entity_id_retry(conn: sqlite3.Connection
     await store_enrichment(
         _ctx(conn),
         chunk_id=chunk_id,
+        claim_token=_CLAIM_TOKEN,
         entities=[{"id": existing_entity_id, "name": "Original", "entity_type": "concept", "description": "retry"}],
     )
 
