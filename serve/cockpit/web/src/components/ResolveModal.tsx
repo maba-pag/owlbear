@@ -70,6 +70,7 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
   const [snapshotDR] = useState<PendingDRWithBody | null>(() => dr)
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null)
   const [notes, setNotes] = useState('')
+  const [notesHost, setNotesHost] = useState<HTMLElement | null>(null)
   const [error, setError] = useState<ResolveErrorState | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [resolveBodyCanScrollDown, setResolveBodyCanScrollDown] = useState(false)
@@ -256,6 +257,24 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
     submitRef.current?.removeAttribute('disabled')
   }, [canSubmit])
 
+  useEffect(() => {
+    const host = notesHost
+    if (!host) {
+      return
+    }
+
+    const syncNotes = (event: Event) => {
+      setNotes(readControlValue(event as ControlValueEvent))
+    }
+
+    host.addEventListener('change', syncNotes)
+    host.addEventListener('input', syncNotes)
+    return () => {
+      host.removeEventListener('change', syncNotes)
+      host.removeEventListener('input', syncNotes)
+    }
+  }, [notesHost])
+
   function setHeadingTagAttr(element: HTMLElement | null): void {
     element?.setAttribute('tag', 'h3')
     element?.setAttribute('size', 'small')
@@ -265,10 +284,10 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
   function readControlValue(event: ControlValueEvent): string {
     const detailValue = (event.detail as { value?: unknown } | undefined)?.value
     const target = event.target as { value?: unknown } | undefined
-    return typeof target?.value === 'string'
-      ? target.value
-      : typeof detailValue === 'string'
+    return typeof detailValue === 'string'
         ? detailValue
+        : typeof target?.value === 'string'
+          ? target.value
         : ''
   }
 
@@ -390,41 +409,45 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
               <legend className="mb-static-xs text-xs font-semibold uppercase text-primary">Response</legend>
               {requestKind === 'decision' ? (
                 <div className="grid gap-static-sm">
-                  {decisionOptions.map((option) => (
-                    <button
-                      key={option.option_id}
-                      type="button"
-                      data-testid={`resolve-option-${option.option_id}`}
-                      aria-selected={selectedOptionId === option.option_id ? 'true' : 'false'}
-                      className="grid gap-static-xs rounded-lg border border-contrast-low bg-canvas p-static-sm text-left text-sm text-primary"
-                      onClick={() => {
-                        setSelectedOptionId(option.option_id)
-                      }}
-                    >
-                      <span className="text-sm font-semibold text-primary">{option.label}</span>
-                      <span className="h-1.5 w-full rounded-full bg-contrast-low">
-                        <span
-                          className="block h-full rounded-full bg-brand"
-                          data-testid={`option-confidence-${option.option_id}`}
-                          style={{ width: `${option.confidence * 100}%` }}
-                        />
-                      </span>
-                      {option.rationale.length > 0 ? (
-                        <span className="text-xs leading-relaxed text-contrast-high">{option.rationale}</span>
-                      ) : null}
-                      {option.recommended ? (
-                        <span className="inline-flex">
-                          <PTag
-                            compact
-                            variant="info"
-                            data-testid={`option-recommended-${option.option_id}`}
-                          >
-                            Recommended
-                          </PTag>
+                  {decisionOptions.map((option) => {
+                    const confidence = typeof option.confidence === 'number' ? option.confidence : 0
+                    const rationale = typeof option.rationale === 'string' ? option.rationale : ''
+                    return (
+                      <button
+                        key={option.option_id}
+                        type="button"
+                        data-testid={`resolve-option-${option.option_id}`}
+                        aria-selected={selectedOptionId === option.option_id ? 'true' : 'false'}
+                        className="grid gap-static-xs rounded-lg border border-contrast-low bg-canvas p-static-sm text-left text-sm text-primary"
+                        onClick={() => {
+                          setSelectedOptionId(option.option_id)
+                        }}
+                      >
+                        <span className="text-sm font-semibold text-primary">{option.label}</span>
+                        <span className="h-1.5 w-full rounded-full bg-contrast-low">
+                          <span
+                            className="block h-full rounded-full bg-brand"
+                            data-testid={`option-confidence-${option.option_id}`}
+                            style={{ width: `${confidence * 100}%` }}
+                          />
                         </span>
-                      ) : null}
-                    </button>
-                  ))}
+                        {rationale.length > 0 ? (
+                          <span className="text-xs leading-relaxed text-contrast-high">{rationale}</span>
+                        ) : null}
+                        {option.recommended ? (
+                          <span className="inline-flex">
+                            <PTag
+                              compact
+                              variant="info"
+                              data-testid={`option-recommended-${option.option_id}`}
+                            >
+                              Recommended
+                            </PTag>
+                          </span>
+                        ) : null}
+                      </button>
+                    )
+                  })}
                 </div>
               ) : (
                 <PText>Mark this action as complete to resolve it.</PText>
@@ -444,6 +467,9 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
             )}
 
             <PTextarea
+              ref={(element) => {
+                setNotesHost(element as HTMLElement | null)
+              }}
               compact
               label="Resolution notes"
               name="resolve-notes"
@@ -451,6 +477,7 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
               data-testid="resolve-notes"
               value={notes}
               onChange={(event) => setNotes(readControlValue(event))}
+              onInput={(event) => setNotes(readControlValue(event))}
             />
 
             {error ? (
