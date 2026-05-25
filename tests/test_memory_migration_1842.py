@@ -574,3 +574,58 @@ class TestFromAC_MemoryMigrateCLI:
         )
         assert "1" in result.stdout
         assert result.returncode == 0
+
+
+# ---------------------------------------------------------------------------
+# AC5 — Packaged console-script proof
+# ---------------------------------------------------------------------------
+
+_PROJECT_DIR = Path(__file__).resolve().parent.parent / "serve" / "memory"
+
+
+class TestFromAC_ConsoleScriptProof:
+    """AC5: packaged `memory-migrate` console-script exits 0 and prints migrated count.
+
+    Executes via `uv run --project serve/memory memory-migrate` — fails if the
+    [project.scripts] entry in serve/memory/pyproject.toml is removed.
+    """
+
+    def test_packaged_script_exits_zero(self, tmp_path: Path) -> None:
+        """uv run --project serve/memory memory-migrate exits 0."""
+        result = subprocess.run(
+            ["uv", "run", "--project", str(_PROJECT_DIR), "memory-migrate", "--memory-dir", str(tmp_path)],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0
+
+    def test_packaged_script_prints_migrated_count(self, tmp_path: Path) -> None:
+        """uv run --project serve/memory memory-migrate prints migrated count to stdout."""
+        _write_legacy_entry(tmp_path, _LegacyEntrySpec(_ID_1, confidence=0.8))
+        result = subprocess.run(
+            ["uv", "run", "--project", str(_PROJECT_DIR), "memory-migrate", "--memory-dir", str(tmp_path)],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0
+        assert "1" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# AC6 — _resolve_memory_dir fallback branch
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ResolveFallbackDir:
+    """AC6: _resolve_memory_dir(None) with OWLBEAR_MEMORY_DIR unset returns Path('.owlbear/memory').
+
+    Direct unit assertion on the private helper, independent of CLI integration.
+    """
+
+    def test_resolve_memory_dir_returns_default_when_no_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """_resolve_memory_dir(None) returns Path('.owlbear/memory') when OWLBEAR_MEMORY_DIR is unset."""
+        from owlbear_memory.migrate import _resolve_memory_dir
+
+        monkeypatch.delenv("OWLBEAR_MEMORY_DIR", raising=False)
+        result = _resolve_memory_dir(None)
+        assert result == Path(".owlbear") / "memory"
