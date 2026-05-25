@@ -558,6 +558,21 @@ Accessibility and responsive state after #1396:
   fixture shape), and `serve/cockpit/web/src/__tests__/ResolveModal.test.tsx` (updated
   field contract and resolve payload assertions).
 
+- #1860 replaces the body-parsed card rendering in `DecisionsPage.tsx` with structured-field
+  rendering from `PendingDR`. Each card displays: kind badge (`PTag`: `"Decision"`/`"Action"`
+  from `item.kind`), `item.title` heading, `item.summary` text, `item.agent` attribution, and
+  relative age via `formatAge(item.created)`. Decision-kind cards additionally render an option
+  count and one confidence bar per option (`[data-testid="confidence-bar-{option_id}"]`,
+  width=`confidence*100`%). `getDecisionBrief()` body-parsing is removed from the card UI;
+  the old `dr-context`/`dr-recommendation`/`dr-consequence` sections are intentionally
+  replaced by the structured-field layout. Empty-state copy updated to "No pending requests";
+  oldest-first sort order preserved. Durable suites `DecisionsPage_1645.test.tsx` and
+  `DecisionsPage_1688.test.tsx` were updated to reflect the structured-field contract.
+  Verified by `serve/cockpit/web/src/__tests__/DecisionsPage_1860.test.tsx` (15 tests — kind
+  badge, summary, agent, confidence-bar widths, 0%/100% boundaries, option count, card click,
+  empty state, and old-section removal) plus updated durable suites (53 tests total, ESLint
+  clean, `DecisionsPage.tsx` coverage 71.42%).
+
 ## Product Boundary
 
 Cockpit steering owns viewing, editing, moving/archiving, user blocks, health/admin,
@@ -607,7 +622,7 @@ Decision behavior after #1385 and #1389:
 
 - Backend decision lifecycle is canonical: resolution appends the task summary,
   moves decision files to `resolved/`, and applies unblock semantics per response.
-- Frontend decision UX after #1645, #1648, and #1857: the `/decisions` tab (`DecisionsPage`) is the primary path; `DRStatusIndicator` in the status bar → `ResolveModal` is the secondary (route-independent Shell-level) path. `DecisionViewport` is no longer rendered in the sidecar. As of #1857, `usePendingDRs` fetches from `GET /api/requests/pending` (Requests API) and `ResolveModal` renders structured `title`, `summary`, and `options` fields — not the legacy Decisions API or body-parsed extraction.
+- Frontend decision UX after #1645, #1648, #1857, and #1860: the `/decisions` tab (`DecisionsPage`) is the primary path; `DRStatusIndicator` in the status bar → `ResolveModal` is the secondary (route-independent Shell-level) path. `DecisionViewport` is no longer rendered in the sidecar. As of #1857, `usePendingDRs` fetches from `GET /api/requests/pending` (Requests API) and `ResolveModal` renders structured `title`, `summary`, and `options` fields — not the legacy Decisions API or body-parsed extraction. As of #1860, `DecisionsPage` cards render from structured `PendingDR` fields (`item.kind`, `item.title`, `item.summary`, `item.agent`, `item.created`, `item.options`) with confidence bars for decision-kind requests; `getDecisionBrief()` is removed from the card UI entirely.
 
 ## Error Envelope
 
