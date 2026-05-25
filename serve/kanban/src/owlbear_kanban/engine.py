@@ -37,7 +37,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from io import StringIO
 from typing import TYPE_CHECKING
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from pydantic import ValidationError as PydanticValidationError
 from ruamel.yaml import YAML
@@ -70,7 +70,13 @@ from owlbear_kanban.models import (
     TaskSummary,
     ValidationError,
 )
-from owlbear_kanban.request_models import ActionRequest, DecisionRequest, Request, RequestRecord
+from owlbear_kanban.request_models import (
+    UUID4_VERSION,
+    ActionRequest,
+    DecisionRequest,
+    Request,
+    RequestRecord,
+)
 from owlbear_kanban.storage import (
     make_task_filename,
     read_task,
@@ -956,11 +962,16 @@ class KanbanEngine:
         return data, body
 
     @staticmethod
-    def _serialize_request_content(request: DecisionRequest | ActionRequest, body: str) -> str:
+    def _serialize_request_content(
+        request: DecisionRequest | ActionRequest,
+        body: str,
+        *,
+        include_resolved_at: bool = False,
+    ) -> str:
         """Render validated request frontmatter and body as markdown."""
         payload: dict[str, object] = request.model_dump()
         resolution = payload.get("resolution")
-        if isinstance(resolution, dict):
+        if isinstance(resolution, dict) and not include_resolved_at:
             resolution = dict(resolution)
             resolution.pop("resolved_at", None)
             payload["resolution"] = resolution
@@ -1039,6 +1050,130 @@ class KanbanEngine:
             code="ERR_NOT_FOUND",
             user_message=f"request '{request_id}' not found",
         )
+
+    @staticmethod
+    def _request_is_structured_pending(path: Path) -> bool:
+        """Return True when *path* has the UUID4 filename used by structured requests."""
+        try:
+            return UUID(path.stem).version == UUID4_VERSION
+        except ValueError:
+            return False
+
+    @staticmethod
+    def _build_request_writeback(
+        request_model: DecisionRequest | ActionRequest,
+        selected_option_id: str | None,
+        free_text: str | None,
+    ) -> str:
+        """Return task-body summary text for a resolved request."""
+        if request_model.kind == "action":
+            return f"## AR: {request_model.title}\n- **Outcome:** {free_text}"
+
+        if selected_option_id is None:
+            return f"## DR: {request_model.title}\n- **Answer:** {free_text}"
+
+        labels = {option.option_id: option.label for option in request_model.options}
+        writeback = f"## DR: {request_model.title}\n- **Selected:** {labels[selected_option_id]}"
+        if free_text is not None:
+            writeback = f"{writeback}\n- **Notes:** {free_text}"
+        return writeback
+
+    def _has_pending_structured_requests_for_task(self, task_id: int) -> bool:
+        """Return True when structured pending requests still exist for *task_id*."""
+        pending_dir = self._kanban_dir / "decisions" / "pending"
+        if not pending_dir.exists():
+            return False
+
+        for candidate in pending_dir.glob("*.md"):
+            if not self._request_is_structured_pending(candidate):
+                continue
+            try:
+                frontmatter, _body = self._parse_request_file(candidate)
+            except (OSError, ValueError, TypeError, YAMLError):
+                continue
+            if frontmatter.get("task_id") == task_id:
+                return True
+        return False
+
+    def resolve_request(
+        self,
+        request_id: str,
+        selected_option_id: str | None,
+        free_text: str | None,
+    ) -> RequestRecord:
+        """Resolve one structured request, move it to resolved/, and update task state."""
+        decisions_dir = self._kanban_dir / "decisions"
+        pending_path = decisions_dir / "pending" / f"{request_id}.md"
+        resolved_path = decisions_dir / "resolved" / f"{request_id}.md"
+        validate_path_containment(self._kanban_dir, pending_path)
+        validate_path_containment(self._kanban_dir, resolved_path)
+
+        if not pending_path.exists():
+            if resolved_path.exists():
+                raise ValidationError(
+                    code="ERR_ALREADY_RESOLVED",
+                    user_message=f"request '{request_id}' is already resolved",
+                )
+            raise NotFoundError(
+                code="ERR_NOT_FOUND",
+                user_message=f"request '{request_id}' not found",
+            )
+
+        try:
+            frontmatter, body = self._parse_request_file(pending_path)
+            request_model = Request.model_validate(frontmatter)
+        except (OSError, ValueError, TypeError, YAMLError, PydanticValidationError) as exc:
+            raise ValidationError(
+                code="ERR_CORRUPT_YAML_PARSE",
+                user_message=f"request file invalid: {pending_path}",
+            ) from exc
+
+        if selected_option_id is None and free_text is None:
+            raise ValidationError(
+                code="ERR_PREDICATE_FAILED",
+                user_message="selected_option_id or free_text is required",
+            )
+
+        if request_model.kind == "action" and selected_option_id is not None:
+            raise ValidationError(
+                code="ERR_PREDICATE_FAILED",
+                user_message="selected_option_id must be null for action requests",
+            )
+
+        if request_model.kind == "decision" and selected_option_id is not None:
+            option_ids = {option.option_id for option in request_model.options}
+            if selected_option_id not in option_ids:
+                raise ValidationError(
+                    code="ERR_PREDICATE_FAILED",
+                    user_message="selected_option_id must match an existing option_id",
+                )
+
+        resolution_payload = request_model.resolution.model_dump()
+        resolution_payload["selected_option_id"] = selected_option_id
+        resolution_payload["free_text"] = free_text
+        resolution_payload["resolved_at"] = datetime.now().astimezone().isoformat()
+
+        request_payload = request_model.model_dump()
+        request_payload["resolution"] = resolution_payload
+        resolved_model = Request.model_validate(request_payload)
+
+        resolved_path.parent.mkdir(parents=True, exist_ok=True)
+        content = self._serialize_request_content(
+            resolved_model,
+            body,
+            include_resolved_at=True,
+        )
+        fd = os.open(resolved_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(content)
+        pending_path.unlink()
+
+        writeback = self._build_request_writeback(resolved_model, selected_option_id, free_text)
+        self.edit_task(str(resolved_model.task_id), append_body=writeback)
+        if not self._has_pending_structured_requests_for_task(resolved_model.task_id):
+            self.edit_task(str(resolved_model.task_id), blocked=False)
+
+        return RequestRecord.from_request(resolved_model, body)
 
     @staticmethod
     def _required_sections_passes(body: str, sections: list[str]) -> bool:
