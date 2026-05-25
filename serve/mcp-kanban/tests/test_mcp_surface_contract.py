@@ -50,6 +50,9 @@ EXPECTED_TOOLS: frozenset[str] = frozenset(
         "start_work",
         "end_work",
         "pick_tasks",
+        "create_request",
+        "list_requests",
+        "show_request",
     }
 )
 
@@ -212,7 +215,7 @@ class TestFromAC_ToolRegistryContract:
     """AC3: Live registry (post-lifespan, no exclusions) matches EXPECTED_TOOLS exactly."""
 
     @pytest.mark.asyncio
-    async def test_live_registry_contains_exactly_nine_tools(
+    async def test_live_registry_contains_exactly_twelve_tools(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
