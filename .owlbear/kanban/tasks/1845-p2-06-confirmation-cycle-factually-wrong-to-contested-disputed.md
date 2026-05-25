@@ -1,10 +1,10 @@
 ---
 id: 1845
 title: 'P2-06: Confirmation cycle — factually-wrong to contested/disputed'
-status: review
+status: done
 priority: needed
 created: 2026-05-24T19:01:24.983062+02:00
-updated: 2026-05-25T04:29:50.644661+02:00
+updated: 2026-05-25T05:44:13.456466+02:00
 tags:
   - phase-2
   - scope:memory
@@ -14,23 +14,22 @@ depends_on:
   - 1840
   - 1841
 ac:
-  - 'AC1: `MemoryEntry` has `contested_by_task: str | None` (default None) field in
-    both `owlbear_memory` and `owlbear_mcp_memory` packages (frontmatter-serialized).
-    Engine method `record_factually_wrong(entry_id: str, task_id: str, expected_updated_at:
-    str | None = None)` raises `ValidationError` if `task_id` is empty/whitespace.
-    When entry state ∈ {approved, curated}: sets state to `contested` and stores `contested_by_task
-    = task_id`. Entry remains in recall results.'
-  - 'AC2: When entry state is `contested` and `contested_by_task` is a non-None value
-    ≠ `task_id`: transitions state to `disputed` (excluded from recall). Edge case:
-    `contested` with `contested_by_task = None` is treated as initial confirmation
-    (stores `task_id`, remains `contested`).'
-  - 'AC3: When entry state is `contested` and `contested_by_task == task_id`: returns
-    entry unchanged (no mutation, no error). Calls on entries not in voteable states
-    ({approved, curated, contested}) raise `TransitionError`. All AC1–AC3 logic is
-    evaluated after the OCC guard in AC4.'
-  - "AC4: `expected_updated_at` is a CAS guard: if non-None and does not match the
-    entry's current `updated_at`, raise `ConcurrencyError` without mutating. If None,
-    the check is skipped (unconditional write)."
+  - 'AC1: `MemoryEntry` has `contested_by_task: str | None` (default None) in both
+    packages (frontmatter-serialized). `record_factually_wrong(entry_id, task_id,
+    expected_updated_at=None)` raises `ValidationError` if `task_id` is empty/whitespace.
+    When state ∈ {approved, curated}: sets `contested`, stores `contested_by_task=task_id`,
+    clears `approved_at` to None (per downgrade contract). Remains in recall. Approved
+    fixtures MUST have non-null `approved_at` and assert cleared.'
+  - 'AC2: When state is `contested` and `contested_by_task` is non-None ≠ `task_id`:
+    transitions to `disputed` (excluded from recall). Edge: `contested` with `contested_by_task=None`
+    treated as initial confirmation (stores `task_id`, remains `contested`).'
+  - 'AC3: When state is `contested` and `contested_by_task == task_id`: returns entry
+    unchanged (no mutation, no error). Non-voteable states ({approved, curated, contested}
+    complement) raise `TransitionError`. All AC1–AC3 logic evaluated after OCC guard
+    in AC4.'
+  - 'AC4: `expected_updated_at` is CAS guard: if non-None and mismatches entry `updated_at`,
+    raise `ConcurrencyError` without mutation. If None, check skipped (unconditional
+    write).'
 proof_bundle: behavioral
 blocked: false
 block_reason:
@@ -191,3 +190,125 @@ Failure modes: AttributeError ('MemoryEngine' has no attribute 'record_factually
 - All 24 tests pass against current implementation (implementation already orders OCC before task_id validation at engine.py:238-245).
 - Builder skip: test-only retry, all tests green.
 - ruff: clean.
+
+[[2026-05-25T05:01:44+02:00]]
+## Review Evidence
+- Verdict: FAIL
+- FAIL #1845 -> backlog | AC1 approved->contested handling leaves `approved_at` semantics inconsistent, and the retry proof would not catch it.
+- Builder evidence reviewed first: the original builder packet provided scoped quality-runner proof (22 passed / 0 failed in `tests/test_confirmation_cycle_1845.py`, scoped ruff clean, implementation summary for 5 source files). The retry note then added two AC3/AC4 ordering tests and reported 24 task-local tests green with builder skip.
+- Challenger cross-check: reconsider on the approved-entry downgrade path (confidence 0.67). I agree the prior OCC-ordering blocker is closed, but one blocking issue remains.
+
+| # | AC Line | Finding | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | AC1 | The new approved->contested branch preserves `approved_at`, creating an ambiguous downgraded state and diverging from the established downgrade contract that clears approval timestamps when leaving `approved`. | AC1 requires approved entries to transition to `contested`; `record_factually_wrong()` updates only `state`, `contested_by_task`, and `updated_at` in `serve/memory/src/owlbear_memory/engine.py:247-255`; existing downgrade logic explicitly clears `approved_at` in `serve/memory/src/owlbear_memory/engine.py:192-193`, with proof in `tests/test_memory_engine_1668.py:185-197`; published field semantics say `approved_at` is "Set on approve, cleared on downgrade/delete" in `serve/mcp-memory/README.md:89`. | backlog |
+| 2 | AC1 | The retry suite would not catch that regression because every approved fixture in #1845 defaults `approved_at` to `None`, so the happy-path tests prove state change but not approval-metadata correctness for realistic approved entries. | Approved fixtures default `approved_at` to `None` in `tests/test_confirmation_cycle_1845.py:56` and `tests/test_confirmation_cycle_1845.py:78`; approved-path tests only assert state / `contested_by_task` in `tests/test_confirmation_cycle_1845.py:190-209`. | backlog |
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Clarify the approved-entry downgrade contract for `record_factually_wrong()` and reissue the task so approved->contested behavior is explicit about `approved_at` alignment with existing downgrade semantics. | serve/memory/src/owlbear_memory/engine.py, tests/test_confirmation_cycle_1845.py, serve/mcp-memory/README.md | Finding #1; `serve/memory/src/owlbear_memory/engine.py:247-255`, `serve/memory/src/owlbear_memory/engine.py:192-193`, `tests/test_memory_engine_1668.py:185-197`, `serve/mcp-memory/README.md:89` |
+| 2 | architect | Require proof with an approved fixture that has non-null `approved_at`, so the chosen contract is executable and cannot false-green on a downgraded approved entry. | tests/test_confirmation_cycle_1845.py | Finding #2; `tests/test_confirmation_cycle_1845.py:56`, `tests/test_confirmation_cycle_1845.py:78`, `tests/test_confirmation_cycle_1845.py:190-209` |
+
+## Observations
+- The prior AC3/AC4 ordering blocker is fixed: new tests in `tests/test_confirmation_cycle_1845.py:345-362` now prove OCC mismatch beats empty/whitespace `task_id` validation, matching code order in `serve/memory/src/owlbear_memory/engine.py:240-243`.
+- AC1 field duplication/frontmatter sync is otherwise coherent across `serve/memory/src/owlbear_memory/models.py:58`, `serve/memory/src/owlbear_memory/storage.py:84`, `serve/mcp-memory/src/owlbear_mcp_memory/models.py:62`, and `serve/mcp-memory/src/owlbear_mcp_memory/engine.py:107`.
+- Recall-state proof is composite but adequate: `tests/test_confirmation_cycle_1845.py:211-216` covers the contested transition surface, and durable recall tests at `tests/test_memory_state_machine_1840.py:357-383` still verify contested inclusion and disputed exclusion on the actual recall API.
+- Adjacent non-blocking note: `serve/mcp-memory/src/owlbear_mcp_memory/tools.py:89-105` still omits `contested_by_task` from dict serialization, but #1845 AC is limited to duplicated models, frontmatter serialization, and `record_factually_wrong()` behavior.
+
+[[2026-05-25T05:09:55+02:00]]
+## Architecture Review (re-review after FAIL)
+### Evaluation
+Re-review scope limited to reviewer findings — prior full evaluation (all 13 criteria PASS) remains valid.
+
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Interface clarity | PASS (refined) | AC1 now explicitly requires `approved_at` clearing on approved->contested, matching documented downgrade contract (`serve/mcp-memory/README.md:89`) and existing `edit()` behavior (`engine.py:192-193`, proved by `tests/test_memory_engine_1668.py:185-197`) |
+| Pattern consistency | PASS (refined) | AC1 fixture requirement ensures approved-path tests use non-null `approved_at`, preventing false-green on downgrade verification |
+
+### Reviewer Findings Addressed
+| # | Finding | Resolution |
+|---|---------|------------|
+| 1 | `approved_at` preserved on approved->contested violates downgrade contract | AC1 refined: explicitly requires `approved_at` cleared to None |
+| 2 | Test fixtures default `approved_at=None` masking the bug | AC1 refined: approved fixtures MUST have non-null `approved_at` and assert it is cleared |
+
+### Proof-Bundle Validation
+- Planner assignment: behavioral
+- Final bundle: behavioral
+- Existing proof scope: N/A
+- Test-writer: PROCEED
+
+### Challenge Results
+- Challenger: SKIPPED — re-review of narrow refinement (prior challenge accepted all structural issues; new finding is a contract alignment fix with documented evidence)
+
+### Verdict: APPROVE
+### Action Taken: Refined AC1 to require `approved_at` clearing on downgrade and non-null fixtures. Advanced to todo.
+
+[[2026-05-25T05:19:28+02:00]]
+## Test-Writer Notes
+- Retry: added 2 tests for reviewer gap (AC1 approved_at clearing contract with non-null fixture).
+- New tests: `test_approved_entry_clears_approved_at_on_contested_transition`, `test_approved_at_cleared_persisted_after_contested_transition`.
+- Added constant `_TS_APPROVED = "2026-05-20T08:00:00+00:00"` for non-null approved_at fixtures.
+- Both new tests FAIL: AssertionError: assert '2026-05-20T08:00:00+00:00' is None (implementation does not clear approved_at).
+- 24 existing tests PASS unchanged.
+- ruff: clean.
+
+[[2026-05-25T05:30:00+02:00]]
+## Builder Notes
+- Implementation: updated `serve/memory/src/owlbear_memory/engine.py` in `record_factually_wrong()` to clear `approved_at` when transitioning `approved|curated -> contested`.
+- Files changed: `serve/memory/src/owlbear_memory/engine.py` (single-line behavioral fix).
+- RED verification (quality-runner): `tests/test_confirmation_cycle_1845.py` had 24 passed / 2 failed before fix.
+  - Failing tests: `test_approved_entry_clears_approved_at_on_contested_transition`, `test_approved_at_cleared_persisted_after_contested_transition`.
+- GREEN verification (quality-runner): `tests/test_confirmation_cycle_1845.py` => 26 passed / 0 failed, lint clean.
+- Additional scoped regression and coverage verification (quality-runner):
+  - Test paths: `tests/test_confirmation_cycle_1845.py`, `tests/test_memory_engine_1668.py`, `tests/test_memory_state_machine_1840.py`, `tests/test_slot_efficiency_1844.py`, `tests/test_memory_migration_1842.py`
+  - Result: 180 passed / 0 failed
+  - Coverage: 96% on `owlbear_memory.engine`
+  - Lint: clean
+- Durable module-level note: `tests/test_confirmation_cycle.py` does not exist (legacy naming in this repo); used durable adjacent engine/state/migration suites for regression signal.
+- Approach: minimal surgical change to align approved->contested downgrade path with AC1 and existing downgrade contract semantics while preserving all existing transition/OCC behavior.
+- Commit: `6c3474ce` (`fix: clear approved_at on factually-wrong downgrade (#1845, builder)`).
+
+[[2026-05-25T05:39:03+02:00]]
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation: PASS #1845 -> docs | AC mapped to code and evidence sufficient.
+- Builder evidence reviewed first: quality-runner reported `26 passed / 0 failed` for `tests/test_confirmation_cycle_1845.py`, scoped lint clean, plus adjacent regression proof of `180 passed / 0 failed` with `96%` coverage on `owlbear_memory.engine`.
+- Challenger cross-check: `proceed` with confidence `0.83`; no remaining blocking findings identified.
+- AC evidence map:
+
+| AC | Code Evidence | Test Evidence | Status |
+|---|---|---|---|
+| AC1 | `serve/memory/src/owlbear_memory/models.py:58`, `serve/mcp-memory/src/owlbear_mcp_memory/models.py:62`, `serve/memory/src/owlbear_memory/storage.py:84`, `serve/mcp-memory/src/owlbear_mcp_memory/engine.py:107`, `serve/memory/src/owlbear_memory/engine.py:244-252` | `tests/test_confirmation_cycle_1845.py:116`, `tests/test_confirmation_cycle_1845.py:130`, `tests/test_confirmation_cycle_1845.py:144`, `tests/test_confirmation_cycle_1845.py:151`, `tests/test_confirmation_cycle_1845.py:181`, `tests/test_confirmation_cycle_1845.py:188`, `tests/test_confirmation_cycle_1845.py:195`, `tests/test_confirmation_cycle_1845.py:212`, `tests/test_confirmation_cycle_1845.py:220`, `tests/test_confirmation_cycle_1845.py:230`, `tests/test_confirmation_cycle_1845.py:239`, `tests/test_confirmation_cycle_1845.py:246`, plus durable recall proof at `tests/test_memory_state_machine_1840.py:357` | PASS |
+| AC2 | `serve/memory/src/owlbear_memory/engine.py:258-268` | `tests/test_confirmation_cycle_1845.py:256`, `tests/test_confirmation_cycle_1845.py:263`, plus disputed recall exclusion at `tests/test_memory_state_machine_1840.py:370` | PASS |
+| AC3 | `serve/memory/src/owlbear_memory/engine.py:241-272` | `tests/test_confirmation_cycle_1845.py:277`, `tests/test_confirmation_cycle_1845.py:286`, `tests/test_confirmation_cycle_1845.py:293`, `tests/test_confirmation_cycle_1845.py:300`, `tests/test_confirmation_cycle_1845.py:307`, `tests/test_confirmation_cycle_1845.py:354`, `tests/test_confirmation_cycle_1845.py:364`, `tests/test_confirmation_cycle_1845.py:374` | PASS |
+| AC4 | `serve/memory/src/owlbear_memory/engine.py:241-244` | `tests/test_confirmation_cycle_1845.py:318`, `tests/test_confirmation_cycle_1845.py:327`, `tests/test_confirmation_cycle_1845.py:338`, `tests/test_confirmation_cycle_1845.py:345`, `tests/test_confirmation_cycle_1845.py:354`, `tests/test_confirmation_cycle_1845.py:364`, `tests/test_confirmation_cycle_1845.py:374` | PASS |
+- Current editor diagnostics on the touched source and task-local test file: no errors found.
+
+## Observations
+- Non-blocking: `serve/mcp-memory/src/owlbear_mcp_memory/tools.py:89-105` still omits `contested_by_task` from `_entry_to_dict()`. I did not treat this as blocking because AC1 is scoped to duplicated models, frontmatter serialization, and `record_factually_wrong()` behavior, and the builder evidence fully covers that contract.
+- Review scope was reconstructed from builder notes and direct file inspection. Shell-level `git diff` / `git status` checks were not available in this tool environment.
+
+[[2026-05-25T05:44:13+02:00]]
+## Docs Gate
+
+### Checklist
+
+| Item | Result | Evidence |
+|------|--------|----------|
+| 1. README Verification | FIXED | `serve/memory/README.md` and `serve/mcp-memory/README.md` both missing `contested_by_task` field, `record_factually_wrong` method, state machine transitions, and OCC note — all task-caused gaps. Updated inline. |
+| 2. External Attribution | N/A | Builder notes cite codebase-only sources; no external attribution needed. |
+| 3. Research Doc | PASS | `.owlbear/research/memory-confirmation-cycle-factually-wrong.md` referenced in task body under `## Research`. |
+| 4. Deletion Detection | N/A | No symbols removed; new field and method added only. |
+
+### Files Updated
+
+- `serve/memory/README.md`: added `contested_by_task` to MemoryEntry table; added `record_factually_wrong` to engine method table; added 4 state machine rows (approved→contested, curated→contested, contested same-task no-op, contested different-task→disputed); updated OCC paragraph to cover optional `expected_updated_at`.
+- `serve/mcp-memory/README.md`: added `contested_by_task` to Entry Schema table.
+
+Commit: `552e7b68`
+
+### Scratch Cleanup
+No scratch files created for this task.
+
+### Verdict
+DONE #1845 -> done | docs gate passed

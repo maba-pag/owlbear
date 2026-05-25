@@ -1,10 +1,10 @@
 ---
 id: 1842
 title: 'P2-03: Migration — score initialization from confidence'
-status: in-progress
+status: done
 priority: needed
 created: 2026-05-24T19:01:24.804040+02:00
-updated: 2026-05-25T04:41:01.682832+02:00
+updated: 2026-05-25T05:43:36.183399+02:00
 tags:
   - phase-2
   - scope:memory
@@ -24,8 +24,14 @@ ac:
     -score, id)` is identical to pre-migration sort `(state_rank, -confidence, id)`
     when all counters are 0.'
   - 'CLI `uv run memory-migrate [--memory-dir PATH] [--dry-run]` calls `migrate_scores()`.
-    Directory defaults: `OWLBEAR_MEMORY_DIR` env → `.owlbear/memory/`. `--dry-run`
-    reports count without writing. Prints count to stdout, exits 0.'
+    Directory resolution chain: `--memory-dir` → `OWLBEAR_MEMORY_DIR` env → `.owlbear/memory/`.
+    `--dry-run` reports count without writing. Prints count to stdout, exits 0.'
+  - "Packaged console-script proof: `subprocess.run(['uv', 'run', '--project', 'serve/memory',
+    'memory-migrate', '--memory-dir', tmp_path])` exits 0 and prints migrated count
+    to stdout. Fails if `[project.scripts]` entry in `serve/memory/pyproject.toml`
+    is removed."
+  - "`_resolve_memory_dir(None)` called with `OWLBEAR_MEMORY_DIR` unset returns `Path('.owlbear/memory')`.
+    Direct unit assertion on the helper, independent of CLI integration."
 proof_bundle: behavioral
 blocked: false
 block_reason:
@@ -193,3 +199,154 @@ serve/memory/
 - The earlier CLI contract conflict in the task-scoped suite was resolved correctly on retry; the current task-scoped test file now passes 30/30.
 - The implementation path for AC1 through AC3 looks coherent: migration routes through `storage.read_entry()` before raw frontmatter inspection, preserving the existing malformed-file skip behavior, and the all-four-keys predicate matches the write format from `storage.write_entry()`.
 - The only remaining issues at this gate are the source-file lint defect and the missing AC4 executable proof.
+
+[[2026-05-25T05:08:18+02:00]]
+## Builder Notes
+- Implementation: fixed source lint defect in `serve/memory/src/owlbear_memory/migrate.py` by restoring trailing newline (ruff W292).
+- Files changed: `serve/memory/src/owlbear_memory/migrate.py`
+- Commit: `4ec2fef8` — fix: restore ruff-clean newline in memory-migrate CLI (#1842, builder)
+
+### Verification Evidence
+- Scoped Quality-Runner (task tests + lint):
+  - `tests/test_memory_migration_1842.py` -> 30 passed, 0 failed
+  - Lint paths: `serve/memory/src/owlbear_memory/engine.py`, `serve/memory/src/owlbear_memory/migrate.py`, `tests/test_memory_migration_1842.py` -> clean
+- Durable baseline check (module-level):
+  - `tests/test_memory_engine.py` -> 8 passed, 6 failed
+  - Failures are pre-existing validation-contract failures in durable suite (category/source/scope shape), unrelated to this task’s migration CLI newline fix.
+
+### AC4 Executable Proof (packaged script + fallback branch)
+Executed isolated CLI proof in a temp directory using packaged console script path:
+1. `env -u OWLBEAR_MEMORY_DIR uv run --project /Users/markus/Projects/owlbear-dev/serve/memory memory-migrate --dry-run`
+   - cwd contained `.owlbear/memory/` with one legacy entry
+   - stdout last line: `1`
+   - exit code: `0`
+   - proves no-arg/no-env default fallback branch (`.owlbear/memory`) and packaged `memory-migrate` entrypoint.
+2. `uv run --project /Users/markus/Projects/owlbear-dev/serve/memory memory-migrate --dry-run --memory-dir <tmp>/empty-memory`
+   - stdout last line: `0`
+   - exit code: `0`
+   - proves explicit `--memory-dir` flag branch.
+
+### Coverage Status
+- Scoped quality-runner attempts returned no coverage data (`overall_pct: 0`, `modules: []`) despite passing tests/lint.
+- Full/domain quality-runner fallback attempt reported instrumentation failure (`pytest` hang at ~99% in full mode) while scoped files remained green.
+- Recorded as concrete environment/instrumentation limitation for this slice; behavior and lint evidence are otherwise complete.
+
+### Approach
+- Surgical retry focused strictly on reviewer finding #1 (source lint defect) plus executable AC4 proof via CLI invocation.
+- No test modifications made (builder role constraint); existing task-scoped TestFromAC suite remains green.
+
+[[2026-05-25T05:16:07+02:00]]
+## Review Evidence
+- Verdict: FAIL
+- Routing signal: FAIL #1842 to backlog | AC4 still lacks automated proof for the packaged console-script path and the no-arg/no-env fallback branch.
+- AC evidence map:
+| AC | Code Evidence | Test Evidence | Status |
+|---|---|---|---|
+| AC1 | serve/memory/src/owlbear_memory/engine.py:304-337 migrates legacy entries by reading frontmatter, backfilling score and counters, skipping malformed files, and preserving state through model-copy plus storage.write_entry. | tests/test_memory_migration_1842.py:115-314 covers migrated count, score/counter backfill, malformed-file skip, file writes, and state preservation. | PASS |
+| AC2 | serve/memory/src/owlbear_memory/engine.py:321-337 skips entries when all four migration keys are present and returns the migrated count. | tests/test_memory_migration_1842.py:327-390 covers fully migrated directories, second-call zero count, no-write idempotency, and mixed directories. | PASS |
+| AC3 | serve/memory/src/owlbear_memory/engine.py:28-30 makes zero-counter score equal confidence; migrate_scores at serve/memory/src/owlbear_memory/engine.py:304-337 writes score from confidence. | tests/test_memory_migration_1842.py:408-436 proves sort-order preservation after migration; tests/test_memory_score_fields_1841.py:203-207 proves the zero-counter compute_score identity. | PASS |
+| AC4 | serve/memory/src/owlbear_memory/migrate.py:13-19 resolves explicit path, env-var path, then bare .owlbear/memory fallback; serve/memory/src/owlbear_memory/migrate.py:22-43 parses CLI args, calls migrate_scores, prints the count, and exits zero; serve/memory/pyproject.toml:8 registers the memory-migrate script. | tests/test_memory_migration_1842.py:462-567 covers imported main, explicit directory selection, dry-run mode, env-var defaulting, and module-mode subprocess execution. It does not contain a test that would fail if the packaged script registration were removed or if the no-arg/no-env fallback branch regressed. | FAIL |
+- Blocking findings:
+| # | AC Line | Finding | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | AC4 | The current suite proves most CLI behavior, but it does not provide automated regression proof for the packaged script registration or the bare fallback branch. The builder's direct command evidence is useful runtime confirmation, but under the behavioral proof gate it does not replace a test that would fail on those regressions. | serve/memory/pyproject.toml:8; serve/memory/src/owlbear_memory/migrate.py:13-19; tests/test_memory_migration_1842.py:462-567 | backlog |
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Re-plan AC4 proof so the task requires automated regression coverage for the packaged script registration and the no-arg/no-env fallback branch, then route the work back through the test-writing stage instead of another builder-only retry. | tests/test_memory_migration_1842.py; serve/memory/pyproject.toml; serve/memory/src/owlbear_memory/migrate.py | Review finding #1; AC4 code branches at serve/memory/src/owlbear_memory/migrate.py:13-19 and script registration at serve/memory/pyproject.toml:8 are not mapped by any test in tests/test_memory_migration_1842.py:462-567. |
+
+## Observations
+- AC1 through AC3 are adequately mapped to code and tests; I did not find an implementation defect in the migration logic itself.
+- The builder's latest retry resolves the earlier lint defect and gives credible runtime evidence that the packaged command currently works. The remaining gate issue is proof quality, not an observed CLI failure.
+- I did not dispatch quality-runner because the builder's scoped test and lint evidence is internally consistent, and the remaining blocker is missing automated proof rather than contradictory execution results.
+
+[[2026-05-25T05:22:42+02:00]]
+## Architecture Review (Re-review)
+### Context
+Re-review after reviewer rejection. AC1-3 passed code review with full test coverage (30/30 tests green). AC4 lacked automated proof for: (a) packaged console-script wiring, (b) bare-fallback branch. Reviewer explicitly requested: "Re-plan AC4 proof so the task requires automated regression coverage... then route the work back through the test-writing stage."
+
+### AC Refinement
+Split AC4 into three lines (AC4 core + AC5 script proof + AC6 fallback proof) to create explicit test-derivation targets:
+- AC5: Names exact subprocess invocation (`uv run --project serve/memory memory-migrate`) with failure condition (pyproject.toml removal)
+- AC6: Names exact function (`_resolve_memory_dir(None)`) with env unset, expected output `Path('.owlbear/memory')`
+
+### Evaluation (re-review scope)
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Unchanged from prior review |
+| Interface clarity | PASS | AC5/AC6 now name exact callables and I/O |
+| Dependency correctness | PASS | #1841 done/archived |
+| Module layering | PASS | No changes |
+| TDD compliance | PASS | Routing to todo for test-writer to add AC5/AC6 tests |
+| KISS/YAGNI | PASS | Two targeted tests, not a framework |
+| Premise challenge | PASS | Reviewer identified real proof gap |
+| Pattern consistency | PASS | `uv run --project` subprocess pattern used elsewhere |
+| Security surface | PASS | No new boundaries |
+| Single domain | PASS | serve/memory/ only |
+
+### Challenge Results
+- Challenger: reconsider (confidence 0.56)
+- Findings: (1) moderate: current-record contradiction — tests don't exist yet; (2) moderate: AC-to-test traceability drift; (3) minor: AC5 wording ambiguity
+- Architect response: rebutted (1) and (2) — approval routes to `todo` for test-writing, not claiming tests exist; the whole point is creating precise AC for the test-writer. Accepted (3) — tightened AC5 to name exact subprocess invocation.
+
+### Proof-Bundle Validation
+- Planner assignment: behavioral
+- Final bundle: behavioral
+- Existing proof scope: N/A
+- Test-writer: PROCEED (add AC5 + AC6 tests only; AC1-4 tests already green)
+
+### Design Diverge
+- Skipped — no competing approaches; single refinement pass
+
+### Verdict: APPROVE
+### Action Taken: Refined AC4 into AC4/AC5/AC6 with function-scoped test targets. Routed to todo for test-writer to add 2 missing tests (AC5 script-name subprocess, AC6 fallback unit). Implementation unchanged — builder only needs to pass new tests.
+
+[[2026-05-25T05:26:56+02:00]]
+## Test-Writer Notes
+- Retry: added 3 tests for architect-refined AC5 + AC6 gaps.
+- Test file: `tests/test_memory_migration_1842.py`
+- New classes: `TestFromAC_ConsoleScriptProof` (2 tests), `TestFromAC_ResolveFallbackDir` (1 test)
+- AC5 (packaged script): `subprocess.run(['uv', 'run', '--project', 'serve/memory', 'memory-migrate', '--memory-dir', ...])` exits 0 and prints migrated count. Fails if `[project.scripts]` entry removed.
+- AC6 (fallback unit): `_resolve_memory_dir(None)` with `OWLBEAR_MEMORY_DIR` unset returns `Path('.owlbear/memory')`. Direct unit assertion.
+- Quality-runner (scoped): 33 passed, 0 failed — all 3 new tests GREEN against current implementation.
+- Lint: clean (ruff exit 0).
+- Commit: `614f4146` — test: add AC5+AC6 retry tests for memory migration (#1842, test-writer)
+- Builder skip: test-only retry, all 33 tests green.
+
+[[2026-05-25T05:41:39+02:00]]
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation (one line): PASS #1842 -> docs | AC mapped to code and evidence sufficient.
+- AC evidence map:
+| AC | Code Evidence | Test Evidence | Status |
+|---|---|---|---|
+| AC1 | serve/memory/src/owlbear_memory/engine.py:305-337 implements migrate_scores with raw frontmatter inspection via _read_frontmatter_raw at serve/memory/src/owlbear_memory/engine.py:371-382, backfills score/counters, skips malformed files through storage.read_entry(), and preserves state by updating only score/counter fields before storage.write_entry(). | tests/test_memory_migration_1842.py:115-314 covers migrated count, score/counter backfill, malformed-file skip, file writes, and state preservation. | PASS |
+| AC2 | serve/memory/src/owlbear_memory/engine.py:319-337 skips writes when all four migration keys are already present and returns the migrated count. | tests/test_memory_migration_1842.py:328-390 covers fully migrated directories, second-call zero count, no-write idempotency, and mixed directories. | PASS |
+| AC3 | serve/memory/src/owlbear_memory/engine.py:28-30 keeps compute_score(confidence, 0, 0) equal to confidence; migrate_scores at serve/memory/src/owlbear_memory/engine.py:305-337 writes score from confidence, preserving sort order when counters are zero. | tests/test_memory_migration_1842.py:395-439 proves post-migration sort-order preservation; tests/test_memory_score_fields_1841.py:203-207 proves the zero-counter compute_score identity. | PASS |
+| AC4 | serve/memory/src/owlbear_memory/migrate.py:13-45 resolves --memory-dir then OWLBEAR_MEMORY_DIR then .owlbear/memory, parses CLI args, calls migrate_scores, prints the count, and exits 0. | tests/test_memory_migration_1842.py:462-577 covers imported main(), dry-run no-write behavior, stdout count, --memory-dir selection, env-var defaulting, and subprocess exit/stdout behavior. | PASS |
+| AC5 | serve/memory/pyproject.toml:9 registers memory-migrate = "owlbear_memory.migrate:main" for the packaged console script. | tests/test_memory_migration_1842.py:593-608 executes uv run --project <serve/memory> memory-migrate, asserting exit 0 and migrated-count stdout so removal of the script registration would fail the proof. | PASS |
+| AC6 | serve/memory/src/owlbear_memory/migrate.py:13-21 implements the helper fallback to Path('.owlbear') / 'memory' when no explicit path or env var is provided. | tests/test_memory_migration_1842.py:625-630 directly asserts _resolve_memory_dir(None) returns Path('.owlbear') / 'memory' with OWLBEAR_MEMORY_DIR unset. | PASS |
+- Builder/test evidence review: builder retry note recorded the implementation and clean scoped test/lint state after the lint fix, plus the earlier coverage-tool limitation; the final test-writer retry added the missing AC5/AC6 automation and reported 33 task-scoped tests passing with clean lint. Because implementation was unchanged on the final retry, that evidence is internally consistent for a behavioral-bundle pass.
+- Challenger cross-check: `proceed` (confidence 0.86). No blocking AC, proof, or safety findings remained after the AC5/AC6 tests landed.
+- Blocking findings: none.
+
+## Observations
+- AC1 continues to write through serve/memory/src/owlbear_memory/storage.py:63-92, so the migration stays behind the existing path-containment and symlink guards at serve/memory/src/owlbear_memory/storage.py:24-33.
+- AC3 proof remains intentionally split between the task-scoped sort-order test and the pre-existing compute_score identity test because compute_score itself was not modified in this task.
+- I did not dispatch quality-runner independently on the final retry because the remaining prior blocker was missing automated proof, not contradictory runtime evidence, and that gap is now closed by the added AC5/AC6 tests.
+
+[[2026-05-25T05:43:36+02:00]]
+## Docs Gate
+
+### Checklist
+
+| Item | Result | Evidence |
+|------|--------|----------|
+| 1. README Verification | UPDATED | `serve/memory/README.md` lacked `migrate_scores()` in engine methods table and had no CLI section. Added `migrate_scores(dry_run)` row; added `## CLI` section for `memory-migrate` with flags, defaults, and behavior; removed stale "No standalone launch" statement. Commit: `373f5339`. |
+| 2. External Attribution | N/A | No external sources; implementation mirrors kanban-migrate CLI precedent (internal). |
+| 3. Research Doc | N/A (linked) | Research doc `.owlbear/research/memory-score-migration-1842.md` is referenced in task body. |
+| 4. Deletion Detection | N/A | No symbols, commands, or flags were removed in this task. |
+
+### Scratch Cleanup
+No `.owlbear/scratch/1842-*` files existed or were created.
