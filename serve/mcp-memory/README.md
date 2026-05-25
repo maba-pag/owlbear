@@ -65,6 +65,7 @@ stale     ──[resolve*]──► approved    [delete: soft → deleted]
 | `curate_memory` | Mutate fields + auto-promote `pending→curated` (when scope provided) or auto-downgrade `approved→curated`; raises `TransitionError` for contested/disputed/stale (use resolve first) |
 | `delete_memory` | Hard-delete pending (file removed); soft-delete curated/approved/contested/disputed/stale (state→deleted) |
 | `approve_memory` | Promote `curated→approved`; user-initiated only (not exposed to any agent) |
+| `assess_memories` | Process batch assessment submissions; increments counters for `outstanding`/`unremarkable`/`didnt_use`, delegates `factually_wrong` to confirmation cycle; returns per-entry `{entry_id, success}` or `{entry_id, success=False, error}` results |
 
 All mutating tools return a `hint` field describing the transition or action taken.
 

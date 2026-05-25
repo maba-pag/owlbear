@@ -5,6 +5,9 @@ requires-python = ">=3.12.13"
 description = "OwlBear memory primitives — models, errors, and storage"
 dependencies = ["pydantic>=2.13.4", "ruamel.yaml>=0.19.1"]
 
+[project.scripts]
+memory-migrate = "owlbear_memory.migrate:main"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
