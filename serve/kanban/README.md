@@ -48,8 +48,23 @@ engine.release_task(42)
 | `repair_storage()` | Quarantine corrupt task files and create action-required tasks |
 | `cleanup()` | User-triggered maintenance: release expired claims, move drift-archived files to `archive/`, remove tasks/ duplicates of archived records, and return a `CleanupResult` with `released_claim_ids`, `archived_task_ids`, `duplicate_removed_ids`, and `skipped_items` |
 | `list_sessions(**kwargs)` | Derived `SessionRecord` objects from `activity.jsonl` |
+| `create_request(task_id, kind, title, summary, agent, *, options=None, body="")` | Write a decision/action request to `decisions/pending/{uuid}.md`, block the task, and return a `RequestRecord`; rolls back the file if blocking fails |
+| `get_request(request_id)` | Return a `RequestRecord` for the given UUID, searching `decisions/pending/` then `decisions/resolved/`; raises `NotFoundError` when absent, `ValidationError` on corrupt or invalid files |
 
 The `guidance` list in `SingleTaskResponse` from `start_work()` carries dependency warnings. When the task has at least one unresolved active dependency (a `depends_on` entry whose task is not archived), exactly one string is emitted: `"⚠️ This task has unresolved dependencies (IDs: {id, …}). Review and confirm with the user that starting this work is intentional."` Callers should surface this to the user before proceeding. When all dependencies are archived or the `depends_on` list is empty, `guidance` is `[]`. Dep-lookup exceptions are swallowed silently; failed lookups are excluded from the active-ID set.
+
+### Utilities
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `atomic_write` | `atomic_write(target: Path, content: str) -> None` | Crash-safe file write: writes content to a sibling `.tmp-*` temp file, fsyncs, then atomically renames to `target`. Removes temp on any error. |
+
+```python
+from owlbear_kanban import atomic_write
+from pathlib import Path
+
+atomic_write(Path("output.md"), "# Hello\n")
+```
 
 ### Product topology (fixed)
 
