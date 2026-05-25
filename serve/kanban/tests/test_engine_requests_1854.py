@@ -35,11 +35,13 @@ AC coverage:
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
 from ruamel.yaml import YAML
 
 from owlbear_kanban import KanbanEngine
@@ -331,6 +333,24 @@ class TestFromAC_ListRequests:
 
         assert result == []
 
+    def test_list_skips_corrupt_yaml_logs_warning(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """AC1 error: corrupt YAML skip emits a WARNING-level log."""
+        engine, kanban_dir = _make_engine(tmp_path, 42)
+        corrupt_id = str(uuid.uuid4())
+        decisions_dir = kanban_dir / "decisions" / "pending"
+        decisions_dir.mkdir(parents=True, exist_ok=True)
+        (decisions_dir / f"{corrupt_id}.md").write_text(
+            "---\n: invalid: yaml: {[}\n---\n",
+            encoding="utf-8",
+        )
+
+        with caplog.at_level(logging.WARNING, logger="owlbear_kanban.engine"):
+            engine.list_requests(status="pending")
+
+        assert any(r.levelno == logging.WARNING for r in caplog.records)
+
     def test_list_ordered_by_created_at_ascending(self, tmp_path: Path) -> None:
         """AC1 boundary: list_requests results are ordered by created_at ascending."""
         engine, kanban_dir = _make_engine(tmp_path, 42)
@@ -537,6 +557,24 @@ class TestFromAC_SweepErrorHandling:
 
         assert result == []
 
+    def test_sweep_skips_corrupt_yaml_logs_warning(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """AC3 error: corrupt YAML skip in sweep emits a WARNING-level log."""
+        engine, kanban_dir = _make_engine(tmp_path, 42)
+        decisions_dir = kanban_dir / "decisions" / "pending"
+        decisions_dir.mkdir(parents=True, exist_ok=True)
+        corrupt_id = str(uuid.uuid4())
+        (decisions_dir / f"{corrupt_id}.md").write_text(
+            "---\n: invalid: yaml: {[}\n---\n",
+            encoding="utf-8",
+        )
+
+        with caplog.at_level(logging.WARNING, logger="owlbear_kanban.engine"):
+            engine.sweep_requests()
+
+        assert any(r.levelno == logging.WARNING for r in caplog.records)
+
     def test_sweep_skips_pydantic_validation_failure_no_raise(self, tmp_path: Path) -> None:
         """AC3 error: file with valid YAML but invalid model fields (kind missing) is skipped."""
         engine, kanban_dir = _make_engine(tmp_path, 42)
@@ -577,6 +615,52 @@ class TestFromAC_SweepErrorHandling:
             result = engine.sweep_requests()
 
         assert rid in result
+
+    def test_sweep_move_preserved_when_edit_task_raises_resolved_exists(
+        self, tmp_path: Path
+    ) -> None:
+        """AC3 error: resolved file exists in decisions/resolved/ even when edit_task raises."""
+        engine, kanban_dir = _make_engine(tmp_path, 42)
+        engine.edit_task("42", blocked=True, block_reason="DR pending")
+        _, rid = _write_request_file(
+            kanban_dir, task_id=42, kind="action", free_text="Done."
+        )
+
+        with patch.object(engine, "edit_task", side_effect=RuntimeError("disk full")):
+            engine.sweep_requests()
+
+        resolved_path = kanban_dir / "decisions" / "resolved" / f"{rid}.md"
+        assert resolved_path.exists()
+
+    def test_sweep_move_preserved_when_edit_task_raises_pending_absent(
+        self, tmp_path: Path
+    ) -> None:
+        """AC3 error: pending file is removed from decisions/pending/ even when edit_task raises."""
+        engine, kanban_dir = _make_engine(tmp_path, 42)
+        engine.edit_task("42", blocked=True, block_reason="DR pending")
+        _, rid = _write_request_file(
+            kanban_dir, task_id=42, kind="action", free_text="Done."
+        )
+
+        with patch.object(engine, "edit_task", side_effect=RuntimeError("disk full")):
+            engine.sweep_requests()
+
+        pending_path = kanban_dir / "decisions" / "pending" / f"{rid}.md"
+        assert not pending_path.exists()
+
+    def test_sweep_side_effect_failure_logs_warning(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """AC3 error: post-move side-effect failure emits a WARNING-level log."""
+        engine, kanban_dir = _make_engine(tmp_path, 42)
+        engine.edit_task("42", blocked=True, block_reason="DR pending")
+        _write_request_file(kanban_dir, task_id=42, kind="action", free_text="Done.")
+
+        with patch.object(engine, "edit_task", side_effect=RuntimeError("disk full")), \
+             caplog.at_level(logging.WARNING, logger="owlbear_kanban.engine"):
+            engine.sweep_requests()
+
+        assert any(r.levelno == logging.WARNING for r in caplog.records)
 
     def test_sweep_continues_after_writeback_error(self, tmp_path: Path) -> None:
         """AC3 error: when the first file's writeback raises, the second file is still processed."""
@@ -634,3 +718,15 @@ class TestFromAC_PickTasksSweepWiring:
             result = engine.agent_view().pick_tasks()
 
         assert result is not None
+
+    def test_pick_tasks_logs_warning_when_sweep_raises(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """AC4 error: pick_tasks emits a WARNING when sweep_requests raises."""
+        engine, _ = _make_engine(tmp_path)
+
+        with patch.object(engine, "sweep_requests", side_effect=RuntimeError("sweep boom")), \
+             caplog.at_level(logging.WARNING, logger="owlbear_kanban.agent_view"):
+            engine.agent_view().pick_tasks()
+
+        assert any(r.levelno == logging.WARNING for r in caplog.records)
