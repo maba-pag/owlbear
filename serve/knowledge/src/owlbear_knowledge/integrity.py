@@ -60,10 +60,10 @@ def audit_integrity(conn: sqlite3.Connection) -> dict[str, dict[str, int | list[
             FROM edges AS e
             LEFT JOIN entities AS source_entity ON source_entity.id = e.source_id
             LEFT JOIN entities AS target_entity ON target_entity.id = e.target_id
-                WHERE e.source_id IS NULL
-                    OR source_entity.id IS NULL
-                    OR e.target_id IS NULL
-                    OR target_entity.id IS NULL
+                    WHERE e.source_id IS NULL
+                        OR source_entity.id IS NULL
+                        OR e.target_id IS NULL
+                        OR target_entity.id IS NULL
             """
         ).fetchall()
     ]

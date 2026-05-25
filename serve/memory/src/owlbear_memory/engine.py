@@ -21,9 +21,7 @@ STALE_THRESHOLD = 50
 
 def compute_score(confidence: float, outstanding_count: int, unremarkable_count: int) -> float:
     """Compute score from confidence and assessment counters."""
-    return confidence + (outstanding_count * OUTSTANDING_BOOST) - (
-        unremarkable_count * UNREMARKABLE_PENALTY
-    )
+    return confidence + (outstanding_count * OUTSTANDING_BOOST) - (unremarkable_count * UNREMARKABLE_PENALTY)
 
 
 class EditPayload(TypedDict, total=False):
