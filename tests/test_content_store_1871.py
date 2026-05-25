@@ -833,3 +833,221 @@ class TestFromAC_ContentStore:
         assert min(delete_positions) < min(upsert_positions), (
             "AC8: stale vector deletion must precede current vector upsert in the repair path"
         )
+
+    # ------------------------------------------------------------------ AC1 + AC8 payload (cycle 4)
+    # Exact upsert payload verification — no bare vector-store callable
+
+    @pytest.mark.asyncio
+    async def test_ingest_created_upserts_exact_chunk_ids_no_bare_call(
+        self, store: ContentStore, mock_vectors: MagicMock
+    ) -> None:
+        """AC8: CREATED ingest must call vector_store.upsert(points=...) with exact chunk IDs.
+
+        The implementation must NOT invoke vector_store as a bare callable (mock_vectors()).
+        Only the .upsert(points=...) method call is a valid vector-write signal; a bare ()
+        call is dead code that does not reach any production Qdrant path.
+        """
+        req = _make_request()
+        result = await store.ingest(req)
+
+        # No bare parity call — vector_store() is dead code that masks weak assertions
+        assert mock_vectors.call_count == 0, (
+            "AC8: vector_store must not be invoked as a bare callable — "
+            "only vector_store.upsert(points=...) must be called on CREATED ingest"
+        )
+        # Exact payload
+        upsert_call = mock_vectors.upsert.call_args
+        assert upsert_call is not None, "AC8: upsert must be called on CREATED ingest"
+        upserted_ids = {p["id"] for p in upsert_call.kwargs["points"]}
+        assert upserted_ids == set(result.chunk_ids), (
+            f"AC8: upsert payload must contain exactly the current chunk IDs. "
+            f"Expected {set(result.chunk_ids)}, got {upserted_ids}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_ingest_replaced_upserts_exact_new_chunk_ids_no_bare_call(
+        self, store: ContentStore, mock_vectors: MagicMock
+    ) -> None:
+        """AC8: REPLACED ingest must upsert exactly the new chunk IDs with no bare call.
+
+        Companion to test_ingest_replaced_deletes_old_vectors_before_upsert — adds
+        payload verification. The bare vector_store() parity call is dead code.
+        """
+        req1 = _make_request(text="First version content. " * 6)
+        await store.ingest(req1)
+        mock_vectors.reset_mock()
+
+        req2 = _make_request(text="Second version — fully updated. " * 6)
+        result2 = await store.ingest(req2)
+
+        # No bare parity call after reset
+        assert mock_vectors.call_count == 0, (
+            "AC8: vector_store must not be invoked as a bare callable on REPLACED ingest"
+        )
+        # Exact payload — only new (V2) chunk IDs must be upserted
+        upsert_calls = [c for c in mock_vectors.method_calls if "upsert" in c[0]]
+        assert upsert_calls, "AC8: at least one upsert call required on REPLACED ingest"
+        upserted_ids: set[str] = set()
+        for call in upsert_calls:
+            upserted_ids.update(p["id"] for p in call.kwargs.get("points", []))
+        assert upserted_ids == set(result2.chunk_ids), (
+            f"AC8: upsert payload must contain exactly the new chunk IDs. "
+            f"Expected {set(result2.chunk_ids)}, got {upserted_ids}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_ingest_retry_after_failure_upserts_exact_chunk_ids_no_bare_call(
+        self, mock_embed: MagicMock
+    ) -> None:
+        """AC1 + AC8: retry after post-commit Qdrant failure upserts exact current chunk IDs.
+
+        Companion to test_ingest_retry_after_qdrant_failure_writes_vectors — adds payload
+        verification and checks that no bare vector_store() call occurs.
+        """
+        db = sqlite3.connect(":memory:")
+        chunker = TextChunker(target_tokens=50)
+        req = _make_request()
+
+        # Step 1: first ingest — SQLite commits, Qdrant fails
+        failing_vectors = MagicMock()
+        failing_vectors.upsert = MagicMock(side_effect=RuntimeError("qdrant down"))
+        s = ContentStore(
+            db=db, vector_store=failing_vectors, embedding_provider=mock_embed, chunker=chunker
+        )
+        s.ensure_tables()
+        with pytest.raises(RuntimeError):
+            await s.ingest(req)
+
+        # Step 2: retry with healthy Qdrant
+        retry_vectors = MagicMock()
+        s2 = ContentStore(
+            db=db, vector_store=retry_vectors, embedding_provider=mock_embed, chunker=chunker
+        )
+        retry_result = await s2.ingest(req)
+
+        # No bare parity call
+        assert retry_vectors.call_count == 0, (
+            "AC8: vector_store must not be invoked as a bare callable on retry ingest"
+        )
+        # Exact payload — must upsert exactly the current persisted chunk IDs
+        upsert_call = retry_vectors.upsert.call_args
+        assert upsert_call is not None, "AC1 + AC8: upsert must be called on retry"
+        upserted_ids = {p["id"] for p in upsert_call.kwargs["points"]}
+        assert upserted_ids == set(retry_result.chunk_ids), (
+            f"AC1 + AC8: retry upsert payload must contain exactly the current chunk IDs. "
+            f"Expected {set(retry_result.chunk_ids)}, got {upserted_ids}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_ingest_replaced_retry_delete_failure_upserts_exact_v2_ids_no_bare_call(
+        self, mock_embed: MagicMock
+    ) -> None:
+        """AC1 + AC8: REPLACED retry after delete failure upserts exactly the V2 chunk IDs.
+
+        Companion to test_ingest_replaced_retry_deletes_stale_vectors_after_failed_delete —
+        adds payload verification and no-bare-call guard.
+        """
+        db = sqlite3.connect(":memory:")
+        chunker = TextChunker(target_tokens=50)
+
+        # V1 CREATED
+        store_1 = ContentStore(
+            db=db, vector_store=MagicMock(), embedding_provider=mock_embed, chunker=chunker
+        )
+        store_1.ensure_tables()
+        await store_1.ingest(_make_request(text="V1 content paragraph here. " * 6))
+
+        # V2 REPLACED — _delete_vectors raises
+        failing_vectors = MagicMock()
+        failing_vectors.delete = MagicMock(side_effect=RuntimeError("Qdrant delete failed"))
+        store_2 = ContentStore(
+            db=db, vector_store=failing_vectors, embedding_provider=mock_embed, chunker=chunker
+        )
+        with pytest.raises(RuntimeError):
+            await store_2.ingest(_make_request(text="V2 updated content paragraph here. " * 6))
+
+        # Retry V2
+        retry_vectors = MagicMock()
+        store_3 = ContentStore(
+            db=db, vector_store=retry_vectors, embedding_provider=mock_embed, chunker=chunker
+        )
+        retry_result = await store_3.ingest(
+            _make_request(text="V2 updated content paragraph here. " * 6)
+        )
+
+        # No bare parity call
+        assert retry_vectors.call_count == 0, (
+            "AC8: vector_store must not be invoked as a bare callable on REPLACED retry"
+        )
+        # Exact payload — must upsert exactly the current V2 chunk IDs
+        upsert_calls = [c for c in retry_vectors.method_calls if "upsert" in c[0]]
+        assert upsert_calls, "AC1 + AC8: upsert must be called on REPLACED retry"
+        upserted_ids: set[str] = set()
+        for call in upsert_calls:
+            upserted_ids.update(p["id"] for p in call.kwargs.get("points", []))
+        assert upserted_ids == set(retry_result.chunk_ids), (
+            f"AC1 + AC8: REPLACED retry upsert payload must contain exactly the V2 chunk IDs. "
+            f"Expected {set(retry_result.chunk_ids)}, got {upserted_ids}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_ingest_replaced_retry_convergence_exact_ids_no_bare_call(
+        self, mock_embed: MagicMock
+    ) -> None:
+        """AC1 + AC3 + AC8: REPLACED retry convergence — delete-before-upsert AND exact V2 payload.
+
+        Companion to test_ingest_replaced_retry_convergence_delete_before_upsert — adds
+        exact payload verification and no-bare-call guard. The convergence contract requires:
+        (1) stale V1 vectors deleted, (2) exact V2 chunk IDs upserted, (3) delete before upsert,
+        (4) no bare vector_store() call.
+        """
+        db = sqlite3.connect(":memory:")
+        chunker = TextChunker(target_tokens=50)
+
+        # V1 CREATED
+        store_1 = ContentStore(
+            db=db, vector_store=MagicMock(), embedding_provider=mock_embed, chunker=chunker
+        )
+        store_1.ensure_tables()
+        await store_1.ingest(_make_request(text="Version one content here. " * 6))
+
+        # V2 REPLACED — _delete_vectors fails
+        failing_vectors = MagicMock()
+        failing_vectors.delete = MagicMock(side_effect=RuntimeError("delete unavailable"))
+        store_2 = ContentStore(
+            db=db, vector_store=failing_vectors, embedding_provider=mock_embed, chunker=chunker
+        )
+        with pytest.raises(RuntimeError):
+            await store_2.ingest(_make_request(text="Version two content — updated. " * 6))
+
+        # Retry V2 — Qdrant healthy
+        retry_vectors = MagicMock()
+        store_3 = ContentStore(
+            db=db, vector_store=retry_vectors, embedding_provider=mock_embed, chunker=chunker
+        )
+        retry_result = await store_3.ingest(
+            _make_request(text="Version two content — updated. " * 6)
+        )
+
+        # (1) No bare parity call
+        assert retry_vectors.call_count == 0, (
+            "AC8: vector_store must not be invoked as a bare callable — dead code must be removed"
+        )
+        method_names = [c[0] for c in retry_vectors.method_calls]
+        delete_positions = [i for i, n in enumerate(method_names) if "delete" in n]
+        upsert_positions = [i for i, n in enumerate(method_names) if "upsert" in n or "upload" in n]
+        # (2) Delete before upsert
+        assert delete_positions, "AC8: stale delete must occur in convergence retry"
+        assert upsert_positions, "AC8: current upsert must occur in convergence retry"
+        assert min(delete_positions) < min(upsert_positions), (
+            "AC8: stale vector deletion must precede upsert in convergence retry"
+        )
+        # (3) Exact payload
+        upsert_calls = [c for c in retry_vectors.method_calls if "upsert" in c[0]]
+        upserted_ids: set[str] = set()
+        for call in upsert_calls:
+            upserted_ids.update(p["id"] for p in call.kwargs.get("points", []))
+        assert upserted_ids == set(retry_result.chunk_ids), (
+            f"AC1 + AC8: convergence retry upsert payload must equal V2 chunk IDs. "
+            f"Expected {set(retry_result.chunk_ids)}, got {upserted_ids}"
+        )
