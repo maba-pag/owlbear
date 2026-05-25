@@ -301,4 +301,30 @@ describe('TestFromAC_ResolveWiring', () => {
       expect(onResolved).toHaveBeenCalled()
     })
   })
+
+  // ─── Retry-AC1b: summary DOM disambiguator (summary ≠ body_preview) ───────
+  // Proves [data-testid="resolve-request-summary"] renders the structured
+  // `summary` field from the API response, NOT `body_preview`, when the two
+  // values differ. A regression that swaps the modal back to body_preview would
+  // fail this assertion.
+
+  it('retry-AC1b: modal renders structured summary field — not body_preview — inside [data-testid="resolve-request-summary"]', () => {
+    const drWithDistinctSummary: PendingRequestResponse = {
+      ...DR_DECISION,
+      id: 'req-summary-test',
+      summary: 'Structured summary from API response',
+      body_preview: 'Body preview text — must NOT appear as summary',
+    }
+
+    const { container } = renderModal(drWithDistinctSummary)
+
+    const summarySection = container.querySelector('[data-testid="resolve-request-summary"]')
+    expect(summarySection).not.toBeNull()
+
+    const summaryText = summarySection!.textContent ?? ''
+    // Must render the structured summary field from the API response
+    expect(summaryText).toContain('Structured summary from API response')
+    // Must NOT fall back to body_preview when summary is present
+    expect(summaryText).not.toContain('Body preview text — must NOT appear as summary')
+  })
 })
