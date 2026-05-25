@@ -968,3 +968,110 @@ class TestFromAC_DelegationContracts:
         assert forwarded_status == "all", (
             f"explicit status='all' must be forwarded as 'all' to engine, got {forwarded_status!r}"
         )
+
+
+# ---------------------------------------------------------------------------
+# AC6+AC7 — Response-shape proof contracts
+# ---------------------------------------------------------------------------
+
+# All field names that RequestRecord.model_dump() produces.
+_REQUEST_RECORD_KEYS = frozenset(
+    {"task_id", "request_id", "kind", "title", "summary", "agent", "created_at", "options", "resolution", "body"}
+)
+# model_dump(exclude={"body"}) keys — body omitted.
+_LIST_RECORD_KEYS = _REQUEST_RECORD_KEYS - {"body"}
+
+
+class TestFromAC_ResponseShapeContracts:
+    """AC6+AC7 response-shape proof — returned dicts must contain all expected keys."""
+
+    # -- AC6: create_request full response shape ----------------------------
+
+    @pytest.mark.asyncio
+    async def test_create_request_success_returns_all_record_keys_plus_guidance(
+        self, app_ctx: AppContext
+    ) -> None:
+        """AC6: create_request result must contain all 10 RequestRecord.model_dump() keys plus 'guidance'."""
+        import owlbear_mcp_kanban.server as server_mod  # noqa: PLC0415
+
+        fn = getattr(server_mod, "create_request", None)
+        assert callable(fn), "owlbear_mcp_kanban.server.create_request must exist"
+
+        ctx = _make_mcp_ctx(app_ctx)
+        fake_record = _make_request_record(task_id=1, kind="action")
+        app_ctx.engine.create_request = MagicMock(return_value=fake_record)
+
+        result = await fn(
+            ctx,
+            task_id="1",
+            kind="action",
+            title="Shape Test",
+            summary="Full shape check.",
+            agent="builder",
+            body="Clean body.",
+        )
+
+        assert isinstance(result, dict), "create_request must return a dict"
+        missing = _REQUEST_RECORD_KEYS - result.keys()
+        assert not missing, (
+            f"create_request result is missing RequestRecord keys: {missing!r}; "
+            f"got keys: {set(result.keys())!r}"
+        )
+        assert "guidance" in result, (
+            f"create_request result must include 'guidance' key; got keys: {set(result.keys())!r}"
+        )
+
+    # -- AC7: list_requests full response shape per record ------------------
+
+    @pytest.mark.asyncio
+    async def test_list_requests_success_each_record_has_all_expected_keys_body_absent(
+        self, app_ctx: AppContext
+    ) -> None:
+        """AC7: each dict in list_requests result must have all model_dump(exclude={'body'}) keys and no 'body'."""
+        import owlbear_mcp_kanban.server as server_mod  # noqa: PLC0415
+
+        fn = getattr(server_mod, "list_requests", None)
+        assert callable(fn), "owlbear_mcp_kanban.server.list_requests must exist"
+
+        ctx = _make_mcp_ctx(app_ctx)
+        fake_record = _make_request_record(task_id=1, kind="action", body="## Hidden body")
+        app_ctx.engine.list_requests = MagicMock(return_value=[fake_record])
+
+        result = await fn(ctx, status="pending")
+
+        assert isinstance(result, list), f"list_requests must return a list, got {result!r}"
+        assert len(result) == 1, f"list_requests must return one item, got {len(result)}"
+        item = result[0]
+        assert isinstance(item, dict), "each item must be a dict"
+
+        missing = _LIST_RECORD_KEYS - item.keys()
+        assert not missing, (
+            f"list_requests record is missing expected keys: {missing!r}; "
+            f"got keys: {set(item.keys())!r}"
+        )
+        assert "body" not in item, (
+            f"'body' must be excluded from list_requests records; got keys: {set(item.keys())!r}"
+        )
+
+    # -- AC7: show_request full response shape ------------------------------
+
+    @pytest.mark.asyncio
+    async def test_show_request_success_returns_all_record_keys(self, app_ctx: AppContext) -> None:
+        """AC7: show_request result must contain all 10 RequestRecord.model_dump() keys."""
+        import owlbear_mcp_kanban.server as server_mod  # noqa: PLC0415
+
+        fn = getattr(server_mod, "show_request", None)
+        assert callable(fn), "owlbear_mcp_kanban.server.show_request must exist"
+
+        ctx = _make_mcp_ctx(app_ctx)
+        fake_record = _make_request_record(task_id=1, kind="action", body="## Full body visible")
+        app_ctx.engine.get_request = MagicMock(return_value=fake_record)
+
+        result = await fn(ctx, request_id=_VALID_REQUEST_UUID)
+
+        assert isinstance(result, dict), "show_request must return a dict"
+        missing = _REQUEST_RECORD_KEYS - result.keys()
+        assert not missing, (
+            f"show_request result is missing RequestRecord keys: {missing!r}; "
+            f"got keys: {set(result.keys())!r}"
+        )
