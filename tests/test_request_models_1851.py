@@ -170,10 +170,7 @@ class TestFromAC_OptionsCountAndForbid:
         assert len(req.options) == 2
 
     def test_decision_request_with_ten_options_valid(self) -> None:
-        options = [
-            {**_OPTION_VALID, "option_id": f"opt-{i:02d}", "recommended": False}
-            for i in range(10)
-        ]
+        options = [{**_OPTION_VALID, "option_id": f"opt-{i:02d}", "recommended": False} for i in range(10)]
         req = DecisionRequest(**{**_DECISION_BASE, "options": options})
         assert len(req.options) == 10
 
@@ -182,10 +179,7 @@ class TestFromAC_OptionsCountAndForbid:
             DecisionRequest(**{**_DECISION_BASE, "options": [_OPTION_VALID]})
 
     def test_decision_request_eleven_options_raises(self) -> None:
-        options = [
-            {**_OPTION_VALID, "option_id": f"opt-{i:02d}", "recommended": False}
-            for i in range(11)
-        ]
+        options = [{**_OPTION_VALID, "option_id": f"opt-{i:02d}", "recommended": False} for i in range(11)]
         with pytest.raises(ValidationError):
             DecisionRequest(**{**_DECISION_BASE, "options": options})
 

@@ -132,6 +132,5 @@ class TestFromAC_DefaultConfigPathUnchanged:
         engine = KanbanEngine(kanban_dir)
         expected = kanban_dir / "archive"
         assert engine.archive_dir == expected, (
-            f"Default archive_dir must be kanban_dir / 'archive' = {expected}, "
-            f"got {engine.archive_dir}"
+            f"Default archive_dir must be kanban_dir / 'archive' = {expected}, got {engine.archive_dir}"
         )

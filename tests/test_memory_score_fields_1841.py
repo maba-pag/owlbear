@@ -249,11 +249,7 @@ class TestFromAC_ComputeScore:
         confidence = 0.8
         outstanding = 4
         unremarkable = 7
-        expected = (
-            confidence
-            + (outstanding * engine.OUTSTANDING_BOOST)
-            - (unremarkable * engine.UNREMARKABLE_PENALTY)
-        )
+        expected = confidence + (outstanding * engine.OUTSTANDING_BOOST) - (unremarkable * engine.UNREMARKABLE_PENALTY)
         assert compute_score(
             confidence=confidence,
             outstanding_count=outstanding,

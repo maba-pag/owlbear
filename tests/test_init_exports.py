@@ -212,10 +212,7 @@ class TestFromAC_TestFileSurgery:
         the positive test was never re-added)."""
         test_file = pathlib.Path(__file__).parent / "test_init_exports.py"
         lines = test_file.read_text(encoding="utf-8").splitlines()
-        assert not any(
-            line.strip().startswith("def test_pick_dispatchable_in_dunder_all")
-            for line in lines
-        )
+        assert not any(line.strip().startswith("def test_pick_dispatchable_in_dunder_all") for line in lines)
 
     def test_negative_assertion_present(self) -> None:
         """AC2: negative assertion for pick_dispatchable must exist in the merged test file."""

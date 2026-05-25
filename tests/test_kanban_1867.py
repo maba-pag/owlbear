@@ -46,12 +46,7 @@ class TestFromAC_AtomicWriteExport:
     def test_kanban_pyproject_dependencies_unchanged(self) -> None:
         """AC3 regression guard: kanban pyproject.toml [project.dependencies]
         must not gain new entries relative to the pre-task baseline."""
-        pyproject_path = (
-            pathlib.Path(__file__).parent.parent
-            / "serve"
-            / "kanban"
-            / "pyproject.toml"
-        )
+        pyproject_path = pathlib.Path(__file__).parent.parent / "serve" / "kanban" / "pyproject.toml"
         with pyproject_path.open("rb") as fh:
             data = tomllib.load(fh)
 
@@ -68,6 +63,4 @@ class TestFromAC_AtomicWriteExport:
             f"Got:      {sorted(deps)}"
         )
         # [tool.uv.sources] must not exist in kanban's pyproject.toml
-        assert "uv" not in data.get("tool", {}), (
-            "[tool.uv.sources] must not be added to serve/kanban/pyproject.toml"
-        )
+        assert "uv" not in data.get("tool", {}), "[tool.uv.sources] must not be added to serve/kanban/pyproject.toml"
