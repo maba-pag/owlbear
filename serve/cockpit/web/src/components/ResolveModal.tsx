@@ -12,7 +12,7 @@ import {
 import type { PendingDR } from '../hooks/usePendingDRs'
 import { resolveDR } from '../api/decisions'
 import { ApiError } from '../api/errors'
-import { formatAge, formatRequestType, getDecisionBodyMarkdown, getDecisionBrief } from '../utils/decisionBrief'
+import { formatAge, formatRequestType } from '../utils/decisionBrief'
 import { openTaskDetail } from '../utils/openTaskDetail'
 import MarkdownPreview from './MarkdownPreview'
 
@@ -38,8 +38,6 @@ type ControlValueEvent = {
   target?: unknown
   detail?: unknown
 }
-
-type ResolveDecision = 'approved' | 'rejected' | 'needs-info' | ''
 
 interface ResolveErrorState {
   message: string
@@ -70,7 +68,7 @@ function formatCreatedMetadata(created: string): string {
 
 export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalProps) {
   const [snapshotDR] = useState<PendingDRWithBody | null>(() => dr)
-  const [response, setResponse] = useState<ResolveDecision>('')
+  const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null)
   const [notes, setNotes] = useState('')
   const [error, setError] = useState<ResolveErrorState | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -99,21 +97,28 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
     if (!snapshotDR || isSubmitting) {
       return
     }
+    const requestKind = snapshotDR.kind ?? (snapshotDR.request_type === 'action' ? 'action' : 'decision')
+    const nextSelectedOptionId = requestKind === 'decision' ? selectedOptionId : null
+    if (requestKind === 'decision' && nextSelectedOptionId === null) {
+      return
+    }
+
     if (!retrying) {
       setError(null)
     }
     setIsSubmitting(true)
     try {
       await resolveDR(snapshotDR.id, {
-        response: response as 'approved' | 'rejected' | 'needs-info',
-        notes,
+        selected_option_id: nextSelectedOptionId,
+        free_text: notes.trim().length > 0 ? notes.trim() : null,
+        kind: requestKind,
       })
       setError(null)
       onResolved()
       requestClose()
     } catch (caught) {
       if (caught instanceof ApiError) {
-        const fallback = `Failed to resolve decision request (${caught.status}).`
+        const fallback = `Failed to resolve request (${caught.status}).`
         const message = caught.message === `Resolve request failed with status ${caught.status}`
           ? fallback
           : caught.message
@@ -125,7 +130,7 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
         setError({ message: caught.message, retryable: true })
         return
       }
-      setError({ message: 'Failed to resolve decision request.', retryable: true })
+      setError({ message: 'Failed to resolve request.', retryable: true })
     } finally {
       setIsSubmitting(false)
     }
@@ -141,10 +146,19 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
 
   if (!snapshotDR) return null
 
-  const snapshotBody = snapshotDR.body ?? ''
-  const briefSource = { ...snapshotDR, body: snapshotBody }
-  const brief = getDecisionBrief(briefSource)
-  const fullRequestBody = getDecisionBodyMarkdown(briefSource) || snapshotBody
+  const requestKind = snapshotDR.kind ?? (snapshotDR.request_type === 'action' ? 'action' : 'decision')
+  const requestTitleValue = typeof snapshotDR.title === 'string' ? snapshotDR.title : ''
+  const requestSummaryValue = typeof snapshotDR.summary === 'string'
+    ? snapshotDR.summary
+    : typeof snapshotDR.body_preview === 'string'
+      ? snapshotDR.body_preview
+      : ''
+  const requestTitle = requestTitleValue.trim().length > 0 ? requestTitleValue : `Request #${snapshotDR.id}`
+  const requestSummary = requestSummaryValue.trim().length > 0 ? requestSummaryValue : 'No summary provided.'
+  const decisionOptions = requestKind === 'decision' && Array.isArray(snapshotDR.options) ? snapshotDR.options : []
+  const fullRequestBody = typeof snapshotDR.body === 'string' ? snapshotDR.body : ''
+  const canSubmit = !isSubmitting && (requestKind === 'action' || selectedOptionId !== null)
+
   const metadataItems: ResolveMetadataItem[] = [
     { label: 'Task', value: `#${snapshotDR.task_id}`, testId: 'resolve-metadata-task', taskId: snapshotDR.task_id },
     { label: 'Request type', value: formatRequestType(snapshotDR.request_type), testId: 'resolve-metadata-request-type' },
@@ -155,7 +169,7 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
 
   useEffect(() => {
     updateResolveBodyScrollCue()
-  }, [error, fullRequestBody, response, updateResolveBodyScrollCue])
+  }, [error, fullRequestBody, selectedOptionId, updateResolveBodyScrollCue])
 
   useEffect(() => {
     const body = resolveBodyRef.current
@@ -233,12 +247,12 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
   }
 
   useEffect(() => {
-    if (response === '') {
+    if (!canSubmit) {
       submitRef.current?.setAttribute('disabled', '')
       return
     }
     submitRef.current?.removeAttribute('disabled')
-  }, [response])
+  }, [canSubmit])
 
   function setHeadingTagAttr(element: HTMLElement | null): void {
     element?.setAttribute('tag', 'h3')
@@ -254,13 +268,6 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
       : typeof detailValue === 'string'
         ? detailValue
         : ''
-  }
-
-  function handleResponseChange(event: ControlValueEvent): void {
-    const value = readControlValue(event)
-    if (value === 'approved' || value === 'rejected' || value === 'needs-info') {
-      setResponse(value)
-    }
   }
 
   function handleModalKeyDown(event: React.KeyboardEvent<HTMLElement>) {
@@ -306,7 +313,7 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
       >
         <header className="grid gap-static-xs border-b border-contrast-low pb-static-sm pr-[4.5rem]">
           <span className="text-xs font-semibold uppercase text-primary">Decision request</span>
-          <PHeading ref={setHeadingTagAttr} size="small" tag="h3">{brief.title}</PHeading>
+          <PHeading ref={setHeadingTagAttr} size="small" tag="h3">{requestTitle}</PHeading>
           <div data-testid="resolve-header-meta" className="flex min-w-0 flex-wrap items-center gap-static-xs text-xs font-semibold text-primary">
             <PButton
               type="button"
@@ -330,56 +337,23 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
             onScroll={updateResolveBodyScrollCue}
           >
             <section data-testid="resolve-request-summary" className="grid gap-static-sm rounded-lg border border-contrast-low bg-canvas p-static-md">
-            {brief.isStructured ? (
-              <>
-                {brief.context ? (
-                  <div className="grid gap-1">
-                    <span className="text-xs font-semibold uppercase leading-tight text-contrast-high">Context</span>
-                    <p className="m-0 text-sm leading-relaxed text-primary">{brief.context}</p>
-                  </div>
-                ) : null}
-                {brief.request ? (
-                  <div className="grid gap-1">
-                    <span className="text-xs font-semibold uppercase leading-tight text-contrast-high">Request</span>
-                    <p className="m-0 text-sm leading-relaxed text-primary">{brief.request}</p>
-                  </div>
-                ) : null}
-              </>
-            ) : (
               <div className="grid gap-1">
                 <span className="text-xs font-semibold uppercase leading-tight text-contrast-high">Summary</span>
-                <p className="m-0 text-sm leading-relaxed text-primary">{brief.summary}</p>
+                <p className="m-0 text-sm leading-relaxed text-primary">{requestSummary}</p>
               </div>
-            )}
-            {brief.options.length > 0 ? (
+            {decisionOptions.length > 0 ? (
               <div className="grid gap-1">
                 <span className="text-xs font-semibold uppercase leading-tight text-contrast-high">Options</span>
                 <ol className="m-0 grid list-none gap-static-xs p-0 text-sm leading-normal text-primary">
-                  {brief.options.map((option, optionIndex) => (
-                    <li key={option} className="grid min-w-0 grid-cols-[1.5rem_minmax(0,1fr)] gap-static-xs">
+                  {decisionOptions.map((option, optionIndex) => (
+                    <li key={option.option_id} className="grid min-w-0 grid-cols-[1.5rem_minmax(0,1fr)] gap-static-xs">
                       <span className="inline-flex size-5 items-center justify-center rounded-full border border-contrast-low bg-surface text-xs font-semibold leading-none text-primary">
                         {optionIndex + 1}
                       </span>
-                      <span>{option}</span>
+                      <span>{option.label}</span>
                     </li>
                   ))}
                 </ol>
-              </div>
-            ) : null}
-            {brief.recommendation || brief.consequence ? (
-              <div className="grid gap-static-sm sm:grid-cols-2">
-                {brief.recommendation ? (
-                  <div className="grid gap-1 border-l-2 border-info pl-static-xs">
-                    <span className="text-xs font-semibold uppercase leading-tight text-contrast-high">Recommendation</span>
-                    <p className="m-0 text-sm leading-normal text-primary">{brief.recommendation}</p>
-                  </div>
-                ) : null}
-                {brief.consequence ? (
-                  <div className="grid gap-1 border-l-2 border-contrast-low pl-static-xs">
-                    <span className="text-xs font-semibold uppercase leading-tight text-contrast-high">Impact</span>
-                    <p className="m-0 text-sm leading-normal text-primary">{brief.consequence}</p>
-                  </div>
-                ) : null}
               </div>
             ) : null}
             </section>
@@ -411,48 +385,26 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
             </section>
 
             <fieldset data-testid="response-selector" className="m-0 grid gap-static-sm border-0 p-0">
-            <legend className="mb-static-xs text-xs font-semibold uppercase text-primary">Response</legend>
-            <div className="grid gap-static-sm sm:grid-cols-3">
-              <div data-testid="option-approved" className="rounded-lg border border-contrast-low bg-canvas p-static-sm">
-                <label className="flex items-center gap-static-xs text-sm font-semibold text-primary">
-                  <input
-                    type="radio"
-                    name="resolve-response"
-                    value="approved"
-                    checked={response === 'approved'}
-                    onChange={handleResponseChange}
-                  />
-                  Approve
-                </label>
-                <PText>Proceed with approval and continue implementation.</PText>
-              </div>
-              <div data-testid="option-rejected" className="rounded-lg border border-contrast-low bg-canvas p-static-sm">
-                <label className="flex items-center gap-static-xs text-sm font-semibold text-primary">
-                  <input
-                    type="radio"
-                    name="resolve-response"
-                    value="rejected"
-                    checked={response === 'rejected'}
-                    onChange={handleResponseChange}
-                  />
-                  Reject
-                </label>
-                <PText>Send this request back and stop current progress.</PText>
-              </div>
-              <div data-testid="option-needs-info" className="rounded-lg border border-contrast-low bg-canvas p-static-sm">
-                <label className="flex items-center gap-static-xs text-sm font-semibold text-primary">
-                  <input
-                    type="radio"
-                    name="resolve-response"
-                    value="needs-info"
-                    checked={response === 'needs-info'}
-                    onChange={handleResponseChange}
-                  />
-                  Needs info
-                </label>
-                <PText>Ask for more details and wait for clarification.</PText>
-              </div>
-            </div>
+              <legend className="mb-static-xs text-xs font-semibold uppercase text-primary">Response</legend>
+              {requestKind === 'decision' ? (
+                <div className="grid gap-static-sm">
+                  {decisionOptions.map((option) => (
+                    <button
+                      key={option.option_id}
+                      type="button"
+                      data-testid={`resolve-option-${option.option_id}`}
+                      className="rounded-lg border border-contrast-low bg-canvas p-static-sm text-left text-sm font-semibold text-primary"
+                      onClick={() => {
+                        setSelectedOptionId(option.option_id)
+                      }}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <PText>Mark this action as complete to resolve it.</PText>
+              )}
             </fieldset>
 
             <details data-testid="resolve-full-request" className="rounded-lg border border-contrast-low bg-canvas p-static-sm text-primary">
@@ -508,12 +460,12 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
             type="button"
             data-testid="resolve-submit"
             variant="primary"
-            disabled={response === ''}
+            disabled={!canSubmit}
             onClick={() => {
               void handleSubmit()
             }}
           >
-            Submit Decision
+            {requestKind === 'action' ? 'Complete' : 'Submit Decision'}
           </PButton>
           <PButton type="button" data-testid="resolve-cancel" variant="secondary" onClick={requestClose}>
             Close Modal

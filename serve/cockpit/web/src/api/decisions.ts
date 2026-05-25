@@ -2,17 +2,21 @@ import { ApiError } from './errors'
 import { getResponseErrorMessage } from './errorMessage'
 
 export interface ResolveRequest {
-  response: 'approved' | 'needs-info' | 'rejected'
-  notes?: string
+  selected_option_id: string | null
+  free_text: string | null
+  kind: 'decision' | 'action' | null
 }
 
 export interface ResolveResponse {
-  id: string
-  response: 'approved' | 'needs-info' | 'rejected'
+  request_id: string
+  task_id: number
+  kind: 'decision' | 'action'
+  title: string
+  resolved_at: string
 }
 
 export async function resolveDR(id: string, request: ResolveRequest): Promise<ResolveResponse> {
-  const response = await fetch(`/api/decisions/${id}/resolve`, {
+  const response = await fetch(`/api/requests/${id}/resolve`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
