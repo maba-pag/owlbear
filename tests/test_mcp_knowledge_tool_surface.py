@@ -59,7 +59,6 @@ _ACTIVE_TOOLS = frozenset(
         "retry_failed_enrichment",
         "get_consolidation_candidates",
         "store_enrichment",
-        "retry_failed_enrichment",
     }
 )
 
