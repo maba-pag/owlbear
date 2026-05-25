@@ -5,11 +5,14 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TypedDict
+from typing import Any, TypedDict
 from uuid import uuid4
 
+from ruamel.yaml import YAML
+from ruamel.yaml.error import YAMLError
+
 from owlbear_memory import storage
-from owlbear_memory.errors import ConcurrencyError, NotFoundError, TransitionError
+from owlbear_memory.errors import ConcurrencyError, NotFoundError, TransitionError, ValidationError
 from owlbear_memory.models import MemoryCategory, MemoryEntry, MemoryState
 
 _LOGGER = logging.getLogger(__name__)
@@ -17,11 +20,20 @@ _LOGGER = logging.getLogger(__name__)
 OUTSTANDING_BOOST = 0.1
 UNREMARKABLE_PENALTY = 0.01
 STALE_THRESHOLD = 50
+_FRONTMATTER_PARTS = 3
+_MIGRATION_KEYS = ("score", "outstanding_count", "unremarkable_count", "didnt_use_count")
+_YAML = YAML(typ="safe")
 
 
 def compute_score(confidence: float, outstanding_count: int, unremarkable_count: int) -> float:
     """Compute score from confidence and assessment counters."""
     return confidence + (outstanding_count * OUTSTANDING_BOOST) - (unremarkable_count * UNREMARKABLE_PENALTY)
+
+
+def check_slot_efficiency(entry: MemoryEntry) -> bool:
+    """Return True when didnt_use dominates outstanding+unremarkable slots."""
+    denominator = max(entry.outstanding_count + entry.unremarkable_count, 1)
+    return entry.didnt_use_count > (STALE_THRESHOLD * denominator)
 
 
 class EditPayload(TypedDict, total=False):
@@ -149,6 +161,18 @@ class MemoryEngine:
         )
         return self._write_updated_entry(updated)
 
+    def try_stale_transition(self, entry: MemoryEntry) -> MemoryEntry:
+        """Transition eligible entries to stale when slot-efficiency predicate fires."""
+        if not check_slot_efficiency(entry):
+            return entry
+
+        if entry.state not in {MemoryState.APPROVED, MemoryState.CURATED, MemoryState.CONTESTED}:
+            return entry
+
+        updated = entry.model_copy(update={"state": MemoryState.STALE, "updated_at": self._now_iso()})
+        _LOGGER.info("Auto-transitioned entry %s to stale via slot-efficiency", entry.id)
+        return self._write_updated_entry(updated)
+
     def edit(self, entry_id: str, fields: EditPayload, expected_updated_at: str) -> MemoryEntry:
         """Apply field updates with state-machine and OCC constraints."""
         entry = self.get_entry(entry_id)
@@ -204,6 +228,49 @@ class MemoryEngine:
         updated = entry.model_copy(update={"state": MemoryState.DELETED, "updated_at": self._now_iso()})
         return self._write_updated_entry(updated)
 
+    def record_factually_wrong(
+        self,
+        entry_id: str,
+        task_id: str,
+        expected_updated_at: str | None = None,
+    ) -> MemoryEntry:
+        """Record a factually-wrong assessment via contested/disputed confirmation cycle."""
+        entry = self.get_entry(entry_id)
+
+        if expected_updated_at is not None:
+            self._validate_occ(entry, expected_updated_at)
+
+        if not task_id.strip():
+            msg = "task_id must not be empty"
+            raise ValidationError(msg)
+
+        if entry.state in {MemoryState.APPROVED, MemoryState.CURATED}:
+            updated = entry.model_copy(
+                update={
+                    "state": MemoryState.CONTESTED,
+                    "contested_by_task": task_id,
+                    "updated_at": self._now_iso(),
+                }
+            )
+            return self._write_updated_entry(updated)
+
+        if entry.state == MemoryState.CONTESTED:
+            if entry.contested_by_task == task_id:
+                return entry
+
+            updated_state = MemoryState.DISPUTED if entry.contested_by_task is not None else MemoryState.CONTESTED
+            updated = entry.model_copy(
+                update={
+                    "state": updated_state,
+                    "contested_by_task": task_id,
+                    "updated_at": self._now_iso(),
+                }
+            )
+            return self._write_updated_entry(updated)
+
+        msg = f"record_factually_wrong() not allowed from state {entry.state}"
+        raise TransitionError(msg)
+
     def save(  # noqa: PLR0913
         self,
         title: str,
@@ -234,6 +301,44 @@ class MemoryEngine:
         )
         return self._write_updated_entry(entry)
 
+    def migrate_scores(self, *, dry_run: bool = False) -> int:
+        """Backfill score and counter fields on legacy entries.
+
+        Returns the count of entries that were migrated or would be migrated when
+        ``dry_run`` is enabled.
+        """
+        migrated = 0
+
+        for file_path in sorted(self._memory_dir.glob("*.md")):
+            entry = storage.read_entry(file_path)
+            if entry is None:
+                continue
+
+            frontmatter = self._read_frontmatter_raw(file_path)
+            if frontmatter is None:
+                continue
+
+            if all(key in frontmatter for key in _MIGRATION_KEYS):
+                continue
+
+            migrated += 1
+            if dry_run:
+                continue
+
+            updated = entry.model_copy(
+                update={
+                    "score": entry.confidence,
+                    "outstanding_count": 0,
+                    "unremarkable_count": 0,
+                    "didnt_use_count": 0,
+                }
+            )
+            storage.write_entry(file_path, updated, memory_dir=self._memory_dir)
+
+        if not dry_run:
+            self.load()
+        return migrated
+
     def _validate_occ(self, entry: MemoryEntry, expected_updated_at: str) -> None:
         if entry.updated_at != expected_updated_at:
             msg = (
@@ -261,3 +366,17 @@ class MemoryEngine:
 
     def _parse_iso_datetime(self, value: str) -> datetime:
         return datetime.fromisoformat(value)
+
+    def _read_frontmatter_raw(self, path: Path) -> dict[str, Any] | None:
+        try:
+            raw = path.read_text(encoding="utf-8-sig")
+            parts = raw.split("---", 2)
+            if len(parts) < _FRONTMATTER_PARTS:
+                return None
+            data = _YAML.load(parts[1])
+        except (OSError, UnicodeDecodeError, YAMLError):
+            return None
+
+        if not isinstance(data, dict):
+            return None
+        return data

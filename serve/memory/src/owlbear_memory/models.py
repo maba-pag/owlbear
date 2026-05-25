@@ -55,6 +55,7 @@ class MemoryEntry(BaseModel):
     created_at: str
     updated_at: str
     approved_at: str | None = None
+    contested_by_task: str | None = None
 
     @model_validator(mode="before")
     @classmethod

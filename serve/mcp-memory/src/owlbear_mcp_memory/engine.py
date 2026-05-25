@@ -104,6 +104,7 @@ class MemoryEngine:
             "created_at": entry.created_at,
             "updated_at": entry.updated_at,
             "approved_at": entry.approved_at,
+            "contested_by_task": entry.contested_by_task,
         }
         content = (
             f"---\n{yaml.safe_dump(frontmatter, default_flow_style=False, sort_keys=False)}---\n\n{entry.content}\n"

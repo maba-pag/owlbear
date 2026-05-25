@@ -81,6 +81,7 @@ def write_entry(path: Path, entry: MemoryEntry | dict[str, Any], *, memory_dir: 
         "created_at": validated.created_at,
         "updated_at": validated.updated_at,
         "approved_at": validated.approved_at,
+        "contested_by_task": validated.contested_by_task,
     }
 
     yaml_stream = StringIO()
