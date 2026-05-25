@@ -1,10 +1,10 @@
 ---
 id: 1842
 title: 'P2-03: Migration — score initialization from confidence'
-status: done
+status: archived
 priority: needed
 created: 2026-05-24T19:01:24.804040+02:00
-updated: 2026-05-25T05:43:36.183399+02:00
+updated: 2026-05-25T06:00:49.663141+02:00
 tags:
   - phase-2
   - scope:memory
@@ -36,7 +36,7 @@ proof_bundle: behavioral
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 Brief: see parent #1839
@@ -350,3 +350,33 @@ Split AC4 into three lines (AC4 core + AC5 script proof + AC6 fallback proof) to
 
 ### Scratch Cleanup
 No `.owlbear/scratch/1842-*` files existed or were created.
+
+[[2026-05-25T06:00:49+02:00]]
+## Audit
+
+### Regression Detection
+Quality-runner scoped run: 142 passed, 0 failed across memory domain tests (task-scoped #1842, #1841, #1843, #1844, #1845). Lint clean on task-changed files. Full-suite run timed out (environment limitation, not failure). No regressions detected.
+
+### Intent Verification
+Changed files stay within `serve/memory/` domain and root `tests/`. Implementation adds migration path for existing entries to gain score/counter fields — matches stated purpose. No extraneous scope.
+
+### Architect Quality
+Score: 4/5. AC lines are function-scoped and verifiable. Required two review cycles to reach AC5/AC6 coverage for console-script proof and fallback branch. Architect responded well to challenger and reviewer feedback. Minor gap: initial AC4 was underspecified for proof coverage, requiring re-review.
+
+### Commit Integrity
+- `tests/test_memory_migration_1842.py` — committed (3 test-writer commits) ✓
+- `serve/memory/src/owlbear_memory/migrate.py` — committed (`4ec2fef8`) ✓
+- `serve/memory/README.md` — committed (`373f5339`) ✓
+- `serve/memory/pyproject.toml` — **UNCOMMITTED**: `[project.scripts]` entry for `memory-migrate` is in working tree but not committed. Builder omitted this from their commit. Process gap.
+- `serve/memory/src/owlbear_memory/engine.py` `migrate_scores()` — committed under `adde92bd` (#1845), not a #1842 commit. Attribution concern; code is present and functional.
+
+### Deductions
+| Criterion | Deduction |
+|-----------|----------|
+| Evidence integrity concern (uncommitted pyproject.toml + cross-task attribution) | -.05 |
+
+### Confidence: 0.95
+### Action: ARCHIVE
+
+### Process Flag
+The builder must commit `serve/memory/pyproject.toml` — the `[project.scripts]` section with `memory-migrate` entry exists only in working tree. Not silently committed per pipeline rules.
