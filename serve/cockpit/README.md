@@ -558,6 +558,23 @@ Accessibility and responsive state after #1396:
   fixture shape), and `serve/cockpit/web/src/__tests__/ResolveModal.test.tsx` (updated
   field contract and resolve payload assertions).
 
+- #1859 completes the action resolver UX in `ResolveModal.tsx`. For action-kind requests,
+  the request body is rendered as directly visible content inside
+  `[data-testid='resolve-action-body']` — not inside a collapsed `<details>` element —
+  while the decision-kind `<details data-testid='resolve-full-request'>` path is
+  preserved unchanged. An optional `p-textarea` notes field (`[data-testid='resolve-notes']`)
+  accepts free-text input; the resolve POST for action kind sends
+  `{selected_option_id: null, free_text: <trimmed text>|null, kind: 'action'}`. PDS
+  `p-textarea` event handling is fixed: host-level `change`/`input` listeners are wired
+  on mount, `onInput` is added alongside `onChange`, and `readControlValue` prefers
+  `event.detail.value` before falling through to `event.target.value` so the custom-element
+  event payload is always captured. Verified by
+  `serve/cockpit/web/src/__tests__/ActionResolver_1859.test.tsx` (8 tests — AC1 body
+  visibility and not-in-details discriminator, AC2 bare-complete and free_text-trimming
+  payloads, AC3 list disappearance after HTTP 200) and
+  `serve/cockpit/web/src/__tests__/ResolveModal.test.tsx` (durable regression, 10 tests
+  passing; `ResolveModal.tsx` coverage 90%).
+
 - #1860 replaces the body-parsed card rendering in `DecisionsPage.tsx` with structured-field
   rendering from `PendingDR`. Each card displays: kind badge (`PTag`: `"Decision"`/`"Action"`
   from `item.kind`), `item.title` heading, `item.summary` text, `item.agent` attribution, and
@@ -622,7 +639,7 @@ Decision behavior after #1385 and #1389:
 
 - Backend decision lifecycle is canonical: resolution appends the task summary,
   moves decision files to `resolved/`, and applies unblock semantics per response.
-- Frontend decision UX after #1645, #1648, #1857, and #1860: the `/decisions` tab (`DecisionsPage`) is the primary path; `DRStatusIndicator` in the status bar → `ResolveModal` is the secondary (route-independent Shell-level) path. `DecisionViewport` is no longer rendered in the sidecar. As of #1857, `usePendingDRs` fetches from `GET /api/requests/pending` (Requests API) and `ResolveModal` renders structured `title`, `summary`, and `options` fields — not the legacy Decisions API or body-parsed extraction. As of #1860, `DecisionsPage` cards render from structured `PendingDR` fields (`item.kind`, `item.title`, `item.summary`, `item.agent`, `item.created`, `item.options`) with confidence bars for decision-kind requests; `getDecisionBrief()` is removed from the card UI entirely.
+- Frontend decision UX after #1645, #1648, #1857, #1859, and #1860: the `/decisions` tab (`DecisionsPage`) is the primary path; `DRStatusIndicator` in the status bar → `ResolveModal` is the secondary (route-independent Shell-level) path. `DecisionViewport` is no longer rendered in the sidecar. As of #1857, `usePendingDRs` fetches from `GET /api/requests/pending` (Requests API) and `ResolveModal` renders structured `title`, `summary`, and `options` fields — not the legacy Decisions API or body-parsed extraction. As of #1860, `DecisionsPage` cards render from structured `PendingDR` fields (`item.kind`, `item.title`, `item.summary`, `item.agent`, `item.created`, `item.options`) with confidence bars for decision-kind requests; `getDecisionBrief()` is removed from the card UI entirely.
 
 ## Error Envelope
 
