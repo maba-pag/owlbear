@@ -32,6 +32,7 @@ from owlbear_mcp_memory.models import MemoryEntry as McpMemoryEntry
 
 _TS = "2026-05-25T10:00:00+00:00"
 _TS_WRONG = "2025-01-01T00:00:00+00:00"
+_TS_APPROVED = "2026-05-20T08:00:00+00:00"  # non-null approved_at for downgrade-contract tests
 
 _ID_APPROVED  = "550e8400-e29b-41d4-a716-446655451001"
 _ID_CURATED   = "550e8400-e29b-41d4-a716-446655451002"
@@ -215,6 +216,24 @@ class TestFromAC_ConfirmationCycle:
         engine.record_factually_wrong(_ID_APPROVED, task_id=_TASK_A)
         entries = engine.get_entries()
         assert any(e.id == _ID_APPROVED for e in entries)
+
+    def test_approved_entry_clears_approved_at_on_contested_transition(self, tmp_path: Path) -> None:
+        """AC1: record_factually_wrong on approved entry clears approved_at to None (downgrade contract).
+
+        Fixture has non-null approved_at so the clearing assertion cannot false-green.
+        """
+        entry = _make_entry_base(_ID_APPROVED, MemoryState.APPROVED, approved_at=_TS_APPROVED)
+        engine = _engine_with_entries(tmp_path, entry)
+        result = engine.record_factually_wrong(_ID_APPROVED, task_id=_TASK_A)
+        assert result.approved_at is None
+
+    def test_approved_at_cleared_persisted_after_contested_transition(self, tmp_path: Path) -> None:
+        """AC1: approved_at=None clearing is persisted to storage on approved→contested transition."""
+        entry = _make_entry_base(_ID_APPROVED, MemoryState.APPROVED, approved_at=_TS_APPROVED)
+        engine = _engine_with_entries(tmp_path, entry)
+        engine.record_factually_wrong(_ID_APPROVED, task_id=_TASK_A)
+        reloaded = engine.get_entry(_ID_APPROVED)
+        assert reloaded.approved_at is None
 
     def test_empty_task_id_raises_validation_error(self, tmp_path: Path) -> None:
         """AC1: record_factually_wrong with empty task_id raises ValidationError."""
