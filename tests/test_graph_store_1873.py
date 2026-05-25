@@ -623,3 +623,132 @@ class TestFromAC_GraphStore:
         assert any("BEGIN IMMEDIATE" in sql for sql in executed_sql), (
             "upsert_edge must use BEGIN IMMEDIATE, not BEGIN or BEGIN DEFERRED"
         )
+
+    # ---- Retry-gap tests (reviewer round 2) --------------------------------
+
+    # AC3 gap: prove the UPDATE half of upsert_edge — weight, metadata, updated_at
+
+    def test_upsert_edge_update_replaces_weight_metadata_and_advances_updated_at(
+        self,
+        store: SqliteGraphStore,
+        entity_a,
+        entity_b,
+    ) -> None:
+        """AC3: second upsert with same edge identity replaces weight and metadata; updated_at > created_at.
+
+        The existing idempotency test proves the ID is reused but never observes
+        changed state. An implementation that returns the same EdgeRecord while
+        ignoring the new weight or metadata would pass the old test but fail here.
+        """
+        import time
+
+        first = store.upsert_edge(
+            EdgeInput(
+                source_entity_id=entity_a.id,
+                target_entity_id=entity_b.id,
+                relation_type=RelationType.REFERENCES,
+                weight=0.5,
+                metadata={"priority": "low"},
+            )
+        )
+        time.sleep(0.001)  # ensure clock advances so updated_at > created_at
+        updated = store.upsert_edge(
+            EdgeInput(
+                source_entity_id=entity_a.id,
+                target_entity_id=entity_b.id,
+                relation_type=RelationType.REFERENCES,
+                weight=0.9,
+                metadata={"priority": "high"},
+            )
+        )
+
+        assert updated.id == first.id, "same identity must yield same edge ID on update"
+        assert updated.weight == pytest.approx(0.9), "weight must be replaced from new EdgeInput"
+        assert updated.metadata.get("priority") == "high", (
+            "metadata must be replaced from new EdgeInput"
+        )
+        assert updated.updated_at > updated.created_at, (
+            "updated_at must advance beyond created_at on update"
+        )
+
+    # AC7 gap: graph_entities UNIQUE index must cover exactly (canonical_name, entity_type)
+
+    def test_graph_entities_unique_index_covers_exactly_canonical_name_and_entity_type(
+        self, db: sqlite3.Connection
+    ) -> None:
+        """AC7: graph_entities UNIQUE constraint covers exactly (canonical_name, entity_type).
+
+        The prior test only asserts that some unique index exists. An impl with a
+        unique index on only canonical_name, or one that adds extra columns, would
+        pass the old test but fail here.
+        """
+        SqliteGraphStore(db).ensure_tables()
+        idx_rows = db.execute("PRAGMA index_list(graph_entities)").fetchall()
+        unique_indexes = [row for row in idx_rows if row[2] == 1]
+
+        found = False
+        for idx in unique_indexes:
+            info_rows = db.execute(f"PRAGMA index_info({idx[1]})").fetchall()  # noqa: S608
+            covered = {row[2] for row in info_rows}
+            if covered == {"canonical_name", "entity_type"}:
+                found = True
+                break
+        assert found, (
+            "graph_entities must have a UNIQUE index covering exactly "
+            "(canonical_name, entity_type)"
+        )
+
+    # AC8 gap: graph_edges UNIQUE index must cover exactly the three-column composite key
+    # and both FK declarations must exist (not just one)
+
+    def test_graph_edges_unique_index_covers_exactly_source_target_and_relation_type(
+        self, db: sqlite3.Connection
+    ) -> None:
+        """AC8: graph_edges UNIQUE constraint covers exactly (source_entity_id, target_entity_id, relation_type).
+
+        The prior test only asserts that some unique index exists. An impl missing
+        one of the three columns, or carrying an extra column, would pass the old
+        test but fail here.
+        """
+        SqliteGraphStore(db).ensure_tables()
+        idx_rows = db.execute("PRAGMA index_list(graph_edges)").fetchall()
+        unique_indexes = [row for row in idx_rows if row[2] == 1]
+        expected = {"source_entity_id", "target_entity_id", "relation_type"}
+
+        found = False
+        for idx in unique_indexes:
+            info_rows = db.execute(f"PRAGMA index_info({idx[1]})").fetchall()  # noqa: S608
+            covered = {row[2] for row in info_rows}
+            if covered == expected:
+                found = True
+                break
+        assert found, (
+            f"graph_edges must have a UNIQUE index covering exactly {expected}"
+        )
+
+    def test_graph_edges_source_entity_id_fk_references_graph_entities(
+        self, db: sqlite3.Connection
+    ) -> None:
+        """AC8: FK source_entity_id → graph_entities.id must be explicitly declared.
+
+        The prior FK test checks only that at least one FK references graph_entities;
+        an impl with only the target FK (or no FK at all) could pass the old test.
+        """
+        SqliteGraphStore(db).ensure_tables()
+        # PRAGMA foreign_key_list columns: (id, seq, table, from, to, ...)
+        fk_rows = db.execute("PRAGMA foreign_key_list(graph_edges)").fetchall()
+        found = any(fk[3] == "source_entity_id" and fk[2] == "graph_entities" for fk in fk_rows)
+        assert found, "graph_edges must declare FK: source_entity_id → graph_entities"
+
+    def test_graph_edges_target_entity_id_fk_references_graph_entities(
+        self, db: sqlite3.Connection
+    ) -> None:
+        """AC8: FK target_entity_id → graph_entities.id must be explicitly declared.
+
+        An impl with only the source_entity_id FK (missing the target FK) would
+        pass the old test but fail here.
+        """
+        SqliteGraphStore(db).ensure_tables()
+        fk_rows = db.execute("PRAGMA foreign_key_list(graph_edges)").fetchall()
+        found = any(fk[3] == "target_entity_id" and fk[2] == "graph_entities" for fk in fk_rows)
+        assert found, "graph_edges must declare FK: target_entity_id → graph_entities"
