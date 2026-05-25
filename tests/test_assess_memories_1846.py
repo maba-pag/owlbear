@@ -107,6 +107,24 @@ class TestFromAC_ToolRegistration:
 
         assert callable(assess_memories)
 
+    def test_assess_memories_registered_on_mcp_server(self) -> None:
+        """assess_memories must appear in the MCP server tool registry.
+
+        Directly importing from tools.py is insufficient — removing the @mcp.tool
+        decorator in server.py would leave tool-import tests green. This test
+        introspects owlbear_mcp_memory.server.mcp to confirm the server-side
+        registration is present.
+        """
+        from owlbear_mcp_memory.server import mcp  # noqa: PLC0415
+
+        registered_names = [
+            getattr(t, "name", None)
+            for t in mcp._tool_manager.list_tools()  # noqa: SLF001
+        ]
+        assert "assess_memories" in registered_names, (
+            f"assess_memories not found in MCP server tool registry; registered: {registered_names}"
+        )
+
     @pytest.mark.asyncio
     async def test_empty_assessments_list_raises_tool_error(self, tmp_path: Path) -> None:
         """Empty assessments list raises ToolError immediately (before any engine call)."""
