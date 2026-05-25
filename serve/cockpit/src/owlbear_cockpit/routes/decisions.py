@@ -3,17 +3,16 @@
 from __future__ import annotations
 
 import re
-from io import StringIO
 from pathlib import Path
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
-from ruamel.yaml import YAML
 from ruamel.yaml.error import YAMLError
 
 from owlbear_cockpit.deps import get_decisions_dir, get_engine
-from owlbear_kanban.decisions import canonical_summary, move_to_resolved, parse_dr
+from owlbear_kanban.decisions import parse_dr
+from owlbear_kanban.decisions import resolve_decision as kanban_resolve_decision
 from owlbear_kanban.errors import ConcurrencyError
 
 router = APIRouter()
@@ -86,27 +85,6 @@ def _extract_title(body: str, fallback: str) -> str:
             return stripped.lstrip("#").strip() or fallback
         return _format_plain_title(stripped, fallback)
     return fallback  # pragma: no cover - empty body fallback
-
-
-def _append_response_section(body: str, response: str, notes: str | None) -> str:
-    """Append the markdown response section while preserving existing body text."""
-    suffix_lines = ["## Response", f"- response: {response}"]
-    if notes is not None:
-        suffix_lines.append(notes)
-    suffix = "\n".join(suffix_lines)
-    cleaned_body = body.rstrip("\n")
-    if cleaned_body:
-        return f"{cleaned_body}\n\n{suffix}\n"
-    return f"{suffix}\n"  # pragma: no cover - empty-body defensive path
-
-
-def _rewrite_response(path: Path, meta: dict[str, object], body: str) -> None:
-    """Persist updated frontmatter + markdown body."""
-    yaml = YAML()
-    stream = StringIO()
-    yaml.dump(meta, stream)
-    frontmatter = stream.getvalue().rstrip("\n")
-    path.write_text(f"---\n{frontmatter}\n---\n{body}", encoding="utf-8", newline="\n")
 
 
 def _validate_decision_id(decision_id: str) -> None:
@@ -189,7 +167,13 @@ def resolve_decision(
         raise HTTPException(status_code=404, detail=detail)
 
     try:
-        meta, body = parse_dr(pending_path)
+        kanban_resolve_decision(
+            pending_path,
+            req.response,
+            engine,
+            notes=req.notes,
+            resolved_by="cockpit-api",
+        )
     except (
         TypeError,
         ValueError,
@@ -197,28 +181,5 @@ def resolve_decision(
     ) as exc:  # pragma: no cover - defensive malformed file guard
         detail = "Invalid decision file format"
         raise HTTPException(status_code=422, detail=detail) from exc
-
-    current_response = str(meta.get("response", "pending"))
-    if current_response != "pending":
-        msg = f"Decision {decision_id!r} is already resolved"
-        code = "ERR_STALE"
-        raise ConcurrencyError(code, msg)
-
-    updated = dict(meta)
-    updated["response"] = req.response
-    updated["resolved_by"] = "cockpit-api"
-    body_with_response = _append_response_section(body, req.response, req.notes)
-    _rewrite_response(pending_path, updated, body_with_response)
-
-    task_id = updated.get("task_id")
-    try:
-        engine.edit_task(task_id, append_body=canonical_summary(req.response, body))
-        if req.response in {"approved", "rejected"}:
-            engine.edit_task(task_id, blocked=False)
-    except FileNotFoundError:
-        # Legacy callers may resolve DRs that point to tasks outside this engine.
-        pass
-
-    move_to_resolved(pending_path, resolved_path.parent)
 
     return {"id": decision_id, "response": req.response}
