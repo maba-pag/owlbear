@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import inspect
 import logging
 from datetime import UTC, datetime
@@ -20,12 +19,9 @@ if TYPE_CHECKING:
     from owlbear_knowledge.cancellation import CancelSignal
     from owlbear_knowledge.graph_store import GraphStore
     from owlbear_knowledge.ingest import IngestPipeline, IngestResult
-    from owlbear_knowledge.inter_doc_graph_builder import InterDocGraphBuilder
     from owlbear_knowledge.source_store import KnowledgeSourceStore
 
 logger = logging.getLogger(__name__)
-
-_MIN_SCOPE_DOCS = 2  # guard: skip inter-doc build when scope has fewer than 2 documents
 _STATUS_COUNTER_KEYS = {
     "ok": "refreshed",
     "partial": "partial",
@@ -125,31 +121,20 @@ class RefreshOrchestrator:
         content_fetcher: Optional protocol object with an async ``fetch(url)``
             method used to retrieve content for ``AUTHENTICATED_WEB`` sources.
             When ``None``, authenticated web refresh is a no-op.
-        inter_doc_builder: Optional ``InterDocGraphBuilder`` used to build
-            cross-document edges after each successful ingest. When ``None``
-            (the default), inter-doc graph building is disabled.
-        graph_store: Optional ``GraphStore`` used to retrieve per-document
-            entities and persist cross-document edges produced by
-            ``inter_doc_builder``. When ``None``, inter-doc graph building is
-            disabled regardless of ``inter_doc_builder``.
     """
 
-    def __init__(  # noqa: PLR0913
+    def __init__(
         self,
         *,
         store: KnowledgeSourceStore | object,
         pipeline: IngestPipeline | object,
         workspace_root: Path | None = None,
         content_fetcher: object | None = None,
-        inter_doc_builder: InterDocGraphBuilder | None = None,
-        graph_store: GraphStore | None = None,
     ) -> None:
         self._store = store
         self._pipeline = pipeline
         self._workspace_root = workspace_root if workspace_root is not None else Path.cwd()
         self._content_fetcher = content_fetcher
-        self._inter_doc_builder = inter_doc_builder
-        self._graph_store = graph_store
 
     async def refresh(
         self,
@@ -230,11 +215,6 @@ class RefreshOrchestrator:
         status = getattr(ingest_result, "status", "ok")
         if status not in {"ok", "partial", "skipped", "failed"}:
             status = "ok"
-
-        if status in {"ok", "partial"}:
-            document_id = str(getattr(ingest_result, "document_id", ""))
-            if document_id:
-                self._schedule_inter_doc_build(source, document_id)
 
         return str(status), self._ingest_warnings(ingest_result)
 
@@ -445,33 +425,6 @@ class RefreshOrchestrator:
             source=url,
             metadata={"source_type": "authenticated_web"},
         )
-
-    def _schedule_inter_doc_build(self, source: KnowledgeSource, document_id: str) -> None:
-        """Schedule an inter-doc graph build as a non-blocking background task."""
-        if self._inter_doc_builder is None or self._graph_store is None:
-            return
-
-        builder = self._inter_doc_builder
-        graph_store = self._graph_store
-
-        async def _run() -> None:
-            try:
-                if len(graph_store.list_documents(scopes=[source.scope])) < _MIN_SCOPE_DOCS:
-                    return
-                entities = graph_store.list_entities(scopes=[source.scope])
-                result = await builder.build(entities, scope=source.scope)
-                for edge in result.edges:
-                    edge_document_id = edge.metadata.get("document_id")
-                    if not isinstance(edge_document_id, str) or not edge_document_id:
-                        edge_document_id = document_id
-                    scoped_edge = edge.model_copy(update={"scope": source.scope})
-                    graph_store.insert_edge(scoped_edge, document_id=edge_document_id)
-            except Exception as exc:  # noqa: BLE001
-                logger.error(  # noqa: TRY400
-                    "Inter-doc build failed for source %r: %s", source.id, exc
-                )
-
-        asyncio.create_task(_run())  # noqa: RUF006
 
     def _update_source_record(
         self,

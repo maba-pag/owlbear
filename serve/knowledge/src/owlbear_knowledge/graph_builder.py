@@ -1,12 +1,8 @@
-"""Graph relationship builders.
+"""Intra-document graph relationship builder.
 
 :class:`IntraDocGraphBuilder` uses an injected :class:`StructuredExtractor`
 to infer edges within a document.  Pass ``extractor=`` for real inference;
 omit it for backward-compatible no-op behaviour.
-
-:class:`InterDocGraphBuilder` (legacy stub) is preserved here for backward
-compatibility.  The new DI-based version lives in
-:mod:`owlbear_knowledge.inter_doc_graph_builder`.
 """
 
 from __future__ import annotations
@@ -134,37 +130,3 @@ class IntraDocGraphBuilder:
 
         stamped = [_stamp_intra_edge(e) for e in all_edges]
         return GraphBuildResult(edges=stamped, edges_added=len(stamped))
-
-
-class InterDocGraphBuilder:
-    """Inter-document relationship builder (legacy no-op stub).
-
-    This class is kept for backward compatibility.  For the new DI-based
-    implementation see :class:`owlbear_knowledge.inter_doc_graph_builder.InterDocGraphBuilder`.
-
-    Args:
-        model: Ignored — kept for API compatibility.
-    """
-
-    def __init__(self, model: str | object, **_kwargs: object) -> None:
-        self._model = model
-
-    async def build(
-        self,
-        entities: list[Entity],
-        vector_store: object,
-        scope: str = "global",  # noqa: ARG002
-    ) -> GraphBuildResult:
-        """Pre-filter using vector similarity and return empty GraphBuildResult."""
-        if not entities:
-            return GraphBuildResult()
-
-        # Pre-filter: call search_similar per entity for candidate discovery.
-        _search = getattr(vector_store, "search_similar", None)
-        if _search is not None:
-            for _entity in entities:
-                _search([0.0] * 1024, top_k=1)
-                break  # one representative call is sufficient
-
-        logger.debug("InterDocGraphBuilder.build called — returning empty result (no-op)")
-        return GraphBuildResult()

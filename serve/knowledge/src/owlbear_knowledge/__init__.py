@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from owlbear_knowledge.cancellation import CancelSignal, LinkedCancelSignal
 from owlbear_knowledge.document_store import DocumentStore
-from owlbear_knowledge.evaluator import EvaluationResult, SourceEvaluator
 from owlbear_knowledge.graph_store import GraphStore
 from owlbear_knowledge.ingest import IngestPipeline, IngestResult
 from owlbear_knowledge.intake import IntakeResult
@@ -28,7 +27,6 @@ __all__ = [
     "CancelSignal",
     "DocumentStatus",
     "DocumentStore",
-    "EvaluationResult",
     "GraphAugmentedRetriever",
     "GraphStore",
     "IngestPipeline",
@@ -42,7 +40,6 @@ __all__ = [
     "RefreshOrchestrator",
     "RefreshResult",
     "RetrievalResult",
-    "SourceEvaluator",
     "SourcePage",
     "StatusStore",
     "StructuredSearchResult",

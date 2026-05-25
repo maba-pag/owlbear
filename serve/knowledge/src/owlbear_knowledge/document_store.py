@@ -51,7 +51,7 @@ class DocumentStore:
 
     def insert_document(
         self,
-        document_id_or_doc: str | Document,
+        document_id: str,
         intake: IntakeResult | None = None,
         *,
         scope: str = "global",
@@ -59,37 +59,34 @@ class DocumentStore:
     ) -> None:
         """Persist a document to the documents table.
 
-        Supports two calling conventions:
-
-        - New API: ``insert_document(document_id, intake, *, scope, source_id)``
-        - Legacy API: ``insert_document(doc)``  — accepts a Document object.
+        Args:
+            document_id: Unique ID for the document.
+            intake: Intake result containing content and metadata.
+            scope: Scope tag for provenance.  Defaults to ``'global'``.
+            source_id: Optional knowledge source ID.
         """
-        if isinstance(document_id_or_doc, str):
-            now = datetime.now(tz=UTC).isoformat()
-            source = intake.source if intake else ""
-            metadata = dict(intake.metadata) if intake else {}
-            if intake is not None:
-                metadata.setdefault("intake_source", source)
-            metadata_title = metadata.get("title")
-            title = metadata_title.strip() if isinstance(metadata_title, str) and metadata_title.strip() else source
-            self._conn.execute(
-                "INSERT OR REPLACE INTO documents"
-                " (id, title, content, metadata, created_at, scope, source_id)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (
-                    document_id_or_doc,
-                    title,
-                    intake.content if intake else "",
-                    json.dumps(metadata),
-                    now,
-                    scope,
-                    source_id,
-                ),
-            )
-            self._conn.commit()
-        else:
-            # Legacy API: insert_document(doc: Document)
-            self._graph.insert_document(document_id_or_doc)
+        now = datetime.now(tz=UTC).isoformat()
+        source = intake.source if intake else ""
+        metadata = dict(intake.metadata) if intake else {}
+        if intake is not None:
+            metadata.setdefault("intake_source", source)
+        metadata_title = metadata.get("title")
+        title = metadata_title.strip() if isinstance(metadata_title, str) and metadata_title.strip() else source
+        self._conn.execute(
+            "INSERT OR REPLACE INTO documents"
+            " (id, title, content, metadata, created_at, scope, source_id)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (
+                document_id,
+                title,
+                intake.content if intake else "",
+                json.dumps(metadata),
+                now,
+                scope,
+                source_id,
+            ),
+        )
+        self._conn.commit()
 
     # ── Chunks ────────────────────────────────────────────────────────────
 
@@ -208,28 +205,18 @@ class DocumentStore:
 
     def store_entity_embeddings(
         self,
-        entities_or_results: list[Entity] | list[ExtractionResult] | None = None,
+        entities: list[Entity] | None = None,
         *,
-        results: list[ExtractionResult] | None = None,
         scope: str = "global",
     ) -> None:
         """Embed entity descriptions and store with embedding_type='entity'.
 
-        Supports two calling conventions:
-
-        - New API: ``store_entity_embeddings(results=[...], scope=...)``
-          — extracts entities from :class:`~owlbear_knowledge.extractor.ExtractionResult` list.
-        - Legacy API: ``store_entity_embeddings(entities)``
-          — accepts a list of :class:`~owlbear_knowledge.models.Entity` objects.
-
+        Args:
+            entities: List of :class:`~owlbear_knowledge.models.Entity` objects.
                 Entity objects with an explicitly set ``scope`` keep that scope;
                 otherwise the method-level ``scope`` is used for vector provenance.
+            scope: Fallback scope for entities without explicit scope.
         """
-        if results is not None:
-            # New API: extract entities from ExtractionResult list
-            entities: list[Entity] = [e for r in results for e in (r.entities or [])]  # type: ignore[union-attr,misc]
-        else:
-            entities = entities_or_results or []  # type: ignore[assignment]
         if not entities:
             return
         texts = [e.description or e.name for e in entities]  # type: ignore[union-attr]

@@ -71,10 +71,6 @@ from ._types import (
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-    from owlbear_knowledge.inter_doc_graph_builder import InterDocGraphBuilder
-else:
-    InterDocGraphBuilder = Any
-
 logger = logging.getLogger(__name__)
 
 # Backward-compatible patch target used by legacy tests; the guard is no longer wired.
@@ -373,7 +369,6 @@ class AppContext:
     refresh_orchestrator: RefreshOrchestrator | None = None
     structured_extractor: object | None = None
     intra_doc_builder: IntraDocGraphBuilder | None = None
-    inter_doc_builder: InterDocGraphBuilder | None = None
 
 
 def _apply_tool_exclusions(server: FastMCP) -> set[str]:
@@ -419,7 +414,6 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
         structured_extractor = None
         extractor = EntityExtractor(extractor=structured_extractor)
         intra_doc_builder = IntraDocGraphBuilder(extractor=structured_extractor)
-        inter_doc_builder = None
         gar = GraphAugmentedRetriever(vs, gs, emb)
         source_store = KnowledgeSourceStore(conn)
         qs = KnowledgeQueryService(
@@ -442,8 +436,6 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
             pipeline=pipeline,
             workspace_root=Path.cwd(),
             content_fetcher=select_content_fetcher("http"),
-            inter_doc_builder=inter_doc_builder,
-            graph_store=gs,
         )
         ctx = AppContext(
             conn=conn,
@@ -455,7 +447,6 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
             refresh_orchestrator=refresh_orchestrator,
             structured_extractor=structured_extractor,
             intra_doc_builder=intra_doc_builder,
-            inter_doc_builder=inter_doc_builder,
         )
         _app_context = ctx
         _apply_tool_exclusions(_server)
@@ -475,6 +466,111 @@ store_enrichment = mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, dest
 retry_failed_enrichment = mcp.tool(
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True)
 )(retry_failed_enrichment)
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True))
+async def retry_failed_enrichment(
+    ctx: Context,
+    chunk_ids: list[str] | None = None,
+    limit: int = 100,
+    scopes: list[str] | None = None,
+) -> RetryEnrichmentResult:
+    """Reset failed enrichment chunks to pending so workers can retry them."""
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    conn = app_ctx.conn
+    scope_values = _normalize_scope_list(scopes)
+
+    normalized_chunk_ids = [chunk_id.strip() for chunk_id in chunk_ids or [] if chunk_id.strip()]
+    conn.execute("PRAGMA busy_timeout = 5000")
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        if normalized_chunk_ids:
+            reset_count = 0
+            for chunk_id in normalized_chunk_ids:
+                cur = conn.execute(
+                    """
+                    UPDATE chunks
+                    SET enrichment_state='pending',
+                        claimed_at=NULL,
+                        claimed_by=NULL,
+                        claim_token=NULL,
+                        enrichment_error=NULL,
+                        last_enrichment_error_at=NULL
+                    WHERE enrichment_state='failed'
+                      AND id = ?
+                    """,
+                    (chunk_id,),
+                )
+                reset_count += max(cur.rowcount, 0)
+        else:
+            limit = _normalize_batch_limit(limit)
+            if scope_values:
+                conn.execute("CREATE TEMP TABLE IF NOT EXISTS retry_failed_enrichment_scopes(scope TEXT NOT NULL)")
+                conn.execute("DELETE FROM retry_failed_enrichment_scopes")
+                conn.executemany(
+                    "INSERT INTO retry_failed_enrichment_scopes(scope) VALUES (?)",
+                    [(scope,) for scope in scope_values],
+                )
+                cur = conn.execute(
+                    """
+                    UPDATE chunks
+                    SET enrichment_state='pending',
+                        claimed_at=NULL,
+                        claimed_by=NULL,
+                        claim_token=NULL,
+                        enrichment_error=NULL,
+                        last_enrichment_error_at=NULL
+                    WHERE id IN (
+                        SELECT c.id
+                        FROM chunks AS c
+                        JOIN documents AS d ON d.id = c.document_id
+                        JOIN knowledge_sources AS ks ON ks.id = d.source_id
+                        WHERE c.enrichment_state = 'failed'
+                          AND ks.enabled = 1
+                          AND ks.enrich = 1
+                          AND COALESCE(d.scope, 'global') IN (
+                              SELECT scope FROM retry_failed_enrichment_scopes
+                          )
+                        ORDER BY c.created_at ASC, c.id ASC
+                        LIMIT ?
+                    )
+                    """,
+                    (limit,),
+                )
+            else:
+                cur = conn.execute(
+                    """
+                    UPDATE chunks
+                    SET enrichment_state='pending',
+                        claimed_at=NULL,
+                        claimed_by=NULL,
+                        claim_token=NULL,
+                        enrichment_error=NULL,
+                        last_enrichment_error_at=NULL
+                    WHERE id IN (
+                        SELECT c.id
+                        FROM chunks AS c
+                        JOIN documents AS d ON d.id = c.document_id
+                        JOIN knowledge_sources AS ks ON ks.id = d.source_id
+                        WHERE c.enrichment_state = 'failed'
+                          AND ks.enabled = 1
+                          AND ks.enrich = 1
+                        ORDER BY c.created_at ASC, c.id ASC
+                        LIMIT ?
+                    )
+                    """,
+                    (limit,),
+                )
+            reset_count = max(cur.rowcount, 0)
+
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
+    failed_row = conn.execute("SELECT COUNT(*) FROM chunks WHERE enrichment_state = 'failed'").fetchone()
+    return {"reset": reset_count, "remaining_failed": int(failed_row[0] if failed_row is not None else 0)}
+
 
 __all__ = [
     "_MAX_ENRICHMENT_BATCH_SIZE",
@@ -544,7 +640,7 @@ async def list_sources(ctx: Context, scope: str | None = None) -> list[SourceInf
         msg = "source store not available"
         raise ToolError(msg)
     scope = _normalize_optional_scope(scope)
-    sources = store.list_all(scope=scope)
+    sources = await asyncio.to_thread(store.list_all, scope=scope)
     return [
         {
             "id": s.id,
@@ -745,8 +841,6 @@ async def refresh_source(ctx: Context, source_id: str) -> dict | str:
         pipeline=pipeline,
         workspace_root=Path.cwd(),
         content_fetcher=selected_fetcher,
-        inter_doc_builder=getattr(app_ctx, "inter_doc_builder", None),
-        graph_store=app_ctx.graph_store,
     )
     try:
         result = await run_orchestrator.refresh(source)
