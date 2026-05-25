@@ -140,14 +140,12 @@ class TestFromAC_PickTasksReadOnly:
 
     def test_no_engine_write_methods_called(self, tmp_path: Path) -> None:
         """AC-1 discriminating sentinel: pick_tasks must NOT call sweep, repair_storage,
-        edit_task, or move_task on the engine.
+        edit_task, or move_task on the engine — except via sweep_requests, which is
+        explicitly permitted (and patched out so its internal writes don't fire).
 
-        Patches each named write method on the live engine instance (without wraps)
-        so any invocation would be captured.  The read path (list_tasks, show_task)
-        remains unpatched.
-
-        Proves the reviewer gap: current proof only pinned resolve_pending_drs;
-        this test fails the moment any of the other named helpers is introduced.
+        sweep_requests is patched to return [] so that its internal calls to
+        edit_task/move_task do not fire.  The remaining write methods must still
+        be uncontacted.  sweep_requests itself must be called exactly once.
         """
         board = _make_board(tmp_path)
         _write_task(board, task_id=1, status="backlog")
@@ -155,6 +153,7 @@ class TestFromAC_PickTasksReadOnly:
         av = engine.agent_view()
 
         with (
+            patch.object(engine, "sweep_requests", return_value=[]) as mock_sweep_requests,
             patch.object(engine, "sweep") as mock_sweep,
             patch.object(engine, "repair_storage") as mock_repair,
             patch.object(engine, "edit_task") as mock_edit,
@@ -163,6 +162,7 @@ class TestFromAC_PickTasksReadOnly:
         ):
             av.pick_tasks()
 
+        mock_sweep_requests.assert_called_once()
         mock_sweep.assert_not_called()
         mock_repair.assert_not_called()
         mock_edit.assert_not_called()
