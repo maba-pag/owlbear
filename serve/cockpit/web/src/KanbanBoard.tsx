@@ -137,6 +137,12 @@ function KanbanBoardContent({
   const [archivalModal, setArchivalModal] = useState<ArchivalModalState | null>(null)
   const [filter, setFilter] = useState<FilterState>(EMPTY_FILTER)
   const [panelOpen, setPanelOpen] = useState(false)
+  const [isMobileLayout, setIsMobileLayout] = useState(() => {
+    if (typeof window === 'undefined') {
+      return false
+    }
+    return window.innerWidth <= 767 || window.matchMedia('(max-width: 767px)').matches
+  })
   const [filterAnnouncement, setFilterAnnouncement] = useState('')
   const menuRef = useRef<HTMLDivElement | null>(null)
   const filterToggleRef = useRef<HTMLElement | null>(null)
@@ -157,6 +163,20 @@ function KanbanBoardContent({
   const activeFilterLabels = getActiveFilterLabels(filter)
   const boardTaskCount = hasActiveFilters ? `${filteredTasks.length} / ${tasks.length}` : tasks.length
   const boardTaskLabel = 'tasks'
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(max-width: 767px)')
+    const handleViewportChange = () => {
+      setIsMobileLayout(window.innerWidth <= 767 || mediaQuery.matches)
+    }
+
+    handleViewportChange()
+    mediaQuery.addEventListener('change', handleViewportChange)
+
+    return () => {
+      mediaQuery.removeEventListener('change', handleViewportChange)
+    }
+  }, [])
 
   useEffect(() => {
     if (!contextMenu) return
@@ -498,7 +518,9 @@ function KanbanBoardContent({
           // inline-justified: grid column count is runtime-driven by board status count.
           style={{
             display: 'grid',
-            gridTemplateColumns: `repeat(${board.statuses.length}, minmax(var(--kanban-column-min), 1fr))`,
+            gridTemplateColumns: isMobileLayout
+              ? 'minmax(0, 1fr)'
+              : `repeat(${board.statuses.length}, minmax(var(--kanban-column-min), 1fr))`,
           }}
         >
           {board.statuses.map(({ name }) => {
