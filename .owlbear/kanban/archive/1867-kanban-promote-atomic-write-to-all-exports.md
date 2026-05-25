@@ -1,10 +1,10 @@
 ---
 id: 1867
 title: 'Kanban: promote atomic_write to __all__ exports'
-status: review
+status: archived
 priority: someday
 created: 2026-05-25T00:06:59.338718+02:00
-updated: 2026-05-25T01:37:49.812146+02:00
+updated: 2026-05-25T03:22:46.523906+02:00
 tags:
   - scope:kanban
   - boundary-audit
@@ -20,7 +20,7 @@ proof_bundle: smoke
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 Add `atomic_write` from `owlbear_kanban.storage_io` to the package's `__init__.__all__` exports. Cockpit's ideas route and potentially other consumers use this generic crash-safe file-write utility. Currently it's imported directly from the submodule — formally exporting it makes the dependency contract explicit.
@@ -139,3 +139,73 @@ N/A — adding to __all__ introduces no new failure modes.
   - AC1 (`"atomic_write"` in `__all__`): PASS
   - AC2 (root import resolves to same callable as submodule): PASS
   - AC3 (no pyproject dependency/source changes): PASS via existing regression guard test
+
+[[2026-05-25T02:08:49+02:00]]
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation (one line): PASS #1867 -> docs | AC mapped to code and evidence sufficient.
+- Builder evidence is internally consistent with the current tree: task notes report `serve/kanban/src/owlbear_kanban/__init__.py` as the only changed file and a final scoped result of 32 passed / 0 failed / 0 skipped with clean lint and 100% coverage for `owlbear_kanban.__init__` (.owlbear/kanban/tasks/1867-kanban-promote-atomic-write-to-all-exports.md:127-138).
+- AC evidence map:
+| AC Line | Code Evidence | Test Evidence | Status |
+|---|---|---|---|
+| AC1: `"atomic_write"` is a member of `owlbear_kanban.__init__.__all__` | `serve/kanban/src/owlbear_kanban/__init__.py:18` imports `atomic_write`; `serve/kanban/src/owlbear_kanban/__init__.py:31` includes `"atomic_write"` in `__all__` | `tests/test_kanban_1867.py:26-30` asserts direct membership; `tests/test_init_exports.py:52-71` asserts the exact added export set includes `atomic_write` | PASS |
+| AC2: `from owlbear_kanban import atomic_write` resolves to the same callable as `from owlbear_kanban.storage_io import atomic_write` | `serve/kanban/src/owlbear_kanban/__init__.py:18` re-exports the symbol directly from `owlbear_kanban.storage_io` | `tests/test_kanban_1867.py:34-42` asserts object identity (`pkg_fn is submod.atomic_write`) | PASS |
+| AC3: No changes to `pyproject.toml` `[project.dependencies]` or `[tool.uv.sources]` sections | Current `serve/kanban/pyproject.toml:6` matches the baseline dependency set and the file contains no `[tool.uv]` section; builder notes report no pyproject file in scope (.owlbear/kanban/tasks/1867-kanban-promote-atomic-write-to-all-exports.md:127) | `tests/test_kanban_1867.py:46-66` asserts the exact dependency baseline and absence of `tool.uv` | PASS |
+- Proof sufficiency: AC1 is proven by exact `__all__` membership assertions, AC2 by identity comparison rather than mere presence, and AC3 by a concrete manifest baseline plus absence check for `tool.uv`. These tests would fail on the reverted pre-fix state described in the builder notes.
+- Safety & security: not a security-sensitive change surface; no new input, storage, auth, or dependency risks observed.
+- Diagnostics spot-check: no editor errors in `serve/kanban/src/owlbear_kanban/__init__.py`, `tests/test_kanban_1867.py`, or `tests/test_init_exports.py`.
+
+## Observations
+- No non-blocking findings.
+
+[[2026-05-25T02:23:07+02:00]]
+## Docs Gate
+
+**Verdict: PASS → done**
+
+### Checklist
+
+| Item | Result | Evidence |
+|------|--------|----------|
+| 1. README Verification | FIXED | `serve/kanban/README.md` had no mention of `atomic_write` despite it being the task's sole purpose (making the public contract explicit). Added a "Utilities" subsection with signature, description, and usage example. Layer 1 (grep): no removed symbols. Layer 2 (editorial): no contradictions; new entry consistent with existing style. |
+| 2. External Attribution | N/A | Pure internal export-hygiene; no external sources used. |
+| 3. Research Doc | PASS | `.owlbear/research/cockpit-api-boundary-audit.md` (Finding 3) referenced at top of task body and in ## Research section. |
+| 4. Deletion Detection | N/A | No symbols removed; no orphaned references introduced. |
+
+### Files Updated
+- `serve/kanban/README.md` — added "### Utilities" subsection documenting `atomic_write` signature and usage.
+
+### Scratch Cleanup
+- No `1867-*` scratch files created during this gate pass.
+
+[[2026-05-25T03:22:46+02:00]]
+## Audit
+### Regression Detection
+- quality-runner mode full: 7191 passed, 25 skipped; failures (test_cockpit_view, test_server, test_engine_requests_1852, MemoryTab_1672) all pre-existing RED tests from unrelated in-progress tasks
+- kanban-domain task-scoped tests (test_kanban_1867.py, test_init_exports.py): all PASS
+- lint violations in serve/knowledge/ only (unrelated domain)
+- regression verdict: PASS (no regressions attributable to #1867)
+
+### Intent Verification
+- scope alignment: PASS (single file changed: serve/kanban/src/owlbear_kanban/__init__.py, squarely in kanban domain)
+- purpose match: PASS (adds atomic_write to __all__ exports, matching stated task intent exactly)
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 5/5
+AC refined from 4 to 3 lines after challenger feedback. All 3 AC lines are specific, testable, and produced a clean implementation path. Challenger engagement improved final AC quality.
+
+### Commit Integrity
+- builder commit: PASS (2439e1fc feat: export atomic_write from kanban root)
+- test-writer commits: PASS (5b56432d, a99ab8ed)
+- doc-writer commit: MISSING (serve/kanban/README.md change is uncommitted in working tree)
+- process concern: doc-writer advanced to done without committing its README deliverable
+
+### Review Evidence
+Present and detailed. PASS verdict with full AC-to-code mapping and proof sufficiency narrative.
+
+### Deduction Breakdown
+- Uncommitted doc-writer deliverable (evidence integrity concern): -0.05
+
+### Confidence: 0.95
+### Action: archive
