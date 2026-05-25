@@ -1,10 +1,10 @@
 ---
 id: 1869
 title: 'Cockpit: delegate decision resolution to kanban resolve_decision()'
-status: done
+status: archived
 priority: important
 created: 2026-05-25T00:20:42.926678+02:00
-updated: 2026-05-25T05:43:10.825173+02:00
+updated: 2026-05-25T05:54:26.323845+02:00
 tags:
   - scope:cockpit-backend
   - boundary-audit
@@ -30,7 +30,7 @@ proof_bundle: existing
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 Replace inline file-lifecycle code in `routes/decisions.py` resolve endpoint (lines 195–222) with a single call to `owlbear_kanban.decisions.resolve_decision(pending_path, req.response, engine, notes=req.notes, resolved_by="cockpit-api")`. Remove now-unused helpers `_rewrite_response` and `_append_response_section` from the route module. Keep HTTP-layer concerns (id validation, 404 checking, error→HTTPException mapping) in Cockpit. Depends on the kanban resolve_decision task above.
@@ -160,3 +160,24 @@ Architecture review complete. Wrote 6 mechanically-verifiable AC lines, set proo
 
 ### Scratch Files Cleaned
 - None found for task #1869
+
+[[2026-05-25T05:54:26+02:00]]
+## Audit
+
+### Regression Detection
+Quality-runner scoped run: 358 passed, 0 failed in cockpit domain (test_cockpit_decisions_api, test_cockpit_decisions_pydantic_1640, test_cockpit_boundary, test_cockpit_mutation_api, test_decisions_1868). Lint clean for changed file. Two failures in tests/test_decisions.py are confirmed pre-existing (reproduced identically on commit prior to builder's change 620a33bc) — kanban module tests unrelated to this cockpit refactor.
+
+### Intent Verification
+Single file changed: serve/cockpit/src/owlbear_cockpit/routes/decisions.py. Domain: cockpit-backend (matches scope tag). Purpose: delegate inline resolve logic to kanban module — implementation direction matches stated purpose. No extraneous scope.
+
+### Architect Quality
+Score: 4/5. Six mechanically-verifiable AC lines. Challenger concern (untested 422 path) rebutted with valid scope-creep argument. Architecture review thorough with failure mode map.
+
+### Commit Integrity
+Builder commit 620a33bc confirmed present with correct format (feat: delegate cockpit decision resolve to kanban (#1869, builder)). Single file changed. No uncommitted source deliverables.
+
+### Deductions
+None.
+
+### Confidence: 1.00
+### Action: ARCHIVE
