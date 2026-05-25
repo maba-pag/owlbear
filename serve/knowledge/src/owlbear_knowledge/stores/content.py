@@ -59,6 +59,7 @@ class ContentStore(ContentStoreProtocol):
                 scope TEXT NOT NULL,
                 content_hash TEXT NOT NULL,
                 vectors_synced INTEGER NOT NULL DEFAULT 1,
+                pending_delete_chunk_ids TEXT NOT NULL DEFAULT '[]',
                 trusted INTEGER NOT NULL,
                 metadata_json TEXT NOT NULL DEFAULT '{}',
                 ingested_at TEXT NOT NULL
@@ -73,6 +74,11 @@ class ContentStore(ContentStoreProtocol):
             self._db.execute(
                 "ALTER TABLE content_documents "
                 "ADD COLUMN vectors_synced INTEGER NOT NULL DEFAULT 1"
+            )
+        if "pending_delete_chunk_ids" not in document_columns:
+            self._db.execute(
+                "ALTER TABLE content_documents "
+                "ADD COLUMN pending_delete_chunk_ids TEXT NOT NULL DEFAULT '[]'"
             )
         self._db.execute(
             """
@@ -112,7 +118,7 @@ class ContentStore(ContentStoreProtocol):
         document_id = self._document_id_for(request)
         content_hash = compute_content_hash(request.text)
         existing_doc = self._db.execute(
-            "SELECT document_id, content_hash, ingested_at, vectors_synced "
+            "SELECT document_id, content_hash, ingested_at, vectors_synced, pending_delete_chunk_ids "
             "FROM content_documents WHERE document_id = ?",
             (document_id,),
         ).fetchone()
@@ -120,6 +126,12 @@ class ContentStore(ContentStoreProtocol):
         if existing_doc is not None and existing_doc["content_hash"] == content_hash:
             chunk_ids = self._chunk_ids_for_document(document_id)
             if not bool(existing_doc["vectors_synced"]):
+                pending_delete_chunk_ids = self._load_json_str_list(
+                    existing_doc["pending_delete_chunk_ids"]
+                )
+                if pending_delete_chunk_ids:
+                    self._delete_vectors(pending_delete_chunk_ids)
+                    self._set_pending_delete_chunk_ids(document_id, ())
                 existing_chunk_rows = self._existing_chunks_for_document(document_id)
                 chunk_texts = [row[1] for row in existing_chunk_rows]
                 if chunk_texts:
@@ -162,8 +174,8 @@ class ContentStore(ContentStoreProtocol):
                 """
                 INSERT INTO content_documents (
                     document_id, source_id, title, uri, scope, content_hash,
-                    vectors_synced, trusted, metadata_json, ingested_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    vectors_synced, pending_delete_chunk_ids, trusted, metadata_json, ingested_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(document_id) DO UPDATE SET
                     source_id = excluded.source_id,
                     title = excluded.title,
@@ -171,6 +183,7 @@ class ContentStore(ContentStoreProtocol):
                     scope = excluded.scope,
                     content_hash = excluded.content_hash,
                     vectors_synced = excluded.vectors_synced,
+                    pending_delete_chunk_ids = excluded.pending_delete_chunk_ids,
                     trusted = excluded.trusted,
                     metadata_json = excluded.metadata_json,
                     ingested_at = excluded.ingested_at
@@ -183,6 +196,7 @@ class ContentStore(ContentStoreProtocol):
                     request.scope,
                     content_hash,
                     0,
+                    json.dumps(list(replaced_ids)),
                     int(request.trusted),
                     json.dumps(request.metadata),
                     now_iso,
@@ -218,6 +232,7 @@ class ContentStore(ContentStoreProtocol):
         new_chunk_ids = tuple(chunk_id for chunk_id, _, _, _ in chunk_rows)
         if existing_doc is not None:
             self._delete_vectors(replaced_ids)
+            self._set_pending_delete_chunk_ids(document_id, ())
             state = ContentIngestState.REPLACED
         else:
             state = ContentIngestState.CREATED
@@ -335,6 +350,26 @@ class ContentStore(ContentStoreProtocol):
                 "UPDATE content_documents SET vectors_synced = 1 WHERE document_id = ?",
                 (document_id,),
             )
+
+    def _set_pending_delete_chunk_ids(
+        self,
+        document_id: str,
+        pending_delete_chunk_ids: tuple[str, ...],
+    ) -> None:
+        with self._db:
+            self._db.execute(
+                "UPDATE content_documents SET pending_delete_chunk_ids = ? WHERE document_id = ?",
+                (json.dumps(list(pending_delete_chunk_ids)), document_id),
+            )
+
+    def _load_json_str_list(self, value: str | None) -> tuple[str, ...]:
+        try:
+            parsed = json.loads(value or "[]")
+        except json.JSONDecodeError:
+            return ()
+        if not isinstance(parsed, list):
+            return ()
+        return tuple(str(item) for item in parsed)
 
     def _upsert_vectors(
         self,
