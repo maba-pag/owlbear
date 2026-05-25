@@ -1,10 +1,10 @@
 ---
 id: 1868
 title: 'Kanban: add resolve_decision() to decisions module with unit tests'
-status: review
+status: done
 priority: important
 created: 2026-05-25T00:20:38.487099+02:00
-updated: 2026-05-25T02:00:17.935900+02:00
+updated: 2026-05-25T04:21:23.395027+02:00
 tags:
   - scope:kanban
   - boundary-audit
@@ -19,10 +19,11 @@ ac:
     values'
   - 'Appends a ## Response markdown section to the DR body containing the response
     value'
-  - When notes is not None, includes notes text in the appended response section
+  - 'When notes is not None, the notes text appears within the ## Response section
+    (between the ## Response heading and any subsequent heading or EOF)'
   - Persists rewritten frontmatter + body to the file at path
-  - Appends canonical_summary(response, body) to the linked task via 
-    engine.edit_task(task_id, append_body=...)
+  - A single engine.edit_task call carries both task_id (from DR frontmatter) 
+    and append_body=canonical_summary(response, original_body)
   - When response is 'approved' or 'rejected', calls engine.edit_task(task_id, 
     blocked=False) to unblock the task
   - When response is 'needs-info', does NOT call engine.edit_task(task_id, 
@@ -168,3 +169,106 @@ Commit:
 - Builder skip: test-only retry, all tests green (Step 1b.1 — implementation already satisfies stronger assertions)
 - ruff: clean
 - Commit: cd3552fc
+
+[[2026-05-25T02:30:05+02:00]]
+## Review Evidence
+- Verdict: FAIL
+- Route: FAIL #1868 -> backlog | AC5 and AC7 proof remains insufficient on the second review cycle.
+
+| # | AC Line | Finding | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | AC5 | The positive notes test only proves the note text appears somewhere in the resolved file. It does not prove the note is inside the appended `## Response` section, which the AC requires. A regression that writes notes outside that section would still pass. | AC text `.owlbear/kanban/tasks/1868-kanban-add-resolve-decision-to-decisions-module-with-unit-tests.md#L22`, test definition `tests/test_decisions_1868.py#L219`, assertion `tests/test_decisions_1868.py#L229`, current helper shape `serve/kanban/src/owlbear_kanban/decisions.py#L77` | backlog |
+| 2 | AC7 | The suite proves `append_body` content on one `edit_task` call and the expected task id on some `edit_task` call, but it never proves those are the same call. A regression could append the canonical summary to the wrong task and still leave the suite green. | AC text `.owlbear/kanban/tasks/1868-kanban-add-resolve-decision-to-decisions-module-with-unit-tests.md#L24`, content proof `tests/test_decisions_1868.py#L280` and `tests/test_decisions_1868.py#L291`, separate task-id proof `tests/test_decisions_1868.py#L294` and `tests/test_decisions_1868.py#L303`, call site `serve/kanban/src/owlbear_kanban/decisions.py#L215` and `serve/kanban/src/owlbear_kanban/decisions.py#L74` | backlog |
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Refine the proof contract for AC5 so the retry must assert that notes appear inside the appended `## Response` section, then re-queue task-local coverage accordingly. | `.owlbear/kanban/tasks/1868-kanban-add-resolve-decision-to-decisions-module-with-unit-tests.md`, `tests/test_decisions_1868.py` | Finding 1 |
+| 2 | architect | Refine the proof contract for AC7 so the retry must assert `task_id` and `append_body=canonical_summary(...)` on the same `engine.edit_task` call, then re-queue task-local coverage accordingly. | `.owlbear/kanban/tasks/1868-kanban-add-resolve-decision-to-decisions-module-with-unit-tests.md`, `tests/test_decisions_1868.py` | Finding 2 |
+
+## Observations
+- Direct review of `serve/kanban/src/owlbear_kanban/decisions.py#L187` through `serve/kanban/src/owlbear_kanban/decisions.py#L223` still indicates the current implementation matches the intended behavior. This rejection is for proof quality, not for an observed source defect.
+- The retry did close the prior AC4 and AC10 gaps by adding ordering and completion assertions in `tests/test_decisions_1868.py#L196`, `tests/test_decisions_1868.py#L381`, and `tests/test_decisions_1868.py#L398`.
+- Builder and test-writer evidence remained internally consistent, so no independent quality-runner rerun was needed; the blocking issue is assertion strength, not contradictory execution evidence.
+
+[[2026-05-25T03:12:08+02:00]]
+## Architecture Review (AC Refinement Cycle 2)
+### Reviewer Feedback Applied
+Refined AC5 and AC7 per reviewer findings from second review cycle:
+
+| AC | Before | After | Rationale |
+|----|--------|-------|----------|
+| AC5 | "includes notes text in the appended response section" | "the notes text appears within the ## Response section (between the ## Response heading and any subsequent heading or EOF)" | Test must prove structural placement, not just presence in file |
+| AC7 | "Appends canonical_summary(response, body) to the linked task via engine.edit_task(task_id, append_body=...)" | "A single engine.edit_task call carries both task_id (from DR frontmatter) and append_body=canonical_summary(response, original_body)" | Test must join task_id and append_body on the same call object |
+
+### Test-Writer Guidance
+- AC5: Assert notes text appears after `## Response` line and before next `##` heading or EOF. Pattern: split resolved file at `## Response`, take that section, verify notes substring within it.
+- AC7: Assert on a single `call_args` entry: `call.args[0] == task_id` AND `call.kwargs[\"append_body\"] == canonical_summary(response, original_body)` on the same mock call.
+- All other AC lines remain unchanged and already have GREEN proof.
+
+### Proof-Bundle Validation
+- Final bundle: behavioral (unchanged)
+- Test-writer: PROCEED (strengthen AC5/AC7 tests only)
+
+### Verdict: REFINE → APPROVE
+### Action Taken: Rewrote AC5 and AC7 for structural proof precision, advanced to todo for test-writer retry
+
+[[2026-05-25T03:35:31+02:00]]
+## Test-Writer Notes
+- Retry: added 2 new tests to TestFromAC_ResolveDecision for reviewer gaps (AC5 and AC7).
+- Test file: tests/test_decisions_1868.py
+- New tests:
+  - `test_notes_appear_within_response_section` (AC5): splits resolved file at `## Response`, finds end of section (next `##` or EOF), asserts note_text is within that slice — proves structural placement, not just file presence
+  - `test_edit_task_carries_task_id_and_append_body_in_same_call` (AC7): iterates `call_args_list` looking for a single entry where `args[0] == 42` AND `kwargs["append_body"] == canonical_summary("approved", original_body)` — proves both are on the same call
+- Quality-runner: 28 passed, 0 failed — all new tests GREEN against current implementation
+- Builder skip: test-only retry, all tests green (Step 1b.1 — implementation already satisfies stronger assertions)
+- ruff: clean
+- Commit: 1a87f5d3
+
+[[2026-05-25T03:57:22+02:00]]
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation (one line): PASS #1868 -> docs | AC mapped to code and evidence sufficient.
+- Blocking findings: none.
+- Builder evidence reviewed first and remained internally consistent. The implementation packet reported quality-runner GREEN on tests/test_decisions_1868.py (23 passed), scoped ruff clean, and scoped coverage for owlbear_kanban.decisions at 54%. The test-only retry packet reported quality-runner GREEN on tests/test_decisions_1868.py (28 passed) and ruff clean after strengthening AC5 and AC7 proof. Retry commit 1a87f5d3 changed only tests/test_decisions_1868.py, and the scoped files tests/test_decisions_1868.py and serve/kanban/src/owlbear_kanban/decisions.py were clean at review time.
+- AC evidence map:
+
+| AC | Code Evidence | Test Evidence | Status |
+|---|---|---|---|
+| 1 | serve/kanban/src/owlbear_kanban/decisions.py:187 | tests/test_decisions_1868.py:98 | PASS |
+| 2 | serve/kanban/src/owlbear_kanban/decisions.py:200-205 | tests/test_decisions_1868.py:108; tests/test_decisions_1868.py:119 | PASS |
+| 3 | serve/kanban/src/owlbear_kanban/decisions.py:208-209 | tests/test_decisions_1868.py:134; tests/test_decisions_1868.py:145; tests/test_decisions_1868.py:156 | PASS |
+| 4 | serve/kanban/src/owlbear_kanban/decisions.py:77-85; serve/kanban/src/owlbear_kanban/decisions.py:210-211 | tests/test_decisions_1868.py:171; tests/test_decisions_1868.py:183; tests/test_decisions_1868.py:196 | PASS |
+| 5 | serve/kanban/src/owlbear_kanban/decisions.py:79-81 | tests/test_decisions_1868.py:220; tests/test_decisions_1868.py:231; tests/test_decisions_1868.py:254 | PASS |
+| 6 | serve/kanban/src/owlbear_kanban/decisions.py:89-95; serve/kanban/src/owlbear_kanban/decisions.py:211 | tests/test_decisions_1868.py:274 | PASS |
+| 7 | serve/kanban/src/owlbear_kanban/decisions.py:71-74; serve/kanban/src/owlbear_kanban/decisions.py:213-215 | tests/test_decisions_1868.py:291; tests/test_decisions_1868.py:303; tests/test_decisions_1868.py:317; tests/test_decisions_1868.py:328 | PASS |
+| 8 | serve/kanban/src/owlbear_kanban/decisions.py:216-217 | tests/test_decisions_1868.py:354; tests/test_decisions_1868.py:366 | PASS |
+| 9 | serve/kanban/src/owlbear_kanban/decisions.py:216-217 | tests/test_decisions_1868.py:381 | PASS |
+| 10 | serve/kanban/src/owlbear_kanban/decisions.py:215-223 | tests/test_decisions_1868.py:396; tests/test_decisions_1868.py:406; tests/test_decisions_1868.py:426; tests/test_decisions_1868.py:443 | PASS |
+| 11 | serve/kanban/src/owlbear_kanban/decisions.py:114-128; serve/kanban/src/owlbear_kanban/decisions.py:222-223 | tests/test_decisions_1868.py:459; tests/test_decisions_1868.py:469; tests/test_decisions_1868.py:480; tests/test_decisions_1868.py:492 | PASS |
+
+## Observations
+- Adjacent Cockpit decision-route tests were not counted as proof for this PASS because task #1869 has not yet delegated the route to owlbear_kanban.decisions.resolve_decision; this verdict rests on the task-local suite plus direct code inspection.
+- Challenger surfaced a broader input-shape question for markdown-heading notes. I treated that as non-blocking in this task because the extracted helper preserves the existing route's verbatim note rendering, and no in-scope AC or existing proof establishes escaped or normalized markdown-note handling as part of #1868's contract.
+
+[[2026-05-25T04:21:23+02:00]]
+## Docs Gate
+
+### Convention Mapping
+- `serve/kanban/src/owlbear_kanban/decisions.py` → `serve/kanban/README.md`
+- `tests/test_decisions_1868.py` → `serve/kanban/README.md`
+
+### Checklist
+
+| Item | Result | Evidence |
+|------|--------|----------|
+| 1. README Verification | N/A (pre-existing gap, no task-caused drift) | `decisions` module functions have never been documented in `serve/kanban/README.md`; README accurately describes the `__init__.py` public API only; `resolve_decision` follows the same undocumented pattern as `create_dr`, `parse_dr`, `resolve_pending_drs` — consistent pre-existing gap, nothing task-caused |
+| 2. External Attribution | N/A — no external sources used | Builder notes describe extraction from existing Cockpit route logic only |
+| 3. Research Doc | N/A — no research artifact | No research file referenced in task body |
+| 4. Deletion Detection | N/A — no deletions | Only `decisions.py` was modified (function addition); no files deleted |
+
+### Files Updated
+None — no task-caused documentation drift detected.
+
+### Scratch Cleanup
+No `.owlbear/scratch/1868-*` files found.
