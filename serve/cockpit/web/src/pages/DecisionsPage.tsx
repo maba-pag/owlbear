@@ -3,8 +3,25 @@ import { PButton, PIcon, PTag, PText } from '@porsche-design-system/components-r
 
 import { WorkspaceHeader, WorkspaceHeaderMetric } from '../components/WorkspaceHeader'
 import { useDRState } from '../hooks/CockpitProvider'
-import { formatAge, formatRequestType, getDecisionBrief } from '../utils/decisionBrief'
+import { formatAge } from '../utils/decisionBrief'
 import { openTaskDetail } from '../utils/openTaskDetail'
+
+function formatKindLabel(value: 'decision' | 'action'): 'Decision' | 'Action' {
+  return value === 'decision' ? 'Decision' : 'Action'
+}
+
+function formatOptionCount(count: number): string {
+  return `${count} option${count === 1 ? '' : 's'}`
+}
+
+function formatConfidenceWidth(confidence: number): string {
+  if (!Number.isFinite(confidence)) {
+    return '0%'
+  }
+
+  const clamped = Math.max(0, Math.min(1, confidence))
+  return `${Math.round(clamped * 100)}%`
+}
 
 function parseCreated(value: string | null | undefined): number {
   if (typeof value !== 'string') {
@@ -47,14 +64,13 @@ function DecisionsPage() {
   } else if (sortedItems.length === 0) {
     content = (
       <div className="rounded-lg border border-contrast-low bg-canvas p-static-lg text-center">
-        <PText data-testid="decisions-empty-state">No decisions are waiting.</PText>
+        <PText data-testid="decisions-empty-state">No pending requests</PText>
       </div>
     )
   } else {
     content = (
       <div className="flex min-h-0 flex-col gap-static-md overflow-y-auto pr-static-xs" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
         {sortedItems.map((item) => {
-          const brief = getDecisionBrief(item)
           return (
           <div
             key={item.id}
@@ -78,7 +94,7 @@ function DecisionsPage() {
               <div className="min-w-0">
                 <div data-testid={`dr-primary-meta-${item.id}`} className="mb-static-xs flex min-w-0 flex-wrap items-center gap-static-xs">
                   <PTag compact variant="secondary">
-                    {formatRequestType(item.request_type)}
+                    {formatKindLabel(item.kind)}
                   </PTag>
                   <PButton
                     type="button"
@@ -96,80 +112,37 @@ function DecisionsPage() {
                     Task #{item.task_id}
                   </PButton>
                   <span className="text-xs font-semibold text-contrast-high">{formatAge(item.created)}</span>
+                  <span className="text-xs text-contrast-medium">{item.agent}</span>
                 </div>
                 <div className="flex min-w-0 flex-wrap items-start justify-between gap-static-sm">
-                  <h2 className="m-0 min-w-0 text-base font-semibold leading-tight text-primary">{brief.title}</h2>
+                  <h2 className="m-0 min-w-0 text-base font-semibold leading-tight text-primary">{item.title}</h2>
                   <span className="inline-flex items-center gap-static-xs whitespace-nowrap text-sm font-semibold text-primary">
                     <span>Open resolver</span>
                     <PIcon name="arrow-right" size="small" color="inherit" aria-hidden="true" />
                   </span>
                 </div>
-                {brief.isStructured ? (
-                  <div className="mt-static-sm grid gap-static-sm xl:grid-cols-[minmax(0,1fr)_minmax(280px,0.58fr)]">
-                    {brief.context ? (
-                      <section data-testid={`dr-context-${item.id}`} className="grid min-w-0 content-start gap-1 border-t border-contrast-low pt-static-xs">
-                        <span className="text-xs font-semibold uppercase leading-tight text-contrast-high">Context</span>
-                        <p className="m-0 text-sm leading-normal text-primary line-clamp-3">{brief.context}</p>
-                      </section>
-                    ) : null}
-                    {brief.options.length > 0 || brief.request ? (
-                      <section data-testid={`dr-options-${item.id}`} className="grid min-w-0 content-start gap-1 border-t border-contrast-low pt-static-xs">
-                        <span className="text-xs font-semibold uppercase leading-tight text-contrast-high">{brief.options.length > 0 ? 'Options' : 'Request'}</span>
-                        {brief.options.length > 0 ? (
-                          <ol className="m-0 grid list-none gap-1 p-0 text-sm leading-normal text-primary">
-                            {brief.options.map((option, optionIndex) => (
-                              <li key={option} className="grid min-w-0 grid-cols-[1.5rem_minmax(0,1fr)] gap-static-xs">
-                                <span className="inline-flex size-5 items-center justify-center rounded-full border border-contrast-low bg-surface text-xs font-semibold leading-none text-primary">
-                                  {optionIndex + 1}
-                                </span>
-                                <span className="min-w-0 line-clamp-1">{option}</span>
-                              </li>
-                            ))}
-                          </ol>
-                        ) : (
-                          <p className="m-0 text-sm leading-normal text-primary line-clamp-2">{brief.request}</p>
-                        )}
-                      </section>
-                    ) : null}
-                  </div>
-                ) : (
-                  <div className="mt-static-sm grid gap-static-sm xl:grid-cols-[minmax(0,1fr)_minmax(280px,0.58fr)]">
-                    <section data-testid={`dr-summary-${item.id}`} className="grid min-w-0 content-start gap-1 border-t border-contrast-low pt-static-xs">
-                      <span className="text-xs font-semibold uppercase leading-tight text-contrast-high">Summary</span>
-                      <p className="m-0 text-sm leading-normal text-primary line-clamp-3">{brief.summary}</p>
-                    </section>
-                    {brief.options.length > 0 ? (
-                      <section data-testid={`dr-options-${item.id}`} className="grid min-w-0 content-start gap-1 border-t border-contrast-low pt-static-xs">
-                        <span className="text-xs font-semibold uppercase leading-tight text-contrast-high">Options</span>
-                        <ol className="m-0 grid list-none gap-1 p-0 text-sm leading-normal text-primary">
-                          {brief.options.map((option, optionIndex) => (
-                            <li key={option} className="grid min-w-0 grid-cols-[1.5rem_minmax(0,1fr)] gap-static-xs">
-                              <span className="inline-flex size-5 items-center justify-center rounded-full border border-contrast-low bg-surface text-xs font-semibold leading-none text-primary">
-                                {optionIndex + 1}
-                              </span>
-                              <span className="min-w-0 line-clamp-1">{option}</span>
-                            </li>
-                          ))}
-                        </ol>
-                      </section>
-                    ) : null}
-                  </div>
-                )}
-                {brief.recommendation || brief.consequence ? (
-                  <div className="mt-static-sm grid gap-static-sm lg:grid-cols-2">
-                    {brief.recommendation ? (
-                      <section data-testid={`dr-recommendation-${item.id}`} className="grid gap-1 border-l-2 border-info pl-static-xs">
-                        <span className="text-xs font-semibold uppercase leading-tight text-contrast-high">Recommendation</span>
-                        <p className="m-0 text-sm leading-normal text-primary line-clamp-2">{brief.recommendation}</p>
-                      </section>
-                    ) : null}
-                    {brief.consequence ? (
-                      <section data-testid={`dr-consequence-${item.id}`} className="grid gap-1 border-l-2 border-contrast-low pl-static-xs">
-                        <span className="text-xs font-semibold uppercase leading-tight text-contrast-high">Impact</span>
-                        <p className="m-0 text-sm leading-normal text-primary line-clamp-2">{brief.consequence}</p>
-                      </section>
-                    ) : null}
-                  </div>
+                <p className="m-0 mt-static-sm text-sm leading-normal text-primary">{item.summary}</p>
+                {item.kind === 'decision' ? (
+                  <section data-testid={`dr-options-${item.id}`} className="mt-static-sm grid min-w-0 content-start gap-2 border-t border-contrast-low pt-static-xs">
+                    <span className="text-xs font-semibold uppercase leading-tight text-contrast-high">{formatOptionCount(item.options.length)}</span>
+                    <div className="grid gap-2">
+                      {item.options.map((option) => (
+                        <div key={option.option_id} className="grid gap-1">
+                          <div className="flex items-center justify-between gap-static-xs text-xs text-contrast-high">
+                            <span className="min-w-0 truncate">{option.label}</span>
+                            <span>{formatConfidenceWidth(option.confidence)}</span>
+                          </div>
+                          <div className="h-1.5 rounded-full bg-surface">
+                            <span
+                              data-testid={`confidence-bar-${option.option_id}`}
+                              className="block h-full rounded-full bg-info"
+                              style={{ width: formatConfidenceWidth(option.confidence) }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
                 ) : null}
               </div>
             </article>
