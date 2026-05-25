@@ -61,7 +61,7 @@ stale     ──[resolve*]──► approved    [delete: soft → deleted]
 | `save_memory` | Create a `pending` entry; `scope_agents` defaults to `[source_agent]` |
 | `list_memories` | List metadata sorted by curation priority; filters: `states`, `categories`, `scope_agents` |
 | `read_memory` | Read one full entry by `entry_id`; errors on deleted entries |
-| `recall_memory` | Body-only markdown blocks scoped to one agent; approved before curated; default limit 20 |
+| `recall_memory` | Body-only markdown blocks scoped to one agent; three-pool slot allocation (explore, challenge, regular) with final sort by `(state_rank, -score, id)`; constants `SLOT_EXPLORE=2`, `SLOT_CHALLENGE=2`; default limit 20 |
 | `curate_memory` | Mutate fields + auto-promote `pending→curated` (when scope provided) or auto-downgrade `approved→curated`; raises `TransitionError` for contested/disputed/stale (use resolve first) |
 | `delete_memory` | Hard-delete pending (file removed); soft-delete curated/approved/contested/disputed/stale (state→deleted) |
 | `approve_memory` | Promote `curated→approved`; user-initiated only (not exposed to any agent) |
