@@ -1,10 +1,10 @@
 ---
 id: 1849
 title: Cockpit public API boundary audit
-status: docs
+status: done
 priority: important
 created: 2026-05-24T19:25:18.570388+02:00
-updated: 2026-05-25T01:25:48.890438+02:00
+updated: 2026-05-25T01:58:14.866957+02:00
 tags:
   - scope:cockpit
   - scope:cockpit-web
@@ -169,3 +169,21 @@ All placed at research status with `boundary-audit` tag for traceability.
 ## Observations
 - Non-blocking: the research note says `Confidence: 0.80 (post-challenge)` and `Challenge: reconsider` at `.owlbear/research/cockpit-api-boundary-audit.md:52,54`, while the task history records `Challenger: SKIPPED` at `.owlbear/kanban/tasks/1849-cockpit-public-api-boundary-audit.md:90-91`. This provenance wording should be clarified if the artifact is revised again, but it does not block because the finding and recommendation are independently supported by the cited code.
 - Historical task notes still show the earlier failed review cycle, but the latest builder note explicitly supersedes that state for the final artifact scope, so it is not a present contract failure.
+
+[[2026-05-25T01:58:14+02:00]]
+## Docs Gate
+
+### Checklist
+
+| Item | Result | Evidence |
+|------|--------|-----------|
+| README Verification | N/A | Changed file is `.owlbear/research/cockpit-api-boundary-audit.md` — no `serve/{pkg}/src/**` pattern match; convention mapping yields zero README targets |
+| External Attribution | N/A | All sources studied are internal codebase files; no external attribution required |
+| Research Doc | PASS | `.owlbear/research/cockpit-api-boundary-audit.md` exists, contains `Owning task: #1849` at line 3, and is referenced by path throughout task body |
+| Deletion Detection | N/A | No files deleted; research artifact was corrected in-place |
+
+### Files Updated
+None — no docs impact; research artifact is the deliverable, not a README or external doc target.
+
+### Scratch Cleanup
+No `.owlbear/scratch/1849-*` files found.

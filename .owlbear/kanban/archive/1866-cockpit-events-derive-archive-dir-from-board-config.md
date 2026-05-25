@@ -1,10 +1,10 @@
 ---
 id: 1866
 title: 'Cockpit events: derive archive_dir from board_config'
-status: docs
+status: archived
 priority: nice-to-have
 created: 2026-05-25T00:06:59.320927+02:00
-updated: 2026-05-25T01:19:16.348045+02:00
+updated: 2026-05-25T02:06:36.046621+02:00
 tags:
   - scope:cockpit-backend
   - boundary-audit
@@ -23,7 +23,7 @@ proof_bundle: smoke
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 Replace hardcoded `kanban_dir / "archive"` in `serve/cockpit/src/owlbear_cockpit/routes/events.py` with `engine.board_config().paths.archive_dir` (or a new public `archive_dir` property). Currently the path is hardcoded as "archive" but `config.paths.archive_dir` is configurable — a non-default config would silently break SSE events for archived tasks.
@@ -119,3 +119,36 @@ Recommendation: Option A — add 3-line `archive_dir` property to KanbanEngine (
 ## Observations
 - No blocking findings.
 - The task-scoped AC2 proof is behaviorally strong: it asserts the exact path forwarded into the SSE watch surface, not just that the request returns 200.
+
+[[2026-05-25T01:36:33+02:00]]
+## Docs Gate
+- Item 1 (README Verification): N/A — no task-caused docs drift. `serve/kanban/README.md` methods table omits properties by convention (`tasks_dir` also absent; consistent pattern). `serve/cockpit/README.md` does not document events.py internals. No public surface changed by this fix.
+- Item 2 (External Attribution): N/A — sources are existing internal boundary-audit doc and codebase validation only.
+- Item 3 (Research Doc): PASS — `.owlbear/research/cockpit-api-boundary-audit.md` exists; linked from task body ("Ref: … Finding 2").
+- Item 4 (Deletion Detection): PASS — no files deleted; no orphaned references.
+- Files updated: none required.
+- Scratch cleanup: no 1866-* files found.
+
+[[2026-05-25T02:06:36+02:00]]
+## Audit
+
+### Regression Detection
+Quality-runner full-suite: 1358 passed, 0 failed, lint clean. No regressions.
+
+### Intent Verification
+Changed files: `serve/kanban/src/owlbear_kanban/engine.py` (5-line property addition), `serve/cockpit/src/owlbear_cockpit/routes/events.py` (1-line substitution). Both in intended domains (kanban engine + cockpit backend). No extraneous scope. Implementation direction matches stated purpose: expose configured archive path and consume it in SSE stream.
+
+### Architect Quality
+Score: 5/5 — AC lines are specific (exact property name, type, delegation target), complete (regression guard included), and led to clean implementation. Challenger concerns addressed in revision.
+
+### Commit Integrity
+- Test-writer: `f89583ad` — RED tests committed
+- Builder: `5a601f6d` — GREEN implementation committed
+- Reviewer: advanced to docs (no code commit expected)
+- Doc-writer: no files required (confirmed in docs gate)
+
+### Deductions
+None.
+
+### Confidence: 1.00
+### Action: ARCHIVE

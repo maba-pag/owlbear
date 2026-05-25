@@ -1,10 +1,10 @@
 ---
 id: 1844
 title: 'P2-05: Slot-efficiency — auto-stale transition'
-status: research
+status: backlog
 priority: needed
 created: 2026-05-24T19:01:24.904500+02:00
-updated: 2026-05-24T19:01:24.904500+02:00
+updated: 2026-05-25T01:48:35.718230+02:00
 tags:
   - phase-2
   - scope:memory
@@ -50,3 +50,11 @@ Implement the slot-efficiency check that auto-transitions entries to stale when 
 
 ## Domain
 serve/memory/
+
+[[2026-05-25T01:48:35+02:00]]
+## Research
+- Research doc: .owlbear/research/slot-efficiency-auto-stale-transition.md
+- Sources: 7 studied, 4 high-relevance (codebase + brief)
+- Recommendation: Pure predicate `check_slot_efficiency` + idempotent `MemoryEngine.try_stale_transition` method. No OCC on transition (upstream assess_memories holds guard). Silent no-op on invalid states per AC. (confidence: 0.90)
+- Challenge: not invoked — T1 implementation task with explicit AC, minimal design latitude
+- No follow-up tasks needed — task ready for architecture/TDD after deps #1840, #1841 land

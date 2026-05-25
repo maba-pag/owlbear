@@ -4,7 +4,7 @@ title: 'Kanban: add resolve_decision() to decisions module with unit tests'
 status: review
 priority: important
 created: 2026-05-25T00:20:38.487099+02:00
-updated: 2026-05-25T01:21:28.724623+02:00
+updated: 2026-05-25T02:00:17.935900+02:00
 tags:
   - scope:kanban
   - boundary-audit
@@ -135,3 +135,36 @@ Module-level durable baseline check:
 Commit:
 - c270ac0e
 
+[[2026-05-25T01:44:22+02:00]]
+## Review Evidence
+- Verdict: FAIL
+- Route: FAIL #1868 -> todo | AC4 and AC10 proof is insufficient in the task-local tests.
+
+| # | AC Line | Finding | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | AC4 | The task-local tests prove that a Response section and response value exist, but they do not prove the original DR body is preserved when the section is appended. An implementation that replaced the body instead of appending would still pass. | AC text [1868 task](.owlbear/kanban/tasks/1868-kanban-add-resolve-decision-to-decisions-module-with-unit-tests.md#L20), weak assertions [tests/test_decisions_1868.py](tests/test_decisions_1868.py#L171) and [tests/test_decisions_1868.py](tests/test_decisions_1868.py#L183), current helper preserves body at [serve/kanban/src/owlbear_kanban/decisions.py](serve/kanban/src/owlbear_kanban/decisions.py#L77) and [serve/kanban/src/owlbear_kanban/decisions.py](serve/kanban/src/owlbear_kanban/decisions.py#L85) | todo |
+| 2 | AC10 | The FileNotFoundError tests only prove non-propagation. They do not prove that resolution still completes on that path, even though the task AC explicitly ties the swallow behavior to preserving the legacy contract. An implementation that swallowed FileNotFoundError and exited early could still pass these tests. | AC text [1868 task](.owlbear/kanban/tasks/1868-kanban-add-resolve-decision-to-decisions-module-with-unit-tests.md#L30), failure-mode context [1868 task](.owlbear/kanban/tasks/1868-kanban-add-resolve-decision-to-decisions-module-with-unit-tests.md#L73) and [1868 task](.owlbear/kanban/tasks/1868-kanban-add-resolve-decision-to-decisions-module-with-unit-tests.md#L74), weak assertions [tests/test_decisions_1868.py](tests/test_decisions_1868.py#L345) and [tests/test_decisions_1868.py](tests/test_decisions_1868.py#L355), current control flow catches then moves at [serve/kanban/src/owlbear_kanban/decisions.py](serve/kanban/src/owlbear_kanban/decisions.py#L218) and [serve/kanban/src/owlbear_kanban/decisions.py](serve/kanban/src/owlbear_kanban/decisions.py#L223) | todo |
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | test-writer | Strengthen AC4 proof to assert the original DR body content survives and appears before the appended Response section. | tests/test_decisions_1868.py | Finding 1 |
+| 2 | test-writer | Strengthen AC10 proof to assert resolve_decision still returns a resolved path and removes the pending file when engine.edit_task raises FileNotFoundError. | tests/test_decisions_1868.py | Finding 2 |
+
+## Observations
+- Direct code review of [serve/kanban/src/owlbear_kanban/decisions.py](serve/kanban/src/owlbear_kanban/decisions.py#L187) through [serve/kanban/src/owlbear_kanban/decisions.py](serve/kanban/src/owlbear_kanban/decisions.py#L223) found the implementation aligned with the 11 AC lines. This rejection is for proof quality, not for an observed source defect.
+- Adjacent Cockpit route tests already show the missing AC4-style ordering proof pattern at [tests/test_cockpit_decisions_api.py](tests/test_cockpit_decisions_api.py#L473), [tests/test_cockpit_decisions_api.py](tests/test_cockpit_decisions_api.py#L998), and [tests/test_cockpit_decisions_api.py](tests/test_cockpit_decisions_api.py#L1011).
+- Builder evidence was otherwise internally consistent: task-local green, scoped lint clean, and the durable decisions baseline remained unchanged.
+
+[[2026-05-25T02:00:17+02:00]]
+## Test-Writer Notes
+- Retry: added 3 new tests to TestFromAC_ResolveDecision for reviewer gaps (AC4 and AC10).
+- Test file: tests/test_decisions_1868.py
+- New tests:
+  - `test_original_dr_body_preserved_before_response_section` (AC4): asserts original body content survives and appears before `## Response`
+  - `test_resolution_returns_resolved_path_when_edit_task_raises_fnf` (AC10): asserts function returns a resolved Path in resolved/ dir when FNF raised
+  - `test_pending_file_removed_when_edit_task_raises_fnf` (AC10): asserts pending file removed even when FNF raised
+- Quality-runner: 26 passed, 0 failed — all new tests GREEN against current implementation
+- Builder skip: test-only retry, all tests green (Step 1b.1 — implementation already satisfies stronger assertions)
+- ruff: clean
+- Commit: cd3552fc

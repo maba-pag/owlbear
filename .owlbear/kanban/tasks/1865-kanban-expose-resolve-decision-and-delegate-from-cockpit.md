@@ -1,24 +1,28 @@
 ---
 id: 1865
 title: 'Kanban: expose resolve_decision() and delegate from Cockpit'
-status: backlog
+status: todo
 priority: important
 created: 2026-05-25T00:06:59.303292+02:00
-updated: 2026-05-25T01:19:21.527971+02:00
+updated: 2026-05-25T01:36:44.130233+02:00
 tags:
   - scope:kanban
   - scope:cockpit-backend
   - boundary-audit
   - quality
 parent:
-depends_on: []
+depends_on:
+  - 1868
+  - 1869
 ac:
-  - 'Children #1868 and #1869 exist with parent=1865, single-domain scope tags, and
-    dependency chain #1869 depends_on #1868'
-  - '#1868 is scoped to owlbear_kanban.decisions only (scope:kanban tag)'
-  - '#1869 is scoped to owlbear_cockpit.routes.decisions only (scope:cockpit-backend
-    tag)'
-proof_bundle: skip
+  - 'Children #1868 and #1869 both reach status done or archived — verifiable via
+    show_task for each'
+  - tests/test_cockpit_decisions_api.py full test suite passes after both 
+    children merge — confirms end-to-end decision resolution flow (frontmatter 
+    persistence, response-section append, file move, unblock, duplicate 
+    handling) works through the refactored kanban.decisions.resolve_decision() 
+    path
+proof_bundle: existing
 blocked: false
 block_reason:
 claimed_at:
@@ -109,3 +113,35 @@ Research: .owlbear/research/1865-resolve-decision-extraction.md
 ## Observations
 - The decomposition itself is coherent: the parent explicitly names exactly two children, `#1868` and `#1869`, and their scope tags/dependency chain match the frontmatter constraints in AC lines 1-3.
 - I did not dispatch `quality-runner` because this failure is at the parent-task contract/routing layer, not at an implementation or scoped-test evidence layer.
+
+[[2026-05-25T01:36:44+02:00]]
+## Architecture Review (Revision 2 — Post-Reject)
+### Reviewer Findings Addressed
+| # | Finding | Fix Applied |
+|---|---------|-------------|
+| 1 | AC proved only decomposition topology; could false-green before children deliver | Rewrote AC to gate on child status (done/archived) + consolidation test |
+| 2 | proof_bundle=skip allowed metadata-only pass-through; consolidation backstop not enforced | Escalated to proof_bundle=existing; named tests/test_cockpit_decisions_api.py as proof scope |
+
+### Changes Made
+- **AC rewritten:** 2 lines — (1) both children reach done/archived, (2) consolidation test passes through refactored path
+- **depends_on: [1868, 1869]** added — dep-blocks the parent until both children complete their pipeline cycles
+- **proof_bundle: existing** — reviewer must verify named consolidation test suite; test-writer still SKIP (quality tag)
+- **quality tag retained** — test-writer and builder pass through; reviewer is the verification gate
+
+### Proof-Bundle Validation
+- Previous assignment: skip (architect cycle 1)
+- Final bundle: existing
+- Existing proof scope: tests/test_cockpit_decisions_api.py
+- Test-writer: SKIP (bundle existing + quality tag)
+
+### Challenge Results
+- Challenger: SKIPPED — proof bundle `existing` (per Step 2.1 gating)
+
+### Closure Contract
+The dep-block on [1868, 1869] prevents this task from advancing until both implementation children complete. When unblocked, the pipeline flow is:
+- Test-writer: SKIP (quality + existing bundle)
+- Builder: pass-through (quality tag) — verifies children done, runs consolidation test
+- Reviewer: verifies AC (child statuses + test evidence) against existing proof scope
+
+### Verdict: APPROVE (REFINE → APPROVE)
+### Action Taken: Rewrote AC to feature-closure criteria, added depends_on [1868, 1869], escalated proof_bundle to existing, re-advanced to todo

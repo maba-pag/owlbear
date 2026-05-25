@@ -1,10 +1,10 @@
 ---
 id: 1867
 title: 'Kanban: promote atomic_write to __all__ exports'
-status: in-progress
+status: review
 priority: someday
 created: 2026-05-25T00:06:59.338718+02:00
-updated: 2026-05-25T01:21:39.609775+02:00
+updated: 2026-05-25T01:37:49.812146+02:00
 tags:
   - scope:kanban
   - boundary-audit
@@ -120,3 +120,22 @@ N/A — adding to __all__ introduces no new failure modes.
   | AC1: exact count contract | test_dunder_all_new_additions_are_exactly_six_symbols | FAIL |
   | AC2: same callable as storage_io | test_atomic_write_same_callable_as_storage_io | FAIL |
   | AC3: pyproject.toml unchanged | test_kanban_pyproject_dependencies_unchanged | PASS (regression guard) |
+
+[[2026-05-25T01:37:49+02:00]]
+## Builder Notes
+- Implementation: exported `atomic_write` at package root in `serve/kanban/src/owlbear_kanban/__init__.py` by adding import from `owlbear_kanban.storage_io` and adding `"atomic_write"` to `__all__`.
+- Files changed: `serve/kanban/src/owlbear_kanban/__init__.py` only.
+- Approach: minimal export-hygiene change to satisfy AC1/AC2 with no dependency or API-surface expansion beyond explicit root re-export.
+- RED verification (quality-runner, pre-change): 29 passed / 3 failed / 0 skipped; failures were exactly:
+  - `tests/test_kanban_1867.py::TestFromAC_AtomicWriteExport::test_atomic_write_in_dunder_all`
+  - `tests/test_kanban_1867.py::TestFromAC_AtomicWriteExport::test_atomic_write_same_callable_as_storage_io`
+  - `tests/test_init_exports.py::TestFromAC_KanbanInitExports::test_dunder_all_new_additions_are_exactly_six_symbols`
+- GREEN verification (quality-runner, final): 32 passed / 0 failed / 0 skipped.
+  - Test scope: `tests/test_kanban_1867.py`, `tests/test_init_exports.py`
+- Coverage: `owlbear_kanban.__init__` 100% (touched module).
+- Lint: clean (ruff clean on source + scoped test files).
+- Fixes applied during verification: corrected `__all__` ordering to satisfy `RUF022` (`atomic_write` sorted after `WorkSession` per isort-style ordering).
+- AC evidence summary:
+  - AC1 (`"atomic_write"` in `__all__`): PASS
+  - AC2 (root import resolves to same callable as submodule): PASS
+  - AC3 (no pyproject dependency/source changes): PASS via existing regression guard test

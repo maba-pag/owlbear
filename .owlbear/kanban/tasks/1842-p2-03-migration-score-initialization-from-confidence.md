@@ -1,10 +1,10 @@
 ---
 id: 1842
 title: 'P2-03: Migration — score initialization from confidence'
-status: research
+status: backlog
 priority: needed
 created: 2026-05-24T19:01:24.804040+02:00
-updated: 2026-05-24T19:15:17.387592+02:00
+updated: 2026-05-25T01:57:02.791016+02:00
 tags:
   - phase-2
   - scope:memory
@@ -45,3 +45,12 @@ Provide a migration path for existing memory entries to gain the new score and c
 
 ## Domain
 serve/memory/
+
+[[2026-05-25T01:57:02+02:00]]
+## Research
+- Research doc: .owlbear/research/memory-score-migration-1842.md
+- Sources: 9 studied, 5 high-relevance
+- Recommendation: Approach A — MemoryEngine.migrate_scores() + `uv run memory-migrate` CLI entry point (confidence: 0.82)
+- Key findings: all-4-keys idempotency predicate (not single-field); order-preservation is mathematical identity (score=confidence when counters=0); follows kanban-migrate CLI precedent; no migration gate needed (task deps sequence P2-03 before P2-04)
+- Challenge: reconsider (confidence 0.58) → addressed critical finding (added CLI execution boundary), accepted moderate findings (stronger predicate, scope clarification). Revised confidence: 0.82
+- No new follow-up tasks — existing decomposition in #1839 covers implementation

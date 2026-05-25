@@ -1,10 +1,10 @@
 ---
 id: 1845
 title: 'P2-06: Confirmation cycle — factually-wrong to contested/disputed'
-status: research
+status: backlog
 priority: needed
 created: 2026-05-24T19:01:24.983062+02:00
-updated: 2026-05-24T19:15:17.417379+02:00
+updated: 2026-05-25T01:47:27.737593+02:00
 tags:
   - phase-2
   - scope:memory
@@ -55,3 +55,12 @@ Implement the two-step confirmation cycle for factually-wrong assessments.
 
 ## Domain
 serve/memory/
+
+[[2026-05-25T01:47:27+02:00]]
+## Research
+- Research doc: .owlbear/research/memory-confirmation-cycle-factually-wrong.md
+- Sources: 8 studied, 5 high-relevance (codebase)
+- Recommendation: T1 implementation — single `record_factually_wrong()` engine method following resolve()/approve() pattern (confidence: 0.92)
+- Key findings: straightforward extension of #1840 state machine; 6 files across 2 packages; one AC4 discrepancy (ConflictError vs ConcurrencyError) flagged for architect
+- Challenge: SKIP — prescriptive ACs, trivial extension
+- No new follow-up tasks needed (decomposition complete in parent #1839)

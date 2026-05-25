@@ -1,10 +1,10 @@
 ---
 id: 1843
 title: 'P2-04: Recall — reserved explore and challenge slots'
-status: research
+status: backlog
 priority: needed
 created: 2026-05-24T19:01:24.850020+02:00
-updated: 2026-05-24T19:15:17.407415+02:00
+updated: 2026-05-25T01:48:30.201817+02:00
 tags:
   - phase-2
   - scope:memory
@@ -60,3 +60,14 @@ Replace the current recall sort (state_rank, -confidence, id) with score-based s
 
 ## Domain
 serve/mcp-memory/
+
+[[2026-05-25T01:48:25+02:00]]
+## Research
+- Research doc: .owlbear/research/memory-recall-explore-challenge-slots.md
+- Sources: 8 studied, 6 high-relevance
+- Recommendation: T1 implementation — three-pool selection (explore→challenge→regular) in tools.py recall_memory, constants in MCP layer (confidence: 0.92)
+- Key findings: fixed-slot allocation is KISS-aligned over probabilistic epsilon-greedy; algorithm is ~30 LOC change; all required model fields already exist from #1840/#1841; limit<4 edge case needs max(0,…) guard
+- Challenge: skipped — prescriptive ACs, single implementation path, no alternatives
+
+[[2026-05-25T01:48:30+02:00]]
+Research complete. T1 — straightforward algorithmic change to recall_memory in tools.py. Three-pool selection (explore→challenge→regular) with dedup via id sets. All model fields available from completed deps #1840/#1841. No follow-up tasks needed — decomposition already complete in parent #1839.
