@@ -16,7 +16,8 @@ AC coverage:
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
+from uuid import UUID
 
 import pytest
 
@@ -53,6 +54,14 @@ _ID_STALE_A = "550e8400-e29b-41d4-a716-446655483003"
 _ID_LEG_A = "550e8400-e29b-41d4-a716-446655484001"
 _ID_LEG_B = "550e8400-e29b-41d4-a716-446655484002"
 _ID_LEG_C = "550e8400-e29b-41d4-a716-446655484003"
+
+# Fixed UUIDs for AC1 slot-split test (500-series)
+_ID_SLOT_EXPLORE_0 = "550e8400-e29b-41d4-a716-446655485001"
+_ID_SLOT_EXPLORE_1 = "550e8400-e29b-41d4-a716-446655485002"
+_ID_SLOT_CHALLENGE_0 = "550e8400-e29b-41d4-a716-446655485003"
+_ID_SLOT_CHALLENGE_1 = "550e8400-e29b-41d4-a716-446655485004"
+_IDS_SLOT_REG_HIGH = [f"550e8400-e29b-41d4-a716-4466554851{i:02d}" for i in range(16)]
+_IDS_SLOT_REG_LOW = [f"550e8400-e29b-41d4-a716-4466554852{i:02d}" for i in range(2)]
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -346,6 +355,131 @@ class TestMemoryVotingLifecycle:
         titles = _recall_titles(result)
 
         assert "Contested But Recalled" in titles
+
+    @pytest.mark.asyncio
+    async def test_full_lifecycle_save_edit_approve_then_recall(self, tmp_path: Path) -> None:
+        """AC1 lifecycle proof: entries driven through real save->curated->approved path appear in recall.
+
+        Uses engine.save() + engine.edit(scope_agents=...) + engine.approve() for each
+        of 22 entries to exercise the full public API chain (PENDING->CURATED->APPROVED).
+        recall_memory with limit=20 must return exactly 20 entries, proving that entries
+        created via the real lifecycle are recallable — not a shortcut via direct file write.
+        """
+        from owlbear_mcp_memory.tools import recall_memory  # noqa: PLC0415
+
+        engine = MemoryEngine(memory_dir=tmp_path)
+        ctx = _make_ctx(engine)
+
+        for i, entry_id in enumerate(_IDS_BULK):
+            with patch("owlbear_memory.engine.uuid4", return_value=UUID(entry_id)):
+                pending = engine.save(
+                    title=f"Lifecycle Entry {i:02d}",
+                    content=f"Content {i}.",
+                    categories=["domain-knowledge"],
+                    confidence=0.8,
+                    source_agent=_AGENT,
+                    scope_agents=[_AGENT],
+                )
+            curated = engine.edit(
+                pending.id,
+                {
+                    "title": f"Lifecycle Entry {i:02d}",
+                    "content": f"Content {i}.",
+                    "categories": ["domain-knowledge"],
+                    "confidence": 0.8,
+                    "scope_agents": [_AGENT],
+                },
+                expected_updated_at=pending.updated_at,
+            )
+            engine.approve(curated.id, expected_updated_at=curated.updated_at)
+
+        result = await recall_memory(ctx, agent=_AGENT, limit=20)
+        titles = _recall_titles(result)
+
+        assert len(titles) == 20
+
+    @pytest.mark.asyncio
+    async def test_recall_slot_allocation_exactly_16_regular_2_explore_2_challenge(
+        self, tmp_path: Path
+    ) -> None:
+        """Exact 16+2+2 slot allocation at limit=20 with 22 entries seeded across all three pools.
+
+        Setup:
+        - 2 ExploreEntry: total_activity=0 (all counters zero) -> explore pool (2 slots)
+        - 2 ChallengeEntry: total_activity=3 (didnt_use=3), outstanding=0 -> challenge pool (2 slots)
+        - 16 RegularHigh: outstanding=5, confidence=0.9 -> score=1.4 -> regular pool (top 16, included)
+        - 2 RegularLow: outstanding=5, confidence=0.5 -> score=1.0 -> regular candidates, excluded
+
+        The assertions are tight enough that each wrong allocation size causes a failure:
+        - explore<2: ExploreEntry displaced by high-activity entries
+        - challenge<2: ChallengeEntry displaced by high-outstanding entries
+        - regular>16: RegularLow 00/01 appear in results
+        """
+        from owlbear_mcp_memory.tools import recall_memory  # noqa: PLC0415
+
+        # Explore pool candidates: total activity=0 (lowest _explore_metric)
+        for eid, name in [
+            (_ID_SLOT_EXPLORE_0, "ExploreEntry 0"),
+            (_ID_SLOT_EXPLORE_1, "ExploreEntry 1"),
+        ]:
+            _write_entry(
+                tmp_path,
+                _make_approved_entry(eid, name, confidence=0.8, outstanding_count=0),
+            )
+
+        # Challenge pool candidates: activity=3 (NOT explore), outstanding=0 (lowest among non-explore)
+        for eid, name in [
+            (_ID_SLOT_CHALLENGE_0, "ChallengeEntry 0"),
+            (_ID_SLOT_CHALLENGE_1, "ChallengeEntry 1"),
+        ]:
+            _write_entry(
+                tmp_path,
+                _make_approved_entry(
+                    eid, name, confidence=0.8, outstanding_count=0, didnt_use_count=3
+                ),
+            )
+
+        # 16 high-score regular entries: outstanding=5, confidence=0.9 -> score=1.4
+        for i, eid in enumerate(_IDS_SLOT_REG_HIGH):
+            _write_entry(
+                tmp_path,
+                _make_approved_entry(
+                    eid, f"RegularHigh {i:02d}", confidence=0.9, outstanding_count=5
+                ),
+            )
+
+        # 2 low-score regular candidates: outstanding=5, confidence=0.7 -> score=1.2 -> excluded
+        # (RegularHigh score=1.4 > RegularLow score=1.2; top 16 slots taken by RegularHigh)
+        for i, eid in enumerate(_IDS_SLOT_REG_LOW):
+            _write_entry(
+                tmp_path,
+                _make_approved_entry(
+                    eid, f"RegularLow {i:02d}", confidence=0.7, outstanding_count=5
+                ),
+            )
+
+        engine = MemoryEngine(memory_dir=tmp_path)
+        ctx = _make_ctx(engine)
+        result = await recall_memory(ctx, agent=_AGENT, limit=20)
+        titles = _recall_titles(result)
+
+        assert len(titles) == 20
+
+        # Explore pool (2 slots): zero-activity entries must appear
+        assert "ExploreEntry 0" in titles
+        assert "ExploreEntry 1" in titles
+
+        # Challenge pool (2 slots): zero-outstanding, some-activity entries must appear
+        assert "ChallengeEntry 0" in titles
+        assert "ChallengeEntry 1" in titles
+
+        # Regular pool (16 slots): all high-score entries included
+        for i in range(16):
+            assert f"RegularHigh {i:02d}" in titles
+
+        # Regular pool overflow: low-score candidates must be excluded (proves regular<=16)
+        assert "RegularLow 00" not in titles
+        assert "RegularLow 01" not in titles
 
 
 # ---------------------------------------------------------------------------
