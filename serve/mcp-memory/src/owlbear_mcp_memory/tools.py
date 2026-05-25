@@ -20,6 +20,8 @@ if TYPE_CHECKING:
     from mcp.server.fastmcp import Context
 
 __all__ = [
+    "SLOT_CHALLENGE",
+    "SLOT_EXPLORE",
     "approve_memory",
     "curate_memory",
     "delete_memory",
@@ -28,6 +30,9 @@ __all__ = [
     "recall_memory",
     "save_memory",
 ]
+
+SLOT_EXPLORE = 2
+SLOT_CHALLENGE = 2
 
 
 def _engine_from_ctx(ctx: Context) -> MemoryEngine:
@@ -270,10 +275,30 @@ async def recall_memory(
     ]
     if category_filter:
         entries = [entry for entry in entries if bool(category_filter.intersection(set(entry.categories)))]
-    entries.sort(key=lambda entry: (state_rank[entry.state], -entry.confidence, entry.id))
-    entries = entries[:capped_limit]
 
-    return "\n\n".join(f"## {entry.title}\n{entry.content}" for entry in entries)
+    explore_capacity = min(SLOT_EXPLORE, capped_limit)
+    regular_capacity = max(0, capped_limit - SLOT_EXPLORE - SLOT_CHALLENGE)
+
+    def _explore_metric(entry: MemoryEntry) -> int:
+        return entry.outstanding_count + entry.unremarkable_count + entry.didnt_use_count
+
+    explore_pool = sorted(entries, key=lambda entry: (_explore_metric(entry), entry.id))[:explore_capacity]
+    selected_ids = {entry.id for entry in explore_pool}
+
+    challenge_capacity = min(SLOT_CHALLENGE, max(0, capped_limit - len(explore_pool)))
+    challenge_candidates = [entry for entry in entries if entry.id not in selected_ids]
+    challenge_pool = sorted(challenge_candidates, key=lambda entry: (entry.outstanding_count, entry.id))[
+        :challenge_capacity
+    ]
+    selected_ids.update(entry.id for entry in challenge_pool)
+
+    regular_candidates = [entry for entry in entries if entry.id not in selected_ids]
+    regular_pool = sorted(regular_candidates, key=lambda entry: (-entry.score, entry.id))[:regular_capacity]
+
+    selected_entries = explore_pool + challenge_pool + regular_pool
+    selected_entries.sort(key=lambda entry: (state_rank[entry.state], -entry.score, entry.id))
+
+    return "\n\n".join(f"## {entry.title}\n{entry.content}" for entry in selected_entries)
 
 
 async def _update_entry(  # noqa: C901, PLR0913
