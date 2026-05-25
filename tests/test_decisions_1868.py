@@ -228,6 +228,29 @@ class TestFromAC_ResolveDecision:
         text = resolved.read_text(encoding="utf-8")
         assert note_text in text
 
+    def test_notes_appear_within_response_section(self, tmp_path: Path) -> None:
+        """AC5: notes text appears within the ## Response section (between heading and next ## or EOF).
+
+        The weaker test above only proves the note exists somewhere in the file.
+        This test proves structural placement: notes must be inside the ## Response block.
+        An implementation that wrote notes outside the section would still pass the weaker test.
+        """
+        import re
+
+        pending_dir = _make_pending_dir(tmp_path)
+        path = _write_dr(pending_dir)
+        engine = _mock_engine()
+        note_text = "Approved after second review."
+
+        resolved = resolve_decision(path, "approved", engine, notes=note_text)
+
+        text = resolved.read_text(encoding="utf-8")
+        assert "## Response" in text, "## Response section must exist"
+        after_response = text.split("## Response", 1)[1]
+        next_heading = re.search(r"\n##\s", after_response)
+        response_section = after_response[: next_heading.start()] if next_heading else after_response
+        assert note_text in response_section
+
     def test_notes_not_present_when_none(self, tmp_path: Path) -> None:
         """AC5: no spurious notes line when notes=None."""
         pending_dir = _make_pending_dir(tmp_path)
@@ -301,6 +324,28 @@ class TestFromAC_ResolveDecision:
 
         called_ids = [c.args[0] for c in engine.edit_task.call_args_list]
         assert 77 in called_ids
+
+    def test_edit_task_carries_task_id_and_append_body_in_same_call(self, tmp_path: Path) -> None:
+        """AC7: a single engine.edit_task call carries both task_id (from frontmatter) and append_body=canonical_summary.
+
+        The weaker tests above prove content and task_id separately.
+        This test proves both appear on the same call — a regression that appended the summary
+        to the wrong task_id would pass the weaker tests but fail here.
+        """
+        pending_dir = _make_pending_dir(tmp_path)
+        original_body = "\n## Question\nShould we proceed?\n"
+        path = _write_dr(pending_dir, task_id=42)
+        engine = _mock_engine()
+
+        resolve_decision(path, "approved", engine)
+
+        expected_summary = canonical_summary("approved", original_body)
+        matching_calls = [
+            c
+            for c in engine.edit_task.call_args_list
+            if c.args and c.args[0] == 42 and c.kwargs.get("append_body") == expected_summary
+        ]
+        assert len(matching_calls) == 1
 
     # ------------------------------------------------------------------
     # AC8 — unblock on approved / rejected
