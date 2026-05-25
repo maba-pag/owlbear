@@ -29,6 +29,7 @@ from owlbear_knowledge.protocols.sources import (
 )
 
 _CONFIG_ADAPTER = TypeAdapter(SourceConfig)
+_KIND_MISMATCH_ERROR = "config kind mismatch"
 _VALID_STATE_TRANSITIONS: dict[SourceState, set[SourceState]] = {
     SourceState.WISHED: {SourceState.ACTIVE, SourceState.INACTIVE},
     SourceState.ACTIVE: {SourceState.INACTIVE},
@@ -77,6 +78,9 @@ class SqliteSourceStore(SourceStore):
 
     def register_source(self, request: SourceRegistration) -> SourceRecord:
         """Persist and return a configured source in ACTIVE state."""
+        if request.kind != request.config.kind:
+            raise ValueError(_KIND_MISMATCH_ERROR)
+
         now = self._now_iso()
         existing_wish = self._get_row_by_name_scope(request.name, request.scope, SourceState.WISHED)
         source_id = existing_wish["id"] if existing_wish is not None else uuid4().hex
