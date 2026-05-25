@@ -117,3 +117,31 @@ class Request:
     def model_validate(cls, data: object) -> DecisionRequest | ActionRequest:
         """Validate and dispatch a payload to the matching request model."""
         return cls._adapter.validate_python(data)
+
+
+class RequestRecord(BaseModel):
+    """Validated request payload with markdown body content."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    task_id: int
+    request_id: str
+    kind: Literal["decision", "action"]
+    title: str
+    summary: str
+    agent: str
+    created_at: str
+    options: list[RequestOption]
+    resolution: Resolution
+    body: str
+
+    @classmethod
+    def from_request(
+        cls,
+        request: DecisionRequest | ActionRequest,
+        body: str,
+    ) -> RequestRecord:
+        """Construct a response record from a validated request model."""
+        payload = request.model_dump()
+        payload["body"] = body
+        return cls.model_validate(payload)

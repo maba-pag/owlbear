@@ -35,8 +35,11 @@ import sys
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from io import StringIO
 from typing import TYPE_CHECKING
+from uuid import uuid4
 
+from pydantic import ValidationError as PydanticValidationError
 from ruamel.yaml import YAML
 from ruamel.yaml.error import YAMLError
 
@@ -52,6 +55,7 @@ from owlbear_kanban.corruption import (
     detect_corruption,
 )
 from owlbear_kanban.dispatch import PRIORITY_RANK, STATUS_RANK
+from owlbear_kanban.errors import NotFoundError
 from owlbear_kanban.models import (
     ActivityCompactionResult,
     ActivityEvent,
@@ -66,6 +70,7 @@ from owlbear_kanban.models import (
     TaskSummary,
     ValidationError,
 )
+from owlbear_kanban.request_models import ActionRequest, DecisionRequest, Request, RequestRecord
 from owlbear_kanban.storage import (
     make_task_filename,
     read_task,
@@ -923,6 +928,117 @@ class KanbanEngine:
 
         msg = f"Task {task_id!r} not found in {self._tasks_dir} or {self._archive_dir}"
         raise FileNotFoundError(msg)
+
+    @staticmethod
+    def _parse_request_file(path: Path) -> tuple[dict[str, object], str]:
+        """Parse request frontmatter and markdown body from a request file."""
+        content = path.read_text(encoding="utf-8")
+        if not content.startswith("---"):
+            msg = f"Invalid request file (missing opening delimiter): {path}"
+            raise ValueError(msg)
+
+        lines = content.splitlines()
+        closing_idx: int | None = None
+        for idx, line in enumerate(lines[1:], start=1):
+            if line.strip() == "---":
+                closing_idx = idx
+                break
+        if closing_idx is None:
+            msg = f"Invalid request file (missing closing delimiter): {path}"
+            raise ValueError(msg)
+
+        yaml_text = "\n".join(lines[1:closing_idx])
+        body = "\n".join(lines[closing_idx + 1 :])
+        data = YAML(typ="safe").load(yaml_text) or {}
+        if not isinstance(data, dict):
+            msg = f"Invalid request file (frontmatter must be mapping): {path}"
+            raise TypeError(msg)
+        return data, body
+
+    @staticmethod
+    def _serialize_request_content(request: DecisionRequest | ActionRequest, body: str) -> str:
+        """Render validated request frontmatter and body as markdown."""
+        payload: dict[str, object] = request.model_dump()
+        resolution = payload.get("resolution")
+        if isinstance(resolution, dict):
+            resolution = dict(resolution)
+            resolution.pop("resolved_at", None)
+            payload["resolution"] = resolution
+
+        yaml = YAML()
+        stream = StringIO()
+        yaml.dump(payload, stream)
+        frontmatter = stream.getvalue().rstrip("\n")
+        return f"---\n{frontmatter}\n---\n{body}"
+
+    def create_request(  # noqa: PLR0913
+        self,
+        task_id: int,
+        kind: str,
+        title: str,
+        summary: str,
+        agent: str,
+        *,
+        options: list[dict[str, object]] | None = None,
+        body: str = "",
+    ) -> RequestRecord:
+        """Create a pending decision/action request and block the owning task."""
+        request_data: dict[str, object] = {
+            "task_id": task_id,
+            "request_id": str(uuid4()),
+            "kind": kind,
+            "title": title,
+            "summary": summary,
+            "agent": agent,
+            "created_at": datetime.now().astimezone().isoformat(),
+            "options": list(options) if options is not None else [],
+            "resolution": {"selected_option_id": None, "free_text": None},
+        }
+        request_model = Request.model_validate(request_data)
+
+        pending_dir = self._kanban_dir / "decisions" / "pending"
+        pending_dir.mkdir(parents=True, exist_ok=True)
+        request_path = pending_dir / f"{request_model.request_id}.md"
+        validate_path_containment(self._kanban_dir, request_path)
+
+        content = self._serialize_request_content(request_model, body)
+        fd = os.open(request_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(content)
+
+        try:
+            self.edit_task(str(task_id), blocked=True, block_reason="DR pending")
+        except Exception:
+            with contextlib.suppress(OSError):
+                request_path.unlink()
+            raise
+
+        return RequestRecord.from_request(request_model, body)
+
+    def get_request(self, request_id: str) -> RequestRecord:
+        """Return a pending/resolved request by request_id."""
+        decisions_dir = self._kanban_dir / "decisions"
+        for subdir in ("pending", "resolved"):
+            path = decisions_dir / subdir / f"{request_id}.md"
+            validate_path_containment(self._kanban_dir, path)
+            if not path.exists():
+                continue
+
+            try:
+                frontmatter, body = self._parse_request_file(path)
+                request_model = Request.model_validate(frontmatter)
+            except (OSError, ValueError, TypeError, YAMLError, PydanticValidationError) as exc:
+                raise ValidationError(
+                    code="ERR_CORRUPT_YAML_PARSE",
+                    user_message=f"request file invalid: {path}",
+                ) from exc
+
+            return RequestRecord.from_request(request_model, body)
+
+        raise NotFoundError(
+            code="ERR_NOT_FOUND",
+            user_message=f"request '{request_id}' not found",
+        )
 
     @staticmethod
     def _required_sections_passes(body: str, sections: list[str]) -> bool:
