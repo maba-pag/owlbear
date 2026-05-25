@@ -1582,10 +1582,10 @@ class TestMergedFrom1450:
         assert ann is not None
         assert ann.idempotentHint is False  # type: ignore[union-attr]
 
-    def test_pick_tasks_read_only_hint_is_true(self) -> None:
+    def test_pick_tasks_read_only_hint_is_false(self) -> None:
         ann = _get_tool_annotations("pick_tasks")
         assert ann is not None
-        assert ann.readOnlyHint is True  # type: ignore[union-attr]
+        assert ann.readOnlyHint is False  # type: ignore[union-attr]
 
     def test_pick_tasks_idempotent_hint_is_true(self) -> None:
         ann = _get_tool_annotations("pick_tasks")
