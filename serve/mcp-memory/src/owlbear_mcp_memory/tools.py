@@ -475,6 +475,9 @@ async def assess_memories(
         raise ToolError(msg)
 
     for assessment in assessments:
+        if not isinstance(assessment, dict) or "entry_id" not in assessment or "bucket" not in assessment:
+            msg = "Each assessment must be a dict containing 'entry_id' and 'bucket' keys."
+            raise ToolError(msg)
         bucket = assessment["bucket"]
         if bucket not in _ASSESSMENT_BUCKETS:
             msg = f"Invalid bucket {bucket!r}. Allowed values: {_allowed_assessment_values()}."
