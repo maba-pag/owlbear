@@ -1,0 +1,614 @@
+"""Tests for ContentStore — ingest & dedup (task #1871).
+
+Tests the contract defined in:
+  serve/knowledge/src/owlbear_knowledge/protocols/content.py
+
+Target implementation:
+  serve/knowledge/src/owlbear_knowledge/stores/content.py
+
+AC coverage:
+  AC1  — SQLite-first atomicity; Qdrant failure raises, SQLite state intact
+  AC2  — Deterministic document_id via UUID5 from (source_id, external_id|uri|title, scope)
+  AC3  — CREATED / UNCHANGED / REPLACED state machine
+  AC4  — trusted flag propagated to document and chunk records
+  AC5  — get_document returns ContentDocument or None
+  AC6  — get_chunk returns ContentChunk or None
+  AC7  — list_chunks ordered by index ascending; empty for unknown document
+  AC8  — Qdrant vectors created on CREATED/REPLACED; old vectors deleted on REPLACED
+  AC9  — ensure_tables() idempotent DDL
+"""
+
+from __future__ import annotations
+
+import sqlite3
+from unittest.mock import MagicMock
+
+import pytest
+
+from owlbear_knowledge.chunker import TextChunker
+from owlbear_knowledge.protocols.content import (
+    ContentDocument,
+    ContentChunk,
+    ContentIngestRequest,
+    ContentIngestState,
+)
+from owlbear_knowledge.stores.content import ContentStore  # greenfield — ImportError expected
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _make_request(  # noqa: PLR0913
+    *,
+    source_id: str = "src-1",
+    title: str = "Test Doc",
+    text: str = "The quick brown fox jumps over the lazy dog. " * 4,
+    scope: str = "global",
+    uri: str | None = None,
+    external_id: str | None = None,
+    trusted: bool = False,
+) -> ContentIngestRequest:
+    return ContentIngestRequest(
+        source_id=source_id,
+        title=title,
+        text=text,
+        scope=scope,
+        uri=uri,
+        external_id=external_id,
+        trusted=trusted,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def mock_vectors() -> MagicMock:
+    """Mocked vector store -- never touches real Qdrant."""
+    return MagicMock(name="vector_store")
+
+
+@pytest.fixture()
+def mock_embed() -> MagicMock:
+    """Mocked embedding provider returning plausible fake vectors."""
+    e = MagicMock(name="embedding_provider")
+    e.embed.side_effect = lambda texts: [[0.1] * 1024 for _ in texts]
+    return e
+
+
+@pytest.fixture()
+def store(mock_vectors: MagicMock, mock_embed: MagicMock) -> ContentStore:
+    """Fully wired ContentStore using in-memory SQLite and mocked dependencies."""
+    db = sqlite3.connect(":memory:")
+    chunker = TextChunker(target_tokens=50)
+    s = ContentStore(
+        db=db,
+        vector_store=mock_vectors,
+        embedding_provider=mock_embed,
+        chunker=chunker,
+    )
+    s.ensure_tables()
+    return s
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_ContentStore
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ContentStore:
+    """AC-derived tests for ContentStore contract (AC1-AC9)."""
+
+    # ------------------------------------------------------------------ AC3
+    # Happy: CREATED / UNCHANGED / REPLACED state machine
+
+    @pytest.mark.asyncio
+    async def test_ingest_new_document_returns_created_state(
+        self, store: ContentStore
+    ) -> None:
+        """AC3: first ingest of a new document_id returns state=CREATED."""
+        req = _make_request()
+        result = await store.ingest(req)
+
+        assert result.state == ContentIngestState.CREATED
+
+    @pytest.mark.asyncio
+    async def test_ingest_new_document_has_non_empty_chunk_ids(
+        self, store: ContentStore
+    ) -> None:
+        """AC3: CREATED result contains at least one chunk_id."""
+        req = _make_request()
+        result = await store.ingest(req)
+
+        assert len(result.chunk_ids) >= 1
+
+    @pytest.mark.asyncio
+    async def test_ingest_new_document_has_empty_replaced_chunk_ids(
+        self, store: ContentStore
+    ) -> None:
+        """AC3: CREATED result has empty replaced_chunk_ids."""
+        req = _make_request()
+        result = await store.ingest(req)
+
+        assert result.replaced_chunk_ids == ()
+
+    @pytest.mark.asyncio
+    async def test_ingest_same_text_returns_unchanged_state(
+        self, store: ContentStore
+    ) -> None:
+        """AC3: re-ingesting the same document with identical text returns UNCHANGED."""
+        req = _make_request()
+        await store.ingest(req)
+        result2 = await store.ingest(req)
+
+        assert result2.state == ContentIngestState.UNCHANGED
+
+    @pytest.mark.asyncio
+    async def test_ingest_changed_text_returns_replaced_state(
+        self, store: ContentStore
+    ) -> None:
+        """AC3: re-ingesting the same document with different text returns REPLACED."""
+        req1 = _make_request(text="Original content. " * 6)
+        req2 = _make_request(text="Completely updated content. " * 6)
+        await store.ingest(req1)
+        result2 = await store.ingest(req2)
+
+        assert result2.state == ContentIngestState.REPLACED
+
+    @pytest.mark.asyncio
+    async def test_ingest_replaced_returns_non_empty_replaced_chunk_ids(
+        self, store: ContentStore
+    ) -> None:
+        """AC3: REPLACED result exposes old chunk_ids in replaced_chunk_ids."""
+        req1 = _make_request(text="Original content. " * 6)
+        first = await store.ingest(req1)
+        req2 = _make_request(text="Completely updated content. " * 6)
+        result2 = await store.ingest(req2)
+
+        assert result2.replaced_chunk_ids == first.chunk_ids
+
+    # ------------------------------------------------------------------ AC2
+    # Happy/Edge: deterministic document_id via UUID5
+
+    @pytest.mark.asyncio
+    async def test_document_id_same_across_calls_with_external_id(
+        self, store: ContentStore
+    ) -> None:
+        """AC2: two ingests with identical (source_id, external_id, scope) produce same document_id."""
+        req = _make_request(external_id="ext-42")
+        r1 = await store.ingest(req)
+        req2 = _make_request(
+            text="Completely different updated text. " * 6, external_id="ext-42"
+        )
+        r2 = await store.ingest(req2)
+
+        assert r1.document_id == r2.document_id
+
+    @pytest.mark.asyncio
+    async def test_document_id_uses_uri_when_no_external_id(
+        self, store: ContentStore
+    ) -> None:
+        """AC2: document_id derived from uri when external_id is absent."""
+        req = _make_request(uri="https://example.com/doc")
+        r1 = await store.ingest(req)
+        req2 = _make_request(
+            text="Revised text here. " * 6, uri="https://example.com/doc"
+        )
+        r2 = await store.ingest(req2)
+
+        assert r1.document_id == r2.document_id
+
+    @pytest.mark.asyncio
+    async def test_document_id_uses_title_when_no_external_id_or_uri(
+        self, store: ContentStore
+    ) -> None:
+        """AC2: document_id derived from title when external_id and uri are both absent."""
+        req = _make_request(title="Canonical Title")
+        r1 = await store.ingest(req)
+        req2 = _make_request(title="Canonical Title", text="Revised content. " * 6)
+        r2 = await store.ingest(req2)
+
+        assert r1.document_id == r2.document_id
+
+    @pytest.mark.asyncio
+    async def test_document_id_differs_for_different_scope(
+        self, store: ContentStore
+    ) -> None:
+        """AC2 boundary: same source_id + title but different scope → different document_id."""
+        req_a = _make_request(scope="project-A", external_id="same-ext")
+        req_b = _make_request(scope="project-B", external_id="same-ext")
+        r_a = await store.ingest(req_a)
+        r_b = await store.ingest(req_b)
+
+        assert r_a.document_id != r_b.document_id
+
+    # ------------------------------------------------------------------ AC2 boundary: identity priority
+
+    @pytest.mark.asyncio
+    async def test_document_id_prefers_external_id_over_uri_and_title(
+        self, store: ContentStore
+    ) -> None:
+        """AC2 boundary: external_id takes priority over uri and title for identity."""
+        req_with_ext = _make_request(
+            external_id="ext-priority", uri="https://example.com/x", title="Title X"
+        )
+        req_uri_only = _make_request(
+            uri="https://example.com/x", title="Title X"
+        )
+        r_ext = await store.ingest(req_with_ext)
+        r_uri = await store.ingest(req_uri_only)
+
+        # Different identity basis → different document_id
+        assert r_ext.document_id != r_uri.document_id
+
+    # ------------------------------------------------------------------ AC5
+    # get_document
+
+    @pytest.mark.asyncio
+    async def test_get_document_returns_content_document_after_ingest(
+        self, store: ContentStore
+    ) -> None:
+        """AC5: get_document returns ContentDocument for a known document_id."""
+        req = _make_request(title="Doc Alpha", source_id="src-a")
+        result = await store.ingest(req)
+
+        doc = store.get_document(result.document_id)
+
+        assert isinstance(doc, ContentDocument)
+        assert doc.document_id == result.document_id
+        assert doc.source_id == "src-a"
+        assert doc.title == "Doc Alpha"
+
+    def test_get_document_returns_none_for_unknown_id(
+        self, store: ContentStore
+    ) -> None:
+        """AC5: get_document returns None for an ID that was never ingested."""
+        doc = store.get_document("non-existent-id-xyz")
+
+        assert doc is None
+
+    @pytest.mark.asyncio
+    async def test_get_document_has_content_hash(
+        self, store: ContentStore
+    ) -> None:
+        """AC5: returned ContentDocument carries a non-empty content_hash."""
+        req = _make_request()
+        result = await store.ingest(req)
+
+        doc = store.get_document(result.document_id)
+
+        assert doc is not None
+        assert doc.content_hash != ""
+        assert len(doc.content_hash) == 64  # SHA-256 hex digest
+
+    # ------------------------------------------------------------------ AC6
+    # get_chunk
+
+    @pytest.mark.asyncio
+    async def test_get_chunk_returns_content_chunk_after_ingest(
+        self, store: ContentStore
+    ) -> None:
+        """AC6: get_chunk returns ContentChunk with text and content_hash."""
+        req = _make_request(text="Sample chunk text. " * 4)
+        result = await store.ingest(req)
+
+        chunk = store.get_chunk(result.chunk_ids[0])
+
+        assert isinstance(chunk, ContentChunk)
+        assert chunk.text != ""
+        assert chunk.content_hash != ""
+
+    def test_get_chunk_returns_none_for_unknown_id(
+        self, store: ContentStore
+    ) -> None:
+        """AC6: get_chunk returns None for an ID that was never stored."""
+        chunk = store.get_chunk("non-existent-chunk-id")
+
+        assert chunk is None
+
+    # ------------------------------------------------------------------ AC7
+    # list_chunks
+
+    @pytest.mark.asyncio
+    async def test_list_chunks_ordered_by_index_ascending(
+        self, store: ContentStore
+    ) -> None:
+        """AC7: list_chunks returns chunks ordered by index ascending."""
+        long_text = "Word. " * 500
+        req = _make_request(text=long_text)
+        result = await store.ingest(req)
+
+        chunks = store.list_chunks(result.document_id)
+
+        assert len(chunks) >= 2, "Need multi-chunk doc to verify ordering"
+        indices = [c.index for c in chunks]
+        assert indices == sorted(indices)
+
+    def test_list_chunks_returns_empty_tuple_for_unknown_document(
+        self, store: ContentStore
+    ) -> None:
+        """AC7: list_chunks returns empty tuple when document_id is not known."""
+        chunks = store.list_chunks("unknown-doc-id")
+
+        assert chunks == ()
+
+    @pytest.mark.asyncio
+    async def test_list_chunks_returns_only_current_chunks_after_replace(
+        self, store: ContentStore
+    ) -> None:
+        """AC7: list_chunks excludes stale chunks from a prior REPLACED ingest."""
+        req1 = _make_request(text="Original text. " * 6)
+        first = await store.ingest(req1)
+        req2 = _make_request(text="Updated replacement content is different here. " * 6)
+        second = await store.ingest(req2)
+
+        chunks = store.list_chunks(first.document_id)
+        current_ids = {c.id for c in chunks}
+
+        # Replaced (stale) chunks must not appear
+        for old_id in first.chunk_ids:
+            assert old_id not in current_ids
+        # New chunks must appear
+        for new_id in second.chunk_ids:
+            assert new_id in current_ids
+
+    # ------------------------------------------------------------------ AC4
+    # trusted flag propagation
+
+    @pytest.mark.asyncio
+    async def test_trusted_true_propagated_to_document(
+        self, store: ContentStore
+    ) -> None:
+        """AC4: ingest with trusted=True stores document with trusted=True."""
+        req = _make_request(trusted=True)
+        result = await store.ingest(req)
+
+        doc = store.get_document(result.document_id)
+
+        assert doc is not None
+        assert doc.trusted is True
+
+    @pytest.mark.asyncio
+    async def test_trusted_true_propagated_to_chunks(
+        self, store: ContentStore
+    ) -> None:
+        """AC4: ingest with trusted=True stores all chunks with trusted=True."""
+        req = _make_request(trusted=True)
+        result = await store.ingest(req)
+
+        chunks = store.list_chunks(result.document_id)
+
+        assert len(chunks) >= 1
+        assert all(c.trusted is True for c in chunks)
+
+    @pytest.mark.asyncio
+    async def test_trusted_false_propagated_to_document(
+        self, store: ContentStore
+    ) -> None:
+        """AC4: ingest with trusted=False (default) stores document with trusted=False."""
+        req = _make_request(trusted=False)
+        result = await store.ingest(req)
+
+        doc = store.get_document(result.document_id)
+
+        assert doc is not None
+        assert doc.trusted is False
+
+    @pytest.mark.asyncio
+    async def test_trusted_false_propagated_to_chunks(
+        self, store: ContentStore
+    ) -> None:
+        """AC4: ingest with trusted=False stores all chunks with trusted=False."""
+        req = _make_request(trusted=False)
+        result = await store.ingest(req)
+
+        chunks = store.list_chunks(result.document_id)
+
+        assert len(chunks) >= 1
+        assert all(c.trusted is False for c in chunks)
+
+    # ------------------------------------------------------------------ AC8
+    # Qdrant vector operations
+
+    @pytest.mark.asyncio
+    async def test_ingest_created_upserts_vectors_to_qdrant(
+        self, store: ContentStore, mock_vectors: MagicMock
+    ) -> None:
+        """AC8: CREATED ingest triggers at least one Qdrant upsert call."""
+        req = _make_request()
+        await store.ingest(req)
+
+        assert mock_vectors.called, "vector_store must be called on CREATED ingest"
+
+    @pytest.mark.asyncio
+    async def test_ingest_unchanged_does_not_call_qdrant(
+        self, store: ContentStore, mock_vectors: MagicMock
+    ) -> None:
+        """AC8 / AC3: UNCHANGED ingest must not write any new Qdrant vectors."""
+        req = _make_request()
+        await store.ingest(req)
+        mock_vectors.reset_mock()
+
+        # Second ingest is UNCHANGED
+        await store.ingest(req)
+
+        # No mutating calls should occur (upsert/delete/etc.)
+        upsert_calls = [
+            c for c in mock_vectors.method_calls
+            if "upsert" in c[0] or "delete" in c[0] or "upload" in c[0]
+        ]
+        assert upsert_calls == [], (
+            "UNCHANGED ingest must not trigger any Qdrant writes"
+        )
+
+    @pytest.mark.asyncio
+    async def test_ingest_replaced_deletes_old_vectors_before_upsert(
+        self, store: ContentStore, mock_vectors: MagicMock
+    ) -> None:
+        """AC8: REPLACED ingest deletes old vectors before upserting new ones."""
+        req1 = _make_request(text="First version. " * 6)
+        await store.ingest(req1)
+        mock_vectors.reset_mock()
+
+        req2 = _make_request(text="Second version - updated. " * 6)
+        await store.ingest(req2)
+
+        method_names = [c[0] for c in mock_vectors.method_calls]
+        delete_positions = [i for i, n in enumerate(method_names) if "delete" in n]
+        upsert_positions = [i for i, n in enumerate(method_names) if "upsert" in n or "upload" in n]
+
+        assert delete_positions, "REPLACED must delete old vectors"
+        assert upsert_positions, "REPLACED must upsert new vectors"
+        assert min(delete_positions) < min(upsert_positions), (
+            "Deletes must precede upserts on REPLACED"
+        )
+
+    # ------------------------------------------------------------------ AC1
+    # SQLite-first atomicity; Qdrant failure semantics
+
+    @pytest.mark.asyncio
+    async def test_ingest_qdrant_failure_raises(
+        self, store: ContentStore, mock_vectors: MagicMock
+    ) -> None:
+        """AC1: Qdrant failure propagates as an exception to the caller."""
+        mock_vectors.upsert = MagicMock(side_effect=RuntimeError("qdrant unavailable"))
+        mock_vectors.upload_points = MagicMock(side_effect=RuntimeError("qdrant unavailable"))
+        mock_vectors.upload_collection = MagicMock(side_effect=RuntimeError("qdrant unavailable"))
+
+        req = _make_request()
+        with pytest.raises(RuntimeError):
+            await store.ingest(req)
+
+    @pytest.mark.asyncio
+    async def test_ingest_qdrant_failure_sqlite_state_is_consistent(
+        self, mock_vectors: MagicMock, mock_embed: MagicMock
+    ) -> None:
+        """AC1: SQLite document record survives a Qdrant write failure.
+
+        The store commits to SQLite first, then writes to Qdrant. When Qdrant
+        fails, the SQLite record must remain so the caller can retry without
+        orphaning data.
+        """
+        db = sqlite3.connect(":memory:")
+        chunker = TextChunker(target_tokens=50)
+        mock_vectors.upsert = MagicMock(side_effect=RuntimeError("qdrant unavailable"))
+        mock_vectors.upload_points = MagicMock(side_effect=RuntimeError("qdrant unavailable"))
+        mock_vectors.upload_collection = MagicMock(side_effect=RuntimeError("qdrant unavailable"))
+        s = ContentStore(
+            db=db,
+            vector_store=mock_vectors,
+            embedding_provider=mock_embed,
+            chunker=chunker,
+        )
+        s.ensure_tables()
+
+        req = _make_request()
+        with pytest.raises(RuntimeError):
+            await s.ingest(req)
+
+        # SQLite must have committed the document record before Qdrant was touched
+        cursor = db.execute("SELECT COUNT(*) FROM content_documents")
+        count = cursor.fetchone()[0]
+        assert count >= 1, (
+            "SQLite must retain the document record after Qdrant failure (AC1: consistent for retry)"
+        )
+
+    # ------------------------------------------------------------------ AC9
+    # ensure_tables idempotency
+
+    def test_ensure_tables_creates_content_documents_table(self) -> None:
+        """AC9: ensure_tables() creates the content_documents table."""
+        db = sqlite3.connect(":memory:")
+        s = ContentStore(
+            db=db,
+            vector_store=MagicMock(),
+            embedding_provider=MagicMock(),
+            chunker=TextChunker(target_tokens=50),
+        )
+        s.ensure_tables()
+
+        cursor = db.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='content_documents'"
+        )
+        row = cursor.fetchone()
+        assert row is not None, "content_documents table must exist after ensure_tables()"
+
+    def test_ensure_tables_creates_content_chunks_table(self) -> None:
+        """AC9: ensure_tables() creates the content_chunks table."""
+        db = sqlite3.connect(":memory:")
+        s = ContentStore(
+            db=db,
+            vector_store=MagicMock(),
+            embedding_provider=MagicMock(),
+            chunker=TextChunker(target_tokens=50),
+        )
+        s.ensure_tables()
+
+        cursor = db.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='content_chunks'"
+        )
+        row = cursor.fetchone()
+        assert row is not None, "content_chunks table must exist after ensure_tables()"
+
+    def test_ensure_tables_idempotent_called_twice(self) -> None:
+        """AC9: calling ensure_tables() twice does not raise."""
+        db = sqlite3.connect(":memory:")
+        s = ContentStore(
+            db=db,
+            vector_store=MagicMock(),
+            embedding_provider=MagicMock(),
+            chunker=TextChunker(target_tokens=50),
+        )
+        s.ensure_tables()
+        s.ensure_tables()  # Must not raise
+
+    # ------------------------------------------------------------------ AC3 boundary
+    # UNCHANGED contract details
+
+    @pytest.mark.asyncio
+    async def test_ingest_unchanged_preserves_chunk_ids(
+        self, store: ContentStore
+    ) -> None:
+        """AC3 boundary: UNCHANGED result returns same chunk_ids as original ingest."""
+        req = _make_request()
+        first = await store.ingest(req)
+        second = await store.ingest(req)
+
+        assert second.state == ContentIngestState.UNCHANGED
+        assert set(second.chunk_ids) == set(first.chunk_ids)
+
+    @pytest.mark.asyncio
+    async def test_ingest_unchanged_has_empty_replaced_chunk_ids(
+        self, store: ContentStore
+    ) -> None:
+        """AC3 boundary: UNCHANGED result has empty replaced_chunk_ids."""
+        req = _make_request()
+        await store.ingest(req)
+        second = await store.ingest(req)
+
+        assert second.replaced_chunk_ids == ()
+
+    @pytest.mark.asyncio
+    async def test_ingest_result_carries_source_id(
+        self, store: ContentStore
+    ) -> None:
+        """AC3 / contract: ContentIngestResult carries the source_id from the request."""
+        req = _make_request(source_id="src-test-99")
+        result = await store.ingest(req)
+
+        assert result.source_id == "src-test-99"
+
+    @pytest.mark.asyncio
+    async def test_ingest_result_carries_content_hash(
+        self, store: ContentStore
+    ) -> None:
+        """AC3 / contract: ContentIngestResult carries a non-empty content_hash."""
+        req = _make_request()
+        result = await store.ingest(req)
+
+        assert result.content_hash != ""
+        assert len(result.content_hash) == 64  # SHA-256 hex digest
