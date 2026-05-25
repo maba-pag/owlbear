@@ -466,7 +466,7 @@ class TestFromAC_MemoryMigrateCLI:
         _write_legacy_entry(tmp_path, _LegacyEntrySpec(_ID_1, confidence=0.8))
         from owlbear_memory.migrate import main
 
-        with patch("sys.argv", ["memory-migrate", "--memory-dir", str(tmp_path)]):
+        with patch("sys.argv", ["memory-migrate", "--memory-dir", str(tmp_path)]), pytest.raises(SystemExit):
             main()
 
         captured = capsys.readouterr()
@@ -490,7 +490,7 @@ class TestFromAC_MemoryMigrateCLI:
         path = tmp_path / f"{_ID_1}.md"
         content_before = path.read_text(encoding="utf-8")
 
-        with patch("sys.argv", ["memory-migrate", "--memory-dir", str(tmp_path), "--dry-run"]):
+        with patch("sys.argv", ["memory-migrate", "--memory-dir", str(tmp_path), "--dry-run"]), pytest.raises(SystemExit):
             main()
 
         assert path.read_text(encoding="utf-8") == content_before
@@ -504,7 +504,7 @@ class TestFromAC_MemoryMigrateCLI:
         _write_legacy_entry(tmp_path, _LegacyEntrySpec(_ID_1, confidence=0.8))
         _write_legacy_entry(tmp_path, _LegacyEntrySpec(_ID_2, confidence=0.9))
 
-        with patch("sys.argv", ["memory-migrate", "--memory-dir", str(tmp_path), "--dry-run"]):
+        with patch("sys.argv", ["memory-migrate", "--memory-dir", str(tmp_path), "--dry-run"]), pytest.raises(SystemExit):
             main()
 
         captured = capsys.readouterr()
@@ -516,7 +516,7 @@ class TestFromAC_MemoryMigrateCLI:
 
         subdir = tmp_path / "custom-mem"
         subdir.mkdir()
-        _write_legacy_entry(subdir, _ID_1, confidence=0.8)
+        _write_legacy_entry(subdir, _LegacyEntrySpec(_ID_1, confidence=0.8))
 
         other = tmp_path / "other-mem"
         other.mkdir()
@@ -549,7 +549,7 @@ class TestFromAC_MemoryMigrateCLI:
         _write_legacy_entry(tmp_path, _LegacyEntrySpec(_ID_1, confidence=0.8))
 
         env = {**os.environ, "OWLBEAR_MEMORY_DIR": str(tmp_path)}
-        with patch("sys.argv", ["memory-migrate"]), patch.dict(os.environ, env, clear=True):
+        with patch("sys.argv", ["memory-migrate"]), patch.dict(os.environ, env, clear=True), pytest.raises(SystemExit):
             main()
 
         captured = capsys.readouterr()
