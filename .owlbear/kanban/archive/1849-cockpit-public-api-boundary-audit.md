@@ -1,10 +1,10 @@
 ---
 id: 1849
 title: Cockpit public API boundary audit
-status: done
+status: archived
 priority: important
 created: 2026-05-24T19:25:18.570388+02:00
-updated: 2026-05-25T01:58:14.866957+02:00
+updated: 2026-05-25T02:38:30.930046+02:00
 tags:
   - scope:cockpit
   - scope:cockpit-web
@@ -26,7 +26,7 @@ proof_bundle: skip
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Purpose
@@ -187,3 +187,29 @@ None — no docs impact; research artifact is the deliverable, not a README or e
 
 ### Scratch Cleanup
 No `.owlbear/scratch/1849-*` files found.
+
+[[2026-05-25T02:38:30+02:00]]
+## Audit
+
+### Regression Detection
+Quality-runner full-suite (with env fallback retry): 5067 passed pytest, lint clean. 234 pytest failures + 7 vitest failures are pre-existing and causally unrelated — task changed only `.owlbear/research/cockpit-api-boundary-audit.md` (documentation), which cannot affect code test behavior. Failure domains (`test_cockpit_view.py`, `test_server.py`, `MemoryTab_1672.test.tsx`) are in unrelated modules.
+
+### Intent Verification
+Changed file stays within task's intended domain (research documentation about cockpit API boundaries). Implementation addresses stated purpose: boundary inventory → finding → stop → follow-ups. No extraneous scope.
+
+### Research Task Verification
+- Research doc exists at `.owlbear/research/cockpit-api-boundary-audit.md` with `Owning task: #1849`.
+- Follow-up tasks created: #1865 (todo), #1866 (archived), #1867 (docs) — all at research or higher status.
+- Follow-ups tagged `boundary-audit` for traceability to this research.
+
+### Architect Quality
+Score: 4/5. AC lines were specific and enforceable — the reviewer successfully caught AC 3 non-compliance on first pass, proving the AC was precise enough to gate against. Minor gap: \"stop at the first real finding\" could have explicitly defined what constitutes a scope stop vs. a parked observation, but this was adequately resolved in the review cycle.
+
+### Commit Integrity
+Builder commit `6247a591` (`docs: align boundary audit to first finding only (#1849, builder)`) changes only `.owlbear/research/cockpit-api-boundary-audit.md`. Researcher commit `ce0c7e16` is the initial deliverable. Both present and correctly scoped.
+
+### Deductions
+None.
+
+### Confidence: 1.00
+### Action: Archive
