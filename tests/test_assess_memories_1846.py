@@ -240,6 +240,54 @@ class TestFromAC_ToolRegistration:
         assert persisted.outstanding_count == 0
 
     @pytest.mark.asyncio
+    async def test_non_dict_item_in_assessments_raises_tool_error(self, tmp_path: Path) -> None:
+        """Non-dict item in assessments list raises ToolError (batch aborts, not per-entry failure)."""
+        from mcp.server.fastmcp.exceptions import ToolError  # noqa: PLC0415
+        from owlbear_mcp_memory.tools import assess_memories  # noqa: PLC0415
+
+        engine = MemoryEngine(memory_dir=tmp_path)
+        ctx = _make_ctx(engine)
+
+        with pytest.raises(ToolError):
+            await assess_memories(
+                ctx,
+                assessments=["not_a_dict"],  # type: ignore[list-item]
+                task_id="task-1",
+            )
+
+    @pytest.mark.asyncio
+    async def test_item_missing_bucket_key_raises_tool_error(self, tmp_path: Path) -> None:
+        """Dict item missing 'bucket' key raises ToolError (batch aborts, not per-entry failure)."""
+        from mcp.server.fastmcp.exceptions import ToolError  # noqa: PLC0415
+        from owlbear_mcp_memory.tools import assess_memories  # noqa: PLC0415
+
+        engine = MemoryEngine(memory_dir=tmp_path)
+        ctx = _make_ctx(engine)
+
+        with pytest.raises(ToolError):
+            await assess_memories(
+                ctx,
+                assessments=[{"entry_id": _ID_APPROVED}],  # missing 'bucket'
+                task_id="task-1",
+            )
+
+    @pytest.mark.asyncio
+    async def test_item_missing_entry_id_key_raises_tool_error(self, tmp_path: Path) -> None:
+        """Dict item missing 'entry_id' key raises ToolError (batch aborts, not per-entry failure)."""
+        from mcp.server.fastmcp.exceptions import ToolError  # noqa: PLC0415
+        from owlbear_mcp_memory.tools import assess_memories  # noqa: PLC0415
+
+        engine = MemoryEngine(memory_dir=tmp_path)
+        ctx = _make_ctx(engine)
+
+        with pytest.raises(ToolError):
+            await assess_memories(
+                ctx,
+                assessments=[{"bucket": "outstanding"}],  # missing 'entry_id'
+                task_id="task-1",
+            )
+
+    @pytest.mark.asyncio
     async def test_all_four_valid_bucket_values_accepted(self, tmp_path: Path) -> None:
         """All four valid bucket values complete without ToolError on a valid approved entry."""
         from owlbear_mcp_memory.tools import assess_memories  # noqa: PLC0415
