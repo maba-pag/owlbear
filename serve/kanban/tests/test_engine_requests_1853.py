@@ -1,4 +1,4 @@
-"""Failing RED-phase tests for #1853: Engine API — resolve_request with conditional unblock.
+"""Tests for #1853: Engine API — resolve_request with conditional unblock.
 
 AC coverage:
   AC1 → TestFromAC_ResolveRequest:
@@ -8,28 +8,44 @@ AC coverage:
         test_resolve_deletes_from_pending_dir
         test_resolve_resolved_at_is_tz_aware_iso8601
         test_resolve_resolved_file_has_resolved_at_in_frontmatter
-  AC2 →
+  AC2 (new: serialized file fields + bounded resolved_at) →
+        test_resolved_file_has_selected_option_id_serialized
+        test_resolved_file_has_free_text_serialized_action
+        test_resolved_file_has_free_text_serialized_decision
+        test_resolved_at_bounded_to_current_time
+        test_resolved_file_resolved_at_bounded_within_2s
+        test_resolved_file_resolved_at_matches_returned_record
+  AC3 (was AC2) →
         test_resolve_not_found_raises_not_found_error
         test_resolve_already_resolved_raises_validation_error
         test_resolve_already_resolved_exact_error_code
-  AC3 →
+  AC4 (was AC3) →
         test_resolve_decision_invalid_option_id_raises_validation_error
         test_resolve_action_with_non_none_option_id_raises_validation_error
         test_resolve_both_null_raises_validation_error
         test_resolve_decision_text_only_valid
         test_resolve_action_free_text_only_valid
-  AC4 →
+  AC5 (was AC4) →
         test_writeback_decision_option_only
         test_writeback_decision_option_and_text
         test_writeback_decision_text_only
         test_writeback_action
-  AC5 →
+        test_writeback_decision_option_only_exact_block
+        test_writeback_decision_option_and_text_exact_block
+        test_writeback_decision_text_only_exact_block
+        test_writeback_action_exact_block
+        test_writeback_appends_not_replaces_existing_body
+  AC6 (new: body.endswith exact tail) →
+        test_writeback_decision_option_only_endswith_exact_tail
+        test_writeback_decision_option_and_text_endswith_exact_tail
+        test_writeback_decision_text_only_endswith_exact_tail
+        test_writeback_action_endswith_exact_tail
+        test_writeback_no_extra_lines_between_existing_and_block
+  AC7 (was AC5) →
         test_unblocks_task_when_no_sibling_pending
         test_keeps_task_blocked_with_sibling_pending
         test_legacy_dr_not_counted_as_sibling
         test_sibling_different_task_id_not_counted
-
-All 22 tests FAIL in RED phase: resolve_request does not exist yet.
 """
 
 from __future__ import annotations
@@ -659,3 +675,118 @@ class TestFromAC_ResolveRequest:
         assert "Body text." in task.body
         # The write-back block must also be present
         assert "## AR: Test Request" in task.body
+
+    # -----------------------------------------------------------------------
+    # AC2 (new): serialized resolved file has bounded resolved_at matching returned record
+    # -----------------------------------------------------------------------
+
+    def test_resolved_file_resolved_at_bounded_within_2s(self, tmp_path: Path) -> None:
+        """AC2: resolved file's resolved_at is bounded within 2s of the call (not merely non-null)."""
+        engine, kanban_dir = _make_engine(tmp_path, 42)
+        _, rid = _write_request_file(kanban_dir, task_id=42, kind="action")
+        engine.edit_task("42", blocked=True, block_reason="DR pending")
+
+        before = datetime.now().astimezone()
+        engine.resolve_request(rid, None, "Done.")
+        after = datetime.now().astimezone()
+
+        resolved_path = kanban_dir / "decisions" / "resolved" / f"{rid}.md"
+        fm = _parse_frontmatter(resolved_path)
+        file_resolved_at = datetime.fromisoformat(fm["resolution"]["resolved_at"])
+        assert before <= file_resolved_at <= after, (
+            f"File resolved_at {file_resolved_at} must be between {before} and {after}"
+        )
+
+    def test_resolved_file_resolved_at_matches_returned_record(self, tmp_path: Path) -> None:
+        """AC2: resolved file's resolved_at string matches the resolved_at in the returned RequestRecord."""
+        engine, kanban_dir = _make_engine(tmp_path, 42)
+        _, rid = _write_request_file(kanban_dir, task_id=42, kind="decision")
+        engine.edit_task("42", blocked=True, block_reason="DR pending")
+
+        result = engine.resolve_request(rid, "option-a", None)
+
+        resolved_path = kanban_dir / "decisions" / "resolved" / f"{rid}.md"
+        fm = _parse_frontmatter(resolved_path)
+        assert fm["resolution"]["resolved_at"] == result.resolution.resolved_at
+
+    # -----------------------------------------------------------------------
+    # AC6 (new): write-back block is exact tail of task body (body.endswith)
+    # -----------------------------------------------------------------------
+
+    def test_writeback_decision_option_only_endswith_exact_tail(self, tmp_path: Path) -> None:
+        """AC6: decision+option write-back is the exact tail of the task body."""
+        engine, kanban_dir = _make_engine(tmp_path, 42)
+        _, rid = _write_request_file(kanban_dir, task_id=42, kind="decision")
+        engine.edit_task("42", blocked=True, block_reason="DR pending")
+
+        engine.resolve_request(rid, "option-a", None)
+
+        task = engine.show_task("42")
+        expected_block = "## DR: Test Request\n- **Selected:** Option Alpha"
+        assert task.body.rstrip("\n").endswith(expected_block), (
+            f"Task body must end with the exact write-back block; got tail: {task.body[-120:]!r}"
+        )
+
+    def test_writeback_decision_option_and_text_endswith_exact_tail(self, tmp_path: Path) -> None:
+        """AC6: decision+option+text write-back is the exact tail of the task body."""
+        engine, kanban_dir = _make_engine(tmp_path, 42)
+        _, rid = _write_request_file(kanban_dir, task_id=42, kind="decision")
+        engine.edit_task("42", blocked=True, block_reason="DR pending")
+
+        engine.resolve_request(rid, "option-b", "Some extra context.")
+
+        task = engine.show_task("42")
+        expected_block = (
+            "## DR: Test Request\n"
+            "- **Selected:** Option Beta\n"
+            "- **Notes:** Some extra context."
+        )
+        assert task.body.rstrip("\n").endswith(expected_block), (
+            f"Task body must end with the exact write-back block; got tail: {task.body[-120:]!r}"
+        )
+
+    def test_writeback_decision_text_only_endswith_exact_tail(self, tmp_path: Path) -> None:
+        """AC6: decision+text-only write-back is the exact tail of the task body."""
+        engine, kanban_dir = _make_engine(tmp_path, 42)
+        _, rid = _write_request_file(kanban_dir, task_id=42, kind="decision")
+        engine.edit_task("42", blocked=True, block_reason="DR pending")
+
+        engine.resolve_request(rid, None, "Free-text answer.")
+
+        task = engine.show_task("42")
+        expected_block = "## DR: Test Request\n- **Answer:** Free-text answer."
+        assert task.body.rstrip("\n").endswith(expected_block), (
+            f"Task body must end with the exact write-back block; got tail: {task.body[-120:]!r}"
+        )
+
+    def test_writeback_action_endswith_exact_tail(self, tmp_path: Path) -> None:
+        """AC6: action write-back is the exact tail of the task body."""
+        engine, kanban_dir = _make_engine(tmp_path, 42)
+        _, rid = _write_request_file(kanban_dir, task_id=42, kind="action")
+        engine.edit_task("42", blocked=True, block_reason="DR pending")
+
+        engine.resolve_request(rid, None, "Action outcome text.")
+
+        task = engine.show_task("42")
+        expected_block = "## AR: Test Request\n- **Outcome:** Action outcome text."
+        assert task.body.rstrip("\n").endswith(expected_block), (
+            f"Task body must end with the exact write-back block; got tail: {task.body[-120:]!r}"
+        )
+
+    def test_writeback_no_extra_lines_between_existing_and_block(self, tmp_path: Path) -> None:
+        """AC6: no extra lines are inserted between pre-existing body content and the appended block."""
+        engine, kanban_dir = _make_engine(tmp_path, 42)
+        _, rid = _write_request_file(kanban_dir, task_id=42, kind="action")
+        engine.edit_task("42", blocked=True, block_reason="DR pending")
+
+        engine.resolve_request(rid, None, "Done.")
+
+        task = engine.show_task("42")
+        expected_block = "## AR: Test Request\n- **Outcome:** Done."
+        body_stripped = task.body.rstrip("\n")
+        assert body_stripped.endswith(expected_block)
+        # The content before the appended block must end with pre-existing body text (no extra lines)
+        prefix_end = body_stripped[: body_stripped.rfind(expected_block)]
+        assert prefix_end.rstrip("\n").endswith("Body text."), (
+            f"No extra content expected between existing body and write-back block; prefix: {prefix_end!r}"
+        )
