@@ -2,6 +2,13 @@
 
 External repos and resources studied during OwlBear development.
 
+## EnrichmentStore — Queue State Machine (Task #1875)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| litements/litequeue | <https://github.com/litements/litequeue> | SQLite queue with IMMEDIATE transactions for atomic claim, UPDATE...RETURNING, WAL mode, MessageStatus state machine | `.owlbear/research/1875-enrichmentstore-queue-state-machine.md` | 2026-05-25 |
+| rails/solid_queue | <https://github.com/rails/solid_queue> | DB-backed job queue with separate claimed_executions table, batch semaphore claiming, expiry patterns | `.owlbear/research/1875-enrichmentstore-queue-state-machine.md` | 2026-05-25 |
+
 ## ContentStore — Ingest & Dedup (Task #1871)
 
 | Source | URL | What | Where Used | Date |
