@@ -341,3 +341,22 @@ class TestFromAC_ConfirmationCycle:
             engine.record_factually_wrong(
                 _ID_PENDING, task_id=_TASK_A, expected_updated_at=_TS_WRONG
             )
+
+    def test_occ_mismatch_beats_empty_task_id_validation(self, tmp_path: Path) -> None:
+        """AC3+AC4: OCC guard evaluated before task_id validation — ConcurrencyError beats ValidationError (empty task_id)."""
+        # Combines OCC mismatch with invalid task_id=""; OCC must be checked first per AC3 ordering clause.
+        entry = _make_entry_base(_ID_APPROVED, MemoryState.APPROVED)
+        engine = _engine_with_entries(tmp_path, entry)
+        with pytest.raises(ConcurrencyError):
+            engine.record_factually_wrong(
+                _ID_APPROVED, task_id="", expected_updated_at=_TS_WRONG
+            )
+
+    def test_occ_mismatch_beats_whitespace_task_id_validation(self, tmp_path: Path) -> None:
+        """AC3+AC4: OCC guard evaluated before task_id validation — ConcurrencyError beats ValidationError (whitespace task_id)."""
+        entry = _make_entry_base(_ID_APPROVED, MemoryState.APPROVED)
+        engine = _engine_with_entries(tmp_path, entry)
+        with pytest.raises(ConcurrencyError):
+            engine.record_factually_wrong(
+                _ID_APPROVED, task_id="   ", expected_updated_at=_TS_WRONG
+            )
