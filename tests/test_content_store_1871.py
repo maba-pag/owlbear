@@ -689,3 +689,147 @@ class TestFromAC_ContentStore:
 
         assert doc is not None
         assert doc.metadata == {"author": "tester", "priority": 1}
+
+    # ------------------------------------------------------------------ AC1 + AC8 retry (REPLACED delete-failure)
+    # Retry-safe vector deletion after post-commit REPLACED+_delete_vectors failure
+
+    @pytest.mark.asyncio
+    async def test_ingest_replaced_retry_deletes_stale_vectors_after_failed_delete(
+        self, mock_embed: MagicMock
+    ) -> None:
+        """AC1 + AC8: retrying REPLACED ingest after _delete_vectors failure must delete stale vectors.
+
+        When a REPLACED ingest fails at _delete_vectors after SQLite commits:
+        - Old chunk rows are gone from content_chunks (deleted in the transaction)
+        - Stale V1 vector IDs still exist in Qdrant (delete was never completed)
+
+        A retry with the same V2 content must still call delete for the stale V1 chunk IDs.
+        This requires the store to have persisted those IDs within the SQLite transaction —
+        they cannot be reconstructed from content_chunks at retry time (already replaced).
+
+        Convergence observable (AC1): no stale vector IDs remain in Qdrant AND all current
+        chunk IDs have vectors upserted after retry.
+        """
+        db = sqlite3.connect(":memory:")
+        chunker = TextChunker(target_tokens=50)
+
+        # Step 1: V1 ingest — CREATED (V1 chunk IDs live in Qdrant)
+        store_1 = ContentStore(
+            db=db,
+            vector_store=MagicMock(),
+            embedding_provider=mock_embed,
+            chunker=chunker,
+        )
+        store_1.ensure_tables()
+        v1_result = await store_1.ingest(
+            _make_request(text="First version content here. " * 6)
+        )
+        v1_chunk_ids = set(v1_result.chunk_ids)
+
+        # Step 2: V2 ingest — REPLACED, SQLite commits new chunks, but _delete_vectors raises
+        failing_vectors = MagicMock()
+        failing_vectors.delete = MagicMock(side_effect=RuntimeError("Qdrant delete failed"))
+        store_2 = ContentStore(
+            db=db,
+            vector_store=failing_vectors,
+            embedding_provider=mock_embed,
+            chunker=chunker,
+        )
+        with pytest.raises(RuntimeError):
+            await store_2.ingest(
+                _make_request(text="Second version — completely different content. " * 6)
+            )
+
+        # Step 3: Retry V2 — Qdrant back online; same V2 content
+        retry_vectors = MagicMock()
+        store_3 = ContentStore(
+            db=db,
+            vector_store=retry_vectors,
+            embedding_provider=mock_embed,
+            chunker=chunker,
+        )
+        await store_3.ingest(
+            _make_request(text="Second version — completely different content. " * 6)
+        )
+
+        # Retry MUST call delete for the stale V1 chunk IDs.
+        # V1 chunk rows were deleted from content_chunks during the REPLACED transaction;
+        # the only way the retry can know what to delete is if those IDs were persisted
+        # in SQLite (e.g. a pending_delete_chunk_ids column on content_documents).
+        delete_calls = [c for c in retry_vectors.method_calls if "delete" in c[0]]
+        assert delete_calls, (
+            "AC8 + AC1: retry after REPLACED+delete-failure must call delete for stale V1 "
+            "vectors. Pending-delete chunk IDs must be persisted in SQLite — V1 chunk rows "
+            "are gone from content_chunks after the REPLACED transaction."
+        )
+        deleted_ids: set[str] = set()
+        for call in delete_calls:
+            ids = call[2].get("ids") if call[2] else (call[1][0] if call[1] else [])
+            if isinstance(ids, (list, tuple)):
+                deleted_ids.update(str(i) for i in ids)
+        assert v1_chunk_ids <= deleted_ids, (
+            f"AC1 convergence: all stale V1 chunk IDs must be deleted on retry. "
+            f"Missing from delete calls: {v1_chunk_ids - deleted_ids}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_ingest_replaced_retry_convergence_delete_before_upsert(
+        self, mock_embed: MagicMock
+    ) -> None:
+        """AC1 + AC3 + AC8: UNCHANGED retry after REPLACED+delete-failure deletes before upserting.
+
+        Refined AC3: UNCHANGED performs no new SQLite row writes but completes any pending
+        vector repairs (stale deletion + current upsert) from a prior failed attempt.
+
+        Both operations must occur during the retry and in the correct order:
+        delete stale vectors → upsert current vectors.
+        """
+        db = sqlite3.connect(":memory:")
+        chunker = TextChunker(target_tokens=50)
+
+        # V1 CREATED
+        store_1 = ContentStore(
+            db=db,
+            vector_store=MagicMock(),
+            embedding_provider=mock_embed,
+            chunker=chunker,
+        )
+        store_1.ensure_tables()
+        await store_1.ingest(_make_request(text="Version one content here. " * 6))
+
+        # V2 REPLACED — _delete_vectors fails
+        failing_vectors = MagicMock()
+        failing_vectors.delete = MagicMock(side_effect=RuntimeError("delete unavailable"))
+        store_2 = ContentStore(
+            db=db,
+            vector_store=failing_vectors,
+            embedding_provider=mock_embed,
+            chunker=chunker,
+        )
+        with pytest.raises(RuntimeError):
+            await store_2.ingest(_make_request(text="Version two content — updated here. " * 6))
+
+        # Retry V2 — Qdrant healthy
+        retry_vectors = MagicMock()
+        store_3 = ContentStore(
+            db=db,
+            vector_store=retry_vectors,
+            embedding_provider=mock_embed,
+            chunker=chunker,
+        )
+        await store_3.ingest(_make_request(text="Version two content — updated here. " * 6))
+
+        method_names = [c[0] for c in retry_vectors.method_calls]
+        delete_positions = [i for i, n in enumerate(method_names) if "delete" in n]
+        upsert_positions = [i for i, n in enumerate(method_names) if "upsert" in n or "upload" in n]
+
+        assert delete_positions, (
+            "AC3 (refined): UNCHANGED retry after REPLACED+delete-failure must delete stale "
+            "vectors — both stale deletion and current upsert are required to converge"
+        )
+        assert upsert_positions, (
+            "AC3 (refined): UNCHANGED retry after REPLACED+delete-failure must upsert current vectors"
+        )
+        assert min(delete_positions) < min(upsert_positions), (
+            "AC8: stale vector deletion must precede current vector upsert in the repair path"
+        )
