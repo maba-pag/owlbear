@@ -7,6 +7,18 @@ applyTo: "share/skills/r-pipeline-protocol/**"
 
 Append your agent section to the task body via the `note` parameter of `end_work`. Include your section header, findings, and summary — all in one call. For tool reference, see `h-mcp-kanban` skill — section `## Agent Lifecycle Pattern`.
 
+### end_work Memory Assessment
+
+When `recall_memory` was called during the task, run `assess_memories` before `end_work` and include all recalled memory IDs.
+
+For each recalled memory entry, categorize your experience:
+- **Outstanding** — this entry's guidance was genuinely great for this task
+- **Used but unremarkable** — I applied or referenced this entry's guidance and it was adequate
+- **Didn't use** — I didn't apply or reference this entry's guidance
+- **Factually wrong** — this entry contains incorrect information
+
+"Apply or reference" includes: following guidance, avoiding a warned pitfall, or confirming your approach was correct.
+
 ## Per-Agent Section Mapping
 
 | Agent | Verdict tokens | Body section |
