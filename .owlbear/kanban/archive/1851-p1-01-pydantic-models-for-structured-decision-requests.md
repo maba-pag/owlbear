@@ -1,10 +1,10 @@
 ---
 id: 1851
 title: 'P1-01: Pydantic models for structured decision requests'
-status: done
+status: archived
 priority: needed
 created: 2026-05-24T20:57:55.018006+02:00
-updated: 2026-05-25T01:22:47.643333+02:00
+updated: 2026-05-25T02:03:37.807966+02:00
 tags:
   - phase-1
   - scope:kanban
@@ -38,7 +38,7 @@ proof_bundle: behavioral
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 Brief: see parent #1850 and `.owlbear/briefs/draft-decision-request-data-model/brief.md`
@@ -250,3 +250,28 @@ Builder must add one test: a valid ISO 8601 datetime WITHOUT timezone (e.g. `\"2
 
 ### Scratch Cleanup
 No `.owlbear/scratch/1851-*` files found — nothing to clean.
+
+[[2026-05-25T02:03:37+02:00]]
+## Audit
+
+### Regression Detection
+quality-runner full kanban domain: 1417 passed, 0 failed, ruff clean.
+
+### Intent Verification
+Changed files: `serve/kanban/src/owlbear_kanban/request_models.py` (new), `tests/test_request_models_1851.py`. Both in kanban domain, matching stated purpose (Pydantic models for structured decision requests). No extraneous scope.
+
+### Architect Quality
+Score: 4/5. Six AC lines with specific testable constraints. Minor gaps (timezone-less datetime edge case, union wrapper naming ambiguity) caught by reviewer and resolved via architect re-review. Challenger was engaged effectively.
+
+### Commit Integrity
+- `b17ffad1` — test: add failing tests for request models (#1851, test-writer)
+- `026067aa` — feat: add structured request models (#1851, builder)
+- `dd942f50` — test: add retry tests for timezone-less created_at (#1851, test-writer)
+
+All deliverables committed before advancement. No orphaned or unauthorized changes.
+
+### Deductions
+None.
+
+### Confidence: 1.00
+### Action: ARCHIVE
