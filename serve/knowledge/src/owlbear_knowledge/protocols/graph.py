@@ -1,15 +1,11 @@
 """GraphStore Protocol — Graph module public surface.
 
-Module responsibility: typed entity/edge CRUD, evidence tracking (CP1 —
-per-document provenance via EvidenceRecord), adjacency queries, and
-multi-hop traversal. Owns tables ``graph_entities``, ``graph_edges``,
-``graph_evidence``.
+Module responsibility: typed entity/edge knowledge graph with evidence
+tracking, alias resolution, and adjacency queries. Owns tables ``graph_*``.
 
 Has zero dependencies on other knowledge modules.
 
-The Graph module does NOT decide which entities or edges to create — that
-is the Enrichment module's job. Graph is a typed, query-friendly store
-with canonical-identity semantics.
+Table ownership: only Graph writes ``graph_*`` tables.
 """
 
 from __future__ import annotations
@@ -20,130 +16,108 @@ from typing import Protocol, runtime_checkable
 
 from pydantic import Field
 
-from owlbear_knowledge.protocols.common import BoundaryModel, Metadata
+from owlbear_knowledge.protocols.common import (
+    BoundaryModel,
+    EntityType,
+    Metadata,
+    RelationType,
+    canonicalize_name,
+)
 
 
 # ---------------------------------------------------------------------------
-# Enums (demand-driven: only types required by current scenarios)
+# Enums
 # ---------------------------------------------------------------------------
 
 
-class EntityKind(StrEnum):
-    """Stable entity categories for cross-source knowledge chains.
+class EvidenceClaimType(StrEnum):
+    """Discriminator for graph evidence provenance.
 
-    Additive: new values may be added without breaking existing code.
+    Used by claims_for_chunk and evidence invalidation to distinguish
+    entity existence claims from edge relationship claims.
     """
 
-    ACCESS_RIGHT = "access_right"
-    COMPONENT = "component"
-    CONCEPT = "concept"
-    CONTROL = "control"
-    POLICY = "policy"
-    PROCEDURE = "procedure"
-    SERVICE = "service"
-    STANDARD = "standard"
-    SYSTEM = "system"
-    TEAM = "team"
-    TOOL = "tool"
-    UI_OPTION = "ui_option"
-
-
-class RelationKind(StrEnum):
-    """Stable relationship categories used by traversal.
-
-    Additive: new values may be added without breaking existing code.
-    SAME_AS is intentionally excluded — canonical identity (CP1) handles
-    entity deduplication without relationship-based merging.
-    """
-
-    ALIGNS_WITH = "aligns_with"
-    APPROVED_BY = "approved_by"
-    AVAILABLE_IN = "available_in"
-    COMPONENT_OF = "component_of"
-    DEFINES = "defines"
-    DEPENDS_ON = "depends_on"
-    GOVERNED_BY = "governed_by"
-    HAS_PROCEDURE = "has_procedure"
-    PART_OF = "part_of"
-    RELATED_TO = "related_to"
-    REQUIRES = "requires"
-    REQUIRES_ACCESS_RIGHT = "requires_access_right"
-    SUPPORTS = "supports"
+    ENTITY = "entity"
+    EDGE = "edge"
 
 
 # ---------------------------------------------------------------------------
-# Boundary types — Entity
+# Entity types
 # ---------------------------------------------------------------------------
 
 
 class EntityInput(BoundaryModel):
-    """Entity write request accepted by Graph."""
+    """Entity upsert request accepted by GraphStore.
+
+    Names are automatically canonicalized (lowercase, stripped, trailing
+    punctuation removed) before storage.
+    """
 
     name: str
-    kind: EntityKind
-    scope: str = "global"
+    entity_type: EntityType
     description: str = ""
-    importance: float = Field(default=0.5, ge=0.0, le=1.0)
     metadata: Metadata = Field(default_factory=dict)
 
 
 class EntityRecord(BoundaryModel):
-    """Persisted entity record returned by Graph."""
+    """Persisted entity record returned by GraphStore."""
 
     id: str
     name: str
     canonical_name: str
-    kind: EntityKind
-    scope: str = "global"
+    entity_type: EntityType
     description: str = ""
-    importance: float = Field(default=0.5, ge=0.0, le=1.0)
+    alias_names: tuple[str, ...] = Field(default_factory=tuple)
     metadata: Metadata = Field(default_factory=dict)
     created_at: datetime
     updated_at: datetime
 
 
 # ---------------------------------------------------------------------------
-# Boundary types — Edge
+# Edge types
 # ---------------------------------------------------------------------------
 
 
 class EdgeInput(BoundaryModel):
-    """Edge write request accepted by Graph."""
+    """Edge upsert request accepted by GraphStore.
+
+    Relationship types are drawn from the project-maintained vocabulary
+    (RelationType enum). SAME_AS is not a valid edge type — use
+    add_alias for identity merging.
+    """
 
     source_entity_id: str
     target_entity_id: str
-    relation: RelationKind
-    scope: str = "global"
+    relation_type: RelationType
     weight: float = Field(default=1.0, ge=0.0, le=1.0)
     metadata: Metadata = Field(default_factory=dict)
 
 
 class EdgeRecord(BoundaryModel):
-    """Persisted edge record returned by Graph."""
+    """Persisted edge record returned by GraphStore."""
 
     id: str
     source_entity_id: str
     target_entity_id: str
-    relation: RelationKind
-    scope: str = "global"
-    weight: float = Field(default=1.0, ge=0.0, le=1.0)
+    relation_type: RelationType
+    weight: float = Field(ge=0.0, le=1.0)
     metadata: Metadata = Field(default_factory=dict)
     created_at: datetime
     updated_at: datetime
 
 
 # ---------------------------------------------------------------------------
-# Boundary types — Evidence (CP1: separate provenance tracking)
+# Evidence types
 # ---------------------------------------------------------------------------
 
 
 class EvidenceInput(BoundaryModel):
-    """Evidence write request linking a graph record to a content chunk."""
+    """Evidence claim linking a chunk to a graph element."""
 
-    claim_type: str  # "entity" or "edge"
-    claim_id: str  # entity_id or edge_id
     chunk_id: str
-    source_id: str
+    claim_type: EvidenceClaimType
+    entity_id: str | None = None
+    edge_id: str | None = None
     confidence: float = Field(default=1.0, ge=0.0, le=1.0)
     metadata: Metadata = Field(default_factory=dict)
 
@@ -152,73 +126,111 @@ class EvidenceRecord(BoundaryModel):
     """Persisted evidence record."""
 
     id: str
-    claim_type: str
-    claim_id: str
     chunk_id: str
-    source_id: str
-    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+    claim_type: EvidenceClaimType
+    entity_id: str | None = None
+    edge_id: str | None = None
+    confidence: float = Field(ge=0.0, le=1.0)
     metadata: Metadata = Field(default_factory=dict)
     created_at: datetime
 
 
+class ChunkClaims(BoundaryModel):
+    """All graph claims derived from a single chunk.
+
+    Returned by claims_for_chunk for targeted invalidation and cascade.
+    """
+
+    chunk_id: str
+    entity_ids: tuple[str, ...] = Field(default_factory=tuple)
+    edge_ids: tuple[str, ...] = Field(default_factory=tuple)
+    evidence_ids: tuple[str, ...] = Field(default_factory=tuple)
+
+
 # ---------------------------------------------------------------------------
-# Boundary types — Query models
+# Alias types (R33 — Graph-owned identity merging)
+# ---------------------------------------------------------------------------
+
+
+class EntityAliasInput(BoundaryModel):
+    """Request to register an alternate name for an entity.
+
+    The alias is canonicalized the same way as entity names. The target
+    entity must already exist.
+    """
+
+    entity_id: str
+    alias_name: str
+
+
+class EntityAliasRecord(BoundaryModel):
+    """Persisted alias record."""
+
+    id: str
+    entity_id: str
+    alias_name: str
+    canonical_alias: str
+    created_at: datetime
+
+
+# ---------------------------------------------------------------------------
+# Query types
 # ---------------------------------------------------------------------------
 
 
 class EntityQuery(BoundaryModel):
-    """Entity lookup request."""
+    """Query to find entities by name or type.
 
-    text: str | None = None
-    canonical_name: str | None = None
-    kind: EntityKind | None = None
-    scope: str | None = None
-    source_id: str | None = None
-    limit: int = Field(default=20, ge=1, le=100)
+    Name lookups use canonical matching (case-insensitive, punctuation
+    stripped) and include alias resolution.
+    """
+
+    name: str | None = None
+    entity_type: EntityType | None = None
+    limit: int = Field(default=50, ge=1, le=500)
 
 
 class AdjacencyQuery(BoundaryModel):
-    """Direct-neighbor graph query (1-hop)."""
+    """Return edges adjacent to a given entity."""
 
     entity_id: str
-    relations: tuple[RelationKind, ...] = Field(default_factory=tuple)
-    scope: str | None = None
-    include_incoming: bool = True
-    include_outgoing: bool = True
-    limit: int = Field(default=50, ge=1, le=200)
+    relation_types: tuple[RelationType, ...] = Field(default_factory=tuple)
+    direction: str = "both"  # "outgoing" | "incoming" | "both"
+    limit: int = Field(default=50, ge=1, le=500)
 
 
 class TraversalQuery(BoundaryModel):
-    """Bounded multi-hop graph traversal request."""
+    """Multi-hop graph traversal from a seed entity."""
 
-    start_entity_ids: tuple[str, ...]
-    target_entity_ids: tuple[str, ...] = Field(default_factory=tuple)
-    relations: tuple[RelationKind, ...] = Field(default_factory=tuple)
-    scope: str | None = None
-    max_depth: int = Field(default=3, ge=1, le=6)
-    limit: int = Field(default=20, ge=1, le=100)
+    entity_id: str
+    max_hops: int = Field(default=2, ge=1, le=5)
+    relation_types: tuple[RelationType, ...] = Field(default_factory=tuple)
+    limit: int = Field(default=100, ge=1, le=1000)
 
 
-class TraversalPath(BoundaryModel):
-    """One graph path returned by traversal."""
+class TraversalResult(BoundaryModel):
+    """Result of a multi-hop graph traversal."""
 
-    entities: tuple[EntityRecord, ...]
-    edges: tuple[EdgeRecord, ...]
-    score: float = Field(default=1.0, ge=0.0)
+    entities: tuple[EntityRecord, ...] = Field(default_factory=tuple)
+    edges: tuple[EdgeRecord, ...] = Field(default_factory=tuple)
 
 
 # ---------------------------------------------------------------------------
-# Boundary types — Results
+# Invalidation types
 # ---------------------------------------------------------------------------
 
 
-class PurgeEvidenceResult(BoundaryModel):
-    """Result of evidence purge and orphan cascade."""
+class EvidenceInvalidationResult(BoundaryModel):
+    """Result of bulk evidence invalidation (R31)."""
 
-    source_id: str
-    evidence_removed: int = 0
-    entities_removed: int = 0
-    edges_removed: int = 0
+    invalidated_evidence_ids: tuple[str, ...] = Field(default_factory=tuple)
+    orphaned_entity_ids: tuple[str, ...] = Field(default_factory=tuple)
+    orphaned_edge_ids: tuple[str, ...] = Field(default_factory=tuple)
+
+
+# ---------------------------------------------------------------------------
+# Stats
+# ---------------------------------------------------------------------------
 
 
 class GraphStats(BoundaryModel):
@@ -226,7 +238,8 @@ class GraphStats(BoundaryModel):
 
     entities: int = 0
     edges: int = 0
-    evidence: int = 0
+    evidence_claims: int = 0
+    aliases: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -238,97 +251,40 @@ class GraphStats(BoundaryModel):
 class GraphStore(Protocol):
     """Public contract for the Graph module.
 
-    Storage ownership: only Graph writes ``graph_entities``,
-    ``graph_edges``, ``graph_evidence`` tables.
+    Storage ownership: only Graph writes ``graph_*`` tables.
     Dependency rule: Graph imports no other knowledge module internals.
     """
 
+    # --- Entity operations ---
+
     def upsert_entity(self, entity: EntityInput) -> EntityRecord:
-        """Insert or update an entity by canonical identity (CP1).
-
-        Identity tuple: (canonicalize_name(entity.name), entity.kind,
-        entity.scope). Two inputs with the same tuple refer to the same
-        entity row.
-
-        Merge rules on existing-row update:
-          - name: keep first non-empty raw form.
-          - description: last-non-empty-wins.
-          - importance: max(existing, input).
-          - metadata: shallow union, input keys override on collision.
+        """Create or update an entity.
 
         Guarantees:
-          - Returned EntityRecord.id is stable across upserts of the same
-            identity tuple.
-          - EntityRecord.canonical_name equals
-            canonicalize_name(returned.name).
-          - created_at is set on first insert and never changes;
-            updated_at refreshes on every call.
+          - Names are canonicalized (lowercased, stripped, trailing
+            punctuation removed) for duplicate detection.
+          - Upsert semantic: existing entity with same canonical name +
+            type is updated; otherwise a new entity is created.
 
         Non-guarantees:
-          - ID format is implementation-defined.
+          - Entity IDs are opaque.
 
         Side effects:
-          - Writes one row in ``graph_entities``. Does NOT add evidence —
-            callers MUST call add_evidence separately to record provenance.
+          - Writes only ``graph_*`` tables.
 
         Raises:
-          - ``ValueError`` if entity.name is empty.
-        """
-        ...
-
-    def upsert_edge(self, edge: EdgeInput) -> EdgeRecord:
-        """Insert or update an edge between two existing entities.
-
-        Identity tuple: (source_entity_id, target_entity_id, relation,
-        scope). Re-upserting the same tuple updates weight and metadata
-        without creating a duplicate row.
-
-        Guarantees:
-          - Returned EdgeRecord.id is stable across upserts of the same
-            identity tuple.
-
-        Non-guarantees:
-          - Edge ordering within a scope is implementation-defined.
-
-        Side effects:
-          - Writes one row in ``graph_edges``. Does NOT add evidence.
-
-        Raises:
-          - ``LookupError`` if either source_entity_id or target_entity_id
-            does not exist in graph_entities.
-          - ``ValueError`` if relation is not in RelationKind.
-        """
-        ...
-
-    def add_evidence(self, evidence: EvidenceInput) -> EvidenceRecord:
-        """Record provenance for an entity or edge (CP1).
-
-        Guarantees:
-          - Returns a record with a freshly generated ID.
-          - source_id is denormalised for fast cascade in
-            purge_evidence_by_source.
-          - Idempotent on (claim_type, claim_id, chunk_id): re-adding the
-            same triple updates confidence instead of inserting a duplicate.
-
-        Non-guarantees:
-          - Evidence ordering is implementation-defined.
-
-        Side effects:
-          - Writes one row in ``graph_evidence``.
-
-        Raises:
-          - ``LookupError`` if the referenced entity/edge does not exist.
+          - ``ValueError`` if name is empty after canonicalization.
         """
         ...
 
     def get_entity(self, entity_id: str) -> EntityRecord | None:
-        """Return the entity by ID, or None if not found.
+        """Return one entity by ID, or None if not found.
 
         Guarantees:
-          - Returns None for unknown IDs.
+          - Returns the entity with its current alias_names.
 
         Non-guarantees:
-          - ID format is opaque.
+          - None.
 
         Side effects:
           - None.
@@ -339,16 +295,15 @@ class GraphStore(Protocol):
         ...
 
     def find_entities(self, query: EntityQuery) -> tuple[EntityRecord, ...]:
-        """Find entities matching the query.
+        """Search entities by name and/or type.
 
         Guarantees:
-          - Filter dimensions combine with AND semantics.
-          - If canonical_name is set, exact match on the canonical form.
-          - Results deterministically ordered by (canonical_name, id).
-          - Result count <= query.limit.
+          - Name lookups are canonical (case-insensitive, punctuation-
+            stripped) and include alias resolution.
+          - Returns up to query.limit results.
 
         Non-guarantees:
-          - Text-based fuzzy matching strategy is implementation-defined.
+          - Ordering is implementation-defined.
 
         Side effects:
           - None.
@@ -358,60 +313,38 @@ class GraphStore(Protocol):
         """
         ...
 
-    def adjacent(self, query: AdjacencyQuery) -> tuple[EdgeRecord, ...]:
-        """Return direct graph neighbours as edges (1-hop).
+    # --- Edge operations ---
+
+    def upsert_edge(self, edge: EdgeInput) -> EdgeRecord:
+        """Create or update an edge between two entities.
 
         Guarantees:
-          - Respects direction flags (incoming/outgoing) and relation
-            filters.
-          - Result count <= query.limit.
+          - Upsert semantic: existing edge with same source + target +
+            relation is updated; otherwise a new edge is created.
+          - SAME_AS is not a valid edge type; use add_alias for identity
+            merging.
 
         Non-guarantees:
-          - Result ordering is implementation-defined.
+          - Edge IDs are opaque.
 
         Side effects:
-          - None.
+          - Writes only ``graph_*`` tables.
 
         Raises:
-          - ``LookupError`` if query.entity_id does not exist.
+          - ``ValueError`` if source or target entity does not exist.
+          - ``ValueError`` if relation_type is SAME_AS or invalid.
         """
         ...
 
-    def traverse(self, query: TraversalQuery) -> tuple[TraversalPath, ...]:
-        """Walk edges from start entities up to max_depth hops.
+    def get_adjacent(self, query: AdjacencyQuery) -> tuple[EdgeRecord, ...]:
+        """Return edges adjacent to an entity.
 
         Guarantees:
-          - Every returned TraversalPath begins with a start entity.
-          - Path length (edges) is between 1 and max_depth.
-          - If relations is set, every edge in every path has a relation
-            in that tuple.
-          - If scope is set, all visited entities/edges share that scope.
-          - Cycles are broken: no entity appears twice in a single path.
-          - If target_entity_ids is set, only paths reaching a target are
-            returned.
-          - Result count <= query.limit.
+          - Direction filtering (outgoing/incoming/both) is applied.
+          - Relation type filtering is applied when non-empty.
 
         Non-guarantees:
-          - Path ordering and completeness when results would exceed limit
-            are implementation-defined.
-
-        Side effects:
-          - None.
-
-        Raises:
-          - ``LookupError`` if any start_entity_id does not exist.
-        """
-        ...
-
-    def evidence_for(self, entity_id: str) -> tuple[EvidenceRecord, ...]:
-        """List all evidence supporting an entity.
-
-        Guarantees:
-          - Ordered most recent first by created_at.
-
-        Non-guarantees:
-          - Evidence for edges is accessed via claim_type="edge" filter
-            (implementation-defined query).
+          - Ordering is implementation-defined.
 
         Side effects:
           - None.
@@ -421,31 +354,116 @@ class GraphStore(Protocol):
         """
         ...
 
-    def purge_evidence_by_source(self, source_id: str) -> PurgeEvidenceResult:
-        """Remove all evidence for a source and cascade-delete orphans.
-
-        Cascade order:
-          1. Delete graph_evidence rows matching source_id.
-          2. Delete entities with zero remaining evidence (orphans).
-          3. Delete edges whose endpoints were orphaned or whose own
-             evidence is gone.
+    def traverse(self, query: TraversalQuery) -> TraversalResult:
+        """Multi-hop BFS/DFS traversal from a seed entity.
 
         Guarantees:
-          - Idempotent: re-running on an already-purged source returns
-            zero counts.
-          - An entity with evidence from a different source survives.
+          - Explores up to query.max_hops hops.
+          - Total result size <= query.limit.
+          - No duplicate entities or edges in the result.
 
         Non-guarantees:
-          - Cascade timing (immediate vs deferred) is implementation-defined.
+          - Traversal algorithm (BFS vs DFS), tie-breaking, and pruning
+            strategy are implementation details.
 
         Side effects:
-          - Writes to ``graph_*`` tables (deletion). Does NOT touch
-            ``content_*`` or ``enrich_*``.
+          - None.
 
         Raises:
-          - Never raises for unknown source_id (returns zero-count result).
+          - ``LookupError`` if the seed entity_id does not exist.
         """
         ...
+
+    # --- Evidence operations ---
+
+    def add_evidence(self, evidence: EvidenceInput) -> EvidenceRecord:
+        """Record an evidence claim linking a chunk to a graph element.
+
+        Guarantees:
+          - Exactly one of entity_id or edge_id must be set (matching
+            claim_type).
+
+        Non-guarantees:
+          - Evidence ID format is opaque.
+
+        Side effects:
+          - Writes only ``graph_*`` tables.
+
+        Raises:
+          - ``ValueError`` if both entity_id and edge_id are set/unset,
+            or if claim_type doesn't match the set field.
+        """
+        ...
+
+    def claims_for_chunk(self, chunk_id: str) -> ChunkClaims:
+        """Return all graph claims derived from a chunk.
+
+        Guarantees:
+          - Returns entity IDs, edge IDs, and evidence IDs that trace
+            back to the given chunk_id.
+          - Returns empty ChunkClaims for unknown chunk_id.
+
+        Non-guarantees:
+          - Does not resolve whether entities/edges have other evidence.
+
+        Side effects:
+          - None.
+
+        Raises:
+          - Never raises for unknown chunk_id.
+        """
+        ...
+
+    def invalidate_evidence_by_chunks(
+        self,
+        chunk_ids: tuple[str, ...],
+    ) -> EvidenceInvalidationResult:
+        """Remove evidence claims for the given chunks and clean up orphans.
+
+        Guarantees:
+          - All evidence records referencing any of the provided chunk_ids
+            are deleted.
+          - Entities and edges that lose ALL evidence are reported as
+            orphaned (and deleted from graph_* tables).
+          - Idempotent: already-absent chunk_ids are silently ignored.
+
+        Non-guarantees:
+          - Whether orphan detection is immediate or batched is
+            implementation-defined.
+
+        Side effects:
+          - Writes only ``graph_*`` tables (deletions).
+
+        Raises:
+          - Never raises (idempotent).
+        """
+        ...
+
+    # --- Alias operations (R33) ---
+
+    def add_alias(self, alias: EntityAliasInput) -> EntityAliasRecord:
+        """Register an alternate name for an entity.
+
+        Guarantees:
+          - The alias is canonicalized identically to entity names.
+          - find_entities resolves aliases transparently.
+          - Duplicate aliases (same canonical form + entity) are
+            idempotent (returns existing record).
+
+        Non-guarantees:
+          - Alias IDs are opaque.
+
+        Side effects:
+          - Writes only ``graph_*`` tables.
+
+        Raises:
+          - ``LookupError`` if entity_id does not exist.
+          - ``ValueError`` if alias_name is empty after canonicalization
+            or conflicts with a different entity's canonical name.
+        """
+        ...
+
+    # --- Stats ---
 
     def stats(self) -> GraphStats:
         """Return counts owned by this module.

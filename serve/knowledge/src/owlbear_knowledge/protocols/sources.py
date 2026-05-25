@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from datetime import datetime  # noqa: TC003 — needed by Pydantic at runtime
 from enum import StrEnum
-from typing import Protocol, runtime_checkable
+from typing import Annotated, Literal, Protocol, runtime_checkable
 
 from pydantic import Field
 
@@ -34,11 +34,7 @@ class SourceKind(StrEnum):
 
 
 class FetchTransport(StrEnum):
-    """Routing hint declaring how a source's content is fetched.
-
-    Used by Ingest to select the appropriate fetcher without inspecting
-    the config blob.
-    """
+    """Routing hint declaring how a source's content is fetched."""
 
     BROWSER = "browser"
     FILESYSTEM = "filesystem"
@@ -67,6 +63,49 @@ class SourceHealth(StrEnum):
 
 
 # ---------------------------------------------------------------------------
+# Typed source configuration (discriminated union keyed on kind — CP6)
+# ---------------------------------------------------------------------------
+
+
+class FileGlobConfig(BoundaryModel):
+    """Configuration for FILE_GLOB sources."""
+
+    kind: Literal[SourceKind.FILE_GLOB] = SourceKind.FILE_GLOB
+    patterns: tuple[str, ...]
+    base_path: str = "."
+    follow_symlinks: bool = False
+
+
+class UrlListConfig(BoundaryModel):
+    """Configuration for URL_LIST sources."""
+
+    kind: Literal[SourceKind.URL_LIST] = SourceKind.URL_LIST
+    urls: tuple[str, ...]
+
+
+class AuthenticatedWebConfig(BoundaryModel):
+    """Configuration for AUTHENTICATED_WEB sources."""
+
+    kind: Literal[SourceKind.AUTHENTICATED_WEB] = SourceKind.AUTHENTICATED_WEB
+    base_url: str
+    auth_profile: str
+    page_limit: int = Field(default=100, ge=1)
+
+
+class InlineConfig(BoundaryModel):
+    """Configuration for INLINE sources (text provided directly)."""
+
+    kind: Literal[SourceKind.INLINE] = SourceKind.INLINE
+
+
+SourceConfig = Annotated[
+    FileGlobConfig | UrlListConfig | AuthenticatedWebConfig | InlineConfig,
+    Field(discriminator="kind"),
+]
+"""Typed source configuration. Shape depends on SourceKind."""
+
+
+# ---------------------------------------------------------------------------
 # Boundary types
 # ---------------------------------------------------------------------------
 
@@ -77,7 +116,7 @@ class SourceRegistration(BoundaryModel):
     name: str
     kind: SourceKind
     fetch_method: FetchTransport
-    config: Metadata = Field(default_factory=dict)
+    config: SourceConfig
     scope: str = "global"
     enrich: bool = False
     refreshable: bool = True
@@ -86,10 +125,15 @@ class SourceRegistration(BoundaryModel):
 
 
 class SourceWish(BoundaryModel):
-    """Request to register demand for a source not yet ingestable."""
+    """Request to register demand for a source not yet ingestable.
+
+    Unlike SourceRegistration, wishes may not know the connector type
+    or configuration — they express demand only.
+    """
 
     name: str
-    kind: SourceKind
+    expected_kind: SourceKind | None = None
+    expected_fetch_method: FetchTransport | None = None
     scope: str = "global"
     reason: str = ""
     metadata: Metadata = Field(default_factory=dict)
@@ -107,7 +151,7 @@ class SourceUpdate(BoundaryModel):
     """
 
     state: SourceState | None = None
-    config: Metadata | None = None
+    config: SourceConfig | None = None
     scope: str | None = None
     enrich: bool | None = None
     refreshable: bool | None = None
@@ -133,7 +177,7 @@ class SourceRecord(BoundaryModel):
     fetch_method: FetchTransport
     state: SourceState
     health: SourceHealth = SourceHealth.UNKNOWN
-    config: Metadata = Field(default_factory=dict)
+    config: SourceConfig
     scope: str = "global"
     enrich: bool = False
     refreshable: bool = True
@@ -149,13 +193,15 @@ class SourceRecord(BoundaryModel):
 class SourceDeletionInfo(BoundaryModel):
     """Typed return from source deletion carrying context for downstream purge.
 
-    Not an async event — returned directly by delete_source for Ingest to
-    coordinate the cascade.
+    Carries audit context (reason, timestamp) so downstream PurgeReport is
+    fully traceable.
     """
 
     source_id: str
     source_name: str
     scope: str
+    deleted_at: datetime
+    reason: str | None = None
 
 
 class SourceStats(BoundaryModel):
@@ -188,17 +234,18 @@ class SourceStore(Protocol):
             timestamps.
           - If a WISHED source with the same name+scope exists, it is
             promoted (superseded) rather than duplicated.
+          - Config shape is validated at the boundary (discriminated union).
 
         Non-guarantees:
-          - Source IDs, timestamp precision, and config storage format are
+          - Source IDs, timestamp precision, and storage format are
             implementation details.
 
         Side effects:
           - Writes only ``source_*`` tables.
 
         Raises:
-          - ``ValueError`` if required fields are missing or config is
-            malformed.
+          - ``ValueError`` if required fields are missing or config shape
+            does not match kind.
         """
         ...
 
@@ -207,6 +254,7 @@ class SourceStore(Protocol):
 
         Guarantees:
           - Returns a WISHED source record queryable through this protocol.
+          - Does not require kind or config (demand signals only).
 
         Non-guarantees:
           - Wishes do not imply fetch credentials, URLs, or future
@@ -271,15 +319,15 @@ class SourceStore(Protocol):
           - updated_at is refreshed on every successful call.
 
         Non-guarantees:
-          - Partial config merge semantics are implementation-defined
-            (replace vs deep-merge).
+          - Metadata merge semantics are implementation-defined.
 
         Side effects:
           - Writes only ``source_*`` tables.
 
         Raises:
           - ``LookupError`` if source_id does not exist.
-          - ``ValueError`` if the state transition is invalid.
+          - ``ValueError`` if the state transition is invalid or config
+            shape does not match kind.
         """
         ...
 
@@ -306,9 +354,10 @@ class SourceStore(Protocol):
 
         Guarantees:
           - The returned SourceDeletionInfo carries all context that
-            downstream modules (Ingest → Content → Enrichment → Graph)
-            need for cascade cleanup without re-reading the deleted record.
+            downstream modules need for cascade cleanup without re-reading
+            the deleted record.
           - The source record is removed from this module's storage.
+          - deleted_at and reason are preserved in the return for audit.
 
         Non-guarantees:
           - Sources does not delete Content, Graph, or Enrichment records.

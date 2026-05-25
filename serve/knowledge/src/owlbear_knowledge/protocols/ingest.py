@@ -1,128 +1,149 @@
-"""IngestPipeline Protocol — Ingest module public surface.
+"""IngestCoordinator Protocol — Ingest module public surface.
 
-Module responsibility: orchestrate the write path. Fetches raw content
-(via the external ContentFetcher boundary in serve/browser/), hands it to
-ContentStore, cascades replacement signals to EnrichmentEngine, and
-coordinates source lifecycle updates.
+Module responsibility: orchestrate the full ingest pipeline from source
+fetch through content ingestion, enrichment enqueuing, and deletion cascade.
+Owns no tables — delegates storage to Sources, Content, Enrichment, and Graph.
 
-Owns NO tables. Pure coordinator (CP13).
+Ingest is the only module that coordinates cross-module cascades. Individual
+modules (Sources, Content, Enrichment, Graph) never call each other directly.
 
-Safety invariant:
-  All ingested content is marked as externally-sourced (not system
-  instructions) before storage. This ensures downstream agents treat
-  retrieved text as data, not as trusted instructions.
+Cascade sequence on source deletion (R31):
+  1. Sources.delete_source → SourceDeletionInfo
+  2. Content.purge_source → ContentPurgeResult (has chunk_ids)
+  3. Enrichment.discard_chunks(chunk_ids) → remove pending queue items
+  4. Enrichment.purge_source → remove extraction records
+  5. Graph.invalidate_evidence_by_chunks(chunk_ids) → remove evidence + orphans
+
+Cascade sequence on content replacement (re-ingest):
+  1. Content.ingest → ContentIngestResult (state=REPLACED, replaced_chunk_ids)
+  2. Enrichment.discard_chunks(replaced_chunk_ids) → clean stale queue items
+  3. Graph.invalidate_evidence_by_chunks(replaced_chunk_ids) → clean evidence
+  4. Enrichment.enqueue_chunks(new_chunk_ids) → queue for extraction
 """
 
 from __future__ import annotations
 
 from datetime import datetime  # noqa: TC003 — needed by Pydantic at runtime
-from enum import StrEnum
 from typing import Protocol, runtime_checkable
 
-from pydantic import Field, model_validator
+from pydantic import Field
 
 from owlbear_knowledge.protocols.common import BoundaryModel, Metadata
-from owlbear_knowledge.protocols.content import ContentPurgeResult  # noqa: TC001
-from owlbear_knowledge.protocols.enrichment import EnrichmentPurgeResult  # noqa: TC001
-from owlbear_knowledge.protocols.graph import PurgeEvidenceResult  # noqa: TC001
-from owlbear_knowledge.protocols.sources import SourceDeletionInfo, SourceRecord  # noqa: TC001
+from owlbear_knowledge.protocols.content import ContentIngestResult, ContentPurgeResult
+from owlbear_knowledge.protocols.enrichment import EnrichmentPurgeResult
+from owlbear_knowledge.protocols.graph import EvidenceInvalidationResult
+from owlbear_knowledge.protocols.sources import SourceDeletionInfo, SourceRecord
 
 
 # ---------------------------------------------------------------------------
-# Enums
-# ---------------------------------------------------------------------------
-
-
-class IngestStatus(StrEnum):
-    """Overall write-path outcome."""
-
-    SUCCEEDED = "succeeded"
-    PARTIAL = "partial"
-    FAILED = "failed"
-    SKIPPED = "skipped"
-
-
-# ---------------------------------------------------------------------------
-# Boundary types — Requests
+# Request types
 # ---------------------------------------------------------------------------
 
 
 class IngestRequest(BoundaryModel):
-    """Request for Ingest to accept or fetch a single document.
+    """Request to ingest content from a registered source.
 
-    Provide either ``text`` (direct) or ``uri`` (fetch via transport).
+    This is the primary entry point for bringing new content into the
+    knowledge system.
     """
 
     source_id: str
-    title: str | None = None
-    uri: str | None = None
-    text: str | None = None
-    scope: str = "global"
-    run_enrichment: bool = True
+    documents: tuple[IngestDocument, ...] = Field(default_factory=tuple)
+    enrich: bool = True
     metadata: Metadata = Field(default_factory=dict)
 
-    @model_validator(mode="after")
-    def _require_uri_or_text(self) -> IngestRequest:
-        """Require either a fetch target or direct text payload."""
-        if self.uri is None and self.text is None:
-            msg = "IngestRequest requires either uri or text"
-            raise ValueError(msg)
-        return self
 
+class IngestDocument(BoundaryModel):
+    """A document to be ingested from a source."""
 
-class RefreshRequest(BoundaryModel):
-    """Request to refresh all ingestable targets for a registered source."""
-
-    source_id: str
-    run_enrichment: bool = True
-    force: bool = False
-
-
-# ---------------------------------------------------------------------------
-# Boundary types — Results
-# ---------------------------------------------------------------------------
-
-
-class IngestFailure(BoundaryModel):
-    """One recoverable write-path failure."""
-
-    stage: str
-    message: str
-    source_id: str | None = None
+    title: str
+    text: str
     uri: str | None = None
+    external_id: str | None = None
+    metadata: Metadata = Field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
+# Result types
+# ---------------------------------------------------------------------------
 
 
 class IngestResult(BoundaryModel):
-    """Write-path result for a single document ingest."""
+    """Aggregate result of an ingest operation."""
 
-    status: IngestStatus
-    source: SourceRecord
-    document_id: str | None = None
-    chunk_ids: tuple[str, ...] = Field(default_factory=tuple)
-    replaced_chunk_ids: tuple[str, ...] = Field(default_factory=tuple)
-    failures: tuple[IngestFailure, ...] = Field(default_factory=tuple)
+    source_id: str
+    documents_processed: int = 0
+    documents_created: int = 0
+    documents_replaced: int = 0
+    documents_unchanged: int = 0
+    chunks_created: int = 0
+    chunks_replaced: int = 0
+    chunks_enqueued: int = 0
+    content_results: tuple[ContentIngestResult, ...] = Field(default_factory=tuple)
+    started_at: datetime
     completed_at: datetime
+
+
+class PurgeResult(BoundaryModel):
+    """Aggregate result of a source deletion cascade.
+
+    Carries typed sub-results from each module for full audit trail.
+    """
+
+    source: SourceDeletionInfo
+    content: ContentPurgeResult
+    enrichment: EnrichmentPurgeResult
+    graph: EvidenceInvalidationResult
+
+
+# ---------------------------------------------------------------------------
+# Refresh types
+# ---------------------------------------------------------------------------
+
+
+class RefreshRequest(BoundaryModel):
+    """Request to refresh content from sources.
+
+    When source_ids is empty, all refreshable sources are refreshed.
+    """
+
+    source_ids: tuple[str, ...] = Field(default_factory=tuple)
+    force: bool = False
+    metadata: Metadata = Field(default_factory=dict)
 
 
 class RefreshResult(BoundaryModel):
-    """Refresh result for all targets under one source."""
+    """Aggregate result of a refresh operation."""
 
-    status: IngestStatus
-    source: SourceRecord
-    ingests: tuple[IngestResult, ...] = Field(default_factory=tuple)
-    failures: tuple[IngestFailure, ...] = Field(default_factory=tuple)
-    completed_at: datetime
+    sources_checked: int = 0
+    sources_refreshed: int = 0
+    ingest_results: tuple[IngestResult, ...] = Field(default_factory=tuple)
+    errors: tuple[RefreshError, ...] = Field(default_factory=tuple)
 
 
-class PurgeReport(BoundaryModel):
-    """Cascade purge result composed from all downstream modules."""
+class RefreshError(BoundaryModel):
+    """Error encountered during source refresh."""
 
     source_id: str
-    content: ContentPurgeResult | None = None
-    enrichment: EnrichmentPurgeResult | None = None
-    graph: PurgeEvidenceResult | None = None
-    failures: tuple[IngestFailure, ...] = Field(default_factory=tuple)
-    completed_at: datetime
+    error: str
+    timestamp: datetime
+
+
+# ---------------------------------------------------------------------------
+# Stats
+# ---------------------------------------------------------------------------
+
+
+class IngestStats(BoundaryModel):
+    """Aggregate stats across all modules (Ingest coordinates the query)."""
+
+    sources_total: int = 0
+    sources_active: int = 0
+    documents_total: int = 0
+    chunks_total: int = 0
+    enrichment_pending: int = 0
+    graph_entities: int = 0
+    graph_edges: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -131,90 +152,105 @@ class PurgeReport(BoundaryModel):
 
 
 @runtime_checkable
-class IngestPipeline(Protocol):
-    """Public contract for the Ingest module.
+class IngestCoordinator(Protocol):
+    """Public contract for the Ingest coordination module.
 
-    Storage ownership: Ingest owns NO tables. All mutations pass through
-    module protocols (Sources, Content, Enrichment, Graph).
+    Storage ownership: Ingest owns no tables. It delegates writes to
+    Sources, Content, Enrichment, and Graph.
 
-    Dependencies: SourceStore, ContentStore, EnrichmentEngine, GraphStore,
-    and an external ContentFetcher (from serve/browser/).
+    Cascade responsibility: Ingest is the sole orchestrator of cross-module
+    cascades (deletion, replacement, enqueue).
     """
 
     async def ingest(self, request: IngestRequest) -> IngestResult:
-        """Fetch or accept text, write to Content, cascade to Enrichment.
-
-        Sequence:
-          1. Validate source exists via SourceStore.get_source.
-          2. If request.uri: fetch via ContentFetcher (transport determined
-             by source's fetch_method).
-          3. Mark content as externally-sourced (safety invariant).
-          4. Call ContentStore.ingest with the text.
-          5. If result has replaced_chunk_ids: call
-             EnrichmentEngine.mark_stale(replaced_chunk_ids).
-          6. Update source health/state via SourceStore as appropriate.
+        """Ingest documents from a source.
 
         Guarantees:
-          - On failure, status is FAILED and failures tuple is populated.
-          - Partial-success is reflected in the result.
-          - Source state is updated on both success and failure.
+          - Each document is passed to Content.ingest for chunking and
+            embedding.
+          - For REPLACED documents: stale chunks are discarded from
+            Enrichment queue and evidence is invalidated in Graph.
+          - For new/replaced documents with enrich=True: new chunk IDs
+            are enqueued for enrichment.
+          - Source health is updated based on ingest success/failure.
 
         Non-guarantees:
-          - Fetch retry policy is implementation-defined.
-          - Enrichment scheduling (when extraction actually runs) is
-            agent-driven, not Ingest's concern.
+          - Document ordering, parallelism degree, and batch sizing are
+            implementation details.
 
         Side effects:
-          - No direct table writes; all mutations through module protocols.
+          - Writes via Content, Enrichment, and Graph delegates.
+          - Updates source health via Sources.
 
         Raises:
           - ``LookupError`` if source_id does not exist.
-          - ``ValueError`` if IngestRequest validation fails.
+          - ``ValueError`` if request contains no documents.
         """
         ...
 
-    async def refresh_source(self, request: RefreshRequest) -> RefreshResult:
-        """Refresh every ingestable target for a registered source.
+    async def delete_source(self, source_id: str, *, reason: str | None = None) -> PurgeResult:
+        """Execute the full deletion cascade for a source.
+
+        Cascade sequence:
+          1. Sources.delete_source → SourceDeletionInfo
+          2. Content.purge_source → ContentPurgeResult (provides chunk_ids)
+          3. Enrichment.discard_chunks(chunk_ids) → remove stale queue items
+          4. Enrichment.purge_source → remove extraction records
+          5. Graph.invalidate_evidence_by_chunks(chunk_ids) → evidence + orphans
 
         Guarantees:
-          - Only ACTIVE sources are refreshed (INACTIVE and WISHED are
-            skipped with status=SKIPPED).
-          - If force=False and content is unchanged, individual ingests
-            return status=SKIPPED.
+          - All module-owned data for the source is removed in correct
+            dependency order.
+          - PurgeResult carries typed sub-results for full audit trail.
+          - deleted_at and reason are preserved for traceability.
 
         Non-guarantees:
-          - Target discovery order and concurrency are implementation
-            details.
+          - Atomicity across modules is implementation-defined (saga vs
+            transaction).
 
         Side effects:
-          - No direct table writes; all mutations through module protocols.
+          - Writes via Sources, Content, Enrichment, and Graph delegates.
 
         Raises:
           - ``LookupError`` if source_id does not exist.
         """
         ...
 
-    async def handle_source_purge(self, info: SourceDeletionInfo) -> PurgeReport:
-        """Coordinate downstream cleanup after Sources deletion.
-
-        Sequence (must execute in this order):
-          1. ContentStore.purge_source(info.source_id).
-          2. EnrichmentEngine.purge_source(info.source_id).
-          3. GraphStore.purge_evidence_by_source(info.source_id).
+    async def refresh(self, request: RefreshRequest) -> RefreshResult:
+        """Refresh content from one or more sources.
 
         Guarantees:
-          - Uses the info payload; does not require reading the deleted
-            source record.
-          - Idempotent: re-running on an already-purged source returns
-            zero counts in all sub-results.
+          - Only sources with refreshable=True are processed (unless
+            force=True overrides).
+          - Each refreshed source is re-ingested through the full pipeline.
+          - Errors in individual sources do not abort the batch.
 
         Non-guarantees:
-          - Does not delete the source record itself (Sources already did).
+          - Fetch mechanism (HTTP, filesystem, browser) is determined by
+            source FetchTransport — implementation detail.
 
         Side effects:
-          - No direct table writes; all mutations through module protocols.
+          - Writes via Sources, Content, Enrichment, and Graph delegates.
 
         Raises:
-          - Never raises (individual module purges are idempotent).
+          - Never raises (errors are captured in RefreshResult.errors).
+        """
+        ...
+
+    def stats(self) -> IngestStats:
+        """Return aggregate stats from all modules.
+
+        Guarantees:
+          - Queries each module's stats() and assembles a unified view.
+
+        Non-guarantees:
+          - Consistency across modules (race conditions between stat
+            queries) is implementation-defined.
+
+        Side effects:
+          - None.
+
+        Raises:
+          - Never raises.
         """
         ...

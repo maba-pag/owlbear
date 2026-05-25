@@ -1,113 +1,137 @@
-"""QueryService Protocol — Query module public surface.
+"""QueryFacade Protocol — Query module public surface.
 
-Module responsibility: orchestrate the read path. Hybrid search via
-ContentStore, optional graph augmentation via GraphStore, provenance
-assembly via SourceStore, context rendering for agent consumption, and
-aggregate stats composition.
+Module responsibility: unified read-only entry point combining semantic
+search, graph traversal, and context rendering. Owns no tables — reads
+from Content and Graph.
 
-Owns NO tables. Pure coordinator (CP4 + CP12).
+The Query module does NOT exist as a writable store. It is a read facade
+that assembles results from Content.search, Graph.traverse, and
+Graph.find_entities into user-facing responses with provenance.
+
+No max_graph_depth parameter — traversal depth is controlled exclusively
+by GraphStore.traverse(max_hops) (R42).
 """
 
 from __future__ import annotations
 
-from datetime import datetime  # noqa: TC003 — needed by Pydantic at runtime
 from typing import Protocol, runtime_checkable
 
 from pydantic import Field
 
-from owlbear_knowledge.protocols.common import BoundaryModel, Metadata
-from owlbear_knowledge.protocols.content import ContentSearchResult, ContentStats  # noqa: TC001
-from owlbear_knowledge.protocols.enrichment import EnrichmentStats  # noqa: TC001
-from owlbear_knowledge.protocols.graph import EntityRecord, GraphStats, RelationKind, TraversalPath  # noqa: TC001
-from owlbear_knowledge.protocols.sources import SourceRecord, SourceStats  # noqa: TC001
+from owlbear_knowledge.protocols.common import BoundaryModel, EntityType, Metadata, RelationType
+from owlbear_knowledge.protocols.content import ContentChunk, ContentSearchResult
+from owlbear_knowledge.protocols.graph import EdgeRecord, EntityRecord, TraversalResult
 
 
 # ---------------------------------------------------------------------------
-# Boundary types — Request
+# Request types
 # ---------------------------------------------------------------------------
 
 
 class QueryRequest(BoundaryModel):
-    """Semantic search request accepted by Query."""
+    """Combined search + traversal request.
+
+    No max_graph_depth field — depth is controlled by the graph
+    traversal hop limit (see TraversalQuery.max_hops).
+    """
 
     text: str
+    top_k: int = Field(default=10, ge=1, le=100)
     scopes: tuple[str, ...] = Field(default_factory=tuple)
     source_ids: tuple[str, ...] = Field(default_factory=tuple)
-    top_k: int = Field(default=5, ge=1, le=100)
+    min_score: float = Field(default=0.0, ge=0.0, le=1.0)
     include_graph: bool = True
-    max_graph_depth: int = Field(default=3, ge=1, le=6)
-    metadata: Metadata = Field(default_factory=dict)
+    graph_hops: int = Field(default=2, ge=1, le=5)
+    entity_types: tuple[EntityType, ...] = Field(default_factory=tuple)
+    relation_types: tuple[RelationType, ...] = Field(default_factory=tuple)
+
+
+class EntityLookupRequest(BoundaryModel):
+    """Direct entity lookup + neighbourhood expansion."""
+
+    entity_id: str
+    expand_hops: int = Field(default=1, ge=0, le=5)
+    relation_types: tuple[RelationType, ...] = Field(default_factory=tuple)
+
+
+class ContextRenderRequest(BoundaryModel):
+    """Request to render LLM context from a query result.
+
+    max_chars controls output budget — see ARCHITECTURE.md for policy.
+    """
+
+    query_result: QueryResult | None = None
+    entity_result: EntityLookupResult | None = None
+    max_chars: int = Field(default=8000, ge=100, le=100_000)
+    include_provenance: bool = True
 
 
 # ---------------------------------------------------------------------------
-# Boundary types — Response
+# Provenance types
 # ---------------------------------------------------------------------------
 
 
 class Provenance(BoundaryModel):
-    """Source and chunk attribution for a query result."""
+    """Provenance record linking a search result to its source.
 
-    source_id: str
-    source_name: str
-    document_id: str
+    ``exact_text`` is derived from the chunk's text field — it is NOT a
+    separately stored matched_text column (R44). Implementations populate
+    it from ContentChunk.text at query time.
+    """
+
     chunk_id: str
-    exact_text: str
+    document_id: str
+    source_id: str
+    title: str
     uri: str | None = None
+    exact_text: str
     section_path: tuple[str, ...] = Field(default_factory=tuple)
+    score: float = Field(default=0.0, ge=0.0)
 
 
-class GraphContext(BoundaryModel):
-    """Graph augmentation attached to one query result."""
-
-    entities: tuple[EntityRecord, ...] = Field(default_factory=tuple)
-    paths: tuple[TraversalPath, ...] = Field(default_factory=tuple)
+# ---------------------------------------------------------------------------
+# Result types
+# ---------------------------------------------------------------------------
 
 
 class QueryResult(BoundaryModel):
-    """One composed read-path result."""
+    """Combined result from search + optional graph expansion."""
 
-    content: ContentSearchResult
-    source: SourceRecord | None = None
-    provenance: Provenance
-    graph: GraphContext = Field(default_factory=GraphContext)
-    score: float = Field(ge=0.0)
+    search_results: tuple[ContentSearchResult, ...] = Field(default_factory=tuple)
+    graph_context: TraversalResult | None = None
+    provenance: tuple[Provenance, ...] = Field(default_factory=tuple)
 
 
-class QueryResponse(BoundaryModel):
-    """Full read-path response."""
+class EntityLookupResult(BoundaryModel):
+    """Result of a direct entity lookup with neighbourhood."""
 
-    request: QueryRequest
-    results: tuple[QueryResult, ...]
-
-
-class QueryContextRequest(BoundaryModel):
-    """Request to render search results as agent prompt context."""
-
-    response: QueryResponse
-    max_chars: int = Field(default=6000, ge=500)
+    entity: EntityRecord | None = None
+    neighbourhood: TraversalResult | None = None
+    related_chunks: tuple[ContentChunk, ...] = Field(default_factory=tuple)
 
 
-class QueryContext(BoundaryModel):
-    """Rendered context bundle for agent consumption."""
+class RenderedContext(BoundaryModel):
+    """Pre-formatted context string ready for LLM consumption."""
 
     text: str
-    results: tuple[QueryResult, ...]
+    char_count: int = 0
+    chunk_count: int = 0
+    entity_count: int = 0
     truncated: bool = False
 
 
 # ---------------------------------------------------------------------------
-# Boundary types — Stats
+# Stats
 # ---------------------------------------------------------------------------
 
 
-class AggregateStats(BoundaryModel):
-    """Composed stats from all knowledge modules."""
+class QueryStats(BoundaryModel):
+    """Read-only stats aggregated from Content and Graph."""
 
-    sources: SourceStats
-    content: ContentStats
-    graph: GraphStats
-    enrichment: EnrichmentStats
-    generated_at: datetime
+    documents: int = 0
+    chunks: int = 0
+    entities: int = 0
+    edges: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -116,124 +140,90 @@ class AggregateStats(BoundaryModel):
 
 
 @runtime_checkable
-class QueryService(Protocol):
-    """Public contract for the Query module.
+class QueryFacade(Protocol):
+    """Public contract for the Query facade.
 
-    Storage ownership: Query owns NO tables. It composes Content search,
-    Graph traversal, and Source attribution through their public protocols.
-
-    Dependencies: ContentStore, GraphStore, SourceStore, EnrichmentEngine
-    (stats only).
+    Storage ownership: Query owns no tables. It reads from Content and
+    Graph to assemble results.
     """
 
-    async def search(self, request: QueryRequest) -> QueryResponse:
-        """Hybrid search with graph augmentation and provenance.
-
-        Sequence:
-          1. ContentStore.search for hybrid hits.
-          2. For each hit, look up source_name via SourceStore.get_source
-             (provenance assembly).
-          3. If include_graph: for each hit, find entities whose evidence
-             cites the hit's chunk and include up to max_graph_depth-hop
-             neighbours via GraphStore.traverse.
+    async def search(self, request: QueryRequest) -> QueryResult:
+        """Execute semantic search with optional graph expansion.
 
         Guarantees:
-          - Result text is verbatim from the stored chunk (no rewriting).
-          - Every result has provenance populated with source_name.
-          - If include_graph=False: graph field is empty on every result.
-          - Result count <= request.top_k.
+          - Semantic search results are returned with normalised scores.
+          - When include_graph=True, entities mentioned in search results
+            are expanded via graph traversal (up to graph_hops).
+          - Provenance records link each result to source/document/chunk
+            with exact_text derived from chunk.text (not a separate column).
+          - entity_types and relation_types filter graph expansion.
 
         Non-guarantees:
-          - Graph augmentation strategy (hops, ranking, entity selection)
-            may evolve. Callers MUST NOT depend on specific traversal
-            depth or path ordering.
-          - Scoring formula is implementation-defined.
+          - Graph expansion strategy (seed selection, traversal order) is
+            implementation-defined.
+          - Score normalisation method is implementation-defined.
 
         Side effects:
-          - None (read-only composition).
+          - None (read-only).
 
         Raises:
           - ``ValueError`` if request.text is empty.
         """
         ...
 
-    def traverse_from_entity(
-        self,
-        entity_name: str,
-        *,
-        relations: tuple[RelationKind, ...] = (),
-        max_depth: int = 2,
-        scope: str | None = None,
-    ) -> tuple[TraversalPath, ...]:
-        """Relationship-aware lookup starting from an entity name.
-
-        Used for the demand scenarios (ISMS → Standards → Approvals;
-        access rights → tool; PDS → CI). With canonical identity (CP1),
-        name resolution is direct: looks up entity by
-        canonicalize_name(entity_name) and traverses outward.
-
-        Sequence:
-          1. find_entities(EntityQuery(canonical_name=...)) via GraphStore.
-          2. For each match: GraphStore.traverse with the given params.
-          3. Concatenate and return paths.
+    def lookup_entity(self, request: EntityLookupRequest) -> EntityLookupResult:
+        """Look up an entity and optionally expand its neighbourhood.
 
         Guarantees:
-          - Empty result if no entity matches.
-          - Direct resolution via canonical identity (no SAME_AS chasing).
+          - Returns the entity record with its aliases.
+          - When expand_hops > 0, expands via graph traversal.
+          - Related chunks are returned for provenance linking.
 
         Non-guarantees:
-          - Path ordering within results is implementation-defined.
+          - Chunk selection for related_chunks is implementation-defined.
 
         Side effects:
-          - None (read-only composition).
+          - None (read-only).
 
         Raises:
-          - Never raises for unknown entity names (returns empty tuple).
+          - ``LookupError`` if entity_id does not exist.
         """
         ...
 
-    def render_context(self, request: QueryContextRequest) -> QueryContext:
-        """Render query results for agent prompt use.
+    def render_context(self, request: ContextRenderRequest) -> RenderedContext:
+        """Render a query or entity result as LLM-ready text.
 
         Guarantees:
-          - Rendered context is derived only from the provided
-            QueryResponse.
-          - Includes provenance sufficient for audit.
-          - If text exceeds max_chars, truncated=True and text is cut at
-            a result boundary (no mid-result truncation).
+          - Output respects max_chars budget (truncates with flag).
+          - When include_provenance=True, source attribution is included.
+          - Text is formatted for direct insertion into an LLM prompt.
 
         Non-guarantees:
-          - Formatting style and truncation strategy are implementation
-            details.
+          - Formatting style, section ordering, and truncation strategy
+            are implementation details.
 
         Side effects:
-          - None.
+          - None (read-only).
+
+        Raises:
+          - ``ValueError`` if neither query_result nor entity_result is
+            provided in the request.
+        """
+        ...
+
+    def stats(self) -> QueryStats:
+        """Return read-only stats aggregated from Content and Graph.
+
+        Guarantees:
+          - Reflects current state from Content and Graph modules.
+
+        Non-guarantees:
+          - Consistency across modules is implementation-defined.
+
+        Side effects:
+          - None (read-only).
 
         Raises:
           - Never raises.
-        """
-        ...
-
-    def stats(self) -> AggregateStats:
-        """Compose per-module stats (serves MCP get_stats tool).
-
-        Sequence:
-          1. SourceStore.stats()
-          2. ContentStore.stats()
-          3. GraphStore.stats()
-          4. EnrichmentEngine.stats()
-
-        Guarantees:
-          - generated_at is the wall-clock time of composition.
-
-        Non-guarantees:
-          - Implementations may tolerate a few seconds of staleness
-            across the four sub-calls.
-
-        Side effects:
-          - None (read-only composition).
-
-        Raises:
-          - Never raises (sub-module stats never raise).
         """
         ...

@@ -43,7 +43,11 @@ class ContentIngestState(StrEnum):
 
 
 class ContentIngestRequest(BoundaryModel):
-    """Document write request accepted by Content."""
+    """Document write request accepted by Content.
+
+    Content always computes content_hash internally from the provided text.
+    The caller does not supply or influence the hash (CP15).
+    """
 
     source_id: str
     title: str
@@ -51,7 +55,25 @@ class ContentIngestRequest(BoundaryModel):
     scope: str = "global"
     uri: str | None = None
     external_id: str | None = None
-    content_hash: str | None = None
+    trusted: bool = False
+    metadata: Metadata = Field(default_factory=dict)
+
+
+class ContentDocument(BoundaryModel):
+    """Persisted document record (document-level metadata).
+
+    Accessible via get_document for provenance assembly.
+    """
+
+    document_id: str
+    source_id: str
+    title: str
+    uri: str | None = None
+    scope: str = "global"
+    content_hash: str
+    chunk_count: int = 0
+    trusted: bool = False
+    ingested_at: datetime
     metadata: Metadata = Field(default_factory=dict)
 
 
@@ -67,6 +89,7 @@ class ContentChunk(BoundaryModel):
     scope: str = "global"
     uri: str | None = None
     section_path: tuple[str, ...] = Field(default_factory=tuple)
+    trusted: bool = False
     metadata: Metadata = Field(default_factory=dict)
     created_at: datetime
     updated_at: datetime
@@ -76,7 +99,7 @@ class ContentIngestResult(BoundaryModel):
     """Result of a content ingest operation.
 
     Downstream consumers use ``state`` for flow control and
-    ``replaced_chunk_ids`` for Enrichment cascade (mark_stale).
+    ``replaced_chunk_ids`` for Enrichment/Graph cascade.
     """
 
     document_id: str
@@ -103,7 +126,6 @@ class ContentSearchResult(BoundaryModel):
 
     chunk: ContentChunk
     score: float = Field(ge=0.0)
-    matched_text: str = ""
 
 
 class ContentPurgeResult(BoundaryModel):
@@ -141,13 +163,17 @@ class ContentStore(Protocol):
         """Chunk, embed, store, and delta-check raw text.
 
         Guarantees:
-          - Unchanged content (same content_hash) returns state=UNCHANGED
-            and preserves current chunk IDs without re-writing.
+          - Content always computes content_hash from the normalised text
+            (single source of truth — CP15).
+          - Unchanged content (same hash) returns state=UNCHANGED and
+            preserves current chunk IDs without re-writing.
           - Changed content returns state=REPLACED with replaced_chunk_ids
             listing the previous chunk IDs for downstream invalidation.
           - New content returns state=CREATED.
           - chunk_ids on the result always reflects the current set of
             chunks after the operation.
+          - The ``trusted`` flag from the request is propagated to all
+            persisted chunks and documents.
 
         Non-guarantees:
           - Chunk boundaries, embedding model, batch sizing, and vector
@@ -158,6 +184,24 @@ class ContentStore(Protocol):
 
         Raises:
           - ``ValueError`` if text is empty or source_id is missing.
+        """
+        ...
+
+    def get_document(self, document_id: str) -> ContentDocument | None:
+        """Return document-level metadata by ID, or None if not found.
+
+        Guarantees:
+          - Returns document title, URI, ingested_at, content_hash, and
+            chunk_count (for provenance assembly by Query).
+
+        Non-guarantees:
+          - Document ID format is implementation-defined.
+
+        Side effects:
+          - None.
+
+        Raises:
+          - Never raises for unknown IDs (returns None).
         """
         ...
 
@@ -202,14 +246,15 @@ class ContentStore(Protocol):
 
         Guarantees:
           - Applies scope and source_id filters.
-          - Preserves exact hit text in each result (no rewriting).
+          - Results ordered by descending score (normalised 0.0–1.0).
+          - Preserves exact chunk text in each result.
           - Result count <= query.top_k.
-          - Results ordered by descending score.
+          - Scores below min_score are excluded.
 
         Non-guarantees:
           - Ranking internals (sparse vs dense weighting, re-ranking),
-            tie-breaking, and query embedding strategy are implementation
-            details (CP9).
+            score normalisation method, and query embedding strategy are
+            implementation details (CP9).
 
         Side effects:
           - May compute a query embedding internally, but does not mutate

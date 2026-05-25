@@ -1,30 +1,18 @@
-"""EnrichmentEngine Protocol — Enrichment module public surface.
+"""EnrichmentStore Protocol — Enrichment module public surface.
 
-Module responsibility: per-chunk entity/edge extraction state machine and
-per-document intra-doc edge inference. Owns table ``enrich_chunk_state``.
+Module responsibility: LLM-driven entity/relation extraction from content
+chunks, enrichment queue management, and intra-document edge suggestion.
+Owns tables ``enrich_*``.
 
-Dependencies: writes via GraphStore, reads chunks via ContentStore. Does
-NOT touch ``content_*`` or ``graph_*`` tables directly.
+The LLM is external to this module — Enrichment exposes a state-machine
+interface (enqueue → process → commit) without prescribing model selection,
+prompt engineering, or inference hosting (CP14).
 
-Execution model (CP10 — agent-external LLM):
-  - Agents call next_pending_batch to claim chunks.
-  - The agent performs LLM extraction itself (out-of-process).
-  - The agent calls store_extraction with results to persist.
-  - Per-document edge inference (Phase 2) runs in-process via
-    infer_intra_doc_edges once all chunks of a document are DONE.
+Has zero dependencies on other knowledge modules at the Protocol boundary.
+Enrichment orchestration in the implementation layer may import Content and
+Graph protocols for coordination.
 
-State machine::
-
-    PENDING ──(next_pending_batch)──> CLAIMED ──(store_extraction)──> DONE
-       ↑                                 │
-       │                                 ├─(store_extraction error)──> FAILED
-       │                                 │
-       └─(reset_failed) <────────────────┘
-       ↑
-       └─(claim expiry after TTL) <────── CLAIMED
-
-    DONE ──(mark_stale, chunk replaced)──> STALE
-    STALE ──(next_pending_batch)──> CLAIMED
+Table ownership: only Enrichment writes ``enrich_*`` tables.
 """
 
 from __future__ import annotations
@@ -35,8 +23,12 @@ from typing import Protocol, runtime_checkable
 
 from pydantic import Field
 
-from owlbear_knowledge.protocols.common import BoundaryModel, Metadata
-from owlbear_knowledge.protocols.graph import EdgeInput, EntityInput  # noqa: TC001
+from owlbear_knowledge.protocols.common import (
+    BoundaryModel,
+    EntityType,
+    Metadata,
+    RelationType,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -45,77 +37,155 @@ from owlbear_knowledge.protocols.graph import EdgeInput, EntityInput  # noqa: TC
 
 
 class EnrichmentState(StrEnum):
-    """Extraction lifecycle states owned by Enrichment."""
+    """Queue states for enrichment work items."""
 
     PENDING = "pending"
-    CLAIMED = "claimed"
-    DONE = "done"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
     FAILED = "failed"
-    STALE = "stale"
 
 
 # ---------------------------------------------------------------------------
-# Boundary types
+# Extraction types (R30 — local_ref for agent-submitted edges)
 # ---------------------------------------------------------------------------
 
 
-class ClaimedChunk(BoundaryModel):
-    """Chunk claimed for extraction, returned by next_pending_batch."""
+class ExtractedEntity(BoundaryModel):
+    """Entity extracted from a chunk by the LLM.
 
-    chunk_id: str
-    document_id: str
-    source_id: str
-    text: str
-    scope: str = "global"
-    claim_token: str
-    claimed_at: datetime
-    expires_at: datetime
-    attempt: int = Field(default=1, ge=1)
+    ``local_ref`` is a transient within-batch identifier so that
+    ExtractedRelation can reference entities before they have persistent
+    IDs. It is NOT persisted — only meaningful within a single
+    submit_extractions call.
+    """
+
+    local_ref: str
+    name: str
+    entity_type: EntityType
+    description: str = ""
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
     metadata: Metadata = Field(default_factory=dict)
 
 
-class StoreExtractionResult(BoundaryModel):
-    """Result of persisting extraction output for one chunk."""
+class ExtractedRelation(BoundaryModel):
+    """Relation extracted from a chunk by the LLM.
+
+    ``source_ref`` and ``target_ref`` use local_ref values from the
+    co-submitted ExtractedEntity list, enabling the caller to express
+    edges between entities that don't have persistent IDs yet.
+    """
+
+    source_ref: str
+    target_ref: str
+    relation_type: RelationType
+    weight: float = Field(default=1.0, ge=0.0, le=1.0)
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+    metadata: Metadata = Field(default_factory=dict)
+
+
+class ExtractionResult(BoundaryModel):
+    """Resolved result of submit_extractions after entity resolution."""
 
     chunk_id: str
-    state: EnrichmentState
     entity_ids: tuple[str, ...] = Field(default_factory=tuple)
     edge_ids: tuple[str, ...] = Field(default_factory=tuple)
     evidence_ids: tuple[str, ...] = Field(default_factory=tuple)
-    error: str | None = None
 
 
-class EdgeInferenceReport(BoundaryModel):
-    """Result of per-document intra-doc edge inference (Phase 2)."""
-
-    document_id: str
-    edges_created: int = 0
-    edge_ids: tuple[str, ...] = Field(default_factory=tuple)
+# ---------------------------------------------------------------------------
+# Queue types
+# ---------------------------------------------------------------------------
 
 
-class ResetResult(BoundaryModel):
-    """Result of resetting failed or stale chunks."""
+class EnrichmentQueueItem(BoundaryModel):
+    """A chunk waiting for or undergoing enrichment."""
 
-    chunks_reset: int = 0
-    chunk_ids: tuple[str, ...] = Field(default_factory=tuple)
+    id: str
+    chunk_id: str
+    source_id: str
+    state: EnrichmentState
+    attempts: int = 0
+    last_error: str | None = None
+    enqueued_at: datetime
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+
+
+class EnrichmentBatch(BoundaryModel):
+    """A batch of queue items claimed for processing."""
+
+    items: tuple[EnrichmentQueueItem, ...] = Field(default_factory=tuple)
+    batch_id: str
+
+
+# ---------------------------------------------------------------------------
+# Intra-document edge suggestion (R37)
+# ---------------------------------------------------------------------------
+
+
+class SuggestedEdge(BoundaryModel):
+    """An intra-document edge suggestion (not yet committed to Graph).
+
+    Returned by suggest_intra_doc_edges — callers decide whether to
+    commit these to Graph via upsert_edge.
+    """
+
+    source_entity_id: str
+    target_entity_id: str
+    relation_type: RelationType
+    confidence: float = Field(ge=0.0, le=1.0)
+    reason: str = ""
+
+
+# ---------------------------------------------------------------------------
+# Purge / discard types
+# ---------------------------------------------------------------------------
 
 
 class EnrichmentPurgeResult(BoundaryModel):
-    """Result of purging Enrichment-owned state for a source."""
+    """Itemised result of enrichment purge for audit and cascade."""
 
     source_id: str
-    chunks_purged: int = 0
-    chunk_ids: tuple[str, ...] = Field(default_factory=tuple)
+    queue_items_removed: int = 0
+    extractions_removed: int = 0
+
+
+class EnrichmentDiscardResult(BoundaryModel):
+    """Result of discarding specific chunks from the enrichment queue."""
+
+    discarded_chunk_ids: tuple[str, ...] = Field(default_factory=tuple)
+    queue_items_removed: int = 0
+
+
+# ---------------------------------------------------------------------------
+# Stats
+# ---------------------------------------------------------------------------
 
 
 class EnrichmentStats(BoundaryModel):
     """Counts owned by the Enrichment module."""
 
     pending: int = 0
-    claimed: int = 0
-    done: int = 0
+    in_progress: int = 0
+    completed: int = 0
     failed: int = 0
-    stale: int = 0
+
+
+# ---------------------------------------------------------------------------
+# Enrichment parameters (R41 — no claim_ttl, system invariant)
+# ---------------------------------------------------------------------------
+
+
+class EnrichmentParams(BoundaryModel):
+    """Configurable parameters for enrichment processing.
+
+    claim_ttl is deliberately absent — it is a system invariant managed
+    by the implementation, not a caller-tunable parameter.
+    """
+
+    batch_size: int = Field(default=10, ge=1, le=100)
+    max_retries: int = Field(default=3, ge=0, le=10)
+    confidence_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
 
 
 # ---------------------------------------------------------------------------
@@ -124,202 +194,179 @@ class EnrichmentStats(BoundaryModel):
 
 
 @runtime_checkable
-class EnrichmentEngine(Protocol):
-    """Public contract for the Enrichment module (CP10).
-
-    No consolidation methods — canonical identity in GraphStore obviates
-    the historical consolidation pipeline (CP1).
+class EnrichmentStore(Protocol):
+    """Public contract for the Enrichment module.
 
     Storage ownership: only Enrichment writes ``enrich_*`` tables.
-    Enrichment writes graph facts only through the public GraphStore
-    protocol and reads chunks only through the public ContentStore
-    protocol.
+    Dependency rule: Enrichment imports no other knowledge module
+    internals at the Protocol boundary.
     """
 
-    # ----- Phase 1: per-chunk extraction (agent-driven) -------------------
+    # --- Queue management ---
 
-    def next_pending_batch(
-        self,
-        *,
-        limit: int = 10,
-        scopes: tuple[str, ...] = (),
-        claim_ttl_seconds: int = 600,
-    ) -> tuple[ClaimedChunk, ...]:
-        """Atomically claim up to ``limit`` chunks for extraction.
-
-        Selects chunks in PENDING or STALE state (and any CLAIMED chunks
-        whose claim has expired beyond claim_ttl_seconds). Transitions
-        them to CLAIMED with a fresh claim_token and timestamps.
+    def enqueue_chunks(self, chunk_ids: tuple[str, ...], source_id: str) -> int:
+        """Add chunks to the enrichment queue.
 
         Guarantees:
-          - Returned chunks are mutually exclusive across concurrent calls
-            (atomicity via SQLite transaction).
-          - Each returned ClaimedChunk carries a non-empty claim_token.
-          - If scopes is non-empty, every returned chunk's scope is in
-            that tuple.
-          - Returns empty tuple when no chunks are available.
+          - Returns the count of newly enqueued items (duplicates are
+            silently skipped).
+          - Already-completed or in-progress chunks are not re-enqueued.
 
         Non-guarantees:
-          - Chunk ordering within the batch is implementation-defined.
+          - Processing order is implementation-defined.
 
         Side effects:
-          - Updates ``enrich_chunk_state``: state→CLAIMED, claim_token,
-            claimed_at, expires_at.
+          - Writes only ``enrich_*`` tables.
 
         Raises:
-          - ``ValueError`` if limit < 1 or claim_ttl_seconds < 60.
+          - ``ValueError`` if chunk_ids is empty.
         """
         ...
 
-    def store_extraction(
+    def discard_chunks(self, chunk_ids: tuple[str, ...]) -> EnrichmentDiscardResult:
+        """Remove chunks from the enrichment queue (lifecycle cleanup).
+
+        Guarantees:
+          - Pending and failed queue items for the given chunk_ids are
+            removed.
+          - In-progress items are left untouched (they will fail or
+            complete on their own).
+          - Idempotent: already-absent chunks are silently ignored.
+
+        Non-guarantees:
+          - Does not remove graph evidence — that is Graph's
+            responsibility via invalidate_evidence_by_chunks.
+
+        Side effects:
+          - Writes only ``enrich_*`` tables (deletions).
+
+        Raises:
+          - Never raises (idempotent).
+        """
+        ...
+
+    def claim_batch(self, params: EnrichmentParams) -> EnrichmentBatch:
+        """Claim a batch of pending items for processing.
+
+        Guarantees:
+          - Up to params.batch_size items transition to IN_PROGRESS.
+          - Claimed items are not visible to concurrent claim_batch calls.
+
+        Non-guarantees:
+          - Selection order among pending items is implementation-defined.
+
+        Side effects:
+          - Writes only ``enrich_*`` tables (state transition).
+
+        Raises:
+          - Never raises (returns empty batch if queue is empty).
+        """
+        ...
+
+    def submit_extractions(
         self,
         chunk_id: str,
-        claim_token: str,
-        entities: tuple[EntityInput, ...],
-        edges: tuple[EdgeInput, ...],
-    ) -> StoreExtractionResult:
-        """Persist extraction results for a previously-claimed chunk.
-
-        Sequence (transactional where possible):
-          1. Verify claim_token matches the current claim.
-          2. For each EntityInput: GraphStore.upsert_entity, then
-             GraphStore.add_evidence with claim_type="entity".
-          3. For each EdgeInput: GraphStore.upsert_edge, then
-             GraphStore.add_evidence with claim_type="edge".
-          4. Transition chunk state CLAIMED → DONE.
+        entities: tuple[ExtractedEntity, ...],
+        relations: tuple[ExtractedRelation, ...],
+    ) -> ExtractionResult:
+        """Commit LLM-extracted entities and relations for a chunk.
 
         Guarantees:
-          - On success: state == DONE and every returned ID is persisted.
-          - All-or-nothing: any failure leaves state in {CLAIMED, FAILED};
-            no partial writes to graph_*.
+          - Entities are resolved (deduplicated via canonical name) and
+            persisted to Graph.
+          - Relations are resolved using local_ref → persistent entity ID
+            mapping and persisted as edges.
+          - Evidence records are created linking the chunk to all produced
+            entities and edges.
+          - The queue item transitions to COMPLETED.
 
         Non-guarantees:
-          - Entity merge strategy during upsert is Graph's responsibility.
+          - Entity deduplication strategy (exact match, fuzzy, embedding)
+            is implementation-defined.
 
         Side effects:
-          - Writes to ``enrich_chunk_state`` and (via GraphStore) to
-            ``graph_entities``, ``graph_edges``, ``graph_evidence``.
+          - Writes ``enrich_*`` tables AND (via Graph) ``graph_*`` tables.
 
         Raises:
-          - ``PermissionError`` if claim_token does not match (expired or
-            taken by another worker).
-          - ``ValueError`` if any edge references an entity that is neither
-            in entities nor pre-existing in Graph.
+          - ``LookupError`` if chunk_id is not in IN_PROGRESS state.
+          - ``ValueError`` if local_ref values in relations don't match
+            any entity in the submitted batch.
         """
         ...
 
-    # ----- Phase 2: per-document intra-doc inference ----------------------
-
-    def infer_intra_doc_edges(self, document_id: str) -> EdgeInferenceReport:
-        """Infer structural edges between entities of a single document.
-
-        Examines entities already extracted from document_id and infers
-        edges (e.g. COMPONENT_OF, GOVERNED_BY) based on entity types and
-        co-occurrence. Inferred edges carry weight=0.5 and
-        metadata["source"] = "intra_doc_inference".
-
-        Should be called after all chunks of the document are in DONE
-        state. Calling earlier yields a partial report.
+    def mark_failed(self, chunk_id: str, error: str) -> EnrichmentQueueItem:
+        """Record a processing failure for a chunk.
 
         Guarantees:
-          - Idempotent: re-running does not duplicate edges (edge identity
-            via GraphStore.upsert_edge).
-          - Inferred edges always carry the marker
-            metadata["source"] == "intra_doc_inference".
+          - Increments attempts counter.
+          - If attempts >= max_retries, transitions to FAILED permanently.
+          - Otherwise, transitions back to PENDING for retry.
 
         Non-guarantees:
-          - Inference heuristics and edge type selection are implementation
-            details.
+          - Retry backoff is implementation-defined.
 
         Side effects:
-          - Via GraphStore: writes ``graph_edges`` and ``graph_evidence``.
+          - Writes only ``enrich_*`` tables.
 
         Raises:
-          - Never raises for unknown document_id (returns zero-count
-            report).
+          - ``LookupError`` if chunk_id is not in IN_PROGRESS state.
         """
         ...
 
-    # ----- Cascade & recovery ---------------------------------------------
+    # --- Suggestion ---
 
-    def mark_stale(self, chunk_ids: tuple[str, ...]) -> int:
-        """Mark chunks as STALE so they will be re-extracted.
-
-        Called by Ingest immediately after Content.ingest reports
-        replaced_chunk_ids. The next next_pending_batch will pick these up.
-
-        Guarantees:
-          - Unknown or never-extracted chunk IDs are silently ignored.
-          - Returns the number of chunks whose state was changed.
-          - Does NOT delete previously-extracted entities/edges/evidence.
-
-        Non-guarantees:
-          - Re-extraction timing depends on next_pending_batch calls.
-
-        Side effects:
-          - Writes to ``enrich_chunk_state``.
-
-        Raises:
-          - Never raises (silently ignores unknown IDs).
-        """
-        ...
-
-    def reset_failed(
+    def suggest_intra_doc_edges(
         self,
-        chunk_ids: tuple[str, ...] | None = None,
-        *,
-        limit: int | None = None,
-        scopes: tuple[str, ...] = (),
-    ) -> ResetResult:
-        """Reset FAILED chunks back to PENDING for retry.
-
-        If chunk_ids is given, resets exactly those (skipping non-failed).
-        Otherwise resets up to limit failed chunks in scopes.
+        document_id: str,
+    ) -> tuple[SuggestedEdge, ...]:
+        """Suggest edges between entities found within the same document.
 
         Guarantees:
-          - Cleared error field after reset.
-          - Returns count and IDs of chunks reset.
+          - Returns suggestions only — does NOT write to Graph.
+          - Suggestions are based on co-occurrence and entity proximity
+            within the document's chunks.
+          - Each suggestion includes a confidence score and reason.
 
         Non-guarantees:
-          - Selection order when using limit is implementation-defined.
+          - Suggestion algorithm (co-occurrence, embedding similarity,
+            LLM re-check) is implementation-defined.
 
         Side effects:
-          - Writes to ``enrich_chunk_state``.
+          - None (read-only).
 
         Raises:
-          - ``ValueError`` if both chunk_ids and limit are None.
+          - ``LookupError`` if document_id is unknown.
         """
         ...
+
+    # --- Purge ---
 
     def purge_source(self, source_id: str) -> EnrichmentPurgeResult:
-        """Remove Enrichment-owned state for a purged source.
-
-        Cleans up enrich_chunk_state rows associated with the source.
-        Does NOT delete Graph records — that is Graph's responsibility
-        via purge_evidence_by_source.
+        """Remove all Enrichment-owned data for a source.
 
         Guarantees:
-          - Only enrich_* state is removed.
-          - Idempotent: re-running returns zero counts.
+          - Removes queue items and extraction records for the source.
+          - Idempotent.
 
         Non-guarantees:
-          - Does not verify source existence (Sources owns that).
+          - Does not remove Graph evidence — that is handled separately
+            via Graph.invalidate_evidence_by_chunks.
 
         Side effects:
-          - Writes to ``enrich_chunk_state`` (deletion).
+          - Writes only ``enrich_*`` tables (deletions).
 
         Raises:
-          - Never raises for unknown source_id (returns zero-count result).
+          - Never raises for unknown source_id (returns empty result).
         """
         ...
 
-    # ----- Stats ----------------------------------------------------------
+    # --- Stats ---
 
     def stats(self) -> EnrichmentStats:
         """Return counts owned by this module.
 
         Guarantees:
-          - Reflects current enrich_chunk_state distribution.
+          - Reflects current enrich_* table state.
 
         Non-guarantees:
           - Staleness tolerance is implementation-defined.

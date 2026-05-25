@@ -1,84 +1,29 @@
-"""Knowledge module protocol surface — public re-exports.
+"""owlbear_knowledge.protocols — Public boundary types and store protocols.
 
-Import from this package for all boundary types and Protocol interfaces:
+This package is the single import surface for all typed boundary models
+used across the knowledge system. Internal modules import from here;
+external consumers (MCP shell, tests) also import exclusively from here.
 
-    from owlbear_knowledge.protocols import (
-        SourceStore,
-        ContentStore,
-        GraphStore,
-        EnrichmentEngine,
-        IngestPipeline,
-        QueryService,
-    )
+Re-exports are grouped by module and sorted alphabetically within groups.
 """
 
+# --- common ---
 from owlbear_knowledge.protocols.common import (
     BoundaryModel,
+    EntityType,
     JsonValue,
     Metadata,
+    RelationType,
     canonicalize_name,
 )
-from owlbear_knowledge.protocols.content import (
-    ContentChunk,
-    ContentIngestRequest,
-    ContentIngestResult,
-    ContentIngestState,
-    ContentPurgeResult,
-    ContentSearchQuery,
-    ContentSearchResult,
-    ContentStats,
-    ContentStore,
-)
-from owlbear_knowledge.protocols.enrichment import (
-    ClaimedChunk,
-    EdgeInferenceReport,
-    EnrichmentEngine,
-    EnrichmentPurgeResult,
-    EnrichmentState,
-    EnrichmentStats,
-    ResetResult,
-    StoreExtractionResult,
-)
-from owlbear_knowledge.protocols.graph import (
-    AdjacencyQuery,
-    EdgeInput,
-    EdgeRecord,
-    EntityInput,
-    EntityKind,
-    EntityQuery,
-    EntityRecord,
-    EvidenceInput,
-    EvidenceRecord,
-    GraphStats,
-    GraphStore,
-    PurgeEvidenceResult,
-    RelationKind,
-    TraversalPath,
-    TraversalQuery,
-)
-from owlbear_knowledge.protocols.ingest import (
-    IngestFailure,
-    IngestPipeline,
-    IngestRequest,
-    IngestResult,
-    IngestStatus,
-    PurgeReport,
-    RefreshRequest,
-    RefreshResult,
-)
-from owlbear_knowledge.protocols.query import (
-    AggregateStats,
-    GraphContext,
-    Provenance,
-    QueryContext,
-    QueryContextRequest,
-    QueryRequest,
-    QueryResponse,
-    QueryResult,
-    QueryService,
-)
+
+# --- sources ---
 from owlbear_knowledge.protocols.sources import (
+    AuthenticatedWebConfig,
     FetchTransport,
+    FileGlobConfig,
+    InlineConfig,
+    SourceConfig,
     SourceDeletionInfo,
     SourceHealth,
     SourceHealthReport,
@@ -90,16 +35,100 @@ from owlbear_knowledge.protocols.sources import (
     SourceStore,
     SourceUpdate,
     SourceWish,
+    UrlListConfig,
+)
+
+# --- content ---
+from owlbear_knowledge.protocols.content import (
+    ContentChunk,
+    ContentDocument,
+    ContentIngestRequest,
+    ContentIngestResult,
+    ContentIngestState,
+    ContentPurgeResult,
+    ContentSearchQuery,
+    ContentSearchResult,
+    ContentStats,
+    ContentStore,
+)
+
+# --- graph ---
+from owlbear_knowledge.protocols.graph import (
+    AdjacencyQuery,
+    ChunkClaims,
+    EdgeInput,
+    EdgeRecord,
+    EntityAliasInput,
+    EntityAliasRecord,
+    EntityInput,
+    EntityQuery,
+    EntityRecord,
+    EvidenceClaimType,
+    EvidenceInvalidationResult,
+    EvidenceInput,
+    EvidenceRecord,
+    GraphStats,
+    GraphStore,
+    TraversalQuery,
+    TraversalResult,
+)
+
+# --- enrichment ---
+from owlbear_knowledge.protocols.enrichment import (
+    EnrichmentBatch,
+    EnrichmentDiscardResult,
+    EnrichmentParams,
+    EnrichmentPurgeResult,
+    EnrichmentQueueItem,
+    EnrichmentState,
+    EnrichmentStats,
+    EnrichmentStore,
+    ExtractionResult,
+    ExtractedEntity,
+    ExtractedRelation,
+    SuggestedEdge,
+)
+
+# --- ingest ---
+from owlbear_knowledge.protocols.ingest import (
+    IngestCoordinator,
+    IngestDocument,
+    IngestRequest,
+    IngestResult,
+    IngestStats,
+    PurgeResult,
+    RefreshError,
+    RefreshRequest,
+    RefreshResult,
+)
+
+# --- query ---
+from owlbear_knowledge.protocols.query import (
+    ContextRenderRequest,
+    EntityLookupRequest,
+    EntityLookupResult,
+    Provenance,
+    QueryFacade,
+    QueryRequest,
+    QueryResult,
+    QueryStats,
+    RenderedContext,
 )
 
 __all__ = [
     # common
     "BoundaryModel",
+    "EntityType",
     "JsonValue",
     "Metadata",
+    "RelationType",
     "canonicalize_name",
     # sources
+    "AuthenticatedWebConfig",
     "FetchTransport",
+    "FileGlobConfig",
+    "InlineConfig",
+    "SourceConfig",
     "SourceDeletionInfo",
     "SourceHealth",
     "SourceHealthReport",
@@ -111,8 +140,10 @@ __all__ = [
     "SourceStore",
     "SourceUpdate",
     "SourceWish",
+    "UrlListConfig",
     # content
     "ContentChunk",
+    "ContentDocument",
     "ContentIngestRequest",
     "ContentIngestResult",
     "ContentIngestState",
@@ -123,46 +154,53 @@ __all__ = [
     "ContentStore",
     # graph
     "AdjacencyQuery",
+    "ChunkClaims",
     "EdgeInput",
     "EdgeRecord",
+    "EntityAliasInput",
+    "EntityAliasRecord",
     "EntityInput",
-    "EntityKind",
     "EntityQuery",
     "EntityRecord",
+    "EvidenceClaimType",
+    "EvidenceInvalidationResult",
     "EvidenceInput",
     "EvidenceRecord",
     "GraphStats",
     "GraphStore",
-    "PurgeEvidenceResult",
-    "RelationKind",
-    "TraversalPath",
     "TraversalQuery",
+    "TraversalResult",
     # enrichment
-    "ClaimedChunk",
-    "EdgeInferenceReport",
-    "EnrichmentEngine",
+    "EnrichmentBatch",
+    "EnrichmentDiscardResult",
+    "EnrichmentParams",
     "EnrichmentPurgeResult",
+    "EnrichmentQueueItem",
     "EnrichmentState",
     "EnrichmentStats",
-    "ResetResult",
-    "StoreExtractionResult",
+    "EnrichmentStore",
+    "ExtractionResult",
+    "ExtractedEntity",
+    "ExtractedRelation",
+    "SuggestedEdge",
     # ingest
-    "IngestFailure",
-    "IngestPipeline",
+    "IngestCoordinator",
+    "IngestDocument",
     "IngestRequest",
     "IngestResult",
-    "IngestStatus",
-    "PurgeReport",
+    "IngestStats",
+    "PurgeResult",
+    "RefreshError",
     "RefreshRequest",
     "RefreshResult",
     # query
-    "AggregateStats",
-    "GraphContext",
+    "ContextRenderRequest",
+    "EntityLookupRequest",
+    "EntityLookupResult",
     "Provenance",
-    "QueryContext",
-    "QueryContextRequest",
+    "QueryFacade",
     "QueryRequest",
-    "QueryResponse",
     "QueryResult",
-    "QueryService",
+    "QueryStats",
+    "RenderedContext",
 ]
