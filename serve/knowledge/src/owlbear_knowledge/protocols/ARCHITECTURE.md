@@ -55,17 +55,20 @@ Contains only types genuinely used by ≥2 modules:
 
 Module-specific enums and models live in their respective module files.
 
-## CI-Enforceable Registries (`_registry.py`) — R40
+## CI-Enforceable Registries (`registry.py`) — R40
 
-Three compile-time registries serve as single source of truth for ownership:
+Four compile-time registries serve as single source of truth for ownership:
 
 | Registry | Purpose |
-|----------|---------|
+|----------|----------|
 | `TABLE_OWNERSHIP` | Module → table-name prefixes it may write |
+| `INFRASTRUCTURE_TABLES` | Tables outside module ownership (migrations) |
 | `QDRANT_COLLECTIONS` | Module → Qdrant collection names it owns |
-| `MCP_TOOL_ROUTING` | Tool name → module responsible for handling |
+| `MCP_TOOL_ROUTING` | Tool name → Protocol.method responsible for handling |
 
-Adding a table, collection, or MCP tool without updating `_registry.py` is a CI failure. The MCP shell uses `MCP_TOOL_ROUTING` for dispatch without transformation.
+All registry keys are typed via `KnowledgeModule(StrEnum)`. Adding a table,
+collection, or MCP tool without updating `registry.py` is a CI failure. The
+MCP shell uses `MCP_TOOL_ROUTING` for dispatch without transformation.
 
 ## Cascade Sequences (Ingest-Coordinated)
 
@@ -103,7 +106,7 @@ Identity aliases are managed through Graph's `add_alias` mechanism — evidence-
 
 ### CP4 — Stats Composition
 
-Each leaf module exposes a `stats()` method. QueryFacade and IngestCoordinator compose them for unified views.
+Each leaf module exposes a `stats()` method. `IngestCoordinator.stats()` aggregates them into a unified `IngestStats` view. There is no separate Query-level stats endpoint (D60).
 
 ### CP9 — Embedding Encapsulation
 
@@ -146,7 +149,24 @@ The `ContextRenderRequest.max_chars` field controls the LLM context budget:
 - Truncation: when output exceeds budget, `RenderedContext.truncated = True`
 - Strategy: implementation-defined (may truncate lower-scored chunks first)
 
-No `max_graph_depth` parameter exists at the Query boundary — traversal depth is controlled exclusively by `TraversalQuery.max_hops` on GraphStore (R42).
+`QueryRequest.graph_hops` is a facade hint that Query translates into
+`TraversalQuery.max_hops` on GraphStore. Query does not own a separate depth
+concept (CP16).
+
+## Scope Semantics (D53)
+
+Sources and Content partition data by scope. **Graph entities are global by
+design** (CP1) — entity identity is `(canonicalize_name(name), entity_type)`
+with no scope component.
+
+- `QueryRequest.scopes` filters Content search hits only.
+- Graph expansion (traversal, adjacency) is scope-unaware and may traverse
+  entities sourced from any scope.
+- This is intentional: the Brief’s demand scenarios explicitly cross domain
+  boundaries (ISMS → AWS tools → security approval).
+
+If full scope isolation is ever required, it would need a new CP entry and
+Graph-level identity change.
 
 ## Boundary Conventions
 
@@ -154,9 +174,11 @@ No `max_graph_depth` parameter exists at the Query boundary — traversal depth 
 - **Tuple returns**: Protocol methods return `tuple[T, ...]` for collections (immutable snapshots)
 - **Metadata**: `dict[str, JsonValue]` — JSON-serialisable, type-safe
 - **Async**: Only on I/O-bound operations (Content.ingest, Content.search, Ingest.*, Query.search)
+- **Metadata merge**: Shallow merge (key-level replace). Non-None metadata
+  in update requests replaces existing keys; absent keys are preserved (R2.13).
 - **Doc depth**: Every Protocol method documents Guarantees, Non-guarantees, Side effects, Raises
 
-## Table Ownership (CI-enforced via `_registry.py`)
+## Table Ownership (CI-enforced via `registry.py`)
 
 | Prefix | Owner | Rule |
 |--------|-------|------|

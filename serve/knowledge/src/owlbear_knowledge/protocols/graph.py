@@ -14,7 +14,7 @@ from datetime import datetime  # noqa: TC003 — needed by Pydantic at runtime
 from enum import StrEnum
 from typing import Protocol, runtime_checkable
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from owlbear_knowledge.protocols.common import (
     BoundaryModel,
@@ -39,6 +39,14 @@ class EvidenceClaimType(StrEnum):
 
     ENTITY = "entity"
     EDGE = "edge"
+
+
+class TraversalDirection(StrEnum):
+    """Direction filter for adjacency queries."""
+
+    OUTGOING = "outgoing"
+    INCOMING = "incoming"
+    BOTH = "both"
 
 
 # ---------------------------------------------------------------------------
@@ -112,7 +120,12 @@ class EdgeRecord(BoundaryModel):
 
 
 class EvidenceInput(BoundaryModel):
-    """Evidence claim linking a chunk to a graph element."""
+    """Evidence claim linking a chunk to a graph element.
+
+    Exactly one of entity_id or edge_id must be set, matching claim_type:
+      - ENTITY → entity_id required, edge_id must be None
+      - EDGE → edge_id required, entity_id must be None
+    """
 
     chunk_id: str
     claim_type: EvidenceClaimType
@@ -120,6 +133,18 @@ class EvidenceInput(BoundaryModel):
     edge_id: str | None = None
     confidence: float = Field(default=1.0, ge=0.0, le=1.0)
     metadata: Metadata = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _check_claim_xor(self) -> "EvidenceInput":
+        if self.claim_type == EvidenceClaimType.ENTITY:
+            if not self.entity_id or self.edge_id:
+                msg = "ENTITY claim requires entity_id and no edge_id"
+                raise ValueError(msg)
+        else:
+            if not self.edge_id or self.entity_id:
+                msg = "EDGE claim requires edge_id and no entity_id"
+                raise ValueError(msg)
+        return self
 
 
 class EvidenceRecord(BoundaryModel):
@@ -195,7 +220,7 @@ class AdjacencyQuery(BoundaryModel):
 
     entity_id: str
     relation_types: tuple[RelationType, ...] = Field(default_factory=tuple)
-    direction: str = "both"  # "outgoing" | "incoming" | "both"
+    direction: TraversalDirection = TraversalDirection.BOTH
     limit: int = Field(default=50, ge=1, le=500)
 
 
@@ -332,7 +357,7 @@ class GraphStore(Protocol):
 
         Raises:
           - ``ValueError`` if source or target entity does not exist.
-          - ``ValueError`` if relation_type is SAME_AS or invalid.
+          - ``ValueError`` if relation_type is SAME_AS.
         """
         ...
 

@@ -107,9 +107,10 @@ def canonicalize_name(raw: str) -> str:
       4. Strip leading/trailing whitespace.
       5. Strip trailing punctuation (.,;:!?).
 
-    This function defines entity identity (together with entity_kind and
-    scope). Two names that canonicalize to the same string refer to the
-    same entity row.
+    This function defines entity identity together with ``EntityType``
+    (CP1). Two names that canonicalize to the same string and share the
+    same entity_type refer to the same entity row. Graph entities are
+    global — scope does not participate in identity.
 
     Contract (CP1): extraction agents are responsible for upstream name
     cleanup beyond what this normaliser handles (article removal,

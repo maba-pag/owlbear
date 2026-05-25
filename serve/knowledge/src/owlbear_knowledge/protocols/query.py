@@ -8,15 +8,19 @@ The Query module does NOT exist as a writable store. It is a read facade
 that assembles results from Content.search, Graph.traverse, and
 Graph.find_entities into user-facing responses with provenance.
 
-No max_graph_depth parameter — traversal depth is controlled exclusively
-by GraphStore.traverse(max_hops) (R42).
+``QueryRequest.graph_hops`` is a facade hint that Query translates into
+``TraversalQuery.max_hops`` on GraphStore. Query does not own a separate
+depth concept (CP16).
+
+``QueryRequest.scopes`` filters Content search hits only. Graph expansion
+is scope-unaware by design — entities are global (CP1, D53).
 """
 
 from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from owlbear_knowledge.protocols.common import BoundaryModel, EntityType, Metadata, RelationType
 from owlbear_knowledge.protocols.content import ContentChunk, ContentSearchResult
@@ -31,8 +35,9 @@ from owlbear_knowledge.protocols.graph import EdgeRecord, EntityRecord, Traversa
 class QueryRequest(BoundaryModel):
     """Combined search + traversal request.
 
-    No max_graph_depth field — depth is controlled by the graph
-    traversal hop limit (see TraversalQuery.max_hops).
+    ``graph_hops`` is a facade hint translated to
+    ``TraversalQuery.max_hops`` on GraphStore (CP16).
+    ``scopes`` filters Content search only; graph expansion is global.
     """
 
     text: str
@@ -47,11 +52,28 @@ class QueryRequest(BoundaryModel):
 
 
 class EntityLookupRequest(BoundaryModel):
-    """Direct entity lookup + neighbourhood expansion."""
+    """Direct entity lookup + neighbourhood expansion.
 
-    entity_id: str
+    Exactly one of ``entity_id`` or ``entity_name`` must be provided.
+    When using ``entity_name``, optionally supply ``entity_type`` to
+    disambiguate homonyms.
+    """
+
+    entity_id: str | None = None
+    entity_name: str | None = None
+    entity_type: EntityType | None = None
     expand_hops: int = Field(default=1, ge=0, le=5)
     relation_types: tuple[RelationType, ...] = Field(default_factory=tuple)
+
+    @model_validator(mode="after")
+    def _check_id_or_name(self) -> "EntityLookupRequest":
+        if self.entity_id and self.entity_name:
+            msg = "Provide exactly one of entity_id or entity_name, not both"
+            raise ValueError(msg)
+        if not self.entity_id and not self.entity_name:
+            msg = "Provide exactly one of entity_id or entity_name"
+            raise ValueError(msg)
+        return self
 
 
 class ContextRenderRequest(BoundaryModel):
@@ -121,20 +143,6 @@ class RenderedContext(BoundaryModel):
 
 
 # ---------------------------------------------------------------------------
-# Stats
-# ---------------------------------------------------------------------------
-
-
-class QueryStats(BoundaryModel):
-    """Read-only stats aggregated from Content and Graph."""
-
-    documents: int = 0
-    chunks: int = 0
-    entities: int = 0
-    edges: int = 0
-
-
-# ---------------------------------------------------------------------------
 # Protocol
 # ---------------------------------------------------------------------------
 
@@ -172,21 +180,26 @@ class QueryFacade(Protocol):
         ...
 
     def lookup_entity(self, request: EntityLookupRequest) -> EntityLookupResult:
-        """Look up an entity and optionally expand its neighbourhood.
+        """Look up an entity by ID or name and expand its neighbourhood.
 
         Guarantees:
+          - Resolves entity by ID (direct) or name (canonical lookup
+            via Graph.find_entities, disambiguated by entity_type).
           - Returns the entity record with its aliases.
           - When expand_hops > 0, expands via graph traversal.
           - Related chunks are returned for provenance linking.
 
         Non-guarantees:
           - Chunk selection for related_chunks is implementation-defined.
+          - When multiple entities match a name without entity_type
+            filter, selection strategy is implementation-defined.
 
         Side effects:
           - None (read-only).
 
         Raises:
-          - ``LookupError`` if entity_id does not exist.
+          - ``LookupError`` if entity_id does not exist or entity_name
+            resolves to no known entity.
         """
         ...
 
@@ -208,22 +221,5 @@ class QueryFacade(Protocol):
         Raises:
           - ``ValueError`` if neither query_result nor entity_result is
             provided in the request.
-        """
-        ...
-
-    def stats(self) -> QueryStats:
-        """Return read-only stats aggregated from Content and Graph.
-
-        Guarantees:
-          - Reflects current state from Content and Graph modules.
-
-        Non-guarantees:
-          - Consistency across modules is implementation-defined.
-
-        Side effects:
-          - None (read-only).
-
-        Raises:
-          - Never raises.
         """
         ...

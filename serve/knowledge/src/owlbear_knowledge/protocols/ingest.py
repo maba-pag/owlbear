@@ -24,6 +24,7 @@ Cascade sequence on content replacement (re-ingest):
 from __future__ import annotations
 
 from datetime import datetime  # noqa: TC003 — needed by Pydantic at runtime
+from enum import StrEnum
 from typing import Protocol, runtime_checkable
 
 from pydantic import Field
@@ -48,7 +49,7 @@ class IngestRequest(BoundaryModel):
     """
 
     source_id: str
-    documents: tuple[IngestDocument, ...] = Field(default_factory=tuple)
+    documents: tuple[IngestDocument, ...] = Field(min_length=1)
     enrich: bool = True
     metadata: Metadata = Field(default_factory=dict)
 
@@ -84,12 +85,25 @@ class IngestResult(BoundaryModel):
     completed_at: datetime
 
 
+class PurgeStatus(StrEnum):
+    """Outcome of a multi-step deletion cascade."""
+
+    COMPLETE = "complete"
+    PARTIAL = "partial"
+
+
 class PurgeResult(BoundaryModel):
     """Aggregate result of a source deletion cascade.
 
     Carries typed sub-results from each module for full audit trail.
+    ``status`` indicates whether all steps completed successfully.
+    ``completed_steps`` lists the steps that ran (in order).
     """
 
+    status: PurgeStatus
+    completed_steps: tuple[str, ...] = Field(default_factory=tuple)
+    failed_step: str | None = None
+    error: str | None = None
     source: SourceDeletionInfo
     content: ContentPurgeResult
     enrichment: EnrichmentPurgeResult
@@ -184,7 +198,6 @@ class IngestCoordinator(Protocol):
 
         Raises:
           - ``LookupError`` if source_id does not exist.
-          - ``ValueError`` if request contains no documents.
         """
         ...
 
@@ -203,16 +216,21 @@ class IngestCoordinator(Protocol):
             dependency order.
           - PurgeResult carries typed sub-results for full audit trail.
           - deleted_at and reason are preserved for traceability.
+          - Each cascade step is idempotent: re-running delete_source on
+            a partially-purged source completes the missing steps and
+            returns status=COMPLETE.
 
         Non-guarantees:
           - Atomicity across modules is implementation-defined (saga vs
-            transaction).
+            transaction). Partial failure returns status=PARTIAL with
+            completed_steps indicating progress.
 
         Side effects:
           - Writes via Sources, Content, Enrichment, and Graph delegates.
 
         Raises:
-          - ``LookupError`` if source_id does not exist.
+          - ``LookupError`` if source_id does not exist (and was not
+            already deleted in a prior partial run).
         """
         ...
 

@@ -168,19 +168,17 @@ class SourceHealthReport(BoundaryModel):
     checked_at: datetime
 
 
-class SourceRecord(BoundaryModel):
-    """Persisted source record returned by SourceStore."""
+# ---------------------------------------------------------------------------
+# Source records (discriminated union keyed on state — D51)
+# ---------------------------------------------------------------------------
+
+
+class _SourceRecordBase(BoundaryModel):
+    """Shared fields for all source record variants."""
 
     id: str
     name: str
-    kind: SourceKind
-    fetch_method: FetchTransport
-    state: SourceState
-    health: SourceHealth = SourceHealth.UNKNOWN
-    config: SourceConfig
     scope: str = "global"
-    enrich: bool = False
-    refreshable: bool = True
     priority: int = 0
     last_refreshed_at: datetime | None = None
     last_checked_at: datetime | None = None
@@ -188,6 +186,35 @@ class SourceRecord(BoundaryModel):
     created_at: datetime
     updated_at: datetime
     metadata: Metadata = Field(default_factory=dict)
+
+
+class ConfiguredSourceRecord(_SourceRecordBase):
+    """A source with full connector configuration (ACTIVE or INACTIVE)."""
+
+    state: Literal[SourceState.ACTIVE, SourceState.INACTIVE]
+    kind: SourceKind
+    fetch_method: FetchTransport
+    health: SourceHealth = SourceHealth.UNKNOWN
+    config: SourceConfig
+    enrich: bool = False
+    refreshable: bool = True
+
+
+class WishedSourceRecord(_SourceRecordBase):
+    """A demand-only source registration (WISHED state).
+
+    Does not require connector kind, fetch method, or config — it
+    expresses demand only (CP24).
+    """
+
+    state: Literal[SourceState.WISHED] = SourceState.WISHED
+    expected_kind: SourceKind | None = None
+    expected_fetch_method: FetchTransport | None = None
+    reason: str = ""
+
+
+SourceRecord = ConfiguredSourceRecord | WishedSourceRecord
+"""Persisted source record. Shape depends on state (D51)."""
 
 
 class SourceDeletionInfo(BoundaryModel):

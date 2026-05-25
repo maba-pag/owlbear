@@ -17,9 +17,19 @@ from owlbear_knowledge.protocols.common import (
     canonicalize_name,
 )
 
+# --- registry ---
+from owlbear_knowledge.protocols.registry import (
+    INFRASTRUCTURE_TABLES,
+    MCP_TOOL_ROUTING,
+    QDRANT_COLLECTIONS,
+    TABLE_OWNERSHIP,
+    KnowledgeModule,
+)
+
 # --- sources ---
 from owlbear_knowledge.protocols.sources import (
     AuthenticatedWebConfig,
+    ConfiguredSourceRecord,
     FetchTransport,
     FileGlobConfig,
     InlineConfig,
@@ -36,6 +46,7 @@ from owlbear_knowledge.protocols.sources import (
     SourceUpdate,
     SourceWish,
     UrlListConfig,
+    WishedSourceRecord,
 )
 
 # --- content ---
@@ -69,6 +80,7 @@ from owlbear_knowledge.protocols.graph import (
     EvidenceRecord,
     GraphStats,
     GraphStore,
+    TraversalDirection,
     TraversalQuery,
     TraversalResult,
 )
@@ -97,6 +109,7 @@ from owlbear_knowledge.protocols.ingest import (
     IngestResult,
     IngestStats,
     PurgeResult,
+    PurgeStatus,
     RefreshError,
     RefreshRequest,
     RefreshResult,
@@ -111,7 +124,6 @@ from owlbear_knowledge.protocols.query import (
     QueryFacade,
     QueryRequest,
     QueryResult,
-    QueryStats,
     RenderedContext,
 )
 
@@ -123,8 +135,15 @@ __all__ = [
     "Metadata",
     "RelationType",
     "canonicalize_name",
+    # registry
+    "INFRASTRUCTURE_TABLES",
+    "KnowledgeModule",
+    "MCP_TOOL_ROUTING",
+    "QDRANT_COLLECTIONS",
+    "TABLE_OWNERSHIP",
     # sources
     "AuthenticatedWebConfig",
+    "ConfiguredSourceRecord",
     "FetchTransport",
     "FileGlobConfig",
     "InlineConfig",
@@ -141,6 +160,7 @@ __all__ = [
     "SourceUpdate",
     "SourceWish",
     "UrlListConfig",
+    "WishedSourceRecord",
     # content
     "ContentChunk",
     "ContentDocument",
@@ -168,6 +188,7 @@ __all__ = [
     "EvidenceRecord",
     "GraphStats",
     "GraphStore",
+    "TraversalDirection",
     "TraversalQuery",
     "TraversalResult",
     # enrichment
@@ -190,6 +211,7 @@ __all__ = [
     "IngestResult",
     "IngestStats",
     "PurgeResult",
+    "PurgeStatus",
     "RefreshError",
     "RefreshRequest",
     "RefreshResult",
@@ -201,6 +223,5 @@ __all__ = [
     "QueryFacade",
     "QueryRequest",
     "QueryResult",
-    "QueryStats",
     "RenderedContext",
 ]
