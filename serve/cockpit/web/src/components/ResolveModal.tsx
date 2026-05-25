@@ -99,7 +99,8 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
     }
     const requestKind = snapshotDR.kind ?? (snapshotDR.request_type === 'action' ? 'action' : 'decision')
     const nextSelectedOptionId = requestKind === 'decision' ? selectedOptionId : null
-    if (requestKind === 'decision' && nextSelectedOptionId === null) {
+    const trimmedNotes = notes.trim()
+    if (requestKind === 'decision' && nextSelectedOptionId === null && trimmedNotes.length === 0) {
       return
     }
 
@@ -110,7 +111,7 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
     try {
       await resolveDR(snapshotDR.id, {
         selected_option_id: nextSelectedOptionId,
-        free_text: notes.trim().length > 0 ? notes.trim() : null,
+        free_text: trimmedNotes.length > 0 ? trimmedNotes : null,
         kind: requestKind,
       })
       setError(null)
@@ -157,7 +158,8 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
   const requestSummary = requestSummaryValue.trim().length > 0 ? requestSummaryValue : 'No summary provided.'
   const decisionOptions = requestKind === 'decision' && Array.isArray(snapshotDR.options) ? snapshotDR.options : []
   const fullRequestBody = typeof snapshotDR.body === 'string' ? snapshotDR.body : ''
-  const canSubmit = !isSubmitting && (requestKind === 'action' || selectedOptionId !== null)
+  const hasTrimmedNotes = notes.trim().length > 0
+  const canSubmit = !isSubmitting && (requestKind === 'action' || selectedOptionId !== null || hasTrimmedNotes)
 
   const metadataItems: ResolveMetadataItem[] = [
     { label: 'Task', value: `#${snapshotDR.task_id}`, testId: 'resolve-metadata-task', taskId: snapshotDR.task_id },
@@ -393,12 +395,34 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
                       key={option.option_id}
                       type="button"
                       data-testid={`resolve-option-${option.option_id}`}
-                      className="rounded-lg border border-contrast-low bg-canvas p-static-sm text-left text-sm font-semibold text-primary"
+                      aria-selected={selectedOptionId === option.option_id ? 'true' : 'false'}
+                      className="grid gap-static-xs rounded-lg border border-contrast-low bg-canvas p-static-sm text-left text-sm text-primary"
                       onClick={() => {
                         setSelectedOptionId(option.option_id)
                       }}
                     >
-                      {option.label}
+                      <span className="text-sm font-semibold text-primary">{option.label}</span>
+                      <span className="h-1.5 w-full rounded-full bg-contrast-low">
+                        <span
+                          className="block h-full rounded-full bg-brand"
+                          data-testid={`option-confidence-${option.option_id}`}
+                          style={{ width: `${option.confidence * 100}%` }}
+                        />
+                      </span>
+                      {option.rationale.length > 0 ? (
+                        <span className="text-xs leading-relaxed text-contrast-high">{option.rationale}</span>
+                      ) : null}
+                      {option.recommended ? (
+                        <span className="inline-flex">
+                          <PTag
+                            compact
+                            variant="info"
+                            data-testid={`option-recommended-${option.option_id}`}
+                          >
+                            Recommended
+                          </PTag>
+                        </span>
+                      ) : null}
                     </button>
                   ))}
                 </div>
@@ -407,10 +431,17 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
               )}
             </fieldset>
 
-            <details data-testid="resolve-full-request" className="rounded-lg border border-contrast-low bg-canvas p-static-sm text-primary">
-              <summary className="cursor-pointer text-xs font-semibold uppercase leading-tight text-contrast-high">Full request</summary>
-              <MarkdownPreview className="mt-static-sm text-sm">{fullRequestBody}</MarkdownPreview>
-            </details>
+            {requestKind === 'action' ? (
+              <section data-testid="resolve-action-body" className="rounded-lg border border-contrast-low bg-canvas p-static-sm text-primary">
+                <span className="text-xs font-semibold uppercase leading-tight text-contrast-high">Full request</span>
+                <MarkdownPreview className="mt-static-sm text-sm">{fullRequestBody}</MarkdownPreview>
+              </section>
+            ) : (
+              <details data-testid="resolve-full-request" className="rounded-lg border border-contrast-low bg-canvas p-static-sm text-primary">
+                <summary className="cursor-pointer text-xs font-semibold uppercase leading-tight text-contrast-high">Full request</summary>
+                <MarkdownPreview className="mt-static-sm text-sm">{fullRequestBody}</MarkdownPreview>
+              </details>
+            )}
 
             <PTextarea
               compact
