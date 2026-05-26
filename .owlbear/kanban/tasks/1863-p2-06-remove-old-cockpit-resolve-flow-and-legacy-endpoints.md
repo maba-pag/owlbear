@@ -1,10 +1,10 @@
 ---
 id: 1863
 title: 'P2-06: Remove old Cockpit resolve flow and legacy endpoints'
-status: review
+status: backlog
 priority: important
 created: 2026-05-24T21:00:04.160667+02:00
-updated: 2026-05-26T08:31:47.846662+02:00
+updated: 2026-05-26T09:21:59.572482+02:00
 tags:
   - phase-2
   - scope:cockpit
@@ -268,3 +268,27 @@ AC4 scoped to exclude known pre-existing unrelated failures. All other AC lines 
 | AC2 (GET /api/decisions/pending → 404) | test_get_decisions_pending_returns_404 |
 | AC3 (frontend decisions.test.ts removed; LegacyPendingDRResponse + normalization removed) | test_frontend_decisions_test_file_removed, test_legacy_pending_dr_response_interface_removed, test_is_pending_requests_payload_guard_removed, test_dual_format_payload_items_access_removed |
 | AC4 (decisions route module removed from disk; suite health) | test_old_decisions_route_module_file_does_not_exist; backend suite evidence above |
+
+[[2026-05-26T09:21:59+02:00]]
+## Review Evidence
+- Verdict: FAIL
+- Routing signal: FAIL #1863 to backlog | AC4 remains unsatisfied as written. The authoritative task AC still requires `tests/test_cockpit_*` and `serve/cockpit/tests/` to pass green after removal, excluding only `serve/cockpit/tests/test_visual_redesign.py`, while the latest retry evidence still records unrelated failures inside `tests/test_cockpit_*`.
+- Builder and retry evidence reviewed first. I found no blocking implementation defect in the removed-route work itself.
+- AC evidence summary:
+  - AC1: PASS. Legacy resolve path is no longer part of the live Cockpit API surface. Evidence: `serve/cockpit/src/owlbear_cockpit/main.py:32,44-50`, `serve/cockpit/src/owlbear_cockpit/routes/requests.py:119`, `tests/test_cockpit_legacy_cleanup_1863.py:120-162`.
+  - AC2: PASS. Legacy pending-list path is removed and task cleanup proof covers the 404 contract. Evidence: `serve/cockpit/src/owlbear_cockpit/routes/requests.py:107`, `tests/test_cockpit_legacy_cleanup_1863.py:165-167`.
+  - AC3: PASS for the implementation and declared frontend proof slice. The hook is array-only and the durable hook retry is green. Evidence: `serve/cockpit/web/src/hooks/usePendingDRs.ts:40-83`, `tests/test_cockpit_legacy_cleanup_1863.py:189-210`, `serve/cockpit/web/src/__tests__/DecisionContract.hook.test.ts:63-114`, task retry note at `.owlbear/kanban/tasks/1863-p2-06-remove-old-cockpit-resolve-flow-and-legacy-endpoints.md:257-260`.
+  - AC4: FAIL. The frontmatter still requires the broad `tests/test_cockpit_*` suite to pass, but the latest retry explicitly records 23 failures there. The architect refinement only excluded `serve/cockpit/tests/test_visual_redesign.py`; it did not narrow the `tests/test_cockpit_*` half of the gate. Evidence: `.owlbear/kanban/tasks/1863-p2-06-remove-old-cockpit-resolve-flow-and-legacy-endpoints.md:24-30`, `.owlbear/kanban/tasks/1863-p2-06-remove-old-cockpit-resolve-flow-and-legacy-endpoints.md:235-241`, `.owlbear/kanban/tasks/1863-p2-06-remove-old-cockpit-resolve-flow-and-legacy-endpoints.md:257-260`.
+
+| # | AC Line | Finding | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | AC4 | The task contract remains broader than the refined intended verification boundary. The frontmatter still requires `tests/test_cockpit_*` green, but the latest retry admits unrelated failures there, so the AC cannot be marked satisfied on this review cycle. | `.owlbear/kanban/tasks/1863-p2-06-remove-old-cockpit-resolve-flow-and-legacy-endpoints.md:24-30`, `.owlbear/kanban/tasks/1863-p2-06-remove-old-cockpit-resolve-flow-and-legacy-endpoints.md:235-241`, `.owlbear/kanban/tasks/1863-p2-06-remove-old-cockpit-resolve-flow-and-legacy-endpoints.md:257-260`, `tests/test_cockpit_view.py:1`, `tests/test_cockpit_models.py:1`, `tests/test_cockpit_shell_sidecar.py:1` | backlog |
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Refine AC4 so the suite-health gate matches the intended task scope, or split the unrelated `tests/test_cockpit_*` failures into separate follow-up work. The current frontmatter still requires a broad suite that the retry evidence shows is not green. | `.owlbear/kanban/tasks/1863-p2-06-remove-old-cockpit-resolve-flow-and-legacy-endpoints.md`, `tests/test_cockpit_view.py`, `tests/test_cockpit_models.py`, `tests/test_cockpit_shell_sidecar.py` | task AC lines 24-30, architect refinement lines 235-241, retry evidence lines 257-260 |
+
+## Observations
+- The implementation itself is consistent with the removal goal. I found no live backend `/api/decisions` route registration under `serve/cockpit/src/**`, and the task cleanup tests cover both 404 removals plus the deleted route module.
+- Residual legacy-endpoint strings remain in non-blocking frontend test surfaces, including parked skipped scaffolding in `serve/cockpit/web/src/__tests__/DecisionContract.test.tsx:234` and Playwright route stubs such as `serve/cockpit/web/e2e/card-density.spec.ts:194` and `serve/cockpit/web/e2e/shell-layout-1606.spec.ts:83`. I did not use those as blockers because the current FAIL is already forced by AC4 contract quality.

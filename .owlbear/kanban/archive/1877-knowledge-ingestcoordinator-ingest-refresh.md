@@ -1,10 +1,10 @@
 ---
 id: 1877
 title: 'Knowledge: IngestCoordinator — ingest & refresh'
-status: done
+status: archived
 priority: needed
 created: 2026-05-25T19:04:22.644852+02:00
-updated: 2026-05-26T08:45:55.531720+02:00
+updated: 2026-05-26T09:32:16.319154+02:00
 tags:
   - knowledge
   - layer-2
@@ -45,7 +45,7 @@ proof_bundle: behavioral
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Objective
@@ -284,3 +284,30 @@ All 4 stores (Sources, Content, Enrichment, Graph) injected via constructor — 
 
 ### Scratch Cleanup
 No `.owlbear/scratch/1877-*` files found.
+
+[[2026-05-26T09:32:16+02:00]]
+## Audit
+### Regression Detection
+- Knowledge domain: 81 passed, 0 failed
+- Adjacent domains (kanban, mcp-kanban, mcp-knowledge, tools, circular-imports): 2013 passed, 0 failed
+- Full suite: known pre-existing hang (unrelated test_mcp_kanban_newline_norm_1531.py ImportError); domain-scoped regression clean
+- Regression verdict: PASS
+
+### Intent Verification
+- Scope alignment: PASS (all changes in serve/knowledge/ domain + task-scoped test)
+- Purpose match: PASS (IngestCoordinator orchestration with 4-store DI matches stated objective)
+- Extraneous scope: none
+- Boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 5/5
+AC rewritten after challenger engagement: resolved scope overlap with #1878, added stats() AC, fixed AC6 contradiction, specified health mapping thresholds. Final AC is specific, complete, and led to clean implementation path.
+
+### Commit Integrity
+- Upstream commits: PASS (f1d1b2cb test-writer initial, e030cac7 builder feat, ce256468 test-writer retry)
+- Kanban commit packaging: pending (this step)
+
+### Deduction Breakdown
+No deductions applied.
+
+### Confidence: 1.00
+### Action: archive

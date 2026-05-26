@@ -1,10 +1,10 @@
 ---
 id: 1884
 title: 'Knowledge: SourceStore protocol — add last_refreshed_at write path'
-status: review
+status: done
 priority: needed
 created: 2026-05-26T06:08:59.357802+02:00
-updated: 2026-05-26T08:41:11.457143+02:00
+updated: 2026-05-26T09:24:25.161587+02:00
 tags:
   - knowledge
   - layer-2
@@ -153,3 +153,43 @@ Extend SourceStore protocol to support refresh watermark updates. Currently `Sou
 - Rationale: implementation already handles this path correctly (the `if update.last_refreshed_at is not None` guard is independent of the state branch). New test passes green — direct-to-review advance per Step 1b.1.
 - Lint: clean (ruff exit 0)
 - Commit: `96c3b2b4` — test: add same-state ACTIVE no-clobber proof for AC4 (#1884, test-writer)
+
+[[2026-05-26T09:11:53+02:00]]
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation: PASS #1884 to docs | AC mapped to code and evidence sufficient.
+- Upstream evidence reviewed first: builder quality-runner note at `.owlbear/kanban/tasks/1884-knowledge-sourcestore-protocol-add-last-refreshed-at-write-path.md:111` reports scoped GREEN verification with 81 passing tests, clean lint, and 91% coverage for `owlbear_knowledge.stores.sources`; test-writer retry note at `.owlbear/kanban/tasks/1884-knowledge-sourcestore-protocol-add-last-refreshed-at-write-path.md:147` reports the added AC4 test, 13 task tests passing, and clean lint.
+- AC evidence map:
+
+| AC Line | Code Evidence | Test Evidence | Status |
+|---|---|---|---|
+| AC1 | `serve/knowledge/src/owlbear_knowledge/protocols/sources.py:157` adds `SourceUpdate.last_refreshed_at`. | `tests/test_source_store_1884.py:67` and `tests/test_source_store_1884.py:74` prove the field is accepted and defaults to `None`. | PASS |
+| AC2 | `serve/knowledge/src/owlbear_knowledge/stores/sources.py:211-212` persists `last_refreshed_at` via `.isoformat()`, matching the established `record_health` pattern at `serve/knowledge/src/owlbear_knowledge/stores/sources.py:276` and `serve/knowledge/src/owlbear_knowledge/stores/sources.py:291`. | `tests/test_source_store_1884.py:127` and `tests/test_source_store_1884.py:137` prove round-trip precision and returned `datetime` type; the serialization detail itself is confirmed by direct code mapping. | PASS |
+| AC3 | `serve/knowledge/src/owlbear_knowledge/stores/sources.py:211-212` writes the new watermark during `update_source`. | `tests/test_source_store_1884.py:93` and `tests/test_source_store_1884.py:103` prove `update_source(...)` persists the timestamp and `get_source(...)` returns the matching value. | PASS |
+| AC4 | `serve/knowledge/src/owlbear_knowledge/stores/sources.py:104` registers configured sources as `ACTIVE`, and `serve/knowledge/src/owlbear_knowledge/stores/sources.py:197` gates only real state transitions, so `SourceUpdate(state=SourceState.ACTIVE)` exercises the same-state path named by the AC. | `tests/test_source_store_1884.py:199` directly proves the same-state `ACTIVE` update preserves `last_refreshed_at`; related no-clobber coverage remains at `tests/test_source_store_1884.py:165`, `tests/test_source_store_1884.py:176`, and `tests/test_source_store_1884.py:187`. | PASS |
+
+- Blocking findings: none.
+- Challenger cross-check: proceed (0.84 confidence). It could not falsify PASS after the retry closed the exact AC4 path.
+
+## Observations
+- AC2 remains implementation-scoped rather than raw-SQL asserted. That is not blocking here because the code path is explicit in `serve/knowledge/src/owlbear_knowledge/stores/sources.py:211-212`, the round-trip tests cover the externally visible behavior, and the retry only strengthened proof without changing source behavior.
+- No safety or security issue was found in the touched slice.
+- I did not perform an independent quality-runner rerun because the upstream evidence was internally consistent after the test-only retry.
+
+[[2026-05-26T09:24:25+02:00]]
+## Docs Gate
+
+### Checklist
+
+| Item | Result | Evidence |
+|------|--------|----------|
+| README Verification | No update needed | `serve/knowledge/README.md` documents only high-level exports; `SourceUpdate` and `update_source` are internal protocol types not listed in the module groups table. No drift detected on Layer 1 (grep) or Layer 2 (editorial). |
+| External Attribution | N/A | Research section states "7 studied (all internal codebase), 4 high-relevance" — no external sources. |
+| Research Doc | Linked | Task body Research section links `.owlbear/research/1884-sourcestore-refresh-write-path.md`. |
+| Deletion Detection | N/A | No files deleted; changes are purely additive (field + persistence guard). |
+
+### Files Updated
+None — no documentation impact.
+
+### Scratch Cleanup
+No `1884-*` scratch files found.

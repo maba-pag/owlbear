@@ -4,7 +4,7 @@ title: 'Knowledge: ContentStore — search & purge'
 status: review
 priority: needed
 created: 2026-05-25T19:03:11.262484+02:00
-updated: 2026-05-26T08:38:37.930569+02:00
+updated: 2026-05-26T09:04:58.931400+02:00
 tags:
   - knowledge
   - layer-1
@@ -26,8 +26,10 @@ ac:
   - Purge is idempotent — purging unknown source_id returns ContentPurgeResult 
     with empty tuples, no error
 proof_bundle: behavioral
-blocked: false
-block_reason:
+blocked: true
+block_reason: 'Reviewer FAIL (3rd cycle): PO-1 proof incomplete — mixed stale+current
+  purge path test only asserts stale V1 IDs, never captures/asserts current V2 IDs.
+  Needs manual move to backlog.'
 claimed_at:
 archival_reason:
 archival_refs: []
@@ -294,3 +296,8 @@ Skipped full re-evaluation — prior architecture review (2026-05-26T06:04) stan
 | PO-1 | AC3 | test_purge_source_includes_stale_pending_vector_ids — REPLACED+delete-failure state, asserts delete payload includes V1 stale IDs + purge_result.vector_ids |
 | PO-2 | AC1 | test_search_scopes_forwarded_to_vector_store — tightened to assert forwarded_scopes == ["wiki", "docs"] |
 | PO-3 | AC4 | test_stats_vectors_excludes_chunks_with_unsynced_parent — directly sets vectors_synced=0, asserts stats().vectors == 0 |
+
+[[2026-05-26T09:04:58+02:00]]
+
+## Reviewer Verdict (orchestrator-applied)
+FAIL → backlog. PO-1 proof incomplete for mixed stale+current purge path. Implementation appears correct but test only asserts stale V1 presence, never captures current V2 IDs. Third review cycle — routed to backlog for rework.
