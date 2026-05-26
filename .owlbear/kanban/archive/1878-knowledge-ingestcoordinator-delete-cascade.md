@@ -1,10 +1,10 @@
 ---
 id: 1878
 title: 'Knowledge: IngestCoordinator — delete cascade'
-status: done
+status: archived
 priority: needed
 created: 2026-05-25T19:04:37.443482+02:00
-updated: 2026-05-27T00:43:45.652249+02:00
+updated: 2026-05-27T00:51:51.231436+02:00
 tags:
   - knowledge
   - layer-2
@@ -55,8 +55,8 @@ ac:
 proof_bundle: behavioral
 blocked: false
 block_reason:
-claimed_at: 2026-05-27T00:43:45.652249+02:00
-archival_reason:
+claimed_at:
+archival_reason: completed
 archival_refs: []
 ---
 ## Objective
@@ -521,3 +521,37 @@ AC9 tests MUST exercise:
 
 **Files updated:** none — no doc impact.
 **Scratch cleanup:** no `.owlbear/scratch/1878-*` files found.
+
+[[2026-05-27T00:51:51+02:00]]
+## Audit
+
+### Regression Detection
+- quality-runner env fallback: instrument failure on first run; direct execution used.
+- Task-scoped tests: 71 passed, 0 failed.
+- Knowledge domain regression (serve/knowledge/tests/ + tests/test_knowledge_* + tests/test_enrichment_*): 159 passed, 0 failed.
+- Lint on changed files: clean.
+
+### Intent Verification
+- Changed files: `serve/knowledge/src/owlbear_knowledge/ingest_coordinator.py`, `serve/knowledge/src/owlbear_knowledge/protocols/ingest.py`.
+- Both within knowledge domain; implementation matches stated purpose (delete cascade orchestration + protocol docstring alignment).
+- No extraneous scope.
+
+### Architect Quality
+- Score: 3/5
+- Original AC had contract flaws (AC7/AC8 LookupError semantics collapse, AC9 impossible retry promise) caught by reviewer — not architect upfront.
+- Required 3 architecture cycles to reach sound contract. Final 12-line AC set is specific, testable, and honestly documents limitations.
+- Deduction: -.03
+
+### Commit Integrity
+- 3 builder commits verified on changed files:
+  - `8efc5873` feat: implement delete_source cascade (#1878, builder)
+  - `a2264b6f` feat: align delete_source protocol raises clause (#1878, builder)
+  - `ffe23069` feat: align delete-source limitation docs (#1878, builder)
+
+### Deduction Breakdown
+| Criterion | Deduction |
+|-----------|----------|
+| AC quality score 3/5 | -.03 |
+
+### Confidence: 0.97
+### Action: ARCHIVE
