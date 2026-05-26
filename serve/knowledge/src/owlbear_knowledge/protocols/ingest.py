@@ -211,8 +211,8 @@ class IngestCoordinator(Protocol):
           5. Graph.invalidate_evidence_by_chunks(chunk_ids) → evidence + orphans
 
         Guarantees:
-          - All module-owned data for the source is removed in correct
-            dependency order.
+          - All module-owned data reachable at call time is removed in
+            correct dependency order.
           - PurgeResult carries typed sub-results for full audit trail.
           - deleted_at and reason are preserved for traceability.
           - Each cascade step is idempotent: re-running delete_source on
@@ -223,6 +223,9 @@ class IngestCoordinator(Protocol):
           - Atomicity across modules is implementation-defined (saga vs
             transaction). Partial failure returns status=PARTIAL with
             completed_steps indicating progress.
+          - Retry after post-step-2 partial failure cannot recover
+            chunk_ids from Content; graph evidence from original chunks persists
+            (chunk addressability lost).
 
         Side effects:
           - Writes via Sources, Content, Enrichment, and Graph delegates.

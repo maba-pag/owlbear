@@ -133,7 +133,9 @@ class IngestCoordinator:
 
         The 5-step cascade is deterministic and fail-fast. Per D63, rerunning after
         partial failures is safe: already-completed state is treated as idempotent
-        progress and remaining steps are attempted.
+        progress and remaining steps are attempted. Non-guarantee: after a post-step-2
+        partial failure, retry loses chunk addressability (Content may return empty
+        chunk_ids), so graph evidence from original chunks can persist.
         """
         completed_steps: list[str] = []
 
