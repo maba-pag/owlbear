@@ -356,21 +356,25 @@ class ContentStore(ContentStoreProtocol):
     def purge_source(self, source_id: str) -> ContentPurgeResult:
         """Remove all documents/chunks/vectors associated with one source."""
         document_rows = self._db.execute(
-            "SELECT document_id FROM content_documents WHERE source_id = ? ORDER BY document_id ASC",
+            "SELECT document_id, pending_delete_chunk_ids "
+            "FROM content_documents WHERE source_id = ? ORDER BY document_id ASC",
             (source_id,),
         ).fetchall()
         document_ids = tuple(str(row["document_id"]) for row in document_rows)
+        pending_vector_ids = self._collect_pending_vector_ids(document_rows)
 
         chunk_rows = self._db.execute(
             "SELECT id FROM content_chunks WHERE source_id = ? ORDER BY chunk_index ASC, id ASC",
             (source_id,),
         ).fetchall()
         chunk_ids = tuple(str(row["id"]) for row in chunk_rows)
+        vector_ids = self._merge_unique_ids(chunk_ids, pending_vector_ids)
 
-        if not document_ids and not chunk_ids:
+        if not document_ids and not vector_ids:
             return ContentPurgeResult(source_id=source_id)
 
-        self._delete_vectors(chunk_ids)
+        if vector_ids:
+            self._delete_vectors(vector_ids)
         with self._db:
             self._db.execute("DELETE FROM content_chunks WHERE source_id = ?", (source_id,))
             self._db.execute("DELETE FROM content_documents WHERE source_id = ?", (source_id,))
@@ -379,7 +383,7 @@ class ContentStore(ContentStoreProtocol):
             source_id=source_id,
             document_ids=document_ids,
             chunk_ids=chunk_ids,
-            vector_ids=chunk_ids,
+            vector_ids=vector_ids,
         )
 
     def stats(self) -> ContentStats:
@@ -446,6 +450,22 @@ class ContentStore(ContentStoreProtocol):
         if not isinstance(parsed, list):
             return ()
         return tuple(str(item) for item in parsed)
+
+    def _collect_pending_vector_ids(self, rows: list[sqlite3.Row]) -> tuple[str, ...]:
+        pending: list[str] = []
+        for row in rows:
+            pending.extend(self._load_json_str_list(row["pending_delete_chunk_ids"]))
+        return tuple(pending)
+
+    def _merge_unique_ids(self, primary: tuple[str, ...], secondary: tuple[str, ...]) -> tuple[str, ...]:
+        merged: list[str] = []
+        seen: set[str] = set()
+        for item in (*primary, *secondary):
+            if item in seen:
+                continue
+            seen.add(item)
+            merged.append(item)
+        return tuple(merged)
 
     def _embed_query(self, query_text: str) -> object:
         embed_hybrid = getattr(self._embedding_provider, "embed_hybrid", None)
