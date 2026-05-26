@@ -30,6 +30,9 @@ if TYPE_CHECKING:
     from owlbear_knowledge.embeddings import EmbeddingProvider
 
 
+OVERFETCH_FACTOR = 10
+
+
 class ContentStore(ContentStoreProtocol):
     """SQLite-backed Content storage with deterministic ingest dedup."""
 
@@ -313,7 +316,7 @@ class ContentStore(ContentStoreProtocol):
             raise ValueError(msg)
 
         query_embedding = self._embed_query(query.text)
-        overfetch = query.top_k * 10 if query.source_ids else query.top_k
+        overfetch = query.top_k * OVERFETCH_FACTOR if query.source_ids else query.top_k
         scopes = list(query.scopes) if query.scopes else None
         raw_hits: list[tuple[str, float]] = self._vector_store.search_similar(
             query_embedding,

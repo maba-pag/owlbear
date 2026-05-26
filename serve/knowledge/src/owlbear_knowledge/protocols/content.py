@@ -23,7 +23,6 @@ from pydantic import Field
 
 from owlbear_knowledge.protocols.common import BoundaryModel, Metadata
 
-
 # ---------------------------------------------------------------------------
 # Enums
 # ---------------------------------------------------------------------------
@@ -246,7 +245,7 @@ class ContentStore(Protocol):
 
         Guarantees:
           - Applies scope and source_id filters.
-          - Results ordered by descending score (normalised 0.0–1.0).
+          - Results ordered by descending score (normalised 0.0-1.0).
           - Preserves exact chunk text in each result.
           - Result count <= query.top_k.
           - Scores below min_score are excluded.
@@ -255,6 +254,10 @@ class ContentStore(Protocol):
           - Ranking internals (sparse vs dense weighting, re-ranking),
             score normalisation method, and query embedding strategy are
             implementation details (CP9).
+          - Exhaustive source_id retrieval beyond the ranked-window
+            boundary (source_ids filtering is approximate; matching
+            results outside the top-ranked candidate window may be
+            omitted).
 
         Side effects:
           - May compute a query embedding internally, but does not mutate
