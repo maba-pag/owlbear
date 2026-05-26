@@ -30,11 +30,10 @@ from typing import Protocol, runtime_checkable
 from pydantic import Field
 
 from owlbear_knowledge.protocols.common import BoundaryModel, Metadata
-from owlbear_knowledge.protocols.content import ContentIngestResult, ContentPurgeResult
-from owlbear_knowledge.protocols.enrichment import EnrichmentPurgeResult
-from owlbear_knowledge.protocols.graph import EvidenceInvalidationResult
-from owlbear_knowledge.protocols.sources import SourceDeletionInfo, SourceRecord
-
+from owlbear_knowledge.protocols.content import ContentIngestResult, ContentPurgeResult  # noqa: TC001
+from owlbear_knowledge.protocols.enrichment import EnrichmentPurgeResult  # noqa: TC001
+from owlbear_knowledge.protocols.graph import EvidenceInvalidationResult  # noqa: TC001
+from owlbear_knowledge.protocols.sources import SourceDeletionInfo  # noqa: TC001
 
 # ---------------------------------------------------------------------------
 # Request types
@@ -229,8 +228,8 @@ class IngestCoordinator(Protocol):
           - Writes via Sources, Content, Enrichment, and Graph delegates.
 
         Raises:
-          - ``LookupError`` if source_id does not exist (and was not
-            already deleted in a prior partial run).
+          - Never raises LookupError — caught internally for
+            forward-recovery semantics.
         """
         ...
 
