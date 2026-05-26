@@ -187,7 +187,7 @@ Resolution constraints:
 
 Resolution is user/Cockpit driven (or sweep fallback), not MCP-tool driven.
 - engine sets `resolution.resolved_at`
-- file moves atomically to `decisions/resolved/{request_id}.md`
+- engine writes `decisions/resolved/{request_id}.md` then removes `decisions/pending/{request_id}.md`
 - request becomes visible via `list_requests(status="resolved")`
 
 ### 3) Write-back to task body
