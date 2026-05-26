@@ -1,10 +1,10 @@
 ---
 id: 1858
 title: 'P2-01: Decision resolver UI with option cards'
-status: done
+status: archived
 priority: needed
 created: 2026-05-24T20:59:10.619728+02:00
-updated: 2026-05-26T02:00:34.813271+02:00
+updated: 2026-05-26T02:36:58.853881+02:00
 tags:
   - phase-2
   - scope:cockpit-web
@@ -28,8 +28,8 @@ ac:
 proof_bundle: behavioral
 blocked: false
 block_reason:
-claimed_at: 2026-05-26T02:00:34.813271+02:00
-archival_reason:
+claimed_at:
+archival_reason: completed
 archival_refs: []
 ---
 Brief: see parent #1850 and `.owlbear/briefs/draft-decision-request-data-model/brief.md`
@@ -288,3 +288,32 @@ No public API, CLI flags, or documented symbols were removed. Change is additive
 **Files Updated:** `serve/cockpit/README.md` — inserted #1858 entry between #1857 and #1859.
 
 **Scratch Cleanup:** No `scratch/1858-*` files found.
+
+[[2026-05-26T02:36:58+02:00]]
+## Audit
+
+### Regression Detection
+- **Frontend (vitest):** Task-scoped tests 52/52 pass (ResolveOptionCards_1858, ResolveModal, ResolveWiring_1857, ActionResolver_1859). Full suite shows 4 module-level files failing (34 tests), but verified ALL are **pre-existing** — same failures reproduce at commit before any #1858 work (git checkout feb25b85^). Root cause: #1857 API rename broke module-level tests (PModal.coverage, PInlineNotification.modal, ResolveModalUX, decisions.test). No regressions introduced by #1858.
+- **Backend (pytest):** 351/351 cockpit tests pass.
+- quality-runner env fallback: instrument error — vitest JSON reporter hung in shell; direct execution used.
+
+### Intent Verification
+- Changed files: `serve/cockpit/web/src/components/ResolveModal.tsx`, `serve/cockpit/web/src/__tests__/ResolveOptionCards_1858.test.tsx`, `serve/cockpit/README.md`
+- All within cockpit web frontend domain. Implementation adds option-card rendering for decision-kind requests — matches stated AC purpose. No extraneous scope.
+
+### Architect Quality: 4/5
+- AC lines are specific: exact DOM selectors (data-testid patterns), exact behavior (aria-selected), explicit boundary conditions (trimmed empty), non-regression clause. Challenger cycle executed and accepted findings incorporated. Minor gap: confidence clamping behavior implied but not explicit (builder handled reasonably).
+
+### Commit Integrity
+- Test-writer: 3 commits present (feb25b85, eee98e8c, e4b4293d) ✓
+- Builder: ⚠ No commit attributed to #1858. Git blame shows option-card code in `de7307d0` which is tagged "#1859, builder". The #1858 builder work was bundled into a #1859 commit — attribution error, not missing code.
+- Doc-writer: ⚠ `serve/cockpit/README.md` update is correct but uncommitted (unstaged). Work is present in working tree.
+- Process observation: builder and doc-writer commit discipline gaps. Code IS delivered and verified; attribution and commit state are the gaps.
+
+### Deductions
+| Criterion | Deduction | Note |
+|-----------|-----------|------|
+| Evidence integrity (commit attribution) | -.05 | Builder commit bundled into #1859; doc-writer uncommitted |
+
+### Confidence: 0.95
+### Action: ARCHIVE
