@@ -2,6 +2,12 @@
 
 External repos and resources studied during OwlBear development.
 
+## EnrichmentStore — Extractions & Purge (Task #1876)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| microsoft/graphrag | <https://github.com/microsoft/graphrag> | Entity extraction workflow, name-based dedup, co-occurrence patterns across text units | `.owlbear/research/1876-enrichmentstore-extractions-purge.md` | 2026-05-26 |
+
 ## GraphStore — Entities & Edges (Task #1873)
 
 | Source | URL | What | Where Used | Date |
@@ -58,6 +64,12 @@ External repos and resources studied during OwlBear development.
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
 | MCP Python SDK — ToolAnnotations | <https://github.com/modelcontextprotocol/python-sdk> | `destructive_hint` field semantics, FastMCP tool registration patterns | `.owlbear/research/1652-remove-source-mcp-tool.md` | 2026-05-18 |
+
+## SourceStore Implementation (Task #1870)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Pydantic TypeAdapter docs | <https://docs.pydantic.dev/latest/concepts/unions/> | Discriminated union serialization via `TypeAdapter`, `validate_json`/`dump_json` round-trip | `.owlbear/research/1870-sourcestore-implementation.md` | 2026-05-25 |
 
 ## URL_LIST Handler Equivalence (Task #1653)
 
