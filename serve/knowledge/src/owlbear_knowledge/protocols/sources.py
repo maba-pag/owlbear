@@ -18,7 +18,6 @@ from pydantic import Field
 
 from owlbear_knowledge.protocols.common import BoundaryModel, Metadata
 
-
 # ---------------------------------------------------------------------------
 # Enums
 # ---------------------------------------------------------------------------
@@ -155,6 +154,7 @@ class SourceUpdate(BoundaryModel):
     scope: str | None = None
     enrich: bool | None = None
     refreshable: bool | None = None
+    last_refreshed_at: datetime | None = None
     priority: int | None = None
     reason: str | None = None
     metadata: Metadata | None = None

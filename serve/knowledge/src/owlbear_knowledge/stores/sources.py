@@ -208,6 +208,8 @@ class SqliteSourceStore(SourceStore):
             values["priority"] = update.priority
         if update.reason is not None:
             values["reason"] = update.reason
+        if update.last_refreshed_at is not None:
+            values["last_refreshed_at"] = update.last_refreshed_at.isoformat()
         if update.metadata is not None:
             existing = self._metadata_from_json(values["metadata_json"])
             values["metadata_json"] = json.dumps({**existing, **update.metadata})
