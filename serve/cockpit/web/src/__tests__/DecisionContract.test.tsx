@@ -383,15 +383,18 @@ describe('TestFromAC_BodyContractAndErrorChain', () => {
   })
 
   // AC2: required decision fields flow into the Decisions route; agent attribution
-  // is available in resolver metadata rather than the primary list row.
+  // is rendered in the primary list row per AC1 structured-field contract.
   it('hook output items render required fields on the Decisions route', async () => {
     const drWithAllFields: PendingDR & { body: string } = {
       id: 'dr-all-fields',
       task_id: 202,
       agent: 'builder',
+      kind: 'decision',
       request_type: 'decision',
       created: '2026-05-08T10:00:00Z',
       title: 'Scope boundary decision',
+      summary: 'Builder requests scope clarification...',
+      options: [],
       body_preview: 'Builder requests scope clarification...',
       body: '## Full decision body with complete context for resolution.',
     }
@@ -412,7 +415,7 @@ describe('TestFromAC_BodyContractAndErrorChain', () => {
     const item = container.querySelector('[data-testid="dr-item-dr-all-fields"]')!
     expect(item.textContent).toContain('Scope boundary decision')
     expect(item.textContent).toContain('Task #202')
-    expect(item.querySelector('[data-testid="dr-primary-meta-dr-all-fields"]')?.textContent).not.toContain('builder')
+    expect(item.querySelector('[data-testid="dr-primary-meta-dr-all-fields"]')?.textContent).toContain('builder')
     expect(item.textContent).toContain('Builder requests scope clarification...')
   })
 
