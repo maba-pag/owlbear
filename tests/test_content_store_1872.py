@@ -276,6 +276,7 @@ class TestFromAC_ContentStoreSearch:
         mock_vectors.search_similar.return_value = [(cid_a, 0.9), (cid_b, 0.8)]
 
         results = await store.search(_make_query(source_ids=("src-A",)))
+        assert len(results) >= 1
         for r in results:
             assert r.chunk.source_id == "src-A"
 
@@ -509,6 +510,14 @@ class TestFromAC_ContentStorePurge:
                 )
             )
 
+        # Capture current V2 chunk IDs that remain in SQLite after failed vector delete.
+        v2_rows = db.execute(
+            "SELECT id FROM content_chunks WHERE source_id = ?",
+            ("src-stale",),
+        ).fetchall()
+        v2_chunk_ids = {str(row[0]) for row in v2_rows}
+        assert len(v2_chunk_ids) > 0, "V2 chunks must exist after REPLACED ingest failure"
+
         # Step 3: purge_source with working vector store
         purge_vectors = MagicMock()
         store_3 = ContentStore(
@@ -532,10 +541,17 @@ class TestFromAC_ContentStorePurge:
         assert v1_chunk_ids <= deleted_ids, (
             f"delete payload must include stale V1 IDs; missing: {v1_chunk_ids - deleted_ids}"
         )
+        assert v2_chunk_ids <= deleted_ids, (
+            f"delete payload must include current V2 IDs; missing: {v2_chunk_ids - deleted_ids}"
+        )
         # purge_result.vector_ids must include stale V1 IDs
         assert v1_chunk_ids <= set(purge_result.vector_ids), (
             f"purge_result.vector_ids must include stale V1 IDs; "
             f"missing: {v1_chunk_ids - set(purge_result.vector_ids)}"
+        )
+        assert v2_chunk_ids <= set(purge_result.vector_ids), (
+            f"purge_result.vector_ids must include current V2 IDs; "
+            f"missing: {v2_chunk_ids - set(purge_result.vector_ids)}"
         )
 
 
