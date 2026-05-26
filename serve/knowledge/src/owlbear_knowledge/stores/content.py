@@ -386,7 +386,6 @@ class ContentStore(ContentStoreProtocol):
                 for chunk_id, vector in zip(chunk_ids, vectors, strict=True)
             ]
             self._vector_store.upsert(points=points)
-            self._vector_store()  # Keep parity with "vector_store called" AC assertion.
             return
 
         store_embedding = getattr(self._vector_store, "store_embedding", None)
