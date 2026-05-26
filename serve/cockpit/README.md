@@ -683,15 +683,6 @@ IDs and duplicate cockpit-resolved IDs; those responses use FastAPI's
 
 Handled by centralized `@app.exception_handler` registrations in `main.py`; route code raises domain errors directly and lets the handlers serialize them.
 
-## Decisions API
-
-Two endpoints handle Decision Request (DR) lifecycle. These routes use `get_decisions_dir` (a separate DI callable in `deps.py`) — not the CockpitView facade.
-
-| Route | Behaviour |
-|-------|----------|
-| `GET /api/decisions/pending` | Reads `decisions/pending/*.md`, parses YAML frontmatter, returns `{count, items[{id, task_id (int), agent, request_type, created, title, body, body_preview}]}`. Only items with frontmatter `response == "pending"` are included. Items that fail schema validation (e.g. missing or non-coercible `task_id`) are silently excluded; `count` reflects only successfully validated items. Returns `{count: 0, items: []}` when the directory is empty or missing. |
-| `POST /api/decisions/{id}/resolve` | Accepts `{response: "approved"\|"needs-info"\|"rejected", notes?: string (max 10,000 chars)}`. Immediately: appends the canonical `## Decision Request` summary to the linked task, unblocks the task for `approved`/`rejected` responses, and moves the DR file from `pending/` to `resolved/`. Returns `{id, response}` on success. Returns 404 (`{detail}`) for unknown or already-cockpit-resolved ids. Returns 409 (`{code, message}`) for DRs resolved by another agent (still in `resolved/`). Returns 422 (`{detail}`) for malformed ids or `notes` exceeding 10,000 characters. |
-
 ## Requests API
 
 Two endpoints handle the structured-request lifecycle (decision requests and action requests created via `mcp-kanban`). These routes use `get_engine` (the same `KanbanEngine` DI callable from `deps.py`) and live in `routes/requests.py`.
