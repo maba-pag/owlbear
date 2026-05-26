@@ -116,6 +116,20 @@ const DR_FULL_CONFIDENCE: PendingDR = {
   body_preview: '',
 }
 
+const DR_FRACTIONAL_CONFIDENCE: PendingDR = {
+  id: 'dr-1860-005',
+  task_id: 1864,
+  agent: 'builder',
+  request_type: 'decision',
+  created: '2026-05-23T12:00:00Z',
+  title: 'Fractional confidence decision',
+  summary: 'One option with non-round-tripping confidence.',
+  kind: 'decision',
+  options: [{ option_id: 'opt-frac', label: 'Fractional option', confidence: 0.333, recommended: false, rationale: '' }],
+  body: '',
+  body_preview: '',
+}
+
 const DR_OLDER: PendingDR = {
   ...DR_DECISION,
   id: 'dr-1860-older',
@@ -222,6 +236,13 @@ describe('TestFromAC_RequestListRendering', () => {
     const { container } = renderPage([DR_FULL_CONFIDENCE])
     const bar = container.querySelector('[data-testid="confidence-bar-opt-full"]') as HTMLElement | null
     expect(bar?.style.width).toBe('100%')
+  })
+
+  it('non-round-tripping confidence (0.333) renders bar width as Math.round(0.333*100)%="33%"', () => {
+    // AC1: one fractional test proving Math.round is applied (0.333 → 33%, not 33.3%)
+    const { container } = renderPage([DR_FRACTIONAL_CONFIDENCE])
+    const bar = container.querySelector('[data-testid="confidence-bar-opt-frac"]') as HTMLElement | null
+    expect(bar?.style.width).toBe('33%')
   })
 
   // ── AC1: Option count text ──────────────────────────────────────────────────
