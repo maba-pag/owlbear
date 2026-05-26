@@ -14,7 +14,7 @@ AC coverage:
   AC5  — IngestResult fields: documents_processed, created/replaced/unchanged, content_results, timestamps
   AC6  — Source health updated: OK / DEGRADED / FAILED + message
   AC7  — stats() aggregates from all 4 stores; never raises
-  AC8  — refresh() raises NotImplementedError
+  AC8  — refresh() with no fetcher returns empty RefreshResult (guard for #1886 behavioral contract)
 """
 
 from __future__ import annotations
@@ -39,6 +39,7 @@ from owlbear_knowledge.protocols.ingest import (
     IngestRequest,
     IngestStats,
     RefreshRequest,
+    RefreshResult,
 )
 from owlbear_knowledge.protocols.sources import (
     ConfiguredSourceRecord,
@@ -689,12 +690,16 @@ class TestFromAC_IngestCoordinator:
         assert isinstance(result, IngestStats)
 
     # ------------------------------------------------------------------
-    # AC8 — refresh() raises NotImplementedError (blocked on #1884 + #1885)
+    # AC8 — refresh() with no fetcher returns empty RefreshResult
+    #        (stale NotImplementedError guard replaced by #1886 behavioral contract)
     # ------------------------------------------------------------------
 
     @pytest.mark.asyncio
-    async def test_refresh_raises_not_implemented_error(
+    async def test_refresh_with_no_fetcher_returns_empty_refresh_result(
         self, coordinator: IngestCoordinator
     ) -> None:
-        with pytest.raises(NotImplementedError):
-            await coordinator.refresh(RefreshRequest())
+        result = await coordinator.refresh(RefreshRequest())
+        assert isinstance(result, RefreshResult)
+        assert result.sources_checked == 0
+        assert result.sources_refreshed == 0
+        assert result.errors == ()
