@@ -32,7 +32,7 @@ from owlbear_knowledge.protocols.content import (
     ContentSearchQuery,
     ContentStats,
 )
-from owlbear_knowledge.stores.content import ContentStore
+from owlbear_knowledge.stores.content import OVERFETCH_FACTOR, ContentStore
 
 
 # ---------------------------------------------------------------------------
@@ -276,6 +276,8 @@ class TestFromAC_ContentStoreSearch:
         mock_vectors.search_similar.return_value = [(cid_a, 0.9), (cid_b, 0.8)]
 
         results = await store.search(_make_query(source_ids=("src-A",)))
+        call_args = mock_vectors.search_similar.call_args
+        assert call_args.kwargs["top_k"] == 10 * OVERFETCH_FACTOR
         assert len(results) >= 1
         for r in results:
             assert r.chunk.source_id == "src-A"
