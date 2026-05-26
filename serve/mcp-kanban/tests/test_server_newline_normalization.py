@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import types
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -12,7 +11,6 @@ from owlbear_kanban import KanbanEngine
 from owlbear_kanban.models import SingleTaskResponse
 from owlbear_mcp_kanban.server import (
     AppContext,
-    create_dr,
     create_task,
     edit_task,
     end_work,
@@ -81,33 +79,6 @@ def mock_view_ctx(tmp_path: Path) -> tuple[AppContext, MagicMock]:
     engine._agent_view = mock_view  # noqa: SLF001
 
     return AppContext(engine=engine, kanban_dir=kanban_dir), mock_view
-
-
-@pytest.fixture
-def dr_ctx(tmp_path: Path) -> AppContext:
-    kanban_dir = _make_board(tmp_path)
-    engine = KanbanEngine(kanban_dir)
-    engine.create_task("DR seed", status="todo", priority="important")
-    engine.list_tasks()
-    return AppContext(engine=engine, kanban_dir=kanban_dir)
-
-
-def _fake_decisions(captured: dict) -> types.SimpleNamespace:
-    def fake_create_dr(
-        d_dir: Path,
-        _engine: object,
-        *,
-        task_id: int,
-        body: str,
-        **_extra: object,
-    ) -> Path:
-        captured["body"] = body
-        d_dir.mkdir(parents=True, exist_ok=True)
-        path = d_dir / f"{task_id}-test.md"
-        path.write_text(body, encoding="utf-8")
-        return path
-
-    return types.SimpleNamespace(create_dr=fake_create_dr)
 
 
 class TestNormalizeEscapedNewlines:
@@ -281,55 +252,6 @@ class TestEndWorkNormalization:
         assert note_passed == "want\\nliteral"
 
 
-class TestCreateDrNormalization:
-    @pytest.mark.asyncio
-    async def test_body_literal_backslash_n_normalized_before_decisions_call(
-        self, dr_ctx: AppContext, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        captured: dict = {}
-        monkeypatch.setattr("owlbear_mcp_kanban.server.decisions", _fake_decisions(captured))
-        await create_dr(
-            _make_ctx(dr_ctx),
-            task_id="1",
-            agent="test-agent",
-            request_type="action",
-            body="reason\\ndetail",
-        )
-        assert captured["body"] == "reason\ndetail"
-
-    @pytest.mark.asyncio
-    async def test_guidance_key_present_in_response_when_body_normalized(
-        self, dr_ctx: AppContext, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        captured: dict = {}
-        monkeypatch.setattr("owlbear_mcp_kanban.server.decisions", _fake_decisions(captured))
-        result = await create_dr(
-            _make_ctx(dr_ctx),
-            task_id="1",
-            agent="test-agent",
-            request_type="action",
-            body="reason\\ndetail",
-        )
-        assert "guidance" in result
-        assert isinstance(result["guidance"], list)
-        assert _has_norm_guidance(result["guidance"])
-
-    @pytest.mark.asyncio
-    async def test_escape_convention_body_preserved_as_single_backslash_n(
-        self, dr_ctx: AppContext, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        captured: dict = {}
-        monkeypatch.setattr("owlbear_mcp_kanban.server.decisions", _fake_decisions(captured))
-        await create_dr(
-            _make_ctx(dr_ctx),
-            task_id="1",
-            agent="test-agent",
-            request_type="action",
-            body="want\\\\nliteral",
-        )
-        assert captured["body"] == "want\\nliteral"
-
-
 class TestGuidancePositioning:
     @pytest.mark.asyncio
     async def test_edit_task_existing_and_norm_guidance_both_present(
@@ -425,22 +347,3 @@ class TestPassthroughWithoutNormalization:
         assert note_passed == "clean note no escapes"
         assert not _has_norm_guidance(result.guidance)
 
-    @pytest.mark.asyncio
-    async def test_create_dr_body_passthrough_no_normalization(
-        self, dr_ctx: AppContext, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        from owlbear_mcp_kanban.server import _normalize_escaped_newlines
-
-        _, changed = _normalize_escaped_newlines("clean body no escapes")
-        assert not changed
-        captured: dict = {}
-        monkeypatch.setattr("owlbear_mcp_kanban.server.decisions", _fake_decisions(captured))
-        result = await create_dr(
-            _make_ctx(dr_ctx),
-            task_id="1",
-            agent="test-agent",
-            request_type="action",
-            body="clean body no escapes",
-        )
-        assert captured["body"] == "clean body no escapes"
-        assert not _has_norm_guidance(result.get("guidance", []))

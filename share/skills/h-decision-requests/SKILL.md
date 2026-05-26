@@ -13,8 +13,6 @@ Tools in scope:
 - `list_requests`
 - `show_request`
 
-Legacy `create_dr` still exists for compatibility, but structured request workflows should use the three tools above.
-
 ## When To Create A Structured Request
 
 Create a structured request only when work is blocked on a user choice or user action that cannot be derived from:

@@ -9,7 +9,6 @@ from __future__ import annotations
 import logging
 import os
 import re
-from datetime import UTC, datetime
 from io import StringIO
 from pathlib import Path
 from typing import Protocol
@@ -130,58 +129,6 @@ def move_to_resolved(path: Path, resolved_dir: Path) -> Path:
                 candidate.unlink()
             raise
         return candidate
-
-
-def create_dr(  # noqa: PLR0913
-    decisions_dir: Path,
-    engine: DecisionEngine,
-    *,
-    task_id: int,
-    agent: str,
-    request_type: str,
-    body: str,
-) -> Path:
-    """Create a pending DR file atomically, then block the task.
-
-    Uses ``O_EXCL`` for creation and retries collisions with ``-2``, ``-3``,
-    etc. suffixes.
-    """
-    pending_dir = decisions_dir / "pending"
-    pending_dir.mkdir(parents=True, exist_ok=True)
-
-    created = datetime.now(tz=UTC).strftime("%Y-%m-%d")
-    frontmatter = (
-        "---\n"
-        f"task_id: {task_id}\n"
-        f"agent: {agent}\n"
-        f"request_type: {request_type}\n"
-        f"created: '{created}'\n"
-        "response: pending\n"
-        "---\n\n"
-    )
-    content = frontmatter + body
-
-    slug = _slugify(request_type)
-    counter = 1
-    while True:
-        filename = f"{task_id}-{slug}.md" if counter == 1 else f"{task_id}-{slug}-{counter}.md"
-        candidate = pending_dir / filename
-        try:
-            fd = os.open(candidate, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
-            with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
-                handle.write(content)
-            break
-        except FileExistsError:
-            counter += 1
-
-    try:
-        engine.edit_task(task_id, blocked=True, block_reason="DR pending")
-    except Exception:
-        if candidate.exists():
-            candidate.unlink()
-        raise
-
-    return candidate
 
 
 def resolve_decision(

@@ -27,7 +27,6 @@ Exactly 9 tools are exposed:
 | `move_task` | `move_task(id: str | int, status: str, archival_reason: str | None = None, archival_refs: list[int] | None = None)` |
 | `start_work` | `start_work(id: str | int)` |
 | `end_work` | `end_work(id: str | int, outcome: str, move_to: str | None = None, note: str | None = None, archival_reason: str | None = None, archival_refs: list[int] | None = None, block_reason: str | None = None)` |
-| `create_dr` | `create_dr(task_id: str | int, agent: str, request_type: str, body: str)` |
 <!-- markdownlint-enable MD056 -->
 
 ### Filter and Retrieval Additions
@@ -112,7 +111,7 @@ Mutation and lifecycle responses include `guidance: list[str]`.
 | `end_work(outcome="success")` | Always (commit-pushed reminder) |
 | `move_task` to a status > 1 slot ahead | Forward-skip warning |
 
-**Agent obligation:** If `guidance` is non-empty, read it before proceeding — it may require an immediate follow-up action (e.g., create a Decision Request via the create_dr tool).
+**Agent obligation:** If `guidance` is non-empty, read it before proceeding — it may require an immediate follow-up action (e.g., create a Decision Request via the create_request tool).
 
 ### `block:user` Tag Exemption
 

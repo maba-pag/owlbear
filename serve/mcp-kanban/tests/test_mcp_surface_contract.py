@@ -44,7 +44,6 @@ EXPECTED_TOOLS: frozenset[str] = frozenset(
         "list_tasks",
         "show_task",
         "create_task",
-        "create_dr",
         "move_task",
         "edit_task",
         "start_work",
@@ -225,7 +224,7 @@ class TestFromAC_ToolRegistryContract:
         Runs app_lifespan (not just module import) because _apply_tool_exclusions
         executes at lifespan time. With no exclusions, the full deployment contract
         must be intact. Introspects mcp._tool_manager._tools — the established pattern
-        in test_tool_annotations_494.py, test_mcp_create_dr_1182.py, etc.
+        in test_tool_annotations_494.py and related MCP contract tests.
         """
         board = _make_board(tmp_path)
         monkeypatch.setenv("KANBAN_DIR", str(board))

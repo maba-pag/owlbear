@@ -18,7 +18,7 @@ from mcp.types import ToolAnnotations
 from pydantic import BeforeValidator
 from pydantic import ValidationError as PydanticValidationError
 
-from owlbear_kanban import KanbanEngine, decisions
+from owlbear_kanban import KanbanEngine
 from owlbear_kanban.errors import KanbanError
 from owlbear_kanban.models import (
     ListTasksResponse,
@@ -58,7 +58,6 @@ __all__ = [
     "_map_kanban_error",
     "_show_validated",
     "app_lifespan",
-    "create_dr",
     "create_request",
     "create_task",
     "edit_task",
@@ -418,41 +417,6 @@ async def create_task(  # noqa: PLR0913
     result = _to_single_task_response(response)
     result.guidance = _append_norm_guidance(result.guidance, changed=body_changed)
     return result
-
-
-@mcp.tool(annotations=ToolAnnotations(destructiveHint=False))
-async def create_dr(
-    ctx: Context,
-    task_id: str | int,
-    agent: str,
-    request_type: str,
-    body: str,
-) -> dict[str, object]:
-    """Create a pending decision/action request file and return relative path."""
-    if request_type not in {"decision", "action"}:
-        _raise_param_validation("request_type must be one of: decision, action")
-
-    app_ctx: AppContext = ctx.request_context.lifespan_context
-    parsed_task_id = parse_task_id(task_id, field="task_id")
-    normalized_body, body_changed = _normalize_escaped_newlines(body)
-    try:
-        created_path = await asyncio.to_thread(
-            decisions.create_dr,
-            app_ctx.kanban_dir / "decisions",
-            app_ctx.engine,
-            task_id=parsed_task_id,
-            agent=agent,
-            request_type=request_type,
-            body=normalized_body,
-        )
-    except KanbanError as exc:
-        _map_kanban_error(exc)
-
-    relative_path = created_path.relative_to(app_ctx.kanban_dir).as_posix()
-    response: dict[str, object] = {"created": True, "path": relative_path}
-    if body_changed:
-        response["guidance"] = [_NORM_GUIDANCE]
-    return response
 
 
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False))
@@ -873,9 +837,3 @@ _patch_params(
     },
 )
 
-_patch_params(
-    "create_dr",
-    {
-        "body": {"description": f"Decision/action request body. {_NORM_PARAM_DESC}"},
-    },
-)

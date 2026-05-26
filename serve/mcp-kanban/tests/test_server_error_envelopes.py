@@ -15,7 +15,6 @@ from owlbear_kanban.models import SingleTaskResponse
 from owlbear_mcp_kanban.server import (
     AppContext,
     _show_validated,
-    create_dr,
     end_work,
     list_tasks,
     move_task,
@@ -167,33 +166,6 @@ class TestStructuredErrorEnvelopes:
             await _show_validated(app_ctx, 99)
         payload = json.loads(str(exc_info.value))
         assert payload["code"] == "ERR_NOT_FOUND"
-
-    @pytest.mark.asyncio
-    async def test_create_dr_invalid_request_type_raises_json_envelope(self, app_ctx_todo: AppContext) -> None:
-        with pytest.raises(ToolError) as exc_info:
-            await create_dr(
-                _make_ctx(app_ctx_todo),
-                task_id="1",
-                agent="builder",
-                request_type="invalid",
-                body="body",
-            )
-        payload = json.loads(str(exc_info.value))
-        assert "code" in payload
-        assert "message" in payload
-
-    @pytest.mark.asyncio
-    async def test_create_dr_invalid_request_type_has_param_validation_code(self, app_ctx_todo: AppContext) -> None:
-        with pytest.raises(ToolError) as exc_info:
-            await create_dr(
-                _make_ctx(app_ctx_todo),
-                task_id="1",
-                agent="builder",
-                request_type="invalid",
-                body="body",
-            )
-        payload = json.loads(str(exc_info.value))
-        assert payload["code"] == "ERR_PARAM_VALIDATION"
 
     @pytest.mark.asyncio
     async def test_move_task_missing_status_raises_json_envelope(self, app_ctx_todo: AppContext) -> None:

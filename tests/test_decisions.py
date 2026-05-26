@@ -23,14 +23,13 @@ All tests FAIL (RED phase) — owlbear_kanban.decisions module does not exist ye
 
 
 import logging
-import re
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 
 from owlbear_kanban import KanbanEngine
-from owlbear_kanban.decisions import create_dr, resolve_pending_drs
+from owlbear_kanban.decisions import resolve_pending_drs
 
 # ---------------------------------------------------------------------------
 # Shared helpers
@@ -88,187 +87,6 @@ def _parse_frontmatter(path: Path) -> dict:
 def _mock_engine() -> MagicMock:
     """Return a MagicMock with spec=KanbanEngine."""
     return MagicMock(spec=KanbanEngine)
-
-
-# ---------------------------------------------------------------------------
-# AC1-AC4: create_dr
-# ---------------------------------------------------------------------------
-
-
-class TestFromAC_CreateDr:
-    """Tests for create_dr() mapped to AC lines 1-4."""
-
-    def test_creates_pending_file_with_five_field_frontmatter(self, tmp_path: Path) -> None:
-        """AC1 happy: file written in pending/ with exactly the 5 required frontmatter fields."""
-        decisions_dir = _make_decisions_dir(tmp_path)
-        engine = _mock_engine()
-
-        result_path = create_dr(
-            decisions_dir,
-            engine,
-            task_id=42,
-            agent="builder",
-            request_type="approach-selection",
-            body="## Context\nNeed a decision.",
-        )
-
-        assert result_path.exists(), "DR file must exist after create_dr"
-        assert result_path.parent == decisions_dir / "pending", "File must be written in pending/"
-        fm = _parse_frontmatter(result_path)
-        assert fm["task_id"] == 42
-        assert fm["agent"] == "builder"
-        assert fm["request_type"] == "approach-selection"
-        assert re.match(r"\d{4}-\d{2}-\d{2}$", str(fm["created"])), (
-            f"created field must be in YYYY-MM-DD format; got {fm.get('created')!r}"
-        )
-        assert fm["response"] == "pending"
-
-    def test_pending_file_body_appears_after_frontmatter(self, tmp_path: Path) -> None:
-        """AC1 boundary: markdown body appears after the closing --- delimiter."""
-        decisions_dir = _make_decisions_dir(tmp_path)
-        engine = _mock_engine()
-        body_text = "## Question\nWhich approach is correct?"
-
-        result_path = create_dr(
-            decisions_dir,
-            engine,
-            task_id=7,
-            agent="reviewer",
-            request_type="information-request",
-            body=body_text,
-        )
-
-        content = result_path.read_text(encoding="utf-8")
-        # Body must appear after the second --- delimiter
-        parts = content.split("---", 2)
-        assert len(parts) >= 3, "File must contain at least two --- delimiters"
-        assert body_text in parts[2], "Body must appear after the closing frontmatter delimiter"
-
-    def test_collision_retries_with_counter_suffix(self, tmp_path: Path) -> None:
-        """AC2 edge: when slug file already exists, create_dr uses a counter suffix (-2.md)."""
-        decisions_dir = _make_decisions_dir(tmp_path)
-        engine = _mock_engine()
-
-        first_path = create_dr(
-            decisions_dir,
-            engine,
-            task_id=10,
-            agent="builder",
-            request_type="approach-selection",
-            body="First DR",
-        )
-        assert first_path.exists()
-
-        # Second call with same parameters must create a distinct file
-        second_path = create_dr(
-            decisions_dir,
-            engine,
-            task_id=10,
-            agent="builder",
-            request_type="approach-selection",
-            body="Second DR",
-        )
-
-        assert second_path.exists(), "Second DR file must be created"
-        assert second_path != first_path, "Collision must produce a different path"
-        assert first_path.exists(), "Original file must not be overwritten"
-        assert "approach-selection" in first_path.stem, (
-            f"Slug must be derived from request_type 'approach-selection'; got stem {first_path.stem!r}"
-        )
-        assert second_path.stem.endswith("-2"), f"Counter suffix must be '-2', got stem {second_path.stem!r}"
-
-    def test_blocks_task_via_edit_task(self, tmp_path: Path) -> None:
-        """AC3 smoke: create_dr calls engine.edit_task(blocked=True, block_reason='DR pending')."""
-        decisions_dir = _make_decisions_dir(tmp_path)
-        engine = _mock_engine()
-
-        create_dr(
-            decisions_dir,
-            engine,
-            task_id=99,
-            agent="builder",
-            request_type="approach-selection",
-            body="",
-        )
-
-        blocking_calls = [
-            c
-            for c in engine.edit_task.call_args_list
-            if c.kwargs.get("blocked") is True and c.kwargs.get("block_reason") == "DR pending"
-        ]
-        assert blocking_calls, (
-            "create_dr must call engine.edit_task(blocked=True, block_reason='DR pending'); "
-            f"actual calls: {engine.edit_task.call_args_list}"
-        )
-
-    def test_file_deleted_if_engine_blocking_fails(self, tmp_path: Path) -> None:
-        """AC4 error: DR file is deleted (rolled back) when engine.edit_task raises."""
-        decisions_dir = _make_decisions_dir(tmp_path)
-        engine = _mock_engine()
-        engine.edit_task.side_effect = RuntimeError("engine unavailable")
-
-        with pytest.raises(RuntimeError):
-            create_dr(
-                decisions_dir,
-                engine,
-                task_id=55,
-                agent="builder",
-                request_type="approach-selection",
-                body="",
-            )
-
-        leftover = list((decisions_dir / "pending").iterdir())
-        assert leftover == [], f"Rollback failed — orphaned DR file(s) remain in pending/: {[p.name for p in leftover]}"
-
-    def test_frontmatter_key_set_is_exactly_five_fields(self, tmp_path: Path) -> None:
-        """AC1 boundary: pending file contains EXACTLY the 5-field schema — no more, no fewer."""
-        decisions_dir = _make_decisions_dir(tmp_path)
-        engine = _mock_engine()
-
-        result_path = create_dr(
-            decisions_dir,
-            engine,
-            task_id=42,
-            agent="builder",
-            request_type="approach-selection",
-            body="## Context",
-        )
-
-        fm = _parse_frontmatter(result_path)
-        expected_keys = {"task_id", "agent", "request_type", "created", "response"}
-        assert set(fm.keys()) == expected_keys, (
-            f"Frontmatter must have exactly {expected_keys!r}; got {set(fm.keys())!r}"
-        )
-
-    def test_exclusive_create_uses_o_excl_flag(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        """AC2 boundary: create_dr uses O_CREAT|O_EXCL for atomic file creation (not exists-then-write)."""
-        import os as os_mod
-
-        real_open = os_mod.open
-        observed_flags: list[int] = []
-
-        def spy_open(path: object, flags: int, mode: int = 0o777) -> int:
-            observed_flags.append(flags)
-            return real_open(path, flags, mode)  # type: ignore[arg-type]
-
-        monkeypatch.setattr("owlbear_kanban.decisions.os.open", spy_open)
-
-        decisions_dir = _make_decisions_dir(tmp_path)
-        engine = _mock_engine()
-
-        create_dr(
-            decisions_dir,
-            engine,
-            task_id=42,
-            agent="builder",
-            request_type="approach-selection",
-            body="",
-        )
-
-        assert observed_flags, "os.open must be called at least once by create_dr"
-        flags = observed_flags[0]
-        assert flags & os_mod.O_CREAT, "O_CREAT must be set in os.open call"
-        assert flags & os_mod.O_EXCL, "O_EXCL must be set — atomic exclusive-create required (not exists-then-write)"
 
 
 # ---------------------------------------------------------------------------
@@ -545,7 +363,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from owlbear_kanban.decisions import create_dr, resolve_pending_drs
+from owlbear_kanban.decisions import resolve_pending_drs
 
 # ---------------------------------------------------------------------------
 # Shared helpers
@@ -560,125 +378,6 @@ def _make_dirs(tmp_path: Path) -> tuple[Path, Path, Path]:
     pending_dir.mkdir(parents=True)
     resolved_dir.mkdir(parents=True)
     return decisions_dir, pending_dir, resolved_dir
-
-
-# ---------------------------------------------------------------------------
-# AC2, AC4, AC5, AC6, AC7 — create_dr
-# ---------------------------------------------------------------------------
-
-
-class TestFromAC_CreateDr_1181:
-    """Smoke tests for create_dr() — AC lines 2, 4, 5, 6, 7."""
-
-    def test_ac2_returns_path_inside_pending_dir(self, tmp_path: Path) -> None:
-        """AC2 smoke: create_dr returns a Path located in decisions_dir/pending/."""
-        decisions_dir, _, _ = _make_dirs(tmp_path)
-        engine = _mock_engine()
-
-        result = create_dr(
-            decisions_dir,
-            engine,
-            task_id=1,
-            agent="builder",
-            request_type="approach-selection",
-            body="## Context\nSome body.",
-        )
-
-        assert isinstance(result, Path), f"create_dr must return a Path; got {type(result)!r}"
-        assert result.exists(), "Returned path must exist on disk"
-        assert result.parent == decisions_dir / "pending", (
-            f"File must be written inside decisions_dir/pending/; got parent {result.parent}"
-        )
-
-    def test_ac4_frontmatter_has_exactly_five_fields(self, tmp_path: Path) -> None:
-        """AC4 smoke: created file frontmatter contains exactly the 5 required fields."""
-        from ruamel.yaml import YAML
-
-        decisions_dir, _, _ = _make_dirs(tmp_path)
-        engine = _mock_engine()
-
-        result = create_dr(
-            decisions_dir,
-            engine,
-            task_id=10,
-            agent="reviewer",
-            request_type="information-request",
-            body="",
-        )
-
-        text = result.read_text(encoding="utf-8")
-        lines = text.splitlines()
-        close_idx = next(i for i, ln in enumerate(lines[1:], 1) if ln.strip() == "---")
-        fm = YAML(typ="safe").load("\n".join(lines[1:close_idx])) or {}
-
-        expected = {"task_id", "agent", "request_type", "created", "response"}
-        assert set(fm.keys()) == expected, f"Frontmatter must have exactly {sorted(expected)}; got {sorted(fm.keys())}"
-        assert str(fm["created"]).count("-") == 2, f"'created' must be YYYY-MM-DD; got {fm['created']!r}"
-        assert fm["response"] == "pending", f"'response' must default to 'pending'; got {fm['response']!r}"
-
-    def test_ac5_slug_derived_from_request_type(self, tmp_path: Path) -> None:
-        """AC5 smoke: filename slug comes from the request_type argument."""
-        decisions_dir, _, _ = _make_dirs(tmp_path)
-        engine = _mock_engine()
-
-        result = create_dr(
-            decisions_dir,
-            engine,
-            task_id=7,
-            agent="builder",
-            request_type="approach-selection",
-            body="",
-        )
-
-        assert "approach-selection" in result.stem, (
-            f"Slug must be derived from request_type 'approach-selection'; got stem {result.stem!r}"
-        )
-
-    def test_ac6_collision_produces_dash_2_suffix(self, tmp_path: Path) -> None:
-        """AC6 smoke: a second create_dr with the same args produces a -2 suffix filename."""
-        decisions_dir, _, _ = _make_dirs(tmp_path)
-        engine = _mock_engine()
-
-        first = create_dr(
-            decisions_dir,
-            engine,
-            task_id=5,
-            agent="builder",
-            request_type="approach-selection",
-            body="First",
-        )
-        second = create_dr(
-            decisions_dir,
-            engine,
-            task_id=5,
-            agent="builder",
-            request_type="approach-selection",
-            body="Second",
-        )
-
-        assert first.exists(), "First file must still exist after collision"
-        assert second.exists(), "Second file must be created despite collision"
-        assert first != second, "Collision must produce a distinct path"
-        assert second.stem.endswith("-2"), f"First collision must produce -2 suffix; got stem {second.stem!r}"
-
-    def test_ac7_file_deleted_and_exception_reraises_on_engine_failure(self, tmp_path: Path) -> None:
-        """AC7 smoke: if engine.edit_task raises, the DR file is deleted and exception re-raised."""
-        decisions_dir, _, _ = _make_dirs(tmp_path)
-        engine = _mock_engine()
-        engine.edit_task.side_effect = RuntimeError("engine down")
-
-        with pytest.raises(RuntimeError, match="engine down"):
-            create_dr(
-                decisions_dir,
-                engine,
-                task_id=99,
-                agent="builder",
-                request_type="approach-selection",
-                body="Rollback test",
-            )
-
-        orphans = list((decisions_dir / "pending").glob("*.md"))
-        assert orphans == [], f"Rollback must remove the DR file; orphaned files: {[p.name for p in orphans]}"
 
 
 # ---------------------------------------------------------------------------
