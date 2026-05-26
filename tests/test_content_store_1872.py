@@ -305,7 +305,7 @@ class TestFromAC_ContentStoreSearch:
         assert mock_vectors.search_similar.called
         call_args = mock_vectors.search_similar.call_args
         forwarded_scopes = call_args.kwargs.get("scopes")
-        assert forwarded_scopes is not None
+        assert forwarded_scopes == ["wiki", "docs"]  # PO-2: exact scopes, not just non-null
 
     # ------------------------------------------------------------------ AC1
     # Happy: chunk text preserved in result
@@ -460,6 +460,84 @@ class TestFromAC_ContentStorePurge:
         assert second.chunk_ids == ()
         assert second.vector_ids == ()
 
+    # ------------------------------------------------------------------ AC3 PO-1
+    # Regression: purge deletes stale vector IDs from REPLACED+delete-failure state
+
+    @pytest.mark.asyncio
+    async def test_purge_source_includes_stale_pending_vector_ids(
+        self, mock_embed: MagicMock
+    ) -> None:
+        """AC3 PO-1: purge_source deletes stale V1 vector IDs persisted after REPLACED+delete-failure.
+
+        Scenario:
+        1. V1 ingest creates chunk IDs (now in Qdrant).
+        2. V2 REPLACED ingest: SQLite commits V2 chunks but _delete_vectors raises →
+           pending_delete_chunk_ids column retains V1 IDs, vectors_synced=0.
+        3. purge_source must delete BOTH V1 (stale, from pending_delete_chunk_ids)
+           and V2 (current) IDs; purge_result.vector_ids must include both sets.
+        """
+        db = sqlite3.connect(":memory:")
+        chunker = TextChunker(target_tokens=50)
+
+        # Step 1: V1 ingest
+        store_1 = ContentStore(
+            db=db,
+            vector_store=MagicMock(),
+            embedding_provider=mock_embed,
+            chunker=chunker,
+        )
+        store_1.ensure_tables()
+        v1_result = await store_1.ingest(
+            _make_request(source_id="src-stale", text="First version content here. " * 6)
+        )
+        v1_chunk_ids = set(v1_result.chunk_ids)
+
+        # Step 2: V2 REPLACED — SQLite commits, _delete_vectors raises
+        failing_vectors = MagicMock()
+        failing_vectors.delete = MagicMock(side_effect=RuntimeError("Qdrant offline"))
+        store_2 = ContentStore(
+            db=db,
+            vector_store=failing_vectors,
+            embedding_provider=mock_embed,
+            chunker=chunker,
+        )
+        with pytest.raises(RuntimeError):
+            await store_2.ingest(
+                _make_request(
+                    source_id="src-stale",
+                    text="Second version, completely different content. " * 6,
+                )
+            )
+
+        # Step 3: purge_source with working vector store
+        purge_vectors = MagicMock()
+        store_3 = ContentStore(
+            db=db,
+            vector_store=purge_vectors,
+            embedding_provider=mock_embed,
+            chunker=chunker,
+        )
+        purge_result = store_3.purge_source("src-stale")
+
+        # delete must be called
+        assert purge_vectors.delete.called, (
+            "purge_source must call vector_store.delete for stale+current IDs"
+        )
+        # Collect all IDs passed to delete
+        deleted_ids: set[str] = set()
+        for call in purge_vectors.delete.call_args_list:
+            ids = call.kwargs.get("ids") or (call.args[0] if call.args else [])
+            if isinstance(ids, (list, tuple)):
+                deleted_ids.update(str(i) for i in ids)
+        assert v1_chunk_ids <= deleted_ids, (
+            f"delete payload must include stale V1 IDs; missing: {v1_chunk_ids - deleted_ids}"
+        )
+        # purge_result.vector_ids must include stale V1 IDs
+        assert v1_chunk_ids <= set(purge_result.vector_ids), (
+            f"purge_result.vector_ids must include stale V1 IDs; "
+            f"missing: {v1_chunk_ids - set(purge_result.vector_ids)}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # TestFromAC_ContentStoreStats  (AC4)
@@ -549,3 +627,47 @@ class TestFromAC_ContentStoreStats:
         store.purge_source("src-1")
         s = store.stats()
         assert s.vectors == len(r2.chunk_ids)
+
+    # ------------------------------------------------------------------ AC4 PO-3
+    # Boundary: stats().vectors excludes chunks of unsynced parent documents
+
+    @pytest.mark.asyncio
+    async def test_stats_vectors_excludes_chunks_with_unsynced_parent(
+        self, mock_embed: MagicMock, mock_vectors: MagicMock
+    ) -> None:
+        """AC4 PO-3: stats().vectors is 0 when all parent documents have vectors_synced=0.
+
+        The vectors count uses a JOIN predicate (WHERE d.vectors_synced = 1). This test
+        directly exercises that predicate by forcing vectors_synced=0 and verifying that
+        existing chunks are excluded from the vectors count.
+        """
+        db = sqlite3.connect(":memory:")
+        chunker = TextChunker(target_tokens=50)
+        s = ContentStore(
+            db=db,
+            vector_store=mock_vectors,
+            embedding_provider=mock_embed,
+            chunker=chunker,
+        )
+        s.ensure_tables()
+
+        # Ingest doc 1 — vectors_synced=1 by default after successful ingest
+        r1 = await s.ingest(_make_request(source_id="src-1", title="Doc 1"))
+        assert s.stats().vectors == len(r1.chunk_ids)  # baseline: synced
+
+        # Directly set vectors_synced=0 to simulate the unsynced state
+        db.execute(
+            "UPDATE content_documents SET vectors_synced = 0 WHERE document_id = ?",
+            (r1.document_id,),
+        )
+        db.commit()
+
+        # Chunks still exist, but parent is unsynced — vectors must be 0
+        assert s.stats().chunks == len(r1.chunk_ids)
+        assert s.stats().vectors == 0, (
+            "stats().vectors must exclude chunks whose parent document has vectors_synced=0"
+        )
+
+        # Ingest a second doc (synced) — only its chunks count toward vectors
+        r2 = await s.ingest(_make_request(source_id="src-2", title="Doc 2"))
+        assert s.stats().vectors == len(r2.chunk_ids)
