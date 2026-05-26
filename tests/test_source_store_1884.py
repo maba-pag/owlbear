@@ -195,3 +195,20 @@ class TestFromAC_NoRefreshClobber:
         result = store.update_source(source.id, SourceUpdate(last_refreshed_at=None))
         assert result.last_refreshed_at is not None
         assert result.last_refreshed_at.isoformat() == now.isoformat()
+
+    def test_same_state_active_update_preserves_last_refreshed_at(
+        self, store: SqliteSourceStore
+    ) -> None:
+        """Passing state=ACTIVE on an already-ACTIVE source must not clobber last_refreshed_at.
+
+        AC4 names this exact path: update_source(id, SourceUpdate(state=SourceState.ACTIVE)).
+        The state-change branch is skipped (update.state == next_state), so the
+        same-state ACTIVE code path must be covered directly.
+        """
+        source = store.register_source(_file_registration())  # starts ACTIVE
+        now = _now()
+        store.update_source(source.id, SourceUpdate(last_refreshed_at=now))
+        # Same-state ACTIVE update — skips the state-transition branch entirely
+        result = store.update_source(source.id, SourceUpdate(state=SourceState.ACTIVE))
+        assert result.last_refreshed_at is not None
+        assert result.last_refreshed_at.isoformat() == now.isoformat()
