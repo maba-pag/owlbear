@@ -59,25 +59,23 @@ describe('TestFromAC_DecisionPollBodyAndErrorChain', () => {
   })
 
   // AC1 + AC2: body field is present in hook output when backend includes it.
-  // Proves hook does not strip body from raw payload.items.
-  it('hook output items include body field when backend /api/decisions/pending response includes it', async () => {
+  // Proves hook does not strip body from raw payload items.
+  it('hook output items include body field when backend /api/requests/pending response includes it', async () => {
     vi.stubGlobal(
       'fetch',
-      makeOkFetch({
-        count: 1,
-        items: [
-          {
-            id: 'dr-001',
-            task_id: 42,
-            agent: 'builder',
-            request_type: 'decision',
-            created: '2026-05-01T00:00:00Z',
-            title: 'Architecture gate decision',
-            body_preview: 'Preview of the decision body...',
-            body: '## Full decision context\n\nShould we proceed with approach A or B?',
-          },
-        ],
-      }),
+      makeOkFetch([
+        {
+          request_id: 'dr-001',
+          task_id: 42,
+          agent: 'builder',
+          kind: 'decision',
+          created_at: '2026-05-01T00:00:00Z',
+          title: 'Architecture gate decision',
+          summary: 'Preview of the decision body...',
+          body: '## Full decision context\n\nShould we proceed with approach A or B?',
+          options: [],
+        },
+      ]),
     )
 
     const { result } = renderHook(() => usePendingDRs({ intervalMs: 60_000 }))
@@ -94,21 +92,19 @@ describe('TestFromAC_DecisionPollBodyAndErrorChain', () => {
   it('hook output items contain all AC2-required fields: id, task_id, agent, request_type, created, title, body_preview, body', async () => {
     vi.stubGlobal(
       'fetch',
-      makeOkFetch({
-        count: 1,
-        items: [
-          {
-            id: 'dr-full-fields',
-            task_id: 303,
-            agent: 'architect',
-            request_type: 'decision',
-            created: '2026-05-08T12:00:00Z',
-            title: 'Field completeness verification',
-            body_preview: 'All required fields should be present...',
-            body: '## Decision details\n\nComplete context for resolution.',
-          },
-        ],
-      }),
+      makeOkFetch([
+        {
+          request_id: 'dr-full-fields',
+          task_id: 303,
+          agent: 'architect',
+          kind: 'decision',
+          created_at: '2026-05-08T12:00:00Z',
+          title: 'Field completeness verification',
+          summary: 'All required fields should be present...',
+          body: '## Decision details\n\nComplete context for resolution.',
+          options: [],
+        },
+      ]),
     )
 
     const { result } = renderHook(() => usePendingDRs({ intervalMs: 60_000 }))
