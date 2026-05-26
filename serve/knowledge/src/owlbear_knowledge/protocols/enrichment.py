@@ -307,7 +307,8 @@ class EnrichmentStore(Protocol):
 
         Guarantees:
           - Increments attempts counter.
-          - If attempts >= max_retries, transitions to FAILED permanently.
+          - If attempts >= max_retries, transitions to FAILED (not retried by
+            mark_failed; may be explicitly re-enqueued via enqueue_chunks).
           - Otherwise, transitions back to PENDING for retry.
 
         Non-guarantees:

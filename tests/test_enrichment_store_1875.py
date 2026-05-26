@@ -11,7 +11,7 @@ AC coverage:
   AC2  — discard_chunks: removes PENDING/FAILED; leaves IN_PROGRESS; idempotent
   AC3  — claim_batch: batch_size, batch_id, claim timestamp, max_retries persisted per-item
   AC4  — claim_batch: stale IN_PROGRESS (>600s) reclaimed to PENDING; fresh untouched
-  AC5  — mark_failed: increments attempts, PENDING retry or FAILED permanent; LookupError guards
+  AC5  — mark_failed: increments attempts, PENDING retry or FAILED (revivable via enqueue_chunks); LookupError guards
   AC6  — stats: counts per state (pending, in_progress, completed, failed)
   AC7  — ensure_tables: creates enrich_queue and enrich_batches idempotently
 """
