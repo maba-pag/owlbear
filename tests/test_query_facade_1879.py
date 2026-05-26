@@ -692,3 +692,148 @@ class TestFromAC_QueryFacadeSearch:
         request = QueryRequest(text="query", include_graph=True)
         result = await facade.search(request)
         assert result.provenance[0].section_path == ("Chapter 1", "Section 2")
+
+    # --- Retry gaps: reviewer Required Follow-up ---
+
+    # Gap 1 (AC1): isinstance proof — ContentStore.search receives a real ContentSearchQuery
+    @pytest.mark.asyncio
+    async def test_search_forwards_content_search_query_instance(
+        self, facade: QueryFacade, mock_content: MagicMock
+    ) -> None:
+        """AC1: ContentStore.search receives a ContentSearchQuery instance with all fields mapped."""
+        request = QueryRequest(
+            text="find me",
+            top_k=7,
+            scopes=("global",),
+            source_ids=("s1",),
+            min_score=0.4,
+            include_graph=False,
+        )
+        await facade.search(request)
+        called_query = mock_content.search.call_args[0][0]
+        from owlbear_knowledge.protocols.content import ContentSearchQuery  # noqa: PLC0415
+        assert isinstance(called_query, ContentSearchQuery)
+        assert called_query.text == "find me"
+        assert called_query.top_k == 7
+        assert called_query.scopes == ("global",)
+        assert called_query.source_ids == ("s1",)
+        assert called_query.min_score == 0.4
+
+    # Gap 2a (AC2): exact unique seed set traversed
+    @pytest.mark.asyncio
+    async def test_graph_expansion_traverses_exact_unique_seed_set(
+        self,
+        facade: QueryFacade,
+        mock_content: MagicMock,
+        mock_graph: MagicMock,
+    ) -> None:
+        """AC2: traverse is called for the exact set of unique entity_ids, no more, no less."""
+        chunk_a = _make_chunk(chunk_id="chunk-a")
+        chunk_b = _make_chunk(chunk_id="chunk-b")
+        mock_content.search.return_value = (
+            _make_search_result(chunk_a),
+            _make_search_result(chunk_b),
+        )
+        # chunk-a claims e1 and e2; chunk-b claims e2 (duplicate) and e3
+        mock_graph.claims_for_chunk.side_effect = lambda cid: _make_claims(
+            cid, entity_ids=("e1", "e2") if cid == "chunk-a" else ("e2", "e3")
+        )
+        mock_graph.traverse.side_effect = lambda q: _make_traversal_result(
+            entities=[_make_entity(q.entity_id)]
+        )
+        request = QueryRequest(text="query", include_graph=True)
+        await facade.search(request)
+        traversed_seeds = {c.args[0].entity_id for c in mock_graph.traverse.call_args_list}
+        assert traversed_seeds == {"e1", "e2", "e3"}
+        assert mock_graph.traverse.call_count == 3
+
+    # Gap 2b (AC2): duplicate edge IDs from multiple traversals collapse to one
+    @pytest.mark.asyncio
+    async def test_graph_expansion_deduplicates_merged_edges(
+        self,
+        facade: QueryFacade,
+        mock_content: MagicMock,
+        mock_graph: MagicMock,
+    ) -> None:
+        """AC2: same edge ID returned by multiple traversals appears exactly once in graph_context."""
+        chunk = _make_chunk(chunk_id="chunk-1")
+        mock_content.search.return_value = (_make_search_result(chunk),)
+        mock_graph.claims_for_chunk.return_value = _make_claims(
+            "chunk-1", entity_ids=("e1", "e2")
+        )
+        e1 = _make_entity("e1")
+        e2 = _make_entity("e2")
+        shared_edge = _make_edge("edge-shared", "e1", "e2")
+        # both traversals return the same shared edge
+        mock_graph.traverse.side_effect = lambda _: _make_traversal_result(
+            entities=[e1, e2], edges=[shared_edge]
+        )
+        request = QueryRequest(text="query", include_graph=True)
+        result = await facade.search(request)
+        assert result.graph_context is not None
+        edge_ids = [e.id for e in result.graph_context.edges]
+        assert edge_ids.count("edge-shared") == 1
+
+    # Gap 3 (AC4): edge removed when source endpoint references an excluded entity
+    @pytest.mark.asyncio
+    async def test_entity_types_filter_removes_edge_with_excluded_source_endpoint(
+        self,
+        facade: QueryFacade,
+        mock_content: MagicMock,
+        mock_graph: MagicMock,
+    ) -> None:
+        """AC4: edge removed when source_entity_id references an excluded entity type."""
+        chunk = _make_chunk(chunk_id="chunk-1")
+        mock_content.search.return_value = (_make_search_result(chunk),)
+        mock_graph.claims_for_chunk.return_value = _make_claims(
+            "chunk-1", entity_ids=("seed",)
+        )
+        concept_entity = _make_entity("e-concept", entity_type=EntityType.CONCEPT)
+        person_entity = _make_entity("e-person", entity_type=EntityType.PERSON)
+        # source=e-person (excluded), target=e-concept (kept) → edge must be removed
+        source_excluded_edge = _make_edge("edge-src-excl", "e-person", "e-concept")
+        # both endpoints kept → edge must be retained
+        kept_edge = _make_edge("edge-kept", "e-concept", "e-concept")
+        mock_graph.traverse.return_value = _make_traversal_result(
+            entities=[concept_entity, person_entity],
+            edges=[source_excluded_edge, kept_edge],
+        )
+        request = QueryRequest(
+            text="query", include_graph=True, entity_types=(EntityType.CONCEPT,)
+        )
+        result = await facade.search(request)
+        assert result.graph_context is not None
+        edge_ids = {e.id for e in result.graph_context.edges}
+        assert "edge-src-excl" not in edge_ids
+        assert "edge-kept" in edge_ids
+
+    # Gap 4 (AC5): one provenance record emitted per search hit
+    @pytest.mark.asyncio
+    async def test_provenance_one_record_per_search_hit(
+        self,
+        facade: QueryFacade,
+        mock_content: MagicMock,
+        mock_graph: MagicMock,
+    ) -> None:
+        """AC5: provenance contains exactly one record for each search result hit."""
+        chunk_a = _make_chunk(chunk_id="chunk-a", document_id="doc-a", source_id="src-a", text="text a")
+        chunk_b = _make_chunk(chunk_id="chunk-b", document_id="doc-b", source_id="src-b", text="text b")
+        chunk_c = _make_chunk(chunk_id="chunk-c", document_id="doc-c", source_id="src-c", text="text c")
+        mock_content.search.return_value = (
+            _make_search_result(chunk_a, score=0.9),
+            _make_search_result(chunk_b, score=0.8),
+            _make_search_result(chunk_c, score=0.7),
+        )
+        mock_content.get_document.side_effect = lambda did: _make_document(
+            document_id=did, title=f"Doc {did}"
+        )
+        mock_graph.claims_for_chunk.return_value = _make_claims("x")
+        request = QueryRequest(text="query", include_graph=False)
+        result = await facade.search(request)
+        assert len(result.provenance) == 3
+        chunk_ids = {p.chunk_id for p in result.provenance}
+        assert chunk_ids == {"chunk-a", "chunk-b", "chunk-c"}
+        scores = {p.chunk_id: p.score for p in result.provenance}
+        assert scores["chunk-a"] == 0.9
+        assert scores["chunk-b"] == 0.8
+        assert scores["chunk-c"] == 0.7
