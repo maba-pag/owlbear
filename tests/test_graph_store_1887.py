@@ -163,6 +163,48 @@ class TestFromAC_ChunkIdsForEntity:
             f"SELECT DISTINCT must collapse duplicate chunk_id rows; got {result!r}"
         )
 
+    def test_protocol_chunk_ids_for_entity_exact_params(self) -> None:
+        """AC1 — Protocol method has EXACTLY one parameter beyond self; no extra or missing params."""
+        sig = inspect.signature(GraphStore.chunk_ids_for_entity)
+        hints = get_type_hints(GraphStore.chunk_ids_for_entity)
+
+        non_self_params = [k for k in sig.parameters if k != "self"]
+        assert non_self_params == ["entity_id"], (
+            f"chunk_ids_for_entity must have exactly one parameter beyond self (entity_id); "
+            f"got {non_self_params!r}"
+        )
+        assert hints.get("entity_id") is str, "entity_id must be annotated as str"
+        assert hints.get("return") == tuple[str, ...], "return annotation must be tuple[str, ...]"
+
+    def test_chunk_ids_for_entity_exact_set_multi_entity(
+        self, store: SqliteGraphStore
+    ) -> None:
+        """AC2 — Returns exact entity-scoped set; excludes chunks belonging only to other entities.
+
+        Fixture: two entities share chunk-shared; each has one exclusive chunk.
+        Proves WHERE entity_id = ? is load-bearing and result is the complete set.
+        """
+        entity_a = store.upsert_entity(_mk_entity(name="Entity A"))
+        entity_b = store.upsert_entity(_mk_entity(name="Entity B"))
+
+        # Entity A: chunk-a1 (exclusive) + chunk-shared (overlapping)
+        store.add_evidence(_entity_evidence(chunk_id="chunk-a1", entity_id=entity_a.id))
+        store.add_evidence(_entity_evidence(chunk_id="chunk-shared", entity_id=entity_a.id))
+
+        # Entity B: chunk-b1 (exclusive) + chunk-shared (overlapping)
+        store.add_evidence(_entity_evidence(chunk_id="chunk-b1", entity_id=entity_b.id))
+        store.add_evidence(_entity_evidence(chunk_id="chunk-shared", entity_id=entity_b.id))
+
+        result_a = store.chunk_ids_for_entity(entity_a.id)
+        result_b = store.chunk_ids_for_entity(entity_b.id)
+
+        assert set(result_a) == {"chunk-a1", "chunk-shared"}, (
+            f"Entity A must return exactly {{chunk-a1, chunk-shared}}; got {set(result_a)!r}"
+        )
+        assert set(result_b) == {"chunk-b1", "chunk-shared"}, (
+            f"Entity B must return exactly {{chunk-b1, chunk-shared}}; got {set(result_b)!r}"
+        )
+
     def test_chunk_ids_for_entity_empty_tuple_for_unknown_entity(
         self, store: SqliteGraphStore
     ) -> None:
