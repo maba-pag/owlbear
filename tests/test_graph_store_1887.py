@@ -16,7 +16,10 @@ AC coverage (smoke — one test per AC line):
 
 from __future__ import annotations
 
+import inspect
 import sqlite3
+import uuid
+from typing import get_type_hints
 
 import pytest
 
@@ -78,6 +81,25 @@ class TestFromAC_ChunkIdsForEntity:
             "GraphStore protocol must define chunk_ids_for_entity"
         )
 
+    def test_protocol_chunk_ids_for_entity_signature(self) -> None:
+        """AC1 — Protocol method has exact signature (self, entity_id: str) -> tuple[str, ...]."""
+        sig = inspect.signature(GraphStore.chunk_ids_for_entity)
+        hints = get_type_hints(GraphStore.chunk_ids_for_entity)
+
+        assert "entity_id" in sig.parameters, "entity_id parameter must exist"
+        assert hints.get("entity_id") is str, "entity_id must be annotated as str"
+        assert hints.get("return") == tuple[str, ...], (
+            "return annotation must be tuple[str, ...]"
+        )
+
+    def test_protocol_chunk_ids_for_entity_docstring_sections(self) -> None:
+        """AC1 — Protocol method docstring contains all four required sections."""
+        doc = GraphStore.chunk_ids_for_entity.__doc__ or ""
+        for section in ("Guarantees", "Non-guarantees", "Side effects", "Raises"):
+            assert section in doc, (
+                f"chunk_ids_for_entity docstring must contain '{section}' section"
+            )
+
     def test_chunk_ids_for_entity_returns_chunk_id_for_known_entity(
         self, store: SqliteGraphStore
     ) -> None:
@@ -100,6 +122,46 @@ class TestFromAC_ChunkIdsForEntity:
 
         assert isinstance(result, tuple)
         assert all(isinstance(c, str) for c in result)
+
+    def test_chunk_ids_for_entity_distinct_deduplicates_repeated_rows(
+        self, db: sqlite3.Connection, store: SqliteGraphStore
+    ) -> None:
+        """AC2/AC3 — SELECT DISTINCT suppresses duplicate chunk_id rows for same entity."""
+        entity = store.upsert_entity(_mk_entity(name="Dup DISTINCT"))
+
+        # Recreate graph_evidence without UNIQUE constraint to allow identical rows
+        db.execute("ALTER TABLE graph_evidence RENAME TO _ge_bak")
+        db.execute(
+            """
+            CREATE TABLE graph_evidence (
+                id TEXT PRIMARY KEY,
+                chunk_id TEXT NOT NULL,
+                claim_type TEXT NOT NULL,
+                entity_id TEXT,
+                edge_id TEXT,
+                confidence REAL NOT NULL DEFAULT 1.0,
+                metadata_json TEXT NOT NULL DEFAULT '{}',
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        db.execute("INSERT INTO graph_evidence SELECT * FROM _ge_bak")
+        db.execute("DROP TABLE _ge_bak")
+
+        # Insert two rows with the same chunk_id and entity_id — bypasses UNIQUE
+        for _ in range(2):
+            db.execute(
+                "INSERT INTO graph_evidence "
+                "(id, chunk_id, claim_type, entity_id, edge_id, confidence, metadata_json, created_at) "
+                "VALUES (?, 'chunk-dup', 'entity', ?, NULL, 1.0, '{}', datetime('now'))",
+                (str(uuid.uuid4()), entity.id),
+            )
+
+        result = store.chunk_ids_for_entity(entity.id)
+
+        assert result == ("chunk-dup",), (
+            f"SELECT DISTINCT must collapse duplicate chunk_id rows; got {result!r}"
+        )
 
     def test_chunk_ids_for_entity_empty_tuple_for_unknown_entity(
         self, store: SqliteGraphStore
