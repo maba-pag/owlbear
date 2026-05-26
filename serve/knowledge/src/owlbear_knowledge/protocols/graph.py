@@ -436,6 +436,26 @@ class GraphStore(Protocol):
         """
         ...
 
+    def chunk_ids_for_entity(self, entity_id: str) -> tuple[str, ...]:
+        """Return chunk IDs that provide entity evidence.
+
+        Guarantees:
+          - Returns distinct chunk_ids from evidence claims referencing
+            the given entity_id.
+          - Returns empty tuple for unknown entity_id.
+          - Never raises.
+
+        Non-guarantees:
+          - Ordering is implementation-defined.
+
+        Side effects:
+          - None.
+
+        Raises:
+          - Never raises.
+        """
+        ...
+
     def invalidate_evidence_by_chunks(
         self,
         chunk_ids: tuple[str, ...],

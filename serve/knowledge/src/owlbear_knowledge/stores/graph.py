@@ -470,6 +470,18 @@ class SqliteGraphStore(GraphStore):
             evidence_ids=evidence_ids,
         )
 
+    def chunk_ids_for_entity(self, entity_id: str) -> tuple[str, ...]:
+        """Return distinct chunk IDs that reference one entity via evidence."""
+        rows = self._conn.execute(
+            """
+            SELECT DISTINCT chunk_id
+            FROM graph_evidence
+            WHERE entity_id = ?
+            """,
+            (entity_id,),
+        ).fetchall()
+        return tuple(str(row["chunk_id"]) for row in rows)
+
     def invalidate_evidence_by_chunks(
         self,
         chunk_ids: tuple[str, ...],
