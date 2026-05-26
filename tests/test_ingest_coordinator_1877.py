@@ -229,6 +229,56 @@ class TestFromAC_IngestCoordinator:
         assert result.documents_processed == 2
         assert result.documents_created == 1
 
+    @pytest.mark.asyncio
+    async def test_ingest_continues_batch_to_doc2_when_doc1_enqueue_raises(
+        self,
+        coordinator: IngestCoordinator,
+        mock_content: MagicMock,
+        mock_enrichment: MagicMock,
+    ) -> None:
+        """Multi-doc: doc 1 enqueue fails; doc 2 must still be processed and counted."""
+        mock_content.ingest = AsyncMock(
+            side_effect=[
+                _make_content_result(state=ContentIngestState.CREATED, chunk_ids=("c1",)),
+                _make_content_result(state=ContentIngestState.CREATED, chunk_ids=("c2",)),
+            ]
+        )
+        mock_enrichment.enqueue_chunks.side_effect = [
+            RuntimeError("queue unavailable"),
+            1,
+        ]
+        result = await coordinator.ingest(_make_request(docs=2, enrich=True))
+        assert result.documents_processed == 2
+        assert mock_content.ingest.call_count == 2
+        assert result.documents_created == 1  # only doc 2 succeeded
+
+    @pytest.mark.asyncio
+    async def test_ingest_continues_batch_to_doc2_when_doc1_discard_raises(
+        self,
+        coordinator: IngestCoordinator,
+        mock_content: MagicMock,
+        mock_enrichment: MagicMock,
+    ) -> None:
+        """Multi-doc: doc 1 discard fails; doc 2 must still be processed and counted."""
+        mock_content.ingest = AsyncMock(
+            side_effect=[
+                _make_content_result(
+                    state=ContentIngestState.REPLACED, replaced_chunk_ids=("old-1",)
+                ),
+                _make_content_result(
+                    state=ContentIngestState.REPLACED, replaced_chunk_ids=("old-2",)
+                ),
+            ]
+        )
+        mock_enrichment.discard_chunks.side_effect = [
+            RuntimeError("discard error"),
+            EnrichmentDiscardResult(discarded_chunk_ids=("old-2",), queue_items_removed=1),
+        ]
+        result = await coordinator.ingest(_make_request(docs=2))
+        assert result.documents_processed == 2
+        assert mock_content.ingest.call_count == 2
+        assert result.documents_replaced == 1  # only doc 2 succeeded
+
     # ------------------------------------------------------------------
     # AC2 — CREATED + enrich flag controls enqueue_chunks
     # ------------------------------------------------------------------
@@ -386,6 +436,68 @@ class TestFromAC_IngestCoordinator:
         result = await coordinator.ingest(_make_request())
         assert result.documents_processed == 1
         assert result.documents_replaced == 0
+
+    @pytest.mark.asyncio
+    async def test_replaced_cascade_discard_occurs_in_per_document_scope(
+        self,
+        coordinator: IngestCoordinator,
+        mock_content: MagicMock,
+        mock_enrichment: MagicMock,
+    ) -> None:
+        """Prove discard_chunks is called inside doc 1's scope, not after all Content.ingest calls."""
+        content_call_count_at_first_discard: list[int] = []
+
+        def track_discard(*_args: object, **_kwargs: object) -> EnrichmentDiscardResult:
+            content_call_count_at_first_discard.append(mock_content.ingest.call_count)
+            return EnrichmentDiscardResult(discarded_chunk_ids=("old-1",), queue_items_removed=1)
+
+        mock_enrichment.discard_chunks.side_effect = track_discard
+        mock_content.ingest = AsyncMock(
+            side_effect=[
+                _make_content_result(
+                    state=ContentIngestState.REPLACED, replaced_chunk_ids=("old-1",)
+                ),
+                _make_content_result(
+                    state=ContentIngestState.REPLACED, replaced_chunk_ids=("old-2",)
+                ),
+            ]
+        )
+        await coordinator.ingest(_make_request(docs=2))
+        # discard_chunks was called for each REPLACED document
+        assert mock_enrichment.discard_chunks.call_count == 2
+        # When discard was first called, Content.ingest must have been called exactly once,
+        # proving the cascade is inside doc 1's scope, not buffered after all content calls.
+        assert content_call_count_at_first_discard[0] == 1
+
+    @pytest.mark.asyncio
+    async def test_replaced_cascade_invalidate_occurs_in_per_document_scope(
+        self,
+        coordinator: IngestCoordinator,
+        mock_content: MagicMock,
+        mock_graph: MagicMock,
+    ) -> None:
+        """Prove invalidate_evidence_by_chunks is called inside doc 1's scope, not buffered."""
+        content_call_count_at_first_invalidate: list[int] = []
+
+        def track_invalidate(*_args: object, **_kwargs: object) -> EvidenceInvalidationResult:
+            content_call_count_at_first_invalidate.append(mock_content.ingest.call_count)
+            return EvidenceInvalidationResult()
+
+        mock_graph.invalidate_evidence_by_chunks.side_effect = track_invalidate
+        mock_content.ingest = AsyncMock(
+            side_effect=[
+                _make_content_result(
+                    state=ContentIngestState.REPLACED, replaced_chunk_ids=("old-a",)
+                ),
+                _make_content_result(
+                    state=ContentIngestState.REPLACED, replaced_chunk_ids=("old-b",)
+                ),
+            ]
+        )
+        await coordinator.ingest(_make_request(docs=2))
+        assert mock_graph.invalidate_evidence_by_chunks.call_count == 2
+        # When invalidate was first called, Content.ingest must have been called exactly once.
+        assert content_call_count_at_first_invalidate[0] == 1
 
     # ------------------------------------------------------------------
     # AC5 — IngestResult fields
