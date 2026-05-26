@@ -1,10 +1,10 @@
 ---
 id: 1875
 title: 'Knowledge: EnrichmentStore — queue state machine'
-status: backlog
+status: archived
 priority: needed
 created: 2026-05-25T19:03:53.062341+02:00
-updated: 2026-05-26T03:41:21.119618+02:00
+updated: 2026-05-26T05:56:10.641837+02:00
 tags:
   - knowledge
   - layer-1
@@ -22,9 +22,11 @@ ac:
   - claim_batch(EnrichmentParams) returns up to batch_size PENDING chunks 
     transitioned to IN_PROGRESS; assigns batch_id + claim timestamp; persists 
     max_retries from params per-item for mark_failed threshold
-  - claim_batch also reclaims stale IN_PROGRESS items whose claim timestamp 
-    exceeds 600s claim_ttl back to PENDING before selecting candidates (system 
-    invariant, not caller-tunable)
+  - claim_batch also reclaims stale IN_PROGRESS items whose claim age is 
+    strictly >600s (claim_ttl) back to PENDING before selecting candidates; an 
+    item exactly 600s old is NOT reclaimed (system invariant, not 
+    caller-tunable); boundary tests use 601s (reclaimed) and 599s (not 
+    reclaimed) to avoid SQLite wall-clock flakiness
   - mark_failed(chunk_id, error) increments attempts; if attempts >= per-item 
     max_retries (stored at claim time) transitions to FAILED (not retried by 
     mark_failed; may be explicitly re-enqueued via enqueue_chunks per AC1); 
@@ -38,7 +40,7 @@ proof_bundle: behavioral
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Objective
@@ -262,3 +264,150 @@ Architecture re-review complete. Resolved reviewer-identified ambiguity: FAILED 
 - The earlier AC1 x AC5 FAILED-item revival ambiguity is resolved for this task: the task AC now explicitly allows revival, and the retry tests prove count, attempts preservation, and `last_error` clearing at [tests/test_enrichment_store_1875.py](tests/test_enrichment_store_1875.py#L397), [tests/test_enrichment_store_1875.py](tests/test_enrichment_store_1875.py#L412), and [tests/test_enrichment_store_1875.py](tests/test_enrichment_store_1875.py#L427).
 - Builder evidence was otherwise sufficient for review: prior scoped quality-runner evidence reported 39 passing tests, 94% coverage, and clean lint, and the test-writer retry added 3 more passing tests for the AC1 x AC5 gap at [.owlbear/kanban/tasks/1875-knowledge-enrichmentstore-queue-state-machine.md](.owlbear/kanban/tasks/1875-knowledge-enrichmentstore-queue-state-machine.md#L161), [.owlbear/kanban/tasks/1875-knowledge-enrichmentstore-queue-state-machine.md](.owlbear/kanban/tasks/1875-knowledge-enrichmentstore-queue-state-machine.md#L162), [.owlbear/kanban/tasks/1875-knowledge-enrichmentstore-queue-state-machine.md](.owlbear/kanban/tasks/1875-knowledge-enrichmentstore-queue-state-machine.md#L163), [.owlbear/kanban/tasks/1875-knowledge-enrichmentstore-queue-state-machine.md](.owlbear/kanban/tasks/1875-knowledge-enrichmentstore-queue-state-machine.md#L234), and [.owlbear/kanban/tasks/1875-knowledge-enrichmentstore-queue-state-machine.md](.owlbear/kanban/tasks/1875-knowledge-enrichmentstore-queue-state-machine.md#L241).
 - Non-blocking: the test header still says "FAILED permanent" at [tests/test_enrichment_store_1875.py](tests/test_enrichment_store_1875.py#L14), which no longer matches the clarified AC.
+
+[[2026-05-26T03:51:33+02:00]]
+## Architecture Review (Re-review #2)
+
+### Context
+Returning from review FAIL #2: reviewer identified AC4 boundary mismatch — AC says "exceeds 600s" (strict >) but implementation uses `<=` (>=600s semantics). Tests at 701s/fresh don't prove the exact edge.
+
+### Design Decision: Stale Reclaim Boundary
+
+**Chosen semantics:** strict >600s (item must be MORE than 600s old to be reclaimed; at exactly 600s it is NOT reclaimed).
+
+**Reasoning:**
+1. Original AC, research note, and test headers all say "exceeds" — three sources favor strict >
+2. Protocol CP22 says "claim_ttl = 600s" without specifying inclusive/exclusive; strict > is the natural reading of "exceeds"
+3. The implementation's `<=` in SQL is a 1-char bug (`<=` should be `<`) — the spec was correct, the code was not
+4. Challenger (confidence 0.34) validated this interpretation: "same evidence supports an off-by-one implementation defect"
+
+**Builder fix required:** Change `started_at <= datetime('now', ?)` to `started_at < datetime('now', ?)` in `claim_batch`.
+
+**Proof requirements (non-flaky):**
+- Test at 601s → item IS reclaimed (safe from clock drift)
+- Test at 599s → item is NOT reclaimed (safe from clock drift)
+- Exact 600s edge cannot be reliably tested due to SQLite wall-clock `datetime('now')` between transactions; operator choice (`<`) is code-inspectable
+
+### AC Change
+- AC4: "exceeds 600s" → "strictly >600s (claim_ttl); an item exactly 600s old is NOT reclaimed; boundary tests use 601s (reclaimed) and 599s (not reclaimed) to avoid SQLite wall-clock flakiness"
+
+### Challenge Results
+- Challenger: block (confidence 0.34)
+- Key findings: multiple sources favor >600s over >=600s; exact-boundary test flakiness; AC not yet persisted
+- Architect response: accepted — kept strict >600s semantics (majority of sources), implementation is the defect. Required 601s/599s tests to avoid wall-clock flakiness. AC persisted via edit_task.
+
+### Proof-Bundle Validation
+- Planner assignment: behavioral
+- Final bundle: behavioral
+- Test-writer: PROCEED (add 601s/599s boundary tests, fix existing 701s test or keep as smoke)
+
+### Verdict: APPROVE
+### Action Taken: AC4 refined with explicit strict >600s boundary semantics and non-flaky proof shape (601s/599s). Builder must fix SQL operator from `<=` to `<`. Advanced to todo.
+
+[[2026-05-26T03:56:01+02:00]]
+## Test-Writer Notes
+- Retry #2: added 2 tests for reviewer gap (AC4 strict >600s stale-reclaim boundary).
+- Test file: tests/test_enrichment_store_1875.py
+- New tests added to existing TestFromAC_EnrichmentStore class:
+  - test_claim_batch_reclaims_item_strictly_more_than_600s_old (601s → IS reclaimed)
+  - test_claim_batch_does_not_reclaim_item_599s_old (599s → NOT reclaimed)
+- Total test suite: 44 tests, all PASS
+- ruff: clean
+- AC4 coverage: 601s/599s boundary tests prove strict >600s semantics per architect-approved non-flaky proof shape (exact 600s is wall-clock-unreliable in SQLite)
+- Note for builder: both new tests PASS against current implementation (601s and 599s behave identically under `<=` and `<`). Builder is still required to fix `started_at <= datetime('now', '-600 seconds')` to `started_at < datetime('now', '-600 seconds')` per architect re-review #2 — this is code-inspectable correctness for the exact-600s edge case.
+
+[[2026-05-26T04:17:07+02:00]]
+## Builder Notes
+- Implementation: updated `serve/knowledge/src/owlbear_knowledge/stores/enrichment.py` in `claim_batch` stale-reclaim query to enforce strict `>600s` semantics by changing SQL predicate from `started_at <= datetime('now', ?)` to `started_at < datetime('now', ?)`.
+- Files changed: `serve/knowledge/src/owlbear_knowledge/stores/enrichment.py`
+- Tests (quality-runner, scoped): `44` passed, `0` failed, `0` skipped in `tests/test_enrichment_store_1875.py`.
+- Coverage: `96%` for module `owlbear_knowledge.stores.enrichment`.
+- Lint: `ruff clean` (`clean: true`, no violations) for `serve/knowledge/src/owlbear_knowledge/stores/enrichment.py` and `tests/test_enrichment_store_1875.py`.
+- Module-level durable test file check: `serve/knowledge/tests/test_enrichment_store.py` not found and `tests/test_enrichment_store.py` not found; skipped per workflow guidance.
+- Evidence summary: architect re-review required a code-inspectable strict boundary fix for exact-600s handling; this change aligns implementation with AC4 while preserving all existing passing behavior and proofs.
+- Commit: `d389a2d6` (`fix: enforce strict stale-claim TTL boundary (#1875, builder)`).
+- Fixes applied: one-line SQL operator correction only; no API/interface changes and no test edits.
+
+[[2026-05-26T04:51:39+02:00]]
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation: PASS #1875 -> docs | AC mapped to code and evidence sufficient.
+- Builder evidence reviewed first: scoped quality-runner reported 44 passed, 0 failed, 0 skipped in [tests/test_enrichment_store_1875.py](tests/test_enrichment_store_1875.py), 96% coverage for [serve/knowledge/src/owlbear_knowledge/stores/enrichment.py](serve/knowledge/src/owlbear_knowledge/stores/enrichment.py), and ruff clean for [serve/knowledge/src/owlbear_knowledge/stores/enrichment.py](serve/knowledge/src/owlbear_knowledge/stores/enrichment.py) plus [tests/test_enrichment_store_1875.py](tests/test_enrichment_store_1875.py).
+- Challenger cross-check: proceed (confidence 0.86); no blocking findings.
+- Blocking findings: none.
+
+| AC | Code Evidence | Test Evidence | Status |
+|---|---|---|---|
+| AC1 | [serve/knowledge/src/owlbear_knowledge/stores/enrichment.py#L61](serve/knowledge/src/owlbear_knowledge/stores/enrichment.py#L61) | [tests/test_enrichment_store_1875.py#L64](tests/test_enrichment_store_1875.py#L64), [tests/test_enrichment_store_1875.py#L83](tests/test_enrichment_store_1875.py#L83), [tests/test_enrichment_store_1875.py#L90](tests/test_enrichment_store_1875.py#L90), [tests/test_enrichment_store_1875.py#L100](tests/test_enrichment_store_1875.py#L100), [tests/test_enrichment_store_1875.py#L397](tests/test_enrichment_store_1875.py#L397), [tests/test_enrichment_store_1875.py#L412](tests/test_enrichment_store_1875.py#L412), [tests/test_enrichment_store_1875.py#L427](tests/test_enrichment_store_1875.py#L427) | PASS |
+| AC2 | [serve/knowledge/src/owlbear_knowledge/stores/enrichment.py#L114](serve/knowledge/src/owlbear_knowledge/stores/enrichment.py#L114) | [tests/test_enrichment_store_1875.py#L124](tests/test_enrichment_store_1875.py#L124), [tests/test_enrichment_store_1875.py#L143](tests/test_enrichment_store_1875.py#L143) | PASS |
+| AC3 | [serve/knowledge/src/owlbear_knowledge/stores/enrichment.py#L139](serve/knowledge/src/owlbear_knowledge/stores/enrichment.py#L139) | [tests/test_enrichment_store_1875.py#L167](tests/test_enrichment_store_1875.py#L167), [tests/test_enrichment_store_1875.py#L178](tests/test_enrichment_store_1875.py#L178), [tests/test_enrichment_store_1875.py#L190](tests/test_enrichment_store_1875.py#L190), [tests/test_enrichment_store_1875.py#L212](tests/test_enrichment_store_1875.py#L212), [tests/test_enrichment_store_1875.py#L222](tests/test_enrichment_store_1875.py#L222) | PASS |
+| AC4 | [serve/knowledge/src/owlbear_knowledge/stores/enrichment.py#L139](serve/knowledge/src/owlbear_knowledge/stores/enrichment.py#L139), [serve/knowledge/src/owlbear_knowledge/stores/enrichment.py#L152](serve/knowledge/src/owlbear_knowledge/stores/enrichment.py#L152) | [tests/test_enrichment_store_1875.py#L451](tests/test_enrichment_store_1875.py#L451), [tests/test_enrichment_store_1875.py#L467](tests/test_enrichment_store_1875.py#L467) | PASS |
+| AC5 | [serve/knowledge/src/owlbear_knowledge/stores/enrichment.py#L219](serve/knowledge/src/owlbear_knowledge/stores/enrichment.py#L219) | [tests/test_enrichment_store_1875.py#L266](tests/test_enrichment_store_1875.py#L266), [tests/test_enrichment_store_1875.py#L281](tests/test_enrichment_store_1875.py#L281), [tests/test_enrichment_store_1875.py#L304](tests/test_enrichment_store_1875.py#L304), [tests/test_enrichment_store_1875.py#L397](tests/test_enrichment_store_1875.py#L397) | PASS |
+| AC6 | [serve/knowledge/src/owlbear_knowledge/stores/enrichment.py#L268](serve/knowledge/src/owlbear_knowledge/stores/enrichment.py#L268) | [tests/test_enrichment_store_1875.py#L331](tests/test_enrichment_store_1875.py#L331), [tests/test_enrichment_store_1875.py#L335](tests/test_enrichment_store_1875.py#L335), [tests/test_enrichment_store_1875.py#L340](tests/test_enrichment_store_1875.py#L340), [tests/test_enrichment_store_1875.py#L346](tests/test_enrichment_store_1875.py#L346) | PASS |
+| AC7 | [serve/knowledge/src/owlbear_knowledge/stores/enrichment.py#L31](serve/knowledge/src/owlbear_knowledge/stores/enrichment.py#L31), [serve/knowledge/src/owlbear_knowledge/stores/content.py#L50](serve/knowledge/src/owlbear_knowledge/stores/content.py#L50), [serve/knowledge/src/owlbear_knowledge/stores/graph.py#L42](serve/knowledge/src/owlbear_knowledge/stores/graph.py#L42) | [tests/test_enrichment_store_1875.py#L359](tests/test_enrichment_store_1875.py#L359), [tests/test_enrichment_store_1875.py#L372](tests/test_enrichment_store_1875.py#L372), [tests/test_enrichment_store_1875.py#L385](tests/test_enrichment_store_1875.py#L385) | PASS |
+
+- Safety and security: all queue writes stay inside parameterized SQLite statements in [serve/knowledge/src/owlbear_knowledge/stores/enrichment.py#L61](serve/knowledge/src/owlbear_knowledge/stores/enrichment.py#L61), [serve/knowledge/src/owlbear_knowledge/stores/enrichment.py#L114](serve/knowledge/src/owlbear_knowledge/stores/enrichment.py#L114), [serve/knowledge/src/owlbear_knowledge/stores/enrichment.py#L139](serve/knowledge/src/owlbear_knowledge/stores/enrichment.py#L139), and [serve/knowledge/src/owlbear_knowledge/stores/enrichment.py#L219](serve/knowledge/src/owlbear_knowledge/stores/enrichment.py#L219); no shell/path/template surfaces or dependency changes are introduced in the reviewed scope.
+
+## Observations
+- Non-blocking: [serve/knowledge/src/owlbear_knowledge/protocols/enrichment.py#L310](serve/knowledge/src/owlbear_knowledge/protocols/enrichment.py#L310) and [tests/test_enrichment_store_1875.py#L14](tests/test_enrichment_store_1875.py#L14) still describe FAILED as permanent. The task AC and architecture re-review resolved the behavioral contract for this task, so this is documentation/test-comment cleanup rather than a release blocker.
+- Current editor diagnostics are clean for [serve/knowledge/src/owlbear_knowledge/stores/enrichment.py](serve/knowledge/src/owlbear_knowledge/stores/enrichment.py) and [tests/test_enrichment_store_1875.py](tests/test_enrichment_store_1875.py).
+
+[[2026-05-26T05:12:12+02:00]]
+## Docs Gate
+
+### Checklist
+
+| Item | Result | Evidence |
+|------|--------|----------|
+| 1. README Verification | No update needed | `EnrichmentStore` not exported from `__init__.py`; Module groups table in `serve/knowledge/README.md` is accurate and lists only top-level `__init__.py` exports (`DocumentStore`, `GraphStore`, `StatusStore`, `KnowledgeSourceStore`). No task-caused drift. |
+| 2. External Attribution | N/A | No external sources cited in builder notes. |
+| 3. Research Doc | N/A | No research artifact created for this task. |
+| 4. Deletion Detection | N/A | Greenfield task — only new files added, no deletions or orphaned references. |
+
+### Doc Fixes Applied
+
+Two task-caused doc inconsistencies flagged as non-blocking in Review Evidence, fixed here:
+
+- **Protocol docstring** (`serve/knowledge/src/owlbear_knowledge/protocols/enrichment.py:310`): "FAILED permanently" → "FAILED (not retried by mark_failed; may be explicitly re-enqueued via enqueue_chunks)" — aligns with resolved AC5 semantics.
+- **Test comment** (`tests/test_enrichment_store_1875.py:14`): "FAILED permanent" → "FAILED (revivable via enqueue_chunks)" — aligns with resolved AC1 × AC5 cross-reference.
+
+Commit: `363593b9` (`docs: fix mark_failed docstring and test comment — FAILED is revivable (#1875, doc-writer)`)
+
+### Scratch Cleanup
+
+No `.owlbear/scratch/1875-*` files found.
+
+[[2026-05-26T05:56:10+02:00]]
+## Audit
+
+### Regression Detection
+Full suite: 5463 passed, 126 failed, 14 skipped, 6 errors (pytest exit 2, session-timeout 300s).
+Zero failures in knowledge/enrichment domain. All 126 failures are in unrelated domains (cockpit, kanban engine, memory, dead code sweep, schema, shell, frontend). Pre-existing — not task-caused.
+Lint: 3 ruff violations in `serve/knowledge/src/owlbear_knowledge/protocols/enrichment.py` (I001, 2× RUF002) — verified pre-existing (present before task's first commit `e1b8ae28^`).
+
+### Intent Verification
+Files changed (all 5 task commits): `serve/knowledge/src/owlbear_knowledge/stores/enrichment.py` (new), `tests/test_enrichment_store_1875.py` (new), `serve/knowledge/src/owlbear_knowledge/protocols/enrichment.py` (docstring fix). All in knowledge domain. Implementation addresses stated purpose (enrichment queue state machine). No extraneous scope.
+
+### Architect Quality: 4/5
+Initial AC had two ambiguities caught by reviewer (FAILED re-enqueue semantics, stale-claim boundary >/>=). Both resolved through architect re-reviews with explicit semantics and testable boundaries. Final AC is specific and independently verifiable. Score 4: adequate, gaps filled through pipeline iteration.
+
+### Commit Integrity
+5 commits, all properly formatted and task-attributed:
+- `e1b8ae28` feat: implement enrichment queue state machine (#1875, builder)
+- `a0422cb4` test: add retry tests for FAILED re-enqueue boundary (#1875, test-writer)
+- `58f84c90` test: add AC4 601s/599s boundary tests for stale reclaim (#1875, test-writer)
+- `d389a2d6` fix: enforce strict stale-claim TTL boundary (#1875, builder)
+- `363593b9` docs: fix mark_failed docstring and test comment — FAILED is revivable (#1875, doc-writer)
+
+### Deductions
+| Criterion | Deduction |
+|-----------|----------|
+| Regression failures (task domain) | 0 |
+| Intent mismatch | 0 |
+| Lint violations | 0 (pre-existing) |
+| AC quality ≤3 | 0 (score 4) |
+| Missing reviewer evidence | 0 |
+| Evidence integrity | 0 |
+
+**Confidence: 1.00**
+**Action: ARCHIVE**
