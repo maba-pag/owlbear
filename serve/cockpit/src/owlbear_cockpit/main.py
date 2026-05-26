@@ -24,7 +24,6 @@ from owlbear_memory.errors import (
 )
 
 from owlbear_cockpit.deps import get_engine  # noqa: F401 — re-exported for test DI
-from owlbear_cockpit.routes.decisions import router as decisions_router
 from owlbear_cockpit.routes.events import router as events_router
 from owlbear_cockpit.routes.ideas import router as ideas_router
 from owlbear_cockpit.routes.memory import router as memory_router
@@ -45,7 +44,6 @@ _MAX_PORT = 65535
 app = FastAPI(title="OwlBear Cockpit")
 app.include_router(read_router, prefix="/api")
 app.include_router(mutation_router, prefix="/api")
-app.include_router(decisions_router, prefix="/api")
 app.include_router(requests_router, prefix="/api")
 app.include_router(events_router, prefix="/api")
 app.include_router(ideas_router, prefix="/api")

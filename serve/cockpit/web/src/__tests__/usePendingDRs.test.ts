@@ -17,7 +17,7 @@ const DR_ITEM: PendingDR = {
   id: 'dr-001',
   task_id: 42,
   agent: 'builder',
-  request_type: 'scope-decision',
+  request_type: 'decision',
   created: '2026-04-30T10:00:00Z',
   title: 'Should we proceed with approach A?',
   summary: 'Builder encountered a fork in the road...',
@@ -27,8 +27,20 @@ const DR_ITEM: PendingDR = {
   body_preview: 'Builder encountered a fork in the road...',
 }
 
+const REQUEST_ITEM = {
+  request_id: 'dr-001',
+  task_id: 42,
+  kind: 'decision' as const,
+  title: 'Should we proceed with approach A?',
+  summary: 'Builder encountered a fork in the road...',
+  agent: 'builder',
+  created_at: '2026-04-30T10:00:00Z',
+  options: [],
+  body: '',
+}
+
 // Bare-array format returned by GET /api/requests/pending (new contract from #1856)
-const PENDING_RESPONSE = [DR_ITEM]
+const PENDING_RESPONSE = [REQUEST_ITEM]
 const EMPTY_RESPONSE: PendingDR[] = []
 
 function makeFetch(response: unknown, ok = true) {

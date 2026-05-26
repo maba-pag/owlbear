@@ -801,35 +801,6 @@ class TestFromAC_ShowTaskGuidanceForwarding:
 
 
 # ---------------------------------------------------------------------------
-# AC8: decisions-route framework errors retain FastAPI detail format
-# ---------------------------------------------------------------------------
-
-
-class TestFromAC_DecisionsFrameworkCarveOut:
-    """AC8 (td:0): Decisions-route HTTPException retains FastAPI {detail} format.
-
-    FastAPI's built-in HTTPException handler produces {"detail": <value>}.
-    The domain envelope handler (KanbanError → {code, message}) must NOT be
-    applied here — the decisions route uses HTTPException, not KanbanError.
-    """
-
-    def test_malformed_decision_id_returns_detail_body_not_domain_envelope(self, client_1371: TestClient) -> None:
-        """POST /decisions/.hidden/resolve returns {\"detail\": \"Invalid decision id\"}."""
-        response = client_1371.post(
-            "/api/decisions/.hidden/resolve",
-            json={"response": "approved"},
-        )
-        assert response.status_code == 422
-        body = response.json()
-        assert "detail" in body, f"Decisions HTTPException must use FastAPI detail format; got {body!r}"
-        assert body["detail"] == "Invalid decision id", (
-            f"Expected exact detail string 'Invalid decision id'; got {body['detail']!r}"
-        )
-        assert "code" not in body, f"Decisions route must NOT use domain envelope; got {body!r}"
-        assert "message" not in body, f"Decisions route must NOT use domain envelope; got {body!r}"
-
-
-# ---------------------------------------------------------------------------
 # AC3: Unexpected-error handler — exact stable literal assertions
 # ---------------------------------------------------------------------------
 
