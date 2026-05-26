@@ -1,10 +1,10 @@
 ---
 id: 1872
 title: 'Knowledge: ContentStore — search & purge'
-status: todo
+status: review
 priority: needed
 created: 2026-05-25T19:03:11.262484+02:00
-updated: 2026-05-26T08:18:19.396711+02:00
+updated: 2026-05-26T08:38:37.930569+02:00
 tags:
   - knowledge
   - layer-1
@@ -277,3 +277,20 @@ Skipped full re-evaluation — prior architecture review (2026-05-26T06:04) stan
 
 ### Verdict: APPROVE (re-dispatch)
 ### Action Taken: Added 3 explicit proof obligations (PO-1 through PO-3) addressing reviewer's blocking findings from two rejection cycles. No AC changes needed — AC is correct and precise. Builder must add discriminating tests for: (1) purge stale-vector regression from REPLACED+delete-failure state, (2) exact scope forwarding assertion, (3) unsynced-parent stats boundary. Advanced to todo for builder retry.
+
+[[2026-05-26T08:38:37+02:00]]
+## Test-Writer Notes
+- Retry #2 — proof obligations from architect (PO-1/PO-2/PO-3)
+- Test file: tests/test_content_store_1872.py
+- Classes: TestFromAC_ContentStoreSearch, TestFromAC_ContentStorePurge, TestFromAC_ContentStoreStats
+- Changes: PO-2 (tightened scope assertion), PO-1 (new stale-vector purge regression), PO-3 (new unsynced-parent stats boundary)
+- Total: 39 tests, all PASS against current impl
+- ruff: clean
+- Builder skip: test-only retry (Step 1b.1) — implementation is correct, proof gaps filled
+
+**AC coverage (proof obligations):**
+| PO | AC | Evidence |
+|----|-----|---------|
+| PO-1 | AC3 | test_purge_source_includes_stale_pending_vector_ids — REPLACED+delete-failure state, asserts delete payload includes V1 stale IDs + purge_result.vector_ids |
+| PO-2 | AC1 | test_search_scopes_forwarded_to_vector_store — tightened to assert forwarded_scopes == ["wiki", "docs"] |
+| PO-3 | AC4 | test_stats_vectors_excludes_chunks_with_unsynced_parent — directly sets vectors_synced=0, asserts stats().vectors == 0 |

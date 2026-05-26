@@ -1,10 +1,10 @@
 ---
 id: 1876
 title: 'Knowledge: EnrichmentStore — extractions & purge'
-status: docs
+status: archived
 priority: needed
 created: 2026-05-25T19:04:07.626934+02:00
-updated: 2026-05-26T08:25:04.856971+02:00
+updated: 2026-05-26T08:52:35.908668+02:00
 tags:
   - knowledge
   - layer-1
@@ -40,7 +40,7 @@ proof_bundle: behavioral
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Objective
@@ -220,3 +220,46 @@ Commit: 33491297
 - The prior review blockers are closed: AC4 now has explicit cross-document scoping proof, and AC7 now checks index DDL rather than index names alone.
 - AC7 proof is still slightly looser than the implementation because the new assertions accept any index DDL containing the target column names rather than proving two separate single-column indexes. Given the explicit DDL at `serve/knowledge/src/owlbear_knowledge/stores/enrichment.py:90` and `:94` and the lack of a demonstrated false-green path on this schema, I treated this as non-blocking.
 - Challenger result: proceed, confidence 0.83.
+
+[[2026-05-26T08:33:59+02:00]]
+## Docs Gate
+
+### Checklist
+
+| Item | Result | Evidence |
+|------|--------|----------|
+| 1. README Verification | NO IMPACT | `EnrichmentStore` is not exported via `owlbear_knowledge.__init__.py` — internal store accessed only via `owlbear_knowledge.protocols` DI. `serve/knowledge/README.md` "Module groups" table lists public exports only (`DocumentStore`, `GraphStore`, `StatusStore`, `KnowledgeSourceStore`). No task-caused README drift. Layer 1 grep: no removed symbols referenced in README. Layer 2: README coherent with post-task package surface. |
+| 2. External Attribution | VERIFIED | `.owlbear/sources/overview.md` contains task #1876 entry: `microsoft/graphrag` source linked to `1876-enrichmentstore-extractions-purge.md` (2026-05-26). |
+| 3. Research Doc | VERIFIED | `.owlbear/research/1876-enrichmentstore-extractions-purge.md` exists. Linked from task body under `## Research`. |
+| 4. Deletion Detection | CLEAN | `git diff HEAD~3 HEAD` shows no lines removed from `stores/enrichment.py` — only additions. No orphaned README references. |
+
+### Files Updated
+None — no-impact gate pass.
+
+### Scratch Cleanup
+- Removed: `.owlbear/scratch/1876-coverage.json`
+
+[[2026-05-26T08:52:35+02:00]]
+## Audit
+### Regression Detection
+- quality-runner mode full: domain-scoped tests 46 passed, 0 failed, lint clean. Full-suite collection blocked by pre-existing ImportError in unrelated domain (tests/test_mcp_kanban_newline_norm_1531.py imports removed symbol from owlbear_mcp_kanban.server). Confirmed pre-existing via git log (last modified well before task 1876 commits). No task-introduced regressions.
+- regression verdict: PASS
+
+### Intent Verification
+- scope alignment: PASS (all 3 task commits touch only serve/knowledge/src/owlbear_knowledge/stores/enrichment.py and tests/test_enrichment_store_1876.py — knowledge domain exclusively)
+- purpose match: PASS (implements submit_extractions, suggest_intra_doc_edges, purge_source per EnrichmentStore protocol)
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 5/5
+Final AC is protocol-exact with method signatures, return types, error conditions, table DDL, and index requirements. Challenger-driven rewrite produced specific, complete, clean implementation path.
+
+### Commit Integrity
+- upstream commit presence: PASS (88033fa8 researcher, 2c7438ff test-writer RED, 6906f32b builder GREEN, 33491297 test-writer retry)
+- kanban commit packaging: pending (this step)
+
+### Deduction Breakdown
+No deductions. All criteria pass.
+
+### Confidence: 1.00
+### Action: archive

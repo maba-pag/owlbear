@@ -1,10 +1,10 @@
 ---
 id: 1885
 title: 'Knowledge: ContentFetcher protocol — fetch abstraction for refresh'
-status: todo
+status: review
 priority: needed
 created: 2026-05-26T06:08:59.378851+02:00
-updated: 2026-05-26T08:27:46.172831+02:00
+updated: 2026-05-26T08:31:52.906580+02:00
 tags:
   - knowledge
   - layer-2
@@ -32,7 +32,7 @@ ac:
 proof_bundle: smoke
 blocked: false
 block_reason:
-claimed_at: 2026-05-26T08:27:46.172831+02:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -203,3 +203,33 @@ N/A — pure type/protocol definition, no runtime logic.
 ## Observations
 - This reject is about proof quality, not the current implementation: `serve/knowledge/src/owlbear_knowledge/protocols/fetcher.py` presently matches the written AC on direct inspection.
 - AC6 appears adequately implemented in `serve/knowledge/src/owlbear_knowledge/protocols/__init__.py:51-55`, `:138`, `:191-195`, `:222`; no blocking issue found there.
+
+[[2026-05-26T08:31:52+02:00]]
+## Test-Writer Notes
+
+**Test file:** `tests/test_fetcher_protocol_1885.py`
+**Proof bundle:** smoke (retry — strengthened assertions)
+
+**Retry-cycle gap-fill (4 reviewer findings addressed):**
+
+| Finding | Gap | New Test Added |
+|---------|-----|----------------|
+| AC1-AC3 | No BoundaryModel inheritance proof | `test_fetched_document_is_boundary_model_subclass`, `test_fetch_error_is_boundary_model_subclass`, `test_fetch_result_is_boundary_model_subclass` |
+| AC4 | isinstance only; no signature/annotation contract | `test_source_fetcher_fetch_source_signature` — inspects async, source/cancel params, keyword-only, return annotation |
+| AC5 | Heading presence only; no semantic content | `test_fetch_source_docstring_semantics` — asserts partial/cancel, errors/never, order, batch, transport, Raises-Never |
+| AC7 | Hard-coded forbidden list; no allowlist enforcement | `test_fetcher_module_imports_only_from_allowlist` — AST-parses source, rejects any owlbear_knowledge.* outside explicit allowlist |
+
+**Test totals:** 13 tests total (7 original + 6 new), all PASS
+**Fail confirmation:** N/A — test-only retry; implementation correct; direct-to-review advance
+**Lint:** ruff exit 0, clean
+
+**AC coverage table (strengthened):**
+| AC | Tests | Proof |
+|----|-------|-------|
+| AC1 FetchedDocument | 2 | field values + BoundaryModel subclass |
+| AC2 FetchError | 2 | field values + BoundaryModel subclass |
+| AC3 FetchResult | 2 | tuple defaults + BoundaryModel subclass |
+| AC4 SourceFetcher | 2 | isinstance + signature/annotations/async |
+| AC5 docstring | 2 | sections + semantic content |
+| AC6 __init__ re-export | 1 | namespace + __all__ |
+| AC7 import boundary | 2 | forbidden list + full AST allowlist |

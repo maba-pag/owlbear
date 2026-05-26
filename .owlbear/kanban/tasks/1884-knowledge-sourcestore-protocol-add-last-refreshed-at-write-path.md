@@ -4,7 +4,7 @@ title: 'Knowledge: SourceStore protocol — add last_refreshed_at write path'
 status: review
 priority: needed
 created: 2026-05-26T06:08:59.357802+02:00
-updated: 2026-05-26T08:18:39.739143+02:00
+updated: 2026-05-26T08:41:11.457143+02:00
 tags:
   - knowledge
   - layer-2

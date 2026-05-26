@@ -1,10 +1,10 @@
 ---
 id: 1863
 title: 'P2-06: Remove old Cockpit resolve flow and legacy endpoints'
-status: todo
+status: review
 priority: important
 created: 2026-05-24T21:00:04.160667+02:00
-updated: 2026-05-26T08:27:40.974624+02:00
+updated: 2026-05-26T08:31:47.846662+02:00
 tags:
   - phase-2
   - scope:cockpit
@@ -33,7 +33,7 @@ ac:
 proof_bundle: behavioral
 blocked: false
 block_reason:
-claimed_at: 2026-05-26T08:27:40.974624+02:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -249,3 +249,22 @@ Refined AC4 to explicitly exclude `serve/cockpit/tests/test_visual_redesign.py` 
 
 ### Verdict: APPROVE (REFINE AC4 + re-advance)
 AC4 scoped to exclude known pre-existing unrelated failures. All other AC lines remain unchanged. Task returns to `todo` for pipeline continuation.
+
+[[2026-05-26T08:31:47+02:00]]
+## Test-Writer Notes
+- Retry 3: no new tests written. Reviewer's Required Follow-up from cycle 2 targeted architect only (refine AC4); architect completed that refinement and returned task to todo.
+- AC4 backend suite evidence (refined scope):
+  - `tests/test_cockpit_legacy_cleanup_1863.py` + `tests/test_cockpit_requests_api_1856.py` + `tests/test_cockpit_error_envelope.py`: **73 passed, 0 failed**.
+  - `serve/cockpit/tests/` (excluding `test_visual_redesign.py`): **13 passed, 0 failed**.
+  - Total direct-impact: **86 passed, 0 failed**.
+- Broad `tests/test_cockpit_*` run shows 23 failures in unrelated files (`test_cockpit_view.py` ×17, `test_cockpit_models.py` ×1, `test_cockpit_shell_sidecar.py` ×1) — all from other open tasks (#1068, #1071, etc.). Same "suite gate debt inheritance" pattern as `test_visual_redesign.py`. Not caused by this removal.
+- `usePendingDRs.polling-active.test.ts` still uses retired wrapped payload shape (`{count, items}`) but asserts only fetch-call counts; reviewed as code-quality weak guard (observation in cycle 2 review, not Required Follow-up). Pass-through per skill — builder to address if needed.
+- Builder skip: test-only retry, no test file changes, all existing tests green against current impl.
+
+### AC Coverage (unchanged from prior cycles)
+| AC | Tests |
+|----|-------|
+| AC1 (POST /api/decisions/{id}/resolve → 404) | test_post_resolve_existing_decision_approved_returns_404, test_post_resolve_existing_decision_needs_info_returns_404, test_post_resolve_decision_invalid_payload_returns_404 |
+| AC2 (GET /api/decisions/pending → 404) | test_get_decisions_pending_returns_404 |
+| AC3 (frontend decisions.test.ts removed; LegacyPendingDRResponse + normalization removed) | test_frontend_decisions_test_file_removed, test_legacy_pending_dr_response_interface_removed, test_is_pending_requests_payload_guard_removed, test_dual_format_payload_items_access_removed |
+| AC4 (decisions route module removed from disk; suite health) | test_old_decisions_route_module_file_does_not_exist; backend suite evidence above |

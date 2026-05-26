@@ -1,10 +1,10 @@
 ---
 id: 1877
 title: 'Knowledge: IngestCoordinator — ingest & refresh'
-status: docs
+status: done
 priority: needed
 created: 2026-05-25T19:04:22.644852+02:00
-updated: 2026-05-26T08:27:14.478435+02:00
+updated: 2026-05-26T08:45:55.531720+02:00
 tags:
   - knowledge
   - layer-2
@@ -252,3 +252,35 @@ All 4 stores (Sources, Content, Enrichment, Graph) injected via constructor — 
 - A created-path or replaced-path enqueue timing sentinel would harden AC4 against future refactors that move enqueue work out of _process_document.
 - tests/test_ingest_coordinator_1877.py:620 still proves only that the health message contains digits, not the full count summary string assembled at serve/knowledge/src/owlbear_knowledge/ingest_coordinator.py:97.
 - tests/test_ingest_coordinator_1877.py:202 proves per-document delegation count, but not the full ContentIngestRequest payload assembled at serve/knowledge/src/owlbear_knowledge/ingest_coordinator.py:126-133.
+
+[[2026-05-26T08:45:55+02:00]]
+## Docs Gate
+
+### Convention Mapping
+- Changed files: `serve/knowledge/src/owlbear_knowledge/ingest_coordinator.py` (added), `tests/test_ingest_coordinator_1877.py` (added)
+- Mapped README: `serve/knowledge/README.md`
+
+### Checklist
+
+**Item 1 — README Verification**
+- Full read of `serve/knowledge/README.md` (120 lines).
+- Layer 1 (grep): No symbols removed; `IngestCoordinator` is not in the package's public `__init__.py` and is not exported as a public API — module groups table remains accurate.
+- Layer 2 (editorial): README coherent and consistent with current implementation. `IngestCoordinator` is an internal Layer-2 coordinator not part of the narrow public API. No update required.
+- **Result: PASS — no edit needed**
+
+**Item 2 — External Attribution**
+- Research doc lists 2 external repos (saga orchestration .70, async RAG ingestion .65).
+- Builder implementation is entirely protocol-driven (internal protocol specs at `protocols/ingest.py`); no external pattern adoption evident in the implementation.
+- `sources/overview.md` check: no entry for #1877, consistent with no external source influence on implementation.
+- **Result: N/A — no external attribution needed**
+
+**Item 3 — Research Doc**
+- `.owlbear/research/1877-ingest-coordinator.md` exists and is linked in the task body.
+- **Result: PASS**
+
+**Item 4 — Deletion Detection**
+- No source files deleted. Only additions: `ingest_coordinator.py` + task-scoped test file.
+- **Result: N/A — no deletion impact**
+
+### Scratch Cleanup
+No `.owlbear/scratch/1877-*` files found.
