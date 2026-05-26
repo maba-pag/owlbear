@@ -1,10 +1,10 @@
 ---
 id: 1887
 title: 'Knowledge: GraphStore — chunk_ids_for_entity protocol method'
-status: review
+status: archived
 priority: needed
 created: 2026-05-27T00:36:20.507539+02:00
-updated: 2026-05-27T01:32:53.143316+02:00
+updated: 2026-05-27T01:42:50.251194+02:00
 tags:
   - knowledge
   - layer-1
@@ -29,8 +29,8 @@ ac:
 proof_bundle: smoke
 blocked: false
 block_reason:
-claimed_at: 2026-05-27T01:32:53.143316+02:00
-archival_reason:
+claimed_at:
+archival_reason: completed
 archival_refs: []
 ---
 ## Objective
@@ -225,3 +225,66 @@ Refined AC1 and AC2 wording to close specific proof gaps identified by reviewer:
 
 ### Quality-runner report
 - 9 passed, 0 failed, lint clean (ruff 0)
+
+[[2026-05-27T01:33:53+02:00]]
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation: PASS #1887 -> docs | AC mapped to code and evidence sufficient.
+- Builder evidence review: builder notes (123 scoped tests passed, coverage 93%/100%, ruff clean) plus the cycle-3 test-writer retry (9 task-local tests passed, lint clean) are internally consistent with the current source and task-local proof.
+
+| AC | Code Evidence | Test Evidence | Status |
+|---|---|---|---|
+| AC1 | `serve/knowledge/src/owlbear_knowledge/protocols/graph.py:439-456` defines `chunk_ids_for_entity(self, entity_id: str) -> tuple[str, ...]` with `Guarantees`, `Non-guarantees`, `Side effects`, and `Raises` sections. | `tests/test_graph_store_1887.py:84-100` and `tests/test_graph_store_1887.py:166-177` assert the annotations, exact non-self parameter list, and presence of all four required docstring sections. | PASS |
+| AC2 | `serve/knowledge/src/owlbear_knowledge/stores/graph.py:473-482` selects distinct `chunk_id` values from `graph_evidence` filtered by `entity_id` and returns them as a tuple. | `tests/test_graph_store_1887.py:126-162` proves duplicate evidence rows collapse to one chunk ID, `tests/test_graph_store_1887.py:179-205` proves exact entity-scoped result sets with overlapping and exclusive chunks using `==`, and `tests/test_graph_store_1887.py:208-213` proves unknown entity IDs return `()`. | PASS |
+| AC3 | `serve/knowledge/src/owlbear_knowledge/stores/graph.py:473-482` matches the required `SELECT DISTINCT chunk_id FROM graph_evidence WHERE entity_id = ?` query shape and tuple return contract. | `tests/test_graph_store_1887.py:114-124` asserts `tuple[str, ...]` shape, while `tests/test_graph_store_1887.py:126-162` and `tests/test_graph_store_1887.py:179-205` prove the DISTINCT and `WHERE entity_id = ?` behavior is load-bearing. | PASS |
+| AC4 | `serve/knowledge/src/owlbear_knowledge/stores/graph.py:475-482` returns `tuple(...)` over an empty result set, yielding `()`. | `tests/test_graph_store_1887.py:208-213` asserts exact empty-tuple behavior for an entity ID with no evidence rows. | PASS |
+
+- Safety/security: the SQL call remains parameterized (`entity_id = ?`) in `serve/knowledge/src/owlbear_knowledge/stores/graph.py:475-480`; no new dependency, credential, or logging surface was introduced.
+- Independent check: current diagnostics report no errors in `serve/knowledge/src/owlbear_knowledge/protocols/graph.py`, `serve/knowledge/src/owlbear_knowledge/stores/graph.py`, or `tests/test_graph_store_1887.py`.
+
+## Observations
+- The older membership-only smoke tests are still present, but the cycle-3 exact-parameter and exact-set assertions close the earlier proof gaps and make the task-local proof sufficient for the refined AC.
+- No blocking implementation defect or remaining proof-quality gap was found in the current task scope.
+
+[[2026-05-27T01:35:37+02:00]]
+## Docs Gate
+
+### Checklist
+| Item | Result | Evidence |
+|------|--------|----------|
+| README Verification | No update needed | `serve/knowledge/README.md` lists GraphStore by class name only; internal protocol method addition causes no README drift. Two pre-existing `#1886` TODO markers are pass-through. |
+| External Attribution | N/A | Research notes cite internal sources only (protocol file, SQLite impl); no external attribution needed. |
+| Research Doc | PASS | `.owlbear/research/1887-chunk-ids-for-entity.md` exists and is linked in task body. |
+| Deletion Detection | N/A | No files deleted; two source files modified, one test file added. |
+| Scratch cleanup | Clean | No `.owlbear/scratch/1887-*` files found. |
+
+### Files Updated
+None — no task-caused documentation drift detected.
+
+### Upstream Evidence
+Final `## Review Evidence` present with Verdict: PASS (cycle 3, `[[2026-05-27T01:33:53+02:00]]`).
+
+[[2026-05-27T01:42:50+02:00]]
+## Audit
+
+### Regression Detection
+quality-runner env fallback: initial run failed (stale interpreter). Direct execution: 128 passed in knowledge domain (serve/knowledge/tests/ + tests/test_graph_store_{1873,1874,1887}.py), 0 failed. Lint clean on task-scoped files (ruff 0).
+
+### Intent Verification
+Changed files: `serve/knowledge/src/owlbear_knowledge/protocols/graph.py`, `serve/knowledge/src/owlbear_knowledge/stores/graph.py`. Both in knowledge/graph domain. Implementation adds `chunk_ids_for_entity` protocol method + SQLite impl — matches stated objective (entity→chunk reverse lookup for downstream #1880). No extraneous scope.
+
+### Architect Quality
+Score: 4/5. Initial AC was adequate but required one proof-plan refinement cycle after reviewer identified test-weakness gaps. Architect responded well with explicit proof constraints (exact-set assertions, exact-param checks). Minor gap: could have specified proof strategy upfront.
+
+### Commit Integrity
+- `3014a7bd test: add smoke tests for chunk_ids_for_entity (#1887, test-writer)`
+- `6f259e5a feat: add graph entity chunk lookup (#1887, builder)`
+- `2cd248fe test: strengthen retry tests for chunk_ids_for_entity (#1887, test-writer)`
+- `39b6be8c test: strengthen signature and exact-set proofs for chunk_ids_for_entity (#1887, test-writer)`
+All deliverables committed to HEAD.
+
+### Deductions
+None.
+
+### Confidence: 1.00
+### Action: ARCHIVE
