@@ -438,3 +438,44 @@ class TestFromAC_EnrichmentStore:
         assert len(batch.items) == 1
         item = batch.items[0]
         assert item.last_error is None  # cleared on revival
+
+    # ------------------------------------------------------------------
+    # AC4 — stale reclaim boundary (retry-cycle addition #2)
+    # Resolves reviewer finding: AC4 says "strictly >600s" but tests used 701s
+    # and fresh only, leaving the exact boundary unspecified.  Architect
+    # re-review (Re-review #2) chose strict >600s and prescribed 601s/599s
+    # as the non-flaky proof shape (exact 600s is wall-clock-unreliable in
+    # SQLite).  Builder must also change `<=` to `<` in claim_batch.
+    # ------------------------------------------------------------------
+
+    def test_claim_batch_reclaims_item_strictly_more_than_600s_old(
+        self, store: EnrichmentStore, db: sqlite3.Connection
+    ) -> None:
+        """An item 601s old (strictly >600s) IS reclaimed to PENDING (AC4)."""
+        store.enqueue_chunks(("c1",), "src-1")
+        store.claim_batch(EnrichmentParams(batch_size=1, max_retries=3))
+        # Backdate started_at to exactly 601 seconds ago
+        db.execute(
+            "UPDATE enrich_queue SET started_at = datetime('now', '-601 seconds')"
+            " WHERE chunk_id = 'c1'"
+        )
+        db.commit()
+        batch = store.claim_batch(EnrichmentParams(batch_size=1, max_retries=3))
+        chunk_ids = {item.chunk_id for item in batch.items}
+        assert "c1" in chunk_ids, "item aged 601s must be reclaimed (strictly >600s TTL)"
+
+    def test_claim_batch_does_not_reclaim_item_599s_old(
+        self, store: EnrichmentStore, db: sqlite3.Connection
+    ) -> None:
+        """An item 599s old (not yet >600s) is NOT reclaimed (AC4 strict > boundary)."""
+        store.enqueue_chunks(("c1",), "src-1")
+        store.claim_batch(EnrichmentParams(batch_size=1, max_retries=3))
+        # Backdate started_at to 599 seconds ago — still within TTL
+        db.execute(
+            "UPDATE enrich_queue SET started_at = datetime('now', '-599 seconds')"
+            " WHERE chunk_id = 'c1'"
+        )
+        db.commit()
+        batch = store.claim_batch(EnrichmentParams(batch_size=1, max_retries=3))
+        chunk_ids = {item.chunk_id for item in batch.items}
+        assert "c1" not in chunk_ids, "item aged 599s must NOT be reclaimed (within 600s TTL)"
