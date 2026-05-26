@@ -696,3 +696,242 @@ class TestFromAC_EnsureTablesExtended:
                 " VALUES (?, ?, ?, ?, ?)",
                 ("id2", "ent1", "alias-one", "alias-one", now),  # same entity_id + canonical_alias
             )
+
+
+# ---------------------------------------------------------------------------
+# Retry-gap tests — reviewer round 1 findings
+# ---------------------------------------------------------------------------
+
+# Finding #1 — AC1: XOR validator contract and update-branch proof
+
+
+class TestFromAC_AddEvidence_XorAndUpdate:
+    """AC1 retry gaps: XOR model_validator rejection and confidence-update on repeat call."""
+
+    # ------------------------------------------------------------------ error: XOR violations
+
+    def test_evidence_input_entity_claim_with_edge_id_raises_value_error(self) -> None:
+        """AC1 error: ENTITY claim_type with edge_id set violates XOR — ValueError at construction."""
+        with pytest.raises(ValueError, match="ENTITY"):
+            EvidenceInput(
+                chunk_id="chunk-x",
+                claim_type=EvidenceClaimType.ENTITY,
+                edge_id="some-edge-id",  # XOR violation: entity claim must not have edge_id
+            )
+
+    def test_evidence_input_edge_claim_with_entity_id_raises_value_error(self) -> None:
+        """AC1 error: EDGE claim_type with entity_id set violates XOR — ValueError at construction."""
+        with pytest.raises(ValueError, match="EDGE"):
+            EvidenceInput(
+                chunk_id="chunk-x",
+                claim_type=EvidenceClaimType.EDGE,
+                entity_id="some-entity-id",  # XOR violation: edge claim must not have entity_id
+            )
+
+    def test_evidence_input_entity_claim_without_entity_id_raises_value_error(self) -> None:
+        """AC1 error: ENTITY claim_type with no entity_id raises ValueError (XOR unmet)."""
+        with pytest.raises(ValueError, match="ENTITY"):
+            EvidenceInput(
+                chunk_id="chunk-x",
+                claim_type=EvidenceClaimType.ENTITY,
+                # entity_id omitted — XOR violation
+            )
+
+    def test_evidence_input_edge_claim_without_edge_id_raises_value_error(self) -> None:
+        """AC1 error: EDGE claim_type with no edge_id raises ValueError (XOR unmet)."""
+        with pytest.raises(ValueError, match="EDGE"):
+            EvidenceInput(
+                chunk_id="chunk-x",
+                claim_type=EvidenceClaimType.EDGE,
+                # edge_id omitted — XOR violation
+            )
+
+    # ------------------------------------------------------------------ update branch
+
+    def test_add_evidence_repeat_call_updates_confidence_mutable_field(
+        self, store: SqliteGraphStore, entity_a
+    ) -> None:
+        """AC1: repeated add_evidence with same identity but different confidence updates the record.
+
+        The existing idempotency test proves the ID is reused but never observes changed
+        state. An implementation that ignores the new confidence on update would still pass
+        the existing test; this test catches that regression.
+        """
+        first = store.add_evidence(
+            EvidenceInput(
+                chunk_id="chunk-upd",
+                claim_type=EvidenceClaimType.ENTITY,
+                entity_id=entity_a.id,
+                confidence=0.3,
+            )
+        )
+        updated = store.add_evidence(
+            EvidenceInput(
+                chunk_id="chunk-upd",
+                claim_type=EvidenceClaimType.ENTITY,
+                entity_id=entity_a.id,
+                confidence=0.9,  # different confidence on same identity
+            )
+        )
+        assert updated.id == first.id, "same identity must yield the same evidence ID"
+        assert updated.confidence == pytest.approx(0.9), (
+            "confidence must be updated when add_evidence is called again with same identity"
+        )
+
+
+# Finding #2 — AC6: exact counts in isolated fixtures
+
+
+class TestFromAC_Stats_ExactCounts:
+    """AC6 retry gaps: exact count assertions for each graph_* table in isolated stores.
+
+    The original suite uses >= assertions. An implementation that overcounts rows
+    (e.g. emits duplicates via a JOIN) would still pass those assertions but fails here.
+    """
+
+    def test_stats_exact_entity_count(self, db: sqlite3.Connection) -> None:
+        """AC6: after inserting exactly 2 entities, entities == 2 (not >= 2)."""
+        store = SqliteGraphStore(db)
+        store.ensure_tables()
+        store.upsert_entity(_mk_entity("ExactEnt1"))
+        store.upsert_entity(_mk_entity("ExactEnt2"))
+        result = store.stats()
+        assert result.entities == 2, (
+            f"expected exactly 2 entities, got {result.entities}"
+        )
+
+    def test_stats_exact_edge_count(self, db: sqlite3.Connection) -> None:
+        """AC6: after inserting exactly 1 edge, edges == 1 (not >= 1)."""
+        store = SqliteGraphStore(db)
+        store.ensure_tables()
+        a = store.upsert_entity(_mk_entity("ExactEdgeA"))
+        b = store.upsert_entity(_mk_entity("ExactEdgeB"))
+        store.upsert_edge(_mk_edge(a.id, b.id))
+        result = store.stats()
+        assert result.edges == 1, (
+            f"expected exactly 1 edge, got {result.edges}"
+        )
+
+    def test_stats_exact_evidence_count(self, db: sqlite3.Connection) -> None:
+        """AC6: after inserting exactly 1 evidence record, evidence_claims == 1 (not >= 1)."""
+        store = SqliteGraphStore(db)
+        store.ensure_tables()
+        ent = store.upsert_entity(_mk_entity("ExactEvEnt"))
+        store.add_evidence(_entity_evidence("chunk-exact-ev", ent.id))
+        result = store.stats()
+        assert result.evidence_claims == 1, (
+            f"expected exactly 1 evidence_claim, got {result.evidence_claims}"
+        )
+
+    def test_stats_exact_alias_count(self, db: sqlite3.Connection) -> None:
+        """AC6: after adding exactly 1 alias, aliases == 1 (not >= 1)."""
+        store = SqliteGraphStore(db)
+        store.ensure_tables()
+        ent = store.upsert_entity(_mk_entity("ExactAliasEnt"))
+        store.add_alias(EntityAliasInput(entity_id=ent.id, alias_name="ExactAlias"))
+        result = store.stats()
+        assert result.aliases == 1, (
+            f"expected exactly 1 alias, got {result.aliases}"
+        )
+
+
+# Finding #3 — AC7: missing index and FK coverage
+
+
+class TestFromAC_EnsureTablesExtended_IndexAndFK:
+    """AC7 retry gaps: indexes on graph_evidence entity_id/edge_id, graph_aliases
+    canonical_alias, and FK declarations for both new tables.
+
+    The original suite covers only the chunk_id index and alias uniqueness.
+    """
+
+    def test_ensure_tables_graph_evidence_has_index_on_entity_id(
+        self, db: sqlite3.Connection
+    ) -> None:
+        """AC7: graph_evidence has an explicit index on entity_id column."""
+        store = SqliteGraphStore(db)
+        store.ensure_tables()
+        indexes = db.execute(
+            "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='graph_evidence'"
+        ).fetchall()
+        entity_id_indexed = False
+        for (idx_name,) in indexes:
+            cols = db.execute(f'PRAGMA index_info("{idx_name}")').fetchall()  # noqa: S608
+            if any(col[2] == "entity_id" for col in cols):
+                entity_id_indexed = True
+                break
+        assert entity_id_indexed, (
+            f"No index on entity_id found in graph_evidence. "
+            f"Indexes: {[r[0] for r in indexes]}"
+        )
+
+    def test_ensure_tables_graph_evidence_has_index_on_edge_id(
+        self, db: sqlite3.Connection
+    ) -> None:
+        """AC7: graph_evidence has an explicit index on edge_id column."""
+        store = SqliteGraphStore(db)
+        store.ensure_tables()
+        indexes = db.execute(
+            "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='graph_evidence'"
+        ).fetchall()
+        edge_id_indexed = False
+        for (idx_name,) in indexes:
+            cols = db.execute(f'PRAGMA index_info("{idx_name}")').fetchall()  # noqa: S608
+            if any(col[2] == "edge_id" for col in cols):
+                edge_id_indexed = True
+                break
+        assert edge_id_indexed, (
+            f"No index on edge_id found in graph_evidence. "
+            f"Indexes: {[r[0] for r in indexes]}"
+        )
+
+    def test_ensure_tables_graph_aliases_has_index_on_canonical_alias(
+        self, db: sqlite3.Connection
+    ) -> None:
+        """AC7: graph_aliases has an explicit index on canonical_alias column."""
+        store = SqliteGraphStore(db)
+        store.ensure_tables()
+        indexes = db.execute(
+            "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='graph_aliases'"
+        ).fetchall()
+        canonical_alias_indexed = False
+        for (idx_name,) in indexes:
+            cols = db.execute(f'PRAGMA index_info("{idx_name}")').fetchall()  # noqa: S608
+            if any(col[2] == "canonical_alias" for col in cols):
+                canonical_alias_indexed = True
+                break
+        assert canonical_alias_indexed, (
+            f"No index on canonical_alias found in graph_aliases. "
+            f"Indexes: {[r[0] for r in indexes]}"
+        )
+
+    def test_ensure_tables_graph_evidence_fk_entity_id_references_graph_entities(
+        self, db: sqlite3.Connection
+    ) -> None:
+        """AC7: graph_evidence.entity_id declares FK referencing graph_entities.
+
+        Uses PRAGMA foreign_key_list to verify the declared FK — mirrors the
+        pattern established in test_graph_store_1873.py for graph_edges FKs.
+        """
+        SqliteGraphStore(db).ensure_tables()
+        fk_rows = db.execute("PRAGMA foreign_key_list(graph_evidence)").fetchall()
+        found = any(fk[3] == "entity_id" and fk[2] == "graph_entities" for fk in fk_rows)
+        assert found, "graph_evidence must declare FK: entity_id → graph_entities"
+
+    def test_ensure_tables_graph_evidence_fk_edge_id_references_graph_edges(
+        self, db: sqlite3.Connection
+    ) -> None:
+        """AC7: graph_evidence.edge_id declares FK referencing graph_edges."""
+        SqliteGraphStore(db).ensure_tables()
+        fk_rows = db.execute("PRAGMA foreign_key_list(graph_evidence)").fetchall()
+        found = any(fk[3] == "edge_id" and fk[2] == "graph_edges" for fk in fk_rows)
+        assert found, "graph_evidence must declare FK: edge_id → graph_edges"
+
+    def test_ensure_tables_graph_aliases_fk_entity_id_references_graph_entities(
+        self, db: sqlite3.Connection
+    ) -> None:
+        """AC7: graph_aliases.entity_id declares FK referencing graph_entities."""
+        SqliteGraphStore(db).ensure_tables()
+        fk_rows = db.execute("PRAGMA foreign_key_list(graph_aliases)").fetchall()
+        found = any(fk[3] == "entity_id" and fk[2] == "graph_entities" for fk in fk_rows)
+        assert found, "graph_aliases must declare FK: entity_id → graph_entities"
