@@ -422,7 +422,7 @@ class TestFromAC_ContentStore:
         req = _make_request()
         await store.ingest(req)
 
-        assert mock_vectors.called, "vector_store must be called on CREATED ingest"
+        assert mock_vectors.upsert.called, "vector_store.upsert must be called on CREATED ingest"
 
     @pytest.mark.asyncio
     async def test_ingest_unchanged_does_not_call_qdrant(
@@ -656,10 +656,10 @@ class TestFromAC_ContentStore:
 
         # Vectors MUST be written — current UNCHANGED short-circuit skips all writes,
         # leaving the document permanently without vector representation.
-        assert retry_vectors.called, (
+        assert retry_vectors.upsert.called, (
             "AC1 retry contract violated: second ingest after Qdrant failure must write "
-            "vectors to reach consistent state — UNCHANGED short-circuit leaves vectors "
-            "unrepaired"
+            "vectors via upsert to reach consistent state — UNCHANGED short-circuit leaves "
+            "vectors unrepaired"
         )
 
     # ------------------------------------------------------------------ AC5 metadata
