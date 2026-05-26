@@ -245,7 +245,7 @@ class TestFromAC_ContentStoreSearch:
 
         results = await store.search(_make_query())
         assert len(results) == 1
-        assert results[0].score <= 1.0
+        assert results[0].score == 1.0
 
     @pytest.mark.asyncio
     async def test_search_clamps_negative_score_to_zero(
@@ -258,7 +258,7 @@ class TestFromAC_ContentStoreSearch:
 
         results = await store.search(_make_query())
         assert len(results) == 1
-        assert results[0].score >= 0.0
+        assert results[0].score == 0.0
 
     # ------------------------------------------------------------------ AC1
     # Edge: source_ids filter (D53)
