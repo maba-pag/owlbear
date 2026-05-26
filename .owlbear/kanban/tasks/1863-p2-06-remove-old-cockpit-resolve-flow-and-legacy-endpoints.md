@@ -1,10 +1,10 @@
 ---
 id: 1863
 title: 'P2-06: Remove old Cockpit resolve flow and legacy endpoints'
-status: backlog
+status: review
 priority: important
 created: 2026-05-24T21:00:04.160667+02:00
-updated: 2026-05-26T09:21:59.572482+02:00
+updated: 2026-05-26T09:36:03.690677+02:00
 tags:
   - phase-2
   - scope:cockpit
@@ -26,10 +26,10 @@ ac:
     contract) is removed; LegacyPendingDRResponse interface and dual-format 
     normalization in usePendingDRs.ts are removed; only new /api/requests/ API 
     types remain in frontend code.
-  - 'Cockpit backend test suites in tests/test_cockpit_* and serve/cockpit/tests/
-    pass green after removal (excluding pre-existing failures in serve/cockpit/tests/test_visual_redesign.py
-    which is a consolidation-test for unrelated #1629); tests referencing deleted
-    endpoints are updated or removed.'
+  - 'Task-impacted backend tests pass green: test_cockpit_legacy_cleanup_1863.py,
+    test_cockpit_requests_api_1856.py, test_cockpit_error_envelope.py, serve/cockpit/tests/
+    (excl. test_visual_redesign.py). Pre-existing failures in test_cockpit_view/models/shell_sidecar
+    (other tasks) not gated. Tests referencing deleted endpoints updated or removed.'
 proof_bundle: behavioral
 blocked: false
 block_reason:
@@ -292,3 +292,40 @@ AC4 scoped to exclude known pre-existing unrelated failures. All other AC lines 
 ## Observations
 - The implementation itself is consistent with the removal goal. I found no live backend `/api/decisions` route registration under `serve/cockpit/src/**`, and the task cleanup tests cover both 404 removals plus the deleted route module.
 - Residual legacy-endpoint strings remain in non-blocking frontend test surfaces, including parked skipped scaffolding in `serve/cockpit/web/src/__tests__/DecisionContract.test.tsx:234` and Playwright route stubs such as `serve/cockpit/web/e2e/card-density.spec.ts:194` and `serve/cockpit/web/e2e/shell-layout-1606.spec.ts:83`. I did not use those as blockers because the current FAIL is already forced by AC4 contract quality.
+
+[[2026-05-26T09:34:03+02:00]]
+## Architecture Review (AC4 Refinement — Cycle 2)
+
+### Context
+Reviewer routed task back to backlog after third FAIL: AC4 broad gate `tests/test_cockpit_*` catches 23 pre-existing failures in `test_cockpit_view.py` (task #1224), `test_cockpit_models.py` (task #1146), and `test_cockpit_shell_sidecar.py` (shell-layout work). None relate to decisions endpoint removal.
+
+### Evidence of Non-Relation
+- `test_cockpit_view.py`: tests CockpitView relocation from kanban→cockpit (#1224). Tests import paths and module boundaries — zero mention of `/api/decisions/`.
+- `test_cockpit_models.py`: tests dead model cleanup (#1146). Asserts removed model classes — zero mention of decisions endpoints.
+- `test_cockpit_shell_sidecar.py`: tests Shell.tsx nav-rail tabIndex and sidecar layout. Zero overlap with backend route removal.
+
+### Action
+Refined AC4 to explicitly scope the suite-health gate to task-impacted files only:
+- `tests/test_cockpit_legacy_cleanup_1863.py`
+- `tests/test_cockpit_requests_api_1856.py`
+- `tests/test_cockpit_error_envelope.py`
+- `serve/cockpit/tests/` (excluding `test_visual_redesign.py`)
+
+Pre-existing failures in other `tests/test_cockpit_*` files are explicitly excluded from this task's gate. This is the same \"suite gate debt inheritance\" pattern identified in cycle 1 — the prior refinement only addressed `serve/cockpit/tests/` half but missed the `tests/test_cockpit_*` half.
+
+### Proof-Bundle Validation
+- Planner assignment: behavioral
+- Final bundle: behavioral
+- Test-writer: PROCEED (already complete — task in retry cycle)
+
+### Verdict: APPROVE (REFINE AC4 + re-advance)
+All 4 AC lines are now verifiable against task-scoped evidence. AC1-AC3 have been passing since cycle 1. AC4 now correctly gates only task-impacted test files. Task returns to `todo` for pipeline continuation.
+
+[[2026-05-26T09:36:03+02:00]]
+## Test-Writer Notes
+- Retry 4: no new tests written. Reviewer's Required Follow-up from cycle 3 targeted architect only (refine AC4 broad gate); architect completed refinement (Cycle 2) and returned task to todo.
+- AC4 backend suite (refined scope — task-impacted files only):
+  - `tests/test_cockpit_legacy_cleanup_1863.py` + `tests/test_cockpit_requests_api_1856.py` + `tests/test_cockpit_error_envelope.py` + `serve/cockpit/tests/` (excl. test_visual_redesign.py): **86 passed, 0 failed**.
+- AC4 frontmatter now explicitly excludes pre-existing failures in `test_cockpit_view/models/shell_sidecar` (other open tasks). None of those are caused by this removal.
+- AC1–AC3: unchanged — passed in all prior cycles.
+- Builder skip: test-only retry, no test file changes, all tests green against current impl.

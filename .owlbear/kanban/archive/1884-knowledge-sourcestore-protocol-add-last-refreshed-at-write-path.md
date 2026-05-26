@@ -1,10 +1,10 @@
 ---
 id: 1884
 title: 'Knowledge: SourceStore protocol — add last_refreshed_at write path'
-status: done
+status: archived
 priority: needed
 created: 2026-05-26T06:08:59.357802+02:00
-updated: 2026-05-26T09:24:25.161587+02:00
+updated: 2026-05-26T09:42:15.846654+02:00
 tags:
   - knowledge
   - layer-2
@@ -24,7 +24,7 @@ proof_bundle: behavioral
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Objective
@@ -193,3 +193,28 @@ None — no documentation impact.
 
 ### Scratch Cleanup
 No `1884-*` scratch files found.
+
+[[2026-05-26T09:42:15+02:00]]
+## Audit
+
+### Regression Detection
+Quality-runner full suite: 5492 passed, 121+ failed (all pre-existing, unrelated domains: cockpit, MCP kanban, memory, dead-code-sweep). Knowledge-domain scoped run: 94 passed, 0 failed. No regressions attributable to task 1884.
+
+### Intent Verification
+Changed files (`protocols/sources.py`, `stores/sources.py`) stay within `serve/knowledge/` domain. Implementation adds a single field + persistence guard matching stated purpose. No extraneous scope.
+
+### Architect Quality
+Score: 4/5. AC lines are specific, behavioral, and testable. The AC4 same-state path naming was precise enough that the reviewer caught the proof gap. Minor: AC1-2 are implementation-scoped (location-guiding) rather than purely behavioral, but architect addressed this in challenge response.
+
+### Commit Integrity
+- `a5dfbc2b` — `feat: add source refresh watermark update path (#1884, builder)`
+- `ce745de9` — `test: add last_refreshed_at write path tests for SourceStore (#1884, test-writer)`
+- `96c3b2b4` — `test: add same-state ACTIVE no-clobber proof for AC4 (#1884, test-writer)`
+
+All deliverables committed by upstream agents before advancement.
+
+### Deductions
+None.
+
+### Confidence: 1.00
+### Action: Archive

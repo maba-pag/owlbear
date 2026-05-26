@@ -1,10 +1,10 @@
 ---
 id: 1885
 title: 'Knowledge: ContentFetcher protocol — fetch abstraction for refresh'
-status: todo
+status: review
 priority: needed
 created: 2026-05-26T06:08:59.378851+02:00
-updated: 2026-05-26T09:25:43.274108+02:00
+updated: 2026-05-26T09:39:06.158143+02:00
 tags:
   - knowledge
   - layer-2
@@ -321,3 +321,34 @@ Do NOT add clause-level docstring matching (AC5) or tighter return-type assertio
 
 [[2026-05-26T09:25:43+02:00]]
 Architecture Review (Cycle 2): Resolved review-cycle deadlock. Triaged reviewer findings — accepted 3 targeted test additions (model field required-ness, param kind lock, full import allowlist) and declined 2 over-scope demands (clause-level docstring matching, exact return type identity). Added explicit test-writer guidance for bounded scope. Proof bundle remains smoke.
+
+[[2026-05-26T09:39:06+02:00]]
+## Test-Writer Notes
+
+**Test file:** `tests/test_fetcher_protocol_1885.py`
+**Proof bundle:** smoke (retry cycle 3 — targeted additions per Arch Review Cycle 2 guidance)
+
+**Retry-cycle gap-fill (3 architect-approved additions):**
+
+| Finding | Gap | New Tests Added |
+|---------|-----|------------------|
+| AC1-AC3 | No `is_required()` proof for required fields | `test_fetched_document_required_fields_are_required` (title/text/uri), `test_fetch_error_required_fields_are_required` (uri/error), `test_fetch_result_fields_have_defaults` (documents/errors not required) |
+| AC4 | `source` param kind not locked | Added `assert params['source'].kind == inspect.Parameter.POSITIONAL_OR_KEYWORD` to signature test |
+| AC7 | Allowlist only checked owlbear_knowledge.*; non-stdlib/pydantic imports uncaught | Replaced allowlist test with full-allowlist version: rejects any import whose root is not in `{__future__, typing, pydantic}` or exact knowledge paths |
+
+**Test totals:** 16 tests total (13 prior + 3 new), all PASS
+**Fail confirmation:** N/A — test-only retry; implementation correct; direct-to-review advance
+**Lint:** ruff exit 0, clean
+
+**AC coverage table (cycle 3):**
+| AC | Tests | Proof |
+|----|-------|-------|
+| AC1 FetchedDocument | 3 | field values + BoundaryModel subclass + required-field |
+| AC2 FetchError | 3 | field values + BoundaryModel subclass + required-field |
+| AC3 FetchResult | 3 | tuple defaults + BoundaryModel subclass + optional-field |
+| AC4 SourceFetcher | 3 | isinstance + signature/annotations/async + source kind |
+| AC5 docstring | 2 | sections + semantic keywords (smoke scope; clause-level declined by architect) |
+| AC6 __init__ re-export | 1 | namespace + __all__ |
+| AC7 import boundary | 2 | forbidden list + full allowlist (stdlib+pydantic+knowledge roots) |
+
+**Builder skip:** test-only retry, all 16 tests green against current implementation.
