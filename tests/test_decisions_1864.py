@@ -178,8 +178,12 @@ class TestFromAC_EndToEndDecisionResolution:
         assert item["options"][0]["label"] == "Option Alpha"
         assert item["options"][0]["confidence"] == 0.8
         assert item["options"][0]["recommended"] is True
+        assert item["options"][0]["rationale"] == "Preferred option."
         assert item["options"][1]["option_id"] == "option-b"
         assert item["options"][1]["label"] == "Option Beta"
+        assert item["options"][1]["confidence"] == 0.5
+        assert item["options"][1]["recommended"] is False
+        assert item["options"][1]["rationale"] == "Alternative option."
 
     def test_resolve_writes_submitted_option_not_first_or_recommended(
         self,
@@ -274,10 +278,11 @@ class TestFromAC_EndToEndActionResolution:
 
         task = engine.show_task(str(task_id))
         # Exact normalized writeback: free_text="" produces "- **Outcome:** " (empty, not "None")
+        # Use line-boundary assertion to prove exact empty-string outcome, not a substring match.
         assert "## AR: Normalized action" in task.body
-        assert "- **Outcome:** " in task.body
-        assert "**Outcome:** None" not in task.body
-        assert "**Outcome:** null" not in task.body
+        outcome_lines = [line for line in task.body.splitlines() if "**Outcome:**" in line]
+        assert len(outcome_lines) == 1
+        assert outcome_lines[0] == "- **Outcome:** "
         assert task.blocked is False
 
 
