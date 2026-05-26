@@ -149,7 +149,7 @@ class EnrichmentStore(EnrichmentStoreProtocol):
                 SET state = ?, batch_id = NULL, started_at = NULL
                 WHERE state = ?
                   AND started_at IS NOT NULL
-                  AND started_at <= datetime('now', ?)
+                                    AND started_at < datetime('now', ?)
                 """,
                 (
                     EnrichmentState.PENDING.value,
