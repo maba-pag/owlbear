@@ -306,23 +306,99 @@ class ContentStore(ContentStoreProtocol):
         ).fetchall()
         return tuple(self._row_to_chunk(row) for row in rows)
 
-    async def search(  # pragma: no cover
-        self, query: ContentSearchQuery
-    ) -> tuple[ContentSearchResult, ...]:
-        """Search is out of scope for task 1871."""
-        msg = "search() is not implemented yet"
-        raise NotImplementedError(msg)
+    async def search(self, query: ContentSearchQuery) -> tuple[ContentSearchResult, ...]:
+        """Search chunks by vector similarity with optional source filtering."""
+        if not query.text.strip():
+            msg = "query.text must not be empty"
+            raise ValueError(msg)
 
-    def purge_source(self, source_id: str) -> ContentPurgeResult:  # pragma: no cover
-        """Purge is out of scope for task 1871."""
-        _ = source_id
-        msg = "purge_source() is not implemented yet"
-        raise NotImplementedError(msg)
+        query_embedding = self._embed_query(query.text)
+        overfetch = query.top_k * 10 if query.source_ids else query.top_k
+        scopes = list(query.scopes) if query.scopes else None
+        raw_hits: list[tuple[str, float]] = self._vector_store.search_similar(
+            query_embedding,
+            top_k=overfetch,
+            embedding_type="document",
+            scopes=scopes,
+        )
+        if not raw_hits:
+            return ()
 
-    def stats(self) -> ContentStats:  # pragma: no cover
-        """Stats is out of scope for task 1871."""
-        msg = "stats() is not implemented yet"
-        raise NotImplementedError(msg)
+        chunk_ids: list[str] = []
+        seen: set[str] = set()
+        for chunk_id, _score in raw_hits:
+            if chunk_id in seen:
+                continue
+            seen.add(chunk_id)
+            chunk_ids.append(chunk_id)
+
+        chunk_by_id = self._get_chunks_by_ids(tuple(chunk_ids))
+        allowed_sources = set(query.source_ids)
+        results: list[ContentSearchResult] = []
+        returned_ids: set[str] = set()
+        for chunk_id, raw_score in raw_hits:
+            if chunk_id in returned_ids:
+                continue
+            chunk = chunk_by_id.get(chunk_id)
+            if chunk is None:
+                continue
+            if allowed_sources and chunk.source_id not in allowed_sources:
+                continue
+            score = self._clamp_score(raw_score)
+            if score < query.min_score:
+                continue
+            returned_ids.add(chunk_id)
+            results.append(ContentSearchResult(chunk=chunk, score=score))
+
+        results.sort(key=lambda item: item.score, reverse=True)
+        return tuple(results[: query.top_k])
+
+    def purge_source(self, source_id: str) -> ContentPurgeResult:
+        """Remove all documents/chunks/vectors associated with one source."""
+        document_rows = self._db.execute(
+            "SELECT document_id FROM content_documents WHERE source_id = ? ORDER BY document_id ASC",
+            (source_id,),
+        ).fetchall()
+        document_ids = tuple(str(row["document_id"]) for row in document_rows)
+
+        chunk_rows = self._db.execute(
+            "SELECT id FROM content_chunks WHERE source_id = ? ORDER BY chunk_index ASC, id ASC",
+            (source_id,),
+        ).fetchall()
+        chunk_ids = tuple(str(row["id"]) for row in chunk_rows)
+
+        if not document_ids and not chunk_ids:
+            return ContentPurgeResult(source_id=source_id)
+
+        self._delete_vectors(chunk_ids)
+        with self._db:
+            self._db.execute("DELETE FROM content_chunks WHERE source_id = ?", (source_id,))
+            self._db.execute("DELETE FROM content_documents WHERE source_id = ?", (source_id,))
+
+        return ContentPurgeResult(
+            source_id=source_id,
+            document_ids=document_ids,
+            chunk_ids=chunk_ids,
+            vector_ids=chunk_ids,
+        )
+
+    def stats(self) -> ContentStats:
+        """Return table-backed content counts."""
+        documents = int(
+            self._db.execute("SELECT COUNT(*) AS c FROM content_documents").fetchone()["c"]
+        )
+        chunks = int(self._db.execute("SELECT COUNT(*) AS c FROM content_chunks").fetchone()["c"])
+        vectors = int(
+            self._db.execute(
+                """
+                SELECT COUNT(*) AS c
+                FROM content_chunks c
+                JOIN content_documents d ON d.document_id = c.document_id
+                WHERE d.vectors_synced = 1
+                """
+            ).fetchone()["c"]
+        )
+        return ContentStats(documents=documents, chunks=chunks, vectors=vectors)
 
     def _document_id_for(self, request: ContentIngestRequest) -> str:
         identity = request.external_id or request.uri or request.title
@@ -370,6 +446,40 @@ class ContentStore(ContentStoreProtocol):
         if not isinstance(parsed, list):
             return ()
         return tuple(str(item) for item in parsed)
+
+    def _embed_query(self, query_text: str) -> object:
+        embed_hybrid = getattr(self._embedding_provider, "embed_hybrid", None)
+        if callable(embed_hybrid):
+            hybrid = embed_hybrid([query_text])
+            if isinstance(hybrid, (list, tuple)) and hybrid:
+                return hybrid[0]
+
+        dense = self._embedding_provider.embed([query_text])
+        if dense:
+            return dense[0]
+        msg = "embedding provider returned no query embedding"
+        raise ValueError(msg)
+
+    def _get_chunks_by_ids(self, chunk_ids: tuple[str, ...]) -> dict[str, ContentChunk]:
+        if not chunk_ids:
+            return {}
+        result: dict[str, ContentChunk] = {}
+        for chunk_id in chunk_ids:
+            row = self._db.execute(
+                """
+                SELECT id, document_id, source_id, chunk_index, text, content_hash, scope, uri,
+                       section_path_json, trusted, metadata_json, created_at, updated_at
+                FROM content_chunks
+                WHERE id = ?
+                """,
+                (chunk_id,),
+            ).fetchone()
+            if row is not None:
+                result[str(row["id"])] = self._row_to_chunk(row)
+        return result
+
+    def _clamp_score(self, score: float) -> float:
+        return max(0.0, min(1.0, float(score)))
 
     def _upsert_vectors(
         self,
