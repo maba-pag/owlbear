@@ -9,24 +9,34 @@ from owlbear_knowledge.protocols.content import (
     ContentIngestRequest,
     ContentIngestResult,
     ContentIngestState,
+    ContentPurgeResult,
     ContentStore,
 )
+from owlbear_knowledge.protocols.enrichment import EnrichmentPurgeResult
+from owlbear_knowledge.protocols.graph import EvidenceInvalidationResult
 from owlbear_knowledge.protocols.ingest import (
     IngestDocument,
     IngestRequest,
     IngestResult,
     IngestStats,
+    PurgeResult,
+    PurgeStatus,
+    RefreshError,
     RefreshRequest,
     RefreshResult,
 )
 from owlbear_knowledge.protocols.sources import (
+    SourceDeletionInfo,
     SourceHealth,
     SourceHealthReport,
+    SourceState,
     SourceStore,
+    SourceUpdate,
 )
 
 if TYPE_CHECKING:
     from owlbear_knowledge.protocols.enrichment import EnrichmentStore
+    from owlbear_knowledge.protocols.fetcher import SourceFetcher
     from owlbear_knowledge.protocols.graph import GraphStore
 
 
@@ -40,11 +50,13 @@ class IngestCoordinator:
         content: ContentStore,
         enrichment: EnrichmentStore,
         graph: GraphStore,
+        fetcher: SourceFetcher | None = None,
     ) -> None:
         self._sources = sources
         self._content = content
         self._enrichment = enrichment
         self._graph = graph
+        self._fetcher = fetcher
 
     async def ingest(self, request: IngestRequest) -> IngestResult:
         """Ingest a batch of documents and run per-document cascade steps."""
@@ -116,6 +128,103 @@ class IngestCoordinator:
             completed_at=completed_at,
         )
 
+    async def delete_source(self, source_id: str, *, reason: str | None = None) -> PurgeResult:
+        """Delete a source via idempotent D63 cascade semantics.
+
+        The 5-step cascade is deterministic and fail-fast. Per D63, rerunning after
+        partial failures is safe: already-completed state is treated as idempotent
+        progress and remaining steps are attempted.
+        """
+        completed_steps: list[str] = []
+
+        try:
+            source_result = self._sources.delete_source(source_id, reason=reason)
+        except LookupError:
+            source_result = SourceDeletionInfo(
+                source_id=source_id,
+                source_name="",
+                scope="",
+                deleted_at=datetime.now(tz=UTC),
+                reason=reason,
+            )
+        completed_steps.append("sources.delete")
+
+        content_result = ContentPurgeResult(source_id=source_id)
+        enrichment_result = EnrichmentPurgeResult(source_id=source_id)
+        graph_result = EvidenceInvalidationResult()
+
+        try:
+            content_result = self._content.purge_source(source_id)
+        except Exception as exc:  # noqa: BLE001 - partial purge returns structured failure.
+            return PurgeResult(
+                status=PurgeStatus.PARTIAL,
+                completed_steps=tuple(completed_steps),
+                failed_step="content.purge",
+                error=str(exc),
+                source=source_result,
+                content=content_result,
+                enrichment=enrichment_result,
+                graph=graph_result,
+            )
+        completed_steps.append("content.purge")
+
+        chunk_ids = content_result.chunk_ids
+        try:
+            self._enrichment.discard_chunks(chunk_ids)
+        except Exception as exc:  # noqa: BLE001 - partial purge returns structured failure.
+            return PurgeResult(
+                status=PurgeStatus.PARTIAL,
+                completed_steps=tuple(completed_steps),
+                failed_step="enrichment.discard",
+                error=str(exc),
+                source=source_result,
+                content=content_result,
+                enrichment=enrichment_result,
+                graph=graph_result,
+            )
+        completed_steps.append("enrichment.discard")
+
+        try:
+            enrichment_result = self._enrichment.purge_source(source_id)
+        except Exception as exc:  # noqa: BLE001 - partial purge returns structured failure.
+            return PurgeResult(
+                status=PurgeStatus.PARTIAL,
+                completed_steps=tuple(completed_steps),
+                failed_step="enrichment.purge",
+                error=str(exc),
+                source=source_result,
+                content=content_result,
+                enrichment=enrichment_result,
+                graph=graph_result,
+            )
+        completed_steps.append("enrichment.purge")
+
+        try:
+            graph_result = self._graph.invalidate_evidence_by_chunks(chunk_ids)
+        except Exception as exc:  # noqa: BLE001 - partial purge returns structured failure.
+            return PurgeResult(
+                status=PurgeStatus.PARTIAL,
+                completed_steps=tuple(completed_steps),
+                failed_step="graph.invalidate",
+                error=str(exc),
+                source=source_result,
+                content=content_result,
+                enrichment=enrichment_result,
+                graph=graph_result,
+            )
+        completed_steps.append("graph.invalidate")
+
+        return PurgeResult(
+            status=PurgeStatus.COMPLETE,
+            completed_steps=tuple(completed_steps),
+            failed_step=None,
+            error=None,
+            source=source_result,
+            content=content_result,
+            enrichment=enrichment_result,
+            graph=graph_result,
+        )
+
     async def _process_document(
         self,
         request: IngestRequest,
@@ -169,10 +278,67 @@ class IngestCoordinator:
             return outcome
 
     async def refresh(self, request: RefreshRequest) -> RefreshResult:
-        """Refresh is intentionally deferred until dependent protocol tasks complete."""
-        _ = request
-        msg = "refresh() is blocked on #1884 and #1885"
-        raise NotImplementedError(msg)
+        """Refresh ACTIVE sources using the configured fetcher and ingest pipeline."""
+        if self._fetcher is None:
+            return RefreshResult()
+
+        listed_sources = self._sources.list_sources(state=SourceState.ACTIVE)
+        filtered_sources = [
+            source
+            for source in listed_sources
+            if (not request.source_ids or source.id in request.source_ids)
+            and (request.force or source.refreshable)
+        ]
+
+        ingest_results: list[IngestResult] = []
+        errors: list[RefreshError] = []
+        sources_refreshed = 0
+
+        for source in filtered_sources:
+            try:
+                fetch_result = await self._fetcher.fetch_source(source)
+                mapped_documents = tuple(
+                    IngestDocument(
+                        title=document.title,
+                        text=document.text,
+                        uri=document.uri,
+                        external_id=document.external_id,
+                        metadata=dict(document.metadata),
+                    )
+                    for document in fetch_result.documents
+                )
+
+                if mapped_documents:
+                    ingest_result = await self.ingest(
+                        IngestRequest(
+                            source_id=source.id,
+                            documents=mapped_documents,
+                            enrich=source.enrich,
+                        )
+                    )
+                    ingest_results.append(ingest_result)
+
+                refreshed_at = datetime.now(tz=UTC)
+                self._sources.update_source(
+                    source.id,
+                    SourceUpdate(last_refreshed_at=refreshed_at),
+                )
+                sources_refreshed += 1
+            except Exception as exc:  # noqa: BLE001 - batch must continue after per-source failures.
+                errors.append(
+                    RefreshError(
+                        source_id=source.id,
+                        error=str(exc),
+                        timestamp=datetime.now(tz=UTC),
+                    )
+                )
+
+        return RefreshResult(
+            sources_checked=len(filtered_sources),
+            sources_refreshed=sources_refreshed,
+            ingest_results=tuple(ingest_results),
+            errors=tuple(errors),
+        )
 
     def stats(self) -> IngestStats:
         """Aggregate stats from all leaf stores and never raise exceptions."""
