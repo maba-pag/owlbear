@@ -935,3 +935,56 @@ class TestFromAC_EnsureTablesExtended_IndexAndFK:
         fk_rows = db.execute("PRAGMA foreign_key_list(graph_aliases)").fetchall()
         found = any(fk[3] == "entity_id" and fk[2] == "graph_entities" for fk in fk_rows)
         assert found, "graph_aliases must declare FK: entity_id → graph_entities"
+
+
+# ---------------------------------------------------------------------------
+# Retry-gap tests — reviewer round 2 finding
+# ---------------------------------------------------------------------------
+
+# Finding #1 (round 2) — AC2: chunk-scoped exclusivity
+
+
+class TestFromAC_ClaimsForChunk_Exclusivity:
+    """AC2 retry gap (cycle 3): claims_for_chunk must exclude IDs linked via other chunks.
+
+    The prior tests prove that expected IDs appear for a known chunk and that an unknown
+    chunk returns empty. They do not prove isolation — a regression that leaked IDs from
+    another chunk's evidence would still pass the prior suite.
+
+    Architect refined AC2: 'IDs linked via other chunks are excluded.'
+    """
+
+    def test_claims_for_chunk_excludes_entity_ids_from_other_chunk(
+        self, store: SqliteGraphStore, entity_a, entity_b
+    ) -> None:
+        """AC2: entity_id linked only via chunk-B must not appear in claims_for_chunk('chunk-A')."""
+        store.add_evidence(_entity_evidence("chunk-A", entity_a.id))
+        store.add_evidence(_entity_evidence("chunk-B", entity_b.id))
+        result = store.claims_for_chunk("chunk-A")
+        assert entity_b.id not in result.entity_ids, (
+            "entity linked only via chunk-B must not appear in claims for chunk-A"
+        )
+
+    def test_claims_for_chunk_excludes_edge_ids_from_other_chunk(
+        self, store: SqliteGraphStore, entity_a, entity_b, edge_ab
+    ) -> None:
+        """AC2: edge_id linked only via chunk-B must not appear in claims_for_chunk('chunk-A')."""
+        store.add_evidence(_entity_evidence("chunk-A", entity_a.id))
+        store.add_evidence(_edge_evidence("chunk-B", edge_ab.id))
+        # entity_b must have evidence so it is not orphaned during this test
+        store.add_evidence(_entity_evidence("chunk-B", entity_b.id))
+        result = store.claims_for_chunk("chunk-A")
+        assert edge_ab.id not in result.edge_ids, (
+            "edge linked only via chunk-B must not appear in claims for chunk-A"
+        )
+
+    def test_claims_for_chunk_excludes_evidence_ids_from_other_chunk(
+        self, store: SqliteGraphStore, entity_a, entity_b
+    ) -> None:
+        """AC2: evidence record from chunk-B must not appear in claims_for_chunk('chunk-A')."""
+        store.add_evidence(_entity_evidence("chunk-A", entity_a.id))
+        ev_b = store.add_evidence(_entity_evidence("chunk-B", entity_b.id))
+        result = store.claims_for_chunk("chunk-A")
+        assert ev_b.id not in result.evidence_ids, (
+            "evidence record from chunk-B must not appear in claims for chunk-A"
+        )
