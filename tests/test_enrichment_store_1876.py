@@ -637,6 +637,66 @@ class TestFromAC_SuggestIntraDocEdges:
         mock_graph.add_evidence.assert_not_called()
 
     # ------------------------------------------------------------------
+    # AC4 — adversarial: cross-document scoping
+    # ------------------------------------------------------------------
+
+    def test_suggest_scopes_confidence_to_requested_document_only(
+        self, suggest_store: EnrichmentStore, db: sqlite3.Connection
+    ) -> None:
+        """Confidence is computed using only the requested document's chunk count.
+
+        doc-1 has 2 chunks with ent-A and ent-B in both → shared=2, total=2, confidence=1.0.
+        doc-2 also contributes 2 chunks with the same entities. An unscoped implementation
+        would count 4 total chunks and produce confidence=0.5 instead of 1.0.
+        """
+        _insert_chunk(db, "c1", "doc-1")
+        _insert_chunk(db, "c2", "doc-1")
+        _insert_entity_evidence(db, "ev1", "c1", "ent-A")
+        _insert_entity_evidence(db, "ev2", "c2", "ent-A")
+        _insert_entity_evidence(db, "ev3", "c1", "ent-B")
+        _insert_entity_evidence(db, "ev4", "c2", "ent-B")
+        # doc-2: same entities, 2 additional chunks — must not inflate doc-1 total
+        _insert_chunk(db, "c3", "doc-2")
+        _insert_chunk(db, "c4", "doc-2")
+        _insert_entity_evidence(db, "ev5", "c3", "ent-A")
+        _insert_entity_evidence(db, "ev6", "c4", "ent-A")
+        _insert_entity_evidence(db, "ev7", "c3", "ent-B")
+        _insert_entity_evidence(db, "ev8", "c4", "ent-B")
+        result = suggest_store.suggest_intra_doc_edges("doc-1")
+        assert len(result) == 1
+        # Unscoped regression: 2/4 = 0.5; correctly scoped: 2/2 = 1.0
+        assert abs(result[0].confidence - 1.0) < 1e-6
+
+    def test_suggest_does_not_include_entity_pairs_from_other_documents(
+        self, suggest_store: EnrichmentStore, db: sqlite3.Connection
+    ) -> None:
+        """Entity pairs that co-occur only in a different document are not returned.
+
+        doc-1 has one entity with no co-occurring partner (no pair should form).
+        doc-2 has entities C and D co-occurring in 2 chunks (would satisfy the threshold).
+        Calling suggest_intra_doc_edges("doc-1") must return an empty tuple,
+        not doc-2's C-D pair.
+        """
+        # doc-1: single entity, no pair possible
+        _insert_chunk(db, "d1c1", "doc-1")
+        _insert_chunk(db, "d1c2", "doc-1")
+        _insert_entity_evidence(db, "d1ev1", "d1c1", "ent-A-solo")
+        _insert_entity_evidence(db, "d1ev2", "d1c2", "ent-A-solo")
+        # doc-2: C and D co-occur in 2 chunks — meets ≥2 threshold
+        _insert_chunk(db, "d2c1", "doc-2")
+        _insert_chunk(db, "d2c2", "doc-2")
+        _insert_entity_evidence(db, "d2ev1", "d2c1", "ent-C")
+        _insert_entity_evidence(db, "d2ev2", "d2c2", "ent-C")
+        _insert_entity_evidence(db, "d2ev3", "d2c1", "ent-D")
+        _insert_entity_evidence(db, "d2ev4", "d2c2", "ent-D")
+        result = suggest_store.suggest_intra_doc_edges("doc-1")
+        pairs = [
+            frozenset({e.source_entity_id, e.target_entity_id}) for e in result
+        ]
+        assert frozenset({"ent-C", "ent-D"}) not in pairs
+        assert result == ()
+
+    # ------------------------------------------------------------------
     # AC5 — LookupError for unknown document
     # ------------------------------------------------------------------
 
@@ -809,3 +869,55 @@ class TestFromAC_EnsureTables:
             "SELECT name FROM sqlite_master WHERE type='table' AND name='enrich_batches'"
         ).fetchone()
         assert row is not None
+
+    # ------------------------------------------------------------------
+    # AC7 — column-level index verification (stronger than name-match)
+    # ------------------------------------------------------------------
+
+    def test_source_id_index_covers_source_id_column(
+        self, initialised_db: sqlite3.Connection
+    ) -> None:
+        """At least one index on enrich_extractions physically covers the source_id column.
+
+        Reads the CREATE INDEX DDL from sqlite_master to verify the actual indexed column,
+        not just the index name. A miswired index whose name contains 'source_id' but
+        indexes a different column would pass the name-based check but fail here.
+        """
+        ddls = initialised_db.execute(
+            "SELECT sql FROM sqlite_master WHERE type='index' AND tbl_name='enrich_extractions'"
+        ).fetchall()
+        # DDL looks like: CREATE INDEX ... ON enrich_extractions(source_id)
+        # Check the column list explicitly, not just the index name.
+        column_lists = []
+        for row in ddls:
+            sql = row["sql"] or ""
+            # Extract the part between ON enrich_extractions( and )
+            if "ON enrich_extractions(" in sql:
+                col_part = sql.split("ON enrich_extractions(", 1)[1].rstrip(")")
+                column_lists.append(col_part)
+        assert any("source_id" in cols for cols in column_lists), (
+            f"No index DDL on enrich_extractions covers source_id column; DDLs: {[r['sql'] for r in ddls]}"
+        )
+
+    def test_chunk_id_index_covers_chunk_id_column(
+        self, initialised_db: sqlite3.Connection
+    ) -> None:
+        """At least one index on enrich_extractions physically covers the chunk_id column.
+
+        Reads the CREATE INDEX DDL from sqlite_master to verify the actual indexed column,
+        not just the index name. A miswired index whose name contains 'chunk_id' but
+        indexes a different column would pass the name-based check but fail here.
+        """
+        ddls = initialised_db.execute(
+            "SELECT sql FROM sqlite_master WHERE type='index' AND tbl_name='enrich_extractions'"
+        ).fetchall()
+        # DDL looks like: CREATE INDEX ... ON enrich_extractions(chunk_id)
+        column_lists = []
+        for row in ddls:
+            sql = row["sql"] or ""
+            if "ON enrich_extractions(" in sql:
+                col_part = sql.split("ON enrich_extractions(", 1)[1].rstrip(")")
+                column_lists.append(col_part)
+        assert any("chunk_id" in cols for cols in column_lists), (
+            f"No index DDL on enrich_extractions covers chunk_id column; DDLs: {[r['sql'] for r in ddls]}"
+        )
