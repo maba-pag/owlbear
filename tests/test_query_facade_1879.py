@@ -304,6 +304,7 @@ class TestFromAC_QueryFacadeSearch:
         request = QueryRequest(text="query", include_graph=True, graph_hops=3)
         await facade.search(request)
         traversal_query: TraversalQuery = mock_graph.traverse.call_args[0][0]
+        assert isinstance(traversal_query, TraversalQuery)
         assert traversal_query.entity_id == "e1"
         assert traversal_query.max_hops == 3
 
