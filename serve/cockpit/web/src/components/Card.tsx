@@ -1,5 +1,5 @@
 import { PIcon, PTag, type IconName } from '@porsche-design-system/components-react'
-import { motion } from 'framer-motion'
+import { motion } from 'motion/react'
 import type { Task } from '../hooks/useBoard'
 import { computeSignal, type CardSignal } from '../utils/computeSignal'
 

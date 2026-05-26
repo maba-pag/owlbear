@@ -1,6 +1,6 @@
 import { Suspense, useCallback, useRef, useEffect, useMemo, useState, type ComponentType, type CSSProperties } from 'react'
 import { useLocation, useNavigate } from 'react-router'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, motion } from 'motion/react'
 import {
   PBanner,
   PButton,
