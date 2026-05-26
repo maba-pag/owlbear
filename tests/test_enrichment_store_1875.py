@@ -386,3 +386,55 @@ class TestFromAC_EnrichmentStore:
         s = EnrichmentStore(db=db)
         s.ensure_tables()
         s.ensure_tables()  # must not raise
+
+    # ------------------------------------------------------------------
+    # AC1 x AC5 — FAILED item re-enqueue boundary (retry-cycle addition)
+    # Resolves reviewer finding: cross-method contract between AC1 and AC5
+    # was not independently verifiable. Architect re-review confirmed:
+    # enqueue_chunks MAY revive FAILED items to PENDING.
+    # ------------------------------------------------------------------
+
+    def test_enqueue_revives_failed_item_to_pending_and_returns_count_one(
+        self, store: EnrichmentStore
+    ) -> None:
+        """FAILED items revived to PENDING by enqueue_chunks; count reflects revival."""
+        store.enqueue_chunks(("c1",), "src-1")
+        store.claim_batch(EnrichmentParams(batch_size=1, max_retries=1))
+        store.mark_failed("c1", "fatal error")  # attempts=1 >= max_retries=1 → FAILED
+        assert store.stats().failed == 1
+
+        count = store.enqueue_chunks(("c1",), "src-1")
+
+        assert count == 1
+        assert store.stats().pending == 1
+        assert store.stats().failed == 0
+
+    def test_enqueue_preserves_attempts_count_on_failed_item_revival(
+        self, store: EnrichmentStore
+    ) -> None:
+        """Reviving a FAILED item preserves its attempts count (not reset to 0)."""
+        store.enqueue_chunks(("c1",), "src-1")
+        store.claim_batch(EnrichmentParams(batch_size=1, max_retries=1))
+        store.mark_failed("c1", "fatal error")  # attempts=1, state=FAILED
+        store.enqueue_chunks(("c1",), "src-1")  # revive → PENDING
+
+        # Claim to read the item's stored attempts value
+        batch = store.claim_batch(EnrichmentParams(batch_size=1, max_retries=3))
+        assert len(batch.items) == 1
+        item = batch.items[0]
+        assert item.attempts == 1  # preserved, not reset to 0
+
+    def test_enqueue_clears_last_error_on_failed_item_revival(
+        self, store: EnrichmentStore
+    ) -> None:
+        """Reviving a FAILED item clears last_error (AC1: 'last_error cleared')."""
+        store.enqueue_chunks(("c1",), "src-1")
+        store.claim_batch(EnrichmentParams(batch_size=1, max_retries=1))
+        store.mark_failed("c1", "the error message")  # attempts=1, state=FAILED
+        store.enqueue_chunks(("c1",), "src-1")  # revive → PENDING
+
+        # Claim to read the item's stored last_error value
+        batch = store.claim_batch(EnrichmentParams(batch_size=1, max_retries=3))
+        assert len(batch.items) == 1
+        item = batch.items[0]
+        assert item.last_error is None  # cleared on revival
