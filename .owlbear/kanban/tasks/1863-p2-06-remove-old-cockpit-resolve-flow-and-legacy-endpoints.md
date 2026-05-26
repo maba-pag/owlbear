@@ -4,7 +4,7 @@ title: 'P2-06: Remove old Cockpit resolve flow and legacy endpoints'
 status: todo
 priority: important
 created: 2026-05-24T21:00:04.160667+02:00
-updated: 2026-05-26T05:54:21.231179+02:00
+updated: 2026-05-26T08:27:40.974624+02:00
 tags:
   - phase-2
   - scope:cockpit
@@ -26,13 +26,14 @@ ac:
     contract) is removed; LegacyPendingDRResponse interface and dual-format 
     normalization in usePendingDRs.ts are removed; only new /api/requests/ API 
     types remain in frontend code.
-  - Cockpit backend test suites in tests/test_cockpit_* and serve/cockpit/tests/
-    pass green after removal (tests referencing deleted endpoints are updated or
-    removed).
+  - 'Cockpit backend test suites in tests/test_cockpit_* and serve/cockpit/tests/
+    pass green after removal (excluding pre-existing failures in serve/cockpit/tests/test_visual_redesign.py
+    which is a consolidation-test for unrelated #1629); tests referencing deleted
+    endpoints are updated or removed.'
 proof_bundle: behavioral
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-26T08:27:40.974624+02:00
 archival_reason:
 archival_refs: []
 ---
@@ -95,3 +96,156 @@ Planner scope listed `_append_response_section` and `_rewrite_response` as in-sc
 
 ### Verdict: APPROVE (after REFINE)
 ### Action Taken: Corrected scope (removed cross-domain kanban helpers from in-scope), tightened AC2 with 404 output, replaced vague AC3 with concrete file targets (decisions.test.ts, LegacyPendingDRResponse), added AC4 for test-suite health, expanded downstream impact list. Advanced backlog → todo.
+
+[[2026-05-26T06:18:20+02:00]]
+## Test-Writer Notes
+- Test file: tests/test_cockpit_legacy_cleanup_1863.py
+- Classes: TestFromAC_LegacyEndpointRemoval, TestFromAC_FrontendLegacyRemoval
+- Tests per category: happy 2, edge 2, error 1, boundary 4
+- Total: 9 tests, all FAIL
+- ruff: clean
+
+### AC Coverage
+| AC | Tests |
+|----|-------|
+| AC1 (POST /api/decisions/{id}/resolve → 404) | test_post_resolve_existing_decision_approved_returns_404, test_post_resolve_existing_decision_needs_info_returns_404, test_post_resolve_decision_invalid_payload_returns_404 |
+| AC2 (GET /api/decisions/pending → 404) | test_get_decisions_pending_returns_404 |
+| AC3 (frontend decisions.test.ts removed; LegacyPendingDRResponse + normalization removed) | test_frontend_decisions_test_file_removed, test_legacy_pending_dr_response_interface_removed, test_is_pending_requests_payload_guard_removed, test_dual_format_payload_items_access_removed |
+| AC4 (decisions route module removed from disk) | test_old_decisions_route_module_file_does_not_exist |
+
+### Failure evidence
+- AC1 tests: assert 200 == 404 (endpoint exists, processes request)
+- AC1 invalid-payload: assert 422 == 404 (FastAPI validates before path removal)
+- AC2: assert 200 == 404 (endpoint exists)
+- AC3 tests: AssertionError (files/strings still present in codebase)
+- AC4: AssertionError (decisions.py still on disk)
+
+### Design note
+AC1 tests create real pending DR files (with blocked tasks in engine) so the live endpoint resolves them and returns 200. This avoids the false-404 that would occur if the decisions dir is empty (endpoint returns 404 for unknown IDs even before route removal).
+
+[[2026-05-26T06:42:15+02:00]]
+## Builder Notes
+- Files changed:
+  - serve/cockpit/src/owlbear_cockpit/main.py
+  - serve/cockpit/src/owlbear_cockpit/routes/decisions.py (deleted)
+  - serve/cockpit/web/src/hooks/usePendingDRs.ts
+  - serve/cockpit/web/src/__tests__/decisions.test.ts (deleted)
+  - serve/cockpit/web/src/__tests__/usePendingDRs.test.ts
+  - tests/test_cockpit_decisions_api.py (deleted)
+  - tests/test_cockpit_decisions_pydantic_1640.py (deleted)
+  - serve/cockpit/tests/test_decisions_integration.py (deleted)
+  - tests/test_cockpit_notes_cap_1641.py (deleted)
+  - tests/test_cockpit_error_envelope.py
+
+- Implementation summary:
+  - Removed legacy cockpit decisions router registration/import from `main.py`.
+  - Removed legacy backend route module implementing `POST /api/decisions/{id}/resolve` and `GET /api/decisions/pending`.
+  - Removed legacy frontend `decisions.test.ts` contract tests.
+  - Removed dual-format legacy compatibility in `usePendingDRs.ts`; hook now consumes only new `/api/requests/pending` array payload.
+  - Updated durable `usePendingDRs` fixture expectations to new request payload shape.
+  - Removed stale backend durable tests that asserted deleted `/api/decisions/*` contracts and removed stale carve-out assertion in `test_cockpit_error_envelope.py`.
+
+- GREEN evidence (quality-runner):
+  - `tests/test_cockpit_legacy_cleanup_1863.py`: 9 passed, 0 failed.
+  - Frontend impacted suite:
+    - `serve/cockpit/web/src/__tests__/usePendingDRs.test.ts`
+    - `serve/cockpit/web/src/__tests__/ResolveWiring_1857.test.tsx`
+    - `serve/cockpit/web/src/__tests__/ResolveModal.test.tsx`
+    - `serve/cockpit/web/src/__tests__/ActionResolver_1859.test.tsx`
+    - Result: 48 passed, 0 failed.
+    - Coverage snapshot: overall 64.4%; `usePendingDRs.ts` 95.34%.
+  - Backend impacted suite:
+    - `tests/test_cockpit_legacy_cleanup_1863.py`
+    - `tests/test_cockpit_error_envelope.py`
+    - `tests/test_cockpit_requests_api_1856.py`
+    - Result: 73 passed, 0 failed.
+
+- Lint status:
+  - ruff: clean
+  - eslint (scoped frontend paths): clean
+
+- Commit:
+  - 3677ebf8
+  - `refactor: remove legacy cockpit decisions flow (#1863, builder)`
+
+[[2026-05-26T07:11:09+02:00]]
+## Review Evidence
+- Verdict: FAIL
+- Routing signal: FAIL #1863 -> todo | omitted frontend durable tests still assume the legacy count/items payload; independent scoped rerun found 2 failing tests outside the builder proof slice.
+- AC evidence summary:
+  - AC1: PASS on implementation and task-scoped proof. Legacy resolve route is no longer registered in `serve/cockpit/src/owlbear_cockpit/main.py:32,47`, new structured resolve route is in `serve/cockpit/src/owlbear_cockpit/routes/requests.py:119`, and the task RED/GREEN check covering `POST /api/decisions/{id}/resolve -> 404` passed per builder evidence (`.owlbear/kanban/tasks/1863-p2-06-remove-old-cockpit-resolve-flow-and-legacy-endpoints.md:148-160`).
+  - AC2: PASS on implementation and task-scoped proof. New pending route is `GET /api/requests/pending` in `serve/cockpit/src/owlbear_cockpit/routes/requests.py:107`, and the task cleanup test covering `GET /api/decisions/pending -> 404` passed per builder evidence (`.owlbear/kanban/tasks/1863-p2-06-remove-old-cockpit-resolve-flow-and-legacy-endpoints.md:148-160`).
+  - AC3: FAIL. Production hook cleanup is present (`serve/cockpit/web/src/hooks/usePendingDRs.ts:77,83`), and task-scoped cleanup tests cover the deleted file/module checks (`tests/test_cockpit_legacy_cleanup_1863.py:170,189`). But an active durable frontend test still mocks the retired wrapped payload shape with `count/items` and names the old `/api/decisions/pending` contract (`serve/cockpit/web/src/__tests__/DecisionContract.hook.test.ts:63,67-68,98-99`). Independent `quality-runner` verification on the omitted frontend proof slice found 2 failures: `expected [] to have a length of 1 but got +0` and `TypeError: Cannot convert undefined or null to object`. This is a real stale-test gap, not a source-code defect.
+  - AC4: FAIL on proof sufficiency. The task AC requires backend suite health across `tests/test_cockpit_*` and `serve/cockpit/tests/` (`.owlbear/kanban/tasks/1863-p2-06-remove-old-cockpit-resolve-flow-and-legacy-endpoints.md:29-30`), but the builder packet only reports a narrowed backend subset (`.owlbear/kanban/tasks/1863-p2-06-remove-old-cockpit-resolve-flow-and-legacy-endpoints.md:156-160`). I independently spot-checked the omitted `serve/cockpit/tests/` slice and found no backend failure, but the builder evidence as recorded does not fully substantiate the AC4 claim.
+
+| # | AC Line | Finding | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | AC3 | Durable frontend contract tests were not fully updated for the new `/api/requests/pending` array payload; an omitted active test still uses legacy `count/items` data and now fails against the correct hook implementation. | `serve/cockpit/web/src/__tests__/DecisionContract.hook.test.ts:63,67-68,98-99`; `serve/cockpit/web/src/hooks/usePendingDRs.ts:77,83`; independent quality-runner rerun on omitted frontend proof slice reported 2 failures (`expected [] to have a length of 1`, `TypeError: Cannot convert undefined or null to object`). | todo |
+| 2 | AC4 | Builder evidence does not cover the full backend suite claim written into the task AC; only a narrowed subset was reported in the proof packet. | Task AC: `.owlbear/kanban/tasks/1863-p2-06-remove-old-cockpit-resolve-flow-and-legacy-endpoints.md:29-30`; builder proof packet: `.owlbear/kanban/tasks/1863-p2-06-remove-old-cockpit-resolve-flow-and-legacy-endpoints.md:156-160`. | todo |
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | test-writer | Update or remove stale frontend durable tests that still model the retired wrapped decision payload; ensure the remaining hook contract tests use `PendingRequestResponse[]` from `/api/requests/pending`. | serve/cockpit/web/src/__tests__/DecisionContract.hook.test.ts, serve/cockpit/web/src/__tests__/DecisionContract.test.tsx | `DecisionContract.hook.test.ts:63,67-68,98-99`; quality-runner failure excerpt in review note |
+| 2 | test-writer | Provide proof that the AC4 suite-health claim is satisfied by recording a backend run aligned to the task AC (`tests/test_cockpit_*` and `serve/cockpit/tests/`), or tighten the task AC if that breadth is not intended. | tests/test_cockpit_*, serve/cockpit/tests/, .owlbear/kanban/tasks/1863-p2-06-remove-old-cockpit-resolve-flow-and-legacy-endpoints.md | Task AC lines 29-30 vs builder packet lines 156-160 |
+
+## Observations
+- The implementation surface itself looks correct. Production backend wiring now exposes only the structured requests routes (`serve/cockpit/src/owlbear_cockpit/main.py:32,47`; `serve/cockpit/src/owlbear_cockpit/routes/requests.py:107,119`), and no live production reference to `/api/decisions/*` was found in `serve/cockpit/src/**`.
+- Independent backend spot-checking did not surface a backend failure in `serve/cockpit/tests/`; the current blocker is stale/omitted proof on the frontend side plus incomplete AC4 evidence, so routing to `todo` is appropriate rather than `in-progress`.
+
+[[2026-05-26T07:38:47+02:00]]
+## Test-Writer Notes
+- Retry: 2 stale durable hook tests updated in `serve/cockpit/web/src/__tests__/DecisionContract.hook.test.ts`.
+- Root cause: mock payloads used old wrapped `{count, items: [{id, request_type, created, body_preview}]}` shape; hook now expects `PendingRequestResponse[]` array with fields `request_id`, `kind`, `created_at`, `summary`.
+- Fix: replaced both `makeOkFetch({count, items})` calls with `makeOkFetch([{request_id, kind, created_at, summary, options}])`. Assertions unchanged — normalized output field names (`id`, `request_type`, `created`, `body_preview`) are stable.
+- `DecisionContract.test.tsx`: no changes needed — mocks `usePendingDRs` at hook level, unaffected by payload shape.
+- Frontend verification: `DecisionContract.hook.test.ts` + `DecisionContract.test.tsx` → 9 passed, 3 skipped, 0 failed.
+- AC4 backend suite (`tests/test_cockpit_legacy_cleanup_1863.py`, `tests/test_cockpit_requests_api_1856.py`, `tests/test_cockpit_error_envelope.py`, `serve/cockpit/tests/`) → 87 passed, 0 failed in task scope. 5 pre-existing failures in `test_visual_redesign.py` (Playwright e2e + inline-style budget) are unrelated to this task.
+- ESLint: clean.
+- Commit: f31907d3 — `test: update DecisionContract.hook tests to new PendingRequestResponse[] shape (#1863, test-writer)`
+- Builder skip: test-only retry, all tests green against current impl.
+
+[[2026-05-26T07:58:56+02:00]]
+## Review Evidence
+- Verdict: FAIL
+- Routing signal: FAIL #1863 -> backlog | AC4 remains unmet as written: the retry evidence narrows backend proof to task scope and explicitly admits 5 failures in serve/cockpit/tests, so the second review cycle must escalate the contract.
+- AC evidence summary:
+  - AC1: PASS. The legacy resolve path is no longer part of the live Cockpit API surface: [serve/cockpit/src/owlbear_cockpit/main.py](serve/cockpit/src/owlbear_cockpit/main.py#L47) registers the new requests router, [serve/cockpit/src/owlbear_cockpit/routes/requests.py](serve/cockpit/src/owlbear_cockpit/routes/requests.py#L119) exposes the structured resolve endpoint, and the task cleanup proof covers the old `POST /api/decisions/{id}/resolve -> 404` contract in [tests/test_cockpit_legacy_cleanup_1863.py](tests/test_cockpit_legacy_cleanup_1863.py#L120).
+  - AC2: PASS. The only live pending-list route is [serve/cockpit/src/owlbear_cockpit/routes/requests.py](serve/cockpit/src/owlbear_cockpit/routes/requests.py#L107), and the task cleanup proof covers `GET /api/decisions/pending -> 404` in [tests/test_cockpit_legacy_cleanup_1863.py](tests/test_cockpit_legacy_cleanup_1863.py#L165).
+  - AC3: PASS. The frontend hook now accepts only the new array payload shape via [serve/cockpit/web/src/hooks/usePendingDRs.ts](serve/cockpit/web/src/hooks/usePendingDRs.ts#L52), [serve/cockpit/web/src/hooks/usePendingDRs.ts](serve/cockpit/web/src/hooks/usePendingDRs.ts#L77), and [serve/cockpit/web/src/hooks/usePendingDRs.ts](serve/cockpit/web/src/hooks/usePendingDRs.ts#L83). The cleanup tests still prove the legacy file/type/guard removals in [tests/test_cockpit_legacy_cleanup_1863.py](tests/test_cockpit_legacy_cleanup_1863.py#L189), [tests/test_cockpit_legacy_cleanup_1863.py](tests/test_cockpit_legacy_cleanup_1863.py#L195), [tests/test_cockpit_legacy_cleanup_1863.py](tests/test_cockpit_legacy_cleanup_1863.py#L200), and [tests/test_cockpit_legacy_cleanup_1863.py](tests/test_cockpit_legacy_cleanup_1863.py#L205). The retry also fixes the previously stale durable hook proof by using `request_id` array payload fixtures in [serve/cockpit/web/src/__tests__/DecisionContract.hook.test.ts](serve/cockpit/web/src/__tests__/DecisionContract.hook.test.ts#L63), [serve/cockpit/web/src/__tests__/DecisionContract.hook.test.ts](serve/cockpit/web/src/__tests__/DecisionContract.hook.test.ts#L68), [serve/cockpit/web/src/__tests__/DecisionContract.hook.test.ts](serve/cockpit/web/src/__tests__/DecisionContract.hook.test.ts#L92), and [serve/cockpit/web/src/__tests__/DecisionContract.hook.test.ts](serve/cockpit/web/src/__tests__/DecisionContract.hook.test.ts#L97).
+  - AC4: FAIL. The task AC literally requires backend suites in `tests/test_cockpit_*` and `serve/cockpit/tests/` to pass green after removal, as written in [.owlbear/kanban/tasks/1863-p2-06-remove-old-cockpit-resolve-flow-and-legacy-endpoints.md](.owlbear/kanban/tasks/1863-p2-06-remove-old-cockpit-resolve-flow-and-legacy-endpoints.md#L29). The retry evidence still narrows that claim to `task scope` and explicitly records `5 pre-existing failures in test_visual_redesign.py`, which lives under [serve/cockpit/tests/test_visual_redesign.py](serve/cockpit/tests/test_visual_redesign.py). See the retry note in [.owlbear/kanban/tasks/1863-p2-06-remove-old-cockpit-resolve-flow-and-legacy-endpoints.md](.owlbear/kanban/tasks/1863-p2-06-remove-old-cockpit-resolve-flow-and-legacy-endpoints.md#L202). Because this is already the second review cycle after the earlier reject in [.owlbear/kanban/tasks/1863-p2-06-remove-old-cockpit-resolve-flow-and-legacy-endpoints.md](.owlbear/kanban/tasks/1863-p2-06-remove-old-cockpit-resolve-flow-and-legacy-endpoints.md#L173), the remaining blocker is contract/proof quality and routes to backlog.
+
+| # | AC Line | Finding | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | AC4 | The retry still proves only task-scoped backend health and explicitly admits failures inside `serve/cockpit/tests/`, so the literal AC cannot be satisfied on this review cycle. | Task AC: [.owlbear/kanban/tasks/1863-p2-06-remove-old-cockpit-resolve-flow-and-legacy-endpoints.md](.owlbear/kanban/tasks/1863-p2-06-remove-old-cockpit-resolve-flow-and-legacy-endpoints.md#L29); retry evidence: [.owlbear/kanban/tasks/1863-p2-06-remove-old-cockpit-resolve-flow-and-legacy-endpoints.md](.owlbear/kanban/tasks/1863-p2-06-remove-old-cockpit-resolve-flow-and-legacy-endpoints.md#L202); failing suite location: [serve/cockpit/tests/test_visual_redesign.py](serve/cockpit/tests/test_visual_redesign.py) | backlog |
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Refine AC4 to the intended impacted-backend verification boundary or split the unrelated `serve/cockpit/tests/test_visual_redesign.py` failures into separate follow-up work; this task cannot PASS while AC4 requires the full suite to be green and the retry evidence admits 5 failures in that suite. | .owlbear/kanban/tasks/1863-p2-06-remove-old-cockpit-resolve-flow-and-legacy-endpoints.md, serve/cockpit/tests/test_visual_redesign.py | Task AC line 29; retry evidence line 202; prior review line 173 |
+
+## Observations
+- The implementation surface itself is consistent with the removal goal. The live Cockpit routes are the structured requests endpoints in [serve/cockpit/src/owlbear_cockpit/routes/requests.py](serve/cockpit/src/owlbear_cockpit/routes/requests.py#L107) and [serve/cockpit/src/owlbear_cockpit/routes/requests.py](serve/cockpit/src/owlbear_cockpit/routes/requests.py#L119), and the legacy route module is covered as absent by [tests/test_cockpit_legacy_cleanup_1863.py](tests/test_cockpit_legacy_cleanup_1863.py#L170).
+- Independent narrow verification on the omitted durable hook file found no active failure, but the test still feeds the retired wrapped payload shape in [serve/cockpit/web/src/__tests__/usePendingDRs.polling-active.test.ts](serve/cockpit/web/src/__tests__/usePendingDRs.polling-active.test.ts#L20) to the real hook and only asserts fetch-call counts in [serve/cockpit/web/src/__tests__/usePendingDRs.polling-active.test.ts](serve/cockpit/web/src/__tests__/usePendingDRs.polling-active.test.ts#L53), [serve/cockpit/web/src/__tests__/usePendingDRs.polling-active.test.ts](serve/cockpit/web/src/__tests__/usePendingDRs.polling-active.test.ts#L66), and [serve/cockpit/web/src/__tests__/usePendingDRs.polling-active.test.ts](serve/cockpit/web/src/__tests__/usePendingDRs.polling-active.test.ts#L79). Because [serve/cockpit/web/src/hooks/usePendingDRs.ts](serve/cockpit/web/src/hooks/usePendingDRs.ts#L83) maps only array payloads and [serve/cockpit/web/src/hooks/usePendingDRs.ts](serve/cockpit/web/src/hooks/usePendingDRs.ts#L92) resets to error state on mismatch, that file is a weak durable regression guard but not the blocking reason for this verdict.
+
+[[2026-05-26T08:12:34+02:00]]
+## Architecture Review (AC4 Refinement)
+
+### Context
+Reviewer routed task back to backlog after second FAIL: AC4 as written required full suite health across `tests/test_cockpit_*` and `serve/cockpit/tests/`, but `serve/cockpit/tests/test_visual_redesign.py` has 5 pre-existing failures (Playwright e2e + inline-style budget) from unrelated consolidation task #1629.
+
+### Action
+Refined AC4 to explicitly exclude `serve/cockpit/tests/test_visual_redesign.py` from the suite-health gate. This is the "suite gate debt inheritance" pitfall — gating a removal task on unrelated visual-redesign consolidation failures is incorrect.
+
+### Evidence
+- `serve/cockpit/tests/test_visual_redesign.py` tests Playwright e2e subprocess gates, inline-style budgets, and dual-theme accessibility for #1629. Zero overlap with decisions endpoint removal.
+- Builder + test-writer evidence already demonstrates all task-impacted backend and frontend tests pass (87 passed in scoped backend, 48 passed in frontend, 9 task-specific tests green).
+- AC1-AC3 already PASS per both review cycles.
+
+### Proof-Bundle Validation
+- Planner assignment: behavioral
+- Final bundle: behavioral
+- Test-writer: PROCEED (already complete — task is in retry cycle)
+
+### Verdict: APPROVE (REFINE AC4 + re-advance)
+AC4 scoped to exclude known pre-existing unrelated failures. All other AC lines remain unchanged. Task returns to `todo` for pipeline continuation.
