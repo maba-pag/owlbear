@@ -1,10 +1,10 @@
 ---
 id: 1859
 title: 'P2-02: Action resolver UI with Complete button'
-status: todo
+status: archived
 priority: needed
 created: 2026-05-24T20:59:19.178037+02:00
-updated: 2026-05-26T00:28:27.268675+02:00
+updated: 2026-05-26T02:25:40.362779+02:00
 tags:
   - phase-2
   - scope:cockpit-web
@@ -30,7 +30,7 @@ proof_bundle: behavioral
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 Brief: see parent #1850 and `.owlbear/briefs/draft-decision-request-data-model/brief.md`
@@ -165,3 +165,147 @@ Brief: see parent #1850 and `.owlbear/briefs/draft-decision-request-data-model/b
 ## Observations
 - Direct source inspection matches the task AC on the shipped code path: serve/cockpit/web/src/components/ResolveModal.tsx:113-115, 162, 444, 508 and serve/cockpit/web/src/Shell.tsx:845-848.
 - The notes control remains slightly ambiguous on the source side because serve/cockpit/web/src/components/ResolveModal.tsx:462 only handles onChange while neighboring PDS form controls often pair onChange and onInput at serve/cockpit/web/src/components/TaskFieldsEditor.tsx:742-743 and 837-838. If the corrected PDS driver still leaves AC2 red, the next cycle should route back to in-progress for a source-side fix.
+
+[[2026-05-26T00:42:01+02:00]]
+## Test-Writer Notes
+- Retry cycle — addressed reviewer Required Follow-up #2.
+- Test file: `serve/cockpit/web/src/__tests__/ActionResolver_1859.test.tsx`
+- Class: `TestFromAC_ActionResolver`
+- Toolchain: vitest (`npm test` in `serve/cockpit/web/`)
+
+### Change made
+Updated `ac2 edge` test to fire the PDS CustomEvent contract (`new CustomEvent('change', { detail: { value: '...' }, bubbles: true })`) instead of `fireEvent.change` with native `target.value`. This matches the production `p-textarea` event path.
+
+### Outcome
+Using the correct PDS driver **localizes a builder defect**: `notes` state does not update via the `CustomEvent detail.value` path. `readControlValue` tries `target.value` first — this is `undefined` for the custom element in jsdom — but the CustomEvent fires without triggering `setNotes`. Result: free_text sends `null` instead of the trimmed text.
+
+### Test results
+| Test | Status |
+|------|--------|
+| ac1(a) happy × 2 | PASS |
+| ac1(a) edge (not in details) | PASS |
+| ac1(a) decision-nonregression | PASS |
+| ac1(b-e) compound | PASS |
+| ac2 happy (bare complete payload) | PASS |
+| **ac2 edge (free_text trimming — PDS driver)** | **FAIL** |
+| ac3 integration | PASS |
+
+**Total: 17 pass, 1 fail — ac2 edge is the RED test that requires builder fix**
+
+### ResolveModal.test.tsx
+All 10 tests pass (unchanged).
+
+### Lint
+eslint clean on modified test file.
+
+### Commit
+2705d589 — `test: fix ac2 edge driver to PDS CustomEvent path (#1859, test-writer)`
+
+### Builder directive
+The `readControlValue` handler reads `target.value` first and only falls through to `detail.value` when `target.value` is not a string. In jsdom + vitest with PDS custom elements, the `CustomEvent` dispatch does not trigger the React `onChange` handler for `p-textarea`. Builder must fix the notes capture path so the `detail.value` route is exercised — either by ensuring the `onChange` handler fires on CustomEvents, or by aligning the event handling to the PDS component lifecycle.
+
+[[2026-05-26T01:07:14+02:00]]
+## Builder Notes
+- Files changed:
+  - serve/cockpit/web/src/components/ResolveModal.tsx
+
+- Fixes applied:
+  - Added robust notes capture for `p-textarea` by wiring host-level `change`/`input` listeners once the host element mounts.
+  - Added `onInput` alongside `onChange` on the notes control so both PDS event paths update state.
+  - Updated `readControlValue` to prefer `event.detail.value` before `event.target.value` for custom-element event payloads.
+  - Kept decision-option rendering stable while guarding optional fixture fields (`confidence`, `rationale`) to avoid runtime errors in wiring tests.
+
+- Quality-runner evidence (scoped behavioral bundle):
+  - Tests: 52 passed, 0 failed, 0 skipped
+  - Suite paths:
+    - serve/cockpit/web/src/__tests__/ResolveOptionCards_1858.test.tsx
+    - serve/cockpit/web/src/__tests__/ResolveWiring_1857.test.tsx
+    - serve/cockpit/web/src/__tests__/ActionResolver_1859.test.tsx
+    - serve/cockpit/web/src/__tests__/ResolveModal.test.tsx
+  - Lint: clean=true (no violations)
+  - Coverage (target module): ResolveModal.tsx pct=90.11 (stmts=90.11, branches=74.43, funcs=95)
+
+- Evidence summary:
+  - AC2 edge now passes with PDS CustomEvent driver; action resolve payload includes trimmed `free_text` when notes are provided.
+  - AC1 and AC3 remain green in task and adjacent resolver suites.
+
+- Commit:
+  - de7307d0
+  - fix: capture action notes from PDS textarea events (#1859, builder)
+
+[[2026-05-26T01:27:16+02:00]]
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation (one line): PASS #1859 -> docs | AC mapped to code and evidence sufficient.
+- Independent verification: quality-runner rerun matched the builder packet exactly: 52 passed, 0 failed, 0 skipped; eslint clean; coverage for ResolveModal.tsx 90%; errors none.
+- Blocking findings: none.
+- AC evidence map:
+| AC Line | Code Evidence | Test Evidence | Status |
+|---|---|---|---|
+| AC1 | serve/cockpit/web/src/components/ResolveModal.tsx:337,360,419,458,519 | serve/cockpit/web/src/__tests__/ActionResolver_1859.test.tsx:208,224,227,261,266,270,275,276 | PASS |
+| AC2 | serve/cockpit/web/src/components/ResolveModal.tsx:114-116,270-271 | serve/cockpit/web/src/__tests__/ActionResolver_1859.test.tsx:283,316-318,322,361-363 | PASS |
+| AC3 | serve/cockpit/web/src/Shell.tsx:846-848; serve/cockpit/web/src/hooks/CockpitProvider.tsx:196; serve/cockpit/web/src/pages/DecisionsPage.tsx:77 | serve/cockpit/web/src/__tests__/ActionResolver_1859.test.tsx:387,399,437,448 | PASS |
+
+## Observations
+- Durable regression coverage remains in place for the decision path and error handling through serve/cockpit/web/src/__tests__/ResolveModal.test.tsx:85,98,153,182-183,244,272, which reduces risk from the action-specific notes-event fix.
+- Challenger flagged AC3's "without full page navigation" clause as more source-backed than route-asserted. Given serve/cockpit/web/src/Shell.tsx:846-848 contains only refetch/close work and the independent quality-runner rerun reproduced the scoped proof surface, this is not blocking.
+
+[[2026-05-26T01:41:28+02:00]]
+## Docs Gate
+
+**Verdict: DONE #1859 -> done | docs gate passed**
+
+### Checklist
+
+**Item 1 — README Verification**
+- Convention mapping: `serve/cockpit/web/src/components/ResolveModal.tsx` → `serve/cockpit/README.md`
+- Layer 1 grep: no existing #1859 entry in README before this run.
+- Layer 2 editorial: #1857 entry already documented the action-kind "Complete" button stub; #1859 delivers the full action resolver UX (body visibility, notes textarea, PDS event handling fix) — content gap confirmed.
+- Fix applied: added #1859 bullet after #1857 in Frontend Surface section documenting `resolve-action-body`, `resolve-notes`, payload shape, and PDS `detail.value` fix. Updated Decision behavior summary line to include #1859.
+
+**Item 2 — External Attribution**
+- N/A — no external sources influenced this implementation.
+
+**Item 3 — Research Doc**
+- N/A — no research artifact for this task.
+
+**Item 4 — Deletion Detection**
+- No symbols, flags, or endpoints removed by this task.
+
+### Files Updated
+- `serve/cockpit/README.md` — added #1859 bullet, updated decision UX summary line.
+
+### Commit
+- `09ecf31d` — `docs: document action resolver UX delivery (#1859, doc-writer)`
+
+### Scratch Cleanup
+- No `1859-*` scratch files existed.
+
+[[2026-05-26T02:25:40+02:00]]
+## Audit
+
+### Regression Detection
+Independent vitest regression on clean HEAD: task-scoped suite (ActionResolver_1859, ResolveModal, ResolveOptionCards_1858, ResolveWiring_1857) = 52 passed, 0 failed. Full-suite failures (decisions.test.ts, ResolveModalUX.test.tsx, PModal.coverage.test.tsx, DecisionContract.test.tsx) confirmed pre-existing via checkout to pre-task commit eab600fa~1 (same 22 failures). No regressions introduced by this task. Lint: single unrelated violation in MemoryTab_1671.test.tsx (pre-existing). Python suite: not in domain scope (frontend-only task); recent full runs exit 0.
+
+### Intent Verification
+Changed files: ResolveModal.tsx, ActionResolver_1859.test.tsx, serve/cockpit/README.md — all within scope:cockpit-web/frontend domain. Implementation delivers action resolver body display, complete button, and PDS textarea notes capture per stated purpose. No extraneous scope.
+
+### Architect Quality
+AC refined after challenger feedback with exact testids, payload shapes, and DOM discriminators. Specificity high. Edge cases addressed (free_text trimming, details vs non-details). Score: 4/5 — needed one refinement round but architect responded effectively.
+
+### Commit Integrity
+- 276606aa test: add behavioral RED tests (#1859, test-writer)
+- eab600fa feat: implement action resolver complete flow (#1859, builder)
+- 2705d589 test: fix ac2 edge driver to PDS CustomEvent path (#1859, test-writer)
+- de7307d0 fix: capture action notes from PDS textarea events (#1859, builder)
+- 09ecf31d docs: document action resolver UX delivery (#1859, doc-writer)
+
+All commits properly formatted with task reference and agent attribution.
+
+### Scoring
+- Starting: 1.00
+- Deductions: none
+- Confidence: 1.00
+
+### Action
+ARCHIVE — confidence 1.00

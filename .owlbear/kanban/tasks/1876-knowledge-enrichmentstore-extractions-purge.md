@@ -4,7 +4,7 @@ title: 'Knowledge: EnrichmentStore — extractions & purge'
 status: research
 priority: needed
 created: 2026-05-25T19:04:07.626934+02:00
-updated: 2026-05-25T19:04:07.626934+02:00
+updated: 2026-05-26T00:40:35.899411+02:00
 tags:
   - knowledge
   - layer-1
@@ -14,17 +14,15 @@ depends_on:
   - 1875
   - 1873
 ac:
-  - submit_extractions(batch_id, chunk_id, entities, relations) resolves 
-    local_ref strings to entity IDs; entities created via Graph.upsert_entity; 
-    chunk transitions to COMPLETED
+  - submit_extractions(chunk_id, entities, relations) resolves local_ref strings
+    to entity IDs via Graph.upsert_entity; transitions chunk to COMPLETED
   - Relations reference entities by local_ref; resolution maps local_ref to 
-    entity_id from same submission or prior submissions in same batch
-  - suggest_intra_doc_edges(chunk_ids) returns SuggestedEdge tuples for entities
-    appearing in multiple chunks of same document
+    entity_id from same submission
+  - suggest_intra_doc_edges(document_id) returns SuggestedEdge tuples for 
+    entities appearing in multiple chunks of same document
   - purge_source(source_id) removes all enrichment state for that source; 
     returns EnrichmentPurgeResult
-  - Submit fails cleanly if batch_id is unknown or chunk is not CLAIMED in that 
-    batch
+  - Submit raises LookupError if chunk_id is not in IN_PROGRESS state
 blocked: false
 block_reason:
 claimed_at:

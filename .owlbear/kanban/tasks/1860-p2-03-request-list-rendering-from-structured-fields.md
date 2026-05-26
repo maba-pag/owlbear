@@ -1,10 +1,10 @@
 ---
 id: 1860
 title: 'P2-03: Request list rendering from structured fields'
-status: backlog
+status: todo
 priority: needed
 created: 2026-05-24T20:59:27.659879+02:00
-updated: 2026-05-26T01:45:04.875756+02:00
+updated: 2026-05-26T02:01:07.786439+02:00
 tags:
   - phase-2
   - scope:cockpit-web
@@ -247,3 +247,45 @@ AC was specific after refinement (testids, field sources, width formula). Minor 
 | # | Target Agent | Action Required | File(s) | Evidence |
 |---|-------------|----------------|---------|----------|
 | 1 | test-writer | Curate DecisionContract.test.tsx:415 stale assertion: update to expect agent attribution per AC1 structured-field contract (item.agent now rendered in card) | serve/cockpit/web/src/__tests__/DecisionContract.test.tsx | Regression: line 415 asserts not.toContain("builder") but AC1 renders item.agent; quality-runner full-suite failure |
+
+[[2026-05-26T02:01:07+02:00]]
+## Architecture Review (re-entry from auditor rejection)
+
+### Context
+Task returned from auditor with confidence .90 and one attributable regression: `DecisionContract.test.tsx:415` asserts `item.agent` is NOT in primary meta, but AC1 explicitly renders `item.agent` attribution. This is the same stale-assertion category already fixed in `DecisionsPage_1645.test.tsx` and `DecisionsPage_1688.test.tsx` during the previous retry.
+
+### Evaluation
+AC unchanged and still precise. Implementation complete and reviewer-verified. No architecture change needed.
+
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Same as prior review |
+| Interface clarity | PASS | AC names exact testids, field sources, width formula |
+| Dependency correctness | PASS | No new deps |
+| Module layering | PASS | No change |
+| TDD compliance | PASS | Test-writer must curate 1 stale assertion in DecisionContract.test.tsx:415 |
+| KISS/YAGNI | PASS | No change |
+| Premise challenge | PASS | No change |
+| Pattern consistency | PASS | No change |
+| Security surface | PASS | Display-only |
+| Single domain | PASS | Cockpit web frontend only |
+
+### Required Test Curation
+- File: `serve/cockpit/web/src/__tests__/DecisionContract.test.tsx:415`
+- Current: `expect(...textContent).not.toContain('builder')` — asserts agent NOT shown
+- Required: update to expect agent attribution IS shown per AC1 structured-field contract
+- Scope: single assertion line; same pattern as the 1645/1688 curation already completed
+
+### Proof-Bundle Validation
+- Planner assignment: behavioral
+- Final bundle: behavioral
+- Test-writer: PROCEED (curate stale assertion only)
+
+### Design Diverge
+- Skipped — re-entry; no design changes
+
+### Challenge Results
+- Skipped — re-entry with narrow scope (single stale test assertion); no AC or architecture change
+
+### Verdict: APPROVE (re-entry)
+### Action Taken: Re-approved to todo. Test-writer must curate DecisionContract.test.tsx:415 to align with AC1 agent-attribution contract, then builder-skip applies if all suites pass against current source.

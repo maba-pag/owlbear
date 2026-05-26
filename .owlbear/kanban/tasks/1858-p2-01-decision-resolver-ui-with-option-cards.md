@@ -1,10 +1,10 @@
 ---
 id: 1858
 title: 'P2-01: Decision resolver UI with option cards'
-status: review
+status: done
 priority: needed
 created: 2026-05-24T20:59:10.619728+02:00
-updated: 2026-05-26T00:32:47.104919+02:00
+updated: 2026-05-26T02:00:34.813271+02:00
 tags:
   - phase-2
   - scope:cockpit-web
@@ -28,7 +28,7 @@ ac:
 proof_bundle: behavioral
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-26T02:00:34.813271+02:00
 archival_reason:
 archival_refs: []
 ---
@@ -208,3 +208,83 @@ AC coverage (retry gaps filled):
 
 Lint: ESLint 0 violations on test file.
 Commit: eee98e8c
+
+[[2026-05-26T00:46:29+02:00]]
+## Review Evidence
+- Verdict: FAIL
+- Builder/test-writer evidence is internally consistent: task notes report 51 scoped tests passing, ESLint clean, and ResolveModal.tsx line coverage at 90.5% after the retry.
+- AC evidence map:
+| AC Line | Code Evidence | Test Evidence | Status |
+|---|---|---|---|
+| AC1: option cards render label, confidence bar, rationale text omitted if empty, recommended badge | `serve/cockpit/web/src/components/ResolveModal.tsx:393-426` renders one card per option, sets `aria-selected`, clamps confidence width, conditionally renders rationale at `:420`, and conditionally renders badge | Confidence-bar presence/width: `serve/cockpit/web/src/__tests__/ResolveOptionCards_1858.test.tsx:143,152,160,168`; non-empty rationale only: `serve/cockpit/web/src/__tests__/ResolveOptionCards_1858.test.tsx:175`; recommended true/false: `serve/cockpit/web/src/__tests__/ResolveOptionCards_1858.test.tsx:185` | FAIL |
+| AC2: selection state and resolve payload | `serve/cockpit/web/src/components/ResolveModal.tsx:406`; payload uses `selected_option_id` at `:113` | `serve/cockpit/web/src/__tests__/ResolveOptionCards_1858.test.tsx:207,216,227,242,254`; adjacent payload proof in `serve/cockpit/web/src/__tests__/ResolveModal.test.tsx:153-184` | PASS |
+| AC3: decision-kind submit gating; no action-kind regression | `serve/cockpit/web/src/components/ResolveModal.tsx:102-106,162,431-511` | Decision gating: `serve/cockpit/web/src/__tests__/ResolveOptionCards_1858.test.tsx:254,300,308,319`; action-kind non-regression: `serve/cockpit/web/src/__tests__/ResolveOptionCards_1858.test.tsx:516,524,552` | PASS |
+- Blocking findings:
+| # | AC Line | Finding | Evidence | Route |
+|---|---|---|---|---|
+| 1 | AC1 | Test proof is insufficient for the `rationale text (omitted if empty)` clause. The implementation currently guards the branch, but the proof surface only asserts the positive case (`rationale` non-empty). No test would fail if an empty-rationale option rendered visible fallback text. | Code branch: `serve/cockpit/web/src/components/ResolveModal.tsx:420`; only rationale assertion: `serve/cockpit/web/src/__tests__/ResolveOptionCards_1858.test.tsx:175`; empty-rationale fixtures exist at `serve/cockpit/web/src/__tests__/ResolveOptionCards_1858.test.tsx:93,109` without a matching omission assertion. | todo |
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | test-writer | Add an explicit AC1 assertion proving that an option with `rationale: ""` omits visible rationale text, so the suite fails if empty-rationale decision cards render fallback text. | serve/cockpit/web/src/__tests__/ResolveOptionCards_1858.test.tsx | Review finding #1; current rationale proof only covers the non-empty branch at `serve/cockpit/web/src/__tests__/ResolveOptionCards_1858.test.tsx:175` |
+
+## Observations
+- No implementation defect was found in the reviewed source slice; the current component mapping for AC2 and AC3 is coherent with the scoped proof.
+- Challenger cross-check argued this could be treated as non-blocking because AC1 does not define a dedicated rationale DOM selector. I am still rejecting because `w-code-review` Step 4.2 requires at least one test that would fail if the AC behavior were violated, and the empty-rationale branch does not currently have that falsifying proof.
+- No additional safety or security issues were observed in this slice.
+
+[[2026-05-26T00:58:18+02:00]]
+## Test-Writer Notes
+- Retry: added 1 test for reviewer coverage gap (empty-rationale omit-if-empty clause).
+- Test file: `serve/cockpit/web/src/__tests__/ResolveOptionCards_1858.test.tsx`
+- Class: `TestFromAC_OptionCards` (added to existing `describe('AC1: rationale text')` block)
+- New test: `does not render any rationale text in the option card when rationale is empty string (omit-if-empty clause)`
+- Total tests: 28 (27 original + 1 new), all PASS against current implementation.
+- Builder skip: test-only retry, all tests green.
+- Lint: ESLint 0 violations.
+- Commit: e4b4293d
+
+AC coverage gap filled:
+| Gap | Test added |
+|-----|------------|
+| AC1 rationale omit-if-empty (negative branch) | `TestFromAC_OptionCards` — asserts betaCard.textContent.trim() === 'Beta approach' when rationale=''; fails if fallback text rendered |
+
+[[2026-05-26T01:27:29+02:00]]
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation: PASS #1858 to docs | AC mapped to code and evidence sufficient.
+- Evidence sufficiency: Builder and test-writer notes show scoped frontend suites green, ESLint clean, and ResolveModal.tsx line coverage at 90.5% before the final test-only retry. The latest retry adds one passing AC1 omission test against unchanged source, so that prior behavioral-bundle coverage proof remains sufficient.
+- Challenger cross-check: no blocking findings remained. Residual concerns were limited to proof-shape refinements, not contract failures.
+- Focused diagnostics check: no editor errors in serve/cockpit/web/src/components/ResolveModal.tsx or serve/cockpit/web/src/__tests__/ResolveOptionCards_1858.test.tsx.
+- AC evidence map:
+| AC Line | Code Evidence | Test Evidence | Status |
+|---|---|---|---|
+| AC1: one card per decision option with label, confidence bar, rationale omitted if empty, recommended badge only when true | serve/cockpit/web/src/components/ResolveModal.tsx:412, 420, 426, 430-442 | serve/cockpit/web/src/__tests__/ResolveOptionCards_1858.test.tsx:154, 162, 170, 180, 189, 200, 202; serve/cockpit/web/src/__tests__/ResolveModal.test.tsx:102-105 | PASS |
+| AC2: selection state and resolve payload mapping | serve/cockpit/web/src/components/ResolveModal.tsx:104, 114, 420, 423 | serve/cockpit/web/src/__tests__/ResolveOptionCards_1858.test.tsx:222, 233, 247-248, 257, 293; serve/cockpit/web/src/__tests__/ResolveModal.test.tsx:182-184 | PASS |
+| AC3: decision-kind submit gating and no action-kind regression | serve/cockpit/web/src/components/ResolveModal.tsx:104, 115, 163 | serve/cockpit/web/src/__tests__/ResolveOptionCards_1858.test.tsx:314, 323, 332, 530, 555, 561 | PASS |
+
+## Observations
+- The new AC1 empty-rationale assertion at serve/cockpit/web/src/__tests__/ResolveOptionCards_1858.test.tsx:189 closes the prior blocking proof gap: with rationale='' and recommended=false, the beta card text collapses to the label only, so fallback rationale text would now fail the suite.
+- The builder implementation summary says confidence width is clamped 0..1, but the source at serve/cockpit/web/src/components/ResolveModal.tsx:431 renders confidence * 100 directly. That does not violate the current AC or cited tests, but it is a source-note mismatch rather than an implemented clamp.
+- Exact count-equals-options-length proof for AC1 is not explicit. The current suites still prove per-option mapping and content via expected option IDs and card-specific assertions, and the reviewed source maps decisionOptions directly at serve/cockpit/web/src/components/ResolveModal.tsx:412, so I am treating that as non-blocking.
+- No additional safety or security issues were observed in this slice.
+
+[[2026-05-26T01:40:05+02:00]]
+## Docs Gate
+
+**Item 1: README Verification**
+Convention mapping: `serve/cockpit/web/src/components/ResolveModal.tsx` → `serve/cockpit/README.md`. README had entries for #1857, #1859, #1860 but was missing #1858. Added entry documenting: option-card metadata (confidence bar `option-confidence-{id}` with proportional width, rationale omit-if-empty, recommended badge `option-recommended-{id}`), aria-selected selection contract, decision-kind submit gating, and test scope (28 tests in `ResolveOptionCards_1858.test.tsx` + durable `ResolveModal.test.tsx` at 90.5% line coverage).
+
+**Item 2: External Attribution**
+N/A — no external sources influenced the implementation; this is a pure internal UI enhancement on existing modal and data shape.
+
+**Item 3: Research Doc**
+N/A — no research artifact exists for this task.
+
+**Item 4: Deletion Detection**
+No public API, CLI flags, or documented symbols were removed. Change is additive (new rendered attributes within existing modal component).
+
+**Files Updated:** `serve/cockpit/README.md` — inserted #1858 entry between #1857 and #1859.
+
+**Scratch Cleanup:** No `scratch/1858-*` files found.
