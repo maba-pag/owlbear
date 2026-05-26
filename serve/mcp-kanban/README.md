@@ -16,7 +16,7 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 
 ### Tools
 
-The server exposes 12 tools:
+The server exposes 11 tools:
 
 | Tool | Signature |
 |------|-----------|
