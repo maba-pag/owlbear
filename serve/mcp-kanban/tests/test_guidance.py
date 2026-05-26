@@ -846,7 +846,7 @@ _SKIP_REJECT_WARNING = (
 )
 
 _BLOCK_AR_HINT = (
-    "⚠️ ACTION REQUIRED: Create a Decision Request via the create_dr tool."
+    "⚠️ ACTION REQUIRED: Create a Decision Request via the create_request tool."
     " Blocks without a DR are invisible to the pipeline."
 )
 

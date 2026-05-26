@@ -82,16 +82,18 @@ class TestFromAC_RemoveCreateDr:
         test_file = WORKSPACE_ROOT / "tests" / "test_mcp_create_dr_coerce.py"
         assert not test_file.exists(), f"Expected {test_file} to be deleted but it still exists"
 
-    def test_test_decisions_does_not_import_create_dr(self) -> None:
-        """AC4 happy: tests/test_decisions.py must not import create_dr."""
+    def test_test_decisions_does_not_reference_create_dr(self) -> None:
+        """AC4 happy: tests/test_decisions.py must not contain any reference to create_dr.
+
+        The AC requires all create_dr tests and references to be removed from this file,
+        including docstrings and inline comments, not just import statements.
+        """
         test_file = WORKSPACE_ROOT / "tests" / "test_decisions.py"
         content = test_file.read_text(encoding="utf-8")
-        import_lines = [
-            line
-            for line in content.splitlines()
-            if "import" in line and "create_dr" in line
-        ]
-        assert not import_lines, f"Found create_dr in import lines of test_decisions.py: {import_lines}"
+        assert "create_dr" not in content, (
+            "tests/test_decisions.py still contains references to create_dr "
+            "(including docstrings/comments — all must be removed per AC4)"
+        )
 
     def test_test_mcp_kanban_does_not_reference_create_dr(self) -> None:
         """AC4 happy: tests/test_mcp_kanban.py must not reference create_dr at all."""
