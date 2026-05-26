@@ -24,6 +24,8 @@ AC coverage:
   AC9  - Re-running delete_source after partial failure completes remaining steps
           and returns status=COMPLETE
   AC10 - Docstring includes idempotency guarantee referencing D63
+  AC11 - Protocol docstring Raises clause replaced with
+          "Never raises LookupError — caught internally for forward-recovery semantics"
 """
 
 from __future__ import annotations
@@ -154,7 +156,7 @@ def coordinator(
 
 
 class TestFromAC_DeleteSourceCascade:
-    """AC-derived tests for IngestCoordinator.delete_source() - AC1 through AC10."""
+    """AC-derived tests for IngestCoordinator.delete_source() - AC1 through AC11."""
 
     # ------------------------------------------------------------------
     # AC1 - 5-step cascade: invocation and argument routing
@@ -875,3 +877,53 @@ class TestFromAC_DeleteSourceCascade:
         assert method is not None, "delete_source method does not exist on IngestCoordinator"
         doc = method.__doc__ or ""
         assert "D63" in doc, f"Expected docstring to reference D63, got: {doc!r}"
+
+    # ------------------------------------------------------------------
+    # AC11 - Protocol docstring Raises clause updated to "Never raises LookupError"
+    # ------------------------------------------------------------------
+
+    def test_protocol_delete_source_docstring_says_never_raises_lookup_error(self) -> None:
+        """AC11: protocol IngestCoordinator.delete_source docstring says 'Never raises LookupError'."""
+        from owlbear_knowledge.protocols.ingest import IngestCoordinator as ProtocolIC
+
+        method = getattr(ProtocolIC, "delete_source", None)
+        assert method is not None, "delete_source not found on protocol IngestCoordinator"
+        doc = method.__doc__ or ""
+        assert "Never raises LookupError" in doc, (
+            f"Expected protocol docstring to say 'Never raises LookupError', got: {doc!r}"
+        )
+
+    def test_protocol_delete_source_docstring_mentions_forward_recovery(self) -> None:
+        """AC11: protocol docstring Raises clause mentions 'forward-recovery semantics'."""
+        from owlbear_knowledge.protocols.ingest import IngestCoordinator as ProtocolIC
+
+        method = getattr(ProtocolIC, "delete_source", None)
+        assert method is not None, "delete_source not found on protocol IngestCoordinator"
+        doc = method.__doc__ or ""
+        assert "forward-recovery" in doc, (
+            f"Expected protocol docstring to mention 'forward-recovery', got: {doc!r}"
+        )
+
+    def test_protocol_delete_source_docstring_no_lookup_error_raises_clause(self) -> None:
+        """AC11: protocol docstring Raises clause no longer lists LookupError as raised."""
+        from owlbear_knowledge.protocols.ingest import IngestCoordinator as ProtocolIC
+
+        method = getattr(ProtocolIC, "delete_source", None)
+        assert method is not None, "delete_source not found on protocol IngestCoordinator"
+        doc = method.__doc__ or ""
+        # The old Raises clause said "LookupError if source_id does not exist".
+        # That text must be gone.
+        assert "if source_id does not exist" not in doc, (
+            f"Old 'LookupError if source_id does not exist' Raises clause still present: {doc!r}"
+        )
+
+    def test_protocol_delete_source_docstring_mentions_caught_internally(self) -> None:
+        """AC11: protocol docstring notes LookupError is caught internally."""
+        from owlbear_knowledge.protocols.ingest import IngestCoordinator as ProtocolIC
+
+        method = getattr(ProtocolIC, "delete_source", None)
+        assert method is not None, "delete_source not found on protocol IngestCoordinator"
+        doc = method.__doc__ or ""
+        assert "caught internally" in doc, (
+            f"Expected protocol docstring to say 'caught internally', got: {doc!r}"
+        )
