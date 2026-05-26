@@ -558,6 +558,25 @@ Accessibility and responsive state after #1396:
   fixture shape), and `serve/cockpit/web/src/__tests__/ResolveModal.test.tsx` (updated
   field contract and resolve payload assertions).
 
+- #1858 extends `ResolveModal.tsx` with option-card metadata for decision-kind requests.
+  Each `[data-testid="resolve-option-{option_id}"]` button gains a confidence bar
+  (`[data-testid="option-confidence-{option_id}"]`, `style.width = confidence * 100%`),
+  optional rationale text (rendered only when `rationale` is a non-empty string; omitted
+  entirely otherwise), and an optional `PTag` Recommended badge
+  (`[data-testid="option-recommended-{option_id}"]`, DOM-present only when
+  `recommended === true`). Clicking an option sets `aria-selected="true"` on it and
+  `aria-selected="false"` on sibling options; all options start with
+  `aria-selected="false"`. Decision-kind submit is enabled when an option is selected OR
+  the free-text textarea contains non-whitespace text; disabled only when neither
+  condition is met. Action-kind submit behavior is unchanged. Resolve payload sends
+  `selected_option_id: null` when no option is selected. Verified by
+  `serve/cockpit/web/src/__tests__/ResolveOptionCards_1858.test.tsx` (28 tests — AC1
+  card rendering, confidence bar widths, rationale omit-if-empty, recommended badge
+  presence/absence; AC2 selection state, aria-selected, payload mapping; AC3 submit
+  gating for decision-kind; action-kind non-regression) and
+  `serve/cockpit/web/src/__tests__/ResolveModal.test.tsx` (durable regression, 10 tests
+  passing; `ResolveModal.tsx` line coverage 90.5%).
+
 - #1859 completes the action resolver UX in `ResolveModal.tsx`. For action-kind requests,
   the request body is rendered as directly visible content inside
   `[data-testid='resolve-action-body']` — not inside a collapsed `<details>` element —
@@ -580,15 +599,16 @@ Accessibility and responsive state after #1396:
   from `item.kind`), `item.title` heading, `item.summary` text, `item.agent` attribution, and
   relative age via `formatAge(item.created)`. Decision-kind cards additionally render an option
   count and one confidence bar per option (`[data-testid="confidence-bar-{option_id}"]`,
-  width=`confidence*100`%). `getDecisionBrief()` body-parsing is removed from the card UI;
-  the old `dr-context`/`dr-recommendation`/`dr-consequence` sections are intentionally
+  width=`Math.round(confidence*100)`%). `getDecisionBrief()` body-parsing is removed from the
+  card UI; the old `dr-context`/`dr-recommendation`/`dr-consequence` sections are intentionally
   replaced by the structured-field layout. Empty-state copy updated to "No pending requests";
-  oldest-first sort order preserved. Durable suites `DecisionsPage_1645.test.tsx` and
-  `DecisionsPage_1688.test.tsx` were updated to reflect the structured-field contract.
-  Verified by `serve/cockpit/web/src/__tests__/DecisionsPage_1860.test.tsx` (15 tests — kind
-  badge, summary, agent, confidence-bar widths, 0%/100% boundaries, option count, card click,
-  empty state, and old-section removal) plus updated durable suites (53 tests total, ESLint
-  clean, `DecisionsPage.tsx` coverage 71.42%).
+  oldest-first sort order preserved. Durable suites `DecisionsPage_1645.test.tsx`,
+  `DecisionsPage_1688.test.tsx`, and `DecisionContract.test.tsx` were updated to reflect the
+  structured-field contract (agent attribution, rounded confidence widths).
+  Verified by `serve/cockpit/web/src/__tests__/DecisionsPage_1860.test.tsx` (16 tests — kind
+  badge, summary, agent, confidence-bar widths including non-round-tripping fractional case,
+  0%/100% boundaries, option count, card click, empty state, and old-section removal) plus
+  updated durable suites (86 tests total, ESLint clean, `DecisionsPage.tsx` coverage 77.1%).
 
 ## Product Boundary
 
