@@ -34,8 +34,6 @@ The curator does not approve entries. Approval is a user decision through the me
 
 ## Step 0 — Setup
 
-Read `r-pipeline-protocol` skill if not already loaded.
-
 **Mode detection:**
 
 - **Periodic mode** — dispatched by the orchestrator. Handle clear-cut entries only. Do not call `askQuestions`; defer conflicts and uncertain scope decisions.
@@ -102,7 +100,7 @@ The `--project` path must point to the OwlBear installation root. Find the corre
 
 ## Step 7 — Return Channel A Signal
 
-Return per `r-pipeline-protocol`:
+Return the verdict:
 
 - Periodic mode: `DONE | {P} promoted, {D} pruned` (add `— {K} pending conflicts/uncertain` when unresolved entries remain)
 - Manual mode: concise summary of promoted, pruned, deferred, and resolved entries

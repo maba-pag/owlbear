@@ -59,6 +59,10 @@ async def search_owlbear() -> list[StructuredSearchResult]:
 | Graph | `IntraDocGraphBuilder`, `InterDocGraphBuilder` |
 | Utilities | `CancelSignal`, `SourceEvaluator` |
 
+> **TODO:** stale — `TextChunker` listed in Ingestion row but not exported from `__init__.py`; remove or promote to `__all__` [#1886]
+
+> **TODO:** missing — `RefreshOrchestrator`, `RefreshResult` exported from `__init__.py` but absent from module groups table [#1886]
+
 Active operational API is intentionally narrow. Bookmark, scope-transfer, and
 consolidation surfaces have been retired and removed from this package.
 

@@ -1,10 +1,10 @@
 ---
 id: 1878
 title: 'Knowledge: IngestCoordinator — delete cascade'
-status: review
+status: done
 priority: needed
 created: 2026-05-25T19:04:37.443482+02:00
-updated: 2026-05-27T00:28:20.599658+02:00
+updated: 2026-05-27T00:43:45.652249+02:00
 tags:
   - knowledge
   - layer-2
@@ -55,7 +55,7 @@ ac:
 proof_bundle: behavioral
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-27T00:43:45.652249+02:00
 archival_reason:
 archival_refs: []
 ---
@@ -490,3 +490,34 @@ AC9 tests MUST exercise:
 - AC10 satisfied: implementation docstring now mentions chunk-addressability limitation and persistence risk.
 - AC12 satisfied: protocol Guarantees/Non-guarantees wording aligned with required contract text.
 - Task-scoped tests pass; scoped regression check pass; lint clean.
+
+[[2026-05-27T00:40:55+02:00]]
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation (one line): PASS #1878 -> docs | AC mapped to code and evidence sufficient.
+- Builder evidence reviewed: final retry reports 76 passed, 0 failed; lint clean; coverage 100% for `owlbear_knowledge.protocols.ingest`, with prior behavioral-path evidence already green in the task history.
+- AC coverage summary:
+| AC Line | Code Evidence | Test Evidence | Status |
+|---|---|---|---|
+| AC1-AC9 | `serve/knowledge/src/owlbear_knowledge/ingest_coordinator.py:143-205` implements the ordered cascade, LookupError recovery, fail-fast partial returns, and the documented retry limitation. | `tests/test_ingest_coordinator_1878.py:402`, `tests/test_ingest_coordinator_1878.py:418`, `tests/test_ingest_coordinator_1878.py:943`, `tests/test_ingest_coordinator_1878.py:971`, `tests/test_ingest_coordinator_1878.py:1003`, `tests/test_ingest_coordinator_1878.py:1032` plus the existing AC1-AC8 task tests. | PASS |
+| AC10 | `serve/knowledge/src/owlbear_knowledge/ingest_coordinator.py:132-138` documents D63 idempotency and the chunk-addressability limitation. | `tests/test_ingest_coordinator_1878.py:866`, `tests/test_ingest_coordinator_1878.py:875`, `tests/test_ingest_coordinator_1878.py:1069` | PASS |
+| AC11-AC12 | `serve/knowledge/src/owlbear_knowledge/protocols/ingest.py:214`, `serve/knowledge/src/owlbear_knowledge/protocols/ingest.py:227`, `serve/knowledge/src/owlbear_knowledge/protocols/ingest.py:234-235` align the protocol Guarantees, Non-guarantees, and Raises contract with the task AC. | `tests/test_ingest_coordinator_1878.py:886`, `tests/test_ingest_coordinator_1878.py:897`, `tests/test_ingest_coordinator_1878.py:908`, `tests/test_ingest_coordinator_1878.py:921`, `tests/test_ingest_coordinator_1878.py:1089`, `tests/test_ingest_coordinator_1878.py:1111`, `tests/test_ingest_coordinator_1878.py:1122` | PASS |
+- Blocking findings: none.
+
+## Observations
+- Non-blocking: the AC2 `reason=None` proof is still permissive because `tests/test_ingest_coordinator_1878.py:325` accepts omission of the keyword argument via `SENTINEL`; the current implementation does explicitly forward `reason=reason` at `serve/knowledge/src/owlbear_knowledge/ingest_coordinator.py:143`, so this is proof-hardening only.
+- Challenger cross-check found no blocking findings; the remaining concerns were theoretical proof-shape gaps rather than present AC violations.
+
+[[2026-05-27T00:42:45+02:00]]
+## Docs Gate
+
+**Item 1 — README Verification:** `serve/knowledge/README.md` read in full. `IngestCoordinator` is not exported from the top-level `owlbear_knowledge/__init__.py`; the README's module groups table covers the public API only. Task adds `delete_source` and updates two docstrings — no symbols removed, no README claim made stale. No update needed.
+
+**Item 2 — External Attribution:** N/A — no external sources referenced in task or research.
+
+**Item 3 — Research Doc:** `.owlbear/research/ingest-delete-cascade.md` exists and is linked from the task body (`## Research` section, 2026-05-26 entry).
+
+**Item 4 — Deletion Detection:** Task only adds (new method + docstring edits). No removals, no orphaned references.
+
+**Files updated:** none — no doc impact.
+**Scratch cleanup:** no `.owlbear/scratch/1878-*` files found.

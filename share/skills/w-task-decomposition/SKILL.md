@@ -30,10 +30,13 @@ Break complex features into atomic, test-driven kanban tasks with explicit depen
 
 ## Step 0 — Setup
 
-Read `r-pipeline-protocol` skill if not already loaded.
 Read `h-ac-quality` skill and use it as the authoritative AC validation checklist while drafting task acceptance criteria.
 
 **Claiming:** When **orchestrator-dispatched** (parent task ID provided), claim the parent task via `start_work` — it returns the task body, making a separate `show_task` call redundant. When **user-invoked**, read the task via `show_task` without claiming.
+
+**If `start_work` fails, stop.** A `ToolError` means the task is blocked, already claimed, or missing. Report the error and exit.
+
+**Knowledge pre-flight:** After claiming, call `recall_memory(agent="planner")` to load reviewed entries. Apply returned entries as context. If the call fails or returns empty, proceed normally.
 
 **Execution mode:** Determined by the caller's prompt prefix (mirrors `planner.agent.md` three-tier convention):
 
@@ -265,9 +268,11 @@ Produce a Mermaid diagram showing task relationships. Arrows: dependency toward 
 
 ## Step 8 — Advance
 
+**Post-task reflection:** Before advancing, write 3-5 bullets on problems faced, workarounds applied, patterns discovered. Skip if nothing notable. Use `save_memory(title=..., content=..., categories=[...], confidence=0.8, source_agent="planner")` for each notable finding.
+
 If dispatched with a parent task ID, advance via `end_work` to release the claim and move status.
 
-Return Channel A signal per `r-pipeline-protocol`.
+Return Channel A signal: `DONE | {N} tasks planned`
 
 ## Output Template
 

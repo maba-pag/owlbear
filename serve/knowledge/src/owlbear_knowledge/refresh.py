@@ -17,7 +17,6 @@ from owlbear_knowledge.models import KnowledgeSource, SourceType
 
 if TYPE_CHECKING:
     from owlbear_knowledge.cancellation import CancelSignal
-    from owlbear_knowledge.graph_store import GraphStore
     from owlbear_knowledge.ingest import IngestPipeline, IngestResult
     from owlbear_knowledge.source_store import KnowledgeSourceStore
 

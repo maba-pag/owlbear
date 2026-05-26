@@ -20,8 +20,6 @@ The orchestrator maintains minimal session state:
 
 ## Signal Contracts
 
-See `r-pipeline-protocol` → Communication for Channel A/B spec.
-
 **pick_tasks tool:** `pick_tasks(wave_size=None, max_waves=3)` delegates to `AgentView.pick_tasks`.
 
 **pick_tasks output shape:** `PickTasksResponse`

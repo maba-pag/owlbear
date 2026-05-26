@@ -21,9 +21,7 @@ from owlbear_knowledge.protocols.common import (
     EntityType,
     Metadata,
     RelationType,
-    canonicalize_name,
 )
-
 
 # ---------------------------------------------------------------------------
 # Enums
@@ -135,15 +133,14 @@ class EvidenceInput(BoundaryModel):
     metadata: Metadata = Field(default_factory=dict)
 
     @model_validator(mode="after")
-    def _check_claim_xor(self) -> "EvidenceInput":
+    def _check_claim_xor(self) -> EvidenceInput:
         if self.claim_type == EvidenceClaimType.ENTITY:
             if not self.entity_id or self.edge_id:
                 msg = "ENTITY claim requires entity_id and no edge_id"
                 raise ValueError(msg)
-        else:
-            if not self.edge_id or self.entity_id:
-                msg = "EDGE claim requires edge_id and no entity_id"
-                raise ValueError(msg)
+        elif not self.edge_id or self.entity_id:
+            msg = "EDGE claim requires edge_id and no entity_id"
+            raise ValueError(msg)
         return self
 
 

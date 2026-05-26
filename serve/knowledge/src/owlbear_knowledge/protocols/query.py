@@ -22,10 +22,9 @@ from typing import Protocol, runtime_checkable
 
 from pydantic import Field, model_validator
 
-from owlbear_knowledge.protocols.common import BoundaryModel, EntityType, Metadata, RelationType
+from owlbear_knowledge.protocols.common import BoundaryModel, EntityType, RelationType
 from owlbear_knowledge.protocols.content import ContentChunk, ContentSearchResult
-from owlbear_knowledge.protocols.graph import EdgeRecord, EntityRecord, TraversalResult
-
+from owlbear_knowledge.protocols.graph import EntityRecord, TraversalResult
 
 # ---------------------------------------------------------------------------
 # Request types
@@ -66,7 +65,7 @@ class EntityLookupRequest(BoundaryModel):
     relation_types: tuple[RelationType, ...] = Field(default_factory=tuple)
 
     @model_validator(mode="after")
-    def _check_id_or_name(self) -> "EntityLookupRequest":
+    def _check_id_or_name(self) -> EntityLookupRequest:
         if self.entity_id and self.entity_name:
             msg = "Provide exactly one of entity_id or entity_name, not both"
             raise ValueError(msg)

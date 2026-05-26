@@ -11,7 +11,6 @@ from collections.abc import Mapping
 from enum import StrEnum
 from typing import Final
 
-
 # ---------------------------------------------------------------------------
 # Module vocabulary (D59)
 # ---------------------------------------------------------------------------
