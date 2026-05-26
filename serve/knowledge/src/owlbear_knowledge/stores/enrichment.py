@@ -2,20 +2,35 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from datetime import UTC, datetime
+from itertools import combinations
 from uuid import uuid4
 
+from owlbear_knowledge.protocols.common import RelationType
 from owlbear_knowledge.protocols.enrichment import (
     EnrichmentBatch,
     EnrichmentDiscardResult,
     EnrichmentParams,
+    EnrichmentPurgeResult,
     EnrichmentQueueItem,
     EnrichmentState,
     EnrichmentStats,
+    ExtractedEntity,
+    ExtractedRelation,
+    ExtractionResult,
+    SuggestedEdge,
 )
 from owlbear_knowledge.protocols.enrichment import (
     EnrichmentStore as EnrichmentStoreProtocol,
+)
+from owlbear_knowledge.protocols.graph import (
+    EdgeInput,
+    EntityInput,
+    EvidenceClaimType,
+    EvidenceInput,
+    GraphStore,
 )
 
 
@@ -23,10 +38,12 @@ class EnrichmentStore(EnrichmentStoreProtocol):
     """SQLite-backed queue state machine for enrichment work items."""
 
     _CLAIM_TTL_SECONDS = 600
+    _MIN_SHARED_CHUNKS_FOR_SUGGESTION = 2
 
-    def __init__(self, *, db: sqlite3.Connection) -> None:
+    def __init__(self, *, db: sqlite3.Connection, graph: GraphStore | None = None) -> None:
         self._db = db
         self._db.row_factory = sqlite3.Row
+        self._graph = graph
 
     def ensure_tables(self) -> None:
         """Create Enrichment-owned tables if they do not yet exist."""
@@ -55,6 +72,27 @@ class EnrichmentStore(EnrichmentStoreProtocol):
                 item_count INTEGER NOT NULL
             )
             """
+        )
+        self._db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS enrich_extractions (
+                id TEXT PRIMARY KEY,
+                chunk_id TEXT NOT NULL,
+                source_id TEXT NOT NULL,
+                batch_id TEXT,
+                entity_count INTEGER NOT NULL,
+                edge_count INTEGER NOT NULL,
+                submitted_at TEXT NOT NULL
+            )
+            """
+        )
+        self._db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_enrich_extractions_source_id "
+            "ON enrich_extractions(source_id)"
+        )
+        self._db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_enrich_extractions_chunk_id "
+            "ON enrich_extractions(chunk_id)"
         )
         self._db.commit()
 
@@ -265,6 +303,193 @@ class EnrichmentStore(EnrichmentStoreProtocol):
 
         return self._row_to_queue_item(updated)
 
+    def submit_extractions(
+        self,
+        chunk_id: str,
+        entities: tuple[ExtractedEntity, ...],
+        relations: tuple[ExtractedRelation, ...],
+    ) -> ExtractionResult:
+        """Resolve extracted entities/relations, create evidence, and complete queue item."""
+        row = self._db.execute(
+            """
+            SELECT source_id, batch_id
+            FROM enrich_queue
+            WHERE chunk_id = ? AND state = ?
+            """,
+            (chunk_id, EnrichmentState.IN_PROGRESS.value),
+        ).fetchone()
+        if row is None:
+            msg = f"chunk {chunk_id!r} is not in progress"
+            raise LookupError(msg)
+
+        graph = self._require_graph()
+        local_ref_to_entity_id: dict[str, str] = {}
+        entity_ids: list[str] = []
+        edge_ids: list[str] = []
+        evidence_ids: list[str] = []
+
+        for entity in entities:
+            entity_record = graph.upsert_entity(
+                EntityInput(
+                    name=entity.name,
+                    entity_type=entity.entity_type,
+                    description=entity.description,
+                    metadata=entity.metadata,
+                )
+            )
+            entity_ids.append(entity_record.id)
+            local_ref_to_entity_id[entity.local_ref] = entity_record.id
+
+        resolved_relations: list[tuple[ExtractedRelation, str, str]] = []
+        for relation in relations:
+            source_entity_id = local_ref_to_entity_id.get(relation.source_ref)
+            target_entity_id = local_ref_to_entity_id.get(relation.target_ref)
+            if source_entity_id is None or target_entity_id is None:
+                msg = (
+                    "relation reference must match submitted entity local_ref values"
+                )
+                raise ValueError(msg)
+            resolved_relations.append((relation, source_entity_id, target_entity_id))
+
+        for relation, source_entity_id, target_entity_id in resolved_relations:
+            edge_record = graph.upsert_edge(
+                EdgeInput(
+                    source_entity_id=source_entity_id,
+                    target_entity_id=target_entity_id,
+                    relation_type=relation.relation_type,
+                    weight=relation.weight,
+                    metadata=relation.metadata,
+                )
+            )
+            edge_ids.append(edge_record.id)
+
+        for entity, entity_id in zip(entities, entity_ids, strict=False):
+            evidence_record = graph.add_evidence(
+                EvidenceInput(
+                    chunk_id=chunk_id,
+                    claim_type=EvidenceClaimType.ENTITY,
+                    entity_id=entity_id,
+                    confidence=entity.confidence,
+                    metadata=entity.metadata,
+                )
+            )
+            evidence_ids.append(evidence_record.id)
+
+        for relation, edge_id in zip(relations, edge_ids, strict=False):
+            evidence_record = graph.add_evidence(
+                EvidenceInput(
+                    chunk_id=chunk_id,
+                    claim_type=EvidenceClaimType.EDGE,
+                    edge_id=edge_id,
+                    confidence=relation.confidence,
+                    metadata=relation.metadata,
+                )
+            )
+            evidence_ids.append(evidence_record.id)
+
+        completed_at = self._now_iso()
+        with self._db:
+            self._db.execute(
+                """
+                INSERT INTO enrich_extractions (
+                    id, chunk_id, source_id, batch_id, entity_count, edge_count, submitted_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    str(uuid4()),
+                    chunk_id,
+                    str(row["source_id"]),
+                    None if row["batch_id"] is None else str(row["batch_id"]),
+                    len(entity_ids),
+                    len(edge_ids),
+                    completed_at,
+                ),
+            )
+            self._db.execute(
+                """
+                UPDATE enrich_queue
+                SET state = ?, completed_at = ?, batch_id = NULL
+                WHERE chunk_id = ?
+                """,
+                (EnrichmentState.COMPLETED.value, completed_at, chunk_id),
+            )
+
+        return ExtractionResult(
+            chunk_id=chunk_id,
+            entity_ids=tuple(entity_ids),
+            edge_ids=tuple(edge_ids),
+            evidence_ids=tuple(evidence_ids),
+        )
+
+    def suggest_intra_doc_edges(self, document_id: str) -> tuple[SuggestedEdge, ...]:
+        """Return co-occurrence suggestions for entities in a document's chunks."""
+        chunk_rows = self._db.execute(
+            "SELECT id FROM content_chunks WHERE document_id = ? ORDER BY chunk_index, id",
+            (document_id,),
+        ).fetchall()
+        if not chunk_rows:
+            msg = f"unknown document_id: {document_id!r}"
+            raise LookupError(msg)
+
+        chunk_ids = tuple(str(row["id"]) for row in chunk_rows)
+        evidence_rows = self._db.execute(
+            """
+            SELECT chunk_id, entity_id
+            FROM graph_evidence
+            WHERE claim_type = ?
+              AND entity_id IS NOT NULL
+              AND chunk_id IN (SELECT value FROM json_each(?))
+            """,
+            (EvidenceClaimType.ENTITY.value, json.dumps(chunk_ids)),
+        ).fetchall()
+
+        entities_by_chunk: dict[str, set[str]] = {chunk_id: set() for chunk_id in chunk_ids}
+        for row in evidence_rows:
+            entities_by_chunk[str(row["chunk_id"])].add(str(row["entity_id"]))
+
+        pair_counts: dict[tuple[str, str], int] = {}
+        for entity_ids in entities_by_chunk.values():
+            for source_id, target_id in combinations(sorted(entity_ids), 2):
+                pair = (source_id, target_id)
+                pair_counts[pair] = pair_counts.get(pair, 0) + 1
+
+        total_chunks = len(chunk_ids)
+        suggestions: list[SuggestedEdge] = []
+        for (source_id, target_id), shared_chunks in sorted(pair_counts.items()):
+            if shared_chunks < self._MIN_SHARED_CHUNKS_FOR_SUGGESTION:
+                continue
+            suggestions.append(
+                SuggestedEdge(
+                    source_entity_id=source_id,
+                    target_entity_id=target_id,
+                    relation_type=RelationType.RELATED_TO,
+                    confidence=shared_chunks / total_chunks,
+                    reason=(
+                        f"co-occurred in {shared_chunks} of {total_chunks} chunks"
+                    ),
+                )
+            )
+
+        return tuple(suggestions)
+
+    def purge_source(self, source_id: str) -> EnrichmentPurgeResult:
+        """Delete source-owned queue and extraction rows from Enrichment tables."""
+        with self._db:
+            queue_deleted = self._db.execute(
+                "DELETE FROM enrich_queue WHERE source_id = ?",
+                (source_id,),
+            ).rowcount
+            extractions_deleted = self._db.execute(
+                "DELETE FROM enrich_extractions WHERE source_id = ?",
+                (source_id,),
+            ).rowcount
+
+        return EnrichmentPurgeResult(
+            source_id=source_id,
+            queue_items_removed=max(queue_deleted, 0),
+            extractions_removed=max(extractions_deleted, 0),
+        )
+
     def stats(self) -> EnrichmentStats:
         """Return queue item counts per state."""
         rows = self._db.execute(
@@ -304,3 +529,9 @@ class EnrichmentStore(EnrichmentStoreProtocol):
             started_at=self._parse_optional_datetime(row["started_at"]),
             completed_at=self._parse_optional_datetime(row["completed_at"]),
         )
+
+    def _require_graph(self) -> GraphStore:
+        if self._graph is None:
+            msg = "graph store is required for extraction operations"
+            raise RuntimeError(msg)
+        return self._graph
