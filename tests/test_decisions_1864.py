@@ -140,6 +140,77 @@ class TestFromAC_EndToEndDecisionResolution:
         assert "Option Alpha" in task.body
         assert task.blocked is False
 
+    def test_pending_response_includes_all_structured_fields(
+        self,
+        client: TestClient,
+        engine: KanbanEngine,
+    ) -> None:
+        """Reviewer gap: pending response must prove ALL public contract fields, not just kind and options count."""
+        task_id = int(engine.create_task("Field check target", status="todo").id)
+        request = engine.create_request(
+            task_id,
+            "decision",
+            "Field check title",
+            "Field check summary.",
+            "builder",
+            options=_OPTIONS_VALID,
+            body="## Body\nField check body.",
+        )
+
+        pending = client.get("/api/requests/pending")
+        assert pending.status_code == 200
+        items = pending.json()
+        matched = [item for item in items if item["request_id"] == request.request_id]
+        assert len(matched) == 1
+        item = matched[0]
+
+        # All structured response fields must be present and correct
+        assert item["request_id"] == request.request_id
+        assert item["task_id"] == task_id
+        assert item["kind"] == "decision"
+        assert item["title"] == "Field check title"
+        assert item["summary"] == "Field check summary."
+        assert item["agent"] == "builder"
+        assert item["created_at"] is not None
+        assert item["body"] == "## Body\nField check body."
+        assert len(item["options"]) == 2
+        assert item["options"][0]["option_id"] == "option-a"
+        assert item["options"][0]["label"] == "Option Alpha"
+        assert item["options"][0]["confidence"] == 0.8
+        assert item["options"][0]["recommended"] is True
+        assert item["options"][1]["option_id"] == "option-b"
+        assert item["options"][1]["label"] == "Option Beta"
+
+    def test_resolve_writes_submitted_option_not_first_or_recommended(
+        self,
+        client: TestClient,
+        engine: KanbanEngine,
+    ) -> None:
+        """Reviewer gap: writeback must prove the SUBMITTED option_id is resolved, not hardcoded first/recommended."""
+        task_id = int(engine.create_task("Non-recommended target", status="todo").id)
+        request = engine.create_request(
+            task_id,
+            "decision",
+            "Choose approach",
+            "Select one option.",
+            "builder",
+            options=_OPTIONS_VALID,
+            body="## Question\nWhich option?",
+        )
+
+        # Submit option-b (NOT the recommended option-a / first option)
+        response = client.post(
+            f"/api/requests/{request.request_id}/resolve",
+            json={"selected_option_id": "option-b", "free_text": None, "kind": "decision"},
+        )
+        assert response.status_code == 200
+
+        task = engine.show_task(str(task_id))
+        # The submitted (non-recommended) option label must appear, not the recommended one
+        assert "- **Selected:** Option Beta" in task.body
+        assert "Option Alpha" not in task.body
+        assert task.blocked is False
+
 
 class TestFromAC_EndToEndActionResolution:
     """AC2: action request can be resolved via bare-complete normalization."""
@@ -168,6 +239,45 @@ class TestFromAC_EndToEndActionResolution:
         task = engine.show_task(str(task_id))
         assert "## AR: Run action" in task.body
         assert "**Outcome:**" in task.body
+        assert task.blocked is False
+
+    def test_resolve_bare_complete_writes_exact_empty_string_not_none(
+        self,
+        client: TestClient,
+        engine: KanbanEngine,
+    ) -> None:
+        """Reviewer gap: bare-complete normalization must produce empty string outcome, not None/null/placeholder."""
+        task_id = int(engine.create_task("Bare complete target", status="todo").id)
+        request = engine.create_request(
+            task_id,
+            "action",
+            "Normalized action",
+            "Normalization check.",
+            "builder",
+            body="## Action\nNormalize this.",
+        )
+
+        # Bare complete: selected_option_id=None, free_text=None, kind=action → free_text normalized to ""
+        response = client.post(
+            f"/api/requests/{request.request_id}/resolve",
+            json={"selected_option_id": None, "free_text": None, "kind": "action"},
+        )
+        assert response.status_code == 200
+
+        # Verify resolve response payload is structured correctly
+        resp_data = response.json()
+        assert resp_data["request_id"] == request.request_id
+        assert resp_data["task_id"] == task_id
+        assert resp_data["kind"] == "action"
+        assert resp_data["title"] == "Normalized action"
+        assert resp_data["resolved_at"] is not None
+
+        task = engine.show_task(str(task_id))
+        # Exact normalized writeback: free_text="" produces "- **Outcome:** " (empty, not "None")
+        assert "## AR: Normalized action" in task.body
+        assert "- **Outcome:** " in task.body
+        assert "**Outcome:** None" not in task.body
+        assert "**Outcome:** null" not in task.body
         assert task.blocked is False
 
 
