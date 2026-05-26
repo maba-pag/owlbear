@@ -1051,3 +1051,38 @@ class TestFromAC_ContentStore:
             f"AC1 + AC8: convergence retry upsert payload must equal V2 chunk IDs. "
             f"Expected {set(retry_result.chunk_ids)}, got {upserted_ids}"
         )
+
+    # ------------------------------------------------------------------ AC8 delete-payload (cycle 5)
+    # Exact delete-payload verification — happy-path REPLACED
+
+    @pytest.mark.asyncio
+    async def test_ingest_replaced_deletes_exact_stale_chunk_ids(
+        self, store: ContentStore, mock_vectors: MagicMock
+    ) -> None:
+        """AC8: happy-path REPLACED delete must pass exactly the stale V1 chunk IDs.
+
+        The existing ordering test proves delete precedes upsert but never inspects the
+        delete(ids=...) payload. A wrong-ID delete on the normal REPLACED path immediately
+        clears recovery state (pending_delete_chunk_ids cleared on success), so stale
+        vectors become permanently orphaned with no retry path.
+
+        Observable: set(delete_call.kwargs["ids"]) == set(result1.chunk_ids)
+        """
+        req1 = _make_request(text="First stable version content here. " * 6)
+        result1 = await store.ingest(req1)
+        v1_chunk_ids = set(result1.chunk_ids)
+        mock_vectors.reset_mock()
+
+        req2 = _make_request(text="Second version — fully replaced content here. " * 6)
+        await store.ingest(req2)
+
+        delete_call = mock_vectors.delete.call_args
+        assert delete_call is not None, (
+            "AC8: REPLACED ingest must call vector_store.delete — "
+            "stale V1 vectors must be removed"
+        )
+        deleted_ids = set(delete_call.kwargs["ids"])
+        assert deleted_ids == v1_chunk_ids, (
+            f"AC8: delete must receive exactly the stale V1 chunk IDs. "
+            f"Expected {v1_chunk_ids}, got {deleted_ids}"
+        )
