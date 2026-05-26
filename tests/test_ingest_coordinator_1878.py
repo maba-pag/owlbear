@@ -156,7 +156,7 @@ def coordinator(
 
 
 class TestFromAC_DeleteSourceCascade:
-    """AC-derived tests for IngestCoordinator.delete_source() - AC1 through AC11."""
+    """AC-derived tests for IngestCoordinator.delete_source() - AC1 through AC12."""
 
     # ------------------------------------------------------------------
     # AC1 - 5-step cascade: invocation and argument routing
@@ -926,4 +926,205 @@ class TestFromAC_DeleteSourceCascade:
         doc = method.__doc__ or ""
         assert "caught internally" in doc, (
             f"Expected protocol docstring to say 'caught internally', got: {doc!r}"
+        )
+
+    # ------------------------------------------------------------------
+    # AC9 (retry) — true two-call proof: partial failure at step 5, then retry
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_rerun_after_step5_partial_second_call_returns_complete(
+        self,
+        coordinator: IngestCoordinator,
+        mock_sources: MagicMock,
+        mock_content: MagicMock,
+        mock_graph: MagicMock,
+    ) -> None:
+        """AC9: After step-5 partial failure, second call with empty chunk_ids returns COMPLETE."""
+        mock_graph.invalidate_evidence_by_chunks.side_effect = [
+            RuntimeError("graph down"),  # first call: step 5 fails
+            _make_evidence_invalidation(),  # second call: succeeds
+        ]
+        mock_content.purge_source.side_effect = [
+            _make_content_purge(),  # first call: returns real chunk_ids
+            ContentPurgeResult(source_id=_SOURCE_ID),  # second call: empty (already purged)
+        ]
+        mock_sources.delete_source.side_effect = [
+            _make_deletion_info(),  # first call: source deleted
+            LookupError("already deleted"),  # second call: step-1 LookupError
+        ]
+
+        first = await coordinator.delete_source(_SOURCE_ID)
+        assert first.status == PurgeStatus.PARTIAL
+
+        second = await coordinator.delete_source(_SOURCE_ID)
+        assert second.status == PurgeStatus.COMPLETE
+
+    @pytest.mark.asyncio
+    async def test_rerun_after_step5_partial_graph_invalidate_receives_empty_chunk_ids(
+        self,
+        coordinator: IngestCoordinator,
+        mock_sources: MagicMock,
+        mock_content: MagicMock,
+        mock_graph: MagicMock,
+    ) -> None:
+        """AC9: On retry after post-step-2 partial failure, graph.invalidate called with empty chunk_ids."""
+        mock_graph.invalidate_evidence_by_chunks.side_effect = [
+            RuntimeError("graph down"),
+            _make_evidence_invalidation(),
+        ]
+        mock_content.purge_source.side_effect = [
+            _make_content_purge(),
+            ContentPurgeResult(source_id=_SOURCE_ID),  # empty chunk_ids on retry
+        ]
+        mock_sources.delete_source.side_effect = [
+            _make_deletion_info(),
+            LookupError("already deleted"),
+        ]
+
+        await coordinator.delete_source(_SOURCE_ID)  # first: PARTIAL at step 5
+        await coordinator.delete_source(_SOURCE_ID)  # second: COMPLETE
+
+        second_call_args = mock_graph.invalidate_evidence_by_chunks.call_args_list[1]
+        chunk_ids_on_retry = second_call_args.args[0]
+        assert chunk_ids_on_retry == (), (
+            f"Expected empty chunk_ids on retry, got: {chunk_ids_on_retry!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_rerun_after_step5_partial_enrichment_purge_called_on_retry(
+        self,
+        coordinator: IngestCoordinator,
+        mock_sources: MagicMock,
+        mock_content: MagicMock,
+        mock_enrichment: MagicMock,
+        mock_graph: MagicMock,
+    ) -> None:
+        """AC9: On retry, enrichment.purge_source still called (source-keyed step recovers)."""
+        mock_graph.invalidate_evidence_by_chunks.side_effect = [
+            RuntimeError("graph down"),
+            _make_evidence_invalidation(),
+        ]
+        mock_content.purge_source.side_effect = [
+            _make_content_purge(),
+            ContentPurgeResult(source_id=_SOURCE_ID),
+        ]
+        mock_sources.delete_source.side_effect = [
+            _make_deletion_info(),
+            LookupError("already deleted"),
+        ]
+
+        await coordinator.delete_source(_SOURCE_ID)  # first: PARTIAL at step 5
+        await coordinator.delete_source(_SOURCE_ID)  # second: COMPLETE
+
+        # enrichment.purge_source is source-keyed and must run on both calls
+        assert mock_enrichment.purge_source.call_count == 2
+        mock_enrichment.purge_source.assert_called_with(_SOURCE_ID)
+
+    @pytest.mark.asyncio
+    async def test_rerun_after_step5_partial_second_call_completed_steps_all_five(
+        self,
+        coordinator: IngestCoordinator,
+        mock_sources: MagicMock,
+        mock_content: MagicMock,
+        mock_graph: MagicMock,
+    ) -> None:
+        """AC9: Second call after step-5 partial returns all five completed_steps."""
+        mock_graph.invalidate_evidence_by_chunks.side_effect = [
+            RuntimeError("graph down"),
+            _make_evidence_invalidation(),
+        ]
+        mock_content.purge_source.side_effect = [
+            _make_content_purge(),
+            ContentPurgeResult(source_id=_SOURCE_ID),
+        ]
+        mock_sources.delete_source.side_effect = [
+            _make_deletion_info(),
+            LookupError("already deleted"),
+        ]
+
+        await coordinator.delete_source(_SOURCE_ID)  # first: PARTIAL
+        second = await coordinator.delete_source(_SOURCE_ID)  # second: COMPLETE
+
+        assert second.completed_steps == (
+            "sources.delete",
+            "content.purge",
+            "enrichment.discard",
+            "enrichment.purge",
+            "graph.invalidate",
+        )
+
+    # ------------------------------------------------------------------
+    # AC10 (updated) — docstring documents chunk-addressability loss
+    # ------------------------------------------------------------------
+
+    def test_delete_source_docstring_documents_chunk_addressability_loss(
+        self,
+    ) -> None:
+        """AC10: docstring documents chunk-addressability loss limitation for post-step-2 retries."""
+        method = getattr(IngestCoordinator, "delete_source", None)
+        assert method is not None, "delete_source method does not exist on IngestCoordinator"
+        doc = method.__doc__ or ""
+        assert "chunk" in doc.lower(), (
+            f"Expected docstring to mention chunk addressability loss, got: {doc!r}"
+        )
+
+    def test_delete_source_docstring_documents_post_step2_retry_limitation(
+        self,
+    ) -> None:
+        """AC10: docstring mentions that retry after post-step-2 partial has a limitation."""
+        method = getattr(IngestCoordinator, "delete_source", None)
+        assert method is not None, "delete_source method does not exist on IngestCoordinator"
+        doc = method.__doc__ or ""
+        # The limitation is that graph evidence from original chunks persists after retry
+        assert "graph" in doc.lower() or "evidence" in doc.lower() or "persist" in doc.lower(), (
+            f"Expected docstring to mention the post-step-2 retry limitation, got: {doc!r}"
+        )
+
+    # ------------------------------------------------------------------
+    # AC12 — Protocol Guarantees clause updated (reachable at call time)
+    # ------------------------------------------------------------------
+
+    def test_protocol_delete_source_guarantees_reachable_at_call_time(self) -> None:
+        """AC12: protocol Guarantees clause says 'reachable at call time'."""
+        from owlbear_knowledge.protocols.ingest import IngestCoordinator as ProtocolIC
+
+        method = getattr(ProtocolIC, "delete_source", None)
+        assert method is not None, "delete_source not found on protocol IngestCoordinator"
+        doc = method.__doc__ or ""
+        assert "reachable at call time" in doc, (
+            f"Expected protocol docstring to say 'reachable at call time', got: {doc!r}"
+        )
+
+    def test_protocol_delete_source_guarantees_old_wording_removed(self) -> None:
+        """AC12: old 'All module-owned data for the source is removed' Guarantees wording replaced."""
+        from owlbear_knowledge.protocols.ingest import IngestCoordinator as ProtocolIC
+
+        method = getattr(ProtocolIC, "delete_source", None)
+        assert method is not None, "delete_source not found on protocol IngestCoordinator"
+        doc = method.__doc__ or ""
+        assert "All module-owned data for the source is removed" not in doc, (
+            f"Old Guarantees clause still present in protocol docstring: {doc!r}"
+        )
+
+    def test_protocol_delete_source_non_guarantee_chunk_addressability(self) -> None:
+        """AC12: protocol Non-guarantee mentions 'chunk addressability' loss on retry."""
+        from owlbear_knowledge.protocols.ingest import IngestCoordinator as ProtocolIC
+
+        method = getattr(ProtocolIC, "delete_source", None)
+        assert method is not None, "delete_source not found on protocol IngestCoordinator"
+        doc = method.__doc__ or ""
+        assert "chunk addressability" in doc.lower(), (
+            f"Expected protocol Non-guarantee about chunk addressability, got: {doc!r}"
+        )
+
+    def test_protocol_delete_source_non_guarantee_graph_evidence_persists(self) -> None:
+        """AC12: protocol Non-guarantee mentions graph evidence persists after retry."""
+        from owlbear_knowledge.protocols.ingest import IngestCoordinator as ProtocolIC
+
+        method = getattr(ProtocolIC, "delete_source", None)
+        assert method is not None, "delete_source not found on protocol IngestCoordinator"
+        doc = method.__doc__ or ""
+        assert "original chunks persists" in doc.lower(), (
+            f"Expected protocol Non-guarantee to say evidence from original chunks persists, got: {doc!r}"
         )
