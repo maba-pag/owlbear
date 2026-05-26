@@ -1,10 +1,10 @@
 ---
 id: 1885
 title: 'Knowledge: ContentFetcher protocol — fetch abstraction for refresh'
-status: review
+status: archived
 priority: needed
 created: 2026-05-26T06:08:59.378851+02:00
-updated: 2026-05-26T09:39:06.158143+02:00
+updated: 2026-05-26T10:04:31.086045+02:00
 tags:
   - knowledge
   - layer-2
@@ -33,7 +33,7 @@ proof_bundle: smoke
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Objective
@@ -352,3 +352,73 @@ Architecture Review (Cycle 2): Resolved review-cycle deadlock. Triaged reviewer 
 | AC7 import boundary | 2 | forbidden list + full allowlist (stdlib+pydantic+knowledge roots) |
 
 **Builder skip:** test-only retry, all 16 tests green against current implementation.
+
+[[2026-05-26T09:49:27+02:00]]
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation: PASS #1885 to docs | AC mapped to code and evidence sufficient.
+- Builder evidence reviewed first: original builder quality-runner evidence reported 7 passing scoped tests, clean lint, and 100% coverage for `owlbear_knowledge.protocols.fetcher`. The cycle-3 test-writer retry reported 16 passing tests with clean lint for the current proof surface.
+- Independent verification: reviewer quality-runner reran scoped pytest for `tests/test_fetcher_protocol_1885.py` and ruff for `serve/knowledge/src/owlbear_knowledge/protocols/fetcher.py`, `serve/knowledge/src/owlbear_knowledge/protocols/__init__.py`, and `tests/test_fetcher_protocol_1885.py`; result was 16 passed, 0 failed, 0 skipped, and 0 lint violations.
+- Focused diagnostics: no editor errors in `serve/knowledge/src/owlbear_knowledge/protocols/fetcher.py`, `serve/knowledge/src/owlbear_knowledge/protocols/__init__.py`, or `tests/test_fetcher_protocol_1885.py`.
+
+| AC | Code Evidence | Test Evidence | Status |
+|---|---|---|---|
+| AC1 | `serve/knowledge/src/owlbear_knowledge/protocols/fetcher.py:20,23-27` | `tests/test_fetcher_protocol_1885.py:59,68,76` | PASS |
+| AC2 | `serve/knowledge/src/owlbear_knowledge/protocols/fetcher.py:30,33-34` | `tests/test_fetcher_protocol_1885.py:90,96,104` | PASS |
+| AC3 | `serve/knowledge/src/owlbear_knowledge/protocols/fetcher.py:37,40-41` | `tests/test_fetcher_protocol_1885.py:118,124,132` | PASS |
+| AC4 | `serve/knowledge/src/owlbear_knowledge/protocols/fetcher.py:45,48` | `tests/test_fetcher_protocol_1885.py:146,160,171,182,185,192` | PASS |
+| AC5 | `serve/knowledge/src/owlbear_knowledge/protocols/fetcher.py:56,61,65,68` | `tests/test_fetcher_protocol_1885.py:204,211,217,220,225,228,233,238,243,251` | PASS |
+| AC6 | `serve/knowledge/src/owlbear_knowledge/protocols/__init__.py:51,191,192,195,222` | `tests/test_fetcher_protocol_1885.py:262,267,268` | PASS |
+| AC7 | `serve/knowledge/src/owlbear_knowledge/protocols/fetcher.py:7,9,11,13,16,17` | `tests/test_fetcher_protocol_1885.py:300,309,315,328,335` | PASS |
+
+## Observations
+- No blocking findings. The cycle-3 retry closes the prior proof gaps on required-field checks, source parameter kind, and full import allowlist enforcement.
+- Smoke-scope proof is aligned with the Cycle 2 architecture guidance; no additional objective proof gap remains for this task.
+- Grep search found no non-test production consumers of `SourceFetcher` yet; the contract surface remains isolated ahead of follow-up #1886.
+
+[[2026-05-26T09:59:41+02:00]]
+## Docs Gate
+
+**Upstream evidence:** Review PASS verdict present — 3-cycle review concluded with clean independent quality-runner run (16 passed, 0 failed, ruff clean).
+
+**Convention mapping:** `serve/knowledge/src/**` → `serve/knowledge/README.md`
+
+### Checklist
+
+| # | Item | Result | Evidence |
+|---|------|--------|----------|
+| 1 | README Verification | PASS — no update needed | `serve/knowledge/README.md` reviewed (120 lines). Task adds `FetchedDocument`, `FetchError`, `FetchResult`, `SourceFetcher` to existing protocols package. All 4 types are in `protocols/__init__.__all__`. These are internal boundary abstractions with no current production consumers (confirmed by reviewer grep). Module groups table describes consumer-facing surface accurately — no change in public behavior. No contradictions introduced. |
+| 2 | External Attribution | N/A | Greenfield protocol definition from internal architectural research + challenger review. No external sources used. |
+| 3 | Research Doc | PASS | `.owlbear/research/1885-contentfetcher-protocol.md` exists and linked from task body (Research section, line 63). |
+| 4 | Deletion Detection | N/A | Changed files are additions only: `protocols/fetcher.py` (new) and `protocols/__init__.py` (additions only). No symbols removed, no orphaned references. |
+
+**Files updated:** None (no task-caused doc gaps).
+
+**Scratch cleanup:** No `1885-*` scratch files found.
+
+[[2026-05-26T10:04:31+02:00]]
+## Audit
+### Regression Detection
+- quality-runner mode full: 5492 passed, 139 failed (all pre-existing in unrelated domains: kanban engine, frontend polling, dispatch gate, support module migration), 14 skipped
+- Task-scoped: 16 passed, 0 failed, clean lint on changed files
+- Lint violations (13) all in OTHER protocol files (content.py, enrichment.py, ingest.py, query.py, registry.py) — pre-existing, not introduced by this task
+- regression verdict: PASS (no task-caused regressions)
+
+### Intent Verification
+- scope alignment: PASS (changed files: protocols/fetcher.py [new], protocols/__init__.py [updated] — both in serve/knowledge/src/owlbear_knowledge/protocols/)
+- purpose match: PASS (defines SourceFetcher protocol for IngestCoordinator.refresh() as stated in objective)
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 5/5
+Specific, complete, clean implementation path. 7 precise AC lines drove 3-cycle iterative test quality improvement. Research and challenger produced well-scoped protocol design. Naming and contract clarity excellent.
+
+### Commit Integrity
+- upstream commit presence: PASS (builder: 707ec2ea, test-writer: 368f238f + 5a3f4e23)
+- kanban commit packaging: pending (this step)
+
+### Deduction Breakdown
+No deductions applied. All criteria clean.
+
+### Confidence: 1.00
+### Action: archive
