@@ -210,7 +210,8 @@ class TestFromAC_EndToEndDecisionResolution:
         assert response.status_code == 200
 
         task = engine.show_task(str(task_id))
-        # The submitted (non-recommended) option label must appear, not the recommended one
+        # The DR header, the submitted (non-recommended) option label, and unblock must all hold
+        assert "## DR: Choose approach" in task.body
         assert "- **Selected:** Option Beta" in task.body
         assert "Option Alpha" not in task.body
         assert task.blocked is False
