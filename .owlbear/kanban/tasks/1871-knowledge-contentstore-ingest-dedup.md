@@ -4,7 +4,7 @@ title: 'Knowledge: ContentStore — ingest & dedup'
 status: todo
 priority: needed
 created: 2026-05-25T19:02:58.711699+02:00
-updated: 2026-05-26T01:49:12.048258+02:00
+updated: 2026-05-26T03:42:13.892121+02:00
 tags:
   - knowledge
   - layer-1
@@ -43,7 +43,7 @@ ac:
 proof_bundle: behavioral
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-26T03:42:13.892121+02:00
 archival_reason:
 archival_refs: []
 ---
@@ -480,3 +480,141 @@ Architecture Review Cycle 3: Added explicit upsert-payload proof strategy for al
 |---|-------------|----------------|---------|----------|
 | 1 | test-writer | Update `TestFromAC` AC8/AC1 vector-write assertions that currently rely on `mock_vectors.called` to assert actual vector-write API usage (`mock_vectors.upsert.called` and/or upsert payload IDs) so dead bare-call removal remains valid. | tests/test_content_store_1871.py | Builder probe run after removing bare call: only `test_ingest_created_upserts_vectors_to_qdrant` and `test_ingest_retry_after_qdrant_failure_writes_vectors` failed due parent-mock `called` assertion mismatch. |
 | 2 | test-writer | Re-run RED and keep dispatch in `todo` until updated `TestFromAC_*` suite fails only on true implementation gaps (not parent-mock callable parity artifacts). | tests/test_content_store_1871.py | Current baseline: 39 passed / 5 failed; probe run: 42 passed / 2 failed with dead-call removed. |
+
+[[2026-05-26T02:40:19+02:00]]
+## Test-Writer Notes
+- Test file: tests/test_content_store_1871.py
+- Classes: TestFromAC_ContentStore (2 existing tests updated)
+- Changes: updated `test_ingest_created_upserts_vectors_to_qdrant` and `test_ingest_retry_after_qdrant_failure_writes_vectors` from `mock_vectors.called` → `mock_vectors.upsert.called`
+- New tests: 0 (surgery on existing assertions only)
+- Total: 44 tests; 39 PASS, 5 FAIL (all no_bare_call AC8 tests), ruff clean
+
+### Why this cycle had no new tests
+Builder probe revealed the 5 existing no_bare_call tests are still the correct RED signal — they fail because the dead bare `self._vector_store()` call in `_upsert_vectors` sets `mock_vectors.call_count >= 1`. The two old tests were asserting `mock_vectors.called` which passed only due to that dead code, masking the gap. Updated to `mock_vectors.upsert.called` so they remain valid after the builder removes the dead call.
+
+### Failing tests (all from cycle 4 — still the correct RED signal)
+| Test | AC | Gap |
+|------|----|-----|
+| test_ingest_created_upserts_exact_chunk_ids_no_bare_call | AC8 | Dead bare call makes mock_vectors.call_count=1 |
+| test_ingest_replaced_upserts_exact_new_chunk_ids_no_bare_call | AC8 | Same |
+| test_ingest_retry_after_failure_upserts_exact_chunk_ids_no_bare_call | AC1+AC8 | Same |
+| test_ingest_replaced_retry_delete_failure_upserts_exact_v2_ids_no_bare_call | AC1+AC8 | Same |
+| test_ingest_replaced_retry_convergence_exact_ids_no_bare_call | AC1+AC3+AC8 | Same |
+
+### Builder guidance (unchanged from cycle 4)
+- Remove bare `self._vector_store()` call + comment from `_upsert_vectors` (~line 389 in content.py)
+- After removal: `test_ingest_created_upserts_vectors_to_qdrant` and `test_ingest_retry_after_qdrant_failure_writes_vectors` will continue to PASS (they now assert `mock_vectors.upsert.called` which is set by the real upsert path)
+- All 5 no_bare_call tests will pass once dead code removed
+- Commit: 2399cfcd
+
+[[2026-05-26T02:48:21+02:00]]
+## Builder Notes
+- Implementation: removed dead bare callable invocation from vector upsert mock path in serve/knowledge/src/owlbear_knowledge/stores/content.py so vector writes are asserted through real upsert payload calls only.
+- Files changed: serve/knowledge/src/owlbear_knowledge/stores/content.py
+- RED verification (quality-runner, scoped): tests/test_content_store_1871.py -> 39 passed, 5 failed (expected no-bare-call TestFromAC failures), lint clean.
+- GREEN verification (quality-runner, scoped): tests/test_content_store_1871.py -> 44 passed, 0 failed, 0 skipped.
+- Coverage (quality-runner): owlbear_knowledge.stores.content -> 90%.
+- Lint (quality-runner): clean=true, violations=0 for serve/knowledge/src/owlbear_knowledge/stores/content.py and tests/test_content_store_1871.py.
+- Module-level durable tests: no serve/knowledge/tests/test_content.py and no tests/test_content.py found (skip recorded per workflow).
+- Commit: 6a1b79c1 fix: remove dead vector-store parity call (#1871, builder)
+- Evidence summary: all five AC8 no-bare-call regressions are now green; task-scoped suite fully passes with required coverage threshold met.
+
+[[2026-05-26T03:14:43+02:00]]
+## Review Evidence
+- Verdict: FAIL
+- Routing: backlog (repeated review cycle with blocking proof-sufficiency gap)
+- Builder evidence reviewed first: scoped quality-runner notes report `tests/test_content_store_1871.py` 44 passed / 0 failed / 0 skipped, coverage 90% for `owlbear_knowledge.stores.content`, and lint clean.
+- Challenger cross-check: block on the same AC8 proof gap.
+- Blocking findings:
+
+| # | AC Line | Finding | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | AC8 | The happy-path `REPLACED` proof still does not verify that `delete(ids=...)` receives the exact stale chunk IDs. The current success-path test proves only that some delete occurs before some upsert, while the implementation treats that delete as authoritative and then clears recovery state. A wrong-ID delete on the normal `REPLACED` path could therefore leave stale vectors behind and still false-green. | `tests/test_content_store_1871.py:449`, `tests/test_content_store_1871.py:464`, `tests/test_content_store_1871.py:868`, `tests/test_content_store_1871.py:893`, `serve/knowledge/src/owlbear_knowledge/stores/content.py:234`, `serve/knowledge/src/owlbear_knowledge/stores/content.py:235`, `serve/knowledge/src/owlbear_knowledge/stores/content.py:240`, `serve/knowledge/src/owlbear_knowledge/stores/content.py:427` | backlog |
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Tighten the AC8 proof plan so the successful `REPLACED` path must assert the exact stale chunk IDs passed to `delete(ids=...)`, then re-dispatch test-writer and builder for that narrower proof gap. | `.owlbear/kanban/tasks/1871-knowledge-contentstore-ingest-dedup.md`, `tests/test_content_store_1871.py` | Finding #1; `tests/test_content_store_1871.py:449`, `tests/test_content_store_1871.py:464`, `serve/knowledge/src/owlbear_knowledge/stores/content.py:234`, `serve/knowledge/src/owlbear_knowledge/stores/content.py:235`, `serve/knowledge/src/owlbear_knowledge/stores/content.py:240` |
+
+## Observations
+- The dead mock-parity call is gone, and the newer AC8 proof now correctly asserts exact upsert payload IDs for CREATED, REPLACED, and retry-repair paths.
+- The retry-repair delete proof is strong: `test_ingest_replaced_retry_deletes_stale_vectors_after_failed_delete` checks that all stale V1 IDs are deleted on retry. The remaining gap is only the first successful `REPLACED` delete path.
+- I did not rerun quality-runner independently because the builder packet is internally consistent; the blocker is assertion strength in the task-scoped proof, not contradictory execution evidence.
+
+[[2026-05-26T03:30:22+02:00]]
+## Architecture Review (Cycle 4)
+### Context
+Fourth review after reviewer rejected for happy-path REPLACED delete-payload proof gap. The retry-delete proof is strong (`test_ingest_replaced_retry_deletes_stale_vectors_after_failed_delete` verifies exact V1 IDs on retry). The normal REPLACED path's delete has ordering proof but no ID-payload verification. Since `_delete_vectors(replaced_ids)` immediately followed by `_set_pending_delete_chunk_ids(document_id, ())` clears recovery state, a wrong-ID delete here would leave stale vectors permanently orphaned with no retry path.
+
+### AC Assessment
+| AC | Assessment | Action |
+|----|-----------|--------|
+| AC1-AC9 | All wording correct and mechanically bounded | No change |
+
+AC8 "deletes stale vectors" is mechanically bounded: stale = chunk IDs from the prior document version = `result1.chunk_ids` from the first ingest. The proof gap is assertion strength, not AC specification.
+
+### Design Guidance for Test-Writer
+
+#### Proof strategy (AC8 delete-payload verification on happy-path REPLACED)
+The existing `test_ingest_replaced_deletes_old_vectors_before_upsert` must be extended (or a companion test added) to verify exact stale chunk IDs passed to `delete(ids=...)`:
+
+```python
+# After first ingest:
+result1 = await store.ingest(req1)
+v1_chunk_ids = set(result1.chunk_ids)
+mock_vectors.reset_mock()
+
+# After second ingest (REPLACED):
+result2 = await store.ingest(req2)
+
+# Verify exact delete payload:
+delete_call = mock_vectors.delete.call_args
+assert delete_call is not None, \"REPLACED must call delete\"
+deleted_ids = set(delete_call.kwargs[\"ids\"])
+assert deleted_ids == v1_chunk_ids, (
+    f\"AC8: delete must receive exactly the V1 chunk IDs. \"
+    f\"Expected {v1_chunk_ids}, got {deleted_ids}\"
+)
+```
+
+This is the delete-side counterpart to the upsert-payload verification already proven in cycle 3/4. The observable is finite and deterministic: `result1.chunk_ids` is the authoritative source of stale IDs.
+
+#### Why this cycle differs from prior AC8 proof guidance
+Cycle 3 guidance targeted upsert-payload verification (5 tests). This cycle targets the single remaining gap: delete-payload verification on the normal REPLACED path. The retry-delete proof (`test_ingest_replaced_retry_deletes_stale_vectors_after_failed_delete`) already verifies exact V1 IDs — that pattern is the template.
+
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Unchanged |
+| Interface clarity | PASS | Observable mechanically bounded by result.chunk_ids |
+| Dependency correctness | PASS | No new deps |
+| Module layering | PASS | Content layer-1, no upward imports |
+| TDD compliance | PASS | Targeted assertion strengthening |
+| KISS/YAGNI | PASS | Single assertion addition |
+| Premise challenge | PASS | Required for knowledge pipeline convergence |
+| Pattern consistency | PASS | Mirrors existing retry-delete and upsert-payload patterns |
+| Security surface | PASS | No new boundaries |
+| Single domain | PASS | Knowledge only |
+
+### Failure Mode Map
+No new failure modes — this cycle is proof-strengthening only.
+
+### Design Diverge
+- Trigger: skipped — single clear action (add delete-payload assertion)
+
+### Challenge Results
+- Challenger: reconsider (0.62)
+- Findings: record overclaim (reviewer validation), AC sufficiency overclaim (stale binding), consequence understatement (cleared recovery state), proof-pattern mismatch (aggregation vs single call)
+- Architect response: accepted 3/4. Dropped reviewer-validation claim. Made proof strategy explicitly bind stale to result1.chunk_ids. Acknowledged consequence (wrong-ID delete clears recovery state permanently). Rebutted pattern mismatch: delete is single-call (`_delete_vectors` calls `delete(ids=list(chunk_ids))` once), so `call_args` is correct; no aggregation needed unlike multi-call upsert.
+
+### Proof-Bundle Validation
+- Planner assignment: behavioral
+- Final bundle: behavioral
+- Existing proof scope: N/A
+- Test-writer: PROCEED
+
+### Verdict: APPROVE
+### Action Taken: Added explicit delete-payload proof strategy for happy-path REPLACED test (single remaining gap). No AC wording change needed — observable is mechanically bounded. Advanced to todo.
+
+[[2026-05-26T03:30:27+02:00]]
+Architecture Review Cycle 4: Added explicit delete-payload proof strategy for happy-path REPLACED test — the single remaining gap after 3 prior cycles closed upsert-payload, retry-delete, and dead-code issues. Observable is mechanically bounded by result1.chunk_ids. No AC wording change. Challenger accepted (3/4 findings incorporated). Proof bundle: behavioral.

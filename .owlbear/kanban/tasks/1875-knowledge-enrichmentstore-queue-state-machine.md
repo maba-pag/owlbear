@@ -1,10 +1,10 @@
 ---
 id: 1875
 title: 'Knowledge: EnrichmentStore — queue state machine'
-status: review
+status: backlog
 priority: needed
 created: 2026-05-25T19:03:53.062341+02:00
-updated: 2026-05-26T01:52:39.874012+02:00
+updated: 2026-05-26T03:41:21.119618+02:00
 tags:
   - knowledge
   - layer-1
@@ -14,7 +14,8 @@ depends_on: []
 ac:
   - enqueue_chunks(chunk_ids, source_id) transitions chunks to PENDING; returns 
     count enqueued; idempotent (already-completed/in-progress not re-enqueued); 
-    raises ValueError if chunk_ids is empty
+    FAILED items are revived to PENDING with attempts count preserved and 
+    last_error cleared; raises ValueError if chunk_ids is empty
   - discard_chunks(chunk_ids) removes PENDING and FAILED items; leaves 
     IN_PROGRESS untouched; returns EnrichmentDiscardResult; idempotent (absent 
     chunks silently ignored)
@@ -25,7 +26,8 @@ ac:
     exceeds 600s claim_ttl back to PENDING before selecting candidates (system 
     invariant, not caller-tunable)
   - mark_failed(chunk_id, error) increments attempts; if attempts >= per-item 
-    max_retries (stored at claim time) transitions to FAILED permanently; 
+    max_retries (stored at claim time) transitions to FAILED (not retried by 
+    mark_failed; may be explicitly re-enqueued via enqueue_chunks per AC1); 
     otherwise returns to PENDING for retry; raises LookupError if chunk_id not 
     IN_PROGRESS
   - stats() returns EnrichmentStats with counts per state (pending, in_progress,
@@ -161,3 +163,102 @@ Architecture review complete. Refined AC: removed submit_extractions (belongs to
 - Lint: `ruff clean` (`clean: true`, no violations) for [serve/knowledge/src/owlbear_knowledge/stores/enrichment.py](serve/knowledge/src/owlbear_knowledge/stores/enrichment.py) and [tests/test_enrichment_store_1875.py](tests/test_enrichment_store_1875.py).
 - Module-level durable test file check: no existing module-level durable enrichment test file found (`serve/knowledge/tests/test_enrichment_store.py` absent; `tests/test_enrichment_store.py` absent) — skipped per workflow guidance.
 - Commit: `e1b8ae28` (`feat: implement enrichment queue state machine (#1875, builder)`).
+
+[[2026-05-26T02:44:55+02:00]]
+## Review Evidence
+- Verdict: FAIL
+- FAIL #1875 -> backlog | AC/protocol wording leaves FAILED re-enqueue behavior ambiguous, and current tests do not prove the disputed boundary.
+- Blocking findings:
+| # | AC Line | Finding | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | AC1 + AC5 | Cross-method contract is not independently verifiable: the protocol says only COMPLETED and IN_PROGRESS items are not re-enqueued, AC5 says mark_failed transitions to FAILED permanently, and the implementation revives FAILED items back to PENDING. Review cannot determine PASS or FAIL for this behavior from the written contract alone. | [.owlbear/kanban/tasks/1875-knowledge-enrichmentstore-queue-state-machine.md](.owlbear/kanban/tasks/1875-knowledge-enrichmentstore-queue-state-machine.md#L28), [.owlbear/kanban/tasks/1875-knowledge-enrichmentstore-queue-state-machine.md](.owlbear/kanban/tasks/1875-knowledge-enrichmentstore-queue-state-machine.md#L64), [serve/knowledge/src/owlbear_knowledge/protocols/enrichment.py](serve/knowledge/src/owlbear_knowledge/protocols/enrichment.py#L213), [serve/knowledge/src/owlbear_knowledge/protocols/enrichment.py](serve/knowledge/src/owlbear_knowledge/protocols/enrichment.py#L310), [serve/knowledge/src/owlbear_knowledge/stores/enrichment.py](serve/knowledge/src/owlbear_knowledge/stores/enrichment.py#L100) | backlog |
+| 2 | AC5 proof | The task tests prove non-reenqueue only for IN_PROGRESS and COMPLETED items and prove FAILED can be reached, but they never assert whether enqueue_chunks may or may not revive a FAILED item. The current green proof would pass under either interpretation. | [tests/test_enrichment_store_1875.py](tests/test_enrichment_store_1875.py#L83), [tests/test_enrichment_store_1875.py](tests/test_enrichment_store_1875.py#L90), [tests/test_enrichment_store_1875.py](tests/test_enrichment_store_1875.py#L281) | backlog |
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Clarify whether enqueue_chunks may revive FAILED items after mark_failed reaches max_retries, and rewrite the AC/protocol wording so the chosen behavior is independently verifiable. | .owlbear/kanban/tasks/1875-knowledge-enrichmentstore-queue-state-machine.md, serve/knowledge/src/owlbear_knowledge/protocols/enrichment.py | Finding #1 |
+| 2 | architect | Reissue proof expectations after the contract is explicit so downstream tests can assert the chosen FAILED-item behavior without guessing author intent. | .owlbear/kanban/tasks/1875-knowledge-enrichmentstore-queue-state-machine.md, tests/test_enrichment_store_1875.py | Finding #2 |
+
+## Observations
+- Builder evidence was otherwise sufficient: the task body includes scoped tests, coverage, and lint, and there are no current editor errors in [serve/knowledge/src/owlbear_knowledge/stores/enrichment.py](serve/knowledge/src/owlbear_knowledge/stores/enrichment.py) or [tests/test_enrichment_store_1875.py](tests/test_enrichment_store_1875.py).
+- The challenger cross-check did not support treating FAILED revival as a settled builder defect under the current wording, which is why this review routes to backlog rather than in-progress.
+
+[[2026-05-26T10:45:00+02:00]]
+## Architecture Review (Re-review)
+
+### Context
+Returning from review with FAIL: reviewer identified cross-method ambiguity between AC1 (re-enqueue) and AC5 (mark_failed \"permanently\") — current tests don't prove whether enqueue_chunks may revive FAILED items.
+
+### Design Decision: FAILED Re-enqueue Semantics
+
+**Chosen interpretation:** enqueue_chunks MAY revive FAILED items to PENDING.
+
+**Reasoning:**
+1. Protocol `enqueue_chunks` explicitly excludes only COMPLETED and IN_PROGRESS — FAILED is not excluded
+2. `discard_chunks` handles FAILED items (removes them) — proving FAILED is a reachable, manageable state, not truly terminal
+3. System purpose: operator should be able to retry after fixing root cause
+4. `attempts` preserved on revival (not reset): simpler semantics, tracks total failure history, operator uses higher `max_retries` at next claim_batch for more retries
+5. `source_id` preserved on revival: chunk's source document doesn't change
+
+**AC changes from first review:**
+- AC1: added explicit \"FAILED items are revived to PENDING with attempts count preserved and last_error cleared\"
+- AC5: replaced \"permanently\" with \"not retried by mark_failed; may be explicitly re-enqueued via enqueue_chunks per AC1\"
+
+### Builder Fix Required
+Implementation already revives FAILED→PENDING but test coverage is missing:
+- Add test: `enqueue_chunks` on a FAILED item → returns count=1, state becomes PENDING, attempts preserved
+- Ensure existing test suite passes under the explicit contract
+
+### Protocol Follow-up
+Protocol file `mark_failed` docstring says \"transitions to FAILED permanently\" which conflicts with the re-enqueue permission. This is a documentation-level fix for a separate task (protocol wording cleanup). This task's AC is self-contained and independently verifiable.
+
+### Challenge Results
+- Challenger: reconsider (confidence 0.39)
+- Key findings: protocol contradiction, vague \"claim cycle\" boundary, unjustified attempts-reset
+- Architect response: accepted key findings — dropped attempts-reset (preserve instead), dropped \"claim cycle\" phrasing, replaced with concrete cross-reference between AC1 and AC5. Protocol contradiction acknowledged as out-of-scope follow-up.
+
+### Proof-Bundle Validation
+- Planner assignment: behavioral
+- Final bundle: behavioral
+- Test-writer: PROCEED (new test for FAILED re-enqueue boundary)
+
+### Verdict: APPROVE
+### Action Taken: AC refined to explicitly resolve FAILED re-enqueue ambiguity (the reviewer-identified gap). Attempts preserved, cross-references between AC1↔AC5 make behavior independently verifiable. Advanced to todo for test-writer to add the missing boundary test.
+
+[[2026-05-26T03:06:55+02:00]]
+Architecture re-review complete. Resolved reviewer-identified ambiguity: FAILED items ARE re-enqueueable (attempts preserved, last_error cleared). AC1 and AC5 now cross-reference each other for independent verifiability. Builder needs one new boundary test (FAILED re-enqueue). Proof bundle: behavioral.
+
+[[2026-05-26T03:20:28+02:00]]
+## Test-Writer Notes
+- Retry: added 3 tests for reviewer gap (AC1 x AC5 FAILED re-enqueue boundary). All 3 PASS against current implementation.
+- Builder skip: test-only retry, all new tests green — implementation already correct.
+- Test file: tests/test_enrichment_store_1875.py
+- New tests: TestFromAC_EnrichmentStore (3 additions to existing class)
+  - test_enqueue_revives_failed_item_to_pending_and_returns_count_one
+  - test_enqueue_preserves_attempts_count_on_failed_item_revival
+  - test_enqueue_clears_last_error_on_failed_item_revival
+- Total test suite: 42 tests, all PASS
+- ruff: clean
+- AC coverage gap filled: AC1 x AC5 cross-method contract now independently verifiable
+
+[[2026-05-26T03:41:21+02:00]]
+## Review Evidence
+- Verdict: FAIL
+- FAIL #1875 -> backlog | AC4 says stale claims are reclaimed only after the age exceeds 600s, but `claim_batch` currently reclaims at the 600s boundary and the tests do not prove that exact edge.
+- Blocking findings:
+| # | AC Line | Finding | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | AC4 | Literal AC mismatch: the task contract requires reclaim only when the claim timestamp exceeds 600s, but `claim_batch` uses `started_at <= datetime('now', ?)` with `-600 seconds`, which reclaims an item exactly at the 600s boundary too. | [.owlbear/kanban/tasks/1875-knowledge-enrichmentstore-queue-state-machine.md](.owlbear/kanban/tasks/1875-knowledge-enrichmentstore-queue-state-machine.md#L25), [serve/knowledge/src/owlbear_knowledge/stores/enrichment.py](serve/knowledge/src/owlbear_knowledge/stores/enrichment.py#L148), [serve/knowledge/src/owlbear_knowledge/stores/enrichment.py](serve/knowledge/src/owlbear_knowledge/stores/enrichment.py#L152), [serve/knowledge/src/owlbear_knowledge/stores/enrichment.py](serve/knowledge/src/owlbear_knowledge/stores/enrichment.py#L157) | backlog |
+| 2 | AC4 proof | The proof surface does not lock down the exact TTL edge: tests cover reclaim at 701 seconds stale and non-reclaim for a fresh item, but nothing asserts the exact 600-second boundary. The suite would pass under either `>` or `>=` semantics. | [tests/test_enrichment_store_1875.py](tests/test_enrichment_store_1875.py#L236), [tests/test_enrichment_store_1875.py](tests/test_enrichment_store_1875.py#L252), [tests/test_enrichment_store_1875.py](tests/test_enrichment_store_1875.py#L260) | backlog |
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Reissue the stale-claim boundary explicitly as either `>600s` or `>=600s` for `claim_batch`, because this repeated review cycle cannot pass with the current literal AC-to-code mismatch. | .owlbear/kanban/tasks/1875-knowledge-enrichmentstore-queue-state-machine.md, serve/knowledge/src/owlbear_knowledge/protocols/enrichment.py | Finding #1 |
+| 2 | architect | Reissue proof expectations that require an exact 600-second boundary test before the task returns to review. | .owlbear/kanban/tasks/1875-knowledge-enrichmentstore-queue-state-machine.md, tests/test_enrichment_store_1875.py | Finding #2 |
+
+## Observations
+- The earlier AC1 x AC5 FAILED-item revival ambiguity is resolved for this task: the task AC now explicitly allows revival, and the retry tests prove count, attempts preservation, and `last_error` clearing at [tests/test_enrichment_store_1875.py](tests/test_enrichment_store_1875.py#L397), [tests/test_enrichment_store_1875.py](tests/test_enrichment_store_1875.py#L412), and [tests/test_enrichment_store_1875.py](tests/test_enrichment_store_1875.py#L427).
+- Builder evidence was otherwise sufficient for review: prior scoped quality-runner evidence reported 39 passing tests, 94% coverage, and clean lint, and the test-writer retry added 3 more passing tests for the AC1 x AC5 gap at [.owlbear/kanban/tasks/1875-knowledge-enrichmentstore-queue-state-machine.md](.owlbear/kanban/tasks/1875-knowledge-enrichmentstore-queue-state-machine.md#L161), [.owlbear/kanban/tasks/1875-knowledge-enrichmentstore-queue-state-machine.md](.owlbear/kanban/tasks/1875-knowledge-enrichmentstore-queue-state-machine.md#L162), [.owlbear/kanban/tasks/1875-knowledge-enrichmentstore-queue-state-machine.md](.owlbear/kanban/tasks/1875-knowledge-enrichmentstore-queue-state-machine.md#L163), [.owlbear/kanban/tasks/1875-knowledge-enrichmentstore-queue-state-machine.md](.owlbear/kanban/tasks/1875-knowledge-enrichmentstore-queue-state-machine.md#L234), and [.owlbear/kanban/tasks/1875-knowledge-enrichmentstore-queue-state-machine.md](.owlbear/kanban/tasks/1875-knowledge-enrichmentstore-queue-state-machine.md#L241).
+- Non-blocking: the test header still says "FAILED permanent" at [tests/test_enrichment_store_1875.py](tests/test_enrichment_store_1875.py#L14), which no longer matches the clarified AC.

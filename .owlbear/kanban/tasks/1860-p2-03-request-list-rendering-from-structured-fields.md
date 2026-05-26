@@ -1,10 +1,10 @@
 ---
 id: 1860
 title: 'P2-03: Request list rendering from structured fields'
-status: todo
+status: backlog
 priority: needed
 created: 2026-05-24T20:59:27.659879+02:00
-updated: 2026-05-26T02:01:07.786439+02:00
+updated: 2026-05-26T03:43:17.414931+02:00
 tags:
   - phase-2
   - scope:cockpit-web
@@ -13,22 +13,21 @@ parent: 1850
 depends_on:
   - 1857
 ac:
-  - 'Each request card (`[data-testid="dr-item-{id}"]`) renders from `PendingDR` fields
-    directly — `getDecisionBrief()` removed. Card shows: kind badge (PTag: "Decision"/"Action"
-    per `item.kind`), `item.title` heading, `item.summary` text, `item.agent` attribution,
-    `item.created` via `formatAge`. Decision-kind cards add: option count text and
-    one confidence bar per option (width=`confidence*100`%, testid `confidence-bar-{option_id}`).'
-  - "Clicking `[data-testid=\"dr-item-{id}\"]` opens the resolve modal showing that
-    item's title. Mechanism: existing `setSelectedDRId`; no new routing components
-    created by this task."
-  - 'Empty state (`[data-testid="decisions-empty-state"]`): "No pending requests"
-    when items empty and not loading. Sort order (oldest-first by `created`) preserved.
-    Old brief-section layout (context/recommendation/consequence from body parsing)
-    intentionally replaced by the structured-field card layout.'
+  - 'Request card (`dr-item-{id}`) renders from PendingDR fields; `getDecisionBrief()`
+    removed. Shows: kind badge (Decision/Action from item.kind), item.title, item.summary,
+    item.agent, formatAge(item.created). Decision-kind adds: option count + confidence
+    bar per option (width=Math.round(confidence*100)%, testid confidence-bar-{option_id}).
+    One test asserts non-round-tripping fractional confidence (e.g. 0.333 -> 33%).'
+  - "Clicking dr-item-{id} opens resolve modal showing that item's title. Mechanism:
+    existing setSelectedDRId; no new routing components created by this task."
+  - 'Empty state (decisions-empty-state): "No pending requests" when items empty and
+    not loading. Sort order (oldest-first by created) preserved. Old brief-section
+    layout (context/recommendation/consequence from body parsing) intentionally replaced
+    by structured-field card layout.'
 proof_bundle: behavioral
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-26T03:42:39.569708+02:00
 archival_reason:
 archival_refs: []
 ---
@@ -289,3 +288,42 @@ AC unchanged and still precise. Implementation complete and reviewer-verified. N
 
 ### Verdict: APPROVE (re-entry)
 ### Action Taken: Re-approved to todo. Test-writer must curate DecisionContract.test.tsx:415 to align with AC1 agent-attribution contract, then builder-skip applies if all suites pass against current source.
+
+[[2026-05-26T02:49:48+02:00]]
+## Test-Writer Notes
+- Retry: curated DecisionContract.test.tsx stale assertion per auditor Required Follow-up 1.
+- File updated: serve/cockpit/web/src/__tests__/DecisionContract.test.tsx
+- Changes: added required PendingDR structured fields (kind, summary, options) to drWithAllFields fixture; flipped stale `.not.toContain('builder')` → `.toContain('builder')` at line 415 to align with AC1 agent-attribution contract; updated stale comment.
+- quality-runner (scoped): 4 passed, 0 failed; ESLint clean.
+- Builder skip: test-only retry, all tests green against current implementation.
+- Commit: 9a5bf2fa
+
+[[2026-05-26T03:32:57+02:00]]
+## Review Evidence
+- Verdict: FAIL
+- FAIL summary: FAIL #1860 -> backlog | AC1 still does not have sufficient implementation/proof for the literal `confidence*100%` width contract, and this is a repeated review cycle.
+- Builder/test-writer evidence reviewed first: the current retry only updates `serve/cockpit/web/src/__tests__/DecisionContract.test.tsx` and reports `quality-runner (scoped): 4 passed, 0 failed; ESLint clean` with builder-skip in `.owlbear/kanban/tasks/1860-p2-03-request-list-rendering-from-structured-fields.md:298-299`.
+
+| AC Line | Code Evidence | Test Evidence | Status |
+|---|---|---|---|
+| AC1 | The task contract requires confidence-bar width=`confidence*100`% at `.owlbear/kanban/tasks/1860-p2-03-request-list-rendering-from-structured-fields.md:20`. The current page helper rounds before rendering at `serve/cockpit/web/src/pages/DecisionsPage.tsx:18-23`, and the visible bar uses that rounded value at `serve/cockpit/web/src/pages/DecisionsPage.tsx:137`. The same workspace still models confidence as arbitrary numeric input at `serve/cockpit/web/src/hooks/usePendingDRs.ts:23` and `serve/cockpit/src/owlbear_cockpit/routes/requests.py:27`, and the sibling resolver renders the literal formula at `serve/cockpit/web/src/components/ResolveModal.tsx:431`. | The task suite only proves round-tripping cases at `serve/cockpit/web/src/__tests__/DecisionsPage_1860.test.tsx:209-224` (75%, 25%, 0%, 100%), so rounding stays invisible. The re-entry retry only fixes agent attribution in `serve/cockpit/web/src/__tests__/DecisionContract.test.tsx:418` and does not add a non-round-tripping fractional case. | FAIL |
+| AC2 | Card click/key activation still routes through `setSelectedDRId(item.id)` at `serve/cockpit/web/src/pages/DecisionsPage.tsx:83-88`, Shell still mounts `ResolveModal` from `selectedDR` at `serve/cockpit/web/src/Shell.tsx:841-848`, and the modal still renders the selected title from snapshot data at `serve/cockpit/web/src/components/ResolveModal.tsx:151-158` and `serve/cockpit/web/src/components/ResolveModal.tsx:337`. | Existing focused proof remains intact at `serve/cockpit/web/src/__tests__/DecisionsPage_1860.test.tsx:240-249`, `serve/cockpit/web/src/__tests__/DecisionsTab.integration.test.tsx:392-432`, and `serve/cockpit/web/src/__tests__/ResolveModalSnapshot_1647.test.tsx:229-251`. | PASS |
+| AC3 | Oldest-first sort and empty-state copy remain in `serve/cockpit/web/src/pages/DecisionsPage.tsx:47` and `serve/cockpit/web/src/pages/DecisionsPage.tsx:67`; the current render block no longer emits the retired brief sections. | Existing focused and durable proof remains intact at `serve/cockpit/web/src/__tests__/DecisionsPage_1860.test.tsx:254-292`, `serve/cockpit/web/src/__tests__/DecisionsPage_1645.test.tsx:193-241`, `serve/cockpit/web/src/__tests__/DecisionsPage_1645.test.tsx:307-311`, and `serve/cockpit/web/src/__tests__/DecisionsPage_1688.test.tsx:115-158`. | PASS |
+
+- Blocking findings:
+
+| # | AC Line | Finding | Evidence | Route |
+|---|---|---|---|---|
+| 1 | AC1 | The implementation still rounds confidence widths, so it does not satisfy the task's literal `confidence*100%` contract for valid fractional inputs such as `0.333` or `0.875`. | `.owlbear/kanban/tasks/1860-p2-03-request-list-rendering-from-structured-fields.md:20`; `serve/cockpit/web/src/pages/DecisionsPage.tsx:18-23`; `serve/cockpit/web/src/pages/DecisionsPage.tsx:137`; `serve/cockpit/web/src/components/ResolveModal.tsx:431`; `serve/cockpit/web/src/hooks/usePendingDRs.ts:23`; `serve/cockpit/src/owlbear_cockpit/routes/requests.py:27` | backlog |
+| 2 | AC1 | The proof surface is still insufficient for that contract because all current width assertions use values where rounding is invisible, and the latest retry only cures the stale agent-attribution contradiction. | `serve/cockpit/web/src/__tests__/DecisionsPage_1860.test.tsx:209-224`; `serve/cockpit/web/src/__tests__/DecisionContract.test.tsx:418`; `.owlbear/kanban/tasks/1860-p2-03-request-list-rendering-from-structured-fields.md:298-299` | backlog |
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Re-open the confidence-width contract and route a builder follow-up to remove rounding from the DecisionsPage confidence-bar width calculation or explicitly refine the AC if rounded percentages are intended. | serve/cockpit/web/src/pages/DecisionsPage.tsx; .owlbear/kanban/tasks/1860-p2-03-request-list-rendering-from-structured-fields.md; serve/cockpit/web/src/components/ResolveModal.tsx | Blocking finding 1 |
+| 2 | architect | Require a non-round-tripping fractional-confidence proof case in the DecisionsPage proof surface before the task returns to review. | serve/cockpit/web/src/__tests__/DecisionsPage_1860.test.tsx; serve/cockpit/web/src/__tests__/DecisionContract.test.tsx | Blocking finding 2 |
+
+## Observations
+- The retry did resolve the auditor-found stale durable assertion: `serve/cockpit/web/src/__tests__/DecisionContract.test.tsx:418` now aligns with the AC1 agent-attribution contract instead of contradicting it.
+- AC2 and AC3 remain sufficiently mapped to code and tests; the current rejection is isolated to AC1's confidence-width behavior/proof.
+- This is a repeated review cycle on the same task (`## Review Evidence` sections already exist at `.owlbear/kanban/tasks/1860-p2-03-request-list-rendering-from-structured-fields.md:138` and `.owlbear/kanban/tasks/1860-p2-03-request-list-rendering-from-structured-fields.md:180`), so the loop-breaker route to backlog is required.

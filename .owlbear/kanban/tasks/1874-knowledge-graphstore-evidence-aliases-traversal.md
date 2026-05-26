@@ -1,10 +1,10 @@
 ---
 id: 1874
 title: 'Knowledge: GraphStore — evidence, aliases & traversal'
-status: in-progress
+status: todo
 priority: needed
 created: 2026-05-25T19:03:39.489495+02:00
-updated: 2026-05-26T01:59:51.708001+02:00
+updated: 2026-05-26T03:43:18.097050+02:00
 tags:
   - knowledge
   - layer-1
@@ -16,8 +16,9 @@ ac:
   - add_evidence(EvidenceInput) links chunk to entity/edge; model_validator 
     enforces claim_type XOR; idempotent for same (chunk_id, claim_type, 
     target_id) identity — returns existing/updated EvidenceRecord
-  - claims_for_chunk(chunk_id) returns ChunkClaims with entity_ids, edge_ids, 
-    evidence_ids referencing that chunk; empty ChunkClaims for unknown chunk_id
+  - claims_for_chunk(chunk_id) returns ChunkClaims with only the entity_ids, 
+    edge_ids, evidence_ids whose evidence references that chunk; IDs linked via 
+    other chunks are excluded; empty ChunkClaims for unknown chunk_id
   - 'invalidate_evidence_by_chunks(chunk_ids) hard-deletes matching evidence records;
     entities/edges with zero remaining evidence are orphaned and deleted (cascade:
     aliases of orphaned entities and edges referencing orphaned entities also deleted);
@@ -137,3 +138,99 @@ Rationale: 6 protocol methods with failure modes, cascading deletion logic, and 
 | AC5 traverse | 11 | single/multi-hop, max_hops limit, relation_types filter, result size limit, no duplicates, LookupError, empty seed |
 | AC6 stats | 6 | all-zero empty store, entity/edge/evidence/alias counts |
 | AC7 ensure_tables | 5 | graph_evidence created, graph_aliases created, idempotent, chunk_id index, UNIQUE constraint |
+
+[[2026-05-26T02:45:57+02:00]]
+## Builder Notes
+- Implementation: serve/knowledge/src/owlbear_knowledge/stores/graph.py
+- Scope completed: extended `ensure_tables` with `graph_evidence` + `graph_aliases` (required indexes/constraints), implemented `add_evidence`, `claims_for_chunk`, `invalidate_evidence_by_chunks`, `add_alias`, `traverse`, `stats`, and supporting row/identity/orphan helpers.
+- RED verification: quality-runner on tests/test_graph_store_1874.py confirmed 50 failing TestFromAC cases before implementation (all NotImplementedError-origin failures).
+- GREEN verification: quality-runner on tests/test_graph_store_1874.py -> 50 passed, 0 failed, 0 skipped.
+- Coverage/Lint gate: quality-runner scoped run with tests/test_graph_store_1873.py + tests/test_graph_store_1874.py and coverage_modules=[owlbear_knowledge.stores.graph] -> 101 passed, 0 failed, coverage 93% on owlbear_knowledge.stores.graph, ruff clean.
+- Durable module-level test file check: No module-level durable test file found for graph store (`serve/knowledge/tests/test_graph_store.py` absent) — skipped per workflow.
+- Commit: f6560e75ba350ac0b5b0cdf9a9e0a4d46b89ed4c (builder), file committed: serve/knowledge/src/owlbear_knowledge/stores/graph.py
+- Fixes applied during implementation: resolved Ruff gates (C901/PLR0913/S608/UP037) by extracting traversal state helper and replacing dynamic IN-clause SQL formatting with json_each parameterization.
+
+[[2026-05-26T02:59:25+02:00]]
+## Review Evidence
+- Verdict: FAIL
+- Routing: todo
+- Builder evidence reviewed first: scoped green on tests/test_graph_store_1874.py, scoped coverage/lint on tests/test_graph_store_1873.py + tests/test_graph_store_1874.py, and direct source inspection of serve/knowledge/src/owlbear_knowledge/stores/graph.py.
+- Blocking findings:
+
+| # | AC Line | Finding | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | AC1 | The test suite does not prove the full AC1 contract. It covers only valid inserts, confidence bounds, and same-ID idempotency, so a regression in the EvidenceInput XOR validator or in the duplicate-update branch could false-green. | serve/knowledge/src/owlbear_knowledge/protocols/graph.py#L122-L145; serve/knowledge/src/owlbear_knowledge/stores/graph.py#L438; tests/test_graph_store_1874.py#L132-L186 | todo |
+| 2 | AC6 | The stats tests use lower-bound assertions instead of exact counts in an isolated fixture. An implementation that overcounted rows would still pass even though AC6 requires current graph_* table counts. | serve/knowledge/src/owlbear_knowledge/stores/graph.py#L647-L651; serve/knowledge/src/owlbear_knowledge/stores/graph.py#L764-L769; tests/test_graph_store_1874.py#L581-L610 | todo |
+| 3 | AC7 | The schema tests prove only table creation, second-call idempotence, the graph_evidence chunk_id index, and alias uniqueness. They do not prove the required graph_evidence entity_id index, graph_evidence edge_id index, graph_aliases canonical_alias index, or declared FK references, despite those declarations existing in source. The adjacent graph-store suite already uses PRAGMA FK checks as local precedent. | serve/knowledge/src/owlbear_knowledge/stores/graph.py#L87-L116; serve/knowledge/src/owlbear_knowledge/stores/graph.py#L107-L116; tests/test_graph_store_1874.py#L621-L697; tests/test_graph_store_1873.py#L565-L577; tests/test_graph_store_1873.py#L729-L743 | todo |
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | test-writer | Add AC1 tests that exercise invalid entity_id or edge_id combinations against the XOR validator and prove that a repeated add_evidence call updates the reused record's mutable fields. | tests/test_graph_store_1874.py | Review finding #1 |
+| 2 | test-writer | Tighten AC6 stats assertions to exact counts for the isolated fixture state instead of lower-bound checks. | tests/test_graph_store_1874.py | Review finding #2 |
+| 3 | test-writer | Extend AC7 schema coverage to verify the graph_evidence entity_id and edge_id indexes, the graph_aliases canonical_alias index, and declared FK references with PRAGMA-level checks. | tests/test_graph_store_1874.py | Review finding #3 |
+
+## Observations
+- Direct inspection of serve/knowledge/src/owlbear_knowledge/stores/graph.py found the implementation broadly aligned with the task AC. This rejection is about proof quality, not a confirmed logic defect in the builder change.
+- AC2 proof is inclusion-oriented rather than exclusivity-oriented in tests/test_graph_store_1874.py#L199-L251, but I did not treat that alone as blocking because the implementation path is a direct chunk-scoped read and the builder evidence was otherwise consistent.
+- The required challenger pass narrowed the case to AC1, AC6, and AC7. It did not overturn the fail or the todo route.
+
+[[2026-05-26T03:10:50+02:00]]
+## Test-Writer Notes
+- Retry: 15 new tests added for 3 reviewer gaps; all PASS against current impl → direct-to-review advance.
+- Test file: tests/test_graph_store_1874.py
+- New classes: TestFromAC_AddEvidence_XorAndUpdate, TestFromAC_Stats_ExactCounts, TestFromAC_EnsureTablesExtended_IndexAndFK
+
+### Gap fill summary
+| Finding | New tests | Result |
+|---------|-----------|--------|
+| AC1 XOR validator + update branch | 5 (4 XOR rejection, 1 confidence-update) | all PASS |
+| AC6 exact counts | 4 (entity=2, edge=1, evidence=1, alias=1) | all PASS |
+| AC7 missing indexes + FK declarations | 6 (entity_id idx, edge_id idx, canonical_alias idx, 3 FK PRAGMA checks) | all PASS |
+
+- Builder skip: test-only retry, all 15 new tests green against existing implementation.
+- Lint: ruff clean
+- Commit: f121cc7a
+
+[[2026-05-26T03:33:45+02:00]]
+## Review Evidence
+- Verdict: FAIL
+- Routing: backlog
+- Builder evidence reviewed first: prior scoped green on tests/test_graph_store_1874.py and scoped coverage/lint on tests/test_graph_store_1873.py plus tests/test_graph_store_1874.py; current cycle reviewed the 15 retry tests added in tests/test_graph_store_1874.py and direct source inspection of serve/knowledge/src/owlbear_knowledge/stores/graph.py.
+- Review cycle: 2. Per reviewer routing rules, repeated review failures return to backlog.
+- Blocking findings:
+
+| # | AC Line | Finding | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | AC2 | The behavioral suite still does not prove that claims_for_chunk returns only the entity_ids, edge_ids, and evidence_ids for the requested known chunk. The current tests assert presence of expected IDs for known chunks and emptiness for an unknown chunk, but they never create multiple known chunks and assert exclusion of unrelated IDs. A regression that returned the requested IDs plus unrelated IDs from another known chunk would still pass. | .owlbear/kanban/tasks/1874-knowledge-graphstore-evidence-aliases-traversal.md:19; tests/test_graph_store_1874.py:208,216,224-233,235,243,250-251; serve/knowledge/src/owlbear_knowledge/stores/graph.py:451,457,463-465 | backlog |
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Refine AC2 or the task proof expectation so exclusivity for known chunks is explicit, then re-dispatch targeted tests that prove unrelated entity_ids, edge_ids, and evidence_ids are excluded when multiple chunks exist. | .owlbear/kanban/tasks/1874-knowledge-graphstore-evidence-aliases-traversal.md; tests/test_graph_store_1874.py | Review finding #1 |
+
+## Observations
+- The retry closed the prior AC1, AC6, and AC7 proof gaps. This rejection is about remaining AC2 proof sufficiency in a behavioral bundle, not a demonstrated implementation defect in serve/knowledge/src/owlbear_knowledge/stores/graph.py.
+- The current implementation is locally consistent with a chunk-scoped read, but the behavioral proof still depends on source inspection rather than a test that would fail on known-chunk leakage.
+- Challenger result: reconsider (0.76). It did not surface a code defect, but it reinforced the remaining AC2 proof gap.
+
+[[2026-05-26T03:43:18+02:00]]
+## Architecture Review (cycle 2 — re-review after reviewer rejection)
+
+### Context
+Task returned from review (cycle 2) with a single finding: AC2 tests prove inclusion but not chunk-scoped exclusivity. Implementation is already complete and green (50+15 tests pass). The reviewer requested AC refinement to make exclusivity explicit.
+
+### AC2 Refinement
+- Before: "claims_for_chunk(chunk_id) returns ChunkClaims with entity_ids, edge_ids, evidence_ids referencing that chunk; empty ChunkClaims for unknown chunk_id"
+- After: "claims_for_chunk(chunk_id) returns ChunkClaims with only the entity_ids, edge_ids, evidence_ids whose evidence references that chunk; IDs linked via other chunks are excluded; empty ChunkClaims for unknown chunk_id"
+- Rationale: "referencing that chunk" was semantically exclusive but the test-writer didn't derive an isolation test. Adding "only" and "IDs linked via other chunks are excluded" makes the exclusivity requirement unambiguous for test derivation.
+
+### Test-writer guidance
+Add a multi-chunk isolation test: create evidence for chunk-A (entity) and chunk-B (different entity/edge), then assert claims_for_chunk("chunk-A") excludes chunk-B's entity_ids, edge_ids, and evidence_ids. This is the minimum proof that closes the reviewer's finding.
+
+### Proof-Bundle Validation
+- Final bundle: behavioral (unchanged)
+- Test-writer: PROCEED (targeted gap-fill only)
+
+### Verdict: APPROVE (REFINE)
+### Action Taken: Refined AC2 to explicitly require chunk-scoped exclusivity. Advanced to todo for targeted test addition.

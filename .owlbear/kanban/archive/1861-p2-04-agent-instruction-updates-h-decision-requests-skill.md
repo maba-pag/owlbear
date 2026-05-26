@@ -1,10 +1,10 @@
 ---
 id: 1861
 title: 'P2-04: Agent instruction updates — h-decision-requests skill'
-status: in-progress
+status: archived
 priority: needed
 created: 2026-05-24T20:59:38.739082+02:00
-updated: 2026-05-26T02:03:02.332302+02:00
+updated: 2026-05-26T03:43:25.839590+02:00
 tags:
   - phase-2
   - scope:docs
@@ -26,7 +26,7 @@ proof_bundle: skip
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 Brief: see parent #1850 and `.owlbear/briefs/draft-decision-request-data-model/brief.md`
@@ -134,3 +134,78 @@ Skip (docs/config only per domain mapping)
 - The data-model and validation sections in share/skills/h-decision-requests/SKILL.md:142-178 align with serve/kanban/src/owlbear_kanban/request_models.py:21-135 and the resolution guards in serve/kanban/src/owlbear_kanban/engine.py:1234-1250.
 - The write-back variants and conditional unblock semantics in share/skills/h-decision-requests/SKILL.md:195-202 align with serve/kanban/src/owlbear_kanban/engine.py:1098-1116 and serve/kanban/src/owlbear_kanban/engine.py:1181-1187 plus 1273-1276.
 - No independent quality-runner rerun was needed because the task is documentation-only and the blocking issue is a source-of-truth mismatch in the reviewed file.
+
+[[2026-05-26T02:47:42+02:00]]
+## Builder Notes
+- Files changed: `share/skills/h-decision-requests/SKILL.md`
+- Fix applied: corrected lifecycle wording in the Resolve section to match engine behavior.
+  - Replaced claim that pending file "moves atomically" with explicit two-step semantics: engine writes `decisions/resolved/{request_id}.md` and then removes `decisions/pending/{request_id}.md`.
+- Why: reviewer finding reported source-of-truth mismatch against engine implementation for AC3 lifecycle transition wording.
+- Tests: skipped (`proof_bundle: skip`, docs-only task).
+- Coverage: n/a (documentation-only change).
+- Lint: n/a (documentation-only change).
+- Commit: `13d90f1d` — `docs: fix request lifecycle wording in DR skill (#1861, builder)`.
+- Evidence summary:
+  - Updated lifecycle text now aligns with engine two-step transition semantics cited in review evidence.
+  - No behavioral/tool contract changes; only wording correction in handbook content.
+
+[[2026-05-26T03:12:31+02:00]]
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation: PASS #1861 to docs | AC mapped to code and evidence sufficient.
+- Review scope: builder-declared docs-only change in share/skills/h-decision-requests/SKILL.md with proof bundle `skip`; no independent quality-runner rerun required.
+
+| AC Line | Code Evidence | Proof Evidence | Status |
+|---|---|---|---|
+| AC1 | share/skills/h-decision-requests/SKILL.md:29, 34, 52-55, 84, 89, 100-104, 113, 118, 129-131 document the three MCP tools, required vs optional params, and one usage example per tool; signatures and return-shape notes align with serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:459-525 and create_request task-blocking behavior aligns with serve/kanban/src/owlbear_kanban/engine.py:1021. | Direct file review of current handbook against MCP server and engine sources; docs-only `skip` bundle does not require executable proof. | PASS |
+| AC2 | share/skills/h-decision-requests/SKILL.md:139-178 documents the named top-level fields, option/resolution subfields, model constraints, and kind-specific validation rules; these align with serve/kanban/src/owlbear_kanban/request_models.py:21-34, 37-44, 52-56, 62-83, 87-105, 95-96. | Direct file review found no remaining source-of-truth drift in the model/validation section after the retry. | PASS |
+| AC3 | share/skills/h-decision-requests/SKILL.md:180-208 now describes the resolved-file write then pending-file removal, write-back variants, conditional unblock semantics, and `show_request` consumption; this aligns with serve/kanban/src/owlbear_kanban/engine.py:1105-1113, 1164-1176, 1186, 1269-1275 and serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:514-525. | Current retry closes the prior review finding: the lifecycle wording at share/skills/h-decision-requests/SKILL.md:190 now matches the engine's two-step transition semantics. | PASS |
+
+## Observations
+- Builder evidence was sufficient for this docs-only `skip` bundle: file list, no-test rationale, and source mappings were internally consistent with the checked code.
+- No blocking findings remain after the lifecycle wording correction in share/skills/h-decision-requests/SKILL.md:190.
+
+[[2026-05-26T03:26:42+02:00]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | README verification | Yes | N/A — no update needed | `share/**` maps to `share/README.md` + `share/WIRING.md`. `share/README.md` does not describe individual skills. `share/WIRING.md` references `h-decision-requests` as `companion` / `body-ref` for pipeline agents and architect (lines 177, 205) — role unchanged by this task; only SKILL.md internals were rewritten. No drift in either file. |
+| 2 | External attribution | No | N/A — no external attribution needed | Builder sources were internal: `server.py`, `request_models.py`, `engine.py`. No external sources. |
+| 3 | Research doc | No | N/A — no research doc linkage needed | No research artifact exists for this task. |
+| 4 | Deletion detection | Yes | N/A — no orphaned references | `create_dr` was demoted to legacy note within SKILL.md (not deleted); WIRING.md describes skill by purpose (`companion` / `body-ref`), not by tool names — no orphaned references. |
+
+### Verification Layers
+- Layer 1 — grep structural: "atomic"/"atomically" absent from SKILL.md (reviewer finding resolved). `create_request`, `list_requests`, `show_request` confirmed present (15 occurrences). Required two-step lifecycle language ("writes … then removes") confirmed at line 189.
+- Layer 2 — LLM editorial: Full file read (214 lines). MCP tool signatures, parameter tables, usage examples, data model, validation rules, lifecycle, agent usage pattern, and important limits are all coherent and internally consistent. No contradictions with review evidence. No pre-existing unresolved issues requiring TODO markers.
+
+### Scratch Cleanup
+No `.owlbear/scratch/1861-*` files found — nothing to delete.
+
+[[2026-05-26T03:43:25+02:00]]
+## Audit
+### Regression Detection
+- Domain mapping: share/ maps to skip (docs/config only)
+- Only file changed: share/skills/h-decision-requests/SKILL.md (Markdown documentation)
+- No code or test files touched; zero regression risk
+- Regression verdict: PASS (domain-exempt)
+
+### Intent Verification
+- Scope alignment: PASS (single skill file in share/skills/ domain, exactly matching task scope)
+- Purpose match: PASS (SKILL.md documents MCP tools, data model, and lifecycle per AC)
+- Extraneous scope: none
+- Boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 5/5
+AC lines name exact tools (create_request, list_requests, show_request), exact fields, and lifecycle phases. Reviewer confirmed precise alignment against server.py, request_models.py, and engine.py. No improvisation required by builder.
+
+### Commit Integrity
+- Upstream commit presence: PASS (834be4ec initial rewrite, 13d90f1d lifecycle fix; both attributed #1861, builder)
+- Both commits scoped to single deliverable file
+- Kanban commit packaging: pending (this step)
+
+### Deduction Breakdown
+No deductions applied.
+
+### Confidence: 1.00
+### Action: archive
