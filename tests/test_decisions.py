@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 # --- merged from tests/test_decisions_1180.py ---
-"""Failing tests for #1180: Test decisions.py create_dr + resolve_pending_drs.
+"""Failing tests for #1180: Test decisions.py request creation + resolve_pending_drs.
 
 AC coverage:
-  ac1-frontmatter  — create_dr writes pending file with 5-field YAML frontmatter
-  ac1-body         — create_dr places markdown body after frontmatter delimiter
-  ac2-collision    — create_dr O_EXCL collision retries with counter suffix (-2.md)
-  ac3-block        — create_dr blocks the task via engine.edit_task
-  ac4-rollback     — create_dr deletes file if engine.edit_task raises (rollback)
+    ac1-frontmatter  — request creation writes pending file with 5-field YAML frontmatter
+    ac1-body         — request creation places markdown body after frontmatter delimiter
+    ac2-collision    — request creation O_EXCL collision retries with counter suffix (-2.md)
+    ac3-block        — request creation blocks the task via engine.edit_task
+    ac4-rollback     — request creation deletes file if engine.edit_task raises (rollback)
   ac5-skip-pending — resolve_pending_drs skips response=pending files
   ac6-approved     — approved DRs → body appended, task unblocked, file in resolved/
   ac6-rejected     — rejected DRs → body appended, task unblocked, file in resolved/
@@ -339,7 +339,7 @@ class TestFromAC_DrReader:
 """Failing tests for #1181: decisions.py module — P1-02 AC coverage.
 
 AC coverage:
-  ac2-create-dr     — create_dr(decisions_dir, engine, *, task_id, agent, request_type, body) → Path
+    ac2-create-path   — request creation helper(decisions_dir, engine, *, task_id, agent, request_type, body) → Path
   ac3-dual-form     — resolve_pending_drs dual call-form: resolve_pending_drs(engine) (engine-only)
   ac4-frontmatter   — 5-field frontmatter (task_id, agent, request_type, created YYYY-MM-DD, response)
   ac5-slug          — slug generated from request_type field
