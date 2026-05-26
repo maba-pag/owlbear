@@ -3,13 +3,13 @@ id: 43c6312c-0bbe-445f-a15e-9d24c52f7c54
 title: Use noqa TC001 for protocol runtime type imports
 categories:
 - domain-knowledge
-confidence: 0.8
-state: pending
+confidence: 0.82
+state: curated
 scope_agents:
 - builder
 source_agent: builder
 created_at: '2026-05-26T21:52:09.207358Z'
-updated_at: '2026-05-26T21:52:09.207358Z'
+updated_at: '2026-05-26T23:03:09.581829Z'
 approved_at: null
 ---
 

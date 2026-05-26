@@ -5,7 +5,7 @@ categories:
 - pitfall
 - process
 confidence: 0.89
-state: pending
+state: curated
 scope_agents:
 - reviewer
 - architect
@@ -13,7 +13,7 @@ scope_agents:
 - builder
 source_agent: reviewer
 created_at: '2026-05-26T22:04:34.729916Z'
-updated_at: '2026-05-26T22:04:34.729916Z'
+updated_at: '2026-05-26T23:03:14.616287Z'
 approved_at: null
 ---
 
