@@ -2,9 +2,24 @@
 
 from __future__ import annotations
 
-from owlbear_knowledge.protocols.content import ContentSearchQuery, ContentSearchResult, ContentStore
-from owlbear_knowledge.protocols.graph import EdgeRecord, EntityRecord, GraphStore, TraversalQuery, TraversalResult
-from owlbear_knowledge.protocols.query import Provenance, QueryRequest, QueryResult
+from owlbear_knowledge.protocols.content import ContentChunk, ContentSearchQuery, ContentSearchResult, ContentStore
+from owlbear_knowledge.protocols.graph import (
+    EdgeRecord,
+    EntityQuery,
+    EntityRecord,
+    GraphStore,
+    TraversalQuery,
+    TraversalResult,
+)
+from owlbear_knowledge.protocols.query import (
+    ContextRenderRequest,
+    EntityLookupRequest,
+    EntityLookupResult,
+    Provenance,
+    QueryRequest,
+    QueryResult,
+    RenderedContext,
+)
 
 
 class QueryFacade:
@@ -37,6 +52,159 @@ class QueryFacade:
             graph_context=graph_context,
             provenance=provenance,
         )
+
+    def lookup_entity(self, request: EntityLookupRequest) -> EntityLookupResult:
+        """Look up an entity by ID or name and optionally expand neighbours."""
+        entity = self._resolve_entity(request)
+        if entity is None:
+            if request.entity_id:
+                msg = f"entity_id not found: {request.entity_id}"
+            else:
+                msg = f"entity_name not found: {request.entity_name}"
+            raise LookupError(msg)
+
+        neighbourhood: TraversalResult | None = None
+        if request.expand_hops > 0:
+            neighbourhood = self._graph.traverse(
+                TraversalQuery(
+                    entity_id=entity.id,
+                    max_hops=request.expand_hops,
+                    relation_types=request.relation_types,
+                )
+            )
+
+        related_chunks = self._load_related_chunks(entity.id)
+        return EntityLookupResult(
+            entity=entity,
+            neighbourhood=neighbourhood,
+            related_chunks=related_chunks,
+        )
+
+    def render_context(self, request: ContextRenderRequest) -> RenderedContext:
+        """Render query/entity results into a prompt-friendly text block."""
+        if request.query_result is None and request.entity_result is None:
+            msg = "Provide at least one of query_result or entity_result"
+            raise ValueError(msg)
+
+        lines: list[str] = []
+        entity_ids: set[str] = set()
+        chunk_count = 0
+
+        if request.query_result is not None:
+            query_lines, query_entity_ids, query_chunks = self._render_query_result(
+                request.query_result,
+                include_provenance=request.include_provenance,
+            )
+            lines.extend(query_lines)
+            entity_ids.update(query_entity_ids)
+            chunk_count += query_chunks
+
+        if request.entity_result is not None:
+            entity_lines, lookup_entity_ids, lookup_chunks = self._render_entity_result(
+                request.entity_result,
+                include_provenance=request.include_provenance,
+            )
+            lines.extend(entity_lines)
+            entity_ids.update(lookup_entity_ids)
+            chunk_count += lookup_chunks
+
+        text = "\n".join(lines).strip()
+        if not text:
+            text = "(no context)"
+
+        truncated = len(text) > request.max_chars
+        if truncated:
+            text = text[: request.max_chars]
+
+        return RenderedContext(
+            text=text,
+            char_count=len(text),
+            chunk_count=chunk_count,
+            entity_count=len(entity_ids),
+            truncated=truncated,
+        )
+
+    def _resolve_entity(self, request: EntityLookupRequest) -> EntityRecord | None:
+        if request.entity_id is not None:
+            return self._graph.get_entity(request.entity_id)
+
+        matches = self._graph.find_entities(
+            EntityQuery(
+                name=request.entity_name,
+                entity_type=request.entity_type,
+            )
+        )
+        return matches[0] if matches else None
+
+    def _load_related_chunks(self, entity_id: str) -> tuple[ContentChunk, ...]:
+        return tuple(
+            chunk
+            for chunk_id in self._graph.chunk_ids_for_entity(entity_id)
+            if (chunk := self._content.get_chunk(chunk_id)) is not None
+        )
+
+    def _render_query_result(
+        self,
+        query_result: QueryResult,
+        *,
+        include_provenance: bool,
+    ) -> tuple[list[str], set[str], int]:
+        lines = ["## Search Results"]
+        entity_ids: set[str] = set()
+        chunk_count = 0
+
+        if query_result.search_results:
+            for index, result in enumerate(query_result.search_results, start=1):
+                lines.append(f"- [{index}] {result.chunk.text}")
+                chunk_count += 1
+        else:
+            lines.append("- None")
+
+        if query_result.graph_context is not None:
+            lines.append("## Graph Context")
+            for entity in query_result.graph_context.entities:
+                entity_ids.add(entity.id)
+                lines.append(f"- {entity.name} ({entity.entity_type})")
+
+        if include_provenance and query_result.provenance:
+            lines.append("## Sources")
+            lines.extend(
+                f"- {provenance.source_id} :: {provenance.title} (chunk={provenance.chunk_id})"
+                for provenance in query_result.provenance
+            )
+
+        return lines, entity_ids, chunk_count
+
+    def _render_entity_result(
+        self,
+        entity_result: EntityLookupResult,
+        *,
+        include_provenance: bool,
+    ) -> tuple[list[str], set[str], int]:
+        lines = ["## Entity Lookup"]
+        entity_ids: set[str] = set()
+        chunk_count = 0
+
+        entity = entity_result.entity
+        if entity is not None:
+            entity_ids.add(entity.id)
+            lines.append(f"- Entity: {entity.name} ({entity.entity_type}) id={entity.id}")
+
+        if entity_result.neighbourhood is not None:
+            lines.append("### Neighbourhood")
+            for neighbour in entity_result.neighbourhood.entities:
+                entity_ids.add(neighbour.id)
+                lines.append(f"- {neighbour.name} ({neighbour.entity_type})")
+
+        if entity_result.related_chunks:
+            lines.append("### Related Chunks")
+            if include_provenance:
+                lines.extend(f"- [{chunk.source_id}] {chunk.text}" for chunk in entity_result.related_chunks)
+            else:
+                lines.extend(f"- {chunk.text}" for chunk in entity_result.related_chunks)
+            chunk_count = len(entity_result.related_chunks)
+
+        return lines, entity_ids, chunk_count
 
     def _build_graph_context(
         self,
