@@ -135,6 +135,24 @@ class TestFromAC_AppContextFields:
         )
         assert ctx.source_store_v2 is source_store_v2
 
+    def test_appcontext_positional_construction_preserves_new_field_defaults(self) -> None:
+        """AppContext accepts original 5 positional args; new fields default to None.
+
+        Reviewer gap AC1: keyword-only tests cannot prove positional compatibility.
+        This test passes the original 5 args positionally (no kwargs for new fields)
+        and asserts that all four new optional fields still default to None.
+        """
+        from owlbear_mcp_knowledge.server import AppContext
+
+        conn = sqlite3.connect(":memory:")
+        # Positional: conn, query_service, graph_store, ingest_pipeline, source_store
+        ctx = AppContext(conn, None, None, None, None)
+        assert ctx.conn is conn
+        assert ctx.content_store is None
+        assert ctx.enrichment_store is None
+        assert ctx.source_store_v2 is None
+        assert ctx.ingest_coordinator is None
+
 
 # ---------------------------------------------------------------------------
 # AC2 — Lifespan instantiates the new stores
@@ -248,6 +266,71 @@ class TestFromAC_LifespanStoreInstantiation:
 
         async with app_lifespan(_heavy_mocks) as ctx:
             assert ctx.ingest_coordinator._graph is ctx.graph_store  # noqa: SLF001
+
+    @pytest.mark.asyncio
+    async def test_content_store_vector_store_identity(
+        self, _heavy_mocks: object
+    ) -> None:
+        """ContentStore._vector_store is the same instance as AppContext.vector_store.
+
+        Reviewer gap AC2: previous tests omitted this field. Both are assigned the
+        same `vs` local in app_lifespan — this asserts that identity.
+        """
+        from owlbear_mcp_knowledge.server import app_lifespan
+
+        async with app_lifespan(_heavy_mocks) as ctx:
+            assert ctx.content_store._vector_store is ctx.vector_store  # noqa: SLF001
+
+    @pytest.mark.asyncio
+    async def test_content_store_embedding_provider_identity(
+        self, tmp_path: object
+    ) -> None:
+        """ContentStore._embedding_provider is the same instance created in lifespan.
+
+        Reviewer gap AC2: uses an inline patch to capture the BgeM3EmbeddingProvider
+        mock and verifies ContentStore received the same instance.
+        """
+        from owlbear_mcp_knowledge.server import app_lifespan
+
+        server_mock = MagicMock()
+        env_overrides = {
+            "OWLBEAR_LOCAL_KB_PATH": ":memory:",
+            "OWLBEAR_QDRANT_PATH": str(tmp_path) + "/vectors",  # type: ignore[operator]
+        }
+        with (
+            patch("owlbear_mcp_knowledge.server.QdrantVectorStore"),
+            patch("owlbear_mcp_knowledge.server.BgeM3EmbeddingProvider") as mock_emb_cls,
+            patch.dict(os.environ, env_overrides),
+        ):
+            async with app_lifespan(server_mock) as ctx:
+                assert ctx.content_store._embedding_provider is mock_emb_cls.return_value  # noqa: SLF001
+
+    @pytest.mark.asyncio
+    async def test_content_store_chunker_is_text_chunker_instance(
+        self, _heavy_mocks: object
+    ) -> None:
+        """ContentStore._chunker is a TextChunker instance (from lifespan's TextChunker()).
+
+        Reviewer gap AC2: chunker wiring was unverified.
+        """
+        from owlbear_knowledge.chunker import TextChunker
+        from owlbear_mcp_knowledge.server import app_lifespan
+
+        async with app_lifespan(_heavy_mocks) as ctx:
+            assert isinstance(ctx.content_store._chunker, TextChunker)  # noqa: SLF001
+
+    @pytest.mark.asyncio
+    async def test_enrichment_store_db_identity_matches_appcontext_conn(
+        self, _heavy_mocks: object
+    ) -> None:
+        """EnrichmentStore._db is the same connection as AppContext.conn.
+
+        Reviewer gap AC2: _graph identity was tested but _db identity was not.
+        """
+        from owlbear_mcp_knowledge.server import app_lifespan
+
+        async with app_lifespan(_heavy_mocks) as ctx:
+            assert ctx.enrichment_store._db is ctx.conn  # noqa: SLF001
 
 
 # ---------------------------------------------------------------------------
