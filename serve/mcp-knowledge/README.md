@@ -26,8 +26,8 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 | `knowledge_stats` | Summary statistics: document, entity, and edge counts plus source count, chunk count, enrichment ratio, and consolidation candidates remaining |
 | `knowledge_sources_refresh` | Re-ingest a registered source by source ID; response includes full, partial, skipped, failed, error, and warning counts |
 | `knowledge_sources_delete` | Delete a source and all its associated data (vectors, documents, chunks, entities, enrichment) via coordinator-orchestrated purge; returns a purge-result summary with status (`complete`/`partial`), completed steps, failed step, error, and per-domain sub-results (source, content, enrichment, graph) |
-| `get_next_batch` | Atomically claim a batch of chunks ready for enrichment |
-| `store_enrichment` | Dual-mode enrichment persist: Phase 1 (`chunk_id`, `entities`, `edges`) marks chunk enriched; Phase 2 (`candidate_id`, `edges`) writes cross-source edges or records a reviewed-pair dismissal |
+| `knowledge_enrichment_claim_batch` | Atomically claim a batch of chunks ready for enrichment |
+| `knowledge_enrichment_store` | Dual-mode enrichment persist: Phase 1 (`chunk_id`, `entities`, `edges`) marks chunk enriched; Phase 2 (`candidate_id`, `edges`) writes cross-source edges or records a reviewed-pair dismissal |
 | `knowledge_sources_register` | Register a new source in the v2 source store; accepts name, kind, fetch_method, config, scope, enrich, refreshable, priority, metadata; validates via Pydantic and returns registered record (id, name, state, kind, scope) |
 
 ## Configuration

@@ -7,9 +7,11 @@ without updating these registries is a CI failure (R40).
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from enum import StrEnum
-from typing import Final
+from typing import TYPE_CHECKING, Final
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 # ---------------------------------------------------------------------------
 # Module vocabulary (D59)
@@ -82,6 +84,9 @@ MCP_TOOL_ROUTING: Final[Mapping[str, str]] = {
     "knowledge_sources_refresh": "IngestCoordinator.refresh",
     "knowledge_entity_lookup": "QueryFacade.lookup_entity",
     "knowledge_stats": "IngestCoordinator.stats",
+    "knowledge_enrichment_claim_batch": "EnrichmentStore.claim_batch",
+    "knowledge_enrichment_store": "EnrichmentStore.submit_extractions",
+    "knowledge_enrichment_retry": "EnrichmentStore.reset_failed",
 }
 """Maps MCP tool name → Protocol.method responsible for handling the call.
 

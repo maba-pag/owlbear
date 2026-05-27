@@ -1,10 +1,10 @@
-"""Tests for store_enrichment MCP tool — phase-1 wiring to submit_extractions (task #1892).
+"""Tests for knowledge_enrichment_store MCP tool — phase-1 wiring to submit_extractions (task #1892).
 
 Source files under test:
   serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py
 
 Target interface:
-  store_enrichment — async MCP tool function
+  knowledge_enrichment_store — async MCP tool function
 
 AC coverage:
   AC1 — Phase-1 path (chunk_id provided) calls EnrichmentStore.submit_extractions()
@@ -25,7 +25,7 @@ import pytest
 from mcp.server.fastmcp.exceptions import ToolError
 
 from owlbear_knowledge.protocols.common import EntityType, RelationType
-from owlbear_mcp_knowledge.server import store_enrichment
+from owlbear_mcp_knowledge.server import knowledge_enrichment_store
 
 
 # ---------------------------------------------------------------------------
@@ -84,14 +84,14 @@ class TestFromAC_Phase1UsesSubmitExtractions:
     async def test_phase1_calls_submit_extractions(self) -> None:
         """Providing chunk_id causes enrichment_store.submit_extractions to be called."""
         ctx, store = _make_ctx()
-        await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=[], edges=[])
+        await knowledge_enrichment_store(ctx, chunk_id=_CHUNK_ID, entities=[], edges=[])
         store.submit_extractions.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_phase1_passes_chunk_id_to_submit_extractions(self) -> None:
-        """submit_extractions receives the exact chunk_id passed to store_enrichment."""
+        """submit_extractions receives the exact chunk_id passed to knowledge_enrichment_store."""
         ctx, store = _make_ctx()
-        await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=[], edges=[])
+        await knowledge_enrichment_store(ctx, chunk_id=_CHUNK_ID, entities=[], edges=[])
         chunk_id_arg, _, _ = _extract_submit_args(store)
         assert chunk_id_arg == _CHUNK_ID
 
@@ -102,7 +102,7 @@ class TestFromAC_Phase1UsesSubmitExtractions:
         app_ctx = ctx.request_context.lifespan_context
         conn_mock = MagicMock()
         app_ctx.conn = conn_mock
-        await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=[], edges=[])
+        await knowledge_enrichment_store(ctx, chunk_id=_CHUNK_ID, entities=[], edges=[])
         # None of the conn.execute calls should be "BEGIN IMMEDIATE"
         begin_calls = [
             c for c in conn_mock.execute.call_args_list
@@ -125,7 +125,7 @@ class TestFromAC_EntityDictParsing:
         """Entity dict 'id' key → ExtractedEntity.local_ref."""
         ctx, store = _make_ctx()
         entity = {"id": "ref-abc", "name": "Alpha", "entity_type": "concept"}
-        await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=[entity], edges=[])
+        await knowledge_enrichment_store(ctx, chunk_id=_CHUNK_ID, entities=[entity], edges=[])
         _, entities_arg, _ = _extract_submit_args(store)
         assert len(entities_arg) == 1
         assert entities_arg[0].local_ref == "ref-abc"
@@ -135,7 +135,7 @@ class TestFromAC_EntityDictParsing:
         """Entity dict 'name' key → ExtractedEntity.name."""
         ctx, store = _make_ctx()
         entity = {"id": "ref-1", "name": "MyEntity", "entity_type": "concept"}
-        await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=[entity], edges=[])
+        await knowledge_enrichment_store(ctx, chunk_id=_CHUNK_ID, entities=[entity], edges=[])
         _, entities_arg, _ = _extract_submit_args(store)
         assert entities_arg[0].name == "MyEntity"
 
@@ -144,7 +144,7 @@ class TestFromAC_EntityDictParsing:
         """Entity dict without 'entity_type' → ExtractedEntity.entity_type == CONCEPT."""
         ctx, store = _make_ctx()
         entity = {"id": "ref-1", "name": "MyEntity"}  # no entity_type
-        await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=[entity], edges=[])
+        await knowledge_enrichment_store(ctx, chunk_id=_CHUNK_ID, entities=[entity], edges=[])
         _, entities_arg, _ = _extract_submit_args(store)
         assert entities_arg[0].entity_type == EntityType.CONCEPT
 
@@ -153,7 +153,7 @@ class TestFromAC_EntityDictParsing:
         """Entity dict without 'description' → ExtractedEntity.description == ''."""
         ctx, store = _make_ctx()
         entity = {"id": "ref-1", "name": "MyEntity", "entity_type": "concept"}
-        await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=[entity], edges=[])
+        await knowledge_enrichment_store(ctx, chunk_id=_CHUNK_ID, entities=[entity], edges=[])
         _, entities_arg, _ = _extract_submit_args(store)
         assert entities_arg[0].description == ""
 
@@ -162,7 +162,7 @@ class TestFromAC_EntityDictParsing:
         """Entity dict without 'confidence' → ExtractedEntity.confidence == 1.0."""
         ctx, store = _make_ctx()
         entity = {"id": "ref-1", "name": "MyEntity", "entity_type": "concept"}
-        await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=[entity], edges=[])
+        await knowledge_enrichment_store(ctx, chunk_id=_CHUNK_ID, entities=[entity], edges=[])
         _, entities_arg, _ = _extract_submit_args(store)
         assert entities_arg[0].confidence == 1.0
 
@@ -171,7 +171,7 @@ class TestFromAC_EntityDictParsing:
         """entity_type='technology' → ExtractedEntity.entity_type == EntityType.TECHNOLOGY."""
         ctx, store = _make_ctx()
         entity = {"id": "ref-1", "name": "Python", "entity_type": "technology"}
-        await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=[entity], edges=[])
+        await knowledge_enrichment_store(ctx, chunk_id=_CHUNK_ID, entities=[entity], edges=[])
         _, entities_arg, _ = _extract_submit_args(store)
         assert entities_arg[0].entity_type == EntityType.TECHNOLOGY
 
@@ -180,7 +180,7 @@ class TestFromAC_EntityDictParsing:
         """entity_type='person' (valid in 12-value protocol enum) → EntityType.PERSON."""
         ctx, store = _make_ctx()
         entity = {"id": "ref-1", "name": "Jane", "entity_type": "person"}
-        await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=[entity], edges=[])
+        await knowledge_enrichment_store(ctx, chunk_id=_CHUNK_ID, entities=[entity], edges=[])
         _, entities_arg, _ = _extract_submit_args(store)
         assert entities_arg[0].entity_type == EntityType.PERSON
 
@@ -192,7 +192,7 @@ class TestFromAC_EntityDictParsing:
             {"id": "r1", "name": "A", "entity_type": "concept"},
             {"id": "r2", "name": "B", "entity_type": "tool"},
         ]
-        await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=entities, edges=[])
+        await knowledge_enrichment_store(ctx, chunk_id=_CHUNK_ID, entities=entities, edges=[])
         _, entities_arg, _ = _extract_submit_args(store)
         assert len(entities_arg) == 2
 
@@ -211,7 +211,7 @@ class TestFromAC_EdgeDictParsing:
         ctx, store = _make_ctx()
         entities = [{"id": "r1", "name": "A", "entity_type": "concept"}]
         edge = {"source_id": "r1", "target_id": "r1", "relation": "related_to"}
-        await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=entities, edges=[edge])
+        await knowledge_enrichment_store(ctx, chunk_id=_CHUNK_ID, entities=entities, edges=[edge])
         _, _, relations_arg = _extract_submit_args(store)
         assert len(relations_arg) == 1
         assert relations_arg[0].source_ref == "r1"
@@ -225,7 +225,7 @@ class TestFromAC_EdgeDictParsing:
             {"id": "r2", "name": "B", "entity_type": "concept"},
         ]
         edge = {"source_id": "r1", "target_id": "r2", "relation": "depends_on"}
-        await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=entities, edges=[edge])
+        await knowledge_enrichment_store(ctx, chunk_id=_CHUNK_ID, entities=entities, edges=[edge])
         _, _, relations_arg = _extract_submit_args(store)
         assert relations_arg[0].target_ref == "r2"
 
@@ -235,7 +235,7 @@ class TestFromAC_EdgeDictParsing:
         ctx, store = _make_ctx()
         entities = [{"id": "r1", "name": "A", "entity_type": "concept"}]
         edge = {"source_id": "r1", "target_id": "r1", "relation": "depends_on"}
-        await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=entities, edges=[edge])
+        await knowledge_enrichment_store(ctx, chunk_id=_CHUNK_ID, entities=entities, edges=[edge])
         _, _, relations_arg = _extract_submit_args(store)
         assert relations_arg[0].relation_type == RelationType.DEPENDS_ON
 
@@ -245,7 +245,7 @@ class TestFromAC_EdgeDictParsing:
         ctx, store = _make_ctx()
         entities = [{"id": "r1", "name": "A", "entity_type": "concept"}]
         edge = {"source_id": "r1", "target_id": "r1", "relationship": "contains"}
-        await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=entities, edges=[edge])
+        await knowledge_enrichment_store(ctx, chunk_id=_CHUNK_ID, entities=entities, edges=[edge])
         _, _, relations_arg = _extract_submit_args(store)
         assert relations_arg[0].relation_type == RelationType.CONTAINS
 
@@ -255,7 +255,7 @@ class TestFromAC_EdgeDictParsing:
         ctx, store = _make_ctx()
         entities = [{"id": "r1", "name": "A", "entity_type": "concept"}]
         edge = {"source_id": "r1", "target_id": "r1", "relation": "related_to"}
-        await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=entities, edges=[edge])
+        await knowledge_enrichment_store(ctx, chunk_id=_CHUNK_ID, entities=entities, edges=[edge])
         _, _, relations_arg = _extract_submit_args(store)
         assert relations_arg[0].weight == 1.0
 
@@ -265,7 +265,7 @@ class TestFromAC_EdgeDictParsing:
         ctx, store = _make_ctx()
         entities = [{"id": "r1", "name": "A", "entity_type": "concept"}]
         edge = {"source_id": "r1", "target_id": "r1", "relation": "references"}
-        await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=entities, edges=[edge])
+        await knowledge_enrichment_store(ctx, chunk_id=_CHUNK_ID, entities=entities, edges=[edge])
         _, _, relations_arg = _extract_submit_args(store)
         assert relations_arg[0].relation_type == RelationType.REFERENCES
 
@@ -273,7 +273,7 @@ class TestFromAC_EdgeDictParsing:
     async def test_no_edges_passes_empty_relations_tuple(self) -> None:
         """edges=[] → submit_extractions receives empty relations tuple."""
         ctx, store = _make_ctx()
-        await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=[], edges=[])
+        await knowledge_enrichment_store(ctx, chunk_id=_CHUNK_ID, entities=[], edges=[])
         _, _, relations_arg = _extract_submit_args(store)
         assert len(relations_arg) == 0
 
@@ -298,7 +298,7 @@ class TestFromAC_LookupErrorAsToolError:
         store.submit_extractions.side_effect = LookupError("chunk not in progress")
         ctx, _ = _make_ctx(enrichment_store=store)
         with pytest.raises(ToolError):
-            await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=[], edges=[])
+            await knowledge_enrichment_store(ctx, chunk_id=_CHUNK_ID, entities=[], edges=[])
         store.submit_extractions.assert_called_once()
 
 
@@ -316,7 +316,7 @@ class TestFromAC_ParsingFailureMarksFailed:
         ctx, store = _make_ctx()
         entity = {"id": "r1", "name": "X", "entity_type": "NOT_A_REAL_ENTITY_TYPE_1892"}
         with pytest.raises(ToolError):
-            await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=[entity], edges=[])
+            await knowledge_enrichment_store(ctx, chunk_id=_CHUNK_ID, entities=[entity], edges=[])
         store.mark_failed.assert_called_once()
 
     @pytest.mark.asyncio
@@ -325,7 +325,7 @@ class TestFromAC_ParsingFailureMarksFailed:
         ctx, store = _make_ctx()
         entity = {"id": "r1", "name": "X", "entity_type": "NOT_A_REAL_ENTITY_TYPE_1892"}
         with pytest.raises(ToolError):
-            await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=[entity], edges=[])
+            await knowledge_enrichment_store(ctx, chunk_id=_CHUNK_ID, entities=[entity], edges=[])
         call_args = store.mark_failed.call_args
         args = call_args.args or ()
         kwargs = call_args.kwargs or {}
@@ -338,7 +338,7 @@ class TestFromAC_ParsingFailureMarksFailed:
         ctx, store = _make_ctx()
         entity = {"id": "r1", "name": "X", "entity_type": "BOGUS_TYPE_1892"}
         with pytest.raises(ToolError):
-            await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=[entity], edges=[])
+            await knowledge_enrichment_store(ctx, chunk_id=_CHUNK_ID, entities=[entity], edges=[])
         call_args = store.mark_failed.call_args
         args = call_args.args or ()
         kwargs = call_args.kwargs or {}
@@ -353,7 +353,7 @@ class TestFromAC_ParsingFailureMarksFailed:
         entities = [{"id": "r1", "name": "X", "entity_type": "concept"}]
         edge = {"source_id": "r1", "target_id": "r1", "relation": "NOT_A_REAL_RELATION_1892"}
         with pytest.raises(ToolError):
-            await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=entities, edges=[edge])
+            await knowledge_enrichment_store(ctx, chunk_id=_CHUNK_ID, entities=entities, edges=[edge])
         store.mark_failed.assert_called_once()
 
     @pytest.mark.asyncio
@@ -363,7 +363,7 @@ class TestFromAC_ParsingFailureMarksFailed:
         entities = [{"id": "r1", "name": "X", "entity_type": "concept"}]
         edge = {"source_id": "r1", "target_id": "r1", "relation": "NOT_A_REAL_RELATION_1892"}
         with pytest.raises(ToolError):
-            await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=entities, edges=[edge])
+            await knowledge_enrichment_store(ctx, chunk_id=_CHUNK_ID, entities=entities, edges=[edge])
         store.mark_failed.assert_called_once()
 
     # ---- missing required field paths (AC6 gap-fill) ----
@@ -374,7 +374,7 @@ class TestFromAC_ParsingFailureMarksFailed:
         ctx, _ = _make_ctx()
         entity = {"name": "X", "entity_type": "concept"}  # no 'id'
         with pytest.raises(ToolError):
-            await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=[entity], edges=[])
+            await knowledge_enrichment_store(ctx, chunk_id=_CHUNK_ID, entities=[entity], edges=[])
 
     @pytest.mark.asyncio
     async def test_missing_entity_id_calls_mark_failed(self) -> None:
@@ -382,7 +382,7 @@ class TestFromAC_ParsingFailureMarksFailed:
         ctx, store = _make_ctx()
         entity = {"name": "X", "entity_type": "concept"}  # no 'id'
         with pytest.raises(ToolError):
-            await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=[entity], edges=[])
+            await knowledge_enrichment_store(ctx, chunk_id=_CHUNK_ID, entities=[entity], edges=[])
         call_args = store.mark_failed.call_args
         args = call_args.args or ()
         kwargs = call_args.kwargs or {}
@@ -398,7 +398,7 @@ class TestFromAC_ParsingFailureMarksFailed:
         ctx, _ = _make_ctx()
         entity = {"id": "r1", "entity_type": "concept"}  # no 'name'
         with pytest.raises(ToolError):
-            await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=[entity], edges=[])
+            await knowledge_enrichment_store(ctx, chunk_id=_CHUNK_ID, entities=[entity], edges=[])
 
     @pytest.mark.asyncio
     async def test_missing_entity_name_calls_mark_failed(self) -> None:
@@ -406,7 +406,7 @@ class TestFromAC_ParsingFailureMarksFailed:
         ctx, store = _make_ctx()
         entity = {"id": "r1", "entity_type": "concept"}  # no 'name'
         with pytest.raises(ToolError):
-            await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=[entity], edges=[])
+            await knowledge_enrichment_store(ctx, chunk_id=_CHUNK_ID, entities=[entity], edges=[])
         call_args = store.mark_failed.call_args
         args = call_args.args or ()
         kwargs = call_args.kwargs or {}
@@ -423,7 +423,7 @@ class TestFromAC_ParsingFailureMarksFailed:
         entities = [{"id": "r1", "name": "A", "entity_type": "concept"}]
         edge = {"target_id": "r1", "relation": "related_to"}  # no 'source_id'
         with pytest.raises(ToolError):
-            await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=entities, edges=[edge])
+            await knowledge_enrichment_store(ctx, chunk_id=_CHUNK_ID, entities=entities, edges=[edge])
 
     @pytest.mark.asyncio
     async def test_missing_edge_source_id_calls_mark_failed(self) -> None:
@@ -432,7 +432,7 @@ class TestFromAC_ParsingFailureMarksFailed:
         entities = [{"id": "r1", "name": "A", "entity_type": "concept"}]
         edge = {"target_id": "r1", "relation": "related_to"}  # no 'source_id'
         with pytest.raises(ToolError):
-            await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=entities, edges=[edge])
+            await knowledge_enrichment_store(ctx, chunk_id=_CHUNK_ID, entities=entities, edges=[edge])
         call_args = store.mark_failed.call_args
         args = call_args.args or ()
         kwargs = call_args.kwargs or {}
@@ -449,7 +449,7 @@ class TestFromAC_ParsingFailureMarksFailed:
         entities = [{"id": "r1", "name": "A", "entity_type": "concept"}]
         edge = {"source_id": "r1", "relation": "related_to"}  # no 'target_id'
         with pytest.raises(ToolError):
-            await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=entities, edges=[edge])
+            await knowledge_enrichment_store(ctx, chunk_id=_CHUNK_ID, entities=entities, edges=[edge])
 
     @pytest.mark.asyncio
     async def test_missing_edge_target_id_calls_mark_failed(self) -> None:
@@ -458,7 +458,7 @@ class TestFromAC_ParsingFailureMarksFailed:
         entities = [{"id": "r1", "name": "A", "entity_type": "concept"}]
         edge = {"source_id": "r1", "relation": "related_to"}  # no 'target_id'
         with pytest.raises(ToolError):
-            await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=entities, edges=[edge])
+            await knowledge_enrichment_store(ctx, chunk_id=_CHUNK_ID, entities=entities, edges=[edge])
         call_args = store.mark_failed.call_args
         args = call_args.args or ()
         kwargs = call_args.kwargs or {}
@@ -475,7 +475,7 @@ class TestFromAC_ParsingFailureMarksFailed:
         entities = [{"id": "r1", "name": "A", "entity_type": "concept"}]
         edge = {"source_id": "r1", "target_id": "r1"}  # no 'relation' or 'relationship'
         with pytest.raises(ToolError):
-            await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=entities, edges=[edge])
+            await knowledge_enrichment_store(ctx, chunk_id=_CHUNK_ID, entities=entities, edges=[edge])
 
     @pytest.mark.asyncio
     async def test_missing_edge_relation_and_relationship_calls_mark_failed(self) -> None:
@@ -484,7 +484,7 @@ class TestFromAC_ParsingFailureMarksFailed:
         entities = [{"id": "r1", "name": "A", "entity_type": "concept"}]
         edge = {"source_id": "r1", "target_id": "r1"}  # no 'relation' or 'relationship'
         with pytest.raises(ToolError):
-            await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=entities, edges=[edge])
+            await knowledge_enrichment_store(ctx, chunk_id=_CHUNK_ID, entities=entities, edges=[edge])
         call_args = store.mark_failed.call_args
         args = call_args.args or ()
         kwargs = call_args.kwargs or {}
@@ -513,7 +513,7 @@ class TestFromAC_ExplicitFieldPassthrough:
             "entity_type": "concept",
             "description": "A custom description string",
         }
-        await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=[entity], edges=[])
+        await knowledge_enrichment_store(ctx, chunk_id=_CHUNK_ID, entities=[entity], edges=[])
         _, entities_arg, _ = _extract_submit_args(store)
         assert entities_arg[0].description == "A custom description string"
 
@@ -527,7 +527,7 @@ class TestFromAC_ExplicitFieldPassthrough:
             "entity_type": "concept",
             "confidence": 0.42,
         }
-        await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=[entity], edges=[])
+        await knowledge_enrichment_store(ctx, chunk_id=_CHUNK_ID, entities=[entity], edges=[])
         _, entities_arg, _ = _extract_submit_args(store)
         assert entities_arg[0].confidence == pytest.approx(0.42)
 
@@ -537,7 +537,7 @@ class TestFromAC_ExplicitFieldPassthrough:
         ctx, store = _make_ctx()
         entities = [{"id": "r1", "name": "A", "entity_type": "concept"}]
         edge = {"source_id": "r1", "target_id": "r1", "relation": "related_to", "weight": 0.25}
-        await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=entities, edges=[edge])
+        await knowledge_enrichment_store(ctx, chunk_id=_CHUNK_ID, entities=entities, edges=[edge])
         _, _, relations_arg = _extract_submit_args(store)
         assert relations_arg[0].weight == pytest.approx(0.25)
 
@@ -559,7 +559,7 @@ class TestFromAC_SubmitExtractionsValueError:
         )
         ctx, _ = _make_ctx(enrichment_store=store)
         with pytest.raises(ToolError):
-            await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=[], edges=[])
+            await knowledge_enrichment_store(ctx, chunk_id=_CHUNK_ID, entities=[], edges=[])
 
     @pytest.mark.asyncio
     async def test_value_error_from_submit_extractions_calls_mark_failed(self) -> None:
@@ -570,7 +570,7 @@ class TestFromAC_SubmitExtractionsValueError:
         )
         ctx, _ = _make_ctx(enrichment_store=store)
         with pytest.raises(ToolError):
-            await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=[], edges=[])
+            await knowledge_enrichment_store(ctx, chunk_id=_CHUNK_ID, entities=[], edges=[])
         store.mark_failed.assert_called_once()
 
     @pytest.mark.asyncio
@@ -580,7 +580,7 @@ class TestFromAC_SubmitExtractionsValueError:
         store.submit_extractions.side_effect = ValueError("unresolved relation ref")
         ctx, _ = _make_ctx(enrichment_store=store)
         with pytest.raises(ToolError):
-            await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=[], edges=[])
+            await knowledge_enrichment_store(ctx, chunk_id=_CHUNK_ID, entities=[], edges=[])
         call_args = store.mark_failed.call_args
         args = call_args.args or ()
         kwargs = call_args.kwargs or {}
@@ -595,7 +595,7 @@ class TestFromAC_SubmitExtractionsValueError:
         store.submit_extractions.side_effect = ValueError(err_msg)
         ctx, _ = _make_ctx(enrichment_store=store)
         with pytest.raises(ToolError):
-            await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=[], edges=[])
+            await knowledge_enrichment_store(ctx, chunk_id=_CHUNK_ID, entities=[], edges=[])
         call_args = store.mark_failed.call_args
         args = call_args.args or ()
         kwargs = call_args.kwargs or {}

@@ -77,7 +77,7 @@ Returns: `dict` with corpus counts and enrichment queue state: `documents`, `ent
 
 **Resource:** `knowledge://stats` — human-readable summary string, e.g. `Knowledge base: 12 documents, 34 entities, 56 edges`.
 
-### get_next_batch
+### knowledge_enrichment_claim_batch
 
 Atomically claim a batch of chunks ready for Phase 1 enrichment.
 
@@ -93,10 +93,10 @@ Behavior:
 - Excludes chunks from sources with enrichment disabled.
 - Excludes orphan chunks whose documents have missing/NULL source links.
 - Updates claimed chunks inside an immediate SQLite transaction.
-- Each returned batch has a lease `claim_token`; pass the exact token back to `store_enrichment` for every Phase 1 chunk from that batch.
+- Each returned batch has a lease `claim_token`; pass the exact token back to `knowledge_enrichment_store` for every Phase 1 chunk from that batch.
 - Empty list means no Phase 1 work is currently available.
 
-### retry_failed_enrichment
+### knowledge_enrichment_retry
 
 Reset failed Phase 1 chunks back to pending so workers can retry them.
 
@@ -108,23 +108,23 @@ Reset failed Phase 1 chunks back to pending so workers can retry them.
 
 Returns: `{"reset": int, "remaining_failed": int}`. Use after inspecting `knowledge_stats().chunks_failed`; it only resets chunks in `failed` state and does not alter already enriched chunks.
 
-### store_enrichment
+### knowledge_enrichment_store
 
 Persist extraction results for a claimed chunk.
 
 | Param | Type | Default | Notes |
 |-------|------|---------|-------|
-| `chunk_id` | str | required | Chunk ID from `get_next_batch` |
+| `chunk_id` | str | required | Chunk ID from `knowledge_enrichment_claim_batch` |
 | `entities` | list[dict] | None | Entities to upsert |
 | `edges` | list[dict] | None | Edges to insert |
-| `claim_token` | str | None | Required; lease token from `get_next_batch` |
+| `claim_token` | str | None | Required; lease token from `knowledge_enrichment_claim_batch` |
 
 Returns: `None` on success.
 
 Behavior:
 
 - Pass `chunk_id`, `claim_token`, and optional `entities` and `edges`; the server derives `document_id`, `source_id`, and `scope` from the claimed chunk/document/source, stamps those values onto persisted rows, and marks the chunk `enriched` only after successful persistence.
-- Leases are fenced: missing or stale `claim_token` values raise `ToolError`. A failed write attempt on the current claim records diagnostics, increments attempts, clears the lease, and moves the chunk to `failed` until `retry_failed_enrichment` resets it.
+- Leases are fenced: missing or stale `claim_token` values raise `ToolError`. A failed write attempt on the current claim records diagnostics, increments attempts, clears the lease, and moves the chunk to `failed` until `knowledge_enrichment_retry` resets it.
 
 Edge payload schema:
 
@@ -152,9 +152,9 @@ Only the tools documented in this reference are agent-callable MCP tools. Treat 
 | Refresh a registered source | `knowledge_sources_refresh` | Re-ingests one source by source ID |
 | Remove a registered source | `knowledge_sources_delete` | Destructive cascade delete after vector cleanup |
 | Get KB statistics | `knowledge_stats` | Also available as resource `knowledge://stats` |
-| Claim enrichment work | `get_next_batch` | Pulls and leases chunks atomically |
-| Retry failed chunks | `retry_failed_enrichment` | Resets failed chunks to pending |
-| Store enrichment results | `store_enrichment` | Pass `chunk_id` and `claim_token`; marks chunk enriched |
+| Claim enrichment work | `knowledge_enrichment_claim_batch` | Pulls and leases chunks atomically |
+| Retry failed chunks | `knowledge_enrichment_retry` | Resets failed chunks to pending |
+| Store enrichment results | `knowledge_enrichment_store` | Pass `chunk_id` and `claim_token`; marks chunk enriched |
 
 Sources listed by `knowledge_sources_list` can be passed to `knowledge_sources_refresh` only when `refreshable=true`. Local file sources refresh from the workspace file path, web sources refresh through the configured fetch method, and inline direct-text sources are searchable/enrichable but intentionally non-refreshable.
 
@@ -223,11 +223,11 @@ Six-step process for adding, updating, and removing knowledge sources. See `.owl
 | `OWLBEAR_KB_PATH` | `.owlbear/knowledge/local.db` | Path to SQLite knowledge database |
 | `KNOWLEDGE_TOOLS_EXCLUDE` | _(unset)_ | Comma-separated tool names to remove |
 
-`KNOWLEDGE_TOOLS_EXCLUDE` accepts registered tool names such as `knowledge_search`, `knowledge_ingest`, `knowledge_sources_list`, `knowledge_stats`, `knowledge_sources_refresh`, `knowledge_sources_delete`, `get_next_batch`, `retry_failed_enrichment`, and `store_enrichment`. Unknown names silently ignored.
+`KNOWLEDGE_TOOLS_EXCLUDE` accepts registered tool names such as `knowledge_search`, `knowledge_ingest`, `knowledge_sources_list`, `knowledge_stats`, `knowledge_sources_refresh`, `knowledge_sources_delete`, `knowledge_enrichment_claim_batch`, `knowledge_enrichment_retry`, and `knowledge_enrichment_store`. Unknown names silently ignored.
 
 ## Known Gotchas
 
 - **Always set `scope`** to `project:{id}` when a project is active; use `global` otherwise.
 - **Search before ingesting** to avoid duplicates — the dedup is by content hash, not by topic.
 - **Keep lease tokens paired with chunks**. A `claim_token` belongs to the batch lease that returned it; do not reuse tokens across batches or sessions.
-- **Failed chunks stay failed until reset**. If `chunks_failed` is non-zero, inspect the cause, then call `retry_failed_enrichment` only when the extractor/payload issue has been corrected.
+- **Failed chunks stay failed until reset**. If `chunks_failed` is non-zero, inspect the cause, then call `knowledge_enrichment_retry` only when the extractor/payload issue has been corrected.

@@ -1,15 +1,15 @@
-"""Tests for get_next_batch → EnrichmentStore.claim_batch delegation (task #1891).
+"""Tests for knowledge_enrichment_claim_batch → EnrichmentStore.claim_batch delegation (task #1891).
 
 Source files under test:
   serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py
 
 Target interface:
-  get_next_batch — refactored to delegate queue claiming to EnrichmentStore.claim_batch()
+  knowledge_enrichment_claim_batch — refactored to delegate queue claiming to EnrichmentStore.claim_batch()
   and hydrate each item via ContentStore.get_chunk/get_document and
   source_store_v2.get_source; response shape (EnrichmentChunk TypedDict) unchanged.
 
 AC coverage:
-  AC1 — get_next_batch calls EnrichmentStore.claim_batch(EnrichmentParams(batch_size=limit))
+  AC1 — knowledge_enrichment_claim_batch calls EnrichmentStore.claim_batch(EnrichmentParams(batch_size=limit))
   AC2 — Each claimed item hydrated via ContentStore.get_chunk(chunk_id),
          ContentStore.get_document(document_id), source_store_v2.get_source(source_id);
          items where get_chunk() returns None are skipped
@@ -34,7 +34,7 @@ from owlbear_knowledge.protocols.enrichment import (
     EnrichmentQueueItem,
     EnrichmentState,
 )
-from owlbear_mcp_knowledge.server import get_next_batch
+from owlbear_mcp_knowledge.server import knowledge_enrichment_claim_batch
 
 
 # ---------------------------------------------------------------------------
@@ -177,7 +177,7 @@ def _make_ctx(
 
 
 class TestFromAC_ClaimBatchDelegation:
-    """AC1: get_next_batch must delegate queue claiming to EnrichmentStore.claim_batch."""
+    """AC1: knowledge_enrichment_claim_batch must delegate queue claiming to EnrichmentStore.claim_batch."""
 
     @pytest.mark.asyncio
     async def test_claim_batch_called_with_batch_size_from_limit(self) -> None:
@@ -185,7 +185,7 @@ class TestFromAC_ClaimBatchDelegation:
         ctx = _make_ctx()
         app_ctx = ctx.request_context.lifespan_context
 
-        await get_next_batch(ctx, limit=5)
+        await knowledge_enrichment_claim_batch(ctx, limit=5)
 
         app_ctx.enrichment_store.claim_batch.assert_called_once_with(
             EnrichmentParams(batch_size=5)
@@ -197,7 +197,7 @@ class TestFromAC_ClaimBatchDelegation:
         ctx = _make_ctx()
         app_ctx = ctx.request_context.lifespan_context
 
-        await get_next_batch(ctx)
+        await knowledge_enrichment_claim_batch(ctx)
 
         app_ctx.enrichment_store.claim_batch.assert_called_once_with(
             EnrichmentParams(batch_size=10)
@@ -209,7 +209,7 @@ class TestFromAC_ClaimBatchDelegation:
         ctx = _make_ctx()
         app_ctx = ctx.request_context.lifespan_context
 
-        await get_next_batch(ctx, limit=9999)
+        await knowledge_enrichment_claim_batch(ctx, limit=9999)
 
         app_ctx.enrichment_store.claim_batch.assert_called_once_with(
             EnrichmentParams(batch_size=100)
@@ -225,7 +225,7 @@ class TestFromAC_ClaimBatchDelegation:
         batch = _make_batch()  # no items
         ctx = _make_ctx(batch=batch, sql_rows=[_SQL_ROW])
 
-        result = await get_next_batch(ctx, limit=10)
+        result = await knowledge_enrichment_claim_batch(ctx, limit=10)
 
         assert result == []
 
@@ -244,7 +244,7 @@ class TestFromAC_PerItemHydration:
         ctx = _make_ctx()
         app_ctx = ctx.request_context.lifespan_context
 
-        await get_next_batch(ctx)
+        await knowledge_enrichment_claim_batch(ctx)
 
         app_ctx.content_store.get_chunk.assert_called_once_with(_ITEM_CHUNK_ID)
 
@@ -254,7 +254,7 @@ class TestFromAC_PerItemHydration:
         ctx = _make_ctx()
         app_ctx = ctx.request_context.lifespan_context
 
-        await get_next_batch(ctx)
+        await knowledge_enrichment_claim_batch(ctx)
 
         app_ctx.content_store.get_document.assert_called_once_with(_STORE_DOC_ID)
 
@@ -264,7 +264,7 @@ class TestFromAC_PerItemHydration:
         ctx = _make_ctx()
         app_ctx = ctx.request_context.lifespan_context
 
-        await get_next_batch(ctx)
+        await knowledge_enrichment_claim_batch(ctx)
 
         app_ctx.source_store_v2.get_source.assert_called_once_with(_ITEM_SOURCE_ID)
 
@@ -278,7 +278,7 @@ class TestFromAC_PerItemHydration:
         ctx = _make_ctx(sql_rows=[_SQL_ROW])
         ctx.request_context.lifespan_context.content_store.get_chunk.return_value = None
 
-        result = await get_next_batch(ctx)
+        result = await knowledge_enrichment_claim_batch(ctx)
 
         assert result == []
 
@@ -298,7 +298,7 @@ class TestFromAC_PerItemHydration:
             chunk_a if cid == "chk-a-1891" else chunk_b
         )
 
-        await get_next_batch(ctx)
+        await knowledge_enrichment_claim_batch(ctx)
 
         assert app_ctx.content_store.get_document.call_count == 1, (
             "get_document should be called exactly once for a shared document_id "
@@ -321,7 +321,7 @@ class TestFromAC_PerItemHydration:
             chunk_a if cid == "chk-a-1891" else chunk_b
         )
 
-        await get_next_batch(ctx)
+        await knowledge_enrichment_claim_batch(ctx)
 
         assert app_ctx.source_store_v2.get_source.call_count == 1, (
             "get_source should be called exactly once for a shared source_id "
@@ -347,7 +347,7 @@ class TestFromAC_ResponseFieldMapping:
         """claim_token must be batch.batch_id, not a freshly generated UUID."""
         ctx = _make_ctx(sql_rows=[_SQL_ROW])
 
-        result = await get_next_batch(ctx)
+        result = await knowledge_enrichment_claim_batch(ctx)
 
         assert result[0]["claim_token"] == _BATCH_ID, (
             f"claim_token must be batch.batch_id={_BATCH_ID!r}; "
@@ -359,7 +359,7 @@ class TestFromAC_ResponseFieldMapping:
         """claimed_at must be item.started_at.isoformat(), not datetime.now().isoformat()."""
         ctx = _make_ctx(sql_rows=[_SQL_ROW])
 
-        result = await get_next_batch(ctx)
+        result = await knowledge_enrichment_claim_batch(ctx)
 
         expected = _ITEM_STARTED_AT.isoformat()
         assert result[0]["claimed_at"] == expected, (
@@ -372,7 +372,7 @@ class TestFromAC_ResponseFieldMapping:
         """chunk_id must come from EnrichmentQueueItem.chunk_id, not SQL row[0]."""
         ctx = _make_ctx(sql_rows=[_SQL_ROW])
 
-        result = await get_next_batch(ctx)
+        result = await knowledge_enrichment_claim_batch(ctx)
 
         assert result[0]["chunk_id"] == _ITEM_CHUNK_ID, (
             f"chunk_id must be item.chunk_id={_ITEM_CHUNK_ID!r}; "
@@ -384,7 +384,7 @@ class TestFromAC_ResponseFieldMapping:
         """text must come from ContentChunk.text, not SQL row c.content."""
         ctx = _make_ctx(sql_rows=[_SQL_ROW])
 
-        result = await get_next_batch(ctx)
+        result = await knowledge_enrichment_claim_batch(ctx)
 
         assert result[0]["text"] == _STORE_TEXT, (
             f"text must be chunk.text={_STORE_TEXT!r}; "
@@ -396,7 +396,7 @@ class TestFromAC_ResponseFieldMapping:
         """doc_title must come from ContentDocument.title, not SQL row d.title."""
         ctx = _make_ctx(sql_rows=[_SQL_ROW])
 
-        result = await get_next_batch(ctx)
+        result = await knowledge_enrichment_claim_batch(ctx)
 
         assert result[0]["doc_title"] == _STORE_DOC_TITLE, (
             f"doc_title must be document.title={_STORE_DOC_TITLE!r}; "
@@ -408,7 +408,7 @@ class TestFromAC_ResponseFieldMapping:
         """section_path must be '/'.join(chunk.section_path) for a non-empty tuple."""
         ctx = _make_ctx(sql_rows=[_SQL_ROW])  # SQL metadata yields "sql/old/path"
 
-        result = await get_next_batch(ctx)
+        result = await knowledge_enrichment_claim_batch(ctx)
 
         expected = "/".join(_STORE_SECTION_PATH)  # "section/subsection"
         assert result[0]["section_path"] == expected, (
@@ -424,7 +424,7 @@ class TestFromAC_ResponseFieldMapping:
         # SQL row has non-empty section_path metadata → old code would return non-None
         ctx = _make_ctx(chunk=chunk, sql_rows=[_SQL_ROW])
 
-        result = await get_next_batch(ctx)
+        result = await knowledge_enrichment_claim_batch(ctx)
 
         assert result[0]["section_path"] is None, (
             f"section_path must be None for empty tuple; "
@@ -437,7 +437,7 @@ class TestFromAC_ResponseFieldMapping:
         """source_name must come from SourceRecord.name, not SQL row ks.name."""
         ctx = _make_ctx(sql_rows=[_SQL_ROW])
 
-        result = await get_next_batch(ctx)
+        result = await knowledge_enrichment_claim_batch(ctx)
 
         assert result[0]["source_name"] == _STORE_SOURCE_NAME, (
             f"source_name must be source.name={_STORE_SOURCE_NAME!r}; "
@@ -449,7 +449,7 @@ class TestFromAC_ResponseFieldMapping:
         """document_id must come from ContentChunk.document_id, not SQL row d.id."""
         ctx = _make_ctx(sql_rows=[_SQL_ROW])
 
-        result = await get_next_batch(ctx)
+        result = await knowledge_enrichment_claim_batch(ctx)
 
         assert result[0]["document_id"] == _STORE_DOC_ID, (
             f"document_id must be chunk.document_id={_STORE_DOC_ID!r}; "
@@ -461,7 +461,7 @@ class TestFromAC_ResponseFieldMapping:
         """source_id must come from EnrichmentQueueItem.source_id, not SQL row d.source_id."""
         ctx = _make_ctx(sql_rows=[_SQL_ROW])
 
-        result = await get_next_batch(ctx)
+        result = await knowledge_enrichment_claim_batch(ctx)
 
         assert result[0]["source_id"] == _ITEM_SOURCE_ID, (
             f"source_id must be item.source_id={_ITEM_SOURCE_ID!r}; "
@@ -473,7 +473,7 @@ class TestFromAC_ResponseFieldMapping:
         """scope must come from ContentChunk.scope, not SQL row d.scope."""
         ctx = _make_ctx(sql_rows=[_SQL_ROW])
 
-        result = await get_next_batch(ctx)
+        result = await knowledge_enrichment_claim_batch(ctx)
 
         assert result[0]["scope"] == _STORE_SCOPE, (
             f"scope must be chunk.scope={_STORE_SCOPE!r}; "
@@ -495,7 +495,7 @@ class TestFromAC_OldSqlRemoved:
         ctx = _make_ctx()
         conn = ctx.request_context.lifespan_context.conn
 
-        await get_next_batch(ctx)
+        await knowledge_enrichment_claim_batch(ctx)
 
         conn.execute.assert_not_called()
 
@@ -505,6 +505,6 @@ class TestFromAC_OldSqlRemoved:
         ctx = _make_ctx()
         conn = ctx.request_context.lifespan_context.conn
 
-        await get_next_batch(ctx)
+        await knowledge_enrichment_claim_batch(ctx)
 
         conn.commit.assert_not_called()

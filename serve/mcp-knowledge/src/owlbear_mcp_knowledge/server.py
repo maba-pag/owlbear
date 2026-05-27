@@ -119,7 +119,7 @@ globals()["ContentInjectionGuard"] = object
 
 
 
-async def get_next_batch(ctx: Context, limit: int = 10) -> list[EnrichmentChunk]:
+async def knowledge_enrichment_claim_batch(ctx: Context, limit: int = 10) -> list[EnrichmentChunk]:
     """Atomically claim a batch of chunks ready for enrichment.
 
     Chunks are eligible when state is pending, or when a previous claim lease
@@ -179,7 +179,7 @@ async def get_next_batch(ctx: Context, limit: int = 10) -> list[EnrichmentChunk]
     return response
 
 
-async def store_enrichment(
+async def knowledge_enrichment_store(
     ctx: Context,
     chunk_id: str | None = None,
     entities: list[dict[str, Any]] | None = None,
@@ -328,7 +328,7 @@ def _parse_protocol_relation_type(edge: dict[str, Any]) -> ProtocolRelationType:
         raise ValueError(msg) from exc
 
 
-async def retry_failed_enrichment(
+async def knowledge_enrichment_retry(
     ctx: Context,
     chunk_ids: list[str] | None = None,
     limit: int = 100,
@@ -581,115 +581,15 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
 
 mcp = FastMCP("owlbear-knowledge", lifespan=app_lifespan)
 
-get_next_batch = mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))(get_next_batch)
-store_enrichment = mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))(store_enrichment)
-retry_failed_enrichment = mcp.tool(
+knowledge_enrichment_claim_batch = mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))(
+    knowledge_enrichment_claim_batch
+)
+knowledge_enrichment_store = mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))(
+    knowledge_enrichment_store
+)
+knowledge_enrichment_retry = mcp.tool(
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True)
-)(retry_failed_enrichment)
-
-
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True))
-async def retry_failed_enrichment(
-    ctx: Context,
-    chunk_ids: list[str] | None = None,
-    limit: int = 100,
-    scopes: list[str] | None = None,
-) -> RetryEnrichmentResult:
-    """Reset failed enrichment chunks to pending so workers can retry them."""
-    app_ctx: AppContext = ctx.request_context.lifespan_context
-    conn = app_ctx.conn
-    scope_values = _normalize_scope_list(scopes)
-
-    normalized_chunk_ids = [chunk_id.strip() for chunk_id in chunk_ids or [] if chunk_id.strip()]
-    conn.execute("PRAGMA busy_timeout = 5000")
-    conn.execute("BEGIN IMMEDIATE")
-    try:
-        if normalized_chunk_ids:
-            reset_count = 0
-            for chunk_id in normalized_chunk_ids:
-                cur = conn.execute(
-                    """
-                    UPDATE chunks
-                    SET enrichment_state='pending',
-                        claimed_at=NULL,
-                        claimed_by=NULL,
-                        claim_token=NULL,
-                        enrichment_error=NULL,
-                        last_enrichment_error_at=NULL
-                    WHERE enrichment_state='failed'
-                      AND id = ?
-                    """,
-                    (chunk_id,),
-                )
-                reset_count += max(cur.rowcount, 0)
-        else:
-            limit = _normalize_batch_limit(limit)
-            if scope_values:
-                conn.execute("CREATE TEMP TABLE IF NOT EXISTS retry_failed_enrichment_scopes(scope TEXT NOT NULL)")
-                conn.execute("DELETE FROM retry_failed_enrichment_scopes")
-                conn.executemany(
-                    "INSERT INTO retry_failed_enrichment_scopes(scope) VALUES (?)",
-                    [(scope,) for scope in scope_values],
-                )
-                cur = conn.execute(
-                    """
-                    UPDATE chunks
-                    SET enrichment_state='pending',
-                        claimed_at=NULL,
-                        claimed_by=NULL,
-                        claim_token=NULL,
-                        enrichment_error=NULL,
-                        last_enrichment_error_at=NULL
-                    WHERE id IN (
-                        SELECT c.id
-                        FROM chunks AS c
-                        JOIN documents AS d ON d.id = c.document_id
-                        JOIN knowledge_sources AS ks ON ks.id = d.source_id
-                        WHERE c.enrichment_state = 'failed'
-                          AND ks.enabled = 1
-                          AND ks.enrich = 1
-                          AND COALESCE(d.scope, 'global') IN (
-                              SELECT scope FROM retry_failed_enrichment_scopes
-                          )
-                        ORDER BY c.created_at ASC, c.id ASC
-                        LIMIT ?
-                    )
-                    """,
-                    (limit,),
-                )
-            else:
-                cur = conn.execute(
-                    """
-                    UPDATE chunks
-                    SET enrichment_state='pending',
-                        claimed_at=NULL,
-                        claimed_by=NULL,
-                        claim_token=NULL,
-                        enrichment_error=NULL,
-                        last_enrichment_error_at=NULL
-                    WHERE id IN (
-                        SELECT c.id
-                        FROM chunks AS c
-                        JOIN documents AS d ON d.id = c.document_id
-                        JOIN knowledge_sources AS ks ON ks.id = d.source_id
-                        WHERE c.enrichment_state = 'failed'
-                          AND ks.enabled = 1
-                          AND ks.enrich = 1
-                        ORDER BY c.created_at ASC, c.id ASC
-                        LIMIT ?
-                    )
-                    """,
-                    (limit,),
-                )
-            reset_count = max(cur.rowcount, 0)
-
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-
-    failed_row = conn.execute("SELECT COUNT(*) FROM chunks WHERE enrichment_state = 'failed'").fetchone()
-    return {"reset": reset_count, "remaining_failed": int(failed_row[0] if failed_row is not None else 0)}
+)(knowledge_enrichment_retry)
 
 
 __all__ = [
@@ -698,6 +598,9 @@ __all__ = [
     "_apply_tool_exclusions",
     "app_lifespan",
     "init_db",
+    "knowledge_enrichment_claim_batch",
+    "knowledge_enrichment_retry",
+    "knowledge_enrichment_store",
     "knowledge_entity_lookup",
     "knowledge_ingest",
     "knowledge_search",
@@ -708,7 +611,6 @@ __all__ = [
     "knowledge_stats",
     "list_entities",
     "mcp",
-    "retry_failed_enrichment",
     "select_content_fetcher",
 ]
 
