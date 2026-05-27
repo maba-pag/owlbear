@@ -10,12 +10,13 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypedDict
 from uuid import uuid4
 
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
+from pydantic import ValidationError
 
 from owlbear_knowledge.chunker import TextChunker
 from owlbear_knowledge.document_store import DocumentStore
@@ -27,6 +28,7 @@ from owlbear_knowledge.graph_store import GraphStore
 from owlbear_knowledge.ingest import IngestPipeline
 from owlbear_knowledge.ingest_coordinator import IngestCoordinator
 from owlbear_knowledge.models import EntityType
+from owlbear_knowledge.protocols.sources import SourceRegistration
 from owlbear_knowledge.qdrant import QdrantVectorStore
 from owlbear_knowledge.query_service import KnowledgeQueryError, KnowledgeQueryService
 from owlbear_knowledge.refresh import RefreshOrchestrator
@@ -401,6 +403,16 @@ class AppContext:
     intra_doc_builder: IntraDocGraphBuilder | None = None
 
 
+class RegisteredSourceResult(TypedDict):
+    """Serialized source fields returned by knowledge_register_source."""
+
+    id: str
+    name: str
+    state: str
+    kind: str
+    scope: str
+
+
 def _apply_tool_exclusions(server: FastMCP) -> set[str]:
     """Read KNOWLEDGE_TOOLS_EXCLUDE and remove each listed tool from the server.
 
@@ -631,6 +643,7 @@ __all__ = [
     "get_stats",
     "ingest_document",
     "init_db",
+    "knowledge_register_source",
     "list_entities",
     "list_sources",
     "mcp",
@@ -708,6 +721,55 @@ async def list_sources(ctx: Context, scope: str | None = None) -> list[SourceInf
         }
         for s in sources
     ]
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
+async def knowledge_register_source(  # noqa: PLR0913
+    ctx: Context,
+    name: str,
+    kind: str,
+    fetch_method: str,
+    config: dict[str, Any],
+    *,
+    scope: str = "global",
+    enrich: bool = False,
+    refreshable: bool = True,
+    priority: int = 0,
+    metadata: dict[str, Any] | None = None,
+) -> RegisteredSourceResult:
+    """Register a source in the v2 source store."""
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    store = app_ctx.source_store_v2
+    if store is None:
+        msg = "source store v2 not available"
+        raise ToolError(msg)
+
+    try:
+        registration = SourceRegistration.model_validate(
+            {
+                "name": name,
+                "kind": kind,
+                "fetch_method": fetch_method,
+                "config": config,
+                "scope": scope,
+                "enrich": enrich,
+                "refreshable": refreshable,
+                "priority": priority,
+                "metadata": {} if metadata is None else metadata,
+            },
+            strict=False,
+        )
+    except ValidationError as exc:
+        raise ToolError(str(exc)) from exc
+
+    source = await asyncio.to_thread(store.register_source, registration)
+    return {
+        "id": str(source.id),
+        "name": str(source.name),
+        "state": str(source.state),
+        "kind": str(source.kind),
+        "scope": str(source.scope),
+    }
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
