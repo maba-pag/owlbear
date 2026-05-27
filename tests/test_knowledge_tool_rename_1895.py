@@ -137,29 +137,22 @@ class TestFromAC_KnowledgeStatsCollision:
             "get_stats must be renamed to knowledge_stats as an @mcp.tool."
         )
 
-    def test_collision_helper_privatised_or_removed(self) -> None:
+    def test_collision_helper_privatised(self) -> None:
         """Collision resolution: the pre-existing non-tool knowledge_stats helper
-        must be privatised (exists as _legacy_graph_stats and is callable) or
-        removed (no public non-tool knowledge_stats attribute in module namespace).
+        must have been privatised as _legacy_graph_stats.
 
-        Registry-only proof is insufficient: a broken state where the collision
-        helper is still public alongside the MCP tool would not be caught by
-        test_knowledge_stats_is_registered_mcp_tool alone.
+        Unconditional assert — no fallback branch. The builder chose privatisation
+        (confirmed at server.py:1209). Any OR-branch logic here would be a
+        tautology because knowledge_stats IS in the registry as the renamed MCP
+        tool, making a "removed entirely" fallback condition always False.
         """
-        registered = _registered_tool_names()
-        privatised = hasattr(server, "_legacy_graph_stats") and callable(
-            server._legacy_graph_stats  # noqa: SLF001
+        assert hasattr(server, "_legacy_graph_stats"), (
+            "_legacy_graph_stats does not exist in server module namespace. "
+            "The pre-existing non-tool knowledge_stats helper must be privatised "
+            "as _legacy_graph_stats to resolve the naming collision."
         )
-        # If privatised path not taken, the old public name must be absent entirely
-        # (not left as a non-tool attribute after the MCP-tool took its name).
-        public_shadow_exists = (
-            hasattr(server, "knowledge_stats")
-            and "knowledge_stats" not in registered
-        )
-        assert privatised or not public_shadow_exists, (
-            "Collision not resolved: the pre-existing non-tool knowledge_stats "
-            "helper is still public and not registered as an MCP tool. "
-            "It must be renamed to _legacy_graph_stats or removed entirely."
+        assert callable(server._legacy_graph_stats), (  # noqa: SLF001
+            "server._legacy_graph_stats exists but is not callable."
         )
 
 
