@@ -909,7 +909,7 @@ async def list_sources(ctx: Context, scope: str | None = None) -> list[SourceInf
         msg = "source store v2 not available"
         raise ToolError(msg)
     scope = _normalize_optional_scope(scope)
-    sources = await asyncio.to_thread(store.list_sources, scope=scope)
+    sources = store.list_sources(scope=scope)
     return [
         {
             "id": s.id,
