@@ -1,10 +1,10 @@
 ---
 id: 1890
 title: 'Knowledge: MCP add register_source tool'
-status: review
+status: archived
 priority: needed
 created: 2026-05-27T01:00:59.214408+02:00
-updated: 2026-05-27T09:49:51.895870+02:00
+updated: 2026-05-27T11:00:38.207025+02:00
 tags:
   - knowledge
   - layer-3
@@ -22,7 +22,7 @@ proof_bundle: behavioral
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 Create new `knowledge_register_source` MCP tool. Accepts name, kind, fetch_method, config, scope, enrich, refreshable, priority, metadata. Validates typed SourceConfig discriminated union via Pydantic. Delegates to SqliteSourceStore.register_source(SourceRegistration).
@@ -228,3 +228,65 @@ test-writer crashed once (no response); releasing claim before retry
 
 - Commit: 523f6c350482fff187c126c4176010773194e434
 - Confidence: 0.91
+
+[[2026-05-27T10:32:59+02:00]]
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation: PASS #1890 to docs | AC mapped to code and evidence sufficient.
+- Evidence map:
+| AC Line | Code Evidence | Test Evidence | Status |
+|---|---|---|---|
+| AC1 | serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:825-826 registers `knowledge_register_source` with `readOnlyHint=False` and `destructiveHint=False`. | tests/test_register_source_1890.py:112-131 proves registry presence and both annotations. | PASS |
+| AC2 | serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:847-867 validates with `SourceRegistration.model_validate(..., strict=False)`, converts `ValidationError` to `ToolError`, and converts delegated store `ValueError` to `ToolError` with preserved detail. | tests/test_register_source_1890.py:142-168 and 489-506 prove validation failures become `ToolError` with detail; tests/test_register_source_1890.py:433-469 proves store-side `ValueError` normalization and detail preservation; tests/test_source_store_1870.py:175-186 proves the real `SqliteSourceStore` mismatch path raises `ValueError` on `kind`/`config.kind` mismatch. | PASS |
+| AC3 | serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:847-865 constructs `SourceRegistration` from tool params and delegates it via `asyncio.to_thread(store.register_source, registration)`; serve/knowledge/src/owlbear_knowledge/protocols/sources.py:112-123 defines the registration contract. | tests/test_register_source_1890.py:183-313 proves delegation, instance type, enum coercion, scope behavior, and the source-store availability guard; tests/test_register_source_1890.py:525-604 proves `enrich`, `refreshable`, `priority`, `metadata`, and `metadata=None` forwarding. | PASS |
+| AC4 | serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:868-873 returns exactly `id`, `name`, `state`, `kind`, and `scope`. | tests/test_register_source_1890.py:328-414 proves each returned field plus the exact five-key shape. | PASS |
+- Safety/security: PASS. Input handling remains behind Pydantic boundary validation at serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:847-867, and persistence continues to use parameterized SQLite inserts in serve/knowledge/src/owlbear_knowledge/stores/sources.py:93-108.
+
+## Observations
+- Challenger raised a proof-sufficiency concern about the real `kind`/`config.kind` mismatch path. I treated that as the only material disambiguation point and resolved it with adjacent durable evidence: tests/test_source_store_1870.py:175-186 proves the concrete store mismatch `ValueError`, while tests/test_register_source_1890.py:433-469 proves the MCP tool now normalizes that class of failure into `ToolError` with detail.
+- Builder evidence was sufficient and internally consistent for evidence-first review: the task body reports 31 passed, 0 failed, ruff clean, and scoped coverage notes for `owlbear_mcp_knowledge.server`.
+- Dirty-tree contamination check could not be independently performed because git-status tooling is not available in this review environment.
+
+[[2026-05-27T10:36:15+02:00]]
+## Docs Gate
+
+### Checklist
+
+| Item | Result | Evidence |
+|------|--------|----------|
+| 1. README Verification | FIXED | `serve/mcp-knowledge/README.md` tools table was missing `knowledge_register_source`; row added with description consistent with docstring and AC4 return shape. All 9 pre-existing tool rows verified accurate. |
+| 2. External Attribution | N/A | Implementation followed internal existing patterns only; no external sources cited in task body or research doc. |
+| 3. Research Doc | PASS | `.owlbear/research/mcp-register-source-tool.md` exists and linked from task body (2026-05-27T03:05:55 entry). |
+| 4. Deletion Detection | N/A | No symbols removed; tool added. No orphaned references. |
+
+### Files Updated
+- `serve/mcp-knowledge/README.md` — added `knowledge_register_source` row to Tools table
+
+### Scratch Cleanup
+- No `1890-*` scratch files found; nothing to clean.
+
+[[2026-05-27T11:00:38+02:00]]
+## Audit
+### Regression Detection
+- quality-runner mode full: 64 passed, 9 failed, lint clean
+- 9 failures are pre-existing in serve/mcp-knowledge/tests/ (TestFromAC_StatusNamesDictFormBug, TestFromAC_FunctionRemoval, TestFromAC_OutputSchemaPreserved) — all at server.py:515 or unrelated assertions. Builder commit (523f6c35) only touched server.py with 4+1 line ValueError normalization, confirmed no new test infrastructure changes.
+- regression verdict: PASS (no new regressions)
+
+### Intent Verification
+- scope alignment: PASS (all changes in knowledge MCP domain: server.py, task tests, README)
+- purpose match: PASS (adds register_source tool with validation and delegation per stated AC)
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 4/5
+AC lines were specific, testable, and led to clean implementation. Minor gap: AC2 scoped to "Pydantic validation errors" but real store also raises ValueError on invalid input (kind/config mismatch). Reviewer caught it, fix cycle was clean. AC was slightly narrow but principle was clear.
+
+### Commit Integrity
+- upstream commits: PASS (4 commits present: eaae6484 test-writer RED, e10d8223 builder GREEN, 5bda8a4c test-writer retry RED, 523f6c35 builder retry GREEN)
+- process concern: doc-writer README update (serve/mcp-knowledge/README.md) is uncommitted. Work is done correctly but git commit was missed by doc-writer.
+
+### Deduction Breakdown
+No rubric deductions apply. Pre-existing failures confirmed unrelated. Reviewer evidence thorough. AC quality 4/5. All source/test commits present. Uncommitted README is a process concern (docs-only, not source) that does not undermine evidence chain.
+
+### Confidence: 1.00
+### Action: archive

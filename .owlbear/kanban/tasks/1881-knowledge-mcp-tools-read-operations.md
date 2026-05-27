@@ -4,7 +4,7 @@ title: 'Knowledge: MCP tools — read operations'
 status: research
 priority: needed
 created: 2026-05-25T19:05:23.030124+02:00
-updated: 2026-05-25T19:05:23.030124+02:00
+updated: 2026-05-27T10:56:25.110341+02:00
 tags:
   - knowledge
   - layer-3
@@ -28,7 +28,7 @@ ac:
     error protocol
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-27T10:56:25.110341+02:00
 archival_reason:
 archival_refs: []
 ---

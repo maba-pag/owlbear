@@ -4,7 +4,7 @@ title: 'Knowledge: MCP wire ingest_document to IngestCoordinator.ingest'
 status: review
 priority: needed
 created: 2026-05-27T01:00:59.346799+02:00
-updated: 2026-05-27T09:53:51.871927+02:00
+updated: 2026-05-27T10:55:43.356284+02:00
 tags:
   - knowledge
   - layer-3
@@ -255,3 +255,103 @@ Original AC was vague on resolution strategy and field mapping. Refined all 5 li
 - Uses `app_lifespan` with in-memory SQLite and patched Qdrant/BgeM3 (heavy deps)
 - `SqliteSourceStore` is real (unpatched); only `coordinator.ingest` mocked to return fake `IngestResult`
 - Asserts source creation/reuse in the real DB and response counter format
+
+[[2026-05-27T10:21:11+02:00]]
+## Review Evidence
+- Verdict: FAIL
+- Routing: reject to backlog. This is a repeated review cycle; the remaining blockers are proof-quality gaps rather than a newly observed implementation mismatch.
+- Blocking findings:
+| # | AC Line | Finding | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | AC3 | The retry still does not prove the source-creation branch passes the resolved or newly registered source id into `IngestRequest.source_id`. The suite asserts `request.source_id` only for the existing-source path, while the create-path tests stop at registration fields or final store state. A broken first-use path could create the inline source yet call `coordinator.ingest` with the wrong source id and still pass green. | `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:897-922`; `tests/test_ingest_document_coordinator_1893.py:259-286`; `tests/test_ingest_document_coordinator_1893.py:373-384`; `tests/test_ingest_document_coordinator_1893.py:659-719` | backlog |
+| 2 | AC5 | Broad-exception proof remains incomplete at the first protected operation. `ingest_document` wraps `list_sources`, `register_source`, and `coordinator.ingest` in one broad handler, but the suite only proves error-string behavior for `register_source` and `coordinator.ingest`. Narrowing the try boundary above `list_sources` would still pass the current tests. | `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:888-923`; `tests/test_ingest_document_coordinator_1893.py:591-619` | backlog |
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Refine the proof expectations for AC3 so the next RED cycle must prove the create-source branch passes the resolved or newly registered source id into `IngestRequest.source_id`, then return the task for new tests. | `tests/test_ingest_document_coordinator_1893.py`; `.owlbear/kanban/tasks/1893-knowledge-mcp-wire-ingest-document-to-ingestcoordinator-ingest.md` | Blocking finding 1 |
+| 2 | architect | Refine the proof expectations for AC5 so the next RED cycle must include executable proof that `list_sources` exceptions are converted into the documented error string by the broad handler, then return the task for new tests. | `tests/test_ingest_document_coordinator_1893.py`; `.owlbear/kanban/tasks/1893-knowledge-mcp-wire-ingest-document-to-ingestcoordinator-ingest.md` | Blocking finding 2 |
+
+## Observations
+- The prior runtime-wiring concern is now closed: request-thread `source_store_v2` access is in place, and the new lifespan tests do exercise the real `SqliteSourceStore` boundary for AC2 and AC4.
+- AC1, AC2, and AC4 otherwise map cleanly to the current implementation in `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:868-930`.
+- `tests/test_persistence_source_wiring.py` still encodes legacy pipeline-oriented expectations and is not valid proof for this coordinator-based AC set.
+
+[[2026-05-27T10:34:58+02:00]]
+## Architecture Review (retry-2)
+
+### Context
+Reviewer rejected to backlog requesting architect refine proof expectations for two gaps:
+1. AC3 create-path: `IngestRequest.source_id` not asserted for the register_source branch
+2. AC5 broad-handler: `list_sources` exception path not covered
+
+### Codebase Verification
+Confirmed in `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:883-930`:
+- The try/except wraps `list_sources`, `register_source`, AND `coordinator.ingest` — so all three can produce the "error: ingestion failed:" response.
+- The create-source branch assigns `source = source_store.register_source(...)` and then uses `source.id` in `IngestRequest(source_id=source.id, ...)` — so a test that sets `register_source.return_value` with a known id and then asserts `request.source_id == that_id` closes the gap.
+
+### Proof-Gap Guidance (for test-writer retry)
+
+**Gap 1 — AC3 create-path source_id flow:**
+Add a test that:
+- Configures `store.list_sources` to return empty (triggers register_source branch)
+- Sets `store.register_source.return_value` to a source record with a distinct id (e.g. `"newly-registered-123"`)
+- Asserts `coordinator.ingest.call_args[0][0].source_id == "newly-registered-123"`
+
+This proves the register_source return value flows into IngestRequest.source_id (not a stale or hardcoded value).
+
+**Gap 2 — AC5 list_sources exception:**
+Add a test that:
+- Configures `store.list_sources` to raise `RuntimeError("db locked")`
+- Asserts result is a string containing "error"
+- Asserts `coordinator.ingest` is NOT called (exception short-circuits before coordinator)
+
+This proves the broad handler covers the first protected operation in the try block.
+
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Same scope as prior reviews |
+| Interface clarity | PASS | AC unchanged; proof guidance added |
+| Dependency correctness | PASS | Dep #1888 archived-done |
+| Module layering | PASS | mcp-knowledge → knowledge (correct) |
+| TDD compliance | PASS | Test-writer will add 2 gap-closing tests |
+| KISS/YAGNI | PASS | Minimal additions to close proof gaps |
+| Premise challenge | PASS | Covered in prior cycle |
+| Pattern consistency | PASS | Same mock/assert pattern as existing suite |
+| Security surface | PASS | No change |
+| Single domain | PASS | Knowledge only |
+
+### Design Diverge
+- Trigger: skipped — no competing approaches; reviewer gap is test coverage only
+
+### Challenge Results
+- Challenger: SKIPPED — re-review of same design; no new architectural decisions; prior challenges still apply
+
+### Proof-Bundle Validation
+- Planner assignment: behavioral
+- Final bundle: behavioral
+- Existing proof scope: N/A
+- Test-writer: PROCEED (add 2 specified tests only)
+
+### Verdict: APPROVE
+### Action Taken: Added explicit proof-gap guidance for test-writer to close AC3 create-path and AC5 list_sources exception gaps. Advanced to todo.
+
+[[2026-05-27T10:35:04+02:00]]
+Architecture review retry-2: refined proof expectations for two reviewer-identified gaps (AC3 create-path source_id flow, AC5 list_sources exception coverage). No AC wording change needed — the gaps are in test coverage, not specification. Added explicit test-writer guidance for 2 targeted additions.
+
+[[2026-05-27T10:55:43+02:00]]
+## Test-Writer Notes
+- Retry: added 2 tests for reviewer gaps (AC3 create-path source_id, AC5 list_sources exception). All 35 tests pass against current implementation.
+- Builder skip: test-only retry, all tests green.
+
+### New tests
+| Test | AC |
+|------|----|
+| `test_ingest_request_source_id_from_newly_registered_source` | AC3 — register_source return value id flows into IngestRequest.source_id (create branch) |
+| `test_list_sources_exception_returns_error_string` | AC5 — list_sources exception caught by broad handler; returns error string; coordinator.ingest NOT called |
+
+### Class: `TestFromAC_IngestDocumentCoordinatorWiring` (2 added)
+- Tests per category: integration/happy 1, integration/error 1
+- Total: 35 tests, all PASS (direct-to-review: implementation already correct)
+- ruff: clean
