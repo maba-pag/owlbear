@@ -28,7 +28,7 @@ from owlbear_knowledge.protocols.sources import (
     SourceKind,
     SourceRegistration,
 )
-from owlbear_mcp_knowledge.server import knowledge_register_source, mcp
+from owlbear_mcp_knowledge.server import knowledge_sources_register as knowledge_register_source, mcp
 
 
 # ---------------------------------------------------------------------------

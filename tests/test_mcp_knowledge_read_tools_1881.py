@@ -290,7 +290,7 @@ class TestFromAC_SearchKnowledgeDelegate:
         'error: Knowledge service not available.' when query_service=None.
         With query_service=None but query_facade configured, result must be a list.
         """
-        from owlbear_mcp_knowledge.server import search_knowledge
+        from owlbear_mcp_knowledge.server import knowledge_search as search_knowledge
 
         facade = MagicMock(spec=QueryFacade)
         facade.search = AsyncMock(return_value=_make_query_result_empty())
@@ -307,7 +307,7 @@ class TestFromAC_SearchKnowledgeDelegate:
         Currently FAILS: code uses KnowledgeQueryService.query(prompt, top_k, scopes)
         positional-style, not QueryRequest.
         """
-        from owlbear_mcp_knowledge.server import search_knowledge
+        from owlbear_mcp_knowledge.server import knowledge_search as search_knowledge
 
         facade = MagicMock(spec=QueryFacade)
         facade.search = AsyncMock(return_value=_make_query_result_empty())
@@ -332,7 +332,7 @@ class TestFromAC_SearchKnowledgeDelegate:
         calls query_service and returns results (list), not error string.
         New code checks query_facade first → returns error string.
         """
-        from owlbear_mcp_knowledge.server import search_knowledge
+        from owlbear_mcp_knowledge.server import knowledge_search as search_knowledge
 
         legacy_qs = MagicMock()
         legacy_qs.query = AsyncMock(return_value=[])
@@ -348,7 +348,7 @@ class TestFromAC_SearchKnowledgeDelegate:
 
         Currently FAILS: code exclusively calls query_service.query().
         """
-        from owlbear_mcp_knowledge.server import search_knowledge
+        from owlbear_mcp_knowledge.server import knowledge_search as search_knowledge
 
         facade = MagicMock(spec=QueryFacade)
         facade.search = AsyncMock(return_value=_make_query_result_empty())
@@ -366,7 +366,7 @@ class TestFromAC_SearchKnowledgeDelegate:
         Currently FAILS: code is not wired to QueryFacade, returns error string
         when query_service=None.
         """
-        from owlbear_mcp_knowledge.server import search_knowledge
+        from owlbear_mcp_knowledge.server import knowledge_search as search_knowledge
 
         facade = MagicMock(spec=QueryFacade)
         facade.search = AsyncMock(return_value=_make_query_result_empty())
@@ -392,7 +392,7 @@ class TestFromAC_ListSourcesDelegate:
 
         Currently FAILS: code calls app_ctx.source_store.list_all(scope=scope).
         """
-        from owlbear_mcp_knowledge.server import list_sources
+        from owlbear_mcp_knowledge.server import knowledge_sources_list as list_sources
 
         store_v2 = MagicMock()
         store_v2.list_sources = MagicMock(return_value=())
@@ -409,7 +409,7 @@ class TestFromAC_ListSourcesDelegate:
 
         Currently FAILS: legacy code passes scope to list_all() with different semantics.
         """
-        from owlbear_mcp_knowledge.server import list_sources
+        from owlbear_mcp_knowledge.server import knowledge_sources_list as list_sources
 
         store_v2 = MagicMock()
         store_v2.list_sources = MagicMock(return_value=())
@@ -427,7 +427,7 @@ class TestFromAC_ListSourcesDelegate:
 
         Currently FAILS: code maps from legacy KnowledgeSource (different field names/shape).
         """
-        from owlbear_mcp_knowledge.server import list_sources
+        from owlbear_mcp_knowledge.server import knowledge_sources_list as list_sources
 
         record = MagicMock()
         record.id = "src-xyz"
@@ -461,7 +461,7 @@ class TestFromAC_ListSourcesDelegate:
         With source_store=non-None but source_store_v2=None, old code proceeds;
         new code raises ToolError from the v2 guard.
         """
-        from owlbear_mcp_knowledge.server import list_sources
+        from owlbear_mcp_knowledge.server import knowledge_sources_list as list_sources
 
         legacy_store = MagicMock()
         legacy_store.list_all = MagicMock(return_value=[])
@@ -476,7 +476,7 @@ class TestFromAC_ListSourcesDelegate:
 
         Currently FAILS: code calls source_store.list_all() exclusively.
         """
-        from owlbear_mcp_knowledge.server import list_sources
+        from owlbear_mcp_knowledge.server import knowledge_sources_list as list_sources
 
         store_v2 = MagicMock()
         store_v2.list_sources = MagicMock(return_value=())
@@ -629,7 +629,7 @@ class TestFromAC_GetStatsDelegation:
         Currently FAILS: code calls legacy GraphStore.get_counts() + raw SQL,
         never touches ingest_coordinator.stats().
         """
-        from owlbear_mcp_knowledge.server import get_stats
+        from owlbear_mcp_knowledge.server import knowledge_stats as get_stats
 
         coordinator = MagicMock()
         coordinator.stats.return_value = IngestStats()
@@ -650,7 +650,7 @@ class TestFromAC_GetStatsDelegation:
 
         Currently FAILS: code uses direct SQL GROUP BY enrichment_state query.
         """
-        from owlbear_mcp_knowledge.server import get_stats
+        from owlbear_mcp_knowledge.server import knowledge_stats as get_stats
 
         coordinator = MagicMock()
         coordinator.stats.return_value = IngestStats()
@@ -672,7 +672,7 @@ class TestFromAC_GetStatsDelegation:
         Currently FAILS: code counts via SQL on knowledge_sources (returns 0 for empty DB).
         Coordinator mock returns 99 → test asserts 99.
         """
-        from owlbear_mcp_knowledge.server import get_stats
+        from owlbear_mcp_knowledge.server import knowledge_stats as get_stats
 
         coordinator = MagicMock()
         coordinator.stats.return_value = IngestStats(sources_total=99)
@@ -694,7 +694,7 @@ class TestFromAC_GetStatsDelegation:
         Currently FAILS: code calls legacy GraphStore.get_counts() which returns (0,0,0)
         from the mock → entities=0. Coordinator returns graph_entities=77 → asserts 77.
         """
-        from owlbear_mcp_knowledge.server import get_stats
+        from owlbear_mcp_knowledge.server import knowledge_stats as get_stats
 
         coordinator = MagicMock()
         coordinator.stats.return_value = IngestStats(graph_entities=77, graph_edges=88)
@@ -721,7 +721,7 @@ class TestFromAC_GetStatsDelegation:
         Currently FAILS: code uses SQL state_counts (returns 0 for empty DB).
         EnrichmentStore mock returns pending=13 → asserts 13.
         """
-        from owlbear_mcp_knowledge.server import get_stats
+        from owlbear_mcp_knowledge.server import knowledge_stats as get_stats
 
         coordinator = MagicMock()
         coordinator.stats.return_value = IngestStats()
@@ -744,7 +744,7 @@ class TestFromAC_GetStatsDelegation:
         Currently FAILS: with graph_store=None, current code raises ToolError before
         returning. New code uses coordinator+enrichment store, handles None graph_store.
         """
-        from owlbear_mcp_knowledge.server import get_stats
+        from owlbear_mcp_knowledge.server import knowledge_stats as get_stats
 
         coordinator = MagicMock()
         coordinator.stats.return_value = IngestStats()
@@ -790,7 +790,7 @@ class TestFromAC_ErrorHandling:
         With query_service=None, returns error string not ToolError.
         New code: ValueError from QueryFacade → ToolError.
         """
-        from owlbear_mcp_knowledge.server import search_knowledge
+        from owlbear_mcp_knowledge.server import knowledge_search as search_knowledge
 
         facade = MagicMock(spec=QueryFacade)
         facade.search = AsyncMock(side_effect=ValueError("request.text must not be empty"))
@@ -989,7 +989,7 @@ class TestFromAC_SearchResultSerialization:
 
         Pins: graph_context is not None → 'vector+graph' branch.
         """
-        from owlbear_mcp_knowledge.server import search_knowledge
+        from owlbear_mcp_knowledge.server import knowledge_search as search_knowledge
 
         _, ctx = _make_populated_query_result_ctx()
         result = await search_knowledge(ctx, query="test")
@@ -1004,7 +1004,7 @@ class TestFromAC_SearchResultSerialization:
 
         Pins: graph_context = 'graph expansion: 2 entities, 1 edges' (2 entities, 1 edge).
         """
-        from owlbear_mcp_knowledge.server import search_knowledge
+        from owlbear_mcp_knowledge.server import knowledge_search as search_knowledge
 
         _, ctx = _make_populated_query_result_ctx()
         result = await search_knowledge(ctx, query="test")
@@ -1017,7 +1017,7 @@ class TestFromAC_SearchResultSerialization:
 
         Pins: both Entity0/concept and Entity1/concept appear in entities.
         """
-        from owlbear_mcp_knowledge.server import search_knowledge
+        from owlbear_mcp_knowledge.server import knowledge_search as search_knowledge
 
         _, ctx = _make_populated_query_result_ctx()
         result = await search_knowledge(ctx, query="test")
@@ -1033,7 +1033,7 @@ class TestFromAC_SearchResultSerialization:
 
         Pins: prov_other (chunk-xyz) → related; prov_main (chunk-abc) excluded.
         """
-        from owlbear_mcp_knowledge.server import search_knowledge
+        from owlbear_mcp_knowledge.server import knowledge_search as search_knowledge
 
         _, ctx = _make_populated_query_result_ctx()
         result = await search_knowledge(ctx, query="test")
@@ -1050,7 +1050,7 @@ class TestFromAC_SearchResultSerialization:
 
         Pins: source_store_v2 provides name and url; not fallen back to SimpleNamespace.
         """
-        from owlbear_mcp_knowledge.server import search_knowledge
+        from owlbear_mcp_knowledge.server import knowledge_search as search_knowledge
 
         _, ctx = _make_populated_query_result_ctx()
         result = await search_knowledge(ctx, query="test")
@@ -1066,7 +1066,7 @@ class TestFromAC_SearchResultSerialization:
 
         Pins: the 'vector' branch of retrieval_path logic.
         """
-        from owlbear_mcp_knowledge.server import search_knowledge
+        from owlbear_mcp_knowledge.server import knowledge_search as search_knowledge
 
         _, ctx = _make_vector_only_ctx()
         result = await search_knowledge(ctx, query="test")
@@ -1095,7 +1095,7 @@ class TestFromAC_ErrorMessageExact:
 
         Pins: message is the sanitized literal, not str(ValueError(...)).
         """
-        from owlbear_mcp_knowledge.server import search_knowledge
+        from owlbear_mcp_knowledge.server import knowledge_search as search_knowledge
 
         facade = MagicMock(spec=QueryFacade)
         facade.search = AsyncMock(
@@ -1217,7 +1217,7 @@ class TestFromAC_SlottedContextSearch:
         → sees query_facade as absent → falls to legacy path → query_service=None
         → returns error string instead of calling facade.search.
         """
-        from owlbear_mcp_knowledge.server import search_knowledge
+        from owlbear_mcp_knowledge.server import knowledge_search as search_knowledge
 
         facade = MagicMock(spec=QueryFacade)
         facade.search = AsyncMock(return_value=_make_query_result_empty())
@@ -1238,7 +1238,7 @@ class TestFromAC_SlottedContextSearch:
         Currently FAILS: __dict__-based detection always falls through to legacy
         path, so query_service.query is called even though query_facade is set.
         """
-        from owlbear_mcp_knowledge.server import search_knowledge
+        from owlbear_mcp_knowledge.server import knowledge_search as search_knowledge
 
         facade = MagicMock(spec=QueryFacade)
         facade.search = AsyncMock(return_value=_make_query_result_empty())
@@ -1262,7 +1262,7 @@ class TestFromAC_SlottedContextSearch:
         so the error-string outcome is reached for the wrong reason. After the fix,
         this test confirms the correct None-guard path.
         """
-        from owlbear_mcp_knowledge.server import search_knowledge
+        from owlbear_mcp_knowledge.server import knowledge_search as search_knowledge
 
         ctx = _make_slotted_ctx(query_facade=None, query_service=None)
         result = await search_knowledge(ctx, query="test")
@@ -1277,7 +1277,7 @@ class TestFromAC_SlottedContextSearch:
 
         Currently FAILS: slotted AppContext falls to legacy path; facade.search never called.
         """
-        from owlbear_mcp_knowledge.server import search_knowledge
+        from owlbear_mcp_knowledge.server import knowledge_search as search_knowledge
 
         facade = MagicMock(spec=QueryFacade)
         facade.search = AsyncMock(return_value=_make_query_result_empty())
@@ -1318,7 +1318,7 @@ class TestFromAC_GetStatsAllFieldsExact:
         chunks_pending, chunks_claimed, chunks_failed, chunks_enriched,
         chunks_claimable, chunks_enriched_ratio, consolidation_candidates_remaining.
         """
-        from owlbear_mcp_knowledge.server import get_stats
+        from owlbear_mcp_knowledge.server import knowledge_stats as get_stats
 
         coordinator = MagicMock()
         coordinator.stats.return_value = IngestStats(
@@ -1366,7 +1366,7 @@ class TestFromAC_GetStatsAllFieldsExact:
 
         Pins: ratio computation guard branch — completed=5, chunks_total=0 → 0.0.
         """
-        from owlbear_mcp_knowledge.server import get_stats
+        from owlbear_mcp_knowledge.server import knowledge_stats as get_stats
 
         coordinator = MagicMock()
         coordinator.stats.return_value = IngestStats(chunks_total=0)
@@ -1392,7 +1392,7 @@ class TestFromAC_GetStatsAllFieldsExact:
         Pins: edges=88 from coordinator while legacy GraphStore returns (0, 0, 22).
         A miswiring that reads get_counts()[2] instead of graph_edges would fail.
         """
-        from owlbear_mcp_knowledge.server import get_stats
+        from owlbear_mcp_knowledge.server import knowledge_stats as get_stats
 
         coordinator = MagicMock()
         coordinator.stats.return_value = IngestStats(graph_entities=77, graph_edges=88)
@@ -1419,7 +1419,7 @@ class TestFromAC_GetStatsAllFieldsExact:
         Pins: documents=42 from coordinator; legacy graph_store.get_counts()[0] = 0.
         A miswiring that reads get_counts() for documents would fail.
         """
-        from owlbear_mcp_knowledge.server import get_stats
+        from owlbear_mcp_knowledge.server import knowledge_stats as get_stats
 
         coordinator = MagicMock()
         coordinator.stats.return_value = IngestStats(documents_total=42)
@@ -1444,7 +1444,7 @@ class TestFromAC_GetStatsAllFieldsExact:
         Pins: in_progress=7 → chunks_claimed=7. A miswiring that maps in_progress
         to chunks_pending or a SQL count would fail.
         """
-        from owlbear_mcp_knowledge.server import get_stats
+        from owlbear_mcp_knowledge.server import knowledge_stats as get_stats
 
         coordinator = MagicMock()
         coordinator.stats.return_value = IngestStats()
@@ -1607,7 +1607,7 @@ class TestFromAC_SlottedPopulatedSearch:
     @pytest.mark.asyncio
     async def test_slotted_retrieval_path_vector_plus_graph(self) -> None:
         """retrieval_path is 'vector+graph' when graph_context is present on slotted ctx."""
-        from owlbear_mcp_knowledge.server import search_knowledge
+        from owlbear_mcp_knowledge.server import knowledge_search as search_knowledge
 
         _, ctx = _make_slotted_populated_ctx()
         result = await search_knowledge(ctx, query="test")
@@ -1619,7 +1619,7 @@ class TestFromAC_SlottedPopulatedSearch:
     @pytest.mark.asyncio
     async def test_slotted_graph_context_formatted_summary(self) -> None:
         """graph_context is 'graph expansion: 2 entities, 1 edges' on slotted ctx."""
-        from owlbear_mcp_knowledge.server import search_knowledge
+        from owlbear_mcp_knowledge.server import knowledge_search as search_knowledge
 
         _, ctx = _make_slotted_populated_ctx()
         result = await search_knowledge(ctx, query="test")
@@ -1629,7 +1629,7 @@ class TestFromAC_SlottedPopulatedSearch:
     @pytest.mark.asyncio
     async def test_slotted_entities_from_graph_traversal(self) -> None:
         """entities list contains {name, type} dicts from graph_context on slotted ctx."""
-        from owlbear_mcp_knowledge.server import search_knowledge
+        from owlbear_mcp_knowledge.server import knowledge_search as search_knowledge
 
         _, ctx = _make_slotted_populated_ctx()
         result = await search_knowledge(ctx, query="test")
@@ -1642,7 +1642,7 @@ class TestFromAC_SlottedPopulatedSearch:
     @pytest.mark.asyncio
     async def test_slotted_related_sources_excludes_self_chunk(self) -> None:
         """related_sources on slotted ctx: other-chunk provenance included, self excluded."""
-        from owlbear_mcp_knowledge.server import search_knowledge
+        from owlbear_mcp_knowledge.server import knowledge_search as search_knowledge
 
         _, ctx = _make_slotted_populated_ctx()
         result = await search_knowledge(ctx, query="test")
@@ -1656,7 +1656,7 @@ class TestFromAC_SlottedPopulatedSearch:
     @pytest.mark.asyncio
     async def test_slotted_source_from_store_v2_hit(self) -> None:
         """Source populated from source_store_v2.get_source hit on slotted AppContext."""
-        from owlbear_mcp_knowledge.server import search_knowledge
+        from owlbear_mcp_knowledge.server import knowledge_search as search_knowledge
 
         _, ctx = _make_slotted_populated_ctx(store_v2_hit=True)
         result = await search_knowledge(ctx, query="test")
@@ -1671,7 +1671,7 @@ class TestFromAC_SlottedPopulatedSearch:
 
         Exercises the AC3 source fallback branch on a real slotted AppContext.
         """
-        from owlbear_mcp_knowledge.server import search_knowledge
+        from owlbear_mcp_knowledge.server import knowledge_search as search_knowledge
 
         _, ctx = _make_slotted_populated_ctx(store_v2_hit=False)
         result = await search_knowledge(ctx, query="test")
@@ -1697,7 +1697,7 @@ class TestFromAC_ListSourcesAllFields:
         last_checked_at, last_error (sanitized), enabled (state=='active'),
         refreshable, enrich, fetch_method.
         """
-        from owlbear_mcp_knowledge.server import list_sources
+        from owlbear_mcp_knowledge.server import knowledge_sources_list as list_sources
 
         record = MagicMock()
         record.id = "src-full"
@@ -1735,7 +1735,7 @@ class TestFromAC_ListSourcesAllFields:
     @pytest.mark.asyncio
     async def test_list_sources_enabled_false_when_state_not_active(self) -> None:
         """enabled is False when state is not 'active' (e.g. 'paused')."""
-        from owlbear_mcp_knowledge.server import list_sources
+        from owlbear_mcp_knowledge.server import knowledge_sources_list as list_sources
 
         record = MagicMock()
         record.id = "src-paused"
@@ -1760,7 +1760,7 @@ class TestFromAC_ListSourcesAllFields:
 
     def test_list_sources_signature_has_no_state_param(self) -> None:
         """list_sources function signature must NOT include a 'state' parameter."""
-        from owlbear_mcp_knowledge.server import list_sources
+        from owlbear_mcp_knowledge.server import knowledge_sources_list as list_sources
 
         sig = inspect.signature(list_sources)
         assert "state" not in sig.parameters

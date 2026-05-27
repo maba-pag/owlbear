@@ -25,7 +25,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from owlbear_knowledge.models import KnowledgeSource, SourceType
-from owlbear_mcp_knowledge.server import search_knowledge
+from owlbear_mcp_knowledge.server import knowledge_search as search_knowledge
 
 
 # ---------------------------------------------------------------------------

@@ -35,7 +35,7 @@ from owlbear_knowledge.protocols.sources import (
     SourceState,
 )
 from owlbear_knowledge.stores.sources import SqliteSourceStore
-from owlbear_mcp_knowledge.server import app_lifespan, ingest_document
+from owlbear_mcp_knowledge.server import app_lifespan, knowledge_ingest as ingest_document
 
 
 # ---------------------------------------------------------------------------

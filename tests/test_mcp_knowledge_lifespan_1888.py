@@ -494,7 +494,7 @@ class TestFromAC_ExistingFieldsPreserved:
         carries the new fields set to None — i.e., the builder's changes must not
         break existing tool routing.
         """
-        from owlbear_mcp_knowledge.server import AppContext, list_sources
+        from owlbear_mcp_knowledge.server import AppContext, knowledge_sources_list as list_sources
 
         mock_source_store = MagicMock()
         mock_source_store.list_all.return_value = []
