@@ -262,6 +262,16 @@ async def store_enrichment(  # noqa: PLR0913
 
     try:
         enrichment_store.submit_extractions(chunk_id, parsed_entities, parsed_relations)
+    except ValueError as exc:
+        error_str = str(exc)
+        try:
+            enrichment_store.mark_failed(chunk_id, error_str)
+        except LookupError:
+            logger.debug(
+                "chunk %s was not in progress during submit_extractions value error mark",
+                chunk_id,
+            )
+        raise ToolError(error_str) from exc
     except LookupError as exc:
         raise ToolError(str(exc)) from exc
 
