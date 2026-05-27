@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import re
 from typing import TYPE_CHECKING, Any
 
@@ -91,18 +90,6 @@ def select_content_fetcher(method: str) -> ContentFetcher:
     if normalized == "browser":
         return _BrowserContentFetcher()  # type: ignore[return-value]
     return HttpxContentFetcher()
-
-
-def _extract_section_path(metadata: str | None) -> str | None:
-    """Extract section_path from serialized chunk metadata."""
-    if not metadata:
-        return None
-    try:
-        parsed = json.loads(metadata)
-    except (TypeError, ValueError):
-        return None
-    section_path = parsed.get("section_path")
-    return section_path if isinstance(section_path, str) else None
 
 
 def _serialize_search_entities(value: object) -> list[SearchEntity]:
