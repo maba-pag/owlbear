@@ -31,6 +31,8 @@ AC coverage:
 from __future__ import annotations
 
 import pathlib
+import subprocess
+import sys
 from typing import ClassVar
 
 from owlbear_mcp_knowledge import server
@@ -252,4 +254,54 @@ class TestFromAC_DocRefs:
         assert not violations, (
             "Old tool names found in doc files:\n"
             + "\n".join(f"  {v}" for v in violations)
+        )
+
+
+# ---------------------------------------------------------------------------
+# AC5 — All durable test suites updated to use new import names
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_DurableSuiteImports:
+    """AC5: pytest collection succeeds on all 6 durable test files that import
+    renamed MCP tool symbols from owlbear_mcp_knowledge.server.
+    """
+
+    _AFFECTED_SUITES: ClassVar[list[str]] = [
+        "tests/test_search_provenance.py",
+        "tests/test_register_source_1890.py",
+        "tests/test_remove_source_1889.py",
+        "tests/test_ingest_document_coordinator_1893.py",
+        "tests/test_mcp_knowledge_read_tools_1881.py",
+        "tests/test_mcp_knowledge_lifespan_1888.py",
+    ]
+
+    def test_all_affected_suites_collect_without_error(self) -> None:
+        """pytest collection must succeed on all 6 durable test files.
+
+        Before the builder updates stale imports in those files, collection fails
+        with ImportError because the pre-rename symbols no longer exist in
+        owlbear_mcp_knowledge.server. After the builder fixes the imports,
+        collection succeeds.
+        """
+        workspace_root = pathlib.Path(__file__).parent.parent
+        result = subprocess.run(  # noqa: S603
+            [
+                sys.executable,
+                "-m",
+                "pytest",
+                "--collect-only",
+                "--no-header",
+                "-q",
+                *self._AFFECTED_SUITES,
+            ],
+            capture_output=True,
+            text=True,
+            cwd=workspace_root,
+        )
+        assert result.returncode == 0, (
+            "pytest collection failed on one or more durable test suites.\n"
+            "These suites still import pre-rename MCP tool symbols that no longer "
+            "exist in owlbear_mcp_knowledge.server.\n"
+            f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
         )
