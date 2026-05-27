@@ -270,10 +270,6 @@ function TaskFieldsDisplay({
         </PButton>
       </div>
 
-      <section className="rounded-lg border border-contrast-low bg-surface p-static-md" data-region="task-body-preview">
-        <MarkdownPreview className="text-sm">{body}</MarkdownPreview>
-      </section>
-
       {hasRelations ? (
         <dl className="grid gap-static-sm text-sm text-primary md:grid-cols-3" data-region="task-relations-summary">
           {task.depends_on.length > 0 ? (
@@ -313,6 +309,10 @@ function TaskFieldsDisplay({
           ) : null}
         </dl>
       ) : null}
+
+      <section className="rounded-lg border border-contrast-low bg-surface p-static-md" data-region="task-body-preview">
+        <MarkdownPreview className="text-sm">{body}</MarkdownPreview>
+      </section>
     </div>
   )
 }
@@ -814,36 +814,6 @@ export default function TaskFieldsEditor({
         ) : null}
       </section>
 
-      <section className="rounded-lg border border-contrast-low bg-surface p-static-md">
-        <div className="mb-static-xs flex min-w-0 flex-wrap items-center justify-end gap-static-xs">
-          <PButton
-            data-testid="body-edit-toggle"
-            variant="secondary"
-            compact
-            onClick={() => setEditBody((v) => !v)}
-          >
-            {editBody ? 'Preview' : 'Edit'}
-          </PButton>
-        </div>
-
-        {editBody ? (
-          <PTextarea
-            name="body"
-            label={bodyFieldLabel}
-            hideLabel
-            className="min-w-0"
-            data-field="body"
-            value={body}
-            onChange={(event) => setBody(readControlValue(event))}
-            onInput={(event) => setBody(readControlValue(event))}
-          />
-        ) : (
-          <MarkdownPreview className="text-sm">{body}</MarkdownPreview>
-        )}
-      </section>
-
-      {acceptanceCriteriaPortalTarget ? (isEditing ? createPortal(acceptanceCriteriaEditor, acceptanceCriteriaPortalTarget) : null) : acceptanceCriteriaEditor}
-
       <section className="grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-static-sm lg:grid-cols-2" data-region="task-reference-editors">
         <div className="grid min-w-0 gap-static-xs" data-region="dependency-editor">
           <div className="grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-static-xs sm:grid-cols-[minmax(0,1fr)_auto]">
@@ -937,6 +907,36 @@ export default function TaskFieldsEditor({
           )}
         </div>
       </section>
+
+      <section className="rounded-lg border border-contrast-low bg-surface p-static-md">
+        <div className="mb-static-xs flex min-w-0 flex-wrap items-center justify-end gap-static-xs">
+          <PButton
+            data-testid="body-edit-toggle"
+            variant="secondary"
+            compact
+            onClick={() => setEditBody((v) => !v)}
+          >
+            {editBody ? 'Preview' : 'Edit'}
+          </PButton>
+        </div>
+
+        {editBody ? (
+          <PTextarea
+            name="body"
+            label={bodyFieldLabel}
+            hideLabel
+            className="min-w-0"
+            data-field="body"
+            value={body}
+            onChange={(event) => setBody(readControlValue(event))}
+            onInput={(event) => setBody(readControlValue(event))}
+          />
+        ) : (
+          <MarkdownPreview className="text-sm">{body}</MarkdownPreview>
+        )}
+      </section>
+
+      {acceptanceCriteriaPortalTarget ? (isEditing ? createPortal(acceptanceCriteriaEditor, acceptanceCriteriaPortalTarget) : null) : acceptanceCriteriaEditor}
 
       {task.blocked && (
         <PInputText
