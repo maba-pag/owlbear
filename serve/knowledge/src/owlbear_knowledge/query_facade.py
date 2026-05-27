@@ -86,41 +86,38 @@ class QueryFacade:
             msg = "Provide at least one of query_result or entity_result"
             raise ValueError(msg)
 
-        lines: list[str] = []
-        entity_ids: set[str] = set()
-        chunk_count = 0
+        line_entries: list[tuple[str, tuple[str, ...], int]] = []
 
         if request.query_result is not None:
-            query_lines, query_entity_ids, query_chunks = self._render_query_result(
+            query_entries = self._render_query_result(
                 request.query_result,
                 include_provenance=request.include_provenance,
             )
-            lines.extend(query_lines)
-            entity_ids.update(query_entity_ids)
-            chunk_count += query_chunks
+            line_entries.extend(query_entries)
 
         if request.entity_result is not None:
-            entity_lines, lookup_entity_ids, lookup_chunks = self._render_entity_result(
+            entity_entries = self._render_entity_result(
                 request.entity_result,
                 include_provenance=request.include_provenance,
             )
-            lines.extend(entity_lines)
-            entity_ids.update(lookup_entity_ids)
-            chunk_count += lookup_chunks
+            line_entries.extend(entity_entries)
 
-        text = "\n".join(lines).strip()
+        text, entity_count, chunk_count, truncated = self._build_rendered_output(
+            line_entries=line_entries,
+            max_chars=request.max_chars,
+        )
+
         if not text:
             text = "(no context)"
-
-        truncated = len(text) > request.max_chars
-        if truncated:
-            text = text[: request.max_chars]
+            if len(text) > request.max_chars:
+                text = text[: request.max_chars]
+                truncated = True
 
         return RenderedContext(
             text=text,
             char_count=len(text),
             chunk_count=chunk_count,
-            entity_count=len(entity_ids),
+            entity_count=entity_count,
             truncated=truncated,
         )
 
@@ -148,63 +145,102 @@ class QueryFacade:
         query_result: QueryResult,
         *,
         include_provenance: bool,
-    ) -> tuple[list[str], set[str], int]:
-        lines = ["## Search Results"]
-        entity_ids: set[str] = set()
-        chunk_count = 0
+    ) -> list[tuple[str, tuple[str, ...], int]]:
+        entries: list[tuple[str, tuple[str, ...], int]] = []
+
+        entries.append(("## Search Results", (), 0))
 
         if query_result.search_results:
             for index, result in enumerate(query_result.search_results, start=1):
-                lines.append(f"- [{index}] {result.chunk.text}")
-                chunk_count += 1
+                entries.append((f"- [{index}] {result.chunk.text}", (), 1))
         else:
-            lines.append("- None")
+            entries.append(("- None", (), 0))
 
         if query_result.graph_context is not None:
-            lines.append("## Graph Context")
-            for entity in query_result.graph_context.entities:
-                entity_ids.add(entity.id)
-                lines.append(f"- {entity.name} ({entity.entity_type})")
-
-        if include_provenance and query_result.provenance:
-            lines.append("## Sources")
-            lines.extend(
-                f"- {provenance.source_id} :: {provenance.title} (chunk={provenance.chunk_id})"
-                for provenance in query_result.provenance
+            entries.append(("## Graph Context", (), 0))
+            entries.extend(
+                [
+                    (f"- {entity.name} ({entity.entity_type})", (entity.id,), 0)
+                    for entity in query_result.graph_context.entities
+                ]
             )
 
-        return lines, entity_ids, chunk_count
+        if include_provenance and query_result.provenance:
+            entries.append(("## Sources", (), 0))
+            entries.extend(
+                [
+                    (f"- {provenance.source_id} :: {provenance.title} (chunk={provenance.chunk_id})", (), 0)
+                    for provenance in query_result.provenance
+                ]
+            )
+
+        return entries
 
     def _render_entity_result(
         self,
         entity_result: EntityLookupResult,
         *,
         include_provenance: bool,
-    ) -> tuple[list[str], set[str], int]:
-        lines = ["## Entity Lookup"]
-        entity_ids: set[str] = set()
-        chunk_count = 0
+    ) -> list[tuple[str, tuple[str, ...], int]]:
+        entries: list[tuple[str, tuple[str, ...], int]] = []
+
+        entries.append(("## Entity Lookup", (), 0))
 
         entity = entity_result.entity
         if entity is not None:
-            entity_ids.add(entity.id)
-            lines.append(f"- Entity: {entity.name} ({entity.entity_type}) id={entity.id}")
+            entries.append((f"- Entity: {entity.name} ({entity.entity_type}) id={entity.id}", (entity.id,), 0))
 
         if entity_result.neighbourhood is not None:
-            lines.append("### Neighbourhood")
-            for neighbour in entity_result.neighbourhood.entities:
-                entity_ids.add(neighbour.id)
-                lines.append(f"- {neighbour.name} ({neighbour.entity_type})")
+            entries.append(("### Neighbourhood", (), 0))
+            entries.extend(
+                [
+                    (f"- {neighbour.name} ({neighbour.entity_type})", (neighbour.id,), 0)
+                    for neighbour in entity_result.neighbourhood.entities
+                ]
+            )
 
         if entity_result.related_chunks:
-            lines.append("### Related Chunks")
+            entries.append(("### Related Chunks", (), 0))
             if include_provenance:
-                lines.extend(f"- [{chunk.source_id}] {chunk.text}" for chunk in entity_result.related_chunks)
+                entries.extend(
+                    [(f"- [{chunk.source_id}] {chunk.text}", (), 1) for chunk in entity_result.related_chunks]
+                )
             else:
-                lines.extend(f"- {chunk.text}" for chunk in entity_result.related_chunks)
-            chunk_count = len(entity_result.related_chunks)
+                entries.extend([(f"- {chunk.text}", (), 1) for chunk in entity_result.related_chunks])
 
-        return lines, entity_ids, chunk_count
+        return entries
+
+    def _build_rendered_output(
+        self,
+        *,
+        line_entries: list[tuple[str, tuple[str, ...], int]],
+        max_chars: int,
+    ) -> tuple[str, int, int, bool]:
+        rendered_parts: list[str] = []
+        entity_ids: set[str] = set()
+        chunk_count = 0
+        current_len = 0
+        truncated = False
+
+        for index, (line, line_entity_ids, line_chunks) in enumerate(line_entries):
+            prefix = "" if index == 0 else "\n"
+            segment = f"{prefix}{line}"
+            next_len = current_len + len(segment)
+
+            if next_len <= max_chars:
+                rendered_parts.append(segment)
+                current_len = next_len
+                entity_ids.update(line_entity_ids)
+                chunk_count += line_chunks
+                continue
+
+            remaining = max_chars - current_len
+            if remaining > 0:
+                rendered_parts.append(segment[:remaining])
+            truncated = True
+            break
+
+        return "".join(rendered_parts), len(entity_ids), chunk_count, truncated
 
     def _build_graph_context(
         self,
