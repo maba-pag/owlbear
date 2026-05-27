@@ -680,7 +680,6 @@ def _lifespan_heavy_mocks(tmp_path: object) -> object:
     }
     with (
         patch("owlbear_mcp_knowledge.server.QdrantVectorStore"),
-        patch("owlbear_mcp_knowledge.server.BgeM3EmbeddingProvider"),
         patch.dict(os.environ, env_overrides),
     ):
         yield server_mock
