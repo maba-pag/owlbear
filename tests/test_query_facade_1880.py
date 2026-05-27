@@ -31,7 +31,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from owlbear_knowledge.protocols.common import EntityType, RelationType
-from owlbear_knowledge.protocols.content import ContentChunk
+from owlbear_knowledge.protocols.content import ContentChunk, ContentSearchResult
 from owlbear_knowledge.protocols.graph import (
     EdgeRecord,
     EntityQuery,
@@ -43,6 +43,7 @@ from owlbear_knowledge.protocols.query import (
     ContextRenderRequest,
     EntityLookupRequest,
     EntityLookupResult,
+    Provenance,
     QueryResult,
     RenderedContext,
 )
@@ -245,6 +246,20 @@ class TestFromAC_LookupEntity:
         request = EntityLookupRequest(entity_id="ent-1")
         facade.lookup_entity(request)
         mock_graph.find_entities.assert_not_called()
+
+    def test_lookup_by_name_returns_resolved_entity(
+        self, facade: QueryFacade, mock_graph: MagicMock
+    ) -> None:
+        """AC1 retry gap: entity in result is the specific entity chosen from find_entities.
+
+        Proves the name-path success case returns the correct resolved entity,
+        not just that find_entities was called with the right query shape.
+        """
+        specific = _make_entity(entity_id="ent-found", name="Bob")
+        mock_graph.find_entities.return_value = (specific,)
+        request = EntityLookupRequest(entity_name="Bob")
+        result = facade.lookup_entity(request)
+        assert result.entity is specific
 
     # --- AC2: EntityLookupResult fields ---
 
@@ -461,3 +476,155 @@ class TestFromAC_RenderContext:
         request = ContextRenderRequest(entity_result=entity_result, max_chars=100_000)
         result = facade.render_context(request)
         assert result.chunk_count >= 1
+
+    # --- AC3 retry gaps: rendered content assertions ---
+
+    def test_render_context_query_text_contains_chunk_content(
+        self, facade: QueryFacade
+    ) -> None:
+        """AC3 retry gap: rendered text includes actual chunk text from query_result.
+
+        A no-op render that drops the chunk text would make this fail.
+        """
+        chunk = _make_chunk(chunk_id="c-unique", text="uniquequerychunktext")
+        search_hit = ContentSearchResult(chunk=chunk, score=0.9)
+        query_result = QueryResult(
+            search_results=(search_hit,),
+            graph_context=None,
+            provenance=(),
+        )
+        request = ContextRenderRequest(query_result=query_result, max_chars=100_000)
+        result = facade.render_context(request)
+        assert "uniquequerychunktext" in result.text
+
+    def test_render_context_entity_text_contains_entity_name(
+        self, facade: QueryFacade
+    ) -> None:
+        """AC3 retry gap: rendered text includes the entity name from entity_result.
+
+        A render that drops entity content would make this fail.
+        """
+        entity = _make_entity(entity_id="ent-1", name="UniqueEntityNameXYZ")
+        entity_result = _make_entity_lookup_result(entity=entity)
+        request = ContextRenderRequest(entity_result=entity_result, max_chars=100_000)
+        result = facade.render_context(request)
+        assert "UniqueEntityNameXYZ" in result.text
+
+    def test_render_context_dual_input_text_contains_both_sources(
+        self, facade: QueryFacade
+    ) -> None:
+        """AC3 retry gap: dual-input render includes content from BOTH inputs.
+
+        Dropping either query_result or entity_result content would make this fail.
+        """
+        chunk = _make_chunk(chunk_id="c-q1", text="querychunkuniqueABC")
+        search_hit = ContentSearchResult(chunk=chunk, score=0.8)
+        query_result = QueryResult(
+            search_results=(search_hit,),
+            graph_context=None,
+            provenance=(),
+        )
+        entity = _make_entity(entity_id="ent-e1", name="EntityFromLookupXYZ")
+        entity_result = _make_entity_lookup_result(entity=entity)
+        request = ContextRenderRequest(
+            query_result=query_result,
+            entity_result=entity_result,
+            max_chars=100_000,
+        )
+        result = facade.render_context(request)
+        assert "querychunkuniqueABC" in result.text
+        assert "EntityFromLookupXYZ" in result.text
+
+    # --- AC4 retry gaps: exact counts and query provenance ---
+
+    def test_render_context_entity_count_exact(
+        self, facade: QueryFacade
+    ) -> None:
+        """AC4 retry gap: entity_count equals the exact number of unique entities rendered.
+
+        The existing test only asserts >= 1; this asserts the exact count so
+        broken attribution or under/over-counting would cause a failure.
+        """
+        entities = [_make_entity(f"ent-ex-{i}", name=f"ExactEntity{i}") for i in range(3)]
+        entity_result = EntityLookupResult(
+            entity=entities[0],
+            neighbourhood=_make_traversal(entities=entities[1:]),
+            related_chunks=(),
+        )
+        request = ContextRenderRequest(entity_result=entity_result, max_chars=100_000)
+        result = facade.render_context(request)
+        assert result.entity_count == 3
+
+    def test_render_context_chunk_count_exact(
+        self, facade: QueryFacade
+    ) -> None:
+        """AC4 retry gap: chunk_count equals the exact number of chunks rendered.
+
+        The existing test only asserts >= 1; this asserts the exact count so
+        missing or extra chunk entries would cause a failure.
+        """
+        chunks = tuple(
+            _make_chunk(f"c-ex-{i}", text=f"Exact chunk text {i}") for i in range(3)
+        )
+        entity_result = EntityLookupResult(
+            entity=_make_entity(),
+            neighbourhood=None,
+            related_chunks=chunks,
+        )
+        request = ContextRenderRequest(entity_result=entity_result, max_chars=100_000)
+        result = facade.render_context(request)
+        assert result.chunk_count == 3
+
+    def test_render_context_query_provenance_includes_source_id(
+        self, facade: QueryFacade
+    ) -> None:
+        """AC4 retry gap: query-result provenance branch includes source_id in rendered text.
+
+        The existing suite only exercises entity provenance. This proves the
+        query-result provenance rendering path is exercised and emits attribution.
+        """
+        prov = Provenance(
+            chunk_id="c-prov",
+            document_id="doc-prov",
+            source_id="special-source-ref-99",
+            title="Provenance Title",
+            exact_text="some exact excerpt",
+        )
+        query_result = QueryResult(
+            search_results=(),
+            graph_context=None,
+            provenance=(prov,),
+        )
+        request = ContextRenderRequest(
+            query_result=query_result,
+            include_provenance=True,
+            max_chars=100_000,
+        )
+        result = facade.render_context(request)
+        assert "special-source-ref-99" in result.text
+
+    def test_render_context_entity_provenance_includes_source_id(
+        self, facade: QueryFacade
+    ) -> None:
+        """AC4 retry gap: entity provenance includes specific source_id string in text.
+
+        The existing test only checks whole-string inequality between
+        with_provenance and without_provenance. This asserts exact content.
+        """
+        chunk = _make_chunk(
+            chunk_id="c-ep",
+            source_id="entity-source-ref-77",
+            text="entity chunk text here",
+        )
+        entity_result = EntityLookupResult(
+            entity=_make_entity(),
+            neighbourhood=None,
+            related_chunks=(chunk,),
+        )
+        request = ContextRenderRequest(
+            entity_result=entity_result,
+            include_provenance=True,
+            max_chars=100_000,
+        )
+        result = facade.render_context(request)
+        assert "entity-source-ref-77" in result.text
