@@ -24,6 +24,7 @@ export type TaskEditPayload = Record<string, unknown> & {
   depends_on: number[]
   parent: number | null
   block_reason: string | null
+  proof_bundle: string | null
 }
 
 export interface TaskFieldsEditorProps {
@@ -228,6 +229,14 @@ function TaskReferenceChip({
   )
 }
 
+const PROOF_BUNDLE_OPTIONS: string[] = [
+  '', 'skip', 'skip+challenge', 'skip+reader', 'skip+challenge+reader',
+  'existing', 'existing+challenge', 'existing+reader', 'existing+challenge+reader',
+  'smoke', 'smoke+challenge', 'smoke+reader', 'smoke+challenge+reader',
+  'behavioral', 'behavioral+challenge', 'behavioral+reader', 'behavioral+challenge+reader',
+  'critical', 'critical+challenge', 'critical+reader', 'critical+challenge+reader',
+]
+
 function TaskFieldsDisplay({
   task,
   onEdit,
@@ -258,6 +267,9 @@ function TaskFieldsDisplay({
           ) : (
             <span data-testid="display-no-tags" className="text-sm text-contrast-high">No tags</span>
           )}
+          <span className="mx-static-xs text-contrast-low" aria-hidden="true">|</span>
+          <span className="text-sm font-semibold text-contrast-high">Proof</span>
+          <PTag compact data-testid="display-proof-bundle">{task.proof_bundle ?? 'behavioral (default)'}</PTag>
         </div>
         <PButton
           data-testid="edit-details-button"
@@ -349,6 +361,7 @@ export default function TaskFieldsEditor({
   const [dependsOn, setDependsOn] = useState(task.depends_on.join(', '))
   const [parent, setParent] = useState(task.parent !== null ? String(task.parent) : '')
   const [blockReason, setBlockReason] = useState(task.block_reason ?? '')
+  const [proofBundle, setProofBundle] = useState(task.proof_bundle ?? '')
   const saveConfirmedTimerRef = useRef<number | null>(null)
   const previousTaskIdRef = useRef(task.id)
   const bodyFieldLabel = 'Body'
@@ -369,6 +382,7 @@ export default function TaskFieldsEditor({
       setNewDependency('')
       setParent(conflictLocalDraft.parent)
       setBlockReason(conflictLocalDraft.blockReason)
+      setProofBundle(conflictLocalDraft.proofBundle)
       setNewTag('')
       setTagValidationMessage(null)
       return
@@ -388,6 +402,7 @@ export default function TaskFieldsEditor({
     setDependsOn(task.depends_on.join(', '))
     setParent(task.parent !== null ? String(task.parent) : '')
     setBlockReason(task.block_reason ?? '')
+    setProofBundle(task.proof_bundle ?? '')
     setNewTag('')
     setNewDependency('')
     setTagValidationMessage(null)
@@ -422,6 +437,7 @@ export default function TaskFieldsEditor({
     || dependsOn !== task.depends_on.join(', ')
     || parent !== (task.parent !== null ? String(task.parent) : '')
     || (task.blocked && blockReason !== (task.block_reason ?? ''))
+    || proofBundle !== (task.proof_bundle ?? '')
   const validationMessage = clientValidationMessage ?? serverValidationMessage
 
   useLayoutEffect(() => {
@@ -454,6 +470,7 @@ export default function TaskFieldsEditor({
     setDependsOn(task.depends_on.join(', '))
     setParent(task.parent !== null ? String(task.parent) : '')
     setBlockReason(task.block_reason ?? '')
+    setProofBundle(task.proof_bundle ?? '')
     setNewTag('')
     setNewDependency('')
     setTagValidationMessage(null)
@@ -567,6 +584,7 @@ export default function TaskFieldsEditor({
       dependsOn: formatTaskIds(nextDependencies),
       parent,
       blockReason,
+      proofBundle,
     }
 
     try {
@@ -580,6 +598,7 @@ export default function TaskFieldsEditor({
         depends_on: nextDependencies,
         parent: parsedParent.value,
         block_reason: task.blocked ? blockReason : null,
+        proof_bundle: proofBundle || null,
       }, conflictDraft)
 
       if (shouldShowSaveConfirmed && mutationSucceeded !== false) {
@@ -757,7 +776,7 @@ export default function TaskFieldsEditor({
       </div>
 
       <section className="grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-static-xs" data-region="task-detail-tags">
-        <div className="grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-static-xs sm:grid-cols-[minmax(0,1fr)_auto]" data-testid="tag-editor-row">
+        <div className="grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-static-xs sm:grid-cols-[minmax(0,1fr)_auto_auto]" data-testid="tag-editor-row">
           <PInputText
             ref={(element) => element?.setAttribute('spellcheck', 'false')}
             name="new_tag"
@@ -789,6 +808,21 @@ export default function TaskFieldsEditor({
           >
             Add
           </PButton>
+          <PSelect
+            name="proof_bundle"
+            label="Proof bundle"
+            compact
+            className="min-w-60 self-end"
+            data-testid="edit-proof-bundle"
+            value={proofBundle}
+            onChange={(event) => setProofBundle(readControlValue(event))}
+          >
+            {PROOF_BUNDLE_OPTIONS.map((opt) => (
+              <PSelectOption key={opt} value={opt}>
+                {opt === '' ? 'behavioral (default)' : opt}
+              </PSelectOption>
+            ))}
+          </PSelect>
         </div>
         {editableTags.length > 0 ? (
           <div className="flex min-w-0 flex-wrap items-center gap-static-xs" data-testid="tag-chip-list">

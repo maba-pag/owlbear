@@ -102,6 +102,7 @@ class CockpitView:
         priority: str = "",
         parent: int | None | object = _FIELD_UNSET,
         ac: list[str] | None = None,
+        proof_bundle: str | None = None,
         add_dep: list[int] | None = None,
         remove_dep: list[int] | None = None,
         add_tag: list[str] | None = None,
@@ -133,6 +134,8 @@ class CockpitView:
             kwargs["parent"] = parent
         if ac is not None:
             kwargs["ac"] = ac
+        if proof_bundle is not None:
+            kwargs["proof_bundle"] = proof_bundle
         if add_dep is not None:
             kwargs["add_deps"] = add_dep
         if remove_dep is not None:

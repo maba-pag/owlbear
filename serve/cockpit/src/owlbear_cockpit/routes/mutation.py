@@ -66,6 +66,7 @@ class EditRequest(BaseModel):
     ac: list[str] | None = None
     block_reason: str | None = None
     body: str | None = None
+    proof_bundle: str | None = None
 
 
 class ReleaseRequest(BaseModel):
@@ -211,6 +212,9 @@ def _build_edit_kwargs(req: EditRequest, task: Any | None = None) -> dict[str, A
             (task.tags if task is not None else []) or [],
             req.block_reason,
         )
+
+    if "proof_bundle" in fields and req.proof_bundle is not None:
+        kwargs["proof_bundle"] = req.proof_bundle
 
     return kwargs
 

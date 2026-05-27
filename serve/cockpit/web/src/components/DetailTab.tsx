@@ -39,6 +39,7 @@ interface TaskDetail {
   dep_status: string | null
   parent: number | null
   depends_on: number[]
+  proof_bundle: string | null
 }
 
 export interface DetailTabProps {

@@ -18,6 +18,7 @@ export interface TaskDetail {
   dep_status: string | null
   parent: number | null
   depends_on: number[]
+  proof_bundle: string | null
 }
 
 export interface MoveRequest {
@@ -37,6 +38,7 @@ export interface EditRequest {
   ac?: string[] | null
   block_reason?: string | null
   body?: string | null
+  proof_bundle?: string | null
 }
 
 export interface ReleaseRequest {

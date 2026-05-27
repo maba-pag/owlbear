@@ -9,6 +9,7 @@ export interface ConflictLocalDraft {
   dependsOn: string
   parent: string
   blockReason: string
+  proofBundle: string
 }
 
 export interface ConflictRemoteTask {
