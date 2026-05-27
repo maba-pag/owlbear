@@ -4,8 +4,8 @@ Module responsibility: LLM-driven entity/relation extraction from content
 chunks, enrichment queue management, and intra-document edge suggestion.
 Owns tables ``enrich_*``.
 
-The LLM is external to this module — Enrichment exposes a state-machine
-interface (enqueue → process → commit) without prescribing model selection,
+The LLM is external to this module - Enrichment exposes a state-machine
+interface (enqueue -> process -> commit) without prescribing model selection,
 prompt engineering, or inference hosting (CP14).
 
 Has zero dependencies on other knowledge modules at the Protocol boundary.
@@ -156,6 +156,13 @@ class EnrichmentDiscardResult(BoundaryModel):
     queue_items_removed: int = 0
 
 
+class EnrichmentResetResult(BoundaryModel):
+  """Result of resetting failed chunks back to pending."""
+
+  reset: int = 0
+  remaining_failed: int = 0
+
+
 # ---------------------------------------------------------------------------
 # Stats
 # ---------------------------------------------------------------------------
@@ -244,6 +251,36 @@ class EnrichmentStore(Protocol):
         """
         ...
 
+    def reset_failed(
+        self,
+        chunk_ids: tuple[str, ...] | None = None,
+        limit: int = 100,
+        scopes: tuple[str, ...] | None = None,
+    ) -> EnrichmentResetResult:
+        """Reset failed queue items to pending for retry.
+
+        Guarantees:
+          - When chunk_ids is provided, it is the exclusive filter;
+            limit and scopes are ignored.
+          - Only FAILED items are reset to PENDING.
+          - Returns reset count and remaining_failed count after reset.
+          - Reset transitions clear claim and error-tracking state.
+
+        Non-guarantees:
+          - Selection order for bulk reset is implementation-defined.
+          - The concrete table used to count remaining_failed is
+            implementation-defined.
+
+        Side effects:
+          - Writes ``enrich_*`` tables.
+          - May synchronize equivalent FAILED->PENDING state in legacy
+            chunk-state tables when present.
+
+        Raises:
+          - Never.
+        """
+        ...
+
     def claim_batch(self, params: EnrichmentParams) -> EnrichmentBatch:
         """Claim a batch of pending items for processing.
 
@@ -273,15 +310,15 @@ class EnrichmentStore(Protocol):
         Guarantees:
           - Entities are resolved (deduplicated via canonical name) and
             persisted to Graph (step 1).
-          - Relations are resolved using local_ref → persistent entity ID
+          - Relations are resolved using local_ref -> persistent entity ID
             mapping and persisted as edges (step 2).
           - Evidence records are created linking the chunk to all produced
             entities and edges (step 3).
           - The queue item transitions to COMPLETED (step 4).
-          - Steps 1–3 are idempotent: entity upsert deduplicates by
+          - Steps 1-3 are idempotent: entity upsert deduplicates by
             canonical identity (CP1); evidence is deduplicated by
             (chunk_id, claim_type, target_id). Step 4 executes only on
-            success of steps 1–3.
+            success of steps 1-3.
 
         Non-guarantees:
           - Entity deduplication strategy (exact match, fuzzy, embedding)

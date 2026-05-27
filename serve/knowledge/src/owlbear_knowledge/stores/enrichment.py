@@ -15,6 +15,7 @@ from owlbear_knowledge.protocols.enrichment import (
     EnrichmentParams,
     EnrichmentPurgeResult,
     EnrichmentQueueItem,
+    EnrichmentResetResult,
     EnrichmentState,
     EnrichmentStats,
     ExtractedEntity,
@@ -173,6 +174,73 @@ class EnrichmentStore(EnrichmentStoreProtocol):
             discarded_chunk_ids=discarded,
             queue_items_removed=len(discarded),
         )
+
+    def reset_failed(
+        self,
+        chunk_ids: tuple[str, ...] | None = None,
+        limit: int = 100,
+        scopes: tuple[str, ...] | None = None,
+    ) -> EnrichmentResetResult:
+        """Reset failed queue items to pending so they can be claimed again.
+
+        Reconciliation note:
+          - ``enrich_queue`` is this store's canonical state source.
+          - When a legacy ``chunks`` table exists, matching rows are synced
+            best-effort to keep mixed-schema deployments consistent.
+        """
+        normalized_chunk_ids = tuple(
+            chunk_id.strip() for chunk_id in (chunk_ids or ()) if chunk_id.strip()
+        )
+        normalized_scopes = tuple(scope.strip() for scope in (scopes or ()) if scope.strip())
+        normalized_limit = self._normalize_reset_limit(limit)
+
+        reset_count = 0
+        with self._db:
+            if normalized_chunk_ids:
+                rows = self._db.execute(
+                    """
+                    SELECT chunk_id
+                    FROM enrich_queue
+                    WHERE state = ?
+                      AND chunk_id IN (SELECT value FROM json_each(?))
+                    ORDER BY chunk_id
+                    """,
+                    (EnrichmentState.FAILED.value, json.dumps(normalized_chunk_ids)),
+                ).fetchall()
+            else:
+                rows = self._select_failed_for_bulk_reset(
+                    limit=normalized_limit,
+                    scopes=normalized_scopes,
+                )
+
+            reset_chunk_ids = tuple(str(row["chunk_id"]) for row in rows)
+            if reset_chunk_ids:
+                reset_count = max(
+                    self._db.execute(
+                        """
+                        UPDATE enrich_queue
+                        SET state = ?, attempts = 0, last_error = NULL,
+                            batch_id = NULL, started_at = NULL, completed_at = NULL
+                        WHERE state = ?
+                          AND chunk_id IN (SELECT value FROM json_each(?))
+                        """,
+                        (
+                            EnrichmentState.PENDING.value,
+                            EnrichmentState.FAILED.value,
+                            json.dumps(reset_chunk_ids),
+                        ),
+                    ).rowcount,
+                    0,
+                )
+                self._sync_legacy_chunk_state(reset_chunk_ids)
+
+            remaining_row = self._db.execute(
+                "SELECT COUNT(*) FROM enrich_queue WHERE state = ?",
+                (EnrichmentState.FAILED.value,),
+            ).fetchone()
+
+        remaining_failed = int(remaining_row[0] if remaining_row is not None else 0)
+        return EnrichmentResetResult(reset=reset_count, remaining_failed=remaining_failed)
 
     def claim_batch(self, params: EnrichmentParams) -> EnrichmentBatch:
         """Claim up to batch_size queue items for processing."""
@@ -506,6 +574,95 @@ class EnrichmentStore(EnrichmentStoreProtocol):
             completed=counts.get(EnrichmentState.COMPLETED.value, 0),
             failed=counts.get(EnrichmentState.FAILED.value, 0),
         )
+
+    def _select_failed_for_bulk_reset(
+        self,
+        *,
+        limit: int,
+        scopes: tuple[str, ...],
+    ) -> tuple[sqlite3.Row, ...]:
+        base_query = """
+            SELECT q.chunk_id
+            FROM enrich_queue AS q
+            WHERE q.state = ?
+            ORDER BY q.enqueued_at, q.chunk_id
+            LIMIT ?
+            """
+        base_params: tuple[object, ...] = (EnrichmentState.FAILED.value, limit)
+
+        joins: list[str] = []
+        predicates = ["q.state = ?"]
+        params: list[object] = [EnrichmentState.FAILED.value]
+
+        if self._table_exists("source_registry"):
+            joins.append("JOIN source_registry AS s ON s.id = q.source_id")
+            predicates.append("s.state = 'active'")
+            predicates.append("COALESCE(s.enrich, 0) = 1")
+
+        if scopes and self._table_exists("content_chunks"):
+            joins.append("JOIN content_chunks AS c ON c.id = q.chunk_id")
+            predicates.append(
+                "COALESCE(c.scope, 'global') IN (SELECT value FROM json_each(?))"
+            )
+            params.append(json.dumps(scopes))
+
+        if not joins and not scopes:
+            return tuple(self._db.execute(base_query, base_params).fetchall())
+
+        query = "\n".join(
+            [
+                "SELECT q.chunk_id",
+                "FROM enrich_queue AS q",
+                *joins,
+                f"WHERE {' AND '.join(predicates)}",
+                "ORDER BY q.enqueued_at, q.chunk_id",
+                "LIMIT ?",
+            ]
+        )
+        params.append(limit)
+
+        try:
+            return tuple(self._db.execute(query, tuple(params)).fetchall())
+        except sqlite3.Error:
+            # Optional joins may be unavailable in mixed-schema deployments.
+            return tuple(self._db.execute(base_query, base_params).fetchall())
+
+    def _sync_legacy_chunk_state(self, chunk_ids: tuple[str, ...]) -> None:
+        if not chunk_ids or not self._table_exists("chunks"):
+            return
+
+        try:
+            self._db.execute(
+                """
+                UPDATE chunks
+                SET enrichment_state = 'pending',
+                    claimed_at = NULL,
+                    claimed_by = NULL,
+                    claim_token = NULL,
+                    enrichment_error = NULL,
+                    enrichment_attempts = 0,
+                    last_enrichment_error_at = NULL
+                WHERE enrichment_state = 'failed'
+                  AND id IN (SELECT value FROM json_each(?))
+                """,
+                (json.dumps(chunk_ids),),
+            )
+        except sqlite3.Error:
+            # Keep queue reset functional even when legacy table shape differs.
+            return
+
+    def _table_exists(self, table_name: str) -> bool:
+        row = self._db.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+            (table_name,),
+        ).fetchone()
+        return row is not None
+
+    @staticmethod
+    def _normalize_reset_limit(limit: int) -> int:
+        if isinstance(limit, bool) or not isinstance(limit, int):
+            return 100
+        return max(limit, 1)
 
     @staticmethod
     def _now_iso() -> str:
