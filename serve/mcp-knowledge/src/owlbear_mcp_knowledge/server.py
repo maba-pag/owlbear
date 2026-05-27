@@ -27,7 +27,17 @@ from owlbear_knowledge.graph_store import GraphStore
 from owlbear_knowledge.ingest import IngestPipeline
 from owlbear_knowledge.ingest_coordinator import IngestCoordinator
 from owlbear_knowledge.models import EntityType
-from owlbear_knowledge.protocols.enrichment import EnrichmentParams
+from owlbear_knowledge.protocols.common import (
+    EntityType as ProtocolEntityType,
+)
+from owlbear_knowledge.protocols.common import (
+    RelationType as ProtocolRelationType,
+)
+from owlbear_knowledge.protocols.enrichment import (
+    EnrichmentParams,
+    ExtractedEntity,
+    ExtractedRelation,
+)
 from owlbear_knowledge.protocols.ingest import IngestDocument, IngestRequest
 from owlbear_knowledge.protocols.sources import (
     FetchTransport,
@@ -52,7 +62,6 @@ from ._consolidation import (
     _fetch_consolidation_candidate_rows,
     _persist_phase2_enrichment,
 )
-from ._enrichment import _mark_failed_chunk_claim, _persist_phase1_enrichment
 from ._helpers import (
     _normalize_batch_limit,
     _normalize_enrichment_items,
@@ -214,6 +223,8 @@ async def store_enrichment(  # noqa: PLR0913
         msg = "provide exactly one of chunk_id or candidate_id"
         raise ToolError(msg)
 
+    _ = claim_token
+
     if chunk_id is None:
         edge_rows = _normalize_enrichment_items(edges, field_name="edges")
         conn.execute("PRAGMA busy_timeout = 5000")
@@ -230,36 +241,127 @@ async def store_enrichment(  # noqa: PLR0913
             raise
         conn.commit()
         return
+    enrichment_store = app_ctx.enrichment_store
+    if enrichment_store is None:
+        msg = "enrichment store not available"
+        raise ToolError(msg)
 
-    conn.execute("PRAGMA busy_timeout = 5000")
-    conn.execute("BEGIN IMMEDIATE")
+    entity_rows = _normalize_enrichment_items(entities, field_name="entities")
+    edge_rows = _normalize_enrichment_items(edges, field_name="edges")
+
     try:
-        entity_rows = _normalize_enrichment_items(entities, field_name="entities")
-        edge_rows = _normalize_enrichment_items(edges, field_name="edges")
-        _persist_phase1_enrichment(
-            conn,
-            chunk_id=chunk_id,
-            claim_token=claim_token,
-            entities=entity_rows,
-            edges=edge_rows,
-            now_iso=now_iso,
-        )
-    except Exception as exc:
-        conn.rollback()
-        conn.execute("BEGIN IMMEDIATE")
+        parsed_entities = tuple(_parse_extracted_entity(item) for item in entity_rows)
+        parsed_relations = tuple(_parse_extracted_relation(item) for item in edge_rows)
+    except (ToolError, ValidationError, ValueError, TypeError, KeyError) as exc:
+        error_str = str(exc)
         try:
-            _mark_failed_chunk_claim(
-                conn,
-                chunk_id=chunk_id,
-                claim_token=claim_token,
-                reason=str(exc),
-                now_iso=now_iso,
-            )
-            conn.commit()
-        except sqlite3.Error:
-            conn.rollback()
-        raise
-    conn.commit()
+            enrichment_store.mark_failed(chunk_id, error_str)
+        except LookupError:
+            logger.debug("chunk %s was not in progress during parse failure mark", chunk_id)
+        raise ToolError(error_str) from exc
+
+    try:
+        enrichment_store.submit_extractions(chunk_id, parsed_entities, parsed_relations)
+    except LookupError as exc:
+        raise ToolError(str(exc)) from exc
+
+
+def _parse_extracted_entity(entity: dict[str, Any]) -> ExtractedEntity:
+    """Map a phase-1 entity payload into ExtractedEntity for submit_extractions."""
+    local_ref_raw = entity.get("id")
+    if not isinstance(local_ref_raw, str) or not local_ref_raw.strip():
+        msg = "entity id is required"
+        raise ValueError(msg)
+
+    name_raw = entity.get("name")
+    if not isinstance(name_raw, str) or not name_raw.strip():
+        msg = "entity name is required"
+        raise ValueError(msg)
+
+    entity_type = _parse_protocol_entity_type(entity)
+    description_raw = entity.get("description", "")
+    if not isinstance(description_raw, str):
+        msg = "entity description must be a string"
+        raise TypeError(msg)
+
+    metadata_raw = entity.get("metadata", {})
+    metadata = metadata_raw if isinstance(metadata_raw, dict) else {}
+    confidence_raw = entity.get("confidence", 1.0)
+    confidence = float(confidence_raw)
+
+    return ExtractedEntity(
+        local_ref=local_ref_raw.strip(),
+        name=name_raw.strip(),
+        entity_type=entity_type,
+        description=description_raw,
+        confidence=confidence,
+        metadata=metadata,
+    )
+
+
+def _parse_protocol_entity_type(entity: dict[str, Any]) -> ProtocolEntityType:
+    """Validate entity_type against the protocol enum used by ExtractedEntity."""
+    raw = entity.get("entity_type")
+    if not isinstance(raw, str) or not raw.strip():
+        alias_raw = entity.get("type")
+        raw = alias_raw if isinstance(alias_raw, str) else ""
+    if not isinstance(raw, str) or not raw.strip():
+        return ProtocolEntityType.CONCEPT
+
+    value = raw.strip().lower()
+    try:
+        return ProtocolEntityType(value)
+    except ValueError as exc:
+        valid = ", ".join(item.value for item in ProtocolEntityType)
+        msg = f"unsupported entity_type {value!r}; valid values: {valid}"
+        raise ValueError(msg) from exc
+
+
+def _parse_extracted_relation(edge: dict[str, Any]) -> ExtractedRelation:
+    """Map a phase-1 edge payload into ExtractedRelation for submit_extractions."""
+    source_ref_raw = edge.get("source_id")
+    if not isinstance(source_ref_raw, str) or not source_ref_raw.strip():
+        msg = "edge source_id is required"
+        raise ValueError(msg)
+
+    target_ref_raw = edge.get("target_id")
+    if not isinstance(target_ref_raw, str) or not target_ref_raw.strip():
+        msg = "edge target_id is required"
+        raise ValueError(msg)
+
+    relation_type = _parse_protocol_relation_type(edge)
+    metadata_raw = edge.get("metadata", {})
+    metadata = metadata_raw if isinstance(metadata_raw, dict) else {}
+    weight_raw = edge.get("weight", 1.0)
+    confidence_raw = edge.get("confidence", 1.0)
+
+    return ExtractedRelation(
+        source_ref=source_ref_raw.strip(),
+        target_ref=target_ref_raw.strip(),
+        relation_type=relation_type,
+        weight=float(weight_raw),
+        confidence=float(confidence_raw),
+        metadata=metadata,
+    )
+
+
+def _parse_protocol_relation_type(edge: dict[str, Any]) -> ProtocolRelationType:
+    """Validate relation/relationship against the protocol enum used by ExtractedRelation."""
+    raw = edge.get("relation")
+    if not isinstance(raw, str) or not raw.strip():
+        alias_raw = edge.get("relationship")
+        raw = alias_raw if isinstance(alias_raw, str) else ""
+    if not isinstance(raw, str) or not raw.strip():
+        msg = "edge relation is required (use 'relation' or 'relationship')"
+        raise ValueError(msg)
+
+    value = raw.strip().lower()
+    try:
+        return ProtocolRelationType(value)
+    except ValueError as exc:
+        valid = ", ".join(item.value for item in ProtocolRelationType)
+        msg = f"unsupported edge relation {value!r}; valid values: {valid}"
+        raise ValueError(msg) from exc
 
 
 async def retry_failed_enrichment(
