@@ -365,3 +365,173 @@ class TestFromAC_ParsingFailureMarksFailed:
         with pytest.raises(ToolError):
             await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=entities, edges=[edge])
         store.mark_failed.assert_called_once()
+
+    # ---- missing required field paths (AC6 gap-fill) ----
+
+    @pytest.mark.asyncio
+    async def test_missing_entity_id_raises_tool_error(self) -> None:
+        """Entity dict without 'id' → ToolError raised."""
+        ctx, store = _make_ctx()
+        entity = {"name": "X", "entity_type": "concept"}  # no 'id'
+        with pytest.raises(ToolError):
+            await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=[entity], edges=[])
+
+    @pytest.mark.asyncio
+    async def test_missing_entity_id_calls_mark_failed(self) -> None:
+        """Entity dict without 'id' → mark_failed(chunk_id, error_str) called."""
+        ctx, store = _make_ctx()
+        entity = {"name": "X", "entity_type": "concept"}  # no 'id'
+        with pytest.raises(ToolError):
+            await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=[entity], edges=[])
+        call_args = store.mark_failed.call_args
+        args = call_args.args or ()
+        kwargs = call_args.kwargs or {}
+        reported_chunk_id = args[0] if len(args) > 0 else kwargs.get("chunk_id", "")
+        error_str = args[1] if len(args) > 1 else kwargs.get("error", "")
+        assert reported_chunk_id == _CHUNK_ID
+        assert isinstance(error_str, str) and len(error_str) > 0
+
+    @pytest.mark.asyncio
+    async def test_missing_entity_name_raises_tool_error(self) -> None:
+        """Entity dict without 'name' → ToolError raised."""
+        ctx, store = _make_ctx()
+        entity = {"id": "r1", "entity_type": "concept"}  # no 'name'
+        with pytest.raises(ToolError):
+            await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=[entity], edges=[])
+
+    @pytest.mark.asyncio
+    async def test_missing_entity_name_calls_mark_failed(self) -> None:
+        """Entity dict without 'name' → mark_failed(chunk_id, error_str) called."""
+        ctx, store = _make_ctx()
+        entity = {"id": "r1", "entity_type": "concept"}  # no 'name'
+        with pytest.raises(ToolError):
+            await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=[entity], edges=[])
+        call_args = store.mark_failed.call_args
+        args = call_args.args or ()
+        kwargs = call_args.kwargs or {}
+        reported_chunk_id = args[0] if len(args) > 0 else kwargs.get("chunk_id", "")
+        error_str = args[1] if len(args) > 1 else kwargs.get("error", "")
+        assert reported_chunk_id == _CHUNK_ID
+        assert isinstance(error_str, str) and len(error_str) > 0
+
+    @pytest.mark.asyncio
+    async def test_missing_edge_source_id_raises_tool_error(self) -> None:
+        """Edge dict without 'source_id' → ToolError raised."""
+        ctx, store = _make_ctx()
+        entities = [{"id": "r1", "name": "A", "entity_type": "concept"}]
+        edge = {"target_id": "r1", "relation": "related_to"}  # no 'source_id'
+        with pytest.raises(ToolError):
+            await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=entities, edges=[edge])
+
+    @pytest.mark.asyncio
+    async def test_missing_edge_source_id_calls_mark_failed(self) -> None:
+        """Edge dict without 'source_id' → mark_failed(chunk_id, error_str) called."""
+        ctx, store = _make_ctx()
+        entities = [{"id": "r1", "name": "A", "entity_type": "concept"}]
+        edge = {"target_id": "r1", "relation": "related_to"}  # no 'source_id'
+        with pytest.raises(ToolError):
+            await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=entities, edges=[edge])
+        call_args = store.mark_failed.call_args
+        args = call_args.args or ()
+        kwargs = call_args.kwargs or {}
+        reported_chunk_id = args[0] if len(args) > 0 else kwargs.get("chunk_id", "")
+        error_str = args[1] if len(args) > 1 else kwargs.get("error", "")
+        assert reported_chunk_id == _CHUNK_ID
+        assert isinstance(error_str, str) and len(error_str) > 0
+
+    @pytest.mark.asyncio
+    async def test_missing_edge_target_id_raises_tool_error(self) -> None:
+        """Edge dict without 'target_id' → ToolError raised."""
+        ctx, store = _make_ctx()
+        entities = [{"id": "r1", "name": "A", "entity_type": "concept"}]
+        edge = {"source_id": "r1", "relation": "related_to"}  # no 'target_id'
+        with pytest.raises(ToolError):
+            await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=entities, edges=[edge])
+
+    @pytest.mark.asyncio
+    async def test_missing_edge_target_id_calls_mark_failed(self) -> None:
+        """Edge dict without 'target_id' → mark_failed(chunk_id, error_str) called."""
+        ctx, store = _make_ctx()
+        entities = [{"id": "r1", "name": "A", "entity_type": "concept"}]
+        edge = {"source_id": "r1", "relation": "related_to"}  # no 'target_id'
+        with pytest.raises(ToolError):
+            await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=entities, edges=[edge])
+        call_args = store.mark_failed.call_args
+        args = call_args.args or ()
+        kwargs = call_args.kwargs or {}
+        reported_chunk_id = args[0] if len(args) > 0 else kwargs.get("chunk_id", "")
+        error_str = args[1] if len(args) > 1 else kwargs.get("error", "")
+        assert reported_chunk_id == _CHUNK_ID
+        assert isinstance(error_str, str) and len(error_str) > 0
+
+    @pytest.mark.asyncio
+    async def test_missing_edge_relation_and_relationship_raises_tool_error(self) -> None:
+        """Edge dict with neither 'relation' nor 'relationship' → ToolError raised."""
+        ctx, store = _make_ctx()
+        entities = [{"id": "r1", "name": "A", "entity_type": "concept"}]
+        edge = {"source_id": "r1", "target_id": "r1"}  # no 'relation' or 'relationship'
+        with pytest.raises(ToolError):
+            await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=entities, edges=[edge])
+
+    @pytest.mark.asyncio
+    async def test_missing_edge_relation_and_relationship_calls_mark_failed(self) -> None:
+        """Edge dict with neither 'relation' nor 'relationship' → mark_failed(chunk_id, error_str) called."""
+        ctx, store = _make_ctx()
+        entities = [{"id": "r1", "name": "A", "entity_type": "concept"}]
+        edge = {"source_id": "r1", "target_id": "r1"}  # no 'relation' or 'relationship'
+        with pytest.raises(ToolError):
+            await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=entities, edges=[edge])
+        call_args = store.mark_failed.call_args
+        args = call_args.args or ()
+        kwargs = call_args.kwargs or {}
+        reported_chunk_id = args[0] if len(args) > 0 else kwargs.get("chunk_id", "")
+        error_str = args[1] if len(args) > 1 else kwargs.get("error", "")
+        assert reported_chunk_id == _CHUNK_ID
+        assert isinstance(error_str, str) and len(error_str) > 0
+
+
+# ---------------------------------------------------------------------------
+# AC2/AC3 gap-fill — explicit non-default values pass through parsing
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ExplicitFieldPassthrough:
+    """Retry gap-fill: prove explicit non-default values survive dict→model parsing."""
+
+    @pytest.mark.asyncio
+    async def test_entity_explicit_description_passes_through(self) -> None:
+        """Entity dict with 'description' set → ExtractedEntity.description matches exactly."""
+        ctx, store = _make_ctx()
+        entity = {
+            "id": "r1",
+            "name": "MyEntity",
+            "entity_type": "concept",
+            "description": "A custom description string",
+        }
+        await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=[entity], edges=[])
+        _, entities_arg, _ = _extract_submit_args(store)
+        assert entities_arg[0].description == "A custom description string"
+
+    @pytest.mark.asyncio
+    async def test_entity_explicit_confidence_passes_through(self) -> None:
+        """Entity dict with 'confidence' set to non-default → ExtractedEntity.confidence matches."""
+        ctx, store = _make_ctx()
+        entity = {
+            "id": "r1",
+            "name": "MyEntity",
+            "entity_type": "concept",
+            "confidence": 0.42,
+        }
+        await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=[entity], edges=[])
+        _, entities_arg, _ = _extract_submit_args(store)
+        assert entities_arg[0].confidence == pytest.approx(0.42)
+
+    @pytest.mark.asyncio
+    async def test_edge_explicit_weight_passes_through(self) -> None:
+        """Edge dict with 'weight' set to non-default → ExtractedRelation.weight matches."""
+        ctx, store = _make_ctx()
+        entities = [{"id": "r1", "name": "A", "entity_type": "concept"}]
+        edge = {"source_id": "r1", "target_id": "r1", "relation": "related_to", "weight": 0.25}
+        await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=entities, edges=[edge])
+        _, _, relations_arg = _extract_submit_args(store)
+        assert relations_arg[0].weight == pytest.approx(0.25)
