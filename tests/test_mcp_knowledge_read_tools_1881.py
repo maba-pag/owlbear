@@ -1162,3 +1162,305 @@ class TestFromAC_ErrorMessageExact:
             await knowledge_entity_lookup(ctx, entity_id="xyz")
 
         assert str(exc_info.value) == "entity not found"
+
+
+# ---------------------------------------------------------------------------
+# AC2 (slot-correctness) — search_knowledge with a real slotted AppContext
+# ---------------------------------------------------------------------------
+
+
+def _make_slotted_ctx(
+    *,
+    query_facade: object = None,
+    query_service: object = None,
+    source_store_v2: object = None,
+) -> object:
+    """Wrap a *real* AppContext (@dataclass slots=True) in a mock MCP Context.
+
+    Unlike _make_ctx(), this uses the production AppContext class so that
+    getattr(app_ctx, '__dict__', {}) behaves as it does in production
+    (returning {} because slots=True dataclasses have no __dict__).
+    """
+    from owlbear_mcp_knowledge.server import AppContext, init_db
+
+    conn = init_db(":memory:")
+    app_ctx = AppContext(
+        conn=conn,
+        query_service=query_service,
+        graph_store=None,
+        ingest_pipeline=None,
+        source_store=None,
+        query_facade=query_facade,
+        source_store_v2=source_store_v2,
+    )
+    mcp_ctx = MagicMock()
+    mcp_ctx.request_context.lifespan_context = app_ctx
+    return mcp_ctx
+
+
+class TestFromAC_SlottedContextSearch:
+    """AC2 (slot-correctness): branch detection must work on slotted AppContext.
+
+    AppContext is @dataclass(slots=True) — it has no __dict__. Tests here use
+    the real AppContext so that getattr(app_ctx, '__dict__', {}).get('query_facade')
+    returns None even when query_facade is populated, exposing the production bug.
+    All tests currently FAIL because the __dict__-based detection always falls
+    through to the legacy query_service path.
+    """
+
+    @pytest.mark.asyncio
+    async def test_slotted_ctx_search_delegates_to_query_facade(self) -> None:
+        """With real AppContext and query_facade populated, search_knowledge calls
+        query_facade.search (not query_service).
+
+        Currently FAILS: __dict__-based detection on a slotted dataclass returns {}
+        → sees query_facade as absent → falls to legacy path → query_service=None
+        → returns error string instead of calling facade.search.
+        """
+        from owlbear_mcp_knowledge.server import search_knowledge
+
+        facade = MagicMock(spec=QueryFacade)
+        facade.search = AsyncMock(return_value=_make_query_result_empty())
+        ctx = _make_slotted_ctx(query_facade=facade, query_service=None)
+
+        result = await search_knowledge(ctx, query="explain pytest")
+
+        facade.search.assert_called_once()
+        assert isinstance(result, list), (
+            f"expected list from QueryFacade path, got {type(result)}: {result!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_slotted_ctx_search_does_not_call_legacy_service(self) -> None:
+        """With real AppContext, legacy query_service.query is NOT called when
+        query_facade is populated.
+
+        Currently FAILS: __dict__-based detection always falls through to legacy
+        path, so query_service.query is called even though query_facade is set.
+        """
+        from owlbear_mcp_knowledge.server import search_knowledge
+
+        facade = MagicMock(spec=QueryFacade)
+        facade.search = AsyncMock(return_value=_make_query_result_empty())
+        legacy_qs = MagicMock()
+        legacy_qs.query = AsyncMock(return_value=[])
+        ctx = _make_slotted_ctx(query_facade=facade, query_service=legacy_qs)
+
+        await search_knowledge(ctx, query="test slotted")
+
+        legacy_qs.query.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_slotted_ctx_search_error_when_query_facade_none(self) -> None:
+        """With real AppContext and query_facade=None, search returns error string
+        (legacy fallback expected when both query_facade and query_service are None).
+
+        This test pins correct fallback behavior — it should PASS after the builder
+        fixes the branch detection, confirming the None-facade guard still works.
+
+        Currently FAILS (indirectly): the bug causes ALL contexts to fall to legacy,
+        so the error-string outcome is reached for the wrong reason. After the fix,
+        this test confirms the correct None-guard path.
+        """
+        from owlbear_mcp_knowledge.server import search_knowledge
+
+        ctx = _make_slotted_ctx(query_facade=None, query_service=None)
+        result = await search_knowledge(ctx, query="test")
+
+        assert isinstance(result, str)
+        assert "error" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_slotted_ctx_search_passes_query_request_to_facade(self) -> None:
+        """QueryRequest(text, top_k, scopes) is constructed and passed to facade.search
+        when using a real slotted AppContext.
+
+        Currently FAILS: slotted AppContext falls to legacy path; facade.search never called.
+        """
+        from owlbear_mcp_knowledge.server import search_knowledge
+
+        facade = MagicMock(spec=QueryFacade)
+        facade.search = AsyncMock(return_value=_make_query_result_empty())
+        ctx = _make_slotted_ctx(query_facade=facade)
+
+        await search_knowledge(ctx, query="domain concepts", limit=7, scopes=["docs"])
+
+        assert facade.search.call_count == 1
+        call_args = facade.search.call_args
+        req = call_args[0][0] if call_args[0] else call_args[1].get("request")
+        assert isinstance(req, QueryRequest)
+        assert req.text == "domain concepts"
+        assert req.top_k == 7
+        assert "docs" in req.scopes
+
+
+# ---------------------------------------------------------------------------
+# AC7 (formerly AC5) — get_stats exact assertions for ALL 12 output fields
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_GetStatsAllFieldsExact:
+    """AC7: get_stats proof must assert exact values for every one of the 12 output fields.
+
+    The existing test_get_stats_preserves_stats_result_typed_dict_shape only checks
+    key presence. These tests assert exact numeric values so that a miswiring of any
+    field is caught. Tests that already had exact coverage in TestFromAC_GetStatsDelegation
+    are extended here with complementary non-default values.
+    """
+
+    @pytest.mark.asyncio
+    async def test_get_stats_all_12_fields_exact_values(self) -> None:
+        """All 12 StatsResult fields match exact values from mocked coordinator and
+        enrichment store; SQL-derived fields (claimable, consolidation) return 0
+        from empty in-memory DB.
+
+        Pins every field: documents, entities, edges, total_sources, total_chunks,
+        chunks_pending, chunks_claimed, chunks_failed, chunks_enriched,
+        chunks_claimable, chunks_enriched_ratio, consolidation_candidates_remaining.
+        """
+        from owlbear_mcp_knowledge.server import get_stats
+
+        coordinator = MagicMock()
+        coordinator.stats.return_value = IngestStats(
+            sources_total=5,
+            documents_total=20,
+            chunks_total=100,
+            graph_entities=50,
+            graph_edges=30,
+        )
+        enrichment_store = MagicMock()
+        enrichment_store.stats.return_value = EnrichmentStats(
+            pending=10,
+            in_progress=3,
+            completed=15,
+            failed=2,
+        )
+        ctx = _make_ctx(
+            ingest_coordinator=coordinator,
+            enrichment_store=enrichment_store,
+            graph_store=None,
+        )
+
+        result = await get_stats(ctx)
+
+        # Coordinator-sourced fields
+        assert result["documents"] == 20
+        assert result["entities"] == 50
+        assert result["edges"] == 30
+        assert result["total_sources"] == 5
+        assert result["total_chunks"] == 100
+        # EnrichmentStore-sourced fields
+        assert result["chunks_pending"] == 10
+        assert result["chunks_claimed"] == 3
+        assert result["chunks_failed"] == 2
+        assert result["chunks_enriched"] == 15
+        # Computed field: ratio = completed / chunks_total = 15 / 100 = 0.15
+        assert result["chunks_enriched_ratio"] == pytest.approx(0.15)
+        # SQL-derived fields: empty DB → 0
+        assert result["chunks_claimable"] == 0
+        assert result["consolidation_candidates_remaining"] == 0
+
+    @pytest.mark.asyncio
+    async def test_get_stats_enriched_ratio_zero_when_total_chunks_zero(self) -> None:
+        """chunks_enriched_ratio is 0.0 when total_chunks is 0 (no division by zero).
+
+        Pins: ratio computation guard branch — completed=5, chunks_total=0 → 0.0.
+        """
+        from owlbear_mcp_knowledge.server import get_stats
+
+        coordinator = MagicMock()
+        coordinator.stats.return_value = IngestStats(chunks_total=0)
+        enrichment_store = MagicMock()
+        enrichment_store.stats.return_value = EnrichmentStats(completed=5)
+        ctx = _make_ctx(
+            ingest_coordinator=coordinator,
+            enrichment_store=enrichment_store,
+            graph_store=None,
+        )
+
+        result = await get_stats(ctx)
+
+        assert result["chunks_enriched_ratio"] == 0.0
+        assert result["total_chunks"] == 0
+        assert result["chunks_enriched"] == 5
+
+    @pytest.mark.asyncio
+    async def test_get_stats_edges_from_coordinator_not_legacy_graph_store(self) -> None:
+        """StatsResult.edges comes from IngestCoordinator.stats().graph_edges,
+        not from legacy GraphStore.get_counts().
+
+        Pins: edges=88 from coordinator while legacy GraphStore returns (0, 0, 22).
+        A miswiring that reads get_counts()[2] instead of graph_edges would fail.
+        """
+        from owlbear_mcp_knowledge.server import get_stats
+
+        coordinator = MagicMock()
+        coordinator.stats.return_value = IngestStats(graph_entities=77, graph_edges=88)
+        enrichment_store = MagicMock()
+        enrichment_store.stats.return_value = EnrichmentStats()
+        # Legacy GraphStore returns different values
+        gs_legacy = MagicMock()
+        gs_legacy.get_counts.return_value = (0, 0, 22)
+        ctx = _make_ctx(
+            ingest_coordinator=coordinator,
+            enrichment_store=enrichment_store,
+            graph_store=gs_legacy,
+        )
+
+        result = await get_stats(ctx)
+
+        assert result["edges"] == 88
+        assert result["entities"] == 77
+
+    @pytest.mark.asyncio
+    async def test_get_stats_documents_from_coordinator_not_legacy_sql(self) -> None:
+        """StatsResult.documents comes from IngestCoordinator.stats().documents_total.
+
+        Pins: documents=42 from coordinator; legacy graph_store.get_counts()[0] = 0.
+        A miswiring that reads get_counts() for documents would fail.
+        """
+        from owlbear_mcp_knowledge.server import get_stats
+
+        coordinator = MagicMock()
+        coordinator.stats.return_value = IngestStats(documents_total=42)
+        enrichment_store = MagicMock()
+        enrichment_store.stats.return_value = EnrichmentStats()
+        gs_legacy = MagicMock()
+        gs_legacy.get_counts.return_value = (0, 0, 0)
+        ctx = _make_ctx(
+            ingest_coordinator=coordinator,
+            enrichment_store=enrichment_store,
+            graph_store=gs_legacy,
+        )
+
+        result = await get_stats(ctx)
+
+        assert result["documents"] == 42
+
+    @pytest.mark.asyncio
+    async def test_get_stats_chunks_claimed_from_enrichment_in_progress(self) -> None:
+        """StatsResult.chunks_claimed maps to EnrichmentStats.in_progress (not a separate field).
+
+        Pins: in_progress=7 → chunks_claimed=7. A miswiring that maps in_progress
+        to chunks_pending or a SQL count would fail.
+        """
+        from owlbear_mcp_knowledge.server import get_stats
+
+        coordinator = MagicMock()
+        coordinator.stats.return_value = IngestStats()
+        enrichment_store = MagicMock()
+        enrichment_store.stats.return_value = EnrichmentStats(
+            pending=2, in_progress=7, failed=1, completed=3
+        )
+        ctx = _make_ctx(
+            ingest_coordinator=coordinator,
+            enrichment_store=enrichment_store,
+            graph_store=None,
+        )
+
+        result = await get_stats(ctx)
+
+        assert result["chunks_claimed"] == 7
+        assert result["chunks_pending"] == 2
+        assert result["chunks_failed"] == 1
+        assert result["chunks_enriched"] == 3
