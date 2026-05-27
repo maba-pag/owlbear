@@ -386,6 +386,25 @@ class TestFromAC_IngestDocumentCoordinatorWiring:
         )
 
     @pytest.mark.asyncio
+    async def test_ingest_request_source_id_from_newly_registered_source(self) -> None:
+        """IngestRequest.source_id is the id returned by register_source (create branch).
+
+        AC3 gap: when list_sources finds no matching source, register_source is called and
+        its returned source.id must flow into IngestRequest.source_id — not a stale or
+        hardcoded value.
+        """
+        store = MagicMock()
+        store.list_sources.return_value = ()  # nothing found — triggers register_source
+        registered = _make_source_record(source_id="newly-registered-123")
+        store.register_source.return_value = registered
+        ctx = _make_ctx(source_store_v2=store)
+        await ingest_document(ctx, text="hello", scope="global")
+        request = ctx.request_context.lifespan_context.ingest_coordinator.ingest.call_args[0][0]
+        assert request.source_id == "newly-registered-123", (
+            f"IngestRequest.source_id must match register_source return value id, got: {request.source_id!r}"
+        )
+
+    @pytest.mark.asyncio
     async def test_ingest_request_enrich_is_true(self) -> None:
         """IngestRequest.enrich is always True.
 
@@ -619,6 +638,27 @@ class TestFromAC_IngestDocumentCoordinatorWiring:
         assert "error" in result.lower(), (
             f"error string expected on register_source exception, got: {result!r}"
         )
+
+    @pytest.mark.asyncio
+    async def test_list_sources_exception_returns_error_string(self) -> None:
+        """Exception in list_sources() is caught by the broad handler; returns error string.
+
+        AC5 gap: the broad try/except wraps list_sources, register_source, AND
+        coordinator.ingest. Prove the handler covers the first protected operation
+        (list_sources) so narrowing the try boundary above list_sources would be
+        caught by this test.
+        """
+        store = MagicMock()
+        store.list_sources.side_effect = RuntimeError("db locked")
+        coordinator = MagicMock()
+        coordinator.ingest = AsyncMock()
+        ctx = _make_ctx(source_store_v2=store, ingest_coordinator=coordinator)
+        result = await ingest_document(ctx, text="hello")
+        assert isinstance(result, str), "exception must produce a string result"
+        assert "error" in result.lower(), (
+            f"error string expected on list_sources exception, got: {result!r}"
+        )
+        coordinator.ingest.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
