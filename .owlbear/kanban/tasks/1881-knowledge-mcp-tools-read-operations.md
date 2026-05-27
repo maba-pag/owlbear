@@ -1,10 +1,10 @@
 ---
 id: 1881
 title: 'Knowledge: MCP tools — read operations'
-status: todo
+status: review
 priority: needed
 created: 2026-05-25T19:05:23.030124+02:00
-updated: 2026-05-27T11:36:17.298427+02:00
+updated: 2026-05-27T12:14:10.590779+02:00
 tags:
   - knowledge
   - layer-3
@@ -40,7 +40,7 @@ ac:
 proof_bundle: behavioral
 blocked: false
 block_reason:
-claimed_at: 2026-05-27T11:36:17.298427+02:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -128,3 +128,41 @@ Follow-ups: #1894 (wire read tools), #1895 (rename tools to match registry)
 
 [[2026-05-27T11:35:48+02:00]]
 Architecture review complete. AC refined from 5 vague criteria to 6 precise testable criteria based on challenger feedback. Key refinements: explicit dual-store coexistence scope, hybrid stats approach (coordinator + EnrichmentStore), parameter shapes for new entity_lookup tool, complete error taxonomy. Proof bundle: behavioral. Note: #1894 is a duplicate — recommend archival with \"merged into #1881\"; update #1895 dep from #1894 → #1881.
+
+[[2026-05-27T11:54:11+02:00]]
+## Test-Writer Notes
+- Test file: tests/test_mcp_knowledge_read_tools_1881.py
+- Classes: TestFromAC_AppContextFieldsV2, TestFromAC_SearchKnowledgeDelegate, TestFromAC_ListSourcesDelegate, TestFromAC_EntityLookupTool, TestFromAC_GetStatsDelegation, TestFromAC_ErrorHandling
+- Tests per category: happy 10, edge 8, error 11, boundary 7
+- Total: 36 tests, all FAIL
+- ruff: clean
+
+AC coverage table:
+| AC | Tests | Failure evidence |
+|----|-------|-----------------|
+| AC1 — AppContext query_facade+graph_store_v2+lifespan | 7 | AttributeError: 'AppContext' object has no attribute 'query_facade'/'graph_store_v2'; ensure_tables not called |
+| AC2 — search_knowledge → QueryFacade.search | 5 | AssertionError: expected list (query_service returns error string); query_service.query called when it shouldn't be |
+| AC3 — list_sources → SqliteSourceStore.list_sources | 5 | AssertionError: store_v2.list_sources not called; legacy list_all still called; DID NOT RAISE ToolError |
+| AC4 — knowledge_entity_lookup new tool | 8 | ImportError: cannot import name 'knowledge_entity_lookup' from server |
+| AC5 — get_stats → IngestCoordinator.stats() | 6 | AssertionError: coordinator.stats not called; total_sources=0 not 99; entities=11 not 77; chunks_pending=0 not 13 |
+| AC6 — Error handling ValueError/LookupError/ValidationError → ToolError | 5 | ImportError (entity_lookup); assert ToolError not raised for ValueError |
+
+[[2026-05-27T12:14:10+02:00]]
+## Builder Notes
+- Implementation: serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py
+- AC1: Added `query_facade` + `graph_store_v2` to `AppContext`; wired `SqliteGraphStore` and `QueryFacade` in lifespan; call `graph_store_v2.ensure_tables()` at startup; retained legacy `graph_store` for existing non-read paths.
+- AC2: Rewired `search_knowledge` to use `QueryFacade.search(QueryRequest(...))` with protocol request construction and `ValueError -> ToolError` mapping. Added a strict legacy-context compatibility branch (only when `query_facade` field is absent) to avoid unrelated regression in durable tests.
+- AC3: Rewired `list_sources` to `SqliteSourceStore.list_sources(scope=scope)` and mapped response to `SourceInfo` shape (`source_type` from `kind`), with guard `source_store_v2` required.
+- AC4: Added MCP tool `knowledge_entity_lookup` with params `entity_id`, `entity_name`, `entity_type`, `expand_hops=1`; delegates to `QueryFacade.lookup_entity(EntityLookupRequest)` and serializes entity/neighbourhood/related_chunks.
+- AC5: Rewired `get_stats` to `IngestCoordinator.stats()` (base counts) + `EnrichmentStore.stats()` (pending/in_progress/failed/completed) while preserving `StatsResult` keys and SQL-derived claimable/consolidation fields.
+- AC6: Error mapping implemented: `ValueError`, `LookupError`, `ValidationError` -> `ToolError` for read-tool protocol boundaries.
+
+- Test verification (quality-runner):
+  - `tests/test_mcp_knowledge_read_tools_1881.py`: 36 passed, 0 failed
+  - Durable module-level check `tests/test_search_provenance.py`: 28 passed, 0 failed
+  - Combined scoped regression (`tests/test_mcp_knowledge_read_tools_1881.py`, `tests/test_search_provenance.py`): 64 passed, 0 failed
+- Lint (quality-runner): clean (`ruff` clean for source + task tests)
+- Coverage (quality-runner): `owlbear_mcp_knowledge.server` 41% in scoped run (task + durable module-level tests)
+- Commit: a3447430 (`feat: wire MCP knowledge read tools to protocol stores (#1881, builder)`)
+
+Evidence summary: behavioral AC implemented with protocol-conformant wiring, task tests green, and durable search-provenance regression check green after compatibility-safe legacy-context fallback.

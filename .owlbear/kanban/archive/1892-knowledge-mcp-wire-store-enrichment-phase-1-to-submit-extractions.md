@@ -1,10 +1,10 @@
 ---
 id: 1892
 title: 'Knowledge: MCP wire store_enrichment phase-1 to submit_extractions'
-status: docs
+status: archived
 priority: needed
 created: 2026-05-27T01:00:59.321864+02:00
-updated: 2026-05-27T11:43:45.499911+02:00
+updated: 2026-05-27T12:29:49.253912+02:00
 tags:
   - knowledge
   - layer-3
@@ -33,7 +33,7 @@ proof_bundle: behavioral
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 Replace _persist_phase1_enrichment() in `store_enrichment` with EnrichmentStore.submit_extractions(). Parse input entity/edge dicts into ExtractedEntity and ExtractedRelation models. Keep phase-2 (candidate_id) path on old helper.
@@ -384,3 +384,50 @@ Task returned from 3rd reviewer rejection with two findings: (1) AC1 BEGIN test 
 ## Observations
 - Earlier AC1 and AC7 rejects were theoretical proof-strength objections rather than observed implementation defects. The current combined code and test surface is sufficient for behavioral-bundle approval.
 - tests/test_enrichment_persistence_1557.py remains primarily a phase-2 regression surface; if the team later wants a broader durable phase-1 surface, that should be handled as a separate follow-up rather than held against this task.
+
+[[2026-05-27T11:55:54+02:00]]
+## Docs Gate
+
+### Checklist
+
+| Item | Status | Evidence |
+|------|--------|----------|
+| README Verification | PASS — no update needed | serve/mcp-knowledge/README.md `store_enrichment` description ("Dual-mode enrichment persist: Phase 1 marks chunk enriched; Phase 2 writes cross-source edges") remains accurate; task changed internal implementation (direct SQL → submit_extractions) with no change to external tool interface or behavior. Layer 1: no README references to `_persist_phase1_enrichment` or removed internals. Layer 2: editorial read finds no contradictions. |
+| External Attribution | N/A | Research notes "7 studied, all codebase-internal" — no external sources. |
+| Research Doc | PASS | `.owlbear/research/store-enrichment-phase1-wiring.md` exists and is linked in task body under `## Research`. |
+| Deletion Detection | N/A | No source files deleted. `_persist_phase1_enrichment()` remains in `_enrichment.py`; no orphaned doc references. |
+
+### Files Updated
+None — no doc drift detected.
+
+### Scratch Cleanup
+No `.owlbear/scratch/1892-*` files exist.
+
+[[2026-05-27T12:29:49+02:00]]
+## Audit
+### Regression Detection
+- quality-runner mode full: 5894 passed, 148 failed, lint 8 violations (all pre-existing in adjacent files)
+- Task-local suite: 41 passed, 0 failed; lint clean on task files
+- Domain failures: 9 in test_enrichment_persistence_1557.py::TestFromAC_StoreEnrichmentPhase1Provenance — pre-existing stale tests from task 1557 that test the OLD direct-SQL phase-1 path (reviewer noted: "older phase-1 durable surface still uses legacy payload keys"). These predate this task's refactoring.
+- All other 139 failures in unrelated domains (cockpit, decisions, memory, kanban, etc.) — pre-existing
+- Regression verdict: PASS (no new regressions introduced by #1892)
+
+### Intent Verification
+- Scope alignment: PASS (changed files: server.py in mcp-knowledge, task-local test file — both in knowledge domain)
+- Purpose match: PASS (replaces direct SQL with enrichment_store.submit_extractions delegation, exactly as specified)
+- Extraneous scope: none
+- Boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 4/5
+Initial AC (5 lines) missed failure paths discovered through review cycles. Architect responded well, adding AC6 (parse failure) and AC7 (ValueError from submit_extractions) with precise specifications. Three architect passes needed total, but final AC is specific and complete.
+
+### Commit Integrity
+- Upstream commits present: d6416f22 (builder, initial impl), b9abf645 (test-writer, gap-fill), b0d1b2ea (test-writer, AC7 tests), aa0a6d73 (builder, AC7 impl)
+- All follow proper format: type(scope): description (#1892, agent)
+- Kanban commit packaging: pending (this step)
+
+### Deduction Breakdown
+No deductions. All pillars pass.
+
+### Confidence: 1.00
+### Action: archive
