@@ -103,13 +103,9 @@ Release packaging boundary:
 
 ## Knowledge Base
 
-Populate the knowledge base from a sources manifest:
+Knowledge base sources are registered and refreshed via the MCP server tools (`knowledge_register_source`, `refresh_source`). See `serve/mcp-knowledge/README.md` for the full tool reference.
 
-```bash
-uv run python -m owlbear_knowledge.loader --manifest store/knowledge/general/sources.yaml --root .
-```
-
-The manifest at `store/knowledge/general/sources.yaml` includes all research docs, skills, and instructions by default. Set `OWLBEAR_LOCAL_KB_PATH` to override the default `.owlbear/knowledge/local.db` location (`OWLBEAR_KB_PATH` is still accepted as a fallback).
+Set `OWLBEAR_LOCAL_KB_PATH` to override the default `.owlbear/knowledge/local.db` location (`OWLBEAR_KB_PATH` is still accepted as a fallback).
 
 ## Doc Index
 
