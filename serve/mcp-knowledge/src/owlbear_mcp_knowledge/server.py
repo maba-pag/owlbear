@@ -39,6 +39,7 @@ from owlbear_knowledge.protocols.enrichment import (
     ExtractedRelation,
 )
 from owlbear_knowledge.protocols.ingest import IngestDocument, IngestRequest
+from owlbear_knowledge.protocols.query import EntityLookupRequest, QueryRequest
 from owlbear_knowledge.protocols.sources import (
     FetchTransport,
     InlineConfig,
@@ -47,6 +48,7 @@ from owlbear_knowledge.protocols.sources import (
     SourceState,
 )
 from owlbear_knowledge.qdrant import QdrantVectorStore
+from owlbear_knowledge.query_facade import QueryFacade
 from owlbear_knowledge.query_service import KnowledgeQueryError, KnowledgeQueryService
 from owlbear_knowledge.refresh import RefreshOrchestrator
 from owlbear_knowledge.retrieval import GraphAugmentedRetriever
@@ -54,6 +56,7 @@ from owlbear_knowledge.schema import init_db as _schema_init_db
 from owlbear_knowledge.source_store import KnowledgeSourceStore
 from owlbear_knowledge.stores.content import ContentStore
 from owlbear_knowledge.stores.enrichment import EnrichmentStore
+from owlbear_knowledge.stores.graph import SqliteGraphStore
 from owlbear_knowledge.stores.sources import SqliteSourceStore
 
 from ._consolidation import (
@@ -492,6 +495,8 @@ class AppContext:
     graph_store: GraphStore | None
     ingest_pipeline: IngestPipeline | None
     source_store: KnowledgeSourceStore | None
+    query_facade: QueryFacade | None = None
+    graph_store_v2: SqliteGraphStore | None = None
     content_store: ContentStore | None = None
     enrichment_store: EnrichmentStore | None = None
     source_store_v2: SqliteSourceStore | None = None
@@ -567,12 +572,14 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
         doc_store = DocumentStore(conn, gs, vs, emb)
         chunker = TextChunker()
         source_store_v2 = SqliteSourceStore(conn)
+        graph_store_v2 = SqliteGraphStore(conn)
         content_store = ContentStore(
             db=conn,
             vector_store=vs,
             embedding_provider=emb,
             chunker=chunker,
         )
+        query_facade = QueryFacade(content=content_store, graph=graph_store_v2)
         enrichment_store = EnrichmentStore(db=conn, graph=gs)
         ingest_coordinator = IngestCoordinator(
             sources=source_store_v2,
@@ -581,6 +588,7 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
             graph=gs,
         )
         source_store_v2.ensure_tables()
+        graph_store_v2.ensure_tables()
         content_store.ensure_tables()
         enrichment_store.ensure_tables()
         pipeline = IngestPipeline(
@@ -599,6 +607,8 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
             conn=conn,
             query_service=qs,
             graph_store=gs,
+            query_facade=query_facade,
+            graph_store_v2=graph_store_v2,
             vector_store=vs,
             ingest_pipeline=pipeline,
             source_store=source_store,
@@ -742,6 +752,7 @@ __all__ = [
     "get_stats",
     "ingest_document",
     "init_db",
+    "knowledge_entity_lookup",
     "knowledge_register_source",
     "list_entities",
     "list_sources",
@@ -766,29 +777,69 @@ async def search_knowledge(
 ) -> list[SearchResult] | str:
     """Search the knowledge base for relevant context."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    qs = app_ctx.query_service
-    if qs is None:
+    query_facade = getattr(app_ctx, "__dict__", {}).get("query_facade")
+    if query_facade is None and "query_facade" not in getattr(app_ctx, "__dict__", {}):
+        qs = app_ctx.query_service
+        if qs is None:
+            return "error: Knowledge service not available."
+        limit = _normalize_read_limit(limit)
+        normalized_scopes = _normalize_scope_list(scopes)
+        try:
+            results = await qs.query(query, top_k=limit, scopes=normalized_scopes)
+        except KnowledgeQueryError as exc:
+            return f"error: {exc}"
+
+        serialized: list[SearchResult] = []
+        for item in results:
+            retrieval_path = getattr(item, "retrieval_path", "vector")
+            serialized.append(
+                {
+                    "title": item.title,
+                    "score": item.score,
+                    "snippet": item.snippet,
+                    "entity_type": item.entity_type,
+                    "retrieval_path": retrieval_path if isinstance(retrieval_path, str) else "vector",
+                    "graph_context": _serialize_graph_context(getattr(item, "graph_context", "")),
+                    "entities": _serialize_search_entities(getattr(item, "entities", [])),
+                    "related_sources": _serialize_related_sources(getattr(item, "related_sources", [])),
+                    "source": _serialize_source(getattr(item, "source", None)),
+                }
+            )
+        return serialized
+
+    if query_facade is None:
         return "error: Knowledge service not available."
     limit = _normalize_read_limit(limit)
-    scopes = _normalize_scope_list(scopes)
+    normalized_scopes = _normalize_scope_list(scopes)
     try:
-        results = await qs.query(query, top_k=limit, scopes=scopes)
-    except KnowledgeQueryError as exc:
-        return f"error: {exc}"
+        request = QueryRequest(
+            text=query,
+            top_k=limit,
+            scopes=tuple(normalized_scopes or ()),
+        )
+        result = await query_facade.search(request)
+    except ValueError as exc:
+        raise ToolError(str(exc)) from exc
+
+    provenance_by_chunk: dict[str, tuple[str, str]] = {
+        item.chunk_id: (item.title, item.source_id) for item in result.provenance
+    }
+
     serialized: list[SearchResult] = []
-    for r in results:
-        retrieval_path = getattr(r, "retrieval_path", "vector")
+    for item in result.search_results:
+        chunk = item.chunk
+        title, source_id = provenance_by_chunk.get(chunk.id, ("", ""))
         serialized.append(
             {
-                "title": r.title,
-                "score": r.score,
-                "snippet": r.snippet,
-                "entity_type": r.entity_type,
-                "retrieval_path": (retrieval_path if isinstance(retrieval_path, str) else "vector"),
-                "graph_context": _serialize_graph_context(getattr(r, "graph_context", "")),
-                "entities": _serialize_search_entities(getattr(r, "entities", [])),
-                "related_sources": _serialize_related_sources(getattr(r, "related_sources", [])),
-                "source": _serialize_source(getattr(r, "source", None)),
+                "title": title,
+                "score": item.score,
+                "snippet": chunk.text,
+                "entity_type": None,
+                "retrieval_path": "vector",
+                "graph_context": _serialize_graph_context(""),
+                "entities": _serialize_search_entities([]),
+                "related_sources": _serialize_related_sources([]),
+                "source": {"name": source_id, "url": ""},
             }
         )
     return serialized
@@ -798,28 +849,96 @@ async def search_knowledge(
 async def list_sources(ctx: Context, scope: str | None = None) -> list[SourceInfo]:
     """List all registered knowledge sources."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    store = app_ctx.source_store
+    store = app_ctx.source_store_v2
     if store is None:
-        msg = "source store not available"
+        msg = "source store v2 not available"
         raise ToolError(msg)
     scope = _normalize_optional_scope(scope)
-    sources = await asyncio.to_thread(store.list_all, scope=scope)
+    sources = await asyncio.to_thread(store.list_sources, scope=scope)
     return [
         {
             "id": s.id,
             "name": s.name,
-            "source_type": str(s.source_type),
+            "source_type": str(getattr(s, "kind", "")),
             "scope": s.scope,
-            "last_refreshed_at": s.last_refreshed_at,
-            "last_checked_at": s.last_checked_at,
-            "last_error": _sanitize_error(s.last_error),
-            "enabled": s.enabled,
-            "refreshable": s.refreshable,
-            "enrich": s.enrich,
-            "fetch_method": s.fetch_method,
+            "last_refreshed_at": getattr(s, "last_refreshed_at", None),
+            "last_checked_at": getattr(s, "last_checked_at", None),
+            "last_error": _sanitize_error(getattr(s, "last_error", None)),
+            "enabled": bool(getattr(s, "state", "") == "active"),
+            "refreshable": bool(getattr(s, "refreshable", False)),
+            "enrich": bool(getattr(s, "enrich", False)),
+            "fetch_method": str(getattr(s, "fetch_method", "")),
         }
         for s in sources
     ]
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
+async def knowledge_entity_lookup(
+    ctx: Context,
+    entity_id: str | None = None,
+    entity_name: str | None = None,
+    entity_type: str | None = None,
+    expand_hops: int = 1,
+) -> dict[str, Any]:
+    """Look up a graph entity and neighborhood through QueryFacade."""
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    query_facade = app_ctx.query_facade
+    if query_facade is None:
+        msg = "query facade not available"
+        raise ToolError(msg)
+
+    try:
+        request = EntityLookupRequest(
+            entity_id=entity_id,
+            entity_name=entity_name,
+            entity_type=entity_type,
+            expand_hops=expand_hops,
+        )
+        result = query_facade.lookup_entity(request)
+    except (ValidationError, ValueError, LookupError) as exc:
+        raise ToolError(str(exc)) from exc
+
+    neighborhood = result.neighbourhood
+    return {
+        "entity": {
+            "id": getattr(result.entity, "id", ""),
+            "name": getattr(result.entity, "name", ""),
+            "entity_type": str(getattr(result.entity, "entity_type", "")),
+            "description": getattr(result.entity, "description", ""),
+        },
+        "neighbourhood": {
+            "entities": [
+                {
+                    "id": item.id,
+                    "name": item.name,
+                    "entity_type": str(item.entity_type),
+                }
+                for item in (neighborhood.entities if neighborhood is not None else ())
+            ],
+            "edges": [
+                {
+                    "id": item.id,
+                    "source_entity_id": item.source_entity_id,
+                    "target_entity_id": item.target_entity_id,
+                    "relation_type": str(item.relation_type),
+                    "weight": item.weight,
+                }
+                for item in (neighborhood.edges if neighborhood is not None else ())
+            ],
+        },
+        "related_chunks": [
+            {
+                "id": chunk.id,
+                "document_id": chunk.document_id,
+                "source_id": chunk.source_id,
+                "text": chunk.text,
+                "scope": chunk.scope,
+                "uri": chunk.uri,
+            }
+            for chunk in result.related_chunks
+        ],
+    }
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
@@ -974,22 +1093,19 @@ async def list_entities(
 async def get_stats(ctx: Context) -> StatsResult:
     """Get knowledge base summary statistics."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    gs = app_ctx.graph_store
+    coordinator = app_ctx.ingest_coordinator
+    enrichment_store = app_ctx.enrichment_store
     conn = app_ctx.conn
-    if gs is None:
-        msg = "graph store not available"
+    if coordinator is None:
+        msg = "ingest coordinator not available"
         raise ToolError(msg)
-    doc_count, entity_count, edge_count = gs.get_counts()
+    if enrichment_store is None:
+        msg = "enrichment store not available"
+        raise ToolError(msg)
 
-    total_sources = conn.execute("SELECT COUNT(*) FROM knowledge_sources").fetchone()[0]
-    total_chunks = conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
-    enriched_chunks = conn.execute("SELECT COUNT(*) FROM chunks WHERE enrichment_state = 'enriched'").fetchone()[0]
-    state_counts = {
-        str(row[0] or "pending"): int(row[1])
-        for row in conn.execute(
-            "SELECT COALESCE(enrichment_state, 'pending'), COUNT(*) FROM chunks GROUP BY enrichment_state"
-        ).fetchall()
-    }
+    ingest_stats = coordinator.stats()
+    enrichment_stats = enrichment_store.stats()
+
     now_iso = datetime.now(tz=UTC).isoformat()
     claimable_row = conn.execute(
         """
@@ -1010,19 +1126,21 @@ async def get_stats(ctx: Context) -> StatsResult:
         """,
         (now_iso,),
     ).fetchone()
-    chunks_enriched_ratio = float(enriched_chunks) / float(total_chunks) if total_chunks else 0.0
+    total_chunks = ingest_stats.chunks_total
+    chunks_enriched = enrichment_stats.completed
+    chunks_enriched_ratio = float(chunks_enriched) / float(total_chunks) if total_chunks else 0.0
     consolidation_candidates_remaining = _count_consolidation_candidates(conn)
 
     return {
-        "documents": doc_count,
-        "entities": entity_count,
-        "edges": edge_count,
-        "total_sources": total_sources,
+        "documents": ingest_stats.documents_total,
+        "entities": ingest_stats.graph_entities,
+        "edges": ingest_stats.graph_edges,
+        "total_sources": ingest_stats.sources_total,
         "total_chunks": total_chunks,
-        "chunks_pending": state_counts.get("pending", 0),
-        "chunks_claimed": state_counts.get("claimed", 0),
-        "chunks_failed": state_counts.get("failed", 0),
-        "chunks_enriched": state_counts.get("enriched", 0),
+        "chunks_pending": enrichment_stats.pending,
+        "chunks_claimed": enrichment_stats.in_progress,
+        "chunks_failed": enrichment_stats.failed,
+        "chunks_enriched": chunks_enriched,
         "chunks_claimable": int(claimable_row[0] if claimable_row is not None else 0),
         "chunks_enriched_ratio": chunks_enriched_ratio,
         "consolidation_candidates_remaining": consolidation_candidates_remaining,
