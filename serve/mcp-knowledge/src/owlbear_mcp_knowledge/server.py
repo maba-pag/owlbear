@@ -10,12 +10,12 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, TypedDict
+from typing import TYPE_CHECKING, Any
+from uuid import uuid4
 
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
-from pydantic import ValidationError
 
 from owlbear_knowledge.chunker import TextChunker
 from owlbear_knowledge.document_store import DocumentStore
@@ -27,25 +27,6 @@ from owlbear_knowledge.graph_store import GraphStore
 from owlbear_knowledge.ingest import IngestPipeline
 from owlbear_knowledge.ingest_coordinator import IngestCoordinator
 from owlbear_knowledge.models import EntityType
-from owlbear_knowledge.protocols.common import (
-    EntityType as ProtocolEntityType,
-)
-from owlbear_knowledge.protocols.common import (
-    RelationType as ProtocolRelationType,
-)
-from owlbear_knowledge.protocols.enrichment import (
-    EnrichmentParams,
-    ExtractedEntity,
-    ExtractedRelation,
-)
-from owlbear_knowledge.protocols.ingest import IngestDocument, IngestRequest
-from owlbear_knowledge.protocols.sources import (
-    FetchTransport,
-    InlineConfig,
-    SourceKind,
-    SourceRegistration,
-    SourceState,
-)
 from owlbear_knowledge.qdrant import QdrantVectorStore
 from owlbear_knowledge.query_service import KnowledgeQueryError, KnowledgeQueryService
 from owlbear_knowledge.refresh import RefreshOrchestrator
@@ -62,7 +43,9 @@ from ._consolidation import (
     _fetch_consolidation_candidate_rows,
     _persist_phase2_enrichment,
 )
+from ._enrichment import _mark_failed_chunk_claim, _persist_phase1_enrichment
 from ._helpers import (
+    _extract_section_path,
     _normalize_batch_limit,
     _normalize_enrichment_items,
     _normalize_optional_read_limit,
@@ -153,57 +136,76 @@ async def get_next_batch(ctx: Context, limit: int = 10) -> list[EnrichmentChunk]
     is stale (>10 minutes). Chunks from sources with enrich=0 are excluded.
     """
     app_ctx: AppContext = ctx.request_context.lifespan_context
+    conn = app_ctx.conn
     limit = _normalize_batch_limit(limit)
-    batch = app_ctx.enrichment_store.claim_batch(EnrichmentParams(batch_size=limit))
+    now = datetime.now(tz=UTC)
+    now_iso = now.isoformat()
+    claim_token = uuid4().hex
 
-    doc_titles: dict[str, str] = {}
-    source_names: dict[str, str] = {}
-    response: list[EnrichmentChunk] = []
+    conn.execute("PRAGMA busy_timeout = 5000")
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        rows = conn.execute(
+            """
+            SELECT
+                c.id,
+                c.content,
+                d.title,
+                c.metadata,
+                ks.name,
+                d.id,
+                d.source_id,
+                d.scope
+            FROM chunks AS c
+            JOIN documents AS d ON d.id = c.document_id
+            JOIN knowledge_sources AS ks ON ks.id = d.source_id
+                        WHERE ks.enrich = 1
+                            AND ks.enabled = 1
+              AND (
+                c.enrichment_state = 'pending'
+                OR (
+                    c.enrichment_state = 'claimed'
+                    AND c.claimed_at IS NOT NULL
+                                        AND (strftime('%s', ?) - strftime('%s', c.claimed_at)) > 600
+                )
+              )
+            ORDER BY c.created_at ASC, c.id ASC
+            LIMIT ?
+            """,
+            (now_iso, limit),
+        ).fetchall()
 
-    for item in batch.items:
-        chunk = app_ctx.content_store.get_chunk(item.chunk_id)
-        if chunk is None:
-            continue
+        if rows:
+            chunk_ids = [row[0] for row in rows]
+            placeholders = ",".join("?" for _ in chunk_ids)
+            update_sql = (
+                "UPDATE chunks SET enrichment_state='claimed', claimed_at=?, claim_token=? "  # noqa: S608
+                f"WHERE id IN ({placeholders})"
+            )
+            conn.execute(
+                update_sql,
+                (now_iso, claim_token, *chunk_ids),
+            )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
 
-        document_id = chunk.document_id
-        source_id = item.source_id
-
-        if document_id not in doc_titles:
-            document = app_ctx.content_store.get_document(document_id)
-            title = getattr(document, "title", "")
-            doc_titles[document_id] = title if isinstance(title, str) else ""
-
-        if source_id not in source_names:
-            source = app_ctx.source_store_v2.get_source(source_id)
-            name = getattr(source, "name", "")
-            source_names[source_id] = name if isinstance(name, str) else ""
-
-        section_parts = getattr(chunk, "section_path", None)
-        section_path = "/".join(section_parts) if section_parts else None
-
-        scope = getattr(chunk, "scope", None)
-        claimed_at = (
-            item.started_at.isoformat()
-            if isinstance(item.started_at, datetime)
-            else datetime.now(tz=UTC).isoformat()
-        )
-
-        response.append(
-            {
-                "chunk_id": item.chunk_id,
-                "text": chunk.text,
-                "doc_title": doc_titles[document_id],
-                "section_path": section_path,
-                "source_name": source_names[source_id],
-                "document_id": document_id,
-                "source_id": source_id,
-                "scope": scope if isinstance(scope, str) and scope else "global",
-                "claim_token": batch.batch_id,
-                "claimed_at": claimed_at,
-            }
-        )
-
-    return response
+    return [
+        {
+            "chunk_id": row[0],
+            "text": row[1],
+            "doc_title": row[2] if isinstance(row[2], str) else "",
+            "section_path": _extract_section_path(row[3]),
+            "source_name": row[4] if isinstance(row[4], str) else "",
+            "document_id": row[5],
+            "source_id": row[6],
+            "scope": row[7] if isinstance(row[7], str) and row[7] else "global",
+            "claim_token": claim_token,
+            "claimed_at": now_iso,
+        }
+        for row in rows
+    ]
 
 
 async def store_enrichment(  # noqa: PLR0913
@@ -223,8 +225,6 @@ async def store_enrichment(  # noqa: PLR0913
         msg = "provide exactly one of chunk_id or candidate_id"
         raise ToolError(msg)
 
-    _ = claim_token
-
     if chunk_id is None:
         edge_rows = _normalize_enrichment_items(edges, field_name="edges")
         conn.execute("PRAGMA busy_timeout = 5000")
@@ -241,127 +241,36 @@ async def store_enrichment(  # noqa: PLR0913
             raise
         conn.commit()
         return
-    enrichment_store = app_ctx.enrichment_store
-    if enrichment_store is None:
-        msg = "enrichment store not available"
-        raise ToolError(msg)
 
-    entity_rows = _normalize_enrichment_items(entities, field_name="entities")
-    edge_rows = _normalize_enrichment_items(edges, field_name="edges")
-
+    conn.execute("PRAGMA busy_timeout = 5000")
+    conn.execute("BEGIN IMMEDIATE")
     try:
-        parsed_entities = tuple(_parse_extracted_entity(item) for item in entity_rows)
-        parsed_relations = tuple(_parse_extracted_relation(item) for item in edge_rows)
-    except (ToolError, ValidationError, ValueError, TypeError, KeyError) as exc:
-        error_str = str(exc)
+        entity_rows = _normalize_enrichment_items(entities, field_name="entities")
+        edge_rows = _normalize_enrichment_items(edges, field_name="edges")
+        _persist_phase1_enrichment(
+            conn,
+            chunk_id=chunk_id,
+            claim_token=claim_token,
+            entities=entity_rows,
+            edges=edge_rows,
+            now_iso=now_iso,
+        )
+    except Exception as exc:
+        conn.rollback()
+        conn.execute("BEGIN IMMEDIATE")
         try:
-            enrichment_store.mark_failed(chunk_id, error_str)
-        except LookupError:
-            logger.debug("chunk %s was not in progress during parse failure mark", chunk_id)
-        raise ToolError(error_str) from exc
-
-    try:
-        enrichment_store.submit_extractions(chunk_id, parsed_entities, parsed_relations)
-    except LookupError as exc:
-        raise ToolError(str(exc)) from exc
-
-
-def _parse_extracted_entity(entity: dict[str, Any]) -> ExtractedEntity:
-    """Map a phase-1 entity payload into ExtractedEntity for submit_extractions."""
-    local_ref_raw = entity.get("id")
-    if not isinstance(local_ref_raw, str) or not local_ref_raw.strip():
-        msg = "entity id is required"
-        raise ValueError(msg)
-
-    name_raw = entity.get("name")
-    if not isinstance(name_raw, str) or not name_raw.strip():
-        msg = "entity name is required"
-        raise ValueError(msg)
-
-    entity_type = _parse_protocol_entity_type(entity)
-    description_raw = entity.get("description", "")
-    if not isinstance(description_raw, str):
-        msg = "entity description must be a string"
-        raise TypeError(msg)
-
-    metadata_raw = entity.get("metadata", {})
-    metadata = metadata_raw if isinstance(metadata_raw, dict) else {}
-    confidence_raw = entity.get("confidence", 1.0)
-    confidence = float(confidence_raw)
-
-    return ExtractedEntity(
-        local_ref=local_ref_raw.strip(),
-        name=name_raw.strip(),
-        entity_type=entity_type,
-        description=description_raw,
-        confidence=confidence,
-        metadata=metadata,
-    )
-
-
-def _parse_protocol_entity_type(entity: dict[str, Any]) -> ProtocolEntityType:
-    """Validate entity_type against the protocol enum used by ExtractedEntity."""
-    raw = entity.get("entity_type")
-    if not isinstance(raw, str) or not raw.strip():
-        alias_raw = entity.get("type")
-        raw = alias_raw if isinstance(alias_raw, str) else ""
-    if not isinstance(raw, str) or not raw.strip():
-        return ProtocolEntityType.CONCEPT
-
-    value = raw.strip().lower()
-    try:
-        return ProtocolEntityType(value)
-    except ValueError as exc:
-        valid = ", ".join(item.value for item in ProtocolEntityType)
-        msg = f"unsupported entity_type {value!r}; valid values: {valid}"
-        raise ValueError(msg) from exc
-
-
-def _parse_extracted_relation(edge: dict[str, Any]) -> ExtractedRelation:
-    """Map a phase-1 edge payload into ExtractedRelation for submit_extractions."""
-    source_ref_raw = edge.get("source_id")
-    if not isinstance(source_ref_raw, str) or not source_ref_raw.strip():
-        msg = "edge source_id is required"
-        raise ValueError(msg)
-
-    target_ref_raw = edge.get("target_id")
-    if not isinstance(target_ref_raw, str) or not target_ref_raw.strip():
-        msg = "edge target_id is required"
-        raise ValueError(msg)
-
-    relation_type = _parse_protocol_relation_type(edge)
-    metadata_raw = edge.get("metadata", {})
-    metadata = metadata_raw if isinstance(metadata_raw, dict) else {}
-    weight_raw = edge.get("weight", 1.0)
-    confidence_raw = edge.get("confidence", 1.0)
-
-    return ExtractedRelation(
-        source_ref=source_ref_raw.strip(),
-        target_ref=target_ref_raw.strip(),
-        relation_type=relation_type,
-        weight=float(weight_raw),
-        confidence=float(confidence_raw),
-        metadata=metadata,
-    )
-
-
-def _parse_protocol_relation_type(edge: dict[str, Any]) -> ProtocolRelationType:
-    """Validate relation/relationship against the protocol enum used by ExtractedRelation."""
-    raw = edge.get("relation")
-    if not isinstance(raw, str) or not raw.strip():
-        alias_raw = edge.get("relationship")
-        raw = alias_raw if isinstance(alias_raw, str) else ""
-    if not isinstance(raw, str) or not raw.strip():
-        msg = "edge relation is required (use 'relation' or 'relationship')"
-        raise ValueError(msg)
-
-    value = raw.strip().lower()
-    try:
-        return ProtocolRelationType(value)
-    except ValueError as exc:
-        valid = ", ".join(item.value for item in ProtocolRelationType)
-        msg = f"unsupported edge relation {value!r}; valid values: {valid}"
-        raise ValueError(msg) from exc
+            _mark_failed_chunk_claim(
+                conn,
+                chunk_id=chunk_id,
+                claim_token=claim_token,
+                reason=str(exc),
+                now_iso=now_iso,
+            )
+            conn.commit()
+        except sqlite3.Error:
+            conn.rollback()
+        raise
+    conn.commit()
 
 
 async def retry_failed_enrichment(
@@ -490,16 +399,6 @@ class AppContext:
     refresh_orchestrator: RefreshOrchestrator | None = None
     structured_extractor: object | None = None
     intra_doc_builder: IntraDocGraphBuilder | None = None
-
-
-class RegisteredSourceResult(TypedDict):
-    """Serialized source fields returned by knowledge_register_source."""
-
-    id: str
-    name: str
-    state: str
-    kind: str
-    scope: str
 
 
 def _apply_tool_exclusions(server: FastMCP) -> set[str]:
@@ -732,7 +631,6 @@ __all__ = [
     "get_stats",
     "ingest_document",
     "init_db",
-    "knowledge_register_source",
     "list_entities",
     "list_sources",
     "mcp",
@@ -813,55 +711,6 @@ async def list_sources(ctx: Context, scope: str | None = None) -> list[SourceInf
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
-async def knowledge_register_source(  # noqa: PLR0913
-    ctx: Context,
-    name: str,
-    kind: str,
-    fetch_method: str,
-    config: dict[str, Any],
-    *,
-    scope: str = "global",
-    enrich: bool = False,
-    refreshable: bool = True,
-    priority: int = 0,
-    metadata: dict[str, Any] | None = None,
-) -> RegisteredSourceResult:
-    """Register a source in the v2 source store."""
-    app_ctx: AppContext = ctx.request_context.lifespan_context
-    store = app_ctx.source_store_v2
-    if store is None:
-        msg = "source store v2 not available"
-        raise ToolError(msg)
-
-    try:
-        registration = SourceRegistration.model_validate(
-            {
-                "name": name,
-                "kind": kind,
-                "fetch_method": fetch_method,
-                "config": config,
-                "scope": scope,
-                "enrich": enrich,
-                "refreshable": refreshable,
-                "priority": priority,
-                "metadata": {} if metadata is None else metadata,
-            },
-            strict=False,
-        )
-    except ValidationError as exc:
-        raise ToolError(str(exc)) from exc
-
-    source = await asyncio.to_thread(store.register_source, registration)
-    return {
-        "id": str(source.id),
-        "name": str(source.name),
-        "state": str(source.state),
-        "kind": str(source.kind),
-        "scope": str(source.scope),
-    }
-
-
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
 async def ingest_document(
     ctx: Context,
     text: str,
@@ -871,61 +720,27 @@ async def ingest_document(
 ) -> str:
     """Ingest a text document into the knowledge base."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    coordinator = app_ctx.ingest_coordinator
-    source_store = app_ctx.source_store_v2
-    if coordinator is None:
-        return "error: ingest coordinator not available"
-    if source_store is None:
-        return "error: source store v2 not available"
-
+    pipeline = app_ctx.ingest_pipeline
+    if pipeline is None:
+        return "error: ingest pipeline not available"
     try:
-        source_name = f"mcp-inline-{scope}"
-        # SourceStore shares the app lifespan SQLite connection; keep operations
-        # on the request thread to avoid cross-thread SQLite access errors.
-        sources = source_store.list_sources(
+        result = await pipeline.ingest_text(
+            text,
+            metadata=metadata,
             scope=scope,
-            state=SourceState.ACTIVE,
+            source_url=source_url,
         )
-        source = next(
-            (item for item in sources if item.name == source_name and item.kind == SourceKind.INLINE),
-            None,
-        )
-        if source is None:
-            source = source_store.register_source(
-                SourceRegistration(
-                    name=source_name,
-                    kind=SourceKind.INLINE,
-                    fetch_method=FetchTransport.NONE,
-                    config=InlineConfig(),
-                    scope=scope,
-                    enrich=True,
-                    refreshable=False,
-                ),
-            )
-
-        document_metadata = metadata or {}
-        request = IngestRequest(
-            source_id=source.id,
-            documents=(
-                IngestDocument(
-                    title=document_metadata.get("title", source_url or "Untitled inline document"),
-                    text=text,
-                    uri=source_url,
-                    metadata=document_metadata,
-                ),
-            ),
-            enrich=True,
-        )
-        result = await coordinator.ingest(request)
     except Exception as exc:  # noqa: BLE001
         return f"error: ingestion failed: {exc}"
-
-    return (
-        "Ingested: "
-        f"documents_processed={result.documents_processed}, "
-        f"chunks_created={result.chunks_created}, "
-        f"chunks_enqueued={result.chunks_enqueued}"
-    )
+    else:
+        if result.status == "failed":
+            return f"error: ingestion failed for document {result.document_id}"
+        warning_text = f", warnings: {'; '.join(result.warnings)}" if result.warnings else ""
+        return (
+            f"Ingested: {result.document_id}, {result.chunk_count} chunks, "
+            f"{result.entity_count} entities, {result.edge_count} edges "
+            f"(status: {result.status}{warning_text})"
+        )
 
 
 async def list_entities(

@@ -261,6 +261,37 @@ class TestFromAC_LookupEntity:
         result = facade.lookup_entity(request)
         assert result.entity is specific
 
+    def test_lookup_empty_entity_id_treats_as_absent_takes_name_path(
+        self, facade: QueryFacade, mock_graph: MagicMock
+    ) -> None:
+        """AC1 cycle-4 boundary: entity_id='' (empty string) must be treated as absent.
+
+        The validator accepts entity_id='' + entity_name='Alice' as a valid request
+        (truthiness check: entity_id is falsy so name-path is selected).  But the
+        current _resolve_entity branches on ``is not None``, so entity_id='' enters
+        the ID-path, calls get_entity(''), gets None, and raises LookupError instead
+        of falling through to find_entities.
+
+        This test proves two things after the fix:
+          1. find_entities is called (name-path taken).
+          2. get_entity is NOT called (ID-path skipped).
+          3. The resolved entity returned by lookup_entity is exactly the entity
+             that find_entities returned (not a wrong match or None).
+
+        Fails with current code because get_entity('') returns None → LookupError,
+        so result.entity is never reached.
+        """
+        alice = _make_entity(entity_id="ent-alice", name="Alice")
+        mock_graph.find_entities.return_value = (alice,)
+        request = EntityLookupRequest(entity_id="", entity_name="Alice")
+
+        result = facade.lookup_entity(request)
+
+        # Name-path was taken: resolved entity matches what find_entities returned.
+        assert result.entity is alice
+        # ID-path was NOT taken.
+        mock_graph.get_entity.assert_not_called()
+
     # --- AC2: EntityLookupResult fields ---
 
     def test_result_neighbourhood_set_when_expand_hops_positive(
