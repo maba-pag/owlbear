@@ -426,3 +426,196 @@ class TestFromAC_RegisterSourceTool:
         assert set(result.keys()) == {"id", "name", "state", "kind", "scope"}, (
             f"Expected exactly {{id, name, state, kind, scope}}, got {set(result.keys())}"
         )
+
+    # -- AC2/AC3: store ValueError must be normalized to ToolError (retry, finding #1) ----
+
+    @pytest.mark.asyncio
+    async def test_store_valueerror_converted_to_tool_error(self) -> None:
+        """When register_source raises ValueError, tool must raise ToolError (not let it propagate)."""
+        ctx = _make_ctx()
+        ctx.request_context.lifespan_context.source_store_v2.register_source.side_effect = ValueError(
+            "kind does not match config kind"
+        )
+        with pytest.raises(ToolError):
+            await knowledge_register_source(
+                ctx,
+                name="src",
+                kind="inline",
+                fetch_method="none",
+                config={"kind": "inline"},
+            )
+
+    @pytest.mark.asyncio
+    async def test_kind_config_mismatch_raises_tool_error(self) -> None:
+        """Payload with kind=inline but config.kind=url_list must raise ToolError, not ValueError.
+
+        This is a Pydantic-valid SourceRegistration (both fields independently valid) that is
+        rejected by the real store. The MCP layer must normalize the ValueError to ToolError.
+        """
+        ctx = _make_ctx()
+        ctx.request_context.lifespan_context.source_store_v2.register_source.side_effect = ValueError(
+            "kind does not match config kind"
+        )
+        with pytest.raises(ToolError):
+            await knowledge_register_source(
+                ctx,
+                name="src",
+                kind="inline",
+                fetch_method="none",
+                config={"kind": "url_list", "urls": ["http://example.com"]},
+            )
+
+    @pytest.mark.asyncio
+    async def test_store_valueerror_tool_error_includes_detail(self) -> None:
+        """ToolError raised from store ValueError must carry the original exception's detail text."""
+        ctx = _make_ctx()
+        detail = "kind does not match config kind"
+        ctx.request_context.lifespan_context.source_store_v2.register_source.side_effect = ValueError(detail)
+        with pytest.raises(ToolError) as exc_info:
+            await knowledge_register_source(
+                ctx,
+                name="src",
+                kind="inline",
+                fetch_method="none",
+                config={"kind": "inline"},
+            )
+        assert detail in str(exc_info.value), (
+            "ToolError from store ValueError must include the original error detail text"
+        )
+
+    # -- AC2: ToolError detail text present (retry, finding #2) -----------------------
+
+    @pytest.mark.asyncio
+    async def test_invalid_kind_tool_error_includes_detail(self) -> None:
+        """ToolError for invalid kind must include descriptive detail text, not be blank or generic."""
+        ctx = _make_ctx()
+        with pytest.raises(ToolError) as exc_info:
+            await knowledge_register_source(
+                ctx,
+                name="src",
+                kind="not_a_valid_kind",
+                fetch_method="none",
+                config={"kind": "inline"},
+            )
+        assert len(str(exc_info.value)) > 0, "ToolError detail must be non-empty"
+        assert "not_a_valid_kind" in str(exc_info.value), (
+            "ToolError detail must reference the invalid input value 'not_a_valid_kind'"
+        )
+
+    @pytest.mark.asyncio
+    async def test_invalid_fetch_method_tool_error_includes_detail(self) -> None:
+        """ToolError for invalid fetch_method must include descriptive detail text."""
+        ctx = _make_ctx()
+        with pytest.raises(ToolError) as exc_info:
+            await knowledge_register_source(
+                ctx,
+                name="src",
+                kind="inline",
+                fetch_method="not_a_transport",
+                config={"kind": "inline"},
+            )
+        assert len(str(exc_info.value)) > 0, "ToolError detail must be non-empty"
+        assert "not_a_transport" in str(exc_info.value), (
+            "ToolError detail must reference the invalid input value 'not_a_transport'"
+        )
+
+    # -- AC3: enrich/refreshable/priority/metadata forwarding (retry, finding #3) ------
+
+    @pytest.mark.asyncio
+    async def test_enrich_forwarded_to_registration(self) -> None:
+        """Non-default enrich=True must be forwarded into SourceRegistration.enrich."""
+        ctx = _make_ctx()
+        app_ctx = ctx.request_context.lifespan_context
+
+        await knowledge_register_source(
+            ctx,
+            name="src",
+            kind="inline",
+            fetch_method="none",
+            config={"kind": "inline"},
+            enrich=True,
+        )
+
+        call_args = app_ctx.source_store_v2.register_source.call_args
+        registration = call_args.args[0] if call_args.args else call_args.kwargs.get("request")
+        assert registration.enrich is True, "enrich=True must be forwarded to SourceRegistration"
+
+    @pytest.mark.asyncio
+    async def test_refreshable_forwarded_to_registration(self) -> None:
+        """Non-default refreshable=False must be forwarded into SourceRegistration.refreshable."""
+        ctx = _make_ctx()
+        app_ctx = ctx.request_context.lifespan_context
+
+        await knowledge_register_source(
+            ctx,
+            name="src",
+            kind="inline",
+            fetch_method="none",
+            config={"kind": "inline"},
+            refreshable=False,
+        )
+
+        call_args = app_ctx.source_store_v2.register_source.call_args
+        registration = call_args.args[0] if call_args.args else call_args.kwargs.get("request")
+        assert registration.refreshable is False, "refreshable=False must be forwarded to SourceRegistration"
+
+    @pytest.mark.asyncio
+    async def test_priority_forwarded_to_registration(self) -> None:
+        """Non-default priority value must be forwarded into SourceRegistration.priority."""
+        ctx = _make_ctx()
+        app_ctx = ctx.request_context.lifespan_context
+
+        await knowledge_register_source(
+            ctx,
+            name="src",
+            kind="inline",
+            fetch_method="none",
+            config={"kind": "inline"},
+            priority=42,
+        )
+
+        call_args = app_ctx.source_store_v2.register_source.call_args
+        registration = call_args.args[0] if call_args.args else call_args.kwargs.get("request")
+        assert registration.priority == 42, "priority=42 must be forwarded to SourceRegistration"
+
+    @pytest.mark.asyncio
+    async def test_metadata_forwarded_to_registration(self) -> None:
+        """Custom metadata dict must be forwarded into SourceRegistration.metadata unchanged."""
+        ctx = _make_ctx()
+        app_ctx = ctx.request_context.lifespan_context
+        custom_metadata: dict[str, object] = {"author": "tester", "version": "1.0"}
+
+        await knowledge_register_source(
+            ctx,
+            name="src",
+            kind="inline",
+            fetch_method="none",
+            config={"kind": "inline"},
+            metadata=custom_metadata,
+        )
+
+        call_args = app_ctx.source_store_v2.register_source.call_args
+        registration = call_args.args[0] if call_args.args else call_args.kwargs.get("request")
+        assert registration.metadata == custom_metadata, (
+            "metadata must be forwarded to SourceRegistration unchanged"
+        )
+
+    @pytest.mark.asyncio
+    async def test_metadata_none_forwarded_as_empty_dict(self) -> None:
+        """When metadata=None (default), SourceRegistration.metadata must be {}."""
+        ctx = _make_ctx()
+        app_ctx = ctx.request_context.lifespan_context
+
+        await knowledge_register_source(
+            ctx,
+            name="src",
+            kind="inline",
+            fetch_method="none",
+            config={"kind": "inline"},
+        )
+
+        call_args = app_ctx.source_store_v2.register_source.call_args
+        registration = call_args.args[0] if call_args.args else call_args.kwargs.get("request")
+        assert registration.metadata == {}, (
+            "metadata=None must be forwarded as {} to SourceRegistration (not None)"
+        )
