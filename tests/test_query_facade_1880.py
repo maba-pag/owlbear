@@ -628,3 +628,51 @@ class TestFromAC_RenderContext:
         )
         result = facade.render_context(request)
         assert "entity-source-ref-77" in result.text
+
+    def test_render_context_truncation_no_partial_line_appended(
+        self, facade: QueryFacade
+    ) -> None:
+        """AC4 cycle-3 gap: when budget is exceeded mid-line, partial segment must not appear.
+
+        Current buggy path (render_context._build_rendered_output):
+          remaining = max_chars - current_len  # > 0
+          rendered_parts.append(segment[:remaining])  # partial line appended
+          truncated = True
+
+        After the fix, that partial-append branch is removed — incomplete lines are
+        dropped entirely.  This test fails with the current implementation because
+        segment[:50] includes "GammaLinePartial", so the assertion on line 6 of the
+        architect spec is violated:
+          assert "GammaLinePartial" not in result.text  ← FAILS with current code
+        """
+        # Three chunks: Alpha and Beta fit fully; Gamma is 600+ chars and will be cut.
+        chunks = (
+            _make_chunk("c-trunc-alpha", text="AlphaLineFull"),
+            _make_chunk("c-trunc-beta", text="BetaLineFull"),
+            _make_chunk("c-trunc-gamma", text="GammaLinePartial" + "X" * 600),
+        )
+        entity_result = EntityLookupResult(
+            entity=_make_entity("ent-trunc-t", "TruncTestEntity"),
+            neighbourhood=None,
+            related_chunks=chunks,
+        )
+        # Full-budget render: find where BetaLineFull ends in the output.
+        full_result = facade.render_context(
+            ContextRenderRequest(entity_result=entity_result, max_chars=10_000)
+        )
+        beta_end = full_result.text.index("BetaLineFull") + len("BetaLineFull")
+        # Allow 50 extra chars past BetaLineFull: enough for partial GammaLine but not all.
+        max_chars = beta_end + 50
+
+        result = facade.render_context(
+            ContextRenderRequest(entity_result=entity_result, max_chars=max_chars)
+        )
+
+        # Budget was exceeded — truncation must be flagged.
+        assert result.truncated is True
+        # TruncTestEntity was fully included; no neighbourhood entities.
+        assert result.entity_count == 1
+        # Only AlphaLineFull and BetaLineFull were fully included.
+        assert result.chunk_count == 2
+        # The partial GammaLine segment must not bleed into the rendered text.
+        assert "GammaLinePartial" not in result.text  # FAILS with current buggy code
