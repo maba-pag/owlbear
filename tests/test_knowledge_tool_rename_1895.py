@@ -274,6 +274,7 @@ class TestFromAC_DurableSuiteImports:
         "tests/test_ingest_document_coordinator_1893.py",
         "tests/test_mcp_knowledge_read_tools_1881.py",
         "tests/test_mcp_knowledge_lifespan_1888.py",
+        "tests/test_persistence_source_wiring.py",
     ]
 
     def test_all_affected_suites_collect_without_error(self) -> None:
