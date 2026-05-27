@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, TypedDict
 
 from mcp.server.fastmcp import Context, FastMCP
@@ -39,7 +40,7 @@ from owlbear_knowledge.protocols.enrichment import (
     ExtractedRelation,
 )
 from owlbear_knowledge.protocols.ingest import IngestDocument, IngestRequest
-from owlbear_knowledge.protocols.query import EntityLookupRequest, QueryRequest
+from owlbear_knowledge.protocols.query import EntityLookupRequest, QueryRequest, QueryResult
 from owlbear_knowledge.protocols.sources import (
     FetchTransport,
     InlineConfig,
@@ -768,6 +769,93 @@ __all__ = [
 _app_context: AppContext | None = None
 
 
+def _serialize_legacy_search_results(results: list[object]) -> list[SearchResult]:
+    """Serialize legacy query_service search hits into SearchResult items."""
+    serialized: list[SearchResult] = []
+    for item in results:
+        retrieval_path = getattr(item, "retrieval_path", "vector")
+        serialized.append(
+            {
+                "title": item.title,
+                "score": item.score,
+                "snippet": item.snippet,
+                "entity_type": item.entity_type,
+                "retrieval_path": retrieval_path if isinstance(retrieval_path, str) else "vector",
+                "graph_context": _serialize_graph_context(getattr(item, "graph_context", "")),
+                "entities": _serialize_search_entities(getattr(item, "entities", [])),
+                "related_sources": _serialize_related_sources(getattr(item, "related_sources", [])),
+                "source": _serialize_source(getattr(item, "source", None)),
+            }
+        )
+    return serialized
+
+
+def _serialize_query_facade_results(app_ctx: AppContext, result: QueryResult) -> list[SearchResult]:
+    """Serialize QueryFacade.search output into SearchResult items."""
+    graph_entities = []
+    graph_context = result.graph_context
+    if graph_context is not None:
+        graph_entities = [
+            {
+                "name": str(getattr(entity, "name", "")),
+                "type": str(getattr(entity, "entity_type", "")),
+            }
+            for entity in getattr(graph_context, "entities", ())
+        ]
+    serialized_entities = _serialize_search_entities(graph_entities)
+
+    graph_context_text = ""
+    if graph_context is not None:
+        entity_count = len(getattr(graph_context, "entities", ()))
+        edge_count = len(getattr(graph_context, "edges", ()))
+        graph_context_text = f"graph expansion: {entity_count} entities, {edge_count} edges"
+
+    retrieval_path = "vector+graph" if graph_context is not None else "vector"
+    provenance_by_chunk = {item.chunk_id: item for item in result.provenance}
+
+    serialized: list[SearchResult] = []
+    for item in result.search_results:
+        chunk = item.chunk
+        provenance = provenance_by_chunk.get(chunk.id)
+        title = provenance.title if provenance is not None else ""
+
+        source_name = provenance.source_id if provenance is not None else ""
+        source_obj: object = SimpleNamespace(name=source_name, url="")
+        if provenance is not None:
+            source_store_v2 = getattr(app_ctx, "source_store_v2", None)
+            if source_store_v2 is not None:
+                source_record = source_store_v2.get_source(provenance.source_id)
+                if source_record is not None:
+                    source_obj = source_record
+            if isinstance(source_obj, SimpleNamespace):
+                source_obj.url = provenance.uri or ""
+
+        related_candidates = [
+            {
+                "name": (other.title or other.source_id),
+                "relationship": "related",
+                "entity": serialized_entities[0]["name"] if serialized_entities else "",
+            }
+            for other in result.provenance
+            if other.chunk_id != chunk.id and (other.title or other.source_id)
+        ]
+
+        serialized.append(
+            {
+                "title": title,
+                "score": item.score,
+                "snippet": chunk.text,
+                "entity_type": None,
+                "retrieval_path": retrieval_path,
+                "graph_context": _serialize_graph_context(graph_context_text),
+                "entities": serialized_entities,
+                "related_sources": _serialize_related_sources(related_candidates),
+                "source": _serialize_source(source_obj),
+            }
+        )
+    return serialized
+
+
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
 async def search_knowledge(
     ctx: Context,
@@ -788,24 +876,7 @@ async def search_knowledge(
             results = await qs.query(query, top_k=limit, scopes=normalized_scopes)
         except KnowledgeQueryError as exc:
             return f"error: {exc}"
-
-        serialized: list[SearchResult] = []
-        for item in results:
-            retrieval_path = getattr(item, "retrieval_path", "vector")
-            serialized.append(
-                {
-                    "title": item.title,
-                    "score": item.score,
-                    "snippet": item.snippet,
-                    "entity_type": item.entity_type,
-                    "retrieval_path": retrieval_path if isinstance(retrieval_path, str) else "vector",
-                    "graph_context": _serialize_graph_context(getattr(item, "graph_context", "")),
-                    "entities": _serialize_search_entities(getattr(item, "entities", [])),
-                    "related_sources": _serialize_related_sources(getattr(item, "related_sources", [])),
-                    "source": _serialize_source(getattr(item, "source", None)),
-                }
-            )
-        return serialized
+        return _serialize_legacy_search_results(results)
 
     if query_facade is None:
         return "error: Knowledge service not available."
@@ -819,30 +890,9 @@ async def search_knowledge(
         )
         result = await query_facade.search(request)
     except ValueError as exc:
-        raise ToolError(str(exc)) from exc
-
-    provenance_by_chunk: dict[str, tuple[str, str]] = {
-        item.chunk_id: (item.title, item.source_id) for item in result.provenance
-    }
-
-    serialized: list[SearchResult] = []
-    for item in result.search_results:
-        chunk = item.chunk
-        title, source_id = provenance_by_chunk.get(chunk.id, ("", ""))
-        serialized.append(
-            {
-                "title": title,
-                "score": item.score,
-                "snippet": chunk.text,
-                "entity_type": None,
-                "retrieval_path": "vector",
-                "graph_context": _serialize_graph_context(""),
-                "entities": _serialize_search_entities([]),
-                "related_sources": _serialize_related_sources([]),
-                "source": {"name": source_id, "url": ""},
-            }
-        )
-    return serialized
+        msg = "invalid search request"
+        raise ToolError(msg) from exc
+    return _serialize_query_facade_results(app_ctx, result)
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
@@ -896,8 +946,12 @@ async def knowledge_entity_lookup(
             expand_hops=expand_hops,
         )
         result = query_facade.lookup_entity(request)
-    except (ValidationError, ValueError, LookupError) as exc:
-        raise ToolError(str(exc)) from exc
+    except (ValidationError, ValueError) as exc:
+        msg = "invalid entity lookup request"
+        raise ToolError(msg) from exc
+    except LookupError as exc:
+        msg = "entity not found"
+        raise ToolError(msg) from exc
 
     neighborhood = result.neighbourhood
     return {
