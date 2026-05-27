@@ -17,7 +17,8 @@ AC coverage:
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+import os
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -33,7 +34,8 @@ from owlbear_knowledge.protocols.sources import (
     SourceRegistration,
     SourceState,
 )
-from owlbear_mcp_knowledge.server import ingest_document
+from owlbear_knowledge.stores.sources import SqliteSourceStore
+from owlbear_mcp_knowledge.server import app_lifespan, ingest_document
 
 
 # ---------------------------------------------------------------------------
@@ -617,3 +619,128 @@ class TestFromAC_IngestDocumentCoordinatorWiring:
         assert "error" in result.lower(), (
             f"error string expected on register_source exception, got: {result!r}"
         )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_IngestDocumentLifespanProof
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def _lifespan_heavy_mocks(tmp_path: object) -> object:
+    """Patch heavy lifespan deps; yield a bare server mock for app_lifespan.
+
+    SqliteSourceStore is real (in-memory SQLite). Only Qdrant and embedding
+    providers are patched to avoid loading heavyweight ML dependencies.
+    """
+    server_mock = MagicMock()
+    env_overrides = {
+        "OWLBEAR_LOCAL_KB_PATH": ":memory:",
+        "OWLBEAR_QDRANT_PATH": str(tmp_path) + "/vectors",  # type: ignore[operator]
+    }
+    with (
+        patch("owlbear_mcp_knowledge.server.QdrantVectorStore"),
+        patch("owlbear_mcp_knowledge.server.BgeM3EmbeddingProvider"),
+        patch.dict(os.environ, env_overrides),
+    ):
+        yield server_mock
+
+
+class TestFromAC_IngestDocumentLifespanProof:
+    """Integration proof: ingest_document resolves/creates sources via real SqliteSourceStore.
+
+    Drives ingest_document through app_lifespan with a real in-memory SqliteSourceStore
+    (only coordinator.ingest and heavy infra deps are mocked). Required by reviewer
+    retry-2 (AC2/AC4): the task-scoped suite proves the coordinator contract via mocks;
+    this class proves the real runtime source-store wiring boundary.
+    """
+
+    @pytest.mark.asyncio
+    async def test_ingest_document_creates_inline_source_in_real_store(
+        self, _lifespan_heavy_mocks: object
+    ) -> None:
+        """ingest_document registers mcp-inline-global in real SqliteSourceStore when absent.
+
+        AC2: list_sources finds no match → register_source is called on the real store →
+        source appears in list_sources after the call with correct name and kind.
+        """
+        async with app_lifespan(_lifespan_heavy_mocks) as app_ctx:
+            assert isinstance(app_ctx.source_store_v2, SqliteSourceStore)
+
+            fake_result = MagicMock(spec=IngestResult)
+            fake_result.documents_processed = 1
+            fake_result.chunks_created = 2
+            fake_result.chunks_enqueued = 2
+            app_ctx.ingest_coordinator.ingest = AsyncMock(return_value=fake_result)
+
+            mcp_ctx = MagicMock()
+            mcp_ctx.request_context.lifespan_context = app_ctx
+
+            result = await ingest_document(mcp_ctx, text="hello world", scope="global")
+
+            assert isinstance(result, str)
+            assert "error" not in result.lower(), f"unexpected error: {result!r}"
+
+            sources = app_ctx.source_store_v2.list_sources(
+                scope="global", state=SourceState.ACTIVE
+            )
+            inline = [s for s in sources if s.name == "mcp-inline-global"]
+            assert len(inline) == 1, (
+                f"expected 1 inline source, found {len(inline)}: {inline}"
+            )
+            assert inline[0].kind == SourceKind.INLINE
+
+    @pytest.mark.asyncio
+    async def test_ingest_document_reuses_existing_inline_source(
+        self, _lifespan_heavy_mocks: object
+    ) -> None:
+        """ingest_document does not create a duplicate source on repeat calls.
+
+        AC2: second call finds source via list_sources → skips register_source →
+        exactly one source record persists in the real store.
+        """
+        async with app_lifespan(_lifespan_heavy_mocks) as app_ctx:
+            fake_result = MagicMock(spec=IngestResult)
+            fake_result.documents_processed = 1
+            fake_result.chunks_created = 1
+            fake_result.chunks_enqueued = 1
+            app_ctx.ingest_coordinator.ingest = AsyncMock(return_value=fake_result)
+
+            mcp_ctx = MagicMock()
+            mcp_ctx.request_context.lifespan_context = app_ctx
+
+            await ingest_document(mcp_ctx, text="first doc", scope="global")
+            await ingest_document(mcp_ctx, text="second doc", scope="global")
+
+            sources = app_ctx.source_store_v2.list_sources(
+                scope="global", state=SourceState.ACTIVE
+            )
+            inline = [s for s in sources if s.name == "mcp-inline-global"]
+            assert len(inline) == 1, (
+                f"expected exactly 1 source after two calls, found {len(inline)}"
+            )
+
+    @pytest.mark.asyncio
+    async def test_ingest_document_response_surfaces_coordinator_counters_real_wiring(
+        self, _lifespan_heavy_mocks: object
+    ) -> None:
+        """Response string surfaces coordinator counters under real app_lifespan wiring.
+
+        AC4: response must include documents_processed, chunks_created, chunks_enqueued
+        from the IngestResult even when source_store_v2 is a real SqliteSourceStore.
+        """
+        async with app_lifespan(_lifespan_heavy_mocks) as app_ctx:
+            fake_result = MagicMock(spec=IngestResult)
+            fake_result.documents_processed = 3
+            fake_result.chunks_created = 7
+            fake_result.chunks_enqueued = 7
+            app_ctx.ingest_coordinator.ingest = AsyncMock(return_value=fake_result)
+
+            mcp_ctx = MagicMock()
+            mcp_ctx.request_context.lifespan_context = app_ctx
+
+            result = await ingest_document(mcp_ctx, text="test content", scope="global")
+
+            assert "documents_processed=3" in result, f"missing counter in: {result!r}"
+            assert "chunks_created=7" in result, f"missing counter in: {result!r}"
+            assert "chunks_enqueued=7" in result, f"missing counter in: {result!r}"
