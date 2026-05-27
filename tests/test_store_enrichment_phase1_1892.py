@@ -371,7 +371,7 @@ class TestFromAC_ParsingFailureMarksFailed:
     @pytest.mark.asyncio
     async def test_missing_entity_id_raises_tool_error(self) -> None:
         """Entity dict without 'id' → ToolError raised."""
-        ctx, store = _make_ctx()
+        ctx, _ = _make_ctx()
         entity = {"name": "X", "entity_type": "concept"}  # no 'id'
         with pytest.raises(ToolError):
             await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=[entity], edges=[])
@@ -389,12 +389,13 @@ class TestFromAC_ParsingFailureMarksFailed:
         reported_chunk_id = args[0] if len(args) > 0 else kwargs.get("chunk_id", "")
         error_str = args[1] if len(args) > 1 else kwargs.get("error", "")
         assert reported_chunk_id == _CHUNK_ID
-        assert isinstance(error_str, str) and len(error_str) > 0
+        assert isinstance(error_str, str)
+        assert len(error_str) > 0
 
     @pytest.mark.asyncio
     async def test_missing_entity_name_raises_tool_error(self) -> None:
         """Entity dict without 'name' → ToolError raised."""
-        ctx, store = _make_ctx()
+        ctx, _ = _make_ctx()
         entity = {"id": "r1", "entity_type": "concept"}  # no 'name'
         with pytest.raises(ToolError):
             await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=[entity], edges=[])
@@ -412,12 +413,13 @@ class TestFromAC_ParsingFailureMarksFailed:
         reported_chunk_id = args[0] if len(args) > 0 else kwargs.get("chunk_id", "")
         error_str = args[1] if len(args) > 1 else kwargs.get("error", "")
         assert reported_chunk_id == _CHUNK_ID
-        assert isinstance(error_str, str) and len(error_str) > 0
+        assert isinstance(error_str, str)
+        assert len(error_str) > 0
 
     @pytest.mark.asyncio
     async def test_missing_edge_source_id_raises_tool_error(self) -> None:
         """Edge dict without 'source_id' → ToolError raised."""
-        ctx, store = _make_ctx()
+        ctx, _ = _make_ctx()
         entities = [{"id": "r1", "name": "A", "entity_type": "concept"}]
         edge = {"target_id": "r1", "relation": "related_to"}  # no 'source_id'
         with pytest.raises(ToolError):
@@ -437,12 +439,13 @@ class TestFromAC_ParsingFailureMarksFailed:
         reported_chunk_id = args[0] if len(args) > 0 else kwargs.get("chunk_id", "")
         error_str = args[1] if len(args) > 1 else kwargs.get("error", "")
         assert reported_chunk_id == _CHUNK_ID
-        assert isinstance(error_str, str) and len(error_str) > 0
+        assert isinstance(error_str, str)
+        assert len(error_str) > 0
 
     @pytest.mark.asyncio
     async def test_missing_edge_target_id_raises_tool_error(self) -> None:
         """Edge dict without 'target_id' → ToolError raised."""
-        ctx, store = _make_ctx()
+        ctx, _ = _make_ctx()
         entities = [{"id": "r1", "name": "A", "entity_type": "concept"}]
         edge = {"source_id": "r1", "relation": "related_to"}  # no 'target_id'
         with pytest.raises(ToolError):
@@ -462,12 +465,13 @@ class TestFromAC_ParsingFailureMarksFailed:
         reported_chunk_id = args[0] if len(args) > 0 else kwargs.get("chunk_id", "")
         error_str = args[1] if len(args) > 1 else kwargs.get("error", "")
         assert reported_chunk_id == _CHUNK_ID
-        assert isinstance(error_str, str) and len(error_str) > 0
+        assert isinstance(error_str, str)
+        assert len(error_str) > 0
 
     @pytest.mark.asyncio
     async def test_missing_edge_relation_and_relationship_raises_tool_error(self) -> None:
         """Edge dict with neither 'relation' nor 'relationship' → ToolError raised."""
-        ctx, store = _make_ctx()
+        ctx, _ = _make_ctx()
         entities = [{"id": "r1", "name": "A", "entity_type": "concept"}]
         edge = {"source_id": "r1", "target_id": "r1"}  # no 'relation' or 'relationship'
         with pytest.raises(ToolError):
@@ -487,7 +491,8 @@ class TestFromAC_ParsingFailureMarksFailed:
         reported_chunk_id = args[0] if len(args) > 0 else kwargs.get("chunk_id", "")
         error_str = args[1] if len(args) > 1 else kwargs.get("error", "")
         assert reported_chunk_id == _CHUNK_ID
-        assert isinstance(error_str, str) and len(error_str) > 0
+        assert isinstance(error_str, str)
+        assert len(error_str) > 0
 
 
 # ---------------------------------------------------------------------------
@@ -535,3 +540,65 @@ class TestFromAC_ExplicitFieldPassthrough:
         await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=entities, edges=[edge])
         _, _, relations_arg = _extract_submit_args(store)
         assert relations_arg[0].weight == pytest.approx(0.25)
+
+
+# ---------------------------------------------------------------------------
+# AC7 — ValueError from submit_extractions → mark_failed + ToolError
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_SubmitExtractionsValueError:
+    """AC7: ValueError from submit_extractions (unresolved ref) → mark_failed + ToolError."""
+
+    @pytest.mark.asyncio
+    async def test_value_error_from_submit_extractions_raised_as_tool_error(self) -> None:
+        """ValueError raised by submit_extractions is wrapped as ToolError, not left uncaught."""
+        store = _make_enrichment_store_mock()
+        store.submit_extractions.side_effect = ValueError(
+            "source_ref 'r1' not found in entity local_refs"
+        )
+        ctx, _ = _make_ctx(enrichment_store=store)
+        with pytest.raises(ToolError):
+            await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=[], edges=[])
+
+    @pytest.mark.asyncio
+    async def test_value_error_from_submit_extractions_calls_mark_failed(self) -> None:
+        """ValueError raised by submit_extractions causes mark_failed to be called."""
+        store = _make_enrichment_store_mock()
+        store.submit_extractions.side_effect = ValueError(
+            "target_ref 'r2' not in submitted entities"
+        )
+        ctx, _ = _make_ctx(enrichment_store=store)
+        with pytest.raises(ToolError):
+            await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=[], edges=[])
+        store.mark_failed.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_value_error_mark_failed_receives_chunk_id(self) -> None:
+        """mark_failed receives the exact chunk_id when ValueError escapes submit_extractions."""
+        store = _make_enrichment_store_mock()
+        store.submit_extractions.side_effect = ValueError("unresolved relation ref")
+        ctx, _ = _make_ctx(enrichment_store=store)
+        with pytest.raises(ToolError):
+            await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=[], edges=[])
+        call_args = store.mark_failed.call_args
+        args = call_args.args or ()
+        kwargs = call_args.kwargs or {}
+        reported_chunk_id = args[0] if len(args) > 0 else kwargs.get("chunk_id", "")
+        assert reported_chunk_id == _CHUNK_ID
+
+    @pytest.mark.asyncio
+    async def test_value_error_mark_failed_receives_error_string(self) -> None:
+        """mark_failed receives a non-empty error string describing the ValueError."""
+        store = _make_enrichment_store_mock()
+        err_msg = "source_ref 'r1' not found among submitted entity local_refs"
+        store.submit_extractions.side_effect = ValueError(err_msg)
+        ctx, _ = _make_ctx(enrichment_store=store)
+        with pytest.raises(ToolError):
+            await store_enrichment(ctx, chunk_id=_CHUNK_ID, entities=[], edges=[])
+        call_args = store.mark_failed.call_args
+        args = call_args.args or ()
+        kwargs = call_args.kwargs or {}
+        error_str = args[1] if len(args) > 1 else kwargs.get("error", "")
+        assert isinstance(error_str, str)
+        assert len(error_str) > 0
