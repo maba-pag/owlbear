@@ -1464,3 +1464,372 @@ class TestFromAC_GetStatsAllFieldsExact:
         assert result["chunks_pending"] == 2
         assert result["chunks_failed"] == 1
         assert result["chunks_enriched"] == 3
+
+
+# ---------------------------------------------------------------------------
+# Retry (cycle 4) helpers
+# ---------------------------------------------------------------------------
+
+
+def _make_slotted_populated_ctx(*, store_v2_hit: bool = True) -> tuple[object, object]:
+    """Build a populated search context using a real slotted AppContext.
+
+    Returns (facade, mcp_ctx) where facade.search returns a QueryResult with:
+    - graph_context: 2 entities (Alpha/concept, Beta/tool), 1 edge
+    - 1 search result (chunk 'c-aaa', source 'src-X')
+    - 2 provenance entries: c-aaa (main) and c-bbb (other)
+
+    store_v2_hit=True  → source_store_v2.get_source returns a SourceRecord
+    store_v2_hit=False → source_store_v2.get_source returns None (fallback branch)
+    """
+    from owlbear_mcp_knowledge.server import AppContext, init_db
+
+    entity0 = MagicMock()
+    entity0.name = "Alpha"
+    entity0.entity_type = "concept"
+
+    entity1 = MagicMock()
+    entity1.name = "Beta"
+    entity1.entity_type = "tool"
+
+    graph_ctx = MagicMock()
+    graph_ctx.entities = (entity0, entity1)
+    graph_ctx.edges = (MagicMock(),)  # 1 edge
+
+    chunk = MagicMock()
+    chunk.id = "c-aaa"
+    chunk.text = "main text"
+    chunk.source_id = "src-X"
+
+    hit = MagicMock()
+    hit.chunk = chunk
+    hit.score = 0.9
+
+    prov_main = MagicMock()
+    prov_main.chunk_id = "c-aaa"
+    prov_main.source_id = "src-X"
+    prov_main.title = "Main"
+    prov_main.uri = "https://main.example.com"
+
+    prov_other = MagicMock()
+    prov_other.chunk_id = "c-bbb"
+    prov_other.source_id = "src-Y"
+    prov_other.title = "Other"
+    prov_other.uri = "https://other.example.com"
+
+    qr = MagicMock()
+    qr.search_results = (hit,)
+    qr.graph_context = graph_ctx
+    qr.provenance = (prov_main, prov_other)
+
+    facade = MagicMock(spec=QueryFacade)
+    facade.search = AsyncMock(return_value=qr)
+
+    if store_v2_hit:
+        source_rec = MagicMock()
+        source_rec.name = "Primary Store"
+        source_rec.url = "https://store.example.com"
+        store_v2 = MagicMock()
+        store_v2.get_source = MagicMock(return_value=source_rec)
+    else:
+        store_v2 = MagicMock()
+        store_v2.get_source = MagicMock(return_value=None)
+
+    conn = init_db(":memory:")
+    app_ctx = AppContext(
+        conn=conn,
+        query_service=None,
+        graph_store=None,
+        ingest_pipeline=None,
+        source_store=None,
+        query_facade=facade,
+        source_store_v2=store_v2,
+    )
+
+    mcp_ctx = MagicMock()
+    mcp_ctx.request_context.lifespan_context = app_ctx
+    return facade, mcp_ctx
+
+
+def _make_rich_entity_lookup_result() -> MagicMock:
+    """Return mock EntityLookupResult with all sub-keys populated."""
+    result = MagicMock()
+
+    entity = MagicMock()
+    entity.id = "ent-42"
+    entity.name = "PyTest"
+    entity.entity_type = "tool"
+    entity.description = "A testing framework"
+    result.entity = entity
+
+    nb_ent = MagicMock()
+    nb_ent.id = "ent-99"
+    nb_ent.name = "Python"
+    nb_ent.entity_type = "language"
+
+    nb_edge = MagicMock()
+    nb_edge.id = "edge-11"
+    nb_edge.source_entity_id = "ent-42"
+    nb_edge.target_entity_id = "ent-99"
+    nb_edge.relation_type = "uses"
+    nb_edge.weight = 1.0
+
+    neighborhood = MagicMock()
+    neighborhood.entities = (nb_ent,)
+    neighborhood.edges = (nb_edge,)
+    result.neighbourhood = neighborhood
+
+    chunk = MagicMock()
+    chunk.id = "chunk-123"
+    chunk.document_id = "doc-1"
+    chunk.source_id = "src-A"
+    chunk.text = "Chunk text here"
+    chunk.scope = "workspace"
+    chunk.uri = "https://docs.pytest.org"
+    result.related_chunks = (chunk,)
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# AC4 (retry cycle 4) — all populated-result field assertions on real slotted AppContext
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_SlottedPopulatedSearch:
+    """AC4 (cycle 4): Populated QueryFacade result serialization proven on real slotted AppContext.
+
+    All field assertions here use a real AppContext(@dataclass, slots=True) so that
+    object.__getattribute__-based branch detection is exercised on the production path.
+    Covers both the source_store_v2 HIT branch and the MISS (fallback) branch (AC3).
+    """
+
+    @pytest.mark.asyncio
+    async def test_slotted_retrieval_path_vector_plus_graph(self) -> None:
+        """retrieval_path is 'vector+graph' when graph_context is present on slotted ctx."""
+        from owlbear_mcp_knowledge.server import search_knowledge
+
+        _, ctx = _make_slotted_populated_ctx()
+        result = await search_knowledge(ctx, query="test")
+
+        assert isinstance(result, list), f"expected list, got {type(result)}: {result!r}"
+        assert len(result) == 1
+        assert result[0]["retrieval_path"] == "vector+graph"
+
+    @pytest.mark.asyncio
+    async def test_slotted_graph_context_formatted_summary(self) -> None:
+        """graph_context is 'graph expansion: 2 entities, 1 edges' on slotted ctx."""
+        from owlbear_mcp_knowledge.server import search_knowledge
+
+        _, ctx = _make_slotted_populated_ctx()
+        result = await search_knowledge(ctx, query="test")
+
+        assert result[0]["graph_context"] == "graph expansion: 2 entities, 1 edges"
+
+    @pytest.mark.asyncio
+    async def test_slotted_entities_from_graph_traversal(self) -> None:
+        """entities list contains {name, type} dicts from graph_context on slotted ctx."""
+        from owlbear_mcp_knowledge.server import search_knowledge
+
+        _, ctx = _make_slotted_populated_ctx()
+        result = await search_knowledge(ctx, query="test")
+
+        entities = result[0]["entities"]
+        assert isinstance(entities, list)
+        assert {"name": "Alpha", "type": "concept"} in entities
+        assert {"name": "Beta", "type": "tool"} in entities
+
+    @pytest.mark.asyncio
+    async def test_slotted_related_sources_excludes_self_chunk(self) -> None:
+        """related_sources on slotted ctx: other-chunk provenance included, self excluded."""
+        from owlbear_mcp_knowledge.server import search_knowledge
+
+        _, ctx = _make_slotted_populated_ctx()
+        result = await search_knowledge(ctx, query="test")
+
+        related = result[0]["related_sources"]
+        assert isinstance(related, list)
+        assert len(related) == 1
+        assert related[0]["name"] == "Other"
+        assert related[0]["relationship"] == "related"
+
+    @pytest.mark.asyncio
+    async def test_slotted_source_from_store_v2_hit(self) -> None:
+        """Source populated from source_store_v2.get_source hit on slotted AppContext."""
+        from owlbear_mcp_knowledge.server import search_knowledge
+
+        _, ctx = _make_slotted_populated_ctx(store_v2_hit=True)
+        result = await search_knowledge(ctx, query="test")
+
+        source = result[0]["source"]
+        assert source["name"] == "Primary Store"
+        assert source["url"] == "https://store.example.com"
+
+    @pytest.mark.asyncio
+    async def test_slotted_source_fallback_when_store_v2_miss(self) -> None:
+        """When store_v2.get_source returns None: source={name: provenance.source_id, url: provenance.uri}.
+
+        Exercises the AC3 source fallback branch on a real slotted AppContext.
+        """
+        from owlbear_mcp_knowledge.server import search_knowledge
+
+        _, ctx = _make_slotted_populated_ctx(store_v2_hit=False)
+        result = await search_knowledge(ctx, query="test")
+
+        source = result[0]["source"]
+        assert source["name"] == "src-X"
+        assert source["url"] == "https://main.example.com"
+
+
+# ---------------------------------------------------------------------------
+# AC5 (retry cycle 4) — list_sources: all 11 fields + state param absence
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ListSourcesAllFields:
+    """AC5 (cycle 4): list_sources proof asserts all 11 output fields exactly."""
+
+    @pytest.mark.asyncio
+    async def test_list_sources_all_11_fields_exact_values(self) -> None:
+        """All 11 SourceInfo fields are mapped with exact controlled values.
+
+        Pins: id, name, source_type (str of kind), scope, last_refreshed_at,
+        last_checked_at, last_error (sanitized), enabled (state=='active'),
+        refreshable, enrich, fetch_method.
+        """
+        from owlbear_mcp_knowledge.server import list_sources
+
+        record = MagicMock()
+        record.id = "src-full"
+        record.name = "Full Source"
+        record.kind = "rss"
+        record.scope = "team"
+        record.state = "active"
+        record.last_refreshed_at = "2026-01-01T00:00:00Z"
+        record.last_checked_at = "2026-01-02T00:00:00Z"
+        record.last_error = None
+        record.enrich = True
+        record.refreshable = False
+        record.fetch_method = "http"
+
+        store_v2 = MagicMock()
+        store_v2.list_sources = MagicMock(return_value=(record,))
+        ctx = _make_ctx(source_store_v2=store_v2)
+
+        result = await list_sources(ctx, scope=None)
+
+        assert len(result) == 1
+        item = result[0]
+        assert item["id"] == "src-full"
+        assert item["name"] == "Full Source"
+        assert item["source_type"] == "rss"
+        assert item["scope"] == "team"
+        assert item["last_refreshed_at"] == "2026-01-01T00:00:00Z"
+        assert item["last_checked_at"] == "2026-01-02T00:00:00Z"
+        assert item["last_error"] is None
+        assert item["enabled"] is True
+        assert item["refreshable"] is False
+        assert item["enrich"] is True
+        assert item["fetch_method"] == "http"
+
+    @pytest.mark.asyncio
+    async def test_list_sources_enabled_false_when_state_not_active(self) -> None:
+        """enabled is False when state is not 'active' (e.g. 'paused')."""
+        from owlbear_mcp_knowledge.server import list_sources
+
+        record = MagicMock()
+        record.id = "src-paused"
+        record.name = "Paused Source"
+        record.kind = "file_glob"
+        record.scope = "global"
+        record.state = "paused"
+        record.last_refreshed_at = None
+        record.last_checked_at = None
+        record.last_error = None
+        record.enrich = False
+        record.refreshable = True
+        record.fetch_method = "filesystem"
+
+        store_v2 = MagicMock()
+        store_v2.list_sources = MagicMock(return_value=(record,))
+        ctx = _make_ctx(source_store_v2=store_v2)
+
+        result = await list_sources(ctx, scope=None)
+
+        assert result[0]["enabled"] is False
+
+    def test_list_sources_signature_has_no_state_param(self) -> None:
+        """list_sources function signature must NOT include a 'state' parameter."""
+        from owlbear_mcp_knowledge.server import list_sources
+
+        sig = inspect.signature(list_sources)
+        assert "state" not in sig.parameters
+
+
+# ---------------------------------------------------------------------------
+# AC6 (retry cycle 4) — knowledge_entity_lookup: full return dict structure
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_EntityLookupReturnStructure:
+    """AC6 (cycle 4): knowledge_entity_lookup return dict asserted with exact field values."""
+
+    @pytest.mark.asyncio
+    async def test_entity_lookup_entity_fields_exact(self) -> None:
+        """entity sub-dict contains id, name, entity_type (str), description with exact values."""
+        from owlbear_mcp_knowledge.server import knowledge_entity_lookup
+
+        facade = MagicMock(spec=QueryFacade)
+        facade.lookup_entity = MagicMock(return_value=_make_rich_entity_lookup_result())
+        ctx = _make_ctx(query_facade=facade)
+
+        result = await knowledge_entity_lookup(ctx, entity_id="ent-42")
+
+        assert result["entity"]["id"] == "ent-42"
+        assert result["entity"]["name"] == "PyTest"
+        assert result["entity"]["entity_type"] == "tool"
+        assert result["entity"]["description"] == "A testing framework"
+
+    @pytest.mark.asyncio
+    async def test_entity_lookup_neighbourhood_exact_shape(self) -> None:
+        """neighbourhood contains entities [{id, name, entity_type}] and edges [{id, src, tgt, rel, weight}]."""
+        from owlbear_mcp_knowledge.server import knowledge_entity_lookup
+
+        facade = MagicMock(spec=QueryFacade)
+        facade.lookup_entity = MagicMock(return_value=_make_rich_entity_lookup_result())
+        ctx = _make_ctx(query_facade=facade)
+
+        result = await knowledge_entity_lookup(ctx, entity_id="ent-42")
+
+        nb = result["neighbourhood"]
+        assert len(nb["entities"]) == 1
+        assert nb["entities"][0]["id"] == "ent-99"
+        assert nb["entities"][0]["name"] == "Python"
+        assert nb["entities"][0]["entity_type"] == "language"
+
+        assert len(nb["edges"]) == 1
+        assert nb["edges"][0]["id"] == "edge-11"
+        assert nb["edges"][0]["source_entity_id"] == "ent-42"
+        assert nb["edges"][0]["target_entity_id"] == "ent-99"
+        assert nb["edges"][0]["relation_type"] == "uses"
+        assert nb["edges"][0]["weight"] == 1.0
+
+    @pytest.mark.asyncio
+    async def test_entity_lookup_related_chunks_exact_shape(self) -> None:
+        """related_chunks is a list of {id, document_id, source_id, text, scope, uri} dicts."""
+        from owlbear_mcp_knowledge.server import knowledge_entity_lookup
+
+        facade = MagicMock(spec=QueryFacade)
+        facade.lookup_entity = MagicMock(return_value=_make_rich_entity_lookup_result())
+        ctx = _make_ctx(query_facade=facade)
+
+        result = await knowledge_entity_lookup(ctx, entity_id="ent-42")
+
+        chunks = result["related_chunks"]
+        assert len(chunks) == 1
+        assert chunks[0]["id"] == "chunk-123"
+        assert chunks[0]["document_id"] == "doc-1"
+        assert chunks[0]["source_id"] == "src-A"
+        assert chunks[0]["text"] == "Chunk text here"
+        assert chunks[0]["scope"] == "workspace"
+        assert chunks[0]["uri"] == "https://docs.pytest.org"
