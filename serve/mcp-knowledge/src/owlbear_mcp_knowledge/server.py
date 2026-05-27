@@ -880,8 +880,9 @@ async def ingest_document(
 
     try:
         source_name = f"mcp-inline-{scope}"
-        sources = await asyncio.to_thread(
-            source_store.list_sources,
+        # SourceStore shares the app lifespan SQLite connection; keep operations
+        # on the request thread to avoid cross-thread SQLite access errors.
+        sources = source_store.list_sources(
             scope=scope,
             state=SourceState.ACTIVE,
         )
@@ -890,8 +891,7 @@ async def ingest_document(
             None,
         )
         if source is None:
-            source = await asyncio.to_thread(
-                source_store.register_source,
+            source = source_store.register_source(
                 SourceRegistration(
                     name=source_name,
                     kind=SourceKind.INLINE,
