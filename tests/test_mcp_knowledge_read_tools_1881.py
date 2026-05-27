@@ -873,3 +873,292 @@ class TestFromAC_ErrorHandling:
             assert "File " not in msg
         else:
             pytest.fail("Expected ToolError was not raised")
+
+
+# ---------------------------------------------------------------------------
+# AC2 retry — populated QueryFacade result serialization (field-level proof)
+# ---------------------------------------------------------------------------
+
+# --- helpers ----------------------------------------------------------------
+
+
+def _make_populated_query_result_ctx() -> tuple[object, object]:
+    """Return (mock QueryResult, mock ctx) for populated-result serialization tests.
+
+    Layout:
+    - graph_context: 2 entities (Entity0/concept, Entity1/concept), 1 edge
+      → retrieval_path='vector+graph', graph_context text='graph expansion: 2 entities, 1 edges'
+    - search_results: one hit (chunk-abc)
+    - provenance: prov_main (chunk-abc, src-1, "Main Doc") +
+                  prov_other (chunk-xyz, src-2, "Related Doc")
+    - source_store_v2.get_source("src-1") returns a record with name/url
+    """
+    # graph context
+    entity0 = MagicMock()
+    entity0.name = "Entity0"
+    entity0.entity_type = "concept"
+    entity1 = MagicMock()
+    entity1.name = "Entity1"
+    entity1.entity_type = "concept"
+
+    graph_ctx = MagicMock()
+    graph_ctx.entities = (entity0, entity1)
+    graph_ctx.edges = (MagicMock(),)
+
+    # content hit
+    chunk = MagicMock()
+    chunk.id = "chunk-abc"
+    chunk.text = "Relevant content"
+    chunk.source_id = "src-1"
+
+    search_hit = MagicMock()
+    search_hit.chunk = chunk
+    search_hit.score = 0.87
+
+    # provenance
+    prov_main = MagicMock()
+    prov_main.chunk_id = "chunk-abc"
+    prov_main.source_id = "src-1"
+    prov_main.title = "Main Doc"
+    prov_main.uri = "https://example.com/main"
+
+    prov_other = MagicMock()
+    prov_other.chunk_id = "chunk-xyz"
+    prov_other.source_id = "src-2"
+    prov_other.title = "Related Doc"
+    prov_other.uri = "https://example.com/related"
+
+    query_result = MagicMock()
+    query_result.search_results = (search_hit,)
+    query_result.graph_context = graph_ctx
+    query_result.provenance = (prov_main, prov_other)
+
+    # source store v2 returns a real-ish source record for src-1
+    source_record = MagicMock()
+    source_record.name = "Knowledge Store"
+    source_record.url = "https://store.example.com"
+
+    store_v2 = MagicMock()
+    store_v2.get_source = MagicMock(return_value=source_record)
+
+    facade = MagicMock(spec=QueryFacade)
+    facade.search = AsyncMock(return_value=query_result)
+
+    ctx = _make_ctx(query_facade=facade, source_store_v2=store_v2)
+    return facade, ctx
+
+
+def _make_vector_only_ctx() -> tuple[object, object]:
+    """Return (mock QueryResult, mock ctx) with graph_context=None (vector path)."""
+    chunk = MagicMock()
+    chunk.id = "chunk-vec"
+    chunk.text = "Vector only text"
+    chunk.source_id = "src-v"
+
+    search_hit = MagicMock()
+    search_hit.chunk = chunk
+    search_hit.score = 0.65
+
+    prov = MagicMock()
+    prov.chunk_id = "chunk-vec"
+    prov.source_id = "src-v"
+    prov.title = "Vector Doc"
+    prov.uri = None
+
+    query_result = MagicMock()
+    query_result.search_results = (search_hit,)
+    query_result.graph_context = None
+    query_result.provenance = (prov,)
+
+    facade = MagicMock(spec=QueryFacade)
+    facade.search = AsyncMock(return_value=query_result)
+    ctx = _make_ctx(query_facade=facade)
+    return facade, ctx
+
+
+class TestFromAC_SearchResultSerialization:
+    """AC2 retry: populated QueryFacade result serializes each field correctly.
+
+    All tests exercise _serialize_query_facade_results via search_knowledge —
+    none would pass if the helper regresses on any of the pinned fields.
+    """
+
+    @pytest.mark.asyncio
+    async def test_populated_result_retrieval_path_vector_plus_graph(self) -> None:
+        """retrieval_path is 'vector+graph' when graph_context is present.
+
+        Pins: graph_context is not None → 'vector+graph' branch.
+        """
+        from owlbear_mcp_knowledge.server import search_knowledge
+
+        _, ctx = _make_populated_query_result_ctx()
+        result = await search_knowledge(ctx, query="test")
+
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert result[0]["retrieval_path"] == "vector+graph"
+
+    @pytest.mark.asyncio
+    async def test_populated_result_graph_context_formatted_string(self) -> None:
+        """graph_context is a formatted summary string with entity/edge counts.
+
+        Pins: graph_context = 'graph expansion: 2 entities, 1 edges' (2 entities, 1 edge).
+        """
+        from owlbear_mcp_knowledge.server import search_knowledge
+
+        _, ctx = _make_populated_query_result_ctx()
+        result = await search_knowledge(ctx, query="test")
+
+        assert result[0]["graph_context"] == "graph expansion: 2 entities, 1 edges"
+
+    @pytest.mark.asyncio
+    async def test_populated_result_entities_from_graph_traversal(self) -> None:
+        """entities list contains {name, type} dicts from graph_context.entities.
+
+        Pins: both Entity0/concept and Entity1/concept appear in entities.
+        """
+        from owlbear_mcp_knowledge.server import search_knowledge
+
+        _, ctx = _make_populated_query_result_ctx()
+        result = await search_knowledge(ctx, query="test")
+
+        entities = result[0]["entities"]
+        assert isinstance(entities, list)
+        assert {"name": "Entity0", "type": "concept"} in entities
+        assert {"name": "Entity1", "type": "concept"} in entities
+
+    @pytest.mark.asyncio
+    async def test_populated_result_related_sources_excludes_self_chunk(self) -> None:
+        """related_sources contains provenance from other chunks, not the self-chunk.
+
+        Pins: prov_other (chunk-xyz) → related; prov_main (chunk-abc) excluded.
+        """
+        from owlbear_mcp_knowledge.server import search_knowledge
+
+        _, ctx = _make_populated_query_result_ctx()
+        result = await search_knowledge(ctx, query="test")
+
+        related = result[0]["related_sources"]
+        assert isinstance(related, list)
+        assert len(related) == 1
+        assert related[0]["name"] == "Related Doc"
+        assert related[0]["relationship"] == "related"
+
+    @pytest.mark.asyncio
+    async def test_populated_result_source_from_source_store_v2(self) -> None:
+        """source field is populated from source_store_v2.get_source lookup.
+
+        Pins: source_store_v2 provides name and url; not fallen back to SimpleNamespace.
+        """
+        from owlbear_mcp_knowledge.server import search_knowledge
+
+        _, ctx = _make_populated_query_result_ctx()
+        result = await search_knowledge(ctx, query="test")
+
+        source = result[0]["source"]
+        assert isinstance(source, dict)
+        assert source["name"] == "Knowledge Store"
+        assert source["url"] == "https://store.example.com"
+
+    @pytest.mark.asyncio
+    async def test_vector_only_retrieval_path_and_empty_graph_context(self) -> None:
+        """retrieval_path is 'vector' and graph_context is '' when graph_context=None.
+
+        Pins: the 'vector' branch of retrieval_path logic.
+        """
+        from owlbear_mcp_knowledge.server import search_knowledge
+
+        _, ctx = _make_vector_only_ctx()
+        result = await search_knowledge(ctx, query="test")
+
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert result[0]["retrieval_path"] == "vector"
+        assert result[0]["graph_context"] == ""
+
+
+# ---------------------------------------------------------------------------
+# AC6 retry — exact sanitized ToolError message assertions
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ErrorMessageExact:
+    """AC6 retry: ToolError messages are exact sanitized literals, not raw exc strings.
+
+    Each test asserts the EXACT message — these would fail if the code
+    regressed from sanitized literals back to ToolError(str(exc)).
+    """
+
+    @pytest.mark.asyncio
+    async def test_search_value_error_message_is_exact_literal(self) -> None:
+        """search_knowledge ValueError → ToolError('invalid search request') — exact match.
+
+        Pins: message is the sanitized literal, not str(ValueError(...)).
+        """
+        from owlbear_mcp_knowledge.server import search_knowledge
+
+        facade = MagicMock(spec=QueryFacade)
+        facade.search = AsyncMock(
+            side_effect=ValueError("request.text must not be empty — internal detail")
+        )
+        ctx = _make_ctx(query_facade=facade)
+
+        with pytest.raises(ToolError) as exc_info:
+            await search_knowledge(ctx, query="   ")
+
+        assert str(exc_info.value) == "invalid search request"
+
+    @pytest.mark.asyncio
+    async def test_entity_lookup_value_error_message_is_exact_literal(self) -> None:
+        """lookup_entity ValueError → ToolError('invalid entity lookup request') — exact match.
+
+        Pins: message is the sanitized literal, not str(ValueError(...)).
+        """
+        from owlbear_mcp_knowledge.server import knowledge_entity_lookup
+
+        facade = MagicMock(spec=QueryFacade)
+        facade.lookup_entity = MagicMock(
+            side_effect=ValueError("some internal detail")
+        )
+        ctx = _make_ctx(query_facade=facade)
+
+        with pytest.raises(ToolError) as exc_info:
+            await knowledge_entity_lookup(ctx, entity_id="ent-1")
+
+        assert str(exc_info.value) == "invalid entity lookup request"
+
+    @pytest.mark.asyncio
+    async def test_entity_lookup_validation_error_message_is_exact_literal(self) -> None:
+        """ValidationError from EntityLookupRequest → ToolError('invalid entity lookup request').
+
+        Pins: ValidationError branch uses the same sanitized literal as ValueError branch.
+        """
+        from owlbear_mcp_knowledge.server import knowledge_entity_lookup
+
+        facade = MagicMock(spec=QueryFacade)
+        ctx = _make_ctx(query_facade=facade)
+
+        # Both entity_id and entity_name None → ValidationError from model_validator
+        with pytest.raises(ToolError) as exc_info:
+            await knowledge_entity_lookup(ctx, entity_id=None, entity_name=None)
+
+        assert str(exc_info.value) == "invalid entity lookup request"
+
+    @pytest.mark.asyncio
+    async def test_entity_lookup_error_message_is_exact_literal(self) -> None:
+        """LookupError from lookup_entity → ToolError('entity not found') — exact match.
+
+        Pins: message is the sanitized literal, not str(LookupError('entity_id not found: xyz')).
+        """
+        from owlbear_mcp_knowledge.server import knowledge_entity_lookup
+
+        facade = MagicMock(spec=QueryFacade)
+        facade.lookup_entity = MagicMock(
+            side_effect=LookupError("entity_id not found: xyz — internal path detail")
+        )
+        ctx = _make_ctx(query_facade=facade)
+
+        with pytest.raises(ToolError) as exc_info:
+            await knowledge_entity_lookup(ctx, entity_id="xyz")
+
+        assert str(exc_info.value) == "entity not found"
