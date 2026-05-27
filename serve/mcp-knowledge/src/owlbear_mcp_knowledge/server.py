@@ -750,18 +750,18 @@ __all__ = [
     "AppContext",
     "_apply_tool_exclusions",
     "app_lifespan",
-    "get_stats",
-    "ingest_document",
     "init_db",
     "knowledge_entity_lookup",
-    "knowledge_register_source",
+    "knowledge_ingest",
+    "knowledge_search",
+    "knowledge_sources_delete",
+    "knowledge_sources_list",
+    "knowledge_sources_refresh",
+    "knowledge_sources_register",
+    "knowledge_stats",
     "list_entities",
-    "list_sources",
     "mcp",
-    "refresh_source",
-    "remove_source",
     "retry_failed_enrichment",
-    "search_knowledge",
     "select_content_fetcher",
 ]
 
@@ -857,7 +857,7 @@ def _serialize_query_facade_results(app_ctx: AppContext, result: QueryResult) ->
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
-async def search_knowledge(
+async def knowledge_search(
     ctx: Context,
     query: str,
     limit: int = 5,
@@ -901,7 +901,7 @@ async def search_knowledge(
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
-async def list_sources(ctx: Context, scope: str | None = None) -> list[SourceInfo]:
+async def knowledge_sources_list(ctx: Context, scope: str | None = None) -> list[SourceInfo]:
     """List all registered knowledge sources."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     store = app_ctx.source_store_v2
@@ -1001,7 +1001,7 @@ async def knowledge_entity_lookup(
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
-async def knowledge_register_source(  # noqa: PLR0913
+async def knowledge_sources_register(  # noqa: PLR0913
     ctx: Context,
     name: str,
     kind: str,
@@ -1053,7 +1053,7 @@ async def knowledge_register_source(  # noqa: PLR0913
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
-async def ingest_document(
+async def knowledge_ingest(
     ctx: Context,
     text: str,
     metadata: dict[str, Any] | None = None,
@@ -1149,7 +1149,7 @@ async def list_entities(
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
-async def get_stats(ctx: Context) -> StatsResult:
+async def knowledge_stats(ctx: Context) -> StatsResult:
     """Get knowledge base summary statistics."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     coordinator = app_ctx.ingest_coordinator
@@ -1206,7 +1206,7 @@ async def get_stats(ctx: Context) -> StatsResult:
     }
 
 
-async def knowledge_stats(ctx: Context) -> str:
+async def _legacy_graph_stats(ctx: Context) -> str:
     """Return knowledge base statistics (callable directly with ctx for testing)."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     gs = app_ctx.graph_store
@@ -1237,7 +1237,7 @@ async def knowledge_stats_resource(ctx: Context | None = None) -> str:
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
-async def refresh_source(ctx: Context, source_id: str) -> dict | str:
+async def knowledge_sources_refresh(ctx: Context, source_id: str) -> dict | str:
     """Trigger re-ingestion of a registered knowledge source by its ID.
 
     Returns a dict with source_id, refreshed, partial, skipped, failed, errors, and warnings on
@@ -1284,7 +1284,7 @@ async def refresh_source(ctx: Context, source_id: str) -> dict | str:
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True))
-async def remove_source(ctx: Context, source_id: str) -> dict[str, Any]:
+async def knowledge_sources_delete(ctx: Context, source_id: str) -> dict[str, Any]:
     """Delete a source through ingest-coordinator purge orchestration."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     source_store = app_ctx.source_store_v2

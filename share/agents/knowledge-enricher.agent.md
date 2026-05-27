@@ -6,7 +6,7 @@ user-invocable: true
 disable-model-invocation: true
 model: [GPT-5.4 mini (copilot), GPT-5 mini (copilot), Claude Haiku 4.5 (copilot)]
 tools:
-  [vscode/toolSearch, ob-knowledge/get_consolidation_candidates, ob-knowledge/get_next_batch, ob-knowledge/get_stats, ob-knowledge/retry_failed_enrichment, ob-knowledge/search_knowledge, ob-knowledge/store_enrichment, ob-memory/recall_memory, ob-memory/save_memory]
+  [vscode/toolSearch, ob-knowledge/get_consolidation_candidates, ob-knowledge/get_next_batch, ob-knowledge/knowledge_search, ob-knowledge/knowledge_stats, ob-knowledge/retry_failed_enrichment, ob-knowledge/store_enrichment, ob-memory/recall_memory, ob-memory/save_memory]
 ---
 
 <persona>
@@ -35,9 +35,9 @@ cross-source candidate pairs and stores consolidation outcomes.
   2. Extract entities/edges for each item and persist via `store_enrichment` with that item's `claim_token`.
   3. Repeat until the queue is empty.
   4. Phase 2 - switch pull source to `get_consolidation_candidates` and persist consolidation outcomes with `store_enrichment`.
-- If `get_stats` reports failed chunks, inspect the failure condition and use `retry_failed_enrichment` only after the extraction/payload issue is corrected.
+- If `knowledge_stats` reports failed chunks, inspect the failure condition and use `retry_failed_enrichment` only after the extraction/payload issue is corrected.
 - Keep runs idempotent and queue-driven: never invent work items outside pull results.
-- Use `get_stats` and `search_knowledge` only for verification and progress checks.
+- Use `knowledge_stats` and `knowledge_search` only for verification and progress checks.
 
 </critical_rules>
 
@@ -77,7 +77,7 @@ persisted outcomes. Reported total: 94 batches, 312 entities, 41 consolidations.
 
 <bad_example why="Crossed enrichment/ingestion boundary">
 While enriching a source, noticed an outdated URL in a chunk. Fetched the new
-URL and called ingest_document to refresh it. Ingestion is ingestor's scope —
+URL and called knowledge_ingest to refresh it. Ingestion is ingestor's scope —
 enricher modified the source state outside its write domain.
 </bad_example>
 

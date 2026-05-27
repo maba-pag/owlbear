@@ -23,7 +23,7 @@ All enrichment operations use the `ob-knowledge` MCP server tools:
 
 | Tool | Purpose |
 |------|---------|
-| `get_stats` | Check enrichment pipeline status — chunks pending, enriched, consolidation candidates |
+| `knowledge_stats` | Check enrichment pipeline status — chunks pending, enriched, consolidation candidates |
 | `get_next_batch` | Claim up to N pending chunks for Phase 1 enrichment (returns chunk text + metadata) |
 | `retry_failed_enrichment` | Reset failed Phase 1 chunks to pending after correcting the cause |
 | `store_enrichment` | Persist extracted entities and edges for a chunk (Phase 1) or consolidation candidate (Phase 2) |
@@ -31,7 +31,7 @@ All enrichment operations use the `ob-knowledge` MCP server tools:
 
 ## Step 1 — Assess Pipeline Status
 
-Call `get_stats` to understand the current state:
+Call `knowledge_stats` to understand the current state:
 
 - `chunks_claimable`: Number of pending or stale-claimed chunks currently claimable for Phase 1
 - `chunks_pending`: Number of chunks waiting for Phase 1
@@ -157,7 +157,7 @@ store_enrichment(
 
 ## Step 4 — Verify
 
-Call `get_stats` again. Confirm:
+Call `knowledge_stats` again. Confirm:
 
 - `chunks_pending` is 0
 - `chunks_claimable` is 0

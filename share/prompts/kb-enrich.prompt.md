@@ -23,5 +23,5 @@ returned by `get_next_batch` when calling `store_enrichment`.
 ## Worker phases
 
 1. Phase 1: pull chunk batches and store entity/relation extraction results.
-2. If chunks fail, inspect `get_stats`, correct the extraction/payload issue, then use `retry_failed_enrichment` to requeue them.
+2. If chunks fail, inspect `knowledge_stats`, correct the extraction/payload issue, then use `retry_failed_enrichment` to requeue them.
 3. Phase 2: pull consolidation candidates and store cross-source outcomes.

@@ -10,7 +10,7 @@ Tool reference and recipes for the `ob-knowledge` MCP server, registered in `.vs
 
 ## Tool Reference
 
-### search_knowledge
+### knowledge_search
 
 Search the knowledge base for relevant context.
 
@@ -22,7 +22,7 @@ Search the knowledge base for relevant context.
 
 Returns: `list[dict]` — ranked results with `title`, `score`, `snippet`, `retrieval_path`, `graph_context`, `entities`, `related_sources`, and `source`; `graph_context` is an empty string unless graph expansion contributes context. Returns `[]` if no results, or an error string if service unavailable.
 
-### ingest_document
+### knowledge_ingest
 
 Ingest a text document into the knowledge base.
 
@@ -39,7 +39,7 @@ Behavior: direct text ingestion uses the same source/status delta detection as r
 
 If document/chunk/vector persistence succeeds but automatic per-chunk graph extraction fails for some chunks, ingestion returns `status: partial`, stores successful extraction results against their original chunk IDs, and surfaces warnings. Treat `partial` as searchable content with incomplete automatic graph extraction.
 
-### list_sources
+### knowledge_sources_list
 
 List all registered knowledge sources.
 
@@ -47,9 +47,9 @@ List all registered knowledge sources.
 |-------|------|---------|-------|
 | `scope` | str | None | Filter by scope; omit for all |
 
-Returns: `list[dict]` — source rows with `id`, `name`, `source_type`, `scope`, `last_refreshed_at`, `last_checked_at`, `last_error`, `enabled`, `refreshable`, `enrich`, and `fetch_method`; `[]` if no sources. Use `id` as the `source_id` for `refresh_source` only when `refreshable` is true.
+Returns: `list[dict]` — source rows with `id`, `name`, `source_type`, `scope`, `last_refreshed_at`, `last_checked_at`, `last_error`, `enabled`, `refreshable`, `enrich`, and `fetch_method`; `[]` if no sources. Use `id` as the `source_id` for `knowledge_sources_refresh` only when `refreshable` is true.
 
-### refresh_source
+### knowledge_sources_refresh
 
 Trigger re-ingestion of a registered knowledge source by source ID.
 
@@ -59,7 +59,7 @@ Trigger re-ingestion of a registered knowledge source by source ID.
 
 Returns: refresh result dict on success — `{"source_id": str, "refreshed": int, "partial": int, "skipped": int, "failed": int, "errors": list[str], "warnings": list[str]}` — or an `error: ...` string when refresh infrastructure is unavailable, the source is disabled, or the source is not refreshable. Raises `ToolError` when the source store is unavailable or the source ID is unknown.
 
-### remove_source
+### knowledge_sources_delete
 
 Delete a registered source and cascade its documents/chunks/graph rows after vector deletion succeeds.
 
@@ -69,7 +69,7 @@ Delete a registered source and cascade its documents/chunks/graph rows after vec
 
 Returns: deletion counts. This is destructive; use only when intentionally decommissioning stale or incorrect source content.
 
-### get_stats
+### knowledge_stats
 
 Get knowledge base summary statistics. No parameters.
 
@@ -106,7 +106,7 @@ Reset failed Phase 1 chunks back to pending so workers can retry them.
 | `limit` | int | 100 | Maximum failed chunks to reset when `chunk_ids` is omitted |
 | `scopes` | list[str] \| null | null | Optional scope filter when resetting by queue order |
 
-Returns: `{"reset": int, "remaining_failed": int}`. Use after inspecting `get_stats().chunks_failed`; it only resets chunks in `failed` state and does not alter already enriched chunks.
+Returns: `{"reset": int, "remaining_failed": int}`. Use after inspecting `knowledge_stats().chunks_failed`; it only resets chunks in `failed` state and does not alter already enriched chunks.
 
 ### get_consolidation_candidates
 
@@ -162,19 +162,19 @@ Only the tools documented in this reference are agent-callable MCP tools. Treat 
 
 | I want to... | Tool | Notes |
 |--------------|------|-------|
-| Search the knowledge base | `search_knowledge` | Natural-language query, returns ranked snippets |
-| Ingest a document | `ingest_document` | Pass text content + optional metadata |
-| List registered sources | `list_sources` | Filter by `scope` |
-| Refresh a registered source | `refresh_source` | Re-ingests one source by source ID |
-| Remove a registered source | `remove_source` | Destructive cascade delete after vector cleanup |
-| Get KB statistics | `get_stats` | Also available as resource `knowledge://stats` |
+| Search the knowledge base | `knowledge_search` | Natural-language query, returns ranked snippets |
+| Ingest a document | `knowledge_ingest` | Pass text content + optional metadata |
+| List registered sources | `knowledge_sources_list` | Filter by `scope` |
+| Refresh a registered source | `knowledge_sources_refresh` | Re-ingests one source by source ID |
+| Remove a registered source | `knowledge_sources_delete` | Destructive cascade delete after vector cleanup |
+| Get KB statistics | `knowledge_stats` | Also available as resource `knowledge://stats` |
 | Claim Phase 1 enrichment work | `get_next_batch` | Pulls and leases chunks atomically |
 | Retry failed Phase 1 chunks | `retry_failed_enrichment` | Resets failed chunks to pending |
 | Store Phase 1 enrichment | `store_enrichment` | Pass `chunk_id` and `claim_token`; marks chunk enriched |
 | Claim Phase 2 consolidation work | `get_consolidation_candidates` | Returns unresolved cross-source pairs |
 | Store Phase 2 consolidation | `store_enrichment` | Pass `candidate_id`; stores edges or marks reviewed |
 
-Sources listed by `list_sources` can be passed to `refresh_source` only when `refreshable=true`. Local file sources refresh from the workspace file path, web sources refresh through the configured fetch method, and inline direct-text sources are searchable/enrichable but intentionally non-refreshable.
+Sources listed by `knowledge_sources_list` can be passed to `knowledge_sources_refresh` only when `refreshable=true`. Local file sources refresh from the workspace file path, web sources refresh through the configured fetch method, and inline direct-text sources are searchable/enrichable but intentionally non-refreshable.
 
 ## Scope Conventions
 
@@ -208,9 +208,9 @@ Config examples per source type:
 ### Check-then-ingest (avoid duplicates)
 
 ```python
-results = search_knowledge(query="retry logic patterns")
+results = knowledge_search(query="retry logic patterns")
 if not results:
-    ingest_document(text=content, metadata={"source": ".owlbear/research/retry.md"})
+  knowledge_ingest(text=content, metadata={"source": ".owlbear/research/retry.md"})
 ```
 
 ### Delta checking
@@ -223,9 +223,9 @@ Six-step process for adding, updating, and removing knowledge sources. See `.owl
 
 1. **Register** — track where content comes from (source metadata)
 2. **Check delta** — content-hash comparison skips unchanged documents
-3. **Ingest** — `ingest_document` to chunk, extract entities, and store
+3. **Ingest** — `knowledge_ingest` to chunk, extract entities, and store
 4. **Track status** — pipeline records ingestion state and content hash
-5. **Verify** — `search_knowledge` to spot-check search relevance
+5. **Verify** — `knowledge_search` to spot-check search relevance
 6. **Remove stale** — delete source + cascade to clean up decommissioned content
 
 ## Policy: Accepted Risk
@@ -241,7 +241,7 @@ Six-step process for adding, updating, and removing knowledge sources. See `.owl
 | `OWLBEAR_KB_PATH` | `.owlbear/knowledge/local.db` | Path to SQLite knowledge database |
 | `KNOWLEDGE_TOOLS_EXCLUDE` | _(unset)_ | Comma-separated tool names to remove |
 
-`KNOWLEDGE_TOOLS_EXCLUDE` accepts registered tool names such as `search_knowledge`, `ingest_document`, `list_sources`, `get_stats`, `refresh_source`, `remove_source`, `get_next_batch`, `retry_failed_enrichment`, `get_consolidation_candidates`, and `store_enrichment`. Unknown names silently ignored.
+`KNOWLEDGE_TOOLS_EXCLUDE` accepts registered tool names such as `knowledge_search`, `knowledge_ingest`, `knowledge_sources_list`, `knowledge_stats`, `knowledge_sources_refresh`, `knowledge_sources_delete`, `get_next_batch`, `retry_failed_enrichment`, `get_consolidation_candidates`, and `store_enrichment`. Unknown names silently ignored.
 
 ## Known Gotchas
 
