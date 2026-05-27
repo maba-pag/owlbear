@@ -374,3 +374,283 @@ class TestFromAC_ResetFailedIdempotency:
         result = store.reset_failed(chunk_ids=None)
         assert result.reset == 0
         assert result.remaining_failed == 0
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_ResetFailedAttemptsClearing — AC5 (retry-cycle gap fill)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ResetFailedAttemptsClearing:
+    """AC5: attempts counter is reset to 0 on FAILED→PENDING transition."""
+
+    def test_attempts_reset_to_zero_chunk_ids_path(
+        self, store: EnrichmentStore, db: sqlite3.Connection
+    ) -> None:
+        """AC5: attempts column is 0 in enrich_queue after chunk_ids reset."""
+        _drive_to_failed(store, "c1")
+        before = db.execute(
+            "SELECT attempts FROM enrich_queue WHERE chunk_id = 'c1'"
+        ).fetchone()
+        assert before is not None
+        assert before[0] > 0  # mark_failed recorded at least one attempt
+
+        store.reset_failed(chunk_ids=("c1",))
+
+        after = db.execute(
+            "SELECT attempts FROM enrich_queue WHERE chunk_id = 'c1'"
+        ).fetchone()
+        assert after is not None
+        assert after[0] == 0
+
+    def test_attempts_reset_to_zero_bulk_path(
+        self, store: EnrichmentStore, db: sqlite3.Connection
+    ) -> None:
+        """AC5: attempts column is 0 in enrich_queue after bulk reset."""
+        _drive_to_failed(store, "c1")
+        _drive_to_failed(store, "c2")
+
+        store.reset_failed(chunk_ids=None, limit=2)
+
+        for chunk_id in ("c1", "c2"):
+            row = db.execute(
+                "SELECT attempts FROM enrich_queue WHERE chunk_id = ?",
+                (chunk_id,),
+            ).fetchone()
+            assert row is not None
+            assert row[0] == 0
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_ResetFailedBulkSourceScope — AC4 (retry-cycle gap fill)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ResetFailedBulkSourceScope:
+    """AC4: bulk path excludes disabled/non-enrich sources and honours scopes filter."""
+
+    @pytest.fixture()
+    def store_with_source_registry(
+        self, db: sqlite3.Connection
+    ) -> EnrichmentStore:
+        """EnrichmentStore backed by a db with a source_registry table."""
+        s = EnrichmentStore(db=db)
+        s.ensure_tables()
+        db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS source_registry (
+                id TEXT PRIMARY KEY,
+                state TEXT NOT NULL,
+                enrich INTEGER NOT NULL DEFAULT 0
+            )
+            """
+        )
+        db.executemany(
+            "INSERT INTO source_registry (id, state, enrich) VALUES (?, ?, ?)",
+            [
+                ("src-active-enrich", "active", 1),
+                ("src-active-noenrich", "active", 0),
+                ("src-inactive-enrich", "inactive", 1),
+            ],
+        )
+        db.commit()
+        return s
+
+    @pytest.fixture()
+    def store_with_content_chunks(
+        self, db: sqlite3.Connection
+    ) -> EnrichmentStore:
+        """EnrichmentStore backed by a db with a content_chunks table (for scope filtering)."""
+        s = EnrichmentStore(db=db)
+        s.ensure_tables()
+        db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS content_chunks (
+                id TEXT PRIMARY KEY,
+                scope TEXT
+            )
+            """
+        )
+        db.executemany(
+            "INSERT INTO content_chunks (id, scope) VALUES (?, ?)",
+            [
+                ("c-scope-a", "scope-a"),
+                ("c-scope-b", "scope-b"),
+            ],
+        )
+        db.commit()
+        return s
+
+    def test_bulk_excludes_inactive_source(
+        self, store_with_source_registry: EnrichmentStore
+    ) -> None:
+        """AC4: FAILED item from inactive source is not reset in bulk path."""
+        s = store_with_source_registry
+        _drive_to_failed(s, "c-active", "src-active-enrich")
+        _drive_to_failed(s, "c-inactive", "src-inactive-enrich")
+
+        result = s.reset_failed(chunk_ids=None)
+
+        assert result.reset == 1
+        stats = s.stats()
+        assert stats.pending == 1  # c-active reset
+        assert stats.failed == 1   # c-inactive still FAILED
+
+    def test_bulk_excludes_non_enrich_source(
+        self, store_with_source_registry: EnrichmentStore
+    ) -> None:
+        """AC4: FAILED item from active but non-enrich source is not reset."""
+        s = store_with_source_registry
+        _drive_to_failed(s, "c-enrich", "src-active-enrich")
+        _drive_to_failed(s, "c-noenrich", "src-active-noenrich")
+
+        result = s.reset_failed(chunk_ids=None)
+
+        assert result.reset == 1
+        stats = s.stats()
+        assert stats.pending == 1  # c-enrich reset
+        assert stats.failed == 1   # c-noenrich still FAILED
+
+    def test_bulk_resets_only_active_enrich_source(
+        self, store_with_source_registry: EnrichmentStore
+    ) -> None:
+        """AC4: with all three source variants only the active+enrich item is reset."""
+        s = store_with_source_registry
+        _drive_to_failed(s, "c1", "src-active-enrich")
+        _drive_to_failed(s, "c2", "src-active-noenrich")
+        _drive_to_failed(s, "c3", "src-inactive-enrich")
+
+        result = s.reset_failed(chunk_ids=None)
+
+        assert result.reset == 1
+        assert result.remaining_failed == 2
+
+    def test_bulk_scope_filter_limits_to_matching_chunks(
+        self, store_with_content_chunks: EnrichmentStore
+    ) -> None:
+        """AC4: scopes filter resets only chunks whose document scope matches."""
+        s = store_with_content_chunks
+        _drive_to_failed(s, "c-scope-a")
+        _drive_to_failed(s, "c-scope-b")
+
+        result = s.reset_failed(chunk_ids=None, scopes=("scope-a",))
+
+        assert result.reset == 1
+        stats = s.stats()
+        assert stats.pending == 1  # c-scope-a reset
+        assert stats.failed == 1   # c-scope-b still FAILED
+
+    def test_bulk_scope_filter_ignores_non_matching_scope(
+        self, store_with_content_chunks: EnrichmentStore
+    ) -> None:
+        """AC4: scopes filter that matches nothing resets nothing."""
+        s = store_with_content_chunks
+        _drive_to_failed(s, "c-scope-a")
+        _drive_to_failed(s, "c-scope-b")
+
+        result = s.reset_failed(chunk_ids=None, scopes=("scope-c",))
+
+        assert result.reset == 0
+        assert result.remaining_failed == 2
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_ResetFailedLegacyChunks — AC5, AC8 (retry-cycle gap fill)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ResetFailedLegacyChunks:
+    """AC5, AC8: mixed-schema reset_failed clears legacy chunks table state."""
+
+    @pytest.fixture()
+    def store_with_legacy_chunks(
+        self, db: sqlite3.Connection
+    ) -> EnrichmentStore:
+        """EnrichmentStore with a legacy chunks table present in the same db."""
+        s = EnrichmentStore(db=db)
+        s.ensure_tables()
+        db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS chunks (
+                id TEXT PRIMARY KEY,
+                enrichment_state TEXT NOT NULL DEFAULT 'pending',
+                claimed_at TEXT,
+                claimed_by TEXT,
+                claim_token TEXT,
+                enrichment_error TEXT,
+                enrichment_attempts INTEGER NOT NULL DEFAULT 0,
+                last_enrichment_error_at TEXT
+            )
+            """
+        )
+        db.commit()
+        return s
+
+    def test_legacy_enrichment_state_reset_to_pending(
+        self, store_with_legacy_chunks: EnrichmentStore, db: sqlite3.Connection
+    ) -> None:
+        """AC5/AC8: chunks.enrichment_state is set to 'pending' after reset_failed."""
+        db.execute(
+            "INSERT INTO chunks (id, enrichment_state, enrichment_error, enrichment_attempts)"
+            " VALUES ('c1', 'failed', 'boom', 3)"
+        )
+        db.commit()
+        _drive_to_failed(store_with_legacy_chunks, "c1")
+
+        store_with_legacy_chunks.reset_failed(chunk_ids=("c1",))
+
+        row = db.execute(
+            "SELECT enrichment_state FROM chunks WHERE id = 'c1'"
+        ).fetchone()
+        assert row is not None
+        assert row[0] == "pending"
+
+    def test_legacy_error_and_claim_fields_cleared(
+        self, store_with_legacy_chunks: EnrichmentStore, db: sqlite3.Connection
+    ) -> None:
+        """AC5/AC8: enrichment_error and all claim fields are NULL after reset."""
+        db.execute(
+            """
+            INSERT INTO chunks
+              (id, enrichment_state, enrichment_error,
+               claimed_at, claimed_by, claim_token, enrichment_attempts)
+            VALUES ('c1', 'failed', 'old error', '2025-01-01', 'agent-x', 'tok-abc', 2)
+            """
+        )
+        db.commit()
+        _drive_to_failed(store_with_legacy_chunks, "c1")
+
+        store_with_legacy_chunks.reset_failed(chunk_ids=("c1",))
+
+        row = db.execute(
+            """
+            SELECT enrichment_error, claimed_at, claimed_by, claim_token,
+                   enrichment_attempts
+            FROM chunks WHERE id = 'c1'
+            """
+        ).fetchone()
+        assert row is not None
+        assert row[0] is None  # enrichment_error
+        assert row[1] is None  # claimed_at
+        assert row[2] is None  # claimed_by
+        assert row[3] is None  # claim_token
+        assert row[4] == 0     # enrichment_attempts
+
+    def test_legacy_attempts_reset_to_zero(
+        self, store_with_legacy_chunks: EnrichmentStore, db: sqlite3.Connection
+    ) -> None:
+        """AC5/AC8: enrichment_attempts in legacy chunks table is 0 after reset."""
+        db.execute(
+            "INSERT INTO chunks (id, enrichment_state, enrichment_attempts)"
+            " VALUES ('c1', 'failed', 5)"
+        )
+        db.commit()
+        _drive_to_failed(store_with_legacy_chunks, "c1")
+
+        store_with_legacy_chunks.reset_failed(chunk_ids=("c1",))
+
+        row = db.execute(
+            "SELECT enrichment_attempts FROM chunks WHERE id = 'c1'"
+        ).fetchone()
+        assert row is not None
+        assert row[0] == 0
