@@ -1,10 +1,10 @@
 ---
 id: 1880
 title: 'Knowledge: QueryFacade — entity lookup & render'
-status: docs
+status: archived
 priority: needed
 created: 2026-05-25T19:05:09.183316+02:00
-updated: 2026-05-27T10:09:11.351357+02:00
+updated: 2026-05-27T10:52:27.317202+02:00
 tags:
   - knowledge
   - layer-2
@@ -32,7 +32,7 @@ proof_bundle: behavioral
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Objective
@@ -571,3 +571,48 @@ Mechanism: `_resolve_entity` branches on `is not None`; `entity_id=""` is not No
 - The prior AC1 blocker is closed: _resolve_entity now treats empty entity_id as absent on the lookup branch, matching the request-boundary semantics, and the task test proves both positive name-path resolution and negative ID-path exclusion.
 - The prior AC4 blocker is closed: _build_rendered_output now truncates on full-line boundaries only, and the task test proves truncated output, exact truncated counts, and absence of partial-line bleed.
 - Non-blocking: query-result graph-context rendering at serve/knowledge/src/owlbear_knowledge/query_facade.py:159-166 is code-inspected rather than isolated by a dedicated task-scoped assertion. Current AC3 proof remains sufficient because query content, dual-input inclusion, provenance, and budget handling are directly asserted.
+
+[[2026-05-27T10:23:21+02:00]]
+## Docs Gate
+
+### Checklist
+
+| Item | Result | Evidence |
+|------|--------|----------|
+| 1. README Verification | N/A — no update needed | `QueryFacade` is not exported from `serve/knowledge/src/owlbear_knowledge/__init__.py`; it is an internal class. `serve/knowledge/README.md` module-groups table reflects public exports only. No grep match for `QueryFacade`, `lookup_entity`, `render_context` in README. No drift. |
+| 2. External Attribution | N/A | Implementation is pure composition of existing protocol primitives; no external sources used or referenced in task notes. |
+| 3. Research Doc | PASS | `.owlbear/research/1880-queryfacade-entity-render.md` exists and is linked from the task body Research section. |
+| 4. Deletion Detection | N/A | No symbols deleted. Two methods (`lookup_entity`, `render_context`) added to existing module. No orphaned references introduced. |
+
+### Files Updated
+None — no public-facing docs required updating.
+
+### Scratch Cleanup
+No `.owlbear/scratch/1880-*` files exist.
+
+[[2026-05-27T10:52:27+02:00]]
+## Audit
+### Regression Detection
+- Knowledge domain (serve/knowledge/tests/, tests/test_query_facade_1879.py, tests/test_query_facade_1880.py): 65 passed, 0 failed
+- Full suite: infrastructure hang at 99% (EEEEE errors at tail); widespread pre-existing failures across unrelated domains (cockpit, enrichment, etc.) clearly unrelated to this single-domain knowledge change
+- Lint: ruff clean on all changed files
+- Regression verdict: PASS (domain clean; full-suite failures are pre-existing and unrelated)
+
+### Intent Verification
+- Scope alignment: PASS (only serve/knowledge/src/owlbear_knowledge/query_facade.py and task-scoped test changed)
+- Purpose match: PASS (implements entity lookup and render on QueryFacade per protocol)
+- Extraneous scope: none
+- Boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 4/5
+AC was specific enough to verify. Minor gaps (truncation semantics ambiguity, empty-string boundary semantics) required iterative refinement through 4 cycles, but architect responded well to reviewer feedback each time, producing clear guidance.
+
+### Commit Integrity
+- Upstream commit presence: PASS (5 commits: 5ebeb520, d0e24b83, 46ad205a, 343f20ec, 4a375bbc all properly attributed)
+- Kanban commit packaging: pending (this archive action)
+
+### Deduction Breakdown
+No deductions applied.
+
+### Confidence: 1.00
+### Action: archive
