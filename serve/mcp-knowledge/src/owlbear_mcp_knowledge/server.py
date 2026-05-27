@@ -25,6 +25,7 @@ from owlbear_knowledge.fetcher import HttpxContentFetcher
 from owlbear_knowledge.graph_builder import IntraDocGraphBuilder
 from owlbear_knowledge.graph_store import GraphStore
 from owlbear_knowledge.ingest import IngestPipeline
+from owlbear_knowledge.ingest_coordinator import IngestCoordinator
 from owlbear_knowledge.models import EntityType
 from owlbear_knowledge.qdrant import QdrantVectorStore
 from owlbear_knowledge.query_service import KnowledgeQueryError, KnowledgeQueryService
@@ -32,6 +33,9 @@ from owlbear_knowledge.refresh import RefreshOrchestrator
 from owlbear_knowledge.retrieval import GraphAugmentedRetriever
 from owlbear_knowledge.schema import init_db as _schema_init_db
 from owlbear_knowledge.source_store import KnowledgeSourceStore
+from owlbear_knowledge.stores.content import ContentStore
+from owlbear_knowledge.stores.enrichment import EnrichmentStore
+from owlbear_knowledge.stores.sources import SqliteSourceStore
 
 from ._consolidation import (
     _count_consolidation_candidates,
@@ -72,6 +76,28 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
 logger = logging.getLogger(__name__)
+
+
+class _LegacyCompatibleEventLoopPolicy(asyncio.DefaultEventLoopPolicy):
+    """Backfill pre-3.12 get_event_loop behavior for sync callers."""
+
+    def get_event_loop(self) -> asyncio.AbstractEventLoop:
+        try:
+            return super().get_event_loop()
+        except RuntimeError:
+            loop = self.new_event_loop()
+            self.set_event_loop(loop)
+            return loop
+
+
+def _install_legacy_event_loop_policy() -> None:
+    """Install an event-loop policy that recreates loops on demand."""
+    if isinstance(asyncio.get_event_loop_policy(), _LegacyCompatibleEventLoopPolicy):
+        return
+    asyncio.set_event_loop_policy(_LegacyCompatibleEventLoopPolicy())
+
+
+_install_legacy_event_loop_policy()
 
 # Backward-compatible patch target used by legacy tests; the guard is no longer wired.
 globals()["ContentInjectionGuard"] = object
@@ -365,6 +391,10 @@ class AppContext:
     graph_store: GraphStore | None
     ingest_pipeline: IngestPipeline | None
     source_store: KnowledgeSourceStore | None
+    content_store: ContentStore | None = None
+    enrichment_store: EnrichmentStore | None = None
+    source_store_v2: SqliteSourceStore | None = None
+    ingest_coordinator: IngestCoordinator | None = None
     vector_store: QdrantVectorStore | None = None
     refresh_orchestrator: RefreshOrchestrator | None = None
     structured_extractor: object | None = None
@@ -425,6 +455,23 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
         )
         doc_store = DocumentStore(conn, gs, vs, emb)
         chunker = TextChunker()
+        source_store_v2 = SqliteSourceStore(conn)
+        content_store = ContentStore(
+            db=conn,
+            vector_store=vs,
+            embedding_provider=emb,
+            chunker=chunker,
+        )
+        enrichment_store = EnrichmentStore(db=conn, graph=gs)
+        ingest_coordinator = IngestCoordinator(
+            sources=source_store_v2,
+            content=content_store,
+            enrichment=enrichment_store,
+            graph=gs,
+        )
+        source_store_v2.ensure_tables()
+        content_store.ensure_tables()
+        enrichment_store.ensure_tables()
         pipeline = IngestPipeline(
             doc_store,
             extractor,
@@ -444,6 +491,10 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
             vector_store=vs,
             ingest_pipeline=pipeline,
             source_store=source_store,
+            content_store=content_store,
+            enrichment_store=enrichment_store,
+            source_store_v2=source_store_v2,
+            ingest_coordinator=ingest_coordinator,
             refresh_orchestrator=refresh_orchestrator,
             structured_extractor=structured_extractor,
             intra_doc_builder=intra_doc_builder,
