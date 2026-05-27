@@ -122,7 +122,7 @@ class QueryFacade:
         )
 
     def _resolve_entity(self, request: EntityLookupRequest) -> EntityRecord | None:
-        if request.entity_id is not None:
+        if request.entity_id:
             return self._graph.get_entity(request.entity_id)
 
         matches = self._graph.find_entities(
