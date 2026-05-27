@@ -86,6 +86,31 @@ class TestFromAC_ToolRenames:
             f"Old (pre-rename) tool names still in __all__: {sorted(still_present)}"
         )
 
+    def test_new_tool_names_in_mcp_registry(self) -> None:
+        """All 7 new tool names must be present in the live MCP tool registry.
+
+        Distinct from __all__ membership: a broken implementation could export
+        new aliases in __all__ while the registry still contains the old names.
+        """
+        registry = _registered_tool_names()
+        missing = _NEW_TOOL_NAMES - registry
+        assert not missing, (
+            f"New tool names missing from MCP registry: {sorted(missing)}. "
+            f"Registry contains: {sorted(t for t in registry if t)}"
+        )
+
+    def test_old_tool_names_absent_from_mcp_registry(self) -> None:
+        """Pre-rename tool names must NOT appear in the live MCP tool registry.
+
+        Ensures the registry itself was updated, not just __all__ or module-level
+        aliases — prevents silent stale-name registrations.
+        """
+        registry = _registered_tool_names()
+        still_present = _OLD_TOOL_NAMES & registry
+        assert not still_present, (
+            f"Old (pre-rename) tool names still in MCP registry: {sorted(still_present)}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # AC2 — Non-tool knowledge_stats helper resolved (collision removed)
@@ -138,6 +163,44 @@ class TestFromAC_AgentAllowlists:
         found = [name for name in _OLD_TOOL_NAMES if name in content]
         assert not found, (
             f"knowledge-ingestor.agent.md still references old tool names: {sorted(found)}"
+        )
+
+    def test_enricher_agent_has_expected_new_tool_names(self) -> None:
+        """knowledge-enricher.agent.md must contain the new tool names it references.
+
+        Positive guard: absence-only tests pass even if references are deleted
+        entirely. This asserts the expected new names are present in allowlist
+        and/or prose so deletion-only regressions fail.
+        """
+        content = self._ENRICHER.read_text()
+        # Enricher uses knowledge_search and knowledge_stats (renamed from
+        # search_knowledge and get_stats respectively)
+        expected = ["knowledge_search", "knowledge_stats"]
+        missing = [name for name in expected if name not in content]
+        assert not missing, (
+            f"knowledge-enricher.agent.md is missing expected new tool names: {missing}"
+        )
+
+    def test_ingestor_agent_has_expected_new_tool_names(self) -> None:
+        """knowledge-ingestor.agent.md must contain the new tool names it references.
+
+        Positive guard: absence-only tests pass even if references are deleted
+        entirely. This asserts the expected new names are present in allowlist
+        and/or prose so deletion-only regressions fail.
+        """
+        content = self._INGESTOR.read_text()
+        # Ingestor uses knowledge_ingest, knowledge_search, knowledge_sources_list,
+        # knowledge_sources_refresh, and knowledge_stats
+        expected = [
+            "knowledge_ingest",
+            "knowledge_search",
+            "knowledge_sources_list",
+            "knowledge_sources_refresh",
+            "knowledge_stats",
+        ]
+        missing = [name for name in expected if name not in content]
+        assert not missing, (
+            f"knowledge-ingestor.agent.md is missing expected new tool names: {missing}"
         )
 
 
