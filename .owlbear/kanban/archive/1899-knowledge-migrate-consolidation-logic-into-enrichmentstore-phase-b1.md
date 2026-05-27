@@ -1,10 +1,10 @@
 ---
 id: 1899
 title: 'Knowledge: Migrate consolidation logic into EnrichmentStore (Phase B1)'
-status: research
+status: archived
 priority: needed
 created: 2026-05-27T17:56:11.886991+02:00
-updated: 2026-05-27T18:01:50.284771+02:00
+updated: 2026-05-27T19:46:19.195605+02:00
 tags:
   - knowledge
   - layer-4
@@ -19,8 +19,8 @@ ac:
   - All existing MCP knowledge tests pass
 blocked: false
 block_reason:
-claimed_at: 2026-05-27T18:01:50.284771+02:00
-archival_reason:
+claimed_at:
+archival_reason: wontfix
 archival_refs: []
 ---
 ## Objective
@@ -47,3 +47,14 @@ Move all `_consolidation.py` logic from mcp-knowledge into the EnrichmentStore i
 
 ## Research
 See .owlbear/research/mcp-knowledge-v2-migration.md §3.3
+
+[[2026-05-27T18:05:41+02:00]]
+## Research
+- Research doc: .owlbear/research/consolidation-migration-conflict.md
+- Sources: 6 studied, 4 high-relevance
+- Finding: CP1 (Canonical Identity) explicitly eliminates consolidation workflows; migrating into EnrichmentStore contradicts settled architecture
+- Recommendation: Delete consolidation entirely (confidence: 0.80)
+- DR: decisions/pending/1899-decision.md — T3 blocking, awaiting user decision
+
+[[2026-05-27T19:46:10+02:00]]
+DR resolved: Option A — delete consolidation entirely. CP1 (Canonical Identity) makes consolidation structurally impossible in v2. Implemented deletion and archiving task as superseded.

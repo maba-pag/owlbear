@@ -8,10 +8,6 @@ _DEFAULT_KB_PATH = ".owlbear/knowledge/local.db"
 _DEFAULT_QDRANT_PATH = ".owlbear/knowledge/vectors"
 _MAX_ENRICHMENT_BATCH_SIZE = 100
 
-_CANDIDATE_ID_BASE_PARTS = 3
-_CANDIDATE_ID_EXTENDED_PARTS = 5
-_CANDIDATE_SOURCE_COUNT = 2
-
 
 class SearchResult(TypedDict):
     """A single knowledge-base search result."""
@@ -110,21 +106,6 @@ class RetryEnrichmentResult(TypedDict):
 
     reset: int
     remaining_failed: int
-
-
-class ConsolidationCandidate(TypedDict):
-    """Cross-source entity pair eligible for phase-2 consolidation."""
-
-    candidate_id: str
-    entity_id_a: str
-    entity_id_b: str
-    entity_name: str
-    source_a: str
-    source_b: str
-    source_a_name: str
-    source_b_name: str
-    source_a_chunk: str
-    source_b_chunk: str
 
 
 class _BrowserContentFetcher:

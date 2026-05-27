@@ -60,16 +60,9 @@ from owlbear_knowledge.stores.enrichment import EnrichmentStore
 from owlbear_knowledge.stores.graph import SqliteGraphStore
 from owlbear_knowledge.stores.sources import SqliteSourceStore
 
-from ._consolidation import (
-    _count_consolidation_candidates,
-    _encode_candidate_id,
-    _fetch_consolidation_candidate_rows,
-    _persist_phase2_enrichment,
-)
 from ._helpers import (
     _normalize_batch_limit,
     _normalize_enrichment_items,
-    _normalize_optional_read_limit,
     _normalize_optional_scope,
     _normalize_read_limit,
     _normalize_scope_list,
@@ -84,7 +77,6 @@ from ._types import (
     _DEFAULT_KB_PATH,
     _DEFAULT_QDRANT_PATH,
     _MAX_ENRICHMENT_BATCH_SIZE,
-    ConsolidationCandidate,
     EnrichmentChunk,
     EntityInfo,
     RetryEnrichmentResult,
@@ -124,30 +116,7 @@ _install_legacy_event_loop_policy()
 globals()["ContentInjectionGuard"] = object
 
 
-async def get_consolidation_candidates(
-    ctx: Context,
-    limit: int | None = 20,
-) -> list[ConsolidationCandidate]:
-    """Return unresolved cross-source consolidation candidates."""
-    app_ctx: AppContext = ctx.request_context.lifespan_context
-    conn = app_ctx.conn
-    limit = _normalize_optional_read_limit(limit)
-    rows = _fetch_consolidation_candidate_rows(conn, limit=limit)
-    return [
-        {
-            "candidate_id": _encode_candidate_id(row[0], row[3], row[4], row[1], row[2]),
-            "entity_name": row[0],
-            "entity_id_a": row[1],
-            "entity_id_b": row[2],
-            "source_a": row[3],
-            "source_b": row[4],
-            "source_a_name": row[5] or "",
-            "source_b_name": row[6] or "",
-            "source_a_chunk": row[7] or "",
-            "source_b_chunk": row[8] or "",
-        }
-        for row in rows
-    ]
+
 
 
 async def get_next_batch(ctx: Context, limit: int = 10) -> list[EnrichmentChunk]:
@@ -210,41 +179,22 @@ async def get_next_batch(ctx: Context, limit: int = 10) -> list[EnrichmentChunk]
     return response
 
 
-async def store_enrichment(  # noqa: PLR0913
+async def store_enrichment(
     ctx: Context,
     chunk_id: str | None = None,
     entities: list[dict[str, Any]] | None = None,
     edges: list[dict[str, Any]] | None = None,
-    candidate_id: str | None = None,
     claim_token: str | None = None,
 ) -> None:
-    """Persist enrichment results for phase-1 chunks or phase-2 candidates."""
+    """Persist enrichment results for a chunk."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    conn = app_ctx.conn
-    now_iso = datetime.now(tz=UTC).isoformat()
-
-    if (chunk_id is None) == (candidate_id is None):
-        msg = "provide exactly one of chunk_id or candidate_id"
-        raise ToolError(msg)
 
     _ = claim_token
 
     if chunk_id is None:
-        edge_rows = _normalize_enrichment_items(edges, field_name="edges")
-        conn.execute("PRAGMA busy_timeout = 5000")
-        conn.execute("BEGIN IMMEDIATE")
-        try:
-            _persist_phase2_enrichment(
-                conn,
-                candidate_id=candidate_id or "",
-                edges=edge_rows,
-                now_iso=now_iso,
-            )
-        except Exception:
-            conn.rollback()
-            raise
-        conn.commit()
-        return
+        msg = "chunk_id is required"
+        raise ToolError(msg)
+
     enrichment_store = app_ctx.enrichment_store
     if enrichment_store is None:
         msg = "enrichment store not available"
@@ -632,9 +582,6 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
 mcp = FastMCP("owlbear-knowledge", lifespan=app_lifespan)
 
 get_next_batch = mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))(get_next_batch)
-get_consolidation_candidates = mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))(
-    get_consolidation_candidates
-)
 store_enrichment = mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))(store_enrichment)
 retry_failed_enrichment = mcp.tool(
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True)
@@ -1188,7 +1135,6 @@ async def knowledge_stats(ctx: Context) -> StatsResult:
     total_chunks = ingest_stats.chunks_total
     chunks_enriched = enrichment_stats.completed
     chunks_enriched_ratio = float(chunks_enriched) / float(total_chunks) if total_chunks else 0.0
-    consolidation_candidates_remaining = _count_consolidation_candidates(conn)
 
     return {
         "documents": ingest_stats.documents_total,
@@ -1202,7 +1148,7 @@ async def knowledge_stats(ctx: Context) -> StatsResult:
         "chunks_enriched": chunks_enriched,
         "chunks_claimable": int(claimable_row[0] if claimable_row is not None else 0),
         "chunks_enriched_ratio": chunks_enriched_ratio,
-        "consolidation_candidates_remaining": consolidation_candidates_remaining,
+        "consolidation_candidates_remaining": 0,
     }
 
 
