@@ -11,7 +11,6 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypedDict
-from uuid import uuid4
 
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
@@ -28,7 +27,15 @@ from owlbear_knowledge.graph_store import GraphStore
 from owlbear_knowledge.ingest import IngestPipeline
 from owlbear_knowledge.ingest_coordinator import IngestCoordinator
 from owlbear_knowledge.models import EntityType
-from owlbear_knowledge.protocols.sources import SourceRegistration
+from owlbear_knowledge.protocols.enrichment import EnrichmentParams
+from owlbear_knowledge.protocols.ingest import IngestDocument, IngestRequest
+from owlbear_knowledge.protocols.sources import (
+    FetchTransport,
+    InlineConfig,
+    SourceKind,
+    SourceRegistration,
+    SourceState,
+)
 from owlbear_knowledge.qdrant import QdrantVectorStore
 from owlbear_knowledge.query_service import KnowledgeQueryError, KnowledgeQueryService
 from owlbear_knowledge.refresh import RefreshOrchestrator
@@ -47,7 +54,6 @@ from ._consolidation import (
 )
 from ._enrichment import _mark_failed_chunk_claim, _persist_phase1_enrichment
 from ._helpers import (
-    _extract_section_path,
     _normalize_batch_limit,
     _normalize_enrichment_items,
     _normalize_optional_read_limit,
@@ -138,76 +144,57 @@ async def get_next_batch(ctx: Context, limit: int = 10) -> list[EnrichmentChunk]
     is stale (>10 minutes). Chunks from sources with enrich=0 are excluded.
     """
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    conn = app_ctx.conn
     limit = _normalize_batch_limit(limit)
-    now = datetime.now(tz=UTC)
-    now_iso = now.isoformat()
-    claim_token = uuid4().hex
+    batch = app_ctx.enrichment_store.claim_batch(EnrichmentParams(batch_size=limit))
 
-    conn.execute("PRAGMA busy_timeout = 5000")
-    conn.execute("BEGIN IMMEDIATE")
-    try:
-        rows = conn.execute(
-            """
-            SELECT
-                c.id,
-                c.content,
-                d.title,
-                c.metadata,
-                ks.name,
-                d.id,
-                d.source_id,
-                d.scope
-            FROM chunks AS c
-            JOIN documents AS d ON d.id = c.document_id
-            JOIN knowledge_sources AS ks ON ks.id = d.source_id
-                        WHERE ks.enrich = 1
-                            AND ks.enabled = 1
-              AND (
-                c.enrichment_state = 'pending'
-                OR (
-                    c.enrichment_state = 'claimed'
-                    AND c.claimed_at IS NOT NULL
-                                        AND (strftime('%s', ?) - strftime('%s', c.claimed_at)) > 600
-                )
-              )
-            ORDER BY c.created_at ASC, c.id ASC
-            LIMIT ?
-            """,
-            (now_iso, limit),
-        ).fetchall()
+    doc_titles: dict[str, str] = {}
+    source_names: dict[str, str] = {}
+    response: list[EnrichmentChunk] = []
 
-        if rows:
-            chunk_ids = [row[0] for row in rows]
-            placeholders = ",".join("?" for _ in chunk_ids)
-            update_sql = (
-                "UPDATE chunks SET enrichment_state='claimed', claimed_at=?, claim_token=? "  # noqa: S608
-                f"WHERE id IN ({placeholders})"
-            )
-            conn.execute(
-                update_sql,
-                (now_iso, claim_token, *chunk_ids),
-            )
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
+    for item in batch.items:
+        chunk = app_ctx.content_store.get_chunk(item.chunk_id)
+        if chunk is None:
+            continue
 
-    return [
-        {
-            "chunk_id": row[0],
-            "text": row[1],
-            "doc_title": row[2] if isinstance(row[2], str) else "",
-            "section_path": _extract_section_path(row[3]),
-            "source_name": row[4] if isinstance(row[4], str) else "",
-            "document_id": row[5],
-            "source_id": row[6],
-            "scope": row[7] if isinstance(row[7], str) and row[7] else "global",
-            "claim_token": claim_token,
-            "claimed_at": now_iso,
-        }
-        for row in rows
-    ]
+        document_id = chunk.document_id
+        source_id = item.source_id
+
+        if document_id not in doc_titles:
+            document = app_ctx.content_store.get_document(document_id)
+            title = getattr(document, "title", "")
+            doc_titles[document_id] = title if isinstance(title, str) else ""
+
+        if source_id not in source_names:
+            source = app_ctx.source_store_v2.get_source(source_id)
+            name = getattr(source, "name", "")
+            source_names[source_id] = name if isinstance(name, str) else ""
+
+        section_parts = getattr(chunk, "section_path", None)
+        section_path = "/".join(section_parts) if section_parts else None
+
+        scope = getattr(chunk, "scope", None)
+        claimed_at = (
+            item.started_at.isoformat()
+            if isinstance(item.started_at, datetime)
+            else datetime.now(tz=UTC).isoformat()
+        )
+
+        response.append(
+            {
+                "chunk_id": item.chunk_id,
+                "text": chunk.text,
+                "doc_title": doc_titles[document_id],
+                "section_path": section_path,
+                "source_name": source_names[source_id],
+                "document_id": document_id,
+                "source_id": source_id,
+                "scope": scope if isinstance(scope, str) and scope else "global",
+                "claim_token": batch.batch_id,
+                "claimed_at": claimed_at,
+            }
+        )
+
+    return response
 
 
 async def store_enrichment(  # noqa: PLR0913
@@ -782,27 +769,61 @@ async def ingest_document(
 ) -> str:
     """Ingest a text document into the knowledge base."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    pipeline = app_ctx.ingest_pipeline
-    if pipeline is None:
-        return "error: ingest pipeline not available"
+    coordinator = app_ctx.ingest_coordinator
+    source_store = app_ctx.source_store_v2
+    if coordinator is None:
+        return "error: ingest coordinator not available"
+    if source_store is None:
+        return "error: source store v2 not available"
+
     try:
-        result = await pipeline.ingest_text(
-            text,
-            metadata=metadata,
+        source_name = f"mcp-inline-{scope}"
+        sources = await asyncio.to_thread(
+            source_store.list_sources,
             scope=scope,
-            source_url=source_url,
+            state=SourceState.ACTIVE,
         )
+        source = next(
+            (item for item in sources if item.name == source_name and item.kind == SourceKind.INLINE),
+            None,
+        )
+        if source is None:
+            source = await asyncio.to_thread(
+                source_store.register_source,
+                SourceRegistration(
+                    name=source_name,
+                    kind=SourceKind.INLINE,
+                    fetch_method=FetchTransport.NONE,
+                    config=InlineConfig(),
+                    scope=scope,
+                    enrich=True,
+                    refreshable=False,
+                ),
+            )
+
+        document_metadata = metadata or {}
+        request = IngestRequest(
+            source_id=source.id,
+            documents=(
+                IngestDocument(
+                    title=document_metadata.get("title", source_url or "Untitled inline document"),
+                    text=text,
+                    uri=source_url,
+                    metadata=document_metadata,
+                ),
+            ),
+            enrich=True,
+        )
+        result = await coordinator.ingest(request)
     except Exception as exc:  # noqa: BLE001
         return f"error: ingestion failed: {exc}"
-    else:
-        if result.status == "failed":
-            return f"error: ingestion failed for document {result.document_id}"
-        warning_text = f", warnings: {'; '.join(result.warnings)}" if result.warnings else ""
-        return (
-            f"Ingested: {result.document_id}, {result.chunk_count} chunks, "
-            f"{result.entity_count} entities, {result.edge_count} edges "
-            f"(status: {result.status}{warning_text})"
-        )
+
+    return (
+        "Ingested: "
+        f"documents_processed={result.documents_processed}, "
+        f"chunks_created={result.chunks_created}, "
+        f"chunks_enqueued={result.chunks_enqueued}"
+    )
 
 
 async def list_entities(
