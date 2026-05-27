@@ -35,8 +35,11 @@ import sys
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from io import StringIO
 from typing import TYPE_CHECKING
+from uuid import UUID, uuid4
 
+from pydantic import ValidationError as PydanticValidationError
 from ruamel.yaml import YAML
 from ruamel.yaml.error import YAMLError
 
@@ -52,6 +55,7 @@ from owlbear_kanban.corruption import (
     detect_corruption,
 )
 from owlbear_kanban.dispatch import PRIORITY_RANK, STATUS_RANK
+from owlbear_kanban.errors import NotFoundError
 from owlbear_kanban.models import (
     ActivityCompactionResult,
     ActivityEvent,
@@ -65,6 +69,13 @@ from owlbear_kanban.models import (
     Task,
     TaskSummary,
     ValidationError,
+)
+from owlbear_kanban.request_models import (
+    UUID4_VERSION,
+    ActionRequest,
+    DecisionRequest,
+    Request,
+    RequestRecord,
 )
 from owlbear_kanban.storage import (
     make_task_filename,
@@ -520,6 +531,11 @@ class KanbanEngine:
         return self._tasks_dir
 
     @property
+    def archive_dir(self) -> Path:
+        """Configured archive directory for the active board."""
+        return self._archive_dir
+
+    @property
     def kanban_dir(self) -> Path:
         """Root kanban directory for the active board."""
         return self._kanban_dir
@@ -633,6 +649,49 @@ class KanbanEngine:
                 status = "redirect"
 
         return status
+
+    def project_dep_status(
+        self,
+        task: Task,
+        *,
+        active_ids: set[int] | None = None,
+        archived_reasons: dict[int, str | None] | None = None,
+    ) -> str | None:
+        """Return the read-time ``dep_status`` projection for *task*.
+
+        Callers that already have a full active/archive snapshot can pass it in
+        to avoid repeated file lookups. Single-task projections can omit the
+        snapshot and let the engine resolve the task's dependency IDs directly.
+        """
+        if (active_ids is None) != (archived_reasons is None):
+            msg = "active_ids and archived_reasons must be provided together"
+            raise ValueError(msg)
+
+        if active_ids is None or archived_reasons is None:
+            active_ids, archived_reasons = self._dep_status_context_for_task(task)
+
+        return self._compute_dep_status(
+            task,
+            active_ids=active_ids,
+            archived_reasons=archived_reasons,
+        )
+
+    def _dep_status_context_for_task(self, task: Task) -> tuple[set[int], dict[int, str | None]]:
+        active_ids: set[int] = set()
+        archived_reasons: dict[int, str | None] = {}
+
+        for dep_id in task.depends_on or []:
+            try:
+                dep_task = self.show_task(str(dep_id))
+            except (FileNotFoundError, CorruptionError, ValueError, KeyError):
+                continue
+
+            if dep_task.status == "archived":
+                archived_reasons[dep_id] = dep_task.archival_reason
+            else:
+                active_ids.add(dep_id)
+
+        return active_ids, archived_reasons
 
     # ------------------------------------------------------------------
     # Read operations
@@ -808,7 +867,7 @@ class KanbanEngine:
         summaries: list[TaskSummary] = []
         for task in tasks:
             projected = task.model_dump()
-            projected["dep_status"] = self._compute_dep_status(
+            projected["dep_status"] = self.project_dep_status(
                 task,
                 active_ids=all_active_ids,
                 archived_reasons=archived_reasons,
@@ -875,6 +934,348 @@ class KanbanEngine:
 
         msg = f"Task {task_id!r} not found in {self._tasks_dir} or {self._archive_dir}"
         raise FileNotFoundError(msg)
+
+    @staticmethod
+    def _parse_request_file(path: Path) -> tuple[dict[str, object], str]:
+        """Parse request frontmatter and markdown body from a request file."""
+        content = path.read_text(encoding="utf-8")
+        if not content.startswith("---"):
+            msg = f"Invalid request file (missing opening delimiter): {path}"
+            raise ValueError(msg)
+
+        lines = content.splitlines()
+        closing_idx: int | None = None
+        for idx, line in enumerate(lines[1:], start=1):
+            if line.strip() == "---":
+                closing_idx = idx
+                break
+        if closing_idx is None:
+            msg = f"Invalid request file (missing closing delimiter): {path}"
+            raise ValueError(msg)
+
+        yaml_text = "\n".join(lines[1:closing_idx])
+        body = "\n".join(lines[closing_idx + 1 :])
+        data = YAML(typ="safe").load(yaml_text) or {}
+        if not isinstance(data, dict):
+            msg = f"Invalid request file (frontmatter must be mapping): {path}"
+            raise TypeError(msg)
+        return data, body
+
+    @staticmethod
+    def _serialize_request_content(
+        request: DecisionRequest | ActionRequest,
+        body: str,
+        *,
+        include_resolved_at: bool = False,
+    ) -> str:
+        """Render validated request frontmatter and body as markdown."""
+        payload: dict[str, object] = request.model_dump()
+        resolution = payload.get("resolution")
+        if isinstance(resolution, dict) and not include_resolved_at:
+            resolution = dict(resolution)
+            resolution.pop("resolved_at", None)
+            payload["resolution"] = resolution
+
+        yaml = YAML()
+        stream = StringIO()
+        yaml.dump(payload, stream)
+        frontmatter = stream.getvalue().rstrip("\n")
+        return f"---\n{frontmatter}\n---\n{body}"
+
+    def create_request(  # noqa: PLR0913
+        self,
+        task_id: int,
+        kind: str,
+        title: str,
+        summary: str,
+        agent: str,
+        *,
+        options: list[dict[str, object]] | None = None,
+        body: str = "",
+    ) -> RequestRecord:
+        """Create a pending decision/action request and block the owning task."""
+        request_data: dict[str, object] = {
+            "task_id": task_id,
+            "request_id": str(uuid4()),
+            "kind": kind,
+            "title": title,
+            "summary": summary,
+            "agent": agent,
+            "created_at": datetime.now().astimezone().isoformat(),
+            "options": list(options) if options is not None else [],
+            "resolution": {"selected_option_id": None, "free_text": None},
+        }
+        request_model = Request.model_validate(request_data)
+
+        pending_dir = self._kanban_dir / "decisions" / "pending"
+        pending_dir.mkdir(parents=True, exist_ok=True)
+        request_path = pending_dir / f"{request_model.request_id}.md"
+        validate_path_containment(self._kanban_dir, request_path)
+
+        content = self._serialize_request_content(request_model, body)
+        fd = os.open(request_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(content)
+
+        try:
+            self.edit_task(str(task_id), blocked=True, block_reason="DR pending")
+        except Exception:
+            with contextlib.suppress(OSError):
+                request_path.unlink()
+            raise
+
+        return RequestRecord.from_request(request_model, body)
+
+    def get_request(self, request_id: str) -> RequestRecord:
+        """Return a pending/resolved request by request_id."""
+        decisions_dir = self._kanban_dir / "decisions"
+        for subdir in ("pending", "resolved"):
+            path = decisions_dir / subdir / f"{request_id}.md"
+            validate_path_containment(self._kanban_dir, path)
+            if not path.exists():
+                continue
+
+            try:
+                frontmatter, body = self._parse_request_file(path)
+                request_model = Request.model_validate(frontmatter)
+            except (OSError, ValueError, TypeError, YAMLError, PydanticValidationError) as exc:
+                raise ValidationError(
+                    code="ERR_CORRUPT_YAML_PARSE",
+                    user_message=f"request file invalid: {path}",
+                ) from exc
+
+            return RequestRecord.from_request(request_model, body)
+
+        raise NotFoundError(
+            code="ERR_NOT_FOUND",
+            user_message=f"request '{request_id}' not found",
+        )
+
+    def list_requests(self, status: str = "pending", task_id: int | None = None) -> list[RequestRecord]:
+        """List structured request files by status and optional task filter."""
+        if status not in {"pending", "resolved", "all"}:
+            raise ValidationError(
+                code="ERR_INVALID_STATUS",
+                user_message="status must be one of: pending, resolved, all",
+            )
+
+        decisions_dir = self._kanban_dir / "decisions"
+        subdirs = ("pending", "resolved") if status == "all" else (status,)
+
+        records: list[RequestRecord] = []
+        for subdir in subdirs:
+            request_dir = decisions_dir / subdir
+            if not request_dir.exists():
+                continue
+
+            for candidate in request_dir.glob("*.md"):
+                validate_path_containment(self._kanban_dir, candidate)
+                if not self._request_is_structured_pending(candidate):
+                    continue
+                try:
+                    frontmatter, body = self._parse_request_file(candidate)
+                    request_model = Request.model_validate(frontmatter)
+                except (OSError, ValueError, TypeError, YAMLError, PydanticValidationError) as exc:
+                    LOGGER.warning("Skipping invalid request file %s: %s", candidate, exc)
+                    continue
+
+                if task_id is not None and request_model.task_id != task_id:
+                    continue
+                records.append(RequestRecord.from_request(request_model, body))
+
+        records.sort(key=lambda record: (record.created_at, record.request_id))
+        return records
+
+    @staticmethod
+    def _request_is_structured_pending(path: Path) -> bool:
+        """Return True when *path* has the UUID4 filename used by structured requests."""
+        try:
+            return UUID(path.stem).version == UUID4_VERSION
+        except ValueError:
+            return False
+
+    @staticmethod
+    def _build_request_writeback(
+        request_model: DecisionRequest | ActionRequest,
+        selected_option_id: str | None,
+        free_text: str | None,
+    ) -> str:
+        """Return task-body summary text for a resolved request."""
+        if request_model.kind == "action":
+            return f"## AR: {request_model.title}\n- **Outcome:** {free_text}"
+
+        if selected_option_id is None:
+            return f"## DR: {request_model.title}\n- **Answer:** {free_text}"
+
+        labels = {option.option_id: option.label for option in request_model.options}
+        writeback = f"## DR: {request_model.title}\n- **Selected:** {labels[selected_option_id]}"
+        if free_text is not None:
+            writeback = f"{writeback}\n- **Notes:** {free_text}"
+        return writeback
+
+    def _has_pending_structured_requests_for_task(self, task_id: int) -> bool:
+        """Return True when structured pending requests still exist for *task_id*."""
+        pending_dir = self._kanban_dir / "decisions" / "pending"
+        if not pending_dir.exists():
+            return False
+
+        for candidate in pending_dir.glob("*.md"):
+            if not self._request_is_structured_pending(candidate):
+                continue
+            try:
+                frontmatter, _body = self._parse_request_file(candidate)
+            except (OSError, ValueError, TypeError, YAMLError):
+                continue
+            if frontmatter.get("task_id") == task_id:
+                return True
+        return False
+
+    def sweep_requests(self) -> list[str]:
+        """Resolve manually-completed structured pending requests and return moved IDs."""
+        pending_dir = self._kanban_dir / "decisions" / "pending"
+        if not pending_dir.exists():
+            return []
+
+        resolved_ids: list[str] = []
+        for pending_path in sorted(pending_dir.glob("*.md")):
+            validate_path_containment(self._kanban_dir, pending_path)
+            if not self._request_is_structured_pending(pending_path):
+                continue
+
+            try:
+                frontmatter, body = self._parse_request_file(pending_path)
+                request_model = Request.model_validate(frontmatter)
+            except (OSError, ValueError, TypeError, YAMLError, PydanticValidationError) as exc:
+                LOGGER.warning("Skipping invalid request file %s: %s", pending_path, exc)
+                continue
+
+            selected_option_id = request_model.resolution.selected_option_id
+            free_text = request_model.resolution.free_text
+            if selected_option_id is None and free_text is None:
+                continue
+
+            resolution_payload = request_model.resolution.model_dump()
+            resolution_payload["resolved_at"] = datetime.now().astimezone().isoformat()
+
+            request_payload = request_model.model_dump()
+            request_payload["resolution"] = resolution_payload
+            resolved_model = Request.model_validate(request_payload)
+
+            resolved_path = self._kanban_dir / "decisions" / "resolved" / f"{resolved_model.request_id}.md"
+            validate_path_containment(self._kanban_dir, resolved_path)
+            resolved_path.parent.mkdir(parents=True, exist_ok=True)
+
+            content = self._serialize_request_content(
+                resolved_model,
+                body,
+                include_resolved_at=True,
+            )
+            fd = os.open(resolved_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+            with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
+                handle.write(content)
+            pending_path.unlink()
+
+            resolved_ids.append(resolved_model.request_id)
+
+            try:
+                writeback = self._build_request_writeback(resolved_model, selected_option_id, free_text)
+                try:
+                    self.edit_task(str(resolved_model.task_id), append_body=writeback)
+                except RuntimeError as exc:
+                    raise ValueError(str(exc)) from exc
+                if not self._has_pending_structured_requests_for_task(resolved_model.task_id):
+                    try:
+                        self.edit_task(str(resolved_model.task_id), blocked=False)
+                    except RuntimeError as exc:
+                        raise ValueError(str(exc)) from exc
+            except (OSError, KeyError, ValueError, KanbanError) as exc:
+                LOGGER.warning(
+                    "Request %s moved to resolved but side-effects failed: %s",
+                    resolved_model.request_id,
+                    exc,
+                )
+
+        return resolved_ids
+
+    def resolve_request(
+        self,
+        request_id: str,
+        selected_option_id: str | None,
+        free_text: str | None,
+    ) -> RequestRecord:
+        """Resolve one structured request, move it to resolved/, and update task state."""
+        decisions_dir = self._kanban_dir / "decisions"
+        pending_path = decisions_dir / "pending" / f"{request_id}.md"
+        resolved_path = decisions_dir / "resolved" / f"{request_id}.md"
+        validate_path_containment(self._kanban_dir, pending_path)
+        validate_path_containment(self._kanban_dir, resolved_path)
+
+        if not pending_path.exists():
+            if resolved_path.exists():
+                raise ValidationError(
+                    code="ERR_ALREADY_RESOLVED",
+                    user_message=f"request '{request_id}' is already resolved",
+                )
+            raise NotFoundError(
+                code="ERR_NOT_FOUND",
+                user_message=f"request '{request_id}' not found",
+            )
+
+        try:
+            frontmatter, body = self._parse_request_file(pending_path)
+            request_model = Request.model_validate(frontmatter)
+        except (OSError, ValueError, TypeError, YAMLError, PydanticValidationError) as exc:
+            raise ValidationError(
+                code="ERR_CORRUPT_YAML_PARSE",
+                user_message=f"request file invalid: {pending_path}",
+            ) from exc
+
+        if selected_option_id is None and free_text is None:
+            raise ValidationError(
+                code="ERR_PREDICATE_FAILED",
+                user_message="selected_option_id or free_text is required",
+            )
+
+        if request_model.kind == "action" and selected_option_id is not None:
+            raise ValidationError(
+                code="ERR_PREDICATE_FAILED",
+                user_message="selected_option_id must be null for action requests",
+            )
+
+        if request_model.kind == "decision" and selected_option_id is not None:
+            option_ids = {option.option_id for option in request_model.options}
+            if selected_option_id not in option_ids:
+                raise ValidationError(
+                    code="ERR_PREDICATE_FAILED",
+                    user_message="selected_option_id must match an existing option_id",
+                )
+
+        resolution_payload = request_model.resolution.model_dump()
+        resolution_payload["selected_option_id"] = selected_option_id
+        resolution_payload["free_text"] = free_text
+        resolution_payload["resolved_at"] = datetime.now().astimezone().isoformat()
+
+        request_payload = request_model.model_dump()
+        request_payload["resolution"] = resolution_payload
+        resolved_model = Request.model_validate(request_payload)
+
+        resolved_path.parent.mkdir(parents=True, exist_ok=True)
+        content = self._serialize_request_content(
+            resolved_model,
+            body,
+            include_resolved_at=True,
+        )
+        fd = os.open(resolved_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(content)
+        pending_path.unlink()
+
+        writeback = self._build_request_writeback(resolved_model, selected_option_id, free_text)
+        self.edit_task(str(resolved_model.task_id), append_body=writeback)
+        if not self._has_pending_structured_requests_for_task(resolved_model.task_id):
+            self.edit_task(str(resolved_model.task_id), blocked=False)
+
+        return RequestRecord.from_request(resolved_model, body)
 
     @staticmethod
     def _required_sections_passes(body: str, sections: list[str]) -> bool:
@@ -2211,24 +2612,7 @@ class KanbanEngine:
         if self._activity_log_path is None or not self._activity_log_path.exists():
             return []
         sessions = self._derive_sessions()
-        if filter == "active":
-            sessions = self._filter_active_sessions_by_current_task_state(sessions)
         return _apply_session_filter(sessions, filter)
-
-    def _filter_active_sessions_by_current_task_state(
-        self,
-        sessions: list[SessionRecord],
-    ) -> list[SessionRecord]:
-        """Drop open log-derived sessions that no longer match task claim state."""
-        task_cache: dict[int, Task | None] = {}
-        filtered: list[SessionRecord] = []
-        for session in sessions:
-            if session.state not in _SESSION_FILTER_STATES["active"]:
-                filtered.append(session)
-                continue
-            if self._session_matches_current_claim(session, task_cache):
-                filtered.append(session)
-        return filtered
 
     def _session_matches_current_claim(
         self,

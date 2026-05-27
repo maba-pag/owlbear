@@ -36,7 +36,7 @@ repos:
 
   # ── Python (matches CI: PYTHON_RUFF + PYTHON_RUFF_FORMAT) ─
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.13
+    rev: v0.15.14
     hooks:
       - id: ruff
       - id: ruff-format
@@ -99,20 +99,20 @@ repos:
       - id: validate-skills
         name: Validate Agent Skills
         language: system
-        entry: bash -c 'uv run python .owlbear/scripts/validate_skills.py share/skills/*/'
+        entry: bash -c 'uv run --frozen python .owlbear/scripts/validate_skills.py share/skills/*/'
         pass_filenames: false
         always_run: true
       - id: validate-agents
         name: Validate Agent Tool Names
         language: system
-        entry: uv run python .owlbear/scripts/validate_agents.py
+        entry: uv run --frozen python .owlbear/scripts/validate_agents.py
         files: ^share/agents/.*\.agent\.md$
         pass_filenames: true
       # TODO marker scan — warning only (always exit 0, output always shown)
       - id: todo-check
         name: TODO marker scan
         language: system
-        entry: uv run todo
+        entry: uv run --frozen todo
         pass_filenames: false
         always_run: true
         verbose: true

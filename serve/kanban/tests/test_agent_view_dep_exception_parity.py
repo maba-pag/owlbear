@@ -1,14 +1,12 @@
 """Durable drift guard — dep-lookup exception tuple parity (#1530).
 
-Asserts that ``show_task()`` and ``start_work()`` in ``AgentView`` both
-catch the same set of exception types
+Asserts that the engine's single-task dependency-status context helper and
+``AgentView.start_work()`` both catch the same set of exception types
 ``{FileNotFoundError, CorruptionError, ValueError, KeyError}``
 in their dep-iteration loops.
 
 ``CorruptionError`` presence in the handler tuple discriminates dep-iteration
-``except`` clauses from other ``try/except`` blocks in the same methods
-(``show_task()`` has a separate ``FileNotFoundError``-only handler at its
-outermost try that must not be counted).
+``except`` clauses from other ``try/except`` blocks in the same methods.
 """
 
 from __future__ import annotations
@@ -27,8 +25,8 @@ _EXPECTED_EXCEPTIONS: frozenset[str] = frozenset({"FileNotFoundError", "Corrupti
 # ---------------------------------------------------------------------------
 
 
-def _agent_view_source() -> str:
-    return (_PKG_DIR / "agent_view.py").read_text(encoding="utf-8")
+def _module_source(module_name: str) -> str:
+    return (_PKG_DIR / module_name).read_text(encoding="utf-8")
 
 
 def _find_method(tree: ast.AST, classname: str, methodname: str) -> ast.FunctionDef | None:
@@ -70,24 +68,25 @@ def _dep_iteration_exception_sets(method_node: ast.FunctionDef) -> list[frozense
 
 
 class TestDepLookupExceptionParity:
-    """AC5: dep-iteration ExceptHandlers in show_task() and start_work() stay in sync."""
+    """AC5: dep-iteration ExceptHandlers stay in sync across projection paths."""
 
     # -- handler presence ----------------------------------------------------
 
-    def test_show_task_has_exactly_one_dep_iteration_handler(self) -> None:
-        """show_task() must have exactly one ExceptHandler containing CorruptionError."""
-        src = _agent_view_source()
+    def test_engine_projection_context_has_exactly_one_dep_iteration_handler(self) -> None:
+        """_dep_status_context_for_task() must have exactly one CorruptionError handler."""
+        src = _module_source("engine.py")
         tree = ast.parse(src)
-        method = _find_method(tree, "AgentView", "show_task")
-        assert method is not None, "AgentView.show_task not found in agent_view.py"
+        method = _find_method(tree, "KanbanEngine", "_dep_status_context_for_task")
+        assert method is not None, "KanbanEngine._dep_status_context_for_task not found in engine.py"
         sets = _dep_iteration_exception_sets(method)
         assert len(sets) == 1, (
-            f"Expected exactly 1 dep-iteration ExceptHandler in show_task(), found {len(sets)}: {sets}"
+            "Expected exactly 1 dep-iteration ExceptHandler in _dep_status_context_for_task(), "
+            f"found {len(sets)}: {sets}"
         )
 
     def test_start_work_has_exactly_one_dep_iteration_handler(self) -> None:
         """start_work() must have exactly one ExceptHandler containing CorruptionError."""
-        src = _agent_view_source()
+        src = _module_source("agent_view.py")
         tree = ast.parse(src)
         method = _find_method(tree, "AgentView", "start_work")
         assert method is not None, "AgentView.start_work not found in agent_view.py"
@@ -98,22 +97,23 @@ class TestDepLookupExceptionParity:
 
     # -- exact exception types -----------------------------------------------
 
-    def test_show_task_dep_handler_catches_exact_exception_set(self) -> None:
-        """show_task() dep-iteration handler must catch exactly the 4 required types."""
-        src = _agent_view_source()
+    def test_engine_projection_context_handler_catches_exact_exception_set(self) -> None:
+        """_dep_status_context_for_task() must catch exactly the 4 required types."""
+        src = _module_source("engine.py")
         tree = ast.parse(src)
-        method = _find_method(tree, "AgentView", "show_task")
+        method = _find_method(tree, "KanbanEngine", "_dep_status_context_for_task")
         assert method is not None
         sets = _dep_iteration_exception_sets(method)
-        assert sets, "No dep-iteration ExceptHandler found in show_task()"
+        assert sets, "No dep-iteration ExceptHandler found in _dep_status_context_for_task()"
         actual = sets[0]
         assert actual == _EXPECTED_EXCEPTIONS, (
-            f"show_task() dep handler mismatch — expected {set(_EXPECTED_EXCEPTIONS)}, got {set(actual)}"
+            "_dep_status_context_for_task() dep handler mismatch — "
+            f"expected {set(_EXPECTED_EXCEPTIONS)}, got {set(actual)}"
         )
 
     def test_start_work_dep_handler_catches_exact_exception_set(self) -> None:
         """start_work() dep-iteration handler must catch exactly the 4 required types."""
-        src = _agent_view_source()
+        src = _module_source("agent_view.py")
         tree = ast.parse(src)
         method = _find_method(tree, "AgentView", "start_work")
         assert method is not None
@@ -127,36 +127,37 @@ class TestDepLookupExceptionParity:
     # -- cross-method parity (the core drift guard) --------------------------
 
     def test_dep_handlers_are_identical_across_methods(self) -> None:
-        """The dep-iteration exception sets in show_task() and start_work() must be equal."""
-        src = _agent_view_source()
-        tree = ast.parse(src)
-        show_method = _find_method(tree, "AgentView", "show_task")
-        start_method = _find_method(tree, "AgentView", "start_work")
-        assert show_method is not None, "AgentView.show_task not found"
+        """The engine projection helper and start_work() exception sets must be equal."""
+        engine_tree = ast.parse(_module_source("engine.py"))
+        agent_tree = ast.parse(_module_source("agent_view.py"))
+        show_method = _find_method(engine_tree, "KanbanEngine", "_dep_status_context_for_task")
+        start_method = _find_method(agent_tree, "AgentView", "start_work")
+        assert show_method is not None, "KanbanEngine._dep_status_context_for_task not found"
         assert start_method is not None, "AgentView.start_work not found"
         show_sets = _dep_iteration_exception_sets(show_method)
         start_sets = _dep_iteration_exception_sets(start_method)
-        assert show_sets, "No dep-iteration ExceptHandler in show_task()"
+        assert show_sets, "No dep-iteration ExceptHandler in _dep_status_context_for_task()"
         assert start_sets, "No dep-iteration ExceptHandler in start_work()"
         assert show_sets[0] == start_sets[0], (
-            f"Exception tuple drift detected — show_task()={set(show_sets[0])}, start_work()={set(start_sets[0])}"
+            "Exception tuple drift detected — "
+            f"_dep_status_context_for_task()={set(show_sets[0])}, start_work()={set(start_sets[0])}"
         )
 
     # -- no bare except ------------------------------------------------------
 
-    def test_show_task_dep_handler_is_not_bare_except(self) -> None:
-        """The dep-iteration handler in show_task() must not be a bare except clause."""
-        src = _agent_view_source()
+    def test_engine_projection_context_handler_is_not_bare_except(self) -> None:
+        """The dep-iteration handler in _dep_status_context_for_task() must not be bare."""
+        src = _module_source("engine.py")
         tree = ast.parse(src)
-        method = _find_method(tree, "AgentView", "show_task")
+        method = _find_method(tree, "KanbanEngine", "_dep_status_context_for_task")
         assert method is not None
         for node in ast.walk(method):
             if isinstance(node, ast.ExceptHandler) and node.type is None:
-                pytest.fail("show_task() contains a bare 'except:' clause")
+                pytest.fail("_dep_status_context_for_task() contains a bare 'except:' clause")
 
     def test_start_work_dep_handler_is_not_bare_except(self) -> None:
         """The dep-iteration handler in start_work() must not be a bare except clause."""
-        src = _agent_view_source()
+        src = _module_source("agent_view.py")
         tree = ast.parse(src)
         method = _find_method(tree, "AgentView", "start_work")
         assert method is not None

@@ -56,6 +56,7 @@ KANBAN_ERROR_CODES: frozenset[str] = frozenset(
         "ERR_BLOCKED_NOT_CLAIMABLE",
         "ERR_BODY_TOO_LARGE",
         "ERR_STALE",
+        "ERR_ALREADY_RESOLVED",
         "ERR_NOT_FOUND",
         "ERR_CORRUPT_DELIMITERS",
         "ERR_CORRUPT_DUPLICATE_ID",

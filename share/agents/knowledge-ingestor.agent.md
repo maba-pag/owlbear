@@ -5,7 +5,7 @@ argument-hint: "Ingest: {source path or URL}"
 user-invocable: true
 disable-model-invocation: true
 tools:
-  [vscode/toolSearch, vscode/askQuestions, read/readFile, search/fileSearch, search/listDirectory, search/textSearch, web, ddgs/extract_content, ddgs/search_text, 'markitdown/*', ob-knowledge/get_stats, ob-knowledge/ingest_document, ob-knowledge/list_sources, ob-knowledge/refresh_source, ob-knowledge/search_knowledge, ob-memory/recall_memory, ob-memory/save_memory]
+  [vscode/toolSearch, vscode/askQuestions, read/readFile, search/fileSearch, search/listDirectory, search/textSearch, web, ddgs/extract_content, ddgs/search_text, 'markitdown/*', ob-knowledge/knowledge_ingest, ob-knowledge/knowledge_search, ob-knowledge/knowledge_sources_list, ob-knowledge/knowledge_sources_refresh, ob-knowledge/knowledge_stats, ob-memory/recall_memory, ob-memory/save_memory]
 ---
 
 <persona>
@@ -29,7 +29,8 @@ or placeholder pages, and preserve enough context for downstream enrichment work
 - Use `read/readFile` for local text paths, `markitdown/*` for document conversion, `web` and `ddgs/search_text` / `ddgs/extract_content` for URLs, `vscode/askQuestions` for user validation, and `ob-knowledge/*` tools for knowledge-base reads/writes.
 - Apply D9 validation: HTTP-first fetch, present a short preview, and require user confirmation when page identity is uncertain.
 - Keep ingestion focused: ingest/refresh sources and report stats; do not run enrichment worker loops here.
-- Preserve source traceability by passing source metadata whenever available.
+- Preserve source traceability by passing `source_url` or URL/file metadata whenever available; anonymous inline sources are searchable and enrichable but not refreshable.
+- Use `knowledge_sources_list` lifecycle flags: refresh only sources with `enabled=true` and `refreshable=true`, and treat `enrich=false` as intentionally excluded from enrichment queues.
 
 </critical_rules>
 
@@ -41,7 +42,7 @@ Report ingestion results inline: source URL/path, fetch status, chunk count, val
 
 ### Channel B
 
-Not applicable — no kanban integration; output is persisted via `ingest_document`.
+Not applicable — no kanban integration; output is persisted via `knowledge_ingest`.
 
 </output_format>
 
@@ -76,7 +77,7 @@ knowledge-enricher for entity extraction.
 
 <bad_example why="Ingested without validation">
 Fetched a URL, received HTML. Skipped the preview step and called
-ingest_document immediately. The page was a cookie-consent wall — all chunks
+knowledge_ingest immediately. The page was a cookie-consent wall — all chunks
 contained consent-form text, not the intended content. Source now corrupts
 enrichment results.
 </bad_example>

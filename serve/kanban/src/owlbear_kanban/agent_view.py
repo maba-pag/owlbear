@@ -6,6 +6,7 @@ Extracted from engine.py to keep KanbanEngine focused on core board operations.
 from __future__ import annotations
 
 import importlib
+import logging
 import re
 from datetime import datetime
 
@@ -34,6 +35,8 @@ from owlbear_kanban.models import (
     Wave,
 )
 
+LOGGER = logging.getLogger(__name__)
+
 
 class AgentView:
     """Minimal role-scoped wrapper for agent-facing engine use."""
@@ -41,7 +44,7 @@ class AgentView:
     _MAX_BODY_BYTES = 500 * 1024
     _BODY_SIZE_WARNING = "\u26a0\ufe0f Task body is large (>100 KB); consider splitting."
     _BLOCK_AR_HINT = (
-        "\u26a0\ufe0f ACTION REQUIRED: Create a Decision Request via the create_dr tool."
+        "\u26a0\ufe0f ACTION REQUIRED: Create a Decision Request via the create_request tool."
         " Blocks without a DR are invisible to the pipeline."
     )
 
@@ -234,24 +237,7 @@ class AgentView:
         if isinstance(payload.get("body"), list):
             payload["body"] = None
 
-        active_ids: set[int] = set()
-        archived_reasons: dict[int, str | None] = {}
-        for dep_id in task.depends_on or []:
-            try:
-                dep_task = self.engine.show_task(str(dep_id))
-            except (FileNotFoundError, CorruptionError, ValueError, KeyError):
-                continue
-
-            if dep_task.status == "archived":
-                archived_reasons[dep_id] = dep_task.archival_reason
-            else:
-                active_ids.add(dep_id)
-
-        payload["dep_status"] = self.engine._compute_dep_status(  # noqa: SLF001
-            task,
-            active_ids=active_ids,
-            archived_reasons=archived_reasons,
-        )
+        payload["dep_status"] = self.engine.project_dep_status(task)
 
         guidance: list[str] = []
         missing_sections: list[str] | None = None
@@ -338,6 +324,11 @@ class AgentView:
                 code="ERR_INVALID_WAVE_PARAM",
                 user_message="wave_size must be >= 1",
             )
+
+        try:
+            self.engine.sweep_requests()
+        except Exception as exc:  # noqa: BLE001
+            LOGGER.warning("pick_tasks sweep_requests failed; continuing dispatch: %s", exc)
 
         config = self.engine.board_config()
         effective_wave = wave_size if wave_size is not None else config.pipeline.wave_size
@@ -944,7 +935,7 @@ class AgentView:
                 else:
                     active_ids.add(dep_id)
 
-            dep_status = self.engine._compute_dep_status(  # noqa: SLF001
+            dep_status = self.engine.project_dep_status(
                 task_record,
                 active_ids=active_ids,
                 archived_reasons=archived_reasons,

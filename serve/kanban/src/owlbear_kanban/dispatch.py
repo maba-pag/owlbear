@@ -83,6 +83,8 @@ def _passes_tdd_gate(task: Task) -> bool:
 
     Gate applies only to in-progress tasks:
     - PASS if body contains '## Test-Writer Notes'
+    - PASS if body contains '## Builder Notes' or '## Review Evidence'
+      (task re-entered in-progress after a review cycle)
     - PASS if any tag is a non-impl tag (exempt from TDD requirement)
     - FAIL otherwise
     """
@@ -90,6 +92,8 @@ def _passes_tdd_gate(task: Task) -> bool:
         return True
     body: str = task.body or ""
     if "## Test-Writer Notes" in body:
+        return True
+    if "## Builder Notes" in body or "## Review Evidence" in body:
         return True
     tags: list[str] = task.tags or []
     return bool(_NON_IMPL_TAGS.intersection(tags))
@@ -99,10 +103,13 @@ def _passes_clarity_gate(task: Task) -> bool:
     """Return True if the task passes the clarity gate.
 
     Gate applies to active statuses (todo, in-progress, review, docs, done):
+    - PASS if the structured ac field has entries
     - PASS if body contains a bullet or numbered list item
-    - FAIL if body is empty or prose-only
+    - FAIL if body is empty or prose-only with no structured AC
     """
     if task.status not in _CLARITY_STATUSES:
+        return True
+    if task.ac:
         return True
     body: str = task.body or ""
     return bool(_AC_PATTERN.search(body))

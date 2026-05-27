@@ -9,11 +9,13 @@ from __future__ import annotations
 import logging
 import os
 import re
-from datetime import UTC, datetime
+from io import StringIO
 from pathlib import Path
 from typing import Protocol
 
 from ruamel.yaml import YAML
+
+from .errors import ConcurrencyError
 
 LOGGER = logging.getLogger(__name__)
 
@@ -71,6 +73,27 @@ def _append_summary(engine: DecisionEngine, task_id: int | str, response: str, b
     engine.edit_task(task_id, append_body=summary)
 
 
+def _append_response_section(body: str, response: str, notes: str | None) -> str:
+    """Append a response section to an existing DR body."""
+    suffix_lines = ["## Response", f"- response: {response}"]
+    if notes is not None:
+        suffix_lines.append(notes)
+    suffix = "\n".join(suffix_lines)
+    cleaned_body = body.rstrip("\n")
+    if cleaned_body:
+        return f"{cleaned_body}\n\n{suffix}\n"
+    return f"{suffix}\n"
+
+
+def _rewrite_response(path: Path, meta: dict[str, object], body: str) -> None:
+    """Persist updated frontmatter and body to a DR file."""
+    yaml = YAML()
+    stream = StringIO()
+    yaml.dump(meta, stream)
+    frontmatter = stream.getvalue().rstrip("\n")
+    path.write_text(f"---\n{frontmatter}\n---\n{body}", encoding="utf-8", newline="\n")
+
+
 def _resolve_decisions_dir(engine: DecisionEngine) -> Path:
     """Resolve decisions directory from an engine instance."""
     kanban_dir = getattr(engine, "_kanban_dir", None)
@@ -108,56 +131,43 @@ def move_to_resolved(path: Path, resolved_dir: Path) -> Path:
         return candidate
 
 
-def create_dr(  # noqa: PLR0913
-    decisions_dir: Path,
+def resolve_decision(
+    path: Path,
+    response: str,
     engine: DecisionEngine,
     *,
-    task_id: int,
-    agent: str,
-    request_type: str,
-    body: str,
+    notes: str | None = None,
+    resolved_by: str = "unknown",
 ) -> Path:
-    """Create a pending DR file atomically, then block the task.
+    """Resolve one pending DR file and return the moved path.
 
-    Uses ``O_EXCL`` for creation and retries collisions with ``-2``, ``-3``,
-    etc. suffixes.
+    Raises:
+        ConcurrencyError: DR is already resolved (response is not pending).
     """
-    pending_dir = decisions_dir / "pending"
-    pending_dir.mkdir(parents=True, exist_ok=True)
+    meta, body = parse_dr(path)
+    current_response = str(meta.get("response", "pending"))
+    if current_response != "pending":
+        msg = f"Decision {path.name!r} is already resolved"
+        code = "ERR_STALE"
+        raise ConcurrencyError(code, msg)
 
-    created = datetime.now(tz=UTC).strftime("%Y-%m-%d")
-    frontmatter = (
-        "---\n"
-        f"task_id: {task_id}\n"
-        f"agent: {agent}\n"
-        f"request_type: {request_type}\n"
-        f"created: '{created}'\n"
-        "response: pending\n"
-        "---\n\n"
-    )
-    content = frontmatter + body
+    updated = dict(meta)
+    updated["response"] = response
+    updated["resolved_by"] = resolved_by
+    body_with_response = _append_response_section(body, response, notes)
+    _rewrite_response(path, updated, body_with_response)
 
-    slug = _slugify(request_type)
-    counter = 1
-    while True:
-        filename = f"{task_id}-{slug}.md" if counter == 1 else f"{task_id}-{slug}-{counter}.md"
-        candidate = pending_dir / filename
-        try:
-            fd = os.open(candidate, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
-            with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
-                handle.write(content)
-            break
-        except FileExistsError:
-            counter += 1
-
+    task_id = updated.get("task_id")
     try:
-        engine.edit_task(task_id, blocked=True, block_reason="DR pending")
-    except Exception:
-        if candidate.exists():
-            candidate.unlink()
-        raise
+        _append_summary(engine, task_id, response, body)
+        if response in {"approved", "rejected"}:
+            engine.edit_task(task_id, blocked=False)
+    except FileNotFoundError:
+        # Legacy callers may resolve DRs that point outside the active engine.
+        pass
 
-    return candidate
+    resolved_dir = path.parent.parent / "resolved"
+    return move_to_resolved(path, resolved_dir)
 
 
 def resolve_pending_drs(

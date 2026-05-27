@@ -19,10 +19,8 @@ max_line_length = unset
 [serve/*/tests/**/*.py]
 max_line_length = unset
 
-[serve/cockpit/web/src/__tests__/**/*.ts]
-max_line_length = unset
-
-[serve/cockpit/web/src/__tests__/**/*.tsx]
+# Cockpit frontend — Tailwind utility classes make 120-char limits impractical
+[serve/cockpit/web/src/**/*.{ts,tsx}]
 max_line_length = unset
 
 [serve/cockpit/web/e2e/**/*.ts]

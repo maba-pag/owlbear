@@ -15,6 +15,7 @@ from owlbear_kanban.errors import (
     ValidationError,
 )
 from owlbear_kanban.models import BoardConfig, Task, TaskSummary
+from owlbear_kanban.storage_io import atomic_write
 
 __all__ = [
     "AgentView",
@@ -27,4 +28,5 @@ __all__ = [
     "TaskSummary",
     "ValidationError",
     "WorkSession",
+    "atomic_write",
 ]

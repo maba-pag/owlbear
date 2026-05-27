@@ -16,7 +16,7 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 
 ### Tools
 
-The server exposes 9 tools:
+The server exposes 11 tools:
 
 | Tool | Signature |
 |------|-----------|
@@ -28,15 +28,19 @@ The server exposes 9 tools:
 | `move_task` | `move_task(id: str \| int, status: str, archival_reason: str \| None = None, archival_refs: list[int] \| None = None)` |
 | `start_work` | `start_work(id: str \| int)` |
 | `end_work` | `end_work(id: str \| int, outcome: str, move_to: str \| None = None, note: str \| None = None, archival_reason: str \| None = None, archival_refs: list[int] \| None = None, block_reason: str \| None = None)` |
-| `create_dr` | `create_dr(task_id: str \| int, agent: str, request_type: str, body: str)` |
+| `create_request` | `create_request(task_id: str \| int, kind: str, title: str, summary: str, agent: str, options: list[dict] \| None = None, body: str = "")` |
+| `list_requests` | `list_requests(status: str = "pending", task_id: str \| int \| None = None)` |
+| `show_request` | `show_request(request_id: str)` |
 
 ### Lifecycle and dispatch semantics
 
 - `create_task.priority`: omitted or `""` uses the product topology default priority (`important`). Pass an explicit value when a different priority is intended.
 
-- `pick_tasks` is read-only. It computes dispatch waves from task state and never mutates task files.
+- `pick_tasks` computes dispatch waves from task state. It sweeps pending request state as part of dispatch, so it is not read-only.
 - `start_work` delegates to engine claim logic. If a rival claim is still live, the call fails; if the rival claim is expired, the claim is reclaimed and the task is claimed for the caller.
-- `create_dr` creates decision/action request files linked to a task.
+- `create_request` creates a structured pending request linked to a task and returns its full payload plus a `guidance` array.
+- `list_requests` returns request summaries (body excluded) filtered by status and optional task.
+- `show_request` returns a single request record with full detail including body and resolution. Accepts a UUID4 `request_id`.
 - Cockpit maintenance triggers cleanup via its `POST /tasks/cleanup` route, which calls engine cleanup and releases expired claims plus archives done tasks.
 
 ## Data Projections and Envelopes
@@ -128,7 +132,7 @@ Documented lifecycle outcomes for agent routing:
 ### Body text normalization
 
 The following text body parameters are normalized at the MCP ingress boundary before any write:
-`create_task.body`, `edit_task.body`, `edit_task.append_body`, `end_work.note`, `create_dr.body`.
+`create_task.body`, `edit_task.body`, `edit_task.append_body`, `end_work.note`, `create_request.body`.
 
 - Literal `\n` sequences are converted to actual newlines.
 - To keep a literal `\n` in the stored file, send `\\n` in JSON input.

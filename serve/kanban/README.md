@@ -48,8 +48,26 @@ engine.release_task(42)
 | `repair_storage()` | Quarantine corrupt task files and create action-required tasks |
 | `cleanup()` | User-triggered maintenance: release expired claims, move drift-archived files to `archive/`, remove tasks/ duplicates of archived records, and return a `CleanupResult` with `released_claim_ids`, `archived_task_ids`, `duplicate_removed_ids`, and `skipped_items` |
 | `list_sessions(**kwargs)` | Derived `SessionRecord` objects from `activity.jsonl` |
+| `create_request(task_id, kind, title, summary, agent, *, options=None, body="")` | Write a decision/action request to `decisions/pending/{uuid}.md`, block the task, and return a `RequestRecord`; rolls back the file if blocking fails |
+| `get_request(request_id)` | Return a `RequestRecord` for the given UUID, searching `decisions/pending/` then `decisions/resolved/`; raises `NotFoundError` when absent, `ValidationError` on corrupt or invalid files |
+| `resolve_request(request_id, selected_option_id, free_text)` | Resolve a pending structured request: validates option/kind/null constraints, writes updated file to `decisions/resolved/{request_id}.md`, deletes `decisions/pending/{request_id}.md`, appends write-back to the task body, and conditionally unblocks the task when no sibling structured requests remain pending; returns `RequestRecord` with populated resolution fields; raises `NotFoundError(ERR_NOT_FOUND)` or `ValidationError(ERR_ALREADY_RESOLVED)` |
+| `list_requests(status="pending", task_id=None)` | List structured request files by status (`"pending"`, `"resolved"`, or `"all"`) with optional `task_id` filter; only UUID4-named files are returned; corrupt files are skipped with a WARNING log; results ordered by `created_at` ascending; returns `list[RequestRecord]` |
+| `sweep_requests()` | Scan `decisions/pending/` for UUID4-named files where resolution fields are populated (manual edits or crash recovery); for each match in sorted filename order: sets `resolved_at`, moves to `decisions/resolved/`, deletes pending copy, appends write-back to the task body, and conditionally unblocks the task; post-move side-effect failures are logged at WARNING without interrupting the sweep; returns `list[str]` of resolved request IDs |
 
 The `guidance` list in `SingleTaskResponse` from `start_work()` carries dependency warnings. When the task has at least one unresolved active dependency (a `depends_on` entry whose task is not archived), exactly one string is emitted: `"⚠️ This task has unresolved dependencies (IDs: {id, …}). Review and confirm with the user that starting this work is intentional."` Callers should surface this to the user before proceeding. When all dependencies are archived or the `depends_on` list is empty, `guidance` is `[]`. Dep-lookup exceptions are swallowed silently; failed lookups are excluded from the active-ID set.
+
+### Utilities
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `atomic_write` | `atomic_write(target: Path, content: str) -> None` | Crash-safe file write: writes content to a sibling `.tmp-*` temp file, fsyncs, then atomically renames to `target`. Removes temp on any error. |
+
+```python
+from owlbear_kanban import atomic_write
+from pathlib import Path
+
+atomic_write(Path("output.md"), "# Hello\n")
+```
 
 ### Product topology (fixed)
 
@@ -76,7 +94,7 @@ for wave in response.waves:
         ...
 ```
 
-`AgentView.pick_tasks` runs a five-step read-only pipeline: topology validation against fixed product statuses, filter (exclude tasks with a live claim, archived/blocked tasks, and tasks whose `depends_on` entries are still active or otherwise dependency-blocked; apply TDD gate for in-progress tasks without `## Test-Writer Notes` unless tagged non-impl; apply clarity gate for active statuses without bullet/numbered AC lines; post-rehydrate archived-status guard skips tasks archived between list and show), deterministic sort (priority ASC, age DESC, id ASC), greedy wave assembly (size cap, dep-disjointness, agent-bucket compatibility), and fixed status-to-agent assignment.
+`AgentView.pick_tasks` begins with a maintenance step — `sweep_requests()` is called to flush manually-resolved structured requests before dispatch (failures are caught and logged at WARNING without interrupting the pipeline). The remaining five steps are read-only: topology validation against fixed product statuses, filter (exclude tasks with a live claim, archived/blocked tasks, and tasks whose `depends_on` entries are still active or otherwise dependency-blocked; apply TDD gate for in-progress tasks without `## Test-Writer Notes` unless tagged non-impl; apply clarity gate for active statuses without bullet/numbered AC lines; post-rehydrate archived-status guard skips tasks archived between list and show), deterministic sort (priority ASC, age DESC, id ASC), greedy wave assembly (size cap, dep-disjointness, agent-bucket compatibility), and fixed status-to-agent assignment.
 
 Concurrency is handled via optimistic concurrency control (OCC): `write_task_if_unchanged` compares the task's `updated` timestamp before writing and raises `ConcurrencyError` on stale reads.
 

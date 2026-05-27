@@ -44,12 +44,14 @@ EXPECTED_TOOLS: frozenset[str] = frozenset(
         "list_tasks",
         "show_task",
         "create_task",
-        "create_dr",
         "move_task",
         "edit_task",
         "start_work",
         "end_work",
         "pick_tasks",
+        "create_request",
+        "list_requests",
+        "show_request",
     }
 )
 
@@ -212,7 +214,7 @@ class TestFromAC_ToolRegistryContract:
     """AC3: Live registry (post-lifespan, no exclusions) matches EXPECTED_TOOLS exactly."""
 
     @pytest.mark.asyncio
-    async def test_live_registry_contains_exactly_nine_tools(
+    async def test_live_registry_contains_exactly_twelve_tools(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
@@ -222,7 +224,7 @@ class TestFromAC_ToolRegistryContract:
         Runs app_lifespan (not just module import) because _apply_tool_exclusions
         executes at lifespan time. With no exclusions, the full deployment contract
         must be intact. Introspects mcp._tool_manager._tools — the established pattern
-        in test_tool_annotations_494.py, test_mcp_create_dr_1182.py, etc.
+        in test_tool_annotations_494.py and related MCP contract tests.
         """
         board = _make_board(tmp_path)
         monkeypatch.setenv("KANBAN_DIR", str(board))

@@ -276,6 +276,18 @@ Rules:
 
 Before your final status advance, write 3-5 bullets covering problems faced, workarounds applied, patterns discovered, time sinks, and quality gaps. Skip if nothing notable happened.
 
+If `recall_memory` was called during the task, memory assessment is mandatory before final status advance. Call `assess_memories` with every recalled memory ID and use this exact framing:
+
+For each recalled memory entry, categorize your experience:
+- **Outstanding** — this entry's guidance was genuinely great for this task
+- **Used but unremarkable** — I applied or referenced this entry's guidance and it was adequate
+- **Didn't use** — I didn't apply or reference this entry's guidance
+- **Factually wrong** — this entry contains incorrect information
+
+"Apply or reference" includes: following guidance, avoiding a warned pitfall, or confirming your approach was correct.
+
+Treat this as opaque quality categorization guidance for agents; do not explain score mechanics.
+
 Use `save_memory` for each notable finding. Required parameters: `title`, `content`, `categories`, `confidence=0.8`, `source_agent="{agent_name}"`.
 
    | Bullet type | MCP category |
