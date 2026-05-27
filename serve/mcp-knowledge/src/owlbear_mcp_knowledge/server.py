@@ -865,8 +865,13 @@ async def search_knowledge(
 ) -> list[SearchResult] | str:
     """Search the knowledge base for relevant context."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    query_facade = getattr(app_ctx, "__dict__", {}).get("query_facade")
-    if query_facade is None and "query_facade" not in getattr(app_ctx, "__dict__", {}):
+    has_query_facade = True
+    try:
+        query_facade = object.__getattribute__(app_ctx, "query_facade")
+    except AttributeError:
+        has_query_facade = False
+        query_facade = None
+    if query_facade is None and not has_query_facade:
         qs = app_ctx.query_service
         if qs is None:
             return "error: Knowledge service not available."
