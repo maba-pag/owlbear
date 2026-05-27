@@ -27,7 +27,30 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from owlbear_mcp_knowledge.server import mcp
+
 _ROOT = Path(__file__).parent.parent
+
+_NEW_ENRICHMENT_NAMES: frozenset[str] = frozenset({
+    "knowledge_enrichment_claim_batch",
+    "knowledge_enrichment_store",
+    "knowledge_enrichment_retry",
+})
+_OLD_ENRICHMENT_NAMES: frozenset[str] = frozenset({
+    "get_next_batch",
+    "store_enrichment",
+    "retry_failed_enrichment",
+})
+
+
+def _registered_tool_names() -> set[str]:
+    """Return the set of tool names registered in the live MCP server."""
+    if hasattr(mcp, "_tool_manager"):
+        return {
+            getattr(t, "name", None)
+            for t in mcp._tool_manager.list_tools()  # noqa: SLF001
+        }
+    return set()
 
 
 class TestFromAC_EnrichmentToolRename:
@@ -96,3 +119,67 @@ class TestFromAC_EnrichmentToolRename:
             assert new_name in content, (
                 f"New symbol '{new_name}' not found in {test_file}"
             )
+
+    # ------------------------------------------------------------------
+    # AC2 retry-fill — live MCP registry introspection
+    # ------------------------------------------------------------------
+
+    def test_ac2_new_enrichment_names_in_live_mcp_registry(self) -> None:
+        """AC2 (retry): all 3 new enrichment names appear in the live MCP registry.
+
+        Callability and __all__ membership do not prove registry wiring; a broken
+        implementation could export aliases in __all__ while the registry retains
+        old names.  This test exercises the same registry introspection pattern as
+        test_knowledge_tool_rename_1895.py.
+        """
+        registry = _registered_tool_names()
+        missing = _NEW_ENRICHMENT_NAMES - registry
+        assert not missing, (
+            f"New enrichment tool names missing from live MCP registry: {sorted(missing)}. "
+            f"Registry snapshot: {sorted(n for n in registry if n)}"
+        )
+
+    def test_ac2_old_enrichment_names_absent_from_live_mcp_registry(self) -> None:
+        """AC2 (retry): all 3 old enrichment names are absent from the live MCP registry.
+
+        Ensures the registry was updated and no stale old-name registration remains.
+        """
+        registry = _registered_tool_names()
+        still_present = _OLD_ENRICHMENT_NAMES & registry
+        assert not still_present, (
+            f"Old enrichment tool names still in live MCP registry: {sorted(still_present)}"
+        )
+
+    # ------------------------------------------------------------------
+    # AC4 retry-fill — full three-pair rename coverage in agent file
+    # ------------------------------------------------------------------
+
+    def test_ac4_all_new_enrichment_names_in_agent_allowlist(self) -> None:
+        """AC4 (retry): all 3 new enrichment names appear in knowledge-enricher.agent.md.
+
+        The original test covered only knowledge_enrichment_claim_batch (1 of 3).
+        This test proves the full allowlist surface.
+        """
+        content = (_ROOT / "share/agents/knowledge-enricher.agent.md").read_text()
+        missing = [
+            name for name in sorted(_NEW_ENRICHMENT_NAMES)
+            if f"ob-knowledge/{name}" not in content
+        ]
+        assert not missing, (
+            f"New enrichment names missing from agent allowlist: {missing}"
+        )
+
+    def test_ac4_all_old_enrichment_names_absent_from_agent_allowlist(self) -> None:
+        """AC4 (retry): all 3 old enrichment names are absent from knowledge-enricher.agent.md.
+
+        The original test covered only get_next_batch (1 of 3).
+        This test proves the full old-name removal.
+        """
+        content = (_ROOT / "share/agents/knowledge-enricher.agent.md").read_text()
+        still_present = [
+            name for name in sorted(_OLD_ENRICHMENT_NAMES)
+            if f"ob-knowledge/{name}" in content
+        ]
+        assert not still_present, (
+            f"Old enrichment names still in agent allowlist: {still_present}"
+        )
