@@ -851,7 +851,10 @@ async def knowledge_register_source(  # noqa: PLR0913
     except ValidationError as exc:
         raise ToolError(str(exc)) from exc
 
-    source = await asyncio.to_thread(store.register_source, registration)
+    try:
+        source = await asyncio.to_thread(store.register_source, registration)
+    except ValueError as exc:
+        raise ToolError(str(exc)) from exc
     return {
         "id": str(source.id),
         "name": str(source.name),
