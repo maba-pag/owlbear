@@ -26,7 +26,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from owlbear_mcp_knowledge.server import app_lifespan, ingest_document
+from owlbear_mcp_knowledge.server import app_lifespan, knowledge_ingest as ingest_document
 
 
 # ---------------------------------------------------------------------------
