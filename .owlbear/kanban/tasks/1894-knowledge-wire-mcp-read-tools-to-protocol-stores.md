@@ -1,10 +1,10 @@
 ---
 id: 1894
 title: 'Knowledge: wire MCP read tools to protocol stores'
-status: review
+status: done
 priority: needed
 created: 2026-05-27T11:05:26.124244+02:00
-updated: 2026-05-27T17:36:51.031518+02:00
+updated: 2026-05-27T18:02:00.915055+02:00
 tags:
   - knowledge
   - layer-3
@@ -24,7 +24,7 @@ ac:
 proof_bundle: existing
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-27T18:02:00.915055+02:00
 archival_reason:
 archival_refs: []
 ---
@@ -307,3 +307,39 @@ Confirmed duplicate of #1881. Auditor should archive as `duplicate` with archiva
 - Coverage: not required for proof-bundle existing gate; quality-runner reported none.
 - Evidence summary: required proof is green and matches architect cycle-3 AC framing (provenance-focused search response contract + remaining read-tool wiring checks).
 - Fixes applied: none (pass-through).
+
+[[2026-05-27T17:51:36+02:00]]
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation: PASS #1894 -> docs | AC mapped to code and evidence sufficient.
+- Builder evidence reviewed first: proof bundle `existing`; builder reported 95 passed, 0 failed, 0 skipped on `tests/test_mcp_knowledge_read_tools_1881.py` and `tests/test_search_provenance.py`, with `ruff` clean. The current builder note is internally consistent with the architect cycle-3 AC.
+- Independent sanity check: editor diagnostics report no errors in `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py`, `serve/mcp-knowledge/src/owlbear_mcp_knowledge/_types.py`, `tests/test_mcp_knowledge_read_tools_1881.py`, and `tests/test_search_provenance.py`.
+
+| AC Line | Code Evidence | Test Evidence | Status |
+|---|---|---|---|
+| search_knowledge delegates to QueryFacade.search; response includes provenance fields (retrieval_path, graph_context, entities, related_sources, source) | `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:793`, `:813`, `:850`, `:851`, `:852`, `:853`, `:859`, `:860`, `:891`, `:900` | `tests/test_mcp_knowledge_read_tools_1881.py:286`, `:301`, `:304`, `:321`, `:322`, `:323`, `:346`, `:360`, `:1608`, `:1617`, `:1620`, `:1627`, `:1630`, `:1639`, `:1640`, `:1643`, `:1653`, `:1654`, `:1657`, `:1665`, `:1666`, `:1669`, `:1680`, `:1681`; durable provenance assertions also remain green at `tests/test_search_provenance.py:112`, `:168`, `:196`, `:248` | PASS |
+| list_sources delegates to SqliteSourceStore.list_sources; filters by scope | `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:903`, `:904`, `:912` | `tests/test_mcp_knowledge_read_tools_1881.py:390`, `:404`, `:407`, `:422`, `:425`, `:452`, `:457`, `:470`, `:474`, `:488`, `:1693`, `:1725`, `:1730`, `:1733`, `:1761`, `:1766` | PASS |
+| knowledge_entity_lookup tool exposed, delegates to QueryFacade.lookup_entity | `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:931`, `:932`, `:953` | `tests/test_mcp_knowledge_read_tools_1881.py:501`, `:508`, `:510`, `:519`, `:524`, `:532`, `:547`, `:559`, `:562`, `:577`, `:578`, `:579`, `:1778`, `:1790`, `:1794`, `:1814`, `:1818`, `:1835` | PASS |
+| get_stats delegates to IngestCoordinator.stats; response includes sources, documents, chunks, graph counts | `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:1151`, `:1152`, `:1165`, `:1166` | `tests/test_mcp_knowledge_read_tools_1881.py:626`, `:645`, `:648`, `:666`, `:669`, `:688`, `:691`, `:715`, `:718`, `:738`, `:1312`, `:1350`, `:1358` | PASS |
+| SqliteGraphStore.ensure_tables() called at startup | `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:576`, `:583`, `:592` | `tests/test_mcp_knowledge_read_tools_1881.py:261`, `:274` | PASS |
+| All error paths (ValueError, LookupError) mapped to ToolError | `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:898`, `:955`, `:958` | `tests/test_mcp_knowledge_read_tools_1881.py:1093`, `:1109`, `:1131`, `:1145`, `:1148`, `:1164` | PASS |
+
+- Blocking findings: none.
+
+## Observations
+- Prior reviewer rejections were about superseded AC text. This review used the current frontmatter `ac` list as authoritative after architect cycle 3.
+- The task is still a duplicate/pass-through of archived task `#1881`; no implementation delta was required in this cycle, but the current AC and proof surface are sufficient for reviewer PASS.
+
+[[2026-05-27T17:57:31+02:00]]
+## Docs Gate
+
+**Verdict: PASS — no docs impact**
+
+| Item | Result | Evidence |
+|------|--------|----------|
+| README Verification | N/A | Builder: "Files changed: none" — pass-through duplicate of #1881; no convention mapping applies |
+| External Attribution | N/A | No external sources used |
+| Research Doc | PASS | `.owlbear/research/mcp-read-tools-wiring.md` exists; linked from task body Context section |
+| Deletion Detection | N/A | No files deleted |
+
+**Scratch cleanup:** No `1894-*` scratch files found.
