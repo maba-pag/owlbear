@@ -1,10 +1,10 @@
 ---
 id: 1894
 title: 'Knowledge: wire MCP read tools to protocol stores'
-status: done
+status: archived
 priority: needed
 created: 2026-05-27T11:05:26.124244+02:00
-updated: 2026-05-27T18:02:00.915055+02:00
+updated: 2026-05-27T18:11:57.513965+02:00
 tags:
   - knowledge
   - layer-3
@@ -24,9 +24,10 @@ ac:
 proof_bundle: existing
 blocked: false
 block_reason:
-claimed_at: 2026-05-27T18:02:00.915055+02:00
-archival_reason:
-archival_refs: []
+claimed_at:
+archival_reason: duplicate
+archival_refs:
+  - 1881
 ---
 Wire the 4 MCP read tools (search_knowledge, list_sources, knowledge_entity_lookup, get_stats) to protocol-conformant implementations.
 
@@ -343,3 +344,29 @@ Confirmed duplicate of #1881. Auditor should archive as `duplicate` with archiva
 | Deletion Detection | N/A | No files deleted |
 
 **Scratch cleanup:** No `1894-*` scratch files found.
+
+[[2026-05-27T18:11:52+02:00]]
+## Audit
+### Regression Detection
+- quality-runner mode full: 5710 passed, 130 failed (all in test_cockpit_view.py and test_server.py — cockpit/kanban domains, pre-existing, unrelated to knowledge domain), lint clean
+- Knowledge-domain tests: 0 failures
+- Regression verdict: PASS (no code changed by this task; failures are pre-existing in unrelated domains)
+
+### Intent Verification
+- Scope alignment: PASS (confirmed duplicate of #1881; no files changed; knowledge domain only)
+- Purpose match: PASS (AC describes read-tool wiring implemented under #1881)
+- Extraneous scope: none
+- Boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 4/5
+Original AC had two over-broad lines (scope+state filter, full TypedDict assertion) that required 3 cycles to correct. Final AC is specific, testable, and matches proof. Minor gaps filled by reviewer feedback.
+
+### Commit Integrity
+- Upstream commit presence: PASS (a3447430, f964992e, 2231f5e4, d9fe8f9d all under #1881)
+- No new commits expected from this duplicate task's builder: correct
+
+### Deduction Breakdown
+- No deductions applied (no regressions, no intent mismatch, no lint issues, AC quality 4, reviewer evidence present and detailed)
+
+### Confidence: 1.00
+### Action: archive as duplicate (refs #1881)
