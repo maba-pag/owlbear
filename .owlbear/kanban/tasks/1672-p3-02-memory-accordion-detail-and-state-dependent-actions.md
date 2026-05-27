@@ -4,7 +4,7 @@ title: 'P3-02: Memory accordion detail and state-dependent actions'
 status: in-progress
 priority: important
 created: 2026-05-18T17:44:11.043517+02:00
-updated: 2026-05-20T01:12:06.968267+02:00
+updated: 2026-05-27T11:51:05.851947+02:00
 tags:
   - phase-3
   - scope:cockpit-web
@@ -38,7 +38,7 @@ ac:
 proof_bundle: behavioral
 blocked: false
 block_reason: 'test-writer crashed twice: agent returned no output on both attempts'
-claimed_at: 2026-05-20T01:12:06.968267+02:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---

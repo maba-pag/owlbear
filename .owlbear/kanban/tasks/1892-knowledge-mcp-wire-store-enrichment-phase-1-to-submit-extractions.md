@@ -1,10 +1,10 @@
 ---
 id: 1892
 title: 'Knowledge: MCP wire store_enrichment phase-1 to submit_extractions'
-status: todo
+status: docs
 priority: needed
 created: 2026-05-27T01:00:59.321864+02:00
-updated: 2026-05-27T10:59:23.243266+02:00
+updated: 2026-05-27T11:43:45.499911+02:00
 tags:
   - knowledge
   - layer-3
@@ -354,3 +354,33 @@ Task returned from 3rd reviewer rejection with two findings: (1) AC1 BEGIN test 
 
 ### Verdict: APPROVE (architect override of reviewer cycle-3 findings)
 ### Action Taken: Override reviewer proof-aesthetic concerns after 3 review cycles with correct implementation confirmed. Advanced backlog → todo.
+
+[[2026-05-27T11:21:01+02:00]]
+## Test-Writer Notes
+- Architect override cycle (3rd review rejection): architect overrode reviewer's proof-aesthetic findings — AC1 conn.commit/rollback assertion not required (conn is dead in phase-1 branch), AC7 side_effect IS invocation proof (empty entities/edges produce no parse errors; only submit_extractions can fire the ValueError).
+- No new AC lines added in this cycle.
+- Quality-runner verification: 41 passed, 0 failed, ruff clean.
+- Builder skip: test-only retry, all tests green against current implementation.
+- Advancing directly to review per Step 1b.1.
+
+[[2026-05-27T11:43:45+02:00]]
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation: PASS #1892 to docs | AC mapped to code and evidence sufficient.
+- Builder evidence reviewed: task-local suite 41 passed, scoped lint clean, scoped coverage reported for owlbear_mcp_knowledge.server, adjacent phase-2 regression class green, and current IDE diagnostics show no errors in the reviewed source/test files.
+- Challenger cross-check: reconsider (confidence 0.68). Rebuttal accepted:
+  - AC1 objection does not hold. Transaction management remains confined to the candidate_id branch at serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:228-242, while the phase-1 branch delegates directly to enrichment_store.submit_extractions at serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:264. Task-local tests prove the phase-1 call path and chunk_id passthrough at tests/test_store_enrichment_phase1_1892.py:84 and :91, plus no phase-1 BEGIN call at tests/test_store_enrichment_phase1_1892.py:99.
+  - AC7 objection does not hold. The task-local wrapper tests at tests/test_store_enrichment_phase1_1892.py:554, :565, :577, and :591 prove that ValueError from submit_extractions is marked failed and wrapped at the MCP boundary, AC1 already proves the phase-1 path reaches submit_extractions, and the underlying unresolved-ref ValueError behavior is independently proved in tests/test_enrichment_store_1876.py:460, :474, :488, and :502 against the store guard at serve/knowledge/src/owlbear_knowledge/stores/enrichment.py:349.
+- AC evidence map:
+  - AC1 PASS: serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:228, :233, :240, :242, :264; tests/test_store_enrichment_phase1_1892.py:84, :91, :99.
+  - AC2 PASS: serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:279, :312, :319; tests/test_store_enrichment_phase1_1892.py:507, :521.
+  - AC3 PASS: serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:330, :352, :358; tests/test_store_enrichment_phase1_1892.py:535.
+  - AC4 PASS: serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:233; tests/test_enrichment_persistence_1557.py:803.
+  - AC5 PASS: serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:275; tests/test_store_enrichment_phase1_1892.py:291.
+  - AC6 PASS: serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:255, :258; tests/test_store_enrichment_phase1_1892.py:380, :404, :429, :455, :481.
+  - AC7 PASS: serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:264, :265, :268; tests/test_store_enrichment_phase1_1892.py:554, :565, :577, :591; tests/test_enrichment_store_1876.py:460, :474, :488, :502; serve/knowledge/src/owlbear_knowledge/stores/enrichment.py:349.
+- Blocking findings: none.
+
+## Observations
+- Earlier AC1 and AC7 rejects were theoretical proof-strength objections rather than observed implementation defects. The current combined code and test surface is sufficient for behavioral-bundle approval.
+- tests/test_enrichment_persistence_1557.py remains primarily a phase-2 regression surface; if the team later wants a broader durable phase-1 surface, that should be handled as a separate follow-up rather than held against this task.

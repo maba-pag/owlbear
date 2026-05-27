@@ -1,10 +1,10 @@
 ---
 id: 1893
 title: 'Knowledge: MCP wire ingest_document to IngestCoordinator.ingest'
-status: review
+status: archived
 priority: needed
 created: 2026-05-27T01:00:59.346799+02:00
-updated: 2026-05-27T10:55:43.356284+02:00
+updated: 2026-05-27T11:51:05.888084+02:00
 tags:
   - knowledge
   - layer-3
@@ -35,7 +35,7 @@ proof_bundle: behavioral
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 Replace IngestPipeline.ingest_text() in `ingest_document` with IngestCoordinator.ingest(IngestRequest). Resolve or create a source record for the inline document. Build IngestRequest with source_id and single IngestDocument.
@@ -355,3 +355,80 @@ Architecture review retry-2: refined proof expectations for two reviewer-identif
 - Tests per category: integration/happy 1, integration/error 1
 - Total: 35 tests, all PASS (direct-to-review: implementation already correct)
 - ruff: clean
+
+[[2026-05-27T11:17:59+02:00]]
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation (one line): PASS #1893 -> docs | AC mapped to code and evidence sufficient.
+- Independent verification:
+  - quality-runner recheck: `tests/test_ingest_document_coordinator_1893.py` -> 35 passed, 0 failed; `ruff` clean for `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py` and `tests/test_ingest_document_coordinator_1893.py`; scoped coverage for `owlbear_mcp_knowledge.server` 34%.
+  - behavioral-bundle challenger cross-check: proceed; no blocking blind spots found.
+- AC evidence map:
+| AC Line | Code Evidence | Test Evidence | Status |
+|---|---|---|---|
+| AC1 | `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:889-891,921-933` | `tests/test_ingest_document_coordinator_1893.py:158,172,212,358` | PASS |
+| AC2 | `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:898-918` | `tests/test_ingest_document_coordinator_1893.py:227,273,699,734` | PASS |
+| AC3 | `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:921,924-930` | `tests/test_ingest_document_coordinator_1893.py:358,389,408,433,452,471,485,499,511,525` | PASS |
+| AC4 | `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:938-940` | `tests/test_ingest_document_coordinator_1893.py:541,555,569,582,764` | PASS |
+| AC5 | `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:878-940` (no `ingest_pipeline.ingest_text()` path; broad handler at `:933`) | `tests/test_ingest_document_coordinator_1893.py:598,610,626,643` | PASS |
+
+## Observations
+- The prior runtime-wiring concern is now closed: request-thread `source_store_v2` access plus real `SqliteSourceStore` lifespan proof cover the AC2/AC4 boundary.
+- `tests/test_persistence_source_wiring.py` still encodes legacy pipeline-oriented assertions and is not valid proof for this coordinator-based AC set.
+- Direct git-status contamination check was not available from the current toolset during this review; this PASS is based on the claimed task state, current file contents, and fresh scoped executable verification.
+
+[[2026-05-27T11:20:37+02:00]]
+## Docs Gate
+
+### Item 1: README Verification
+- Target: `serve/mcp-knowledge/README.md` (convention mapping: `serve/mcp-knowledge/src/**` → `serve/mcp-knowledge/README.md`)
+- Layer 1 (grep): `ingest_document` row found; description referenced old `IngestPipeline.ingest_text()` behavior (content-hash delta detection, source linkage, anonymous-only inline provenance, partial graph warnings) — all stale after this task's coordinator wiring.
+- Layer 2 (LLM editorial): New implementation always uses shared `mcp-inline-{scope}` inline source; `source_url` stored as document URI only; response is `documents_processed/chunks_created/chunks_enqueued` with no warning mechanism.
+- **Fix applied**: Updated `ingest_document` table description to reflect actual coordinator-based behavior.
+
+### Item 2: External Attribution
+- N/A — no external sources used; pure internal wiring task.
+
+### Item 3: Research Doc
+- `.owlbear/research/mcp-ingest-document-wiring.md` exists and is referenced in task body Research Notes section. ✓
+
+### Item 4: Deletion Detection
+- `IngestPipeline.ingest_text()` removed from `ingest_document` tool path.
+- `serve/knowledge/README.md` lists `IngestPipeline` as a knowledge package export — still accurate (class exists; not mcp-knowledge's concern). No orphaned references in public docs.
+- `.owlbear/research/` mentions are historical notes only — out of scope.
+
+### Scratch Cleanup
+- No `1893-*` scratch files found. ✓
+
+### Files Updated
+- `serve/mcp-knowledge/README.md` — corrected `ingest_document` tool description
+
+[[2026-05-27T11:51:05+02:00]]
+## Audit
+### Regression Detection
+- quality-runner env fallback: xdist hung repeatedly (instrument_error); ran domain-scoped tests directly
+- Domain-scoped (serve/mcp-knowledge/tests/, serve/knowledge/tests/, task test, lifespan test): 66 passed, 0 failed
+- Adjacent knowledge tests (test_persistence_source_wiring.py, test_store_enrichment_phase1_1892.py): 46 passed, 4 failed
+- 4 failures are legacy assertions on ingest_text (AC5 intentionally removes this path); documented by builder and reviewer
+- Lint: clean for server.py and task test file
+- regression verdict: PASS
+
+### Intent Verification
+- scope alignment: PASS (all changes in serve/mcp-knowledge/ and tests/test_ingest_document_coordinator_1893.py; knowledge domain only)
+- purpose match: PASS (wires ingest_document from legacy IngestPipeline to IngestCoordinator per stated task purpose)
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 5/5
+AC lines highly specific with exact method calls, parameter values, guard behavior, and response format. Architect refined vague originals into mechanically testable conditions. Multiple review cycles resolved proof gaps through targeted architect guidance.
+
+### Commit Integrity
+- upstream commit presence: PASS (builder: 0138219e, b5073158; test-writer: 7dd1543b, ff96e1be, 80092f1a)
+- doc-writer README: uncommitted working-tree change (process concern noted; other tasks also have uncommitted README updates mixed in)
+- kanban commit packaging: pending
+
+### Deduction Breakdown
+No deductions. Legacy test failures are intentional (AC5 removes old contract). Lint clean. Reviewer evidence detailed with PASS. No intent mismatch.
+
+### Confidence: 1.00
+### Action: archive

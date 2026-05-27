@@ -4,7 +4,7 @@ title: 'P2-02: ResolveModal integration + modal snapshot SSE guard'
 status: docs
 priority: important
 created: 2026-05-18T00:50:17.184817+02:00
-updated: 2026-05-20T01:12:00.867228+02:00
+updated: 2026-05-27T11:51:05.840134+02:00
 tags:
   - phase-2
   - scope:cockpit-web
@@ -24,7 +24,7 @@ ac:
 proof_bundle: behavioral
 blocked: false
 block_reason:
-claimed_at: 2026-05-20T01:12:00.867228+02:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---

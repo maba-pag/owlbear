@@ -4,7 +4,7 @@ title: 'P2-04: Remove DecisionViewport from sidecar'
 status: in-progress
 priority: important
 created: 2026-05-18T00:50:17.215196+02:00
-updated: 2026-05-20T01:12:11.159535+02:00
+updated: 2026-05-27T11:51:05.846356+02:00
 tags:
   - phase-2
   - scope:cockpit-web
@@ -22,7 +22,7 @@ ac:
 proof_bundle: behavioral
 blocked: false
 block_reason:
-claimed_at: 2026-05-20T01:12:11.159535+02:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
