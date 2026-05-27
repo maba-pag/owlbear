@@ -909,87 +909,32 @@ async def refresh_source(ctx: Context, source_id: str) -> dict | str:
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True))
-async def remove_source(ctx: Context, source_id: str) -> dict[str, int]:
-    """Delete a source after removing vectors; abort on vector deletion exceptions."""
+async def remove_source(ctx: Context, source_id: str) -> dict[str, Any]:
+    """Delete a source through ingest-coordinator purge orchestration."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    store = app_ctx.source_store
-    if store is None:
+    source_store = app_ctx.source_store_v2
+    if source_store is None:
         msg = "source store not available"
         raise ToolError(msg)
 
-    source = store.get(source_id)
+    source = source_store.get_source(source_id)
     if source is None:
         msg = f"Source '{source_id}' not found"
         raise ToolError(msg)
 
-    conn = app_ctx.conn
-    vector_store = app_ctx.vector_store
-    if vector_store is None:
-        msg = "vector store not available"
+    coordinator = app_ctx.ingest_coordinator
+    if coordinator is None:
+        msg = "ingest coordinator not available"
         raise ToolError(msg)
 
-    doc_count_row = conn.execute("SELECT COUNT(*) FROM documents WHERE source_id = ?", (source_id,)).fetchone()
-    chunk_count_row = conn.execute(
-        """
-        SELECT COUNT(*)
-        FROM chunks c
-        JOIN documents d ON c.document_id = d.id
-        WHERE d.source_id = ?
-        """,
-        (source_id,),
-    ).fetchone()
-    entity_count_row = conn.execute(
-        """
-        SELECT COUNT(*)
-        FROM entities e
-        JOIN documents d ON e.document_id = d.id
-        WHERE d.source_id = ?
-        """,
-        (source_id,),
-    ).fetchone()
-
-    chunk_rows = conn.execute(
-        """
-        SELECT c.id
-        FROM chunks c
-        JOIN documents d ON c.document_id = d.id
-        WHERE d.source_id = ?
-        """,
-        (source_id,),
-    ).fetchall()
-    chunk_ids = [str(row[0]) for row in chunk_rows]
-    entity_rows = conn.execute(
-        """
-        SELECT e.id
-        FROM entities e
-        JOIN documents d ON e.document_id = d.id
-        WHERE d.source_id = ?
-        """,
-        (source_id,),
-    ).fetchall()
-    entity_ids = [str(row[0]) for row in entity_rows]
-
-    try:
-        for vector_id in [*chunk_ids, *entity_ids]:
-            vector_store.delete_embedding(vector_id)
-    except Exception as exc:
-        msg = f"Failed to delete vectors for source '{source_id}': {exc}"
-        raise ToolError(msg) from exc
-
-    doc_count = int(doc_count_row[0] if doc_count_row is not None else 0)
-    chunk_count = int(chunk_count_row[0] if chunk_count_row is not None else 0)
-    entity_count = int(entity_count_row[0] if entity_count_row is not None else 0)
-    logger.info(
-        "remove_source audit source_id=%s source_name=%s documents=%d chunks=%d entities=%d",
-        source_id,
-        source.name,
-        doc_count,
-        chunk_count,
-        entity_count,
-    )
-    store.delete_cascade(source_id)
+    purge_result = await coordinator.delete_source(source_id)
     return {
-        "documents": doc_count,
-        "chunks": chunk_count,
-        "entities": entity_count,
+        "status": purge_result.status.value,
+        "completed_steps": list(purge_result.completed_steps),
+        "failed_step": purge_result.failed_step,
+        "error": purge_result.error,
+        "source": purge_result.source.model_dump(mode="json"),
+        "content": purge_result.content.model_dump(mode="json"),
+        "enrichment": purge_result.enrichment.model_dump(mode="json"),
+        "graph": purge_result.graph.model_dump(mode="json"),
     }
