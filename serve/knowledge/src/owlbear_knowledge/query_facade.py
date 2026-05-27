@@ -234,9 +234,6 @@ class QueryFacade:
                 chunk_count += line_chunks
                 continue
 
-            remaining = max_chars - current_len
-            if remaining > 0:
-                rendered_parts.append(segment[:remaining])
             truncated = True
             break
 
