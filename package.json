@@ -1,4 +1,5 @@
 {
+  "name": "owlbear",
   "private": true,
   "scripts": {
     "test": "npm --prefix serve/cockpit/web test --",
