@@ -7,7 +7,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Literal
 
-from owlbear_knowledge.protocol import HybridEmbedding
+from owlbear_knowledge.embeddings import HybridEmbedding
 
 try:
     from qdrant_client import QdrantClient

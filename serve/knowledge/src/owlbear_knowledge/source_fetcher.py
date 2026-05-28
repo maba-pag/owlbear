@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from owlbear_knowledge.cancellation import CancelSignal
-    from owlbear_knowledge.protocol import ContentFetcher
+    from owlbear_knowledge.fetcher import ContentFetcher
     from owlbear_knowledge.protocols.sources import FetchTransport
 
 

@@ -1,15 +1,13 @@
-"""Utility functions: normalization, serialization, validation, extraction."""
+"""Utility functions: normalization and serialization helpers."""
 
 from __future__ import annotations
 
-import hashlib
 import re
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from mcp.server.fastmcp.exceptions import ToolError
 
-from owlbear_knowledge.fetcher import HttpxContentFetcher
-from owlbear_knowledge.models import Edge, EntityType, RelationType
+from owlbear_knowledge.fetcher import ContentFetcher, HttpxContentFetcher
 
 from ._types import (
     _MAX_ENRICHMENT_BATCH_SIZE,
@@ -18,12 +16,6 @@ from ._types import (
     SearchSource,
     _BrowserContentFetcher,
 )
-
-if TYPE_CHECKING:
-    from owlbear_knowledge.protocol import ContentFetcher
-
-if False:  # TYPE_CHECKING
-    pass
 
 _SANITIZED_ERROR_MAX_LEN = 120
 _ERROR_CLASS_OR_HTTP_RE = re.compile(r"(?<![/\\])[A-Z][a-zA-Z]*(?:Error|Exception)|HTTP \d{3}")
@@ -40,48 +32,6 @@ def _sanitize_error(raw: str | None) -> str | None:
     if match is None:
         return "error"
     return match.group(0)[:_SANITIZED_ERROR_MAX_LEN]
-
-
-def _extract_relation(edge: dict[str, Any]) -> str:
-    """Read edge relation from documented aliases and validate it."""
-    relation = edge.get("relation")
-    if not isinstance(relation, str) or not relation.strip():
-        relationship = edge.get("relationship")
-        if isinstance(relationship, str) and relationship.strip():
-            relation = relationship
-    if not isinstance(relation, str) or not relation.strip():
-        msg = "edge relation is required (use 'relation' or 'relationship')"
-        raise ToolError(msg)
-    relation_value = relation.strip().lower()
-    try:
-        return RelationType(relation_value).value
-    except ValueError as exc:
-        valid = ", ".join(item.value for item in RelationType)
-        msg = f"unsupported edge relation {relation_value!r}; valid values: {valid}"
-        raise ToolError(msg) from exc
-
-
-def _extract_entity_type(entity: dict[str, Any]) -> str:
-    """Read entity type from documented aliases and return a readable graph value."""
-    entity_type = entity.get("entity_type")
-    if not isinstance(entity_type, str) or not entity_type.strip():
-        type_alias = entity.get("type")
-        entity_type = type_alias if isinstance(type_alias, str) else ""
-    if not isinstance(entity_type, str) or not entity_type.strip():
-        return EntityType.CONCEPT.value
-
-    entity_type_value = entity_type.strip().lower()
-    try:
-        return EntityType(entity_type_value).value
-    except ValueError as exc:
-        valid = ", ".join(item.value for item in EntityType)
-        msg = f"unsupported entity_type {entity_type_value!r}; valid values: {valid}"
-        raise ToolError(msg) from exc
-
-
-def _stable_edge_id(*parts: str) -> str:
-    """Return a deterministic edge row ID for idempotent retries."""
-    return hashlib.sha256("\x1f".join(parts).encode("utf-8")).hexdigest()
 
 
 def select_content_fetcher(method: str) -> ContentFetcher:
@@ -230,12 +180,3 @@ def _normalize_enrichment_items(value: object, *, field_name: str) -> list[dict[
             msg = f"{field_name} must be a list of objects"
             raise ToolError(msg)
     return value
-
-
-def _validate_enrichment_edge_payload(payload: dict[str, Any]) -> Edge:
-    """Return a domain-validated Edge for an enrichment payload."""
-    try:
-        return Edge(**payload)
-    except ValueError as exc:
-        msg = "invalid edge payload"
-        raise ToolError(msg) from exc

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 from datetime import UTC, datetime
@@ -23,7 +24,6 @@ from owlbear_knowledge.protocols.content import (
 from owlbear_knowledge.protocols.content import (
     ContentStore as ContentStoreProtocol,
 )
-from owlbear_knowledge.status_store import compute_content_hash
 
 if TYPE_CHECKING:
     from owlbear_knowledge.chunker import TextChunker
@@ -31,6 +31,12 @@ if TYPE_CHECKING:
 
 
 OVERFETCH_FACTOR = 10
+
+
+def compute_content_hash(content: str) -> str:
+    """Return a stable SHA-256 digest for normalized document text."""
+    normalized = " ".join(content.split())
+    return hashlib.sha256(normalized.encode()).hexdigest()
 
 
 class ContentStore(ContentStoreProtocol):
