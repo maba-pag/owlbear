@@ -6,10 +6,10 @@ import json
 import sqlite3
 from datetime import UTC, datetime
 from itertools import combinations
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from owlbear_knowledge.protocols.common import RelationType
-from owlbear_knowledge.protocols.content import ContentStore
 from owlbear_knowledge.protocols.enrichment import (
     EnrichmentBatch,
     EnrichmentDiscardResult,
@@ -34,6 +34,9 @@ from owlbear_knowledge.protocols.graph import (
     EvidenceInput,
     GraphStore,
 )
+
+if TYPE_CHECKING:
+    from owlbear_knowledge.protocols.content import ContentStore
 
 
 class EnrichmentStore(EnrichmentStoreProtocol):

@@ -98,7 +98,7 @@ EDITORCONFIG_EDITORCONFIG_CHECKER_ARGUMENTS: "-f github-actions --disable-indent
 REPOSITORY_DEVSKIM_DISABLE_ERRORS: false
 
 # Trivy — vulnerability + misconfiguration scanning
-REPOSITORY_TRIVY_ARGUMENTS: "--scanners vuln,misconfig --skip-dirs .venv"
+REPOSITORY_TRIVY_ARGUMENTS: "--scanners vuln,misconfig --skip-dirs .venv,.owlbear/scratch"
 
 # ──────────────────────────────────────────────
 # Performance & Display
