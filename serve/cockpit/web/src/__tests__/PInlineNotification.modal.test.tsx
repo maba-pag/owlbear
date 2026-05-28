@@ -34,7 +34,6 @@ import { beforeAll, describe, it, expect, vi, afterEach } from 'vitest'
 import { render, fireEvent, waitFor, act } from '@testing-library/react'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
 import ArchivalModal from '../components/ArchivalModal'
-import ResolveModal from '../components/ResolveModal'
 
 // ─── PDS jsdom polyfill ────────────────────────────────────────────────────────
 // Prevents PDS Stencil form components from throwing on mount in jsdom.
@@ -67,19 +66,6 @@ type PInlineEl = HTMLElement & {
   actionLoading?: boolean
   onAction?: () => void
   onDismiss?: () => void
-}
-
-// ─── Fixtures ─────────────────────────────────────────────────────────────────
-
-const DR_FIXTURE = {
-  id: '42-scope-question',
-  task_id: 42,
-  agent: 'builder',
-  request_type: 'decision',
-  created: '2026-04-30T14:30:00+02:00',
-  title: 'Scope question',
-  body_preview: 'Context: Should we include X?',
-  body: '## Context\n\nShould we include X?',
 }
 
 // ─── Fetch stubs ──────────────────────────────────────────────────────────────
@@ -130,17 +116,7 @@ function renderArchivalModal({
   return { ...utils, onClose, onRefresh }
 }
 
-function renderResolveModal(
-  dr = DR_FIXTURE,
-  onClose = vi.fn(),
-  onResolved = vi.fn(),
-) {
-  return render(
-    <PorscheDesignSystemProvider>
-      <ResolveModal dr={dr} onClose={onClose} onResolved={onResolved} />
-    </PorscheDesignSystemProvider>,
-  )
-}
+
 
 // ─── Interaction helpers ──────────────────────────────────────────────────────
 
@@ -160,24 +136,7 @@ function getArchivalError(container: HTMLElement): PInlineEl | null {
   return container.querySelector('p-inline-notification[data-testid="archival-error"]')
 }
 
-function getResolveError(container: HTMLElement): PInlineEl | null {
-  return container.querySelector('p-inline-notification[data-testid="resolve-error"]')
-}
 
-function selectResponse(container: HTMLElement, value: string): void {
-  const radio = container.querySelector(
-    `[data-testid="response-selector"] input[value="${value}"]`,
-  ) as HTMLInputElement | null
-  if (radio) {
-    fireEvent.click(radio)
-  }
-}
-
-function getResolveSubmitBtn(container: HTMLElement): HTMLElement {
-  const el = container.querySelector('[data-testid="resolve-submit"]') as HTMLElement | null
-  if (!el) throw new Error('resolve-submit button not found')
-  return el
-}
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 

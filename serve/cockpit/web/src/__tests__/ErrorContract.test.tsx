@@ -90,7 +90,6 @@ import { repairStorage } from '../api/repair'
 import Shell from '../Shell'
 import { CockpitProvider } from '../hooks/CockpitProvider'
 import DetailTab from '../components/DetailTab'
-import ResolveModal from '../components/ResolveModal'
 import type { Board } from '../hooks/useBoard'
 import type { TaskDetail } from '../components/DetailTab'
 
@@ -158,16 +157,7 @@ const TASK: TaskDetail = {
   depends_on: [],
 }
 
-const DR_FIXTURE = {
-  id: 'dr-42',
-  task_id: 42,
-  agent: 'builder',
-  request_type: 'decision',
-  created: '2026-01-01T00:00:00+00:00',
-  title: 'Scope question',
-  body_preview: 'Context',
-  body: '## Context\n\nShould we include X?',
-}
+
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 from owlbear_kanban import KanbanEngine
-from owlbear_kanban.storage import list_task_files, read_task, write_task
+from owlbear_kanban.storage import read_task, write_task
 
 # ---------------------------------------------------------------------------
 # Board fixture templates

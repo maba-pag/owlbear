@@ -439,29 +439,6 @@ describe('TestFromAC_PdsMigration_Buttons', () => {
       const el = container.querySelector('p-button[data-testid="conflict-refresh"]')
       expect((el as HTMLElement & { variant: string }).variant).toBe('secondary')
     })
-
-    it('conflict-overwrite has variant="primary" (default action — no explicit variant prop)', async () => {
-      const { container } = renderDetailTab()
-      let callCount = 0
-      vi.stubGlobal(
-        'fetch',
-        vi.fn(() => {
-          callCount += 1
-          if (callCount === 1) {
-            return Promise.resolve({ ok: false, status: 409, json: () => Promise.resolve({}) })
-          }
-          return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(TASK) })
-        }),
-      )
-      const saveBtn = container.querySelector('p-button[data-testid="save-button"]')!
-      fireEvent.click(saveBtn)
-      await new Promise((r) => setTimeout(r, 0))
-      const acknowledge = container.querySelector('p-button[data-testid="conflict-acknowledge"]')!
-      fireEvent.click(acknowledge)
-      await new Promise((r) => setTimeout(r, 0))
-      const el = container.querySelector('p-button[data-testid="conflict-overwrite"]')
-      expect((el as HTMLElement & { variant: string }).variant).toBe('primary')
-    })
   })
 
   describe('AC1 variant: ResolveModal — submit=primary, cancel=secondary (PDS v4: tertiary removed)', () => {

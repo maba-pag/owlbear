@@ -30,16 +30,9 @@ import inspect
 import re
 from pathlib import Path
 
-import yaml
 
 import owlbear_kanban.corruption as _corruption_mod
 import owlbear_kanban.storage as _storage_mod
-from owlbear_kanban.corruption import (
-    ERR_CORRUPT_INVALID_PRIORITY,
-    ERR_CORRUPT_MISSING_FIELD,
-    detect_corruption,
-    attempt_repair,
-)
 from owlbear_kanban.models import (
     AgentsConfig,
     BoardConfig,

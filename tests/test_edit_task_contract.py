@@ -17,9 +17,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from mcp.server.fastmcp.exceptions import ToolError
 from owlbear_kanban import KanbanEngine
-from owlbear_kanban.models import SingleTaskResponse, ValidationError
 
 from owlbear_mcp_kanban.server import AppContext, edit_task
 

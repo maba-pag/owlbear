@@ -9,7 +9,6 @@ dual-theme accessibility compliance.
 Durable file: remains after task #1629 is archived (consolidation-test tag).
 """
 
-import re
 import subprocess
 from pathlib import Path
 

@@ -21,13 +21,11 @@
  *   - retryResolve → re-submits
  */
 import { beforeAll, describe, it, expect, vi, afterEach } from 'vitest'
-import { render, fireEvent, waitFor } from '@testing-library/react'
+import { render, fireEvent } from '@testing-library/react'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
 import ConfirmDialog from '../components/ConfirmDialog'
 import ResolveModal from '../components/ResolveModal'
 import type { PendingDRWithBody } from '../components/ResolveModal'
-import { ApiError } from '../api/errors'
-import * as decisionsApi from '../api/decisions'
 
 // ─── PDS Stencil form-component workaround ───────────────────────────────────
 beforeAll(() => {

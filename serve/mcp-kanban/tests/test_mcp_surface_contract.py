@@ -32,7 +32,7 @@ from unittest.mock import MagicMock
 import pytest
 
 import owlbear_mcp_kanban
-from owlbear_mcp_kanban.server import AppContext, app_lifespan, mcp
+from owlbear_mcp_kanban.server import app_lifespan, mcp
 
 # ---------------------------------------------------------------------------
 # Deployment-contract snapshot

@@ -31,9 +31,6 @@ import importlib.util
 from pathlib import Path
 from unittest.mock import MagicMock
 
-import pytest
-
-from owlbear_mcp_kanban.server import move_task
 
 # ---------------------------------------------------------------------------
 # Import _make_engine_mock from the file under test

@@ -471,7 +471,6 @@ import pytest
 
 from owlbear_cockpit.view import CockpitView
 from owlbear_kanban import KanbanEngine
-from owlbear_kanban.errors import ValidationError
 
 # ---------------------------------------------------------------------------
 # Board helpers

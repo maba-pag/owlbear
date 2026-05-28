@@ -57,8 +57,6 @@ All 5 tests FAIL (RED phase):
 
 import logging
 from pathlib import Path
-from tempfile import mkstemp as _real_mkstemp
-from unittest.mock import patch
 
 import pytest
 

@@ -46,19 +46,19 @@ const TASK_DETAIL = {
   depends_on: [] as number[],
 }
 
-const DECISION = {
-  id: 'dr-route-001',
-  task_id: 1,
-  agent: 'builder',
-  request_type: 'scope-decision',
-  created: '2026-05-20T06:15:00+00:00',
-  title: 'Confirm cockpit routing priority',
-  body_preview: 'Builder needs guidance on whether route polish outranks board internals.',
-  body: '## Context\n\nBuilder needs guidance on whether route polish outranks board internals.\n\n- Route polish affects daily cockpit scanning.\n- Board internals are already green.\n\n## Options\n\nApprove route polish, reject it, or ask for more detail.',
+type Decision = {
+  id: string
+  task_id: number
+  agent: string
+  request_type: string
+  created: string
+  title: string
+  body_preview: string
+  body: string
 }
 
 type StubOptions = {
-  decisions?: { count: number; items: typeof DECISION[] }
+  decisions?: { count: number; items: Decision[] }
 }
 
 async function stubApis(page: Page, options: StubOptions = {}): Promise<void> {

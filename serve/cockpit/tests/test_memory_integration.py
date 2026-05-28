@@ -17,7 +17,6 @@ AC coverage:
        cross-package import chain (owlbear_memory ← cockpit) is intact
 """
 
-import sys
 from pathlib import Path
 
 import pytest

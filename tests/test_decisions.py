@@ -359,7 +359,7 @@ from pre-built work, so tests serve as the authoritative contract spec for #1181
 
 import logging
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
