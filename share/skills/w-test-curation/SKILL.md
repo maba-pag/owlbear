@@ -1,248 +1,155 @@
 ---
 name: w-test-curation
-description: "Workflow: Test suite curation — coverage-gap mining, task-test cleanup, module-test improvement"
+description: "Workflow: Test suite curation — remove low-value task-tests, mine useful assertions into durable tests"
 user-invocable: false
 ---
 
 # Test Curation
 
-Suite-scoped workflow for the test-curator agent. Scans for task-scoped tests with archived tasks, measures durable coverage without them, mines assertions that close coverage gaps, and cleans up the rest.
+Remove task-scoped tests that no longer provide project value. Mine useful assertions into durable tests before deleting. The goal is not to reduce test count — it is to stop spending compute on tests whose only purpose was proving a task's AC were met.
 
-Supported suites:
+**Non-blocking:** Runs on demand via prompt. Never gates task dispatch.
 
-| Suite | Task-scoped pattern | Durable target |
-|-------|---------------------|----------------|
-| Python | `tests/test_{module}_{task_id}.py` | `serve/{package}/tests/test_{module}.py` or legacy `tests/test_{module}.py` |
-| Cockpit Vitest | `serve/cockpit/web/src/__tests__/*_{task_id}.test.{ts,tsx}` and `*.{task_id}.test.{ts,tsx}` | Durable frontend tests without task IDs, near the covered component/hook/api module |
-| Cockpit Playwright | `serve/cockpit/web/e2e/*[-_]{task_id}.spec.ts` and matching `*.spec.ts-snapshots/` | Stable fast-gate E2E specs or focused durable E2E contracts without archived task IDs |
+## Goal
 
-**Non-blocking:** This workflow never gates task dispatch. It runs on demand via prompt.
+A task-scoped test has **no ongoing value** when:
 
-## Step 0 — Inventory
+- The task is archived and the test only proved AC were met (typical TDD RED-phase artifact)
+- The test verifies something was *removed* — once removed, the test is tautological
+- The test verifies a configuration was *added* — and the configuration is now exercised by product tests
+- The test exercises code paths already covered by durable module or integration tests
+- The test is a proof-of-concept, benchmark, or visual snapshot tied to a completed investigation
 
-1. List task-scoped tests:
-   - Python: `tests/test_*_*.py`
-   - Cockpit Vitest: `serve/cockpit/web/src/__tests__/*[._-][0-9][0-9][0-9]*.test.ts` and `*.test.tsx`
+A task-scoped test **still has value** when:
 
-- Cockpit Playwright: `serve/cockpit/web/e2e/*[-_][0-9][0-9][0-9]*.spec.ts` plus snapshot directories named after archived visual specs
+- It exercises a code path no other test covers (regression guard)
+- It documents an edge case or boundary condition that is hard to re-derive
+- It protects against a bug that was actually hit (not hypothetical)
 
-2. For each, extract the task ID and check status via `show_task`. Keep only files whose task is **archived**.
+## Discovery
 
-- Protect Playwright/Vitest files for tasks still in backlog, todo, in-progress, review, or docs.
-- Also protect archived-looking filenames that active task tests inspect or invoke.
+Scan **all** directories listed in `testpaths` (from `pyproject.toml` or equivalent config) plus any package-local test directories (`serve/*/tests/`, `packages/*/tests/`, etc.). Task-scoped tests follow the pattern `*_{task_id}*` where task_id is a numeric identifier.
 
-3. Group by suite and durable target: `{suite: {module_or_component: [task_id_1, task_id_2, ...]}}`.
-4. If no archived task-tests exist, report "nothing to curate" and stop.
+### Finding task-scoped tests
 
-## Step 1 — Baseline Coverage per Module
+1. **Python:** Find files matching `test_*_[0-9]*.py` recursively in all test directories.
+2. **Vitest/Jest:** Find files matching `*[._-][0-9][0-9][0-9]*.test.{ts,tsx}` in the frontend test directories.
+3. **Playwright:** Find files matching `*[-_][0-9][0-9][0-9]*.spec.ts` in E2E directories.
 
-For each module in the inventory:
+Adapt patterns to the project's naming convention. The key signal is a numeric task ID embedded in the filename.
 
-1. Measure coverage using **only** the module-level test file (exclude task-tests):
+### Filtering
 
-Resolve the durable test path before invoking Quality-Runner:
+1. Extract task IDs from filenames.
+2. Check each task via `show_task`. Keep only files whose task is **archived**.
+3. **Protect** files for tasks in any active state (backlog through docs).
+4. **Protect** files that active-task tests import or reference.
 
-- Canonical target: `serve/{package}/tests/test_{module}.py`
-- Legacy fallback: `tests/test_{module}.py`
-- Package-resolution heuristic: search for `serve/*/tests/test_{module}.py`; if exactly one match exists, use it. If multiple matches exist, choose the package that owns the module under `serve/*/src/` and log the decision. If no canonical match exists, use the root legacy file.
+If no archived task-tests exist across any suite, report "nothing to curate" and stop.
 
-```
-agentName: quality-runner
-prompt: |
-  mode: scoped
-  task_id: test-curation-{module}
-  test_paths: ["serve/{package}/tests/test_{module}.py"]  # or ["tests/test_{module}.py"] if only the legacy root file exists
-  coverage_modules: ["{module}"]
-  lint_paths: ["serve/{package}/tests/test_{module}.py"]
-```
+## Triage
 
-2. Record baseline coverage from the Quality-Runner `Coverage` section. If neither canonical nor legacy module-level files exist, baseline is 0%.
+For each archived task-test, answer one question: **does this test provide ongoing project value?**
 
-### Cockpit Vitest Baseline
+### Zero-value patterns (delete without mining)
 
-For each frontend component/hook/api target in the inventory:
+| Pattern | Example | Reasoning |
+|---------|---------|-----------|
+| Removal proof | Test asserts an old import raises or a deleted file is gone | The thing is gone; the test is tautological |
+| Config addition proof | Test asserts a config key exists in a manifest | Config is exercised by the system it configures |
+| Structural assertion | Test asserts a file exists or a module exports a name | The code that imports it is the real test |
+| Duplicate coverage | Same assertions already exist in durable module tests | Redundant compute |
+| Pipeline artifact proof | Test asserts compiler output, DOM budgets, or generated internals | Brittle to implementation details, not product behavior |
+| RED-phase scaffolding | Test was written before implementation and never evolved beyond AC parroting | No unique assertions beyond what the implementation naturally tests |
 
-1. Locate durable tests that cover the same target and do **not** include a task ID in the filename.
-   - Prefer exact durable names such as `Card.test.tsx`, `Card.signal.test.tsx`, `useBoard.test.ts`, or `tasks.test.ts`.
-   - If an active task still inspects an archived task filename, keep that filename protected until the active task is completed.
-   - If no durable test exists, mark the target as missing and proceed to Step 3.
-2. Run the durable tests from the Cockpit frontend package root:
+### Potential-value patterns (read before deciding)
 
-```
-agentName: quality-runner
-prompt: |
-  mode: scoped
-  task_id: test-curation-cockpit-{target}
-  test_paths: ["serve/cockpit/web/src/__tests__/{durable-test}.test.tsx"]
-  lint_paths: ["serve/cockpit/web/src/__tests__/{durable-test}.test.tsx"]
-```
+| Pattern | Action |
+|---------|--------|
+| Tests a non-obvious edge case | Mine into durable test |
+| Tests error handling / boundary validation | Mine into durable test |
+| Tests integration between two modules | Mine if not covered elsewhere |
+| Tests a bug fix (regression guard) | Mine — these are high-value |
 
-3. Treat passing durable tests as the frontend baseline. Use coverage only when the target has meaningful source-level coverage output; many Cockpit tests are behavioral or CSS/source-contract tests where pass/fail is the useful gate.
+**Bias:** When genuinely unsure, keep the test (mark as `skip`). Removing a useful regression guard is worse than one extra test file.
 
-## Step 2 — Classify Modules
+## Mining
 
-| Module state | Coverage | Action |
-|-------------|----------|--------|
-| At or above target (≥ 90%) | Good | **Fast path** — delete all archived task-tests for this module (Step 4) |
-| Below target | Gap | **Mine path** — proceed to Step 3 for this module |
-| No module-level file (0%) | Missing | **Mine path** — create `serve/{package}/tests/test_{module}.py`, proceed to Step 3 |
+When a task-test has assertions worth preserving:
 
-For Cockpit Vitest, classify by durable behavioral coverage rather than coverage percentage:
+### Python
 
-| Target state | Action |
-|--------------|--------|
-| Durable tests already cover the behavior and pass | **Fast path** — delete archived task-tests |
-| Durable tests exist but miss unique assertions | **Mine path** — move the useful assertions into durable tests |
-| No durable test exists | **Mine path** — create or extend a durable test near the covered target |
-| Task test is an unstable proof artifact with low product value | Delete it after recording rationale; do not preserve bad gates as tech debt |
-| Active task depends on a filename | Protect that file until the active task is completed |
+1. Identify the durable test target — the module-level or package-level test file covering the same source module. If none exists, create one.
+2. Move assertions in with descriptive names (not `TestFromAC_*`).
+3. Add provenance: `# Mined from #{task_id}: {behavior}`.
+4. Adjust imports/fixtures for the durable context.
 
-For Cockpit Playwright, classify by runtime cost and product value:
+### Frontend (Vitest/Jest)
 
-| E2E state | Action |
-|-----------|--------|
-| Stable product smoke/contract behavior | Keep in the fast E2E gate |
-| Active task proof | Protect; run scoped with `npm run test:e2e -- e2e/{file}.spec.ts` |
-| Archived benchmark, visual snapshot proof, or RED evidence artifact | Delete after recording rationale; do not keep as default CI ballast |
-| Archived suite with unique durable behavior | Mine or consolidate into a smaller durable E2E contract, then delete the task-numbered file |
-| Archived suite is useful but expensive and not yet mined | Remove it from the default gate and log a follow-up; do not let it block sync or routine agent checks |
+1. Identify the durable test covering the same component, hook, or API module.
+2. Move assertions that protect product behavior, public contracts, or API payloads.
+3. Drop assertions about compiler output, DOM budgets, or implementation details.
+4. Run from the frontend package root — never from the repo root.
 
-## Step 3 — Mine Coverage Gaps
+### E2E (Playwright)
 
-For modules below target:
+1. Keep only durable browser-level contracts that unit tests cannot cover.
+2. Prefer a small fast gate over comprehensive sweeps.
+3. Delete snapshot directories alongside their spec files.
 
-1. Read the coverage report from Step 1. Identify uncovered lines/branches.
-2. Read all archived task-tests for this module.
-3. Find assertions in the task-tests that exercise the uncovered paths.
-4. Write those assertions into `serve/{package}/tests/test_{module}.py`:
-   - Use descriptive class/method names (not `TestFromAC_` — those are task-scoped).
-   - Add provenance comment: `# From task #{task_id}: {behavior description}`.
-   - Adjust imports/fixtures for the module-level context.
-   - Deduplicate against existing assertions in the module file.
-5. If no task-test assertions cover the gap, write new tests based on the source code to close it.
+## Verify & Delete
 
-For Cockpit Vitest targets:
+After mining (or for zero-value tests, directly):
 
-1. Read the archived task-numbered tests and the durable target tests.
-2. Mine only assertions that protect product behavior, public contracts, accessibility, API payloads, or stable source contracts.
-3. Drop assertions that only prove a temporary pipeline artifact, brittle DOM budgets, generated compiler details, or a one-off implementation detour.
-4. Move useful assertions into durable tests with descriptive names and no `TestFromAC_` class/describe naming.
-5. Run from `serve/cockpit/web/`; never run frontend Vitest from the repo root.
+1. **Run affected tests** to confirm nothing breaks. Use the project's quality-runner if available, otherwise run the relevant test command directly (pytest for Python, vitest/jest for frontend, playwright for E2E).
 
-For Cockpit Playwright targets:
-
-1. Read archived task-numbered specs and identify whether they are product contracts, visual snapshots, benchmark thresholds, or RED evidence.
-2. Preserve only durable browser-level behavior that cannot be covered well by Vitest.
-3. Prefer a small fast gate over a broad full sweep. The default command is `npm run test:e2e`; intentional full sweeps use `npm run test:e2e:all`.
-4. Delete snapshot directories when their owning visual spec is deleted.
-5. Keep active task specs runnable by path; do not rename them while their board tasks are active.
-
-**Conservative default:** When unsure whether an assertion covers a gap, include it. Removing a useful test is worse than keeping a borderline one.
-
-### Verify
-
-After writing tests for a module, verify through Quality-Runner:
-
-```
-agentName: quality-runner
-prompt: |
-  mode: scoped
-  task_id: test-curation-{module}
-  test_paths: ["serve/{package}/tests/test_{module}.py"]
-  coverage_modules: ["{module}"]
-  lint_paths: ["serve/{package}/tests/test_{module}.py"]
-```
-
-Gate passes only when tests pass, lint is clean, and the target module coverage is ≥ 90% in the Quality-Runner report.
-
-**Rollback safety:** Before editing a module-level file, record whether it was clean, dirty, or untracked. If it was already dirty or untracked, save a baseline copy under `.owlbear/scratch/test-curation-{module}.baseline` before modifying it. On failure, restore only the curator-created changes; never discard pre-existing edits.
-
-**Gate failure:** Restore the module file to its recorded baseline, log the failure, move to the next module. Do not block. If the curator-created changes cannot be isolated from pre-existing edits, leave the file untouched, keep the task-tests, and log the module as `skip` with a manual follow-up note.
-
-## Step 4 — Clean Up Task-Tests
-
-For each module that passed its gate (or was fast-pathed):
+2. **Delete** the task-test files:
 
 ```shell
-git rm tests/test_{module}_{task_id_1}.py tests/test_{module}_{task_id_2}.py ...
-git rm serve/cockpit/web/src/__tests__/{frontend-task-test}_{task_id}.test.tsx
-git rm serve/cockpit/web/e2e/{playwright-task-test}-{task_id}.spec.ts
+git rm {task_test_paths}
 ```
 
-Remove all archived task-tests for this module.
+3. **Rollback** on failure: if durable tests break after mining, restore the durable file and keep the task-test. Log as `skip`.
 
-## Step 5 — Full Suite Gate
+## Full Suite Gate
 
-After all modules are processed, run the full suite through Quality-Runner:
+After all deletions, run the full test suite. If failures appear, identify which deletion caused the break, restore that task-test, and log it.
 
-```
-agentName: quality-runner
-prompt: |
-  mode: full
-  task_id: test-curation
-```
-
-All tests must pass. If the full suite fails, identify the breaking module and apply the same rollback safety contract: restore only curator-created module-file changes, re-add only task-tests removed during this curation pass, and log the failure.
-
-## Step 6 — Lifecycle Log
-
-Append one entry per module to `.owlbear/scratch/curator-log.jsonl`:
-
-```json
-{
-  "module": "bookmark_pipeline",
-  "action": "curate",
-  "task_tests_removed": 3,
-  "assertions_mined": 5,
-  "coverage_before": 72.0,
-  "coverage_after": 93.1,
-  "fast_path": false,
-  "timestamp": "2026-04-17T12:00:00Z"
-}
-```
-
-**Actions:** `curate` (gaps mined + task-tests removed), `fast_path` (already at target, task-tests removed), `skip` (gate failure, no changes).
-
-## Step 7 — Commit & Advance
-
-**Commit your deliverables** (see `r-pipeline-protocol` → Who Commits What):
+## Commit
 
 ```shell
-git add {module_test_paths} {removed_task_test_paths} && git commit -m "test: curate module tests — {N} task-tests removed, {M} modules improved (test-curator)"
+git add -A && git commit -m "test: curate {N} task-tests — {D} deleted, {M} mined (test-curator)"
 ```
 
-Use exact paths only. Module-level tests may live under `serve/{package}/tests/`, and broad `git add tests/` can miss package-local changes while staging unrelated root tests.
-
-Then return the Channel A signal and Channel B summary. This prompt-run workflow has no kanban lifecycle advance step.
-
-## Output Template
+## Output
 
 ```
 ## Test Curation
 ### Summary
-- Modules scanned: {N}
-- Fast-pathed (already ≥ 90%): {F}
-- Gaps mined: {G}
-- Skipped (gate failure): {S}
-- Task-tests removed: {T}
+- Task-tests found: {total} (Python: {py}, Frontend: {fe}, E2E: {e2e})
+- Deleted (zero-value): {D}
+- Mined then deleted: {M}
+- Skipped (protected/uncertain): {S}
 
-### Per Module
-| Module | Before | After | Task-tests removed | Action |
-|--------|--------|-------|--------------------|--------|
-| {name} | {X}% | {Y}% | {count} | {curate/fast_path/skip} |
+### Decisions
+| File | Task | Verdict | Reason |
+|------|------|---------|--------|
+| test_core_removal_1234.py | #1234 (archived) | delete | removal proof |
+| test_engine_edge_1200.py | #1200 (archived) | mine → engine tests | regression guard |
+| Shell.tab-routing_1639.test.tsx | #1639 (archived) | delete | covered by Shell.test.tsx |
 ```
 
 ## Known Pitfalls
 
-- **Coverage ≠ correctness.** A module at 95% coverage might still lack tests for important edge cases. Coverage is the gate, but read the task-test assertions before discarding — they may test behaviors not visible in line coverage.
-- **Shared fixtures.** Task-tests may rely on fixtures defined in `conftest.py` or their own file. When mining assertions, ensure the target module file has access to the same fixtures.
-- **Import collisions.** Multiple task-tests for the same module may define identically-named test classes. Dedup when mining.
-- **Active frontend tasks.** Do not rename or delete numbered Vitest tests for tasks still in backlog, todo, in-progress, review, or docs. Some active task-tests inspect other filenames; protect those dependencies until the active task is archived.
+- **Package-local tests.** Task-tests in package test directories mine into the same directory's durable files, not into a different location.
+- **Shared fixtures.** Task-tests may use fixtures from their local `conftest.py` or setup file. Verify fixture availability in the durable target.
+- **Active task dependencies.** Some active-task tests import or reference archived-task test files. Protect those until the active task completes.
+- **Coverage ≠ value.** A module at 95% coverage may still benefit from a mined edge-case test. Read the assertions before deleting.
 
 ## Companion Skills
 
-| Skill | When to load | Purpose |
-|-------|-------------|---------|
-| `h-quality-runner` | Step 1 (coverage measurement), Step 3 (verify), Step 5 (full suite) | Structured test, lint, and coverage execution |
-| `h-python-conventions` | Step 3 (writing tests) | Naming, structure, and style for test code |
-| `h-vitest-and-linting` | Cockpit Vitest or Playwright curation | Frontend cwd, Vitest, ESLint, Playwright, and coverage commands |
+| Skill | When | Purpose |
+|-------|------|---------|
+| `h-quality-runner` | Verify and full-suite gate | Test/lint execution |
+| `h-python-conventions` | Mining Python assertions | Naming and structure |
+| `h-vitest-and-linting` | Frontend/E2E curation | Frontend tooling commands |
