@@ -10,7 +10,7 @@ Table ownership: only Sources writes ``source_*`` tables.
 
 from __future__ import annotations
 
-from datetime import datetime  # noqa: TC003 — needed by Pydantic at runtime
+from datetime import datetime
 from enum import StrEnum
 from typing import Annotated, Literal, Protocol, runtime_checkable
 

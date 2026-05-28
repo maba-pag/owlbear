@@ -202,9 +202,7 @@ class TestFromAC_IngestDocumentCoordinatorWiring:
         assert isinstance(result, str), "result must be a string"
         assert "error" not in result.lower(), f"unexpected error: {result!r}"
         # New format must include coordinator result fields, not old pipeline fields
-        assert "documents_processed" in result, (
-            f"response must use new coordinator format, got: {result!r}"
-        )
+        assert "documents_processed" in result, f"response must use new coordinator format, got: {result!r}"
 
     # -- AC1 (continued): does NOT use ingest_pipeline as the guard ----------
 
@@ -425,9 +423,7 @@ class TestFromAC_IngestDocumentCoordinatorWiring:
         await ingest_document(ctx, text="the actual document body")
         request = ctx.request_context.lifespan_context.ingest_coordinator.ingest.call_args[0][0]
         doc: IngestDocument = request.documents[0]
-        assert doc.text == "the actual document body", (
-            f"IngestDocument.text must match input, got: {doc.text!r}"
-        )
+        assert doc.text == "the actual document body", f"IngestDocument.text must match input, got: {doc.text!r}"
 
     @pytest.mark.asyncio
     async def test_ingest_document_title_from_metadata_title(self) -> None:
@@ -444,9 +440,7 @@ class TestFromAC_IngestDocumentCoordinatorWiring:
         )
         request = ctx.request_context.lifespan_context.ingest_coordinator.ingest.call_args[0][0]
         doc: IngestDocument = request.documents[0]
-        assert doc.title == "My Custom Title", (
-            f"title must come from metadata['title'], got: {doc.title!r}"
-        )
+        assert doc.title == "My Custom Title", f"title must come from metadata['title'], got: {doc.title!r}"
 
     @pytest.mark.asyncio
     async def test_ingest_document_title_falls_back_to_source_url(self) -> None:
@@ -491,9 +485,7 @@ class TestFromAC_IngestDocumentCoordinatorWiring:
         await ingest_document(ctx, text="content", source_url="https://example.com/doc")
         request = ctx.request_context.lifespan_context.ingest_coordinator.ingest.call_args[0][0]
         doc: IngestDocument = request.documents[0]
-        assert doc.uri == "https://example.com/doc", (
-            f"IngestDocument.uri must equal source_url, got: {doc.uri!r}"
-        )
+        assert doc.uri == "https://example.com/doc", f"IngestDocument.uri must equal source_url, got: {doc.uri!r}"
 
     @pytest.mark.asyncio
     async def test_ingest_document_uri_is_none_when_no_source_url(self) -> None:
@@ -546,9 +538,7 @@ class TestFromAC_IngestDocumentCoordinatorWiring:
         ingest_result = _make_ingest_result(documents_processed=1, chunks_created=5, chunks_enqueued=5)
         ctx = _make_ctx(ingest_result=ingest_result)
         result = await ingest_document(ctx, text="hello")
-        assert "documents_processed" in result, (
-            f"response must mention 'documents_processed', got: {result!r}"
-        )
+        assert "documents_processed" in result, f"response must mention 'documents_processed', got: {result!r}"
         assert "1" in result, f"response must include the count 1, got: {result!r}"
 
     @pytest.mark.asyncio
@@ -560,9 +550,7 @@ class TestFromAC_IngestDocumentCoordinatorWiring:
         ingest_result = _make_ingest_result(documents_processed=1, chunks_created=7, chunks_enqueued=7)
         ctx = _make_ctx(ingest_result=ingest_result)
         result = await ingest_document(ctx, text="hello")
-        assert "chunks_created" in result, (
-            f"response must mention 'chunks_created', got: {result!r}"
-        )
+        assert "chunks_created" in result, f"response must mention 'chunks_created', got: {result!r}"
         assert "7" in result, f"response must include count 7, got: {result!r}"
 
     @pytest.mark.asyncio
@@ -574,9 +562,7 @@ class TestFromAC_IngestDocumentCoordinatorWiring:
         ingest_result = _make_ingest_result(documents_processed=1, chunks_created=4, chunks_enqueued=4)
         ctx = _make_ctx(ingest_result=ingest_result)
         result = await ingest_document(ctx, text="hello")
-        assert "chunks_enqueued" in result, (
-            f"response must mention 'chunks_enqueued', got: {result!r}"
-        )
+        assert "chunks_enqueued" in result, f"response must mention 'chunks_enqueued', got: {result!r}"
 
     @pytest.mark.asyncio
     async def test_response_values_match_ingest_result(self) -> None:
@@ -618,9 +604,7 @@ class TestFromAC_IngestDocumentCoordinatorWiring:
         ctx = _make_ctx(ingest_coordinator=failing_coordinator)
         result = await ingest_document(ctx, text="hello")
         assert isinstance(result, str), "exception must produce a string result"
-        assert "error" in result.lower(), (
-            f"error string expected on exception, got: {result!r}"
-        )
+        assert "error" in result.lower(), f"error string expected on exception, got: {result!r}"
 
     @pytest.mark.asyncio
     async def test_register_source_exception_returns_error_string(self) -> None:
@@ -635,9 +619,7 @@ class TestFromAC_IngestDocumentCoordinatorWiring:
         ctx = _make_ctx(source_store_v2=store)
         result = await ingest_document(ctx, text="hello")
         assert isinstance(result, str), "exception must produce a string result"
-        assert "error" in result.lower(), (
-            f"error string expected on register_source exception, got: {result!r}"
-        )
+        assert "error" in result.lower(), f"error string expected on register_source exception, got: {result!r}"
 
     @pytest.mark.asyncio
     async def test_list_sources_exception_returns_error_string(self) -> None:
@@ -655,9 +637,7 @@ class TestFromAC_IngestDocumentCoordinatorWiring:
         ctx = _make_ctx(source_store_v2=store, ingest_coordinator=coordinator)
         result = await ingest_document(ctx, text="hello")
         assert isinstance(result, str), "exception must produce a string result"
-        assert "error" in result.lower(), (
-            f"error string expected on list_sources exception, got: {result!r}"
-        )
+        assert "error" in result.lower(), f"error string expected on list_sources exception, got: {result!r}"
         coordinator.ingest.assert_not_called()
 
 
@@ -695,9 +675,7 @@ class TestFromAC_IngestDocumentLifespanProof:
     """
 
     @pytest.mark.asyncio
-    async def test_ingest_document_creates_inline_source_in_real_store(
-        self, _lifespan_heavy_mocks: object
-    ) -> None:
+    async def test_ingest_document_creates_inline_source_in_real_store(self, _lifespan_heavy_mocks: object) -> None:
         """ingest_document registers mcp-inline-global in real SqliteSourceStore when absent.
 
         AC2: list_sources finds no match → register_source is called on the real store →
@@ -720,19 +698,13 @@ class TestFromAC_IngestDocumentLifespanProof:
             assert isinstance(result, str)
             assert "error" not in result.lower(), f"unexpected error: {result!r}"
 
-            sources = app_ctx.source_store_v2.list_sources(
-                scope="global", state=SourceState.ACTIVE
-            )
+            sources = app_ctx.source_store_v2.list_sources(scope="global", state=SourceState.ACTIVE)
             inline = [s for s in sources if s.name == "mcp-inline-global"]
-            assert len(inline) == 1, (
-                f"expected 1 inline source, found {len(inline)}: {inline}"
-            )
+            assert len(inline) == 1, f"expected 1 inline source, found {len(inline)}: {inline}"
             assert inline[0].kind == SourceKind.INLINE
 
     @pytest.mark.asyncio
-    async def test_ingest_document_reuses_existing_inline_source(
-        self, _lifespan_heavy_mocks: object
-    ) -> None:
+    async def test_ingest_document_reuses_existing_inline_source(self, _lifespan_heavy_mocks: object) -> None:
         """ingest_document does not create a duplicate source on repeat calls.
 
         AC2: second call finds source via list_sources → skips register_source →
@@ -751,13 +723,9 @@ class TestFromAC_IngestDocumentLifespanProof:
             await ingest_document(mcp_ctx, text="first doc", scope="global")
             await ingest_document(mcp_ctx, text="second doc", scope="global")
 
-            sources = app_ctx.source_store_v2.list_sources(
-                scope="global", state=SourceState.ACTIVE
-            )
+            sources = app_ctx.source_store_v2.list_sources(scope="global", state=SourceState.ACTIVE)
             inline = [s for s in sources if s.name == "mcp-inline-global"]
-            assert len(inline) == 1, (
-                f"expected exactly 1 source after two calls, found {len(inline)}"
-            )
+            assert len(inline) == 1, f"expected exactly 1 source after two calls, found {len(inline)}"
 
     @pytest.mark.asyncio
     async def test_ingest_document_response_surfaces_coordinator_counters_real_wiring(

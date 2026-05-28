@@ -67,10 +67,7 @@ def _make_request(
 ) -> IngestRequest:
     return IngestRequest(
         source_id=source_id,
-        documents=tuple(
-            IngestDocument(title=f"Doc {i}", text=f"Text content for document {i}.")
-            for i in range(docs)
-        ),
+        documents=tuple(IngestDocument(title=f"Doc {i}", text=f"Text content for document {i}.") for i in range(docs)),
         enrich=enrich,
     )
 
@@ -143,9 +140,7 @@ def mock_content() -> MagicMock:
 def mock_enrichment() -> MagicMock:
     e = MagicMock(name="enrichment")
     e.enqueue_chunks.return_value = 1
-    e.discard_chunks.return_value = EnrichmentDiscardResult(
-        discarded_chunk_ids=("chunk-old",), queue_items_removed=1
-    )
+    e.discard_chunks.return_value = EnrichmentDiscardResult(discarded_chunk_ids=("chunk-old",), queue_items_removed=1)
     e.stats.return_value = EnrichmentStats(pending=7)
     return e
 
@@ -179,7 +174,6 @@ def coordinator(
 
 
 class TestFromAC_IngestCoordinator:
-
     # ------------------------------------------------------------------
     # AC1 — source_id validation + per-doc delegation + per-doc error handling
     # ------------------------------------------------------------------
@@ -210,9 +204,7 @@ class TestFromAC_IngestCoordinator:
     async def test_ingest_continues_batch_when_content_ingest_raises(
         self, coordinator: IngestCoordinator, mock_content: MagicMock
     ) -> None:
-        mock_content.ingest = AsyncMock(
-            side_effect=[RuntimeError("store failure"), _make_content_result()]
-        )
+        mock_content.ingest = AsyncMock(side_effect=[RuntimeError("store failure"), _make_content_result()])
         result = await coordinator.ingest(_make_request(docs=2))
         assert result.documents_processed == 2
 
@@ -263,12 +255,8 @@ class TestFromAC_IngestCoordinator:
         """Multi-doc: doc 1 discard fails; doc 2 must still be processed and counted."""
         mock_content.ingest = AsyncMock(
             side_effect=[
-                _make_content_result(
-                    state=ContentIngestState.REPLACED, replaced_chunk_ids=("old-1",)
-                ),
-                _make_content_result(
-                    state=ContentIngestState.REPLACED, replaced_chunk_ids=("old-2",)
-                ),
+                _make_content_result(state=ContentIngestState.REPLACED, replaced_chunk_ids=("old-1",)),
+                _make_content_result(state=ContentIngestState.REPLACED, replaced_chunk_ids=("old-2",)),
             ]
         )
         mock_enrichment.discard_chunks.side_effect = [
@@ -292,9 +280,7 @@ class TestFromAC_IngestCoordinator:
         mock_enrichment: MagicMock,
     ) -> None:
         mock_content.ingest = AsyncMock(
-            return_value=_make_content_result(
-                state=ContentIngestState.CREATED, chunk_ids=("c1", "c2")
-            )
+            return_value=_make_content_result(state=ContentIngestState.CREATED, chunk_ids=("c1", "c2"))
         )
         await coordinator.ingest(_make_request(enrich=True))
         mock_enrichment.enqueue_chunks.assert_called_once_with(("c1", "c2"), "src-1")
@@ -306,9 +292,7 @@ class TestFromAC_IngestCoordinator:
         mock_content: MagicMock,
         mock_enrichment: MagicMock,
     ) -> None:
-        mock_content.ingest = AsyncMock(
-            return_value=_make_content_result(state=ContentIngestState.CREATED)
-        )
+        mock_content.ingest = AsyncMock(return_value=_make_content_result(state=ContentIngestState.CREATED))
         await coordinator.ingest(_make_request(enrich=False))
         mock_enrichment.enqueue_chunks.assert_not_called()
 
@@ -392,9 +376,7 @@ class TestFromAC_IngestCoordinator:
         mock_enrichment: MagicMock,
         mock_graph: MagicMock,
     ) -> None:
-        mock_content.ingest = AsyncMock(
-            return_value=_make_content_result(state=ContentIngestState.UNCHANGED)
-        )
+        mock_content.ingest = AsyncMock(return_value=_make_content_result(state=ContentIngestState.UNCHANGED))
         await coordinator.ingest(_make_request(enrich=True))
         mock_enrichment.enqueue_chunks.assert_not_called()
         mock_enrichment.discard_chunks.assert_not_called()
@@ -411,9 +393,7 @@ class TestFromAC_IngestCoordinator:
         mock_content: MagicMock,
         mock_enrichment: MagicMock,
     ) -> None:
-        mock_content.ingest = AsyncMock(
-            return_value=_make_content_result(state=ContentIngestState.CREATED)
-        )
+        mock_content.ingest = AsyncMock(return_value=_make_content_result(state=ContentIngestState.CREATED))
         mock_enrichment.enqueue_chunks.side_effect = RuntimeError("queue unavailable")
         result = await coordinator.ingest(_make_request(enrich=True))
         # Batch must complete
@@ -429,9 +409,7 @@ class TestFromAC_IngestCoordinator:
         mock_enrichment: MagicMock,
     ) -> None:
         mock_content.ingest = AsyncMock(
-            return_value=_make_content_result(
-                state=ContentIngestState.REPLACED, replaced_chunk_ids=("old-1",)
-            )
+            return_value=_make_content_result(state=ContentIngestState.REPLACED, replaced_chunk_ids=("old-1",))
         )
         mock_enrichment.discard_chunks.side_effect = RuntimeError("discard error")
         result = await coordinator.ingest(_make_request())
@@ -455,12 +433,8 @@ class TestFromAC_IngestCoordinator:
         mock_enrichment.discard_chunks.side_effect = track_discard
         mock_content.ingest = AsyncMock(
             side_effect=[
-                _make_content_result(
-                    state=ContentIngestState.REPLACED, replaced_chunk_ids=("old-1",)
-                ),
-                _make_content_result(
-                    state=ContentIngestState.REPLACED, replaced_chunk_ids=("old-2",)
-                ),
+                _make_content_result(state=ContentIngestState.REPLACED, replaced_chunk_ids=("old-1",)),
+                _make_content_result(state=ContentIngestState.REPLACED, replaced_chunk_ids=("old-2",)),
             ]
         )
         await coordinator.ingest(_make_request(docs=2))
@@ -487,12 +461,8 @@ class TestFromAC_IngestCoordinator:
         mock_graph.invalidate_evidence_by_chunks.side_effect = track_invalidate
         mock_content.ingest = AsyncMock(
             side_effect=[
-                _make_content_result(
-                    state=ContentIngestState.REPLACED, replaced_chunk_ids=("old-a",)
-                ),
-                _make_content_result(
-                    state=ContentIngestState.REPLACED, replaced_chunk_ids=("old-b",)
-                ),
+                _make_content_result(state=ContentIngestState.REPLACED, replaced_chunk_ids=("old-a",)),
+                _make_content_result(state=ContentIngestState.REPLACED, replaced_chunk_ids=("old-b",)),
             ]
         )
         await coordinator.ingest(_make_request(docs=2))
@@ -508,9 +478,7 @@ class TestFromAC_IngestCoordinator:
     async def test_ingest_result_documents_processed_equals_total_attempted(
         self, coordinator: IngestCoordinator, mock_content: MagicMock
     ) -> None:
-        mock_content.ingest = AsyncMock(
-            side_effect=[RuntimeError("x"), _make_content_result(), _make_content_result()]
-        )
+        mock_content.ingest = AsyncMock(side_effect=[RuntimeError("x"), _make_content_result(), _make_content_result()])
         result = await coordinator.ingest(_make_request(docs=3))
         assert result.documents_processed == 3
 
@@ -523,9 +491,7 @@ class TestFromAC_IngestCoordinator:
         mock_content.ingest = AsyncMock(
             side_effect=[
                 _make_content_result(state=ContentIngestState.CREATED),
-                _make_content_result(
-                    state=ContentIngestState.REPLACED, replaced_chunk_ids=("old-x",)
-                ),
+                _make_content_result(state=ContentIngestState.REPLACED, replaced_chunk_ids=("old-x",)),
                 _make_content_result(state=ContentIngestState.UNCHANGED),
             ]
         )
@@ -545,16 +511,12 @@ class TestFromAC_IngestCoordinator:
         assert result.content_results[0] is success
 
     @pytest.mark.asyncio
-    async def test_ingest_result_started_at_before_or_equal_completed_at(
-        self, coordinator: IngestCoordinator
-    ) -> None:
+    async def test_ingest_result_started_at_before_or_equal_completed_at(self, coordinator: IngestCoordinator) -> None:
         result = await coordinator.ingest(_make_request())
         assert result.started_at <= result.completed_at
 
     @pytest.mark.asyncio
-    async def test_ingest_result_source_id_matches_request(
-        self, coordinator: IngestCoordinator
-    ) -> None:
+    async def test_ingest_result_source_id_matches_request(self, coordinator: IngestCoordinator) -> None:
         result = await coordinator.ingest(_make_request(source_id="src-xyz"))
         assert result.source_id == "src-xyz"
 
@@ -586,9 +548,7 @@ class TestFromAC_IngestCoordinator:
         mock_sources: MagicMock,
         mock_content: MagicMock,
     ) -> None:
-        mock_content.ingest = AsyncMock(
-            side_effect=[RuntimeError("fail"), _make_content_result()]
-        )
+        mock_content.ingest = AsyncMock(side_effect=[RuntimeError("fail"), _make_content_result()])
         await coordinator.ingest(_make_request(docs=2))
         report = _extract_health_report(mock_sources)
         assert report.health == SourceHealth.DEGRADED
@@ -624,9 +584,7 @@ class TestFromAC_IngestCoordinator:
         mock_sources: MagicMock,
         mock_content: MagicMock,
     ) -> None:
-        mock_content.ingest = AsyncMock(
-            side_effect=[RuntimeError("fail"), _make_content_result()]
-        )
+        mock_content.ingest = AsyncMock(side_effect=[RuntimeError("fail"), _make_content_result()])
         await coordinator.ingest(_make_request(docs=2))
         report = _extract_health_report(mock_sources)
         assert report.message is not None
@@ -667,9 +625,7 @@ class TestFromAC_IngestCoordinator:
         assert result.graph_entities == 99
         assert result.graph_edges == 77
 
-    def test_stats_returns_ingest_stats_type(
-        self, coordinator: IngestCoordinator
-    ) -> None:
+    def test_stats_returns_ingest_stats_type(self, coordinator: IngestCoordinator) -> None:
         result = coordinator.stats()
         assert isinstance(result, IngestStats)
 
@@ -695,9 +651,7 @@ class TestFromAC_IngestCoordinator:
     # ------------------------------------------------------------------
 
     @pytest.mark.asyncio
-    async def test_refresh_with_no_fetcher_returns_empty_refresh_result(
-        self, coordinator: IngestCoordinator
-    ) -> None:
+    async def test_refresh_with_no_fetcher_returns_empty_refresh_result(self, coordinator: IngestCoordinator) -> None:
         result = await coordinator.refresh(RefreshRequest())
         assert isinstance(result, RefreshResult)
         assert result.sources_checked == 0

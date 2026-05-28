@@ -88,7 +88,7 @@ function readHostStringArray(element: Element | null): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
 }
 
-function readPdsVariant(element: Element | null): string | undefined {
+function _readPdsVariant(element: Element | null): string | undefined {
   return (element as (Element & { variant?: string }) | null)?.variant ?? element?.getAttribute('variant') ?? undefined
 }
 

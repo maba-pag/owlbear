@@ -479,9 +479,7 @@ class TestFromAC_CreateRequest:
         nonexistent_task_id = 9999  # task does not exist → edit_task will fail
 
         # Pre-condition: create_request must be defined — fails in RED phase
-        assert callable(getattr(engine, "create_request", None)), (
-            "create_request method not found on KanbanEngine"
-        )
+        assert callable(getattr(engine, "create_request", None)), "create_request method not found on KanbanEngine"
 
         with pytest.raises(Exception):  # noqa: B017 — any exception from blocking
             engine.create_request(
@@ -502,9 +500,7 @@ class TestFromAC_CreateRequest:
         nonexistent_task_id = 9999
 
         # Pre-condition: create_request must be defined — fails in RED phase
-        assert callable(getattr(engine, "create_request", None)), (
-            "create_request method not found on KanbanEngine"
-        )
+        assert callable(getattr(engine, "create_request", None)), "create_request method not found on KanbanEngine"
 
         with pytest.raises(Exception):  # noqa: B017
             engine.create_request(
@@ -591,9 +587,7 @@ class TestFromAC_GetRequest:
         with pytest.raises(ValidationError):
             engine.get_request(rid)
 
-    def test_get_request_invalid_model_fields_raises_validation_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_get_request_invalid_model_fields_raises_validation_error(self, tmp_path: Path) -> None:
         """AC4: get_request raises ValidationError when YAML is valid but model fails."""
         kanban_dir = _make_board(tmp_path)
         engine = KanbanEngine(kanban_dir, activity_log=False)

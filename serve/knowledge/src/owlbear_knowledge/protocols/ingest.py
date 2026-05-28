@@ -23,17 +23,17 @@ Cascade sequence on content replacement (re-ingest):
 
 from __future__ import annotations
 
-from datetime import datetime  # noqa: TC003 — needed by Pydantic at runtime
+from datetime import datetime
 from enum import StrEnum
 from typing import Protocol, runtime_checkable
 
 from pydantic import Field
 
 from owlbear_knowledge.protocols.common import BoundaryModel, Metadata
-from owlbear_knowledge.protocols.content import ContentIngestResult, ContentPurgeResult  # noqa: TC001
-from owlbear_knowledge.protocols.enrichment import EnrichmentPurgeResult  # noqa: TC001
-from owlbear_knowledge.protocols.graph import EvidenceInvalidationResult  # noqa: TC001
-from owlbear_knowledge.protocols.sources import SourceDeletionInfo  # noqa: TC001
+from owlbear_knowledge.protocols.content import ContentIngestResult, ContentPurgeResult
+from owlbear_knowledge.protocols.enrichment import EnrichmentPurgeResult
+from owlbear_knowledge.protocols.graph import EvidenceInvalidationResult
+from owlbear_knowledge.protocols.sources import SourceDeletionInfo
 
 # ---------------------------------------------------------------------------
 # Request types

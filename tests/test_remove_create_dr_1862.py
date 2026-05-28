@@ -72,9 +72,7 @@ class TestFromAC_RemoveCreateDr:
 
     def test_mcp_create_dr_dedicated_test_file_deleted(self) -> None:
         """AC4 edge: serve/mcp-kanban/tests/test_mcp_create_dr.py must not exist."""
-        test_file = (
-            WORKSPACE_ROOT / "serve" / "mcp-kanban" / "tests" / "test_mcp_create_dr.py"
-        )
+        test_file = WORKSPACE_ROOT / "serve" / "mcp-kanban" / "tests" / "test_mcp_create_dr.py"
         assert not test_file.exists(), f"Expected {test_file} to be deleted but it still exists"
 
     def test_mcp_create_dr_coerce_test_file_deleted(self) -> None:
@@ -99,49 +97,27 @@ class TestFromAC_RemoveCreateDr:
         """AC4 happy: tests/test_mcp_kanban.py must not reference create_dr at all."""
         test_file = WORKSPACE_ROOT / "tests" / "test_mcp_kanban.py"
         content = test_file.read_text(encoding="utf-8")
-        assert "create_dr" not in content, (
-            "tests/test_mcp_kanban.py still contains references to create_dr"
-        )
+        assert "create_dr" not in content, "tests/test_mcp_kanban.py still contains references to create_dr"
 
     def test_server_newline_normalization_test_does_not_reference_create_dr(self) -> None:
         """AC4 happy: serve/mcp-kanban/tests/test_server_newline_normalization.py must not reference create_dr."""
-        test_file = (
-            WORKSPACE_ROOT
-            / "serve"
-            / "mcp-kanban"
-            / "tests"
-            / "test_server_newline_normalization.py"
-        )
+        test_file = WORKSPACE_ROOT / "serve" / "mcp-kanban" / "tests" / "test_server_newline_normalization.py"
         content = test_file.read_text(encoding="utf-8")
-        assert "create_dr" not in content, (
-            "test_server_newline_normalization.py still contains references to create_dr"
-        )
+        assert "create_dr" not in content, "test_server_newline_normalization.py still contains references to create_dr"
 
     def test_server_error_envelopes_test_does_not_reference_create_dr(self) -> None:
         """AC4 happy: serve/mcp-kanban/tests/test_server_error_envelopes.py must not reference create_dr."""
-        test_file = (
-            WORKSPACE_ROOT
-            / "serve"
-            / "mcp-kanban"
-            / "tests"
-            / "test_server_error_envelopes.py"
-        )
+        test_file = WORKSPACE_ROOT / "serve" / "mcp-kanban" / "tests" / "test_server_error_envelopes.py"
         content = test_file.read_text(encoding="utf-8")
-        assert "create_dr" not in content, (
-            "test_server_error_envelopes.py still contains references to create_dr"
-        )
+        assert "create_dr" not in content, "test_server_error_envelopes.py still contains references to create_dr"
 
     # ------------------------------------------------------------------ AC5 --
 
     def test_surface_contract_expected_tools_excludes_create_dr(self) -> None:
         """AC5 happy: EXPECTED_TOOLS in test_mcp_surface_contract.py must not include 'create_dr'."""
-        surface_test = (
-            WORKSPACE_ROOT / "serve" / "mcp-kanban" / "tests" / "test_mcp_surface_contract.py"
-        )
+        surface_test = WORKSPACE_ROOT / "serve" / "mcp-kanban" / "tests" / "test_mcp_surface_contract.py"
         content = surface_test.read_text(encoding="utf-8")
-        assert '"create_dr"' not in content, (
-            "test_mcp_surface_contract.py still contains 'create_dr' in EXPECTED_TOOLS"
-        )
+        assert '"create_dr"' not in content, "test_mcp_surface_contract.py still contains 'create_dr' in EXPECTED_TOOLS"
 
     # ------------------------------------------------------------------ AC6 --
 
@@ -157,16 +133,10 @@ class TestFromAC_RemoveCreateDr:
         """AC7 happy: share/skills/h-mcp-kanban/SKILL.md must not present create_dr as a tool."""
         skill_file = WORKSPACE_ROOT / "share" / "skills" / "h-mcp-kanban" / "SKILL.md"
         content = skill_file.read_text(encoding="utf-8")
-        assert "create_dr" not in content, (
-            "share/skills/h-mcp-kanban/SKILL.md still references create_dr"
-        )
+        assert "create_dr" not in content, "share/skills/h-mcp-kanban/SKILL.md still references create_dr"
 
     def test_h_decision_requests_skill_does_not_present_create_dr_as_available(self) -> None:
         """AC7 happy: share/skills/h-decision-requests/SKILL.md must not present create_dr as available."""
-        skill_file = (
-            WORKSPACE_ROOT / "share" / "skills" / "h-decision-requests" / "SKILL.md"
-        )
+        skill_file = WORKSPACE_ROOT / "share" / "skills" / "h-decision-requests" / "SKILL.md"
         content = skill_file.read_text(encoding="utf-8")
-        assert "create_dr" not in content, (
-            "share/skills/h-decision-requests/SKILL.md still mentions create_dr"
-        )
+        assert "create_dr" not in content, "share/skills/h-decision-requests/SKILL.md still mentions create_dr"

@@ -279,6 +279,7 @@ Before your final status advance, write 3-5 bullets covering problems faced, wor
 If `recall_memory` was called during the task, memory assessment is mandatory before final status advance. Call `assess_memories` with every recalled memory ID and use this exact framing:
 
 For each recalled memory entry, categorize your experience:
+
 - **Outstanding** — this entry's guidance was genuinely great for this task
 - **Used but unremarkable** — I applied or referenced this entry's guidance and it was adequate
 - **Didn't use** — I didn't apply or reference this entry's guidance

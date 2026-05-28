@@ -107,9 +107,7 @@ class TestFromAC_ContentStore:
     # Happy: CREATED / UNCHANGED / REPLACED state machine
 
     @pytest.mark.asyncio
-    async def test_ingest_new_document_returns_created_state(
-        self, store: ContentStore
-    ) -> None:
+    async def test_ingest_new_document_returns_created_state(self, store: ContentStore) -> None:
         """AC3: first ingest of a new document_id returns state=CREATED."""
         req = _make_request()
         result = await store.ingest(req)
@@ -117,9 +115,7 @@ class TestFromAC_ContentStore:
         assert result.state == ContentIngestState.CREATED
 
     @pytest.mark.asyncio
-    async def test_ingest_new_document_has_non_empty_chunk_ids(
-        self, store: ContentStore
-    ) -> None:
+    async def test_ingest_new_document_has_non_empty_chunk_ids(self, store: ContentStore) -> None:
         """AC3: CREATED result contains at least one chunk_id."""
         req = _make_request()
         result = await store.ingest(req)
@@ -127,9 +123,7 @@ class TestFromAC_ContentStore:
         assert len(result.chunk_ids) >= 1
 
     @pytest.mark.asyncio
-    async def test_ingest_new_document_has_empty_replaced_chunk_ids(
-        self, store: ContentStore
-    ) -> None:
+    async def test_ingest_new_document_has_empty_replaced_chunk_ids(self, store: ContentStore) -> None:
         """AC3: CREATED result has empty replaced_chunk_ids."""
         req = _make_request()
         result = await store.ingest(req)
@@ -137,9 +131,7 @@ class TestFromAC_ContentStore:
         assert result.replaced_chunk_ids == ()
 
     @pytest.mark.asyncio
-    async def test_ingest_same_text_returns_unchanged_state(
-        self, store: ContentStore
-    ) -> None:
+    async def test_ingest_same_text_returns_unchanged_state(self, store: ContentStore) -> None:
         """AC3: re-ingesting the same document with identical text returns UNCHANGED."""
         req = _make_request()
         await store.ingest(req)
@@ -148,9 +140,7 @@ class TestFromAC_ContentStore:
         assert result2.state == ContentIngestState.UNCHANGED
 
     @pytest.mark.asyncio
-    async def test_ingest_changed_text_returns_replaced_state(
-        self, store: ContentStore
-    ) -> None:
+    async def test_ingest_changed_text_returns_replaced_state(self, store: ContentStore) -> None:
         """AC3: re-ingesting the same document with different text returns REPLACED."""
         req1 = _make_request(text="Original content. " * 6)
         req2 = _make_request(text="Completely updated content. " * 6)
@@ -160,9 +150,7 @@ class TestFromAC_ContentStore:
         assert result2.state == ContentIngestState.REPLACED
 
     @pytest.mark.asyncio
-    async def test_ingest_replaced_returns_non_empty_replaced_chunk_ids(
-        self, store: ContentStore
-    ) -> None:
+    async def test_ingest_replaced_returns_non_empty_replaced_chunk_ids(self, store: ContentStore) -> None:
         """AC3: REPLACED result exposes old chunk_ids in replaced_chunk_ids."""
         req1 = _make_request(text="Original content. " * 6)
         first = await store.ingest(req1)
@@ -175,37 +163,27 @@ class TestFromAC_ContentStore:
     # Happy/Edge: deterministic document_id via UUID5
 
     @pytest.mark.asyncio
-    async def test_document_id_same_across_calls_with_external_id(
-        self, store: ContentStore
-    ) -> None:
+    async def test_document_id_same_across_calls_with_external_id(self, store: ContentStore) -> None:
         """AC2: two ingests with identical (source_id, external_id, scope) produce same document_id."""
         req = _make_request(external_id="ext-42")
         r1 = await store.ingest(req)
-        req2 = _make_request(
-            text="Completely different updated text. " * 6, external_id="ext-42"
-        )
+        req2 = _make_request(text="Completely different updated text. " * 6, external_id="ext-42")
         r2 = await store.ingest(req2)
 
         assert r1.document_id == r2.document_id
 
     @pytest.mark.asyncio
-    async def test_document_id_uses_uri_when_no_external_id(
-        self, store: ContentStore
-    ) -> None:
+    async def test_document_id_uses_uri_when_no_external_id(self, store: ContentStore) -> None:
         """AC2: document_id derived from uri when external_id is absent."""
         req = _make_request(uri="https://example.com/doc")
         r1 = await store.ingest(req)
-        req2 = _make_request(
-            text="Revised text here. " * 6, uri="https://example.com/doc"
-        )
+        req2 = _make_request(text="Revised text here. " * 6, uri="https://example.com/doc")
         r2 = await store.ingest(req2)
 
         assert r1.document_id == r2.document_id
 
     @pytest.mark.asyncio
-    async def test_document_id_uses_title_when_no_external_id_or_uri(
-        self, store: ContentStore
-    ) -> None:
+    async def test_document_id_uses_title_when_no_external_id_or_uri(self, store: ContentStore) -> None:
         """AC2: document_id derived from title when external_id and uri are both absent."""
         req = _make_request(title="Canonical Title")
         r1 = await store.ingest(req)
@@ -215,9 +193,7 @@ class TestFromAC_ContentStore:
         assert r1.document_id == r2.document_id
 
     @pytest.mark.asyncio
-    async def test_document_id_differs_for_different_scope(
-        self, store: ContentStore
-    ) -> None:
+    async def test_document_id_differs_for_different_scope(self, store: ContentStore) -> None:
         """AC2 boundary: same source_id + title but different scope → different document_id."""
         req_a = _make_request(scope="project-A", external_id="same-ext")
         req_b = _make_request(scope="project-B", external_id="same-ext")
@@ -229,16 +205,10 @@ class TestFromAC_ContentStore:
     # ------------------------------------------------------------------ AC2 boundary: identity priority
 
     @pytest.mark.asyncio
-    async def test_document_id_prefers_external_id_over_uri_and_title(
-        self, store: ContentStore
-    ) -> None:
+    async def test_document_id_prefers_external_id_over_uri_and_title(self, store: ContentStore) -> None:
         """AC2 boundary: external_id takes priority over uri and title for identity."""
-        req_with_ext = _make_request(
-            external_id="ext-priority", uri="https://example.com/x", title="Title X"
-        )
-        req_uri_only = _make_request(
-            uri="https://example.com/x", title="Title X"
-        )
+        req_with_ext = _make_request(external_id="ext-priority", uri="https://example.com/x", title="Title X")
+        req_uri_only = _make_request(uri="https://example.com/x", title="Title X")
         r_ext = await store.ingest(req_with_ext)
         r_uri = await store.ingest(req_uri_only)
 
@@ -249,9 +219,7 @@ class TestFromAC_ContentStore:
     # get_document
 
     @pytest.mark.asyncio
-    async def test_get_document_returns_content_document_after_ingest(
-        self, store: ContentStore
-    ) -> None:
+    async def test_get_document_returns_content_document_after_ingest(self, store: ContentStore) -> None:
         """AC5: get_document returns ContentDocument for a known document_id."""
         req = _make_request(title="Doc Alpha", source_id="src-a")
         result = await store.ingest(req)
@@ -263,18 +231,14 @@ class TestFromAC_ContentStore:
         assert doc.source_id == "src-a"
         assert doc.title == "Doc Alpha"
 
-    def test_get_document_returns_none_for_unknown_id(
-        self, store: ContentStore
-    ) -> None:
+    def test_get_document_returns_none_for_unknown_id(self, store: ContentStore) -> None:
         """AC5: get_document returns None for an ID that was never ingested."""
         doc = store.get_document("non-existent-id-xyz")
 
         assert doc is None
 
     @pytest.mark.asyncio
-    async def test_get_document_has_content_hash(
-        self, store: ContentStore
-    ) -> None:
+    async def test_get_document_has_content_hash(self, store: ContentStore) -> None:
         """AC5: returned ContentDocument carries a non-empty content_hash."""
         req = _make_request()
         result = await store.ingest(req)
@@ -289,9 +253,7 @@ class TestFromAC_ContentStore:
     # get_chunk
 
     @pytest.mark.asyncio
-    async def test_get_chunk_returns_content_chunk_after_ingest(
-        self, store: ContentStore
-    ) -> None:
+    async def test_get_chunk_returns_content_chunk_after_ingest(self, store: ContentStore) -> None:
         """AC6: get_chunk returns ContentChunk with text and content_hash."""
         req = _make_request(text="Sample chunk text. " * 4)
         result = await store.ingest(req)
@@ -302,9 +264,7 @@ class TestFromAC_ContentStore:
         assert chunk.text != ""
         assert chunk.content_hash != ""
 
-    def test_get_chunk_returns_none_for_unknown_id(
-        self, store: ContentStore
-    ) -> None:
+    def test_get_chunk_returns_none_for_unknown_id(self, store: ContentStore) -> None:
         """AC6: get_chunk returns None for an ID that was never stored."""
         chunk = store.get_chunk("non-existent-chunk-id")
 
@@ -314,9 +274,7 @@ class TestFromAC_ContentStore:
     # list_chunks
 
     @pytest.mark.asyncio
-    async def test_list_chunks_ordered_by_index_ascending(
-        self, store: ContentStore
-    ) -> None:
+    async def test_list_chunks_ordered_by_index_ascending(self, store: ContentStore) -> None:
         """AC7: list_chunks returns chunks ordered by index ascending."""
         long_text = "Word. " * 500
         req = _make_request(text=long_text)
@@ -328,18 +286,14 @@ class TestFromAC_ContentStore:
         indices = [c.index for c in chunks]
         assert indices == sorted(indices)
 
-    def test_list_chunks_returns_empty_tuple_for_unknown_document(
-        self, store: ContentStore
-    ) -> None:
+    def test_list_chunks_returns_empty_tuple_for_unknown_document(self, store: ContentStore) -> None:
         """AC7: list_chunks returns empty tuple when document_id is not known."""
         chunks = store.list_chunks("unknown-doc-id")
 
         assert chunks == ()
 
     @pytest.mark.asyncio
-    async def test_list_chunks_returns_only_current_chunks_after_replace(
-        self, store: ContentStore
-    ) -> None:
+    async def test_list_chunks_returns_only_current_chunks_after_replace(self, store: ContentStore) -> None:
         """AC7: list_chunks excludes stale chunks from a prior REPLACED ingest."""
         req1 = _make_request(text="Original text. " * 6)
         first = await store.ingest(req1)
@@ -360,9 +314,7 @@ class TestFromAC_ContentStore:
     # trusted flag propagation
 
     @pytest.mark.asyncio
-    async def test_trusted_true_propagated_to_document(
-        self, store: ContentStore
-    ) -> None:
+    async def test_trusted_true_propagated_to_document(self, store: ContentStore) -> None:
         """AC4: ingest with trusted=True stores document with trusted=True."""
         req = _make_request(trusted=True)
         result = await store.ingest(req)
@@ -373,9 +325,7 @@ class TestFromAC_ContentStore:
         assert doc.trusted is True
 
     @pytest.mark.asyncio
-    async def test_trusted_true_propagated_to_chunks(
-        self, store: ContentStore
-    ) -> None:
+    async def test_trusted_true_propagated_to_chunks(self, store: ContentStore) -> None:
         """AC4: ingest with trusted=True stores all chunks with trusted=True."""
         req = _make_request(trusted=True)
         result = await store.ingest(req)
@@ -386,9 +336,7 @@ class TestFromAC_ContentStore:
         assert all(c.trusted is True for c in chunks)
 
     @pytest.mark.asyncio
-    async def test_trusted_false_propagated_to_document(
-        self, store: ContentStore
-    ) -> None:
+    async def test_trusted_false_propagated_to_document(self, store: ContentStore) -> None:
         """AC4: ingest with trusted=False (default) stores document with trusted=False."""
         req = _make_request(trusted=False)
         result = await store.ingest(req)
@@ -399,9 +347,7 @@ class TestFromAC_ContentStore:
         assert doc.trusted is False
 
     @pytest.mark.asyncio
-    async def test_trusted_false_propagated_to_chunks(
-        self, store: ContentStore
-    ) -> None:
+    async def test_trusted_false_propagated_to_chunks(self, store: ContentStore) -> None:
         """AC4: ingest with trusted=False stores all chunks with trusted=False."""
         req = _make_request(trusted=False)
         result = await store.ingest(req)
@@ -415,9 +361,7 @@ class TestFromAC_ContentStore:
     # Qdrant vector operations
 
     @pytest.mark.asyncio
-    async def test_ingest_created_upserts_vectors_to_qdrant(
-        self, store: ContentStore, mock_vectors: MagicMock
-    ) -> None:
+    async def test_ingest_created_upserts_vectors_to_qdrant(self, store: ContentStore, mock_vectors: MagicMock) -> None:
         """AC8: CREATED ingest triggers at least one Qdrant upsert call."""
         req = _make_request()
         await store.ingest(req)
@@ -425,9 +369,7 @@ class TestFromAC_ContentStore:
         assert mock_vectors.upsert.called, "vector_store.upsert must be called on CREATED ingest"
 
     @pytest.mark.asyncio
-    async def test_ingest_unchanged_does_not_call_qdrant(
-        self, store: ContentStore, mock_vectors: MagicMock
-    ) -> None:
+    async def test_ingest_unchanged_does_not_call_qdrant(self, store: ContentStore, mock_vectors: MagicMock) -> None:
         """AC8 / AC3: UNCHANGED ingest must not write any new Qdrant vectors."""
         req = _make_request()
         await store.ingest(req)
@@ -438,12 +380,9 @@ class TestFromAC_ContentStore:
 
         # No mutating calls should occur (upsert/delete/etc.)
         upsert_calls = [
-            c for c in mock_vectors.method_calls
-            if "upsert" in c[0] or "delete" in c[0] or "upload" in c[0]
+            c for c in mock_vectors.method_calls if "upsert" in c[0] or "delete" in c[0] or "upload" in c[0]
         ]
-        assert upsert_calls == [], (
-            "UNCHANGED ingest must not trigger any Qdrant writes"
-        )
+        assert upsert_calls == [], "UNCHANGED ingest must not trigger any Qdrant writes"
 
     @pytest.mark.asyncio
     async def test_ingest_replaced_deletes_old_vectors_before_upsert(
@@ -463,17 +402,13 @@ class TestFromAC_ContentStore:
 
         assert delete_positions, "REPLACED must delete old vectors"
         assert upsert_positions, "REPLACED must upsert new vectors"
-        assert min(delete_positions) < min(upsert_positions), (
-            "Deletes must precede upserts on REPLACED"
-        )
+        assert min(delete_positions) < min(upsert_positions), "Deletes must precede upserts on REPLACED"
 
     # ------------------------------------------------------------------ AC1
     # SQLite-first atomicity; Qdrant failure semantics
 
     @pytest.mark.asyncio
-    async def test_ingest_qdrant_failure_raises(
-        self, store: ContentStore, mock_vectors: MagicMock
-    ) -> None:
+    async def test_ingest_qdrant_failure_raises(self, store: ContentStore, mock_vectors: MagicMock) -> None:
         """AC1: Qdrant failure propagates as an exception to the caller."""
         mock_vectors.upsert = MagicMock(side_effect=RuntimeError("qdrant unavailable"))
         mock_vectors.upload_points = MagicMock(side_effect=RuntimeError("qdrant unavailable"))
@@ -513,9 +448,7 @@ class TestFromAC_ContentStore:
         # SQLite must have committed the document record before Qdrant was touched
         cursor = db.execute("SELECT COUNT(*) FROM content_documents")
         count = cursor.fetchone()[0]
-        assert count >= 1, (
-            "SQLite must retain the document record after Qdrant failure (AC1: consistent for retry)"
-        )
+        assert count >= 1, "SQLite must retain the document record after Qdrant failure (AC1: consistent for retry)"
 
     # ------------------------------------------------------------------ AC9
     # ensure_tables idempotency
@@ -531,9 +464,7 @@ class TestFromAC_ContentStore:
         )
         s.ensure_tables()
 
-        cursor = db.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='content_documents'"
-        )
+        cursor = db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='content_documents'")
         row = cursor.fetchone()
         assert row is not None, "content_documents table must exist after ensure_tables()"
 
@@ -548,9 +479,7 @@ class TestFromAC_ContentStore:
         )
         s.ensure_tables()
 
-        cursor = db.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='content_chunks'"
-        )
+        cursor = db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='content_chunks'")
         row = cursor.fetchone()
         assert row is not None, "content_chunks table must exist after ensure_tables()"
 
@@ -570,9 +499,7 @@ class TestFromAC_ContentStore:
     # UNCHANGED contract details
 
     @pytest.mark.asyncio
-    async def test_ingest_unchanged_preserves_chunk_ids(
-        self, store: ContentStore
-    ) -> None:
+    async def test_ingest_unchanged_preserves_chunk_ids(self, store: ContentStore) -> None:
         """AC3 boundary: UNCHANGED result returns same chunk_ids as original ingest."""
         req = _make_request()
         first = await store.ingest(req)
@@ -582,9 +509,7 @@ class TestFromAC_ContentStore:
         assert set(second.chunk_ids) == set(first.chunk_ids)
 
     @pytest.mark.asyncio
-    async def test_ingest_unchanged_has_empty_replaced_chunk_ids(
-        self, store: ContentStore
-    ) -> None:
+    async def test_ingest_unchanged_has_empty_replaced_chunk_ids(self, store: ContentStore) -> None:
         """AC3 boundary: UNCHANGED result has empty replaced_chunk_ids."""
         req = _make_request()
         await store.ingest(req)
@@ -593,9 +518,7 @@ class TestFromAC_ContentStore:
         assert second.replaced_chunk_ids == ()
 
     @pytest.mark.asyncio
-    async def test_ingest_result_carries_source_id(
-        self, store: ContentStore
-    ) -> None:
+    async def test_ingest_result_carries_source_id(self, store: ContentStore) -> None:
         """AC3 / contract: ContentIngestResult carries the source_id from the request."""
         req = _make_request(source_id="src-test-99")
         result = await store.ingest(req)
@@ -603,9 +526,7 @@ class TestFromAC_ContentStore:
         assert result.source_id == "src-test-99"
 
     @pytest.mark.asyncio
-    async def test_ingest_result_carries_content_hash(
-        self, store: ContentStore
-    ) -> None:
+    async def test_ingest_result_carries_content_hash(self, store: ContentStore) -> None:
         """AC3 / contract: ContentIngestResult carries a non-empty content_hash."""
         req = _make_request()
         result = await store.ingest(req)
@@ -617,9 +538,7 @@ class TestFromAC_ContentStore:
     # Retry-safe vector repair after post-commit Qdrant failure
 
     @pytest.mark.asyncio
-    async def test_ingest_retry_after_qdrant_failure_writes_vectors(
-        self, mock_embed: MagicMock
-    ) -> None:
+    async def test_ingest_retry_after_qdrant_failure_writes_vectors(self, mock_embed: MagicMock) -> None:
         """AC1: retrying ingest after a post-commit Qdrant failure must write vectors.
 
         When Qdrant fails after SQLite commits the document, the document record
@@ -666,9 +585,7 @@ class TestFromAC_ContentStore:
     # get_document metadata round-trip proof
 
     @pytest.mark.asyncio
-    async def test_get_document_returns_request_metadata(
-        self, store: ContentStore
-    ) -> None:
+    async def test_get_document_returns_request_metadata(self, store: ContentStore) -> None:
         """AC5: get_document returns ContentDocument whose metadata matches the request.
 
         Explicit round-trip proof: metadata supplied in ContentIngestRequest must be
@@ -694,9 +611,7 @@ class TestFromAC_ContentStore:
     # Retry-safe vector deletion after post-commit REPLACED+_delete_vectors failure
 
     @pytest.mark.asyncio
-    async def test_ingest_replaced_retry_deletes_stale_vectors_after_failed_delete(
-        self, mock_embed: MagicMock
-    ) -> None:
+    async def test_ingest_replaced_retry_deletes_stale_vectors_after_failed_delete(self, mock_embed: MagicMock) -> None:
         """AC1 + AC8: retrying REPLACED ingest after _delete_vectors failure must delete stale vectors.
 
         When a REPLACED ingest fails at _delete_vectors after SQLite commits:
@@ -721,9 +636,7 @@ class TestFromAC_ContentStore:
             chunker=chunker,
         )
         store_1.ensure_tables()
-        v1_result = await store_1.ingest(
-            _make_request(text="First version content here. " * 6)
-        )
+        v1_result = await store_1.ingest(_make_request(text="First version content here. " * 6))
         v1_chunk_ids = set(v1_result.chunk_ids)
 
         # Step 2: V2 ingest — REPLACED, SQLite commits new chunks, but _delete_vectors raises
@@ -736,9 +649,7 @@ class TestFromAC_ContentStore:
             chunker=chunker,
         )
         with pytest.raises(RuntimeError):
-            await store_2.ingest(
-                _make_request(text="Second version — completely different content. " * 6)
-            )
+            await store_2.ingest(_make_request(text="Second version — completely different content. " * 6))
 
         # Step 3: Retry V2 — Qdrant back online; same V2 content
         retry_vectors = MagicMock()
@@ -748,9 +659,7 @@ class TestFromAC_ContentStore:
             embedding_provider=mock_embed,
             chunker=chunker,
         )
-        await store_3.ingest(
-            _make_request(text="Second version — completely different content. " * 6)
-        )
+        await store_3.ingest(_make_request(text="Second version — completely different content. " * 6))
 
         # Retry MUST call delete for the stale V1 chunk IDs.
         # V1 chunk rows were deleted from content_chunks during the REPLACED transaction;
@@ -773,9 +682,7 @@ class TestFromAC_ContentStore:
         )
 
     @pytest.mark.asyncio
-    async def test_ingest_replaced_retry_convergence_delete_before_upsert(
-        self, mock_embed: MagicMock
-    ) -> None:
+    async def test_ingest_replaced_retry_convergence_delete_before_upsert(self, mock_embed: MagicMock) -> None:
         """AC1 + AC3 + AC8: UNCHANGED retry after REPLACED+delete-failure deletes before upserting.
 
         Refined AC3: UNCHANGED performs no new SQLite row writes but completes any pending
@@ -896,9 +803,7 @@ class TestFromAC_ContentStore:
         )
 
     @pytest.mark.asyncio
-    async def test_ingest_retry_after_failure_upserts_exact_chunk_ids_no_bare_call(
-        self, mock_embed: MagicMock
-    ) -> None:
+    async def test_ingest_retry_after_failure_upserts_exact_chunk_ids_no_bare_call(self, mock_embed: MagicMock) -> None:
         """AC1 + AC8: retry after post-commit Qdrant failure upserts exact current chunk IDs.
 
         Companion to test_ingest_retry_after_qdrant_failure_writes_vectors — adds payload
@@ -911,24 +816,18 @@ class TestFromAC_ContentStore:
         # Step 1: first ingest — SQLite commits, Qdrant fails
         failing_vectors = MagicMock()
         failing_vectors.upsert = MagicMock(side_effect=RuntimeError("qdrant down"))
-        s = ContentStore(
-            db=db, vector_store=failing_vectors, embedding_provider=mock_embed, chunker=chunker
-        )
+        s = ContentStore(db=db, vector_store=failing_vectors, embedding_provider=mock_embed, chunker=chunker)
         s.ensure_tables()
         with pytest.raises(RuntimeError):
             await s.ingest(req)
 
         # Step 2: retry with healthy Qdrant
         retry_vectors = MagicMock()
-        s2 = ContentStore(
-            db=db, vector_store=retry_vectors, embedding_provider=mock_embed, chunker=chunker
-        )
+        s2 = ContentStore(db=db, vector_store=retry_vectors, embedding_provider=mock_embed, chunker=chunker)
         retry_result = await s2.ingest(req)
 
         # No bare parity call
-        assert retry_vectors.call_count == 0, (
-            "AC8: vector_store must not be invoked as a bare callable on retry ingest"
-        )
+        assert retry_vectors.call_count == 0, "AC8: vector_store must not be invoked as a bare callable on retry ingest"
         # Exact payload — must upsert exactly the current persisted chunk IDs
         upsert_call = retry_vectors.upsert.call_args
         assert upsert_call is not None, "AC1 + AC8: upsert must be called on retry"
@@ -951,29 +850,21 @@ class TestFromAC_ContentStore:
         chunker = TextChunker(target_tokens=50)
 
         # V1 CREATED
-        store_1 = ContentStore(
-            db=db, vector_store=MagicMock(), embedding_provider=mock_embed, chunker=chunker
-        )
+        store_1 = ContentStore(db=db, vector_store=MagicMock(), embedding_provider=mock_embed, chunker=chunker)
         store_1.ensure_tables()
         await store_1.ingest(_make_request(text="V1 content paragraph here. " * 6))
 
         # V2 REPLACED — _delete_vectors raises
         failing_vectors = MagicMock()
         failing_vectors.delete = MagicMock(side_effect=RuntimeError("Qdrant delete failed"))
-        store_2 = ContentStore(
-            db=db, vector_store=failing_vectors, embedding_provider=mock_embed, chunker=chunker
-        )
+        store_2 = ContentStore(db=db, vector_store=failing_vectors, embedding_provider=mock_embed, chunker=chunker)
         with pytest.raises(RuntimeError):
             await store_2.ingest(_make_request(text="V2 updated content paragraph here. " * 6))
 
         # Retry V2
         retry_vectors = MagicMock()
-        store_3 = ContentStore(
-            db=db, vector_store=retry_vectors, embedding_provider=mock_embed, chunker=chunker
-        )
-        retry_result = await store_3.ingest(
-            _make_request(text="V2 updated content paragraph here. " * 6)
-        )
+        store_3 = ContentStore(db=db, vector_store=retry_vectors, embedding_provider=mock_embed, chunker=chunker)
+        retry_result = await store_3.ingest(_make_request(text="V2 updated content paragraph here. " * 6))
 
         # No bare parity call
         assert retry_vectors.call_count == 0, (
@@ -991,9 +882,7 @@ class TestFromAC_ContentStore:
         )
 
     @pytest.mark.asyncio
-    async def test_ingest_replaced_retry_convergence_exact_ids_no_bare_call(
-        self, mock_embed: MagicMock
-    ) -> None:
+    async def test_ingest_replaced_retry_convergence_exact_ids_no_bare_call(self, mock_embed: MagicMock) -> None:
         """AC1 + AC3 + AC8: REPLACED retry convergence — delete-before-upsert AND exact V2 payload.
 
         Companion to test_ingest_replaced_retry_convergence_delete_before_upsert — adds
@@ -1005,29 +894,21 @@ class TestFromAC_ContentStore:
         chunker = TextChunker(target_tokens=50)
 
         # V1 CREATED
-        store_1 = ContentStore(
-            db=db, vector_store=MagicMock(), embedding_provider=mock_embed, chunker=chunker
-        )
+        store_1 = ContentStore(db=db, vector_store=MagicMock(), embedding_provider=mock_embed, chunker=chunker)
         store_1.ensure_tables()
         await store_1.ingest(_make_request(text="Version one content here. " * 6))
 
         # V2 REPLACED — _delete_vectors fails
         failing_vectors = MagicMock()
         failing_vectors.delete = MagicMock(side_effect=RuntimeError("delete unavailable"))
-        store_2 = ContentStore(
-            db=db, vector_store=failing_vectors, embedding_provider=mock_embed, chunker=chunker
-        )
+        store_2 = ContentStore(db=db, vector_store=failing_vectors, embedding_provider=mock_embed, chunker=chunker)
         with pytest.raises(RuntimeError):
             await store_2.ingest(_make_request(text="Version two content — updated. " * 6))
 
         # Retry V2 — Qdrant healthy
         retry_vectors = MagicMock()
-        store_3 = ContentStore(
-            db=db, vector_store=retry_vectors, embedding_provider=mock_embed, chunker=chunker
-        )
-        retry_result = await store_3.ingest(
-            _make_request(text="Version two content — updated. " * 6)
-        )
+        store_3 = ContentStore(db=db, vector_store=retry_vectors, embedding_provider=mock_embed, chunker=chunker)
+        retry_result = await store_3.ingest(_make_request(text="Version two content — updated. " * 6))
 
         # (1) No bare parity call
         assert retry_vectors.call_count == 0, (
@@ -1078,11 +959,9 @@ class TestFromAC_ContentStore:
 
         delete_call = mock_vectors.delete.call_args
         assert delete_call is not None, (
-            "AC8: REPLACED ingest must call vector_store.delete — "
-            "stale V1 vectors must be removed"
+            "AC8: REPLACED ingest must call vector_store.delete — stale V1 vectors must be removed"
         )
         deleted_ids = set(delete_call.kwargs["ids"])
         assert deleted_ids == v1_chunk_ids, (
-            f"AC8: delete must receive exactly the stale V1 chunk IDs. "
-            f"Expected {v1_chunk_ids}, got {deleted_ids}"
+            f"AC8: delete must receive exactly the stale V1 chunk IDs. Expected {v1_chunk_ids}, got {deleted_ids}"
         )

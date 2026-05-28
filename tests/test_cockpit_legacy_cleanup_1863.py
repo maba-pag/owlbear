@@ -87,9 +87,7 @@ def client(engine: KanbanEngine, decisions_dir: Path):
 
 _PROJECT_ROOT = Path(__file__).parent.parent
 _HOOK_FILE = _PROJECT_ROOT / "serve" / "cockpit" / "web" / "src" / "hooks" / "usePendingDRs.ts"
-_DECISIONS_TEST_FILE = (
-    _PROJECT_ROOT / "serve" / "cockpit" / "web" / "src" / "__tests__" / "decisions.test.ts"
-)
+_DECISIONS_TEST_FILE = _PROJECT_ROOT / "serve" / "cockpit" / "web" / "src" / "__tests__" / "decisions.test.ts"
 
 
 # ---------------------------------------------------------------------------
@@ -147,9 +145,7 @@ class TestFromAC_LegacyEndpointRemoval:
         )
         assert response.status_code == 404
 
-    def test_post_resolve_decision_invalid_payload_returns_404(
-        self, client: TestClient
-    ) -> None:
+    def test_post_resolve_decision_invalid_payload_returns_404(self, client: TestClient) -> None:
         """AC1: POST to removed path returns 404 even when payload is invalid.
 
         Currently returns 422 (FastAPI validates against ResolveRequest).
@@ -173,9 +169,7 @@ class TestFromAC_LegacyEndpointRemoval:
 
         cockpit_dir = Path(owlbear_cockpit.__file__).parent
         decisions_file = cockpit_dir / "routes" / "decisions.py"
-        assert not decisions_file.exists(), (
-            f"Legacy decisions route module still present at {decisions_file}"
-        )
+        assert not decisions_file.exists(), f"Legacy decisions route module still present at {decisions_file}"
 
 
 # ---------------------------------------------------------------------------
@@ -188,9 +182,7 @@ class TestFromAC_FrontendLegacyRemoval:
 
     def test_frontend_decisions_test_file_removed(self) -> None:
         """AC3: decisions.test.ts (testing old POST /api/decisions endpoint) is deleted."""
-        assert not _DECISIONS_TEST_FILE.exists(), (
-            f"Legacy frontend test file still exists: {_DECISIONS_TEST_FILE}"
-        )
+        assert not _DECISIONS_TEST_FILE.exists(), f"Legacy frontend test file still exists: {_DECISIONS_TEST_FILE}"
 
     def test_legacy_pending_dr_response_interface_removed(self) -> None:
         """AC3: LegacyPendingDRResponse interface is removed from usePendingDRs.ts."""

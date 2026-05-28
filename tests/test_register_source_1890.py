@@ -105,9 +105,7 @@ class TestFromAC_RegisterSourceTool:
         """knowledge_register_source must be importable from the server module."""
         # The import at the top of this file already exercises this;
         # the explicit assert ensures a meaningful failure message.
-        assert callable(knowledge_register_source), (
-            "knowledge_register_source must be a callable defined in server.py"
-        )
+        assert callable(knowledge_register_source), "knowledge_register_source must be a callable defined in server.py"
 
     def test_tool_in_mcp_registry(self) -> None:
         """knowledge_register_source must appear in the mcp tool registry."""
@@ -116,8 +114,7 @@ class TestFromAC_RegisterSourceTool:
             for t in mcp._tool_manager.list_tools()  # noqa: SLF001
         }
         assert "knowledge_register_source" in tool_names, (
-            "knowledge_register_source not found in mcp._tool_manager; "
-            "register it with @mcp.tool()"
+            "knowledge_register_source not found in mcp._tool_manager; register it with @mcp.tool()"
         )
 
     def test_readonlyhint_is_false(self) -> None:
@@ -213,8 +210,7 @@ class TestFromAC_RegisterSourceTool:
         assert call_args is not None
         registration = call_args.args[0] if call_args.args else call_args.kwargs.get("request")
         assert isinstance(registration, SourceRegistration), (
-            "register_source must receive a SourceRegistration instance, "
-            f"got {type(registration)}"
+            f"register_source must receive a SourceRegistration instance, got {type(registration)}"
         )
 
     @pytest.mark.asyncio
@@ -596,9 +592,7 @@ class TestFromAC_RegisterSourceTool:
 
         call_args = app_ctx.source_store_v2.register_source.call_args
         registration = call_args.args[0] if call_args.args else call_args.kwargs.get("request")
-        assert registration.metadata == custom_metadata, (
-            "metadata must be forwarded to SourceRegistration unchanged"
-        )
+        assert registration.metadata == custom_metadata, "metadata must be forwarded to SourceRegistration unchanged"
 
     @pytest.mark.asyncio
     async def test_metadata_none_forwarded_as_empty_dict(self) -> None:
@@ -616,6 +610,4 @@ class TestFromAC_RegisterSourceTool:
 
         call_args = app_ctx.source_store_v2.register_source.call_args
         registration = call_args.args[0] if call_args.args else call_args.kwargs.get("request")
-        assert registration.metadata == {}, (
-            "metadata=None must be forwarded as {} to SourceRegistration (not None)"
-        )
+        assert registration.metadata == {}, "metadata=None must be forwarded as {} to SourceRegistration (not None)"

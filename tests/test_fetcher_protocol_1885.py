@@ -69,9 +69,7 @@ class TestFromAC_FetchedDocumentModel:
         """AC1: FetchedDocument must inherit BoundaryModel (boundary contract cannot regress)."""
         from owlbear_knowledge.protocols.common import BoundaryModel
 
-        assert issubclass(FetchedDocument, BoundaryModel), (
-            "FetchedDocument must inherit BoundaryModel"
-        )
+        assert issubclass(FetchedDocument, BoundaryModel), "FetchedDocument must inherit BoundaryModel"
 
     def test_fetched_document_required_fields_are_required(self) -> None:
         """AC1: title, text, uri must remain required — cannot silently gain defaults."""
@@ -97,9 +95,7 @@ class TestFromAC_FetchErrorModel:
         """AC2: FetchError must inherit BoundaryModel (boundary contract cannot regress)."""
         from owlbear_knowledge.protocols.common import BoundaryModel
 
-        assert issubclass(FetchError, BoundaryModel), (
-            "FetchError must inherit BoundaryModel"
-        )
+        assert issubclass(FetchError, BoundaryModel), "FetchError must inherit BoundaryModel"
 
     def test_fetch_error_required_fields_are_required(self) -> None:
         """AC2: uri, error must remain required — cannot silently gain defaults."""
@@ -125,9 +121,7 @@ class TestFromAC_FetchResultModel:
         """AC3: FetchResult must inherit BoundaryModel (boundary contract cannot regress)."""
         from owlbear_knowledge.protocols.common import BoundaryModel
 
-        assert issubclass(FetchResult, BoundaryModel), (
-            "FetchResult must inherit BoundaryModel"
-        )
+        assert issubclass(FetchResult, BoundaryModel), "FetchResult must inherit BoundaryModel"
 
     def test_fetch_result_fields_have_defaults(self) -> None:
         """AC3: documents and errors must have default_factory (remain optional, not required)."""
@@ -162,9 +156,7 @@ class TestFromAC_SourceFetcherProtocol:
         sig = inspect.signature(SourceFetcher.fetch_source)
         params = sig.parameters
 
-        assert inspect.iscoroutinefunction(SourceFetcher.fetch_source), (
-            "fetch_source must be declared async"
-        )
+        assert inspect.iscoroutinefunction(SourceFetcher.fetch_source), "fetch_source must be declared async"
 
         # 'source' positional param — annotated ConfiguredSourceRecord
         assert "source" in params, "missing 'source' parameter on fetch_source"
@@ -172,26 +164,21 @@ class TestFromAC_SourceFetcherProtocol:
             f"'source' must be POSITIONAL_OR_KEYWORD, got {params['source'].kind!r}"
         )
         assert "ConfiguredSourceRecord" in str(params["source"].annotation), (
-            f"'source' annotation must reference ConfiguredSourceRecord, "
-            f"got {params['source'].annotation!r}"
+            f"'source' annotation must reference ConfiguredSourceRecord, got {params['source'].annotation!r}"
         )
 
         # 'cancel' keyword-only param — annotated CancelSignal | None, default None
         assert "cancel" in params, "missing 'cancel' keyword parameter on fetch_source"
         cancel_param = params["cancel"]
-        assert cancel_param.kind == inspect.Parameter.KEYWORD_ONLY, (
-            "'cancel' must be keyword-only (after *)"
-        )
+        assert cancel_param.kind == inspect.Parameter.KEYWORD_ONLY, "'cancel' must be keyword-only (after *)"
         assert cancel_param.default is None, "'cancel' default must be None"
         assert "CancelSignal" in str(cancel_param.annotation), (
-            f"'cancel' annotation must reference CancelSignal, "
-            f"got {cancel_param.annotation!r}"
+            f"'cancel' annotation must reference CancelSignal, got {cancel_param.annotation!r}"
         )
 
         # Return annotation — FetchResult
         assert "FetchResult" in str(sig.return_annotation), (
-            f"fetch_source return annotation must be FetchResult, "
-            f"got {sig.return_annotation!r}"
+            f"fetch_source return annotation must be FetchResult, got {sig.return_annotation!r}"
         )
 
 
@@ -214,43 +201,27 @@ class TestFromAC_SourceFetcherDocstring:
         doc_lower = doc.lower()
 
         # Guarantees: partial documents on cancel
-        assert "partial" in doc_lower, (
-            "Guarantees must mention partial documents on cancellation"
-        )
-        assert "cancel" in doc_lower, (
-            "Guarantees must reference cancellation behaviour"
-        )
+        assert "partial" in doc_lower, "Guarantees must mention partial documents on cancellation"
+        assert "cancel" in doc_lower, "Guarantees must reference cancellation behaviour"
 
         # Guarantees: per-item failures in errors tuple, never raised
-        assert "errors" in doc_lower, (
-            "Guarantees must mention errors tuple for per-item failures"
-        )
-        assert "never" in doc_lower, (
-            "Guarantees must state item-level failures are never raised"
-        )
+        assert "errors" in doc_lower, "Guarantees must mention errors tuple for per-item failures"
+        assert "never" in doc_lower, "Guarantees must state item-level failures are never raised"
 
         # Non-guarantees: ordering
-        assert "order" in doc_lower, (
-            "Non-guarantees must state result ordering is not guaranteed"
-        )
+        assert "order" in doc_lower, "Non-guarantees must state result ordering is not guaranteed"
 
         # Non-guarantees: batch strategy
-        assert "batch" in doc_lower, (
-            "Non-guarantees must mention batch strategy"
-        )
+        assert "batch" in doc_lower, "Non-guarantees must mention batch strategy"
 
         # Side effects: transport I/O
-        assert "transport" in doc_lower, (
-            "Side effects must mention transport I/O"
-        )
+        assert "transport" in doc_lower, "Side effects must mention transport I/O"
 
         # Raises: Never — check inside the Raises section specifically
         raises_idx = doc.find("Raises")
         assert raises_idx != -1, "docstring must have a Raises section"
         raises_section = doc[raises_idx:]
-        assert "never" in raises_section.lower(), (
-            "Raises section must state 'Never' (no exceptions propagated)"
-        )
+        assert "never" in raises_section.lower(), "Raises section must state 'Never' (no exceptions propagated)"
 
 
 # ---------------------------------------------------------------------------
@@ -293,9 +264,7 @@ class TestFromAC_FetcherModuleImports:
             "import owlbear_knowledge.protocols.ingest",
         ]
         for pattern in forbidden:
-            assert pattern not in source, (
-                f"fetcher.py contains forbidden import: {pattern!r}"
-            )
+            assert pattern not in source, f"fetcher.py contains forbidden import: {pattern!r}"
 
     def test_fetcher_module_imports_only_from_allowlist(self) -> None:
         """AC7: Every import in fetcher.py must come from stdlib roots, pydantic, or the 3 knowledge paths."""

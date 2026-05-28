@@ -36,9 +36,7 @@ _TASK_A = "task-alpha"
 _TASK_B = "task-beta"
 
 # Fixed UUIDs for AC1/AC2 tests (100-series)
-_IDS_BULK = [
-    f"550e8400-e29b-41d4-a716-4466554811{i:02d}" for i in range(22)
-]
+_IDS_BULK = [f"550e8400-e29b-41d4-a716-4466554811{i:02d}" for i in range(22)]
 
 # Fixed UUIDs for score / counter / sort tests (200-series)
 _ID_SCORE_A = "550e8400-e29b-41d4-a716-446655482001"
@@ -153,11 +151,7 @@ def _write_legacy_entry(  # noqa: PLR0913
 
 def _recall_titles(result: str) -> list[str]:
     """Extract title tokens from recall_memory output (## {title} headings)."""
-    return [
-        line[3:].strip()
-        for line in result.splitlines()
-        if line.startswith("## ")
-    ]
+    return [line[3:].strip() for line in result.splitlines() if line.startswith("## ")]
 
 
 # ---------------------------------------------------------------------------
@@ -238,8 +232,12 @@ class TestMemoryVotingLifecycle:
         # We seed 20 entries with no activity (→ explore candidates by activity=0),
         # but only 2 explore slots available. The next 2 lowest by outstanding=0 go to challenge.
         # Seed 2 entries with outstanding=0, didnt_use=5 (some activity but no outstanding)
-        entry_ch_a = _make_approved_entry(_ID_SCORE_A, "Challenge A", confidence=0.8, outstanding_count=0, didnt_use_count=5)
-        entry_ch_b = _make_approved_entry(_ID_SCORE_B, "Challenge B", confidence=0.8, outstanding_count=0, didnt_use_count=5)
+        entry_ch_a = _make_approved_entry(
+            _ID_SCORE_A, "Challenge A", confidence=0.8, outstanding_count=0, didnt_use_count=5
+        )
+        entry_ch_b = _make_approved_entry(
+            _ID_SCORE_B, "Challenge B", confidence=0.8, outstanding_count=0, didnt_use_count=5
+        )
         _write_entry(tmp_path, entry_ch_a)
         _write_entry(tmp_path, entry_ch_b)
 
@@ -399,9 +397,7 @@ class TestMemoryVotingLifecycle:
         assert len(titles) == 20
 
     @pytest.mark.asyncio
-    async def test_recall_slot_allocation_exactly_16_regular_2_explore_2_challenge(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_recall_slot_allocation_exactly_16_regular_2_explore_2_challenge(self, tmp_path: Path) -> None:
         """Exact 16+2+2 slot allocation at limit=20 with 22 entries seeded across all three pools.
 
         Setup:
@@ -434,18 +430,14 @@ class TestMemoryVotingLifecycle:
         ]:
             _write_entry(
                 tmp_path,
-                _make_approved_entry(
-                    eid, name, confidence=0.8, outstanding_count=0, didnt_use_count=3
-                ),
+                _make_approved_entry(eid, name, confidence=0.8, outstanding_count=0, didnt_use_count=3),
             )
 
         # 16 high-score regular entries: outstanding=5, confidence=0.9 -> score=1.4
         for i, eid in enumerate(_IDS_SLOT_REG_HIGH):
             _write_entry(
                 tmp_path,
-                _make_approved_entry(
-                    eid, f"RegularHigh {i:02d}", confidence=0.9, outstanding_count=5
-                ),
+                _make_approved_entry(eid, f"RegularHigh {i:02d}", confidence=0.9, outstanding_count=5),
             )
 
         # 2 low-score regular candidates: outstanding=5, confidence=0.7 -> score=1.2 -> excluded
@@ -453,9 +445,7 @@ class TestMemoryVotingLifecycle:
         for i, eid in enumerate(_IDS_SLOT_REG_LOW):
             _write_entry(
                 tmp_path,
-                _make_approved_entry(
-                    eid, f"RegularLow {i:02d}", confidence=0.7, outstanding_count=5
-                ),
+                _make_approved_entry(eid, f"RegularLow {i:02d}", confidence=0.7, outstanding_count=5),
             )
 
         engine = MemoryEngine(memory_dir=tmp_path)
@@ -526,9 +516,7 @@ class TestMemoryVotingStateTransitions:
 
         assert "In Recall When Contested" in titles
 
-    def test_second_factually_wrong_different_task_transitions_contested_to_disputed(
-        self, tmp_path: Path
-    ) -> None:
+    def test_second_factually_wrong_different_task_transitions_contested_to_disputed(self, tmp_path: Path) -> None:
         """Second record_factually_wrong from different task_id transitions contested→disputed."""
         entry = _make_approved_entry(_ID_TRANS_A, "Will Become Disputed")
         _write_entry(tmp_path, entry)
@@ -619,9 +607,7 @@ class TestMemoryVotingStateTransitions:
         assert result.state == MemoryState.APPROVED
 
     @pytest.mark.asyncio
-    async def test_full_state_transition_pipeline_recall_inclusion_exclusion(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_full_state_transition_pipeline_recall_inclusion_exclusion(self, tmp_path: Path) -> None:
         """Integration: three entries cycle through contested/disputed/stale; recall reflects each.
 
         Entry A: approved → contested → still in recall
@@ -772,9 +758,7 @@ class TestMemoryVotingMigration:
         assert result.unremarkable_count == 1
 
     @pytest.mark.asyncio
-    async def test_post_migration_recall_order_reflects_score_after_outstanding(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_post_migration_recall_order_reflects_score_after_outstanding(self, tmp_path: Path) -> None:
         """Post-migration: entry with outstanding boost appears first in recall.
 
         Entry A: confidence=0.75 + 2 outstanding → score=0.95

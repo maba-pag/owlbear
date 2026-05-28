@@ -27,12 +27,14 @@ from owlbear_memory.models import MemoryState
 # Guard: check_slot_efficiency does not exist yet — import will fail until implemented.
 try:
     from owlbear_memory.engine import check_slot_efficiency as _check_slot_efficiency_engine
+
     _CSE_ENGINE = _check_slot_efficiency_engine
 except ImportError:
     _CSE_ENGINE = None  # type: ignore[assignment]
 
 try:
     from owlbear_memory import check_slot_efficiency as _check_slot_efficiency_pkg
+
     _CSE_PKG = _check_slot_efficiency_pkg
 except ImportError:
     _CSE_PKG = None  # type: ignore[assignment]

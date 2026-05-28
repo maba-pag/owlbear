@@ -90,9 +90,7 @@ class TestFromAC_SourceUpdateField:
 
 
 class TestFromAC_UpdateSourceRefreshTimestamp:
-    def test_update_source_persists_last_refreshed_at(
-        self, store: SqliteSourceStore
-    ) -> None:
+    def test_update_source_persists_last_refreshed_at(self, store: SqliteSourceStore) -> None:
         """update_source with last_refreshed_at returns record with matching timestamp."""
         source = store.register_source(_file_registration())
         now = _now()
@@ -100,9 +98,7 @@ class TestFromAC_UpdateSourceRefreshTimestamp:
         assert result.last_refreshed_at is not None
         assert result.last_refreshed_at.isoformat() == now.isoformat()
 
-    def test_get_source_reflects_last_refreshed_at_after_update(
-        self, store: SqliteSourceStore
-    ) -> None:
+    def test_get_source_reflects_last_refreshed_at_after_update(self, store: SqliteSourceStore) -> None:
         """Persisted last_refreshed_at survives a round-trip through get_source."""
         source = store.register_source(_file_registration())
         now = _now()
@@ -112,9 +108,7 @@ class TestFromAC_UpdateSourceRefreshTimestamp:
         assert reloaded.last_refreshed_at is not None
         assert reloaded.last_refreshed_at.isoformat() == now.isoformat()
 
-    def test_last_refreshed_at_overwrites_previous_value(
-        self, store: SqliteSourceStore
-    ) -> None:
+    def test_last_refreshed_at_overwrites_previous_value(self, store: SqliteSourceStore) -> None:
         """A second update replaces the first last_refreshed_at value."""
         source = store.register_source(_file_registration())
         first = datetime(2026, 1, 1, tzinfo=UTC)
@@ -124,9 +118,7 @@ class TestFromAC_UpdateSourceRefreshTimestamp:
         assert result.last_refreshed_at is not None
         assert result.last_refreshed_at.isoformat() == second.isoformat()
 
-    def test_last_refreshed_at_microsecond_precision_preserved(
-        self, store: SqliteSourceStore
-    ) -> None:
+    def test_last_refreshed_at_microsecond_precision_preserved(self, store: SqliteSourceStore) -> None:
         """ISO format round-trip preserves microsecond precision."""
         source = store.register_source(_file_registration())
         ts = datetime(2026, 5, 26, 10, 30, 45, 123456, tzinfo=UTC)
@@ -134,9 +126,7 @@ class TestFromAC_UpdateSourceRefreshTimestamp:
         assert result.last_refreshed_at is not None
         assert result.last_refreshed_at == ts
 
-    def test_update_source_returns_datetime_not_string(
-        self, store: SqliteSourceStore
-    ) -> None:
+    def test_update_source_returns_datetime_not_string(self, store: SqliteSourceStore) -> None:
         """last_refreshed_at on the returned record is a datetime object, not a string."""
         source = store.register_source(_file_registration())
         now = _now()
@@ -150,9 +140,7 @@ class TestFromAC_UpdateSourceRefreshTimestamp:
 
 
 class TestFromAC_NoRefreshClobber:
-    def test_state_update_preserves_last_refreshed_at(
-        self, store: SqliteSourceStore
-    ) -> None:
+    def test_state_update_preserves_last_refreshed_at(self, store: SqliteSourceStore) -> None:
         """Updating only state does not clobber an existing last_refreshed_at."""
         source = store.register_source(_file_registration())
         now = _now()
@@ -162,9 +150,7 @@ class TestFromAC_NoRefreshClobber:
         assert result.last_refreshed_at is not None
         assert result.last_refreshed_at.isoformat() == now.isoformat()
 
-    def test_priority_update_preserves_last_refreshed_at(
-        self, store: SqliteSourceStore
-    ) -> None:
+    def test_priority_update_preserves_last_refreshed_at(self, store: SqliteSourceStore) -> None:
         """Updating only priority does not clobber an existing last_refreshed_at."""
         source = store.register_source(_file_registration())
         now = _now()
@@ -173,9 +159,7 @@ class TestFromAC_NoRefreshClobber:
         assert result.last_refreshed_at is not None
         assert result.last_refreshed_at.isoformat() == now.isoformat()
 
-    def test_scope_update_preserves_last_refreshed_at(
-        self, store: SqliteSourceStore
-    ) -> None:
+    def test_scope_update_preserves_last_refreshed_at(self, store: SqliteSourceStore) -> None:
         """Updating only scope does not clobber an existing last_refreshed_at."""
         source = store.register_source(_file_registration())
         now = _now()
@@ -184,9 +168,7 @@ class TestFromAC_NoRefreshClobber:
         assert result.last_refreshed_at is not None
         assert result.last_refreshed_at.isoformat() == now.isoformat()
 
-    def test_none_last_refreshed_at_does_not_clobber_existing(
-        self, store: SqliteSourceStore
-    ) -> None:
+    def test_none_last_refreshed_at_does_not_clobber_existing(self, store: SqliteSourceStore) -> None:
         """SourceUpdate with last_refreshed_at=None must not overwrite an existing timestamp."""
         source = store.register_source(_file_registration())
         now = _now()
@@ -196,9 +178,7 @@ class TestFromAC_NoRefreshClobber:
         assert result.last_refreshed_at is not None
         assert result.last_refreshed_at.isoformat() == now.isoformat()
 
-    def test_same_state_active_update_preserves_last_refreshed_at(
-        self, store: SqliteSourceStore
-    ) -> None:
+    def test_same_state_active_update_preserves_last_refreshed_at(self, store: SqliteSourceStore) -> None:
         """Passing state=ACTIVE on an already-ACTIVE source must not clobber last_refreshed_at.
 
         AC4 names this exact path: update_source(id, SourceUpdate(state=SourceState.ACTIVE)).

@@ -317,9 +317,7 @@ class SqliteSourceStore(SourceStore):
 
     def stats(self) -> SourceStats:
         """Return aggregate source counts by state."""
-        rows = self._conn.execute(
-            "SELECT state, COUNT(*) FROM source_registry GROUP BY state"
-        ).fetchall()
+        rows = self._conn.execute("SELECT state, COUNT(*) FROM source_registry GROUP BY state").fetchall()
         counts = dict(rows)
         return SourceStats(
             total=sum(counts.values()),
@@ -396,9 +394,7 @@ class SqliteSourceStore(SourceStore):
                 state=SourceState.WISHED,
                 expected_kind=SourceKind(row["expected_kind"]) if row["expected_kind"] else None,
                 expected_fetch_method=(
-                    FetchTransport(row["expected_fetch_method"])
-                    if row["expected_fetch_method"]
-                    else None
+                    FetchTransport(row["expected_fetch_method"]) if row["expected_fetch_method"] else None
                 ),
                 reason=row["reason"] or "",
                 last_refreshed_at=self._parse_dt(row["last_refreshed_at"]),

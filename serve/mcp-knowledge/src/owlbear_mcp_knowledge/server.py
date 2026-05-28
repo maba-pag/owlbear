@@ -126,9 +126,6 @@ class _ZeroEmbeddingProvider:
         return [[0.0] for _ in texts]
 
 
-
-
-
 async def knowledge_enrichment_claim_batch(ctx: Context, limit: int = 10) -> list[EnrichmentChunk]:
     """Atomically claim a batch of chunks ready for enrichment.
 
@@ -166,9 +163,7 @@ async def knowledge_enrichment_claim_batch(ctx: Context, limit: int = 10) -> lis
 
         scope = getattr(chunk, "scope", None)
         claimed_at = (
-            item.started_at.isoformat()
-            if isinstance(item.started_at, datetime)
-            else datetime.now(tz=UTC).isoformat()
+            item.started_at.isoformat() if isinstance(item.started_at, datetime) else datetime.now(tz=UTC).isoformat()
         )
 
         response.append(

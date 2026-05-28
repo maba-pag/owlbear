@@ -181,17 +181,13 @@ class TestFromAC_LookupEntity:
 
     # --- AC1: resolve by entity_id ---
 
-    def test_lookup_by_id_calls_get_entity(
-        self, facade: QueryFacade, mock_graph: MagicMock
-    ) -> None:
+    def test_lookup_by_id_calls_get_entity(self, facade: QueryFacade, mock_graph: MagicMock) -> None:
         """AC1: lookup by entity_id calls graph.get_entity with that ID."""
         request = EntityLookupRequest(entity_id="ent-42")
         facade.lookup_entity(request)
         mock_graph.get_entity.assert_called_once_with("ent-42")
 
-    def test_lookup_by_id_returns_entity_in_result(
-        self, facade: QueryFacade, mock_graph: MagicMock
-    ) -> None:
+    def test_lookup_by_id_returns_entity_in_result(self, facade: QueryFacade, mock_graph: MagicMock) -> None:
         """AC1: entity field in result matches resolved entity record."""
         entity = _make_entity(entity_id="ent-7")
         mock_graph.get_entity.return_value = entity
@@ -199,9 +195,7 @@ class TestFromAC_LookupEntity:
         result = facade.lookup_entity(request)
         assert result.entity == entity
 
-    def test_lookup_by_id_not_found_raises_lookup_error(
-        self, facade: QueryFacade, mock_graph: MagicMock
-    ) -> None:
+    def test_lookup_by_id_not_found_raises_lookup_error(self, facade: QueryFacade, mock_graph: MagicMock) -> None:
         """AC1: get_entity returns None → LookupError raised."""
         mock_graph.get_entity.return_value = None
         request = EntityLookupRequest(entity_id="missing-id")
@@ -210,9 +204,7 @@ class TestFromAC_LookupEntity:
 
     # --- AC1: resolve by entity_name ---
 
-    def test_lookup_by_name_calls_find_entities(
-        self, facade: QueryFacade, mock_graph: MagicMock
-    ) -> None:
+    def test_lookup_by_name_calls_find_entities(self, facade: QueryFacade, mock_graph: MagicMock) -> None:
         """AC1: lookup by entity_name calls graph.find_entities with the name."""
         request = EntityLookupRequest(entity_name="Alice")
         facade.lookup_entity(request)
@@ -221,35 +213,27 @@ class TestFromAC_LookupEntity:
         assert isinstance(called_query, EntityQuery)
         assert called_query.name == "Alice"
 
-    def test_lookup_by_name_uses_entity_type_filter(
-        self, facade: QueryFacade, mock_graph: MagicMock
-    ) -> None:
+    def test_lookup_by_name_uses_entity_type_filter(self, facade: QueryFacade, mock_graph: MagicMock) -> None:
         """AC1: entity_type from request is passed to find_entities for disambiguation."""
         request = EntityLookupRequest(entity_name="Alice", entity_type=EntityType.PERSON)
         facade.lookup_entity(request)
         called_query = mock_graph.find_entities.call_args[0][0]
         assert called_query.entity_type == EntityType.PERSON
 
-    def test_lookup_by_name_not_found_raises_lookup_error(
-        self, facade: QueryFacade, mock_graph: MagicMock
-    ) -> None:
+    def test_lookup_by_name_not_found_raises_lookup_error(self, facade: QueryFacade, mock_graph: MagicMock) -> None:
         """AC1: find_entities returns empty tuple → LookupError raised."""
         mock_graph.find_entities.return_value = ()
         request = EntityLookupRequest(entity_name="Unknown")
         with pytest.raises(LookupError):
             facade.lookup_entity(request)
 
-    def test_lookup_by_id_does_not_call_find_entities(
-        self, facade: QueryFacade, mock_graph: MagicMock
-    ) -> None:
+    def test_lookup_by_id_does_not_call_find_entities(self, facade: QueryFacade, mock_graph: MagicMock) -> None:
         """AC1: ID path uses get_entity only, not find_entities."""
         request = EntityLookupRequest(entity_id="ent-1")
         facade.lookup_entity(request)
         mock_graph.find_entities.assert_not_called()
 
-    def test_lookup_by_name_returns_resolved_entity(
-        self, facade: QueryFacade, mock_graph: MagicMock
-    ) -> None:
+    def test_lookup_by_name_returns_resolved_entity(self, facade: QueryFacade, mock_graph: MagicMock) -> None:
         """AC1 retry gap: entity in result is the specific entity chosen from find_entities.
 
         Proves the name-path success case returns the correct resolved entity,
@@ -304,9 +288,7 @@ class TestFromAC_LookupEntity:
         result = facade.lookup_entity(request)
         assert result.neighbourhood == traversal
 
-    def test_result_traverse_called_with_correct_hops(
-        self, facade: QueryFacade, mock_graph: MagicMock
-    ) -> None:
+    def test_result_traverse_called_with_correct_hops(self, facade: QueryFacade, mock_graph: MagicMock) -> None:
         """AC2: traverse uses expand_hops as max_hops in TraversalQuery."""
         entity = _make_entity("ent-1")
         mock_graph.get_entity.return_value = entity
@@ -342,9 +324,7 @@ class TestFromAC_LookupEntity:
         mock_content.get_chunk.assert_called_once_with("chunk-99")
         assert chunk in result.related_chunks
 
-    def test_result_related_chunks_empty_when_no_evidence(
-        self, facade: QueryFacade, mock_graph: MagicMock
-    ) -> None:
+    def test_result_related_chunks_empty_when_no_evidence(self, facade: QueryFacade, mock_graph: MagicMock) -> None:
         """AC2: related_chunks is empty tuple when chunk_ids_for_entity returns ()."""
         mock_graph.chunk_ids_for_entity.return_value = ()
         request = EntityLookupRequest(entity_id="ent-1")
@@ -372,9 +352,7 @@ class TestFromAC_RenderContext:
 
     # --- AC3: renders results as structured text ---
 
-    def test_render_context_with_query_result_returns_rendered_context(
-        self, facade: QueryFacade
-    ) -> None:
+    def test_render_context_with_query_result_returns_rendered_context(self, facade: QueryFacade) -> None:
         """AC3: render_context with query_result returns a RenderedContext."""
         query_result = _make_query_result()
         request = ContextRenderRequest(query_result=query_result)
@@ -382,9 +360,7 @@ class TestFromAC_RenderContext:
         assert isinstance(result, RenderedContext)
         assert isinstance(result.text, str)
 
-    def test_render_context_with_entity_result_returns_rendered_context(
-        self, facade: QueryFacade
-    ) -> None:
+    def test_render_context_with_entity_result_returns_rendered_context(self, facade: QueryFacade) -> None:
         """AC3: render_context with entity_result returns a RenderedContext."""
         entity_result = _make_entity_lookup_result(entity=_make_entity())
         request = ContextRenderRequest(entity_result=entity_result)
@@ -392,9 +368,7 @@ class TestFromAC_RenderContext:
         assert isinstance(result, RenderedContext)
         assert isinstance(result.text, str)
 
-    def test_render_context_with_both_results_returns_rendered_context(
-        self, facade: QueryFacade
-    ) -> None:
+    def test_render_context_with_both_results_returns_rendered_context(self, facade: QueryFacade) -> None:
         """AC3: render_context with both query_result and entity_result succeeds."""
         query_result = _make_query_result()
         entity_result = _make_entity_lookup_result(entity=_make_entity())
@@ -405,17 +379,13 @@ class TestFromAC_RenderContext:
         result = facade.render_context(request)
         assert isinstance(result, RenderedContext)
 
-    def test_render_context_raises_value_error_when_neither_result(
-        self, facade: QueryFacade
-    ) -> None:
+    def test_render_context_raises_value_error_when_neither_result(self, facade: QueryFacade) -> None:
         """AC3: raises ValueError when neither query_result nor entity_result provided."""
         request = ContextRenderRequest(query_result=None, entity_result=None)
         with pytest.raises(ValueError):
             facade.render_context(request)
 
-    def test_render_context_text_within_max_chars_budget(
-        self, facade: QueryFacade
-    ) -> None:
+    def test_render_context_text_within_max_chars_budget(self, facade: QueryFacade) -> None:
         """AC3: output text length does not exceed max_chars."""
         entity_result = _make_entity_lookup_result(entity=_make_entity())
         request = ContextRenderRequest(entity_result=entity_result, max_chars=500)
@@ -424,18 +394,14 @@ class TestFromAC_RenderContext:
 
     # --- AC4: metadata fields and truncation ---
 
-    def test_render_context_truncated_false_when_content_fits(
-        self, facade: QueryFacade
-    ) -> None:
+    def test_render_context_truncated_false_when_content_fits(self, facade: QueryFacade) -> None:
         """AC4: truncated=False when content fits within max_chars budget."""
         entity_result = _make_entity_lookup_result(entity=_make_entity())
         request = ContextRenderRequest(entity_result=entity_result, max_chars=10_000)
         result = facade.render_context(request)
         assert result.truncated is False
 
-    def test_render_context_truncated_true_when_budget_exceeded(
-        self, facade: QueryFacade
-    ) -> None:
+    def test_render_context_truncated_true_when_budget_exceeded(self, facade: QueryFacade) -> None:
         """AC4: truncated=True when max_chars is smaller than natural output."""
         # Build a result with enough content to exceed a 100-char budget.
         entity = _make_entity("ent-big", name="Verylongentitynamethataddsupquickly")
@@ -444,26 +410,20 @@ class TestFromAC_RenderContext:
             neighbourhood=_make_traversal(
                 entities=[_make_entity(f"ent-{i}", name=f"Entity{i}" * 10) for i in range(20)]
             ),
-            related_chunks=tuple(
-                _make_chunk(f"c-{i}", text="x" * 200) for i in range(10)
-            ),
+            related_chunks=tuple(_make_chunk(f"c-{i}", text="x" * 200) for i in range(10)),
         )
         request = ContextRenderRequest(entity_result=entity_result, max_chars=100)
         result = facade.render_context(request)
         assert result.truncated is True
 
-    def test_render_context_char_count_equals_text_length(
-        self, facade: QueryFacade
-    ) -> None:
+    def test_render_context_char_count_equals_text_length(self, facade: QueryFacade) -> None:
         """AC4: char_count matches len(result.text)."""
         entity_result = _make_entity_lookup_result(entity=_make_entity())
         request = ContextRenderRequest(entity_result=entity_result)
         result = facade.render_context(request)
         assert result.char_count == len(result.text)
 
-    def test_render_context_include_provenance_true_includes_attribution(
-        self, facade: QueryFacade
-    ) -> None:
+    def test_render_context_include_provenance_true_includes_attribution(self, facade: QueryFacade) -> None:
         """AC4: include_provenance=True includes source attribution in text."""
         chunk = _make_chunk(source_id="my-source-id")
         entity_result = EntityLookupResult(
@@ -471,18 +431,14 @@ class TestFromAC_RenderContext:
             neighbourhood=None,
             related_chunks=(chunk,),
         )
-        with_prov = facade.render_context(
-            ContextRenderRequest(entity_result=entity_result, include_provenance=True)
-        )
+        with_prov = facade.render_context(ContextRenderRequest(entity_result=entity_result, include_provenance=True))
         without_prov = facade.render_context(
             ContextRenderRequest(entity_result=entity_result, include_provenance=False)
         )
         # Provenance adds content; text with provenance must differ from without.
         assert with_prov.text != without_prov.text
 
-    def test_render_context_entity_count_reflects_entities_rendered(
-        self, facade: QueryFacade
-    ) -> None:
+    def test_render_context_entity_count_reflects_entities_rendered(self, facade: QueryFacade) -> None:
         """AC4: entity_count is populated from entities present in the rendered result."""
         entities = [_make_entity(f"ent-{i}") for i in range(3)]
         entity_result = EntityLookupResult(
@@ -494,9 +450,7 @@ class TestFromAC_RenderContext:
         result = facade.render_context(request)
         assert result.entity_count >= 1
 
-    def test_render_context_chunk_count_reflects_chunks_rendered(
-        self, facade: QueryFacade
-    ) -> None:
+    def test_render_context_chunk_count_reflects_chunks_rendered(self, facade: QueryFacade) -> None:
         """AC4: chunk_count is populated from chunks present in the rendered result."""
         chunks = tuple(_make_chunk(f"c-{i}", text=f"Chunk text {i}") for i in range(3))
         entity_result = EntityLookupResult(
@@ -510,9 +464,7 @@ class TestFromAC_RenderContext:
 
     # --- AC3 retry gaps: rendered content assertions ---
 
-    def test_render_context_query_text_contains_chunk_content(
-        self, facade: QueryFacade
-    ) -> None:
+    def test_render_context_query_text_contains_chunk_content(self, facade: QueryFacade) -> None:
         """AC3 retry gap: rendered text includes actual chunk text from query_result.
 
         A no-op render that drops the chunk text would make this fail.
@@ -528,9 +480,7 @@ class TestFromAC_RenderContext:
         result = facade.render_context(request)
         assert "uniquequerychunktext" in result.text
 
-    def test_render_context_entity_text_contains_entity_name(
-        self, facade: QueryFacade
-    ) -> None:
+    def test_render_context_entity_text_contains_entity_name(self, facade: QueryFacade) -> None:
         """AC3 retry gap: rendered text includes the entity name from entity_result.
 
         A render that drops entity content would make this fail.
@@ -541,9 +491,7 @@ class TestFromAC_RenderContext:
         result = facade.render_context(request)
         assert "UniqueEntityNameXYZ" in result.text
 
-    def test_render_context_dual_input_text_contains_both_sources(
-        self, facade: QueryFacade
-    ) -> None:
+    def test_render_context_dual_input_text_contains_both_sources(self, facade: QueryFacade) -> None:
         """AC3 retry gap: dual-input render includes content from BOTH inputs.
 
         Dropping either query_result or entity_result content would make this fail.
@@ -568,9 +516,7 @@ class TestFromAC_RenderContext:
 
     # --- AC4 retry gaps: exact counts and query provenance ---
 
-    def test_render_context_entity_count_exact(
-        self, facade: QueryFacade
-    ) -> None:
+    def test_render_context_entity_count_exact(self, facade: QueryFacade) -> None:
         """AC4 retry gap: entity_count equals the exact number of unique entities rendered.
 
         The existing test only asserts >= 1; this asserts the exact count so
@@ -586,17 +532,13 @@ class TestFromAC_RenderContext:
         result = facade.render_context(request)
         assert result.entity_count == 3
 
-    def test_render_context_chunk_count_exact(
-        self, facade: QueryFacade
-    ) -> None:
+    def test_render_context_chunk_count_exact(self, facade: QueryFacade) -> None:
         """AC4 retry gap: chunk_count equals the exact number of chunks rendered.
 
         The existing test only asserts >= 1; this asserts the exact count so
         missing or extra chunk entries would cause a failure.
         """
-        chunks = tuple(
-            _make_chunk(f"c-ex-{i}", text=f"Exact chunk text {i}") for i in range(3)
-        )
+        chunks = tuple(_make_chunk(f"c-ex-{i}", text=f"Exact chunk text {i}") for i in range(3))
         entity_result = EntityLookupResult(
             entity=_make_entity(),
             neighbourhood=None,
@@ -606,9 +548,7 @@ class TestFromAC_RenderContext:
         result = facade.render_context(request)
         assert result.chunk_count == 3
 
-    def test_render_context_query_provenance_includes_source_id(
-        self, facade: QueryFacade
-    ) -> None:
+    def test_render_context_query_provenance_includes_source_id(self, facade: QueryFacade) -> None:
         """AC4 retry gap: query-result provenance branch includes source_id in rendered text.
 
         The existing suite only exercises entity provenance. This proves the
@@ -634,9 +574,7 @@ class TestFromAC_RenderContext:
         result = facade.render_context(request)
         assert "special-source-ref-99" in result.text
 
-    def test_render_context_entity_provenance_includes_source_id(
-        self, facade: QueryFacade
-    ) -> None:
+    def test_render_context_entity_provenance_includes_source_id(self, facade: QueryFacade) -> None:
         """AC4 retry gap: entity provenance includes specific source_id string in text.
 
         The existing test only checks whole-string inequality between
@@ -660,9 +598,7 @@ class TestFromAC_RenderContext:
         result = facade.render_context(request)
         assert "entity-source-ref-77" in result.text
 
-    def test_render_context_truncation_no_partial_line_appended(
-        self, facade: QueryFacade
-    ) -> None:
+    def test_render_context_truncation_no_partial_line_appended(self, facade: QueryFacade) -> None:
         """AC4 cycle-3 gap: when budget is exceeded mid-line, partial segment must not appear.
 
         Current buggy path (render_context._build_rendered_output):
@@ -688,16 +624,12 @@ class TestFromAC_RenderContext:
             related_chunks=chunks,
         )
         # Full-budget render: find where BetaLineFull ends in the output.
-        full_result = facade.render_context(
-            ContextRenderRequest(entity_result=entity_result, max_chars=10_000)
-        )
+        full_result = facade.render_context(ContextRenderRequest(entity_result=entity_result, max_chars=10_000))
         beta_end = full_result.text.index("BetaLineFull") + len("BetaLineFull")
         # Allow 50 extra chars past BetaLineFull: enough for partial GammaLine but not all.
         max_chars = beta_end + 50
 
-        result = facade.render_context(
-            ContextRenderRequest(entity_result=entity_result, max_chars=max_chars)
-        )
+        result = facade.render_context(ContextRenderRequest(entity_result=entity_result, max_chars=max_chars))
 
         # Budget was exceeded — truncation must be flagged.
         assert result.truncated is True

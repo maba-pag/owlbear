@@ -124,9 +124,7 @@ class TestFromAC_SlotConstants:
         assert SLOT_CHALLENGE == 2
 
     @pytest.mark.asyncio
-    async def test_explore_selects_lowest_total_assessment_metric_entries(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_explore_selects_lowest_total_assessment_metric_entries(self, tmp_path: Path) -> None:
         """Explore pool contains the 2 entries with lowest (outstanding+unremarkable+didnt_use).
 
         Setup: 4 entries ranked by explore metric. limit=2 → only explore fills.
@@ -193,9 +191,7 @@ class TestFromAC_SlotConstants:
         assert d.title not in result
 
     @pytest.mark.asyncio
-    async def test_challenge_selects_lowest_outstanding_from_remaining_after_dedup(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_challenge_selects_lowest_outstanding_from_remaining_after_dedup(self, tmp_path: Path) -> None:
         """Challenge pool picks 2 entries with lowest outstanding_count from non-explore pool.
 
         Setup: 6 entries, limit=4 (explore=2, challenge=2, regular=0).
@@ -280,9 +276,7 @@ class TestFromAC_SlotConstants:
         assert "High-Conf-Y" not in result
 
     @pytest.mark.asyncio
-    async def test_regular_pool_takes_highest_score_from_remaining_entries(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_regular_pool_takes_highest_score_from_remaining_entries(self, tmp_path: Path) -> None:
         """Regular pool picks max(0, limit-4) entries by highest score after explore+challenge dedup.
 
         Setup: 8 entries, limit=6 (explore=2, challenge=2, regular=2).
@@ -449,9 +443,7 @@ class TestFromAC_LimitEdge:
         assert len(titles) == 4
 
     @pytest.mark.asyncio
-    async def test_limit_three_explore_gets_two_challenge_gets_one(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_limit_three_explore_gets_two_challenge_gets_one(self, tmp_path: Path) -> None:
         """limit=3 → explore fills 2, challenge fills 1; 4th challenge candidate excluded."""
         _write_entry(
             tmp_path,
@@ -650,9 +642,7 @@ class TestFromAC_SlotDedup:
     """
 
     @pytest.mark.asyncio
-    async def test_explore_dedup_frees_challenge_slot_for_different_entry(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_explore_dedup_frees_challenge_slot_for_different_entry(self, tmp_path: Path) -> None:
         """Entry with lowest metric AND lowest outstanding goes to explore only.
 
         The challenge slot then goes to the next-best outstanding_count candidate.
@@ -760,9 +750,7 @@ class TestFromAC_FinalSort:
     """
 
     @pytest.mark.asyncio
-    async def test_higher_score_before_lower_score_within_same_state(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_higher_score_before_lower_score_within_same_state(self, tmp_path: Path) -> None:
         """Within the same state tier, higher score appears before lower score.
 
         Both entries are curated (same state_rank).  Score ordering must override
@@ -824,9 +812,7 @@ class TestFromAC_FinalSort:
         assert result.index("LowConf-HighScore") < result.index("HighConf-LowScore")
 
     @pytest.mark.asyncio
-    async def test_pool_origin_does_not_affect_position_in_final_sort(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_pool_origin_does_not_affect_position_in_final_sort(self, tmp_path: Path) -> None:
         """Explore entry with low score appears after regular entry with high score.
 
         The final sort is (state_rank, -score, id) — pool membership is irrelevant.
@@ -877,9 +863,7 @@ class TestFromAC_Tiebreak:
     """
 
     @pytest.mark.asyncio
-    async def test_explore_tiebreak_selects_lowest_id_over_highest_confidence(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_explore_tiebreak_selects_lowest_id_over_highest_confidence(self, tmp_path: Path) -> None:
         """Three entries all with metric=0; lowest two ids win explore slots.
 
         Entry A: id=_uuid(1), confidence=0.72 → new: explore #1 (lowest id)
@@ -929,9 +913,7 @@ class TestFromAC_Tiebreak:
         assert "High-ID" not in result
 
     @pytest.mark.asyncio
-    async def test_challenge_tiebreak_selects_lowest_id_over_highest_confidence(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_challenge_tiebreak_selects_lowest_id_over_highest_confidence(self, tmp_path: Path) -> None:
         """Three challenge candidates with equal outstanding_count; lowest two ids win.
 
         Setup (limit=4 → explore=2, challenge=2, regular=0):
@@ -1019,9 +1001,7 @@ class TestFromAC_StateFilter:
     """
 
     @pytest.mark.asyncio
-    async def test_contested_entry_wins_explore_slot_over_high_confidence_curated(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_contested_entry_wins_explore_slot_over_high_confidence_curated(self, tmp_path: Path) -> None:
         """Contested entry with lowest metric wins the single explore slot (limit=1).
 
         Entry disputed (metric=0) is excluded by state filter.
@@ -1075,5 +1055,3 @@ class TestFromAC_StateFilter:
         assert "Curated-HighConf" not in result
         # Disputed is always excluded by state filter
         assert "Disputed-Zero" not in result
-
-

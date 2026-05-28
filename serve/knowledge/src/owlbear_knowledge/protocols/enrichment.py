@@ -17,7 +17,7 @@ Table ownership: only Enrichment writes ``enrich_*`` tables.
 
 from __future__ import annotations
 
-from datetime import datetime  # noqa: TC003 — needed by Pydantic at runtime
+from datetime import datetime
 from enum import StrEnum
 from typing import Protocol, runtime_checkable
 
@@ -157,10 +157,10 @@ class EnrichmentDiscardResult(BoundaryModel):
 
 
 class EnrichmentResetResult(BoundaryModel):
-  """Result of resetting failed chunks back to pending."""
+    """Result of resetting failed chunks back to pending."""
 
-  reset: int = 0
-  remaining_failed: int = 0
+    reset: int = 0
+    remaining_failed: int = 0
 
 
 # ---------------------------------------------------------------------------

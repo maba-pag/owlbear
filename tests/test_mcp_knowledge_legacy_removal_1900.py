@@ -33,30 +33,22 @@ class TestFromAC_AppContextFields:
     def test_no_query_service_field(self) -> None:
         """query_service must be removed from AppContext (AC1)."""
         field_names = {f.name for f in dataclasses.fields(AppContext)}
-        assert "query_service" not in field_names, (
-            "Legacy field 'query_service' still present in AppContext"
-        )
+        assert "query_service" not in field_names, "Legacy field 'query_service' still present in AppContext"
 
     def test_no_graph_store_field(self) -> None:
         """graph_store (old GraphStore) must be removed from AppContext (AC1)."""
         field_names = {f.name for f in dataclasses.fields(AppContext)}
-        assert "graph_store" not in field_names, (
-            "Legacy field 'graph_store' still present in AppContext"
-        )
+        assert "graph_store" not in field_names, "Legacy field 'graph_store' still present in AppContext"
 
     def test_no_ingest_pipeline_field(self) -> None:
         """ingest_pipeline must be removed from AppContext (AC1)."""
         field_names = {f.name for f in dataclasses.fields(AppContext)}
-        assert "ingest_pipeline" not in field_names, (
-            "Legacy field 'ingest_pipeline' still present in AppContext"
-        )
+        assert "ingest_pipeline" not in field_names, "Legacy field 'ingest_pipeline' still present in AppContext"
 
     def test_no_intra_doc_builder_field(self) -> None:
         """intra_doc_builder must be removed from AppContext (AC1)."""
         field_names = {f.name for f in dataclasses.fields(AppContext)}
-        assert "intra_doc_builder" not in field_names, (
-            "Legacy field 'intra_doc_builder' still present in AppContext"
-        )
+        assert "intra_doc_builder" not in field_names, "Legacy field 'intra_doc_builder' still present in AppContext"
 
     def test_no_structured_extractor_field(self) -> None:
         """structured_extractor must be removed from AppContext (AC1)."""
@@ -109,9 +101,7 @@ class TestFromAC_SearchKnowledgeV2Only:
     def test_search_knowledge_source_has_no_query_service_branch(self) -> None:
         """search_knowledge source must not reference query_service (AC2)."""
         src = inspect.getsource(server.knowledge_search)
-        assert "query_service" not in src, (
-            "search_knowledge still contains a query_service branch"
-        )
+        assert "query_service" not in src, "search_knowledge still contains a query_service branch"
 
     def test_search_knowledge_source_has_no_legacy_fallback_call(self) -> None:
         """search_knowledge must not call _serialize_legacy_search_results (AC2)."""
@@ -142,9 +132,7 @@ class TestFromAC_StorageWiring:
         src = inspect.getsource(server.app_lifespan)
         # Old GraphStore was constructed as: gs = GraphStore(conn)
         # After cleanup, no GraphStore instance should be created
-        assert "gs = GraphStore(" not in src, (
-            "Old GraphStore (gs) still constructed in lifespan"
-        )
+        assert "gs = GraphStore(" not in src, "Old GraphStore (gs) still constructed in lifespan"
 
     def test_enrichment_store_uses_graph_store_v2_keyword(self) -> None:
         """After wiring fix, EnrichmentStore call must pass graph_store_v2 (AC3)."""
@@ -173,27 +161,19 @@ class TestFromAC_DeletedFunctions:
 
     def test_list_entities_removed(self) -> None:
         """list_entities must be deleted from server module (AC4)."""
-        assert not hasattr(server, "list_entities"), (
-            "list_entities still exists in server module"
-        )
+        assert not hasattr(server, "list_entities"), "list_entities still exists in server module"
 
     def test_legacy_graph_stats_removed(self) -> None:
         """_legacy_graph_stats must be deleted from server module (AC4)."""
-        assert not hasattr(server, "_legacy_graph_stats"), (
-            "_legacy_graph_stats still exists in server module"
-        )
+        assert not hasattr(server, "_legacy_graph_stats"), "_legacy_graph_stats still exists in server module"
 
     def test_knowledge_stats_bridge_removed(self) -> None:
         """_knowledge_stats_bridge MCP resource must be deleted (AC4)."""
-        assert not hasattr(server, "_knowledge_stats_bridge"), (
-            "_knowledge_stats_bridge still exists in server module"
-        )
+        assert not hasattr(server, "_knowledge_stats_bridge"), "_knowledge_stats_bridge still exists in server module"
 
     def test_knowledge_stats_resource_removed(self) -> None:
         """knowledge_stats_resource must be deleted from server module (AC4)."""
-        assert not hasattr(server, "knowledge_stats_resource"), (
-            "knowledge_stats_resource still exists in server module"
-        )
+        assert not hasattr(server, "knowledge_stats_resource"), "knowledge_stats_resource still exists in server module"
 
     def test_knowledge_stats_mcp_resource_not_registered(self) -> None:
         """The MCP resource 'knowledge://stats' must not be registered after cleanup (AC4)."""
@@ -214,15 +194,11 @@ class TestFromAC_InitDbRemoved:
 
     def test_init_db_wrapper_removed(self) -> None:
         """init_db() wrapper must be removed from server module (AC5)."""
-        assert not hasattr(server, "init_db"), (
-            "init_db() wrapper still present in server module"
-        )
+        assert not hasattr(server, "init_db"), "init_db() wrapper still present in server module"
 
     def test_schema_init_db_not_in_server(self) -> None:
         """_schema_init_db must not be imported/accessible in server module (AC5)."""
-        assert not hasattr(server, "_schema_init_db"), (
-            "_schema_init_db still imported into server module"
-        )
+        assert not hasattr(server, "_schema_init_db"), "_schema_init_db still imported into server module"
 
     def test_lifespan_uses_sqlite_connect_not_init_db(self) -> None:
         """Lifespan must call sqlite3.connect() directly, not init_db() wrapper (AC5)."""
@@ -242,15 +218,11 @@ class TestFromAC_NoLegacyImportsServer:
 
     def test_no_graph_store_import(self) -> None:
         """GraphStore (legacy) must not be imported in server.py (AC6)."""
-        assert not hasattr(server, "GraphStore"), (
-            "GraphStore (legacy graph_store module) still imported in server.py"
-        )
+        assert not hasattr(server, "GraphStore"), "GraphStore (legacy graph_store module) still imported in server.py"
 
     def test_no_document_store_import(self) -> None:
         """DocumentStore must not be imported in server.py (AC6)."""
-        assert not hasattr(server, "DocumentStore"), (
-            "DocumentStore still imported in server.py"
-        )
+        assert not hasattr(server, "DocumentStore"), "DocumentStore still imported in server.py"
 
     def test_no_ingest_pipeline_import(self) -> None:
         """IngestPipeline must not be imported in server.py (AC6)."""
@@ -260,46 +232,32 @@ class TestFromAC_NoLegacyImportsServer:
 
     def test_no_knowledge_query_service_import(self) -> None:
         """KnowledgeQueryService must not be imported in server.py (AC6)."""
-        assert not hasattr(server, "KnowledgeQueryService"), (
-            "KnowledgeQueryService still imported in server.py"
-        )
+        assert not hasattr(server, "KnowledgeQueryService"), "KnowledgeQueryService still imported in server.py"
 
     def test_no_knowledge_query_error_import(self) -> None:
         """KnowledgeQueryError must not be imported in server.py (AC6)."""
-        assert not hasattr(server, "KnowledgeQueryError"), (
-            "KnowledgeQueryError still imported in server.py"
-        )
+        assert not hasattr(server, "KnowledgeQueryError"), "KnowledgeQueryError still imported in server.py"
 
     def test_no_graph_augmented_retriever_import(self) -> None:
         """GraphAugmentedRetriever must not be imported in server.py (AC6)."""
-        assert not hasattr(server, "GraphAugmentedRetriever"), (
-            "GraphAugmentedRetriever still imported in server.py"
-        )
+        assert not hasattr(server, "GraphAugmentedRetriever"), "GraphAugmentedRetriever still imported in server.py"
 
     def test_no_bge_embedding_provider_import(self) -> None:
         """BgeM3EmbeddingProvider must not be imported in server.py (AC6)."""
-        assert not hasattr(server, "BgeM3EmbeddingProvider"), (
-            "BgeM3EmbeddingProvider still imported in server.py"
-        )
+        assert not hasattr(server, "BgeM3EmbeddingProvider"), "BgeM3EmbeddingProvider still imported in server.py"
 
     def test_no_entity_extractor_import(self) -> None:
         """EntityExtractor must not be imported in server.py (AC6)."""
-        assert not hasattr(server, "EntityExtractor"), (
-            "EntityExtractor still imported in server.py"
-        )
+        assert not hasattr(server, "EntityExtractor"), "EntityExtractor still imported in server.py"
 
     def test_no_text_chunker_import(self) -> None:
         """TextChunker must not be imported in server.py (AC6)."""
-        assert not hasattr(server, "TextChunker"), (
-            "TextChunker still imported in server.py"
-        )
+        assert not hasattr(server, "TextChunker"), "TextChunker still imported in server.py"
 
     def test_no_models_entity_type_import(self) -> None:
         """EntityType from owlbear_knowledge.models must not be imported in server.py (AC6)."""
         # After cleanup, ProtocolEntityType alias remains but bare EntityType from models is gone
-        assert not hasattr(server, "EntityType"), (
-            "EntityType (from legacy models) still imported in server.py"
-        )
+        assert not hasattr(server, "EntityType"), "EntityType (from legacy models) still imported in server.py"
 
     def test_no_schema_init_db_import(self) -> None:
         """schema.init_db must not be imported in server.py (AC6)."""
@@ -309,9 +267,7 @@ class TestFromAC_NoLegacyImportsServer:
 
     def test_no_intra_doc_graph_builder_import(self) -> None:
         """IntraDocGraphBuilder must not be imported in server.py (AC6)."""
-        assert not hasattr(server, "IntraDocGraphBuilder"), (
-            "IntraDocGraphBuilder still imported in server.py"
-        )
+        assert not hasattr(server, "IntraDocGraphBuilder"), "IntraDocGraphBuilder still imported in server.py"
 
 
 # ---------------------------------------------------------------------------
@@ -324,33 +280,23 @@ class TestFromAC_NoLegacyImportsHelpers:
 
     def test_helpers_no_edge_import(self) -> None:
         """Edge from owlbear_knowledge.models must not be imported in _helpers.py (AC6)."""
-        assert not hasattr(_helpers, "Edge"), (
-            "Edge (from legacy models) still imported in _helpers.py"
-        )
+        assert not hasattr(_helpers, "Edge"), "Edge (from legacy models) still imported in _helpers.py"
 
     def test_helpers_no_models_entity_type_import(self) -> None:
         """EntityType from owlbear_knowledge.models must not be imported in _helpers.py (AC6)."""
-        assert not hasattr(_helpers, "EntityType"), (
-            "EntityType (from legacy models) still imported in _helpers.py"
-        )
+        assert not hasattr(_helpers, "EntityType"), "EntityType (from legacy models) still imported in _helpers.py"
 
     def test_helpers_no_relation_type_import(self) -> None:
         """RelationType from owlbear_knowledge.models must not be imported in _helpers.py (AC6)."""
-        assert not hasattr(_helpers, "RelationType"), (
-            "RelationType (from legacy models) still imported in _helpers.py"
-        )
+        assert not hasattr(_helpers, "RelationType"), "RelationType (from legacy models) still imported in _helpers.py"
 
     def test_helpers_no_extract_entity_type_function(self) -> None:
         """_extract_entity_type must be deleted from _helpers.py (AC6)."""
-        assert not hasattr(_helpers, "_extract_entity_type"), (
-            "_extract_entity_type still present in _helpers.py"
-        )
+        assert not hasattr(_helpers, "_extract_entity_type"), "_extract_entity_type still present in _helpers.py"
 
     def test_helpers_no_extract_relation_function(self) -> None:
         """_extract_relation must be deleted from _helpers.py (AC6)."""
-        assert not hasattr(_helpers, "_extract_relation"), (
-            "_extract_relation still present in _helpers.py"
-        )
+        assert not hasattr(_helpers, "_extract_relation"), "_extract_relation still present in _helpers.py"
 
     def test_helpers_no_validate_enrichment_edge_payload(self) -> None:
         """_validate_enrichment_edge_payload must be deleted from _helpers.py (AC6)."""
@@ -360,9 +306,7 @@ class TestFromAC_NoLegacyImportsHelpers:
 
     def test_helpers_no_stable_edge_id(self) -> None:
         """_stable_edge_id must be deleted from _helpers.py (AC6)."""
-        assert not hasattr(_helpers, "_stable_edge_id"), (
-            "_stable_edge_id still present in _helpers.py"
-        )
+        assert not hasattr(_helpers, "_stable_edge_id"), "_stable_edge_id still present in _helpers.py"
 
 
 # ---------------------------------------------------------------------------
@@ -392,17 +336,12 @@ class TestFromAC_V2RegressionGuard:
         legacy_fields = {"query_service", "graph_store", "ingest_pipeline", "intra_doc_builder", "structured_extractor"}
         remaining_legacy = legacy_fields & field_names
         assert not remaining_legacy, (
-            f"AppContext still has legacy required fields: {remaining_legacy}; "
-            "cannot construct v2-only context"
+            f"AppContext still has legacy required fields: {remaining_legacy}; cannot construct v2-only context"
         )
         _ = conn  # connection is valid; test is structural
 
     def test_lifespan_does_not_construct_legacy_objects(self) -> None:
         """Lifespan must not construct KnowledgeQueryService, IngestPipeline, or GraphStore (AC7)."""
         src = inspect.getsource(server.app_lifespan)
-        assert "KnowledgeQueryService(" not in src, (
-            "Lifespan still constructs KnowledgeQueryService"
-        )
-        assert "IngestPipeline(" not in src, (
-            "Lifespan still constructs IngestPipeline"
-        )
+        assert "KnowledgeQueryService(" not in src, "Lifespan still constructs KnowledgeQueryService"
+        assert "IngestPipeline(" not in src, "Lifespan still constructs IngestPipeline"

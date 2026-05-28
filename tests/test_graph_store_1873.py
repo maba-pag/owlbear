@@ -101,9 +101,7 @@ class TestFromAC_GraphStore:
     # ------------------------------------------------------------------ AC1
     # upsert_entity → EntityRecord; canonical identity; ValueError on empty
 
-    def test_upsert_entity_new_returns_entity_record(
-        self, store: SqliteGraphStore
-    ) -> None:
+    def test_upsert_entity_new_returns_entity_record(self, store: SqliteGraphStore) -> None:
         """AC1: upsert_entity returns an EntityRecord for a new entity."""
         from owlbear_knowledge.protocols.graph import EntityRecord
 
@@ -127,23 +125,17 @@ class TestFromAC_GraphStore:
         result = store.upsert_entity(_mk_entity("Go Lang", entity_type=EntityType.TECHNOLOGY))
         assert result.entity_type == EntityType.TECHNOLOGY
 
-    def test_upsert_entity_empty_string_raises_value_error(
-        self, store: SqliteGraphStore
-    ) -> None:
+    def test_upsert_entity_empty_string_raises_value_error(self, store: SqliteGraphStore) -> None:
         """AC1: ValueError when name is empty string after canonicalization."""
         with pytest.raises(ValueError):
             store.upsert_entity(_mk_entity(""))
 
-    def test_upsert_entity_whitespace_only_name_raises_value_error(
-        self, store: SqliteGraphStore
-    ) -> None:
+    def test_upsert_entity_whitespace_only_name_raises_value_error(self, store: SqliteGraphStore) -> None:
         """AC1: ValueError when name is whitespace-only (canonicalizes to empty)."""
         with pytest.raises(ValueError):
             store.upsert_entity(_mk_entity("   "))
 
-    def test_upsert_entity_punctuation_only_name_raises_value_error(
-        self, store: SqliteGraphStore
-    ) -> None:
+    def test_upsert_entity_punctuation_only_name_raises_value_error(self, store: SqliteGraphStore) -> None:
         """AC1 boundary: ValueError when name is punctuation-only (canonicalizes to empty)."""
         with pytest.raises(ValueError):
             store.upsert_entity(_mk_entity("..."))
@@ -151,34 +143,26 @@ class TestFromAC_GraphStore:
     # ------------------------------------------------------------------ AC2
     # Idempotency: same ID on repeat; metadata shallow-merge (CP25)
 
-    def test_upsert_entity_same_identity_returns_same_id(
-        self, store: SqliteGraphStore
-    ) -> None:
+    def test_upsert_entity_same_identity_returns_same_id(self, store: SqliteGraphStore) -> None:
         """AC2: two upserts with same (canonical_name, entity_type) yield same ID."""
         e1 = store.upsert_entity(_mk_entity("Rust", entity_type=EntityType.TECHNOLOGY))
         e2 = store.upsert_entity(_mk_entity("Rust", entity_type=EntityType.TECHNOLOGY))
         assert e1.id == e2.id
 
-    def test_upsert_entity_case_variant_same_identity(
-        self, store: SqliteGraphStore
-    ) -> None:
+    def test_upsert_entity_case_variant_same_identity(self, store: SqliteGraphStore) -> None:
         """AC2: case variants that canonicalize to the same name yield same ID."""
         e1 = store.upsert_entity(_mk_entity("RUST", entity_type=EntityType.TECHNOLOGY))
         e2 = store.upsert_entity(_mk_entity("rust", entity_type=EntityType.TECHNOLOGY))
         assert e1.id == e2.id
 
-    def test_upsert_entity_metadata_shallow_merged_adds_new_key(
-        self, store: SqliteGraphStore
-    ) -> None:
+    def test_upsert_entity_metadata_shallow_merged_adds_new_key(self, store: SqliteGraphStore) -> None:
         """AC2: on update, metadata new keys are added to existing metadata (CP25)."""
         store.upsert_entity(_mk_entity("Rust", metadata={"lang": "systems"}))
         result = store.upsert_entity(_mk_entity("Rust", metadata={"version": "1.75"}))
         assert result.metadata.get("lang") == "systems"
         assert result.metadata.get("version") == "1.75"
 
-    def test_upsert_entity_metadata_shallow_merged_overrides_existing_key(
-        self, store: SqliteGraphStore
-    ) -> None:
+    def test_upsert_entity_metadata_shallow_merged_overrides_existing_key(self, store: SqliteGraphStore) -> None:
         """AC2: on update, existing metadata keys are overridden by new values (CP25 shallow merge)."""
         store.upsert_entity(_mk_entity("Rust", metadata={"version": "1.70"}))
         result = store.upsert_entity(_mk_entity("Rust", metadata={"version": "1.75"}))
@@ -199,23 +183,17 @@ class TestFromAC_GraphStore:
         result = store.upsert_edge(_mk_edge(entity_a.id, entity_b.id))
         assert isinstance(result, EdgeRecord)
 
-    def test_upsert_edge_missing_source_raises_value_error(
-        self, store: SqliteGraphStore, entity_b
-    ) -> None:
+    def test_upsert_edge_missing_source_raises_value_error(self, store: SqliteGraphStore, entity_b) -> None:
         """AC3: ValueError when source entity does not exist."""
         with pytest.raises(ValueError):
             store.upsert_edge(_mk_edge("nonexistent-id", entity_b.id))
 
-    def test_upsert_edge_missing_target_raises_value_error(
-        self, store: SqliteGraphStore, entity_a
-    ) -> None:
+    def test_upsert_edge_missing_target_raises_value_error(self, store: SqliteGraphStore, entity_a) -> None:
         """AC3: ValueError when target entity does not exist."""
         with pytest.raises(ValueError):
             store.upsert_edge(_mk_edge(entity_a.id, "nonexistent-id"))
 
-    def test_upsert_edge_same_as_raises_value_error(
-        self, store: SqliteGraphStore, entity_a, entity_b
-    ) -> None:
+    def test_upsert_edge_same_as_raises_value_error(self, store: SqliteGraphStore, entity_a, entity_b) -> None:
         """AC3: ValueError if relation_type is SAME_AS (bypasses Pydantic to test store guard)."""
         # model_construct bypasses Pydantic validation — tests store-level guard
         bad_edge = EdgeInput.model_construct(
@@ -251,18 +229,14 @@ class TestFromAC_GraphStore:
         assert isinstance(result, EntityRecord)
         assert result.id == created.id
 
-    def test_get_entity_alias_names_empty_tuple_when_no_aliases(
-        self, store: SqliteGraphStore
-    ) -> None:
+    def test_get_entity_alias_names_empty_tuple_when_no_aliases(self, store: SqliteGraphStore) -> None:
         """AC4: alias_names is empty tuple when no aliases exist for entity."""
         created = store.upsert_entity(_mk_entity("Flask"))
         result = store.get_entity(created.id)
         assert result is not None
         assert result.alias_names == ()
 
-    def test_get_entity_returns_none_for_unknown_id(
-        self, store: SqliteGraphStore
-    ) -> None:
+    def test_get_entity_returns_none_for_unknown_id(self, store: SqliteGraphStore) -> None:
         """AC4: get_entity returns None for an unknown entity_id."""
         result = store.get_entity("00000000-0000-0000-0000-000000000000")
         assert result is None
@@ -277,9 +251,7 @@ class TestFromAC_GraphStore:
         assert len(results) >= 1
         assert any(r.canonical_name == "fastapi" for r in results)
 
-    def test_find_entities_name_match_is_case_insensitive(
-        self, store: SqliteGraphStore
-    ) -> None:
+    def test_find_entities_name_match_is_case_insensitive(self, store: SqliteGraphStore) -> None:
         """AC5: name lookup is canonical (case-insensitive)."""
         store.upsert_entity(_mk_entity("FastAPI"))
         results = store.find_entities(EntityQuery(name="FASTAPI"))
@@ -298,15 +270,11 @@ class TestFromAC_GraphStore:
         """AC5: find_entities with both name and entity_type filters."""
         store.upsert_entity(_mk_entity("Redis", entity_type=EntityType.TECHNOLOGY))
         store.upsert_entity(_mk_entity("Redis Foundation", entity_type=EntityType.ORGANIZATION))
-        results = store.find_entities(
-            EntityQuery(name="redis", entity_type=EntityType.TECHNOLOGY)
-        )
+        results = store.find_entities(EntityQuery(name="redis", entity_type=EntityType.TECHNOLOGY))
         assert len(results) == 1
         assert results[0].entity_type == EntityType.TECHNOLOGY
 
-    def test_find_entities_returns_empty_tuple_on_no_match(
-        self, store: SqliteGraphStore
-    ) -> None:
+    def test_find_entities_returns_empty_tuple_on_no_match(self, store: SqliteGraphStore) -> None:
         """AC5: returns empty tuple when no entities match."""
         results = store.find_entities(EntityQuery(name="xyzzy-not-found-42"))
         assert results == ()
@@ -318,9 +286,7 @@ class TestFromAC_GraphStore:
         results = store.find_entities(EntityQuery(entity_type=EntityType.CONCEPT, limit=2))
         assert len(results) <= 2
 
-    def test_find_entities_works_without_aliases_table(
-        self, store: SqliteGraphStore
-    ) -> None:
+    def test_find_entities_works_without_aliases_table(self, store: SqliteGraphStore) -> None:
         """AC5 graceful degradation: find_entities works when graph_aliases table is absent."""
         # Default store fixture only creates graph_entities + graph_edges (AC7 scope).
         # Verify canonical-name search works without graph_aliases.
@@ -356,45 +322,29 @@ class TestFromAC_GraphStore:
     # ------------------------------------------------------------------ AC6
     # get_adjacent: direction / relation_type filter; empty for unknown entity
 
-    def test_get_adjacent_returns_outgoing_edges(
-        self, store: SqliteGraphStore, entity_a, entity_b
-    ) -> None:
+    def test_get_adjacent_returns_outgoing_edges(self, store: SqliteGraphStore, entity_a, entity_b) -> None:
         """AC6: OUTGOING returns edges where queried entity is the source."""
         store.upsert_edge(_mk_edge(entity_a.id, entity_b.id, RelationType.DEPENDS_ON))
-        results = store.get_adjacent(
-            AdjacencyQuery(entity_id=entity_a.id, direction=TraversalDirection.OUTGOING)
-        )
+        results = store.get_adjacent(AdjacencyQuery(entity_id=entity_a.id, direction=TraversalDirection.OUTGOING))
         assert len(results) == 1
         assert results[0].source_entity_id == entity_a.id
 
-    def test_get_adjacent_returns_incoming_edges(
-        self, store: SqliteGraphStore, entity_a, entity_b
-    ) -> None:
+    def test_get_adjacent_returns_incoming_edges(self, store: SqliteGraphStore, entity_a, entity_b) -> None:
         """AC6: INCOMING returns edges where queried entity is the target."""
         store.upsert_edge(_mk_edge(entity_a.id, entity_b.id, RelationType.DEPENDS_ON))
-        results = store.get_adjacent(
-            AdjacencyQuery(entity_id=entity_b.id, direction=TraversalDirection.INCOMING)
-        )
+        results = store.get_adjacent(AdjacencyQuery(entity_id=entity_b.id, direction=TraversalDirection.INCOMING))
         assert len(results) == 1
         assert results[0].target_entity_id == entity_b.id
 
-    def test_get_adjacent_both_directions_includes_all_edges(
-        self, store: SqliteGraphStore, entity_a, entity_b
-    ) -> None:
+    def test_get_adjacent_both_directions_includes_all_edges(self, store: SqliteGraphStore, entity_a, entity_b) -> None:
         """AC6: BOTH direction returns edges regardless of source/target role."""
         store.upsert_edge(_mk_edge(entity_a.id, entity_b.id, RelationType.DEPENDS_ON))
-        out = store.get_adjacent(
-            AdjacencyQuery(entity_id=entity_a.id, direction=TraversalDirection.BOTH)
-        )
-        inc = store.get_adjacent(
-            AdjacencyQuery(entity_id=entity_b.id, direction=TraversalDirection.BOTH)
-        )
+        out = store.get_adjacent(AdjacencyQuery(entity_id=entity_a.id, direction=TraversalDirection.BOTH))
+        inc = store.get_adjacent(AdjacencyQuery(entity_id=entity_b.id, direction=TraversalDirection.BOTH))
         assert len(out) >= 1
         assert len(inc) >= 1
 
-    def test_get_adjacent_filters_by_relation_type(
-        self, store: SqliteGraphStore, entity_a, entity_b
-    ) -> None:
+    def test_get_adjacent_filters_by_relation_type(self, store: SqliteGraphStore, entity_a, entity_b) -> None:
         """AC6: relation_types filter excludes non-matching edges."""
         store.upsert_edge(_mk_edge(entity_a.id, entity_b.id, RelationType.DEPENDS_ON))
         store.upsert_edge(_mk_edge(entity_a.id, entity_b.id, RelationType.MENTIONS))
@@ -407,9 +357,7 @@ class TestFromAC_GraphStore:
         )
         assert all(r.relation_type == RelationType.DEPENDS_ON for r in results)
 
-    def test_get_adjacent_returns_empty_tuple_for_unknown_entity(
-        self, store: SqliteGraphStore
-    ) -> None:
+    def test_get_adjacent_returns_empty_tuple_for_unknown_entity(self, store: SqliteGraphStore) -> None:
         """AC6: empty tuple returned for unknown entity_id — does not raise."""
         results = store.get_adjacent(
             AdjacencyQuery(
@@ -424,34 +372,24 @@ class TestFromAC_GraphStore:
     ) -> None:
         """AC6: OUTGOING for entity_b is empty when only entity_a→entity_b edge exists."""
         store.upsert_edge(_mk_edge(entity_a.id, entity_b.id))
-        results = store.get_adjacent(
-            AdjacencyQuery(entity_id=entity_b.id, direction=TraversalDirection.OUTGOING)
-        )
+        results = store.get_adjacent(AdjacencyQuery(entity_id=entity_b.id, direction=TraversalDirection.OUTGOING))
         assert results == ()
 
     # ------------------------------------------------------------------ AC7
     # Table DDL: graph_entities + graph_edges; ensure_tables() idempotent
 
-    def test_ensure_tables_creates_graph_entities_table(
-        self, db: sqlite3.Connection
-    ) -> None:
+    def test_ensure_tables_creates_graph_entities_table(self, db: sqlite3.Connection) -> None:
         """AC7: ensure_tables() creates graph_entities table."""
         s = SqliteGraphStore(db)
         s.ensure_tables()
-        cursor = db.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='graph_entities'"
-        )
+        cursor = db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='graph_entities'")
         assert cursor.fetchone() is not None
 
-    def test_ensure_tables_creates_graph_edges_table(
-        self, db: sqlite3.Connection
-    ) -> None:
+    def test_ensure_tables_creates_graph_edges_table(self, db: sqlite3.Connection) -> None:
         """AC7: ensure_tables() creates graph_edges table."""
         s = SqliteGraphStore(db)
         s.ensure_tables()
-        cursor = db.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='graph_edges'"
-        )
+        cursor = db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='graph_edges'")
         assert cursor.fetchone() is not None
 
     def test_ensure_tables_is_idempotent(self, db: sqlite3.Connection) -> None:
@@ -460,9 +398,7 @@ class TestFromAC_GraphStore:
         s.ensure_tables()
         s.ensure_tables()  # must not raise
 
-    def test_graph_entities_has_unique_constraint_on_canonical_name_and_type(
-        self, db: sqlite3.Connection
-    ) -> None:
+    def test_graph_entities_has_unique_constraint_on_canonical_name_and_type(self, db: sqlite3.Connection) -> None:
         """AC7 boundary: graph_entities enforces UNIQUE (canonical_name, entity_type)."""
         SqliteGraphStore(db).ensure_tables()
         cursor = db.execute("PRAGMA index_list(graph_entities)")
@@ -485,9 +421,7 @@ class TestFromAC_GraphStore:
         result = store.upsert_entity(_mk_entity("SyncCheck"))
         assert not inspect.isawaitable(result), "upsert_entity must be synchronous"
 
-    def test_upsert_edge_is_synchronous(
-        self, store: SqliteGraphStore, entity_a, entity_b
-    ) -> None:
+    def test_upsert_edge_is_synchronous(self, store: SqliteGraphStore, entity_a, entity_b) -> None:
         """AC8: upsert_edge is synchronous — calling without await returns a value."""
         import inspect
 
@@ -498,9 +432,7 @@ class TestFromAC_GraphStore:
 
     # AC1+AC2 gap: prove entity_type is part of the identity key
 
-    def test_upsert_entity_same_name_different_type_yields_distinct_ids(
-        self, store: SqliteGraphStore
-    ) -> None:
+    def test_upsert_entity_same_name_different_type_yields_distinct_ids(self, store: SqliteGraphStore) -> None:
         """AC1+AC2: same canonical name under two different entity_types produces distinct IDs.
 
         Proves that entity_type is a required component of the identity key; an
@@ -521,9 +453,7 @@ class TestFromAC_GraphStore:
         Distinct from the AC5 alias-search path: this verifies that get_entity itself
         reads and returns current alias_names, not just that aliases are searchable.
         """
-        entity = store.upsert_entity(
-            _mk_entity("PostgreSQL", entity_type=EntityType.TECHNOLOGY)
-        )
+        entity = store.upsert_entity(_mk_entity("PostgreSQL", entity_type=EntityType.TECHNOLOGY))
         db.execute(
             """
             CREATE TABLE IF NOT EXISTS graph_aliases (
@@ -549,9 +479,7 @@ class TestFromAC_GraphStore:
 
     # AC7 gap: graph_edges composite uniqueness and FK declarations
 
-    def test_graph_edges_has_unique_constraint_on_composite_key(
-        self, db: sqlite3.Connection
-    ) -> None:
+    def test_graph_edges_has_unique_constraint_on_composite_key(self, db: sqlite3.Connection) -> None:
         """AC7: graph_edges enforces UNIQUE(source_entity_id, target_entity_id, relation_type).
 
         Uses PRAGMA index_list to confirm a unique index exists on graph_edges.
@@ -562,9 +490,7 @@ class TestFromAC_GraphStore:
         has_unique = any(idx[2] == 1 for idx in indexes)
         assert has_unique, "graph_edges must declare a UNIQUE composite index"
 
-    def test_graph_edges_declares_foreign_keys_to_graph_entities(
-        self, db: sqlite3.Connection
-    ) -> None:
+    def test_graph_edges_declares_foreign_keys_to_graph_entities(self, db: sqlite3.Connection) -> None:
         """AC7: graph_edges FK constraints reference graph_entities for source and target.
 
         Uses PRAGMA foreign_key_list to inspect declared FK constraints.
@@ -579,9 +505,7 @@ class TestFromAC_GraphStore:
 
     # AC8 gap: BEGIN IMMEDIATE must be used explicitly in both upsert paths
 
-    def test_upsert_entity_executes_begin_immediate_transaction(
-        self, db: sqlite3.Connection
-    ) -> None:
+    def test_upsert_entity_executes_begin_immediate_transaction(self, db: sqlite3.Connection) -> None:
         """AC8: upsert_entity issues BEGIN IMMEDIATE, not the weaker BEGIN/BEGIN DEFERRED.
 
         Uses sqlite3.Connection.set_trace_callback to record every SQL statement
@@ -600,9 +524,7 @@ class TestFromAC_GraphStore:
             "upsert_entity must use BEGIN IMMEDIATE, not BEGIN or BEGIN DEFERRED"
         )
 
-    def test_upsert_edge_executes_begin_immediate_transaction(
-        self, db: sqlite3.Connection
-    ) -> None:
+    def test_upsert_edge_executes_begin_immediate_transaction(self, db: sqlite3.Connection) -> None:
         """AC8: upsert_edge issues BEGIN IMMEDIATE, not the weaker BEGIN/BEGIN DEFERRED.
 
         Uses sqlite3.Connection.set_trace_callback to record every SQL statement
@@ -664,12 +586,8 @@ class TestFromAC_GraphStore:
 
         assert updated.id == first.id, "same identity must yield same edge ID on update"
         assert updated.weight == pytest.approx(0.9), "weight must be replaced from new EdgeInput"
-        assert updated.metadata.get("priority") == "high", (
-            "metadata must be replaced from new EdgeInput"
-        )
-        assert updated.updated_at > updated.created_at, (
-            "updated_at must advance beyond created_at on update"
-        )
+        assert updated.metadata.get("priority") == "high", "metadata must be replaced from new EdgeInput"
+        assert updated.updated_at > updated.created_at, "updated_at must advance beyond created_at on update"
 
     # AC7 gap: graph_entities UNIQUE index must cover exactly (canonical_name, entity_type)
 
@@ -693,10 +611,7 @@ class TestFromAC_GraphStore:
             if covered == {"canonical_name", "entity_type"}:
                 found = True
                 break
-        assert found, (
-            "graph_entities must have a UNIQUE index covering exactly "
-            "(canonical_name, entity_type)"
-        )
+        assert found, "graph_entities must have a UNIQUE index covering exactly (canonical_name, entity_type)"
 
     # AC8 gap: graph_edges UNIQUE index must cover exactly the three-column composite key
     # and both FK declarations must exist (not just one)
@@ -722,13 +637,9 @@ class TestFromAC_GraphStore:
             if covered == expected:
                 found = True
                 break
-        assert found, (
-            f"graph_edges must have a UNIQUE index covering exactly {expected}"
-        )
+        assert found, f"graph_edges must have a UNIQUE index covering exactly {expected}"
 
-    def test_graph_edges_source_entity_id_fk_references_graph_entities(
-        self, db: sqlite3.Connection
-    ) -> None:
+    def test_graph_edges_source_entity_id_fk_references_graph_entities(self, db: sqlite3.Connection) -> None:
         """AC8: FK source_entity_id → graph_entities.id must be explicitly declared.
 
         The prior FK test checks only that at least one FK references graph_entities;
@@ -740,9 +651,7 @@ class TestFromAC_GraphStore:
         found = any(fk[3] == "source_entity_id" and fk[2] == "graph_entities" for fk in fk_rows)
         assert found, "graph_edges must declare FK: source_entity_id → graph_entities"
 
-    def test_graph_edges_target_entity_id_fk_references_graph_entities(
-        self, db: sqlite3.Connection
-    ) -> None:
+    def test_graph_edges_target_entity_id_fk_references_graph_entities(self, db: sqlite3.Connection) -> None:
         """AC8: FK target_entity_id → graph_entities.id must be explicitly declared.
 
         An impl with only the source_entity_id FK (missing the target FK) would

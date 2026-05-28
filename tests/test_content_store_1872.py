@@ -122,17 +122,13 @@ class TestFromAC_ContentStoreSearch:
     # Error: ValueError on empty / whitespace-only text
 
     @pytest.mark.asyncio
-    async def test_search_raises_value_error_on_empty_text(
-        self, store: ContentStore
-    ) -> None:
+    async def test_search_raises_value_error_on_empty_text(self, store: ContentStore) -> None:
         """AC2: empty query.text raises ValueError."""
         with pytest.raises(ValueError):
             await store.search(_make_query(text=""))
 
     @pytest.mark.asyncio
-    async def test_search_raises_value_error_on_whitespace_only_text(
-        self, store: ContentStore
-    ) -> None:
+    async def test_search_raises_value_error_on_whitespace_only_text(self, store: ContentStore) -> None:
         """AC2: whitespace-only query.text raises ValueError."""
         with pytest.raises(ValueError):
             await store.search(_make_query(text="   "))
@@ -141,9 +137,7 @@ class TestFromAC_ContentStoreSearch:
     # Happy: return type and basic contract
 
     @pytest.mark.asyncio
-    async def test_search_returns_tuple(
-        self, store: ContentStore, mock_vectors: MagicMock
-    ) -> None:
+    async def test_search_returns_tuple(self, store: ContentStore, mock_vectors: MagicMock) -> None:
         """AC1: search returns a tuple (not list or generator)."""
         req = _make_request()
         result = await store.ingest(req)
@@ -192,9 +186,7 @@ class TestFromAC_ContentStoreSearch:
         result = await store.ingest(req)
         chunk_ids = list(result.chunk_ids)
         # Feed more hits than top_k=2
-        mock_vectors.search_similar.return_value = [
-            (cid, 0.9 - i * 0.05) for i, cid in enumerate(chunk_ids)
-        ]
+        mock_vectors.search_similar.return_value = [(cid, 0.9 - i * 0.05) for i, cid in enumerate(chunk_ids)]
 
         results = await store.search(_make_query(top_k=2))
         assert len(results) <= 2
@@ -203,9 +195,7 @@ class TestFromAC_ContentStoreSearch:
     # Boundary: min_score filter
 
     @pytest.mark.asyncio
-    async def test_search_excludes_results_below_min_score(
-        self, store: ContentStore, mock_vectors: MagicMock
-    ) -> None:
+    async def test_search_excludes_results_below_min_score(self, store: ContentStore, mock_vectors: MagicMock) -> None:
         """AC1: results whose score < min_score are not returned."""
         req = _make_request()
         result = await store.ingest(req)
@@ -235,9 +225,7 @@ class TestFromAC_ContentStoreSearch:
     # Boundary: score clamping
 
     @pytest.mark.asyncio
-    async def test_search_clamps_score_above_one_to_one(
-        self, store: ContentStore, mock_vectors: MagicMock
-    ) -> None:
+    async def test_search_clamps_score_above_one_to_one(self, store: ContentStore, mock_vectors: MagicMock) -> None:
         """AC1: score > 1.0 from vector_store is clamped to 1.0."""
         req = _make_request()
         result = await store.ingest(req)
@@ -248,9 +236,7 @@ class TestFromAC_ContentStoreSearch:
         assert results[0].score == 1.0
 
     @pytest.mark.asyncio
-    async def test_search_clamps_negative_score_to_zero(
-        self, store: ContentStore, mock_vectors: MagicMock
-    ) -> None:
+    async def test_search_clamps_negative_score_to_zero(self, store: ContentStore, mock_vectors: MagicMock) -> None:
         """AC1: negative score from vector_store is clamped to 0.0."""
         req = _make_request()
         result = await store.ingest(req)
@@ -297,9 +283,7 @@ class TestFromAC_ContentStoreSearch:
     # Edge: scopes filter forwarded to vector store
 
     @pytest.mark.asyncio
-    async def test_search_scopes_forwarded_to_vector_store(
-        self, store: ContentStore, mock_vectors: MagicMock
-    ) -> None:
+    async def test_search_scopes_forwarded_to_vector_store(self, store: ContentStore, mock_vectors: MagicMock) -> None:
         """AC1: scopes from query are passed through to vector_store.search_similar."""
         mock_vectors.search_similar.return_value = []
         query = _make_query(scopes=("wiki", "docs"))
@@ -314,9 +298,7 @@ class TestFromAC_ContentStoreSearch:
     # Happy: chunk text preserved in result
 
     @pytest.mark.asyncio
-    async def test_search_result_chunk_preserves_exact_text(
-        self, store: ContentStore, mock_vectors: MagicMock
-    ) -> None:
+    async def test_search_result_chunk_preserves_exact_text(self, store: ContentStore, mock_vectors: MagicMock) -> None:
         """AC1: ContentChunk returned in result has non-empty preserved text."""
         req = _make_request()
         result = await store.ingest(req)
@@ -347,23 +329,17 @@ class TestFromAC_ContentStorePurge:
         result = store.purge_source("nonexistent-source")
         assert result is not None
 
-    def test_purge_unknown_source_returns_empty_document_ids(
-        self, store: ContentStore
-    ) -> None:
+    def test_purge_unknown_source_returns_empty_document_ids(self, store: ContentStore) -> None:
         """AC5: document_ids tuple is empty for unknown source."""
         result = store.purge_source("nonexistent-source")
         assert result.document_ids == ()
 
-    def test_purge_unknown_source_returns_empty_chunk_ids(
-        self, store: ContentStore
-    ) -> None:
+    def test_purge_unknown_source_returns_empty_chunk_ids(self, store: ContentStore) -> None:
         """AC5: chunk_ids tuple is empty for unknown source."""
         result = store.purge_source("nonexistent-source")
         assert result.chunk_ids == ()
 
-    def test_purge_unknown_source_returns_empty_vector_ids(
-        self, store: ContentStore
-    ) -> None:
+    def test_purge_unknown_source_returns_empty_vector_ids(self, store: ContentStore) -> None:
         """AC5: vector_ids tuple is empty for unknown source."""
         result = store.purge_source("nonexistent-source")
         assert result.vector_ids == ()
@@ -372,54 +348,42 @@ class TestFromAC_ContentStorePurge:
     # Happy: purge returns ContentPurgeResult
 
     @pytest.mark.asyncio
-    async def test_purge_source_returns_content_purge_result_type(
-        self, store: ContentStore
-    ) -> None:
+    async def test_purge_source_returns_content_purge_result_type(self, store: ContentStore) -> None:
         """AC3: purge_source returns a ContentPurgeResult."""
         await store.ingest(_make_request(source_id="src-purge"))
         result = store.purge_source("src-purge")
         assert isinstance(result, ContentPurgeResult)
 
     @pytest.mark.asyncio
-    async def test_purge_source_document_ids_contains_ingested_doc(
-        self, store: ContentStore
-    ) -> None:
+    async def test_purge_source_document_ids_contains_ingested_doc(self, store: ContentStore) -> None:
         """AC3: returned document_ids contains the document_id of the purged document."""
         r = await store.ingest(_make_request(source_id="src-purge"))
         purge = store.purge_source("src-purge")
         assert r.document_id in purge.document_ids
 
     @pytest.mark.asyncio
-    async def test_purge_source_chunk_ids_contains_ingested_chunks(
-        self, store: ContentStore
-    ) -> None:
+    async def test_purge_source_chunk_ids_contains_ingested_chunks(self, store: ContentStore) -> None:
         """AC3: returned chunk_ids contains all chunk IDs of the purged document."""
         r = await store.ingest(_make_request(source_id="src-purge"))
         purge = store.purge_source("src-purge")
         assert set(r.chunk_ids).issubset(set(purge.chunk_ids))
 
     @pytest.mark.asyncio
-    async def test_purge_source_vector_ids_match_chunk_ids(
-        self, store: ContentStore
-    ) -> None:
+    async def test_purge_source_vector_ids_match_chunk_ids(self, store: ContentStore) -> None:
         """AC3: vector_ids equals chunk_ids (1:1 mapping between chunks and vectors)."""
         await store.ingest(_make_request(source_id="src-purge"))
         purge = store.purge_source("src-purge")
         assert set(purge.vector_ids) == set(purge.chunk_ids)
 
     @pytest.mark.asyncio
-    async def test_purge_source_removes_document_from_store(
-        self, store: ContentStore
-    ) -> None:
+    async def test_purge_source_removes_document_from_store(self, store: ContentStore) -> None:
         """AC3: document is no longer retrievable via get_document after purge."""
         r = await store.ingest(_make_request(source_id="src-purge"))
         store.purge_source("src-purge")
         assert store.get_document(r.document_id) is None
 
     @pytest.mark.asyncio
-    async def test_purge_source_removes_chunks_from_store(
-        self, store: ContentStore
-    ) -> None:
+    async def test_purge_source_removes_chunks_from_store(self, store: ContentStore) -> None:
         """AC3: all chunks are no longer retrievable via get_chunk after purge."""
         r = await store.ingest(_make_request(source_id="src-purge"))
         chunk_ids = r.chunk_ids
@@ -438,9 +402,7 @@ class TestFromAC_ContentStorePurge:
         mock_vectors.delete.assert_called()
 
     @pytest.mark.asyncio
-    async def test_purge_only_removes_target_source_not_others(
-        self, store: ContentStore
-    ) -> None:
+    async def test_purge_only_removes_target_source_not_others(self, store: ContentStore) -> None:
         """AC3: purging one source_id does not remove documents from other sources."""
         await store.ingest(_make_request(source_id="src-1", title="Doc 1"))
         r2 = await store.ingest(_make_request(source_id="src-2", title="Doc 2"))
@@ -452,9 +414,7 @@ class TestFromAC_ContentStorePurge:
     # Edge: idempotent — second purge returns empty tuples
 
     @pytest.mark.asyncio
-    async def test_purge_second_call_returns_empty_tuples(
-        self, store: ContentStore
-    ) -> None:
+    async def test_purge_second_call_returns_empty_tuples(self, store: ContentStore) -> None:
         """AC5: second purge_source on already-purged source returns empty tuples."""
         await store.ingest(_make_request(source_id="src-purge"))
         store.purge_source("src-purge")
@@ -467,9 +427,7 @@ class TestFromAC_ContentStorePurge:
     # Regression: purge deletes stale vector IDs from REPLACED+delete-failure state
 
     @pytest.mark.asyncio
-    async def test_purge_source_includes_stale_pending_vector_ids(
-        self, mock_embed: MagicMock
-    ) -> None:
+    async def test_purge_source_includes_stale_pending_vector_ids(self, mock_embed: MagicMock) -> None:
         """AC3 PO-1: purge_source deletes stale V1 vector IDs persisted after REPLACED+delete-failure.
 
         Scenario:
@@ -490,9 +448,7 @@ class TestFromAC_ContentStorePurge:
             chunker=chunker,
         )
         store_1.ensure_tables()
-        v1_result = await store_1.ingest(
-            _make_request(source_id="src-stale", text="First version content here. " * 6)
-        )
+        v1_result = await store_1.ingest(_make_request(source_id="src-stale", text="First version content here. " * 6))
         v1_chunk_ids = set(v1_result.chunk_ids)
 
         # Step 2: V2 REPLACED — SQLite commits, _delete_vectors raises
@@ -531,9 +487,7 @@ class TestFromAC_ContentStorePurge:
         purge_result = store_3.purge_source("src-stale")
 
         # delete must be called
-        assert purge_vectors.delete.called, (
-            "purge_source must call vector_store.delete for stale+current IDs"
-        )
+        assert purge_vectors.delete.called, "purge_source must call vector_store.delete for stale+current IDs"
         # Collect all IDs passed to delete
         deleted_ids: set[str] = set()
         for call in purge_vectors.delete.call_args_list:
@@ -548,8 +502,7 @@ class TestFromAC_ContentStorePurge:
         )
         # purge_result.vector_ids must include stale V1 IDs
         assert v1_chunk_ids <= set(purge_result.vector_ids), (
-            f"purge_result.vector_ids must include stale V1 IDs; "
-            f"missing: {v1_chunk_ids - set(purge_result.vector_ids)}"
+            f"purge_result.vector_ids must include stale V1 IDs; missing: {v1_chunk_ids - set(purge_result.vector_ids)}"
         )
         assert v2_chunk_ids <= set(purge_result.vector_ids), (
             f"purge_result.vector_ids must include current V2 IDs; "
@@ -587,26 +540,20 @@ class TestFromAC_ContentStoreStats:
     # Happy: after ingest
 
     @pytest.mark.asyncio
-    async def test_stats_document_count_increments_after_ingest(
-        self, store: ContentStore
-    ) -> None:
+    async def test_stats_document_count_increments_after_ingest(self, store: ContentStore) -> None:
         """AC4: documents count equals number of ingested documents."""
         await store.ingest(_make_request(source_id="src-1", title="Doc 1"))
         await store.ingest(_make_request(source_id="src-2", title="Doc 2"))
         assert store.stats().documents == 2
 
     @pytest.mark.asyncio
-    async def test_stats_chunk_count_matches_ingested_chunks(
-        self, store: ContentStore
-    ) -> None:
+    async def test_stats_chunk_count_matches_ingested_chunks(self, store: ContentStore) -> None:
         """AC4: chunks count equals total chunks across all documents."""
         r = await store.ingest(_make_request())
         assert store.stats().chunks == len(r.chunk_ids)
 
     @pytest.mark.asyncio
-    async def test_stats_vectors_equals_chunks_when_all_synced(
-        self, store: ContentStore
-    ) -> None:
+    async def test_stats_vectors_equals_chunks_when_all_synced(self, store: ContentStore) -> None:
         """AC4: vectors = chunk count when all parent documents have vectors_synced=1."""
         r = await store.ingest(_make_request())
         s = store.stats()
@@ -615,9 +562,7 @@ class TestFromAC_ContentStoreStats:
     # Boundary: after purge
 
     @pytest.mark.asyncio
-    async def test_stats_document_count_decrements_after_purge(
-        self, store: ContentStore
-    ) -> None:
+    async def test_stats_document_count_decrements_after_purge(self, store: ContentStore) -> None:
         """AC4: documents count decreases after purge_source."""
         await store.ingest(_make_request(source_id="src-1", title="Doc 1"))
         await store.ingest(_make_request(source_id="src-2", title="Doc 2"))
@@ -625,9 +570,7 @@ class TestFromAC_ContentStoreStats:
         assert store.stats().documents == 1
 
     @pytest.mark.asyncio
-    async def test_stats_chunk_count_decrements_after_purge(
-        self, store: ContentStore
-    ) -> None:
+    async def test_stats_chunk_count_decrements_after_purge(self, store: ContentStore) -> None:
         """AC4: chunks count decreases after purge_source."""
         await store.ingest(_make_request(source_id="src-1", title="Doc 1"))
         r2 = await store.ingest(_make_request(source_id="src-2", title="Doc 2"))
@@ -636,9 +579,7 @@ class TestFromAC_ContentStoreStats:
         assert s.chunks == len(r2.chunk_ids)
 
     @pytest.mark.asyncio
-    async def test_stats_vectors_count_decrements_after_purge(
-        self, store: ContentStore
-    ) -> None:
+    async def test_stats_vectors_count_decrements_after_purge(self, store: ContentStore) -> None:
         """AC4: vectors count decreases after purge_source."""
         await store.ingest(_make_request(source_id="src-1", title="Doc 1"))
         r2 = await store.ingest(_make_request(source_id="src-2", title="Doc 2"))
@@ -682,9 +623,7 @@ class TestFromAC_ContentStoreStats:
 
         # Chunks still exist, but parent is unsynced — vectors must be 0
         assert s.stats().chunks == len(r1.chunk_ids)
-        assert s.stats().vectors == 0, (
-            "stats().vectors must exclude chunks whose parent document has vectors_synced=0"
-        )
+        assert s.stats().vectors == 0, "stats().vectors must exclude chunks whose parent document has vectors_synced=0"
 
         # Ingest a second doc (synced) — only its chunks count toward vectors
         r2 = await s.ingest(_make_request(source_id="src-2", title="Doc 2"))

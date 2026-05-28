@@ -88,21 +88,15 @@ class TestFromAC_ChunkIdsForEntity:
 
         assert "entity_id" in sig.parameters, "entity_id parameter must exist"
         assert hints.get("entity_id") is str, "entity_id must be annotated as str"
-        assert hints.get("return") == tuple[str, ...], (
-            "return annotation must be tuple[str, ...]"
-        )
+        assert hints.get("return") == tuple[str, ...], "return annotation must be tuple[str, ...]"
 
     def test_protocol_chunk_ids_for_entity_docstring_sections(self) -> None:
         """AC1 — Protocol method docstring contains all four required sections."""
         doc = GraphStore.chunk_ids_for_entity.__doc__ or ""
         for section in ("Guarantees", "Non-guarantees", "Side effects", "Raises"):
-            assert section in doc, (
-                f"chunk_ids_for_entity docstring must contain '{section}' section"
-            )
+            assert section in doc, f"chunk_ids_for_entity docstring must contain '{section}' section"
 
-    def test_chunk_ids_for_entity_returns_chunk_id_for_known_entity(
-        self, store: SqliteGraphStore
-    ) -> None:
+    def test_chunk_ids_for_entity_returns_chunk_id_for_known_entity(self, store: SqliteGraphStore) -> None:
         """AC2 — Returns chunk_ids from evidence claims referencing entity_id."""
         entity = store.upsert_entity(_mk_entity())
         store.add_evidence(_entity_evidence(chunk_id="chunk-abc", entity_id=entity.id))
@@ -111,9 +105,7 @@ class TestFromAC_ChunkIdsForEntity:
 
         assert "chunk-abc" in result
 
-    def test_chunk_ids_for_entity_returns_tuple_of_strings(
-        self, store: SqliteGraphStore
-    ) -> None:
+    def test_chunk_ids_for_entity_returns_tuple_of_strings(self, store: SqliteGraphStore) -> None:
         """AC3 — SqliteGraphStore returns a tuple[str, ...] from graph_evidence query."""
         entity = store.upsert_entity(_mk_entity(name="String Check"))
         store.add_evidence(_entity_evidence(chunk_id="chunk-xyz", entity_id=entity.id))
@@ -159,9 +151,7 @@ class TestFromAC_ChunkIdsForEntity:
 
         result = store.chunk_ids_for_entity(entity.id)
 
-        assert result == ("chunk-dup",), (
-            f"SELECT DISTINCT must collapse duplicate chunk_id rows; got {result!r}"
-        )
+        assert result == ("chunk-dup",), f"SELECT DISTINCT must collapse duplicate chunk_id rows; got {result!r}"
 
     def test_protocol_chunk_ids_for_entity_exact_params(self) -> None:
         """AC1 — Protocol method has EXACTLY one parameter beyond self; no extra or missing params."""
@@ -170,15 +160,12 @@ class TestFromAC_ChunkIdsForEntity:
 
         non_self_params = [k for k in sig.parameters if k != "self"]
         assert non_self_params == ["entity_id"], (
-            f"chunk_ids_for_entity must have exactly one parameter beyond self (entity_id); "
-            f"got {non_self_params!r}"
+            f"chunk_ids_for_entity must have exactly one parameter beyond self (entity_id); got {non_self_params!r}"
         )
         assert hints.get("entity_id") is str, "entity_id must be annotated as str"
         assert hints.get("return") == tuple[str, ...], "return annotation must be tuple[str, ...]"
 
-    def test_chunk_ids_for_entity_exact_set_multi_entity(
-        self, store: SqliteGraphStore
-    ) -> None:
+    def test_chunk_ids_for_entity_exact_set_multi_entity(self, store: SqliteGraphStore) -> None:
         """AC2 — Returns exact entity-scoped set; excludes chunks belonging only to other entities.
 
         Fixture: two entities share chunk-shared; each has one exclusive chunk.
@@ -205,9 +192,7 @@ class TestFromAC_ChunkIdsForEntity:
             f"Entity B must return exactly {{chunk-b1, chunk-shared}}; got {set(result_b)!r}"
         )
 
-    def test_chunk_ids_for_entity_empty_tuple_for_unknown_entity(
-        self, store: SqliteGraphStore
-    ) -> None:
+    def test_chunk_ids_for_entity_empty_tuple_for_unknown_entity(self, store: SqliteGraphStore) -> None:
         """AC4 — Returns empty tuple (not raises) for entity_id with no evidence."""
         result = store.chunk_ids_for_entity("nonexistent-entity-id-00000000")
 

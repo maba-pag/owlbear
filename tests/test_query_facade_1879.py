@@ -187,9 +187,7 @@ class TestFromAC_QueryFacadeSearch:
     # --- AC1: ContentSearchQuery construction and ValueError ---
 
     @pytest.mark.asyncio
-    async def test_search_passes_text_to_content_store(
-        self, facade: QueryFacade, mock_content: MagicMock
-    ) -> None:
+    async def test_search_passes_text_to_content_store(self, facade: QueryFacade, mock_content: MagicMock) -> None:
         """AC1: search() passes request.text into ContentSearchQuery.text."""
         request = QueryRequest(text="hello world", include_graph=False)
         await facade.search(request)
@@ -197,9 +195,7 @@ class TestFromAC_QueryFacadeSearch:
         assert called_query.text == "hello world"
 
     @pytest.mark.asyncio
-    async def test_search_passes_top_k_to_content_store(
-        self, facade: QueryFacade, mock_content: MagicMock
-    ) -> None:
+    async def test_search_passes_top_k_to_content_store(self, facade: QueryFacade, mock_content: MagicMock) -> None:
         """AC1: search() passes request.top_k into ContentSearchQuery.top_k."""
         request = QueryRequest(text="query", top_k=5, include_graph=False)
         await facade.search(request)
@@ -207,13 +203,9 @@ class TestFromAC_QueryFacadeSearch:
         assert called_query.top_k == 5
 
     @pytest.mark.asyncio
-    async def test_search_passes_scopes_to_content_store(
-        self, facade: QueryFacade, mock_content: MagicMock
-    ) -> None:
+    async def test_search_passes_scopes_to_content_store(self, facade: QueryFacade, mock_content: MagicMock) -> None:
         """AC1: search() passes request.scopes into ContentSearchQuery.scopes."""
-        request = QueryRequest(
-            text="query", scopes=("private", "public"), include_graph=False
-        )
+        request = QueryRequest(text="query", scopes=("private", "public"), include_graph=False)
         await facade.search(request)
         called_query = mock_content.search.call_args[0][0]
         assert called_query.scopes == ("private", "public")
@@ -223,17 +215,13 @@ class TestFromAC_QueryFacadeSearch:
         self, facade: QueryFacade, mock_content: MagicMock
     ) -> None:
         """AC1: search() passes request.source_ids into ContentSearchQuery.source_ids."""
-        request = QueryRequest(
-            text="query", source_ids=("src-a", "src-b"), include_graph=False
-        )
+        request = QueryRequest(text="query", source_ids=("src-a", "src-b"), include_graph=False)
         await facade.search(request)
         called_query = mock_content.search.call_args[0][0]
         assert called_query.source_ids == ("src-a", "src-b")
 
     @pytest.mark.asyncio
-    async def test_search_passes_min_score_to_content_store(
-        self, facade: QueryFacade, mock_content: MagicMock
-    ) -> None:
+    async def test_search_passes_min_score_to_content_store(self, facade: QueryFacade, mock_content: MagicMock) -> None:
         """AC1: search() passes request.min_score into ContentSearchQuery.min_score."""
         request = QueryRequest(text="query", min_score=0.5, include_graph=False)
         await facade.search(request)
@@ -255,9 +243,7 @@ class TestFromAC_QueryFacadeSearch:
         assert result.search_results[0].chunk.id == "chunk-1"
 
     @pytest.mark.asyncio
-    async def test_search_raises_value_error_on_empty_text(
-        self, facade: QueryFacade
-    ) -> None:
+    async def test_search_raises_value_error_on_empty_text(self, facade: QueryFacade) -> None:
         """AC1: search() raises ValueError when request.text is empty."""
         with pytest.raises(ValueError):
             await facade.search(QueryRequest(text=""))
@@ -295,12 +281,8 @@ class TestFromAC_QueryFacadeSearch:
         """AC2: traverse is called with max_hops == request.graph_hops."""
         chunk = _make_chunk(chunk_id="chunk-1")
         mock_content.search.return_value = (_make_search_result(chunk),)
-        mock_graph.claims_for_chunk.return_value = _make_claims(
-            "chunk-1", entity_ids=("e1",)
-        )
-        mock_graph.traverse.return_value = _make_traversal_result(
-            entities=[_make_entity("e1")]
-        )
+        mock_graph.claims_for_chunk.return_value = _make_claims("chunk-1", entity_ids=("e1",))
+        mock_graph.traverse.return_value = _make_traversal_result(entities=[_make_entity("e1")])
         request = QueryRequest(text="query", include_graph=True, graph_hops=3)
         await facade.search(request)
         traversal_query: TraversalQuery = mock_graph.traverse.call_args[0][0]
@@ -318,16 +300,10 @@ class TestFromAC_QueryFacadeSearch:
         """AC2: traverse is called with relation_types == request.relation_types."""
         chunk = _make_chunk(chunk_id="chunk-1")
         mock_content.search.return_value = (_make_search_result(chunk),)
-        mock_graph.claims_for_chunk.return_value = _make_claims(
-            "chunk-1", entity_ids=("e1",)
-        )
-        mock_graph.traverse.return_value = _make_traversal_result(
-            entities=[_make_entity("e1")]
-        )
+        mock_graph.claims_for_chunk.return_value = _make_claims("chunk-1", entity_ids=("e1",))
+        mock_graph.traverse.return_value = _make_traversal_result(entities=[_make_entity("e1")])
         rel_types = (RelationType.DEPENDS_ON, RelationType.IMPLEMENTS)
-        request = QueryRequest(
-            text="query", include_graph=True, relation_types=rel_types
-        )
+        request = QueryRequest(text="query", include_graph=True, relation_types=rel_types)
         await facade.search(request)
         traversal_query: TraversalQuery = mock_graph.traverse.call_args[0][0]
         assert traversal_query.relation_types == rel_types
@@ -347,12 +323,8 @@ class TestFromAC_QueryFacadeSearch:
             _make_search_result(chunk_b),
         )
         # both chunks claim the same entity
-        mock_graph.claims_for_chunk.side_effect = lambda cid: _make_claims(
-            cid, entity_ids=("e1",)
-        )
-        mock_graph.traverse.return_value = _make_traversal_result(
-            entities=[_make_entity("e1")]
-        )
+        mock_graph.claims_for_chunk.side_effect = lambda cid: _make_claims(cid, entity_ids=("e1",))
+        mock_graph.traverse.return_value = _make_traversal_result(entities=[_make_entity("e1")])
         request = QueryRequest(text="query", include_graph=True)
         await facade.search(request)
         assert mock_graph.traverse.call_count == 1
@@ -367,9 +339,7 @@ class TestFromAC_QueryFacadeSearch:
         """AC2: LookupError from traverse is silently skipped; other seeds still produce results."""
         chunk = _make_chunk(chunk_id="chunk-1")
         mock_content.search.return_value = (_make_search_result(chunk),)
-        mock_graph.claims_for_chunk.return_value = _make_claims(
-            "chunk-1", entity_ids=("e-bad", "e-good")
-        )
+        mock_graph.claims_for_chunk.return_value = _make_claims("chunk-1", entity_ids=("e-bad", "e-good"))
         entity_ok = _make_entity("e-good")
 
         def _traverse_side_effect(q: TraversalQuery) -> TraversalResult:
@@ -396,9 +366,7 @@ class TestFromAC_QueryFacadeSearch:
         """AC2: traversal results from multiple seeds are merged into one TraversalResult."""
         chunk = _make_chunk(chunk_id="chunk-1")
         mock_content.search.return_value = (_make_search_result(chunk),)
-        mock_graph.claims_for_chunk.return_value = _make_claims(
-            "chunk-1", entity_ids=("e1", "e2")
-        )
+        mock_graph.claims_for_chunk.return_value = _make_claims("chunk-1", entity_ids=("e1", "e2"))
         e1 = _make_entity("e1")
         e2 = _make_entity("e2")
         edge = _make_edge("edge-1", "e1", "e2")
@@ -437,9 +405,7 @@ class TestFromAC_QueryFacadeSearch:
         )
         shared_entity = _make_entity("e-shared")
 
-        mock_graph.traverse.return_value = _make_traversal_result(
-            entities=[shared_entity]
-        )
+        mock_graph.traverse.return_value = _make_traversal_result(entities=[shared_entity])
         request = QueryRequest(text="query", include_graph=True)
         result = await facade.search(request)
         assert result.graph_context is not None
@@ -503,9 +469,7 @@ class TestFromAC_QueryFacadeSearch:
         """AC3: graph_context is None when every traverse call raises LookupError."""
         chunk = _make_chunk(chunk_id="chunk-1")
         mock_content.search.return_value = (_make_search_result(chunk),)
-        mock_graph.claims_for_chunk.return_value = _make_claims(
-            "chunk-1", entity_ids=("e1", "e2")
-        )
+        mock_graph.claims_for_chunk.return_value = _make_claims("chunk-1", entity_ids=("e1", "e2"))
         mock_graph.traverse.side_effect = LookupError("not found")
         request = QueryRequest(text="query", include_graph=True)
         result = await facade.search(request)
@@ -523,17 +487,11 @@ class TestFromAC_QueryFacadeSearch:
         """AC4: only entities with entity_type in request.entity_types are kept."""
         chunk = _make_chunk(chunk_id="chunk-1")
         mock_content.search.return_value = (_make_search_result(chunk),)
-        mock_graph.claims_for_chunk.return_value = _make_claims(
-            "chunk-1", entity_ids=("seed",)
-        )
+        mock_graph.claims_for_chunk.return_value = _make_claims("chunk-1", entity_ids=("seed",))
         concept_entity = _make_entity("e-concept", entity_type=EntityType.CONCEPT)
         person_entity = _make_entity("e-person", entity_type=EntityType.PERSON)
-        mock_graph.traverse.return_value = _make_traversal_result(
-            entities=[concept_entity, person_entity]
-        )
-        request = QueryRequest(
-            text="query", include_graph=True, entity_types=(EntityType.CONCEPT,)
-        )
+        mock_graph.traverse.return_value = _make_traversal_result(entities=[concept_entity, person_entity])
+        request = QueryRequest(text="query", include_graph=True, entity_types=(EntityType.CONCEPT,))
         result = await facade.search(request)
         assert result.graph_context is not None
         entity_ids = {e.id for e in result.graph_context.entities}
@@ -550,9 +508,7 @@ class TestFromAC_QueryFacadeSearch:
         """AC4: edges removed when either source or target entity is excluded."""
         chunk = _make_chunk(chunk_id="chunk-1")
         mock_content.search.return_value = (_make_search_result(chunk),)
-        mock_graph.claims_for_chunk.return_value = _make_claims(
-            "chunk-1", entity_ids=("seed",)
-        )
+        mock_graph.claims_for_chunk.return_value = _make_claims("chunk-1", entity_ids=("seed",))
         concept_entity = _make_entity("e-concept", entity_type=EntityType.CONCEPT)
         person_entity = _make_entity("e-person", entity_type=EntityType.PERSON)
         # edge spans kept ↔ excluded endpoint
@@ -563,9 +519,7 @@ class TestFromAC_QueryFacadeSearch:
             entities=[concept_entity, person_entity],
             edges=[mixed_edge, concept_edge],
         )
-        request = QueryRequest(
-            text="query", include_graph=True, entity_types=(EntityType.CONCEPT,)
-        )
+        request = QueryRequest(text="query", include_graph=True, entity_types=(EntityType.CONCEPT,))
         result = await facade.search(request)
         assert result.graph_context is not None
         edge_ids = {e.id for e in result.graph_context.edges}
@@ -582,15 +536,11 @@ class TestFromAC_QueryFacadeSearch:
         """AC4: empty entity_types tuple — all entities and edges retained."""
         chunk = _make_chunk(chunk_id="chunk-1")
         mock_content.search.return_value = (_make_search_result(chunk),)
-        mock_graph.claims_for_chunk.return_value = _make_claims(
-            "chunk-1", entity_ids=("seed",)
-        )
+        mock_graph.claims_for_chunk.return_value = _make_claims("chunk-1", entity_ids=("seed",))
         concept = _make_entity("e-concept", entity_type=EntityType.CONCEPT)
         person = _make_entity("e-person", entity_type=EntityType.PERSON)
         edge = _make_edge("edge-1", "e-concept", "e-person")
-        mock_graph.traverse.return_value = _make_traversal_result(
-            entities=[concept, person], edges=[edge]
-        )
+        mock_graph.traverse.return_value = _make_traversal_result(entities=[concept, person], edges=[edge])
         request = QueryRequest(text="query", include_graph=True, entity_types=())
         result = await facade.search(request)
         assert result.graph_context is not None
@@ -638,9 +588,7 @@ class TestFromAC_QueryFacadeSearch:
         """AC5: title is fetched from get_document(chunk.document_id).title."""
         chunk = _make_chunk(chunk_id="chunk-1", document_id="doc-abc")
         mock_content.search.return_value = (_make_search_result(chunk),)
-        mock_content.get_document.return_value = _make_document(
-            document_id="doc-abc", title="My Important Document"
-        )
+        mock_content.get_document.return_value = _make_document(document_id="doc-abc", title="My Important Document")
         mock_graph.claims_for_chunk.return_value = _make_claims("chunk-1")
         request = QueryRequest(text="query", include_graph=True)
         result = await facade.search(request)
@@ -685,9 +633,7 @@ class TestFromAC_QueryFacadeSearch:
         mock_graph: MagicMock,
     ) -> None:
         """AC5: section_path is populated from chunk.section_path."""
-        chunk = _make_chunk(
-            chunk_id="chunk-1", section_path=("Chapter 1", "Section 2")
-        )
+        chunk = _make_chunk(chunk_id="chunk-1", section_path=("Chapter 1", "Section 2"))
         mock_content.search.return_value = (_make_search_result(chunk),)
         mock_graph.claims_for_chunk.return_value = _make_claims("chunk-1")
         request = QueryRequest(text="query", include_graph=True)
@@ -713,6 +659,7 @@ class TestFromAC_QueryFacadeSearch:
         await facade.search(request)
         called_query = mock_content.search.call_args[0][0]
         from owlbear_knowledge.protocols.content import ContentSearchQuery  # noqa: PLC0415
+
         assert isinstance(called_query, ContentSearchQuery)
         assert called_query.text == "find me"
         assert called_query.top_k == 7
@@ -739,9 +686,7 @@ class TestFromAC_QueryFacadeSearch:
         mock_graph.claims_for_chunk.side_effect = lambda cid: _make_claims(
             cid, entity_ids=("e1", "e2") if cid == "chunk-a" else ("e2", "e3")
         )
-        mock_graph.traverse.side_effect = lambda q: _make_traversal_result(
-            entities=[_make_entity(q.entity_id)]
-        )
+        mock_graph.traverse.side_effect = lambda q: _make_traversal_result(entities=[_make_entity(q.entity_id)])
         request = QueryRequest(text="query", include_graph=True)
         await facade.search(request)
         traversed_seeds = {c.args[0].entity_id for c in mock_graph.traverse.call_args_list}
@@ -759,16 +704,12 @@ class TestFromAC_QueryFacadeSearch:
         """AC2: same edge ID returned by multiple traversals appears exactly once in graph_context."""
         chunk = _make_chunk(chunk_id="chunk-1")
         mock_content.search.return_value = (_make_search_result(chunk),)
-        mock_graph.claims_for_chunk.return_value = _make_claims(
-            "chunk-1", entity_ids=("e1", "e2")
-        )
+        mock_graph.claims_for_chunk.return_value = _make_claims("chunk-1", entity_ids=("e1", "e2"))
         e1 = _make_entity("e1")
         e2 = _make_entity("e2")
         shared_edge = _make_edge("edge-shared", "e1", "e2")
         # both traversals return the same shared edge
-        mock_graph.traverse.side_effect = lambda _: _make_traversal_result(
-            entities=[e1, e2], edges=[shared_edge]
-        )
+        mock_graph.traverse.side_effect = lambda _: _make_traversal_result(entities=[e1, e2], edges=[shared_edge])
         request = QueryRequest(text="query", include_graph=True)
         result = await facade.search(request)
         assert result.graph_context is not None
@@ -786,9 +727,7 @@ class TestFromAC_QueryFacadeSearch:
         """AC4: edge removed when source_entity_id references an excluded entity type."""
         chunk = _make_chunk(chunk_id="chunk-1")
         mock_content.search.return_value = (_make_search_result(chunk),)
-        mock_graph.claims_for_chunk.return_value = _make_claims(
-            "chunk-1", entity_ids=("seed",)
-        )
+        mock_graph.claims_for_chunk.return_value = _make_claims("chunk-1", entity_ids=("seed",))
         concept_entity = _make_entity("e-concept", entity_type=EntityType.CONCEPT)
         person_entity = _make_entity("e-person", entity_type=EntityType.PERSON)
         # source=e-person (excluded), target=e-concept (kept) → edge must be removed
@@ -799,9 +738,7 @@ class TestFromAC_QueryFacadeSearch:
             entities=[concept_entity, person_entity],
             edges=[source_excluded_edge, kept_edge],
         )
-        request = QueryRequest(
-            text="query", include_graph=True, entity_types=(EntityType.CONCEPT,)
-        )
+        request = QueryRequest(text="query", include_graph=True, entity_types=(EntityType.CONCEPT,))
         result = await facade.search(request)
         assert result.graph_context is not None
         edge_ids = {e.id for e in result.graph_context.edges}
@@ -825,9 +762,7 @@ class TestFromAC_QueryFacadeSearch:
             _make_search_result(chunk_b, score=0.8),
             _make_search_result(chunk_c, score=0.7),
         )
-        mock_content.get_document.side_effect = lambda did: _make_document(
-            document_id=did, title=f"Doc {did}"
-        )
+        mock_content.get_document.side_effect = lambda did: _make_document(document_id=did, title=f"Doc {did}")
         mock_graph.claims_for_chunk.return_value = _make_claims("x")
         request = QueryRequest(text="query", include_graph=False)
         result = await facade.search(request)

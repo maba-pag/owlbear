@@ -138,15 +138,11 @@ class TestKnowledgeIngestSourceIdentityWiring:
 
                 response = await knowledge_ingest(mcp_ctx, text="hello world", scope="global")
 
-                sources = list(
-                    app_ctx.source_store_v2.list_sources(scope="global", state=SourceState.ACTIVE)
-                )
+                sources = list(app_ctx.source_store_v2.list_sources(scope="global", state=SourceState.ACTIVE))
                 inline = [s for s in sources if s.name == "mcp-inline-global"]
 
         assert response.startswith("Ingested:"), f"unexpected response: {response!r}"
-        assert len(inline) == 1, (
-            f"expected exactly one inline source after ingest, found {len(inline)}"
-        )
+        assert len(inline) == 1, f"expected exactly one inline source after ingest, found {len(inline)}"
         app_ctx.ingest_coordinator.ingest.assert_called_once()
         request = app_ctx.ingest_coordinator.ingest.call_args.args[0]
         assert isinstance(request, IngestRequest), (

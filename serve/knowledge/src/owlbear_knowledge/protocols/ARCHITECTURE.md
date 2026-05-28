@@ -98,6 +98,7 @@ MCP shell uses `MCP_TOOL_ROUTING` for dispatch without transformation.
 ### CP1 — Canonical Identity (no SAME_AS, no consolidation)
 
 Entity identity is deterministic: `(canonicalize_name(name), entity_type)`. Two entities with the same tuple are the same row. This eliminates:
+
 - The SAME_AS relation (not in RelationType)
 - Consolidation workflows
 - Entity deduplication ambiguity
@@ -115,6 +116,7 @@ Embedding model, vector dimensions, sparse format, and ColBERT details are inter
 ### CP10 — Agent-External Enrichment
 
 The Enrichment module is a state machine only. It does NOT call LLMs. Agents:
+
 1. Call `claim_batch()` to claim chunks
 2. Perform LLM extraction externally (with their own model/prompt)
 3. Call `submit_extractions()` with results (using `local_ref` for entity cross-referencing)
@@ -124,6 +126,7 @@ This keeps Enrichment testable without LLM mocking and lets agents own extractio
 ### CP12 — Typed Cascade Results
 
 Cross-module invalidation uses imperative method calls (no event bus). Each cascade method returns a typed result object for audit:
+
 - `ContentPurgeResult` (document/chunk/vector IDs removed)
 - `EnrichmentPurgeResult` (queue items + extractions removed)
 - `EnrichmentDiscardResult` (chunks discarded from queue)
@@ -144,6 +147,7 @@ Content always computes `content_hash` internally from the normalised text. Call
 ## max_chars Policy (R49)
 
 The `ContextRenderRequest.max_chars` field controls the LLM context budget:
+
 - Default: 8000 characters
 - Range: 100–100,000
 - Truncation: when output exceeds budget, `RenderedContext.truncated = True`
@@ -198,7 +202,9 @@ Graph-level identity change.
 ## Testing Strategy
 
 ### Module acceptance tests (independent)
+
 Each module is tested in isolation with mocked dependencies. Tests verify:
+
 - Protocol method guarantees hold
 - State machine transitions are correct
 - Error conditions raise documented exceptions

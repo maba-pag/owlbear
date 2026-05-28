@@ -187,9 +187,7 @@ class TestFromAC_ClaimBatchDelegation:
 
         await knowledge_enrichment_claim_batch(ctx, limit=5)
 
-        app_ctx.enrichment_store.claim_batch.assert_called_once_with(
-            EnrichmentParams(batch_size=5)
-        )
+        app_ctx.enrichment_store.claim_batch.assert_called_once_with(EnrichmentParams(batch_size=5))
 
     @pytest.mark.asyncio
     async def test_claim_batch_called_with_default_limit_10(self) -> None:
@@ -199,9 +197,7 @@ class TestFromAC_ClaimBatchDelegation:
 
         await knowledge_enrichment_claim_batch(ctx)
 
-        app_ctx.enrichment_store.claim_batch.assert_called_once_with(
-            EnrichmentParams(batch_size=10)
-        )
+        app_ctx.enrichment_store.claim_batch.assert_called_once_with(EnrichmentParams(batch_size=10))
 
     @pytest.mark.asyncio
     async def test_claim_batch_limit_clamped_to_100(self) -> None:
@@ -211,9 +207,7 @@ class TestFromAC_ClaimBatchDelegation:
 
         await knowledge_enrichment_claim_batch(ctx, limit=9999)
 
-        app_ctx.enrichment_store.claim_batch.assert_called_once_with(
-            EnrichmentParams(batch_size=100)
-        )
+        app_ctx.enrichment_store.claim_batch.assert_called_once_with(EnrichmentParams(batch_size=100))
 
     @pytest.mark.asyncio
     async def test_empty_batch_returns_empty_list(self) -> None:
@@ -294,9 +288,7 @@ class TestFromAC_PerItemHydration:
 
         ctx = _make_ctx(batch=batch, document=_make_document_mock())
         app_ctx = ctx.request_context.lifespan_context
-        app_ctx.content_store.get_chunk.side_effect = lambda cid: (
-            chunk_a if cid == "chk-a-1891" else chunk_b
-        )
+        app_ctx.content_store.get_chunk.side_effect = lambda cid: chunk_a if cid == "chk-a-1891" else chunk_b
 
         await knowledge_enrichment_claim_batch(ctx)
 
@@ -317,9 +309,7 @@ class TestFromAC_PerItemHydration:
 
         ctx = _make_ctx(batch=batch, source=_make_source_mock())
         app_ctx = ctx.request_context.lifespan_context
-        app_ctx.content_store.get_chunk.side_effect = lambda cid: (
-            chunk_a if cid == "chk-a-1891" else chunk_b
-        )
+        app_ctx.content_store.get_chunk.side_effect = lambda cid: chunk_a if cid == "chk-a-1891" else chunk_b
 
         await knowledge_enrichment_claim_batch(ctx)
 

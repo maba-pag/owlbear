@@ -213,9 +213,7 @@ def _insert_chunk(conn: sqlite3.Connection, chunk_id: str, document_id: str) -> 
     conn.commit()
 
 
-def _insert_entity_evidence(
-    conn: sqlite3.Connection, ev_id: str, chunk_id: str, entity_id: str
-) -> None:
+def _insert_entity_evidence(conn: sqlite3.Connection, ev_id: str, chunk_id: str, entity_id: str) -> None:
     now = datetime.now(tz=UTC).isoformat()
     conn.execute(
         """
@@ -233,14 +231,11 @@ def _insert_entity_evidence(
 
 
 class TestFromAC_SubmitExtractions:
-
     # ------------------------------------------------------------------
     # AC1 — happy path: entity resolution and ExtractionResult shape
     # ------------------------------------------------------------------
 
-    def test_returns_extraction_result_with_correct_chunk_id(
-        self, store: EnrichmentStore
-    ) -> None:
+    def test_returns_extraction_result_with_correct_chunk_id(self, store: EnrichmentStore) -> None:
         """submit_extractions returns ExtractionResult with the submitted chunk_id."""
         _claim_chunk(store, "chunk-a")
         entity = ExtractedEntity(
@@ -252,9 +247,7 @@ class TestFromAC_SubmitExtractions:
         assert isinstance(result, ExtractionResult)
         assert result.chunk_id == "chunk-a"
 
-    def test_entity_ids_populated_with_one_id_per_entity(
-        self, store: EnrichmentStore
-    ) -> None:
+    def test_entity_ids_populated_with_one_id_per_entity(self, store: EnrichmentStore) -> None:
         """submit_extractions entity_ids tuple has one ID per submitted entity."""
         _claim_chunk(store, "chunk-a")
         entities = (
@@ -264,9 +257,7 @@ class TestFromAC_SubmitExtractions:
         result = store.submit_extractions("chunk-a", entities, ())
         assert len(result.entity_ids) == 2
 
-    def test_upsert_entity_called_once_per_entity(
-        self, store: EnrichmentStore, mock_graph: MagicMock
-    ) -> None:
+    def test_upsert_entity_called_once_per_entity(self, store: EnrichmentStore, mock_graph: MagicMock) -> None:
         """Graph.upsert_entity is called exactly once per extracted entity."""
         _claim_chunk(store, "chunk-a")
         entities = (
@@ -276,9 +267,7 @@ class TestFromAC_SubmitExtractions:
         store.submit_extractions("chunk-a", entities, ())
         assert mock_graph.upsert_entity.call_count == 2
 
-    def test_edge_ids_populated_with_one_id_per_relation(
-        self, store: EnrichmentStore
-    ) -> None:
+    def test_edge_ids_populated_with_one_id_per_relation(self, store: EnrichmentStore) -> None:
         """submit_extractions edge_ids tuple has one ID per submitted relation."""
         _claim_chunk(store, "chunk-a")
         entities = (
@@ -293,9 +282,7 @@ class TestFromAC_SubmitExtractions:
         result = store.submit_extractions("chunk-a", entities, (relation,))
         assert len(result.edge_ids) == 1
 
-    def test_upsert_edge_called_with_resolved_entity_ids(
-        self, store: EnrichmentStore, mock_graph: MagicMock
-    ) -> None:
+    def test_upsert_edge_called_with_resolved_entity_ids(self, store: EnrichmentStore, mock_graph: MagicMock) -> None:
         """Graph.upsert_edge receives resolved persistent entity IDs, not local_refs."""
         _claim_chunk(store, "chunk-a")
         entities = (
@@ -325,8 +312,7 @@ class TestFromAC_SubmitExtractions:
         )
         store.submit_extractions("chunk-a", entities, ())
         entity_calls = [
-            c for c in mock_graph.add_evidence.call_args_list
-            if c[0][0].claim_type == EvidenceClaimType.ENTITY
+            c for c in mock_graph.add_evidence.call_args_list if c[0][0].claim_type == EvidenceClaimType.ENTITY
         ]
         assert len(entity_calls) == 2
 
@@ -339,28 +325,19 @@ class TestFromAC_SubmitExtractions:
             ExtractedEntity(local_ref="e1", name="Alpha", entity_type=EntityType.CONCEPT),
             ExtractedEntity(local_ref="e2", name="Beta", entity_type=EntityType.CONCEPT),
         )
-        relation = ExtractedRelation(
-            source_ref="e1", target_ref="e2", relation_type=RelationType.RELATED_TO
-        )
+        relation = ExtractedRelation(source_ref="e1", target_ref="e2", relation_type=RelationType.RELATED_TO)
         store.submit_extractions("chunk-a", entities, (relation,))
-        edge_calls = [
-            c for c in mock_graph.add_evidence.call_args_list
-            if c[0][0].claim_type == EvidenceClaimType.EDGE
-        ]
+        edge_calls = [c for c in mock_graph.add_evidence.call_args_list if c[0][0].claim_type == EvidenceClaimType.EDGE]
         assert len(edge_calls) == 1
 
-    def test_evidence_ids_populated_with_all_evidence_records(
-        self, store: EnrichmentStore
-    ) -> None:
+    def test_evidence_ids_populated_with_all_evidence_records(self, store: EnrichmentStore) -> None:
         """evidence_ids tuple contains IDs for entity + edge evidence combined."""
         _claim_chunk(store, "chunk-a")
         entities = (
             ExtractedEntity(local_ref="e1", name="Alpha", entity_type=EntityType.CONCEPT),
             ExtractedEntity(local_ref="e2", name="Beta", entity_type=EntityType.CONCEPT),
         )
-        relation = ExtractedRelation(
-            source_ref="e1", target_ref="e2", relation_type=RelationType.RELATED_TO
-        )
+        relation = ExtractedRelation(source_ref="e1", target_ref="e2", relation_type=RelationType.RELATED_TO)
         result = store.submit_extractions("chunk-a", entities, (relation,))
         # 2 entity evidence + 1 edge evidence = 3
         assert len(result.evidence_ids) == 3
@@ -372,9 +349,7 @@ class TestFromAC_SubmitExtractions:
         _claim_chunk(store, "chunk-a")
         entity = ExtractedEntity(local_ref="e1", name="Alpha", entity_type=EntityType.CONCEPT)
         store.submit_extractions("chunk-a", (entity,), ())
-        row = db.execute(
-            "SELECT state, completed_at FROM enrich_queue WHERE chunk_id = ?", ("chunk-a",)
-        ).fetchone()
+        row = db.execute("SELECT state, completed_at FROM enrich_queue WHERE chunk_id = ?", ("chunk-a",)).fetchone()
         assert row["state"] == EnrichmentState.COMPLETED.value
         assert row["completed_at"] is not None
 
@@ -389,9 +364,7 @@ class TestFromAC_SubmitExtractions:
         assert isinstance(result, ExtractionResult)
         assert result.entity_ids == ()
         assert result.edge_ids == ()
-        row = db.execute(
-            "SELECT state FROM enrich_queue WHERE chunk_id = ?", ("chunk-a",)
-        ).fetchone()
+        row = db.execute("SELECT state FROM enrich_queue WHERE chunk_id = ?", ("chunk-a",)).fetchone()
         assert row["state"] == EnrichmentState.COMPLETED.value
 
     def test_state_transition_step4_occurs_only_after_graph_steps(
@@ -403,48 +376,36 @@ class TestFromAC_SubmitExtractions:
         entity = ExtractedEntity(local_ref="e1", name="Alpha", entity_type=EntityType.CONCEPT)
         with pytest.raises(RuntimeError):
             store.submit_extractions("chunk-a", (entity,), ())
-        row = db.execute(
-            "SELECT state FROM enrich_queue WHERE chunk_id = ?", ("chunk-a",)
-        ).fetchone()
+        row = db.execute("SELECT state FROM enrich_queue WHERE chunk_id = ?", ("chunk-a",)).fetchone()
         assert row["state"] != EnrichmentState.COMPLETED.value
 
     # ------------------------------------------------------------------
     # AC2 — LookupError if chunk not IN_PROGRESS
     # ------------------------------------------------------------------
 
-    def test_raises_lookup_error_if_chunk_not_in_queue(
-        self, store: EnrichmentStore
-    ) -> None:
+    def test_raises_lookup_error_if_chunk_not_in_queue(self, store: EnrichmentStore) -> None:
         """LookupError raised when chunk_id does not exist in enrich_queue at all."""
         entity = ExtractedEntity(local_ref="e1", name="Alpha", entity_type=EntityType.CONCEPT)
         with pytest.raises(LookupError):
             store.submit_extractions("no-such-chunk", (entity,), ())
 
-    def test_raises_lookup_error_if_chunk_is_pending(
-        self, store: EnrichmentStore
-    ) -> None:
+    def test_raises_lookup_error_if_chunk_is_pending(self, store: EnrichmentStore) -> None:
         """LookupError raised when chunk_id is in PENDING state (not yet claimed)."""
         store.enqueue_chunks(("chunk-pending",), "src-1")
         entity = ExtractedEntity(local_ref="e1", name="Alpha", entity_type=EntityType.CONCEPT)
         with pytest.raises(LookupError):
             store.submit_extractions("chunk-pending", (entity,), ())
 
-    def test_raises_lookup_error_if_chunk_is_completed(
-        self, store: EnrichmentStore, db: sqlite3.Connection
-    ) -> None:
+    def test_raises_lookup_error_if_chunk_is_completed(self, store: EnrichmentStore, db: sqlite3.Connection) -> None:
         """LookupError raised when chunk_id is already COMPLETED."""
         store.enqueue_chunks(("chunk-done",), "src-1")
-        db.execute(
-            "UPDATE enrich_queue SET state = 'completed' WHERE chunk_id = 'chunk-done'"
-        )
+        db.execute("UPDATE enrich_queue SET state = 'completed' WHERE chunk_id = 'chunk-done'")
         db.commit()
         entity = ExtractedEntity(local_ref="e1", name="Alpha", entity_type=EntityType.CONCEPT)
         with pytest.raises(LookupError):
             store.submit_extractions("chunk-done", (entity,), ())
 
-    def test_raises_lookup_error_if_chunk_is_failed(
-        self, store: EnrichmentStore
-    ) -> None:
+    def test_raises_lookup_error_if_chunk_is_failed(self, store: EnrichmentStore) -> None:
         """LookupError raised when chunk_id is in FAILED state."""
         store.enqueue_chunks(("chunk-fail",), "src-1")
         store.claim_batch(EnrichmentParams(batch_size=1, max_retries=1))
@@ -457,9 +418,7 @@ class TestFromAC_SubmitExtractions:
     # AC3 — ValueError if relation refs unresolved
     # ------------------------------------------------------------------
 
-    def test_raises_value_error_if_source_ref_not_in_entities(
-        self, store: EnrichmentStore
-    ) -> None:
+    def test_raises_value_error_if_source_ref_not_in_entities(self, store: EnrichmentStore) -> None:
         """ValueError raised when a relation source_ref is not among submitted entities."""
         _claim_chunk(store, "chunk-a")
         entities = (ExtractedEntity(local_ref="e1", name="Alpha", entity_type=EntityType.CONCEPT),)
@@ -471,9 +430,7 @@ class TestFromAC_SubmitExtractions:
         with pytest.raises(ValueError):
             store.submit_extractions("chunk-a", entities, (relation,))
 
-    def test_raises_value_error_if_target_ref_not_in_entities(
-        self, store: EnrichmentStore
-    ) -> None:
+    def test_raises_value_error_if_target_ref_not_in_entities(self, store: EnrichmentStore) -> None:
         """ValueError raised when a relation target_ref is not among submitted entities."""
         _claim_chunk(store, "chunk-a")
         entities = (ExtractedEntity(local_ref="e1", name="Alpha", entity_type=EntityType.CONCEPT),)
@@ -485,9 +442,7 @@ class TestFromAC_SubmitExtractions:
         with pytest.raises(ValueError):
             store.submit_extractions("chunk-a", entities, (relation,))
 
-    def test_raises_value_error_if_both_refs_unresolved(
-        self, store: EnrichmentStore
-    ) -> None:
+    def test_raises_value_error_if_both_refs_unresolved(self, store: EnrichmentStore) -> None:
         """ValueError raised when both source_ref and target_ref are unresolved."""
         _claim_chunk(store, "chunk-a")
         entities = (ExtractedEntity(local_ref="e1", name="Alpha", entity_type=EntityType.CONCEPT),)
@@ -523,7 +478,6 @@ class TestFromAC_SubmitExtractions:
 
 
 class TestFromAC_SuggestIntraDocEdges:
-
     @pytest.fixture()
     def suggest_store(self, db: sqlite3.Connection, mock_graph: MagicMock) -> EnrichmentStore:
         """Store with both enrich tables and content/graph evidence tables set up."""
@@ -536,9 +490,7 @@ class TestFromAC_SuggestIntraDocEdges:
     # AC4 — happy paths
     # ------------------------------------------------------------------
 
-    def test_returns_tuple_of_suggested_edges(
-        self, suggest_store: EnrichmentStore, db: sqlite3.Connection
-    ) -> None:
+    def test_returns_tuple_of_suggested_edges(self, suggest_store: EnrichmentStore, db: sqlite3.Connection) -> None:
         """suggest_intra_doc_edges returns a tuple."""
         _insert_chunk(db, "c1", "doc-1")
         _insert_chunk(db, "c2", "doc-1")
@@ -606,9 +558,7 @@ class TestFromAC_SuggestIntraDocEdges:
         _insert_entity_evidence(db, "ev2", "c1", "ent-B")
         _insert_entity_evidence(db, "ev3", "c2", "ent-A")  # only A in c2
         result = suggest_store.suggest_intra_doc_edges("doc-1")
-        pairs = [
-            frozenset({e.source_entity_id, e.target_entity_id}) for e in result
-        ]
+        pairs = [frozenset({e.source_entity_id, e.target_entity_id}) for e in result]
         assert frozenset({"ent-A", "ent-B"}) not in pairs
 
     def test_no_suggestions_when_no_entity_evidence_in_document(
@@ -690,9 +640,7 @@ class TestFromAC_SuggestIntraDocEdges:
         _insert_entity_evidence(db, "d2ev3", "d2c1", "ent-D")
         _insert_entity_evidence(db, "d2ev4", "d2c2", "ent-D")
         result = suggest_store.suggest_intra_doc_edges("doc-1")
-        pairs = [
-            frozenset({e.source_entity_id, e.target_entity_id}) for e in result
-        ]
+        pairs = [frozenset({e.source_entity_id, e.target_entity_id}) for e in result]
         assert frozenset({"ent-C", "ent-D"}) not in pairs
         assert result == ()
 
@@ -700,16 +648,12 @@ class TestFromAC_SuggestIntraDocEdges:
     # AC5 — LookupError for unknown document
     # ------------------------------------------------------------------
 
-    def test_raises_lookup_error_for_document_with_no_chunks(
-        self, suggest_store: EnrichmentStore
-    ) -> None:
+    def test_raises_lookup_error_for_document_with_no_chunks(self, suggest_store: EnrichmentStore) -> None:
         """LookupError raised if document_id has no rows in content_chunks."""
         with pytest.raises(LookupError):
             suggest_store.suggest_intra_doc_edges("no-such-doc")
 
-    def test_raises_lookup_error_not_empty_tuple_for_unknown_document(
-        self, suggest_store: EnrichmentStore
-    ) -> None:
+    def test_raises_lookup_error_not_empty_tuple_for_unknown_document(self, suggest_store: EnrichmentStore) -> None:
         """Confirm the raised exception is exactly LookupError, not a subclass or silent return."""
         exc: LookupError | None = None
         try:
@@ -725,7 +669,6 @@ class TestFromAC_SuggestIntraDocEdges:
 
 
 class TestFromAC_PurgeSource:
-
     def test_returns_enrichment_purge_result(self, store: EnrichmentStore) -> None:
         """purge_source returns an EnrichmentPurgeResult instance."""
         result = store.purge_source("src-unknown")
@@ -736,17 +679,13 @@ class TestFromAC_PurgeSource:
         result = store.purge_source("src-xyz")
         assert result.source_id == "src-xyz"
 
-    def test_purge_removes_enqueue_queue_items_for_source(
-        self, store: EnrichmentStore, db: sqlite3.Connection
-    ) -> None:
+    def test_purge_removes_enqueue_queue_items_for_source(self, store: EnrichmentStore, db: sqlite3.Connection) -> None:
         """purge_source deletes enrich_queue rows with matching source_id."""
         store.enqueue_chunks(("c1", "c2"), "src-A")
         store.enqueue_chunks(("c3",), "src-B")
         result = store.purge_source("src-A")
         assert result.queue_items_removed == 2
-        remaining = db.execute(
-            "SELECT COUNT(*) AS n FROM enrich_queue WHERE source_id = 'src-A'"
-        ).fetchone()["n"]
+        remaining = db.execute("SELECT COUNT(*) AS n FROM enrich_queue WHERE source_id = 'src-A'").fetchone()["n"]
         assert remaining == 0
 
     def test_purge_does_not_remove_other_source_queue_items(
@@ -756,14 +695,10 @@ class TestFromAC_PurgeSource:
         store.enqueue_chunks(("c1",), "src-A")
         store.enqueue_chunks(("c2",), "src-B")
         store.purge_source("src-A")
-        remaining = db.execute(
-            "SELECT COUNT(*) AS n FROM enrich_queue WHERE source_id = 'src-B'"
-        ).fetchone()["n"]
+        remaining = db.execute("SELECT COUNT(*) AS n FROM enrich_queue WHERE source_id = 'src-B'").fetchone()["n"]
         assert remaining == 1
 
-    def test_purge_removes_enrich_extractions_for_source(
-        self, store: EnrichmentStore, db: sqlite3.Connection
-    ) -> None:
+    def test_purge_removes_enrich_extractions_for_source(self, store: EnrichmentStore, db: sqlite3.Connection) -> None:
         """purge_source deletes enrich_extractions rows with matching source_id."""
         now = datetime.now(tz=UTC).isoformat()
         db.execute(
@@ -777,9 +712,7 @@ class TestFromAC_PurgeSource:
         db.commit()
         result = store.purge_source("src-A")
         assert result.extractions_removed == 1
-        remaining = db.execute(
-            "SELECT COUNT(*) AS n FROM enrich_extractions WHERE source_id = 'src-A'"
-        ).fetchone()["n"]
+        remaining = db.execute("SELECT COUNT(*) AS n FROM enrich_extractions WHERE source_id = 'src-A'").fetchone()["n"]
         assert remaining == 0
 
     def test_purge_returns_zero_counts_for_unknown_source(self, store: EnrichmentStore) -> None:
@@ -788,9 +721,7 @@ class TestFromAC_PurgeSource:
         assert result.queue_items_removed == 0
         assert result.extractions_removed == 0
 
-    def test_purge_is_idempotent(
-        self, store: EnrichmentStore
-    ) -> None:
+    def test_purge_is_idempotent(self, store: EnrichmentStore) -> None:
         """Second purge_source call for same source returns zeros — idempotent."""
         store.enqueue_chunks(("c1",), "src-A")
         store.purge_source("src-A")
@@ -805,28 +736,21 @@ class TestFromAC_PurgeSource:
 
 
 class TestFromAC_EnsureTables:
-
-    def test_enrich_extractions_table_is_created(
-        self, initialised_db: sqlite3.Connection
-    ) -> None:
+    def test_enrich_extractions_table_is_created(self, initialised_db: sqlite3.Connection) -> None:
         """ensure_tables creates the enrich_extractions table."""
         row = initialised_db.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='enrich_extractions'"
         ).fetchone()
         assert row is not None
 
-    def test_enrich_extractions_has_required_columns(
-        self, initialised_db: sqlite3.Connection
-    ) -> None:
+    def test_enrich_extractions_has_required_columns(self, initialised_db: sqlite3.Connection) -> None:
         """enrich_extractions has all required columns per AC7."""
         pragma = initialised_db.execute("PRAGMA table_info(enrich_extractions)").fetchall()
         col_names = {row["name"] for row in pragma}
         required = {"id", "chunk_id", "source_id", "batch_id", "entity_count", "edge_count", "submitted_at"}
         assert required.issubset(col_names)
 
-    def test_index_on_source_id_exists(
-        self, initialised_db: sqlite3.Connection
-    ) -> None:
+    def test_index_on_source_id_exists(self, initialised_db: sqlite3.Connection) -> None:
         """enrich_extractions has an index on source_id."""
         indexes = initialised_db.execute(
             "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='enrich_extractions'"
@@ -835,9 +759,7 @@ class TestFromAC_EnsureTables:
         has_source_idx = any("source_id" in name for name in index_names)
         assert has_source_idx, f"No source_id index found in {index_names}"
 
-    def test_index_on_chunk_id_exists(
-        self, initialised_db: sqlite3.Connection
-    ) -> None:
+    def test_index_on_chunk_id_exists(self, initialised_db: sqlite3.Connection) -> None:
         """enrich_extractions has an index on chunk_id."""
         indexes = initialised_db.execute(
             "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='enrich_extractions'"
@@ -846,24 +768,18 @@ class TestFromAC_EnsureTables:
         has_chunk_idx = any("chunk_id" in name for name in index_names)
         assert has_chunk_idx, f"No chunk_id index found in {index_names}"
 
-    def test_ensure_tables_is_idempotent(
-        self, store: EnrichmentStore
-    ) -> None:
+    def test_ensure_tables_is_idempotent(self, store: EnrichmentStore) -> None:
         """Calling ensure_tables twice does not raise."""
         store.ensure_tables()  # second call
 
-    def test_enrich_queue_table_still_present_after_ensure_tables(
-        self, initialised_db: sqlite3.Connection
-    ) -> None:
+    def test_enrich_queue_table_still_present_after_ensure_tables(self, initialised_db: sqlite3.Connection) -> None:
         """ensure_tables leaves existing enrich_queue table intact."""
         row = initialised_db.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='enrich_queue'"
         ).fetchone()
         assert row is not None
 
-    def test_enrich_batches_table_still_present_after_ensure_tables(
-        self, initialised_db: sqlite3.Connection
-    ) -> None:
+    def test_enrich_batches_table_still_present_after_ensure_tables(self, initialised_db: sqlite3.Connection) -> None:
         """ensure_tables leaves existing enrich_batches table intact."""
         row = initialised_db.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='enrich_batches'"
@@ -874,9 +790,7 @@ class TestFromAC_EnsureTables:
     # AC7 — column-level index verification (stronger than name-match)
     # ------------------------------------------------------------------
 
-    def test_source_id_index_covers_source_id_column(
-        self, initialised_db: sqlite3.Connection
-    ) -> None:
+    def test_source_id_index_covers_source_id_column(self, initialised_db: sqlite3.Connection) -> None:
         """At least one index on enrich_extractions physically covers the source_id column.
 
         Reads the CREATE INDEX DDL from sqlite_master to verify the actual indexed column,
@@ -899,9 +813,7 @@ class TestFromAC_EnsureTables:
             f"No index DDL on enrich_extractions covers source_id column; DDLs: {[r['sql'] for r in ddls]}"
         )
 
-    def test_chunk_id_index_covers_chunk_id_column(
-        self, initialised_db: sqlite3.Connection
-    ) -> None:
+    def test_chunk_id_index_covers_chunk_id_column(self, initialised_db: sqlite3.Connection) -> None:
         """At least one index on enrich_extractions physically covers the chunk_id column.
 
         Reads the CREATE INDEX DDL from sqlite_master to verify the actual indexed column,

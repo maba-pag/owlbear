@@ -149,7 +149,6 @@ def coordinator(
 
 
 class TestFromAC_FetchErrorPropagation:
-
     # ------------------------------------------------------------------
     # AC1 — FetchErrors mapped to RefreshErrors in RefreshResult.errors
     # ------------------------------------------------------------------

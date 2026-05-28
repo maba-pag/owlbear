@@ -87,14 +87,8 @@ class EnrichmentStore(EnrichmentStoreProtocol):
             )
             """
         )
-        self._db.execute(
-            "CREATE INDEX IF NOT EXISTS idx_enrich_extractions_source_id "
-            "ON enrich_extractions(source_id)"
-        )
-        self._db.execute(
-            "CREATE INDEX IF NOT EXISTS idx_enrich_extractions_chunk_id "
-            "ON enrich_extractions(chunk_id)"
-        )
+        self._db.execute("CREATE INDEX IF NOT EXISTS idx_enrich_extractions_source_id ON enrich_extractions(source_id)")
+        self._db.execute("CREATE INDEX IF NOT EXISTS idx_enrich_extractions_chunk_id ON enrich_extractions(chunk_id)")
         self._db.commit()
 
     def enqueue_chunks(self, chunk_ids: tuple[str, ...], source_id: str) -> int:
@@ -188,9 +182,7 @@ class EnrichmentStore(EnrichmentStoreProtocol):
           - When a legacy ``chunks`` table exists, matching rows are synced
             best-effort to keep mixed-schema deployments consistent.
         """
-        normalized_chunk_ids = tuple(
-            chunk_id.strip() for chunk_id in (chunk_ids or ()) if chunk_id.strip()
-        )
+        normalized_chunk_ids = tuple(chunk_id.strip() for chunk_id in (chunk_ids or ()) if chunk_id.strip())
         normalized_scopes = tuple(scope.strip() for scope in (scopes or ()) if scope.strip())
         normalized_limit = self._normalize_reset_limit(limit)
 
@@ -340,11 +332,7 @@ class EnrichmentStore(EnrichmentStoreProtocol):
 
             attempts = int(row["attempts"]) + 1
             max_retries = int(row["max_retries"])
-            next_state = (
-                EnrichmentState.FAILED
-                if attempts >= max_retries
-                else EnrichmentState.PENDING
-            )
+            next_state = EnrichmentState.FAILED if attempts >= max_retries else EnrichmentState.PENDING
             started_at = None if next_state == EnrichmentState.PENDING else str(row["started_at"])
 
             self._db.execute(
@@ -413,9 +401,7 @@ class EnrichmentStore(EnrichmentStoreProtocol):
             source_entity_id = local_ref_to_entity_id.get(relation.source_ref)
             target_entity_id = local_ref_to_entity_id.get(relation.target_ref)
             if source_entity_id is None or target_entity_id is None:
-                msg = (
-                    "relation reference must match submitted entity local_ref values"
-                )
+                msg = "relation reference must match submitted entity local_ref values"
                 raise ValueError(msg)
             resolved_relations.append((relation, source_entity_id, target_entity_id))
 
@@ -532,9 +518,7 @@ class EnrichmentStore(EnrichmentStoreProtocol):
                     target_entity_id=target_id,
                     relation_type=RelationType.RELATED_TO,
                     confidence=shared_chunks / total_chunks,
-                    reason=(
-                        f"co-occurred in {shared_chunks} of {total_chunks} chunks"
-                    ),
+                    reason=(f"co-occurred in {shared_chunks} of {total_chunks} chunks"),
                 )
             )
 
@@ -601,9 +585,7 @@ class EnrichmentStore(EnrichmentStoreProtocol):
 
         if scopes and self._table_exists("content_chunks"):
             joins.append("JOIN content_chunks AS c ON c.id = q.chunk_id")
-            predicates.append(
-                "COALESCE(c.scope, 'global') IN (SELECT value FROM json_each(?))"
-            )
+            predicates.append("COALESCE(c.scope, 'global') IN (SELECT value FROM json_each(?))")
             params.append(json.dumps(scopes))
 
         if not joins and not scopes:

@@ -42,12 +42,8 @@ class TestFromAC_SourceFetcherWiring:
     def test_app_lifespan_constructs_composite_fetcher_wired_to_coordinator(self) -> None:
         """app_lifespan must construct CompositeSourceFetcher and pass fetcher= to IngestCoordinator (AC1)."""
         src = inspect.getsource(server.app_lifespan)
-        assert "CompositeSourceFetcher" in src, (
-            "CompositeSourceFetcher not constructed in app_lifespan"
-        )
-        assert "fetcher=" in src, (
-            "fetcher= argument not passed to IngestCoordinator in app_lifespan"
-        )
+        assert "CompositeSourceFetcher" in src, "CompositeSourceFetcher not constructed in app_lifespan"
+        assert "fetcher=" in src, "fetcher= argument not passed to IngestCoordinator in app_lifespan"
 
     @pytest.mark.asyncio
     async def test_app_lifespan_uses_exact_fetcher_kwargs_and_handoff_to_coordinator(self) -> None:
@@ -143,16 +139,12 @@ class TestFromAC_SourceFetcherWiring:
 
         result = await knowledge_sources_refresh(ctx, source_id="my-src-42")
 
-        assert result["source_id"] == "my-src-42", (
-            f"source_id not echoed: {result['source_id']!r}"
-        )
+        assert result["source_id"] == "my-src-42", f"source_id not echoed: {result['source_id']!r}"
         assert result["sources_refreshed"] == 5, (
             f"sources_refreshed must equal RefreshResult.sources_refreshed=5, got {result['sources_refreshed']!r}"
         )
         assert result["errors"] == [], f"errors should be empty list, got {result['errors']!r}"
-        ingest_coordinator.refresh.assert_called_once_with(
-            RefreshRequest(source_ids=("my-src-42",))
-        )
+        ingest_coordinator.refresh.assert_called_once_with(RefreshRequest(source_ids=("my-src-42",)))
 
     @pytest.mark.asyncio
     async def test_refresh_handler_serializes_refresh_errors_with_all_fields(self) -> None:
@@ -184,9 +176,7 @@ class TestFromAC_SourceFetcherWiring:
         err = result["errors"][0]
         assert err["source_id"] == "src-err"
         assert err["error"] == "fetch failed"
-        assert isinstance(err["timestamp"], str), (
-            "timestamp must be serialized to str via model_dump(mode='json')"
-        )
+        assert isinstance(err["timestamp"], str), "timestamp must be serialized to str via model_dump(mode='json')"
 
     # -----------------------------------------------------------------------
     # AC3 — AppContext field removal
@@ -195,12 +185,8 @@ class TestFromAC_SourceFetcherWiring:
     def test_appcontext_has_no_source_store_or_refresh_orchestrator(self) -> None:
         """AppContext must not have source_store or refresh_orchestrator fields (AC3)."""
         field_names = {f.name for f in dataclasses.fields(AppContext)}
-        assert "refresh_orchestrator" not in field_names, (
-            "refresh_orchestrator still present in AppContext"
-        )
-        assert "source_store" not in field_names, (
-            "source_store still present in AppContext"
-        )
+        assert "refresh_orchestrator" not in field_names, "refresh_orchestrator still present in AppContext"
+        assert "source_store" not in field_names, "source_store still present in AppContext"
 
     # -----------------------------------------------------------------------
     # AC4 — No legacy imports in server.py
@@ -210,15 +196,9 @@ class TestFromAC_SourceFetcherWiring:
         """server.py must not import KnowledgeSourceStore, RefreshOrchestrator, or IngestPipeline (AC4)."""
         server_file = Path(inspect.getfile(server))
         server_source = server_file.read_text(encoding="utf-8")
-        assert "KnowledgeSourceStore" not in server_source, (
-            "KnowledgeSourceStore still imported in server.py"
-        )
-        assert "RefreshOrchestrator" not in server_source, (
-            "RefreshOrchestrator still imported in server.py"
-        )
-        assert "IngestPipeline" not in server_source, (
-            "IngestPipeline still imported in server.py"
-        )
+        assert "KnowledgeSourceStore" not in server_source, "KnowledgeSourceStore still imported in server.py"
+        assert "RefreshOrchestrator" not in server_source, "RefreshOrchestrator still imported in server.py"
+        assert "IngestPipeline" not in server_source, "IngestPipeline still imported in server.py"
 
     # -----------------------------------------------------------------------
     # AC5 — ToolError when source not found; full envelope when not ACTIVE
@@ -259,18 +239,14 @@ class TestFromAC_SourceFetcherWiring:
 
         result = await knowledge_sources_refresh(ctx, source_id="src-inactive")
 
-        assert result["source_id"] == "src-inactive", (
-            f"source_id not echoed in envelope: {result.get('source_id')!r}"
-        )
+        assert result["source_id"] == "src-inactive", f"source_id not echoed in envelope: {result.get('source_id')!r}"
         assert result["sources_refreshed"] == 0, (
             f"sources_refreshed must be 0 for non-ACTIVE source, got {result.get('sources_refreshed')!r}"
         )
         errors = result.get("errors", [])
         assert len(errors) == 1, f"expected 1 error entry in envelope, got {len(errors)}"
         err = errors[0]
-        assert err["source_id"] == "src-inactive", (
-            f"error source_id not echoed: {err.get('source_id')!r}"
-        )
+        assert err["source_id"] == "src-inactive", f"error source_id not echoed: {err.get('source_id')!r}"
         assert isinstance(err["error"], str), "error field must be a string"
         assert len(err["error"]) > 0, "error field must be non-empty"
         assert isinstance(err["timestamp"], str), "timestamp must be an ISO datetime string"

@@ -138,9 +138,7 @@ def mock_graph() -> MagicMock:
 @pytest.fixture()
 def mock_fetcher() -> MagicMock:
     f = MagicMock(name="fetcher")
-    f.fetch_source = AsyncMock(
-        return_value=FetchResult(documents=(_make_fetched_doc(),))
-    )
+    f.fetch_source = AsyncMock(return_value=FetchResult(documents=(_make_fetched_doc(),)))
     return f
 
 
@@ -251,9 +249,7 @@ class TestFromAC_RefreshImplementation:
         assert result.sources_refreshed == 0
 
     @pytest.mark.asyncio
-    async def test_refresh_without_fetcher_errors_is_empty(
-        self, coordinator_no_fetcher: IngestCoordinator
-    ) -> None:
+    async def test_refresh_without_fetcher_errors_is_empty(self, coordinator_no_fetcher: IngestCoordinator) -> None:
         result = await coordinator_no_fetcher.refresh(RefreshRequest())
         assert len(result.errors) == 0
 
@@ -295,9 +291,7 @@ class TestFromAC_RefreshImplementation:
         mock_fetcher: MagicMock,
     ) -> None:
         """Sources with refreshable=False are skipped when force=False."""
-        mock_sources.list_sources.return_value = (
-            _make_source("src-nr", refreshable=False),
-        )
+        mock_sources.list_sources.return_value = (_make_source("src-nr", refreshable=False),)
         await coordinator.refresh(RefreshRequest(force=False))
         mock_fetcher.fetch_source.assert_not_called()
 
@@ -309,9 +303,7 @@ class TestFromAC_RefreshImplementation:
         mock_fetcher: MagicMock,
     ) -> None:
         """force=True bypasses the refreshable=False filter."""
-        mock_sources.list_sources.return_value = (
-            _make_source("src-nr", refreshable=False),
-        )
+        mock_sources.list_sources.return_value = (_make_source("src-nr", refreshable=False),)
         await coordinator.refresh(RefreshRequest(force=True))
         mock_fetcher.fetch_source.assert_called_once()
 
@@ -411,9 +403,7 @@ class TestFromAC_RefreshImplementation:
         mock_fetcher: MagicMock,
     ) -> None:
         mock_fetcher.fetch_source = AsyncMock(
-            return_value=FetchResult(
-                documents=(_make_fetched_doc(uri="https://docs.example.com/page"),)
-            )
+            return_value=FetchResult(documents=(_make_fetched_doc(uri="https://docs.example.com/page"),))
         )
         await coordinator.refresh(RefreshRequest())
         req: IngestRequest = coordinator.ingest.call_args.args[0]
@@ -426,9 +416,7 @@ class TestFromAC_RefreshImplementation:
         mock_fetcher: MagicMock,
     ) -> None:
         mock_fetcher.fetch_source = AsyncMock(
-            return_value=FetchResult(
-                documents=(_make_fetched_doc(external_id="ext-99"),)
-            )
+            return_value=FetchResult(documents=(_make_fetched_doc(external_id="ext-99"),))
         )
         await coordinator.refresh(RefreshRequest())
         req: IngestRequest = coordinator.ingest.call_args.args[0]
@@ -441,9 +429,7 @@ class TestFromAC_RefreshImplementation:
         mock_fetcher: MagicMock,
     ) -> None:
         mock_fetcher.fetch_source = AsyncMock(
-            return_value=FetchResult(
-                documents=(_make_fetched_doc(external_id=None),)
-            )
+            return_value=FetchResult(documents=(_make_fetched_doc(external_id=None),))
         )
         await coordinator.refresh(RefreshRequest())
         req: IngestRequest = coordinator.ingest.call_args.args[0]
@@ -456,9 +442,7 @@ class TestFromAC_RefreshImplementation:
         mock_fetcher: MagicMock,
     ) -> None:
         mock_fetcher.fetch_source = AsyncMock(
-            return_value=FetchResult(
-                documents=(_make_fetched_doc(metadata={"lang": "en", "page": 3}),)
-            )
+            return_value=FetchResult(documents=(_make_fetched_doc(metadata={"lang": "en", "page": 3}),))
         )
         await coordinator.refresh(RefreshRequest())
         req: IngestRequest = coordinator.ingest.call_args.args[0]
@@ -470,10 +454,7 @@ class TestFromAC_RefreshImplementation:
         coordinator: IngestCoordinator,
         mock_fetcher: MagicMock,
     ) -> None:
-        docs = tuple(
-            _make_fetched_doc(title=f"Doc {i}", external_id=f"ext-{i}")
-            for i in range(3)
-        )
+        docs = tuple(_make_fetched_doc(title=f"Doc {i}", external_id=f"ext-{i}") for i in range(3))
         mock_fetcher.fetch_source = AsyncMock(return_value=FetchResult(documents=docs))
         await coordinator.refresh(RefreshRequest())
         req: IngestRequest = coordinator.ingest.call_args.args[0]
@@ -492,9 +473,7 @@ class TestFromAC_RefreshImplementation:
         coordinator: IngestCoordinator,
         mock_fetcher: MagicMock,
     ) -> None:
-        mock_fetcher.fetch_source = AsyncMock(
-            return_value=FetchResult(documents=(_make_fetched_doc(),))
-        )
+        mock_fetcher.fetch_source = AsyncMock(return_value=FetchResult(documents=(_make_fetched_doc(),)))
         await coordinator.refresh(RefreshRequest())
         coordinator.ingest.assert_called_once()
 
@@ -553,9 +532,7 @@ class TestFromAC_RefreshImplementation:
         mock_fetcher: MagicMock,
     ) -> None:
         mock_sources.list_sources.return_value = (_make_source("src-1"),)
-        mock_fetcher.fetch_source = AsyncMock(
-            return_value=FetchResult(documents=(_make_fetched_doc(),))
-        )
+        mock_fetcher.fetch_source = AsyncMock(return_value=FetchResult(documents=(_make_fetched_doc(),)))
         await coordinator.refresh(RefreshRequest())
         mock_sources.update_source.assert_called_once()
         assert mock_sources.update_source.call_args.args[0] == "src-1"
@@ -710,9 +687,7 @@ class TestFromAC_RefreshImplementation:
             RuntimeError("src-a ingest failed"),
             _make_ingest_result("src-b"),
         ]
-        mock_fetcher.fetch_source = AsyncMock(
-            return_value=FetchResult(documents=(_make_fetched_doc(),))
-        )
+        mock_fetcher.fetch_source = AsyncMock(return_value=FetchResult(documents=(_make_fetched_doc(),)))
         result = await coordinator.refresh(RefreshRequest())
         assert len(result.errors) == 1
         assert result.errors[0].source_id == "src-a"
@@ -788,9 +763,7 @@ class TestFromAC_RefreshImplementation:
         )
         result_a = _make_ingest_result("src-a")
         coordinator.ingest.side_effect = [result_a, RuntimeError("src-b ingest failed")]
-        mock_fetcher.fetch_source = AsyncMock(
-            return_value=FetchResult(documents=(_make_fetched_doc(),))
-        )
+        mock_fetcher.fetch_source = AsyncMock(return_value=FetchResult(documents=(_make_fetched_doc(),)))
         result = await coordinator.refresh(RefreshRequest())
         assert len(result.ingest_results) == 1
         assert result.ingest_results[0].source_id == "src-a"

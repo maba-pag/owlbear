@@ -103,15 +103,9 @@ class SqliteGraphStore(GraphStore):
             )
             """
         )
-        self._conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_graph_evidence_chunk_id ON graph_evidence(chunk_id)"
-        )
-        self._conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_graph_evidence_entity_id ON graph_evidence(entity_id)"
-        )
-        self._conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_graph_evidence_edge_id ON graph_evidence(edge_id)"
-        )
+        self._conn.execute("CREATE INDEX IF NOT EXISTS idx_graph_evidence_chunk_id ON graph_evidence(chunk_id)")
+        self._conn.execute("CREATE INDEX IF NOT EXISTS idx_graph_evidence_entity_id ON graph_evidence(entity_id)")
+        self._conn.execute("CREATE INDEX IF NOT EXISTS idx_graph_evidence_edge_id ON graph_evidence(edge_id)")
         self._conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_graph_aliases_canonical_alias ON graph_aliases(canonical_alias)"
         )
@@ -508,19 +502,9 @@ class SqliteGraphStore(GraphStore):
 
             invalidated_evidence_ids = tuple(str(row["id"]) for row in deleted_rows)
             candidate_entity_ids = sorted(
-                {
-                    str(row["entity_id"])
-                    for row in deleted_rows
-                    if row["entity_id"] is not None
-                }
+                {str(row["entity_id"]) for row in deleted_rows if row["entity_id"] is not None}
             )
-            candidate_edge_ids = sorted(
-                {
-                    str(row["edge_id"])
-                    for row in deleted_rows
-                    if row["edge_id"] is not None
-                }
-            )
+            candidate_edge_ids = sorted({str(row["edge_id"]) for row in deleted_rows if row["edge_id"] is not None})
 
             self._conn.execute(
                 """

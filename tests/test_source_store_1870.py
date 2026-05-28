@@ -234,16 +234,12 @@ class TestFromAC_RegisterWish:
         assert isinstance(result, WishedSourceRecord)
         assert result.expected_kind == SourceKind.URL_LIST
 
-    def test_raises_value_error_when_active_source_same_name_scope(
-        self, store: SqliteSourceStore
-    ) -> None:
+    def test_raises_value_error_when_active_source_same_name_scope(self, store: SqliteSourceStore) -> None:
         store.register_source(_file_registration(name="conflict", scope="global"))
         with pytest.raises(ValueError):
             store.register_wish(SourceWish(name="conflict", scope="global"))
 
-    def test_does_not_raise_for_inactive_source_same_name_scope(
-        self, store: SqliteSourceStore
-    ) -> None:
+    def test_does_not_raise_for_inactive_source_same_name_scope(self, store: SqliteSourceStore) -> None:
         # INACTIVE source — wish should NOT raise (only ACTIVE blocks)
         rec = store.register_source(_file_registration(name="sleeping", scope="global"))
         store.update_source(rec.id, SourceUpdate(state=SourceState.INACTIVE))
@@ -414,6 +410,7 @@ class TestFromAC_UpdateSource:
 class TestFromAC_DeleteSource:
     def test_returns_source_deletion_info(self, store: SqliteSourceStore) -> None:
         from owlbear_knowledge.protocols.sources import SourceDeletionInfo
+
         rec = store.register_source(_file_registration())
         result = store.delete_source(rec.id)
         assert isinstance(result, SourceDeletionInfo)
@@ -497,9 +494,7 @@ class TestFromAC_RecordHealth:
 
     def test_last_error_stored_from_message(self, store: SqliteSourceStore) -> None:
         rec = store.register_source(_file_registration())
-        report = SourceHealthReport(
-            health=SourceHealth.FAILED, message="connection refused", checked_at=_now()
-        )
+        report = SourceHealthReport(health=SourceHealth.FAILED, message="connection refused", checked_at=_now())
         store.record_health(rec.id, report)
         retrieved = store.get_source(rec.id)
         assert isinstance(retrieved, ConfiguredSourceRecord)
@@ -527,6 +522,7 @@ class TestFromAC_RecordHealth:
 class TestFromAC_Stats:
     def test_returns_source_stats(self, store: SqliteSourceStore) -> None:
         from owlbear_knowledge.protocols.sources import SourceStats
+
         result = store.stats()
         assert isinstance(result, SourceStats)
 
@@ -582,9 +578,7 @@ class TestFromAC_Stats:
 
 
 class TestFromAC_EnsureTables:
-    def test_ensure_tables_creates_schema_without_error(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    def test_ensure_tables_creates_schema_without_error(self, conn: sqlite3.Connection) -> None:
         s = SqliteSourceStore(conn)
         s.ensure_tables()  # must not raise
 
@@ -593,14 +587,10 @@ class TestFromAC_EnsureTables:
         s.ensure_tables()
         s.ensure_tables()  # second call must not raise
 
-    def test_source_registry_table_exists_after_ensure_tables(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    def test_source_registry_table_exists_after_ensure_tables(self, conn: sqlite3.Connection) -> None:
         s = SqliteSourceStore(conn)
         s.ensure_tables()
-        cursor = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'source_%'"
-        )
+        cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'source_%'")
         tables = {row[0] for row in cursor.fetchall()}
         assert tables, "Expected at least one source_* table to be created"
 

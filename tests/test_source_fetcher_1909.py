@@ -11,6 +11,7 @@ AC coverage:
   AC6 — Cancellation: cancel.is_set()=True between items stops iteration, partial results returned
   AC7 — Item-level exceptions caught as FetchError(uri=..., error=str(exc)); never raises
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -148,9 +149,7 @@ class TestFromAC_CompositeSourceFetcher:
     # AC1 — Protocol conformance                                           #
     # ------------------------------------------------------------------ #
 
-    def test_isinstance_source_fetcher_protocol(
-        self, composite: CompositeSourceFetcher
-    ) -> None:
+    def test_isinstance_source_fetcher_protocol(self, composite: CompositeSourceFetcher) -> None:
         """CompositeSourceFetcher must satisfy the SourceFetcher runtime protocol."""
         assert isinstance(composite, SourceFetcher)
 
@@ -159,9 +158,7 @@ class TestFromAC_CompositeSourceFetcher:
     # ------------------------------------------------------------------ #
 
     @pytest.mark.asyncio
-    async def test_url_list_single_url_returns_one_document(
-        self, composite: CompositeSourceFetcher
-    ) -> None:
+    async def test_url_list_single_url_returns_one_document(self, composite: CompositeSourceFetcher) -> None:
         url = "https://example.com/page"
         source = _url_source((url,))
         with patch(
@@ -173,9 +170,7 @@ class TestFromAC_CompositeSourceFetcher:
         assert len(result.documents) == 1
 
     @pytest.mark.asyncio
-    async def test_url_list_document_title_equals_url(
-        self, composite: CompositeSourceFetcher
-    ) -> None:
+    async def test_url_list_document_title_equals_url(self, composite: CompositeSourceFetcher) -> None:
         url = "https://example.com/page"
         source = _url_source((url,))
         with patch(
@@ -187,9 +182,7 @@ class TestFromAC_CompositeSourceFetcher:
         assert result.documents[0].title == url
 
     @pytest.mark.asyncio
-    async def test_url_list_document_text_equals_fetched_content(
-        self, composite: CompositeSourceFetcher
-    ) -> None:
+    async def test_url_list_document_text_equals_fetched_content(self, composite: CompositeSourceFetcher) -> None:
         url = "https://example.com/article"
         source = _url_source((url,))
         with patch(
@@ -201,9 +194,7 @@ class TestFromAC_CompositeSourceFetcher:
         assert result.documents[0].text == "article body"
 
     @pytest.mark.asyncio
-    async def test_url_list_document_uri_equals_url(
-        self, composite: CompositeSourceFetcher
-    ) -> None:
+    async def test_url_list_document_uri_equals_url(self, composite: CompositeSourceFetcher) -> None:
         url = "https://example.com/resource"
         source = _url_source((url,))
         with patch(
@@ -215,9 +206,7 @@ class TestFromAC_CompositeSourceFetcher:
         assert result.documents[0].uri == url
 
     @pytest.mark.asyncio
-    async def test_url_list_multiple_urls_returns_one_document_per_url(
-        self, composite: CompositeSourceFetcher
-    ) -> None:
+    async def test_url_list_multiple_urls_returns_one_document_per_url(self, composite: CompositeSourceFetcher) -> None:
         urls = (
             "https://example.com/a",
             "https://example.com/b",
@@ -233,9 +222,7 @@ class TestFromAC_CompositeSourceFetcher:
         assert len(result.documents) == 3
 
     @pytest.mark.asyncio
-    async def test_url_list_empty_urls_returns_empty_fetch_result(
-        self, composite: CompositeSourceFetcher
-    ) -> None:
+    async def test_url_list_empty_urls_returns_empty_fetch_result(self, composite: CompositeSourceFetcher) -> None:
         source = _url_source(())
         result = await composite.fetch_source(source)
         assert isinstance(result, FetchResult)
@@ -243,9 +230,7 @@ class TestFromAC_CompositeSourceFetcher:
         assert len(result.errors) == 0
 
     @pytest.mark.asyncio
-    async def test_url_list_failed_url_captured_as_fetch_error(
-        self, composite: CompositeSourceFetcher
-    ) -> None:
+    async def test_url_list_failed_url_captured_as_fetch_error(self, composite: CompositeSourceFetcher) -> None:
         url = "https://bad.example.com/missing"
         source = _url_source((url,))
         exc = httpx.HTTPStatusError(
@@ -264,9 +249,7 @@ class TestFromAC_CompositeSourceFetcher:
         assert isinstance(result.errors[0], FetchError)
 
     @pytest.mark.asyncio
-    async def test_url_list_fetch_error_uri_equals_failed_url(
-        self, composite: CompositeSourceFetcher
-    ) -> None:
+    async def test_url_list_fetch_error_uri_equals_failed_url(self, composite: CompositeSourceFetcher) -> None:
         url = "https://bad.example.com/missing"
         source = _url_source((url,))
         exc = httpx.HTTPStatusError(
@@ -283,9 +266,7 @@ class TestFromAC_CompositeSourceFetcher:
         assert result.errors[0].uri == url
 
     @pytest.mark.asyncio
-    async def test_url_list_fetch_error_message_equals_str_exception(
-        self, composite: CompositeSourceFetcher
-    ) -> None:
+    async def test_url_list_fetch_error_message_equals_str_exception(self, composite: CompositeSourceFetcher) -> None:
         url = "https://bad.example.com/timeout"
         source = _url_source((url,))
         exc = httpx.HTTPStatusError(
@@ -302,9 +283,7 @@ class TestFromAC_CompositeSourceFetcher:
         assert result.errors[0].error == str(exc)
 
     @pytest.mark.asyncio
-    async def test_url_list_batch_continues_after_url_failure(
-        self, composite: CompositeSourceFetcher
-    ) -> None:
+    async def test_url_list_batch_continues_after_url_failure(self, composite: CompositeSourceFetcher) -> None:
         url_bad = "https://bad.example.com/fail"
         url_good = "https://example.com/ok"
         source = _url_source((url_bad, url_good))
@@ -346,9 +325,7 @@ class TestFromAC_CompositeSourceFetcher:
         assert result.documents[0].text == "report content here"
 
     @pytest.mark.asyncio
-    async def test_file_glob_pattern_matching_no_files_returns_empty(
-        self, composite: CompositeSourceFetcher
-    ) -> None:
+    async def test_file_glob_pattern_matching_no_files_returns_empty(self, composite: CompositeSourceFetcher) -> None:
         source = _file_source(("*.nonexistent",))
         result = await composite.fetch_source(source)
         assert isinstance(result, FetchResult)
@@ -429,16 +406,12 @@ class TestFromAC_CompositeSourceFetcher:
         mock_factory.return_value.fetch.assert_called_once_with(base_url)
 
     @pytest.mark.asyncio
-    async def test_auth_web_returns_exactly_one_document(
-        self, composite: CompositeSourceFetcher
-    ) -> None:
+    async def test_auth_web_returns_exactly_one_document(self, composite: CompositeSourceFetcher) -> None:
         result = await composite.fetch_source(_auth_source())
         assert len(result.documents) == 1
 
     @pytest.mark.asyncio
-    async def test_auth_web_document_title_equals_base_url(
-        self, composite: CompositeSourceFetcher
-    ) -> None:
+    async def test_auth_web_document_title_equals_base_url(self, composite: CompositeSourceFetcher) -> None:
         base_url = "https://internal.example.com/wiki"
         result = await composite.fetch_source(_auth_source(base_url=base_url))
         assert result.documents[0].title == base_url
@@ -452,9 +425,7 @@ class TestFromAC_CompositeSourceFetcher:
         assert result.documents[0].text == "wiki content"
 
     @pytest.mark.asyncio
-    async def test_auth_web_document_uri_equals_base_url(
-        self, composite: CompositeSourceFetcher
-    ) -> None:
+    async def test_auth_web_document_uri_equals_base_url(self, composite: CompositeSourceFetcher) -> None:
         base_url = "https://internal.example.com/api"
         result = await composite.fetch_source(_auth_source(base_url=base_url))
         assert result.documents[0].uri == base_url
@@ -483,23 +454,17 @@ class TestFromAC_CompositeSourceFetcher:
     # ------------------------------------------------------------------ #
 
     @pytest.mark.asyncio
-    async def test_inline_returns_fetch_result_instance(
-        self, composite: CompositeSourceFetcher
-    ) -> None:
+    async def test_inline_returns_fetch_result_instance(self, composite: CompositeSourceFetcher) -> None:
         result = await composite.fetch_source(_inline_source())
         assert isinstance(result, FetchResult)
 
     @pytest.mark.asyncio
-    async def test_inline_documents_tuple_is_empty(
-        self, composite: CompositeSourceFetcher
-    ) -> None:
+    async def test_inline_documents_tuple_is_empty(self, composite: CompositeSourceFetcher) -> None:
         result = await composite.fetch_source(_inline_source())
         assert result.documents == ()
 
     @pytest.mark.asyncio
-    async def test_inline_errors_tuple_is_empty(
-        self, composite: CompositeSourceFetcher
-    ) -> None:
+    async def test_inline_errors_tuple_is_empty(self, composite: CompositeSourceFetcher) -> None:
         result = await composite.fetch_source(_inline_source())
         assert result.errors == ()
 
@@ -508,9 +473,7 @@ class TestFromAC_CompositeSourceFetcher:
     # ------------------------------------------------------------------ #
 
     @pytest.mark.asyncio
-    async def test_cancel_stops_url_iteration_not_all_items_fetched(
-        self, composite: CompositeSourceFetcher
-    ) -> None:
+    async def test_cancel_stops_url_iteration_not_all_items_fetched(self, composite: CompositeSourceFetcher) -> None:
         """When cancel fires, fewer than N reads happen for N URLs."""
         urls = (
             "https://example.com/1",
@@ -554,9 +517,7 @@ class TestFromAC_CompositeSourceFetcher:
         assert 0 < len(result.documents) < 3
 
     @pytest.mark.asyncio
-    async def test_cancel_none_processes_all_urls(
-        self, composite: CompositeSourceFetcher
-    ) -> None:
+    async def test_cancel_none_processes_all_urls(self, composite: CompositeSourceFetcher) -> None:
         """cancel=None means no cancellation — all URLs processed."""
         urls = ("https://example.com/x", "https://example.com/y")
         source = _url_source(urls)
@@ -592,9 +553,7 @@ class TestFromAC_CompositeSourceFetcher:
     # ------------------------------------------------------------------ #
 
     @pytest.mark.asyncio
-    async def test_http_status_error_caught_as_fetch_error_not_raised(
-        self, composite: CompositeSourceFetcher
-    ) -> None:
+    async def test_http_status_error_caught_as_fetch_error_not_raised(self, composite: CompositeSourceFetcher) -> None:
         url = "https://example.com/gone"
         source = _url_source((url,))
         exc = httpx.HTTPStatusError(
@@ -647,9 +606,7 @@ class TestFromAC_CompositeSourceFetcher:
         assert len(result.errors) == 1
 
     @pytest.mark.asyncio
-    async def test_url_fetch_error_error_field_equals_str_of_exception(
-        self, composite: CompositeSourceFetcher
-    ) -> None:
+    async def test_url_fetch_error_error_field_equals_str_of_exception(self, composite: CompositeSourceFetcher) -> None:
         url = "https://example.com/page"
         source = _url_source((url,))
         exc = httpx.HTTPStatusError(

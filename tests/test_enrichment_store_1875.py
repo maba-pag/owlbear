@@ -87,9 +87,7 @@ class TestFromAC_EnrichmentStore:
         count = store.enqueue_chunks(("c1",), "src-1")
         assert count == 0
 
-    def test_enqueue_does_not_reenqueue_completed_chunks(
-        self, store: EnrichmentStore, db: sqlite3.Connection
-    ) -> None:
+    def test_enqueue_does_not_reenqueue_completed_chunks(self, store: EnrichmentStore, db: sqlite3.Connection) -> None:
         # Manually set COMPLETED — submit_extractions is in #1876 scope
         store.enqueue_chunks(("c1",), "src-1")
         db.execute("UPDATE enrich_queue SET state = 'completed' WHERE chunk_id = 'c1'")
@@ -140,9 +138,7 @@ class TestFromAC_EnrichmentStore:
         result2 = store.discard_chunks(("c1",))
         assert result2.queue_items_removed == 0
 
-    def test_discard_mixed_states_removes_only_pending_and_failed(
-        self, store: EnrichmentStore
-    ) -> None:
+    def test_discard_mixed_states_removes_only_pending_and_failed(self, store: EnrichmentStore) -> None:
         # c_in_progress: claim → IN_PROGRESS
         store.enqueue_chunks(("c_in_progress",), "src-1")
         store.claim_batch(EnrichmentParams(batch_size=1, max_retries=1))
@@ -164,9 +160,7 @@ class TestFromAC_EnrichmentStore:
     # AC3 — claim_batch
     # ------------------------------------------------------------------
 
-    def test_claim_batch_transitions_pending_to_in_progress(
-        self, store: EnrichmentStore
-    ) -> None:
+    def test_claim_batch_transitions_pending_to_in_progress(self, store: EnrichmentStore) -> None:
         store.enqueue_chunks(("c1", "c2"), "src-1")
         params = EnrichmentParams(batch_size=2, max_retries=3)
         batch = store.claim_batch(params)
@@ -198,9 +192,7 @@ class TestFromAC_EnrichmentStore:
         batch = store.claim_batch(EnrichmentParams(batch_size=2, max_retries=3))
         assert len(batch.items) == 2
 
-    def test_claim_batch_returns_fewer_when_queue_smaller_than_batch_size(
-        self, store: EnrichmentStore
-    ) -> None:
+    def test_claim_batch_returns_fewer_when_queue_smaller_than_batch_size(self, store: EnrichmentStore) -> None:
         store.enqueue_chunks(("c1",), "src-1")
         batch = store.claim_batch(EnrichmentParams(batch_size=10, max_retries=3))
         assert len(batch.items) == 1
@@ -209,9 +201,7 @@ class TestFromAC_EnrichmentStore:
         batch = store.claim_batch(EnrichmentParams(batch_size=10, max_retries=3))
         assert len(batch.items) == 0
 
-    def test_claim_batch_claimed_items_not_visible_to_second_claim(
-        self, store: EnrichmentStore
-    ) -> None:
+    def test_claim_batch_claimed_items_not_visible_to_second_claim(self, store: EnrichmentStore) -> None:
         store.enqueue_chunks(("c1", "c2"), "src-1")
         batch1 = store.claim_batch(EnrichmentParams(batch_size=2, max_retries=3))
         batch2 = store.claim_batch(EnrichmentParams(batch_size=2, max_retries=3))
@@ -219,9 +209,7 @@ class TestFromAC_EnrichmentStore:
         for item in batch2.items:
             assert item.chunk_id not in claimed_ids
 
-    def test_claim_batch_max_retries_persisted_governs_mark_failed_threshold(
-        self, store: EnrichmentStore
-    ) -> None:
+    def test_claim_batch_max_retries_persisted_governs_mark_failed_threshold(self, store: EnrichmentStore) -> None:
         """Per-item max_retries persisted at claim time determines FAILED transition."""
         store.enqueue_chunks(("c1",), "src-1")
         # Claim with max_retries=1 — first failure should be permanent
@@ -239,19 +227,14 @@ class TestFromAC_EnrichmentStore:
         store.enqueue_chunks(("c1",), "src-1")
         store.claim_batch(EnrichmentParams(batch_size=1, max_retries=3))
         # Backdate started_at to 701 seconds ago to simulate stale claim
-        db.execute(
-            "UPDATE enrich_queue SET started_at = datetime('now', '-701 seconds')"
-            " WHERE chunk_id = 'c1'"
-        )
+        db.execute("UPDATE enrich_queue SET started_at = datetime('now', '-701 seconds') WHERE chunk_id = 'c1'")
         db.commit()
         # Next claim_batch must reclaim stale item
         batch = store.claim_batch(EnrichmentParams(batch_size=1, max_retries=3))
         chunk_ids = {item.chunk_id for item in batch.items}
         assert "c1" in chunk_ids
 
-    def test_claim_batch_does_not_reclaim_fresh_in_progress(
-        self, store: EnrichmentStore
-    ) -> None:
+    def test_claim_batch_does_not_reclaim_fresh_in_progress(self, store: EnrichmentStore) -> None:
         store.enqueue_chunks(("c1",), "src-1")
         store.claim_batch(EnrichmentParams(batch_size=1, max_retries=3))
         # c1 freshly claimed; second call must not return it
@@ -263,9 +246,7 @@ class TestFromAC_EnrichmentStore:
     # AC5 — mark_failed
     # ------------------------------------------------------------------
 
-    def test_mark_failed_returns_to_pending_below_max_retries(
-        self, store: EnrichmentStore
-    ) -> None:
+    def test_mark_failed_returns_to_pending_below_max_retries(self, store: EnrichmentStore) -> None:
         store.enqueue_chunks(("c1",), "src-1")
         store.claim_batch(EnrichmentParams(batch_size=1, max_retries=3))
         result = store.mark_failed("c1", "transient error")
@@ -278,17 +259,13 @@ class TestFromAC_EnrichmentStore:
         result = store.mark_failed("c1", "err")
         assert result.attempts == 1
 
-    def test_mark_failed_transitions_to_failed_when_attempts_reach_max_retries(
-        self, store: EnrichmentStore
-    ) -> None:
+    def test_mark_failed_transitions_to_failed_when_attempts_reach_max_retries(self, store: EnrichmentStore) -> None:
         store.enqueue_chunks(("c1",), "src-1")
         store.claim_batch(EnrichmentParams(batch_size=1, max_retries=1))
         result = store.mark_failed("c1", "fatal")  # attempts=1 >= max_retries=1
         assert result.state == EnrichmentState.FAILED
 
-    def test_mark_failed_uses_per_item_max_retries_from_claim_time(
-        self, store: EnrichmentStore
-    ) -> None:
+    def test_mark_failed_uses_per_item_max_retries_from_claim_time(self, store: EnrichmentStore) -> None:
         """max_retries stored per-item at claim time — governs retry vs permanent failure."""
         store.enqueue_chunks(("c1",), "src-1")
         params = EnrichmentParams(batch_size=1, max_retries=2)
@@ -301,16 +278,12 @@ class TestFromAC_EnrichmentStore:
         r2 = store.mark_failed("c1", "err2")
         assert r2.state == EnrichmentState.FAILED
 
-    def test_mark_failed_raises_lookup_error_if_chunk_is_pending_not_in_progress(
-        self, store: EnrichmentStore
-    ) -> None:
+    def test_mark_failed_raises_lookup_error_if_chunk_is_pending_not_in_progress(self, store: EnrichmentStore) -> None:
         store.enqueue_chunks(("c1",), "src-1")  # c1 is PENDING
         with pytest.raises(LookupError):
             store.mark_failed("c1", "error")
 
-    def test_mark_failed_raises_lookup_error_if_chunk_not_found(
-        self, store: EnrichmentStore
-    ) -> None:
+    def test_mark_failed_raises_lookup_error_if_chunk_not_found(self, store: EnrichmentStore) -> None:
         with pytest.raises(LookupError):
             store.mark_failed("nonexistent-chunk", "error")
 
@@ -343,9 +316,7 @@ class TestFromAC_EnrichmentStore:
         store.mark_failed("c1", "err")  # → FAILED
         assert store.stats().failed == 1
 
-    def test_stats_counts_completed(
-        self, store: EnrichmentStore, db: sqlite3.Connection
-    ) -> None:
+    def test_stats_counts_completed(self, store: EnrichmentStore, db: sqlite3.Connection) -> None:
         # COMPLETED transition belongs to submit_extractions (#1876); set via SQL for stats test
         store.enqueue_chunks(("c1",), "src-1")
         db.execute("UPDATE enrich_queue SET state = 'completed' WHERE chunk_id = 'c1'")
@@ -356,30 +327,16 @@ class TestFromAC_EnrichmentStore:
     # AC7 — ensure_tables
     # ------------------------------------------------------------------
 
-    def test_ensure_tables_creates_enrich_queue_table(
-        self, db: sqlite3.Connection
-    ) -> None:
+    def test_ensure_tables_creates_enrich_queue_table(self, db: sqlite3.Connection) -> None:
         s = EnrichmentStore(db=db)
         s.ensure_tables()
-        tables = {
-            row[0]
-            for row in db.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            ).fetchall()
-        }
+        tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
         assert "enrich_queue" in tables
 
-    def test_ensure_tables_creates_enrich_batches_table(
-        self, db: sqlite3.Connection
-    ) -> None:
+    def test_ensure_tables_creates_enrich_batches_table(self, db: sqlite3.Connection) -> None:
         s = EnrichmentStore(db=db)
         s.ensure_tables()
-        tables = {
-            row[0]
-            for row in db.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            ).fetchall()
-        }
+        tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
         assert "enrich_batches" in tables
 
     def test_ensure_tables_is_idempotent(self, db: sqlite3.Connection) -> None:
@@ -394,9 +351,7 @@ class TestFromAC_EnrichmentStore:
     # enqueue_chunks MAY revive FAILED items to PENDING.
     # ------------------------------------------------------------------
 
-    def test_enqueue_revives_failed_item_to_pending_and_returns_count_one(
-        self, store: EnrichmentStore
-    ) -> None:
+    def test_enqueue_revives_failed_item_to_pending_and_returns_count_one(self, store: EnrichmentStore) -> None:
         """FAILED items revived to PENDING by enqueue_chunks; count reflects revival."""
         store.enqueue_chunks(("c1",), "src-1")
         store.claim_batch(EnrichmentParams(batch_size=1, max_retries=1))
@@ -409,9 +364,7 @@ class TestFromAC_EnrichmentStore:
         assert store.stats().pending == 1
         assert store.stats().failed == 0
 
-    def test_enqueue_preserves_attempts_count_on_failed_item_revival(
-        self, store: EnrichmentStore
-    ) -> None:
+    def test_enqueue_preserves_attempts_count_on_failed_item_revival(self, store: EnrichmentStore) -> None:
         """Reviving a FAILED item preserves its attempts count (not reset to 0)."""
         store.enqueue_chunks(("c1",), "src-1")
         store.claim_batch(EnrichmentParams(batch_size=1, max_retries=1))
@@ -424,9 +377,7 @@ class TestFromAC_EnrichmentStore:
         item = batch.items[0]
         assert item.attempts == 1  # preserved, not reset to 0
 
-    def test_enqueue_clears_last_error_on_failed_item_revival(
-        self, store: EnrichmentStore
-    ) -> None:
+    def test_enqueue_clears_last_error_on_failed_item_revival(self, store: EnrichmentStore) -> None:
         """Reviving a FAILED item clears last_error (AC1: 'last_error cleared')."""
         store.enqueue_chunks(("c1",), "src-1")
         store.claim_batch(EnrichmentParams(batch_size=1, max_retries=1))
@@ -455,26 +406,18 @@ class TestFromAC_EnrichmentStore:
         store.enqueue_chunks(("c1",), "src-1")
         store.claim_batch(EnrichmentParams(batch_size=1, max_retries=3))
         # Backdate started_at to exactly 601 seconds ago
-        db.execute(
-            "UPDATE enrich_queue SET started_at = datetime('now', '-601 seconds')"
-            " WHERE chunk_id = 'c1'"
-        )
+        db.execute("UPDATE enrich_queue SET started_at = datetime('now', '-601 seconds') WHERE chunk_id = 'c1'")
         db.commit()
         batch = store.claim_batch(EnrichmentParams(batch_size=1, max_retries=3))
         chunk_ids = {item.chunk_id for item in batch.items}
         assert "c1" in chunk_ids, "item aged 601s must be reclaimed (strictly >600s TTL)"
 
-    def test_claim_batch_does_not_reclaim_item_599s_old(
-        self, store: EnrichmentStore, db: sqlite3.Connection
-    ) -> None:
+    def test_claim_batch_does_not_reclaim_item_599s_old(self, store: EnrichmentStore, db: sqlite3.Connection) -> None:
         """An item 599s old (not yet >600s) is NOT reclaimed (AC4 strict > boundary)."""
         store.enqueue_chunks(("c1",), "src-1")
         store.claim_batch(EnrichmentParams(batch_size=1, max_retries=3))
         # Backdate started_at to 599 seconds ago — still within TTL
-        db.execute(
-            "UPDATE enrich_queue SET started_at = datetime('now', '-599 seconds')"
-            " WHERE chunk_id = 'c1'"
-        )
+        db.execute("UPDATE enrich_queue SET started_at = datetime('now', '-599 seconds') WHERE chunk_id = 'c1'")
         db.commit()
         batch = store.claim_batch(EnrichmentParams(batch_size=1, max_retries=3))
         chunk_ids = {item.chunk_id for item in batch.items}

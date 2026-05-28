@@ -100,22 +100,17 @@ class TestFromAC_ComputeContentHash:
         fn = getattr(_content_mod, "compute_content_hash", None)
         assert fn is not None, "compute_content_hash not found in stores.content"
         assert inspect.getmodule(fn) is _content_mod, (
-            f"compute_content_hash is defined in {inspect.getmodule(fn)}, "
-            "expected owlbear_knowledge.stores.content"
+            f"compute_content_hash is defined in {inspect.getmodule(fn)}, expected owlbear_knowledge.stores.content"
         )
 
     def test_stores_content_does_not_import_from_status_store(self) -> None:
         source = (KNOWLEDGE_PKG / "stores" / "content.py").read_text()
-        assert "status_store" not in source, (
-            "stores/content.py still imports from status_store"
-        )
+        assert "status_store" not in source, "stores/content.py still imports from status_store"
 
     def test_stores_content_defines_compute_content_hash(self) -> None:
         """compute_content_hash must be defined (not just imported) in stores/content.py."""
         source = (KNOWLEDGE_PKG / "stores" / "content.py").read_text()
-        assert "def compute_content_hash" in source, (
-            "compute_content_hash is not defined in stores/content.py"
-        )
+        assert "def compute_content_hash" in source, "compute_content_hash is not defined in stores/content.py"
 
 
 # ---------------------------------------------------------------------------
@@ -150,24 +145,18 @@ class TestFromAC_EmbeddingsMigration:
 
     def test_qdrant_does_not_import_from_protocol(self) -> None:
         source = (KNOWLEDGE_PKG / "qdrant.py").read_text()
-        assert "from owlbear_knowledge.protocol import" not in source, (
-            "qdrant.py still imports from protocol.py"
-        )
+        assert "from owlbear_knowledge.protocol import" not in source, "qdrant.py still imports from protocol.py"
 
     def test_qdrant_imports_hybrid_embedding_from_embeddings(self) -> None:
         source = (KNOWLEDGE_PKG / "qdrant.py").read_text()
         has_absolute = "from owlbear_knowledge.embeddings import" in source
         has_relative = "from .embeddings import" in source
-        assert has_absolute or has_relative, (
-            "qdrant.py does not import HybridEmbedding from embeddings"
-        )
+        assert has_absolute or has_relative, "qdrant.py does not import HybridEmbedding from embeddings"
 
     def test_embeddings_module_source_has_no_protocol_import(self) -> None:
         """embeddings.py source must not reference protocol.py at all (no TYPE_CHECKING block)."""
         source = (KNOWLEDGE_PKG / "embeddings.py").read_text()
-        assert "from owlbear_knowledge.protocol import" not in source, (
-            "embeddings.py still references protocol.py"
-        )
+        assert "from owlbear_knowledge.protocol import" not in source, "embeddings.py still references protocol.py"
 
 
 # ---------------------------------------------------------------------------
@@ -186,9 +175,7 @@ class TestFromAC_ContentFetcherMigration:
     def test_content_fetcher_is_protocol_with_fetch_method(self) -> None:
         from owlbear_knowledge.fetcher import ContentFetcher  # type: ignore[attr-defined]
 
-        assert hasattr(ContentFetcher, "fetch"), (
-            "ContentFetcher in fetcher.py must declare async fetch(url) method"
-        )
+        assert hasattr(ContentFetcher, "fetch"), "ContentFetcher in fetcher.py must declare async fetch(url) method"
 
     def test_content_fetcher_is_runtime_checkable(self) -> None:
         from owlbear_knowledge.fetcher import ContentFetcher  # type: ignore[attr-defined]
@@ -210,12 +197,8 @@ class TestFromAC_ContentFetcherMigration:
         source = (MCP_KNOWLEDGE_PKG / "_helpers.py").read_text()
         # ContentFetcher type annotation must come from owlbear_knowledge.fetcher specifically.
         # Use \b word boundary so HttpxContentFetcher does not produce a false match.
-        has_fetcher_import = bool(
-            re.search(r"from owlbear_knowledge\.fetcher import[^\n]*\bContentFetcher\b", source)
-        )
-        assert has_fetcher_import, (
-            "_helpers.py does not import ContentFetcher from owlbear_knowledge.fetcher"
-        )
+        has_fetcher_import = bool(re.search(r"from owlbear_knowledge\.fetcher import[^\n]*\bContentFetcher\b", source))
+        assert has_fetcher_import, "_helpers.py does not import ContentFetcher from owlbear_knowledge.fetcher"
 
 
 # ---------------------------------------------------------------------------
@@ -275,11 +258,10 @@ class TestFromAC_InitExports:
             if not mod.startswith("owlbear_knowledge."):
                 # relative or standard-lib import handled separately
                 continue
-            suffix = mod[len("owlbear_knowledge."):]
+            suffix = mod[len("owlbear_knowledge.") :]
             assert suffix.startswith(("protocols", "stores")), (
                 f"__init__.py has import from non-protocols/stores module: {mod}"
             )
-
 
 
 # ---------------------------------------------------------------------------
@@ -291,9 +273,7 @@ class TestFromAC_DeadTestFiles:
     """AC7: test_search_provenance.py and test_mcp_knowledge_lifespan_1888.py must be gone."""
 
     def test_test_search_provenance_absent(self) -> None:
-        assert not (TESTS_ROOT / "test_search_provenance.py").exists(), (
-            "test_search_provenance.py still exists"
-        )
+        assert not (TESTS_ROOT / "test_search_provenance.py").exists(), "test_search_provenance.py still exists"
 
     def test_test_mcp_knowledge_lifespan_1888_absent(self) -> None:
         assert not (TESTS_ROOT / "test_mcp_knowledge_lifespan_1888.py").exists(), (
@@ -306,9 +286,7 @@ class TestFromAC_DeadTestFiles:
 # ---------------------------------------------------------------------------
 
 
-_LEGACY_FQ_PREFIXES: tuple[str, ...] = tuple(
-    f"owlbear_knowledge.{m}" for m in _LEGACY_MODULES
-)
+_LEGACY_FQ_PREFIXES: tuple[str, ...] = tuple(f"owlbear_knowledge.{m}" for m in _LEGACY_MODULES)
 
 
 def _absolute_imports_from(node: ast.AST) -> list[str]:
@@ -396,9 +374,7 @@ class TestFromAC_PackageIntegrity:
 
         for module in _LEGACY_MODULES:
             fq = f"owlbear_knowledge.{module}"
-            assert fq not in sys.modules, (
-                f"Importing owlbear_knowledge loaded deleted module: {fq}"
-            )
+            assert fq not in sys.modules, f"Importing owlbear_knowledge loaded deleted module: {fq}"
 
     def test_protocols_subpackage_importable(self) -> None:
         from owlbear_knowledge import protocols  # noqa: F401

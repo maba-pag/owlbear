@@ -250,7 +250,9 @@ class TestFromAC_AssessMemoriesContract:
         _seed(tmp_path, _ID_A, state=MemoryState.APPROVED)
         engine = MemoryEngine(tmp_path)
         ctx = _make_ctx(engine)
-        result = await assess_memories(ctx, assessments=[{"entry_id": _ID_A, "bucket": "unremarkable"}], task_id=_TASK_A)
+        result = await assess_memories(
+            ctx, assessments=[{"entry_id": _ID_A, "bucket": "unremarkable"}], task_id=_TASK_A
+        )
         item = result["results"][0]
         assert item["entry_id"] == _ID_A
         assert item["success"] is True
@@ -271,7 +273,7 @@ class TestFromAC_AssessMemoriesContract:
     @pytest.mark.asyncio
     async def test_batch_continues_after_per_entry_failure(self, tmp_path: Path) -> None:
         """A failed entry does not abort the batch; subsequent entries are processed."""
-        _seed(tmp_path, _ID_A, state=MemoryState.PENDING)   # will fail
+        _seed(tmp_path, _ID_A, state=MemoryState.PENDING)  # will fail
         _seed(tmp_path, _ID_B, state=MemoryState.APPROVED)  # should succeed
         engine = MemoryEngine(tmp_path)
         ctx = _make_ctx(engine)
@@ -311,9 +313,7 @@ class TestFromAC_AssessMemoriesContract:
         engine = MemoryEngine(tmp_path)
         ctx = _make_ctx(engine)
         with pytest.raises(ToolError):
-            await assess_memories(
-                ctx, assessments=[{"entry_id": _ID_A, "bucket": "invalid-bucket"}], task_id=_TASK_A
-            )
+            await assess_memories(ctx, assessments=[{"entry_id": _ID_A, "bucket": "invalid-bucket"}], task_id=_TASK_A)
 
     @pytest.mark.asyncio
     async def test_assess_outstanding_increments_counter_and_updates_score(self, tmp_path: Path) -> None:
@@ -332,7 +332,9 @@ class TestFromAC_AssessMemoriesContract:
         _seed(tmp_path, _ID_A, state=MemoryState.CONTESTED, contested_by_task=_TASK_B)
         engine = MemoryEngine(tmp_path)
         ctx = _make_ctx(engine)
-        result = await assess_memories(ctx, assessments=[{"entry_id": _ID_A, "bucket": "unremarkable"}], task_id=_TASK_A)
+        result = await assess_memories(
+            ctx, assessments=[{"entry_id": _ID_A, "bucket": "unremarkable"}], task_id=_TASK_A
+        )
         assert result["results"][0]["success"] is True
 
 
@@ -387,10 +389,42 @@ class TestFromAC_RecallSlotAllocation:
         # challenge (lowest outstanding). They must land in explore, not challenge.
         # We verify by using 2 zero-counter entries (max explore slots) and 2 with
         # outstanding=1 (challenge candidates). Challenge must draw from the latter two.
-        _seed(tmp_path, _ID_A, title="ZeroAll A", outstanding_count=0, unremarkable_count=0, didnt_use_count=0, state=MemoryState.APPROVED)
-        _seed(tmp_path, _ID_B, title="ZeroAll B", outstanding_count=0, unremarkable_count=0, didnt_use_count=0, state=MemoryState.APPROVED)
-        _seed(tmp_path, _ID_C, title="OneOut C", outstanding_count=1, unremarkable_count=0, didnt_use_count=0, state=MemoryState.APPROVED)
-        _seed(tmp_path, _ID_D, title="OneOut D", outstanding_count=1, unremarkable_count=0, didnt_use_count=0, state=MemoryState.APPROVED)
+        _seed(
+            tmp_path,
+            _ID_A,
+            title="ZeroAll A",
+            outstanding_count=0,
+            unremarkable_count=0,
+            didnt_use_count=0,
+            state=MemoryState.APPROVED,
+        )
+        _seed(
+            tmp_path,
+            _ID_B,
+            title="ZeroAll B",
+            outstanding_count=0,
+            unremarkable_count=0,
+            didnt_use_count=0,
+            state=MemoryState.APPROVED,
+        )
+        _seed(
+            tmp_path,
+            _ID_C,
+            title="OneOut C",
+            outstanding_count=1,
+            unremarkable_count=0,
+            didnt_use_count=0,
+            state=MemoryState.APPROVED,
+        )
+        _seed(
+            tmp_path,
+            _ID_D,
+            title="OneOut D",
+            outstanding_count=1,
+            unremarkable_count=0,
+            didnt_use_count=0,
+            state=MemoryState.APPROVED,
+        )
         engine = MemoryEngine(tmp_path)
         ctx = _make_ctx(engine)
         result = await recall_memory(ctx, agent=_AGENT, limit=4)
@@ -456,18 +490,36 @@ class TestFromAC_SlotEfficiencyStale:
     def test_stale_denominator_uses_max_with_one_when_both_counters_zero(self) -> None:
         """max(outstanding+unremarkable, 1) protects denominator when both are 0 (no division by 0)."""
         entry_0 = MemoryEntry(
-            id=_ID_A, title="T", content="C.", categories=["domain-knowledge"],
-            confidence=0.8, state=MemoryState.APPROVED,
-            outstanding_count=0, unremarkable_count=0, didnt_use_count=1,
-            score=0.8, scope_agents=[_AGENT], source_agent=_AGENT,
-            created_at=_TS, updated_at=_TS,
+            id=_ID_A,
+            title="T",
+            content="C.",
+            categories=["domain-knowledge"],
+            confidence=0.8,
+            state=MemoryState.APPROVED,
+            outstanding_count=0,
+            unremarkable_count=0,
+            didnt_use_count=1,
+            score=0.8,
+            scope_agents=[_AGENT],
+            source_agent=_AGENT,
+            created_at=_TS,
+            updated_at=_TS,
         )
         entry_1 = MemoryEntry(
-            id=_ID_B, title="T", content="C.", categories=["domain-knowledge"],
-            confidence=0.8, state=MemoryState.APPROVED,
-            outstanding_count=1, unremarkable_count=0, didnt_use_count=1,
-            score=0.8, scope_agents=[_AGENT], source_agent=_AGENT,
-            created_at=_TS, updated_at=_TS,
+            id=_ID_B,
+            title="T",
+            content="C.",
+            categories=["domain-knowledge"],
+            confidence=0.8,
+            state=MemoryState.APPROVED,
+            outstanding_count=1,
+            unremarkable_count=0,
+            didnt_use_count=1,
+            score=0.8,
+            scope_agents=[_AGENT],
+            source_agent=_AGENT,
+            created_at=_TS,
+            updated_at=_TS,
         )
         # denominator for entry_0 = max(0+0, 1) = 1; 1 > 50 → False
         # denominator for entry_1 = max(1+0, 1) = 1; 1 > 50 → False

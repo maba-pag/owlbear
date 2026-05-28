@@ -13,8 +13,8 @@ from pydantic import Field
 from owlbear_knowledge.protocols.common import BoundaryModel, Metadata
 
 if TYPE_CHECKING:
-  from owlbear_knowledge.cancellation import CancelSignal
-  from owlbear_knowledge.protocols.sources import ConfiguredSourceRecord
+    from owlbear_knowledge.cancellation import CancelSignal
+    from owlbear_knowledge.protocols.sources import ConfiguredSourceRecord
 
 
 class FetchedDocument(BoundaryModel):

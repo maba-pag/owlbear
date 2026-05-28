@@ -104,12 +104,8 @@ class TestFromAC_Phase1UsesSubmitExtractions:
         app_ctx.conn = conn_mock
         await knowledge_enrichment_store(ctx, chunk_id=_CHUNK_ID, entities=[], edges=[])
         # None of the conn.execute calls should be "BEGIN IMMEDIATE"
-        begin_calls = [
-            c for c in conn_mock.execute.call_args_list
-            if "BEGIN" in str(c)
-        ]
+        begin_calls = [c for c in conn_mock.execute.call_args_list if "BEGIN" in str(c)]
         assert begin_calls == [], "Phase-1 path must not call conn.execute with BEGIN"
-
 
 
 # ---------------------------------------------------------------------------
@@ -276,7 +272,6 @@ class TestFromAC_EdgeDictParsing:
         await knowledge_enrichment_store(ctx, chunk_id=_CHUNK_ID, entities=[], edges=[])
         _, _, relations_arg = _extract_submit_args(store)
         assert len(relations_arg) == 0
-
 
 
 # ---------------------------------------------------------------------------
@@ -554,9 +549,7 @@ class TestFromAC_SubmitExtractionsValueError:
     async def test_value_error_from_submit_extractions_raised_as_tool_error(self) -> None:
         """ValueError raised by submit_extractions is wrapped as ToolError, not left uncaught."""
         store = _make_enrichment_store_mock()
-        store.submit_extractions.side_effect = ValueError(
-            "source_ref 'r1' not found in entity local_refs"
-        )
+        store.submit_extractions.side_effect = ValueError("source_ref 'r1' not found in entity local_refs")
         ctx, _ = _make_ctx(enrichment_store=store)
         with pytest.raises(ToolError):
             await knowledge_enrichment_store(ctx, chunk_id=_CHUNK_ID, entities=[], edges=[])
@@ -565,9 +558,7 @@ class TestFromAC_SubmitExtractionsValueError:
     async def test_value_error_from_submit_extractions_calls_mark_failed(self) -> None:
         """ValueError raised by submit_extractions causes mark_failed to be called."""
         store = _make_enrichment_store_mock()
-        store.submit_extractions.side_effect = ValueError(
-            "target_ref 'r2' not in submitted entities"
-        )
+        store.submit_extractions.side_effect = ValueError("target_ref 'r2' not in submitted entities")
         ctx, _ = _make_ctx(enrichment_store=store)
         with pytest.raises(ToolError):
             await knowledge_enrichment_store(ctx, chunk_id=_CHUNK_ID, entities=[], edges=[])

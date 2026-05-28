@@ -72,9 +72,7 @@ def _write_legacy_entry(
     state = spec.state
     optional_score = f"score: {confidence}\n" if spec.include_score else ""
     optional_counters = (
-        "outstanding_count: 0\nunremarkable_count: 0\ndidnt_use_count: 0\n"
-        if spec.include_counters
-        else ""
+        "outstanding_count: 0\nunremarkable_count: 0\ndidnt_use_count: 0\n" if spec.include_counters else ""
     )
     content = (
         "---\n"
@@ -477,7 +475,10 @@ class TestFromAC_MemoryMigrateCLI:
         from owlbear_memory.migrate import main
 
         exit_code: int | None = None
-        with patch("sys.argv", ["memory-migrate", "--memory-dir", str(tmp_path)]), pytest.raises(SystemExit) as exc_info:
+        with (
+            patch("sys.argv", ["memory-migrate", "--memory-dir", str(tmp_path)]),
+            pytest.raises(SystemExit) as exc_info,
+        ):
             main()
         exit_code = exc_info.value.code
         assert exit_code in (0, None)
@@ -490,21 +491,25 @@ class TestFromAC_MemoryMigrateCLI:
         path = tmp_path / f"{_ID_1}.md"
         content_before = path.read_text(encoding="utf-8")
 
-        with patch("sys.argv", ["memory-migrate", "--memory-dir", str(tmp_path), "--dry-run"]), pytest.raises(SystemExit):
+        with (
+            patch("sys.argv", ["memory-migrate", "--memory-dir", str(tmp_path), "--dry-run"]),
+            pytest.raises(SystemExit),
+        ):
             main()
 
         assert path.read_text(encoding="utf-8") == content_before
 
-    def test_cli_dry_run_prints_count(
-        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_cli_dry_run_prints_count(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         """--dry-run reports the would-be migrated count to stdout."""
         from owlbear_memory.migrate import main
 
         _write_legacy_entry(tmp_path, _LegacyEntrySpec(_ID_1, confidence=0.8))
         _write_legacy_entry(tmp_path, _LegacyEntrySpec(_ID_2, confidence=0.9))
 
-        with patch("sys.argv", ["memory-migrate", "--memory-dir", str(tmp_path), "--dry-run"]), pytest.raises(SystemExit):
+        with (
+            patch("sys.argv", ["memory-migrate", "--memory-dir", str(tmp_path), "--dry-run"]),
+            pytest.raises(SystemExit),
+        ):
             main()
 
         captured = capsys.readouterr()
@@ -526,7 +531,10 @@ class TestFromAC_MemoryMigrateCLI:
         from ruamel.yaml import YAML
 
         yaml = YAML(typ="safe")
-        with patch("sys.argv", ["memory-migrate", "--memory-dir", str(subdir)]), pytest.raises(SystemExit):  # argparse may call sys.exit(0)
+        with (
+            patch("sys.argv", ["memory-migrate", "--memory-dir", str(subdir)]),
+            pytest.raises(SystemExit),
+        ):  # argparse may call sys.exit(0)
             main()
 
         raw_id1 = (subdir / f"{_ID_1}.md").read_text(encoding="utf-8")

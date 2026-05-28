@@ -163,9 +163,7 @@ class TestFromAC_DeleteSourceCascade:
     # ------------------------------------------------------------------
 
     @pytest.mark.asyncio
-    async def test_returns_purge_result_type(
-        self, coordinator: IngestCoordinator
-    ) -> None:
+    async def test_returns_purge_result_type(self, coordinator: IngestCoordinator) -> None:
         """delete_source returns a PurgeResult instance."""
         result = await coordinator.delete_source(_SOURCE_ID)
         assert isinstance(result, PurgeResult)
@@ -306,9 +304,7 @@ class TestFromAC_DeleteSourceCascade:
         """AC2: non-None reason is forwarded to Sources.delete_source as keyword arg."""
         await coordinator.delete_source(_SOURCE_ID, reason="testing reason")
         call_args = mock_sources.delete_source.call_args
-        forwarded_reason = call_args.kwargs.get("reason") or (
-            call_args.args[1] if len(call_args.args) > 1 else None
-        )
+        forwarded_reason = call_args.kwargs.get("reason") or (call_args.args[1] if len(call_args.args) > 1 else None)
         assert forwarded_reason == "testing reason"
 
     @pytest.mark.asyncio
@@ -340,9 +336,7 @@ class TestFromAC_DeleteSourceCascade:
     # ------------------------------------------------------------------
 
     @pytest.mark.asyncio
-    async def test_status_complete_when_all_5_steps_succeed(
-        self, coordinator: IngestCoordinator
-    ) -> None:
+    async def test_status_complete_when_all_5_steps_succeed(self, coordinator: IngestCoordinator) -> None:
         """AC3: status is COMPLETE when all five steps execute without exception."""
         result = await coordinator.delete_source(_SOURCE_ID)
         assert result.status == PurgeStatus.COMPLETE
@@ -396,9 +390,7 @@ class TestFromAC_DeleteSourceCascade:
     # ------------------------------------------------------------------
 
     @pytest.mark.asyncio
-    async def test_completed_steps_all_five_in_order_when_all_succeed(
-        self, coordinator: IngestCoordinator
-    ) -> None:
+    async def test_completed_steps_all_five_in_order_when_all_succeed(self, coordinator: IngestCoordinator) -> None:
         """AC4: all 5 canonical step names appear in execution order on success."""
         result = await coordinator.delete_source(_SOURCE_ID)
         assert result.completed_steps == (
@@ -467,17 +459,13 @@ class TestFromAC_DeleteSourceCascade:
     # ------------------------------------------------------------------
 
     @pytest.mark.asyncio
-    async def test_no_failed_step_when_all_succeed(
-        self, coordinator: IngestCoordinator
-    ) -> None:
+    async def test_no_failed_step_when_all_succeed(self, coordinator: IngestCoordinator) -> None:
         """AC5: failed_step is None on full success."""
         result = await coordinator.delete_source(_SOURCE_ID)
         assert result.failed_step is None
 
     @pytest.mark.asyncio
-    async def test_no_error_field_when_all_succeed(
-        self, coordinator: IngestCoordinator
-    ) -> None:
+    async def test_no_error_field_when_all_succeed(self, coordinator: IngestCoordinator) -> None:
         """AC5: error is None on full success."""
         result = await coordinator.delete_source(_SOURCE_ID)
         assert result.error is None
@@ -835,9 +823,7 @@ class TestFromAC_DeleteSourceCascade:
     ) -> None:
         """AC9: re-run triggers LookupError on step 1; steps 2-5 succeed -> COMPLETE."""
         # Simulate a second call where source was already deleted
-        mock_sources.delete_source.side_effect = LookupError(
-            "source already deleted in prior run"
-        )
+        mock_sources.delete_source.side_effect = LookupError("source already deleted in prior run")
         result = await coordinator.delete_source(_SOURCE_ID)
         assert result.status == PurgeStatus.COMPLETE
 
@@ -867,9 +853,7 @@ class TestFromAC_DeleteSourceCascade:
         method = getattr(IngestCoordinator, "delete_source", None)
         assert method is not None, "delete_source method does not exist on IngestCoordinator"
         doc = method.__doc__ or ""
-        assert "idempoten" in doc.lower(), (
-            f"Expected docstring to mention idempotency, got: {doc!r}"
-        )
+        assert "idempoten" in doc.lower(), f"Expected docstring to mention idempotency, got: {doc!r}"
 
     def test_delete_source_docstring_references_d63(self) -> None:
         """AC10: delete_source docstring references design decision D63."""
@@ -900,9 +884,7 @@ class TestFromAC_DeleteSourceCascade:
         method = getattr(ProtocolIC, "delete_source", None)
         assert method is not None, "delete_source not found on protocol IngestCoordinator"
         doc = method.__doc__ or ""
-        assert "forward-recovery" in doc, (
-            f"Expected protocol docstring to mention 'forward-recovery', got: {doc!r}"
-        )
+        assert "forward-recovery" in doc, f"Expected protocol docstring to mention 'forward-recovery', got: {doc!r}"
 
     def test_protocol_delete_source_docstring_no_lookup_error_raises_clause(self) -> None:
         """AC11: protocol docstring Raises clause no longer lists LookupError as raised."""
@@ -924,9 +906,7 @@ class TestFromAC_DeleteSourceCascade:
         method = getattr(ProtocolIC, "delete_source", None)
         assert method is not None, "delete_source not found on protocol IngestCoordinator"
         doc = method.__doc__ or ""
-        assert "caught internally" in doc, (
-            f"Expected protocol docstring to say 'caught internally', got: {doc!r}"
-        )
+        assert "caught internally" in doc, f"Expected protocol docstring to say 'caught internally', got: {doc!r}"
 
     # ------------------------------------------------------------------
     # AC9 (retry) — true two-call proof: partial failure at step 5, then retry
@@ -987,9 +967,7 @@ class TestFromAC_DeleteSourceCascade:
 
         second_call_args = mock_graph.invalidate_evidence_by_chunks.call_args_list[1]
         chunk_ids_on_retry = second_call_args.args[0]
-        assert chunk_ids_on_retry == (), (
-            f"Expected empty chunk_ids on retry, got: {chunk_ids_on_retry!r}"
-        )
+        assert chunk_ids_on_retry == (), f"Expected empty chunk_ids on retry, got: {chunk_ids_on_retry!r}"
 
     @pytest.mark.asyncio
     async def test_rerun_after_step5_partial_enrichment_purge_called_on_retry(
@@ -1065,9 +1043,7 @@ class TestFromAC_DeleteSourceCascade:
         method = getattr(IngestCoordinator, "delete_source", None)
         assert method is not None, "delete_source method does not exist on IngestCoordinator"
         doc = method.__doc__ or ""
-        assert "chunk" in doc.lower(), (
-            f"Expected docstring to mention chunk addressability loss, got: {doc!r}"
-        )
+        assert "chunk" in doc.lower(), f"Expected docstring to mention chunk addressability loss, got: {doc!r}"
 
     def test_delete_source_docstring_documents_post_step2_retry_limitation(
         self,

@@ -602,9 +602,7 @@ class TestFromAC_FactuallyWrongPath:
         assert updated.score == pytest.approx(initial_score)
 
     @pytest.mark.asyncio
-    async def test_factually_wrong_delegates_to_record_factually_wrong_with_task_id(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_factually_wrong_delegates_to_record_factually_wrong_with_task_id(self, tmp_path: Path) -> None:
         """assess_memories calls record_factually_wrong with the supplied task_id."""
         from owlbear_mcp_memory.tools import assess_memories  # noqa: PLC0415
 
@@ -626,9 +624,7 @@ class TestFromAC_FactuallyWrongPath:
         assert "task-sentinel-abc" in all_args
 
     @pytest.mark.asyncio
-    async def test_factually_wrong_passes_entry_updated_at_as_expected_updated_at(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_factually_wrong_passes_entry_updated_at_as_expected_updated_at(self, tmp_path: Path) -> None:
         """assess_memories passes entry.updated_at as expected_updated_at to record_factually_wrong."""
         from owlbear_mcp_memory.tools import assess_memories  # noqa: PLC0415
 
@@ -646,9 +642,7 @@ class TestFromAC_FactuallyWrongPath:
             )
 
         all_args = list(mock_fw.call_args.args) + list(mock_fw.call_args.kwargs.values())
-        assert _TS in all_args, (
-            f"expected_updated_at={_TS!r} was not passed to record_factually_wrong; got: {all_args}"
-        )
+        assert _TS in all_args, f"expected_updated_at={_TS!r} was not passed to record_factually_wrong; got: {all_args}"
 
     @pytest.mark.asyncio
     async def test_factually_wrong_non_voteable_produces_per_item_failure(self, tmp_path: Path) -> None:

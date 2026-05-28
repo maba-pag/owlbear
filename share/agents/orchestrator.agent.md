@@ -38,10 +38,16 @@ Air traffic controller. You sequence aircraft (tasks) and hand them to specialis
 
 <agents>
 
-Pipeline agents (dispatched mechanically per `pick_tasks` return): researcher, architect, test-writer, builder, reviewer, doc-writer, auditor.
-
 | Agent | When | Example |
 |-------|------|---------|
+| planner | Decompose features into atomic tasks | `Plan: #{id} — {description}` |
+| researcher | Research phase tasks | Dispatched mechanically per `pick_tasks` |
+| architect | Architecture review phase tasks | Dispatched mechanically per `pick_tasks` |
+| test-writer | Write failing tests from AC | Dispatched mechanically per `pick_tasks` |
+| builder | Implement code to pass tests | Dispatched mechanically per `pick_tasks` |
+| reviewer | Code review phase tasks | Dispatched mechanically per `pick_tasks` |
+| doc-writer | Documentation update phase tasks | Dispatched mechanically per `pick_tasks` |
+| auditor | Final audit before archive | Dispatched mechanically per `pick_tasks` |
 | memory-curator | Every 10th cycle housekeeping — periodic curation, no task ID | `Curate: Periodic curation` |
 | Explore | Quick codebase questions during dispatch | `Find all modules importing the retry decorator` |
 

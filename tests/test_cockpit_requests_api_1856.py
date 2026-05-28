@@ -224,9 +224,7 @@ def mock_client(mock_engine: MagicMock):
 class TestFromAC_GetRequestsPending:
     """AC1: GET /api/requests/pending — sweep + list + JSON response shape."""
 
-    def test_returns_pending_records_list(
-        self, mock_engine: MagicMock, mock_client: TestClient
-    ) -> None:
+    def test_returns_pending_records_list(self, mock_engine: MagicMock, mock_client: TestClient) -> None:
         """AC1 happy: returns a JSON array containing pending request records."""
         record = _make_action_record()
         mock_engine.list_requests.return_value = [record]
@@ -238,9 +236,7 @@ class TestFromAC_GetRequestsPending:
         assert isinstance(data, list)
         assert len(data) == 1
 
-    def test_response_item_has_required_fields(
-        self, mock_engine: MagicMock, mock_client: TestClient
-    ) -> None:
+    def test_response_item_has_required_fields(self, mock_engine: MagicMock, mock_client: TestClient) -> None:
         """AC1 happy: each item contains request_id, task_id, kind, title, summary, agent, created_at, options, body."""
         record = _make_action_record()
         mock_engine.list_requests.return_value = [record]
@@ -279,9 +275,7 @@ class TestFromAC_GetRequestsPending:
         for field in ("option_id", "label", "confidence", "recommended", "rationale"):
             assert field in option, f"Missing option sub-field: {field!r}"
 
-    def test_action_request_has_empty_options(
-        self, mock_engine: MagicMock, mock_client: TestClient
-    ) -> None:
+    def test_action_request_has_empty_options(self, mock_engine: MagicMock, mock_client: TestClient) -> None:
         """AC1 boundary: action request returns empty options list."""
         record = _make_action_record()
         mock_engine.list_requests.return_value = [record]
@@ -291,9 +285,7 @@ class TestFromAC_GetRequestsPending:
         assert resp.status_code == 200
         assert resp.json()[0]["options"] == []
 
-    def test_returns_empty_list_when_no_pending(
-        self, mock_engine: MagicMock, mock_client: TestClient
-    ) -> None:
+    def test_returns_empty_list_when_no_pending(self, mock_engine: MagicMock, mock_client: TestClient) -> None:
         """AC1 edge: returns empty JSON array when no pending requests exist."""
         mock_engine.list_requests.return_value = []
 
@@ -322,9 +314,7 @@ class TestFromAC_GetRequestsPending:
         # list_requests must still be called after the sweep failure
         mock_engine.list_requests.assert_called_once()
 
-    def test_response_excludes_resolution_field(
-        self, mock_engine: MagicMock, mock_client: TestClient
-    ) -> None:
+    def test_response_excludes_resolution_field(self, mock_engine: MagicMock, mock_client: TestClient) -> None:
         """AC1 boundary: response model extra='forbid' — 'resolution' must not appear in response."""
         record = _make_action_record()
         mock_engine.list_requests.return_value = [record]
@@ -335,9 +325,7 @@ class TestFromAC_GetRequestsPending:
         item = resp.json()[0]
         assert "resolution" not in item
 
-    def test_normal_path_calls_sweep_requests_once(
-        self, mock_engine: MagicMock, mock_client: TestClient
-    ) -> None:
+    def test_normal_path_calls_sweep_requests_once(self, mock_engine: MagicMock, mock_client: TestClient) -> None:
         """AC1 interaction: GET calls engine.sweep_requests() on the normal (non-exception) path."""
         mock_engine.list_requests.return_value = []
 
@@ -382,9 +370,7 @@ class TestFromAC_GetRequestsPending:
 class TestFromAC_PostRequestsResolve:
     """AC2: POST /api/requests/{id}/resolve — UUID4 validation, delegation, error mapping."""
 
-    def test_resolve_decision_request_returns_200(
-        self, mock_engine: MagicMock, mock_client: TestClient
-    ) -> None:
+    def test_resolve_decision_request_returns_200(self, mock_engine: MagicMock, mock_client: TestClient) -> None:
         """AC2 happy: valid UUID4 + decision body with selected_option_id → 200."""
         rid = str(uuid.uuid4())
         mock_engine.resolve_request.return_value = _make_resolved_decision_record(request_id=rid)
@@ -396,9 +382,7 @@ class TestFromAC_PostRequestsResolve:
 
         assert resp.status_code == 200
 
-    def test_resolve_action_request_returns_200(
-        self, mock_engine: MagicMock, mock_client: TestClient
-    ) -> None:
+    def test_resolve_action_request_returns_200(self, mock_engine: MagicMock, mock_client: TestClient) -> None:
         """AC2 happy: valid UUID4 + action body with free_text → 200."""
         rid = str(uuid.uuid4())
         mock_engine.resolve_request.return_value = _make_resolved_action_record(request_id=rid)
@@ -410,9 +394,7 @@ class TestFromAC_PostRequestsResolve:
 
         assert resp.status_code == 200
 
-    def test_response_has_required_fields(
-        self, mock_engine: MagicMock, mock_client: TestClient
-    ) -> None:
+    def test_response_has_required_fields(self, mock_engine: MagicMock, mock_client: TestClient) -> None:
         """AC2 happy: 200 response contains request_id, task_id, kind, title, resolved_at."""
         rid = str(uuid.uuid4())
         mock_engine.resolve_request.return_value = _make_resolved_decision_record(request_id=rid)
@@ -427,9 +409,7 @@ class TestFromAC_PostRequestsResolve:
         for field in ("request_id", "task_id", "kind", "title", "resolved_at"):
             assert field in body, f"Missing response field: {field!r}"
 
-    def test_non_uuid_id_returns_422_with_invalid_request_id(
-        self, mock_client: TestClient
-    ) -> None:
+    def test_non_uuid_id_returns_422_with_invalid_request_id(self, mock_client: TestClient) -> None:
         """AC2 error: non-UUID path param → 422 HTTPException detail='Invalid request id'."""
         resp = mock_client.post(
             "/api/requests/not-a-uuid/resolve",
@@ -439,9 +419,7 @@ class TestFromAC_PostRequestsResolve:
         assert resp.status_code == 422
         assert resp.json()["detail"] == "Invalid request id"
 
-    def test_uuid_v1_id_returns_422_with_invalid_request_id(
-        self, mock_client: TestClient
-    ) -> None:
+    def test_uuid_v1_id_returns_422_with_invalid_request_id(self, mock_client: TestClient) -> None:
         """AC2 boundary: UUID v1 (not UUID4) → 422 HTTPException detail='Invalid request id'."""
         uuid_v1 = "550e8400-e29b-11d4-a716-446655440000"  # UUID version 1
 
@@ -453,14 +431,10 @@ class TestFromAC_PostRequestsResolve:
         assert resp.status_code == 422
         assert resp.json()["detail"] == "Invalid request id"
 
-    def test_engine_not_found_returns_404(
-        self, mock_engine: MagicMock, mock_client: TestClient
-    ) -> None:
+    def test_engine_not_found_returns_404(self, mock_engine: MagicMock, mock_client: TestClient) -> None:
         """AC2 error: engine raises NotFoundError → 404 via existing KanbanError handler."""
         rid = str(uuid.uuid4())
-        mock_engine.resolve_request.side_effect = NotFoundError(
-            code="ERR_NOT_FOUND", user_message="request not found"
-        )
+        mock_engine.resolve_request.side_effect = NotFoundError(code="ERR_NOT_FOUND", user_message="request not found")
 
         resp = mock_client.post(
             f"/api/requests/{rid}/resolve",
@@ -472,9 +446,7 @@ class TestFromAC_PostRequestsResolve:
         body = resp.json()
         assert body.get("code") == "ERR_NOT_FOUND"
 
-    def test_engine_already_resolved_returns_422(
-        self, mock_engine: MagicMock, mock_client: TestClient
-    ) -> None:
+    def test_engine_already_resolved_returns_422(self, mock_engine: MagicMock, mock_client: TestClient) -> None:
         """AC2 error: engine raises ValidationError (ERR_ALREADY_RESOLVED) → 422 via existing handler."""
         rid = str(uuid.uuid4())
         mock_engine.resolve_request.side_effect = ValidationError(
@@ -488,9 +460,7 @@ class TestFromAC_PostRequestsResolve:
 
         assert resp.status_code == 422
 
-    def test_extra_field_in_body_returns_422(
-        self, mock_client: TestClient
-    ) -> None:
+    def test_extra_field_in_body_returns_422(self, mock_client: TestClient) -> None:
         """AC2 error: request body with extra='forbid' — unknown field → 422."""
         rid = str(uuid.uuid4())
 
@@ -506,9 +476,7 @@ class TestFromAC_PostRequestsResolve:
 
         assert resp.status_code == 422
 
-    def test_invalid_kind_value_returns_422(
-        self, mock_client: TestClient
-    ) -> None:
+    def test_invalid_kind_value_returns_422(self, mock_client: TestClient) -> None:
         """AC2 error: kind must be 'decision' or 'action' — unrecognized value → 422."""
         rid = str(uuid.uuid4())
 
@@ -572,9 +540,7 @@ class TestFromAC_BareCompleteNormalization:
         # Verify the route normalized free_text to "" (not None) when delegating
         mock_engine.resolve_request.assert_called_once_with(rid, None, "")
 
-    def test_both_null_no_kind_returns_422(
-        self, mock_client: TestClient
-    ) -> None:
+    def test_both_null_no_kind_returns_422(self, mock_client: TestClient) -> None:
         """AC3 error: both null, kind field absent → 422 with specific detail message."""
         rid = str(uuid.uuid4())
 
@@ -586,9 +552,7 @@ class TestFromAC_BareCompleteNormalization:
         assert resp.status_code == 422
         assert resp.json()["detail"] == "decision requests require selected_option_id or free_text"
 
-    def test_both_null_kind_decision_returns_422(
-        self, mock_client: TestClient
-    ) -> None:
+    def test_both_null_kind_decision_returns_422(self, mock_client: TestClient) -> None:
         """AC3 error: both null + kind='decision' → 422 with specific detail message."""
         rid = str(uuid.uuid4())
 
@@ -600,9 +564,7 @@ class TestFromAC_BareCompleteNormalization:
         assert resp.status_code == 422
         assert resp.json()["detail"] == "decision requests require selected_option_id or free_text"
 
-    def test_both_null_kind_none_returns_422(
-        self, mock_client: TestClient
-    ) -> None:
+    def test_both_null_kind_none_returns_422(self, mock_client: TestClient) -> None:
         """AC3 boundary: kind=null (explicit JSON null) treated as absent → same 422."""
         rid = str(uuid.uuid4())
 
@@ -623,9 +585,7 @@ class TestFromAC_BareCompleteNormalization:
 class TestFromAC_RouteWiring:
     """AC4: routes/requests.py registered in main.py with prefix='/api'."""
 
-    def test_get_requests_route_registered(
-        self, mock_engine: MagicMock, mock_client: TestClient
-    ) -> None:
+    def test_get_requests_route_registered(self, mock_engine: MagicMock, mock_client: TestClient) -> None:
         """AC4 direct: GET /api/requests/pending returns 200 (not 404 — route is registered)."""
         mock_engine.list_requests.return_value = []
 
@@ -633,9 +593,7 @@ class TestFromAC_RouteWiring:
 
         assert resp.status_code == 200
 
-    def test_post_requests_route_registered(
-        self, mock_client: TestClient
-    ) -> None:
+    def test_post_requests_route_registered(self, mock_client: TestClient) -> None:
         """AC4 direct: POST /api/requests/{uuid}/resolve is reachable (returns non-404)."""
         rid = str(uuid.uuid4())
         # Send an invalid body — a registered route returns 422; an absent route returns 404.
@@ -649,14 +607,7 @@ class TestFromAC_RouteWiring:
 
     def test_routes_requests_file_exists(self) -> None:
         """AC4 direct: routes/requests.py exists as a separate file (not inlined into decisions.py)."""
-        cockpit_routes = (
-            Path(__file__).parent.parent
-            / "serve"
-            / "cockpit"
-            / "src"
-            / "owlbear_cockpit"
-            / "routes"
-        )
+        cockpit_routes = Path(__file__).parent.parent / "serve" / "cockpit" / "src" / "owlbear_cockpit" / "routes"
         requests_file = cockpit_routes / "requests.py"
 
         assert requests_file.exists(), (
@@ -708,9 +659,7 @@ class TestFromAC_ErrorEnvelopeAndCanonicalization:
         # Engine must receive the lowercase canonical id, not the original uppercase path param
         mock_engine.resolve_request.assert_called_once_with(rid_lower, None, "done")
 
-    def test_uppercase_uuid4_accepted_returns_200(
-        self, mock_engine: MagicMock, mock_client: TestClient
-    ) -> None:
+    def test_uppercase_uuid4_accepted_returns_200(self, mock_engine: MagicMock, mock_client: TestClient) -> None:
         """AC3 regression: uppercase UUID4 is not rejected by the API (canonicalized → 200)."""
         rid_lower = str(uuid.uuid4())
         rid_upper = rid_lower.upper()

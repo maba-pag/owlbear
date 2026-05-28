@@ -76,18 +76,12 @@ class ContentStore(ContentStoreProtocol):
             """
         )
         # Backfill compatibility for databases created before vectors_synced existed.
-        document_columns = {
-            row[1] for row in self._db.execute("PRAGMA table_info(content_documents)").fetchall()
-        }
+        document_columns = {row[1] for row in self._db.execute("PRAGMA table_info(content_documents)").fetchall()}
         if "vectors_synced" not in document_columns:
-            self._db.execute(
-                "ALTER TABLE content_documents "
-                "ADD COLUMN vectors_synced INTEGER NOT NULL DEFAULT 1"
-            )
+            self._db.execute("ALTER TABLE content_documents ADD COLUMN vectors_synced INTEGER NOT NULL DEFAULT 1")
         if "pending_delete_chunk_ids" not in document_columns:
             self._db.execute(
-                "ALTER TABLE content_documents "
-                "ADD COLUMN pending_delete_chunk_ids TEXT NOT NULL DEFAULT '[]'"
+                "ALTER TABLE content_documents ADD COLUMN pending_delete_chunk_ids TEXT NOT NULL DEFAULT '[]'"
             )
         self._db.execute(
             """
@@ -135,9 +129,7 @@ class ContentStore(ContentStoreProtocol):
         if existing_doc is not None and existing_doc["content_hash"] == content_hash:
             chunk_ids = self._chunk_ids_for_document(document_id)
             if not bool(existing_doc["vectors_synced"]):
-                pending_delete_chunk_ids = self._load_json_str_list(
-                    existing_doc["pending_delete_chunk_ids"]
-                )
+                pending_delete_chunk_ids = self._load_json_str_list(existing_doc["pending_delete_chunk_ids"])
                 if pending_delete_chunk_ids:
                     self._delete_vectors(pending_delete_chunk_ids)
                     self._set_pending_delete_chunk_ids(document_id, ())
@@ -173,10 +165,7 @@ class ContentStore(ContentStoreProtocol):
             raise ValueError(msg)
 
         replaced_ids = self._chunk_ids_for_document(document_id) if existing_doc is not None else ()
-        chunk_rows = [
-            (uuid4().hex, chunk.index, chunk.text, json.dumps(chunk.metadata))
-            for chunk in chunks
-        ]
+        chunk_rows = [(uuid4().hex, chunk.index, chunk.text, json.dumps(chunk.metadata)) for chunk in chunks]
 
         with self._db:
             self._db.execute(
@@ -397,9 +386,7 @@ class ContentStore(ContentStoreProtocol):
 
     def stats(self) -> ContentStats:
         """Return table-backed content counts."""
-        documents = int(
-            self._db.execute("SELECT COUNT(*) AS c FROM content_documents").fetchone()["c"]
-        )
+        documents = int(self._db.execute("SELECT COUNT(*) AS c FROM content_documents").fetchone()["c"])
         chunks = int(self._db.execute("SELECT COUNT(*) AS c FROM content_chunks").fetchone()["c"])
         vectors = int(
             self._db.execute(
@@ -427,8 +414,7 @@ class ContentStore(ContentStoreProtocol):
 
     def _existing_chunks_for_document(self, document_id: str) -> list[tuple[str, str]]:
         rows = self._db.execute(
-            "SELECT id, text FROM content_chunks "
-            "WHERE document_id = ? ORDER BY chunk_index ASC, id ASC",
+            "SELECT id, text FROM content_chunks WHERE document_id = ? ORDER BY chunk_index ASC, id ASC",
             (document_id,),
         ).fetchall()
         return [(str(row["id"]), str(row["text"])) for row in rows]

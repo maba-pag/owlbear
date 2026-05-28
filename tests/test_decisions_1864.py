@@ -345,12 +345,8 @@ class TestFromAC_SweepViaPickTasksIntegration:
             body="## Action\nPerform via sweep.",
         )
 
-        pending_path = (
-            Path(engine.kanban_dir) / "decisions" / "pending" / f"{request.request_id}.md"
-        )
-        resolved_path = (
-            Path(engine.kanban_dir) / "decisions" / "resolved" / f"{request.request_id}.md"
-        )
+        pending_path = Path(engine.kanban_dir) / "decisions" / "pending" / f"{request.request_id}.md"
+        resolved_path = Path(engine.kanban_dir) / "decisions" / "resolved" / f"{request.request_id}.md"
         assert pending_path.exists()
 
         _rewrite_resolution_fields(

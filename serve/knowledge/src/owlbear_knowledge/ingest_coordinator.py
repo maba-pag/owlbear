@@ -288,8 +288,7 @@ class IngestCoordinator:
         filtered_sources = [
             source
             for source in listed_sources
-            if (not request.source_ids or source.id in request.source_ids)
-            and (request.force or source.refreshable)
+            if (not request.source_ids or source.id in request.source_ids) and (request.force or source.refreshable)
         ]
 
         ingest_results: list[IngestResult] = []

@@ -346,4 +346,3 @@ class TestPassthroughWithoutNormalization:
         note_passed = mock_view.end_work.call_args.kwargs["note"]
         assert note_passed == "clean note no escapes"
         assert not _has_norm_guidance(result.guidance)
-

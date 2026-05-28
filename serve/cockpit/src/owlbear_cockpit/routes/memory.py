@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Annotated
 
 from fastapi import APIRouter, Depends
-from owlbear_memory.models import MemoryCategory, MemoryEntry, MemoryState  # noqa: TC002
+from owlbear_memory.models import MemoryCategory, MemoryEntry, MemoryState
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from owlbear_cockpit.deps import get_memory_engine
