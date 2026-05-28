@@ -27,7 +27,7 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 > **TODO:** stale — `get_consolidation_candidates` was retired per CP1; this row should be removed and the package description updated to remove "consolidation candidate review" once the retired tool is confirmed purged from server.py
 
 | `knowledge_stats` | Summary statistics: document, entity, and edge counts plus source count, chunk count, enrichment ratio, and consolidation candidates remaining |
-| `knowledge_sources_refresh` | Re-ingest a registered source by source ID; response includes full, partial, skipped, failed, error, and warning counts |
+| `knowledge_sources_refresh` | Re-ingest a registered source by source ID; response includes `source_id` (echoed), `sources_refreshed` (int), and `errors` (list of `{source_id, error, timestamp}` entries); raises `ToolError` when source is not found; returns error envelope when source is not active |
 | `knowledge_sources_delete` | Delete a source and all its associated data (vectors, documents, chunks, entities, enrichment) via coordinator-orchestrated purge; returns a purge-result summary with status (`complete`/`partial`), completed steps, failed step, error, and per-domain sub-results (source, content, enrichment, graph) |
 | `knowledge_enrichment_claim_batch` | Atomically claim a batch of chunks ready for enrichment |
 | `knowledge_enrichment_store` | Dual-mode enrichment persist: Phase 1 (`chunk_id`, `entities`, `edges`) marks chunk enriched; Phase 2 (`candidate_id`, `edges`) writes cross-source edges or records a reviewed-pair dismissal |
