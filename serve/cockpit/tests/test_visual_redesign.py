@@ -90,5 +90,3 @@ class TestCockpitVisualRedesignSuiteGates:
 # ─────────────────────────────────────────────────────────────────────────────
 # AC-2: Inline-style budget — at most 4 style={…} attributes, each justified
 # ─────────────────────────────────────────────────────────────────────────────
-
-

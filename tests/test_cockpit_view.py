@@ -255,10 +255,6 @@ class TestFromAC_SourceConsumersImport:
 # ---------------------------------------------------------------------------
 
 
-
-
-
-
 class TestFromAC_ViewNoPrivateAccess:
     """AC6: view.py must not use any ._-prefixed engine attributes."""
 
@@ -695,5 +691,3 @@ def _updated(engine: KanbanEngine, task_id: int) -> str:
 # ---------------------------------------------------------------------------
 # TestFromAC_ArchivalValidation422Surfacing
 # ---------------------------------------------------------------------------
-
-

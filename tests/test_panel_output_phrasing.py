@@ -57,5 +57,3 @@ def _extract_section_body(content: str) -> str | None:
             break
         body.append(line)
     return "\n".join(body)
-
-

@@ -224,5 +224,3 @@ def vitest_failing_files(vitest_output: str) -> set[str]:
         if stem:
             failing.add(stem)
     return failing
-
-

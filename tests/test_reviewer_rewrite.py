@@ -40,8 +40,6 @@ _CODE_REVIEW_SKILL = _REPO_ROOT / "share" / "skills" / "w-code-review" / "SKILL.
 _PIPELINE_PROTOCOL = _REPO_ROOT / "share" / "skills" / "r-pipeline-protocol" / "SKILL.md"
 
 
-
-
 class TestFromAC_PipelineProtocolUpdate:
     """Verify r-pipeline-protocol/SKILL.md trust model and reviewer contract updates. Task #1407."""
 

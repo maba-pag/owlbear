@@ -7,5 +7,3 @@ from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _SHELL_TSX = _REPO_ROOT / "serve" / "cockpit" / "web" / "src" / "Shell.tsx"
-
-

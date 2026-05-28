@@ -13,5 +13,3 @@ SHELL_PATH = ROOT / "serve/cockpit/web/src/Shell.tsx"
 TEST_PATH = ROOT / "serve/cockpit/web/src/__tests__/Shell_1162.test.tsx"
 
 # Promoted from archived task #1162.
-
-

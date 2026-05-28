@@ -19,5 +19,3 @@ _NEW_DR_MSG = (
     "⚠️ ACTION REQUIRED: Create a Decision Request via the create_dr tool."
     " Blocks without a DR are invisible to the pipeline."
 )
-
-

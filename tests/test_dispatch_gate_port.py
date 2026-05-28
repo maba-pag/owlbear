@@ -675,8 +675,6 @@ def _make_board_incompatible_buckets(base_dir: Path) -> Path:
     return kanban_dir
 
 
-
-
 class TestFromAC_PostRehydrateArchivedGuard:
     """AC11: After show_task() returns in pick_tasks(), candidates with
     status='archived' must be skipped — they must not enter wave assembly.

@@ -193,8 +193,6 @@ def _make_invalid_priority_task(tmp_path: Path) -> Path:
 # ---------------------------------------------------------------------------
 
 
-
-
 class TestFromAC_StorageSubmodelPaths:
     """AC2 — storage.py non-save_config access sites must use config.paths sub-model.
 
@@ -219,7 +217,3 @@ class TestFromAC_StorageSubmodelPaths:
 # ---------------------------------------------------------------------------
 # AC4 — Live config.yml has no flat duplicate keys
 # ---------------------------------------------------------------------------
-
-
-
-

@@ -477,8 +477,6 @@ class TestFromAC_BodyOnlyFormat:
 # ---------------------------------------------------------------------------
 
 
-
-
 class TestFromAC_LimitParameter:
     """AC7: limit caps the number of entries returned; default is 20."""
 

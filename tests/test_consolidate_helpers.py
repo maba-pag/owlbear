@@ -289,8 +289,6 @@ class TestFromAC_CorruptionImportsFromNaming:
 # ---------------------------------------------------------------------------
 
 
-
-
 class TestFromAC_NoCircularImports:
     """AC6: No circular imports — owlbear_kanban._naming importable, full package loads."""
 

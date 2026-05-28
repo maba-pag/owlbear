@@ -146,5 +146,3 @@ class TestFromAC_StatusNamesMockContract:
 # AC4: move_task adapter returns non-empty guidance for forward-skip via
 #      the fallback path, with the mock providing correct list[str] statuses.
 # ---------------------------------------------------------------------------
-
-

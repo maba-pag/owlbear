@@ -181,8 +181,6 @@ policy:
 # ---------------------------------------------------------------------------
 
 
-
-
 class TestFromAC_SuccessAtTerminalStatus:
     """end_work(outcome="success") from terminal status archives with archival_reason="completed".
 
@@ -342,10 +340,6 @@ class TestFromAC_RejectWithoutMoveToContract:
 # ---------------------------------------------------------------------------
 # TestFromAC_CustomConfigAdvancement — AC1 discriminating: non-stock config
 # ---------------------------------------------------------------------------
-
-
-
-
 
 
 class TestFromAC_AgentViewNoMasking:

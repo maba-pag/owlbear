@@ -61,5 +61,3 @@ def _is_excluded(path: Path) -> bool:
         else:
             return True
     return False
-
-

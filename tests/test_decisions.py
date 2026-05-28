@@ -430,5 +430,3 @@ def _write_resolved(resolved_dir: Path, filename: str, content: str = _SENTINEL)
 # ---------------------------------------------------------------------------
 # AC1 (td:2): Move to resolved/ succeeds without overwrite when basename conflicts
 # ---------------------------------------------------------------------------
-
-

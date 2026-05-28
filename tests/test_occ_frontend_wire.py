@@ -197,8 +197,6 @@ class TestFromAC_TasksEndpointIncludesUpdated:
 # ---------------------------------------------------------------------------
 
 
-
-
 class TestFromAC_RoundTripOCCProof:
     """AC6: updated token from GET /api/tasks must be accepted by POST /move (no 409)."""
 
@@ -267,5 +265,3 @@ class TestFromAC_RoundTripOCCProof:
 # AC7: MCP fixture remediation
 # TaskSummary.updated is required; MCP test fixtures must supply it
 # ---------------------------------------------------------------------------
-
-

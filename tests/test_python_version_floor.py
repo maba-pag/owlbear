@@ -83,10 +83,6 @@ def _has_313_plus_features(src_dir: pathlib.Path) -> bool:
     return False
 
 
-
-
-
-
 class TestFromAC_PythonVersionAlignment:
     """AC4: .python-version must align to the project-wide Python 3.12 floor."""
 
@@ -133,8 +129,6 @@ class TestFromAC_RenovatePythonPolicy:
             "AC5 requires matchManagers to include 'pep621' or 'uv' so the rule "
             "actually applies to pyproject.toml requires-python updates."
         )
-
-
 
 
 class TestFromAC_PrerequisiteDocsAlignment:

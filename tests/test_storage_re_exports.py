@@ -131,8 +131,6 @@ class TestFromAC_EngineImportMigration:
 # ---------------------------------------------------------------------------
 
 
-
-
 class TestFromAC_RootTestPatchTargets:
     """AC4: root-level tests must use updated patch targets matching engine.py's
     new import paths (not owlbear_kanban.storage.*)."""
@@ -238,8 +236,6 @@ class TestFromAC_EngineNewImportTargets:
 # ---------------------------------------------------------------------------
 # AC3 (positive): package-local tests import from source modules
 # ---------------------------------------------------------------------------
-
-
 
 
 class TestFromAC_RootTestNewPatchTargets:

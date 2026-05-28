@@ -64,5 +64,3 @@ def _collect_serve_ref_violations(root: Path) -> list[tuple[Path, int, str]]:
                 continue
             violations.append((md_file, lineno, line))
     return violations
-
-

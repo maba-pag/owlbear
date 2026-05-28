@@ -38,8 +38,6 @@ _HOOKS = _SRC / "hooks"
 # ---------------------------------------------------------------------------
 
 
-
-
 class TestFromAC_KanbanBoardMemoRemoval:
     """All 8 manual-memoization callsites in KanbanBoard.tsx must be removed."""
 
@@ -122,8 +120,6 @@ class TestFromAC_KanbanBoardMemoRemoval:
 # ---------------------------------------------------------------------------
 # AC#6 — Callsite removal: usePolling.ts (callsite 9)
 # ---------------------------------------------------------------------------
-
-
 
 
 class TestFromAC_UseConnectionHealthMemoRemoval:

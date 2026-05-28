@@ -211,5 +211,3 @@ class TestFromAC_KanbanBoardLegacyRemoval:
 # ---------------------------------------------------------------------------
 # AC6 (new, cycle 2): Durable suites aligned to new polling architecture
 # ---------------------------------------------------------------------------
-
-

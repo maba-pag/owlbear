@@ -59,8 +59,6 @@ def _make_mcp_ctx(app_ctx: AppContext) -> MagicMock:
 # ---------------------------------------------------------------------------
 
 
-
-
 class TestFromAC_ParentClearSemantics:
     """AC3: Parent can be set and cleared through an explicit contract."""
 
@@ -115,7 +113,3 @@ class TestFromAC_ParentClearSemantics:
 # AC4: MCP/AgentView must expose title editing with non-empty validation,
 #      OR the task must record an explicit decision that title editing is excluded.
 # ---------------------------------------------------------------------------
-
-
-
-

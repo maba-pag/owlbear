@@ -959,8 +959,6 @@ from owlbear_mcp_kanban.server import app_lifespan, mcp
 # ---------------------------------------------------------------------------
 
 
-
-
 class TestFromAC_LifespanCallRemoval:
     """app_lifespan must not invoke server.remove_tool for KANBAN_TOOLS_EXCLUDE."""
 

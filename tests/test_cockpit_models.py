@@ -332,8 +332,6 @@ class TestFromAC_CommentRefsCockpitKanbanRoutesClean:
 # ---------------------------------------------------------------------------
 
 
-
-
 class TestFromAC_CommentRefs1137DocstringClean:
     """AC3 (Cycle 2): test_occ_frontend_wire.py module docstring must not name TaskSummaryOut.
 

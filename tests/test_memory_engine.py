@@ -89,10 +89,6 @@ def _make_entry(**kwargs: object) -> MemoryEntry:
 # ---------------------------------------------------------------------------
 
 
-
-
-
-
 class TestFromAC_MalformedLogging:
     """load() must emit a WARNING-level log for each malformed file it skips.
 
@@ -150,5 +146,3 @@ class TestFromAC_MalformedLogging:
 # ---------------------------------------------------------------------------
 # AC: Directory auto-created on first write
 # ---------------------------------------------------------------------------
-
-

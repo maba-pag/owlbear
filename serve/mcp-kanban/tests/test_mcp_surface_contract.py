@@ -141,8 +141,6 @@ def _find_repo_root() -> Path:
 # ---------------------------------------------------------------------------
 
 
-
-
 class TestFromAC_ModuleSourceOrigin:
     """AC2: owlbear_mcp_kanban.__file__ resolves under the dev repo working tree."""
 
