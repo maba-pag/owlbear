@@ -9,6 +9,7 @@ from itertools import combinations
 from uuid import uuid4
 
 from owlbear_knowledge.protocols.common import RelationType
+from owlbear_knowledge.protocols.content import ContentStore
 from owlbear_knowledge.protocols.enrichment import (
     EnrichmentBatch,
     EnrichmentDiscardResult,
@@ -41,10 +42,17 @@ class EnrichmentStore(EnrichmentStoreProtocol):
     _CLAIM_TTL_SECONDS = 600
     _MIN_SHARED_CHUNKS_FOR_SUGGESTION = 2
 
-    def __init__(self, *, db: sqlite3.Connection, graph: GraphStore | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        db: sqlite3.Connection,
+        graph: GraphStore | None = None,
+        content: ContentStore | None = None,
+    ) -> None:
         self._db = db
         self._db.row_factory = sqlite3.Row
         self._graph = graph
+        self._content = content
 
     def ensure_tables(self) -> None:
         """Create Enrichment-owned tables if they do not yet exist."""
@@ -417,7 +425,7 @@ class EnrichmentStore(EnrichmentStoreProtocol):
             )
             edge_ids.append(edge_record.id)
 
-        for entity, entity_id in zip(entities, entity_ids, strict=False):
+        for entity, entity_id in zip(entities, entity_ids, strict=True):
             evidence_record = graph.add_evidence(
                 EvidenceInput(
                     chunk_id=chunk_id,
@@ -429,7 +437,7 @@ class EnrichmentStore(EnrichmentStoreProtocol):
             )
             evidence_ids.append(evidence_record.id)
 
-        for relation, edge_id in zip(relations, edge_ids, strict=False):
+        for relation, edge_id in zip(relations, edge_ids, strict=True):
             evidence_record = graph.add_evidence(
                 EvidenceInput(
                     chunk_id=chunk_id,
@@ -475,17 +483,32 @@ class EnrichmentStore(EnrichmentStoreProtocol):
             evidence_ids=tuple(evidence_ids),
         )
 
-    def suggest_intra_doc_edges(self, document_id: str) -> tuple[SuggestedEdge, ...]:
+    def suggest_intra_doc_edges(
+        self,
+        document_id: str,
+        *,
+        confidence_threshold: float = 0.5,
+    ) -> tuple[SuggestedEdge, ...]:
         """Return co-occurrence suggestions for entities in a document's chunks."""
-        chunk_rows = self._db.execute(
-            "SELECT id FROM content_chunks WHERE document_id = ? ORDER BY chunk_index, id",
-            (document_id,),
-        ).fetchall()
-        if not chunk_rows:
-            msg = f"unknown document_id: {document_id!r}"
-            raise LookupError(msg)
+        # Use ContentStore protocol if available; fall back to direct SQL
+        if self._content is not None:
+            chunks = self._content.list_chunks(document_id)
+            if not chunks:
+                msg = f"unknown document_id: {document_id!r}"
+                raise LookupError(msg)
+            chunk_ids = tuple(c.id for c in chunks)
+        else:
+            chunk_rows = self._db.execute(
+                "SELECT id FROM content_chunks WHERE document_id = ? ORDER BY chunk_index, id",
+                (document_id,),
+            ).fetchall()
+            if not chunk_rows:
+                msg = f"unknown document_id: {document_id!r}"
+                raise LookupError(msg)
+            chunk_ids = tuple(str(row["id"]) for row in chunk_rows)
 
-        chunk_ids = tuple(str(row["id"]) for row in chunk_rows)
+        # Evidence reading uses direct SQL — shared-DB bulk read avoids N+1
+        # protocol calls (GraphStore.claims_for_chunk is per-chunk).
         evidence_rows = self._db.execute(
             """
             SELECT chunk_id, entity_id
@@ -496,8 +519,7 @@ class EnrichmentStore(EnrichmentStoreProtocol):
             """,
             (EvidenceClaimType.ENTITY.value, json.dumps(chunk_ids)),
         ).fetchall()
-
-        entities_by_chunk: dict[str, set[str]] = {chunk_id: set() for chunk_id in chunk_ids}
+        entities_by_chunk: dict[str, set[str]] = {cid: set() for cid in chunk_ids}
         for row in evidence_rows:
             entities_by_chunk[str(row["chunk_id"])].add(str(row["entity_id"]))
 
@@ -512,12 +534,15 @@ class EnrichmentStore(EnrichmentStoreProtocol):
         for (source_id, target_id), shared_chunks in sorted(pair_counts.items()):
             if shared_chunks < self._MIN_SHARED_CHUNKS_FOR_SUGGESTION:
                 continue
+            confidence = shared_chunks / total_chunks
+            if confidence < confidence_threshold:
+                continue
             suggestions.append(
                 SuggestedEdge(
                     source_entity_id=source_id,
                     target_entity_id=target_id,
                     relation_type=RelationType.RELATED_TO,
-                    confidence=shared_chunks / total_chunks,
+                    confidence=confidence,
                     reason=(f"co-occurred in {shared_chunks} of {total_chunks} chunks"),
                 )
             )
@@ -584,6 +609,8 @@ class EnrichmentStore(EnrichmentStoreProtocol):
             predicates.append("COALESCE(s.enrich, 0) = 1")
 
         if scopes and self._table_exists("content_chunks"):
+            # Pragmatic shared-DB join — Content-owned table accessed directly
+            # for performance (avoids N+1 protocol calls in claim path).
             joins.append("JOIN content_chunks AS c ON c.id = q.chunk_id")
             predicates.append("COALESCE(c.scope, 'global') IN (SELECT value FROM json_each(?))")
             params.append(json.dumps(scopes))

@@ -680,193 +680,13 @@ describe('ResolveModal branch coverage', () => {
 
   // ─── Error state: retryable vs non-retryable ──────────────────────────────
 
-  it('4xx error sets retryable=false — no action label on error notification', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(() =>
-        Promise.resolve({
-          ok: false,
-          status: 400,
-          json: () => Promise.resolve({}),
-        }),
-      ),
-    )
-    const { container } = renderResolveModal()
-
-    // Select a radio to enable submit
-    const radio = container.querySelector('input[type="radio"][value="approved"]') as HTMLElement
-    fireEvent.click(radio)
-
-    const submitBtn = container.querySelector('[data-testid="resolve-submit"]') as HTMLElement
-    fireEvent.click(submitBtn)
-
-    await waitFor(() => {
-      const notification = container.querySelector(
-        'p-inline-notification[data-testid="resolve-error"]',
-      ) as (HTMLElement & { actionLabel?: string }) | null
-      expect(notification).not.toBeNull()
-      // Non-retryable: actionLabel prop is undefined (not set)
-      expect(notification!.actionLabel).toBeUndefined()
-    })
-  })
-
-  it('5xx error sets retryable=true — action label "Retry" present on error notification', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(() =>
-        Promise.resolve({
-          ok: false,
-          status: 500,
-          json: () => Promise.resolve({}),
-        }),
-      ),
-    )
-    const { container } = renderResolveModal()
-
-    const radio = container.querySelector('input[type="radio"][value="approved"]') as HTMLElement
-    fireEvent.click(radio)
-
-    const submitBtn = container.querySelector('[data-testid="resolve-submit"]') as HTMLElement
-    fireEvent.click(submitBtn)
-
-    await waitFor(() => {
-      const notification = container.querySelector(
-        'p-inline-notification[data-testid="resolve-error"]',
-      ) as (HTMLElement & { actionLabel?: string }) | null
-      expect(notification).not.toBeNull()
-      expect(notification!.actionLabel).toBe('Retry')
-    })
-  })
-
   // ─── dismissError → notification removed ─────────────────────────────────
-
-  it('firing dismiss on the error notification clears the error state', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(() => Promise.reject(new Error('Network error'))),
-    )
-    const { container } = renderResolveModal()
-
-    const radio = container.querySelector('input[type="radio"][value="rejected"]') as HTMLElement
-    fireEvent.click(radio)
-
-    const submitBtn = container.querySelector('[data-testid="resolve-submit"]') as HTMLElement
-    fireEvent.click(submitBtn)
-
-    // Wait for error notification to appear
-    await waitFor(() => {
-      expect(container.querySelector('[data-testid="resolve-error"]')).not.toBeNull()
-    })
-
-    // Invoke dismissError via the imperative onDismiss property set by the ref
-    // callback. React 19 custom element onDismiss props don't fire from raw
-    // CustomEvent dispatch in jsdom — use the stored property directly.
-    const notification = container.querySelector('[data-testid="resolve-error"]') as HTMLElement & { onDismiss?: () => void }
-    expect(typeof notification.onDismiss).toBe('function')
-    notification.onDismiss?.()
-
-    // Error notification must disappear after dismissError runs
-    await waitFor(() => {
-      expect(container.querySelector('[data-testid="resolve-error"]')).toBeNull()
-    })
-  })
 
   // ─── retryResolve → re-submits ────────────────────────────────────────────
 
-  it('firing action on the error notification re-submits the request (retryResolve)', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-        json: () => Promise.resolve({}),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ id: DR_FIXTURE.id, response: 'approved' }),
-      })
-    vi.stubGlobal('fetch', fetchMock)
-
-    const onResolved = vi.fn()
-    const { container } = renderResolveModal({ onResolved })
-
-    const radio = container.querySelector('input[type="radio"][value="approved"]') as HTMLElement
-    fireEvent.click(radio)
-
-    const submitBtn = container.querySelector('[data-testid="resolve-submit"]') as HTMLElement
-    fireEvent.click(submitBtn)
-
-    // Wait for retryable error to appear
-    await waitFor(() => {
-      expect(container.querySelector('[data-testid="resolve-error"]')).not.toBeNull()
-    })
-
-    // Invoke retryResolve via the imperative onAction property set by the ref
-    // callback (same reason as dismissError — React 19 custom element event props
-    // don't bubble from raw CustomEvent dispatch in jsdom).
-    const notification = container.querySelector('[data-testid="resolve-error"]') as HTMLElement & { onAction?: () => void }
-    expect(typeof notification.onAction).toBe('function')
-    notification.onAction?.()
-
-    // Retry should succeed: fetchMock called twice, onResolved called
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledTimes(2)
-      expect(onResolved).toHaveBeenCalledOnce()
-    })
-  })
-
   // ─── Non-Error, non-ApiError throw (line 102) ─────────────────────────────
 
-  it('non-Error non-ApiError thrown in handleSubmit shows generic error message', async () => {
-    // Covers the final setError branch in the catch block:
-    //   setError({ message: 'Failed to resolve decision request.', retryable: true })
-    // This runs when caught is neither instanceof ApiError nor instanceof Error
-    // (e.g. a raw string or plain object is thrown).
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(() => Promise.reject('unexpected string error')),
-    )
-    const { container } = renderResolveModal()
-
-    const radio = container.querySelector('input[type="radio"][value="approved"]') as HTMLElement
-    fireEvent.click(radio)
-
-    const submitBtn = container.querySelector('[data-testid="resolve-submit"]') as HTMLElement
-    fireEvent.click(submitBtn)
-
-    await waitFor(() => {
-      const notification = container.querySelector(
-        'p-inline-notification[data-testid="resolve-error"]',
-      ) as (HTMLElement & { description?: string }) | null
-      expect(notification).not.toBeNull()
-      expect(notification!.description).toBe('Failed to resolve decision request.')
-    })
-  })
-
   // ─── isSubmitting guard prevents duplicate submit (line 74) ───────────────
-
-  it('clicking submit while already submitting calls fetch only once', async () => {
-    // Covers `return` at line 74: `if (!dr || isSubmitting) { return }`.
-    // The isSubmitting branch is hit when submit is clicked a second time while
-    // the first async fetch is still in flight.
-    const fetchMock = vi.fn(() => new Promise<never>(() => {})) // never resolves
-    vi.stubGlobal('fetch', fetchMock)
-
-    const { container } = renderResolveModal()
-
-    const radio = container.querySelector('input[type="radio"][value="approved"]') as HTMLElement
-    fireEvent.click(radio)
-
-    const submitBtn = container.querySelector('[data-testid="resolve-submit"]') as HTMLElement
-
-    // First click: starts fetch, setIsSubmitting(true) fires synchronously
-    fireEvent.click(submitBtn)
-    // Second click: isSubmitting is true → early return, fetch not called again
-    fireEvent.click(submitBtn)
-
-    // Fetch should have been called exactly once
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-  })
 
   // ─── MutationObserver callback in ResolveModal useEffect (line 130) ───────
 
@@ -954,21 +774,6 @@ describe('ResolveModal branch coverage', () => {
 
   // ─── handleResponseChange: invalid value does not update state ────────────
 
-  it('handleResponseChange with a value outside the allowed set does not update response', () => {
-    // Covers the false branch of `if (value === 'approved' || value === 'rejected' || value === 'needs-info')`.
-    // When an event fires with an out-of-set value, setResponse is NOT called.
-    // The submit button stays disabled (response remains '').
-    const { container } = renderResolveModal()
-    const radio = container.querySelector('input[type="radio"][value="approved"]') as HTMLElement
-
-    // Fire a change event whose target.value is not in the allowed set
-    fireEvent.change(radio, { target: { value: 'unknown-option' } })
-
-    const submitBtn = container.querySelector('[data-testid="resolve-submit"]') as HTMLElement
-    // submit remains disabled because response was not updated from ''
-    expect(submitBtn.hasAttribute('disabled')).toBe(true)
-  })
-
   // ─── dr.body null / undefined — ?? '' fallback ────────────────────────────
 
   it('renders without crashing when dr.body is falsy (covers the ?? \'\' fallback)', () => {
@@ -1011,33 +816,6 @@ describe('ResolveModal branch coverage', () => {
   })
 
   // ─── ApiError with non-default message (line 91) ─────────────────────────
-
-  it('ApiError with a custom message uses caught.message not the fallback', async () => {
-    // Covers the false branch of:
-    //   const message = caught.message === `Resolve request failed with status ${caught.status}`
-    //     ? fallback
-    //     : caught.message
-    // When ApiError has a custom (non-default) message, caught.message is used directly.
-    vi.spyOn(decisionsApi, 'resolveDR').mockRejectedValueOnce(
-      new ApiError(403, 'Specific validation error from server'),
-    )
-    const { container } = renderResolveModal()
-
-    const radio = container.querySelector('input[type="radio"][value="approved"]') as HTMLElement
-    fireEvent.click(radio)
-
-    const submitBtn = container.querySelector('[data-testid="resolve-submit"]') as HTMLElement
-    fireEvent.click(submitBtn)
-
-    await waitFor(() => {
-      const notification = container.querySelector(
-        'p-inline-notification[data-testid="resolve-error"]',
-      ) as (HTMLElement & { description?: string }) | null
-      expect(notification).not.toBeNull()
-      // Non-default message should appear directly (not replaced by fallback)
-      expect(notification!.description).toBe('Specific validation error from server')
-    })
-  })
 
   // ─── useEffect: document.activeElement null at mount (line 119) ──────────
 

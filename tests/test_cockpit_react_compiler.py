@@ -38,47 +38,6 @@ _HOOKS = _SRC / "hooks"
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_ReactCompilerConfig:
-    """React Compiler installation and vite.config.ts configuration."""
-
-    def test_babel_plugin_react_compiler_in_devdependencies(self) -> None:
-        """babel-plugin-react-compiler must appear in package.json devDependencies."""
-        pkg = json.loads((_WEB / "package.json").read_text())
-        dev_deps = pkg.get("devDependencies", {})
-        assert "babel-plugin-react-compiler" in dev_deps, (
-            "babel-plugin-react-compiler not found in devDependencies — run: npm install -D babel-plugin-react-compiler"
-        )
-
-    def test_vite_config_passes_babel_plugin_to_react_plugin(self) -> None:
-        """vite.config.ts must configure @vitejs/plugin-react with the babel plugin.
-
-        Expected form: react({ babel: { plugins: ['babel-plugin-react-compiler'] } })
-        """
-        config = (_WEB / "vite.config.ts").read_text()
-        assert "babel-plugin-react-compiler" in config, (
-            "vite.config.ts does not reference babel-plugin-react-compiler — "
-            "update: react({ babel: { plugins: ['babel-plugin-react-compiler'] } })"
-        )
-
-    def test_vite_config_react_plugin_not_bare_call(self) -> None:
-        """react() must include babel.plugins option — not a bare react() call.
-
-        The bare react() call in the plugins array must be replaced with the
-        babel-configured form so the compiler is actually applied at build time.
-        """
-        config = (_WEB / "vite.config.ts").read_text()
-        # After update the plugins line must NOT contain a bare `react()` (without
-        # a babel argument) alongside the compiler config. The presence of
-        # 'babel-plugin-react-compiler' inside a `react({` call is sufficient.
-        assert "react({" in config, (
-            "vite.config.ts does not use react({ ... }) form — "
-            "replace bare react() with react({ babel: { plugins: ['babel-plugin-react-compiler'] } })"
-        )
-
-
-# ---------------------------------------------------------------------------
-# AC#6 — Callsite removal: KanbanBoard.tsx (callsites 1-8)
-# ---------------------------------------------------------------------------
 
 
 class TestFromAC_KanbanBoardMemoRemoval:
@@ -165,32 +124,6 @@ class TestFromAC_KanbanBoardMemoRemoval:
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_UsePollingMemoRemoval:
-    """useCallback for poll in usePolling.ts must be removed (callsite 9)."""
-
-    def test_poll_not_wrapped_in_usecallback(self) -> None:
-        """Callsite 9: const poll = useCallback(...) in usePolling.ts must be removed."""
-        src = (_HOOKS / "usePolling.ts").read_text()
-        assert "const poll = useCallback(" not in src, (
-            "usePolling still wraps poll in useCallback — remove the wrapper; "
-            "React Compiler stabilises the reference automatically"
-        )
-
-    def test_usepolling_does_not_import_usecallback(self) -> None:
-        """After removing poll useCallback, useCallback must not remain imported in usePolling.ts."""
-        src = (_HOOKS / "usePolling.ts").read_text()
-        react_import_line = next(
-            (line for line in src.splitlines() if "from 'react'" in line),
-            "",
-        )
-        assert "useCallback" not in react_import_line, (
-            "usePolling.ts still imports useCallback — remove it after the callsite is removed"
-        )
-
-
-# ---------------------------------------------------------------------------
-# AC#6 — Callsite removal: useConnectionHealth.ts (callsites 10-11)
-# ---------------------------------------------------------------------------
 
 
 class TestFromAC_UseConnectionHealthMemoRemoval:

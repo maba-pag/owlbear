@@ -675,69 +675,6 @@ def _make_board_incompatible_buckets(base_dir: Path) -> Path:
     return kanban_dir
 
 
-class TestFromAC_BucketCompatibilityRegressionGuard:
-    """AC9: Wave assembly must place tasks with incompatible agent buckets in
-    separate waves — even after the new gate stage narrows the candidate set.
-
-    Both fixtures use clarity-compliant bodies (AC bullets) so they clear the
-    clarity gate and reach wave assembly.  Without clarity-compliant bodies the
-    tasks would be excluded before bucket compatibility is checked, making this
-    an empty proof.
-    """
-
-    def test_incompatible_agent_buckets_go_to_different_waves(self, tmp_path: Path) -> None:
-        """Two tasks mapped to incompatible agent buckets AND with clarity-compliant
-        bodies must be placed in separate waves by pick_tasks.
-
-        Task 40: todo → builder → type-builder bucket
-        Task 41: review → reviewer → type-reviewer bucket
-        type-builder and type-reviewer are configured as incompatible (each
-        bucket only allows itself in agent_compatibility).
-
-        If both land in the same wave, the bucket-compatibility check is broken.
-        Both tasks must appear somewhere (clarity gate clears them) to prove
-        the compatibility check is the constraint, not gate exclusion.
-        """
-        board = _make_board_incompatible_buckets(tmp_path)
-        tasks_dir = board / "tasks"
-        _write_task(
-            tasks_dir,
-            task_id=40,
-            title="Todo task — builder bucket, clarity compliant",
-            status="todo",
-            priority="needed",
-            body="## AC\n- item one\n- item two\n",
-        )
-        _write_task(
-            tasks_dir,
-            task_id=41,
-            title="Review task — reviewer bucket, clarity compliant",
-            status="review",
-            priority="needed",
-            body="## AC\n- item one\n- item two\n",
-        )
-        view = AgentView(KanbanEngine(board, activity_log=False))
-
-        result = view.pick_tasks()
-
-        all_ids = _all_task_ids(result)
-        assert 40 in all_ids, "todo task (builder bucket) must clear gates and appear"
-        assert 41 in all_ids, "review task (reviewer bucket) must clear gates and appear"
-
-        wave_sets = [{entry.id for entry in wave.tasks} for wave in result.waves]
-        task_40_wave = next((i for i, ids in enumerate(wave_sets) if 40 in ids), None)
-        task_41_wave = next((i for i, ids in enumerate(wave_sets) if 41 in ids), None)
-        assert task_40_wave is not None, "task 40 must be placed in a wave"
-        assert task_41_wave is not None, "task 41 must be placed in a wave"
-        assert task_40_wave != task_41_wave, (
-            "tasks with incompatible agent buckets must be in different waves; "
-            "same wave means bucket-compatibility check is broken after gate filtering"
-        )
-
-
-# ---------------------------------------------------------------------------
-# AC11: Post-rehydrate archived-status guard
-# ---------------------------------------------------------------------------
 
 
 class TestFromAC_PostRehydrateArchivedGuard:

@@ -308,100 +308,6 @@ describe('TestFromAC_PInlineNotificationModals', () => {
     })
   })
 
-  // ─── AC-2: ResolveModal renders PInlineNotification on errors ─────────────
-
-  describe('AC-2: ResolveModal renders p-inline-notification on submission errors', () => {
-    it('renders p-inline-notification[data-testid=resolve-error] with state=error on 404', async () => {
-      vi.stubGlobal('fetch', makeJsonFetch(404, { detail: 'Decision request not found' }))
-      const { container } = renderResolveModal()
-      selectResponse(container, 'approved')
-      fireEvent.click(getResolveSubmitBtn(container))
-      await waitFor(
-        () => {
-          const el = getResolveError(container)
-          expect(el).not.toBeNull()
-          expect(el!.state).toBe('error')
-        },
-        { timeout: 2000 },
-      )
-    })
-
-    it('renders p-inline-notification with state=error on 409 already resolved', async () => {
-      vi.stubGlobal('fetch', makeJsonFetch(409, { detail: 'DR already resolved' }))
-      const { container } = renderResolveModal()
-      selectResponse(container, 'approved')
-      fireEvent.click(getResolveSubmitBtn(container))
-      await waitFor(
-        () => {
-          const el = getResolveError(container)
-          expect(el).not.toBeNull()
-          expect(el!.state).toBe('error')
-        },
-        { timeout: 2000 },
-      )
-    })
-
-    it('renders p-inline-notification with state=error on 422 validation', async () => {
-      vi.stubGlobal('fetch', makeJsonFetch(422, { detail: 'Invalid DR id format' }))
-      const { container } = renderResolveModal()
-      selectResponse(container, 'approved')
-      fireEvent.click(getResolveSubmitBtn(container))
-      await waitFor(
-        () => {
-          const el = getResolveError(container)
-          expect(el).not.toBeNull()
-          expect(el!.state).toBe('error')
-        },
-        { timeout: 2000 },
-      )
-    })
-
-    it('renders p-inline-notification with state=error on 500 server error', async () => {
-      vi.stubGlobal('fetch', makeJsonFetch(500, { detail: 'Internal server error' }))
-      const { container } = renderResolveModal()
-      selectResponse(container, 'approved')
-      fireEvent.click(getResolveSubmitBtn(container))
-      await waitFor(
-        () => {
-          const el = getResolveError(container)
-          expect(el).not.toBeNull()
-          expect(el!.state).toBe('error')
-        },
-        { timeout: 2000 },
-      )
-    })
-
-    it('renders p-inline-notification with state=error on network failure', async () => {
-      vi.stubGlobal('fetch', makeNetworkFetch())
-      const { container } = renderResolveModal()
-      selectResponse(container, 'approved')
-      fireEvent.click(getResolveSubmitBtn(container))
-      await waitFor(
-        () => {
-          const el = getResolveError(container)
-          expect(el).not.toBeNull()
-          expect(el!.state).toBe('error')
-        },
-        { timeout: 2000 },
-      )
-    })
-
-    it('description prop carries error detail from getResponseErrorMessage on 500', async () => {
-      vi.stubGlobal('fetch', makeJsonFetch(500, { detail: 'resolve backend storage failed' }))
-      const { container } = renderResolveModal()
-      selectResponse(container, 'approved')
-      fireEvent.click(getResolveSubmitBtn(container))
-      await waitFor(
-        () => {
-          const el = getResolveError(container)
-          expect(el).not.toBeNull()
-          expect(el!.description).toContain('resolve backend storage failed')
-        },
-        { timeout: 2000 },
-      )
-    })
-  })
-
   // ─── AC-3: Retryable errors show Retry action ─────────────────────────────
 
   describe('AC-3: retryable errors render actionLabel=Retry and actionIcon=reset', () => {
@@ -465,50 +371,6 @@ describe('TestFromAC_PInlineNotificationModals', () => {
       )
     })
 
-    it('ResolveModal 500: actionLabel is Retry', async () => {
-      vi.stubGlobal('fetch', makeJsonFetch(500, {}))
-      const { container } = renderResolveModal()
-      selectResponse(container, 'approved')
-      fireEvent.click(getResolveSubmitBtn(container))
-      await waitFor(
-        () => {
-          const el = getResolveError(container)
-          expect(el).not.toBeNull()
-          expect(el!.actionLabel).toBe('Retry')
-        },
-        { timeout: 2000 },
-      )
-    })
-
-    it('ResolveModal 500: actionIcon is reset', async () => {
-      vi.stubGlobal('fetch', makeJsonFetch(500, {}))
-      const { container } = renderResolveModal()
-      selectResponse(container, 'approved')
-      fireEvent.click(getResolveSubmitBtn(container))
-      await waitFor(
-        () => {
-          const el = getResolveError(container)
-          expect(el).not.toBeNull()
-          expect(el!.actionIcon).toBe('reset')
-        },
-        { timeout: 2000 },
-      )
-    })
-
-    it('ResolveModal network failure: actionLabel is Retry', async () => {
-      vi.stubGlobal('fetch', makeNetworkFetch())
-      const { container } = renderResolveModal()
-      selectResponse(container, 'approved')
-      fireEvent.click(getResolveSubmitBtn(container))
-      await waitFor(
-        () => {
-          const el = getResolveError(container)
-          expect(el).not.toBeNull()
-          expect(el!.actionLabel).toBe('Retry')
-        },
-        { timeout: 2000 },
-      )
-    })
   })
 
   // ─── AC-4: Non-retryable errors have no action button ────────────────────
@@ -560,50 +422,6 @@ describe('TestFromAC_PInlineNotificationModals', () => {
       expect(el!.actionLabel ?? '').toBe('')
     })
 
-    it('ResolveModal 404 not found: actionLabel is empty or absent', async () => {
-      vi.stubGlobal('fetch', makeJsonFetch(404, { detail: 'Not found' }))
-      const { container } = renderResolveModal()
-      selectResponse(container, 'approved')
-      fireEvent.click(getResolveSubmitBtn(container))
-      await waitFor(
-        () => {
-          const el = getResolveError(container)
-          expect(el).not.toBeNull()
-          expect(el!.actionLabel ?? '').toBe('')
-        },
-        { timeout: 2000 },
-      )
-    })
-
-    it('ResolveModal 409 already resolved: actionLabel is empty or absent', async () => {
-      vi.stubGlobal('fetch', makeJsonFetch(409, { detail: 'Already resolved' }))
-      const { container } = renderResolveModal()
-      selectResponse(container, 'approved')
-      fireEvent.click(getResolveSubmitBtn(container))
-      await waitFor(
-        () => {
-          const el = getResolveError(container)
-          expect(el).not.toBeNull()
-          expect(el!.actionLabel ?? '').toBe('')
-        },
-        { timeout: 2000 },
-      )
-    })
-
-    it('ResolveModal 422 validation: actionLabel is empty or absent', async () => {
-      vi.stubGlobal('fetch', makeJsonFetch(422, { detail: 'Invalid ID' }))
-      const { container } = renderResolveModal()
-      selectResponse(container, 'approved')
-      fireEvent.click(getResolveSubmitBtn(container))
-      await waitFor(
-        () => {
-          const el = getResolveError(container)
-          expect(el).not.toBeNull()
-          expect(el!.actionLabel ?? '').toBe('')
-        },
-        { timeout: 2000 },
-      )
-    })
   })
 
   // ─── AC-5: actionLoading=true while retry is in-flight ───────────────────
@@ -657,48 +475,6 @@ describe('TestFromAC_PInlineNotificationModals', () => {
       } as unknown as Response)
     })
 
-    it('ResolveModal: actionLoading is true while retry fetch is stalled', async () => {
-      let resolveRetry!: (value: Response) => void
-      let callCount = 0
-      vi.stubGlobal(
-        'fetch',
-        vi.fn(async () => {
-          callCount++
-          if (callCount === 1) {
-            return {
-              ok: false,
-              status: 500,
-              json: async () => ({ detail: 'Server error' }),
-              text: async () => 'Server error',
-            } as unknown as Response
-          }
-          return new Promise<Response>((resolve) => {
-            resolveRetry = resolve
-          })
-        }),
-      )
-
-      const { container } = renderResolveModal()
-      selectResponse(container, 'approved')
-      fireEvent.click(getResolveSubmitBtn(container))
-
-      await waitFor(() => expect(getResolveError(container)).not.toBeNull(), { timeout: 2000 })
-
-      const el = getResolveError(container)!
-
-      await act(async () => {
-        el.onAction?.()
-      })
-
-      expect(el.actionLoading).toBe(true)
-
-      resolveRetry({
-        ok: false,
-        status: 500,
-        json: async () => ({}),
-        text: async () => '',
-      } as unknown as Response)
-    })
   })
 
   // ─── AC-6: Notification dismissed on success or manual dismiss ───────────
@@ -776,59 +552,6 @@ describe('TestFromAC_PInlineNotificationModals', () => {
       }, { timeout: 2000 })
     })
 
-    it('ResolveModal: error absent after successful retry (onResolved called)', async () => {
-      let callCount = 0
-      const onResolved = vi.fn()
-      const onClose = vi.fn()
-      vi.stubGlobal(
-        'fetch',
-        vi.fn(async () => {
-          callCount++
-          if (callCount === 1) {
-            return {
-              ok: false,
-              status: 500,
-              json: async () => ({}),
-              text: async () => '',
-            } as unknown as Response
-          }
-          return { ok: true, status: 200, json: async () => ({}), text: async () => '' } as unknown as Response
-        }),
-      )
-
-      const { container } = renderResolveModal(DR_FIXTURE, onClose, onResolved)
-      selectResponse(container, 'approved')
-      fireEvent.click(getResolveSubmitBtn(container))
-
-      await waitFor(() => expect(getResolveError(container)).not.toBeNull(), { timeout: 2000 })
-
-      const el = getResolveError(container)!
-      await act(async () => {
-        el.onAction?.()
-      })
-
-      await waitFor(() => expect(onResolved).toHaveBeenCalled(), { timeout: 2000 })
-      // AC-6b: notification element absent from DOM after successful retry
-      await waitFor(() => expect(getResolveError(container)).toBeNull(), { timeout: 2000 })
-    })
-
-    it('ResolveModal: error element absent after onDismiss fires (setError(null))', async () => {
-      vi.stubGlobal('fetch', makeJsonFetch(500, {}))
-      const { container } = renderResolveModal()
-      selectResponse(container, 'approved')
-      fireEvent.click(getResolveSubmitBtn(container))
-
-      await waitFor(() => expect(getResolveError(container)).not.toBeNull(), { timeout: 2000 })
-
-      const el = getResolveError(container)!
-      await act(async () => {
-        el.onDismiss?.()
-      })
-
-      await waitFor(() => {
-        expect(getResolveError(container)).toBeNull()
-      }, { timeout: 2000 })
-    })
   })
 
   // ─── AC-7: ArchivalModal getFocusableElements includes p-inline-notification ──

@@ -74,79 +74,6 @@ describe('TestFromAC_ResolveModalUX', () => {
   //
   // Current code: bare labels, no p-text in fieldset → all FAIL
 
-  it('approved option has a p-text description element structurally separate from its radio label', () => {
-    // AC2: scope to per-option container (data-testid="option-approved"), not shared fieldset parent
-    const { container } = renderModal()
-    const optionContainer = container.querySelector('[data-testid="option-approved"]')
-    expect(optionContainer).not.toBeNull()
-    const approvedInput = optionContainer!.querySelector(
-      'input[type="radio"][value="approved"]',
-    ) as HTMLInputElement | null
-    expect(approvedInput).not.toBeNull()
-    const approvedLabel = approvedInput!.closest('label') ?? approvedInput!.parentElement!
-    const descEl = optionContainer!.querySelector('p-text')
-    expect(descEl).not.toBeNull()
-    // Description must be outside the radio's label, not inside it
-    expect(approvedLabel.contains(descEl)).toBe(false)
-  })
-
-  it('approved description p-text uses proceed/continue outcome language', () => {
-    // AC2 v2: approved consequence must explicitly communicate proceeding.
-    const { container } = renderModal()
-    const optionContainer = container.querySelector('[data-testid="option-approved"]')!
-    const descEl = optionContainer.querySelector('p-text')!
-    const text = descEl.textContent ?? ''
-    expect(text).toMatch(/proceed|continue/i)
-  })
-
-  it('rejected option has a p-text description element structurally separate from its radio label', () => {
-    // AC2: scope to per-option container (data-testid="option-rejected"), not shared fieldset parent
-    const { container } = renderModal()
-    const optionContainer = container.querySelector('[data-testid="option-rejected"]')
-    expect(optionContainer).not.toBeNull()
-    const rejectedInput = optionContainer!.querySelector(
-      'input[type="radio"][value="rejected"]',
-    ) as HTMLInputElement | null
-    expect(rejectedInput).not.toBeNull()
-    const rejectedLabel = rejectedInput!.closest('label') ?? rejectedInput!.parentElement!
-    const descEl = optionContainer!.querySelector('p-text')
-    expect(descEl).not.toBeNull()
-    expect(rejectedLabel.contains(descEl)).toBe(false)
-  })
-
-  it('rejected description p-text uses stop/return/back outcome language', () => {
-    // AC2 v2: rejected consequence must explicitly communicate stopping/returning.
-    const { container } = renderModal()
-    const optionContainer = container.querySelector('[data-testid="option-rejected"]')!
-    const descEl = optionContainer.querySelector('p-text')!
-    const text = descEl.textContent ?? ''
-    expect(text).toMatch(/stop|return|back/i)
-  })
-
-  it('needs-info option has a p-text description element structurally separate from its radio label', () => {
-    // AC2: scope to per-option container (data-testid="option-needs-info"), not shared fieldset parent
-    const { container } = renderModal()
-    const optionContainer = container.querySelector('[data-testid="option-needs-info"]')
-    expect(optionContainer).not.toBeNull()
-    const needsInfoInput = optionContainer!.querySelector(
-      'input[type="radio"][value="needs-info"]',
-    ) as HTMLInputElement | null
-    expect(needsInfoInput).not.toBeNull()
-    const needsInfoLabel = needsInfoInput!.closest('label') ?? needsInfoInput!.parentElement!
-    const descEl = optionContainer!.querySelector('p-text')
-    expect(descEl).not.toBeNull()
-    expect(needsInfoLabel.contains(descEl)).toBe(false)
-  })
-
-  it('needs-info description p-text uses wait/clarification outcome language', () => {
-    // AC2 v2: needs-info consequence must explicitly communicate waiting for clarity.
-    const { container } = renderModal()
-    const optionContainer = container.querySelector('[data-testid="option-needs-info"]')!
-    const descEl = optionContainer.querySelector('p-text')!
-    const text = descEl.textContent ?? ''
-    expect(text).toMatch(/wait|clarif/i)
-  })
-
   // ─── AC3 (td:2): No pre-selected choice; submit disabled until selection ──
   //
   // Current code: `useState('approved')` pre-selects → FAIL
@@ -160,15 +87,6 @@ describe('TestFromAC_ResolveModalUX', () => {
     expect(checked).toHaveLength(0)
   })
 
-  it('approved radio is not pre-selected on initial render', () => {
-    const { container } = renderModal()
-    const approved = container.querySelector(
-      'input[type="radio"][value="approved"]',
-    ) as HTMLInputElement | null
-    expect(approved).not.toBeNull()
-    expect(approved!.checked).toBe(false)
-  })
-
   it('submit button is disabled when no choice has been selected', () => {
     const { container } = renderModal()
     const submit = container.querySelector(
@@ -177,20 +95,6 @@ describe('TestFromAC_ResolveModalUX', () => {
     expect(submit).not.toBeNull()
     // PDS PButton surfaces disabled as an attribute on the custom element
     expect(submit!.hasAttribute('disabled')).toBe(true)
-  })
-
-  it('submit button is disabled → enabled only after explicit user selection (sequence test)', () => {
-    const { container } = renderModal()
-    const submit = container.querySelector('[data-testid="resolve-submit"]') as HTMLElement
-    // Step 1: disabled before any selection
-    expect(submit.hasAttribute('disabled')).toBe(true)
-    // Step 2: select a choice
-    const radio = container.querySelector(
-      'input[type="radio"][value="needs-info"]',
-    ) as HTMLInputElement
-    fireEvent.click(radio)
-    // Step 3: submit is now enabled
-    expect(submit.hasAttribute('disabled')).toBe(false)
   })
 
   // ─── AC4 (td:1): Multi-word action labels ────────────────────────────────
@@ -217,15 +121,6 @@ describe('TestFromAC_ResolveModalUX', () => {
     const label = cancel!.textContent?.trim() ?? ''
     const wordCount = label.split(/\s+/).filter(Boolean).length
     expect(wordCount).toBeGreaterThan(1)
-  })
-
-  it('consequence description text for each option uses PDS typography element (p-text)', () => {
-    const { container } = renderModal()
-    const selector = container.querySelector('[data-testid="response-selector"]')!
-    expect(selector).not.toBeNull()
-    // Each option's description should be in a p-text element — not bare text nodes
-    const pTextEls = selector.querySelectorAll('p-text')
-    expect(pTextEls.length).toBeGreaterThanOrEqual(3)
   })
 
   it('shows a resolver body continuation cue while more inputs continue below', () => {

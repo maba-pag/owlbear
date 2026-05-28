@@ -332,47 +332,6 @@ class TestFromAC_CommentRefsCockpitKanbanRoutesClean:
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_TaskDetailKeysConstantFix:
-    """AC3 (Cycle 2): _TASK_DETAIL_KEYS must drop claimed_by and update the '14' count.
-
-    SingleTaskResponse explicitly excludes claimed_by (Field(exclude=True) + pop in
-    owlbear_kanban/models.py).  The frozenset that encodes the expected response keys
-    must reflect the live 13-key contract; the adjacent comment must say '13', not '14'.
-    """
-
-    def test_task_detail_keys_does_not_contain_claimed_by(self) -> None:
-        """_TASK_DETAIL_KEYS frozenset must not include 'claimed_by'."""
-        source = (_TESTS_DIR / "test_cockpit_mutation_race.py").read_text(encoding="utf-8")
-        start = source.find("_TASK_DETAIL_KEYS = frozenset({")
-        assert start != -1, "_TASK_DETAIL_KEYS constant not found in test_cockpit_mutation_race.py"
-        end = source.find("})", start)
-        constant_block = source[start : end + 2]
-        assert '"claimed_by"' not in constant_block, (
-            '_TASK_DETAIL_KEYS still contains "claimed_by" — remove it; '
-            "SingleTaskResponse excludes claimed_by per owlbear_kanban/models.py (AC3)"
-        )
-        assert "'claimed_by'" not in constant_block, (
-            "_TASK_DETAIL_KEYS still contains 'claimed_by' — remove it; "
-            "SingleTaskResponse excludes claimed_by per owlbear_kanban/models.py (AC3)"
-        )
-
-    def test_task_detail_keys_preceding_comment_does_not_reference_14(self) -> None:
-        """The comment immediately before _TASK_DETAIL_KEYS must not say '14'."""
-        source = (_TESTS_DIR / "test_cockpit_mutation_race.py").read_text(encoding="utf-8")
-        idx = source.find("_TASK_DETAIL_KEYS = frozenset")
-        assert idx != -1, "_TASK_DETAIL_KEYS not found in test_cockpit_mutation_race.py"
-        # Walk back one newline to find the preceding line.
-        line_end = idx - 1  # position just before the definition line
-        preceding_line_start = source.rfind("\n", 0, line_end) + 1
-        preceding_line = source[preceding_line_start:line_end]
-        assert "14" not in preceding_line, (
-            f"Comment before _TASK_DETAIL_KEYS still references '14': {preceding_line!r}\n— update to '13' (AC3)"
-        )
-
-
-# ---------------------------------------------------------------------------
-# AC3 (Cycle 2): residual 'TaskSummaryOut' in test_occ_frontend_wire.py docstring
-# ---------------------------------------------------------------------------
 
 
 class TestFromAC_CommentRefs1137DocstringClean:

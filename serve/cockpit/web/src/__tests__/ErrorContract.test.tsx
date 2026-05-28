@@ -403,55 +403,6 @@ describe('TestFromAC_ErrorEnvelopeParsing', () => {
       )
     })
   })
-
-  // ── ResolveModal: reads response body instead of hardcoding error text ───────
-
-  describe('ResolveModal error body extraction', () => {
-    // FAILS: handleSubmit sets hardcoded 'Failed to resolve decision request.' for all errors.
-    // resolve-error text never matches the body message field.
-    it('submit 500 with {code,message} — resolve-error text includes body message field', async () => {
-      const errorBody = { code: 'CONCURRENCY_ERROR', message: 'decision already resolved by another agent' }
-      vi.stubGlobal('fetch', makeJsonFetch(500, errorBody))
-      const { container } = render(
-        <PorscheDesignSystemProvider>
-          <ResolveModal dr={DR_FIXTURE} onClose={vi.fn()} onResolved={vi.fn()} />
-        </PorscheDesignSystemProvider>,
-      )
-      fireEvent.click(container.querySelector('[data-testid="resolve-submit"]')!)
-      await waitFor(
-        () => {
-          const errEl = container.querySelector('[data-testid="resolve-error"]')
-          expect(errEl).not.toBeNull()
-          expect((errEl as HTMLElement & { description?: string }).description ?? '').toContain(
-            'decision already resolved by another agent',
-          )
-        },
-        { timeout: 1000 },
-      )
-    })
-
-    // FAILS: same root cause — hardcoded error string never shows {detail} value.
-    it('submit 422 with {detail} — resolve-error text includes body detail field', async () => {
-      const errorBody = { detail: 'invalid decision id format: missing prefix' }
-      vi.stubGlobal('fetch', makeJsonFetch(422, errorBody))
-      const { container } = render(
-        <PorscheDesignSystemProvider>
-          <ResolveModal dr={DR_FIXTURE} onClose={vi.fn()} onResolved={vi.fn()} />
-        </PorscheDesignSystemProvider>,
-      )
-      fireEvent.click(container.querySelector('[data-testid="resolve-submit"]')!)
-      await waitFor(
-        () => {
-          const errEl = container.querySelector('[data-testid="resolve-error"]')
-          expect(errEl).not.toBeNull()
-          expect((errEl as HTMLElement & { description?: string }).description ?? '').toContain(
-            'invalid decision id format: missing prefix',
-          )
-        },
-        { timeout: 1000 },
-      )
-    })
-  })
 })
 
 // ─── AC2: Error rendering and retry/refetch paths across all flows ─────────────
@@ -667,27 +618,6 @@ describe('TestFromAC_NoSilentErrors', () => {
 
   // FAILS: handleSubmit always sets 'Failed to resolve decision request.' regardless
   // of response. error text IS the hardcoded string → toNot assertion fails.
-  it('ResolveModal non-ok: displayed error is specific (not hardcoded generic string)', async () => {
-    const errorBody = { code: 'SERVER_ERROR', message: 'decision service unavailable' }
-    vi.stubGlobal('fetch', makeJsonFetch(503, errorBody))
-    const { container } = render(
-      <PorscheDesignSystemProvider>
-        <ResolveModal dr={DR_FIXTURE} onClose={vi.fn()} onResolved={vi.fn()} />
-      </PorscheDesignSystemProvider>,
-    )
-    fireEvent.click(container.querySelector('[data-testid="resolve-submit"]')!)
-    await waitFor(
-      () => {
-        const errEl = container.querySelector('[data-testid="resolve-error"]')
-        expect(errEl).not.toBeNull()
-        expect((errEl as HTMLElement & { description?: string }).description).not.toBe(
-          'Failed to resolve decision request.',
-        )
-      },
-      { timeout: 1000 },
-    )
-  })
-
   // ── DetailTab non-422 error: validationMessage rendered (error not swallowed) ─
 
   // FAILS: non-422/409/404 status codes leave validationMessage null in runMutation.

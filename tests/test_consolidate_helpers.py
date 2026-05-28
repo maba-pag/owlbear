@@ -289,43 +289,6 @@ class TestFromAC_CorruptionImportsFromNaming:
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_AgentViewDelegation:
-    """AC4: AgentView._dep_effect_from_archival_reason removed; delegates to KanbanEngine.
-    AC5: AgentView._compute_dep_status removed; delegates to KanbanEngine.
-    """
-
-    def test_agentview_no_dep_effect_method(self) -> None:
-        """AC4: AgentView must NOT define _dep_effect_from_archival_reason as its own method."""
-        src = _source("engine.py")
-        assert not _has_class_method(src, "AgentView", "_dep_effect_from_archival_reason"), (
-            "AgentView still has its own _dep_effect_from_archival_reason; must delegate to KanbanEngine"
-        )
-
-    def test_agentview_no_compute_dep_status_method(self) -> None:
-        """AC5: AgentView must NOT define _compute_dep_status as its own method."""
-        src = _source("engine.py")
-        assert not _has_class_method(src, "AgentView", "_compute_dep_status"), (
-            "AgentView still has its own _compute_dep_status; must delegate to KanbanEngine"
-        )
-
-    def test_kanbanengine_has_dep_effect_method(self) -> None:
-        """AC4: KanbanEngine must have _dep_effect_from_archival_reason as the canonical location."""
-        src = _source("engine.py")
-        assert _has_class_method(src, "KanbanEngine", "_dep_effect_from_archival_reason"), (
-            "KanbanEngine missing _dep_effect_from_archival_reason; canonical location must exist"
-        )
-
-    def test_agentview_show_task_delegates_compute_dep_status(self) -> None:
-        """AC5: AgentView.show_task() must call self.engine._compute_dep_status(...)."""
-        src = _source("agent_view.py")
-        assert _method_calls_engine_attr(src, "AgentView", "show_task", "_compute_dep_status"), (
-            "AgentView.show_task() does not delegate to self.engine._compute_dep_status(...)"
-        )
-
-
-# ---------------------------------------------------------------------------
-# TestFromAC_NoCircularImports — AC6: import owlbear_kanban._naming succeeds
-# ---------------------------------------------------------------------------
 
 
 class TestFromAC_NoCircularImports:

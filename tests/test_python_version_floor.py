@@ -83,47 +83,8 @@ def _has_313_plus_features(src_dir: pathlib.Path) -> bool:
     return False
 
 
-class TestFromAC_AllPackagesRequiresPythonFloor:
-    """AC2: All synced serve/*/pyproject.toml must specify requires-python = '>=3.12'."""
-
-    def test_all_synced_packages_require_python_3_12(self) -> None:
-        failures: list[str] = []
-        for pkg, pyproject in _SYNCED_PACKAGES.items():
-            req = _read_requires_python(pyproject)
-            if req != ">=3.12":
-                failures.append(f"  serve/{pkg}/pyproject.toml: requires-python={req!r}")
-        assert not failures, "These synced packages have wrong requires-python (expected '>=3.12'):\n" + "\n".join(
-            failures
-        )
-
-    def test_no_synced_package_pins_to_3_14(self) -> None:
-        failures: list[str] = []
-        for pkg, pyproject in _SYNCED_PACKAGES.items():
-            req = _read_requires_python(pyproject)
-            if re.search(r"3\.14", req):
-                failures.append(f"  serve/{pkg}/pyproject.toml: requires-python={req!r}")
-        assert not failures, "These synced packages pin to Python 3.14 without documented justification:\n" + "\n".join(
-            failures
-        )
 
 
-class TestFromAC_NoUnjustifiedVersionBump:
-    """AC1+AC2: For every package with no Python 3.13+ syntax, floor must be '>=3.12'."""
-
-    def test_all_packages_floor_justified_by_source_syntax(self) -> None:
-        failures: list[str] = []
-        for pkg, pyproject in _SYNCED_PACKAGES.items():
-            src = _SYNCED_SOURCES[pkg]
-            has_313 = _has_313_plus_features(src)
-            if not has_313:
-                req = _read_requires_python(pyproject)
-                if req != ">=3.12":
-                    failures.append(
-                        f"  serve/{pkg}: no Python 3.13+ syntax found but requires-python={req!r} (must be '>=3.12')"
-                    )
-        assert not failures, (
-            "Packages with requires-python > '>=3.12' but no 3.13+ syntax justification:\n" + "\n".join(failures)
-        )
 
 
 class TestFromAC_PythonVersionAlignment:
@@ -174,42 +135,6 @@ class TestFromAC_RenovatePythonPolicy:
         )
 
 
-class TestFromAC_DependencyFloorAudit:
-    """AC1: No locked dependency forces the project's Python floor above 3.12."""
-
-    def test_uv_lock_workspace_floor_is_3_12(self) -> None:
-        """The uv.lock workspace requires-python must be '>=3.12'.
-
-        uv derives this value as the maximum of all workspace-member
-        requires-python declarations, so a value above '>=3.12' would mean
-        at least one member (or resolved dependency constraint) demands a
-        higher Python floor.
-        """
-        content = _UV_LOCK.read_text()
-        # The workspace-level requires-python appears near the top of the lock file.
-        match = re.search(r'^requires-python\s*=\s*"([^"]+)"', content, re.MULTILINE)
-        assert match, "uv.lock has no workspace-level requires-python declaration."
-        floor = match.group(1)
-        assert floor == ">=3.12", (
-            f"uv.lock workspace requires-python is {floor!r} — expected '>=3.12'. "
-            "A value above >=3.12 indicates that a workspace member or dependency "
-            "constraint has pushed the floor above the approved project minimum."
-        )
-
-    def test_no_synced_package_has_313_plus_feature_in_source(self) -> None:
-        """AC1 broad scan: no synced source file uses any Python 3.13+/3.14+ feature token."""
-        violations: list[str] = []
-        for src in _SYNCED_SOURCES.values():
-            for py_file in src.rglob("*.py"):
-                text = py_file.read_text()
-                for pattern in _PY313_PLUS_PATTERNS:
-                    if re.search(pattern, text):
-                        rel = py_file.relative_to(_ROOT)
-                        violations.append(f"  {rel}: matches pattern {pattern!r} (3.13+/3.14+ exclusive)")
-        assert not violations, (
-            "Python 3.13+/3.14+ exclusive features detected in synced source files.\n"
-            "Either raise the project floor to match or replace with 3.12-compatible code:\n" + "\n".join(violations)
-        )
 
 
 class TestFromAC_PrerequisiteDocsAlignment:

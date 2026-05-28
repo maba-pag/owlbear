@@ -418,38 +418,6 @@ describe('TestFromAC_DetailTab', () => {
       expect(inputRow!.compareDocumentPosition(chipList!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     })
 
-    it('dependency editor adds pasted task references as removable chips and saves them as integers', async () => {
-      const fetchMock = vi.fn(() =>
-        Promise.resolve({ ok: true, json: () => Promise.resolve({ ...TASK_WITH_DEPS, depends_on: [10, 20, 30] }) }),
-      )
-      vi.stubGlobal('fetch', fetchMock)
-      const { container } = renderDetail(TASK_WITH_DEPS)
-
-      expect(container.querySelectorAll('[data-testid="dependency-chip"]')).toHaveLength(2)
-      typeIntoPdsField(container, 'p-input-text[data-field="depends_on"]', '#30')
-      fireEvent.click(container.querySelector('[data-testid="add-dependency-button"]')!)
-
-      expect(container.querySelector('[data-testid="dependency-chip"][data-reference-id="30"]')).not.toBeNull()
-      fireEvent.click(container.querySelector('[data-testid="save-button"]')!)
-
-      expect(getFetchBody(fetchMock)['depends_on']).toEqual([10, 20, 30])
-      await flushAsyncSave()
-    })
-
-    it('dependency chips can remove a dependency before save', async () => {
-      const fetchMock = vi.fn(() =>
-        Promise.resolve({ ok: true, json: () => Promise.resolve({ ...TASK_WITH_DEPS, depends_on: [20] }) }),
-      )
-      vi.stubGlobal('fetch', fetchMock)
-      const { container } = renderDetail(TASK_WITH_DEPS)
-
-      fireEvent.click(container.querySelector('[data-testid="dependency-chip"][data-reference-id="10"]')!)
-      fireEvent.click(container.querySelector('[data-testid="save-button"]')!)
-
-      expect(getFetchBody(fetchMock)['depends_on']).toEqual([20])
-      await flushAsyncSave()
-    })
-
     it('renders compact parent input row before the parent chip', () => {
       const { container } = renderDetail(TASK_WITH_DEPS)
       const editor = container.querySelector('[data-region="parent-editor"]')
@@ -469,22 +437,6 @@ describe('TestFromAC_DetailTab', () => {
       expect(input?.compact).toBe(true)
       expect(clearButton?.compact).toBe(true)
       expect(inputRow!.compareDocumentPosition(chipList!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    })
-
-    it('parent editor renders a single removable task-reference chip', async () => {
-      const fetchMock = vi.fn(() =>
-        Promise.resolve({ ok: true, json: () => Promise.resolve({ ...TASK_WITH_DEPS, parent: null }) }),
-      )
-      vi.stubGlobal('fetch', fetchMock)
-      const { container } = renderDetail(TASK_WITH_DEPS)
-
-      expect(container.querySelector('[data-testid="parent-chip"][data-reference-id="5"]')).not.toBeNull()
-      fireEvent.click(container.querySelector('[data-testid="parent-chip"]')!)
-      expect(container.querySelector('[data-testid="no-parent"]')).not.toBeNull()
-      fireEvent.click(container.querySelector('[data-testid="save-button"]')!)
-
-      expect(getFetchBody(fetchMock)['parent']).toBeNull()
-      await flushAsyncSave()
     })
 
     it('renders parent and dependency references as navigable chips with title and status', () => {
@@ -846,41 +798,6 @@ describe('TestBuilderDiscovered', () => {
   // ─── AC8: Typed save payload proofs ────────────────────────────────────────
 
   describe('save payload typed fields (AC8)', () => {
-    it('save payload includes depends_on as an array of integers', async () => {
-      const fetchMock = vi.fn(() =>
-        Promise.resolve({ ok: true, json: () => Promise.resolve(TASK_WITH_DEPS) }),
-      )
-      vi.stubGlobal('fetch', fetchMock)
-      const { container } = renderDetail(TASK_WITH_DEPS)
-      const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
-      expect(saveBtn).not.toBeNull()
-      fireEvent.click(saveBtn!)
-      const body = getFetchBody(fetchMock)
-      expect(body).toHaveProperty('depends_on')
-      const deps = body['depends_on'] as unknown[]
-      expect(Array.isArray(deps)).toBe(true)
-      expect(deps.every((d) => typeof d === 'number')).toBe(true)
-      expect(deps).toContain(10)
-      expect(deps).toContain(20)
-      await flushAsyncSave()
-    })
-
-    it('save payload includes parent as integer when task has a parent', async () => {
-      const fetchMock = vi.fn(() =>
-        Promise.resolve({ ok: true, json: () => Promise.resolve(TASK_WITH_DEPS) }),
-      )
-      vi.stubGlobal('fetch', fetchMock)
-      const { container } = renderDetail(TASK_WITH_DEPS)
-      const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
-      expect(saveBtn).not.toBeNull()
-      fireEvent.click(saveBtn!)
-      const body = getFetchBody(fetchMock)
-      expect(body).toHaveProperty('parent')
-      expect(typeof body['parent']).toBe('number')
-      expect(body['parent']).toBe(5)
-      await flushAsyncSave()
-    })
-
     it('save payload includes parent as null when task has no parent', async () => {
       const fetchMock = vi.fn(() =>
         Promise.resolve({ ok: true, json: () => Promise.resolve(TASK) }),

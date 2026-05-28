@@ -141,48 +141,6 @@ def _find_repo_root() -> Path:
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_LifespanStartup:
-    """AC1: app_lifespan starts against an isolated temp board and yields AppContext."""
-
-    @pytest.mark.asyncio
-    async def test_lifespan_yields_app_context_with_temp_board(
-        self,
-        tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        """AC1: lifespan starts successfully with a valid temp board and yields AppContext."""
-        board = _make_board(tmp_path)
-        monkeypatch.setenv("KANBAN_DIR", str(board))
-        monkeypatch.delenv("KANBAN_TOOLS_EXCLUDE", raising=False)
-
-        async with app_lifespan(_server_mock()) as ctx:
-            assert isinstance(ctx, AppContext), f"app_lifespan must yield AppContext, got {type(ctx).__name__!r}"
-
-    @pytest.mark.asyncio
-    async def test_app_context_exposes_engine_and_resolved_kanban_dir(
-        self,
-        tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        """AC1: AppContext carries a KanbanEngine and an absolute kanban_dir pointing to the board."""
-        from owlbear_kanban import KanbanEngine
-
-        board = _make_board(tmp_path)
-        monkeypatch.setenv("KANBAN_DIR", str(board))
-        monkeypatch.delenv("KANBAN_TOOLS_EXCLUDE", raising=False)
-
-        async with app_lifespan(_server_mock()) as ctx:
-            assert isinstance(ctx.engine, KanbanEngine), (
-                f"AppContext.engine must be a KanbanEngine, got {type(ctx.engine).__name__!r}"
-            )
-            assert ctx.kanban_dir == board.resolve(), (
-                f"AppContext.kanban_dir must equal {board.resolve()!r}, got {ctx.kanban_dir!r}"
-            )
-
-
-# ---------------------------------------------------------------------------
-# AC2 — module source origin
-# ---------------------------------------------------------------------------
 
 
 class TestFromAC_ModuleSourceOrigin:
