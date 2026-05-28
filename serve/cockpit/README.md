@@ -284,11 +284,8 @@ Accessibility and responsive state after #1396:
   `<button>` elements in `KanbanBoard.tsx` (filter toggle) and `Shell.tsx` (nav rail
   control); prohibited `aria-current`/`aria-label` on the nav `p-button` host is removed.
 
-> **TODO:** unverified — heading semantics claim below ("Shell.tsx adds the page-level `<h1>` product identity and `<h2>` headings for sidecar sections; `DetailTab.tsx` adds `<h3>` section headings") may duplicate #1614 work; the `PHeading` additions in `Shell.tsx`/`DetailTab.tsx` were implemented by #1614. Verify which aspects of heading structure #1628 actually introduced vs. inherited. [#1628]
-
-  Heading semantics are corrected: `Shell.tsx` adds the page-level `<h1>` product identity
-  and `<h2>` headings for sidecar sections; `DetailTab.tsx` adds `<h3>` section headings
-  for accordion content. `RepairPanel.tsx` moves the confirm action from a non-interactive
+  Heading semantics are corrected: `Shell.tsx` adds `<h2>` headings for sidecar sections;
+  `DetailTab.tsx` adds `<h3>` section headings for accordion content. `RepairPanel.tsx` moves the confirm action from a non-interactive
   `<span onClick>` wrapper to the `<PButton>` element; `DecisionViewport.tsx` removes
   `role="button"` misuse from non-interactive `<article>` decision cards. `vite-env.d.ts`
   adds `p-accordion` IntrinsicElements typing. Verified by
@@ -641,9 +638,7 @@ All mutation routes go through the `CockpitView` facade.
 | `view.scan_corruption()` | `POST /tasks/scan` | Scans all task files for corruption; returns list of `{code, detail, file_path}` items |
 | `view.repair_storage()` | `POST /tasks/repair` | Repairs corrupted task files; returns list of `RepairOutcome` items |
 | `view.compact_activity()` | `POST /tasks/compact-activity` | Compacts the activity log; returns `ActivityCompactionResult` |
-| `view.cleanup()` | `POST /tasks/cleanup` | Releases expired claims, archives done tasks, and prunes orphan lock files; returns `CleanupResult` with `released_claim_ids`, `archived_task_ids`, `pruned_lock_paths`, and `skipped_items` |
-
-> **TODO:** stale — `view.cleanup()` row claims `pruned_lock_paths` return field and "prunes orphan lock files" behavior; both were removed by the flock-infrastructure removal. `CleanupResult` now returns `released_claim_ids`, `archived_task_ids`, `duplicate_removed_ids`, `skipped_items`. [#1571]
+| `view.cleanup()` | `POST /tasks/cleanup` | Releases expired claims, archives done tasks, and removes duplicate task files; returns `CleanupResult` with `released_claim_ids`, `archived_task_ids`, `duplicate_removed_ids`, and `skipped_items` |
 
 ### Excluded methods — why
 

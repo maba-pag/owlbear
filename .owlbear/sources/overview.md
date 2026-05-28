@@ -713,21 +713,6 @@ No external sources — analysis based entirely on codebase static analysis of `
 | Bundlephobia: react-window | <https://bundlephobia.com/package/react-window@2.2.7> | Bundle composition: 100% self, tree-shakeable | `.owlbear/research/959-frontend-perf-virtualization.md` | 2026-04-18 |
 | Vitest bench API | <https://vitest.dev/api/#bench> | Experimental Tinybench-based benchmarking, `bench()` function, statistical output | `.owlbear/research/959-frontend-perf-virtualization.md` | 2026-04-18 |
 
-> **TODO:** stale — duplicate section heading for Task #970 (MD024); merge with first occurrence above [#1495]
-
-## React Compiler + PDS Interop (Task #970)
-
-| Source | URL | What | Where Used | Date |
-|--------|-----|------|------------|------|
-| React Compiler introduction | <https://react.dev/learn/react-compiler/introduction> | Stability statement, scope, useMemo/useCallback guidance | `.owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
-| React Compiler installation | <https://react.dev/learn/react-compiler/installation> | Vite Babel plugin config, DevTools verification, "use no memo" | `.owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
-| React Compiler debugging | <https://react.dev/learn/react-compiler/debugging> | Breaking patterns, runtime vs build errors, "use no memo" workflow | `.owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
-| React Compiler directives | <https://react.dev/reference/react-compiler/directives> | "use memo"/"use no memo", compilationMode interaction, best practices | `.owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
-| React Compiler incremental adoption | <https://react.dev/learn/react-compiler/incremental-adoption> | Babel overrides, annotation mode, runtime gating | `.owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
-| React Compiler configuration | <https://react.dev/reference/react-compiler/configuration> | compilationMode, panicThreshold, logger, gating options | `.owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
-| Vitest coverage drop with React Compiler | <https://github.com/reactwg/react-compiler/discussions/78> | Known issue: compiler-generated branches inflate branch count, no source-map fix | `.owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
-| Rules of React | <https://react.dev/reference/rules> | Purity, side effects outside render, immutability rules compiler relies on | `.owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
-
 ## TanStack Query vs Plain Polling (Task #960)
 
 | Source | URL | What | Where Used | Date |
@@ -4842,17 +4827,6 @@ No external sources — analysis based entirely on codebase static analysis of `
 | Playwright webServer docs | <https://playwright.dev/docs/test-webserver> | webServer config: command, url, reuseExistingServer, timeout, auto-start dev server | .owlbear/research/956-playwright-e2e-infrastructure.md | 2026-04-18 |
 | Playwright config reference | <https://playwright.dev/docs/test-configuration> | testDir, projects, reporters, fullyParallel, forbidOnly, workers | .owlbear/research/956-playwright-e2e-infrastructure.md | 2026-04-18 |
 | Vite preview options | <https://vite.dev/config/preview-options.html> | Default port 4173, strictPort, host options for vite preview | .owlbear/research/956-playwright-e2e-infrastructure.md | 2026-04-18 |
-
-> **TODO:** stale — duplicate section heading for Task #969 (MD024); merge with first occurrence above [#1495]
-
-## React Compiler Evaluation (Task #969)
-
-| Source | URL | What | Where Used | Date |
-|--------|-----|------|------------|------|
-| React Compiler introduction | <https://react.dev/learn/react-compiler/introduction> | Stability status, what it does, useMemo/useCallback/React.memo guidance | .owlbear/research/969-react-compiler-evaluation.md | 2026-04-18 |
-| React Compiler installation | <https://react.dev/learn/react-compiler/installation> | Vite integration guide, ESLint plugin, verification steps | .owlbear/research/969-react-compiler-evaluation.md | 2026-04-18 |
-| babel-plugin-react-compiler npm | <https://www.npmjs.com/package/babel-plugin-react-compiler> | v1.0.0 stable, 7.6M weekly downloads, MIT license | .owlbear/research/969-react-compiler-evaluation.md | 2026-04-18 |
-| react-compiler-runtime npm | <https://www.npmjs.com/package/react-compiler-runtime> | v1.0.0, 0 dependencies, React 19 compat shim | .owlbear/research/969-react-compiler-evaluation.md | 2026-04-18 |
 
 ## Arch Review Design-Diverge (Task #1149)
 
