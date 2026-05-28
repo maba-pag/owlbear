@@ -299,6 +299,14 @@ class IngestCoordinator:
         for source in filtered_sources:
             try:
                 fetch_result = await self._fetcher.fetch_source(source)
+                errors.extend(
+                    RefreshError(
+                        source_id=source.id,
+                        error=f"{fetch_error.uri}: {fetch_error.error}",
+                        timestamp=datetime.now(tz=UTC),
+                    )
+                    for fetch_error in fetch_result.errors
+                )
                 mapped_documents = tuple(
                     IngestDocument(
                         title=document.title,
@@ -309,6 +317,9 @@ class IngestCoordinator:
                     )
                     for document in fetch_result.documents
                 )
+
+                if not mapped_documents and fetch_result.errors:
+                    continue
 
                 if mapped_documents:
                     ingest_result = await self.ingest(
