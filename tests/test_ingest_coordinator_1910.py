@@ -228,3 +228,159 @@ class TestFromAC_FetchErrorPropagation:
         result = await coordinator.refresh(RefreshRequest())
 
         assert result.sources_refreshed == 0
+
+    # ------------------------------------------------------------------
+    # AC1 strengthened — field-level mapping and multi-error propagation
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_ac1_refresh_error_source_id_matches_source(
+        self,
+        coordinator: IngestCoordinator,
+        mock_fetcher: MagicMock,
+    ) -> None:
+        """AC1: RefreshError.source_id must equal the source's id."""
+        mock_fetcher.fetch_source = AsyncMock(
+            return_value=FetchResult(
+                documents=(),
+                errors=(FetchError(uri="https://example.com/fail", error="timeout"),),
+            )
+        )
+
+        result = await coordinator.refresh(RefreshRequest())
+
+        assert len(result.errors) == 1
+        assert result.errors[0].source_id == "src-1"
+
+    @pytest.mark.asyncio
+    async def test_ac1_refresh_error_string_incorporates_uri_and_error(
+        self,
+        coordinator: IngestCoordinator,
+        mock_fetcher: MagicMock,
+    ) -> None:
+        """AC1: RefreshError.error must incorporate both FetchError.uri and FetchError.error."""
+        fetch_uri = "https://example.com/fail"
+        fetch_err = "connection refused"
+        mock_fetcher.fetch_source = AsyncMock(
+            return_value=FetchResult(
+                documents=(),
+                errors=(FetchError(uri=fetch_uri, error=fetch_err),),
+            )
+        )
+
+        result = await coordinator.refresh(RefreshRequest())
+
+        assert len(result.errors) == 1
+        assert fetch_uri in result.errors[0].error
+        assert fetch_err in result.errors[0].error
+
+    @pytest.mark.asyncio
+    async def test_ac1_refresh_error_timestamp_is_datetime(
+        self,
+        coordinator: IngestCoordinator,
+        mock_fetcher: MagicMock,
+    ) -> None:
+        """AC1: RefreshError.timestamp must be a current UTC datetime."""
+        before = datetime.now(tz=UTC)
+        mock_fetcher.fetch_source = AsyncMock(
+            return_value=FetchResult(
+                documents=(),
+                errors=(FetchError(uri="https://example.com/fail", error="timeout"),),
+            )
+        )
+
+        result = await coordinator.refresh(RefreshRequest())
+        after = datetime.now(tz=UTC)
+
+        assert len(result.errors) == 1
+        ts = result.errors[0].timestamp
+        assert isinstance(ts, datetime)
+        assert before <= ts <= after
+
+    @pytest.mark.asyncio
+    async def test_ac1_all_fetch_errors_propagated_for_multiple_errors(
+        self,
+        coordinator: IngestCoordinator,
+        mock_fetcher: MagicMock,
+    ) -> None:
+        """AC1: Every FetchError in fetch_result.errors must become a RefreshError — not just the first."""
+        mock_fetcher.fetch_source = AsyncMock(
+            return_value=FetchResult(
+                documents=(),
+                errors=(
+                    FetchError(uri="https://example.com/a", error="timeout"),
+                    FetchError(uri="https://example.com/b", error="403 Forbidden"),
+                ),
+            )
+        )
+
+        result = await coordinator.refresh(RefreshRequest())
+
+        assert len(result.errors) == 2
+        uris_in_errors = {e.error for e in result.errors}
+        assert any("https://example.com/a" in e for e in uris_in_errors)
+        assert any("https://example.com/b" in e for e in uris_in_errors)
+
+    # ------------------------------------------------------------------
+    # AC2 strengthened — update_source called and sources_refreshed increments
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_ac2_partial_success_update_source_still_called(
+        self,
+        coordinator: IngestCoordinator,
+        mock_fetcher: MagicMock,
+        mock_sources: MagicMock,
+    ) -> None:
+        """AC2: In partial success, update_source() must be called despite fetch errors."""
+        mock_fetcher.fetch_source = AsyncMock(
+            return_value=FetchResult(
+                documents=(_make_fetched_doc(),),
+                errors=(FetchError(uri="https://example.com/partial", error="403 Forbidden"),),
+            )
+        )
+
+        await coordinator.refresh(RefreshRequest())
+
+        mock_sources.update_source.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_ac2_partial_success_sources_refreshed_increments(
+        self,
+        coordinator: IngestCoordinator,
+        mock_fetcher: MagicMock,
+    ) -> None:
+        """AC2: In partial success, sources_refreshed must increment despite fetch errors."""
+        mock_fetcher.fetch_source = AsyncMock(
+            return_value=FetchResult(
+                documents=(_make_fetched_doc(),),
+                errors=(FetchError(uri="https://example.com/partial", error="403 Forbidden"),),
+            )
+        )
+
+        result = await coordinator.refresh(RefreshRequest())
+
+        assert result.sources_refreshed == 1
+
+    # ------------------------------------------------------------------
+    # AC3 strengthened — update_source NOT called on total failure
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_ac3_total_failure_update_source_not_called(
+        self,
+        coordinator: IngestCoordinator,
+        mock_fetcher: MagicMock,
+        mock_sources: MagicMock,
+    ) -> None:
+        """AC3: When total failure (empty docs + non-empty errors), update_source must NOT be called."""
+        mock_fetcher.fetch_source = AsyncMock(
+            return_value=FetchResult(
+                documents=(),
+                errors=(FetchError(uri="https://example.com/fail", error="connection refused"),),
+            )
+        )
+
+        await coordinator.refresh(RefreshRequest())
+
+        mock_sources.update_source.assert_not_called()
