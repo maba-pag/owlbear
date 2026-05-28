@@ -23,7 +23,7 @@ uv sync
 ```
 
 > **Branches:** `dev` is the working branch (full workspace). `main` is the consumer-facing branch — auto-synced product subset, never committed to directly.
-
+>
 > **Consumers:** If you're setting up OwlBear for use (not development), see [README-consumer.md](README-consumer.md).
 
 Open VS Code with `code .`.

@@ -55,6 +55,16 @@ repository.
 | CSS/HTML lint | Stylelint `^17.10.0` (`npm run lint:css`), HTMLHint `^1.9.2` (`npm run lint:html`) |
 | Build output | `serve/cockpit/dist/` via `npm run build` |
 
+## Audit Trail
+
+Activity events use a `source` field for attribution:
+
+| Source | Meaning |
+|--------|---------|
+| `source="cockpit"` | UI-initiated mutation (user action in the Cockpit frontend) |
+| `source="agent"` | agent-initiated mutation (pipeline agent via MCP) |
+| `source="engine"` | internal engine operation (lifecycle, migration) |
+
 ## Configuration
 
 | Variable | Default | Purpose |
