@@ -12,7 +12,7 @@
  *
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { render, fireEvent } from '@testing-library/react'
+import { render, fireEvent, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -546,10 +546,14 @@ describe('TestFromAC_PdsMigration_Text', () => {
       if (submitBtn) fireEvent.click(submitBtn)
 
       // After migration the error host must be p-inline-notification
-      await new Promise((r) => setTimeout(r, 0))
-      expect(
-        container.querySelector('p-inline-notification[data-testid="archival-error"]'),
-      ).not.toBeNull()
+      await waitFor(
+        () => {
+          expect(
+            container.querySelector('p-inline-notification[data-testid="archival-error"]'),
+          ).not.toBeNull()
+        },
+        { timeout: 2000 },
+      )
     })
 
     it('renders no p-text[data-testid="archival-error"] (replaced by PInlineNotification)', async () => {
