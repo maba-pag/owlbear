@@ -1,10 +1,10 @@
 ---
 id: 1898
 title: 'Knowledge: Final legacy file sweep (Phase C)'
-status: review
+status: archived
 priority: needed
 created: 2026-05-27T16:19:59.014229+02:00
-updated: 2026-05-28T10:57:33.356729+02:00
+updated: 2026-05-28T11:18:58.907997+02:00
 tags:
   - knowledge
   - layer-4
@@ -39,7 +39,7 @@ proof_bundle: behavioral
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Objective
@@ -336,3 +336,82 @@ All architecture criteria (single responsibility, interface clarity, dependency 
 - quality-runner scoped run: 42 passed, 0 failed, ruff clean.
 - Builder skip: test-only retry, all 42 tests green against current implementation.
 - AC coverage unchanged — all AC lines covered by TestFromAC_* classes from prior test-writer cycles.
+
+[[2026-05-28T11:08:50+02:00]]
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation: PASS #1898 -> docs | AC mapped to code and evidence sufficient.
+- Builder evidence reviewed first: builder notes established the implementation file set, deletion set, scoped green task gate, scoped lint status, coverage summary, and AC8 anchored import re-scan. The only remaining proof gap was whether the exact AC9 command had fresh independent confirmation after the architect re-scope, so I ran `quality-runner` on `serve/knowledge/tests/`, `serve/mcp-knowledge/tests/`, and `tests/test_knowledge_legacy_sweep_1898.py`; result: 42 passed, 0 failed, 0 skipped, `pytest` exit 0, `ruff` exit 0.
+
+| AC | Status | Evidence |
+|---|---|---|
+| AC1 | PASS | Direct directory inspection of `serve/knowledge/src/owlbear_knowledge/` shows the 13 legacy modules are absent; task guard at `tests/test_knowledge_legacy_sweep_1898.py:42` covers the aggregate deletion check. |
+| AC2 | PASS | `serve/knowledge/src/owlbear_knowledge/stores/content.py:36` defines `compute_content_hash` locally; task guard at `tests/test_knowledge_legacy_sweep_1898.py:94` verifies local ownership. |
+| AC3 | PASS | `serve/knowledge/src/owlbear_knowledge/embeddings.py:13` defines `SparseVector`, `serve/knowledge/src/owlbear_knowledge/embeddings.py:20` defines `HybridEmbedding`, and `serve/knowledge/src/owlbear_knowledge/qdrant.py:10` imports `HybridEmbedding` from `embeddings`; task guard at `tests/test_knowledge_legacy_sweep_1898.py:129` covers the migration. |
+| AC4 | PASS | `serve/knowledge/src/owlbear_knowledge/fetcher.py:13` defines runtime-checkable `ContentFetcher`; `serve/mcp-knowledge/src/owlbear_mcp_knowledge/_helpers.py:10` imports `ContentFetcher` from `fetcher`; task guard at `tests/test_knowledge_legacy_sweep_1898.py:181` covers the migration. |
+| AC5 | PASS | `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:366` defines `AppContext` without `source_store` or `refresh_orchestrator`; task guard at `tests/test_knowledge_legacy_sweep_1898.py:230` verifies the regression condition. |
+| AC6 | PASS | `serve/knowledge/src/owlbear_knowledge/__init__.py:5` imports only `protocols` and `stores`; task guard at `tests/test_knowledge_legacy_sweep_1898.py:266` plus direct source inspection confirm the narrowed package surface. |
+| AC7 | PASS | `tests/test_search_provenance.py` and `tests/test_mcp_knowledge_lifespan_1888.py` are absent on disk; task guard `TestFromAC_DeadTestFiles` remains part of the green 42-test task suite. |
+| AC8 | PASS | Reviewer anchored import sweep `^\s*(?:from|import)\s+owlbear_knowledge\.(source_store|document_store|graph_store|graph_builder|status_store|ingest|query_service|retrieval|refresh|protocol|models|schema|extractor)\b` returned 0 matches under both `serve/**` and `tests/**`; task guard at `tests/test_knowledge_legacy_sweep_1898.py:355` keeps the Python import topology green. |
+| AC9 | PASS | Independent `quality-runner` execution of the exact knowledge-domain gate (`serve/knowledge/tests/`, `serve/mcp-knowledge/tests/`, `tests/test_knowledge_legacy_sweep_1898.py`) returned 42 passed, 0 failed, `pytest` exit 0; task proxy begins at `tests/test_knowledge_legacy_sweep_1898.py:385`. |
+
+- Challenger result: reconsider (confidence 0.66) on proof quality. I kept PASS because the two material concerns were resolved during review: AC8 received an independent literal import sweep across `serve/` and `tests/`, and AC9 received an independent `quality-runner` rerun of the exact scoped command.
+- Blocking findings: none.
+
+## Observations
+- `serve/knowledge/tests/` and `serve/mcp-knowledge/tests/` currently contain only `__pycache__/`, so the re-scoped AC9 gate is effectively the task file plus empty package-local paths. That is acceptable for this task because the AC now requires the exact command to pass and it does, but the broader 236-pass builder regression remains the more meaningful supplemental integrity signal.
+- The AC8 task guard in `tests/test_knowledge_legacy_sweep_1898.py` is intentionally narrower than the literal reviewer sweep because it only parses Python AST imports. The independent grep remains necessary to catch non-Python import examples such as the earlier README drift.
+- The AC6 task guard does not fully exercise the exact top-level import form used in `serve/knowledge/src/owlbear_knowledge/__init__.py:5`, so direct source inspection carried part of the proof in this review. That is a test-tightening opportunity, not a blocking defect in the current implementation.
+
+[[2026-05-28T11:14:11+02:00]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | README verification | Yes | Verified clean | `serve/knowledge/README.md` fixed by builder (commit `538f4398`); Layer 1 grep confirms no stale deleted-module import paths — `source_store`/`graph_store` on lines 24–25 are Python variable names typed against `protocols.SourceStore`/`protocols.GraphStore`, not module imports. `serve/mcp-knowledge/README.md` also grep-clean (no deleted-module references). Layer 2 editorial: usage example, module groups table, and description coherent with current package surface (`protocols`, `stores`, `fetcher`, `embeddings`, `qdrant`). |
+| 2 | External attribution | No | N/A | No external sources cited in task body or builder notes; pure internal cleanup task. |
+| 3 | Research doc | Yes | Verified linked | Task body links `.owlbear/research/knowledge-legacy-deletion.md §3.1, §3.2`, `.owlbear/research/knowledge-phase-c-sweep.md`, and `.owlbear/research/knowledge-phase-c-sweep-v2.md`; all three files exist on disk. |
+| 4 | Deletion detection | Yes | No orphans remain | 13 Python source files deleted. Reviewer caught and required README stale-import fix (lines 23–25 in original); builder fixed in commit `538f4398`. Layer 1 grep over both READMEs confirms no surviving stale import paths. mcp-knowledge README has a pre-existing TODO for `get_consolidation_candidates` (outside task scope; passes through). |
+
+### Verification Layers
+- Layer 1 — grep on `serve/knowledge/README.md` for deleted-module identifiers (`source_store`, `document_store`, `graph_store`, `graph_builder`, `status_store`, `ingest`, `query_service`, `retrieval`, `refresh`, `protocol.py`, `models.py`, `schema.py`, `extractor`): 6 hits, all valid (narrative text, variable names typed against protocol types, protocol type names in module table). No stale import paths.
+- Layer 2 — editorial read of `serve/knowledge/README.md`: usage example imports from `protocols`, `stores`, `chunker`, `embeddings`, `fetcher`, `qdrant`, `stores.content` — all verified to exist. Module groups table matches `protocols/__init__.py` and `stores/__init__.py` exports (`SourceStore`, `GraphStore`, `ContentStore`, `QueryFacade`, `IngestCoordinator`; `ContentStore`, `SqliteGraphStore`, `SqliteSourceStore`). No contradictions or orphaned references.
+
+### Files Updated
+- None (README fixes were committed upstream by builder in `538f4398`; no further edits required)
+
+### Scratch Files Cleaned
+- None (no `.owlbear/scratch/1898-*` files found)
+
+[[2026-05-28T11:18:58+02:00]]
+## Audit
+
+### Regression Detection
+- Knowledge-domain regression: 460 passed, 0 failed (serve/knowledge/tests/, serve/mcp-knowledge/tests/, tests/*knowledge*, tests/*enrichment*, tests/*content_store*, tests/*source_fetcher*, tests/*mcp_knowledge*)
+- Scoped task tests: 42 passed, 0 failed
+- Lint (ruff): clean across all changed files
+- Full-suite gate: blocked by pre-existing ImportError in tests/test_mcp_kanban_newline_norm_1531.py (cannot import 'create_dr' from owlbear_mcp_kanban.server) — unrelated to knowledge domain, not a regression from this task
+
+### Intent Verification
+- Changed files: serve/knowledge/src/owlbear_knowledge/{stores/content.py, embeddings.py, qdrant.py, fetcher.py, source_fetcher.py, __init__.py, README.md}, serve/mcp-knowledge/src/owlbear_mcp_knowledge/_helpers.py
+- Deleted files: 13 legacy modules + 2 dead test files
+- Domain: knowledge package exclusively — no extraneous scope
+- Purpose alignment: task objective (delete legacy files, migrate types, rewrite __init__.py) fully matches implementation direction
+
+### Architect Quality
+- Score: 4/5
+- 9 AC lines with exact file paths, module names, and verifiable commands
+- Multiple challenger reviews incorporated (confidence 0.61, 0.68)
+- Minor gaps: AC9 initial full-suite scope required re-scoping when unrelated Cockpit debt surfaced; AC8 didn't anticipate README drift (caught by reviewer)
+- Both addressed through normal pipeline iteration
+
+### Commit Integrity
+- Builder commits: 85025848 (feat: complete knowledge legacy phase-c sweep), 538f4398 (fix: remove legacy imports from knowledge README) — both #1898 attributed
+- Test-writer commits: 600ff70a, d753ab40 — both #1898 attributed
+- All deliverables committed before status advancement
+
+### Deductions
+- None
+
+### Confidence: 1.00
+### Action: Archive
