@@ -3,13 +3,19 @@
 from __future__ import annotations
 
 from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from owlbear_knowledge.protocols.ingest import IngestRequest
-from owlbear_knowledge.protocols.sources import SourceKind, SourceState
+from owlbear_knowledge.protocols.sources import (
+    FetchTransport,
+    InlineConfig,
+    SourceKind,
+    SourceRegistration,
+    SourceState,
+)
+from owlbear_knowledge.stores.sources import SqliteSourceStore
 from owlbear_mcp_knowledge.server import _DEFAULT_QDRANT_PATH, app_lifespan, knowledge_ingest
 
 
@@ -56,67 +62,96 @@ class TestQdrantPersistencePathWiring:
 
 
 class TestKnowledgeIngestSourceIdentityWiring:
-    """Verify source identity is resolved from v2 source-store wiring."""
+    """Verify source identity flows correctly through real v2 lifespan (app_lifespan + SqliteSourceStore)."""
 
     @pytest.mark.asyncio
-    async def test_ingest_request_source_id_comes_from_existing_inline_source(self) -> None:
-        """knowledge_ingest forwards resolved inline source id into IngestRequest."""
-        existing_source = SimpleNamespace(id="resolved-src-1907", name="mcp-inline-global", kind=SourceKind.INLINE)
-        source_store = MagicMock()
-        source_store.list_sources.return_value = (existing_source,)
+    async def test_ingest_source_id_comes_from_existing_inline_source(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """knowledge_ingest uses existing source.id when mcp-inline-{scope} is already registered."""
+        monkeypatch.setenv("OWLBEAR_LOCAL_KB_PATH", ":memory:")
+        monkeypatch.setenv("OWLBEAR_QDRANT_PATH", str(tmp_path / "vectors"))
+        server_mock = MagicMock()
 
-        ingest_result = SimpleNamespace(documents_processed=1, chunks_created=1, chunks_enqueued=1)
-        coordinator = MagicMock()
-        coordinator.ingest = AsyncMock(return_value=ingest_result)
+        with patch("owlbear_mcp_knowledge.server.QdrantVectorStore"):
+            async with app_lifespan(server_mock) as app_ctx:
+                assert isinstance(app_ctx.source_store_v2, SqliteSourceStore)
 
-        ctx = MagicMock()
-        ctx.request_context.lifespan_context = SimpleNamespace(
-            source_store_v2=source_store,
-            ingest_coordinator=coordinator,
-        )
+                pre_registered = app_ctx.source_store_v2.register_source(
+                    SourceRegistration(
+                        name="mcp-inline-global",
+                        kind=SourceKind.INLINE,
+                        fetch_method=FetchTransport.NONE,
+                        config=InlineConfig(),
+                        scope="global",
+                        enrich=True,
+                        refreshable=False,
+                    )
+                )
 
-        response = await knowledge_ingest(ctx, text="hello world", scope="global")
+                fake_result = MagicMock()
+                fake_result.documents_processed = 1
+                fake_result.chunks_created = 1
+                fake_result.chunks_enqueued = 1
+                app_ctx.ingest_coordinator.ingest = AsyncMock(return_value=fake_result)
+
+                mcp_ctx = MagicMock()
+                mcp_ctx.request_context.lifespan_context = app_ctx
+
+                response = await knowledge_ingest(mcp_ctx, text="hello world", scope="global")
 
         assert response.startswith("Ingested:"), f"unexpected response: {response!r}"
-        source_store.list_sources.assert_called_once_with(scope="global", state=SourceState.ACTIVE)
-        coordinator.ingest.assert_called_once()
-
-        request = coordinator.ingest.call_args.args[0]
+        app_ctx.ingest_coordinator.ingest.assert_called_once()
+        request = app_ctx.ingest_coordinator.ingest.call_args.args[0]
         assert isinstance(request, IngestRequest), (
             f"knowledge_ingest must call coordinator.ingest with IngestRequest, got: {type(request)}"
         )
-        assert request.source_id == "resolved-src-1907", (
-            f"request.source_id must match resolved source id, got: {request.source_id!r}"
+        assert request.source_id == pre_registered.id, (
+            f"request.source_id must match existing source id, got: {request.source_id!r}"
         )
 
     @pytest.mark.asyncio
-    async def test_ingest_request_source_id_comes_from_newly_registered_source(self) -> None:
-        """knowledge_ingest uses register_source return id when no inline source exists."""
-        registered_source = SimpleNamespace(id="registered-src-1907", name="mcp-inline-global", kind=SourceKind.INLINE)
-        source_store = MagicMock()
-        source_store.list_sources.return_value = ()
-        source_store.register_source.return_value = registered_source
+    async def test_ingest_source_id_comes_from_newly_registered_inline_source(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """knowledge_ingest creates and uses a new source.id when mcp-inline-{scope} is absent."""
+        monkeypatch.setenv("OWLBEAR_LOCAL_KB_PATH", ":memory:")
+        monkeypatch.setenv("OWLBEAR_QDRANT_PATH", str(tmp_path / "vectors"))
+        server_mock = MagicMock()
 
-        ingest_result = SimpleNamespace(documents_processed=1, chunks_created=2, chunks_enqueued=2)
-        coordinator = MagicMock()
-        coordinator.ingest = AsyncMock(return_value=ingest_result)
+        with patch("owlbear_mcp_knowledge.server.QdrantVectorStore"):
+            async with app_lifespan(server_mock) as app_ctx:
+                assert isinstance(app_ctx.source_store_v2, SqliteSourceStore)
 
-        ctx = MagicMock()
-        ctx.request_context.lifespan_context = SimpleNamespace(
-            source_store_v2=source_store,
-            ingest_coordinator=coordinator,
-        )
+                fake_result = MagicMock()
+                fake_result.documents_processed = 1
+                fake_result.chunks_created = 2
+                fake_result.chunks_enqueued = 2
+                app_ctx.ingest_coordinator.ingest = AsyncMock(return_value=fake_result)
 
-        response = await knowledge_ingest(ctx, text="hello world", scope="global")
+                mcp_ctx = MagicMock()
+                mcp_ctx.request_context.lifespan_context = app_ctx
+
+                response = await knowledge_ingest(mcp_ctx, text="hello world", scope="global")
+
+                sources = list(
+                    app_ctx.source_store_v2.list_sources(scope="global", state=SourceState.ACTIVE)
+                )
+                inline = [s for s in sources if s.name == "mcp-inline-global"]
 
         assert response.startswith("Ingested:"), f"unexpected response: {response!r}"
-        source_store.register_source.assert_called_once()
-        coordinator.ingest.assert_called_once()
-
-        request = coordinator.ingest.call_args.args[0]
+        assert len(inline) == 1, (
+            f"expected exactly one inline source after ingest, found {len(inline)}"
+        )
+        app_ctx.ingest_coordinator.ingest.assert_called_once()
+        request = app_ctx.ingest_coordinator.ingest.call_args.args[0]
         assert isinstance(request, IngestRequest), (
             f"knowledge_ingest must call coordinator.ingest with IngestRequest, got: {type(request)}"
         )
-        assert request.source_id == "registered-src-1907", (
-            f"request.source_id must match registered source id, got: {request.source_id!r}"
+        assert request.source_id == inline[0].id, (
+            f"request.source_id must match newly registered source id, got: {request.source_id!r}"
         )
