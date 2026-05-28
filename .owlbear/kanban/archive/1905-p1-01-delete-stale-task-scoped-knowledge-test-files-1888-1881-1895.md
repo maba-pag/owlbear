@@ -1,10 +1,10 @@
 ---
 id: 1905
 title: 'P1-01: Delete stale task-scoped knowledge test files (1888, 1881, 1895)'
-status: docs
+status: archived
 priority: needed
 created: 2026-05-28T00:34:20.691200+02:00
-updated: 2026-05-28T04:37:50.936885+02:00
+updated: 2026-05-28T05:07:19.819600+02:00
 tags:
   - knowledge
   - cleanup
@@ -26,7 +26,7 @@ proof_bundle: existing
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Objective
@@ -201,3 +201,49 @@ Re-approved with extended ignore list. Test-writer: SKIP (bundle `existing`, tag
 
 ## Observations
 - No non-blocking follow-up from review. Historical rejected attempts in the task body are superseded by the final AC and builder evidence.
+
+[[2026-05-28T04:49:05+02:00]]
+## Docs Gate
+
+**Verdict: PASS — no docs impact**
+
+### Item 1: README Verification
+N/A — changed files are root `tests/` deletions (`tests/test_mcp_knowledge_lifespan_1888.py`, `tests/test_mcp_knowledge_read_tools_1881.py`, `tests/test_knowledge_tool_rename_1895.py`). Convention mapping: root-level test files do not map to any `serve/{pkg}/README.md` target. No source code, public interface, CLI flags, or entry points changed.
+
+### Item 2: External Attribution
+N/A — no external sources influenced this deletion-only task.
+
+### Item 3: Research Doc
+N/A — no research document was authored for this task. Pre-existing research files (`.owlbear/research/knowledge-phase-c-sweep-v2.md`, `mcp-knowledge-legacy-removal-b2.md`) reference the deleted files in historical context; these are internal tracking artifacts, not public docs, and were created under predecessor tasks.
+
+### Item 4: Deletion Detection
+No README references orphaned — grep across all `**/*.md` README files for all three deleted filenames returned zero matches. The references in `.owlbear/kanban/tasks/1906-*.md` are internal kanban task bodies; task #1906 has a declared #1905 dependency and its arch review already accounts for the deletion.
+
+### Scratch Cleanup
+No `.owlbear/scratch/1905-*` files found — nothing to clean.
+
+### Files Modified
+None.
+
+[[2026-05-28T05:07:19+02:00]]
+## Audit
+
+### Regression Detection
+Quality-runner full suite: 5902 passed, 6 failed. All 6 failures are in `tests/test_mcp_knowledge_server_1911.py` — TDD RED tests committed by test-writer for in-progress task #1911 (`61b0faba`). Not regressions from #1905. Lint violations (3x TC001/ARG002 in `serve/knowledge/`) are pre-existing, not introduced by this deletion-only task. Collection error in `test_mcp_kanban_newline_norm_1531.py` is pre-existing (known broken import).
+
+### Intent Verification
+Changed files: 3 task-scoped test files deleted from `tests/` (knowledge domain). Matches stated purpose exactly — remove broken test files superseded by #1900. No extraneous scope.
+
+### Architect Quality
+AC1-3: crystal clear file-deletion assertions (5/5). AC4: final form is adequate but required 3 architect iterations — initial selector collected unrelated broken tests twice, costing 2 full builder rejection cycles. Score: **3/5** — notable gaps requiring significant builder improvisation.
+
+### Commit Integrity
+Builder commit `ad7dbfe2` present: `chore: delete stale task-scoped knowledge tests (#1905, builder)`. 3 files deleted, 2691 lines removed. Correct format and attribution.
+
+### Deductions
+- AC quality score 3: -.03
+
+### Confidence: 0.97
+### Action: ARCHIVE
+
+ARCHIVED #1905 -> archived | confidence .97
