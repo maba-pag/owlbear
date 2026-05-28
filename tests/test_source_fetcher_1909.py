@@ -664,3 +664,80 @@ class TestFromAC_CompositeSourceFetcher:
         ):
             result = await composite.fetch_source(source)
         assert result.errors[0].error == str(exc)
+
+    # ------------------------------------------------------------------ #
+    # AC3 retry gap — non-default base_path                                #
+    # ------------------------------------------------------------------ #
+
+    @pytest.mark.asyncio
+    async def test_file_glob_non_default_base_path_globs_relative_to_base_path(
+        self, composite: CompositeSourceFetcher, tmp_path: Path
+    ) -> None:
+        """Globbing must use config.base_path, not workspace_root.
+
+        Two txt files at workspace root; one txt file in a 'docs' subdirectory.
+        A source configured with base_path='docs' must return exactly one document
+        (the subdir file). If base_path were ignored and workspace_root were used,
+        two documents would be returned.
+        """
+        (tmp_path / "root_a.txt").write_text("root file a", encoding="utf-8")
+        (tmp_path / "root_b.txt").write_text("root file b", encoding="utf-8")
+        subdir = tmp_path / "docs"
+        subdir.mkdir()
+        (subdir / "manual.txt").write_text("manual content", encoding="utf-8")
+        source = _file_source(("*.txt",), base_path="docs")
+        result = await composite.fetch_source(source)
+        assert len(result.documents) == 1
+        assert result.documents[0].text == "manual content"
+
+    # ------------------------------------------------------------------ #
+    # AC7 retry gaps — exact FetchError payload                            #
+    # ------------------------------------------------------------------ #
+
+    @pytest.mark.asyncio
+    async def test_file_glob_file_not_found_fetch_error_uri_and_error_exact(
+        self, composite: CompositeSourceFetcher, tmp_path: Path
+    ) -> None:
+        """FILE_GLOB FileNotFoundError → FetchError.uri equals matched path str, .error equals str(exc)."""
+        (tmp_path / "target.txt").write_text("data", encoding="utf-8")
+        source = _file_source(("*.txt",))
+        exc = FileNotFoundError("file vanished")
+        with patch(
+            "owlbear_knowledge.source_fetcher.intake.read_file",
+            new_callable=AsyncMock,
+            side_effect=exc,
+        ):
+            result = await composite.fetch_source(source)
+        assert len(result.errors) == 1
+        expected_uri = str((tmp_path / "target.txt").resolve())
+        assert result.errors[0].uri == expected_uri
+        assert result.errors[0].error == str(exc)
+
+    @pytest.mark.asyncio
+    async def test_file_glob_permission_error_fetch_error_uri_and_error_exact(
+        self, composite: CompositeSourceFetcher, tmp_path: Path
+    ) -> None:
+        """FILE_GLOB PermissionError → FetchError.uri equals matched path str, .error equals str(exc)."""
+        (tmp_path / "restricted.txt").write_text("data", encoding="utf-8")
+        source = _file_source(("*.txt",))
+        exc = PermissionError("path escapes sandbox")
+        with patch(
+            "owlbear_knowledge.source_fetcher.intake.read_file",
+            new_callable=AsyncMock,
+            side_effect=exc,
+        ):
+            result = await composite.fetch_source(source)
+        assert len(result.errors) == 1
+        expected_uri = str((tmp_path / "restricted.txt").resolve())
+        assert result.errors[0].uri == expected_uri
+        assert result.errors[0].error == str(exc)
+
+    @pytest.mark.asyncio
+    async def test_auth_web_fetch_error_error_equals_str_of_exception(
+        self, composite: CompositeSourceFetcher, mock_factory: MagicMock
+    ) -> None:
+        """AUTHENTICATED_WEB failure → FetchError.error equals str(exc) per AC7 contract."""
+        exc = RuntimeError("browser connection timed out")
+        mock_factory.return_value.fetch = AsyncMock(side_effect=exc)
+        result = await composite.fetch_source(_auth_source())
+        assert result.errors[0].error == str(exc)
