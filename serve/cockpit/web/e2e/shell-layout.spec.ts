@@ -46,22 +46,7 @@ const TASK_DETAIL = {
   depends_on: [] as number[],
 }
 
-type Decision = {
-  id: string
-  task_id: number
-  agent: string
-  request_type: string
-  created: string
-  title: string
-  body_preview: string
-  body: string
-}
-
-type StubOptions = {
-  decisions?: { count: number; items: Decision[] }
-}
-
-async function stubApis(page: Page, options: StubOptions = {}): Promise<void> {
+async function stubApis(page: Page): Promise<void> {
   await page.route('/api/**', (route) => route.fulfill({ status: 200, json: {} }))
   await page.route('/api/events', (route) =>
     route.fulfill({
@@ -80,9 +65,6 @@ async function stubApis(page: Page, options: StubOptions = {}): Promise<void> {
     route.fulfill({ json: { tasks: [TASK], mtime: 1_747_353_600 } }),
   )
   await page.route('/api/board', (route) => route.fulfill({ json: BOARD }))
-  await page.route('/api/decisions/pending', (route) =>
-    route.fulfill({ json: options.decisions ?? { count: 0, items: [] } }),
-  )
   await page.route('/api/memories', (route) => route.fulfill({ json: { entries: [] } }))
   await page.route('/api/ideas', (route) => route.fulfill({ json: { content: '# Direct load' } }))
 }

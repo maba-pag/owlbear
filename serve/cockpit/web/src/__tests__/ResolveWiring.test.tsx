@@ -1,23 +1,15 @@
 /**
- * Task #1857 — P1-07: Cockpit frontend — minimal resolver wiring to new API
+ * Cockpit frontend resolver wiring to the pending-request API.
  *
  * Smoke tests (one per AC line):
- *   AC1: usePendingDRs (or replacement) fetches from GET /api/requests/pending
- *        (bare JSON array of PendingRequestResponse objects, NOT old
- *        /api/decisions/pending); modal renders title and summary from structured
- *        response fields — does NOT derive them via getDecisionBrief() body-text parsing.
+ *   AC1: usePendingDRs fetches from GET /api/requests/pending
+ *        (bare JSON array of PendingRequestResponse objects); modal renders title
+ *        and summary from structured response fields.
  *   AC2: Resolve submission calls POST /api/requests/{request_id}/resolve with JSON body
  *        {selected_option_id, free_text, kind}; for decision-kind, selected_option_id
  *        is the chosen options[].option_id; on HTTP 200, modal closes (onResolved fired).
  *   AC3: kind==="decision" renders options[].label as selectable controls;
  *        kind==="action" renders a "Complete" button replacing option controls.
- *
- * RED reasons (current failures against existing implementation):
- *   AC1: usePendingDRs polls /api/decisions/pending — assertion on /api/requests/pending fails.
- *   AC2: No option selection controls exist; POST goes to /api/decisions/{id}/resolve with
- *        {response, notes}, not the new payload shape.
- *   AC3: Modal renders approve/reject/needs-info radios, not options[].label selectable
- *        controls; submit button text is "Submit Decision", not "Complete" for action kind.
  */
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { renderHook, act, render, fireEvent, waitFor } from '@testing-library/react'
@@ -82,9 +74,7 @@ const DR_ACTION: PendingRequestResponse = {
 }
 
 // ─── Render helper ────────────────────────────────────────────────────────────
-// `as any` cast: builder will update ResolveModal props to accept the new
-// PendingRequestResponse shape; until then the cast allows DOM assertions to
-// run against current rendering and fail on missing new controls.
+// Cast through any because these smoke fixtures use the hook-normalized shape.
 
 function renderModal(
   dr: PendingRequestResponse,
@@ -117,8 +107,7 @@ describe('ResolveWiring', () => {
       vi.useRealTimers()
     })
 
-    it('smoke: usePendingDRs fetches from GET /api/requests/pending (not /api/decisions/pending)', async () => {
-      // RED: current hook polls /api/decisions/pending — this assertion fails on wrong URL.
+    it('smoke: usePendingDRs fetches from GET /api/requests/pending', async () => {
       const fetchMock = vi.fn(() =>
         Promise.resolve({
           ok: true,
@@ -131,7 +120,6 @@ describe('ResolveWiring', () => {
       renderHook(() => usePendingDRs())
       await act(async () => {})
 
-      // FAILS: fetchMock is called with '/api/decisions/pending', not '/api/requests/pending'.
       expect(fetchMock).toHaveBeenCalledWith('/api/requests/pending', expect.anything())
     })
   })
@@ -139,8 +127,6 @@ describe('ResolveWiring', () => {
   // ─── AC2: Resolve submit calls POST /api/requests/{id}/resolve ───────────
 
   it('smoke: resolve submit sends selected_option_id and kind to POST /api/requests/{id}/resolve', async () => {
-    // RED: (1) no option selection controls exist; (2) POST goes to /api/decisions/{id}/resolve
-    // with {response, notes} — neither the endpoint nor the body shape match the new contract.
     const fetchMock = vi.fn(() =>
       Promise.resolve({
         ok: true,
@@ -153,25 +139,24 @@ describe('ResolveWiring', () => {
     const onResolved = vi.fn()
     const { container } = renderModal(DR_DECISION, vi.fn(), onResolved)
 
-    // Builder must render one selectable control per options[] entry, identified by
-    // data-testid="resolve-option-{option_id}".
+    // ResolveModal renders one selectable control per options[] entry, identified
+    // by data-testid="resolve-option-{option_id}".
     const firstOptionControl = container.querySelector(
       `[data-testid="resolve-option-${DR_DECISION.options[0].option_id}"]`,
     )
-    // FAILS: current modal renders approve/reject/needs-info radios, not per-option controls.
     expect(firstOptionControl).not.toBeNull()
 
     fireEvent.click(firstOptionControl!)
     fireEvent.click(container.querySelector('[data-testid="resolve-submit"]') as HTMLElement)
 
     await waitFor(() => {
-      // Endpoint must be the new /api/requests/ path.
+      // Endpoint must use the /api/requests/ path.
       const resolveCall = fetchMock.mock.calls.find((c) =>
         String(c[0]).includes('/resolve'),
       )
       expect(String(resolveCall?.[0])).toContain('/api/requests/')
 
-      // Body must include selected_option_id and kind (new payload shape).
+      // Body must include selected_option_id and kind.
       const body = JSON.parse((resolveCall?.[1] as RequestInit).body as string) as Record<string, unknown>
       expect(body).toMatchObject({
         selected_option_id: DR_DECISION.options[0].option_id,
@@ -191,7 +176,6 @@ describe('ResolveWiring', () => {
     {
       const { container, unmount } = renderModal(DR_DECISION)
       const optionControls = container.querySelectorAll('[data-testid^="resolve-option-"]')
-      // FAILS: current modal renders approve/reject/needs-info radios, not option controls.
       expect(optionControls.length).toBeGreaterThan(0)
 
       // At least one option label from the fixture must be visible.
@@ -207,7 +191,6 @@ describe('ResolveWiring', () => {
       const completeBtn = Array.from(
         container.querySelectorAll<HTMLElement>('[data-testid="resolve-submit"]'),
       ).find((el) => el.textContent?.includes('Complete'))
-      // FAILS: current submit button text is "Submit Decision", not "Complete".
       expect(completeBtn).toBeDefined()
     }
   })

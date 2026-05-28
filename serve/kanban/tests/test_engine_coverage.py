@@ -421,9 +421,6 @@ class TestFromAC_SessionFilterHelpers:
     def test_validate_blocked_or_rejected_is_valid(self) -> None:
         _validate_session_filter("blocked-or-rejected")
 
-    def test_validate_failed_or_rejected_alias_is_valid(self) -> None:
-        _validate_session_filter("failed-or-rejected")
-
     def test_validate_released_is_valid(self) -> None:
         _validate_session_filter("released")
 

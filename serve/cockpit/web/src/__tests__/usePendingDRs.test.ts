@@ -1,7 +1,7 @@
 /**
  * usePendingDRs polling hook
  *
- * Covers: GET fetch to /api/decisions/pending on mount, configurable
+ * Covers: GET fetch to /api/requests/pending on mount, configurable
  * intervalMs, state shape (count/items/isLoading/error), empty response,
  * error paths (network failure + non-OK HTTP status), and interval cleanup
  * on unmount.
@@ -59,7 +59,7 @@ describe('TestFromAC_usePendingDRs', () => {
   beforeEach(() => { vi.useFakeTimers() })
   afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals() })
 
-  // ─── AC: Test polling hook fetches /api/decisions/pending on interval ──────
+  // ─── AC: Test polling hook fetches /api/requests/pending on interval ──────
 
   describe('AC1: GET fetch to /api/requests/pending on mount', () => {
     it('fetches /api/requests/pending on mount', async () => {

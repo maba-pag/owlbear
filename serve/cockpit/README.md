@@ -740,7 +740,6 @@ Two endpoints expose a single shared markdown file for collaborative ideation. T
 | `active` | `running`, `stuck` |
 | `all` | all states |
 | `blocked-or-rejected` | `blocked`, `rejected` |
-| `failed-or-rejected` | `blocked`, `rejected` (legacy alias for `blocked-or-rejected`) |
 | `released` | `released` |
 
 Usage: `GET /api/sessions?filter=active`

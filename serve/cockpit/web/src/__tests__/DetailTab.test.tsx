@@ -715,15 +715,6 @@ describe('TestFromAC_DetailTab', () => {
   // ─── Oppose-the-flow confirmations ────────────────────────────────────────
 
   describe('oppose-the-flow confirmations', () => {
-    // TODO(#1381): re-enable when backward-action confirmation dialog wiring is implemented.
-    it.skip('backward move action requires a confirmation dialog', () => {
-      const { container } = renderDetail()
-      const btn = container.querySelector('[data-testid="move-backward"]') as HTMLElement | null
-      expect(btn).not.toBeNull()
-      fireEvent.click(btn!)
-      expect(container.querySelector('[data-testid="confirm-dialog"]')).not.toBeNull()
-    })
-
     it('unblock action requires a confirmation dialog', () => {
       const { container } = renderDetail(TASK_BLOCKED)
       const btn = container.querySelector('[data-testid="unblock-action"]') as HTMLElement | null

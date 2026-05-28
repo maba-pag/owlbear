@@ -1,8 +1,8 @@
 /**
  * WCAG 2.1 AA Playwright accessibility sweep for Cockpit surfaces.
  *
- * Covers the board, task detail modal, DR and health popovers, FilterPanel,
- * ResolveModal, ArchivalModal, ConfirmDialog, CleanupPanel, and RepairPanel.
+ * Covers the board, task detail modal, health popover, FilterPanel,
+ * ArchivalModal, ConfirmDialog, CleanupPanel, and RepairPanel.
  * Route mocks use Playwright LIFO ordering: catch-all first, specific routes last.
  */
 
@@ -82,19 +82,6 @@ const TASK_DETAIL = {
   created: '2026-05-10T00:00:00+00:00',
 }
 
-const PENDING_DRS = [
-  {
-    id: 'dr-sweep-001',
-    task_id: 1,
-    agent: 'builder',
-    request_type: 'scope-decision',
-    created: '2026-05-16T00:00:00+00:00',
-    title: 'Confirm caching strategy',
-    body_preview: 'Builder needs guidance on caching.',
-    body: '## Context\n\nShould we use Redis or in-memory cache?',
-  },
-]
-
 /** Scan items: ensure HealthBadge shows data-health="red" and RepairPanel appears. */
 const SCAN_ITEMS = [
   {
@@ -132,10 +119,6 @@ async function stubApis(page: Page): Promise<void> {
     route.fulfill({ json: { tasks: TASKS, mtime: 1_716_000_000 } }),
   )
   await page.route('/api/sessions', (route) => route.fulfill({ json: { sessions: [] } }))
-  await page.route('/api/decisions/pending', (route) =>
-    route.fulfill({ json: { count: PENDING_DRS.length, items: PENDING_DRS } }),
-  )
-
   // /api/tasks/scan — provides scan items so HealthBadge renders red and RepairPanel
   // shows the "Repair" button. Must be registered before /api/tasks/:id (LIFO).
   await page.route('/api/tasks/scan', (route) => route.fulfill({ json: SCAN_ITEMS }))
@@ -224,17 +207,6 @@ test.describe('TestFromAC_WcagSweep', () => {
     expect(results.violations, formatViolations(results.violations)).toEqual([])
   })
 
-  // ── Surface 3: Decisions workspace ────────────────────────────────────────
-  // Decisions are route-owned; pending DRs resolve from the Decisions workspace.
-  test('decisions workspace passes wcag2.1 aa axe scan (AC1)', async ({ page }) => {
-    await page.goto('/decisions')
-    await expect(page.locator('[data-testid="decisions-page"]')).toBeVisible({ timeout: 8_000 })
-    await expect(page.locator(`[data-testid="dr-item-${PENDING_DRS[0].id}"]`)).toBeVisible({ timeout: 8_000 })
-
-    const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze()
-    expect(results.violations, formatViolations(results.violations)).toEqual([])
-  })
-
   // ── Surface 4: Workspace Status popover ───────────────────────────────────
   // The Workspace Status popover lists scan issues and exposes care actions.
   test('workspace status popover passes wcag2.1 aa axe scan (AC1)', async ({ page }) => {
@@ -266,24 +238,6 @@ test.describe('TestFromAC_WcagSweep', () => {
       page.locator('[data-testid="filter-panel"]'),
       'filter-panel must be visible after clicking filter-toggle',
     ).toBeVisible({ timeout: 3_000 })
-
-    const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze()
-    expect(results.violations, formatViolations(results.violations)).toEqual([])
-  })
-
-  // ── Surface 6: ResolveModal ───────────────────────────────────────────────
-  // ResolveModal opens when a DR item is clicked from the Decisions workspace.
-  // The modal renders as a custom div with role="dialog" in the Shell.
-  test('resolve modal passes wcag2.1 aa axe scan (AC1)', async ({ page }) => {
-    await page.goto('/decisions')
-    await expect(page.locator('[data-testid="decisions-page"]')).toBeVisible({ timeout: 8_000 })
-
-    const drItem = page.locator(`[data-testid="dr-item-${PENDING_DRS[0].id}"]`)
-    await drItem.waitFor({ state: 'visible', timeout: 3_000 })
-    await drItem.click()
-
-    // ResolveModal must be open — no conditional skip.
-    await page.locator('[data-testid="resolve-modal"]').waitFor({ state: 'visible', timeout: 3_000 })
 
     const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze()
     expect(results.violations, formatViolations(results.violations)).toEqual([])

@@ -432,7 +432,7 @@ Reviewer returned to backlog under loop-breaker rule (3rd review cycle). Two fol
 
 ### Decisions
 
-**AC6 Refinement:** The OCC token at `DetailTab.tsx:349` and the `onTaskUpdated` callback branches in `Shell.tsx:248-260` are pre-existing behavior explicitly attributed to #1344 (both skipped tests carry `TODO(#1344)` markers). This task did NOT introduce, modify, or break those codepaths. AC6's intent is "no regression in backend conflict semantics or decision-resolution flows" — proven by adjacent Shell suites running green (50 passed, 0 failed). Requiring full coverage of untouched branches owned by another task is scope creep.
+**AC6 Refinement:** The OCC token at `DetailTab.tsx:349` and the `onTaskUpdated` callback branches in `Shell.tsx:248-260` are pre-existing behavior explicitly attributed to #1344 (both skipped tests carried archived-task markers). This task did NOT introduce, modify, or break those codepaths. AC6's intent is "no regression in backend conflict semantics or decision-resolution flows" — proven by adjacent Shell suites running green (50 passed, 0 failed). Requiring full coverage of untouched branches owned by another task is scope creep.
 
 **Rewritten AC6:** "The implementation satisfies #1382 without changing backend conflict semantics or decision-resolution flows. Proof: adjacent Shell suites (decision-viewport, resolve-modal, dr-indicator, card-selection, on-task-updated) remain green. Note: positive `onTaskUpdated` branches and OCC token assertion are owned by #1344, not this task. (td:1)"
 

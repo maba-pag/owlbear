@@ -139,8 +139,8 @@ class TestFromAC_ReleaseNoteAppending:
         note_text = "Releasing to allow another agent to claim."
         result = view.end_work(1, outcome="release", note=note_text)
 
-        assert note_text in result.task.body, (
-            f"Expected note to appear in returned body after release; body={result.task.body!r}"
+        assert note_text in result.body, (
+            f"Expected note to appear in returned body after release; body={result.body!r}"
         )
 
     def test_release_claimed_note_in_disk_body(self, tmp_path: Path) -> None:
@@ -171,9 +171,9 @@ class TestFromAC_ReleaseNoteAppending:
         note_text = "Compound: note + claim cleared + status unchanged."
         result = view.end_work(1, outcome="release", note=note_text)
 
-        assert note_text in result.task.body, f"Note must be in returned body; body={result.task.body!r}"
-        assert result.task.claimed_at is None, f"Claim must be cleared; claimed_at={result.task.claimed_at!r}"
-        assert result.task.status == "in-progress", f"Status must be unchanged; status={result.task.status!r}"
+        assert note_text in result.body, f"Note must be in returned body; body={result.body!r}"
+        assert result.claimed_at is None, f"Claim must be cleared; claimed_at={result.claimed_at!r}"
+        assert result.status == "in-progress", f"Status must be unchanged; status={result.status!r}"
 
     # --- AC3: note format ----------------------------------------------------
 
@@ -191,7 +191,7 @@ class TestFromAC_ReleaseNoteAppending:
 
         # ISO 8601 pattern with time component (YYYY-MM-DDTHH:MM:SS±HH:MM)
         # microseconds must NOT appear (now.replace(microsecond=0).isoformat())
-        body = result.task.body
+        body = result.body
         assert re.search(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}", body), (
             f"Expected ISO 8601 datetime prefix (no microseconds) in body; body={body!r}"
         )
@@ -206,7 +206,7 @@ class TestFromAC_ReleaseNoteAppending:
 
         result = view.end_work(1, outcome="release", note="Microsecond-free check.")
 
-        body = result.task.body
+        body = result.body
         # Fractional seconds would look like 2026-04-26T10:00:00.123456+00:00
         assert not re.search(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+", body), (
             f"Timestamp must not contain fractional seconds; body={body!r}"
@@ -238,7 +238,7 @@ class TestFromAC_ReleaseNoteAppending:
         note_text = "Release note content."
         result = view.end_work(1, outcome="release", note=note_text)
 
-        body = result.task.body
+        body = result.body
         # Timestamp and note must both appear, with note after timestamp
         ts_match = re.search(r"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[^\n]*)", body)
         assert ts_match is not None, f"No timestamp found in body={body!r}"
@@ -265,8 +265,8 @@ class TestFromAC_ReleaseNoteAppending:
         release_result = view_release.end_work(1, outcome="release", note=note_text)
 
         # Both bodies must end with <newline><timestamp><newline><note_text>
-        success_body = success_result.task.body
-        release_body = release_result.task.body
+        success_body = success_result.body
+        release_body = release_result.body
 
         # Strip prefix differences (success may advance status, release keeps it)
         # Focus: both should contain the same timestamp+note pattern
@@ -307,8 +307,8 @@ class TestFromAC_ReleaseUnclaimedNoop:
         note_text = "This note must NOT appear."
         result = view.end_work(1, outcome="release", note=note_text)
 
-        assert note_text not in result.task.body, (
-            f"Note must not be appended to unclaimed task body; body={result.task.body!r}"
+        assert note_text not in result.body, (
+            f"Note must not be appended to unclaimed task body; body={result.body!r}"
         )
 
     def test_unclaimed_release_disk_body_unchanged(self, tmp_path: Path) -> None:

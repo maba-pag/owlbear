@@ -13,7 +13,7 @@ AC coverage:
   10. sweep-release: release + sweep-release pair closes exactly one session (no phantom)
   11. Filter: active-only (default) returns running + stuck only
   12. Filter: all returns every session regardless of state
-    13. Filter: failed-or-rejected returns blocked + rejected
+    13. Filter: blocked-or-rejected returns blocked + rejected
   14. Filter: released returns released sessions only
   15. Empty activity log returns empty list
   16. Missing activity log returns empty list (no crash)
@@ -439,10 +439,10 @@ class TestFromAC_ListSessions:
         returned_ids = {s.task_id for s in sessions}
         assert {20, 21, 22}.issubset(returned_ids)
 
-    # ------------------------------------------------------------------ AC 13: filter failed-or-rejected
+    # ------------------------------------------------------------------ AC 13: filter blocked-or-rejected
 
-    def test_filter_failed_or_rejected_includes_fail_and_reject(self, engine: KanbanEngine, log_path: Path) -> None:
-        """filter='failed-or-rejected' includes blocked and rejected sessions."""
+    def test_filter_blocked_or_rejected_includes_block_and_reject(self, engine: KanbanEngine, log_path: Path) -> None:
+        """filter='blocked-or-rejected' includes blocked and rejected sessions."""
         _write_log(
             log_path,
             [
@@ -462,13 +462,13 @@ class TestFromAC_ListSessions:
                 _entry(action="end_work", task_id=31, detail="reject: in-progress -> todo"),
             ],
         )
-        sessions = engine.list_sessions(filter="failed-or-rejected")
+        sessions = engine.list_sessions(filter="blocked-or-rejected")
         returned_ids = {s.task_id for s in sessions}
-        assert 30 in returned_ids, "blocked state must be in failed-or-rejected"
-        assert 31 in returned_ids, "rejected state must be in failed-or-rejected"
+        assert 30 in returned_ids, "blocked state must be in blocked-or-rejected"
+        assert 31 in returned_ids, "rejected state must be in blocked-or-rejected"
 
-    def test_filter_failed_or_rejected_excludes_pass_and_released(self, engine: KanbanEngine, log_path: Path) -> None:
-        """filter='failed-or-rejected' excludes completed and released sessions."""
+    def test_filter_blocked_or_rejected_excludes_pass_and_released(self, engine: KanbanEngine, log_path: Path) -> None:
+        """filter='blocked-or-rejected' excludes completed and released sessions."""
         _write_log(
             log_path,
             [
@@ -488,10 +488,10 @@ class TestFromAC_ListSessions:
                 _entry(action="release", task_id=33, detail="test-agent"),
             ],
         )
-        sessions = engine.list_sessions(filter="failed-or-rejected")
+        sessions = engine.list_sessions(filter="blocked-or-rejected")
         returned_ids = {s.task_id for s in sessions}
-        assert 32 not in returned_ids, "completed must be excluded from failed-or-rejected"
-        assert 33 not in returned_ids, "released must be excluded from failed-or-rejected"
+        assert 32 not in returned_ids, "completed must be excluded from blocked-or-rejected"
+        assert 33 not in returned_ids, "released must be excluded from blocked-or-rejected"
 
     # ------------------------------------------------------------------ AC 14: filter released
 

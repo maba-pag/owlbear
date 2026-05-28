@@ -430,8 +430,8 @@ class TestFromAC_EndWork:
 
         result = view.end_work(1, outcome="fail", note="Outcome fail.")
 
-        assert result.task.status == "in-progress"
-        assert result.task.claimed_at is None
+        assert result.status == "in-progress"
+        assert result.claimed_at is None
 
     def test_success_with_block_reason_raises_err_block_reason_forbidden(self, tmp_path: Path) -> None:
         """AC-NEW-11: non-block outcome (success) with block_reason raises

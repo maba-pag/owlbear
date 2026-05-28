@@ -86,9 +86,6 @@ async function stubApis(page: Page): Promise<void> {
   await page.route(/\/api\/sessions(\?.*)?$/, (route) =>
     route.fulfill({ json: { sessions: [] } }),
   )
-  await page.route('/api/decisions/pending', (route) =>
-    route.fulfill({ json: { count: 0, items: [] } }),
-  )
   await page.route('/api/tasks/scan', (route) => route.fulfill({ json: [] }))
 }
 

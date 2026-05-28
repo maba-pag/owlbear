@@ -1,8 +1,8 @@
 /**
  * Sidecar Activity tab
  *
- * Covers: default active-session filter, filter switches (all / failed-or-rejected /
- * released), session row field rendering, and click-to-detail navigation.
+ * Covers: default active-session filter, filter switches (all / blocked / released),
+ * session row field rendering, and click-to-detail navigation.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, fireEvent, waitFor } from '@testing-library/react'

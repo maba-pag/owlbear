@@ -58,19 +58,6 @@ const TASK_DETAIL = {
   body: '## Context\n\nCache implementation details.',
 }
 
-const DECISION_ITEMS = [
-  {
-    id: 'dr-1562-001',
-    task_id: 1,
-    agent: 'builder',
-    request_type: 'scope-decision',
-    created: '2026-05-14T00:00:00+00:00',
-    title: 'Confirm caching strategy',
-    body_preview: 'Builder needs guidance on caching.',
-    body: '## Context\n\nShould we use Redis or in-memory?',
-  },
-]
-
 // Two sessions: 'running' is shown under default 'active' filter; 'released' is filtered out.
 const SESSIONS = [
   {
@@ -126,10 +113,6 @@ async function stubApis(page: Page): Promise<void> {
   // Regex matches /api/sessions and /api/sessions?filter=all (query-string variant)
   await page.route(/\/api\/sessions(\?.*)?$/, (route) =>
     route.fulfill({ json: { sessions: SESSIONS } }),
-  )
-
-  await page.route('/api/decisions/pending', (route) =>
-    route.fulfill({ json: { count: DECISION_ITEMS.length, items: DECISION_ITEMS } }),
   )
 
   // Registered last → highest LIFO priority (overrides /api/tasks/* for the scan path)
@@ -336,52 +319,6 @@ test.describe('TestFromAC_TaskDetailModalComposition', () => {
       return (element as HTMLElement & { label?: string }).label ?? element.getAttribute('label')
     })
     expect(bodyLabel).toBe('Task body')
-  })
-})
-
-// ─── AC-2: Decision route composition ───────────────────────────────────────
-
-test.describe('TestFromAC_DecisionRouteComposition', () => {
-  test.use({ viewport: { width: 1280, height: 800 } })
-
-  test.beforeEach(async ({ page }) => {
-    await stubApis(page)
-    await page.goto('/decisions')
-    await expect(page.locator('[data-testid="decisions-page"]')).toBeVisible({ timeout: 8_000 })
-  })
-
-  test('legacy DecisionViewport decision-item elements are absent from the shell', async ({
-    page,
-  }) => {
-    await expect(page.locator('[data-testid^="decision-item-"]')).toHaveCount(0)
-  })
-
-  test('Decisions route exposes pending request identity', async ({
-    page,
-  }) => {
-    const item = page.locator('[data-testid="dr-item-dr-1562-001"]')
-    await expect(item).toBeVisible()
-    await expect(item).toContainText('Confirm caching strategy')
-    await expect(item).toContainText('builder')
-    await expect(item).toContainText('1')
-  })
-
-  test('clicking a Decisions route item opens the PModal resolve workflow', async ({
-    page,
-  }) => {
-    await page.locator('[data-testid="dr-item-dr-1562-001"]').click()
-    const modal = page.locator('[data-testid="resolve-modal"]')
-    await expect(modal).toBeVisible()
-    await expect(modal).toContainText('Confirm caching strategy')
-  })
-
-  test('task references open the task detail overlay from Decisions', async ({ page }) => {
-    await page.locator('[data-testid="dr-open-task-dr-1562-001"]').click()
-    const modal = page.locator('[data-testid="task-detail-modal"]')
-
-    await expect(modal).toBeVisible()
-    await expect(modal).toContainText('Implement cache layer')
-    await expect(page.locator('[data-testid="decisions-page"]')).toBeVisible()
   })
 })
 

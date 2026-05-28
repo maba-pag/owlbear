@@ -366,7 +366,7 @@ Reviewer routed task back to backlog after fourth FAIL: AC3/AC4 flagged two adja
 
 **`usePendingDRs.polling-active.test.ts`** — uses `{count: 0, items: []}` as fetch fixture but ONLY asserts on `fetchMock.mock.calls.length` (lines 53, 66, 79). The test guards polling interval timing (60s setInterval regression), not payload processing. The hook silently resets to error state on non-array data (line 83-94 of usePendingDRs.ts), but this test never inspects hook state — it only counts fetch invocations. This is a weak-guard code quality concern, not a functional defect caused by this removal.
 
-**`DecisionContract.test.tsx` lines 234-285** — all flagged tests are `it.skip(...)` with `TODO(#1387)`. They are parked scaffolding for the refetchTasks wiring feature. Removing them would destroy planned work for task #1387. They never execute and produce no pass/fail signal.
+**`DecisionContract.test.tsx` lines 234-285** — all flagged tests are `it.skip(...)` with references to archived task #1387. They are parked scaffolding for the refetchTasks wiring feature. Removing them would destroy planned work for task #1387. They never execute and produce no pass/fail signal.
 
 ### Decision
 Neither file represents an active test that validates the deleted decisions contract. The polling test exercises interval behavior (its own task's AC5), and the skipped tests are future work. Including these in this removal task's scope would create scope creep and destroy planned scaffolding.

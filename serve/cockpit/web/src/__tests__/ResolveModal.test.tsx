@@ -6,7 +6,7 @@
  * on success, error state on failure, and cancel-without-mutation guard.
  *
  * Component interface: { dr: PendingDRWithBody | null; onClose: () => void; onResolved: () => void }
- * API contract:  POST /api/decisions/{id}/resolve  body: { response, notes }
+ * API contract: POST /api/requests/{id}/resolve with the selected option, notes, and kind.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, fireEvent, waitFor } from '@testing-library/react'

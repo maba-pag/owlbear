@@ -162,14 +162,9 @@ const PENDING_DR_FOR_TASK_5 = {
   ],
 }
 
-const NO_PENDING_DRS = { count: 0, items: [] as object[] }
-
 // --- API stub ----------------------------------------------------------------
 
-async function stubApis(
-  page: Page,
-  pendingDRs: { count: number; items: object[] } = NO_PENDING_DRS,
-): Promise<void> {
+async function stubApis(page: Page): Promise<void> {
   // Generic catch-all registered FIRST — specific routes registered after take
   // precedence (Playwright route() matching is LIFO: last registered wins).
   await page.route('/api/**', (route) => route.fulfill({ status: 200, json: {} }))
@@ -191,15 +186,11 @@ async function stubApis(
     route.fulfill({ json: { tasks: ALL_TASKS, mtime: 1_715_644_800 } }),
   )
   await page.route('/api/sessions', (route) => route.fulfill({ json: { sessions: [] } }))
-  await page.route('/api/decisions/pending', (route) => route.fulfill({ json: pendingDRs }))
   await page.route('/api/tasks/scan', (route) => route.fulfill({ json: [] }))
 }
 
-async function loadBoard(
-  page: Page,
-  pendingDRs: { count: number; items: object[] } = NO_PENDING_DRS,
-): Promise<void> {
-  await stubApis(page, pendingDRs)
+async function loadBoard(page: Page): Promise<void> {
+  await stubApis(page)
   await page.goto('/')
   await page.locator('[data-region="workspace"]').waitFor({ state: 'visible', timeout: 8_000 })
 }

@@ -297,7 +297,7 @@ class TestFromAC_CockpitViewEditTaskTitle:
         )
 
         assert isinstance(result, SingleTaskResponse)
-        assert result.task.title == "New Title"
+        assert result.title == "New Title"
 
     def test_edit_task_title_none_preserves_original_title(self, tmp_path: Path) -> None:
         """Passing title=None preserves the existing title."""
@@ -318,7 +318,7 @@ class TestFromAC_CockpitViewEditTaskTitle:
         )
 
         assert isinstance(result, SingleTaskResponse)
-        assert result.task.title == "Original Title"
+        assert result.title == "Original Title"
 
     def test_edit_task_title_is_keyword_only(self, tmp_path: Path) -> None:
         """The title parameter remains keyword-only."""

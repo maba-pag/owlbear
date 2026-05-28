@@ -74,19 +74,6 @@ const TASK_DETAIL = {
   created: '2026-05-10T00:00:00+00:00',
 }
 
-const PENDING_DRS = [
-  {
-    id: 'dr-overlay-001',
-    task_id: 1,
-    agent: 'builder',
-    request_type: 'scope-decision',
-    created: '2026-05-14T00:00:00+00:00',
-    title: 'Overlay strategy decision',
-    body_preview: 'Builder needs guidance on overlay approach.',
-    body: '## Context\n\nShould overlays use position:fixed or a portal?',
-  },
-]
-
 // ─── Stub helpers ─────────────────────────────────────────────────────────────
 
 /**
@@ -115,10 +102,6 @@ async function stubApis(page: Page): Promise<void> {
     route.fulfill({ json: { tasks: TASKS, mtime: 1_716_000_000 } }),
   )
   await page.route('/api/sessions', (route) => route.fulfill({ json: { sessions: [] } }))
-  await page.route('/api/decisions/pending', (route) =>
-    route.fulfill({ json: { count: PENDING_DRS.length, items: PENDING_DRS } }),
-  )
-
   // /api/tasks/scan — returns scan items so HealthBadge and RepairPanel appear.
   // Must be registered before the wildcard /api/tasks/\d+ route (LIFO).
   await page.route('/api/tasks/scan', (route) => route.fulfill({ json: SCAN_ITEMS }))
@@ -261,30 +244,6 @@ test.describe('TestFromAC_OverlayReflow', () => {
     ).toBe(heightBefore)
   })
 
-  // AC-1 surface 4: ResolveModal
-  // ResolveModal renders as an inline <div role="dialog"> that is a direct child
-  // of the .shell CSS-grid root (no portal, no position:fixed). Shell height is
-  // pinned to 100vh, so the shell bounding-box should not change; the status-bar
-  // is unaffected by a sibling that is auto-placed outside the named grid areas.
-  test('resolve_modal_does_not_expand_shell_or_status_bar', async ({ page }) => {
-    const shellH = await shellHeight(page)
-    const statusH = await statusBarHeight(page)
-
-    await page.goto('/decisions')
-    await page.locator('[data-testid="decisions-page"]').waitFor({ state: 'visible', timeout: 5_000 })
-    await page.click('[data-testid="dr-item-dr-overlay-001"]')
-    await page.locator('[data-testid="resolve-modal"]').waitFor({ state: 'visible', timeout: 5_000 })
-
-    expect(
-      await shellHeight(page),
-      'shell height must not grow when ResolveModal opens',
-    ).toBe(shellH)
-    expect(
-      await statusBarHeight(page),
-      'status-bar height must not grow when ResolveModal opens',
-    ).toBe(statusH)
-  })
-
   // AC-1 surface 5: ArchivalModal
   // ArchivalModal renders as an inline <div role="dialog"> inside KanbanBoard,
   // which lives in .shell__workspace (overflow:auto). The workspace bounding-box
@@ -344,12 +303,10 @@ test.describe('TestFromAudit_WorkspaceStatusPdsModalComposition', () => {
 //
 // GREEN (regression guards — already implemented in source):
 //   - ConfirmDialog: role="dialog" and aria-modal="true" (ConfirmDialog.tsx:65).
-//   - ResolveModal: role="dialog" and aria-modal="true" (ResolveModal.tsx:157-158).
 //   - ArchivalModal: role="dialog" and aria-modal="true" (ArchivalModal.tsx:246).
 //
 // RED:
 //   - ConfirmDialog: no Tab focus trap → Tab escapes after 2 PButtons.
-//   - ResolveModal: no Tab focus trap → Tab escapes; no previous-focus tracking.
 //   - ArchivalModal: no previous-focus tracking → focus not returned after close.
 
 test.describe('TestFromAC_BlockingDialogSemantics', () => {
@@ -380,19 +337,6 @@ test.describe('TestFromAC_BlockingDialogSemantics', () => {
     await expect(dialog).toBeVisible()
     await expect(dialog).toHaveAttribute('role', 'dialog')
     await expect(dialog).toHaveAttribute('aria-modal', 'true')
-  })
-
-  // AC-2, ResolveModal: role="dialog" and aria-modal="true" must be present.
-  // GREEN (regression guard): source already renders these attributes (ResolveModal.tsx:157-158).
-  // Task-local E2E proof required by AC-2.
-  test('resolve_modal_has_role_dialog_and_aria_modal', async ({ page }) => {
-    await page.goto('/decisions')
-    await page.locator('[data-testid="decisions-page"]').waitFor({ state: 'visible', timeout: 5_000 })
-    await page.click('[data-testid="dr-item-dr-overlay-001"]')
-    const modal = page.locator('[data-testid="resolve-modal"]')
-    await modal.waitFor({ state: 'visible', timeout: 5_000 })
-    await expect(modal).toHaveAttribute('role', 'dialog')
-    await expect(modal).toHaveAttribute('aria-modal', 'true')
   })
 
   // AC-2, ArchivalModal: role="dialog" and aria-modal="true" must be present.
@@ -446,83 +390,6 @@ test.describe('TestFromAC_BlockingDialogSemantics', () => {
       confirmBtn,
       'Shift+Tab from first focusable (Cancel) must wrap to last focusable (Confirm) — no trap currently',
     ).toBeFocused()
-  })
-
-  // AC-2, ResolveModal: Tab must cycle within the modal (focus trap).
-  // RED: ResolveModal has no Tab handler — Tab escapes the modal.
-  // Wrap assertion: focus last focusable (Close PButton) → Tab → first (approved radio) must be focused;
-  // focus first (approved radio) → Shift+Tab → last (Close) must be focused.
-  // FAILS: no Tab trap → Tab/Shift+Tab escape the modal instead of wrapping.
-  test('resolve_modal_tab_focus_cycles_within_modal', async ({ page }) => {
-    await page.goto('/decisions')
-    await page.locator('[data-testid="decisions-page"]').waitFor({ state: 'visible', timeout: 5_000 })
-    await page.click('[data-testid="dr-item-dr-overlay-001"]')
-    const modal = page.locator('[data-testid="resolve-modal"]')
-    await modal.waitFor({ state: 'visible', timeout: 5_000 })
-
-    // First focusable: approved radio inside response-selector.
-    // Last focusable: Close/Cancel PButton [data-testid="resolve-cancel"].
-    const firstFocusable = modal.locator('[data-testid="response-selector"] input[value="approved"]')
-    const lastFocusable = page.locator('[data-testid="resolve-cancel"]')
-    await firstFocusable.waitFor({ state: 'visible', timeout: 5_000 })
-    await lastFocusable.waitFor({ state: 'visible', timeout: 5_000 })
-
-    // Forward wrap: focus last (Close), press Tab, assert first (approved radio) is focused.
-    // FAILS: ResolveModal has no Tab trap → Tab escapes the modal.
-    await lastFocusable.focus()
-    await page.keyboard.press('Tab')
-    const approvedFocused = await page.evaluate(() => {
-      const el = document.querySelector('[data-testid="response-selector"] input[value="approved"]')
-      return document.activeElement === el
-    })
-    expect(
-      approvedFocused,
-      'Tab from last focusable (Close) must wrap to first focusable (approved radio) — no trap currently',
-    ).toBe(true)
-
-    // Backward wrap: focus first (approved radio), press Shift+Tab, assert Close is focused.
-    // FAILS: no Tab trap → Shift+Tab escapes the modal.
-    await firstFocusable.focus()
-    await page.keyboard.press('Shift+Tab')
-    await expect(
-      lastFocusable,
-      'Shift+Tab from first focusable (approved radio) must wrap to last (Close) — no trap currently',
-    ).toBeFocused()
-  })
-
-  // AC-2, ResolveModal: focus must return to the triggering element after close.
-  // RED: ResolveModal mounts without capturing previousFocus — no restoration on close.
-  //
-  // Close mechanism: "Close Modal" button (data-testid="resolve-cancel") rather than Escape.
-  // Rationale: pressing Escape while PModal host has focus does not reach the native <dialog>
-  // cancel event (PDS PModal in this version focuses the host element, not the shadow dialog,
-  // so the native dismiss mechanism is not triggered by Escape keypress). The "Close Modal"
-  // button directly calls requestClose() via React onClick — same code path as PModal onDismiss.
-  test('resolve_modal_focus_returned_to_trigger_after_close', async ({ page }) => {
-    await page.goto('/decisions')
-    await page.locator('[data-testid="decisions-page"]').waitFor({ state: 'visible', timeout: 5_000 })
-    const drItem = page.locator('[data-testid="dr-item-dr-overlay-001"]')
-    await drItem.waitFor({ state: 'visible' })
-    await drItem.focus()
-
-    // Click DR item → ResolveModal opens.
-    await drItem.click()
-    await page.locator('[data-testid="resolve-modal"]').waitFor({ state: 'visible', timeout: 5_000 })
-
-    // Close via the "Close Modal" button — calls requestClose() → onClose() → modal unmounts.
-    // The Decisions route remains mounted, so the dr-item-* trigger remains in DOM.
-    const closeBtn = page.locator('[data-testid="resolve-cancel"]')
-    await closeBtn.waitFor({ state: 'visible', timeout: 5_000 })
-    await closeBtn.click()
-
-    // Assert focus is back on the exact DR item button that triggered the modal.
-    // ResolveModal.useEffect cleanup calls previousFocusRef.current?.focus() on unmount.
-    // previousFocusRef captured document.activeElement (dr-item button) at mount time.
-    // FAILS: ResolveModal does not track previous focus — focus goes to body after close.
-    await expect(
-      drItem,
-      'Focus must return to exact [data-testid="dr-item-dr-overlay-001"] trigger after ResolveModal closes',
-    ).toBeFocused({ timeout: 5_000 })
   })
 
   // AC-2, ArchivalModal: Tab must cycle within the modal — PModal native <dialog> trap.

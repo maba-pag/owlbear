@@ -1,4 +1,4 @@
-"""Failing tests for P2-06 removal of old Cockpit resolve flow and legacy endpoints (#1863).
+"""Regression guards for removed Cockpit /api/decisions endpoints (#1863).
 
 AC1: POST /api/decisions/{id}/resolve returns HTTP 404 after endpoint removal.
 AC2: GET /api/decisions/pending returns HTTP 404 after endpoint removal.
@@ -6,9 +6,8 @@ AC3: Frontend decisions.test.ts removed; LegacyPendingDRResponse and dual-format
      normalization removed from usePendingDRs.ts.
 AC4: Legacy decisions route module (decisions.py) is fully removed from disk.
 
-All tests must FAIL in the RED phase.  The builder makes them pass by removing
-decisions.py, unregistering its router in main.py, and cleaning up the frontend
-hook and test files.
+These tests keep the removed route surface and old dual-format frontend hook
+support from being reintroduced.
 """
 
 from __future__ import annotations
@@ -112,17 +111,13 @@ def _write_pending_dr(decisions_dir: Path, *, stem: str, task_id: int) -> Path:
     return path
 
 
-class TestLegacyEndpointRemoval:
+class TestRemovedDecisionsApi:
     """Verify old /api/decisions/* endpoints are removed and module is gone."""
 
     def test_post_resolve_existing_decision_approved_returns_404(
         self, client: TestClient, decisions_dir: Path, engine: KanbanEngine
     ) -> None:
-        """AC1: POST to an existing decision ID must return 404 after endpoint removal.
-
-        A real DR file is created so the live endpoint can currently find and
-        resolve it (returning 200).  After removal the path is unknown → 404.
-        """
+        """AC1: POST to an existing decision ID must return 404."""
         task = engine.create_task("Scope gate")
         engine.edit_task(task.id, blocked=True, block_reason="DR pending")
         _write_pending_dr(decisions_dir, stem="1863-scope-dr", task_id=task.id)
@@ -146,12 +141,7 @@ class TestLegacyEndpointRemoval:
         assert response.status_code == 404
 
     def test_post_resolve_decision_invalid_payload_returns_404(self, client: TestClient) -> None:
-        """AC1: POST to removed path returns 404 even when payload is invalid.
-
-        Currently returns 422 (FastAPI validates against ResolveRequest).
-        After endpoint removal the path is unknown → 404 takes precedence.
-        This proves path removal rather than handler-level failure.
-        """
+        """AC1: POST to removed path returns 404 even when payload is invalid."""
         response = client.post(
             "/api/decisions/any-dr/resolve",
             json={"notes": "missing required response field"},
@@ -177,7 +167,7 @@ class TestLegacyEndpointRemoval:
 # ---------------------------------------------------------------------------
 
 
-class TestFrontendLegacyRemoval:
+class TestRemovedFrontendDecisionsSupport:
     """Verify old frontend test file and legacy hook types/normalization are removed."""
 
     def test_frontend_decisions_test_file_removed(self) -> None:

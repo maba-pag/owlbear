@@ -363,8 +363,6 @@ def _collect_task_sessions(
 _SESSION_FILTER_STATES: dict[str, frozenset[str]] = {
     "active": frozenset({"running", "stuck"}),
     "blocked-or-rejected": frozenset({"blocked", "rejected"}),
-    # Compatibility alias for pre-Brief-C consumers.
-    "failed-or-rejected": frozenset({"blocked", "rejected"}),
     "released": frozenset({"released"}),
 }
 
@@ -2595,8 +2593,7 @@ class KanbanEngine:
 
         Args:
             filter: One of ``"active"`` (default), ``"all"``,
-                    ``"blocked-or-rejected"`` (or legacy alias
-                    ``"failed-or-rejected"``), or ``"released"``.
+                    ``"blocked-or-rejected"``, or ``"released"``.
 
         Returns:
             List of :class:`SessionRecord` objects matching the filter.

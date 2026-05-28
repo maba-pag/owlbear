@@ -58,9 +58,6 @@ async function stubApis(page: Page, getMoveMode: () => MoveMode): Promise<void> 
   )
   await page.route(/\/api\/tasks\/\d+$/, (route) => route.fulfill({ json: BASE_TASK }))
   await page.route('/api/sessions', (route) => route.fulfill({ json: { sessions: [] } }))
-  await page.route('/api/decisions/pending', (route) =>
-    route.fulfill({ json: { count: 0, items: [] } }),
-  )
   await page.route('/api/tasks/scan', (route) => route.fulfill({ json: [] }))
 
   await page.route(/\/api\/tasks\/\d+\/move\/?(?:\?.*)?$/, async (route) => {

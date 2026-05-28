@@ -137,8 +137,8 @@ class TestFromAC_FailOutcome:
 
         result = view.end_work(1, outcome="fail", note="Fail — retry needed.")
 
-        assert result.task.status == "in-progress", (
-            f"Expected status 'in-progress' after fail; got {result.task.status!r}"
+        assert result.status == "in-progress", (
+            f"Expected status 'in-progress' after fail; got {result.status!r}"
         )
 
     def test_fail_outcome_releases_claim(self, tmp_path: Path) -> None:
@@ -152,7 +152,7 @@ class TestFromAC_FailOutcome:
 
         result = view.end_work(1, outcome="fail", note="Fail — releasing.")
 
-        assert result.task.claimed_at is None, f"Expected claim released after fail; got {result.task.claimed_at!r}"
+        assert result.claimed_at is None, f"Expected claim released after fail; got {result.claimed_at!r}"
 
     def test_fail_outcome_note_appended(self, tmp_path: Path) -> None:
         """AC1: fail outcome appends the note to task body.
@@ -171,7 +171,7 @@ class TestFromAC_FailOutcome:
         note_text = "Fail — approach needs rethink."
         result = view.end_work(1, outcome="fail", note=note_text)
 
-        assert note_text in result.task.body, f"Expected note to be appended to body; body={result.task.body!r}"
+        assert note_text in result.body, f"Expected note to be appended to body; body={result.body!r}"
 
     def test_fail_outcome_note_has_timestamp(self, tmp_path: Path) -> None:
         """AC1: appended note includes an ISO 8601 datetime prefix.
@@ -187,8 +187,8 @@ class TestFromAC_FailOutcome:
         result = view.end_work(1, outcome="fail", note="Fail note.")
 
         # ISO 8601 datetime pattern: YYYY-MM-DDTHH:MM (time component present)
-        assert re.search(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}", result.task.body), (
-            f"Expected ISO 8601 datetime in appended note; body={result.task.body!r}"
+        assert re.search(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}", result.body), (
+            f"Expected ISO 8601 datetime in appended note; body={result.body!r}"
         )
 
     # --- AC2: claimed requirement ---------------------------------------------

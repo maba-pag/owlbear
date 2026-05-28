@@ -267,12 +267,6 @@ describe('TestFromAC_PdsMigration_Buttons', () => {
       expect(container.querySelector('p-button[data-testid="body-edit-toggle"]')).not.toBeNull()
     })
 
-    // TODO(#1230): re-enable when DetailTab action button mapping is fully migrated to PDS v4.
-    it.skip('move-backward is p-button', () => {
-      const { container } = renderDetailTab()
-      expect(container.querySelector('p-button[data-testid="move-backward"]')).not.toBeNull()
-    })
-
     it('renders no raw <button> in DetailTab (excl. ConfirmDialog which is also migrated)', () => {
       const { container } = renderDetailTab()
       expect(container.querySelector('button')).toBeNull()
@@ -398,13 +392,6 @@ describe('TestFromAC_PdsMigration_Buttons', () => {
       const { container } = renderDetailTab()
       openDetailEditor(container)
       const el = container.querySelector('p-button[data-testid="body-edit-toggle"]')
-      expect((el as HTMLElement & { variant: string }).variant).toBe('secondary')
-    })
-
-    // TODO(#1230): re-enable when move-backward variant contract is finalized for PDS v4.
-    it.skip('move-backward has variant="secondary"', () => {
-      const { container } = renderDetailTab()
-      const el = container.querySelector('p-button[data-testid="move-backward"]')
       expect((el as HTMLElement & { variant: string }).variant).toBe('secondary')
     })
 
@@ -810,32 +797,6 @@ describe('TestFromAC_PdsMigration_FormControls', () => {
     })
   })
 
-  // ─ AC4 payload: ResolveModal notes via PDS event path ────────────────────
-
-  describe('AC4 payload: ResolveModal notes textarea sends updated notes via PDS detail.value path', () => {
-    // TODO(#1230): re-enable when ResolveModal notes path uses CustomEvent detail.value payload.
-    it.skip('notes changed via CustomEvent detail.value appears in POST body on submit', async () => {
-      const mockFetch = vi.fn(() =>
-        Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) }),
-      )
-      vi.stubGlobal('fetch', mockFetch)
-      const { container } = renderResolveModal()
-
-      const notesTextarea = container.querySelector('p-textarea[data-testid="resolve-notes"]')!
-      fireEvent(
-        notesTextarea,
-        new CustomEvent('change', { detail: { value: 'Approved — looks good to me.' }, bubbles: true }),
-      )
-
-      const submitBtn = container.querySelector('p-button[data-testid="resolve-submit"]')!
-      fireEvent.click(submitBtn)
-      await new Promise((r) => setTimeout(r, 0))
-
-      const [, callOptions] = mockFetch.mock.calls[0]
-      const payload = JSON.parse((callOptions as RequestInit).body as string) as Record<string, unknown>
-      expect(payload.notes).toBe('Approved — looks good to me.')
-    })
-  })
 })
 
 // ─── AC4 payload: PDS event path propagates field values into POST body ───────

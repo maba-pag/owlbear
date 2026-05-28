@@ -1,16 +1,12 @@
 /**
  * Decision data contract and refetch flow.
  *
- * Separate file because DecisionContract_1386.test.tsx globally mocks usePendingDRs;
+ * Separate file because DecisionContract.test.tsx globally mocks usePendingDRs;
  * these tests need the REAL hook with a mocked fetch response to prove the full chain.
  *
  * AC1 (td:1): body field is present in hook output items when backend includes it.
- *   PASS against current code — usePendingDRs passes raw payload.items through the
- *   JS runtime. TypeScript-level contract (body in canonical PendingDR type) requires
- *   vitest typecheck mode or tsc; builder adds it in #1387.
  *
  * AC2 (td:2): hook output items include all required fields including body.
- *   PASS against current code — same root cause as AC1 (JS passthrough).
  *
  * AC4 (td:1): usePendingDRs → usePollingFetch → getResponseErrorMessage chain
  *   surfaces backend error body content in hook error.message.
@@ -59,7 +55,6 @@ describe('TestFromAC_DecisionPollBodyAndErrorChain', () => {
   })
 
   // AC1 + AC2: body field is present in hook output when backend includes it.
-  // Proves hook does not strip body from raw payload items.
   it('hook output items include body field when backend /api/requests/pending response includes it', async () => {
     vi.stubGlobal(
       'fetch',

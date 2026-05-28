@@ -47,30 +47,6 @@ const TASK_DETAIL = {
   depends_on: [] as number[],
 }
 
-const DECISION = {
-  id: 'dr-1626-001',
-  task_id: 1,
-  agent: 'builder',
-  request_type: 'scope-decision',
-  created: '2026-05-16T00:00:00+00:00',
-  title: 'Focus ring test decision',
-  body_preview: 'Decision request used by focus-visible E2E.',
-  body: '## Context\n\nResolve modal focus proof.',
-}
-
-const SESSIONS = {
-  sessions: [
-    {
-      task_id: 1,
-      state: 'released',
-      agent: 'builder',
-      started_at: '2026-05-16T00:00:00+00:00',
-      duration: 3_600,
-      outcome: 'success',
-    },
-  ],
-}
-
 async function stubApis(page: Page): Promise<void> {
   await page.route('/api/**', (route) => route.fulfill({ status: 200, json: {} }))
   await page.route('/api/events', (route) =>
@@ -91,9 +67,6 @@ async function stubApis(page: Page): Promise<void> {
     route.fulfill({ json: { tasks: [TASK], mtime: 1_713_456_000 } }),
   )
   await page.route('/api/board', (route) => route.fulfill({ json: BOARD }))
-  await page.route('/api/decisions/pending', (route) =>
-    route.fulfill({ json: { count: 1, items: [DECISION] } }),
-  )
   await page.route('/api/memories', (route) => route.fulfill({ json: { entries: [] } }))
 }
 

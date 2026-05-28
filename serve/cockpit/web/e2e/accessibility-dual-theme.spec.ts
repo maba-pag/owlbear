@@ -11,17 +11,15 @@
  * Surfaces tested per theme (full parity with accessibility-sweep.spec.ts):
  *   1. Board view
  *   2. Ideas workspace
- *   3. Decisions workspace
- *   4. Memory workspace
- *   5. Task detail modal
- *   6. Workspace Status popover
- *   7. Workspace Status issue list
- *   8. FilterPanel (open state)
- *   9. ResolveModal (DR resolution modal)
- *  10. ArchivalModal
- *  11. ConfirmDialog
- *  12. CleanupPanel confirm dialog
- *  13. RepairPanel confirm dialog
+ *   3. Memory workspace
+ *   4. Task detail modal
+ *   5. Workspace Status popover
+ *   6. Workspace Status issue list
+ *   7. FilterPanel (open state)
+ *   8. ArchivalModal
+ *   9. ConfirmDialog
+ *  10. CleanupPanel confirm dialog
+ *  11. RepairPanel confirm dialog
  *
  * Route mocks use Playwright LIFO ordering: catch-all first, specific routes last.
  */
@@ -96,19 +94,6 @@ const TASK_DETAIL = {
   created: '2026-05-10T00:00:00+00:00',
 }
 
-const PENDING_DRS = [
-  {
-    id: 'dr-dualtheme-001',
-    task_id: 1,
-    agent: 'builder',
-    request_type: 'scope-decision',
-    created: '2026-05-16T00:00:00+00:00',
-    title: 'Confirm caching strategy',
-    body_preview: 'Builder needs guidance on caching.',
-    body: '## Context\n\nShould we use Redis or in-memory cache?',
-  },
-]
-
 const MEMORY_ENTRIES = [
   {
     id: 'memory-dualtheme-001',
@@ -173,9 +158,6 @@ async function stubApis(page: Page): Promise<void> {
     route.fulfill({ json: { tasks: TASKS, mtime: 1_716_000_000 } }),
   )
   await page.route('/api/sessions', (route) => route.fulfill({ json: { sessions: [] } }))
-  await page.route('/api/decisions/pending', (route) =>
-    route.fulfill({ json: { count: PENDING_DRS.length, items: PENDING_DRS } }),
-  )
   await page.route('/api/ideas', (route) =>
     route.fulfill({
       json: {
@@ -318,29 +300,6 @@ for (const theme of THEMES) {
       expect(results.violations, formatViolations(results.violations)).toEqual([])
     })
 
-    // ── Surface 3: Decisions workspace ───────────────────────────────────
-    // Decisions route — pending DR list and route-level status summary.
-    test(`decisions workspace passes wcag2.1 aa under ${theme} theme (AC3)`, async ({ page }) => {
-      await page.goto('/decisions')
-      await expect(
-        page.locator('html'),
-        `html element must carry class scheme-${theme}`,
-      ).toHaveClass(new RegExp(`scheme-${theme}`))
-
-      await expect(
-        page.locator('[data-testid="decisions-page"]'),
-        'decisions workspace must be visible before axe scan',
-      ).toBeVisible({ timeout: 8_000 })
-      await expect(
-        page.locator(`[data-testid="dr-item-${PENDING_DRS[0].id}"]`),
-        'at least one pending decision row must be visible before axe scan',
-      ).toBeVisible({ timeout: 8_000 })
-      await waitForWorkspaceSettled(page)
-
-      const results = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze()
-      expect(results.violations, formatViolations(results.violations)).toEqual([])
-    })
-
     // ── Surface 4: Memory workspace ──────────────────────────────────────
     // Memory route — filter controls, entry summaries, and state/category chips.
     test(`memory workspace passes wcag2.1 aa under ${theme} theme (AC3)`, async ({ page }) => {
@@ -449,27 +408,6 @@ for (const theme of THEMES) {
         page.locator('[data-testid="filter-panel"]'),
         'filter-panel must be visible after clicking filter-toggle',
       ).toBeVisible({ timeout: 3_000 })
-
-      const results = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze()
-      expect(results.violations, formatViolations(results.violations)).toEqual([])
-    })
-
-    // ── Surface 9: ResolveModal (modal surface) ───────────────────────────
-    // DR resolution modal — opened from the route-owned Decisions workspace.
-    test(`resolve modal passes wcag2.1 aa under ${theme} theme (AC3)`, async ({ page }) => {
-      await expect(
-        page.locator('html'),
-        `html element must carry class scheme-${theme}`,
-      ).toHaveClass(new RegExp(`scheme-${theme}`))
-
-      await page.goto('/decisions')
-      await waitForWorkspaceSettled(page)
-
-      const drItem = page.locator(`[data-testid="dr-item-${PENDING_DRS[0].id}"]`)
-      await drItem.waitFor({ state: 'visible', timeout: 3_000 })
-      await drItem.click()
-
-      await page.locator('[data-testid="resolve-modal"]').waitFor({ state: 'visible', timeout: 3_000 })
 
       const results = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze()
       expect(results.violations, formatViolations(results.violations)).toEqual([])

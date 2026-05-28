@@ -47,7 +47,6 @@ async function stubApis(page: Page): Promise<{ puts: string[] }> {
   await page.route('/api/tasks', (route) => route.fulfill({ json: { tasks: [], mtime: 1_716_000_000 } }))
   await page.route('/api/sessions', (route) => route.fulfill({ json: { sessions: [] } }))
   await page.route('/api/memories', (route) => route.fulfill({ json: { entries: [] } }))
-  await page.route('/api/decisions/pending', (route) => route.fulfill({ json: { count: 0, items: [] } }))
   await page.route('/api/tasks/scan', (route) => route.fulfill({ json: [] }))
   await page.route('/api/ideas', async (route) => {
     if (route.request().method() === 'PUT') {
