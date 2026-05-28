@@ -1183,19 +1183,7 @@ class TestFromAC_OutputSchemaPreserved:
 
 
 # --- merged from tests/test_server_1317.py ---
-"""RED-phase tests for MCP startup without copilot_auth (task #1317).
-
-AC coverage:
-  AC1: copilot_auth NOT imported during app_lifespan; structured_extractor is None
-       when OWLBEAR_LLM_API_KEY is unset.
-  AC2: IngestPipeline and KnowledgeQueryService wired in lifespan context
-       when structured_extractor is None.
-  AC3: Lifespan startup deletes ~/.owlbear/copilot_token.json if present;
-       cleanup is idempotent when file absent.
-
-All tests FAIL until #1318 removes the copilot_auth fallback path and adds
-token-file cleanup to app_lifespan.
-"""
+"""Compatibility tests for MCP startup without copilot_auth (task #1317)."""
 
 
 import sys
@@ -1241,26 +1229,18 @@ def _mock_llm_module() -> ModuleType:
 @pytest.fixture(autouse=True)
 def mock_lifespan_deps() -> None:
     """Patch heavy I/O deps so app_lifespan runs without real DB or network."""
-    with (
-        patch("owlbear_mcp_knowledge.server.init_db", return_value=MagicMock()),
-        patch("owlbear_mcp_knowledge.server.GraphStore"),
-        patch("owlbear_mcp_knowledge.server.QdrantVectorStore"),
-        patch("owlbear_mcp_knowledge.server.BgeM3EmbeddingProvider"),
-        patch("owlbear_mcp_knowledge.server.KnowledgeQueryService"),
-        patch("owlbear_mcp_knowledge.server.GraphAugmentedRetriever"),
-    ):
+    with patch("owlbear_mcp_knowledge.server.QdrantVectorStore"):
         yield
 
 
 # ---------------------------------------------------------------------------
 # TestFromAC_LifespanNoCopilotAuth
-# AC1: copilot_auth not imported; structured_extractor is None without API key
-# AC2: IngestPipeline + KnowledgeQueryService wired when structured_extractor is None
+# AC: copilot_auth not imported in app_lifespan
 # ---------------------------------------------------------------------------
 
 
 class TestFromAC_LifespanNoCopilotAuth:
-    """AC1 + AC2: app_lifespan does not import copilot_auth after removal."""
+    """app_lifespan does not import copilot_auth after removal."""
 
     @pytest.mark.asyncio
     async def test_copilot_auth_not_imported_when_no_api_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1312,106 +1292,9 @@ class TestFromAC_LifespanNoCopilotAuth:
 
         assert "owlbear_knowledge.copilot_auth" not in sys.modules  # noqa: S101
 
-    @pytest.mark.asyncio
-    async def test_ingest_pipeline_and_query_service_are_actual_constructed_instances(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """ctx.ingest_pipeline and ctx.query_service are the exact instances constructed in lifespan.
-
-        AC2 discriminating assertion: pins identity of the actual objects assigned to AppContext,
-        not just any truthy value.
-        """
-        monkeypatch.delenv("OWLBEAR_LLM_API_KEY", raising=False)
-        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-
-        mock_qs_instance = MagicMock(name="qs_instance")
-        mock_pipeline_instance = MagicMock(name="pipeline_instance")
-
-        with (
-            patch(
-                "owlbear_mcp_knowledge.server.KnowledgeQueryService",
-                return_value=mock_qs_instance,
-            ),
-            patch(
-                "owlbear_mcp_knowledge.server.IngestPipeline",
-                return_value=mock_pipeline_instance,
-            ),
-        ):
-            async with app_lifespan(MagicMock()) as ctx:
-                assert ctx.query_service is mock_qs_instance  # noqa: S101
-                assert ctx.ingest_pipeline is mock_pipeline_instance  # noqa: S101
-
-    @pytest.mark.asyncio
-    async def test_structured_extractor_is_none_without_api_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """ctx.structured_extractor is None when OWLBEAR_LLM_API_KEY is unset.
-
-        After #1318, copilot_auth path is removed; structured_extractor stays None.
-
-        Currently FAILS: copilot path sets structured_extractor to an LLMExtractor
-        instance when get_copilot_token succeeds.
-        """
-        monkeypatch.delenv("OWLBEAR_LLM_API_KEY", raising=False)
-        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-
-        mock_auth = _mock_auth_module()
-        mock_llm = _mock_llm_module()
-
-        with patch.dict(
-            sys.modules,
-            {
-                "owlbear_knowledge.copilot_auth": mock_auth,
-                "owlbear_knowledge.llm_extractor": mock_llm,
-            },
-        ):
-            async with app_lifespan(MagicMock()) as ctx:
-                # New code: always None (no copilot fallback).
-                # Current code: mock_llm.LLMExtractor instance (not None) → FAILS.
-                assert ctx.structured_extractor is None  # noqa: S101
-
-    @pytest.mark.asyncio
-    async def test_ingest_pipeline_and_query_service_wired_with_null_extractor(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """IngestPipeline and KnowledgeQueryService are wired when structured_extractor is None.
-
-        After #1318, with no copilot fallback, structured_extractor is None but
-        pipeline services must still be fully wired in the lifespan context.
-
-        Currently FAILS: structured_extractor is set (not None) because the current
-        code runs the copilot path, making the third assertion fail.
-        """
-        monkeypatch.delenv("OWLBEAR_LLM_API_KEY", raising=False)
-        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-
-        mock_auth = _mock_auth_module()
-        mock_llm = _mock_llm_module()
-
-        with patch.dict(
-            sys.modules,
-            {
-                "owlbear_knowledge.copilot_auth": mock_auth,
-                "owlbear_knowledge.llm_extractor": mock_llm,
-            },
-        ):
-            async with app_lifespan(MagicMock()) as ctx:
-                # structured_extractor must be None in the new no-copilot world.
-                # Currently FAILS here before the pipeline assertions are reached.
-                assert ctx.structured_extractor is None  # noqa: S101
-                # Pipeline services must still be available.
-                assert ctx.ingest_pipeline is not None  # noqa: S101
-                assert ctx.query_service is not None  # noqa: S101
-
 
 # --- merged from tests/test_server_1358.py ---
-"""RED-phase tests for legacy API key branch removal — task #1358.
-
-AC coverage:
-  AC1: OWLBEAR_LLM_API_KEY / OPENAI_API_KEY branch removed; structured_extractor=None always.
-  AC2: LLMExtractor lazy import and related env-var reads removed from server.py source.
-  AC3: README.md no longer documents OWLBEAR_LLM_API_KEY or OPENAI_API_KEY env vars.
-  AC4: Dead test files test_copilot_server_wiring_888.py and test_llmextractor_wiring_876.py deleted.
-  AC5: EntityExtractor and IntraDocGraphBuilder receive extractor=None unconditionally.
-"""
+"""Regression tests for legacy API key branch removal (task #1358)."""
 
 
 import sys
@@ -1449,56 +1332,18 @@ def _make_llm_mod(llm_cls: MagicMock | None = None) -> ModuleType:
 @pytest.fixture(autouse=True)
 def mock_lifespan_deps_1358() -> None:
     """Patch I/O-heavy constructors so app_lifespan can run without real resources."""
-    with (
-        patch("owlbear_mcp_knowledge.server.init_db", return_value=MagicMock()),
-        patch("owlbear_mcp_knowledge.server.GraphStore"),
-        patch("owlbear_mcp_knowledge.server.QdrantVectorStore"),
-        patch("owlbear_mcp_knowledge.server.BgeM3EmbeddingProvider"),
-        patch("owlbear_mcp_knowledge.server.KnowledgeQueryService"),
-        patch("owlbear_mcp_knowledge.server.GraphAugmentedRetriever"),
-    ):
+    with patch("owlbear_mcp_knowledge.server.QdrantVectorStore"):
         yield
 
 
 # ---------------------------------------------------------------------------
 # TestFromAC_ApiKeyBranchRemoved — AC1
-# structured_extractor is None regardless of which key env vars are set
+# API key env vars do not reactivate LLM extractor wiring
 # ---------------------------------------------------------------------------
 
 
 class TestFromAC_ApiKeyBranchRemoved:
-    """AC1: OWLBEAR_LLM_API_KEY / OPENAI_API_KEY branch removed; structured_extractor=None."""
-
-    @pytest.mark.asyncio
-    async def test_structured_extractor_none_when_owlbear_key_set(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """structured_extractor=None even when OWLBEAR_LLM_API_KEY is set.
-
-        Currently FAILS: current code creates an LLMExtractor instance when the key is present.
-        """
-        monkeypatch.setenv("OWLBEAR_LLM_API_KEY", "sk-should-be-ignored")
-        mock_llm_cls = MagicMock(name="LLMExtractorCls", return_value=MagicMock())
-        with patch.dict(
-            sys.modules,
-            {"owlbear_knowledge.llm_extractor": _make_llm_mod(mock_llm_cls)},
-        ):
-            async with app_lifespan(MagicMock()) as ctx:
-                assert ctx.structured_extractor is None  # noqa: S101
-
-    @pytest.mark.asyncio
-    async def test_structured_extractor_none_when_openai_key_set(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """structured_extractor=None even when OPENAI_API_KEY is set as fallback.
-
-        Currently FAILS: current code enters the api_key branch via the OPENAI_API_KEY or-clause.
-        """
-        monkeypatch.delenv("OWLBEAR_LLM_API_KEY", raising=False)
-        monkeypatch.setenv("OPENAI_API_KEY", "sk-openai-should-be-ignored")
-        mock_llm_cls = MagicMock(name="LLMExtractorCls", return_value=MagicMock())
-        with patch.dict(
-            sys.modules,
-            {"owlbear_knowledge.llm_extractor": _make_llm_mod(mock_llm_cls)},
-        ):
-            async with app_lifespan(MagicMock()) as ctx:
-                assert ctx.structured_extractor is None  # noqa: S101
+    """AC1: API key env vars no longer wire in LLM extractor components."""
 
     @pytest.mark.asyncio
     async def test_llmextractor_never_instantiated_when_both_keys_set(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1604,57 +1449,3 @@ class TestFromAC_DeadTestsRemoved:
         """
         dead_file = _MCP_KNOWLEDGE_TESTS / "test_llmextractor_wiring_876.py"
         assert not dead_file.exists()  # noqa: S101
-
-
-# ---------------------------------------------------------------------------
-# TestFromAC_NoRegression — AC5
-# EntityExtractor and IntraDocGraphBuilder receive extractor=None unconditionally
-# ---------------------------------------------------------------------------
-
-
-class TestFromAC_NoRegression:
-    """AC5: EntityExtractor and IntraDocGraphBuilder always get extractor=None after cleanup."""
-
-    @pytest.mark.asyncio
-    async def test_entity_extractor_receives_none_when_api_key_set(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """EntityExtractor is constructed with extractor=None even when OWLBEAR_LLM_API_KEY is set.
-
-        Currently FAILS: current code passes an LLMExtractor instance as extractor when a key
-        is present.
-        """
-        monkeypatch.setenv("OWLBEAR_LLM_API_KEY", "sk-test-key")
-        mock_llm_cls = MagicMock(name="LLMExtractorCls", return_value=MagicMock())
-        with (
-            patch.dict(
-                sys.modules,
-                {"owlbear_knowledge.llm_extractor": _make_llm_mod(mock_llm_cls)},
-            ),
-            patch("owlbear_mcp_knowledge.server.EntityExtractor") as mock_ee,
-        ):
-            async with app_lifespan(MagicMock()):
-                pass
-        mock_ee.assert_called_once()
-        _, kwargs = mock_ee.call_args
-        assert kwargs.get("extractor") is None  # noqa: S101
-
-    @pytest.mark.asyncio
-    async def test_intra_doc_builder_receives_none_when_api_key_set(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """IntraDocGraphBuilder is constructed with extractor=None even when API key is set.
-
-        Currently FAILS: current code passes an LLMExtractor instance as extractor when a key
-        is present.
-        """
-        monkeypatch.setenv("OWLBEAR_LLM_API_KEY", "sk-test-key")
-        mock_llm_cls = MagicMock(name="LLMExtractorCls", return_value=MagicMock())
-        with (
-            patch.dict(
-                sys.modules,
-                {"owlbear_knowledge.llm_extractor": _make_llm_mod(mock_llm_cls)},
-            ),
-            patch("owlbear_mcp_knowledge.server.IntraDocGraphBuilder") as mock_idb,
-        ):
-            async with app_lifespan(MagicMock()):
-                pass
-        mock_idb.assert_called_once()
-        _, kwargs = mock_idb.call_args
-        assert kwargs.get("extractor") is None  # noqa: S101
