@@ -6,10 +6,10 @@ import asyncio
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-import httpx
 from pydantic import BaseModel, ConfigDict
 
 from owlbear_knowledge._paths import sandbox_path
+from owlbear_knowledge.fetcher import HttpxContentFetcher
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -63,10 +63,7 @@ async def read_url(url: str) -> IntakeResult:
     Raises:
         httpx.HTTPStatusError: On non-2xx HTTP responses.
     """
-    async with httpx.AsyncClient() as client:
-        response = await client.get(url)
-        response.raise_for_status()
-    content = response.text
+    content = await HttpxContentFetcher().fetch(url)
     return IntakeResult(
         content=content,
         source=url,

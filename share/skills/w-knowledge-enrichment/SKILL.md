@@ -21,9 +21,9 @@ All enrichment operations use the `ob-knowledge` MCP server tools:
 | Tool | Purpose |
 |------|---------|
 | `knowledge_stats` | Check enrichment pipeline status — chunks pending, enriched, failed |
-| `get_next_batch` | Claim up to N pending chunks for enrichment (returns chunk text + metadata) |
-| `retry_failed_enrichment` | Reset failed chunks to pending after correcting the cause |
-| `store_enrichment` | Persist extracted entities and edges for a chunk |
+| `knowledge_enrichment_claim_batch` | Claim up to N pending chunks for enrichment (returns chunk text + metadata) |
+| `knowledge_enrichment_retry` | Reset failed chunks to pending after correcting the cause |
+| `knowledge_enrichment_store` | Persist extracted entities and edges for a chunk |
 
 ## Step 1 — Assess Pipeline Status
 
@@ -39,7 +39,7 @@ If `chunks_failed` is non-zero, inspect the failure cause before retrying. If no
 
 ## Step 2 — Entity and Edge Extraction
 
-Process chunks in batches of 5–10 using `get_next_batch`.
+Process chunks in batches of 5–10 using `knowledge_enrichment_claim_batch`.
 
 For each chunk in the batch:
 
@@ -96,10 +96,10 @@ Identify relationships between entities found in the same chunk:
 
 ### 2d — Store Results
 
-Call `store_enrichment` with the chunk_id, entities list, and edges list:
+Call `knowledge_enrichment_store` with the chunk_id, entities list, and edges list:
 
 ```
-store_enrichment(
+knowledge_enrichment_store(
     chunk_id="<chunk_id>",
     claim_token="<claim_token>",
     entities=[
@@ -113,7 +113,7 @@ store_enrichment(
 )
 ```
 
-Repeat for all chunks in the batch, pairing each `chunk_id` with the exact `claim_token` returned by `get_next_batch`, then call `get_next_batch` for the next batch. If a store call fails for the current claim, the server records diagnostics and moves that chunk to `failed`; correct the payload/extractor issue before calling `retry_failed_enrichment`.
+Repeat for all chunks in the batch, pairing each `chunk_id` with the exact `claim_token` returned by `knowledge_enrichment_claim_batch`, then call `knowledge_enrichment_claim_batch` for the next batch. If a store call fails for the current claim, the server records diagnostics and moves that chunk to `failed`; correct the payload/extractor issue before calling `knowledge_enrichment_retry`.
 
 ## Step 3 — Verify
 
@@ -135,7 +135,7 @@ Call `knowledge_stats` again. Confirm:
 
 - **Entity name drift**: Same concept gets different names across batches. Before extracting, review recently stored entities (visible in prior batch results) and reuse canonical names.
 - **Over-extraction**: Not every noun is a meaningful entity. Skip generic terms and focus on domain-specific concepts that would help an agent answer questions.
-- **Stale claims**: If enrichment is interrupted, claimed chunks become stale after 10 minutes and are automatically reclaimed by the next `get_next_batch` call.
-- **Lease tokens**: Store every Phase 1 chunk with the `claim_token` returned by `get_next_batch`. Missing or stale tokens are rejected so parallel workers cannot overwrite one another.
-- **Failed chunks**: Failed Phase 1 writes stay in `failed` until `retry_failed_enrichment` resets them. Do not blindly reset; fix the cause first.
+- **Stale claims**: If enrichment is interrupted, claimed chunks become stale after 10 minutes and are automatically reclaimed by the next `knowledge_enrichment_claim_batch` call.
+- **Lease tokens**: Store every Phase 1 chunk with the `claim_token` returned by `knowledge_enrichment_claim_batch`. Missing or stale tokens are rejected so parallel workers cannot overwrite one another.
+- **Failed chunks**: Failed Phase 1 writes stay in `failed` until `knowledge_enrichment_retry` resets them. Do not blindly reset; fix the cause first.
 - **Empty chunks**: Some chunks may contain only boilerplate (headers, footers, navigation). Store an empty entities/edges list to mark them as enriched rather than leaving them pending.

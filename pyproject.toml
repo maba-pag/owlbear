@@ -158,6 +158,9 @@ ignore = [
   "PT019",   # @patch-injected mocks with _ prefix are not unused fixtures
 ]
 
+[tool.ruff.lint.flake8-type-checking]
+runtime-evaluated-base-classes = ["pydantic.BaseModel", "owlbear_knowledge.protocols.common.BoundaryModel"]
+
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 

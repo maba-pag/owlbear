@@ -10,12 +10,14 @@ from typing import TYPE_CHECKING, Annotated, Any
 
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.types import ToolAnnotations
+from owlbear_memory import MemoryCategory, MemoryEngine, MemoryState
 from pydantic import Field
 
-from owlbear_mcp_memory.engine import MemoryEngine
-from owlbear_mcp_memory.models import MemoryCategory, MemoryState
 from owlbear_mcp_memory.tools import (
     approve_memory as approve_memory_impl,
+)
+from owlbear_mcp_memory.tools import (
+    assess_memories as assess_memories_impl,
 )
 from owlbear_mcp_memory.tools import (
     curate_memory as curate_memory_impl,
@@ -43,6 +45,7 @@ __all__ = [
     "AppContext",
     "app_lifespan",
     "approve_memory",
+    "assess_memories",
     "curate_memory",
     "delete_memory",
     "list_memories",
@@ -180,3 +183,14 @@ async def delete_memory(ctx: Context, *, entry_id: str) -> dict[str, Any]:  # pr
 async def approve_memory(ctx: Context, *, entry_id: str) -> dict[str, Any]:  # pragma: no cover
     """Approve a curated memory entry."""
     return await approve_memory_impl(ctx, entry_id=entry_id)
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False, destructiveHint=False))
+async def assess_memories(
+    ctx: Context,
+    *,
+    assessments: Annotated[list[dict[str, str]], Field(min_length=1)],
+    task_id: _Agent,
+) -> dict[str, Any]:  # pragma: no cover
+    """Assess memories in batch and return per-entry outcomes."""
+    return await assess_memories_impl(ctx, assessments=assessments, task_id=task_id)

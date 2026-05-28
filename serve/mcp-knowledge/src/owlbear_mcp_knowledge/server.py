@@ -3,997 +3,358 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
-import json
+import logging
 import os
 import sqlite3
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, TypedDict
-from uuid import uuid4
 
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
+from pydantic import ValidationError
 
-from owlbear_knowledge.chunker import TextChunker
-from owlbear_knowledge.document_store import DocumentStore
-from owlbear_knowledge.embeddings import BgeM3EmbeddingProvider
-from owlbear_knowledge.extractor import EntityExtractor
 from owlbear_knowledge.fetcher import HttpxContentFetcher
-from owlbear_knowledge.graph_builder import IntraDocGraphBuilder
-from owlbear_knowledge.graph_store import GraphStore
-from owlbear_knowledge.ingest import IngestPipeline
-from owlbear_knowledge.models import EntityType
+from owlbear_knowledge.ingest_coordinator import IngestCoordinator
+from owlbear_knowledge.protocols.common import (
+    EntityType as ProtocolEntityType,
+)
+from owlbear_knowledge.protocols.common import (
+    RelationType as ProtocolRelationType,
+)
+from owlbear_knowledge.protocols.enrichment import (
+    EnrichmentParams,
+    ExtractedEntity,
+    ExtractedRelation,
+)
+from owlbear_knowledge.protocols.ingest import IngestDocument, IngestRequest, RefreshRequest
+from owlbear_knowledge.protocols.query import EntityLookupRequest, QueryRequest, QueryResult
+from owlbear_knowledge.protocols.sources import (
+    FetchTransport,
+    InlineConfig,
+    SourceKind,
+    SourceRegistration,
+    SourceState,
+)
 from owlbear_knowledge.qdrant import QdrantVectorStore
-from owlbear_knowledge.query_service import KnowledgeQueryService
-from owlbear_knowledge.refresh import RefreshOrchestrator
-from owlbear_knowledge.retrieval import GraphAugmentedRetriever
-from owlbear_knowledge.schema import init_db as _schema_init_db
-from owlbear_knowledge.source_store import KnowledgeSourceStore
+from owlbear_knowledge.query_facade import QueryFacade
+from owlbear_knowledge.source_fetcher import CompositeSourceFetcher
+from owlbear_knowledge.stores.content import ContentStore
+from owlbear_knowledge.stores.enrichment import EnrichmentStore
+from owlbear_knowledge.stores.graph import SqliteGraphStore
+from owlbear_knowledge.stores.sources import SqliteSourceStore
+
+from ._helpers import (
+    _normalize_batch_limit,
+    _normalize_enrichment_items,
+    _normalize_optional_scope,
+    _normalize_read_limit,
+    _normalize_scope_list,
+    _sanitize_error,
+    _serialize_graph_context,
+    _serialize_related_sources,
+    _serialize_search_entities,
+    _serialize_source,
+    select_content_fetcher,
+)
+from ._types import (
+    _DEFAULT_KB_PATH,
+    _DEFAULT_QDRANT_PATH,
+    _MAX_ENRICHMENT_BATCH_SIZE,
+    EnrichmentChunk,
+    RetryEnrichmentResult,
+    SearchResult,
+    SourceInfo,
+    StatsResult,
+)
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-    from owlbear_knowledge.inter_doc_graph_builder import InterDocGraphBuilder
-    from owlbear_knowledge.protocol import ContentFetcher
-else:
-    InterDocGraphBuilder = Any
+logger = logging.getLogger(__name__)
 
-_DEFAULT_KB_PATH = ".owlbear/knowledge/local.db"
-_DEFAULT_QDRANT_PATH = ".owlbear/knowledge/vectors"
+
+class _LegacyCompatibleEventLoopPolicy(asyncio.DefaultEventLoopPolicy):
+    """Backfill pre-3.12 get_event_loop behavior for sync callers."""
+
+    def get_event_loop(self) -> asyncio.AbstractEventLoop:
+        try:
+            return super().get_event_loop()
+        except RuntimeError:
+            loop = self.new_event_loop()
+            self.set_event_loop(loop)
+            return loop
+
+
+def _install_legacy_event_loop_policy() -> None:
+    """Install an event-loop policy that recreates loops on demand."""
+    if isinstance(asyncio.get_event_loop_policy(), _LegacyCompatibleEventLoopPolicy):
+        return
+    asyncio.set_event_loop_policy(_LegacyCompatibleEventLoopPolicy())
+
+
+_install_legacy_event_loop_policy()
 
 # Backward-compatible patch target used by legacy tests; the guard is no longer wired.
 globals()["ContentInjectionGuard"] = object
 
 
-class _BrowserContentFetcher:
-    """Protocol-compatible browser fetcher placeholder.
+@dataclass(slots=True, frozen=True)
+class _SingleChunk:
+    """Minimal chunk payload consumed by ContentStore.ingest."""
 
-    The browser MCP server owns Playwright lifecycle. This placeholder preserves
-    fetch-method routing behavior in mcp-knowledge without introducing a direct
-    package dependency on owlbear_browser.
-    """
-
-    async def fetch(self, url: str) -> str:
-        """Raise a clear error until a live browser fetcher is injected."""
-        # Keep protocol signature without leaking URL details into persisted errors.
-        _ = url
-        msg = "browser fetcher selected but no browser session is wired"
-        raise RuntimeError(msg)
-
-
-class SearchResult(TypedDict):
-    """A single knowledge-base search result."""
-
-    title: str
-    score: float
-    snippet: str
-    entity_type: str | None
-    retrieval_path: str
-    entities: list[SearchEntity]
-    related_sources: list[RelatedSource]
-    source: SearchSource
-
-
-class SearchEntity(TypedDict):
-    """A single entity mention attached to a search result."""
-
-    name: str
-    type: str
-
-
-class RelatedSource(TypedDict):
-    """A relationship edge from this result to another source."""
-
-    name: str
-    relationship: str
-    entity: str
-
-
-class SearchSource(TypedDict):
-    """Source metadata attached to a search result."""
-
-    name: str
-    url: str
-
-
-class SourceInfo(TypedDict):
-    """A registered knowledge source entry."""
-
-    id: str
-    name: str
-    source_type: str
-    scope: str
-
-
-class EntityInfo(TypedDict):
-    """A knowledge-graph entity entry."""
-
-    name: str
-    entity_type: str
-    description: str
-
-
-class StatsResult(TypedDict):
-    """Knowledge-base summary statistics."""
-
-    documents: int
-    entities: int
-    edges: int
-    total_sources: int
-    total_chunks: int
-    chunks_enriched_ratio: float
-    consolidation_candidates_remaining: int
-
-
-class EnrichmentChunk(TypedDict):
-    """Chunk payload claimed by enrichment workers."""
-
-    chunk_id: str
+    index: int
     text: str
-    doc_title: str
-    section_path: str | None
-    source_name: str | None
-    document_id: str
-    source_id: str
-    scope: str
+    metadata: dict[str, Any]
 
 
-class ConsolidationCandidate(TypedDict):
-    """Cross-source entity pair eligible for phase-2 consolidation."""
+class _SingleChunker:
+    """Small chunker adapter used by the v2 ContentStore wiring."""
 
-    candidate_id: str
-    entity_id_a: str
-    entity_id_b: str
-    entity_name: str
-    source_a: str
-    source_b: str
-    source_a_name: str
-    source_b_name: str
-    source_a_chunk: str
-    source_b_chunk: str
+    def chunk(self, text: str, metadata: dict[str, Any]) -> list[_SingleChunk]:
+        return [_SingleChunk(index=0, text=text, metadata=metadata)]
 
 
-_CANDIDATE_ID_BASE_PARTS = 3
-_CANDIDATE_ID_EXTENDED_PARTS = 5
+class _ZeroEmbeddingProvider:
+    """Deterministic embedding adapter for v2 ingestion wiring."""
 
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        return [[0.0] for _ in texts]
 
-def _encode_candidate_id(
-    entity_name: str,
-    source_a: str,
-    source_b: str,
-    entity_id_a: str,
-    entity_id_b: str,
-) -> str:
-    """Encode the reviewed-pair identity into an opaque candidate ID."""
-    return json.dumps(
-        [entity_name, source_a, source_b, entity_id_a, entity_id_b],
-        separators=(",", ":"),
-    )
 
-
-def _decode_candidate_id(candidate_id: str) -> tuple[str, str, str, str | None, str | None]:
-    """Decode candidate ID into (entity_name, source_a, source_b, entity_id_a, entity_id_b)."""
-    try:
-        parsed = json.loads(candidate_id)
-    except (TypeError, ValueError) as exc:
-        msg = "invalid candidate_id"
-        raise ToolError(msg) from exc
-
-    if (
-        not isinstance(parsed, list)
-        or len(parsed) not in {_CANDIDATE_ID_BASE_PARTS, _CANDIDATE_ID_EXTENDED_PARTS}
-        or not all(isinstance(part, str) for part in parsed)
-    ):
-        msg = "invalid candidate_id"
-        raise ToolError(msg)
-    if len(parsed) == _CANDIDATE_ID_BASE_PARTS:
-        return parsed[0], parsed[1], parsed[2], None, None
-    return parsed[0], parsed[1], parsed[2], parsed[3], parsed[4]
-
-
-def _fetch_consolidation_candidate_rows(
-    conn: sqlite3.Connection,
-    *,
-    limit: int | None,
-) -> list[
-    tuple[
-        str,
-        str,
-        str,
-        str,
-        str,
-        str | None,
-        str | None,
-        str | None,
-        str | None,
-    ]
-]:
-    """Return deduplicated candidate rows ordered by entity name."""
-    sql = """
-        WITH pair_candidates AS (
-            SELECT
-                e1.name AS entity_name,
-                CASE
-                    WHEN d1.source_id < d2.source_id THEN e1.id
-                    ELSE e2.id
-                END AS entity_id_a,
-                CASE
-                    WHEN d1.source_id < d2.source_id THEN e2.id
-                    ELSE e1.id
-                END AS entity_id_b,
-                CASE
-                    WHEN d1.source_id < d2.source_id THEN d1.source_id
-                    ELSE d2.source_id
-                END AS source_a,
-                CASE
-                    WHEN d1.source_id < d2.source_id THEN d2.source_id
-                    ELSE d1.source_id
-                END AS source_b,
-                CASE
-                    WHEN d1.source_id < d2.source_id THEN ks1.name
-                    ELSE ks2.name
-                END AS source_a_name,
-                CASE
-                    WHEN d1.source_id < d2.source_id THEN ks2.name
-                    ELSE ks1.name
-                END AS source_b_name,
-                CASE
-                    WHEN d1.source_id < d2.source_id THEN c1.content
-                    ELSE c2.content
-                END AS source_a_chunk,
-                CASE
-                    WHEN d1.source_id < d2.source_id THEN c2.content
-                    ELSE c1.content
-                END AS source_b_chunk
-            FROM entities AS e1
-            JOIN entities AS e2 ON e1.name = e2.name AND e1.id < e2.id
-            JOIN documents AS d1 ON d1.id = e1.document_id
-            JOIN documents AS d2 ON d2.id = e2.document_id
-            LEFT JOIN knowledge_sources AS ks1 ON ks1.id = d1.source_id
-            LEFT JOIN knowledge_sources AS ks2 ON ks2.id = d2.source_id
-            LEFT JOIN chunks AS c1 ON c1.id = e1.chunk_id
-            LEFT JOIN chunks AS c2 ON c2.id = e2.chunk_id
-            WHERE d1.source_id IS NOT NULL
-              AND d2.source_id IS NOT NULL
-              AND d1.source_id != d2.source_id
-              AND NOT EXISTS (
-                  SELECT 1
-                  FROM edges AS ed
-                  WHERE (ed.source_id = e1.id AND ed.target_id = e2.id)
-                     OR (ed.source_id = e2.id AND ed.target_id = e1.id)
-              )
-        )
-        SELECT
-            pc.entity_name,
-            pc.entity_id_a,
-            pc.entity_id_b,
-            pc.source_a,
-            pc.source_b,
-            MIN(pc.source_a_name) AS source_a_name,
-            MIN(pc.source_b_name) AS source_b_name,
-            MIN(pc.source_a_chunk) AS source_a_chunk,
-            MIN(pc.source_b_chunk) AS source_b_chunk
-        FROM pair_candidates AS pc
-        WHERE NOT EXISTS (
-            SELECT 1
-            FROM reviewed_pairs AS rp
-            WHERE (
-                (
-                    rp.entity_name = pc.entity_name
-                    AND (
-                        (rp.source_a = pc.source_a AND rp.source_b = pc.source_b)
-                        OR (rp.source_a = pc.source_b AND rp.source_b = pc.source_a)
-                    )
-                    AND COALESCE(rp.entity_id_a, '') = ''
-                    AND COALESCE(rp.entity_id_b, '') = ''
-                )
-                OR (
-                    (
-                        rp.source_a = pc.source_a
-                        AND rp.source_b = pc.source_b
-                        AND rp.entity_id_a = pc.entity_id_a
-                        AND rp.entity_id_b = pc.entity_id_b
-                    )
-                    OR (
-                        rp.source_a = pc.source_b
-                        AND rp.source_b = pc.source_a
-                        AND rp.entity_id_a = pc.entity_id_b
-                        AND rp.entity_id_b = pc.entity_id_a
-                    )
-                )
-            )
-        )
-        GROUP BY pc.entity_name, pc.entity_id_a, pc.entity_id_b, pc.source_a, pc.source_b
-        ORDER BY pc.entity_name ASC, pc.source_a ASC, pc.source_b ASC
-    """
-
-    params: tuple[object, ...] = ()
-    if limit is not None:
-        sql += " LIMIT ?"
-        params = (limit,)
-    return conn.execute(sql, params).fetchall()
-
-
-async def get_consolidation_candidates(
-    ctx: Context,
-    limit: int = 20,
-) -> list[ConsolidationCandidate]:
-    """Return unresolved cross-source consolidation candidates."""
-    app_ctx: AppContext = ctx.request_context.lifespan_context
-    conn = app_ctx.conn
-    rows = _fetch_consolidation_candidate_rows(conn, limit=limit)
-    return [
-        {
-            "candidate_id": _encode_candidate_id(row[0], row[3], row[4], row[1], row[2]),
-            "entity_name": row[0],
-            "entity_id_a": row[1],
-            "entity_id_b": row[2],
-            "source_a": row[3],
-            "source_b": row[4],
-            "source_a_name": row[5] or "",
-            "source_b_name": row[6] or "",
-            "source_a_chunk": row[7] or "",
-            "source_b_chunk": row[8] or "",
-        }
-        for row in rows
-    ]
-
-
-def _candidate_entity_ids(
-    conn: sqlite3.Connection,
-    *,
-    entity_name: str,
-    source_a: str,
-    source_b: str,
-) -> tuple[str, str] | None:
-    """Resolve candidate endpoint IDs in source_a/source_b order."""
-    row = conn.execute(
-        """
-        SELECT
-            CASE
-                WHEN d1.source_id < d2.source_id THEN e1.id
-                ELSE e2.id
-            END AS entity_id_a,
-            CASE
-                WHEN d1.source_id < d2.source_id THEN e2.id
-                ELSE e1.id
-            END AS entity_id_b
-        FROM entities AS e1
-        JOIN entities AS e2 ON e1.name = e2.name AND e1.id < e2.id
-        JOIN documents AS d1 ON d1.id = e1.document_id
-        JOIN documents AS d2 ON d2.id = e2.document_id
-        WHERE e1.name = ?
-          AND (
-                (d1.source_id = ? AND d2.source_id = ?)
-                OR (d1.source_id = ? AND d2.source_id = ?)
-          )
-        ORDER BY entity_id_a ASC, entity_id_b ASC
-        LIMIT 1
-        """,
-        (entity_name, source_a, source_b, source_b, source_a),
-    ).fetchone()
-    if row is None or row[0] is None or row[1] is None:
-        return None
-    return row[0], row[1]
-
-
-def _resolve_candidate_identity(
-    conn: sqlite3.Connection,
-    *,
-    candidate_id: str,
-) -> tuple[str, str, str, str, str]:
-    """Resolve candidate identity to a durable row pair and source pair."""
-    entity_name, source_a, source_b, id_a, id_b = _decode_candidate_id(candidate_id)
-    if id_a is not None and id_b is not None:
-        row = conn.execute(
-            """
-            SELECT
-                e1.id,
-                e2.id,
-                d1.source_id,
-                d2.source_id,
-                e1.name,
-                e2.name
-            FROM entities AS e1
-            JOIN entities AS e2 ON e2.id = ?
-            JOIN documents AS d1 ON d1.id = e1.document_id
-            JOIN documents AS d2 ON d2.id = e2.document_id
-            WHERE e1.id = ?
-            """,
-            (id_b, id_a),
-        ).fetchone()
-        if (
-            row is None
-            or not isinstance(row[0], str)
-            or not isinstance(row[1], str)
-            or not isinstance(row[2], str)
-            or not isinstance(row[3], str)
-            or row[4] != entity_name
-            or row[5] != entity_name
-            or row[2] != source_a
-            or row[3] != source_b
-        ):
-            msg = "candidate_id does not resolve to persisted entity endpoints"
-            raise ToolError(msg)
-        return row[4], row[2], row[3], row[0], row[1]
-
-    entity_ids = _candidate_entity_ids(
-        conn,
-        entity_name=entity_name,
-        source_a=source_a,
-        source_b=source_b,
-    )
-    if entity_ids is None:
-        msg = "candidate_id does not resolve to persisted entity endpoints"
-        raise ToolError(msg)
-    return entity_name, source_a, source_b, entity_ids[0], entity_ids[1]
-
-
-def _resolve_phase2_edge_endpoints(
-    edge: dict[str, Any],
-    *,
-    entity_id_a: str,
-    entity_id_b: str,
-) -> tuple[str, str]:
-    """Resolve and validate phase-2 endpoints against the candidate pair."""
-    pair = {entity_id_a, entity_id_b}
-    source_value = edge.get("source_id")
-    target_value = edge.get("target_id")
-    source_id = source_value if isinstance(source_value, str) else None
-    target_id = target_value if isinstance(target_value, str) else None
-
-    if source_id is None and target_id is None:
-        return entity_id_a, entity_id_b
-
-    if source_id is None:
-        if target_id not in pair:
-            msg = "edge endpoints must match candidate entity row identifiers"
-            raise ToolError(msg)
-        return (entity_id_b if target_id == entity_id_a else entity_id_a), target_id
-
-    if target_id is None:
-        if source_id not in pair:
-            msg = "edge endpoints must match candidate entity row identifiers"
-            raise ToolError(msg)
-        return source_id, (entity_id_b if source_id == entity_id_a else entity_id_a)
-
-    if source_id == target_id or {source_id, target_id} != pair:
-        msg = "edge endpoints must match candidate entity row identifiers"
-        raise ToolError(msg)
-    return source_id, target_id
-
-
-def _extract_relation(edge: dict[str, Any]) -> str:
-    """Read edge relation from documented aliases and validate it."""
-    relation = edge.get("relation")
-    if not isinstance(relation, str) or not relation.strip():
-        relationship = edge.get("relationship")
-        if isinstance(relationship, str) and relationship.strip():
-            relation = relationship
-    if not isinstance(relation, str) or not relation.strip():
-        msg = "edge relation is required (use 'relation' or 'relationship')"
-        raise ToolError(msg)
-    return relation.strip()
-
-
-def _stable_edge_id(*parts: str) -> str:
-    """Return a deterministic edge row ID for idempotent retries."""
-    return hashlib.sha256("\x1f".join(parts).encode("utf-8")).hexdigest()
-
-
-@dataclass(frozen=True, slots=True)
-class _ChunkProvenance:
-    """Server-derived provenance for phase-1 enrichment persistence."""
-
-    document_id: str
-    source_id: str
-    scope: str
-    state: str
-    chunk_id: str
-
-
-def _resolve_or_create_chunk_entity(
-    conn: sqlite3.Connection,
-    *,
-    now_iso: str,
-    provenance: _ChunkProvenance,
-    name: str,
-) -> str:
-    """Resolve an entity by chunk/name, creating a placeholder if needed."""
-    existing = conn.execute(
-        """
-        SELECT id FROM entities
-        WHERE name = ? AND document_id = ? AND chunk_id = ? AND scope = ?
-        ORDER BY created_at ASC, id ASC
-        LIMIT 1
-        """,
-        (name, provenance.document_id, provenance.chunk_id, provenance.scope),
-    ).fetchone()
-    if existing is not None and isinstance(existing[0], str):
-        return existing[0]
-
-    entity_id = uuid4().hex
-    conn.execute(
-        """
-        INSERT OR REPLACE INTO entities
-        (id, name, entity_type, description, metadata, created_at, scope, document_id, chunk_id, importance)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            entity_id,
-            name,
-            "",
-            "",
-            json.dumps({}),
-            now_iso,
-            provenance.scope,
-            provenance.document_id,
-            provenance.chunk_id,
-            0.5,
-        ),
-    )
-    return entity_id
-
-
-def _resolve_phase1_edge_endpoints(
-    conn: sqlite3.Connection,
-    *,
-    edge: dict[str, Any],
-    now_iso: str,
-    provenance: _ChunkProvenance,
-    default_source_id: str | None,
-) -> tuple[str, str]:
-    """Resolve edge endpoints using IDs, names, and chunk-local fallbacks."""
-    source_id = edge.get("source_id") if isinstance(edge.get("source_id"), str) else None
-    target_id = edge.get("target_id") if isinstance(edge.get("target_id"), str) else None
-
-    def _entity_id_exists(entity_id: str) -> bool:
-        row = conn.execute(
-            "SELECT 1 FROM entities WHERE id = ? AND scope = ? LIMIT 1",
-            (entity_id, provenance.scope),
-        ).fetchone()
-        return row is not None
-
-    if source_id is None:
-        source_name = edge.get("source_name")
-        if isinstance(source_name, str) and source_name.strip():
-            source_id = _resolve_or_create_chunk_entity(
-                conn,
-                now_iso=now_iso,
-                provenance=provenance,
-                name=source_name.strip(),
-            )
-        elif default_source_id is not None:
-            source_id = default_source_id
-
-    if target_id is None:
-        target_name = edge.get("target_name")
-        if isinstance(target_name, str) and target_name.strip():
-            target_id = _resolve_or_create_chunk_entity(
-                conn,
-                now_iso=now_iso,
-                provenance=provenance,
-                name=target_name.strip(),
-            )
-
-    if source_id is not None and not _entity_id_exists(source_id):
-        msg = "unable to resolve edge endpoints from provided payload"
-        raise ToolError(msg)
-
-    if target_id is not None and not _entity_id_exists(target_id):
-        msg = "unable to resolve edge endpoints from provided payload"
-        raise ToolError(msg)
-
-    if source_id is None or target_id is None:
-        msg = "unable to resolve edge endpoints from provided payload"
-        raise ToolError(msg)
-
-    return source_id, target_id
-
-
-def _load_chunk_provenance(conn: sqlite3.Connection, *, chunk_id: str) -> _ChunkProvenance:
-    """Load chunk/document/source identity required for phase-1 persistence."""
-    row = conn.execute(
-        """
-        SELECT d.id, d.source_id, d.scope, c.enrichment_state
-        FROM chunks AS c
-        JOIN documents AS d ON d.id = c.document_id
-        JOIN knowledge_sources AS ks ON ks.id = d.source_id
-        WHERE c.id = ?
-        """,
-        (chunk_id,),
-    ).fetchone()
-    if row is None:
-        msg = "chunk_id does not resolve to an enrich-enabled source-linked chunk"
-        raise ToolError(msg)
-    if row[3] == "enriched":
-        msg = "chunk is already enriched"
-        raise ToolError(msg)
-    if not isinstance(row[0], str) or not isinstance(row[1], str):
-        msg = "chunk provenance could not be resolved"
-        raise ToolError(msg)
-
-    scope = row[2] if isinstance(row[2], str) and row[2] else "global"
-    state = row[3] if isinstance(row[3], str) else "pending"
-    return _ChunkProvenance(
-        document_id=row[0],
-        source_id=row[1],
-        scope=scope,
-        state=state,
-        chunk_id=chunk_id,
-    )
-
-
-def _clear_failed_chunk_claim(conn: sqlite3.Connection, *, chunk_id: str) -> None:
-    """Release stale claim for a failed phase-1 write attempt."""
-    row = conn.execute(
-        "SELECT enrichment_state FROM chunks WHERE id = ?",
-        (chunk_id,),
-    ).fetchone()
-    if row is None:
-        return
-    if row[0] != "claimed":
-        return
-    conn.execute(
-        "UPDATE chunks SET enrichment_state='failed', claimed_at=NULL WHERE id = ?",
-        (chunk_id,),
-    )
-
-
-def _persist_phase2_enrichment(
-    conn: sqlite3.Connection,
-    *,
-    candidate_id: str,
-    edges: list[dict[str, Any]],
-    now_iso: str,
-) -> None:
-    """Persist phase-2 consolidation review or edge output."""
-    entity_name, source_a, source_b, entity_id_a, entity_id_b = _resolve_candidate_identity(
-        conn,
-        candidate_id=candidate_id,
-    )
-
-    if edges:
-        for edge in edges:
-            relation = _extract_relation(edge)
-            metadata = edge.get("metadata")
-            edge_metadata = metadata if isinstance(metadata, dict) else {}
-            resolved_source_id, resolved_target_id = _resolve_phase2_edge_endpoints(
-                edge,
-                entity_id_a=entity_id_a,
-                entity_id_b=entity_id_b,
-            )
-
-            conn.execute(
-                """
-                INSERT OR IGNORE INTO edges
-                (id, source_id, target_id, relation, document_id, weight, metadata, created_at, scope)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    edge.get("id")
-                    or _stable_edge_id(
-                        "phase2",
-                        candidate_id,
-                        resolved_source_id,
-                        resolved_target_id,
-                        relation,
-                    ),
-                    resolved_source_id,
-                    resolved_target_id,
-                    relation,
-                    edge.get("document_id"),
-                    edge.get("weight", 1.0),
-                    json.dumps(edge_metadata),
-                    now_iso,
-                    edge.get("scope", "global"),
-                ),
-            )
-
-    conn.execute(
-        """
-        INSERT OR IGNORE INTO reviewed_pairs
-        (entity_name, source_a, source_b, entity_id_a, entity_id_b)
-        VALUES (?, ?, ?, ?, ?)
-        """,
-        (entity_name, source_a, source_b, entity_id_a, entity_id_b),
-    )
-
-
-def _persist_phase1_enrichment(
-    conn: sqlite3.Connection,
-    *,
-    chunk_id: str,
-    entities: list[dict[str, Any]],
-    edges: list[dict[str, Any]],
-    now_iso: str,
-) -> None:
-    """Persist phase-1 extraction output using server-derived provenance."""
-    provenance = _load_chunk_provenance(conn, chunk_id=chunk_id)
-
-    first_entity_id: str | None = None
-    for entity in entities:
-        entity_name = entity.get("name")
-        if not isinstance(entity_name, str) or not entity_name.strip():
-            msg = "entity name is required"
-            raise ToolError(msg)
-        entity_type = entity.get("entity_type")
-        if not isinstance(entity_type, str):
-            entity_type_alias = entity.get("type")
-            entity_type = entity_type_alias if isinstance(entity_type_alias, str) else ""
-
-        entity_id = entity.get("id") if isinstance(entity.get("id"), str) else uuid4().hex
-        conn.execute(
-            """
-            INSERT OR REPLACE INTO entities
-            (id, name, entity_type, description, metadata, created_at, scope, document_id, chunk_id, importance)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                entity_id,
-                entity_name.strip(),
-                entity_type,
-                entity.get("description", ""),
-                json.dumps(entity.get("metadata", {})),
-                now_iso,
-                provenance.scope,
-                provenance.document_id,
-                provenance.chunk_id,
-                entity.get("importance", 0.5),
-            ),
-        )
-        if first_entity_id is None:
-            first_entity_id = entity_id
-
-    for edge in edges:
-        relation = _extract_relation(edge)
-        endpoint_source_id, endpoint_target_id = _resolve_phase1_edge_endpoints(
-            conn,
-            edge=edge,
-            now_iso=now_iso,
-            provenance=provenance,
-            default_source_id=first_entity_id,
-        )
-        metadata = edge.get("metadata")
-        edge_metadata = metadata.copy() if isinstance(metadata, dict) else {}
-        edge_metadata.setdefault("chunk_id", chunk_id)
-        conn.execute(
-            """
-            INSERT OR IGNORE INTO edges
-            (id, source_id, target_id, relation, document_id, weight, metadata, created_at, scope)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                edge.get("id") or uuid4().hex,
-                endpoint_source_id,
-                endpoint_target_id,
-                relation,
-                provenance.document_id,
-                edge.get("weight", 1.0),
-                json.dumps(edge_metadata),
-                now_iso,
-                provenance.scope,
-            ),
-        )
-
-    conn.execute(
-        "UPDATE chunks SET enrichment_state='enriched', claimed_at=NULL WHERE id = ?",
-        (chunk_id,),
-    )
-
-
-def select_content_fetcher(method: str) -> ContentFetcher:
-    """Return the content fetcher implementation for a persisted fetch method."""
-    normalized = method.strip().lower()
-    if normalized == "browser":
-        return _BrowserContentFetcher()
-    return HttpxContentFetcher()
-
-
-def _extract_section_path(metadata: str | None) -> str | None:
-    """Extract section_path from serialized chunk metadata."""
-    if not metadata:
-        return None
-    try:
-        parsed = json.loads(metadata)
-    except (TypeError, ValueError):
-        return None
-    section_path = parsed.get("section_path")
-    return section_path if isinstance(section_path, str) else None
-
-
-def _serialize_search_entities(value: object) -> list[SearchEntity]:
-    """Normalize result entities to a list of {name, type} objects."""
-    if not isinstance(value, list):
-        return []
-
-    entities: list[SearchEntity] = []
-    for item in value:
-        if isinstance(item, dict):
-            name = item.get("name")
-            entity_type = item.get("type")
-        else:
-            name = getattr(item, "name", None)
-            entity_type = getattr(item, "type", None)
-        if isinstance(name, str) and isinstance(entity_type, str):
-            entities.append({"name": name, "type": entity_type})
-    return entities
-
-
-def _serialize_related_sources(value: object) -> list[RelatedSource]:
-    """Normalize related_sources to {name, relationship, entity} objects."""
-    if not isinstance(value, list):
-        return []
-
-    related_sources: list[RelatedSource] = []
-    for item in value:
-        if isinstance(item, dict):
-            name = item.get("name")
-            relationship = item.get("relationship")
-            entity = item.get("entity")
-        else:
-            name = getattr(item, "name", None)
-            relationship = getattr(item, "relationship", None)
-            entity = getattr(item, "entity", None)
-        if isinstance(name, str) and isinstance(relationship, str) and isinstance(entity, str):
-            related_sources.append({"name": name, "relationship": relationship, "entity": entity})
-    return related_sources
-
-
-def _serialize_source(value: object) -> SearchSource:
-    """Normalize source metadata to a {name, url} object."""
-    name = getattr(value, "name", None)
-    url = getattr(value, "url", None)
-
-    if not isinstance(url, str):
-        config = getattr(value, "config", None)
-        config_url = config.get("url") if isinstance(config, dict) else None
-        if isinstance(config_url, str):
-            url = config_url
-
-    return {
-        "name": name if isinstance(name, str) else "",
-        "url": url if isinstance(url, str) else "",
-    }
-
-
-async def get_next_batch(ctx: Context, limit: int = 10) -> list[EnrichmentChunk]:
+async def knowledge_enrichment_claim_batch(ctx: Context, limit: int = 10) -> list[EnrichmentChunk]:
     """Atomically claim a batch of chunks ready for enrichment.
 
     Chunks are eligible when state is pending, or when a previous claim lease
     is stale (>10 minutes). Chunks from sources with enrich=0 are excluded.
     """
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    conn = app_ctx.conn
-    now = datetime.now(tz=UTC)
-    now_iso = now.isoformat()
+    limit = _normalize_batch_limit(limit)
+    batch = app_ctx.enrichment_store.claim_batch(EnrichmentParams(batch_size=limit))
 
-    conn.execute("PRAGMA busy_timeout = 5000")
-    conn.execute("BEGIN IMMEDIATE")
-    try:
-        rows = conn.execute(
-            """
-            SELECT
-                c.id,
-                c.content,
-                d.title,
-                c.metadata,
-                ks.name,
-                d.id,
-                d.source_id,
-                d.scope
-            FROM chunks AS c
-            JOIN documents AS d ON d.id = c.document_id
-            JOIN knowledge_sources AS ks ON ks.id = d.source_id
-            WHERE ks.enrich = 1
-              AND (
-                c.enrichment_state = 'pending'
-                OR (
-                    c.enrichment_state = 'claimed'
-                    AND c.claimed_at IS NOT NULL
-                                        AND (strftime('%s', ?) - strftime('%s', c.claimed_at)) > 600
-                )
-              )
-            ORDER BY c.created_at ASC, c.id ASC
-            LIMIT ?
-            """,
-            (now_iso, limit),
-        ).fetchall()
+    doc_titles: dict[str, str] = {}
+    source_names: dict[str, str] = {}
+    response: list[EnrichmentChunk] = []
 
-        if rows:
-            chunk_ids = [row[0] for row in rows]
-            placeholders = ",".join("?" for _ in chunk_ids)
-            update_sql = (
-                "UPDATE chunks SET enrichment_state='claimed', claimed_at=? "  # noqa: S608
-                f"WHERE id IN ({placeholders})"
-            )
-            conn.execute(
-                update_sql,
-                (now_iso, *chunk_ids),
-            )
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
+    for item in batch.items:
+        chunk = app_ctx.content_store.get_chunk(item.chunk_id)
+        if chunk is None:
+            continue
 
-    return [
-        {
-            "chunk_id": row[0],
-            "text": row[1],
-            "doc_title": row[2],
-            "section_path": _extract_section_path(row[3]),
-            "source_name": row[4],
-            "document_id": row[5],
-            "source_id": row[6],
-            "scope": row[7],
-        }
-        for row in rows
-    ]
+        document_id = chunk.document_id
+        source_id = item.source_id
+
+        if document_id not in doc_titles:
+            document = app_ctx.content_store.get_document(document_id)
+            title = getattr(document, "title", "")
+            doc_titles[document_id] = title if isinstance(title, str) else ""
+
+        if source_id not in source_names:
+            source = app_ctx.source_store_v2.get_source(source_id)
+            name = getattr(source, "name", "")
+            source_names[source_id] = name if isinstance(name, str) else ""
+
+        section_parts = getattr(chunk, "section_path", None)
+        section_path = "/".join(section_parts) if section_parts else None
+
+        scope = getattr(chunk, "scope", None)
+        claimed_at = (
+            item.started_at.isoformat() if isinstance(item.started_at, datetime) else datetime.now(tz=UTC).isoformat()
+        )
+
+        response.append(
+            {
+                "chunk_id": item.chunk_id,
+                "text": chunk.text,
+                "doc_title": doc_titles[document_id],
+                "section_path": section_path,
+                "source_name": source_names[source_id],
+                "document_id": document_id,
+                "source_id": source_id,
+                "scope": scope if isinstance(scope, str) and scope else "global",
+                "claim_token": batch.batch_id,
+                "claimed_at": claimed_at,
+            }
+        )
+
+    return response
 
 
-async def store_enrichment(
+async def knowledge_enrichment_store(
     ctx: Context,
     chunk_id: str | None = None,
     entities: list[dict[str, Any]] | None = None,
     edges: list[dict[str, Any]] | None = None,
-    candidate_id: str | None = None,
+    claim_token: str | None = None,
 ) -> None:
-    """Persist enrichment results for phase-1 chunks or phase-2 candidates."""
+    """Persist enrichment results for a chunk."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    conn = app_ctx.conn
-    now_iso = datetime.now(tz=UTC).isoformat()
-    edge_rows = edges or []
+
+    _ = claim_token
 
     if chunk_id is None:
-        if candidate_id is not None:
-            conn.execute("PRAGMA busy_timeout = 5000")
-            conn.execute("BEGIN IMMEDIATE")
-            try:
-                _persist_phase2_enrichment(
-                    conn,
-                    candidate_id=candidate_id,
-                    edges=edge_rows,
-                    now_iso=now_iso,
-                )
-            except Exception:
-                conn.rollback()
-                raise
-            conn.commit()
-            return
-        msg = "chunk_id is required for phase-1 store_enrichment"
+        msg = "chunk_id is required"
         raise ToolError(msg)
 
-    conn.execute("PRAGMA busy_timeout = 5000")
-    conn.execute("BEGIN IMMEDIATE")
+    enrichment_store = app_ctx.enrichment_store
+    if enrichment_store is None:
+        msg = "enrichment store not available"
+        raise ToolError(msg)
+
+    entity_rows = _normalize_enrichment_items(entities, field_name="entities")
+    edge_rows = _normalize_enrichment_items(edges, field_name="edges")
+
     try:
-        _persist_phase1_enrichment(
-            conn,
-            chunk_id=chunk_id,
-            entities=entities or [],
-            edges=edge_rows,
-            now_iso=now_iso,
-        )
-    except (sqlite3.Error, ToolError, TypeError, ValueError):
-        conn.rollback()
-        conn.execute("BEGIN IMMEDIATE")
+        parsed_entities = tuple(_parse_extracted_entity(item) for item in entity_rows)
+        parsed_relations = tuple(_parse_extracted_relation(item) for item in edge_rows)
+    except (ToolError, ValidationError, ValueError, TypeError, KeyError) as exc:
+        error_str = str(exc)
         try:
-            _clear_failed_chunk_claim(conn, chunk_id=chunk_id)
-            conn.commit()
-        except sqlite3.Error:
-            conn.rollback()
-        raise
-    conn.commit()
+            enrichment_store.mark_failed(chunk_id, error_str)
+        except LookupError:
+            logger.debug("chunk %s was not in progress during parse failure mark", chunk_id)
+        raise ToolError(error_str) from exc
+
+    try:
+        enrichment_store.submit_extractions(chunk_id, parsed_entities, parsed_relations)
+    except ValueError as exc:
+        error_str = str(exc)
+        try:
+            enrichment_store.mark_failed(chunk_id, error_str)
+        except LookupError:
+            logger.debug(
+                "chunk %s was not in progress during submit_extractions value error mark",
+                chunk_id,
+            )
+        raise ToolError(error_str) from exc
+    except LookupError as exc:
+        raise ToolError(str(exc)) from exc
 
 
-def init_db(path: str) -> sqlite3.Connection:
-    """Open the SQLite database at *path*, apply schema, return connection."""
-    conn = sqlite3.connect(path)
-    _schema_init_db(conn)
-    return conn
+def _parse_extracted_entity(entity: dict[str, Any]) -> ExtractedEntity:
+    """Map a phase-1 entity payload into ExtractedEntity for submit_extractions."""
+    local_ref_raw = entity.get("id")
+    if not isinstance(local_ref_raw, str) or not local_ref_raw.strip():
+        msg = "entity id is required"
+        raise ValueError(msg)
+
+    name_raw = entity.get("name")
+    if not isinstance(name_raw, str) or not name_raw.strip():
+        msg = "entity name is required"
+        raise ValueError(msg)
+
+    entity_type = _parse_protocol_entity_type(entity)
+    description_raw = entity.get("description", "")
+    if not isinstance(description_raw, str):
+        msg = "entity description must be a string"
+        raise TypeError(msg)
+
+    metadata_raw = entity.get("metadata", {})
+    metadata = metadata_raw if isinstance(metadata_raw, dict) else {}
+    confidence_raw = entity.get("confidence", 1.0)
+    confidence = float(confidence_raw)
+
+    return ExtractedEntity(
+        local_ref=local_ref_raw.strip(),
+        name=name_raw.strip(),
+        entity_type=entity_type,
+        description=description_raw,
+        confidence=confidence,
+        metadata=metadata,
+    )
+
+
+def _parse_protocol_entity_type(entity: dict[str, Any]) -> ProtocolEntityType:
+    """Validate entity_type against the protocol enum used by ExtractedEntity."""
+    raw = entity.get("entity_type")
+    if not isinstance(raw, str) or not raw.strip():
+        alias_raw = entity.get("type")
+        raw = alias_raw if isinstance(alias_raw, str) else ""
+    if not isinstance(raw, str) or not raw.strip():
+        return ProtocolEntityType.CONCEPT
+
+    value = raw.strip().lower()
+    try:
+        return ProtocolEntityType(value)
+    except ValueError as exc:
+        valid = ", ".join(item.value for item in ProtocolEntityType)
+        msg = f"unsupported entity_type {value!r}; valid values: {valid}"
+        raise ValueError(msg) from exc
+
+
+def _parse_extracted_relation(edge: dict[str, Any]) -> ExtractedRelation:
+    """Map a phase-1 edge payload into ExtractedRelation for submit_extractions."""
+    source_ref_raw = edge.get("source_id")
+    if not isinstance(source_ref_raw, str) or not source_ref_raw.strip():
+        msg = "edge source_id is required"
+        raise ValueError(msg)
+
+    target_ref_raw = edge.get("target_id")
+    if not isinstance(target_ref_raw, str) or not target_ref_raw.strip():
+        msg = "edge target_id is required"
+        raise ValueError(msg)
+
+    relation_type = _parse_protocol_relation_type(edge)
+    metadata_raw = edge.get("metadata", {})
+    metadata = metadata_raw if isinstance(metadata_raw, dict) else {}
+    weight_raw = edge.get("weight", 1.0)
+    confidence_raw = edge.get("confidence", 1.0)
+
+    return ExtractedRelation(
+        source_ref=source_ref_raw.strip(),
+        target_ref=target_ref_raw.strip(),
+        relation_type=relation_type,
+        weight=float(weight_raw),
+        confidence=float(confidence_raw),
+        metadata=metadata,
+    )
+
+
+def _parse_protocol_relation_type(edge: dict[str, Any]) -> ProtocolRelationType:
+    """Validate relation/relationship against the protocol enum used by ExtractedRelation."""
+    raw = edge.get("relation")
+    if not isinstance(raw, str) or not raw.strip():
+        alias_raw = edge.get("relationship")
+        raw = alias_raw if isinstance(alias_raw, str) else ""
+    if not isinstance(raw, str) or not raw.strip():
+        msg = "edge relation is required (use 'relation' or 'relationship')"
+        raise ValueError(msg)
+
+    value = raw.strip().lower()
+    try:
+        return ProtocolRelationType(value)
+    except ValueError as exc:
+        valid = ", ".join(item.value for item in ProtocolRelationType)
+        msg = f"unsupported edge relation {value!r}; valid values: {valid}"
+        raise ValueError(msg) from exc
+
+
+async def knowledge_enrichment_retry(
+    ctx: Context,
+    chunk_ids: list[str] | None = None,
+    limit: int = 100,
+    scopes: list[str] | None = None,
+) -> RetryEnrichmentResult:
+    """Reset failed enrichment chunks to pending so workers can retry them."""
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    enrichment_store = app_ctx.enrichment_store
+    if enrichment_store is None:
+        msg = "enrichment store not available"
+        raise ToolError(msg)
+
+    scope_values = _normalize_scope_list(scopes)
+    normalized_chunk_ids = tuple(chunk_id.strip() for chunk_id in chunk_ids or [] if chunk_id.strip())
+    normalized_limit = _normalize_batch_limit(limit)
+    result = enrichment_store.reset_failed(
+        chunk_ids=normalized_chunk_ids or None,
+        limit=normalized_limit,
+        scopes=tuple(scope_values) if scope_values else None,
+    )
+    return {"reset": result.reset, "remaining_failed": result.remaining_failed}
 
 
 @dataclass(slots=True)
@@ -1001,14 +362,23 @@ class AppContext:
     """Runtime context passed to MCP tools via FastMCP lifespan."""
 
     conn: sqlite3.Connection
-    query_service: KnowledgeQueryService | None
-    graph_store: GraphStore | None
-    ingest_pipeline: IngestPipeline | None
-    source_store: KnowledgeSourceStore | None
-    refresh_orchestrator: RefreshOrchestrator | None = None
-    structured_extractor: object | None = None
-    intra_doc_builder: IntraDocGraphBuilder | None = None
-    inter_doc_builder: InterDocGraphBuilder | None = None
+    query_facade: QueryFacade | None = None
+    graph_store_v2: SqliteGraphStore | None = None
+    content_store: ContentStore | None = None
+    enrichment_store: EnrichmentStore | None = None
+    source_store_v2: SqliteSourceStore | None = None
+    ingest_coordinator: IngestCoordinator | None = None
+    vector_store: QdrantVectorStore | None = None
+
+
+class RegisteredSourceResult(TypedDict):
+    """Serialized source fields returned by knowledge_register_source."""
+
+    id: str
+    name: str
+    state: str
+    kind: str
+    scope: str
 
 
 def _apply_tool_exclusions(server: FastMCP) -> set[str]:
@@ -1043,91 +413,154 @@ async def _web_read(url: str) -> str | None:
 @asynccontextmanager
 async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
     """Initialise knowledge-base services; close the DB connection on exit."""
-    global _app_context  # noqa: PLW0603
     path = os.environ.get("OWLBEAR_LOCAL_KB_PATH") or os.environ.get("OWLBEAR_KB_PATH", _DEFAULT_KB_PATH)
     qdrant_path = os.environ.get("OWLBEAR_QDRANT_PATH", _DEFAULT_QDRANT_PATH)
-    conn = init_db(path)
+    conn = sqlite3.connect(path)
     try:
-        gs = GraphStore(conn)
-        vs = QdrantVectorStore(location=qdrant_path)
-        emb = BgeM3EmbeddingProvider()
-        structured_extractor = None
-        extractor = EntityExtractor(extractor=structured_extractor)
-        intra_doc_builder = IntraDocGraphBuilder(extractor=structured_extractor)
-        inter_doc_builder = None
-        gar = GraphAugmentedRetriever(vs, gs, emb)
-        source_store = KnowledgeSourceStore(conn)
-        qs = KnowledgeQueryService(
-            vector_store=vs,
-            graph_store=gs,
-            embedding_provider=emb,
-            retriever=gar,
-            source_store=source_store,
+        vector_store = QdrantVectorStore(location=qdrant_path)
+        source_store_v2 = SqliteSourceStore(conn)
+        graph_store_v2 = SqliteGraphStore(conn)
+        content_store = ContentStore(
+            db=conn,
+            vector_store=vector_store,
+            embedding_provider=_ZeroEmbeddingProvider(),
+            chunker=_SingleChunker(),
         )
-        doc_store = DocumentStore(conn, gs, vs, emb)
-        chunker = TextChunker()
-        pipeline = IngestPipeline(
-            doc_store,
-            extractor,
-            chunker,
-            source_store=source_store,
-        )
-        refresh_orchestrator = RefreshOrchestrator(
-            store=source_store,
-            pipeline=pipeline,
+        query_facade = QueryFacade(content=content_store, graph=graph_store_v2)
+        enrichment_store = EnrichmentStore(db=conn, graph=graph_store_v2)
+        source_fetcher = CompositeSourceFetcher(
             workspace_root=Path.cwd(),
-            content_fetcher=select_content_fetcher("http"),
-            inter_doc_builder=inter_doc_builder,
-            graph_store=gs,
+            content_fetcher_factory=select_content_fetcher,
         )
+        ingest_coordinator = IngestCoordinator(
+            sources=source_store_v2,
+            content=content_store,
+            enrichment=enrichment_store,
+            graph=graph_store_v2,
+            fetcher=source_fetcher,
+        )
+        source_store_v2.ensure_tables()
+        graph_store_v2.ensure_tables()
+        content_store.ensure_tables()
+        enrichment_store.ensure_tables()
         ctx = AppContext(
             conn=conn,
-            query_service=qs,
-            graph_store=gs,
-            ingest_pipeline=pipeline,
-            source_store=source_store,
-            refresh_orchestrator=refresh_orchestrator,
-            structured_extractor=structured_extractor,
-            intra_doc_builder=intra_doc_builder,
-            inter_doc_builder=inter_doc_builder,
+            query_facade=query_facade,
+            graph_store_v2=graph_store_v2,
+            vector_store=vector_store,
+            content_store=content_store,
+            enrichment_store=enrichment_store,
+            source_store_v2=source_store_v2,
+            ingest_coordinator=ingest_coordinator,
         )
-        _app_context = ctx
         _apply_tool_exclusions(_server)
         yield ctx
     finally:
-        _app_context = None
         conn.close()
 
 
 mcp = FastMCP("owlbear-knowledge", lifespan=app_lifespan)
 
-get_next_batch = mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))(get_next_batch)
-get_consolidation_candidates = mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))(
-    get_consolidation_candidates
+knowledge_enrichment_claim_batch = mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))(
+    knowledge_enrichment_claim_batch
 )
-store_enrichment = mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))(store_enrichment)
+knowledge_enrichment_store = mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))(
+    knowledge_enrichment_store
+)
+knowledge_enrichment_retry = mcp.tool(
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True)
+)(knowledge_enrichment_retry)
+
 
 __all__ = [
+    "_MAX_ENRICHMENT_BATCH_SIZE",
     "AppContext",
     "_apply_tool_exclusions",
     "app_lifespan",
-    "get_stats",
-    "ingest_document",
-    "init_db",
-    "list_entities",
-    "list_sources",
+    "knowledge_enrichment_claim_batch",
+    "knowledge_enrichment_retry",
+    "knowledge_enrichment_store",
+    "knowledge_entity_lookup",
+    "knowledge_ingest",
+    "knowledge_search",
+    "knowledge_sources_delete",
+    "knowledge_sources_list",
+    "knowledge_sources_refresh",
+    "knowledge_sources_register",
+    "knowledge_stats",
     "mcp",
-    "refresh_source",
-    "search_knowledge",
     "select_content_fetcher",
 ]
 
-# Module-level context so zero-arg @mcp.resource handlers can access graph_store.
-_app_context: AppContext | None = None
+
+def _serialize_query_facade_results(app_ctx: AppContext, result: QueryResult) -> list[SearchResult]:
+    """Serialize QueryFacade.search output into SearchResult items."""
+    graph_entities = []
+    graph_context = result.graph_context
+    if graph_context is not None:
+        graph_entities = [
+            {
+                "name": str(getattr(entity, "name", "")),
+                "type": str(getattr(entity, "entity_type", "")),
+            }
+            for entity in getattr(graph_context, "entities", ())
+        ]
+    serialized_entities = _serialize_search_entities(graph_entities)
+
+    graph_context_text = ""
+    if graph_context is not None:
+        entity_count = len(getattr(graph_context, "entities", ()))
+        edge_count = len(getattr(graph_context, "edges", ()))
+        graph_context_text = f"graph expansion: {entity_count} entities, {edge_count} edges"
+
+    retrieval_path = "vector+graph" if graph_context is not None else "vector"
+    provenance_by_chunk = {item.chunk_id: item for item in result.provenance}
+
+    serialized: list[SearchResult] = []
+    for item in result.search_results:
+        chunk = item.chunk
+        provenance = provenance_by_chunk.get(chunk.id)
+        title = provenance.title if provenance is not None else ""
+
+        source_name = provenance.source_id if provenance is not None else ""
+        source_obj: object = SimpleNamespace(name=source_name, url="")
+        if provenance is not None:
+            source_store_v2 = getattr(app_ctx, "source_store_v2", None)
+            if source_store_v2 is not None:
+                source_record = source_store_v2.get_source(provenance.source_id)
+                if source_record is not None:
+                    source_obj = source_record
+            if isinstance(source_obj, SimpleNamespace):
+                source_obj.url = provenance.uri or ""
+
+        related_candidates = [
+            {
+                "name": (other.title or other.source_id),
+                "relationship": "related",
+                "entity": serialized_entities[0]["name"] if serialized_entities else "",
+            }
+            for other in result.provenance
+            if other.chunk_id != chunk.id and (other.title or other.source_id)
+        ]
+
+        serialized.append(
+            {
+                "title": title,
+                "score": item.score,
+                "snippet": chunk.text,
+                "entity_type": None,
+                "retrieval_path": retrieval_path,
+                "graph_context": _serialize_graph_context(graph_context_text),
+                "entities": serialized_entities,
+                "related_sources": _serialize_related_sources(related_candidates),
+                "source": _serialize_source(source_obj),
+            }
+        )
+    return serialized
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
-async def search_knowledge(
+async def knowledge_search(
     ctx: Context,
     query: str,
     limit: int = 5,
@@ -1135,50 +568,179 @@ async def search_knowledge(
 ) -> list[SearchResult] | str:
     """Search the knowledge base for relevant context."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    qs = app_ctx.query_service
-    if qs is None:
+    query_facade = app_ctx.query_facade
+
+    if query_facade is None:
         return "error: Knowledge service not available."
-    results = await qs.query(query, top_k=limit, scopes=scopes)
-    serialized: list[SearchResult] = []
-    for r in results:
-        retrieval_path = getattr(r, "retrieval_path", "vector")
-        serialized.append(
-            {
-                "title": r.title,
-                "score": r.score,
-                "snippet": r.snippet,
-                "entity_type": r.entity_type,
-                "retrieval_path": (retrieval_path if isinstance(retrieval_path, str) else "vector"),
-                "entities": _serialize_search_entities(getattr(r, "entities", [])),
-                "related_sources": _serialize_related_sources(getattr(r, "related_sources", [])),
-                "source": _serialize_source(getattr(r, "source", None)),
-            }
+    limit = _normalize_read_limit(limit)
+    normalized_scopes = _normalize_scope_list(scopes)
+    try:
+        request = QueryRequest(
+            text=query,
+            top_k=limit,
+            scopes=tuple(normalized_scopes or ()),
         )
-    return serialized
+        result = await query_facade.search(request)
+    except ValueError as exc:
+        msg = "invalid search request"
+        raise ToolError(msg) from exc
+    return _serialize_query_facade_results(app_ctx, result)
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
-async def list_sources(ctx: Context, scope: str | None = None) -> list[SourceInfo]:
+async def knowledge_sources_list(ctx: Context, scope: str | None = None) -> list[SourceInfo]:
     """List all registered knowledge sources."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    store = app_ctx.source_store
+    store = app_ctx.source_store_v2
     if store is None:
-        msg = "source store not available"
+        msg = "source store v2 not available"
         raise ToolError(msg)
-    sources = store.list_all(scope=scope)
+    scope = _normalize_optional_scope(scope)
+    sources = store.list_sources(scope=scope)
     return [
         {
             "id": s.id,
             "name": s.name,
-            "source_type": str(s.source_type),
+            "source_type": str(getattr(s, "kind", "")),
             "scope": s.scope,
+            "last_refreshed_at": getattr(s, "last_refreshed_at", None),
+            "last_checked_at": getattr(s, "last_checked_at", None),
+            "last_error": _sanitize_error(getattr(s, "last_error", None)),
+            "enabled": bool(getattr(s, "state", "") == "active"),
+            "refreshable": bool(getattr(s, "refreshable", False)),
+            "enrich": bool(getattr(s, "enrich", False)),
+            "fetch_method": str(getattr(s, "fetch_method", "")),
         }
         for s in sources
     ]
 
 
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
+async def knowledge_entity_lookup(
+    ctx: Context,
+    entity_id: str | None = None,
+    entity_name: str | None = None,
+    entity_type: str | None = None,
+    expand_hops: int = 1,
+) -> dict[str, Any]:
+    """Look up a graph entity and neighborhood through QueryFacade."""
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    query_facade = app_ctx.query_facade
+    if query_facade is None:
+        msg = "query facade not available"
+        raise ToolError(msg)
+
+    try:
+        request = EntityLookupRequest(
+            entity_id=entity_id,
+            entity_name=entity_name,
+            entity_type=entity_type,
+            expand_hops=expand_hops,
+        )
+        result = query_facade.lookup_entity(request)
+    except (ValidationError, ValueError) as exc:
+        msg = "invalid entity lookup request"
+        raise ToolError(msg) from exc
+    except LookupError as exc:
+        msg = "entity not found"
+        raise ToolError(msg) from exc
+
+    neighborhood = result.neighbourhood
+    return {
+        "entity": {
+            "id": getattr(result.entity, "id", ""),
+            "name": getattr(result.entity, "name", ""),
+            "entity_type": str(getattr(result.entity, "entity_type", "")),
+            "description": getattr(result.entity, "description", ""),
+        },
+        "neighbourhood": {
+            "entities": [
+                {
+                    "id": item.id,
+                    "name": item.name,
+                    "entity_type": str(item.entity_type),
+                }
+                for item in (neighborhood.entities if neighborhood is not None else ())
+            ],
+            "edges": [
+                {
+                    "id": item.id,
+                    "source_entity_id": item.source_entity_id,
+                    "target_entity_id": item.target_entity_id,
+                    "relation_type": str(item.relation_type),
+                    "weight": item.weight,
+                }
+                for item in (neighborhood.edges if neighborhood is not None else ())
+            ],
+        },
+        "related_chunks": [
+            {
+                "id": chunk.id,
+                "document_id": chunk.document_id,
+                "source_id": chunk.source_id,
+                "text": chunk.text,
+                "scope": chunk.scope,
+                "uri": chunk.uri,
+            }
+            for chunk in result.related_chunks
+        ],
+    }
+
+
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
-async def ingest_document(
+async def knowledge_sources_register(  # noqa: PLR0913
+    ctx: Context,
+    name: str,
+    kind: str,
+    fetch_method: str,
+    config: dict[str, Any],
+    *,
+    scope: str = "global",
+    enrich: bool = False,
+    refreshable: bool = True,
+    priority: int = 0,
+    metadata: dict[str, Any] | None = None,
+) -> RegisteredSourceResult:
+    """Register a source in the v2 source store."""
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    store = app_ctx.source_store_v2
+    if store is None:
+        msg = "source store v2 not available"
+        raise ToolError(msg)
+
+    try:
+        registration = SourceRegistration.model_validate(
+            {
+                "name": name,
+                "kind": kind,
+                "fetch_method": fetch_method,
+                "config": config,
+                "scope": scope,
+                "enrich": enrich,
+                "refreshable": refreshable,
+                "priority": priority,
+                "metadata": {} if metadata is None else metadata,
+            },
+            strict=False,
+        )
+    except ValidationError as exc:
+        raise ToolError(str(exc)) from exc
+
+    try:
+        source = await asyncio.to_thread(store.register_source, registration)
+    except ValueError as exc:
+        raise ToolError(str(exc)) from exc
+    return {
+        "id": str(source.id),
+        "name": str(source.name),
+        "state": str(source.state),
+        "kind": str(source.kind),
+        "scope": str(source.scope),
+    }
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
+async def knowledge_ingest(
     ctx: Context,
     text: str,
     metadata: dict[str, Any] | None = None,
@@ -1187,156 +749,192 @@ async def ingest_document(
 ) -> str:
     """Ingest a text document into the knowledge base."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    pipeline = app_ctx.ingest_pipeline
-    if pipeline is None:
-        return "error: ingest pipeline not available"
+    coordinator = app_ctx.ingest_coordinator
+    source_store = app_ctx.source_store_v2
+    if coordinator is None:
+        return "error: ingest coordinator not available"
+    if source_store is None:
+        return "error: source store v2 not available"
+
     try:
-        result = await pipeline.ingest_text(
-            text,
-            metadata=metadata,
+        source_name = f"mcp-inline-{scope}"
+        # SourceStore shares the app lifespan SQLite connection; keep operations
+        # on the request thread to avoid cross-thread SQLite access errors.
+        sources = source_store.list_sources(
             scope=scope,
-            source_url=source_url,
+            state=SourceState.ACTIVE,
         )
+        source = next(
+            (item for item in sources if item.name == source_name and item.kind == SourceKind.INLINE),
+            None,
+        )
+        if source is None:
+            source = source_store.register_source(
+                SourceRegistration(
+                    name=source_name,
+                    kind=SourceKind.INLINE,
+                    fetch_method=FetchTransport.NONE,
+                    config=InlineConfig(),
+                    scope=scope,
+                    enrich=True,
+                    refreshable=False,
+                ),
+            )
+
+        document_metadata = metadata or {}
+        request = IngestRequest(
+            source_id=source.id,
+            documents=(
+                IngestDocument(
+                    title=document_metadata.get("title", source_url or "Untitled inline document"),
+                    text=text,
+                    uri=source_url,
+                    metadata=document_metadata,
+                ),
+            ),
+            enrich=True,
+        )
+        result = await coordinator.ingest(request)
     except Exception as exc:  # noqa: BLE001
         return f"error: ingestion failed: {exc}"
-    else:
-        if result.status == "failed":
-            return f"error: ingestion failed for document {result.document_id}"
-        return (
-            f"Ingested: {result.document_id}, {result.chunk_count} chunks, "
-            f"{result.entity_count} entities, {result.edge_count} edges "
-            f"(status: {result.status})"
-        )
 
-
-async def list_entities(
-    ctx: Context,
-    entity_type: str | None = None,
-    offset: int = 0,
-    limit: int = 50,
-    scopes: list[str] | None = None,
-) -> list[EntityInfo] | str:
-    # DEFERRED: kept as an internal helper; not exposed as an MCP tool until
-    # thread-safety review is completed.
-    """List entities in the knowledge graph."""
-    app_ctx: AppContext = ctx.request_context.lifespan_context
-    gs = app_ctx.graph_store
-    if gs is None:
-        return "error: graph store not available"
-
-    if entity_type is not None:
-        try:
-            et = EntityType(entity_type)
-        except ValueError:
-            valid = ", ".join(e.value for e in EntityType)
-            return f"error: Invalid entity_type '{entity_type}'. Valid types: {valid}"
-        entities = await asyncio.to_thread(gs.list_entities, entity_type=et, scopes=scopes)
-    else:
-        entities = await asyncio.to_thread(gs.list_entities, scopes=scopes)
-
-    page = entities[offset : offset + limit]
-    return [{"name": e.name, "entity_type": e.entity_type, "description": e.description} for e in page]
+    return (
+        "Ingested: "
+        f"documents_processed={result.documents_processed}, "
+        f"chunks_created={result.chunks_created}, "
+        f"chunks_enqueued={result.chunks_enqueued}"
+    )
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
-async def get_stats(ctx: Context) -> StatsResult:
+async def knowledge_stats(ctx: Context) -> StatsResult:
     """Get knowledge base summary statistics."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    gs = app_ctx.graph_store
+    coordinator = app_ctx.ingest_coordinator
+    enrichment_store = app_ctx.enrichment_store
     conn = app_ctx.conn
-    if gs is None:
-        msg = "graph store not available"
+    if coordinator is None:
+        msg = "ingest coordinator not available"
         raise ToolError(msg)
-    doc_count, entity_count, edge_count = gs.get_counts()
+    if enrichment_store is None:
+        msg = "enrichment store not available"
+        raise ToolError(msg)
 
-    total_sources = conn.execute("SELECT COUNT(*) FROM knowledge_sources").fetchone()[0]
-    total_chunks = conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
-    enriched_chunks = conn.execute("SELECT COUNT(*) FROM chunks WHERE enrichment_state = 'enriched'").fetchone()[0]
-    chunks_enriched_ratio = float(enriched_chunks) / float(total_chunks) if total_chunks else 0.0
-    consolidation_candidates_remaining = len(_fetch_consolidation_candidate_rows(conn, limit=None))
+    ingest_stats = coordinator.stats()
+    enrichment_stats = enrichment_store.stats()
+
+    now_iso = datetime.now(tz=UTC).isoformat()
+    claimable_row = conn.execute(
+        """
+        SELECT COUNT(*)
+                FROM enrich_queue AS eq
+                JOIN content_chunks AS cc ON cc.id = eq.chunk_id
+                JOIN content_documents AS cd ON cd.document_id = cc.document_id
+                JOIN source_registry AS sr ON sr.id = cd.source_id
+                WHERE sr.state = 'active'
+                    AND COALESCE(sr.enrich, 0) = 1
+          AND (
+                        eq.state = 'pending'
+            OR (
+                                eq.state = 'in_progress'
+                                AND eq.started_at IS NOT NULL
+                                AND (strftime('%s', ?) - strftime('%s', eq.started_at)) > 600
+            )
+          )
+        """,
+        (now_iso,),
+    ).fetchone()
+    total_chunks = ingest_stats.chunks_total
+    chunks_enriched = enrichment_stats.completed
+    chunks_enriched_ratio = float(chunks_enriched) / float(total_chunks) if total_chunks else 0.0
 
     return {
-        "documents": doc_count,
-        "entities": entity_count,
-        "edges": edge_count,
-        "total_sources": total_sources,
+        "documents": ingest_stats.documents_total,
+        "entities": ingest_stats.graph_entities,
+        "edges": ingest_stats.graph_edges,
+        "total_sources": ingest_stats.sources_total,
         "total_chunks": total_chunks,
+        "chunks_pending": enrichment_stats.pending,
+        "chunks_claimed": enrichment_stats.in_progress,
+        "chunks_failed": enrichment_stats.failed,
+        "chunks_enriched": chunks_enriched,
+        "chunks_claimable": int(claimable_row[0] if claimable_row is not None else 0),
         "chunks_enriched_ratio": chunks_enriched_ratio,
-        "consolidation_candidates_remaining": consolidation_candidates_remaining,
+        "consolidation_candidates_remaining": 0,
     }
 
 
-async def knowledge_stats(ctx: Context) -> str:
-    """Return knowledge base statistics (callable directly with ctx for testing)."""
-    app_ctx: AppContext = ctx.request_context.lifespan_context
-    gs = app_ctx.graph_store
-    doc_count, entity_count, edge_count = gs.get_counts()
-    return f"Knowledge base: {doc_count} documents, {entity_count} entities, {edge_count} edges"
-
-
-@mcp.resource("knowledge://stats")
-async def _knowledge_stats_bridge() -> str:
-    """MCP-registered concrete resource for knowledge://stats (zero-arg for FastMCP compat)."""
-    if _app_context is None or _app_context.graph_store is None:
-        return "Knowledge base: 0 documents, 0 entities, 0 edges"
-    gs = _app_context.graph_store
-    doc_count, entity_count, edge_count = gs.get_counts()
-    return f"Knowledge base: {doc_count} documents, {entity_count} entities, {edge_count} edges"
-
-
-async def knowledge_stats_resource(ctx: Context | None = None) -> str:
-    """Return knowledge base statistics; accepts optional ctx for direct invocation."""
-    if ctx is not None:
-        app_ctx: AppContext = ctx.request_context.lifespan_context
-        gs = app_ctx.graph_store
-        counts_fn = gs.get_counts
-    else:
-        counts_fn = lambda: (0, 0, 0)  # noqa: E731
-    doc_count, entity_count, edge_count = counts_fn()
-    return f"Knowledge base: {doc_count} documents, {entity_count} entities, {edge_count} edges"
-
-
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
-async def refresh_source(ctx: Context, source_id: str) -> dict | str:
+async def knowledge_sources_refresh(ctx: Context, source_id: str) -> dict[str, Any]:
     """Trigger re-ingestion of a registered knowledge source by its ID.
 
-    Returns a dict with source_id, refreshed, skipped, and failed counts on
-    success.  Returns an error string for disabled sources or unavailable
-    orchestrator.  Raises ToolError if source_store is unavailable or the
-    source_id is not found.
+    Returns source_id, sources_refreshed, and serialized refresh errors.
+
+    Raises ToolError when source storage is unavailable or source_id is missing.
     """
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    store = app_ctx.source_store
+    store = app_ctx.source_store_v2
     if store is None:
         msg = "source store not available"
         raise ToolError(msg)
-    source = store.get(source_id)
+    source = store.get_source(source_id)
     if source is None:
         msg = f"Source '{source_id}' not found"
         raise ToolError(msg)
-    orchestrator = app_ctx.refresh_orchestrator
-    if orchestrator is None:
-        return "error: refresh orchestrator not available"
-    pipeline = app_ctx.ingest_pipeline
-    if pipeline is None:
-        return "error: ingest pipeline not available"
 
-    selected_fetcher = select_content_fetcher(source.fetch_method)
-    run_orchestrator = RefreshOrchestrator(
-        store=store,
-        pipeline=pipeline,
-        workspace_root=Path.cwd(),
-        content_fetcher=selected_fetcher,
-        inter_doc_builder=None,
-        graph_store=app_ctx.graph_store,
-    )
-    try:
-        result = await run_orchestrator.refresh(source)
-    except ValueError as exc:
-        return f"error: {exc}"
+    if source.state != SourceState.ACTIVE:
+        return {
+            "source_id": source_id,
+            "sources_refreshed": 0,
+            "errors": [
+                {
+                    "source_id": source_id,
+                    "error": f"Source '{source_id}' is not active",
+                    "timestamp": datetime.now(tz=UTC).isoformat(),
+                }
+            ],
+        }
+
+    coordinator = app_ctx.ingest_coordinator
+    if coordinator is None:
+        msg = "ingest coordinator not available"
+        raise ToolError(msg)
+
+    result = await coordinator.refresh(RefreshRequest(source_ids=(source_id,)))
     return {
-        "source_id": result.source_id,
-        "refreshed": result.refreshed,
-        "skipped": result.skipped,
-        "failed": result.failed,
+        "source_id": source_id,
+        "sources_refreshed": result.sources_refreshed,
+        "errors": [error.model_dump(mode="json") for error in result.errors],
+    }
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True))
+async def knowledge_sources_delete(ctx: Context, source_id: str) -> dict[str, Any]:
+    """Delete a source through ingest-coordinator purge orchestration."""
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    source_store = app_ctx.source_store_v2
+    if source_store is None:
+        msg = "source store not available"
+        raise ToolError(msg)
+
+    source = source_store.get_source(source_id)
+    if source is None:
+        msg = f"Source '{source_id}' not found"
+        raise ToolError(msg)
+
+    coordinator = app_ctx.ingest_coordinator
+    if coordinator is None:
+        msg = "ingest coordinator not available"
+        raise ToolError(msg)
+
+    purge_result = await coordinator.delete_source(source_id)
+    return {
+        "status": purge_result.status.value,
+        "completed_steps": list(purge_result.completed_steps),
+        "failed_step": purge_result.failed_step,
+        "error": purge_result.error,
+        "source": purge_result.source.model_dump(mode="json"),
+        "content": purge_result.content.model_dump(mode="json"),
+        "enrichment": purge_result.enrichment.model_dump(mode="json"),
+        "graph": purge_result.graph.model_dump(mode="json"),
     }

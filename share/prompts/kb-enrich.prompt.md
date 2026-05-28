@@ -18,10 +18,10 @@ Each decision item must include: status quo, problem, options with pro/con/risk/
 Open 1 to 6 chat sessions with this same prompt to run parallel workers. Each worker
 pulls from the same coordinated queue, so sessions can process work concurrently
 without manual sharding. Each Phase 1 worker must pass the exact `claim_token`
-returned by `get_next_batch` when calling `store_enrichment`.
+returned by `knowledge_enrichment_claim_batch` when calling `knowledge_enrichment_store`.
 
 ## Worker phases
 
 1. Phase 1: pull chunk batches and store entity/relation extraction results.
-2. If chunks fail, inspect `knowledge_stats`, correct the extraction/payload issue, then use `retry_failed_enrichment` to requeue them.
+2. If chunks fail, inspect `knowledge_stats`, correct the extraction/payload issue, then use `knowledge_enrichment_retry` to requeue them.
 3. Phase 2: pull consolidation candidates and store cross-source outcomes.

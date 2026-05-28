@@ -270,8 +270,9 @@ class TestFromAC_ListRequests:
     def test_list_all_returns_both_dirs(self, tmp_path: Path) -> None:
         """AC1 happy: list_requests(status='all') returns records from pending/ and resolved/."""
         engine, kanban_dir = _make_engine(tmp_path, 42)
-        _write_request_file(kanban_dir, subdir="pending", task_id=42, kind="action",
-                            created_at="2026-05-24T10:00:00+02:00")
+        _write_request_file(
+            kanban_dir, subdir="pending", task_id=42, kind="action", created_at="2026-05-24T10:00:00+02:00"
+        )
         _write_request_file(
             kanban_dir,
             subdir="resolved",
@@ -338,9 +339,7 @@ class TestFromAC_ListRequests:
 
         assert result == []
 
-    def test_list_skips_corrupt_yaml_logs_warning(
-        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_list_skips_corrupt_yaml_logs_warning(self, tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
         """AC1 error: corrupt YAML skip emits a WARNING-level log."""
         engine, kanban_dir = _make_engine(tmp_path, 42)
         corrupt_id = str(uuid.uuid4())
@@ -394,9 +393,7 @@ class TestFromAC_SweepRequests:
         """AC2 happy: pending decision file with selected_option_id non-null → request_id in returned list."""
         engine, kanban_dir = _make_engine(tmp_path, 42)
         engine.edit_task("42", blocked=True, block_reason="DR pending")
-        _, rid = _write_request_file(
-            kanban_dir, task_id=42, kind="decision", selected_option_id="option-a"
-        )
+        _, rid = _write_request_file(kanban_dir, task_id=42, kind="decision", selected_option_id="option-a")
 
         result = engine.sweep_requests()
 
@@ -406,9 +403,7 @@ class TestFromAC_SweepRequests:
         """AC2 happy: pending action file with free_text non-null → request_id in returned list."""
         engine, kanban_dir = _make_engine(tmp_path, 42)
         engine.edit_task("42", blocked=True, block_reason="DR pending")
-        _, rid = _write_request_file(
-            kanban_dir, task_id=42, kind="action", free_text="Action done."
-        )
+        _, rid = _write_request_file(kanban_dir, task_id=42, kind="action", free_text="Action done.")
 
         result = engine.sweep_requests()
 
@@ -418,9 +413,7 @@ class TestFromAC_SweepRequests:
         """AC2 happy: sweep writes the request file to decisions/resolved/{id}.md."""
         engine, kanban_dir = _make_engine(tmp_path, 42)
         engine.edit_task("42", blocked=True, block_reason="DR pending")
-        _, rid = _write_request_file(
-            kanban_dir, task_id=42, kind="action", free_text="Done."
-        )
+        _, rid = _write_request_file(kanban_dir, task_id=42, kind="action", free_text="Done.")
 
         engine.sweep_requests()
 
@@ -431,9 +424,7 @@ class TestFromAC_SweepRequests:
         """AC2 happy: sweep removes the file from decisions/pending/ after move."""
         engine, kanban_dir = _make_engine(tmp_path, 42)
         engine.edit_task("42", blocked=True, block_reason="DR pending")
-        _, rid = _write_request_file(
-            kanban_dir, task_id=42, kind="action", free_text="Done."
-        )
+        _, rid = _write_request_file(kanban_dir, task_id=42, kind="action", free_text="Done.")
 
         engine.sweep_requests()
 
@@ -444,9 +435,7 @@ class TestFromAC_SweepRequests:
         """AC2 happy: after sweep, resolved file has a tz-aware ISO 8601 resolved_at."""
         engine, kanban_dir = _make_engine(tmp_path, 42)
         engine.edit_task("42", blocked=True, block_reason="DR pending")
-        _, rid = _write_request_file(
-            kanban_dir, task_id=42, kind="action", free_text="Done."
-        )
+        _, rid = _write_request_file(kanban_dir, task_id=42, kind="action", free_text="Done.")
 
         engine.sweep_requests()
 
@@ -461,9 +450,7 @@ class TestFromAC_SweepRequests:
         """AC2 happy: sweep appends a ## AR/DR: title write-back block to the task body."""
         engine, kanban_dir = _make_engine(tmp_path, 42)
         engine.edit_task("42", blocked=True, block_reason="DR pending")
-        _write_request_file(
-            kanban_dir, task_id=42, kind="action", free_text="Action outcome."
-        )
+        _write_request_file(kanban_dir, task_id=42, kind="action", free_text="Action outcome.")
 
         engine.sweep_requests()
 
@@ -475,24 +462,19 @@ class TestFromAC_SweepRequests:
         """AC2 happy: task is unblocked after sweep when it is the only pending structured request."""
         engine, kanban_dir = _make_engine(tmp_path, 42)
         engine.edit_task("42", blocked=True, block_reason="DR pending")
-        _write_request_file(
-            kanban_dir, task_id=42, kind="action", free_text="Done."
-        )
+        _write_request_file(kanban_dir, task_id=42, kind="action", free_text="Done.")
 
         engine.sweep_requests()
 
         task = engine.show_task("42")
         assert task.blocked is False
 
-
     def test_sweep_keeps_task_blocked_with_sibling_pending(self, tmp_path: Path) -> None:
         """AC2 edge: task stays blocked when another structured pending request for the same task remains."""
         engine, kanban_dir = _make_engine(tmp_path, 42)
         engine.edit_task("42", blocked=True, block_reason="DR pending")
         # One resolvable request
-        _write_request_file(
-            kanban_dir, task_id=42, kind="action", free_text="Done."
-        )
+        _write_request_file(kanban_dir, task_id=42, kind="action", free_text="Done.")
         # Sibling still pending (no resolution fields set)
         _write_request_file(kanban_dir, task_id=42, kind="action")
 
@@ -505,12 +487,8 @@ class TestFromAC_SweepRequests:
         """AC2 happy: two resolvable pending files → both request_ids in returned list."""
         engine, kanban_dir = _make_engine(tmp_path, 42)
         engine.edit_task("42", blocked=True, block_reason="DR pending")
-        _, rid1 = _write_request_file(
-            kanban_dir, task_id=42, kind="action", free_text="Done A."
-        )
-        _, rid2 = _write_request_file(
-            kanban_dir, task_id=42, kind="action", free_text="Done B."
-        )
+        _, rid1 = _write_request_file(kanban_dir, task_id=42, kind="action", free_text="Done A.")
+        _, rid2 = _write_request_file(kanban_dir, task_id=42, kind="action", free_text="Done B.")
 
         result = engine.sweep_requests()
 
@@ -526,12 +504,8 @@ class TestFromAC_SweepRequests:
         # Use fixed UUIDs with predictable sort order
         rid_a = "00000000-0000-4000-8000-000000000001"
         rid_b = "ffffffff-ffff-4fff-bfff-ffffffffffff"
-        _write_request_file(
-            kanban_dir, request_id=rid_b, task_id=42, kind="action", free_text="B."
-        )
-        _write_request_file(
-            kanban_dir, request_id=rid_a, task_id=42, kind="action", free_text="A."
-        )
+        _write_request_file(kanban_dir, request_id=rid_b, task_id=42, kind="action", free_text="B.")
+        _write_request_file(kanban_dir, request_id=rid_a, task_id=42, kind="action", free_text="A.")
 
         result = engine.sweep_requests()
 
@@ -562,9 +536,7 @@ class TestFromAC_SweepErrorHandling:
 
         assert result == []
 
-    def test_sweep_skips_corrupt_yaml_logs_warning(
-        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_sweep_skips_corrupt_yaml_logs_warning(self, tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
         """AC3 error: corrupt YAML skip in sweep emits a WARNING-level log."""
         engine, kanban_dir = _make_engine(tmp_path, 42)
         decisions_dir = kanban_dir / "decisions" / "pending"
@@ -612,24 +584,18 @@ class TestFromAC_SweepErrorHandling:
         """AC3 error: if edit_task (write-back) raises after move, request_id is still in result."""
         engine, kanban_dir = _make_engine(tmp_path, 42)
         engine.edit_task("42", blocked=True, block_reason="DR pending")
-        _, rid = _write_request_file(
-            kanban_dir, task_id=42, kind="action", free_text="Done."
-        )
+        _, rid = _write_request_file(kanban_dir, task_id=42, kind="action", free_text="Done.")
 
         with patch.object(engine, "edit_task", side_effect=RuntimeError("disk full")):
             result = engine.sweep_requests()
 
         assert rid in result
 
-    def test_sweep_move_preserved_when_edit_task_raises_resolved_exists(
-        self, tmp_path: Path
-    ) -> None:
+    def test_sweep_move_preserved_when_edit_task_raises_resolved_exists(self, tmp_path: Path) -> None:
         """AC3 error: resolved file exists in decisions/resolved/ even when edit_task raises."""
         engine, kanban_dir = _make_engine(tmp_path, 42)
         engine.edit_task("42", blocked=True, block_reason="DR pending")
-        _, rid = _write_request_file(
-            kanban_dir, task_id=42, kind="action", free_text="Done."
-        )
+        _, rid = _write_request_file(kanban_dir, task_id=42, kind="action", free_text="Done.")
 
         with patch.object(engine, "edit_task", side_effect=RuntimeError("disk full")):
             engine.sweep_requests()
@@ -637,15 +603,11 @@ class TestFromAC_SweepErrorHandling:
         resolved_path = kanban_dir / "decisions" / "resolved" / f"{rid}.md"
         assert resolved_path.exists()
 
-    def test_sweep_move_preserved_when_edit_task_raises_pending_absent(
-        self, tmp_path: Path
-    ) -> None:
+    def test_sweep_move_preserved_when_edit_task_raises_pending_absent(self, tmp_path: Path) -> None:
         """AC3 error: pending file is removed from decisions/pending/ even when edit_task raises."""
         engine, kanban_dir = _make_engine(tmp_path, 42)
         engine.edit_task("42", blocked=True, block_reason="DR pending")
-        _, rid = _write_request_file(
-            kanban_dir, task_id=42, kind="action", free_text="Done."
-        )
+        _, rid = _write_request_file(kanban_dir, task_id=42, kind="action", free_text="Done.")
 
         with patch.object(engine, "edit_task", side_effect=RuntimeError("disk full")):
             engine.sweep_requests()
@@ -653,16 +615,16 @@ class TestFromAC_SweepErrorHandling:
         pending_path = kanban_dir / "decisions" / "pending" / f"{rid}.md"
         assert not pending_path.exists()
 
-    def test_sweep_side_effect_failure_logs_warning(
-        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_sweep_side_effect_failure_logs_warning(self, tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
         """AC3 error: post-move side-effect failure emits a WARNING-level log."""
         engine, kanban_dir = _make_engine(tmp_path, 42)
         engine.edit_task("42", blocked=True, block_reason="DR pending")
         _write_request_file(kanban_dir, task_id=42, kind="action", free_text="Done.")
 
-        with patch.object(engine, "edit_task", side_effect=RuntimeError("disk full")), \
-             caplog.at_level(logging.WARNING, logger="owlbear_kanban.engine"):
+        with (
+            patch.object(engine, "edit_task", side_effect=RuntimeError("disk full")),
+            caplog.at_level(logging.WARNING, logger="owlbear_kanban.engine"),
+        ):
             engine.sweep_requests()
 
         assert any(r.levelno == logging.WARNING for r in caplog.records)
@@ -704,65 +666,48 @@ class TestFromAC_SweepErrorHandling:
         """AC3b error: if unblock edit_task raises after successful write-back, request_id is still returned."""
         engine, kanban_dir = _make_engine(tmp_path, 42)
         engine.edit_task("42", blocked=True, block_reason="DR pending")
-        _, rid = _write_request_file(
-            kanban_dir, task_id=42, kind="action", free_text="Done."
-        )
+        _, rid = _write_request_file(kanban_dir, task_id=42, kind="action", free_text="Done.")
 
         # First call (write-back) succeeds; second call (unblock) raises.
-        with patch.object(
-            engine, "edit_task", side_effect=[None, RuntimeError("unblock failed")]
-        ):
+        with patch.object(engine, "edit_task", side_effect=[None, RuntimeError("unblock failed")]):
             result = engine.sweep_requests()
 
         assert rid in result
 
-    def test_sweep_move_preserved_when_unblock_raises_resolved_exists(
-        self, tmp_path: Path
-    ) -> None:
+    def test_sweep_move_preserved_when_unblock_raises_resolved_exists(self, tmp_path: Path) -> None:
         """AC3b error: resolved file exists in decisions/resolved/ even when unblock raises."""
         engine, kanban_dir = _make_engine(tmp_path, 42)
         engine.edit_task("42", blocked=True, block_reason="DR pending")
-        _, rid = _write_request_file(
-            kanban_dir, task_id=42, kind="action", free_text="Done."
-        )
+        _, rid = _write_request_file(kanban_dir, task_id=42, kind="action", free_text="Done.")
 
-        with patch.object(
-            engine, "edit_task", side_effect=[None, RuntimeError("unblock failed")]
-        ):
+        with patch.object(engine, "edit_task", side_effect=[None, RuntimeError("unblock failed")]):
             engine.sweep_requests()
 
         resolved_path = kanban_dir / "decisions" / "resolved" / f"{rid}.md"
         assert resolved_path.exists()
 
-    def test_sweep_move_preserved_when_unblock_raises_pending_absent(
-        self, tmp_path: Path
-    ) -> None:
+    def test_sweep_move_preserved_when_unblock_raises_pending_absent(self, tmp_path: Path) -> None:
         """AC3b error: pending file is removed from decisions/pending/ even when unblock raises."""
         engine, kanban_dir = _make_engine(tmp_path, 42)
         engine.edit_task("42", blocked=True, block_reason="DR pending")
-        _, rid = _write_request_file(
-            kanban_dir, task_id=42, kind="action", free_text="Done."
-        )
+        _, rid = _write_request_file(kanban_dir, task_id=42, kind="action", free_text="Done.")
 
-        with patch.object(
-            engine, "edit_task", side_effect=[None, RuntimeError("unblock failed")]
-        ):
+        with patch.object(engine, "edit_task", side_effect=[None, RuntimeError("unblock failed")]):
             engine.sweep_requests()
 
         pending_path = kanban_dir / "decisions" / "pending" / f"{rid}.md"
         assert not pending_path.exists()
 
-    def test_sweep_unblock_failure_logs_warning(
-        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_sweep_unblock_failure_logs_warning(self, tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
         """AC3b error: unblock failure after successful write-back emits a WARNING-level log."""
         engine, kanban_dir = _make_engine(tmp_path, 42)
         engine.edit_task("42", blocked=True, block_reason="DR pending")
         _write_request_file(kanban_dir, task_id=42, kind="action", free_text="Done.")
 
-        with patch.object(
-            engine, "edit_task", side_effect=[None, RuntimeError("unblock failed")]
-        ), caplog.at_level(logging.WARNING, logger="owlbear_kanban.engine"):
+        with (
+            patch.object(engine, "edit_task", side_effect=[None, RuntimeError("unblock failed")]),
+            caplog.at_level(logging.WARNING, logger="owlbear_kanban.engine"),
+        ):
             engine.sweep_requests()
 
         assert any(r.levelno == logging.WARNING for r in caplog.records)
@@ -818,14 +763,14 @@ class TestFromAC_PickTasksSweepWiring:
 
         assert result is not None
 
-    def test_pick_tasks_logs_warning_when_sweep_raises(
-        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_pick_tasks_logs_warning_when_sweep_raises(self, tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
         """AC4 error: pick_tasks emits a WARNING when sweep_requests raises."""
         engine, _ = _make_engine(tmp_path)
 
-        with patch.object(engine, "sweep_requests", side_effect=RuntimeError("sweep boom")), \
-             caplog.at_level(logging.WARNING, logger="owlbear_kanban.agent_view"):
+        with (
+            patch.object(engine, "sweep_requests", side_effect=RuntimeError("sweep boom")),
+            caplog.at_level(logging.WARNING, logger="owlbear_kanban.agent_view"),
+        ):
             engine.agent_view().pick_tasks()
 
         assert any(r.levelno == logging.WARNING for r in caplog.records)

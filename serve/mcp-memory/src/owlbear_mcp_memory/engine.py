@@ -95,11 +95,16 @@ class MemoryEngine:
             "categories": list(entry.categories),
             "confidence": entry.confidence,
             "state": str(entry.state),
+            "outstanding_count": entry.outstanding_count,
+            "unremarkable_count": entry.unremarkable_count,
+            "didnt_use_count": entry.didnt_use_count,
+            "score": entry.score,
             "scope_agents": entry.scope_agents,
             "source_agent": entry.source_agent,
             "created_at": entry.created_at,
             "updated_at": entry.updated_at,
             "approved_at": entry.approved_at,
+            "contested_by_task": entry.contested_by_task,
         }
         content = (
             f"---\n{yaml.safe_dump(frontmatter, default_flow_style=False, sort_keys=False)}---\n\n{entry.content}\n"

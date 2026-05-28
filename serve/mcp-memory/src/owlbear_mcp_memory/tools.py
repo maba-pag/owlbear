@@ -2,22 +2,28 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
-from uuid import uuid4
 
 from mcp.server.fastmcp.exceptions import ToolError
+from owlbear_memory import (
+    ConcurrencyError,
+    MemoryCategory,
+    MemoryEngine,
+    MemoryEntry,
+    MemoryState,
+    NotFoundError,
+    TransitionError,
+)
 from pydantic import ValidationError
-
-from owlbear_mcp_memory.models import MemoryCategory, MemoryEntry, MemoryState
 
 if TYPE_CHECKING:
     from mcp.server.fastmcp import Context
 
-    from owlbear_mcp_memory.engine import MemoryEngine
-
 __all__ = [
+    "SLOT_CHALLENGE",
+    "SLOT_EXPLORE",
     "approve_memory",
+    "assess_memories",
     "curate_memory",
     "delete_memory",
     "list_memories",
@@ -26,6 +32,19 @@ __all__ = [
     "save_memory",
 ]
 
+SLOT_EXPLORE = 2
+SLOT_CHALLENGE = 2
+_ASSESSMENT_BUCKETS = (
+    "outstanding",
+    "unremarkable",
+    "didnt_use",
+    "factually_wrong",
+)
+
+
+def _allowed_assessment_values() -> str:
+    return ", ".join(_ASSESSMENT_BUCKETS)
+
 
 def _engine_from_ctx(ctx: Context) -> MemoryEngine:
     try:
@@ -33,10 +52,6 @@ def _engine_from_ctx(ctx: Context) -> MemoryEngine:
     except AttributeError as exc:
         msg = "memory engine is not available in MCP context"
         raise ToolError(msg) from exc
-
-
-def _now_iso() -> str:
-    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
 def _allowed_category_values() -> str:
@@ -90,6 +105,10 @@ def _entry_to_dict(entry: MemoryEntry) -> dict[str, object]:
         "confidence": entry.confidence,
         "state": str(entry.state),
         "content": entry.content,
+        "outstanding_count": entry.outstanding_count,
+        "unremarkable_count": entry.unremarkable_count,
+        "didnt_use_count": entry.didnt_use_count,
+        "score": entry.score,
         "scope_agents": entry.scope_agents,
         "source_agent": entry.source_agent,
         "created_at": entry.created_at,
@@ -101,7 +120,7 @@ def _entry_to_dict(entry: MemoryEntry) -> dict[str, object]:
 def _load_entry_or_raise(engine: MemoryEngine, entry_id: str) -> MemoryEntry:
     try:
         return engine.get_entry(entry_id)
-    except KeyError as exc:
+    except NotFoundError as exc:
         msg = f"entry not found: {entry_id}"
         raise ToolError(msg) from exc
 
@@ -115,7 +134,7 @@ def _metadata_dict(entry: MemoryEntry) -> dict[str, object]:
 def _state_rank_for_list(state: MemoryState) -> int:
     if state == MemoryState.PENDING:
         return 0
-    if state == MemoryState.CURATED:
+    if state in {MemoryState.CURATED, MemoryState.CONTESTED}:
         return 1
     if state == MemoryState.APPROVED:
         return 2
@@ -143,21 +162,6 @@ def _with_hint(data: dict[str, Any], hint: str) -> dict[str, Any]:
     return {**data, "hint": hint}
 
 
-def _ensure_update_transition(current: MemoryState, target: MemoryState) -> None:
-    if current == target:
-        return
-    allowed: dict[MemoryState, set[MemoryState]] = {
-        MemoryState.PENDING: {MemoryState.CURATED},
-        MemoryState.CURATED: set(),
-        MemoryState.APPROVED: {MemoryState.CURATED},
-        MemoryState.DELETED: set(),
-    }
-    if target in allowed[current]:
-        return
-    msg = f"invalid state transition for curate_memory: {current} -> {target}"
-    raise ToolError(msg)
-
-
 async def save_memory(  # noqa: PLR0913
     ctx: Context,
     *,
@@ -170,26 +174,19 @@ async def save_memory(  # noqa: PLR0913
 ) -> dict[str, Any]:
     """Create a pending memory entry with explicit source_agent."""
     engine = _engine_from_ctx(ctx)
-    now = _now_iso()
     coerced_categories = _coerce_categories(categories)
     initial_scope = scope_agents if scope_agents is not None else [source_agent]
     try:
-        entry = MemoryEntry(
-            id=str(uuid4()),
+        entry = engine.save(
             title=title,
+            content=content,
             categories=coerced_categories,
             confidence=confidence,
-            state=MemoryState.PENDING,
-            content=content,
             scope_agents=initial_scope,
             source_agent=source_agent,
-            created_at=now,
-            updated_at=now,
-            approved_at=None,
         )
     except ValidationError as exc:
         raise ToolError(_teaching_validation_message(exc)) from exc
-    engine.write(entry)
     hint = f"Saved as pending. Scoped to {initial_scope}. Curate to promote to curated and adjust scope if needed."
     return _with_hint(_entry_to_dict(entry), hint)
 
@@ -212,6 +209,9 @@ async def list_memories(
             MemoryState.PENDING,
             MemoryState.CURATED,
             MemoryState.APPROVED,
+            MemoryState.CONTESTED,
+            MemoryState.DISPUTED,
+            MemoryState.STALE,
         }
     )
     category_filter = set(coerced_categories or [])
@@ -274,20 +274,45 @@ async def recall_memory(
     state_rank = {
         MemoryState.APPROVED: 0,
         MemoryState.CURATED: 1,
+        MemoryState.CONTESTED: 1,
     }
-    entries = [entry for entry in engine.get_entries() if entry.state in {MemoryState.APPROVED, MemoryState.CURATED}]
+    entries = [
+        entry
+        for entry in engine.get_entries()
+        if entry.state in {MemoryState.APPROVED, MemoryState.CURATED, MemoryState.CONTESTED}
+    ]
     entries = [
         entry for entry in entries if entry.scope_agents and (agent in entry.scope_agents or "*" in entry.scope_agents)
     ]
     if category_filter:
         entries = [entry for entry in entries if bool(category_filter.intersection(set(entry.categories)))]
-    entries.sort(key=lambda entry: (state_rank[entry.state], -entry.confidence, entry.id))
-    entries = entries[:capped_limit]
 
-    return "\n\n".join(f"## {entry.title}\n{entry.content}" for entry in entries)
+    explore_capacity = min(SLOT_EXPLORE, capped_limit)
+    regular_capacity = max(0, capped_limit - SLOT_EXPLORE - SLOT_CHALLENGE)
+
+    def _explore_metric(entry: MemoryEntry) -> int:
+        return entry.outstanding_count + entry.unremarkable_count + entry.didnt_use_count
+
+    explore_pool = sorted(entries, key=lambda entry: (_explore_metric(entry), entry.id))[:explore_capacity]
+    selected_ids = {entry.id for entry in explore_pool}
+
+    challenge_capacity = min(SLOT_CHALLENGE, max(0, capped_limit - len(explore_pool)))
+    challenge_candidates = [entry for entry in entries if entry.id not in selected_ids]
+    challenge_pool = sorted(challenge_candidates, key=lambda entry: (entry.outstanding_count, entry.id))[
+        :challenge_capacity
+    ]
+    selected_ids.update(entry.id for entry in challenge_pool)
+
+    regular_candidates = [entry for entry in entries if entry.id not in selected_ids]
+    regular_pool = sorted(regular_candidates, key=lambda entry: (-entry.score, entry.id))[:regular_capacity]
+
+    selected_entries = explore_pool + challenge_pool + regular_pool
+    selected_entries.sort(key=lambda entry: (state_rank[entry.state], -entry.score, entry.id))
+
+    return "\n\n".join(f"## {entry.title}\n{entry.content}" for entry in selected_entries)
 
 
-async def _update_entry(  # noqa: PLR0913
+async def _update_entry(  # noqa: C901, PLR0913
     ctx: Context,
     *,
     current: MemoryEntry,
@@ -317,31 +342,30 @@ async def _update_entry(  # noqa: PLR0913
         msg = "scope_agents cannot be blanked on curated or approved entries"
         raise ToolError(msg)
 
-    if current.state == MemoryState.APPROVED or (current.state == MemoryState.PENDING and bool(next_scope_agents)):
-        target_state = MemoryState.CURATED
-    else:
-        target_state = current.state
+    payload: dict[str, Any] = {}
+    if title is not None:
+        payload["title"] = title
+    if content is not None:
+        payload["content"] = content
+    if categories is not None:
+        payload["categories"] = coerced_categories
+    if confidence is not None:
+        payload["confidence"] = confidence
+    if scope_agents is not None:
+        payload["scope_agents"] = scope_agents
+    if current.state == MemoryState.PENDING and "scope_agents" not in payload:
+        payload["scope_agents"] = next_scope_agents
 
-    _ensure_update_transition(current.state, target_state)
-
-    payload = {
-        "id": current.id,
-        "title": current.title if title is None else title,
-        "content": current.content if content is None else content,
-        "categories": current.categories if categories is None else coerced_categories,
-        "confidence": current.confidence if confidence is None else confidence,
-        "state": target_state,
-        "scope_agents": next_scope_agents,
-        "source_agent": current.source_agent,
-        "created_at": current.created_at,
-        "updated_at": _now_iso(),
-        "approved_at": None if current.state == MemoryState.APPROVED else current.approved_at,
-    }
     try:
-        updated = MemoryEntry.model_validate(payload)
+        updated = engine.edit(
+            current.id,
+            payload,
+            expected_updated_at=current.updated_at,
+        )
+    except (TransitionError, NotFoundError, ConcurrencyError) as exc:
+        raise ToolError(str(exc)) from exc
     except ValidationError as exc:
         raise ToolError(_teaching_validation_message(exc)) from exc
-    engine.write(updated)
     return _entry_to_dict(updated)
 
 
@@ -358,26 +382,19 @@ async def _delete_entry(ctx: Context, *, entry_id: str) -> dict[str, Any]:
         msg = "delete_memory cannot delete an entry that is already deleted"
         raise ToolError(msg)
 
+    try:
+        deleted = engine.delete(current.id, expected_updated_at=current.updated_at)
+    except (TransitionError, NotFoundError, ConcurrencyError) as exc:
+        raise ToolError(str(exc)) from exc
+
     if current.state == MemoryState.PENDING:
-        engine.delete(current.id)
         deleted = current.model_copy(
             update={
                 "state": MemoryState.DELETED,
-                "updated_at": _now_iso(),
-                "approved_at": None,
             }
         )
-        return _entry_to_dict(deleted)
 
-    updated = current.model_copy(
-        update={
-            "state": MemoryState.DELETED,
-            "updated_at": _now_iso(),
-            "approved_at": None,
-        }
-    )
-    engine.write(updated)
-    return _entry_to_dict(updated)
+    return _entry_to_dict(deleted)
 
 
 async def curate_memory(  # noqa: PLR0913
@@ -428,18 +445,11 @@ async def _approve_entry(ctx: Context, *, entry_id: str) -> dict[str, Any]:
     engine = _engine_from_ctx(ctx)
     current = _load_entry_or_raise(engine, entry_id)
 
-    if current.state != MemoryState.CURATED:
-        msg = f"approve_memory requires curated state, got {current.state}"
-        raise ToolError(msg)
+    try:
+        updated = engine.approve(current.id, expected_updated_at=current.updated_at)
+    except (TransitionError, NotFoundError, ConcurrencyError) as exc:
+        raise ToolError(str(exc)) from exc
 
-    updated = current.model_copy(
-        update={
-            "state": MemoryState.APPROVED,
-            "updated_at": _now_iso(),
-            "approved_at": _now_iso(),
-        }
-    )
-    engine.write(updated)
     return _entry_to_dict(updated)
 
 
@@ -447,3 +457,54 @@ async def approve_memory(ctx: Context, *, entry_id: str) -> dict[str, Any]:
     """Compatibility alias for approving curated memory entries."""
     approved = await _approve_entry(ctx, entry_id=entry_id)
     return _with_hint(approved, "Entry approved. Now visible to scoped agents.")
+
+
+async def assess_memories(
+    ctx: Context,
+    *,
+    assessments: list[dict[str, str]],
+    task_id: str,
+) -> dict[str, list[dict[str, object]]]:
+    """Process batch assessment submissions with per-entry success/failure results."""
+    if not assessments:
+        msg = "assessments must be non-empty"
+        raise ToolError(msg)
+
+    if not task_id.strip():
+        msg = "task_id must be non-empty"
+        raise ToolError(msg)
+
+    for assessment in assessments:
+        if not isinstance(assessment, dict) or "entry_id" not in assessment or "bucket" not in assessment:
+            msg = "Each assessment must be a dict containing 'entry_id' and 'bucket' keys."
+            raise ToolError(msg)
+        bucket = assessment["bucket"]
+        if bucket not in _ASSESSMENT_BUCKETS:
+            msg = f"Invalid bucket {bucket!r}. Allowed values: {_allowed_assessment_values()}."
+            raise ToolError(msg)
+
+    engine = _engine_from_ctx(ctx)
+    results: list[dict[str, object]] = []
+
+    for assessment in assessments:
+        entry_id = assessment["entry_id"]
+        bucket = assessment["bucket"]
+        try:
+            current = engine.get_entry(entry_id)
+            if bucket == "factually_wrong":
+                engine.record_factually_wrong(
+                    entry_id,
+                    task_id,
+                    expected_updated_at=current.updated_at,
+                )
+            else:
+                engine.record_assessment(
+                    entry_id,
+                    bucket,
+                    expected_updated_at=current.updated_at,
+                )
+            results.append({"entry_id": entry_id, "success": True})
+        except (NotFoundError, TransitionError, ConcurrencyError, ValidationError) as exc:
+            results.append({"entry_id": entry_id, "success": False, "error": str(exc)})
+
+    return {"results": results}

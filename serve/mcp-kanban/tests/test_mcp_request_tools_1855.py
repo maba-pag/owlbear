@@ -179,9 +179,11 @@ class TestFromAC_CreateRequestTool:
         assert "options" in params, "create_request must have 'options' optional param"
         assert "body" in params, "create_request must have 'body' optional param"
         # options should default to None
-        assert params["options"].default is None or params["options"].default == inspect.Parameter.empty or params["options"].default is None, (
-            "create_request 'options' must default to None"
-        )
+        assert (
+            params["options"].default is None
+            or params["options"].default == inspect.Parameter.empty
+            or params["options"].default is None
+        ), "create_request 'options' must default to None"
 
     # -- Happy paths ---------------------------------------------------------
 
@@ -268,9 +270,7 @@ class TestFromAC_CreateRequestTool:
         )
 
         assert isinstance(result.get("guidance"), list), "guidance must be a list"
-        assert len(result["guidance"]) > 0, (
-            r"guidance must be non-empty when body contains literal \n sequences"
-        )
+        assert len(result["guidance"]) > 0, r"guidance must be non-empty when body contains literal \n sequences"
 
     @pytest.mark.asyncio
     async def test_create_request_no_body_normalization_guidance_empty(self, app_ctx: AppContext) -> None:
@@ -294,9 +294,7 @@ class TestFromAC_CreateRequestTool:
             body="Normal body with actual\nnewlines.",  # real newlines, not escaped
         )
 
-        assert result.get("guidance") == [], (
-            "guidance must be [] when no literal \\n sequences are in body"
-        )
+        assert result.get("guidance") == [], "guidance must be [] when no literal \\n sequences are in body"
 
     # -- Error paths ---------------------------------------------------------
 
@@ -321,9 +319,7 @@ class TestFromAC_CreateRequestTool:
             )
 
         payload = json.loads(str(exc_info.value))
-        assert payload.get("code") == "ERR_INVALID_ID", (
-            f"Expected ERR_INVALID_ID, got {payload.get('code')}"
-        )
+        assert payload.get("code") == "ERR_INVALID_ID", f"Expected ERR_INVALID_ID, got {payload.get('code')}"
 
     @pytest.mark.asyncio
     async def test_create_request_task_not_found_maps_to_tool_error(self, app_ctx: AppContext) -> None:
@@ -349,9 +345,7 @@ class TestFromAC_CreateRequestTool:
             )
 
     @pytest.mark.asyncio
-    async def test_create_request_pydantic_validation_error_maps_to_tool_error(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_create_request_pydantic_validation_error_maps_to_tool_error(self, app_ctx: AppContext) -> None:
         """AC1: PydanticValidationError (invalid kind/options) → ToolError with ERR_PARAM_VALIDATION."""
         import owlbear_mcp_kanban.server as server_mod  # noqa: PLC0415
 
@@ -578,8 +572,10 @@ class TestFromAC_ListRequestsTool:
         call_kwargs = app_ctx.engine.list_requests.call_args.kwargs
         forwarded_task_id = call_kwargs.get("task_id", "NOT_IN_KWARGS")
         # None should be forwarded, not converted
-        assert forwarded_task_id is None or forwarded_task_id == "NOT_IN_KWARGS" or (
-            app_ctx.engine.list_requests.call_args.args and None in app_ctx.engine.list_requests.call_args.args
+        assert (
+            forwarded_task_id is None
+            or forwarded_task_id == "NOT_IN_KWARGS"
+            or (app_ctx.engine.list_requests.call_args.args and None in app_ctx.engine.list_requests.call_args.args)
         ), f"task_id=None must be forwarded to engine as None, got {forwarded_task_id!r}"
 
 
@@ -626,9 +622,7 @@ class TestFromAC_ShowRequestTool:
         assert callable(fn), "owlbear_mcp_kanban.server.show_request must exist"
 
         ctx = _make_mcp_ctx(app_ctx)
-        fake_record = _make_request_record(
-            task_id=1, kind="action", body="## Full details\nVisible body."
-        )
+        fake_record = _make_request_record(task_id=1, kind="action", body="## Full details\nVisible body.")
         app_ctx.engine.get_request = MagicMock(return_value=fake_record)
 
         result = await fn(ctx, request_id=_VALID_REQUEST_UUID)
@@ -879,9 +873,7 @@ class TestFromAC_DelegationContracts:
         )
 
     @pytest.mark.asyncio
-    async def test_create_request_normalization_forwards_normalized_body_not_raw(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_create_request_normalization_forwards_normalized_body_not_raw(self, app_ctx: AppContext) -> None:
         r"""AC5(a): normalized body (actual \n chars) is forwarded to engine, not the raw escaped string."""
         import owlbear_mcp_kanban.server as server_mod  # noqa: PLC0415
 
@@ -920,9 +912,7 @@ class TestFromAC_DelegationContracts:
     # -- AC5(b): list_requests explicit status forwarding --------------------
 
     @pytest.mark.asyncio
-    async def test_list_requests_explicit_resolved_status_forwarded_to_engine(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_list_requests_explicit_resolved_status_forwarded_to_engine(self, app_ctx: AppContext) -> None:
         """AC5(b): when caller passes status='resolved', engine receives exactly 'resolved'."""
         import owlbear_mcp_kanban.server as server_mod  # noqa: PLC0415
 
@@ -944,9 +934,7 @@ class TestFromAC_DelegationContracts:
         )
 
     @pytest.mark.asyncio
-    async def test_list_requests_explicit_all_status_forwarded_to_engine(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_list_requests_explicit_all_status_forwarded_to_engine(self, app_ctx: AppContext) -> None:
         """AC5(b): when caller passes status='all', engine receives exactly 'all' (not default 'pending')."""
         import owlbear_mcp_kanban.server as server_mod  # noqa: PLC0415
 
@@ -988,9 +976,7 @@ class TestFromAC_ResponseShapeContracts:
     # -- AC6: create_request full response shape ----------------------------
 
     @pytest.mark.asyncio
-    async def test_create_request_success_returns_all_record_keys_plus_guidance(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_create_request_success_returns_all_record_keys_plus_guidance(self, app_ctx: AppContext) -> None:
         """AC6: create_request result must contain all 10 RequestRecord.model_dump() keys plus 'guidance'."""
         import owlbear_mcp_kanban.server as server_mod  # noqa: PLC0415
 
@@ -1014,8 +1000,7 @@ class TestFromAC_ResponseShapeContracts:
         assert isinstance(result, dict), "create_request must return a dict"
         missing = _REQUEST_RECORD_KEYS - result.keys()
         assert not missing, (
-            f"create_request result is missing RequestRecord keys: {missing!r}; "
-            f"got keys: {set(result.keys())!r}"
+            f"create_request result is missing RequestRecord keys: {missing!r}; got keys: {set(result.keys())!r}"
         )
         assert "guidance" in result, (
             f"create_request result must include 'guidance' key; got keys: {set(result.keys())!r}"
@@ -1046,12 +1031,9 @@ class TestFromAC_ResponseShapeContracts:
 
         missing = _LIST_RECORD_KEYS - item.keys()
         assert not missing, (
-            f"list_requests record is missing expected keys: {missing!r}; "
-            f"got keys: {set(item.keys())!r}"
+            f"list_requests record is missing expected keys: {missing!r}; got keys: {set(item.keys())!r}"
         )
-        assert "body" not in item, (
-            f"'body' must be excluded from list_requests records; got keys: {set(item.keys())!r}"
-        )
+        assert "body" not in item, f"'body' must be excluded from list_requests records; got keys: {set(item.keys())!r}"
 
     # -- AC7: show_request full response shape ------------------------------
 
@@ -1072,8 +1054,7 @@ class TestFromAC_ResponseShapeContracts:
         assert isinstance(result, dict), "show_request must return a dict"
         missing = _REQUEST_RECORD_KEYS - result.keys()
         assert not missing, (
-            f"show_request result is missing RequestRecord keys: {missing!r}; "
-            f"got keys: {set(result.keys())!r}"
+            f"show_request result is missing RequestRecord keys: {missing!r}; got keys: {set(result.keys())!r}"
         )
 
 
@@ -1088,9 +1069,7 @@ class TestFromAC_ValueEqualityContracts:
     # -- AC6: create_request non-normalized path (guidance=[]) ---------------
 
     @pytest.mark.asyncio
-    async def test_create_request_success_full_value_equality_non_normalized(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_create_request_success_full_value_equality_non_normalized(self, app_ctx: AppContext) -> None:
         """AC6: create_request result must equal fake_record.model_dump() | {'guidance': []} exactly."""
         import owlbear_mcp_kanban.server as server_mod  # noqa: PLC0415
 
@@ -1121,9 +1100,7 @@ class TestFromAC_ValueEqualityContracts:
     # -- AC6: create_request normalization path (guidance non-empty) ---------
 
     @pytest.mark.asyncio
-    async def test_create_request_normalization_path_full_value_equality(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_create_request_normalization_path_full_value_equality(self, app_ctx: AppContext) -> None:
         r"""AC6: normalization-path result must equal fake_record.model_dump() on all record fields + non-empty guidance."""
         import owlbear_mcp_kanban.server as server_mod  # noqa: PLC0415
 
@@ -1156,9 +1133,7 @@ class TestFromAC_ValueEqualityContracts:
         assert isinstance(guidance, list), (
             f"create_request normalization path: guidance must be a list; got {guidance!r}"
         )
-        assert len(guidance) > 0, (
-            f"create_request normalization path: guidance must be non-empty; got {guidance!r}"
-        )
+        assert len(guidance) > 0, f"create_request normalization path: guidance must be non-empty; got {guidance!r}"
 
     # -- AC7: list_requests full value equality per item ---------------------
 

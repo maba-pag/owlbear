@@ -11,48 +11,41 @@ Graph-augmented vector retrieval engine for the OwlBear pipeline. Provides docum
 No standalone launch. Used as a library by `owlbear-mcp-knowledge` and consumer code.
 
 ```python
-from owlbear_knowledge import (
-    GraphAugmentedRetriever,
-    KnowledgeQueryService,
-    RetrievalResult,
-    StructuredSearchResult,
-)
-from owlbear_knowledge.qdrant import QdrantVectorStore
-from owlbear_knowledge.graph_store import GraphStore
+import sqlite3
+
+from owlbear_knowledge import protocols, stores
+from owlbear_knowledge.chunker import TextChunker
 from owlbear_knowledge.embeddings import BgeM3EmbeddingProvider
-from owlbear_knowledge.schema import init_db
+from owlbear_knowledge.fetcher import ContentFetcher, HttpxContentFetcher
+from owlbear_knowledge.qdrant import QdrantVectorStore
+from owlbear_knowledge.stores.content import ContentStore
 
-conn = init_db("path/to/knowledge.db")
+conn = sqlite3.connect("path/to/knowledge.db")
+source_store: protocols.SourceStore = stores.SqliteSourceStore(conn)
+graph_store: protocols.GraphStore = stores.SqliteGraphStore(conn)
 vector_store = QdrantVectorStore(location=":memory:")
-graph_store = GraphStore(conn)
 embedding_provider = BgeM3EmbeddingProvider()   # ~2.3 GB download on first use
-
-retriever = GraphAugmentedRetriever(
+chunker = TextChunker()
+content_store: protocols.ContentStore = ContentStore(
+    db=conn,
     vector_store=vector_store,
-    graph_store=graph_store,
     embedding_provider=embedding_provider,
-)
-service = KnowledgeQueryService(
-    vector_store=vector_store,
-    graph_store=graph_store,
-    embedding_provider=embedding_provider,
-    retriever=retriever,
+    chunker=chunker,
 )
 
-context: str | None = service.query_for_context("What is OwlBear?")
-results: list[StructuredSearchResult] = service.search("What is OwlBear?")
+fetcher: ContentFetcher = HttpxContentFetcher()
 ```
 
 ### Module groups
 
 | Group | Key exports |
 |-------|-------------|
-| Data stores | `DocumentStore`, `GraphStore`, `StatusStore`, `KnowledgeSourceStore` |
-| Ingestion | `IngestPipeline`, `IngestResult`, `TextChunker` |
-| Retrieval | `GraphAugmentedRetriever`, `KnowledgeQueryService`, `RetrievalResult`, `StructuredSearchResult` |
-| Embeddings | `BgeM3EmbeddingProvider`, `EmbeddingProvider` |
-| Graph | `IntraDocGraphBuilder`, `InterDocGraphBuilder` |
-| Utilities | `CancelSignal`, `SourceEvaluator` |
+| Package surface | `protocols`, `stores` |
+| Protocols | `ContentStore`, `GraphStore`, `SourceStore`, `QueryFacade`, `IngestCoordinator` |
+| Store implementations | `stores.ContentStore`, `stores.SqliteGraphStore`, `stores.SqliteSourceStore` |
+| Fetching | `ContentFetcher`, `HttpxContentFetcher` |
+| Embeddings | `BgeM3EmbeddingProvider`, `EmbeddingProvider`, `HybridEmbedding` |
+| Vector search | `QdrantVectorStore` |
 
 Active operational API is intentionally narrow. Bookmark, scope-transfer, and
 consolidation surfaces have been retired and removed from this package.

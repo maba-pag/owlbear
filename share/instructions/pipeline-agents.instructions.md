@@ -12,6 +12,7 @@ Append your agent section to the task body via the `note` parameter of `end_work
 When `recall_memory` was called during the task, run `assess_memories` before `end_work` and include all recalled memory IDs.
 
 For each recalled memory entry, categorize your experience:
+
 - **Outstanding** — this entry's guidance was genuinely great for this task
 - **Used but unremarkable** — I applied or referenced this entry's guidance and it was adequate
 - **Didn't use** — I didn't apply or reference this entry's guidance

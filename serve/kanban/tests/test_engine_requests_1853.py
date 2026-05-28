@@ -378,9 +378,7 @@ class TestFromAC_ResolveRequest:
     # AC3 — validation: option_id cross-check, kind constraints, both-None guard
     # -----------------------------------------------------------------------
 
-    def test_resolve_decision_invalid_option_id_raises_validation_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_resolve_decision_invalid_option_id_raises_validation_error(self, tmp_path: Path) -> None:
         """AC3: resolve_request raises ValidationError when selected_option_id doesn't match any option."""
         engine, kanban_dir = _make_engine(tmp_path, 42)
         _, rid = _write_request_file(kanban_dir, task_id=42, kind="decision")
@@ -389,9 +387,7 @@ class TestFromAC_ResolveRequest:
         with pytest.raises(ValidationError):
             engine.resolve_request(rid, "option-nonexistent", None)
 
-    def test_resolve_action_with_non_none_option_id_raises_validation_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_resolve_action_with_non_none_option_id_raises_validation_error(self, tmp_path: Path) -> None:
         """AC3: resolve_request raises ValidationError when action request receives non-None selected_option_id."""
         engine, kanban_dir = _make_engine(tmp_path, 42)
         _, rid = _write_request_file(kanban_dir, task_id=42, kind="action")
@@ -521,9 +517,7 @@ class TestFromAC_ResolveRequest:
         engine.resolve_request(rid, None, "Done.")
 
         task = engine.show_task("42")
-        assert task.blocked is False, (
-            "Legacy DR (non-UUID4 filename) must not count as a structured sibling"
-        )
+        assert task.blocked is False, "Legacy DR (non-UUID4 filename) must not count as a structured sibling"
 
     def test_sibling_different_task_id_not_counted(self, tmp_path: Path) -> None:
         """AC5: a structured pending request belonging to a different task_id is not a sibling."""
@@ -535,9 +529,7 @@ class TestFromAC_ResolveRequest:
         engine.resolve_request(rid42, None, "Task 42 done.")
 
         task42 = engine.show_task("42")
-        assert task42.blocked is False, (
-            "Structured request for a different task_id must not prevent unblocking"
-        )
+        assert task42.blocked is False, "Structured request for a different task_id must not prevent unblocking"
 
     # -----------------------------------------------------------------------
     # Retry-gap tests — AC1: resolved-file field assertions (Findings 1+2)
@@ -590,9 +582,7 @@ class TestFromAC_ResolveRequest:
         after = datetime.now().astimezone()
 
         resolved_at = datetime.fromisoformat(result.resolution.resolved_at)
-        assert before <= resolved_at <= after, (
-            f"resolved_at {resolved_at} must be between {before} and {after}"
-        )
+        assert before <= resolved_at <= after, f"resolved_at {resolved_at} must be between {before} and {after}"
 
     # -----------------------------------------------------------------------
     # Retry-gap tests — AC4: exact write-back blocks (Finding 3)
@@ -622,11 +612,7 @@ class TestFromAC_ResolveRequest:
         engine.resolve_request(rid, "option-b", "Some extra context.")
 
         task = engine.show_task("42")
-        exact_block = (
-            "## DR: Test Request\n"
-            "- **Selected:** Option Beta\n"
-            "- **Notes:** Some extra context."
-        )
+        exact_block = "## DR: Test Request\n- **Selected:** Option Beta\n- **Notes:** Some extra context."
         assert exact_block in task.body
         # Variant 2 must not contain Answer line
         assert "**Answer:**" not in task.body
@@ -736,11 +722,7 @@ class TestFromAC_ResolveRequest:
         engine.resolve_request(rid, "option-b", "Some extra context.")
 
         task = engine.show_task("42")
-        expected_block = (
-            "## DR: Test Request\n"
-            "- **Selected:** Option Beta\n"
-            "- **Notes:** Some extra context."
-        )
+        expected_block = "## DR: Test Request\n- **Selected:** Option Beta\n- **Notes:** Some extra context."
         assert task.body.rstrip("\n").endswith(expected_block), (
             f"Task body must end with the exact write-back block; got tail: {task.body[-120:]!r}"
         )

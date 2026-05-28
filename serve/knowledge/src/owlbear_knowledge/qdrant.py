@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import math
 import uuid
 from datetime import UTC, datetime
 from typing import Literal
 
-from owlbear_knowledge.protocol import HybridEmbedding
+from owlbear_knowledge.embeddings import HybridEmbedding
 
 try:
     from qdrant_client import QdrantClient
@@ -17,6 +18,16 @@ except ImportError:
 
 COLLECTION_NAME = "owlbear_vectors"
 DENSE_DIM = 1024
+
+
+def _cosine_similarity(a: list[float], b: list[float]) -> float:
+    """Compute cosine similarity between two vectors."""
+    dot = sum(x * y for x, y in zip(a, b, strict=True))
+    norm_a = math.sqrt(sum(x * x for x in a))
+    norm_b = math.sqrt(sum(x * x for x in b))
+    if norm_a == 0 or norm_b == 0:
+        return 0.0
+    return dot / (norm_a * norm_b)
 
 
 def _point_id(entity_or_doc_id: str) -> str:
@@ -51,6 +62,7 @@ class QdrantVectorStore:
             self._client: QdrantClient = QdrantClient(path=location)  # type: ignore[misc]
         self._collection = collection_name
         self._initialized = False
+        self._has_colbert = False
 
     def _ensure_collection(self) -> None:
         """Create the Qdrant collection if it doesn't exist yet."""
@@ -64,11 +76,24 @@ class QdrantVectorStore:
                         size=DENSE_DIM,
                         distance=qmodels.Distance.COSINE,
                     ),
+                    "colbert": qmodels.VectorParams(
+                        size=DENSE_DIM,
+                        distance=qmodels.Distance.COSINE,
+                        multivector_config=qmodels.MultiVectorConfig(
+                            comparator=qmodels.MultiVectorComparator.MAX_SIM,
+                        ),
+                    ),
                 },
                 sparse_vectors_config={
                     "sparse": qmodels.SparseVectorParams(),
                 },
             )
+            self._has_colbert = True
+        else:
+            # Check if existing collection has the "colbert" named vector.
+            info = self._client.get_collection(self._collection)
+            vectors_cfg = info.config.params.vectors
+            self._has_colbert = isinstance(vectors_cfg, dict) and "colbert" in vectors_cfg
         self._initialized = True
 
     def store_embedding(
@@ -95,6 +120,8 @@ class QdrantVectorStore:
                     indices=embedding.sparse.indices,
                     values=embedding.sparse.values,
                 )
+            if embedding.colbert is not None and self._has_colbert:
+                vectors["colbert"] = embedding.colbert
         else:
             vectors = {"dense": embedding}
 
@@ -180,7 +207,12 @@ class QdrantVectorStore:
         top_k: int,
         query_filter: object | None,
     ) -> list[tuple[str, float]]:
-        """Run Qdrant prefetch+RRF hybrid search and return normalized (id, score) pairs."""
+        """Run Qdrant prefetch+RRF hybrid search with absolute cosine scoring.
+
+        Results are ordered by hybrid ranking quality (RRF + optional ColBERT
+        rerank) but scored by dense cosine similarity — an absolute metric
+        suitable for threshold filtering.
+        """
         assert query_embedding.sparse is not None  # guaranteed by caller
         dense_prefetch = qmodels.Prefetch(
             query=query_embedding.dense,
@@ -195,25 +227,62 @@ class QdrantVectorStore:
             using="sparse",
             limit=top_k * 10,
         )
-        response = self._client.query_points(
-            collection_name=self._collection,
-            prefetch=[dense_prefetch, sparse_prefetch],
-            query=qmodels.FusionQuery(fusion=qmodels.Fusion.RRF),
-            limit=top_k,
-            query_filter=query_filter,
-            with_payload=True,
-        )
-        raw = [
-            (point.payload["entity_or_doc_id"], point.score)  # type: ignore[index]
-            for point in response.points
-        ]
-        if not raw:
-            return raw
-        scores = [s for _, s in raw]
-        min_s, max_s = min(scores), max(scores)
-        if max_s == min_s:
-            return [(pid, 1.0) for pid, _ in raw]
-        return [(pid, (s - min_s) / (max_s - min_s)) for pid, s in raw]
+
+        if query_embedding.colbert is not None and self._has_colbert:
+            # Two-stage: prefetch with dense+sparse via RRF, rerank with ColBERT MaxSim.
+            # Filter to document embeddings only — entity embeddings lack ColBERT vectors
+            # and the local Qdrant client's MaxSim fails on points without them.
+            colbert_filter_conditions = [
+                qmodels.FieldCondition(
+                    key="embedding_type",
+                    match=qmodels.MatchValue(value="document"),
+                ),
+            ]
+            if query_filter is not None and hasattr(query_filter, "must") and query_filter.must:
+                colbert_filter_conditions.extend(query_filter.must)
+            colbert_filter = qmodels.Filter(must=colbert_filter_conditions)
+
+            rrf_prefetch = qmodels.Prefetch(
+                prefetch=[dense_prefetch, sparse_prefetch],
+                query=qmodels.FusionQuery(fusion=qmodels.Fusion.RRF),
+                limit=top_k * 5,
+                filter=colbert_filter,
+            )
+            response = self._client.query_points(
+                collection_name=self._collection,
+                prefetch=[rrf_prefetch],
+                query=query_embedding.colbert,
+                using="colbert",
+                limit=top_k,
+                with_payload=True,
+                with_vectors=["dense"],
+            )
+        else:
+            response = self._client.query_points(
+                collection_name=self._collection,
+                prefetch=[dense_prefetch, sparse_prefetch],
+                query=qmodels.FusionQuery(fusion=qmodels.Fusion.RRF),
+                limit=top_k,
+                query_filter=query_filter,
+                with_payload=True,
+                with_vectors=["dense"],
+            )
+
+        # Score each result by dense cosine similarity (absolute quality metric)
+        # while preserving hybrid ranking order.
+        results: list[tuple[str, float]] = []
+        for point in response.points:
+            doc_id = point.payload["entity_or_doc_id"]  # type: ignore[index]
+            stored_dense = (  # type: ignore[union-attr]
+                point.vector.get("dense") if isinstance(point.vector, dict) else None
+            )
+            if stored_dense is not None:
+                score = _cosine_similarity(query_embedding.dense, stored_dense)
+            else:
+                # Fallback: use normalized hybrid score if dense vector unavailable
+                score = point.score if point.score is not None else 0.0
+            results.append((doc_id, score))
+        return results
 
     def delete_embedding(self, entity_or_doc_id: str) -> bool:
         """Delete the embedding for *entity_or_doc_id*.
