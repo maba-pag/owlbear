@@ -2,10 +2,10 @@
 id: 1904
 title: 'Knowledge: Implement SourceFetcher adapter and migrate refresh to IngestCoordinator
   (Phase B2b)'
-status: review
+status: archived
 priority: needed
 created: 2026-05-27T23:24:10.601235+02:00
-updated: 2026-05-28T11:12:44.470625+02:00
+updated: 2026-05-28T11:23:10.209263+02:00
 tags:
   - knowledge
   - layer-4
@@ -19,7 +19,7 @@ proof_bundle: skip
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Role
@@ -99,3 +99,67 @@ Reviewer finding #1: Body contained stale manual status annotation `#1911 — MC
 - The claim response briefly showed `dep_status=null`; re-reading task state resolved to `dep_status=ok`.
 - For parent coordination tasks, explicit dependency verification avoids stale-body drift.
 - No additional proof execution was needed because this task has no implementation AC and uses proof bundle `skip`.
+
+[[2026-05-28T11:20:41+02:00]]
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation (one line): PASS #1904 -> docs | AC mapped to code and evidence sufficient.
+- Builder evidence reviewed first: this task is a `skip`-bundle parent coordination container with no implementation AC, no changed files, and a body-defined mechanical gate via `depends_on=[1900, 1911]`.
+- Gate verification: `show_task` resolved `dep_status=ok` on the claimed task. The explicit gate dependencies (#1900 and #1911) are archived, and the child work delegated under this parent is also archived through #1909, #1910, and #1911.
+- Proof sufficiency: for this non-implementation parent task, the review contract is the dependency gate plus drift-resistant task body. The body is status-free and explicitly delegates status tracking to `depends_on`, so no executable proof was required beyond verifying board state.
+- Blocking findings: none.
+
+## Observations
+- `start_work` briefly returned `dep_status=null`, but the required follow-up `show_task` read immediately resolved it to `ok`; the current board state is consistent with the builder note and the pass-through verdict.
+- No additional safety or security surface was introduced by this task because it made no code changes.
+
+[[2026-05-28T11:21:46+02:00]]
+## Docs Gate
+
+**Verdict: PASS — no docs impact**
+
+### Checklist
+
+| Item | Result | Evidence |
+|------|--------|----------|
+| README Verification | N/A | Builder confirmed zero changed files; parent coordination container with proof bundle `skip`; convention mapping yields no README targets |
+| External Attribution | N/A | No external sources referenced; implementation delegated entirely to child tasks #1909–#1911 |
+| Research Doc | PASS | `.owlbear/research/mcp-knowledge-legacy-removal-b2.md` exists on disk and is linked from task body (§3.3 reference) |
+| Deletion Detection | N/A | No files deleted; no orphan references possible |
+
+### Files Updated
+None — no-impact fast path applied.
+
+### Scratch Cleanup
+No `1904-*` scratch files found; nothing to delete.
+
+[[2026-05-28T11:23:10+02:00]]
+## Audit
+### Regression Detection
+- quality-runner: SKIPPED (zero changed files; proof_bundle=skip; parent coordination container)
+- Child tasks #1909, #1910, #1911 each passed full regression during their own audit cycles
+- regression verdict: PASS (no code surface to regress)
+
+### Intent Verification
+- scope alignment: PASS (purely coordination container, no code changes, correct domain)
+- purpose match: PASS (gates on child task archival via depends_on; all 4 deps archived: #1900, #1909, #1910, #1911)
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 4/5
+Final body is clean and drift-resistant. Empty AC array is appropriate for a skip-bundle parent. The 5 architecture review passes indicate initial drafting overcomplication, but final state correctly delegates all implementation to children and gates purely on depends_on.
+
+### Commit Integrity
+- upstream commit presence: N/A (zero changed files; builder confirmed no code deliverables)
+- kanban commit packaging: pending (this audit cycle)
+
+### Deduction Breakdown
+No deductions applied:
+- No regression failures (no code surface)
+- No intent mismatch
+- No lint violations
+- AC quality 4/5 (no deduction)
+- Reviewer evidence section present with detailed PASS verdict
+
+### Confidence: 1.00
+### Action: archive
