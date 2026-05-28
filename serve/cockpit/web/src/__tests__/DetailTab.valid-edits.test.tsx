@@ -64,10 +64,17 @@ const TASK_WITH_DEPS: TaskDetail = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+// Provide references covering dep/parent IDs to avoid resolution hook fetching
+const TASK_REFERENCES = [
+  { id: 5, title: 'Parent', status: 'done', archival_reason: null },
+  { id: 10, title: 'Dep 1', status: 'done', archival_reason: null },
+  { id: 20, title: 'Dep 2', status: 'done', archival_reason: null },
+]
+
 function renderDetail(task: TaskDetail = BASE_TASK) {
   return render(
     <PorscheDesignSystemProvider>
-      <DetailTab task={task} />
+      <DetailTab task={task} taskReferences={TASK_REFERENCES} />
     </PorscheDesignSystemProvider>,
   )
 }

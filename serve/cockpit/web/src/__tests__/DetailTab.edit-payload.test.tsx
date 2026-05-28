@@ -96,10 +96,17 @@ const BOARD: Board = {
 
 // ─── Render helpers ───────────────────────────────────────────────────────────
 
+// Provide references covering dep/parent IDs to avoid resolution hook fetching
+const TASK_REFERENCES = [
+  { id: 5, title: 'Parent', status: 'done', archival_reason: null },
+  { id: 10, title: 'Dep 1', status: 'done', archival_reason: null },
+  { id: 20, title: 'Dep 2', status: 'done', archival_reason: null },
+]
+
 function renderDetail(task: TaskDetail = TASK) {
   return render(
     <PorscheDesignSystemProvider>
-      <DetailTab task={task} />
+      <DetailTab task={task} taskReferences={TASK_REFERENCES} />
     </PorscheDesignSystemProvider>,
   )
 }
@@ -114,7 +121,7 @@ function renderDetailWithBoard(task: TaskDetail = TASK, board: Board | null = BO
   return render(
     <PorscheDesignSystemProvider>
       {/* @ts-expect-error board prop will be added by builder in GREEN phase */}
-      <DetailTab task={task} board={board} />
+      <DetailTab task={task} board={board} taskReferences={TASK_REFERENCES} />
     </PorscheDesignSystemProvider>,
   )
 }

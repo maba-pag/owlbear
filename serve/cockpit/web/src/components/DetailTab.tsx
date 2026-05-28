@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   PButton,
   PDivider,
@@ -21,6 +21,7 @@ import {
 } from '../hooks/useConflictDraft'
 import { useTaskMutation } from '../hooks/useTaskMutation'
 import { getOrderedTransitionTargets, shouldShowArchiveAction } from '../utils/taskTransitions'
+import { getTask } from '../api/tasks'
 
 interface TaskDetail {
   id: number
@@ -129,6 +130,46 @@ export default function DetailTab({
   const historyRegionRef = useRef<HTMLDivElement | null>(null)
   const archiveReturnFocusRef = useRef<HTMLElement | null>(null)
 
+  // Resolve dep/parent IDs not in the active board list (e.g. archived tasks)
+  const [resolvedRefs, setResolvedRefs] = useState<TaskReferenceSummary[]>([])
+  const unresolvedIds = useMemo(() => {
+    if (!task) return []
+    const allRefIds = [...task.depends_on, ...(task.parent !== null ? [task.parent] : [])]
+    const boardIds = new Set(taskReferences.map((t) => t.id))
+    return allRefIds.filter((id) => !boardIds.has(id))
+  }, [task, taskReferences])
+
+  // Serialize to a stable string key so the effect doesn't re-fire on array reference changes
+  const unresolvedIdsKey = unresolvedIds.join(',')
+
+  useEffect(() => {
+    if (!unresolvedIdsKey) return
+    let cancelled = false
+    const ids = unresolvedIdsKey.split(',').map(Number)
+    Promise.allSettled(ids.map((id) => getTask(id)))
+      .then((results) => {
+        if (cancelled) return
+        const summaries: TaskReferenceSummary[] = []
+        for (const result of results) {
+          if (result.status === 'fulfilled') {
+            summaries.push({
+              id: result.value.id,
+              title: result.value.title,
+              status: result.value.status,
+              archival_reason: result.value.archival_reason ?? null,
+            })
+          }
+        }
+        setResolvedRefs(summaries)
+      })
+    return () => { cancelled = true }
+  }, [unresolvedIdsKey])
+
+  const enrichedReferences = useMemo(() => {
+    if (resolvedRefs.length === 0) return taskReferences
+    return [...taskReferences, ...resolvedRefs]
+  }, [taskReferences, resolvedRefs])
+
   useEffect(() => {
     if (initialSubtab !== 'history' || task === null) {
       return
@@ -208,7 +249,7 @@ export default function DetailTab({
         <TaskFieldsEditor
           task={t}
           priorities={board?.priorities ?? []}
-          taskReferences={taskReferences}
+          taskReferences={enrichedReferences}
           conflictLocalDraft={conflictLocalDraft}
           conflictRemoteTaskId={conflictRemoteTask?.id ?? null}
           serverValidationMessage={serverValidationMessage}

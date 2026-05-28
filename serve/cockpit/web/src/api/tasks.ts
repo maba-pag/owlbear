@@ -19,6 +19,7 @@ export interface TaskDetail {
   parent: number | null
   depends_on: number[]
   proof_bundle: string | null
+  archival_reason?: string | null
 }
 
 export interface MoveRequest {

@@ -48,6 +48,7 @@ export interface TaskReferenceSummary {
   id: number
   title: string
   status: string
+  archival_reason?: string | null
 }
 
 function formatTaskIds(ids: number[]): string {
@@ -181,11 +182,14 @@ function TaskReferenceChip({
   relationLabel: 'Dependency' | 'Parent'
   onSelectTask?: (taskId: number) => void
 }) {
+  const isArchived = summary?.status === 'archived'
   const statusLabel = summary ? formatStatusLabel(summary.status) : 'Unavailable'
   const chipClassName = [
     'inline-flex min-h-8 max-w-full items-center gap-static-xs rounded-full border px-static-sm py-1 text-xs font-semibold leading-none',
     summary
-      ? 'border-contrast-low bg-canvas text-primary hover:bg-frosted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]'
+      ? isArchived
+        ? 'border-contrast-low bg-canvas text-contrast-high'
+        : 'border-contrast-low bg-canvas text-primary hover:bg-frosted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]'
       : 'border-warning bg-warning-low text-primary',
   ].join(' ')
   const content = (
@@ -195,10 +199,15 @@ function TaskReferenceChip({
       <span className="shrink-0 rounded-full bg-frosted-soft px-2 py-px text-[0.68rem] uppercase leading-none text-contrast-high">
         {statusLabel}
       </span>
+      {isArchived && summary.archival_reason ? (
+        <span className="shrink-0 text-[0.65rem] italic text-contrast-high" title={summary.archival_reason}>
+          ({summary.archival_reason})
+        </span>
+      ) : null}
     </>
   )
 
-  if (summary && onSelectTask) {
+  if (summary && !isArchived && onSelectTask) {
     return (
       <button
         type="button"
@@ -220,9 +229,9 @@ function TaskReferenceChip({
       data-testid="task-reference-chip"
       data-reference-id={taskId}
       data-reference-kind={relationLabel.toLowerCase()}
-      data-reference-state={summary ? 'available' : 'unavailable'}
+      data-reference-state={summary ? (isArchived ? 'archived' : 'available') : 'unavailable'}
       className={chipClassName}
-      aria-label={summary ? `${relationLabel} task #${taskId}: ${summary.title}` : `${relationLabel} task #${taskId} is unavailable`}
+      aria-label={summary ? `${relationLabel} task #${taskId}: ${summary.title}${isArchived ? ' (archived)' : ''}` : `${relationLabel} task #${taskId} is unavailable`}
     >
       {content}
     </span>
