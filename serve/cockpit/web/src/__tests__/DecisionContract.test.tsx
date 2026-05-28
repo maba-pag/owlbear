@@ -58,7 +58,6 @@ vi.mock('../KanbanBoard', () => ({
 
 import { useBoard } from '../hooks/useBoard'
 import { usePendingDRs } from '../hooks/usePendingDRs'
-import DRStatusIndicator from '../components/DRStatusIndicator'
 import Shell from '../Shell'
 import { CockpitProvider } from '../hooks/CockpitProvider'
 import type { Board } from '../hooks/useBoard'

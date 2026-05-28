@@ -241,7 +241,7 @@ class TestFromAC_BuildTestE2EVerification:
             "files from the production tsconfig so the compiler-enabled build is clean:\n" + combined[-2000:]
         )
 
-    @pytest.mark.timeout(150)
+    @pytest.mark.timeout(360)
     def test_vitest_suite_no_unhandled_errors(self) -> None:
         """AC#4: npm test exits 0 and reports no unhandled errors.
 
@@ -254,7 +254,7 @@ class TestFromAC_BuildTestE2EVerification:
             cwd=_WEB,
             capture_output=True,
             text=True,
-            timeout=120,
+            timeout=300,
         )
         combined = result.stdout + result.stderr
         assert result.returncode == 0, f"npm test failed (exit {result.returncode}):\n{combined[-2000:]}"

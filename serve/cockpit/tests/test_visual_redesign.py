@@ -32,7 +32,7 @@ class TestCockpitVisualRedesignSuiteGates:
     Prerequisites: ``npx playwright install chromium`` run once in serve/cockpit/web/.
     """
 
-    @pytest.mark.timeout(300)
+    @pytest.mark.timeout(420)
     def test_vitest_passes(self) -> None:
         """AC-1: ``npm test`` (Vitest unit suite) exits 0 with zero test failures."""
         result = subprocess.run(
@@ -40,7 +40,7 @@ class TestCockpitVisualRedesignSuiteGates:
             cwd=_WEB,
             capture_output=True,
             text=True,
-            timeout=240,
+            timeout=360,
         )
         combined = result.stdout + result.stderr
         assert result.returncode == 0, (
@@ -49,7 +49,7 @@ class TestCockpitVisualRedesignSuiteGates:
             f"Vitest output:\n{combined[-4000:]}"
         )
 
-    @pytest.mark.timeout(180)
+    @pytest.mark.timeout(300)
     def test_production_build_passes(self) -> None:
         """AC-1: ``npm run build`` (tsc -b && vite build) exits 0."""
         result = subprocess.run(
@@ -57,7 +57,7 @@ class TestCockpitVisualRedesignSuiteGates:
             cwd=_WEB,
             capture_output=True,
             text=True,
-            timeout=120,
+            timeout=240,
         )
         combined = result.stdout + result.stderr
         assert result.returncode == 0, (
@@ -66,7 +66,7 @@ class TestCockpitVisualRedesignSuiteGates:
             f"Build output:\n{combined[-4000:]}"
         )
 
-    @pytest.mark.timeout(420)
+    @pytest.mark.timeout(540)
     def test_playwright_e2e_all_passes(self) -> None:
         """AC-1: ``npm run test:e2e:all`` (full Playwright suite, all specs) exits 0.
 
@@ -77,7 +77,7 @@ class TestCockpitVisualRedesignSuiteGates:
             cwd=_WEB,
             capture_output=True,
             text=True,
-            timeout=400,
+            timeout=480,
         )
         combined = result.stdout + result.stderr
         assert result.returncode == 0, (

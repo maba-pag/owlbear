@@ -418,7 +418,8 @@ def _move_file(src: Path, dest: Path, *, no_overwrite: bool = False) -> None:
     if no_overwrite:
         # Fail if destination already exists to avoid silent overwrite.
         if dest.exists():
-            raise FileExistsError(f"Destination already exists: {dest}")
+            msg = f"Destination already exists: {dest}"
+            raise FileExistsError(msg)
         src.replace(dest)
         return
 

@@ -125,7 +125,7 @@ repos:
         name: MegaLinter (full CI parity)
         language: python
         additional_dependencies: []
-        entry: python -c "import subprocess,os;subprocess.run(['docker','run','--rm','--platform','linux/amd64','-v',os.getcwd()+':/tmp/lint','-e','APPLY_FIXES=none','-e','UPDATED_SOURCES_REPORTER=false','-e','LOG_LEVEL=INFO','-e','VALIDATE_ALL_CODEBASE=true','ghcr.io/oxsecurity/megalinter-cupcake:v9.5.0'],check=True)"
+        entry: python -c "import subprocess,os;subprocess.run(['docker','run','--rm','--platform','linux/amd64','-v',os.getcwd()+':/tmp/lint','-e','APPLY_FIXES=none','-e','UPDATED_SOURCES_REPORTER=false','-e','LOG_LEVEL=INFO','-e','VALIDATE_ALL_CODEBASE=true','ghcr.io/oxsecurity/megalinter-cupcake:v9.5.0'],check=True)"  # editorconfig-checker-disable-line
         pass_filenames: false
         always_run: true
         stages: [manual]

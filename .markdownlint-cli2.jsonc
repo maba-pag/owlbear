@@ -10,6 +10,8 @@
     ".owlbear/memory/**",
     ".owlbear/sources/**",
     ".venv/**",
-    "node_modules/**"
+    "**/node_modules/**",
+    "**/test-results/**",
+    "megalinter-reports/**"
   ]
 }

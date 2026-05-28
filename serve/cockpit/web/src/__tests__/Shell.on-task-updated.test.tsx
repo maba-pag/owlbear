@@ -94,14 +94,7 @@ const TASK_42_DETAIL: TaskDetail = {
   depends_on: [],
 }
 
-// Updated task returned by the save endpoint — title AND updated differ.
-// Different updated triggers the DetailTab useEffect so title state re-syncs,
-// enabling a discriminating assertion that the new title is actually rendered.
-const TASK_42_UPDATED: TaskDetail = {
-  ...TASK_42_DETAIL,
-  title: 'Updated Title From Server',
-  updated: '2026-01-02T00:00:00+00:00',
-}
+
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

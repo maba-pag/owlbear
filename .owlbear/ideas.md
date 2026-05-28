@@ -48,12 +48,15 @@ Mtations alone are 820 LOC (lines 1400–2220). That suggests one more split:
 
 | New module | Source lines |
 |---|---|
-| `mutations.py` | ~820 LOC | `create_task`, `edit_task`, `move_task` |
-| `work_cycle.py` | ~400 LOC | `claim_task`, `release_task`, `start_work`, `end_work` |
-| `engine.py` (residual) | ~500 LOC | Init, config, deps, `list_tasks`, `show_task`, facade delegation |
+| `mutations.py` | ~820 LOC — `create_task`, `edit_task`, `move_task` |
+| `work_cycle.py` | ~400 LOC — `claim_task`, `release_task`, `start_work`, `end_work` |
+| `engine.py` (residual) | ~500 LOC — Init, config, deps, `list_tasks`, `show_task`, facade delegation |
 
 And for `agent_view.py`:
-| `dispatch_picker.py` | ~500 LOC | `pick_tasks` + bucket helpers |
-| `agent_view.py` (residual) | ~720 LOC | `list_tasks`, `show_task`, `create_task`, `edit_task`, `move_task`, `start_work`, `end_work` |
+
+| New module | Source lines |
+|---|---|
+| `dispatch_picker.py` | ~500 LOC — `pick_tasks` + bucket helpers |
+| `agent_view.py` (residual) | ~720 LOC — `list_tasks`, `show_task`, `create_task`, `edit_task`, `move_task`, `start_work`, `end_work` |
 
 **Expected outcome:** No file > 800 LOC. Public API (`from owlbear_kanban import KanbanEngine, AgentView`) unchanged. Internal modules use explicit parameter passing, not mixins.

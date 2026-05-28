@@ -13,6 +13,7 @@ export default tseslint.config(
       "coverage/**",
       "playwright-report/**",
       "node_modules/**",
+      "public/porsche-design-system/**",
       "*.config.js",
       "*.config.ts",
     ],
@@ -70,6 +71,16 @@ export default tseslint.config(
           message: "Use <PTag> from @porsche-design-system/components-react instead of raw <p-tag>.",
         },
       ],
+    },
+  },
+  {
+    files: ["scripts/**/*.mjs"],
+    languageOptions: {
+      globals: {
+        process: "readonly",
+        Buffer: "readonly",
+        console: "readonly",
+      },
     },
   },
 );

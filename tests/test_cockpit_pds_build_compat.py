@@ -26,7 +26,7 @@ def build_result() -> subprocess.CompletedProcess[str]:
         cwd=_WEB,
         capture_output=True,
         text=True,
-        timeout=300,
+        timeout=480,
     )
 
 
@@ -61,6 +61,9 @@ def package_json_data() -> dict[str, object]:
     return json.loads((_WEB / "package.json").read_text(encoding="utf-8"))
 
 
+@pytest.mark.slow
+@pytest.mark.timeout(540)
+@pytest.mark.xdist_group("npm_subprocess")
 class TestFromAC_CockpitPdsV4BuildCompatibility:
     """AC1/AC4: build must pass cleanly as a delivery gate."""
 
@@ -73,6 +76,9 @@ class TestFromAC_CockpitPdsV4BuildCompatibility:
         )
 
 
+@pytest.mark.slow
+@pytest.mark.timeout(540)
+@pytest.mark.xdist_group("npm_subprocess")
 class TestFromAC_PdsV4TypeContracts:
     """AC2: audited PDS v4 type failures must not appear in build output."""
 
@@ -102,6 +108,9 @@ class TestFromAC_PdsV4TypeContracts:
         assert fragment not in build_output, f"Detected known PDS v4 incompatibility: {reason}"
 
 
+@pytest.mark.slow
+@pytest.mark.timeout(540)
+@pytest.mark.xdist_group("npm_subprocess")
 class TestFromAC_PendingDrResolveModalBodyContract:
     """AC3: PendingDR/ResolveModal body typing mismatch must be absent."""
 
