@@ -24,6 +24,7 @@ _TSX_SRC = _WEB / "src"
 
 
 @pytest.mark.slow
+@pytest.mark.xdist_group("npm_subprocess")
 class TestCockpitVisualRedesignSuiteGates:
     """AC-1: Vitest unit tests, full Playwright e2e suite, and production build pass with zero failures.
 

@@ -208,6 +208,7 @@ class TestFromAC_KanbanBoard963TestCleanup:
 
 
 @pytest.mark.slow
+@pytest.mark.xdist_group("npm_subprocess")
 class TestFromAC_BuildTestE2EVerification:
     """AC#3/4/5: subprocess verification of npm build, Vitest suite, and Playwright E2E.
 
@@ -218,6 +219,7 @@ class TestFromAC_BuildTestE2EVerification:
       - AC#5 (Playwright): run `npx playwright install chromium` in serve/cockpit/web/ once.
     """
 
+    @pytest.mark.timeout(200)
     def test_npm_build_succeeds_clean(self) -> None:
         """AC#3: npm run build exits 0 and emits no TypeScript type errors.
 
@@ -239,6 +241,7 @@ class TestFromAC_BuildTestE2EVerification:
             "files from the production tsconfig so the compiler-enabled build is clean:\n" + combined[-2000:]
         )
 
+    @pytest.mark.timeout(150)
     def test_vitest_suite_no_unhandled_errors(self) -> None:
         """AC#4: npm test exits 0 and reports no unhandled errors.
 
@@ -260,6 +263,7 @@ class TestFromAC_BuildTestE2EVerification:
             "race condition (suspected: KanbanBoard.test.tsx ownerDocument error):\n" + combined[-2000:]
         )
 
+    @pytest.mark.timeout(360)
     def test_playwright_e2e_passes(self) -> None:
         """AC#5: npm run test:e2e exits 0.
 
