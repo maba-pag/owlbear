@@ -37,7 +37,7 @@ const DIST_ASSETS_DIR = resolve(WEB_DIR, '..', 'dist', 'assets')
 // node_modules/.bin/vite → ../vite/bin/vite.js (Node.js script, invoke via node)
 const VITE_BIN = resolve(WEB_DIR, 'node_modules', '.bin', 'vite')
 // Fixture source file: deterministic Tailwind utility-class input for build (AC-1 reviewer finding)
-const FIXTURE_FILE = resolve(WEB_DIR, 'src', '_tailwind-test-fixture-1592.tsx')
+const FIXTURE_FILE = resolve(WEB_DIR, 'src', '_tailwind-test-fixture.tsx')
 const FIXTURE_CONTENT = [
   '// Tailwind v4 test fixture — created and removed by TailwindStylelint_1592.test.ts',
   'export const TailwindTestFixture = () => (',
