@@ -306,18 +306,46 @@ class TestFromAC_DeadTestFiles:
 # ---------------------------------------------------------------------------
 
 
+_LEGACY_FQ_PREFIXES: tuple[str, ...] = tuple(
+    f"owlbear_knowledge.{m}" for m in _LEGACY_MODULES
+)
+
+
+def _absolute_imports_from(node: ast.AST) -> list[str]:
+    """Extract fully-qualified module names from absolute import AST nodes."""
+    if isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+        return [node.module]
+    if isinstance(node, ast.Import):
+        return [alias.name for alias in node.names]
+    return []
+
+
+def _matches_legacy_prefix(name: str) -> str:
+    """Return the matching legacy FQ prefix if name is an import of a deleted module, else ''."""
+    for prefix in _LEGACY_FQ_PREFIXES:
+        if name == prefix or name.startswith(prefix + "."):
+            return prefix
+    return ""
+
+
 def _find_stale_legacy_imports(root: pathlib.Path) -> list[str]:
-    """Return list of '<file>: references <module>' for any stale import found."""
+    """Return stale legacy import hits using AST (not raw text) to avoid false positives.
+
+    Only checks absolute imports (``from owlbear_knowledge.{module} import …`` and
+    ``import owlbear_knowledge.{module}``). Relative imports within the knowledge
+    package that reference deleted modules will be caught by the AC9 full-suite run.
+    """
     hits: list[str] = []
     for py_file in sorted(root.rglob("*.py")):
         try:
-            text = py_file.read_text(encoding="utf-8", errors="replace")
-        except OSError:
+            tree = ast.parse(py_file.read_text(encoding="utf-8", errors="replace"))
+        except (OSError, SyntaxError):
             continue
-        for module in _LEGACY_MODULES:
-            pattern = f"owlbear_knowledge.{module}"
-            if pattern in text:
-                hits.append(f"{py_file}: references owlbear_knowledge.{module}")
+        for node in ast.walk(tree):
+            for mod_name in _absolute_imports_from(node):
+                match = _matches_legacy_prefix(mod_name)
+                if match:
+                    hits.append(f"{py_file}: {match}")
     return hits
 
 
@@ -329,6 +357,8 @@ class TestFromAC_StaleSweep:
         assert hits == [], "Stale legacy imports found in serve/:\n" + "\n".join(hits)
 
     def test_no_stale_imports_in_tests(self) -> None:
+        # Regression guard: tests/ had no legacy imports after AC7 dead test files were deleted.
+        # Ensures no new test file inadvertently imports from deleted modules post-implementation.
         hits = _find_stale_legacy_imports(pathlib.Path("tests"))
         assert hits == [], "Stale legacy imports found in tests/:\n" + "\n".join(hits)
 
