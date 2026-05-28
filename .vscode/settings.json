@@ -81,6 +81,8 @@
     ".owlbear/kanban/**": true
   },
   "git.autorefresh": false,
+  // NOTE: User-local absolute path — update to your owlbear install location.
+  // On Windows this might be e.g. "C:\\Users\\you\\Projects\\owlbear".
   "github.copilot.chat.additionalReadAccessPaths": [
     "/Users/markus/Projects/owlbear"
   ],
@@ -93,7 +95,6 @@
   "github.copilot.chat.newWorkspaceCreation.enabled": false,
   "github.copilot.chat.searchSubagent.enabled": true,
   "github.copilot.chat.searchSubagent.toolCallLimit": 50,
-  "github.copilot.chat.tools.memory.enabled": false,
   "github.copilot.enable": {
     "*": false,
     "markdown": false,
@@ -158,7 +159,7 @@
   "terminal.integrated.profiles.windows": {
     "pwsh": {
       "icon": "terminal-powershell",
-      "path": "${env:HOMEDRIVE}${env:HOMEPATH}\\Coding\\pwsh\\pwsh.exe"
+      "path": "pwsh"
     }
   },
   "terminal.integrated.wordSeparators": "",

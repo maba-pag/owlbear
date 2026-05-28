@@ -18,7 +18,7 @@
 import { chromium } from "playwright";
 import { readFileSync, writeFileSync, readdirSync } from "fs";
 import { resolve, basename, dirname, join } from "path";
-import { fileURLToPath } from "url";
+import { fileURLToPath, pathToFileURL } from "url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const RENDER_HTML = join(__dirname, "render.html");
@@ -50,7 +50,7 @@ async function main() {
   const browser = await chromium.launch();
   const context = await browser.newContext({ deviceScaleFactor: DEVICE_SCALE });
   const page = await context.newPage();
-  await page.goto(`file://${RENDER_HTML}`);
+  await page.goto(pathToFileURL(RENDER_HTML).href);
   await page.waitForFunction(() => typeof window.renderExcalidraw === "function", {
     timeout: 30000,
   });
