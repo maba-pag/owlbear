@@ -1,10 +1,10 @@
 ---
 id: 1910
 title: 'Knowledge: Fix IngestCoordinator.refresh() to propagate fetch errors'
-status: done
+status: archived
 priority: needed
 created: 2026-05-28T01:41:35.456164+02:00
-updated: 2026-05-28T04:31:07.585383+02:00
+updated: 2026-05-28T04:47:41.438507+02:00
 tags:
   - knowledge
   - layer-4
@@ -25,7 +25,7 @@ proof_bundle: smoke
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Objective
@@ -200,3 +200,32 @@ No files deleted. Convention mapping: `serve/knowledge/src/**` → `serve/knowle
 
 ### Scratch cleanup
 Removed: `1910-coverage.json`, `1910-pytest-output.txt`, `1910-ruff-output.txt`.
+
+[[2026-05-28T04:47:41+02:00]]
+## Audit
+
+### Regression Detection
+- Domain-scoped: 160 ingest_coordinator tests passed (0 failed).
+- Broad knowledge-domain: 396 passed, 1 pre-existing failure in test_search_provenance.py (TypeError: MagicMock async issue from task #1895, unrelated to changed files).
+- Lint: ruff clean on both changed files.
+
+### Intent Verification
+- Changed files: serve/knowledge/src/owlbear_knowledge/ingest_coordinator.py (+11), tests/test_ingest_coordinator_1910.py (+156).
+- Domain: knowledge module only. No extraneous scope.
+- Purpose match: propagates fetch errors into RefreshResult per stated objective.
+
+### Architect Quality
+- AC specificity: 4/5. Final AC names exact methods, parameters, field types, and conditional branches. Challenger integration improved precision (B1/B2 refinement accepted). Reviewer rejection was about test proof depth, not AC ambiguity — AC was specific enough to identify the proof gaps.
+- Edge cases: total-failure, partial-success, and full-propagation all covered.
+- Design notes: architecture review thorough with failure mode map.
+
+### Commit Integrity
+- fcbca007: fix: propagate fetch errors in refresh (#1910, builder) — 1 file, +11 lines.
+- e87c9797: test: strengthen proof for fetch error propagation (#1910, test-writer) — 1 file, +156 lines.
+- Both commits well-formed, reference task ID and agent role, no extraneous files.
+
+### Deductions
+None.
+
+### Confidence: 1.00
+### Action: ARCHIVED #1910 -> archived | confidence 1.00
