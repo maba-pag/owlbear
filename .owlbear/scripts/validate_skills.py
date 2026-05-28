@@ -55,12 +55,21 @@ def validate_skill(skill_dir: Path) -> list[str]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """CLI entry point.  Accepts skill directory paths as positional arguments."""
+    """CLI entry point.  Accepts skill directory paths as positional arguments.
+
+    When called with no arguments, auto-discovers all skill directories under
+    ``share/skills/``.
+    """
     args = argv if argv is not None else sys.argv[1:]
 
     if not args:
-        sys.stderr.write("Usage: validate_skills.py <skill_dir> [<skill_dir> ...]\n")
-        return 1
+        # Auto-discover skill directories (cross-platform, no shell glob needed).
+        skills_root = Path("share/skills")
+        if skills_root.is_dir():
+            args = [str(p) for p in sorted(skills_root.iterdir()) if p.is_dir()]
+        if not args:
+            sys.stderr.write("Usage: validate_skills.py [<skill_dir> ...]\n")
+            return 1
 
     has_errors = False
     for raw_path in args:

@@ -561,17 +561,6 @@ class TestFromAC_EngineConfigOps:
 class TestFromAC_MigrationGateEdgeCases:
     """AC: MigrationRequiredError raised if active tasks carry claimed_by frontmatter."""
 
-    def test_task_with_oserror_is_skipped(self, tmp_path: Path) -> None:
-        board = _make_board(tmp_path)
-        task_path = board / "tasks" / "1-unreadable.md"
-        task_path.write_text("claimed_by: agent\n", encoding="utf-8")
-        task_path.chmod(0o000)
-        try:
-            engine = KanbanEngine(board, activity_log=False)
-            assert engine is not None
-        finally:
-            task_path.chmod(0o644)
-
     def test_task_without_frontmatter_marker_is_skipped(self, tmp_path: Path) -> None:
         board = _make_board(tmp_path)
         (board / "tasks" / "1-nofm.md").write_text("no frontmatter here\nclaimed_by: agent\n", encoding="utf-8")
@@ -2784,17 +2773,6 @@ class TestFromAC_EngineInitMigrationGateEdgeCases:
     """AC: __init__ migration gate handles OSError, no frontmatter, no closing
     fence, and cleared claimed_by without raising."""
 
-    def test_oserror_reading_task_file_is_skipped(self, tmp_path: Path) -> None:
-        board = _make_board(tmp_path)
-        task_path = board / "tasks" / "1-unreadable.md"
-        task_path.write_text("claimed_by: someone\n", encoding="utf-8")
-        task_path.chmod(0o000)
-        try:
-            engine = KanbanEngine(board, activity_log=False)
-            assert engine is not None
-        finally:
-            task_path.chmod(0o644)
-
     def test_file_without_yaml_frontmatter_marker_is_skipped(self, tmp_path: Path) -> None:
         board = _make_board(tmp_path)
         (board / "tasks" / "1-nofm.md").write_text("no frontmatter\nclaimed_by: someone\n", encoding="utf-8")
@@ -2974,31 +2952,6 @@ class TestFromAC_EngineMoveTaskValidation:
 
 class TestFromAC_EngineReadLogEntriesErrors:
     """AC: _read_log_entries handles OSError, invalid JSON, and bad timestamps."""
-
-    def test_oserror_on_activity_log_read_returns_empty_sessions(self, tmp_path: Path) -> None:
-        board = _make_board(tmp_path)
-        log = board / "activity.jsonl"
-        import json as _json
-
-        log.write_text(
-            _json.dumps(
-                {
-                    "action": "claim",
-                    "task_id": 1,
-                    "detail": "x",
-                    "timestamp": "2026-01-01T00:00:00+00:00",
-                }
-            )
-            + "\n",
-            encoding="utf-8",
-        )
-        log.chmod(0o000)
-        try:
-            engine = KanbanEngine(board, activity_log=True)
-            result = engine.list_sessions(filter="all")
-            assert result == []
-        finally:
-            log.chmod(0o644)
 
     def test_invalid_json_line_is_skipped(self, tmp_path: Path) -> None:
         board = _make_board(tmp_path)

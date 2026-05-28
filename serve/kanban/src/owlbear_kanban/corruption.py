@@ -654,4 +654,4 @@ def _extract_file_id(path: Path) -> int | None:
 
 def _is_archive_path(path: Path, config: BoardConfig) -> bool:
     """Return True if *path* is inside the archive directory."""
-    return path.parent.name == config.paths.archive_dir.split("/")[-1]
+    return path.parent.name == Path(config.paths.archive_dir).name

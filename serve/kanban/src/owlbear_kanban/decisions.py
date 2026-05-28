@@ -7,7 +7,6 @@ This module manages lightweight decision request (DR) files stored under a
 from __future__ import annotations
 
 import logging
-import os
 import re
 from io import StringIO
 from pathlib import Path
@@ -117,17 +116,10 @@ def move_to_resolved(path: Path, resolved_dir: Path) -> Path:
     counter = 1
     while True:
         candidate = _resolved_candidate(base_path, counter)
-        try:
-            os.link(path, candidate)
-        except FileExistsError:
+        if candidate.exists():
             counter += 1
             continue
-        try:
-            path.unlink()
-        except OSError:
-            if candidate.exists():
-                candidate.unlink()
-            raise
+        path.rename(candidate)
         return candidate
 
 
