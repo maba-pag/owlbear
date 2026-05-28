@@ -370,9 +370,11 @@ class TestFromAC_ProvenanceRelatedSources:
 
     def test_related_sources_populated_for_second_result(self) -> None:
         c1, c2 = _chunk("c1"), _chunk("c2")
+        e1 = _entity("e1", "Alpha")
+        traversal = TraversalResult(entities=(e1,), edges=())
         result = QueryResult(
             search_results=(_hit(c1), _hit(c2)),
-            graph_context=None,
+            graph_context=traversal,
             provenance=(_prov("c1", title="Doc A"), _prov("c2", title="Doc B")),
         )
         items = _serialize_query_facade_results(_ctx(), result)
@@ -380,6 +382,7 @@ class TestFromAC_ProvenanceRelatedSources:
         assert len(related_c1) == 1
         assert related_c1[0]["name"] == "Doc B"
         assert related_c1[0]["relationship"] == "related"
+        assert related_c1[0]["entity"] == "Alpha"
 
     def test_related_sources_relationship_field_is_related(self) -> None:
         c1, c2 = _chunk("c1"), _chunk("c2")
