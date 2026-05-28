@@ -24,6 +24,8 @@ uv sync
 
 > **Branches:** `dev` is the working branch (full workspace). `main` is the consumer-facing branch — auto-synced product subset, never committed to directly.
 
+> **Consumers:** If you're setting up OwlBear for use (not development), see [README-consumer.md](README-consumer.md).
+
 Open VS Code with `code .`.
 
 ## Directory Layout
@@ -103,7 +105,7 @@ Release packaging boundary:
 
 ## Knowledge Base
 
-Knowledge base sources are registered and refreshed via the MCP server tools (`knowledge_sources_register`, `knowledge_sources_refresh`). See `serve/mcp-knowledge/README.md` for the full tool reference.
+Knowledge base sources are registered and refreshed via the MCP server tools (`knowledge_sources_register`, `knowledge_sources_refresh`). See [serve/mcp-knowledge/README.md](serve/mcp-knowledge/README.md) for the full tool reference.
 
 Set `OWLBEAR_LOCAL_KB_PATH` to override the default `.owlbear/knowledge/local.db` location (`OWLBEAR_KB_PATH` is still accepted as a fallback).
 

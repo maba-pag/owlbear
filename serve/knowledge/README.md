@@ -52,7 +52,7 @@ consolidation surfaces have been retired and removed from this package.
 
 ## Configuration
 
-No environment variables at the library level. Configuration is passed via constructor arguments. See `serve/mcp-knowledge/README.md` for the MCP server's environment variables.
+No environment variables at the library level. Configuration is passed via constructor arguments. See [mcp-knowledge README](../mcp-knowledge/README.md) for the MCP server's environment variables.
 
 ### Qdrant storage modes
 

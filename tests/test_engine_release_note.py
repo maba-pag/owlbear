@@ -139,9 +139,7 @@ class TestFromAC_ReleaseNoteAppending:
         note_text = "Releasing to allow another agent to claim."
         result = view.end_work(1, outcome="release", note=note_text)
 
-        assert note_text in result.body, (
-            f"Expected note to appear in returned body after release; body={result.body!r}"
-        )
+        assert note_text in result.body, f"Expected note to appear in returned body after release; body={result.body!r}"
 
     def test_release_claimed_note_in_disk_body(self, tmp_path: Path) -> None:
         """AC1: on-disk task body contains the note text after claimed release.
@@ -307,9 +305,7 @@ class TestFromAC_ReleaseUnclaimedNoop:
         note_text = "This note must NOT appear."
         result = view.end_work(1, outcome="release", note=note_text)
 
-        assert note_text not in result.body, (
-            f"Note must not be appended to unclaimed task body; body={result.body!r}"
-        )
+        assert note_text not in result.body, f"Note must not be appended to unclaimed task body; body={result.body!r}"
 
     def test_unclaimed_release_disk_body_unchanged(self, tmp_path: Path) -> None:
         """AC2: on-disk body is not modified when release is called on unclaimed task.

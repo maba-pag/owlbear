@@ -1,6 +1,6 @@
 # owlbear-mcp-knowledge — Knowledge MCP Server
 
-MCP server that exposes the `owlbear-knowledge` engine as tools for pipeline agents. Provides document ingestion, semantic search, source management, and enrichment batching. Registered in VS Code's MCP configuration as `owlbear-knowledge`.
+MCP server that exposes the `owlbear-knowledge` engine as tools for pipeline agents. Provides document ingestion, semantic search, source management, and enrichment batching. Registered in VS Code's MCP configuration as `ob-knowledge`.
 
 → Parent: [README.md](../../README.md)
 

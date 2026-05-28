@@ -3,6 +3,7 @@
 ### Status quo
 
 **Current state:**
+
 - `engine.py` — 2,738 LOC (the god-class problem)
 - `agent_view.py` — 1,221 LOC (also over limit)
 - Everything else is ≤700 LOC
@@ -55,4 +56,4 @@ And for `agent_view.py`:
 | `dispatch_picker.py` | ~500 LOC | `pick_tasks` + bucket helpers |
 | `agent_view.py` (residual) | ~720 LOC | `list_tasks`, `show_task`, `create_task`, `edit_task`, `move_task`, `start_work`, `end_work` |
 
-**Expected outcome:** No file > 800 LOC. Public API (`from owlbear_kanban import KanbanEngine, AgentView`) unchanged. Internal modules use explicit parameter passing, not mixins. 
+**Expected outcome:** No file > 800 LOC. Public API (`from owlbear_kanban import KanbanEngine, AgentView`) unchanged. Internal modules use explicit parameter passing, not mixins.

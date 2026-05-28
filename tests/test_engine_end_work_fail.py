@@ -137,9 +137,7 @@ class TestFromAC_FailOutcome:
 
         result = view.end_work(1, outcome="fail", note="Fail — retry needed.")
 
-        assert result.status == "in-progress", (
-            f"Expected status 'in-progress' after fail; got {result.status!r}"
-        )
+        assert result.status == "in-progress", f"Expected status 'in-progress' after fail; got {result.status!r}"
 
     def test_fail_outcome_releases_claim(self, tmp_path: Path) -> None:
         """AC1: fail outcome releases the claim (claimed_at becomes null).
