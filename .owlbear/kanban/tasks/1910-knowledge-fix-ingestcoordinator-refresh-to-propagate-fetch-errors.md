@@ -1,10 +1,10 @@
 ---
 id: 1910
 title: 'Knowledge: Fix IngestCoordinator.refresh() to propagate fetch errors'
-status: docs
+status: done
 priority: needed
 created: 2026-05-28T01:41:35.456164+02:00
-updated: 2026-05-28T04:13:42.059249+02:00
+updated: 2026-05-28T04:31:07.585383+02:00
 tags:
   - knowledge
   - layer-4
@@ -177,3 +177,26 @@ Total: 10 tests, all PASS. Lint: clean. Commit: e87c9797.
 - Builder evidence and the test-writer retry evidence are internally consistent with the current file state: the implementation aligns with the AC and the strengthened tests close the prior proof gaps.
 - No additional safety/security issue was observed in this slice; the change only maps structured fetcher errors into RefreshResult and gates refresh bookkeeping.
 - Editor diagnostics are clean for the touched source and task test file.
+
+[[2026-05-28T04:31:07+02:00]]
+## Docs Gate
+
+**Verdict: PASS — no docs impact**
+
+### Changed files
+- `serve/knowledge/src/owlbear_knowledge/ingest_coordinator.py` (builder, +11 lines)
+- `tests/test_ingest_coordinator_1910.py` (test-writer, +156 lines)
+
+No files deleted. Convention mapping: `serve/knowledge/src/**` → `serve/knowledge/README.md`.
+
+### Checklist
+
+| # | Item | Finding |
+|---|------|---------|
+| 1 | README Verification | No update needed. The fix is purely internal — `IngestCoordinator.refresh()` error-propagation behavior is not documented in `serve/knowledge/README.md`. No exports added/removed, no CLI flags, no env vars changed. Pre-existing TODO markers at [#1886] are out of task scope and carried through unmodified. |
+| 2 | External Attribution | N/A — no external attribution needed. Builder used internal patterns only. |
+| 3 | Research Doc | PASS — `.owlbear/research/source-fetcher-adapter-b2b.md §3.2` is referenced in the task body under Objective. |
+| 4 | Deletion Detection | N/A — no deletion impact. Both commits are additions only. |
+
+### Scratch cleanup
+Removed: `1910-coverage.json`, `1910-pytest-output.txt`, `1910-ruff-output.txt`.

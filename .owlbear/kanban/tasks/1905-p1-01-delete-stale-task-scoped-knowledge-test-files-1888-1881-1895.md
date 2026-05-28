@@ -1,10 +1,10 @@
 ---
 id: 1905
 title: 'P1-01: Delete stale task-scoped knowledge test files (1888, 1881, 1895)'
-status: in-progress
+status: docs
 priority: needed
 created: 2026-05-28T00:34:20.691200+02:00
-updated: 2026-05-28T04:20:49.562820+02:00
+updated: 2026-05-28T04:37:50.936885+02:00
 tags:
   - knowledge
   - cleanup
@@ -25,7 +25,7 @@ ac:
 proof_bundle: existing
 blocked: false
 block_reason:
-claimed_at: 2026-05-28T04:20:49.562820+02:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -165,3 +165,39 @@ Re-approved with extended ignore list. Test-writer: SKIP (bundle `existing`, tag
 - Tagged `test`; architecture review (re-review #3) explicitly marks test-writer SKIP.
 - AC1–AC3 are file-deletion assertions; AC4 is a pytest gate on existing infrastructure (refined selector with three `--ignore` flags after re-review #3).
 - Passing through to builder.
+
+[[2026-05-28T04:29:28+02:00]]
+## Builder Notes
+- Implementation: deleted `tests/test_mcp_knowledge_lifespan_1888.py`, `tests/test_mcp_knowledge_read_tools_1881.py`, and `tests/test_knowledge_tool_rename_1895.py`.
+- Proof bundle: `existing` (no new tests authored; deletion-only execution).
+- Existing proof 1 (named): quality-runner scoped run on `tests/test_mcp_knowledge_legacy_removal_1900.py` -> `44 passed, 0 failed, 0 skipped`; ruff clean (`ruff: 0`).
+- Existing proof 2 (AC4 selector): `pytest tests/ -k 'knowledge or enrichment or ingest_document or get_next_batch' --ignore=tests/test_search_provenance.py --ignore=tests/test_persistence_source_wiring.py --ignore=tests/test_mcp_kanban_newline_norm_1531.py` -> `304 passed, 0 failed, 0 errors`.
+- Coverage: N/A for this deletion-only `existing` proof task.
+- Lint status: clean on proof runs.
+- Commit: `ad7dbfe2` (`chore: delete stale task-scoped knowledge tests (#1905, builder)`).
+- Evidence summary: AC1-AC3 satisfied by file deletion; AC4 satisfied by passing selector gate without ignoring the deleted files.
+
+### Post-task Reflection
+- Problem faced: patch-based delete operations initially reported success but did not persist on disk.
+- Workaround applied: switched to direct `rm -f` with immediate `git status -- <paths>` verification before re-running proofs.
+- Pattern discovered: for deletion-only tasks, filesystem + git-status verification should happen before invoking expensive proof commands.
+- Time sink: one extra quality-runner cycle was consumed while stale files were still present.
+- Quality gap: none in current task scope after corrected deletion flow; required proofs are now green.
+
+[[2026-05-28T04:37:50+02:00]]
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation: PASS #1905 -> docs | AC mapped to code and evidence sufficient.
+- Blocking findings: none.
+- Builder evidence sufficiency: existing-bundle proof is complete and internally consistent. Local workspace checks confirmed all three target files are absent, consistent with the delete summary in [.owlbear/kanban/tasks/1905-p1-01-delete-stale-task-scoped-knowledge-test-files-1888-1881-1895.md](.owlbear/kanban/tasks/1905-p1-01-delete-stale-task-scoped-knowledge-test-files-1888-1881-1895.md#L171-L178).
+- Safety & security: deletion-only task; no new runtime boundary or input-handling surface was introduced.
+
+| AC Line | Code Evidence | Test Evidence | Status |
+|---|---|---|---|
+| AC1 | Authoritative AC at [.owlbear/kanban/tasks/1905-p1-01-delete-stale-task-scoped-knowledge-test-files-1888-1881-1895.md](.owlbear/kanban/tasks/1905-p1-01-delete-stale-task-scoped-knowledge-test-files-1888-1881-1895.md#L16). Local workspace file search returned no path for tests/test_mcp_knowledge_lifespan_1888.py. | Legacy AppContext field removal remains directly asserted in [tests/test_mcp_knowledge_legacy_removal_1900.py](tests/test_mcp_knowledge_legacy_removal_1900.py#L33), [tests/test_mcp_knowledge_legacy_removal_1900.py](tests/test_mcp_knowledge_legacy_removal_1900.py#L40), and [tests/test_mcp_knowledge_legacy_removal_1900.py](tests/test_mcp_knowledge_legacy_removal_1900.py#L47). | PASS |
+| AC2 | Authoritative AC at [.owlbear/kanban/tasks/1905-p1-01-delete-stale-task-scoped-knowledge-test-files-1888-1881-1895.md](.owlbear/kanban/tasks/1905-p1-01-delete-stale-task-scoped-knowledge-test-files-1888-1881-1895.md#L17). Local workspace file search returned no path for tests/test_mcp_knowledge_read_tools_1881.py. | Legacy init_db removal remains asserted in [tests/test_mcp_knowledge_legacy_removal_1900.py](tests/test_mcp_knowledge_legacy_removal_1900.py#L222). Durable v2 entity-lookup coverage remains in [tests/test_query_facade_1880.py](tests/test_query_facade_1880.py#L179-L367). | PASS |
+| AC3 | Authoritative AC at [.owlbear/kanban/tasks/1905-p1-01-delete-stale-task-scoped-knowledge-test-files-1888-1881-1895.md](.owlbear/kanban/tasks/1905-p1-01-delete-stale-task-scoped-knowledge-test-files-1888-1881-1895.md#L18). Local workspace file search returned no path for tests/test_knowledge_tool_rename_1895.py. | Deleted legacy graph-stats surface remains asserted in [tests/test_mcp_knowledge_legacy_removal_1900.py](tests/test_mcp_knowledge_legacy_removal_1900.py#L187). Adjacent live-registry and allowlist coverage remains in [tests/test_enrichment_tools_registry_1901.py](tests/test_enrichment_tools_registry_1901.py#L127-L184). | PASS |
+| AC4 | Authoritative gate is the frontmatter AC at [.owlbear/kanban/tasks/1905-p1-01-delete-stale-task-scoped-knowledge-test-files-1888-1881-1895.md](.owlbear/kanban/tasks/1905-p1-01-delete-stale-task-scoped-knowledge-test-files-1888-1881-1895.md#L19-L24). | Builder recorded the named proof pass at [.owlbear/kanban/tasks/1905-p1-01-delete-stale-task-scoped-knowledge-test-files-1888-1881-1895.md](.owlbear/kanban/tasks/1905-p1-01-delete-stale-task-scoped-knowledge-test-files-1888-1881-1895.md#L173) and the selector gate pass at [.owlbear/kanban/tasks/1905-p1-01-delete-stale-task-scoped-knowledge-test-files-1888-1881-1895.md](.owlbear/kanban/tasks/1905-p1-01-delete-stale-task-scoped-knowledge-test-files-1888-1881-1895.md#L174). The ignore list excludes only unrelated pre-existing failures, not the three deleted files. | PASS |
+
+## Observations
+- No non-blocking follow-up from review. Historical rejected attempts in the task body are superseded by the final AC and builder evidence.

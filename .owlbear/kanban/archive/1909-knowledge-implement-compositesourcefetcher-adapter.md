@@ -1,10 +1,10 @@
 ---
 id: 1909
 title: 'Knowledge: Implement CompositeSourceFetcher adapter'
-status: docs
+status: archived
 priority: needed
 created: 2026-05-28T01:41:35.432412+02:00
-updated: 2026-05-28T04:19:40.765967+02:00
+updated: 2026-05-28T04:39:52.849791+02:00
 tags:
   - knowledge
   - layer-4
@@ -36,7 +36,7 @@ proof_bundle: behavioral
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Objective
@@ -190,3 +190,73 @@ URL/FILE_GLOB item-level error tests use `patch("owlbear_knowledge.source_fetche
 ## Observations
 - Non-blocking hardening idea: if this adapter changes again, adding a FILE_GLOB partial-results assertion and an alias-form dedupe case would make the suite more mutation-resistant, but they are not required to satisfy the current AC gate.
 - The proof surface for this adapter is currently task-local (`tests/test_source_fetcher_1909.py`); there is still no adjacent durable module-level `source_fetcher` suite.
+
+[[2026-05-28T04:31:35+02:00]]
+## Docs Gate
+
+### Convention Mapping
+- `serve/knowledge/src/owlbear_knowledge/source_fetcher.py` (added) → `serve/knowledge/README.md`
+- `tests/test_source_fetcher_1909.py` (updated) → no standalone README impact
+
+### Checklist
+
+**Item 1: README Verification**
+- Layer 1 (grep): `CompositeSourceFetcher` is NOT in `owlbear_knowledge/__init__.py` `__all__`. It is an internal implementation class; the README documents the public API only. No symbols were removed or renamed that the README references.
+- Layer 2 (editorial): Full read of `serve/knowledge/README.md`. Module groups table is coherent with current `__init__.py` exports. No task-caused drift detected. Two pre-existing TODO markers (#1886) remain — pass-through, pre-existing scope.
+- Verdict: no updates required.
+
+**Item 2: External Attribution**
+- Research doc (`source-fetcher-adapter-b2b.md`) cites internal codebase files only (protocols, stores, ingest). No external sources (papers, URLs, third-party docs) influenced implementation.
+- N/A — no external attribution needed.
+
+**Item 3: Research Doc**
+- `.owlbear/research/source-fetcher-adapter-b2b.md` exists (confirmed).
+- Task body contains: "Research: .owlbear/research/source-fetcher-adapter-b2b.md" — linked.
+- PASS.
+
+**Item 4: Deletion Detection**
+- Builder commit `81517475`: added `source_fetcher.py`, no deletions.
+- Test-writer commit `867e59cc`: updated test file only, no deletions.
+- N/A — no deletion impact.
+
+### Scratch Cleanup
+- Deleted: `1909-coverage.json`, `1909-pytest-output.txt`, `1909-ruff-output.json`
+
+### Verdict
+DONE #1909 -> done | docs gate passed
+
+[[2026-05-28T04:39:52+02:00]]
+## Audit
+
+### Regression Detection
+quality-runner env fallback: instrument timeout on full suite.
+Direct execution:
+- `serve/knowledge/tests/` + `tests/test_source_fetcher_1909.py`: 42 passed, 0 failed.
+- Broader knowledge domain (`tests/ -k "knowledge or enrichment"`): 248 passed, 1 failed (pre-existing `test_search_provenance` async mock issue from #1895), 1 error (pre-existing `test_mcp_kanban_newline_norm_1531` import error — unrelated mcp-kanban module).
+- Lint: `ruff check` — All checks passed.
+- No regressions introduced by this task.
+
+### Intent Verification
+- Changed files: `serve/knowledge/src/owlbear_knowledge/source_fetcher.py` (added), `tests/test_source_fetcher_1909.py` (added/updated).
+- Domain: knowledge — correct.
+- Purpose: implement CompositeSourceFetcher adapter dispatching by source.kind — matches stated objective.
+- Scope: no extraneous files, no cross-domain drift.
+
+### Architect Quality
+- Score: 4/5 — AC lines are specific, testable, name the method and I/O pairs per kind. Initial AC required one refinement cycle after challenger feedback (B1/B2/B3 compliance) but final set enabled clean TDD.
+- No calibration follow-up needed.
+
+### Commit Integrity
+- `53b5a68c` — test: add failing tests for CompositeSourceFetcher (#1909, test-writer)
+- `81517475` — feat: implement composite source fetcher adapter (#1909, builder)
+- `867e59cc` — test: add retry tests for composite source fetcher (#1909, test-writer)
+- All properly attributed, task-referenced, committed.
+
+### Review Evidence
+- Present and detailed. PASS verdict with full AC→code mapping and challenger cross-checks.
+
+### Deductions
+None.
+
+### Confidence: 1.00
+### Action: ARCHIVE

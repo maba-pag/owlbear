@@ -2,10 +2,10 @@
 id: 1904
 title: 'Knowledge: Implement SourceFetcher adapter and migrate refresh to IngestCoordinator
   (Phase B2b)'
-status: review
+status: backlog
 priority: needed
 created: 2026-05-27T23:24:10.601235+02:00
-updated: 2026-05-28T04:04:25.093773+02:00
+updated: 2026-05-28T04:38:09.440549+02:00
 tags:
   - knowledge
   - layer-4
@@ -112,3 +112,23 @@ Reviewer correctly identified that the parent task body contained stale implemen
 - ruff: n/a (no source edits)
 - Evidence summary: task remains a delegation shell; executable behavior is delegated to subtasks #1909, #1910, and #1911
 - Fixes applied: none
+
+[[2026-05-28T04:38:09+02:00]]
+## Review Evidence
+- Verdict: FAIL
+- FAIL #1904 -> backlog | parent coordination shell is in review before its own child-completion gate is satisfied.
+- Blocking findings:
+| # | AC Line | Finding | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | Parent shell completion gate | The parent task says completion is gated on subtask completion, but child #1911 remains at backlog while #1904 is already in review. | .owlbear/kanban/tasks/1904-knowledge-implement-sourcefetcher-adapter-and-migrate-refresh-to-ingestcoordinat.md:5,33; .owlbear/kanban/tasks/1911-knowledge-wire-sourcefetcher-in-mcp-server-and-replace-refresh-handler.md:4 | backlog |
+| 2 | Parent coordination state | The parent shell's child-status table is stale: it still shows #1909 as review and #1910 as todo even though both child tasks are done. As a coordination-only shell, its own coordination artifact is not current. | .owlbear/kanban/tasks/1904-knowledge-implement-sourcefetcher-adapter-and-migrate-refresh-to-ingestcoordinat.md:29,30; .owlbear/kanban/tasks/1909-knowledge-implement-compositesourcefetcher-adapter.md:4; .owlbear/kanban/tasks/1910-knowledge-fix-ingestcoordinator-refresh-to-propagate-fetch-errors.md:4 | backlog |
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Return #1904 to a coordination-only holding state and define the parent-shell completion rule so it cannot advance to review until all delegated subtasks are complete. | .owlbear/kanban/tasks/1904-knowledge-implement-sourcefetcher-adapter-and-migrate-refresh-to-ingestcoordinat.md | 1904:5,33 and 1911:4 |
+| 2 | architect | Refresh the parent coordination table to match live child statuses, or remove static child-status snapshots if they will drift. | .owlbear/kanban/tasks/1904-knowledge-implement-sourcefetcher-adapter-and-migrate-refresh-to-ingestcoordinat.md, .owlbear/kanban/tasks/1909-knowledge-implement-compositesourcefetcher-adapter.md, .owlbear/kanban/tasks/1910-knowledge-fix-ingestcoordinator-refresh-to-propagate-fetch-errors.md | 1904:29,30 vs 1909:4 and 1910:4 |
+
+## Observations
+- The normalized parent-shell framing is otherwise consistent with a `skip` proof bundle and no local code or test changes; the failure is workflow and coordination state, not implementation proof.
+- This is a re-review cycle, so backlog routing is consistent with the loop-break rule.
