@@ -75,8 +75,6 @@ Get knowledge base summary statistics. No parameters.
 
 Returns: `dict` with corpus counts and enrichment queue state: `documents`, `entities`, `edges`, `total_sources`, `total_chunks`, `chunks_pending`, `chunks_claimed`, `chunks_failed`, `chunks_enriched`, `chunks_claimable`, and `chunks_enriched_ratio`.
 
-**Resource:** `knowledge://stats` — human-readable summary string, e.g. `Knowledge base: 12 documents, 34 entities, 56 edges`.
-
 ### knowledge_enrichment_claim_batch
 
 Atomically claim a batch of chunks ready for Phase 1 enrichment.
@@ -151,7 +149,7 @@ Only the tools documented in this reference are agent-callable MCP tools. Treat 
 | List registered sources | `knowledge_sources_list` | Filter by `scope` |
 | Refresh a registered source | `knowledge_sources_refresh` | Re-ingests one source by source ID |
 | Remove a registered source | `knowledge_sources_delete` | Destructive cascade delete after vector cleanup |
-| Get KB statistics | `knowledge_stats` | Also available as resource `knowledge://stats` |
+| Get KB statistics | `knowledge_stats` | |
 | Claim enrichment work | `knowledge_enrichment_claim_batch` | Pulls and leases chunks atomically |
 | Retry failed chunks | `knowledge_enrichment_retry` | Resets failed chunks to pending |
 | Store enrichment results | `knowledge_enrichment_store` | Pass `chunk_id` and `claim_token`; marks chunk enriched |
