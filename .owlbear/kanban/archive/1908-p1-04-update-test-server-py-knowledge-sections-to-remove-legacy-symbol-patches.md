@@ -1,10 +1,10 @@
 ---
 id: 1908
 title: 'P1-04: Update test_server.py knowledge sections to remove legacy symbol patches'
-status: docs
+status: archived
 priority: needed
 created: 2026-05-28T00:34:20.763020+02:00
-updated: 2026-05-28T04:01:04.484345+02:00
+updated: 2026-05-28T04:27:12.143898+02:00
 tags:
   - knowledge
   - cleanup
@@ -25,7 +25,7 @@ proof_bundle: smoke
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Objective
@@ -175,3 +175,50 @@ New: `pytest tests/test_server.py -k "not (StatusNamesDictFormBug or FunctionRem
 - No blocking findings.
 - This task is a `smoke` / non-implementation cleanup pass, so challenger and code-reader escalation was not required by the review contract.
 - Coverage remained non-gating for this task and does not undermine the AC-specific proof above.
+
+[[2026-05-28T04:11:01+02:00]]
+## Docs Gate
+
+### Checklist
+
+| Item | Result | Evidence |
+|------|--------|----------|
+| README Verification | N/A | Changed file is `tests/test_server.py` (root-level test, not `serve/{pkg}/src/**` or `serve/{pkg}/tests/**`). No production code changed. `serve/mcp-knowledge/README.md` documents public tool interface only — no reference to removed symbols. `serve/knowledge/README.md` references these symbols as part of the still-existing library API (unaffected by this task). |
+| External Attribution | N/A | Pure test cleanup; no external sources used. |
+| Research Doc | N/A | No research artifact for this task. |
+| Deletion Detection | N/A | Test fixtures/classes removed from `tests/test_server.py`; none documented in any README. No orphaned references. |
+
+### Files Updated
+None — no docs impact.
+
+### Scratch Cleanup
+No `.owlbear/scratch/1908-*` files found.
+
+[[2026-05-28T04:27:12+02:00]]
+## Audit
+### Regression Detection
+- AC3 scoped command (pytest tests/test_server.py -k exclusion): 56 passed, 0 failed
+- Full file: 57 passed, 9 failed (all in out-of-scope mcp-kanban section, pre-existing)
+- Ruff: clean on tests/test_server.py
+- Lint violations in serve/knowledge/ are from #1909/#1910, not this task
+- Regression verdict: PASS
+
+### Intent Verification
+- Scope alignment: PASS (single file tests/test_server.py, 217 deletions of dead patches in knowledge sections)
+- Purpose match: PASS (removal of legacy symbol patches matches stated objective)
+- Extraneous scope: none
+- Boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 4/5
+AC lines are specific (named symbols, named fields, exact pytest command). AC3 required mid-pipeline refinement after builder surfaced pre-existing failures, but architect responded promptly. Challenger caught 2 missing dead symbols and architect incorporated them.
+
+### Commit Integrity
+- Upstream commit presence: PASS (1a2c2977, 1 file, 8 insertions / 217 deletions)
+- Commit message format: PASS (test: clean legacy knowledge patches in test_server (#1908, builder))
+- No uncommitted deliverables
+
+### Deduction Breakdown
+No deductions applied.
+
+### Confidence: 1.00
+### Action: archive

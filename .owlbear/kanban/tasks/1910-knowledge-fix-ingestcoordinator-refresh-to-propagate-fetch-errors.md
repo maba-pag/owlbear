@@ -1,10 +1,10 @@
 ---
 id: 1910
 title: 'Knowledge: Fix IngestCoordinator.refresh() to propagate fetch errors'
-status: review
+status: docs
 priority: needed
 created: 2026-05-28T01:41:35.456164+02:00
-updated: 2026-05-28T03:50:47.322107+02:00
+updated: 2026-05-28T04:13:42.059249+02:00
 tags:
   - knowledge
   - layer-4
@@ -158,3 +158,22 @@ Total: 3 tests, all FAIL
 | AC3 | test_ac3_total_failure_update_source_not_called | update_source.assert_not_called() | PASS |
 
 Total: 10 tests, all PASS. Lint: clean. Commit: e87c9797.
+
+[[2026-05-28T04:13:42+02:00]]
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation: PASS #1910 -> docs | AC mapped to code and evidence sufficient.
+- Evidence map:
+
+| AC | Code Evidence | Test Evidence | Status |
+|---|---|---|---|
+| AC1 | serve/knowledge/src/owlbear_knowledge/ingest_coordinator.py:302-306 maps each FetchError to RefreshError(source_id, "{uri}: {error}", timestamp=datetime.now(tz=UTC)) appended to RefreshResult.errors. | tests/test_ingest_coordinator_1910.py:253 proves source_id mapping; :274-275 proves uri + error string content; :298 proves current aware timestamp behavior; :319 proves all fetch errors are propagated for multiple FetchError entries. | PASS |
+| AC2 | serve/knowledge/src/owlbear_knowledge/ingest_coordinator.py:321,335-339 preserves the refresh/update path when documents exist, even if fetch_result.errors is non-empty. | tests/test_ingest_coordinator_1910.py:204 proves errors remain visible in the mixed branch; :345 proves update_source still runs; :363 proves sources_refreshed increments. Adjacent durable success-path assertions at tests/test_ingest_coordinator_1886.py:561, :574, :576 still cover the update_source(source.id, SourceUpdate(last_refreshed_at=...)) argument contract. | PASS |
+| AC3 | serve/knowledge/src/owlbear_knowledge/ingest_coordinator.py:321 skips refresh bookkeeping when mapped_documents is empty and fetch_result.errors is non-empty. | tests/test_ingest_coordinator_1910.py:230 proves sources_refreshed stays 0; :386 proves update_source is skipped in the total-failure branch. | PASS |
+
+- Blocking findings: none
+
+## Observations
+- Builder evidence and the test-writer retry evidence are internally consistent with the current file state: the implementation aligns with the AC and the strengthened tests close the prior proof gaps.
+- No additional safety/security issue was observed in this slice; the change only maps structured fetcher errors into RefreshResult and gates refresh bookkeeping.
+- Editor diagnostics are clean for the touched source and task test file.

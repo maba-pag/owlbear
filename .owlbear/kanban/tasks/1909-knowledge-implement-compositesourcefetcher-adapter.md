@@ -1,10 +1,10 @@
 ---
 id: 1909
 title: 'Knowledge: Implement CompositeSourceFetcher adapter'
-status: review
+status: docs
 priority: needed
 created: 2026-05-28T01:41:35.432412+02:00
-updated: 2026-05-28T04:02:40.196485+02:00
+updated: 2026-05-28T04:19:40.765967+02:00
 tags:
   - knowledge
   - layer-4
@@ -175,3 +175,18 @@ URL/FILE_GLOB item-level error tests use `patch("owlbear_knowledge.source_fetche
   - AC7 gap (AUTHENTICATED_WEB): test_auth_web_fetch_error_error_equals_str_of_exception — asserts FetchError.error == str(exc)
 - Quality-runner (scoped): 42 passed, 0 failed, 0 skipped; ruff clean
 - Commit: 867e59cc
+
+[[2026-05-28T04:19:40+02:00]]
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation (one line): PASS #1909 -> docs | AC mapped to code and evidence sufficient.
+- Builder evidence reviewed first: task notes report quality-runner scoped tests passing (38 on builder run, 42 after test-only retry), `source_fetcher` coverage at 90%, and `ruff` clean; the direct source/test inspection is consistent with that evidence.
+- AC->code mapping: `CompositeSourceFetcher` satisfies the `SourceFetcher` runtime protocol and its `URL_LIST`, `FILE_GLOB`, `AUTHENTICATED_WEB`, and `INLINE` branches align with AC1-AC7 in `serve/knowledge/src/owlbear_knowledge/source_fetcher.py`.
+- Test->AC alignment: the retry added the missing non-default `base_path` proof and exact `FetchError` payload assertions for `FILE_GLOB` and `AUTHENTICATED_WEB`, closing the prior AC3/AC7 review gaps in `tests/test_source_fetcher_1909.py`.
+- Proof sufficiency: no remaining blocking mismatch was found after re-checking AC3/AC6/AC7. The suite now proves the required observable behavior well enough for this task's behavioral bundle.
+- Challenger cross-check: PASS challenge returned `proceed`; FAIL challenge returned `reconsider` and did not establish a concrete blocking defect or proof gap.
+- Blocking findings: none.
+
+## Observations
+- Non-blocking hardening idea: if this adapter changes again, adding a FILE_GLOB partial-results assertion and an alias-form dedupe case would make the suite more mutation-resistant, but they are not required to satisfy the current AC gate.
+- The proof surface for this adapter is currently task-local (`tests/test_source_fetcher_1909.py`); there is still no adjacent durable module-level `source_fetcher` suite.

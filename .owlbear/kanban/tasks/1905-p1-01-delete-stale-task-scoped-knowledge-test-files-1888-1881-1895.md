@@ -4,7 +4,7 @@ title: 'P1-01: Delete stale task-scoped knowledge test files (1888, 1881, 1895)'
 status: in-progress
 priority: needed
 created: 2026-05-28T00:34:20.691200+02:00
-updated: 2026-05-28T04:04:25.168328+02:00
+updated: 2026-05-28T04:20:49.562820+02:00
 tags:
   - knowledge
   - cleanup
@@ -25,7 +25,7 @@ ac:
 proof_bundle: existing
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-28T04:20:49.562820+02:00
 archival_reason:
 archival_refs: []
 ---
