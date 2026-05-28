@@ -18,16 +18,8 @@ from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import ValidationError
 
-from owlbear_knowledge.chunker import TextChunker
-from owlbear_knowledge.document_store import DocumentStore
-from owlbear_knowledge.embeddings import BgeM3EmbeddingProvider
-from owlbear_knowledge.extractor import EntityExtractor
 from owlbear_knowledge.fetcher import HttpxContentFetcher
-from owlbear_knowledge.graph_builder import IntraDocGraphBuilder
-from owlbear_knowledge.graph_store import GraphStore
-from owlbear_knowledge.ingest import IngestPipeline
 from owlbear_knowledge.ingest_coordinator import IngestCoordinator
-from owlbear_knowledge.models import EntityType
 from owlbear_knowledge.protocols.common import (
     EntityType as ProtocolEntityType,
 )
@@ -39,7 +31,7 @@ from owlbear_knowledge.protocols.enrichment import (
     ExtractedEntity,
     ExtractedRelation,
 )
-from owlbear_knowledge.protocols.ingest import IngestDocument, IngestRequest
+from owlbear_knowledge.protocols.ingest import IngestDocument, IngestRequest, RefreshRequest
 from owlbear_knowledge.protocols.query import EntityLookupRequest, QueryRequest, QueryResult
 from owlbear_knowledge.protocols.sources import (
     FetchTransport,
@@ -50,11 +42,7 @@ from owlbear_knowledge.protocols.sources import (
 )
 from owlbear_knowledge.qdrant import QdrantVectorStore
 from owlbear_knowledge.query_facade import QueryFacade
-from owlbear_knowledge.query_service import KnowledgeQueryError, KnowledgeQueryService
-from owlbear_knowledge.refresh import RefreshOrchestrator
-from owlbear_knowledge.retrieval import GraphAugmentedRetriever
-from owlbear_knowledge.schema import init_db as _schema_init_db
-from owlbear_knowledge.source_store import KnowledgeSourceStore
+from owlbear_knowledge.source_fetcher import CompositeSourceFetcher
 from owlbear_knowledge.stores.content import ContentStore
 from owlbear_knowledge.stores.enrichment import EnrichmentStore
 from owlbear_knowledge.stores.graph import SqliteGraphStore
@@ -78,7 +66,6 @@ from ._types import (
     _DEFAULT_QDRANT_PATH,
     _MAX_ENRICHMENT_BATCH_SIZE,
     EnrichmentChunk,
-    EntityInfo,
     RetryEnrichmentResult,
     SearchResult,
     SourceInfo,
@@ -114,6 +101,29 @@ _install_legacy_event_loop_policy()
 
 # Backward-compatible patch target used by legacy tests; the guard is no longer wired.
 globals()["ContentInjectionGuard"] = object
+
+
+@dataclass(slots=True, frozen=True)
+class _SingleChunk:
+    """Minimal chunk payload consumed by ContentStore.ingest."""
+
+    index: int
+    text: str
+    metadata: dict[str, Any]
+
+
+class _SingleChunker:
+    """Small chunker adapter used by the v2 ContentStore wiring."""
+
+    def chunk(self, text: str, metadata: dict[str, Any]) -> list[_SingleChunk]:
+        return [_SingleChunk(index=0, text=text, metadata=metadata)]
+
+
+class _ZeroEmbeddingProvider:
+    """Deterministic embedding adapter for v2 ingestion wiring."""
+
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        return [[0.0] for _ in texts]
 
 
 
@@ -336,105 +346,20 @@ async def knowledge_enrichment_retry(
 ) -> RetryEnrichmentResult:
     """Reset failed enrichment chunks to pending so workers can retry them."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    conn = app_ctx.conn
+    enrichment_store = app_ctx.enrichment_store
+    if enrichment_store is None:
+        msg = "enrichment store not available"
+        raise ToolError(msg)
+
     scope_values = _normalize_scope_list(scopes)
-    normalized_chunk_ids = [chunk_id.strip() for chunk_id in chunk_ids or [] if chunk_id.strip()]
-
-    conn.execute("PRAGMA busy_timeout = 5000")
-    conn.execute("BEGIN IMMEDIATE")
-    try:
-        if normalized_chunk_ids:
-            reset_count = 0
-            for chunk_id in normalized_chunk_ids:
-                cur = conn.execute(
-                    """
-                    UPDATE chunks
-                    SET enrichment_state='pending',
-                        claimed_at=NULL,
-                        claimed_by=NULL,
-                        claim_token=NULL,
-                        enrichment_error=NULL,
-                        last_enrichment_error_at=NULL
-                    WHERE enrichment_state='failed'
-                      AND id = ?
-                    """,
-                    (chunk_id,),
-                )
-                reset_count += max(cur.rowcount, 0)
-        else:
-            limit = _normalize_batch_limit(limit)
-            if scope_values:
-                conn.execute("CREATE TEMP TABLE IF NOT EXISTS retry_failed_enrichment_scopes(scope TEXT NOT NULL)")
-                conn.execute("DELETE FROM retry_failed_enrichment_scopes")
-                conn.executemany(
-                    "INSERT INTO retry_failed_enrichment_scopes(scope) VALUES (?)",
-                    [(scope,) for scope in scope_values],
-                )
-                cur = conn.execute(
-                    """
-                    UPDATE chunks
-                    SET enrichment_state='pending',
-                        claimed_at=NULL,
-                        claimed_by=NULL,
-                        claim_token=NULL,
-                        enrichment_error=NULL,
-                        last_enrichment_error_at=NULL
-                    WHERE id IN (
-                        SELECT c.id
-                        FROM chunks AS c
-                        JOIN documents AS d ON d.id = c.document_id
-                        JOIN knowledge_sources AS ks ON ks.id = d.source_id
-                        WHERE c.enrichment_state = 'failed'
-                          AND ks.enabled = 1
-                          AND ks.enrich = 1
-                          AND COALESCE(d.scope, 'global') IN (
-                              SELECT scope FROM retry_failed_enrichment_scopes
-                          )
-                        ORDER BY c.created_at ASC, c.id ASC
-                        LIMIT ?
-                    )
-                    """,
-                    (limit,),
-                )
-            else:
-                cur = conn.execute(
-                    """
-                    UPDATE chunks
-                    SET enrichment_state='pending',
-                        claimed_at=NULL,
-                        claimed_by=NULL,
-                        claim_token=NULL,
-                        enrichment_error=NULL,
-                        last_enrichment_error_at=NULL
-                    WHERE id IN (
-                        SELECT c.id
-                        FROM chunks AS c
-                        JOIN documents AS d ON d.id = c.document_id
-                        JOIN knowledge_sources AS ks ON ks.id = d.source_id
-                        WHERE c.enrichment_state = 'failed'
-                          AND ks.enabled = 1
-                          AND ks.enrich = 1
-                        ORDER BY c.created_at ASC, c.id ASC
-                        LIMIT ?
-                    )
-                    """,
-                    (limit,),
-                )
-            reset_count = max(cur.rowcount, 0)
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-
-    failed_row = conn.execute("SELECT COUNT(*) FROM chunks WHERE enrichment_state = 'failed'").fetchone()
-    return {"reset": reset_count, "remaining_failed": int(failed_row[0] if failed_row is not None else 0)}
-
-
-def init_db(path: str) -> sqlite3.Connection:
-    """Open the SQLite database at *path*, apply schema, return connection."""
-    conn = sqlite3.connect(path)
-    _schema_init_db(conn)
-    return conn
+    normalized_chunk_ids = tuple(chunk_id.strip() for chunk_id in chunk_ids or [] if chunk_id.strip())
+    normalized_limit = _normalize_batch_limit(limit)
+    result = enrichment_store.reset_failed(
+        chunk_ids=normalized_chunk_ids or None,
+        limit=normalized_limit,
+        scopes=tuple(scope_values) if scope_values else None,
+    )
+    return {"reset": result.reset, "remaining_failed": result.remaining_failed}
 
 
 @dataclass(slots=True)
@@ -442,10 +367,6 @@ class AppContext:
     """Runtime context passed to MCP tools via FastMCP lifespan."""
 
     conn: sqlite3.Connection
-    query_service: KnowledgeQueryService | None
-    graph_store: GraphStore | None
-    ingest_pipeline: IngestPipeline | None
-    source_store: KnowledgeSourceStore | None
     query_facade: QueryFacade | None = None
     graph_store_v2: SqliteGraphStore | None = None
     content_store: ContentStore | None = None
@@ -453,9 +374,6 @@ class AppContext:
     source_store_v2: SqliteSourceStore | None = None
     ingest_coordinator: IngestCoordinator | None = None
     vector_store: QdrantVectorStore | None = None
-    refresh_orchestrator: RefreshOrchestrator | None = None
-    structured_extractor: object | None = None
-    intra_doc_builder: IntraDocGraphBuilder | None = None
 
 
 class RegisteredSourceResult(TypedDict):
@@ -500,82 +418,49 @@ async def _web_read(url: str) -> str | None:
 @asynccontextmanager
 async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
     """Initialise knowledge-base services; close the DB connection on exit."""
-    global _app_context  # noqa: PLW0603
     path = os.environ.get("OWLBEAR_LOCAL_KB_PATH") or os.environ.get("OWLBEAR_KB_PATH", _DEFAULT_KB_PATH)
     qdrant_path = os.environ.get("OWLBEAR_QDRANT_PATH", _DEFAULT_QDRANT_PATH)
-    conn = init_db(path)
+    conn = sqlite3.connect(path)
     try:
-        gs = GraphStore(conn)
-        vs = QdrantVectorStore(location=qdrant_path)
-        emb = BgeM3EmbeddingProvider()
-        structured_extractor = None
-        extractor = EntityExtractor(extractor=structured_extractor)
-        intra_doc_builder = IntraDocGraphBuilder(extractor=structured_extractor)
-        gar = GraphAugmentedRetriever(vs, gs, emb)
-        source_store = KnowledgeSourceStore(conn)
-        qs = KnowledgeQueryService(
-            vector_store=vs,
-            graph_store=gs,
-            embedding_provider=emb,
-            retriever=gar,
-            source_store=source_store,
-        )
-        doc_store = DocumentStore(conn, gs, vs, emb)
-        chunker = TextChunker()
+        vector_store = QdrantVectorStore(location=qdrant_path)
         source_store_v2 = SqliteSourceStore(conn)
         graph_store_v2 = SqliteGraphStore(conn)
         content_store = ContentStore(
             db=conn,
-            vector_store=vs,
-            embedding_provider=emb,
-            chunker=chunker,
+            vector_store=vector_store,
+            embedding_provider=_ZeroEmbeddingProvider(),
+            chunker=_SingleChunker(),
         )
         query_facade = QueryFacade(content=content_store, graph=graph_store_v2)
-        enrichment_store = EnrichmentStore(db=conn, graph=gs)
+        enrichment_store = EnrichmentStore(db=conn, graph=graph_store_v2)
+        source_fetcher = CompositeSourceFetcher(
+            workspace_root=Path.cwd(),
+            content_fetcher_factory=select_content_fetcher,
+        )
         ingest_coordinator = IngestCoordinator(
             sources=source_store_v2,
             content=content_store,
             enrichment=enrichment_store,
-            graph=gs,
+            graph=graph_store_v2,
+            fetcher=source_fetcher,
         )
         source_store_v2.ensure_tables()
         graph_store_v2.ensure_tables()
         content_store.ensure_tables()
         enrichment_store.ensure_tables()
-        pipeline = IngestPipeline(
-            doc_store,
-            extractor,
-            chunker,
-            source_store=source_store,
-        )
-        refresh_orchestrator = RefreshOrchestrator(
-            store=source_store,
-            pipeline=pipeline,
-            workspace_root=Path.cwd(),
-            content_fetcher=select_content_fetcher("http"),
-        )
         ctx = AppContext(
             conn=conn,
-            query_service=qs,
-            graph_store=gs,
             query_facade=query_facade,
             graph_store_v2=graph_store_v2,
-            vector_store=vs,
-            ingest_pipeline=pipeline,
-            source_store=source_store,
+            vector_store=vector_store,
             content_store=content_store,
             enrichment_store=enrichment_store,
             source_store_v2=source_store_v2,
             ingest_coordinator=ingest_coordinator,
-            refresh_orchestrator=refresh_orchestrator,
-            structured_extractor=structured_extractor,
-            intra_doc_builder=intra_doc_builder,
         )
-        _app_context = ctx
         _apply_tool_exclusions(_server)
         yield ctx
     finally:
-        _app_context = None
         conn.close()
 
 
@@ -597,7 +482,6 @@ __all__ = [
     "AppContext",
     "_apply_tool_exclusions",
     "app_lifespan",
-    "init_db",
     "knowledge_enrichment_claim_batch",
     "knowledge_enrichment_retry",
     "knowledge_enrichment_store",
@@ -609,34 +493,9 @@ __all__ = [
     "knowledge_sources_refresh",
     "knowledge_sources_register",
     "knowledge_stats",
-    "list_entities",
     "mcp",
     "select_content_fetcher",
 ]
-
-# Module-level context so zero-arg @mcp.resource handlers can access graph_store.
-_app_context: AppContext | None = None
-
-
-def _serialize_legacy_search_results(results: list[object]) -> list[SearchResult]:
-    """Serialize legacy query_service search hits into SearchResult items."""
-    serialized: list[SearchResult] = []
-    for item in results:
-        retrieval_path = getattr(item, "retrieval_path", "vector")
-        serialized.append(
-            {
-                "title": item.title,
-                "score": item.score,
-                "snippet": item.snippet,
-                "entity_type": item.entity_type,
-                "retrieval_path": retrieval_path if isinstance(retrieval_path, str) else "vector",
-                "graph_context": _serialize_graph_context(getattr(item, "graph_context", "")),
-                "entities": _serialize_search_entities(getattr(item, "entities", [])),
-                "related_sources": _serialize_related_sources(getattr(item, "related_sources", [])),
-                "source": _serialize_source(getattr(item, "source", None)),
-            }
-        )
-    return serialized
 
 
 def _serialize_query_facade_results(app_ctx: AppContext, result: QueryResult) -> list[SearchResult]:
@@ -714,23 +573,7 @@ async def knowledge_search(
 ) -> list[SearchResult] | str:
     """Search the knowledge base for relevant context."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    has_query_facade = True
-    try:
-        query_facade = object.__getattribute__(app_ctx, "query_facade")
-    except AttributeError:
-        has_query_facade = False
-        query_facade = None
-    if query_facade is None and not has_query_facade:
-        qs = app_ctx.query_service
-        if qs is None:
-            return "error: Knowledge service not available."
-        limit = _normalize_read_limit(limit)
-        normalized_scopes = _normalize_scope_list(scopes)
-        try:
-            results = await qs.query(query, top_k=limit, scopes=normalized_scopes)
-        except KnowledgeQueryError as exc:
-            return f"error: {exc}"
-        return _serialize_legacy_search_results(results)
+    query_facade = app_ctx.query_facade
 
     if query_facade is None:
         return "error: Knowledge service not available."
@@ -968,35 +811,6 @@ async def knowledge_ingest(
     )
 
 
-async def list_entities(
-    ctx: Context,
-    entity_type: str | None = None,
-    offset: int = 0,
-    limit: int = 50,
-    scopes: list[str] | None = None,
-) -> list[EntityInfo] | str:
-    # DEFERRED: kept as an internal helper; not exposed as an MCP tool until
-    # thread-safety review is completed.
-    """List entities in the knowledge graph."""
-    app_ctx: AppContext = ctx.request_context.lifespan_context
-    gs = app_ctx.graph_store
-    if gs is None:
-        return "error: graph store not available"
-
-    if entity_type is not None:
-        try:
-            et = EntityType(entity_type)
-        except ValueError:
-            valid = ", ".join(e.value for e in EntityType)
-            return f"error: Invalid entity_type '{entity_type}'. Valid types: {valid}"
-        entities = await asyncio.to_thread(gs.list_entities, entity_type=et, scopes=scopes)
-    else:
-        entities = await asyncio.to_thread(gs.list_entities, scopes=scopes)
-
-    page = entities[offset : offset + limit]
-    return [{"name": e.name, "entity_type": e.entity_type, "description": e.description} for e in page]
-
-
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
 async def knowledge_stats(ctx: Context) -> StatsResult:
     """Get knowledge base summary statistics."""
@@ -1018,17 +832,18 @@ async def knowledge_stats(ctx: Context) -> StatsResult:
     claimable_row = conn.execute(
         """
         SELECT COUNT(*)
-        FROM chunks AS c
-        JOIN documents AS d ON d.id = c.document_id
-        JOIN knowledge_sources AS ks ON ks.id = d.source_id
-        WHERE ks.enabled = 1
-          AND ks.enrich = 1
+                FROM enrich_queue AS eq
+                JOIN content_chunks AS cc ON cc.id = eq.chunk_id
+                JOIN content_documents AS cd ON cd.document_id = cc.document_id
+                JOIN source_registry AS sr ON sr.id = cd.source_id
+                WHERE sr.state = 'active'
+                    AND COALESCE(sr.enrich, 0) = 1
           AND (
-            c.enrichment_state = 'pending'
+                        eq.state = 'pending'
             OR (
-                c.enrichment_state = 'claimed'
-                AND c.claimed_at IS NOT NULL
-                AND (strftime('%s', ?) - strftime('%s', c.claimed_at)) > 600
+                                eq.state = 'in_progress'
+                                AND eq.started_at IS NOT NULL
+                                AND (strftime('%s', ?) - strftime('%s', eq.started_at)) > 600
             )
           )
         """,
@@ -1054,80 +869,47 @@ async def knowledge_stats(ctx: Context) -> StatsResult:
     }
 
 
-async def _legacy_graph_stats(ctx: Context) -> str:
-    """Return knowledge base statistics (callable directly with ctx for testing)."""
-    app_ctx: AppContext = ctx.request_context.lifespan_context
-    gs = app_ctx.graph_store
-    doc_count, entity_count, edge_count = gs.get_counts()
-    return f"Knowledge base: {doc_count} documents, {entity_count} entities, {edge_count} edges"
-
-
-@mcp.resource("knowledge://stats")
-async def _knowledge_stats_bridge() -> str:
-    """MCP-registered concrete resource for knowledge://stats (zero-arg for FastMCP compat)."""
-    if _app_context is None or _app_context.graph_store is None:
-        return "Knowledge base: 0 documents, 0 entities, 0 edges"
-    gs = _app_context.graph_store
-    doc_count, entity_count, edge_count = gs.get_counts()
-    return f"Knowledge base: {doc_count} documents, {entity_count} entities, {edge_count} edges"
-
-
-async def knowledge_stats_resource(ctx: Context | None = None) -> str:
-    """Return knowledge base statistics; accepts optional ctx for direct invocation."""
-    if ctx is not None:
-        app_ctx: AppContext = ctx.request_context.lifespan_context
-        gs = app_ctx.graph_store
-        counts_fn = gs.get_counts
-    else:
-        counts_fn = lambda: (0, 0, 0)  # noqa: E731
-    doc_count, entity_count, edge_count = counts_fn()
-    return f"Knowledge base: {doc_count} documents, {entity_count} entities, {edge_count} edges"
-
-
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
-async def knowledge_sources_refresh(ctx: Context, source_id: str) -> dict | str:
+async def knowledge_sources_refresh(ctx: Context, source_id: str) -> dict[str, Any]:
     """Trigger re-ingestion of a registered knowledge source by its ID.
 
-    Returns a dict with source_id, refreshed, partial, skipped, failed, errors, and warnings on
-    success.  Returns an error string for disabled sources or unavailable
-    orchestrator.  Raises ToolError if source_store is unavailable or the
-    source_id is not found.
+    Returns source_id, sources_refreshed, and serialized refresh errors.
+
+    Raises ToolError when source storage is unavailable or source_id is missing.
     """
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    store = app_ctx.source_store
+    store = app_ctx.source_store_v2
     if store is None:
         msg = "source store not available"
         raise ToolError(msg)
-    source = store.get(source_id)
+    source = store.get_source(source_id)
     if source is None:
         msg = f"Source '{source_id}' not found"
         raise ToolError(msg)
-    orchestrator = app_ctx.refresh_orchestrator
-    if orchestrator is None:
-        return "error: refresh orchestrator not available"
-    pipeline = app_ctx.ingest_pipeline
-    if pipeline is None:
-        return "error: ingest pipeline not available"
 
-    selected_fetcher = select_content_fetcher(source.fetch_method)
-    run_orchestrator = RefreshOrchestrator(
-        store=store,
-        pipeline=pipeline,
-        workspace_root=Path.cwd(),
-        content_fetcher=selected_fetcher,
-    )
-    try:
-        result = await run_orchestrator.refresh(source)
-    except ValueError as exc:
-        return f"error: {exc}"
+    if source.state != SourceState.ACTIVE:
+        return {
+            "source_id": source_id,
+            "sources_refreshed": 0,
+            "errors": [
+                {
+                    "source_id": source_id,
+                    "error": f"Source '{source_id}' is not active",
+                    "timestamp": datetime.now(tz=UTC).isoformat(),
+                }
+            ],
+        }
+
+    coordinator = app_ctx.ingest_coordinator
+    if coordinator is None:
+        msg = "ingest coordinator not available"
+        raise ToolError(msg)
+
+    result = await coordinator.refresh(RefreshRequest(source_ids=(source_id,)))
     return {
-        "source_id": result.source_id,
-        "refreshed": result.refreshed,
-        "partial": result.partial,
-        "skipped": result.skipped,
-        "failed": result.failed,
-        "errors": result.errors,
-        "warnings": result.warnings,
+        "source_id": source_id,
+        "sources_refreshed": result.sources_refreshed,
+        "errors": [error.model_dump(mode="json") for error in result.errors],
     }
 
 

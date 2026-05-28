@@ -65,23 +65,19 @@ class TestFromAC_AppContextFields:
             "Legacy field 'structured_extractor' still present in AppContext"
         )
 
-    def test_source_store_retained_and_legacy_absent(self) -> None:
-        """source_store retained (AC8) and legacy fields absent (AC1) — combined guard."""
+    def test_source_store_absent_and_legacy_absent(self) -> None:
+        """source_store removed and legacy fields absent after B2b cleanup."""
         field_names = {f.name for f in dataclasses.fields(AppContext)}
-        # Retained (B2b scope)
-        assert "source_store" in field_names, "source_store must be retained (AC8/B2b)"
+        assert "source_store" not in field_names, "source_store must be removed"
         # Must be absent (legacy)
         legacy = {"query_service", "graph_store", "ingest_pipeline"}
         still_present = legacy & field_names
         assert not still_present, f"Legacy fields still in AppContext: {still_present}"
 
-    def test_refresh_orchestrator_retained_and_legacy_absent(self) -> None:
-        """refresh_orchestrator retained (AC8) and legacy fields absent (AC1) — combined guard."""
+    def test_refresh_orchestrator_absent_and_legacy_absent(self) -> None:
+        """refresh_orchestrator removed and legacy fields absent after B2b cleanup."""
         field_names = {f.name for f in dataclasses.fields(AppContext)}
-        # Retained (B2b scope)
-        assert "refresh_orchestrator" in field_names, (
-            "refresh_orchestrator must be retained (AC8/B2b)"
-        )
+        assert "refresh_orchestrator" not in field_names, "refresh_orchestrator must be removed"
         # Must be absent (legacy)
         legacy = {"intra_doc_builder", "structured_extractor"}
         still_present = legacy & field_names
@@ -92,10 +88,7 @@ class TestFromAC_AppContextFields:
         conn = sqlite3.connect(":memory:")
         # After cleanup, legacy fields (query_service, graph_store, ingest_pipeline) are gone;
         # this call must succeed without them.
-        ctx = AppContext(
-            conn=conn,
-            source_store=None,
-        )
+        ctx = AppContext(conn=conn)
         assert ctx.conn is conn
 
 
