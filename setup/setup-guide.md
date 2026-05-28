@@ -179,7 +179,7 @@ Set these in `.vscode/mcp.json` under the server's `env` key:
       "args": ["run", "--project", "../owlbear", "-m", "owlbear_mcp_knowledge"],
       "env": {
         "OWLBEAR_KB_PATH": "/path/to/knowledge.db",
-        "KNOWLEDGE_TOOLS_EXCLUDE": "knowledge_ingest,list_entities"
+        "KNOWLEDGE_TOOLS_EXCLUDE": "knowledge_ingest"
       }
     }
   }
