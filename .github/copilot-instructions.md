@@ -51,11 +51,8 @@ All other `serve/` packages are Python — use `uv run` for those.
 | Attribute | Value |
 |-----------|-------|
 | Stack | FastAPI + Pydantic v2 |
-| Endpoints | `GET /api/board`, `GET /api/tasks`, `GET /api/tasks/{id}`, `GET /api/sessions`, `GET /health`, `POST /api/tasks/{id}/move`, `POST /api/tasks/{id}/edit`, `POST /api/tasks/{id}/release`, `GET /api/requests/pending`, `POST /api/requests/{id}/resolve`, `GET /api/memories`, `POST /api/memories/{id}/approve`, `POST /api/memories/{id}/edit`, `POST /api/memories/{id}/delete`, `GET /api/ideas`, `PUT /api/ideas` |
+| Endpoints | REST API under `/api/` — see `owlbear_cockpit/routes/` for current routes |
 | Launch | `uv run cockpit` — starts uvicorn on `127.0.0.1:8420` (default) and auto-opens browser; `COCKPIT_PORT` overrides port; `COCKPIT_NO_OPEN=1` suppresses browser; `KANBAN_DIR` overrides `.owlbear/kanban/`; requires built `dist/` |
-| DI pattern | `get_engine` from `owlbear_cockpit.main` — override via `app.dependency_overrides` in tests |
-| Cache | `MtimeScanCache` in `cache.py` — skips engine reload when task-dir mtime is unchanged |
-| Test scope | `tests/test_cockpit_read_api*.py`, `tests/test_cockpit_boundary.py`, `tests/test_cockpit_mutation_api.py`, `tests/test_cockpit_launch.py` |
 | Package manager | `uv` (standard for all `serve/` Python packages) |
 
 ## 5. Tools Package
@@ -67,11 +64,8 @@ All other `serve/` packages are Python — use `uv run` for those.
 | Entry points | `uv run doc-index`, `uv run test-root <path>` |
 | Output (doc-index) | `.owlbear/doc-index.md` (auto-generated; committed to repo) |
 | Output (test-root) | JSON to stdout: `{"test_path", "cwd", "toolchain", "cmd"}` — resolves nearest package manifest to determine toolchain and execution cwd |
-| Conditional regen | Skips write when index mtime > newest collected doc mtime |
 | Exclusion list | Paths: `.owlbear/scratch`, `.owlbear/research`, `.owlbear/kanban`, `.owlbear/briefs`, `.owlbear/sources`, `store`, `tests`; Names (any depth): `node_modules`, `.git`, `.venv`, `dist`, `build` |
-| Public API | `collect_docs()`, `generate_index()`, `should_regenerate()`, `parse_index()` — all in `owlbear_tools.doc_index`; `find_test_root()` in `owlbear_tools.test_root` |
 | Test scope | `serve/tools/tests/test_doc_index_1018.py` |
-| Package manager | `uv` |
 
 ## 6. File Placement
 

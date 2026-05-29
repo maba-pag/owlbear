@@ -126,8 +126,7 @@ All 9 agents (critic, pragmatist, simplifier, outsider, ideation-architect, data
 | | python.instructions | `applyTo:*.py` | | |
 | **test-curator** | w-test-curation | `req` | h-quality-runner | `companion:w-test-curation` |
 | | python.instructions | `applyTo:*.py` | h-python-conventions | `companion:w-test-curation` |
-| **challenger** | r-pipeline-protocol | `req` | python.instructions | `applyTo:*.py` (reads .py) |
-| | pipeline-agents.instructions | `applyTo:r-pipeline-protocol/**` | | |
+| **challenger** | h-ac-quality | `req` | python.instructions | `applyTo:*.py` (reads .py) |
 
 ### Prompts
 
@@ -153,7 +152,7 @@ All 9 agents (critic, pragmatist, simplifier, outsider, ideation-architect, data
 
 | Skill | Regularly (90%+) | Connection | Seldom (<90%) | Connection |
 |-------|-------------------|------------|---------------|------------|
-| **r-pipeline-protocol** | orchestrator, builder, test-writer, reviewer, doc-writer, auditor, architect, researcher, planner, memory-curator, challenger | `req` | — | — |
+| **r-pipeline-protocol** | orchestrator, builder, test-writer, reviewer, doc-writer, auditor, architect, researcher, planner, memory-curator | `req` | — | — |
 | **w-orchestration** | orchestrator | `req` | — | — |
 | **w-tdd-green** | builder | `req` | — | — |
 | **w-tdd-red** | test-writer | `req` | — | — |
@@ -218,7 +217,7 @@ All 9 agents (critic, pragmatist, simplifier, outsider, ideation-architect, data
 |-------------|-------------------|------------|---------------|------------|
 | **copilot-instructions.md** | ALL agents, ALL prompts | `auto` | — | — |
 | **owlbear-system.instructions** | ALL agents, ALL prompts | `applyTo: **` | — | — |
-| **pipeline-agents.instructions** | 12× pipeline agents + challenger | `applyTo: r-pipeline-protocol/**` | — | — |
+| **pipeline-agents.instructions** | 12× pipeline agents | `applyTo: r-pipeline-protocol/**` | — | — |
 | **python.instructions** | builder, test-writer, reviewer, auditor, quality-runner, code-reader, fix-attempt, test-curator | `applyTo: *.py` | doc-writer, challenger | `applyTo: *.py` (occasionally) |
 | **frontend.instructions** | — | — | builder, reviewer | `applyTo: *.tsx` (cockpit work) |
 | **research-docs.instructions** | researcher | `applyTo: .owlbear/research/*.md` | doc-writer | `applyTo: .owlbear/research/*.md` |
