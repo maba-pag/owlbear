@@ -189,8 +189,24 @@ async function stubApis(page: Page): Promise<void> {
   await page.route('/api/tasks/scan', (route) => route.fulfill({ json: [] }))
 }
 
-async function loadBoard(page: Page): Promise<void> {
+async function loadBoard(page: Page, pendingDRs?: typeof PENDING_DR_FOR_TASK_5): Promise<void> {
   await stubApis(page)
+  if (pendingDRs) {
+    // Stub /api/requests/pending with the provided DR items in API format.
+    // Registered AFTER stubApis → higher LIFO priority than the catch-all.
+    const apiItems = pendingDRs.items.map((item) => ({
+      request_id: item.id,
+      task_id: item.task_id,
+      kind: item.request_type,
+      title: item.title,
+      summary: item.body_preview,
+      agent: item.agent,
+      created_at: item.created,
+      options: [],
+      body: item.body,
+    }))
+    await page.route('/api/requests/pending', (route) => route.fulfill({ json: apiItems }))
+  }
   await page.goto('/')
   await page.locator('[data-region="workspace"]').waitFor({ state: 'visible', timeout: 8_000 })
 }
@@ -221,12 +237,13 @@ test.describe('AC-1 | Card rendering fixtures — id, priority, tags, state sign
     await expect(card.locator('[data-testid="card-tags"]')).toBeVisible({ timeout: 2_000 })
   })
 
-  test('card with five tags shows overflow indicator', async ({ page }) => {
+  test('card with five tags renders all tags without overflow indicator', async ({ page }) => {
     await loadBoard(page)
-    // Task 6 has 5 tags — exceeds any reasonable preview slot limit.
+    // Task 6 has 5 tags — card renders all of them (no truncation).
     const card = page.locator('[data-testid="task-card"][data-id="6"]')
     await card.waitFor({ state: 'visible', timeout: 6_000 })
-    await expect(card.locator('[data-testid="card-tag-overflow"]')).toBeVisible({ timeout: 2_000 })
+    await expect(card.locator('[data-testid="card-tags"]')).toBeVisible({ timeout: 2_000 })
+    await expect(card.locator('[data-testid="card-tag-overflow"]')).toHaveCount(0)
   })
 
   test('blocked card shows blocked primary signal without duplicate cue text', async ({ page }) => {

@@ -47,6 +47,19 @@ const TASK_DETAIL = {
   depends_on: [] as number[],
 }
 
+const SESSIONS = {
+  sessions: [
+    {
+      task_id: 1,
+      state: 'released',
+      agent: 'builder',
+      started_at: '2026-05-16T09:00:00+00:00',
+      duration: 120,
+      outcome: 'success',
+    },
+  ],
+}
+
 async function stubApis(page: Page): Promise<void> {
   await page.route('/api/**', (route) => route.fulfill({ status: 200, json: {} }))
   await page.route('/api/events', (route) =>

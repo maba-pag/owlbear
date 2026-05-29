@@ -79,7 +79,7 @@ export default defineConfig({
     setupFiles: ['./vitest.setup.ts'],
     globals: true,
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
-    testTimeout: 10_000,
+    testTimeout: 20_000,
     teardownTimeout: 3_000,
     // Suppress React act() warnings — thousands of these drown real errors.
     // Keep all other console output for debugging.

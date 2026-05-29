@@ -319,7 +319,7 @@ describe('TestFromAC_DetailTab', () => {
       expect(container.querySelector('[data-testid="dirty-indicator"]')).not.toBeNull()
     })
 
-    it('reports dirty-state changes to the parent shell', async () => {
+    it('reports dirty-state changes to the parent shell', () => {
       const onDirtyChange = vi.fn()
       const { container } = render(
         <PorscheDesignSystemProvider>
@@ -329,12 +329,12 @@ describe('TestFromAC_DetailTab', () => {
 
       const editButton = container.querySelector('[data-testid="edit-details-button"]') as HTMLElement | null
       expect(editButton).not.toBeNull()
-      await act(async () => { fireEvent.click(editButton!) })
-      await act(async () => { typeIntoPdsField(container, 'p-input-text[data-field="title"]', 'Changed task title') })
+      act(() => { fireEvent.click(editButton!) })
+      act(() => { typeIntoPdsField(container, 'p-input-text[data-field="title"]', 'Changed task title') })
 
       expect(onDirtyChange).toHaveBeenCalledWith(true)
 
-      await act(async () => { typeIntoPdsField(container, 'p-input-text[data-field="title"]', TASK.title) })
+      act(() => { typeIntoPdsField(container, 'p-input-text[data-field="title"]', TASK.title) })
 
       expect(onDirtyChange).toHaveBeenLastCalledWith(false)
     })

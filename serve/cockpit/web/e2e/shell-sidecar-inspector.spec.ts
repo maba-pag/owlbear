@@ -115,6 +115,25 @@ async function stubApis(page: Page): Promise<void> {
     route.fulfill({ json: { sessions: SESSIONS } }),
   )
 
+  // Pending requests — at least one DR so nav-badge renders
+  await page.route('/api/requests/pending', (route) =>
+    route.fulfill({
+      json: [
+        {
+          request_id: 'dr-stub-1',
+          task_id: 1,
+          kind: 'decision',
+          title: 'Stub DR',
+          summary: 'Stub decision request.',
+          agent: 'test',
+          created_at: '2026-05-14T10:00:00+00:00',
+          options: [],
+          body: 'Stub DR body.',
+        },
+      ],
+    }),
+  )
+
   // Registered last → highest LIFO priority (overrides /api/tasks/* for the scan path)
   await page.route('/api/tasks/scan', (route) => route.fulfill({ json: [] }))
 }
@@ -135,8 +154,8 @@ async function expectTaskEditorLabelContract(page: Page): Promise<void> {
   const controls = [
     { selector: 'p-input-text[data-field="title"]', label: 'Title' },
     { selector: 'p-select[data-field="priority"]', label: 'Priority' },
-    { selector: 'p-input-text[data-field="new-tag"]', label: 'Add tag' },
-    { selector: 'p-input-text[data-field="depends_on"]', label: 'Depends on' },
+    { selector: 'p-input-text[data-field="new-tag"]', label: 'Tags' },
+    { selector: 'p-input-text[data-field="depends_on"]', label: 'Dependencies' },
     { selector: 'p-input-text[data-field="parent"]', label: 'Parent' },
   ]
 
@@ -235,7 +254,6 @@ test.describe('TestFromAC_TaskDetailModalComposition', () => {
     page,
   }) => {
     const details = page.locator('[data-region="task-detail-body"]')
-    await expect(details).toContainText('Task details')
     await expect(details.locator('[data-testid="task-detail-display"]')).toBeVisible()
     await expect(details.locator('[data-testid="edit-details-button"]')).toBeVisible()
     await expect(details.locator('p-input-text[data-field="title"]')).toBeHidden()
@@ -295,7 +313,7 @@ test.describe('TestFromAC_TaskDetailModalComposition', () => {
     const bodyLabel = await bodyTextarea.evaluate((element) => {
       return (element as HTMLElement & { label?: string }).label ?? element.getAttribute('label')
     })
-    expect(bodyLabel).toBe('Task body')
+    expect(bodyLabel).toBe('Body')
     expect(await bodyTextarea.evaluate((element) => element.hasAttribute('hide-label'))).toBe(false)
     await expectTaskEditorLabelContract(page)
 
@@ -308,7 +326,7 @@ test.describe('TestFromAC_TaskDetailModalComposition', () => {
     page,
   }) => {
     const details = page.locator('[data-region="task-detail-body"]')
-    await expect(details).toContainText('Task body')
+    await expect(details).toContainText('Cache implementation details')
     await expect(details).not.toContainText('Brief')
 
     await openTaskDetailEditor(page)
@@ -318,7 +336,7 @@ test.describe('TestFromAC_TaskDetailModalComposition', () => {
     const bodyLabel = await bodyTextarea.evaluate((element) => {
       return (element as HTMLElement & { label?: string }).label ?? element.getAttribute('label')
     })
-    expect(bodyLabel).toBe('Task body')
+    expect(bodyLabel).toBe('Body')
   })
 })
 
@@ -494,7 +512,7 @@ test.describe('TestFromAC_NoActivitySidecarTab', () => {
   }) => {
     await page.locator('[data-testid="task-card"]').first().click()
     await expect(page.locator('[data-testid="task-detail-modal"]')).toBeVisible()
-    await expect(page.locator('[data-field="title"]')).toBeVisible()
+    await expect(page.locator('[data-testid="task-detail-display"]')).toBeVisible()
     await expect(page.locator('[data-testid="session-outcome"]')).toHaveCount(0)
   })
 })

@@ -530,10 +530,9 @@ describe('TestFromAC_PdsMigration_Text', () => {
       const pSelect = container.querySelector('p-select')
       if (pSelect) fireEvent(pSelect, new CustomEvent('change', { detail: { value: 'dropped' }, bubbles: true }))
       const submitBtn = container.querySelector('[data-testid="archival-submit"]')
-      // Wrap in act to flush the async fetch and subsequent state update
-      await act(async () => {
-        if (submitBtn) fireEvent.click(submitBtn)
-      })
+      act(() => { if (submitBtn) fireEvent.click(submitBtn) })
+      // Let the mocked fetch Promise chain resolve and trigger re-render
+      await act(async () => { await new Promise(r => setTimeout(r, 0)) })
 
       // After migration the error host must be p-inline-notification
       expect(
