@@ -63,7 +63,7 @@ appear in INFRASTRUCTURE_TABLES. Unmatched tables are violations.
 # ---------------------------------------------------------------------------
 
 QDRANT_COLLECTIONS: Final[Mapping[KnowledgeModule, tuple[str, ...]]] = {
-    KnowledgeModule.CONTENT: ("content_chunks",),
+    KnowledgeModule.CONTENT: ("owlbear_vectors",),
 }
 """Maps module → Qdrant collection names it owns.
 

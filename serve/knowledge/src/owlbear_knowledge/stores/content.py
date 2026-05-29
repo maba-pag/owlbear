@@ -136,7 +136,7 @@ class ContentStore(ContentStoreProtocol):
                 existing_chunk_rows = self._existing_chunks_for_document(document_id)
                 chunk_texts = [row[1] for row in existing_chunk_rows]
                 if chunk_texts:
-                    embeddings = self._embedding_provider.embed(chunk_texts)
+                    embeddings = self._embed_for_storage(chunk_texts)
                     self._upsert_vectors(
                         tuple(row[0] for row in existing_chunk_rows),
                         embeddings,
@@ -159,7 +159,7 @@ class ContentStore(ContentStoreProtocol):
         if not chunks:  # pragma: no cover
             msg = "chunker produced no chunks"
             raise ValueError(msg)
-        embeddings = self._embedding_provider.embed([chunk.text for chunk in chunks])
+        embeddings = self._embed_for_storage([chunk.text for chunk in chunks])
         if len(embeddings) != len(chunks):  # pragma: no cover
             msg = "embedding count does not match chunk count"
             raise ValueError(msg)
@@ -462,6 +462,16 @@ class ContentStore(ContentStoreProtocol):
             merged.append(item)
         return tuple(merged)
 
+    def _embed_for_storage(self, texts: list[str]) -> list[object]:
+        """Embed texts for storage — hybrid if available, dense fallback."""
+        embed_hybrid = getattr(self._embedding_provider, "embed_hybrid", None)
+        if callable(embed_hybrid):
+            hybrid = embed_hybrid(texts)
+            if isinstance(hybrid, (list, tuple)) and len(hybrid) == len(texts):
+                return list(hybrid)
+
+        return self._embedding_provider.embed(texts)
+
     def _embed_query(self, query_text: str) -> object:
         embed_hybrid = getattr(self._embedding_provider, "embed_hybrid", None)
         if callable(embed_hybrid):
@@ -499,7 +509,7 @@ class ContentStore(ContentStoreProtocol):
     def _upsert_vectors(
         self,
         chunk_ids: tuple[str, ...],
-        vectors: list[list[float]],
+        vectors: list[object],
         *,
         scope: str,
     ) -> None:
@@ -513,41 +523,8 @@ class ContentStore(ContentStoreProtocol):
             self._vector_store.upsert(points=points)
             return
 
-        store_embedding = getattr(self._vector_store, "store_embedding", None)
-        if callable(store_embedding):  # pragma: no cover
-            for chunk_id, vector in zip(chunk_ids, vectors, strict=True):
-                store_embedding(chunk_id, vector, "document", scope=scope)
-            return
-
-        upsert = getattr(self._vector_store, "upsert", None)
-        if callable(upsert):  # pragma: no cover
-            points = [
-                {"id": chunk_id, "vector": vector, "scope": scope}
-                for chunk_id, vector in zip(chunk_ids, vectors, strict=True)
-            ]
-            upsert(points=points)
-            return
-
-        upload_points = getattr(self._vector_store, "upload_points", None)
-        if callable(upload_points):  # pragma: no cover
-            points = [
-                {"id": chunk_id, "vector": vector, "scope": scope}
-                for chunk_id, vector in zip(chunk_ids, vectors, strict=True)
-            ]
-            upload_points(points=points)
-            return
-
-        upload_collection = getattr(self._vector_store, "upload_collection", None)
-        if callable(upload_collection):  # pragma: no cover
-            points = [
-                {"id": chunk_id, "vector": vector, "scope": scope}
-                for chunk_id, vector in zip(chunk_ids, vectors, strict=True)
-            ]
-            upload_collection(points=points)
-            return
-
-        msg = "vector_store does not expose a supported upsert method"  # pragma: no cover
-        raise TypeError(msg)
+        for chunk_id, vector in zip(chunk_ids, vectors, strict=True):
+            self._vector_store.store_embedding(chunk_id, vector, "document", scope=scope)
 
     def _delete_vectors(self, chunk_ids: tuple[str, ...]) -> None:
         if not chunk_ids:  # pragma: no cover
@@ -556,19 +533,8 @@ class ContentStore(ContentStoreProtocol):
             self._vector_store.delete(ids=list(chunk_ids))
             return
 
-        delete_embedding = getattr(self._vector_store, "delete_embedding", None)
-        if callable(delete_embedding):  # pragma: no cover
-            for chunk_id in chunk_ids:
-                delete_embedding(chunk_id)
-            return
-
-        delete = getattr(self._vector_store, "delete", None)
-        if callable(delete):  # pragma: no cover
-            delete(ids=list(chunk_ids))
-            return
-
-        msg = "vector_store does not expose a supported delete method"  # pragma: no cover
-        raise TypeError(msg)
+        for chunk_id in chunk_ids:
+            self._vector_store.delete_embedding(chunk_id)
 
     def _row_to_chunk(self, row: sqlite3.Row) -> ContentChunk:
         return ContentChunk(

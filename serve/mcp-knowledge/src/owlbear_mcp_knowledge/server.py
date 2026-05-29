@@ -545,13 +545,14 @@ async def knowledge_search(
     query: str,
     limit: int = 5,
     scopes: list[str] | None = None,
-) -> list[SearchResult] | str:
+) -> list[SearchResult]:
     """Search the knowledge base for relevant context."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     query_facade = app_ctx.query_facade
 
     if query_facade is None:
-        return "error: Knowledge service not available."
+        msg = "Knowledge service not available"
+        raise ToolError(msg)
     limit = _normalize_read_limit(limit)
     normalized_scopes = _normalize_scope_list(scopes)
     try:
@@ -732,9 +733,11 @@ async def knowledge_ingest(
     coordinator = app_ctx.ingest_coordinator
     source_store = app_ctx.source_store_v2
     if coordinator is None:
-        return "error: ingest coordinator not available"
+        msg = "ingest coordinator not available"
+        raise ToolError(msg)
     if source_store is None:
-        return "error: source store v2 not available"
+        msg = "source store not available"
+        raise ToolError(msg)
 
     try:
         source_name = f"mcp-inline-{scope}"
