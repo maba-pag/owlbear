@@ -30,6 +30,8 @@ def atomic_write(target: Path, content: str) -> None:
     Raises:
         OSError: Any I/O failure; the temp file is cleaned up before raising.
     """
+    # Resolve to absolute path to prevent path traversal attacks
+    target = target.resolve()
     fd, tmp_path = tempfile.mkstemp(
         dir=target.parent,
         prefix=".tmp-",
