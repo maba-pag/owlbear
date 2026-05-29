@@ -12,7 +12,7 @@
  *
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { render, fireEvent, waitFor } from '@testing-library/react'
+import { act, render, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -530,17 +530,15 @@ describe('TestFromAC_PdsMigration_Text', () => {
       const pSelect = container.querySelector('p-select')
       if (pSelect) fireEvent(pSelect, new CustomEvent('change', { detail: { value: 'dropped' }, bubbles: true }))
       const submitBtn = container.querySelector('[data-testid="archival-submit"]')
-      if (submitBtn) fireEvent.click(submitBtn)
+      // Wrap in act to flush the async fetch and subsequent state update
+      await act(async () => {
+        if (submitBtn) fireEvent.click(submitBtn)
+      })
 
       // After migration the error host must be p-inline-notification
-      await waitFor(
-        () => {
-          expect(
-            container.querySelector('p-inline-notification[data-testid="archival-error"]'),
-          ).not.toBeNull()
-        },
-        { timeout: 2000 },
-      )
+      expect(
+        container.querySelector('p-inline-notification[data-testid="archival-error"]'),
+      ).not.toBeNull()
     })
 
     it('renders no p-text[data-testid="archival-error"] (replaced by PInlineNotification)', async () => {

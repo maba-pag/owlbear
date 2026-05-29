@@ -9,7 +9,7 @@
  * the real dep during GREEN phase; the mock intercepts the import automatically.
  */
 import { beforeAll, beforeEach, describe, it, expect, vi, afterEach } from 'vitest'
-import { cleanup, render, fireEvent, waitFor } from '@testing-library/react'
+import { act, cleanup, render, fireEvent } from '@testing-library/react'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
 import DetailTab, { type TaskDetail } from '../components/DetailTab'
 import type { Board } from '../hooks/useBoard'
@@ -329,18 +329,14 @@ describe('TestFromAC_DetailTab', () => {
 
       const editButton = container.querySelector('[data-testid="edit-details-button"]') as HTMLElement | null
       expect(editButton).not.toBeNull()
-      fireEvent.click(editButton!)
-      typeIntoPdsField(container, 'p-input-text[data-field="title"]', 'Changed task title')
+      await act(async () => { fireEvent.click(editButton!) })
+      await act(async () => { typeIntoPdsField(container, 'p-input-text[data-field="title"]', 'Changed task title') })
 
-      await waitFor(() => {
-        expect(onDirtyChange).toHaveBeenLastCalledWith(true)
-      })
+      expect(onDirtyChange).toHaveBeenCalledWith(true)
 
-      typeIntoPdsField(container, 'p-input-text[data-field="title"]', TASK.title)
+      await act(async () => { typeIntoPdsField(container, 'p-input-text[data-field="title"]', TASK.title) })
 
-      await waitFor(() => {
-        expect(onDirtyChange).toHaveBeenLastCalledWith(false)
-      })
+      expect(onDirtyChange).toHaveBeenLastCalledWith(false)
     })
 
     it('renders a field and command to add a tag', () => {
