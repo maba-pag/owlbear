@@ -285,52 +285,35 @@ describe('TestFromAC_ConflictLocalEditsPreserved', () => {
     vi.unstubAllGlobals()
   })
 
-  it('title_preserved_in_form_after_409_refetch_and_parent_rerender', async () => {
+  it('all_non_body_fields_preserved_after_409_refetch_and_parent_rerender', async () => {
     /**
-     * AC1 (happy path): User edits title → saves → 409 → refetch → parent re-renders
-     * DetailTab with SERVER_TASK (different title + updated timestamp). useEffect fires
-     * and RESETS title to server value — the bug. After fix, title must retain the
-     * user's edited value.
+     * AC1 (happy path): User edits title, priority, depends_on, parent → saves → 409 →
+     * refetch → parent re-renders with SERVER_TASK. useEffect fires and would RESET all
+     * fields — the bug. After fix, ALL user's local edits must survive.
      *
      * StatefulWrapper reproduces the real parent re-render path.
-     * Without it: DetailTab never re-renders on onTaskUpdated → false-green.
-     * Spy closes the false-green path: a builder who suppresses onTaskUpdated?.(latestTask)
-     * avoids the useEffect reset but fails the spy assertion.
-     */
-    vi.stubGlobal('fetch', mockConflictThenRefetch(SERVER_TASK))
-    const onTaskUpdatedSpy = vi.fn()
-    const { container } = render(<StatefulWrapper initialTask={BASE_TASK} onTaskUpdated={onTaskUpdatedSpy} />)
-
-    editTitle(container, 'My Local Edit Title')
-    await triggerConflictModal(container)
-
-    // Spy proves onTaskUpdated was invoked with server's refreshed task (parent re-render path)
-    expect(onTaskUpdatedSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ updated: SERVER_TASK.updated }),
-    )
-    // BUG: useEffect resets title to SERVER_TASK.title ('Server Title (Different)')
-    // EXPECTED after fix: user's local title preserved
-    expect(getFieldValue(container, 'p-input-text[data-field="title"]')).toBe('My Local Edit Title')
-  })
-
-  it('priority_preserved_in_form_after_409_refetch_and_parent_rerender', async () => {
-    /**
-     * AC1 (edge): Priority (distinct from title) must also be preserved after re-render.
-     * User edits priority to 'someday'; SERVER_TASK.priority is 'critical'.
-     * Without fix: useEffect resets to 'critical'.
      * Spy closes the false-green path: suppressing onTaskUpdated avoids useEffect reset.
      */
     vi.stubGlobal('fetch', mockConflictThenRefetch(SERVER_TASK))
     const onTaskUpdatedSpy = vi.fn()
     const { container } = render(<StatefulWrapper initialTask={BASE_TASK} onTaskUpdated={onTaskUpdatedSpy} />)
 
+    editTitle(container, 'My Local Edit Title')
     editPriority(container, 'someday')
+    editDependsOn(container, '1, 2')
+    editParent(container, '7')
     await triggerConflictModal(container)
 
+    // Spy proves onTaskUpdated was invoked with server's refreshed task (parent re-render path)
     expect(onTaskUpdatedSpy).toHaveBeenCalledWith(
       expect.objectContaining({ updated: SERVER_TASK.updated }),
     )
+    // All fields must retain user's local edits, not server values
+    expect(getFieldValue(container, 'p-input-text[data-field="title"]')).toBe('My Local Edit Title')
     expect(getFieldValue(container, '[data-field="priority"]')).toBe('someday')
+    expect(container.querySelector('[data-testid="dependency-chip"][data-reference-id="1"]')).not.toBeNull()
+    expect(container.querySelector('[data-testid="dependency-chip"][data-reference-id="2"]')).not.toBeNull()
+    expect(getFieldValue(container, 'p-input-text[data-field="parent"]')).toBe('7')
   })
 
   it('block_reason_preserved_on_blocked_task_after_409_rerender', async () => {
@@ -416,50 +399,6 @@ describe('TestFromAC_ConflictLocalEditsPreserved', () => {
       },
       { timeout: 500 },
     )
-  })
-
-  it('depends_on_preserved_as_chips_after_409_refetch_and_parent_rerender', async () => {
-    /**
-    * AC1 (edge): depends_on must survive the useEffect reset.
-    * User adds dependencies '1, 2'; SERVER_TASK.depends_on is [] → resets to [].
-    * Without fix: useEffect resets dependency chips to none.
-     * Spy closes the false-green path: suppressing onTaskUpdated avoids useEffect reset.
-     */
-    vi.stubGlobal('fetch', mockConflictThenRefetch(SERVER_TASK))
-    const onTaskUpdatedSpy = vi.fn()
-    const { container } = render(<StatefulWrapper initialTask={BASE_TASK} onTaskUpdated={onTaskUpdatedSpy} />)
-
-    editDependsOn(container, '1, 2')
-    await triggerConflictModal(container)
-
-    expect(onTaskUpdatedSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ updated: SERVER_TASK.updated }),
-    )
-    // BUG: useEffect resets dependency chips to none (SERVER_TASK.depends_on = [])
-    expect(container.querySelector('[data-testid="dependency-chip"][data-reference-id="1"]')).not.toBeNull()
-    expect(container.querySelector('[data-testid="dependency-chip"][data-reference-id="2"]')).not.toBeNull()
-    expect(getFieldValue(container, 'p-input-text[data-field="depends_on"]')).toBe('')
-  })
-
-  it('parent_preserved_in_form_after_409_refetch_and_parent_rerender', async () => {
-    /**
-     * AC1 (edge): parent must survive the useEffect reset.
-     * User sets parent to '7'; SERVER_TASK.parent is null → resets to ''.
-     * Without fix: useEffect resets parent to ''.
-     * Spy closes the false-green path: suppressing onTaskUpdated avoids useEffect reset.
-     */
-    vi.stubGlobal('fetch', mockConflictThenRefetch(SERVER_TASK))
-    const onTaskUpdatedSpy = vi.fn()
-    const { container } = render(<StatefulWrapper initialTask={BASE_TASK} onTaskUpdated={onTaskUpdatedSpy} />)
-
-    editParent(container, '7')
-    await triggerConflictModal(container)
-
-    expect(onTaskUpdatedSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ updated: SERVER_TASK.updated }),
-    )
-    // BUG: useEffect resets parent to '' (SERVER_TASK.parent = null → '')
-    expect(getFieldValue(container, 'p-input-text[data-field="parent"]')).toBe('7')
   })
 
   it('title_preserved_in_form_after_409_refetch_with_delayed_async_gap', async () => {
@@ -555,75 +494,34 @@ describe('TestFromAC_ConflictModalComparison', () => {
     vi.unstubAllGlobals()
   })
 
-  it('conflict_modal_renders_server_remote_title_with_conflict_remote_testid', async () => {
+  it('conflict_modal_renders_remote_and_local_values_for_differing_fields', async () => {
     /**
-     * AC2 (happy path): The conflict modal must include an element with
-     * data-testid="conflict-remote-title" showing the server's title.
-     * Current: conflict modal has no remote/local comparison elements — FAIL.
+     * AC2: The conflict modal renders identifiable remote (server) and local (user) values
+     * for each differing field. Edits title + priority then triggers 409. Modal must show
+     * all 4 comparison elements: remote-title, local-title, remote-priority, local-priority.
      */
     vi.stubGlobal('fetch', mockConflictThenRefetch(SERVER_TASK))
     const { container } = render(<StatefulWrapper initialTask={BASE_TASK} />)
 
     editTitle(container, 'My Local Edit Title')
-    await triggerConflictModal(container)
-
-    const remoteEl = container.querySelector('[data-testid="conflict-remote-title"]')
-    expect(remoteEl).not.toBeNull()
-    expect(remoteEl!.textContent).toContain('Server Title (Different)')
-  })
-
-  it('conflict_modal_renders_user_local_title_with_conflict_local_testid', async () => {
-    /**
-     * AC2 (happy path): The conflict modal must include an element with
-     * data-testid="conflict-local-title" showing the user's pending local title.
-     * Current: no such element — FAIL.
-     */
-    vi.stubGlobal('fetch', mockConflictThenRefetch(SERVER_TASK))
-    const { container } = render(<StatefulWrapper initialTask={BASE_TASK} />)
-
-    editTitle(container, 'My Local Edit Title')
-    await triggerConflictModal(container)
-
-    const localEl = container.querySelector('[data-testid="conflict-local-title"]')
-    expect(localEl).not.toBeNull()
-    expect(localEl!.textContent).toContain('My Local Edit Title')
-  })
-
-  it('conflict_modal_renders_server_remote_priority_with_conflict_remote_testid', async () => {
-    /**
-     * AC2 (edge — different field): Priority field also gets remote/local comparison.
-     * User edits priority to 'someday'; server's priority is 'critical'.
-     * conflict-remote-priority must display 'critical'.
-     * Current: no such element — FAIL.
-     */
-    vi.stubGlobal('fetch', mockConflictThenRefetch(SERVER_TASK))
-    const { container } = render(<StatefulWrapper initialTask={BASE_TASK} />)
-
     editPriority(container, 'someday')
     await triggerConflictModal(container)
 
-    const remoteEl = container.querySelector('[data-testid="conflict-remote-priority"]')
-    expect(remoteEl).not.toBeNull()
-    expect(remoteEl!.textContent).toContain('critical')
-  })
+    const remoteTitle = container.querySelector('[data-testid="conflict-remote-title"]')
+    expect(remoteTitle).not.toBeNull()
+    expect(remoteTitle!.textContent).toContain('Server Title (Different)')
 
-  it('conflict_modal_renders_user_local_priority_with_conflict_local_testid', async () => {
-    /**
-     * AC2 (edge — different field): The conflict modal must include an element with
-     * data-testid="conflict-local-priority" showing the user's pending local priority.
-     * User edits priority to 'someday'; after fix, conflict-local-priority must show
-     * 'someday' (not 'critical' which is the server's/reset value).
-     * Current: no such element — FAIL.
-     */
-    vi.stubGlobal('fetch', mockConflictThenRefetch(SERVER_TASK))
-    const { container } = render(<StatefulWrapper initialTask={BASE_TASK} />)
+    const localTitle = container.querySelector('[data-testid="conflict-local-title"]')
+    expect(localTitle).not.toBeNull()
+    expect(localTitle!.textContent).toContain('My Local Edit Title')
 
-    editPriority(container, 'someday')
-    await triggerConflictModal(container)
+    const remotePriority = container.querySelector('[data-testid="conflict-remote-priority"]')
+    expect(remotePriority).not.toBeNull()
+    expect(remotePriority!.textContent).toContain('critical')
 
-    const localEl = container.querySelector('[data-testid="conflict-local-priority"]')
-    expect(localEl).not.toBeNull()
-    expect(localEl!.textContent).toContain('someday')
+    const localPriority = container.querySelector('[data-testid="conflict-local-priority"]')
+    expect(localPriority).not.toBeNull()
+    expect(localPriority!.textContent).toContain('someday')
   })
 })
 
@@ -675,157 +573,18 @@ describe('TestFromAC_ForceSaveAcknowledgmentGate', () => {
 
   it('force_save_sends_user_local_title_not_server_refreshed_title', async () => {
     /**
-     * AC3 (happy path — payload check): Force-save request payload must carry the
-     * user's edited title ('My Local Edit Title'), not SERVER_TASK.title
-     * ('Server Title (Different)').
-     *
-     * Current behavior:
-     *   1. 409 → useEffect resets title to SERVER_TASK.title
-     *   2. force-save reads reset title → sends 'Server Title (Different)'  ← BUG
-     *
-     * After fix: local edits preserved; force-save sends 'My Local Edit Title'.
-     * Test also fails earlier on missing conflict-acknowledge element.
+     * AC3 (payload check): Force-save request payload must carry ALL the user's edited
+     * fields — title, priority, body, depends_on, parent — not the server's values.
+     * Edits all 5 fields, acknowledges overwrite, clicks force-save, checks payload.
      */
     const fetchMock = mockConflictThenForceSaveSuccess(SERVER_TASK)
     vi.stubGlobal('fetch', fetchMock)
     const { container } = render(<StatefulWrapper initialTask={BASE_TASK} />)
 
     editTitle(container, 'My Local Edit Title')
-    await triggerConflictModal(container)
-
-    const ackEl = container.querySelector('[data-testid="conflict-acknowledge"]') as HTMLElement | null
-    expect(ackEl).not.toBeNull()
-    fireEvent.click(ackEl!)
-
-    await waitFor(
-      () => expect(container.querySelector('[data-testid="conflict-overwrite"]')).not.toBeNull(),
-      { timeout: 500 },
-    )
-    fireEvent.click(container.querySelector('[data-testid="conflict-overwrite"]') as HTMLElement)
-
-    await waitFor(
-      () => {
-        expect(fetchMock).toHaveBeenCalledTimes(3)
-        const [, opts] = fetchMock.mock.calls[2] as [string, RequestInit]
-        const payload = JSON.parse(opts.body as string) as Record<string, unknown>
-        expect(payload.title).toBe('My Local Edit Title')
-      },
-      { timeout: 500 },
-    )
-  })
-
-  it('force_save_sends_user_local_priority_not_server_refreshed_priority', async () => {
-    /**
-     * AC3 (edge — different field): Force-save payload carries user's priority
-     * ('someday'), not SERVER_TASK.priority ('critical').
-     * Test also fails on missing conflict-acknowledge element.
-     */
-    const fetchMock = mockConflictThenForceSaveSuccess(SERVER_TASK)
-    vi.stubGlobal('fetch', fetchMock)
-    const { container } = render(<StatefulWrapper initialTask={BASE_TASK} />)
-
     editPriority(container, 'someday')
-    await triggerConflictModal(container)
-
-    const ackEl = container.querySelector('[data-testid="conflict-acknowledge"]') as HTMLElement | null
-    expect(ackEl).not.toBeNull()
-    fireEvent.click(ackEl!)
-
-    await waitFor(
-      () => expect(container.querySelector('[data-testid="conflict-overwrite"]')).not.toBeNull(),
-      { timeout: 500 },
-    )
-    fireEvent.click(container.querySelector('[data-testid="conflict-overwrite"]') as HTMLElement)
-
-    await waitFor(
-      () => {
-        expect(fetchMock).toHaveBeenCalledTimes(3)
-        const [, opts] = fetchMock.mock.calls[2] as [string, RequestInit]
-        const payload = JSON.parse(opts.body as string) as Record<string, unknown>
-        expect(payload.priority).toBe('someday')
-      },
-      { timeout: 500 },
-    )
-  })
-
-  it('force_save_sends_user_local_body_not_server_refreshed_body', async () => {
-    /**
-     * AC3 (edge — body): Force-save payload carries user's edited body,
-     * not SERVER_TASK.body ('Server body (Different)').
-     * Test also fails on missing conflict-acknowledge element.
-     */
-    const fetchMock = mockConflictThenForceSaveSuccess(SERVER_TASK)
-    vi.stubGlobal('fetch', fetchMock)
-    const { container } = render(<StatefulWrapper initialTask={BASE_TASK} />)
-
     editBody(container, 'My Local Edit Body')
-    await triggerConflictModal(container)
-
-    const ackEl = container.querySelector('[data-testid="conflict-acknowledge"]') as HTMLElement | null
-    expect(ackEl).not.toBeNull()
-    fireEvent.click(ackEl!)
-
-    await waitFor(
-      () => expect(container.querySelector('[data-testid="conflict-overwrite"]')).not.toBeNull(),
-      { timeout: 500 },
-    )
-    fireEvent.click(container.querySelector('[data-testid="conflict-overwrite"]') as HTMLElement)
-
-    await waitFor(
-      () => {
-        expect(fetchMock).toHaveBeenCalledTimes(3)
-        const [, opts] = fetchMock.mock.calls[2] as [string, RequestInit]
-        const payload = JSON.parse(opts.body as string) as Record<string, unknown>
-        expect(payload.body).toBe('My Local Edit Body')
-      },
-      { timeout: 500 },
-    )
-  })
-
-  it('force_save_sends_user_local_depends_on_not_server_refreshed_depends_on', async () => {
-    /**
-     * AC3 (edge — depends_on): Force-save payload carries user's depends_on ([10, 20]),
-     * not SERVER_TASK.depends_on ([] → []).
-     * Test also fails on missing conflict-acknowledge element.
-     */
-    const fetchMock = mockConflictThenForceSaveSuccess(SERVER_TASK)
-    vi.stubGlobal('fetch', fetchMock)
-    const { container } = render(<StatefulWrapper initialTask={BASE_TASK} />)
-
     editDependsOn(container, '10, 20')
-    await triggerConflictModal(container)
-
-    const ackEl = container.querySelector('[data-testid="conflict-acknowledge"]') as HTMLElement | null
-    expect(ackEl).not.toBeNull()
-    fireEvent.click(ackEl!)
-
-    await waitFor(
-      () => expect(container.querySelector('[data-testid="conflict-overwrite"]')).not.toBeNull(),
-      { timeout: 500 },
-    )
-    fireEvent.click(container.querySelector('[data-testid="conflict-overwrite"]') as HTMLElement)
-
-    await waitFor(
-      () => {
-        expect(fetchMock).toHaveBeenCalledTimes(3)
-        const [, opts] = fetchMock.mock.calls[2] as [string, RequestInit]
-        const payload = JSON.parse(opts.body as string) as Record<string, unknown>
-        expect(payload.depends_on).toEqual([10, 20])
-      },
-      { timeout: 500 },
-    )
-  })
-
-  it('force_save_sends_user_local_parent_not_server_refreshed_parent', async () => {
-    /**
-     * AC3 (edge — parent): Force-save payload carries user's parent (7),
-     * not SERVER_TASK.parent (null → null).
-     * Test also fails on missing conflict-acknowledge element.
-     */
-    const fetchMock = mockConflictThenForceSaveSuccess(SERVER_TASK)
-    vi.stubGlobal('fetch', fetchMock)
-    const { container } = render(<StatefulWrapper initialTask={BASE_TASK} />)
-
     editParent(container, '7')
     await triggerConflictModal(container)
 
@@ -844,6 +603,10 @@ describe('TestFromAC_ForceSaveAcknowledgmentGate', () => {
         expect(fetchMock).toHaveBeenCalledTimes(3)
         const [, opts] = fetchMock.mock.calls[2] as [string, RequestInit]
         const payload = JSON.parse(opts.body as string) as Record<string, unknown>
+        expect(payload.title).toBe('My Local Edit Title')
+        expect(payload.priority).toBe('someday')
+        expect(payload.body).toBe('My Local Edit Body')
+        expect(payload.depends_on).toEqual([10, 20])
         expect(payload.parent).toBe(7)
       },
       { timeout: 500 },
@@ -895,45 +658,16 @@ describe('TestFromAC_ConflictCancelPreservesEdits', () => {
     vi.unstubAllGlobals()
   })
 
-  it('conflict_dismiss_closes_modal_and_preserves_user_local_title', async () => {
+  it('conflict_dismiss_closes_modal_and_preserves_user_local_edits', async () => {
     /**
-     * AC4 (happy path): The available close affordance (conflict-refresh) must close
-     * the modal without discarding the user's pending local edits. After dismiss, title
-     * must still show the user's value, not the server's.
-     *
-     * Current failure: useEffect already reset the form to SERVER_TASK.title when
-     * onTaskUpdated fired after 409 refetch — form shows server value regardless of
-     * which button closes the modal.
+     * AC4: Dismissing via conflict-refresh closes the modal and preserves ALL user's
+     * pending local edits (title + priority). After dismiss, fields must retain the
+     * user's values, not the server's.
      */
     vi.stubGlobal('fetch', mockConflictThenRefetch(SERVER_TASK))
     const { container } = render(<StatefulWrapper initialTask={BASE_TASK} />)
 
     editTitle(container, 'My Local Edit Title')
-    await triggerConflictModal(container)
-
-    const dismissBtn = container.querySelector('[data-testid="conflict-refresh"]') as HTMLElement | null
-    expect(dismissBtn).not.toBeNull()
-    fireEvent.click(dismissBtn!)
-
-    await waitFor(
-      () => expect(container.querySelector('[data-testid="conflict-modal"]')).toBeNull(),
-      { timeout: 500 },
-    )
-
-    // EXPECTED after fix: user's local title preserved in form
-    expect(getFieldValue(container, 'p-input-text[data-field="title"]')).toBe('My Local Edit Title')
-  })
-
-  it('conflict_dismiss_preserves_user_local_priority', async () => {
-    /**
-     * AC4 (edge — different field): Dismissing via the available close affordance
-     * (conflict-refresh) must also preserve user's edited priority.
-     * Current failure: useEffect already reset priority to SERVER_TASK.priority
-     * ('critical') — form shows server value after modal closes.
-     */
-    vi.stubGlobal('fetch', mockConflictThenRefetch(SERVER_TASK))
-    const { container } = render(<StatefulWrapper initialTask={BASE_TASK} />)
-
     editPriority(container, 'someday')
     await triggerConflictModal(container)
 
@@ -946,6 +680,7 @@ describe('TestFromAC_ConflictCancelPreservesEdits', () => {
       { timeout: 500 },
     )
 
+    expect(getFieldValue(container, 'p-input-text[data-field="title"]')).toBe('My Local Edit Title')
     expect(getFieldValue(container, '[data-field="priority"]')).toBe('someday')
   })
 })

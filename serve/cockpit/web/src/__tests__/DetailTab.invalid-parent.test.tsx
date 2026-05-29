@@ -112,182 +112,76 @@ describe('TestFromAC_InvalidParentValidation', () => {
     vi.unstubAllGlobals()
   })
 
-  it('non-numeric parent input renders a client-side validation error in the DOM', async () => {
+  it('non-numeric_float_and_negative_parent_inputs_all_render_validation_error', async () => {
     /**
-     * AC1: entering "abc" in the parent field must produce a visible
-     * client-side validation error element in the DOM.
-     *
-     * Current bug: parseParent silently returns null for "abc" — no error shown.
+     * AC1: All invalid parent categories (non-numeric text, float, negative)
+     * must produce a visible client-side validation error element.
      */
-    const { container } = renderDetail()
-    typeIntoField(container, '[data-field="parent"]', 'abc')
-
-    await waitFor(
-      () => {
-        const error = container.querySelector('[data-testid="validation-message"]')
-        expect(error).not.toBeNull()
-        expect(error!.textContent?.trim()).toBeTruthy()
-      },
-      { timeout: 500 },
-    )
+    for (const value of ['abc', '3.14', '-5']) {
+      const { container, unmount } = renderDetail()
+      typeIntoField(container, '[data-field="parent"]', value)
+      await waitFor(
+        () => {
+          const error = container.querySelector('[data-testid="validation-message"]')
+          expect(error, `expected error for parent="${value}"`).not.toBeNull()
+          expect(error!.textContent?.trim()).toBeTruthy()
+        },
+        { timeout: 500 },
+      )
+      unmount()
+    }
   })
 
-  it('float parent input renders a client-side validation error in the DOM', async () => {
+  it('save_does_not_call_fetch_for_any_invalid_parent_category', async () => {
     /**
-     * AC1 boundary: "3.14" is not a valid integer parent ID.
-     *
-     * Current bug: Number("3.14") fails Number.isInteger → parseParent returns
-     * null silently, no error element is rendered.
+     * AC1+AC3: Save must not proceed for non-numeric, float, or negative parent.
      */
-    const { container } = renderDetail()
-    typeIntoField(container, '[data-field="parent"]', '3.14')
-
-    await waitFor(
-      () => {
-        const error = container.querySelector('[data-testid="validation-message"]')
-        expect(error).not.toBeNull()
-      },
-      { timeout: 500 },
-    )
+    for (const value of ['notanumber', '1.5', '-5']) {
+      const fetchMock = vi.fn()
+      vi.stubGlobal('fetch', fetchMock)
+      const { container, unmount } = renderDetail()
+      typeIntoField(container, '[data-field="parent"]', value)
+      const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement
+      fireEvent.click(saveBtn)
+      await waitFor(
+        () => expect(fetchMock, `fetch called for parent="${value}"`).not.toHaveBeenCalled(),
+        { timeout: 500 },
+      )
+      unmount()
+      vi.unstubAllGlobals()
+    }
   })
 
-  it('save does not call fetch when parent field contains non-numeric text', async () => {
+  it('invalid_parent_text_preserved_after_validation_fires', async () => {
     /**
-     * AC1: when parent validation error is present, save must not proceed.
-     * fetch() must not be called at all.
-     *
-     * Current bug: parseParent("notanumber") silently returns null; handleSave()
-     * fires the POST with parent: null, losing the user's invalid-but-intentional input.
-     */
-    const fetchMock = vi.fn()
-    vi.stubGlobal('fetch', fetchMock)
-    const { container } = renderDetail()
-    typeIntoField(container, '[data-field="parent"]', 'notanumber')
-
-    const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
-    expect(saveBtn).not.toBeNull()
-    fireEvent.click(saveBtn!)
-
-    await waitFor(
-      () => expect(fetchMock).not.toHaveBeenCalled(),
-      { timeout: 500 },
-    )
-  })
-
-  it('save does not call fetch when parent field contains a float', async () => {
-    /**
-     * AC1 boundary: "1.5" is not a valid task ID (must be a non-negative integer).
-     * Save must refuse rather than silently converting to null.
-     *
-     * Current bug: parseParent("1.5") → null; POST fires with parent: null.
-     */
-    const fetchMock = vi.fn()
-    vi.stubGlobal('fetch', fetchMock)
-    const { container } = renderDetail()
-    typeIntoField(container, '[data-field="parent"]', '1.5')
-
-    const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
-    expect(saveBtn).not.toBeNull()
-    fireEvent.click(saveBtn!)
-
-    await waitFor(
-      () => expect(fetchMock).not.toHaveBeenCalled(),
-      { timeout: 500 },
-    )
-  })
-
-  it('negative parent input renders a client-side validation error in the DOM', async () => {
-    /**
-     * AC1 boundary: "-5" is not a valid parent task ID (must be a non-negative integer).
-     *
-     * Current bug: parseParent("-5") silently returns null — no error shown.
-     */
-    const { container } = renderDetail()
-    typeIntoField(container, '[data-field="parent"]', '-5')
-
-    await waitFor(
-      () => {
-        const error = container.querySelector('[data-testid="validation-message"]')
-        expect(error).not.toBeNull()
-        expect(error!.textContent?.trim()).toBeTruthy()
-      },
-      { timeout: 500 },
-    )
-  })
-
-  it('save does not call fetch when parent field contains a negative number', async () => {
-    /**
-     * AC1 boundary: "-5" is not a valid task ID. Save must refuse rather than
-     * silently converting to null.
-     *
-     * Current bug: parseParent("-5") → null; POST fires with parent: null.
-     */
-    const fetchMock = vi.fn()
-    vi.stubGlobal('fetch', fetchMock)
-    const { container } = renderDetail()
-    typeIntoField(container, '[data-field="parent"]', '-5')
-
-    const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
-    expect(saveBtn).not.toBeNull()
-    fireEvent.click(saveBtn!)
-
-    await waitFor(
-      () => expect(fetchMock).not.toHaveBeenCalled(),
-      { timeout: 500 },
-    )
-  })
-
-  it('invalid parent text is preserved in the parent field after validation fires', async () => {
-    /**
-     * AC1 preserved clause: after typing invalid text and validation fires,
-     * the raw input must remain in the field — it must not be cleared, nulled,
-     * or replaced with the previously-valid value.
-     *
-     * Readback assertion: field value === the invalid string the user typed.
+     * AC1 preserved clause: raw invalid input must remain in the field.
      */
     const { container } = renderDetail()
     typeIntoField(container, '[data-field="parent"]', 'not-a-number')
-
-    // Wait for validation error to confirm the component processed the input
     await waitFor(
-      () => {
-        const error = container.querySelector('[data-testid="validation-message"]')
-        expect(error).not.toBeNull()
-      },
+      () => expect(container.querySelector('[data-testid="validation-message"]')).not.toBeNull(),
       { timeout: 500 },
     )
-
-    const el = container.querySelector('[data-field="parent"]') as HTMLInputElement | null
-    expect(el).not.toBeNull()
-    const fieldValue = (el as HTMLInputElement).value ?? el!.getAttribute('value')
+    const el = container.querySelector('[data-field="parent"]') as HTMLInputElement
+    const fieldValue = el.value ?? el.getAttribute('value')
     expect(fieldValue).toBe('not-a-number')
   })
 
-  it('invalid parent text is preserved in the parent field after a blocked save attempt', async () => {
+  it('invalid_parent_text_preserved_after_blocked_save_attempt', async () => {
     /**
-     * AC1 preserved clause: after a blocked save attempt (fetch not called),
-     * the raw invalid text must still be visible in the parent field.
-     * The field must not revert to the loaded state or become empty.
+     * AC1 preserved clause: after blocked save, raw invalid text still visible.
      */
     vi.stubGlobal('fetch', vi.fn())
     const { container } = renderDetail()
     typeIntoField(container, '[data-field="parent"]', 'bad-parent')
-
-    const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
-    expect(saveBtn).not.toBeNull()
-    fireEvent.click(saveBtn!)
-
+    const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement
+    fireEvent.click(saveBtn)
     await waitFor(
-      () => {
-        const error = container.querySelector('[data-testid="validation-message"]')
-        expect(error).not.toBeNull()
-      },
+      () => expect(container.querySelector('[data-testid="validation-message"]')).not.toBeNull(),
       { timeout: 500 },
     )
-
-    const el = container.querySelector('[data-field="parent"]') as HTMLInputElement | null
-    expect(el).not.toBeNull()
-    const fieldValue = (el as HTMLInputElement).value ?? el!.getAttribute('value')
+    const el = container.querySelector('[data-field="parent"]') as HTMLInputElement
+    const fieldValue = el.value ?? el.getAttribute('value')
     expect(fieldValue).toBe('bad-parent')
   })
 })
@@ -301,244 +195,77 @@ describe('TestFromAC_InvalidDependsOnValidation', () => {
     vi.unstubAllGlobals()
   })
 
-  it('non-numeric entry in depends_on renders a client-side validation error', async () => {
+  it('non-numeric_float_and_negative_depends_on_entries_all_render_validation_error', async () => {
     /**
-     * AC2: "10, abc, 20" contains a non-numeric entry — must produce a visible
-     * client-side validation error element.
-     *
-     * Current bug: parseDependsOn silently drops "abc" → result is [10, 20]
-     * with no error rendered.
+     * AC2: All invalid depends_on categories (non-numeric, float, negative)
+     * must produce a visible client-side validation error.
      */
-    const { container } = renderDetail()
-    typeIntoField(container, '[data-field="depends_on"]', '10, abc, 20')
-
-    await waitFor(
-      () => {
-        const error = container.querySelector('[data-testid="validation-message"]')
-        expect(error).not.toBeNull()
-        expect(error!.textContent?.trim()).toBeTruthy()
-      },
-      { timeout: 500 },
-    )
+    for (const value of ['10, abc, 20', '10, 1.5, 20', '10, -1, 20']) {
+      const { container, unmount } = renderDetail()
+      typeIntoField(container, '[data-field="depends_on"]', value)
+      await waitFor(
+        () => {
+          const error = container.querySelector('[data-testid="validation-message"]')
+          expect(error, `expected error for depends_on="${value}"`).not.toBeNull()
+          expect(error!.textContent?.trim()).toBeTruthy()
+        },
+        { timeout: 500 },
+      )
+      unmount()
+    }
   })
 
-  it('negative number entry in depends_on renders a client-side validation error', async () => {
+  it('save_does_not_call_fetch_for_any_invalid_depends_on_category', async () => {
     /**
-     * AC2 boundary: negative IDs are invalid (task IDs are non-negative integers).
-     * "-1" must produce a validation error, not be silently filtered out.
-     *
-     * Current bug: parseDependsOn filters negatives via `value >= 0` with no error.
+     * AC2+AC3: Save must not proceed for non-numeric, float, or negative depends_on.
      */
-    const { container } = renderDetail()
-    typeIntoField(container, '[data-field="depends_on"]', '10, -1, 20')
-
-    await waitFor(
-      () => {
-        const error = container.querySelector('[data-testid="validation-message"]')
-        expect(error).not.toBeNull()
-      },
-      { timeout: 500 },
-    )
+    for (const value of ['10, notvalid, 20', '10, -1, 20', '10, 1.5, 20']) {
+      const fetchMock = vi.fn()
+      vi.stubGlobal('fetch', fetchMock)
+      const { container, unmount } = renderDetail()
+      typeIntoField(container, '[data-field="depends_on"]', value)
+      const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement
+      fireEvent.click(saveBtn)
+      await waitFor(
+        () => expect(fetchMock, `fetch called for depends_on="${value}"`).not.toHaveBeenCalled(),
+        { timeout: 500 },
+      )
+      unmount()
+      vi.unstubAllGlobals()
+    }
   })
 
-  it('float entry in depends_on renders a client-side validation error', async () => {
+  it('invalid_depends_on_text_preserved_after_validation_fires', async () => {
     /**
-     * AC2 boundary: "1.5" is not a valid task ID integer.
-     * parseDependsOn rejects it via Number.isInteger — silently with no error.
-     *
-     * Current bug: float is filtered without surfacing an error to the user.
-     */
-    const { container } = renderDetail()
-    typeIntoField(container, '[data-field="depends_on"]', '10, 1.5, 20')
-
-    await waitFor(
-      () => {
-        const error = container.querySelector('[data-testid="validation-message"]')
-        expect(error).not.toBeNull()
-      },
-      { timeout: 500 },
-    )
-  })
-
-  it('save does not call fetch when depends_on contains invalid entries among valid ones', async () => {
-    /**
-     * AC2: "10, notvalid, 20" — save must not proceed. Silent removal of the
-     * invalid entry would corrupt the user's depends_on list.
-     *
-     * Current bug: parseDependsOn drops "notvalid" and handleSave fires POST
-     * with depends_on: [10, 20], silently truncating the list.
-     */
-    const fetchMock = vi.fn()
-    vi.stubGlobal('fetch', fetchMock)
-    const { container } = renderDetail()
-    typeIntoField(container, '[data-field="depends_on"]', '10, notvalid, 20')
-
-    const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
-    expect(saveBtn).not.toBeNull()
-    fireEvent.click(saveBtn!)
-
-    await waitFor(
-      () => expect(fetchMock).not.toHaveBeenCalled(),
-      { timeout: 500 },
-    )
-  })
-
-  it('save does not call fetch when depends_on contains a negative entry', async () => {
-    /**
-     * AC2: "10, -1, 20" — save must not proceed. Silent removal of the negative
-     * entry would corrupt the user's intent.
-     *
-     * Current bug: parseDependsOn filters negatives without validation;
-     * handleSave fires POST with depends_on: [10, 20].
-     */
-    const fetchMock = vi.fn()
-    vi.stubGlobal('fetch', fetchMock)
-    const { container } = renderDetail()
-    typeIntoField(container, '[data-field="depends_on"]', '10, -1, 20')
-
-    const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
-    expect(saveBtn).not.toBeNull()
-    fireEvent.click(saveBtn!)
-
-    await waitFor(
-      () => expect(fetchMock).not.toHaveBeenCalled(),
-      { timeout: 500 },
-    )
-  })
-
-  it('save does not call fetch when depends_on contains a float entry', async () => {
-    /**
-     * AC2: "10, 1.5, 20" — save must not proceed. Float is not a valid task ID;
-     * silent removal would corrupt the list.
-     *
-     * Current bug: parseDependsOn filters floats without validation;
-     * handleSave fires POST with depends_on: [10, 20].
-     */
-    const fetchMock = vi.fn()
-    vi.stubGlobal('fetch', fetchMock)
-    const { container } = renderDetail()
-    typeIntoField(container, '[data-field="depends_on"]', '10, 1.5, 20')
-
-    const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
-    expect(saveBtn).not.toBeNull()
-    fireEvent.click(saveBtn!)
-
-    await waitFor(
-      () => expect(fetchMock).not.toHaveBeenCalled(),
-      { timeout: 500 },
-    )
-  })
-
-  it('invalid depends_on text is preserved in the field after validation fires', async () => {
-    /**
-     * AC2 preserved clause: after typing invalid depends_on text and validation
-     * fires, the raw input must remain in the field — the invalid entry must
-     * not be silently dropped from the visible field value.
-     *
-     * Readback assertion: field value === the invalid string the user typed.
+     * AC2 preserved clause: raw invalid input must remain in the field.
      */
     const { container } = renderDetail()
     typeIntoField(container, '[data-field="depends_on"]', '10, not-valid, 20')
-
-    // Wait for validation error to confirm the component processed the input
     await waitFor(
-      () => {
-        const error = container.querySelector('[data-testid="validation-message"]')
-        expect(error).not.toBeNull()
-      },
+      () => expect(container.querySelector('[data-testid="validation-message"]')).not.toBeNull(),
       { timeout: 500 },
     )
-
-    const el = container.querySelector('[data-field="depends_on"]') as HTMLInputElement | null
-    expect(el).not.toBeNull()
-    const fieldValue = (el as HTMLInputElement).value ?? el!.getAttribute('value')
+    const el = container.querySelector('[data-field="depends_on"]') as HTMLInputElement
+    const fieldValue = el.value ?? el.getAttribute('value')
     expect(fieldValue).toBe('10, not-valid, 20')
   })
 
-  it('invalid depends_on text is preserved in the field after a blocked save attempt', async () => {
+  it('invalid_depends_on_text_preserved_after_blocked_save_attempt', async () => {
     /**
-     * AC2 preserved clause: after a blocked save attempt (fetch not called),
-     * the full raw invalid text must still be visible in the depends_on field.
-     * The invalid entry must not be silently removed from the field display.
+     * AC2 preserved clause: after blocked save, raw invalid text still visible.
      */
     vi.stubGlobal('fetch', vi.fn())
     const { container } = renderDetail()
     typeIntoField(container, '[data-field="depends_on"]', '5, bad-entry, 15')
-
-    const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
-    expect(saveBtn).not.toBeNull()
-    fireEvent.click(saveBtn!)
-
+    const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement
+    fireEvent.click(saveBtn)
     await waitFor(
-      () => {
-        const error = container.querySelector('[data-testid="validation-message"]')
-        expect(error).not.toBeNull()
-      },
+      () => expect(container.querySelector('[data-testid="validation-message"]')).not.toBeNull(),
       { timeout: 500 },
     )
-
-    const el = container.querySelector('[data-field="depends_on"]') as HTMLInputElement | null
-    expect(el).not.toBeNull()
-    const fieldValue = (el as HTMLInputElement).value ?? el!.getAttribute('value')
+    const el = container.querySelector('[data-field="depends_on"]') as HTMLInputElement
+    const fieldValue = el.value ?? el.getAttribute('value')
     expect(fieldValue).toBe('5, bad-entry, 15')
-  })
-})
-
-// ---------------------------------------------------------------------------
-// AC3: Save blocked while client-side validation errors are present (td:2)
-// ---------------------------------------------------------------------------
-
-describe('TestFromAC_SaveBlockedOnValidationError', () => {
-  afterEach(() => {
-    vi.unstubAllGlobals()
-  })
-
-  it('save does not call fetch when parent field contains invalid input', async () => {
-    /**
-     * AC3: mechanism-agnostic save refusal proof. While a client-side validation
-     * error is active, save must not proceed regardless of whether the button is
-     * disabled or a click-time handler refuses.
-     *
-     * Proof: fetch is not called after clicking save with invalid parent input.
-     *
-     * Current bug: no validation state exists; handleSave fires POST with null parent.
-     */
-    const fetchMock = vi.fn()
-    vi.stubGlobal('fetch', fetchMock)
-    const { container } = renderDetail()
-    typeIntoField(container, '[data-field="parent"]', 'invalid')
-
-    const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
-    expect(saveBtn).not.toBeNull()
-    fireEvent.click(saveBtn!)
-
-    await waitFor(
-      () => expect(fetchMock).not.toHaveBeenCalled(),
-      { timeout: 500 },
-    )
-  })
-
-  it('save does not call fetch when depends_on contains invalid entries', async () => {
-    /**
-     * AC3: mechanism-agnostic save refusal proof for invalid depends_on.
-     *
-     * Proof: fetch is not called after clicking save with invalid depends_on.
-     *
-     * Current bug: no validation state; handleSave fires POST with silently-filtered list.
-     */
-    const fetchMock = vi.fn()
-    vi.stubGlobal('fetch', fetchMock)
-    const { container } = renderDetail()
-    typeIntoField(container, '[data-field="depends_on"]', 'bad, 10')
-
-    const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
-    expect(saveBtn).not.toBeNull()
-    fireEvent.click(saveBtn!)
-
-    await waitFor(
-      () => expect(fetchMock).not.toHaveBeenCalled(),
-      { timeout: 500 },
-    )
   })
 })
 
@@ -547,81 +274,49 @@ describe('TestFromAC_SaveBlockedOnValidationError', () => {
 // ---------------------------------------------------------------------------
 
 describe('TestFromAC_DirtyStateSignal', () => {
-  it('dirty indicator appears in DOM when title is changed from its loaded value', async () => {
+  it('dirty_indicator_appears_when_any_editable_field_changes_from_loaded_value', async () => {
     /**
-     * AC4: after changing the title field, a dirty-state signal must be
-     * visible in the DOM via data-testid="dirty-indicator".
-     *
-     * Current bug: no dirty-state model exists — no such element is ever rendered.
+     * AC4: Changing title, depends_on, or parent from loaded values must all
+     * produce a dirty-state signal via data-testid="dirty-indicator".
      */
-    const { container } = renderDetail()
-    typeIntoField(container, '[data-field="title"]', 'New title value')
-
+    // title
+    const r1 = renderDetail()
+    typeIntoField(r1.container, '[data-field="title"]', 'New title value')
     await waitFor(
-      () => {
-        const dirty = container.querySelector('[data-testid="dirty-indicator"]')
-        expect(dirty).not.toBeNull()
-      },
+      () => expect(r1.container.querySelector('[data-testid="dirty-indicator"]')).not.toBeNull(),
       { timeout: 500 },
     )
-  })
+    r1.unmount()
 
-  it('dirty indicator appears when depends_on is changed from its loaded value', async () => {
-    /**
-     * AC4: changing depends_on from the loaded "10, 20" (TASK_WITH_DEPS) to
-     * a different valid value must render the dirty indicator.
-     *
-     * Current bug: no dirty-state signal.
-     */
-    const { container } = renderDetail(TASK_WITH_DEPS)
-    typeIntoField(container, '[data-field="depends_on"]', '10, 20, 30')
-
+    // depends_on
+    const r2 = renderDetail(TASK_WITH_DEPS)
+    typeIntoField(r2.container, '[data-field="depends_on"]', '10, 20, 30')
     await waitFor(
-      () => {
-        const dirty = container.querySelector('[data-testid="dirty-indicator"]')
-        expect(dirty).not.toBeNull()
-      },
+      () => expect(r2.container.querySelector('[data-testid="dirty-indicator"]')).not.toBeNull(),
       { timeout: 500 },
     )
-  })
+    r2.unmount()
 
-  it('dirty indicator appears when parent is changed from its loaded value', async () => {
-    /**
-     * AC4: changing parent from "5" (loaded from TASK_WITH_DEPS) to a different
-     * valid integer must render the dirty indicator.
-     *
-     * Current bug: no dirty-state signal.
-     */
-    const { container } = renderDetail(TASK_WITH_DEPS)
-    typeIntoField(container, '[data-field="parent"]', '99')
-
+    // parent
+    const r3 = renderDetail(TASK_WITH_DEPS)
+    typeIntoField(r3.container, '[data-field="parent"]', '99')
     await waitFor(
-      () => {
-        const dirty = container.querySelector('[data-testid="dirty-indicator"]')
-        expect(dirty).not.toBeNull()
-      },
+      () => expect(r3.container.querySelector('[data-testid="dirty-indicator"]')).not.toBeNull(),
       { timeout: 500 },
     )
+    r3.unmount()
   })
 
-  it('dirty indicator is absent when a changed field is restored to its loaded value', async () => {
+  it('dirty_indicator_absent_when_changed_field_restored_to_loaded_value', async () => {
     /**
-     * AC4: restoring a field to its original loaded value must clear the dirty signal.
-     * The signal must be absent when fields match the loaded state.
-     *
-     * Fail path in RED: the first waitFor (dirty indicator appearing) fails —
-     * no dirty-state model exists at all.
+     * AC4: Restoring a field to its loaded value must clear the dirty signal.
      */
     const { container } = renderDetail(TASK_WITH_DEPS)
-
-    // Step 1: Change parent away from loaded value — dirty indicator must appear
     typeIntoField(container, '[data-field="parent"]', '99')
     await waitFor(
       () => expect(container.querySelector('[data-testid="dirty-indicator"]')).not.toBeNull(),
       { timeout: 500 },
     )
-
-    // Step 2: Restore to original loaded value "5" — dirty indicator must clear
     typeIntoField(container, '[data-field="parent"]', '5')
     await waitFor(
       () => expect(container.querySelector('[data-testid="dirty-indicator"]')).toBeNull(),
@@ -637,15 +332,10 @@ describe('TestFromAC_DirtyStateSignal', () => {
 describe('TestFromAC_ValidationErrorVisibility', () => {
   it('client-side validation error renders in a DOM element queryable by data-testid', async () => {
     /**
-     * AC5: after triggering a client-side validation error (invalid parent),
-     * the error must be findable via a stable data-testid query and must have
-     * non-empty visible text content.
-     *
-     * Current bug: no client-side validation element exists in the component.
+     * AC5: Error must be findable via data-testid with non-empty text.
      */
     const { container } = renderDetail()
     typeIntoField(container, '[data-field="parent"]', 'notvalid')
-
     await waitFor(
       () => {
         const error = container.querySelector('[data-testid="validation-message"]')
@@ -658,27 +348,17 @@ describe('TestFromAC_ValidationErrorVisibility', () => {
 
   it('client-side validation error disappears when invalid input is corrected', async () => {
     /**
-     * AC5 + AC1 boundary: correcting an invalid parent input must remove the
-     * validation error from the DOM — the error is not sticky.
-     *
-     * Fail path in RED: first waitFor (error appearing) fails — no validation
-     * error element exists in the current implementation.
+     * AC5 + AC1: Correcting invalid input must remove the validation error.
      */
     const { container } = renderDetail()
-
-    // Step 1: Enter invalid value — error must appear
     typeIntoField(container, '[data-field="parent"]', 'bad')
     await waitFor(
-      () =>
-        expect(container.querySelector('[data-testid="validation-message"]')).not.toBeNull(),
+      () => expect(container.querySelector('[data-testid="validation-message"]')).not.toBeNull(),
       { timeout: 500 },
     )
-
-    // Step 2: Correct to a valid integer — error must disappear
     typeIntoField(container, '[data-field="parent"]', '7')
     await waitFor(
-      () =>
-        expect(container.querySelector('[data-testid="validation-message"]')).toBeNull(),
+      () => expect(container.querySelector('[data-testid="validation-message"]')).toBeNull(),
       { timeout: 500 },
     )
   })
