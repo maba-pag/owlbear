@@ -4,125 +4,149 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 
-from owlbear_cockpit import adapter
 from owlbear_cockpit.cache import MtimeScanCache
-from owlbear_cockpit.deps import get_cache, get_engine
+from owlbear_cockpit.deps import get_cache, get_engine, get_view
 from owlbear_cockpit.models import (
     BoardOut,
-    SessionListOut,
-    SessionOut,
-    TaskDetailOut,
-    TaskListOut,
-    TaskSummaryOut,
 )
+from owlbear_cockpit.view import CockpitView
 from owlbear_kanban import KanbanEngine
+from owlbear_kanban.models import (
+    ActivityEvent,
+    ListTasksResponse,
+    SessionRecord,
+    ShowTaskResponse,
+)
 
 router = APIRouter()
 
 _Engine = Annotated[KanbanEngine, Depends(get_engine)]
 _Cache = Annotated[MtimeScanCache, Depends(get_cache)]
+_View = Annotated[CockpitView, Depends(get_view)]
+
+
+class CockpitListTasksResponse(ListTasksResponse):
+    """Cockpit envelope for GET /api/tasks with tasks-dir signature metadata."""
+
+    mtime: int
+
+
+class SessionsResponse(BaseModel):
+    """Cockpit envelope for GET /api/sessions."""
+
+    sessions: list[SessionRecord]
+
+
+def _filter_cached_tasks(
+    tasks: list,
+    *,
+    status: str,
+    priority: str,
+    tag: str,
+    blocked: bool | None,
+) -> list:
+    """Apply the subset of list filters supported on the cache-hit path."""
+    filtered = tasks
+    if status:
+        filtered = [task for task in filtered if task.status == status]
+    if priority:
+        filtered = [task for task in filtered if task.priority == priority]
+    if tag:
+        filtered = [task for task in filtered if tag in task.tags]
+    if blocked is not None:
+        filtered = [task for task in filtered if task.blocked is blocked]
+    return filtered
 
 
 @router.get("/board", response_model=BoardOut)
 def get_board(engine: _Engine) -> BoardOut:
     """Return board config: statuses, priorities, and valid_transitions map."""
-    config = adapter.board_config(engine)
-    statuses = config.statuses
-    status_names = [s["name"] for s in statuses]
-    valid_transitions = {name: sorted(adapter.valid_transitions(engine, name)) for name in status_names}
+    config = engine.board_config()
+    status_names = config.status_names
+    valid_transitions = {name: sorted(engine.valid_transitions(name)) for name in status_names}
     return BoardOut(
-        statuses=statuses,
+        statuses=[{"name": s} for s in status_names],
         priorities=config.priorities,
         valid_transitions=valid_transitions,
     )
 
 
-@router.get("/tasks", response_model=TaskListOut)
+@router.get("/tasks", response_model=CockpitListTasksResponse)
 def list_tasks(  # noqa: PLR0913
-    engine: _Engine,
+    view: _View,
     cache: _Cache,
     status: str = "",
     priority: str = "",
     tag: str = "",
     blocked: bool | None = None,  # noqa: FBT001
-) -> TaskListOut:
-    """Return task summaries list and max mtime_ns of the tasks directory.
+) -> CockpitListTasksResponse:
+    """Return canonical list-tasks envelope for cockpit clients."""
+    mtime = cache.scan()
 
-    Uses a per-engine mtime cache: engine.list_tasks() is only called when the
-    tasks directory has changed since the last request (cache miss).  On a cache
-    hit the previously fetched task list is returned without touching the engine.
-    Filtering is applied in Python after the cache look-up so that different
-    filter combinations still benefit from the same cached full task list.
-    """
-    if cache.has_changed():
-        cache.tasks = adapter.list_tasks(engine)
-
-    summaries = cache.tasks
-    if status:
-        summaries = [s for s in summaries if s.status == status]
-    if priority:
-        summaries = [s for s in summaries if s.priority == priority]
-    if tag:
-        summaries = [s for s in summaries if tag in (s.tags or [])]
-    if blocked is not None:
-        summaries = [s for s in summaries if s.blocked == blocked]
-
-    tasks = [
-        TaskSummaryOut(
-            id=s.id,
-            title=s.title,
-            status=s.status,
-            priority=s.priority,
-            tags=s.tags,
-            blocked=s.blocked,
-            block_reason=s.block_reason,
-            claimed=s.claimed,
+    if cache.changed_since(mtime) or not cache.has_cached_tasks:
+        envelope = view.list_tasks()
+        cache.tasks = envelope.tasks
+        cache.commit_signature(mtime)
+        tasks = _filter_cached_tasks(
+            cache.tasks,
+            status=status,
+            priority=priority,
+            tag=tag,
+            blocked=blocked,
         )
-        for s in summaries
-    ]
-    return TaskListOut(tasks=tasks, mtime=cache.last_mtime)
+        return CockpitListTasksResponse(
+            tasks=tasks,
+            guidance=envelope.guidance,
+            missing_ids=envelope.missing_ids,
+            mtime=mtime,
+        )
+
+    tasks = _filter_cached_tasks(
+        cache.tasks,
+        status=status,
+        priority=priority,
+        tag=tag,
+        blocked=blocked,
+    )
+    return CockpitListTasksResponse(
+        tasks=tasks,
+        guidance=[],
+        missing_ids=None,
+        mtime=mtime,
+    )
 
 
-@router.get("/tasks/{task_id}", response_model=TaskDetailOut)
-def get_task(task_id: str, engine: _Engine) -> TaskDetailOut:
+@router.get("/tasks/{task_id}", response_model=ShowTaskResponse)
+def get_task(task_id: int, view: _View) -> ShowTaskResponse:
     """Return full task detail for the given task ID, or 404 if not found."""
-    try:
-        task = adapter.show_task(engine, task_id)
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail=f"Task {task_id!r} not found") from None
-    return TaskDetailOut(
-        id=task.id,
-        title=task.title,
-        status=task.status,
-        priority=task.priority,
-        body=task.body,
-        updated=task.updated,
-        created=task.created,
-        tags=task.tags,
-        blocked=task.blocked,
-        block_reason=task.block_reason,
-        parent=task.parent,
-        depends_on=task.depends_on,
-        claimed_by=task.claimed_by,
+    return view.show_task(task_id)
+
+
+@router.get("/activity", response_model=list[ActivityEvent])
+def list_activity(  # noqa: PLR0913
+    view: _View,
+    task_id: int | None = None,
+    action: str | None = None,
+    source: str | None = None,
+    since: str | None = None,
+    until: str | None = None,
+    limit: int | None = None,
+) -> list[ActivityEvent]:
+    """Return activity events with optional filters."""
+    return view.list_activity(
+        task_id=task_id,
+        action=action,
+        source=source,
+        since=since,
+        until=until,
+        limit=limit,
     )
 
 
-@router.get("/sessions", response_model=SessionListOut)
-def list_sessions(engine: _Engine, filter: str = "active") -> SessionListOut:  # noqa: A002
+@router.get("/sessions", response_model=SessionsResponse)
+def list_sessions(view: _View, filter: str = "active") -> SessionsResponse:  # noqa: A002
     """Return work sessions, filtered by state."""
-    sessions = adapter.list_sessions(engine, filter=filter)
-    return SessionListOut(
-        sessions=[
-            SessionOut(
-                task_id=s.task_id,
-                state=s.state,
-                agent=s.agent,
-                started_at=s.started_at,
-                duration=s.duration,
-                outcome=s.outcome,
-            )
-            for s in sessions
-        ]
-    )
+    return SessionsResponse(sessions=view.list_sessions(filter=filter))

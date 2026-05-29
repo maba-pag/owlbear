@@ -1,9 +1,18 @@
 [project]
 name = "owlbear-cockpit"
 version = "0.1.0"
-requires-python = ">=3.12"
+requires-python = ">=3.12.13"
 description = "OwlBear Cockpit — FastAPI backend for the kanban UI"
-dependencies = ["owlbear-kanban", "fastapi", "uvicorn", "pydantic"]
+dependencies = [
+  "owlbear-kanban",
+  "owlbear-memory",
+  "fastapi",
+  "uvicorn",
+  "pydantic",
+  "ruamel.yaml",
+  "sse-starlette",
+  "watchfiles",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -17,3 +26,4 @@ cockpit = "owlbear_cockpit.main:run"
 
 [tool.uv.sources]
 owlbear-kanban = { workspace = true }
+owlbear-memory = { workspace = true }

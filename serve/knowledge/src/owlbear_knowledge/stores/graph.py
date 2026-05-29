@@ -235,6 +235,7 @@ class SqliteGraphStore(GraphStore):
                 )
             else:
                 edge_id = str(row["id"])
+                merged = {**self._load_json_dict(row["metadata_json"]), **edge.metadata}
                 self._conn.execute(
                     """
                     UPDATE graph_edges
@@ -243,7 +244,7 @@ class SqliteGraphStore(GraphStore):
                     """,
                     (
                         edge.weight,
-                        json.dumps(edge.metadata),
+                        json.dumps(merged),
                         now_iso,
                         edge_id,
                     ),

@@ -82,7 +82,7 @@ repos:
       - id: eslint-frontend
         name: ESLint (Cockpit frontend)
         language: system
-        entry: bash -c 'cd serve/cockpit/web && npx eslint src/ e2e/ --max-warnings 0'
+        entry: npx --prefix serve/cockpit/web eslint serve/cockpit/web/src/ serve/cockpit/web/e2e/ --max-warnings 0
         files: ^serve/cockpit/web/(src|e2e)/.*\.(ts|tsx)$
         pass_filenames: false
       # Frontend — extra (no CI equivalent, catches type errors early)
@@ -91,7 +91,7 @@ repos:
       - id: typecheck-frontend
         name: TypeScript (Cockpit frontend)
         language: system
-        entry: bash -c 'cd serve/cockpit/web && npx tsc --noEmit'
+        entry: npx --prefix serve/cockpit/web tsc --noEmit --project serve/cockpit/web/tsconfig.json
         files: ^serve/cockpit/web/src/.*\.(ts|tsx)$
         pass_filenames: false
         stages: [manual]
@@ -99,7 +99,7 @@ repos:
       - id: validate-skills
         name: Validate Agent Skills
         language: system
-        entry: bash -c 'uv run --frozen python .owlbear/scripts/validate_skills.py share/skills/*/'
+        entry: uv run --frozen python .owlbear/scripts/validate_skills.py
         pass_filenames: false
         always_run: true
       - id: validate-agents
@@ -123,16 +123,9 @@ repos:
     hooks:
       - id: megalinter
         name: MegaLinter (full CI parity)
-        language: system
-        entry: >-
-          bash -c 'docker run --rm
-          --platform linux/amd64
-          -v "$(pwd):/tmp/lint"
-          -e APPLY_FIXES=none
-          -e UPDATED_SOURCES_REPORTER=false
-          -e LOG_LEVEL=INFO
-          -e VALIDATE_ALL_CODEBASE=true
-          ghcr.io/oxsecurity/megalinter-cupcake:v9.5.0'
+        language: python
+        additional_dependencies: []
+        entry: python -c "import subprocess,os;subprocess.run(['docker','run','--rm','--platform','linux/amd64','-v',os.getcwd()+':/tmp/lint','-e','APPLY_FIXES=none','-e','UPDATED_SOURCES_REPORTER=false','-e','LOG_LEVEL=INFO','-e','VALIDATE_ALL_CODEBASE=true','ghcr.io/oxsecurity/megalinter-cupcake:v9.5.0'],check=True)"  # editorconfig-checker-disable-line
         pass_filenames: false
         always_run: true
         stages: [manual]

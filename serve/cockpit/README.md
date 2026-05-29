@@ -1,6 +1,9 @@
-# owlbear-cockpit — Kanban Backend
+# owlbear-cockpit — Steering Cockpit Package
 
-FastAPI backend for the Cockpit kanban UI. Wraps `KanbanEngine` with an HTTP API consumed by the React frontend. For the frontend stack, entry points, and full endpoint list, see [copilot-instructions.md](../../.github/copilot-instructions.md) §3 and §4.
+Cockpit combines a FastAPI backend (`src/owlbear_cockpit/`) with a React frontend (`web/`),
+served as built static assets from `dist/`. The backend wraps `KanbanEngine` with read and
+mutation APIs, and the frontend provides the steering viewport used to view, edit, move,
+archive, inspect activity, and resolve decisions.
 
 → Parent: [README.md](../../README.md)
 
@@ -8,74 +11,75 @@ FastAPI backend for the Cockpit kanban UI. Wraps `KanbanEngine` with an HTTP API
 
 ## Launch / Usage
 
-See [copilot-instructions.md](../../.github/copilot-instructions.md) §4 for launch commands and environment variables (`COCKPIT_PORT`, `COCKPIT_NO_OPEN`, `KANBAN_DIR`).
+Build frontend assets (developer/source workflow):
 
-## Engine Surface — Allowlist
+```bash
+cd serve/cockpit/web
+npm run build
+cd -
+```
 
-The cockpit exposes a subset of `KanbanEngine`'s public API. All read access goes through `adapter.py`.
+Sync Porsche Design System runtime assets from CDN (run once after PDS version bumps):
 
-### Via adapter (read-only)
+```bash
+cd serve/cockpit/web
+npm run sync:pds
+cd -
+```
 
-| Method | Purpose |
+This downloads the core chunk, 58 component chunks, and 290 icon SVGs from
+`cdn.ui.porsche.com` into `public/porsche-design-system/` and commits them for offline
+use. Assets are version-pinned to the installed `@porsche-design-system/components-js`
+version; re-run after any PDS upgrade.
+
+Launch Cockpit backend + static frontend:
+
+```bash
+uv run cockpit
+```
+
+`uv run cockpit` serves `serve/cockpit/dist/`, starts on `127.0.0.1:8420` by default,
+and opens a browser unless disabled with `COCKPIT_NO_OPEN=1`.
+
+## Frontend Surface
+
+Frontend source is under `serve/cockpit/web/` and is the only Node/npm package in this
+repository.
+
+| Attribute | Value |
+|-----------|-------|
+| Node requirement | `>=24.15.0` (`web/package.json`) |
+| Stack | React `^19.2.5`, Vite `^8.0.10`, TypeScript `^6.0.3`, React Router `^7.14.2`, Porsche Design System React `^4.0.0`, React Compiler (`babel-plugin-react-compiler` `^1.0.0`), Tailwind CSS `^4.3.0` (`@tailwindcss/vite` + `tailwindcss`) |
+| Test runner | Vitest `^4.1.5` (`npm test`) |
+| E2E runner | Playwright `^1.59.1` (`npm run test:e2e`) |
+| CSS/HTML lint | Stylelint `^17.10.0` (`npm run lint:css`), HTMLHint `^1.9.2` (`npm run lint:html`) |
+| Build output | `serve/cockpit/dist/` via `npm run build` |
+
+## Audit Trail
+
+Activity events use a `source` field for attribution:
+
+| Source | Meaning |
 |--------|---------|
-| `list_tasks(**kwargs)` | Task summaries for board columns |
-| `show_task(task_id)` | Full task detail for the detail tab |
-| `board_config()` | Statuses and priorities for column rendering |
-| `valid_transitions(status)` | Validates move targets; also used by `move_task` route |
-| `list_sessions(**kwargs)` | Work session data for the activity tab |
-
-### Direct engine calls (mutations)
-
-| Method | Route | Notes |
-|--------|-------|-------|
-| `engine.show_task()` + `engine.move_task()` | `POST /tasks/{id}/move` | Pre-check read, then `valid_transitions` check, then move |
-| `engine.show_task()` + `engine.edit_task()` | `POST /tasks/{id}/edit` | Reads current task; diffs tags and deps before writing |
-| `engine.show_task()` + `engine.release_task()` | `POST /tasks/{id}/release` | Existence check then unconditional release |
-
-### Excluded methods — why
-
-| Method | Reason excluded |
-|--------|----------------|
-| `create_task()` | Pipeline agents create tasks, not the UI |
-| `claim_task()` / `start_work()` / `end_work()` | Agent lifecycle operations |
-| `sweep()` | Background maintenance — not user-triggered |
-| `refresh_config()` | Managed internally by the engine |
-
-## Work Sessions Model
-
-`GET /api/sessions` returns derived `WorkSession` objects built from `activity.jsonl` at read time — there is no separate sessions store.
-
-### Derived states
-
-| State | Derivation condition |
-|-------|---------------------|
-| `running` | Open claim; last activity within `claim_timeout` |
-| `stuck` | Open claim; last activity exceeds `claim_timeout` |
-| `completed-pass` | `end_work` with `detail` starting `"success:"` |
-| `completed-rejected` | `end_work` with `detail` starting `"reject:"` |
-| `completed-fail` | Any other `end_work` outcome |
-| `released` | `release` action in the log |
-
-> `sweep-release` resets the internal claim state but does **not** produce a `WorkSession` entry. Only a user-initiated `release` produces a `"released"` session.
-
-### Filter vocabulary
-
-| Filter value | Included states |
-|-------------|-----------------|
-| `active` | `running`, `stuck` |
-| `all` | all states |
-| `failed-or-rejected` | `completed-fail`, `completed-rejected` |
-| `released` | `released` |
-
-Usage: `GET /api/sessions?filter=active`
-
-## Audit Trail — `actor: "cockpit"` Convention
-
-The engine is initialised with `agent_name="cockpit"`. Every mutation written to `activity.jsonl` carries `actor: "cockpit"`, distinguishing UI-initiated changes from agent-initiated ones (e.g. `actor: "builder"`).
+| `source="cockpit"` | UI-initiated mutation (user action in the Cockpit frontend) |
+| `source="agent"` | agent-initiated mutation (pipeline agent via MCP) |
+| `source="engine"` | internal engine operation (lifecycle, migration) |
 
 ## Configuration
 
-See [copilot-instructions.md](../../.github/copilot-instructions.md) §4 for all environment variables.
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `COCKPIT_PORT` | `8420` | Override listen port (1-65535) |
+| `COCKPIT_NO_OPEN` | unset | Set to `1` to suppress browser auto-open |
+| `KANBAN_DIR` | `.owlbear/kanban/` | Override kanban directory path |
+| `MEMORY_DIR` | `.owlbear/memory/` | Override memory directory path used by `MemoryEngine` |
+
+## Delivery Packaging
+
+- Developer branch (`dev`): frontend source (`serve/cockpit/web/`) is present and used for
+  build/test/lint workflows.
+- Consumer branch (`main`): sync-to-main builds and stages prebuilt
+  `serve/cockpit/dist/` artifacts; consumers launch Cockpit without Node/npm.
 
 ## Dependencies
 
@@ -84,4 +88,8 @@ See [copilot-instructions.md](../../.github/copilot-instructions.md) §4 for all
 | `fastapi` | HTTP framework |
 | `uvicorn` | ASGI server |
 | `pydantic` | Request/response model validation |
+| `sse-starlette` | SSE streaming for the `GET /api/events` invalidation endpoint |
+| `watchfiles` | File-system watcher used by the events endpoint |
 | `owlbear-kanban` | Kanban engine (workspace package) |
+| `owlbear-memory` | Memory engine (workspace package) |
+| `ruamel.yaml` | Round-trip YAML parsing for the Decisions API |

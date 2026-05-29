@@ -24,7 +24,6 @@ Re-exported types:
 from __future__ import annotations
 
 import contextlib
-import fcntl
 import io
 import re
 import threading
@@ -108,13 +107,8 @@ def _allocation_thread_lock(kanban_dir: Path) -> threading.Lock:
 @contextlib.contextmanager
 def _allocation_lock(kanban_dir: Path) -> Iterator[None]:
     thread_lock = _allocation_thread_lock(kanban_dir)
-    lock_path = kanban_dir / ".next_id.lock"
-    with thread_lock, lock_path.open("a", encoding="utf-8") as lock_file:
-        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
-        try:
-            yield
-        finally:
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+    with thread_lock:
+        yield
 
 
 def _load_yaml12_frontmatter(frontmatter_str: str, *, path: Path) -> dict[str, Any]:

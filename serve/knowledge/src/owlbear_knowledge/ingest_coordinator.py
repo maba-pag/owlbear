@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -38,6 +39,8 @@ if TYPE_CHECKING:
     from owlbear_knowledge.protocols.enrichment import EnrichmentStore
     from owlbear_knowledge.protocols.fetcher import SourceFetcher
     from owlbear_knowledge.protocols.graph import GraphStore
+
+logger = logging.getLogger(__name__)
 
 
 class IngestCoordinator:
@@ -274,7 +277,7 @@ class IngestCoordinator:
             else:
                 outcome = (content_result.state, content_result, 0, 0, 0)
         except (RuntimeError, ValueError, LookupError, TypeError, AttributeError, KeyError):
-            # Per-document failures are captured by omission from success counters.
+            logger.exception("Failed to process document during ingest")
             return None
         else:
             return outcome

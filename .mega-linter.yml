@@ -85,8 +85,9 @@ ACTION_ACTIONLINT_FILTER_REGEX_INCLUDE: '^(\.github/workflows/.*\.ya?ml)$'
 # YAML — strict mode
 YAML_YAMLLINT_ARGUMENTS: "--strict"
 
-# JSON — quiet output
+# JSON — quiet output; exclude JSONC files (VS Code settings use comments)
 JSON_JSONLINT_ARGUMENTS: "--quiet"
+JSON_JSONLINT_FILTER_REGEX_EXCLUDE: '(\.vscode/)'
 
 # EditorConfig — GitHub Actions annotations
 # --disable-indent-size: ruff handles Python indent; editorconfig-checker
@@ -98,7 +99,7 @@ EDITORCONFIG_EDITORCONFIG_CHECKER_ARGUMENTS: "-f github-actions --disable-indent
 REPOSITORY_DEVSKIM_DISABLE_ERRORS: false
 
 # Trivy — vulnerability + misconfiguration scanning
-REPOSITORY_TRIVY_ARGUMENTS: "--scanners vuln,misconfig --skip-dirs .venv"
+REPOSITORY_TRIVY_ARGUMENTS: "--scanners vuln,misconfig --skip-dirs .venv,.owlbear/scratch"
 
 # ──────────────────────────────────────────────
 # Performance & Display

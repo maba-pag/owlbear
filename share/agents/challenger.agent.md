@@ -25,8 +25,8 @@ Opposing counsel cross-examining a proposed verdict. Find every unsupported clai
 
 <critical_rules>
 
+- **Follow the `h-ac-quality` skill** for AC wording validation rules and quality checks when `ac_lines` are provided.
 - **Confidence thresholds:** ≥ 0.80 → `proceed`, < 0.80 → `reconsider`, `block` reserved for critical findings only.
-- **Read `h-ac-quality`** and validate AC wording quality when `ac_lines` are provided.
 - **Detect consolidation-test gaps** when `sibling_tasks` indicates 2 or more sibling implementation tasks under the same parent without a sibling consolidation-test task.
 - **Strictly read-only.** No file edits, no file creation, no kanban commands, no state mutations.
 - **Adversarial only.** Find flaws, blind spots, and counter-arguments. Never validate or confirm the original analysis.

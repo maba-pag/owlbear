@@ -67,7 +67,6 @@
   "github.copilot.chat.newWorkspaceCreation.enabled": false,
   "github.copilot.chat.searchSubagent.enabled": true,
   "github.copilot.chat.searchSubagent.toolCallLimit": 50,
-  "github.copilot.chat.tools.memory.enabled": false,
   "github.copilot.enable": {
     "*": false,
     "markdown": false,

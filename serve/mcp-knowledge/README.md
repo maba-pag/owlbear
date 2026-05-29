@@ -1,6 +1,6 @@
 # owlbear-mcp-knowledge — Knowledge MCP Server
 
-MCP server that exposes the `owlbear-knowledge` engine as tools for pipeline agents. Provides document ingestion, semantic search, source management, enrichment batching, and consolidation candidate review. Registered in VS Code's MCP configuration as `owlbear-knowledge`.
+MCP server that exposes the `owlbear-knowledge` engine as tools for pipeline agents. Provides document ingestion, semantic search, source management, and enrichment batching. Registered in VS Code's MCP configuration as `ob-knowledge`.
 
 → Parent: [README.md](../../README.md)
 
@@ -22,10 +22,6 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 | `knowledge_entity_lookup` | Look up a graph entity and its neighbourhood by `entity_id`, `entity_name`, or `entity_type`; expands the graph by `expand_hops` hops (default 1); returns `entity`, `neighbourhood` (entities + edges), and `related_chunks` |
 | `knowledge_sources_list` | List registered knowledge sources, optionally filtered by scope |
 | `knowledge_ingest` | Ingest text content into the knowledge base using a per-scope shared inline source (`mcp-inline-{scope}`); `source_url` stored as document URI; response includes `documents_processed`, `chunks_created`, and `chunks_enqueued` |
-| `get_consolidation_candidates` | List unresolved cross-source entity consolidation candidates (entities appearing in 2+ sources with no existing edge or reviewed dismissal) |
-
-> **TODO:** stale — `get_consolidation_candidates` was retired per CP1; this row should be removed and the package description updated to remove "consolidation candidate review" once the retired tool is confirmed purged from server.py
-
 | `knowledge_stats` | Summary statistics: document, entity, and edge counts plus source count, chunk count, enrichment ratio, and consolidation candidates remaining |
 | `knowledge_sources_refresh` | Re-ingest a registered source by source ID; response includes `source_id` (echoed), `sources_refreshed` (int), and `errors` (list of `{source_id, error, timestamp}` entries); raises `ToolError` when source is not found; returns error envelope when source is not active |
 | `knowledge_sources_delete` | Delete a source and all its associated data (vectors, documents, chunks, entities, enrichment) via coordinator-orchestrated purge; returns a purge-result summary with status (`complete`/`partial`), completed steps, failed step, error, and per-domain sub-results (source, content, enrichment, graph) |

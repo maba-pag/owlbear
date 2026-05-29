@@ -363,8 +363,6 @@ def _collect_task_sessions(
 _SESSION_FILTER_STATES: dict[str, frozenset[str]] = {
     "active": frozenset({"running", "stuck"}),
     "blocked-or-rejected": frozenset({"blocked", "rejected"}),
-    # Compatibility alias for pre-Brief-C consumers.
-    "failed-or-rejected": frozenset({"blocked", "rejected"}),
     "released": frozenset({"released"}),
 }
 
@@ -418,17 +416,11 @@ def _move_file(src: Path, dest: Path, *, no_overwrite: bool = False) -> None:
         pass
 
     if no_overwrite:
-        # os.link() is atomic for destination creation and fails if dest exists,
-        # avoiding overwrite when a collision appears after a pre-check.
-        os.link(src, dest)
-        try:
-            src.unlink()
-        except OSError:
-            # Roll back the destination hard link so partial failures do not
-            # leave a duplicate task file in archive/.
-            with contextlib.suppress(OSError):
-                dest.unlink()
-            raise
+        # Fail if destination already exists to avoid silent overwrite.
+        if dest.exists():
+            msg = f"Destination already exists: {dest}"
+            raise FileExistsError(msg)
+        src.replace(dest)
         return
 
     src.replace(dest)
@@ -2602,8 +2594,7 @@ class KanbanEngine:
 
         Args:
             filter: One of ``"active"`` (default), ``"all"``,
-                    ``"blocked-or-rejected"`` (or legacy alias
-                    ``"failed-or-rejected"``), or ``"released"``.
+                    ``"blocked-or-rejected"``, or ``"released"``.
 
         Returns:
             List of :class:`SessionRecord` objects matching the filter.

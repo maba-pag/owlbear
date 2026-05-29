@@ -103,29 +103,6 @@ _install_legacy_event_loop_policy()
 globals()["ContentInjectionGuard"] = object
 
 
-@dataclass(slots=True, frozen=True)
-class _SingleChunk:
-    """Minimal chunk payload consumed by ContentStore.ingest."""
-
-    index: int
-    text: str
-    metadata: dict[str, Any]
-
-
-class _SingleChunker:
-    """Small chunker adapter used by the v2 ContentStore wiring."""
-
-    def chunk(self, text: str, metadata: dict[str, Any]) -> list[_SingleChunk]:
-        return [_SingleChunk(index=0, text=text, metadata=metadata)]
-
-
-class _ZeroEmbeddingProvider:
-    """Deterministic embedding adapter for v2 ingestion wiring."""
-
-    def embed(self, texts: list[str]) -> list[list[float]]:
-        return [[0.0] for _ in texts]
-
-
 async def knowledge_enrichment_claim_batch(ctx: Context, limit: int = 10) -> list[EnrichmentChunk]:
     """Atomically claim a batch of chunks ready for enrichment.
 
@@ -417,14 +394,17 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
     qdrant_path = os.environ.get("OWLBEAR_QDRANT_PATH", _DEFAULT_QDRANT_PATH)
     conn = sqlite3.connect(path)
     try:
+        from owlbear_knowledge.chunker import TextChunker  # noqa: PLC0415
+        from owlbear_knowledge.embeddings import BgeM3EmbeddingProvider  # noqa: PLC0415
+
         vector_store = QdrantVectorStore(location=qdrant_path)
         source_store_v2 = SqliteSourceStore(conn)
         graph_store_v2 = SqliteGraphStore(conn)
         content_store = ContentStore(
             db=conn,
             vector_store=vector_store,
-            embedding_provider=_ZeroEmbeddingProvider(),
-            chunker=_SingleChunker(),
+            embedding_provider=BgeM3EmbeddingProvider(),
+            chunker=TextChunker(),
         )
         query_facade = QueryFacade(content=content_store, graph=graph_store_v2)
         enrichment_store = EnrichmentStore(db=conn, graph=graph_store_v2)
@@ -565,13 +545,14 @@ async def knowledge_search(
     query: str,
     limit: int = 5,
     scopes: list[str] | None = None,
-) -> list[SearchResult] | str:
+) -> list[SearchResult]:
     """Search the knowledge base for relevant context."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     query_facade = app_ctx.query_facade
 
     if query_facade is None:
-        return "error: Knowledge service not available."
+        msg = "Knowledge service not available"
+        raise ToolError(msg)
     limit = _normalize_read_limit(limit)
     normalized_scopes = _normalize_scope_list(scopes)
     try:
@@ -752,9 +733,11 @@ async def knowledge_ingest(
     coordinator = app_ctx.ingest_coordinator
     source_store = app_ctx.source_store_v2
     if coordinator is None:
-        return "error: ingest coordinator not available"
+        msg = "ingest coordinator not available"
+        raise ToolError(msg)
     if source_store is None:
-        return "error: source store v2 not available"
+        msg = "source store not available"
+        raise ToolError(msg)
 
     try:
         source_name = f"mcp-inline-{scope}"

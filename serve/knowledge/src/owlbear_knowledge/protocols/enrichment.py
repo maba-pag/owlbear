@@ -363,6 +363,8 @@ class EnrichmentStore(Protocol):
     def suggest_intra_doc_edges(
         self,
         document_id: str,
+        *,
+        confidence_threshold: float = 0.5,
     ) -> tuple[SuggestedEdge, ...]:
         """Suggest edges between entities found within the same document.
 
@@ -371,6 +373,8 @@ class EnrichmentStore(Protocol):
           - Suggestions are based on co-occurrence and entity proximity
             within the document's chunks.
           - Each suggestion includes a confidence score and reason.
+          - Only suggestions with confidence >= confidence_threshold are
+            returned.
 
         Non-guarantees:
           - Suggestion algorithm (co-occurrence, embedding similarity,
