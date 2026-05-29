@@ -21,6 +21,7 @@ import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from mcp.server.fastmcp.exceptions import ToolError
 
 from owlbear_knowledge.protocols.ingest import (
     IngestDocument,
@@ -155,41 +156,25 @@ class TestIngestDocumentCoordinatorWiring:
     # -- AC1: Guard checks — ingest_coordinator is None ---------------------
 
     @pytest.mark.asyncio
-    async def test_returns_error_when_ingest_coordinator_is_none(self) -> None:
-        """ingest_document returns an error string when ingest_coordinator is None.
-
-        Currently FAILS: the old code checks 'pipeline is None' not 'ingest_coordinator'.
-        With a non-None pipeline the old code returns a success string, not an error.
-        """
-        # Use a real pipeline mock so old code doesn't bail on pipeline=None;
-        # old code will then return a success string → assertion fails before fix.
+    async def test_raises_tool_error_when_ingest_coordinator_is_none(self) -> None:
+        """ingest_document raises ToolError when ingest_coordinator is None."""
         ctx = _make_ctx(ingest_coordinator=None)
-        result = await ingest_document(ctx, text="some text")
-        assert isinstance(result, str), "result must be a string"
-        assert "error" in result.lower(), f"expected error string, got: {result!r}"
+        with pytest.raises(ToolError, match="ingest coordinator not available"):
+            await ingest_document(ctx, text="some text")
 
     @pytest.mark.asyncio
-    async def test_returns_error_when_source_store_v2_is_none(self) -> None:
-        """ingest_document returns an error string when source_store_v2 is None.
-
-        Currently FAILS: the old code does not check source_store_v2 at all;
-        with a non-None pipeline it returns a success string, not an error.
-        """
+    async def test_raises_tool_error_when_source_store_v2_is_none(self) -> None:
+        """ingest_document raises ToolError when source_store_v2 is None."""
         ctx = _make_ctx(source_store_v2=None)
-        result = await ingest_document(ctx, text="some text")
-        assert isinstance(result, str), "result must be a string"
-        assert "error" in result.lower(), f"expected error string, got: {result!r}"
+        with pytest.raises(ToolError, match="source store not available"):
+            await ingest_document(ctx, text="some text")
 
     @pytest.mark.asyncio
-    async def test_returns_error_when_both_guards_fail(self) -> None:
-        """Returns error when both ingest_coordinator and source_store_v2 are None.
-
-        Currently FAILS: old code returns success string via non-None pipeline mock.
-        """
+    async def test_raises_tool_error_when_both_guards_fail(self) -> None:
+        """Raises ToolError when both ingest_coordinator and source_store_v2 are None."""
         ctx = _make_ctx(ingest_coordinator=None, source_store_v2=None)
-        result = await ingest_document(ctx, text="some text")
-        assert isinstance(result, str), "result must be a string"
-        assert "error" in result.lower(), f"expected error string, got: {result!r}"
+        with pytest.raises(ToolError, match="ingest coordinator not available"):
+            await ingest_document(ctx, text="some text")
 
     @pytest.mark.asyncio
     async def test_proceeds_when_both_guards_satisfied(self) -> None:
