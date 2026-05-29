@@ -5,7 +5,7 @@ requires-python = ">=3.12.13"
 description = "OwlBear knowledge engine (graph + vector)"
 dependencies = [
     "pydantic>=2.13.4",
-    "strictyaml>=1.7.3",
+    "ruamel.yaml>=0.18.0",
 ]
 
 [project.optional-dependencies]

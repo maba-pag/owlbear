@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import strictyaml
+from ruamel.yaml import YAML, YAMLError
 
 from skills_ref.errors import ParseError
 
@@ -43,8 +43,9 @@ def parse_frontmatter(content: str) -> tuple[dict, str]:
     body = after_open[close_idx + 4 :]
 
     try:
-        data = strictyaml.load(yaml_text).data
-    except strictyaml.YAMLError as exc:
+        yaml = YAML(typ="safe")
+        data = yaml.load(yaml_text)
+    except YAMLError as exc:
         msg = f"YAML parse error: {exc}"
         raise ParseError(msg) from exc
 
