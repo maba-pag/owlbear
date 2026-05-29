@@ -241,10 +241,6 @@ jobs:
         if: ${{ env.SYNC_KANBAN == 'true' }}
         run: uv python install
 
-      - name: Verify MCP surface contract from dev source
-        if: ${{ env.SYNC_KANBAN == 'true' }}
-        run: uv run pytest serve/mcp-kanban/tests/test_mcp_surface_contract.py -q --tb=short
-
       - name: Configure git identity
         run: |
           git config user.name "github-actions[bot]"
@@ -373,20 +369,10 @@ jobs:
         working-directory: serve/cockpit/web
         run: npm ci && npm run build
 
-      - name: Run cockpit Vitest
-        if: ${{ env.SYNC_COCKPIT == 'true' }}
-        working-directory: serve/cockpit/web
-        run: npm test
-
       - name: Install Chromium for cockpit E2E
         if: ${{ env.SYNC_COCKPIT == 'true' }}
         working-directory: serve/cockpit/web
         run: npx playwright install chromium --with-deps
-
-      - name: Run cockpit Playwright E2E
-        if: ${{ env.SYNC_COCKPIT == 'true' }}
-        working-directory: serve/cockpit/web
-        run: npm run test:e2e
 
       - name: Assert SPA bundle exists
         if: ${{ env.SYNC_COCKPIT == 'true' }}

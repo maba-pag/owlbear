@@ -12,7 +12,7 @@
  *
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { act, render, fireEvent } from '@testing-library/react'
+import { act, render, fireEvent, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -531,13 +531,13 @@ describe('TestFromAC_PdsMigration_Text', () => {
       if (pSelect) fireEvent(pSelect, new CustomEvent('change', { detail: { value: 'dropped' }, bubbles: true }))
       const submitBtn = container.querySelector('[data-testid="archival-submit"]')
       act(() => { if (submitBtn) fireEvent.click(submitBtn) })
-      // Let the mocked fetch Promise chain resolve and trigger re-render
-      await act(async () => { await new Promise(r => setTimeout(r, 0)) })
 
       // After migration the error host must be p-inline-notification
-      expect(
-        container.querySelector('p-inline-notification[data-testid="archival-error"]'),
-      ).not.toBeNull()
+      await waitFor(() => {
+        expect(
+          container.querySelector('p-inline-notification[data-testid="archival-error"]'),
+        ).not.toBeNull()
+      })
     })
 
     it('renders no p-text[data-testid="archival-error"] (replaced by PInlineNotification)', async () => {
