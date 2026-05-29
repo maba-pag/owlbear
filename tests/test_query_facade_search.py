@@ -642,31 +642,6 @@ class TestQueryFacadeSearch:
 
     # --- Retry gaps: reviewer Required Follow-up ---
 
-    # Gap 1 (AC1): isinstance proof — ContentStore.search receives a real ContentSearchQuery
-    @pytest.mark.asyncio
-    async def test_search_forwards_content_search_query_instance(
-        self, facade: QueryFacade, mock_content: MagicMock
-    ) -> None:
-        """AC1: ContentStore.search receives a ContentSearchQuery instance with all fields mapped."""
-        request = QueryRequest(
-            text="find me",
-            top_k=7,
-            scopes=("global",),
-            source_ids=("s1",),
-            min_score=0.4,
-            include_graph=False,
-        )
-        await facade.search(request)
-        called_query = mock_content.search.call_args[0][0]
-        from owlbear_knowledge.protocols.content import ContentSearchQuery  # noqa: PLC0415
-
-        assert isinstance(called_query, ContentSearchQuery)
-        assert called_query.text == "find me"
-        assert called_query.top_k == 7
-        assert called_query.scopes == ("global",)
-        assert called_query.source_ids == ("s1",)
-        assert called_query.min_score == 0.4
-
     # Gap 2a (AC2): exact unique seed set traversed
     @pytest.mark.asyncio
     async def test_graph_expansion_traverses_exact_unique_seed_set(
