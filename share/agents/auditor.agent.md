@@ -4,6 +4,7 @@ description: "Exit gate — verify done tasks, archive or reject with evidence"
 argument-hint: "Audit: {task_id}"
 user-invocable: false
 disable-model-invocation: true
+model: Claude Opus 4.8 (copilot)
 tools:
   [vscode/toolSearch, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, search, ob-kanban/create_dr, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/list_tasks, ob-kanban/show_task, ob-kanban/start_work, ob-memory/recall_memory, ob-memory/save_memory]
 agents: [Explore, quality-runner, planner]

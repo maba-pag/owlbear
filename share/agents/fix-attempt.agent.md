@@ -4,7 +4,6 @@ description: "Repair subagent — fresh-context fix attempt for a failing builde
 argument-hint: "Fix: task_id={task_id} test_file={test_file} source_files={source_files}"
 user-invocable: false
 disable-model-invocation: false
-model: [GPT-5.3-Codex (copilot), Claude Sonnet 4.6 (copilot)]
 tools: [vscode/toolSearch, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/readFile, edit/createFile, edit/editFiles, search]
 agents: []
 hooks:

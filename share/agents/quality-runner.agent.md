@@ -4,7 +4,7 @@ description: "Mechanical utility — run Python/frontend quality commands; retur
 argument-hint: "Run: mode={scoped|full}, test_paths=[...], task_id={id}, coverage_modules=[...], lint_paths=[...]"
 user-invocable: false
 disable-model-invocation: false
-model: [Claude Haiku 4.5 (copilot), GPT-5.4 mini (copilot)]
+model: GPT-5 mini (copilot)
 tools: [vscode/toolSearch, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, execute/testFailure, read/readFile, read/terminalLastCommand]
 agents: []
 hooks:

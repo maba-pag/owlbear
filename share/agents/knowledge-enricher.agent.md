@@ -4,7 +4,7 @@ description: "Knowledge enrichment worker - entity and relation extraction from 
 argument-hint: "Enrich: {optional scope or worker note}"
 user-invocable: true
 disable-model-invocation: true
-model: [GPT-5.4 mini (copilot), GPT-5 mini (copilot), Claude Haiku 4.5 (copilot)]
+model: Claude Haiku 4.5 (copilot)
 tools:
   [vscode/toolSearch, ob-knowledge/knowledge_enrichment_claim_batch, ob-knowledge/knowledge_search, ob-knowledge/knowledge_stats, ob-knowledge/knowledge_enrichment_retry, ob-knowledge/knowledge_enrichment_store, ob-memory/recall_memory, ob-memory/save_memory]
 ---

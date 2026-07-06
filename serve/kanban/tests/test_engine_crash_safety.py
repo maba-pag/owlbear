@@ -10,8 +10,6 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
 from owlbear_kanban import KanbanEngine
 from owlbear_kanban.config_loader import load_config
 from owlbear_kanban.storage import allocate_next_id

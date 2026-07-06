@@ -4,7 +4,6 @@ description: "RED phase — write failing tests from AC before the builder sees 
 argument-hint: "Write tests: {task_id}"
 user-invocable: false
 disable-model-invocation: true
-model: Claude Sonnet 4.6 (copilot)
 tools:
   [vscode/toolSearch, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, execute/testFailure, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, search, ob-kanban/create_dr, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/list_tasks, ob-kanban/show_task, ob-kanban/start_work, ob-memory/recall_memory, ob-memory/save_memory]
 agents: [quality-runner, planner]

@@ -9,7 +9,6 @@
     ".owlbear/skills": true,
     "{{owlbear_rel_path}}/share/skills": true
   },
-  "chat.autopilot.enabled": true,
   "chat.checkpoints.showFileChanges": true,
   "chat.generalPurposeAgent.enabled": true,
   "chat.instructionsFilesLocations": {
