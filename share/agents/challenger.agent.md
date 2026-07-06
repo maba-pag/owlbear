@@ -4,7 +4,7 @@ description: "Adversarial pre-decision subagent — challenges proposed verdicts
 argument-hint: "Challenge: task_id={task_id}, proposed_verdict={verdict}, reasoning={reasoning}, ac_lines=[...], codebase_evidence={evidence}"
 user-invocable: false
 disable-model-invocation: false
-model: GPT-5.4 (copilot)
+model: Claude Opus 4.8 (copilot)
 tools: [vscode/toolSearch, read/problems, read/readFile, read/viewImage, search]
 agents: []
 hooks:

@@ -1,7 +1,7 @@
 ---
 name: ideation-critic
 description: "Adversarial critic subagent — challenges the current position, claim, or stance by exposing weaknesses and blind spots (ND3)"
-model: GPT-5.4 (copilot)
+model: Claude Opus 4.8 (copilot)
 argument-hint: "Critique: {position or claim to challenge}"
 user-invocable: false
 disable-model-invocation: false
