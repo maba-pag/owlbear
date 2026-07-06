@@ -10,8 +10,7 @@
  * AC4: form controls → PInputText/PSelect/PTextarea
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { render, fireEvent, waitFor } from '@testing-library/react'
-import { MemoryRouter } from 'react-router'
+import { render, fireEvent } from '@testing-library/react'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
 import ConfirmDialog from '../components/ConfirmDialog'
 import ArchivalModal from '../components/ArchivalModal'
@@ -19,8 +18,6 @@ import ActivityTab from '../components/ActivityTab'
 import DetailTab, { type TaskDetail } from '../components/DetailTab'
 import ResolveModal from '../components/ResolveModal'
 import HealthBadge from '../components/HealthBadge'
-import Shell from '../Shell'
-import { CockpitProvider } from '../hooks/CockpitProvider'
 
 vi.mock('../hooks/EventSourceProvider', () => ({
   useSSEEvent: vi.fn(() => ({ status: 'closed', mtime: null })),
@@ -122,25 +119,6 @@ function renderResolveModal() {
   return render(
     <PorscheDesignSystemProvider>
       <ResolveModal dr={DR_FIXTURE} onClose={vi.fn()} onResolved={vi.fn()} />
-    </PorscheDesignSystemProvider>,
-  )
-}
-
-function renderShell() {
-  vi.stubGlobal('fetch', vi.fn((_url: string, init?: RequestInit) =>
-    new Promise<never>((_resolve, reject) => {
-      init?.signal?.addEventListener('abort', () =>
-        reject(new DOMException('Aborted', 'AbortError')),
-      )
-    }),
-  ))
-  return render(
-    <PorscheDesignSystemProvider>
-      <MemoryRouter initialEntries={['/']}>
-        <CockpitProvider>
-          <Shell />
-        </CockpitProvider>
-      </MemoryRouter>
     </PorscheDesignSystemProvider>,
   )
 }

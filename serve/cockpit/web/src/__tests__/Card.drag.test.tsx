@@ -1,21 +1,9 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, fireEvent } from '@testing-library/react'
 import { Card } from '../components/Card'
+import type { Task } from '../hooks/useBoard'
 
-interface MinimalTask {
-  id: number
-  title: string
-  status: string
-  priority: string
-  updated: string
-  tags: string[]
-  blocked: boolean
-  block_reason: string | null
-  claimed: boolean
-  dep_status: string | null
-}
-
-function makeTask(id: number): MinimalTask {
+function makeTask(id: number): Task {
   return {
     id,
     title: 'Test task',
@@ -34,8 +22,7 @@ describe('Card no-drag interaction contract', () => {
   it('renders as a non-draggable task button without drag state chrome', () => {
     const { container } = render(
       <Card
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        task={makeTask(1) as any}
+        task={makeTask(1)}
         onContextMenu={() => {}}
       />,
     )
@@ -51,8 +38,7 @@ describe('Card no-drag interaction contract', () => {
     const onSelect = vi.fn()
     const { container } = render(
       <Card
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        task={makeTask(2) as any}
+        task={makeTask(2)}
         onSelect={onSelect}
         onContextMenu={() => {}}
       />,

@@ -633,11 +633,9 @@ describe('TestFromAC_RepairConfirmationDetails', () => {
 
   it('RepairPanel confirmation dialog shows affected file path when files prop is provided', () => {
     stubRepairHook({ phase: 'confirming', corruptionCount: 1 })
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const AnyRepairPanel = RepairPanel as React.ComponentType<any>
     const { container } = render(
       <PorscheDesignSystemProvider>
-        <AnyRepairPanel
+        <RepairPanel
           corruptionCount={1}
           files={[{ file_path: '/tasks/TASK-001.md', code: 'CORRUPT_YAML' }]}
         />
@@ -651,11 +649,9 @@ describe('TestFromAC_RepairConfirmationDetails', () => {
 
   it('RepairPanel confirmation dialog lists all provided file paths when multiple files given', () => {
     stubRepairHook({ phase: 'confirming', corruptionCount: 2 })
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const AnyRepairPanel = RepairPanel as React.ComponentType<any>
     const { container } = render(
       <PorscheDesignSystemProvider>
-        <AnyRepairPanel
+        <RepairPanel
           corruptionCount={2}
           files={[
             { file_path: '/tasks/TASK-001.md', code: 'MISSING_STATUS' },

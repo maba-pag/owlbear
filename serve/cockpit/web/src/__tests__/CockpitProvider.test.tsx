@@ -27,6 +27,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { type ReactNode } from 'react'
+import type { PendingDR } from '../hooks/usePendingDRs'
+import type { ScanItem } from '../hooks/useScanPolling'
 
 // ─── Hoisted mock factories ───────────────────────────────────────────────────
 // vi.hoisted() runs before vi.mock() factories, making these refs safe to use
@@ -86,13 +88,6 @@ import {
   useDRState,
 } from '../hooks/CockpitProvider'
 
-// ─── Type aliases (for clarity — real types come from actual modules) ──────────
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type ScanItem = any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type PendingDR = any
-
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
 const TASK_DETAIL = {
@@ -120,6 +115,8 @@ const PENDING_DR: PendingDR = {
   request_type: 'decision',
   created: '2026-05-12T00:00:00+00:00',
   title: 'Approve approach?',
+  kind: 'decision',
+  options: [],
   body: 'Full body text',
   body_preview: 'Full body text',
 }

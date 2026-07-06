@@ -16,6 +16,7 @@ import { renderHook, act, render, fireEvent, waitFor } from '@testing-library/re
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
 import { usePendingDRs } from '../hooks/usePendingDRs'
 import ResolveModal from '../components/ResolveModal'
+import type { PendingDR } from '../hooks/usePendingDRs'
 
 // ─── react-markdown mock ──────────────────────────────────────────────────────
 // Prevents JSDOM parse failures; existing tests use this same stub.
@@ -28,21 +29,7 @@ vi.mock('react-markdown', () => ({
 
 // ─── New response shape from GET /api/requests/pending (introduced in #1856) ─
 
-interface PendingRequestResponse {
-  id: string
-  task_id: number
-  agent: string
-  request_type: string
-  created: string
-  title: string
-  summary: string
-  kind: 'decision' | 'action'
-  options: { option_id: string; label: string }[]
-  body: string
-  body_preview: string
-}
-
-const DR_DECISION: PendingRequestResponse = {
+const DR_DECISION: PendingDR = {
   id: 'req-001',
   task_id: 42,
   agent: 'builder',
@@ -52,14 +39,14 @@ const DR_DECISION: PendingRequestResponse = {
   summary: 'Should we proceed with feature X implementation?',
   kind: 'decision',
   options: [
-    { option_id: 'opt-a', label: 'Option A — proceed now' },
-    { option_id: 'opt-b', label: 'Option B — defer to Q3' },
+    { option_id: 'opt-a', label: 'Option A — proceed now', confidence: 0.9, recommended: true, rationale: '' },
+    { option_id: 'opt-b', label: 'Option B — defer to Q3', confidence: 0.6, recommended: false, rationale: '' },
   ],
   body: '',
   body_preview: '',
 }
 
-const DR_ACTION: PendingRequestResponse = {
+const DR_ACTION: PendingDR = {
   id: 'req-002',
   task_id: 43,
   agent: 'builder',
@@ -77,14 +64,13 @@ const DR_ACTION: PendingRequestResponse = {
 // Cast through any because these smoke fixtures use the hook-normalized shape.
 
 function renderModal(
-  dr: PendingRequestResponse,
+  dr: PendingDR,
   onClose = vi.fn(),
   onResolved = vi.fn(),
 ) {
   return render(
     <PorscheDesignSystemProvider>
-      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-      <ResolveModal dr={dr as any} onClose={onClose} onResolved={onResolved} />
+      <ResolveModal dr={dr} onClose={onClose} onResolved={onResolved} />
     </PorscheDesignSystemProvider>,
   )
 }

@@ -13,6 +13,7 @@ import { render } from '@testing-library/react'
 import { renderHook, act } from '@testing-library/react'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
 import type { UseRepairFlowResult } from '../hooks/useRepairFlow'
+import type { RepairPanelProps } from '../components/RepairPanel'
 
 // ─── Module mocks ─────────────────────────────────────────────────────────────
 // useRepairFlow mocked at file scope so RepairPanel can be rendered without
@@ -55,9 +56,11 @@ function mockHook(overrides: Partial<UseRepairFlowResult> = {}): UseRepairFlowRe
 // such as corruptionCount without TypeScript compile gating these RED tests).
 // Renders RepairPanel with extra props forwarded (allows testing new builder-added props
 // such as onSuccess without TypeScript compile gating these RED tests).
-function renderPanel(corruptionCount: number, extra: Record<string, unknown> = {}) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const props = { corruptionCount, ...(extra as any) }
+function renderPanel(
+  corruptionCount: number,
+  extra: Omit<Partial<RepairPanelProps>, 'corruptionCount'> = {},
+) {
+  const props: RepairPanelProps = { corruptionCount, ...extra }
   return render(
     <PorscheDesignSystemProvider>
       <RepairPanel {...props} />

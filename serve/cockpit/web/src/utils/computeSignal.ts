@@ -7,8 +7,12 @@ interface SignalInput {
   dep_status: string | null
 }
 
-export function computeSignal(task: SignalInput, pendingDRIds: Set<number>): CardSignal {
-  if (!task || typeof task.id !== 'number') {
+function isSignalInput(task: unknown): task is SignalInput {
+  return typeof task === 'object' && task !== null && typeof (task as { id?: unknown }).id === 'number'
+}
+
+export function computeSignal(task: unknown, pendingDRIds: Set<number>): CardSignal {
+  if (!isSignalInput(task)) {
     return 'unknown'
   }
 

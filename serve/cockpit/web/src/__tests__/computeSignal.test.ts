@@ -153,9 +153,9 @@ describe('TestFromAC_ComputeSignal', () => {
 
 // ─── AC: Unknown state for invalid/missing inputs (task #1599) ────────────────
 //
-// AC-1: computeSignal(null as any, pendingDRIds) → 'unknown'
-//        computeSignal({} as any, pendingDRIds) → 'unknown'
-//        computeSignal(undefined as any, pendingDRIds) → 'unknown'
+// AC-1: computeSignal(null, pendingDRIds) → 'unknown'
+//        computeSignal({}, pendingDRIds) → 'unknown'
+//        computeSignal(undefined, pendingDRIds) → 'unknown'
 //
 // AC-2: Existing 17 test cases in computeSignal.test.ts remain unmodified.
 //        Enforced by: (a) the 17 existing tests above are the direct guards;
@@ -166,39 +166,33 @@ describe('TestFromAC_ComputeSignalUnknownState', () => {
   describe('AC-1: returns "unknown" for null, undefined, and empty-object inputs', () => {
     // Happy path — the three explicit cases from AC-1
     it('returns "unknown" when task is null', () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = computeSignal(null as any, noDRs)
+      const result = computeSignal(null, noDRs)
       expect(result).toBe('unknown')
     })
 
     it('returns "unknown" when task is undefined', () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = computeSignal(undefined as any, noDRs)
+      const result = computeSignal(undefined, noDRs)
       expect(result).toBe('unknown')
     })
 
     it('returns "unknown" when task is an empty object {}', () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = computeSignal({} as any, noDRs)
+      const result = computeSignal({}, noDRs)
       expect(result).toBe('unknown')
     })
 
     // Boundary — same invalid inputs with non-empty pendingDRIds
     it('returns "unknown" for null regardless of pendingDRIds content', () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = computeSignal(null as any, new Set([1, 42, 99]))
+      const result = computeSignal(null, new Set([1, 42, 99]))
       expect(result).toBe('unknown')
     })
 
     it('returns "unknown" for undefined regardless of pendingDRIds content', () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = computeSignal(undefined as any, new Set([42]))
+      const result = computeSignal(undefined, new Set([42]))
       expect(result).toBe('unknown')
     })
 
     it('returns "unknown" for {} regardless of pendingDRIds content', () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = computeSignal({} as any, new Set([99]))
+      const result = computeSignal({}, new Set([99]))
       expect(result).toBe('unknown')
     })
   })

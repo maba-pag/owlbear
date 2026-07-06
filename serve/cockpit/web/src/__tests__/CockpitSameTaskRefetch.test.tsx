@@ -18,6 +18,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { type ReactNode } from 'react'
+import type { PendingDR } from '../hooks/usePendingDRs'
+import type { ScanItem } from '../hooks/useScanPolling'
 
 // ─── Hoisted mock factories ───────────────────────────────────────────────────
 // vi.hoisted() ensures these refs are available inside vi.mock() factory closures.
@@ -68,16 +70,14 @@ const DEFAULT_BOARD_STATE = {
 
 const DEFAULT_DR_STATE = {
   count: 0,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  items: [] as any[],
+  items: [] as PendingDR[],
   isLoading: false,
   error: null as Error | null,
   refetch: vi.fn(),
 }
 
 const DEFAULT_SCAN_STATE = {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  items: [] as any[],
+  items: [] as ScanItem[],
   isLoading: false,
   error: null as Error | null,
   refetch: vi.fn(),
