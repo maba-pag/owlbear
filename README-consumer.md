@@ -76,29 +76,30 @@ The consumer tree does not need `serve/cockpit/web/` and does not require Node/n
 run Cockpit.
 
 Run Cockpit from the consumer project root, not from the owlbear clone. `--project`
-points uv at the shared owlbear installation, while `--directory` keeps Cockpit scoped
-to the current project so `.owlbear/kanban/` and `.owlbear/memory/` resolve correctly.
+points uv at the shared owlbear installation; the current directory keeps Cockpit scoped
+to the project so `.owlbear/kanban/` and `.owlbear/memory/` resolve correctly.
 
 macOS / Linux:
 
 ```shell
 cd ~/Dev/my-project
-uv run --project ../owlbear --directory "$PWD" cockpit
+uv run --project ../owlbear cockpit
 ```
 
 Windows PowerShell:
 
 ```powershell
 cd C:\Dev\my-project
-uv run --project ..\owlbear --directory "$PWD" cockpit
+uv run --project ..\owlbear cockpit
 ```
 
 Cockpit starts on `http://127.0.0.1:8420` by default and serves static assets from the
 bundled `dist/` directory in the owlbear clone.
 
 `uv run cockpit` without `--project` is only for running from inside the owlbear
-repository itself. Consumer projects should use the command above or set `KANBAN_DIR`
-and `MEMORY_DIR` explicitly.
+repository itself. If you launch Cockpit from outside the consumer project directory,
+use `uv run --project ../owlbear --directory /path/to/project cockpit` or set
+`KANBAN_DIR` and `MEMORY_DIR` explicitly.
 
 | Variable | Default | Purpose |
 |----------|---------|---------|

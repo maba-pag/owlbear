@@ -95,8 +95,8 @@ Release packaging boundary:
 
 - `dev` keeps frontend source at `serve/cockpit/web/` for development and quality checks.
 - `main` ships prebuilt `serve/cockpit/dist/` for consumers; consumers launch from their
-  project root with `uv run --project ../owlbear --directory "$PWD" cockpit` and do not
-  need Node/npm. See [README-consumer.md](README-consumer.md#cockpit-consumer-launch).
+  project root with `uv run --project ../owlbear cockpit` and do not need Node/npm. See
+  [README-consumer.md](README-consumer.md#cockpit-consumer-launch).
 
 | Variable | Default | Purpose |
 |----------|---------|--------|
