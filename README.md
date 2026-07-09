@@ -94,14 +94,15 @@ default browser. The kanban directory defaults to `.owlbear/kanban/` relative to
 Release packaging boundary:
 
 - `dev` keeps frontend source at `serve/cockpit/web/` for development and quality checks.
-- `main` ships prebuilt `serve/cockpit/dist/` for consumers; consumers launch with
-  `uv run cockpit` and do not need Node/npm.
+- `main` ships prebuilt `serve/cockpit/dist/` for consumers; consumers launch from their
+  project root with `uv run --project ../owlbear --directory "$PWD" cockpit` and do not
+  need Node/npm. See [README-consumer.md](README-consumer.md#cockpit-consumer-launch).
 
 | Variable | Default | Purpose |
 |----------|---------|--------|
 | `COCKPIT_PORT` | `8420` | Override listen port (1–65535) |
 | `COCKPIT_NO_OPEN` | — | Set to `1` to suppress browser auto-open |
-| `KANBAN_DIR` | `.owlbear/kanban/` | Override kanban directory path |
+| `KANBAN_DIR` | `$PWD/.owlbear/kanban/` | Override kanban directory path |
 
 ## Knowledge Base
 

@@ -52,6 +52,17 @@ and instructions loaded from the shared installation.
 See [setup-guide.md](setup-guide.md) for the full verification checklist and
 troubleshooting reference.
 
+To launch Cockpit for the shared project, run it from the project directory and point uv
+at the sibling owlbear clone:
+
+```shell
+cd ~/Dev/my-project
+uv run --project ../owlbear --directory "$PWD" cockpit
+```
+
+This serves the prebuilt Cockpit bundle from owlbear while keeping `.owlbear/kanban/` and
+`.owlbear/memory/` scoped to the project.
+
 ---
 
 ## Platform Notes
@@ -137,6 +148,8 @@ organization agent registry as a complement to the local installation.
 |---------|------------|
 | `ValueError` during `init.py` | Ensure owlbear and project are on the same Windows drive |
 | Agents missing after setup | Run `init.py` again; check that `.vscode/settings.json` was created and contains `chat.agentFilesLocations` pointing to the owlbear installation |
+| Cockpit command not found in project | Run `uv run --project ../owlbear --directory "$PWD" cockpit` from the project root instead of plain `uv run cockpit` |
+| Cockpit opens the wrong board | Launch from the project root or set `KANBAN_DIR` to the intended `.owlbear/kanban` directory |
 | Hook updates not taking effect after `git pull` | Re-run `init.py`; use `--replace-hooks` if local hook files differ and you want the seeded versions restored |
 | `uv` not found | Install uv globally: `pip install uv` or see [uv docs](https://docs.astral.sh/uv/) |
 | Different owlbear versions between teammates | Pin owlbear to a tag or commit SHA in team onboarding docs; `git pull` + re-run `init.py` to update |

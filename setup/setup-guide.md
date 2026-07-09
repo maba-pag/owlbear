@@ -114,6 +114,40 @@ this shows chronological tool calls, LLM requests, and prompt discovery events.
 
 ---
 
+## Launch Cockpit
+
+Cockpit is the browser UI for the project kanban board. Launch it from the project root
+so it reads this project's `.owlbear/kanban/` and `.owlbear/memory/` directories.
+
+1. Open a terminal in the project directory.
+
+   Expected outcome: `pwd` or `$PWD` points to your project, not the owlbear clone.
+
+2. Start Cockpit using the sibling owlbear installation.
+
+   macOS / Linux:
+
+   ```shell
+   uv run --project ../owlbear --directory "$PWD" cockpit
+   ```
+
+   Windows PowerShell:
+
+   ```powershell
+   uv run --project ..\owlbear --directory "$PWD" cockpit
+   ```
+
+   Expected outcome: Cockpit opens `http://127.0.0.1:8420` and shows this project's
+   board. Use `COCKPIT_NO_OPEN=1` to suppress browser auto-open.
+
+3. If your owlbear clone is not a sibling directory, replace `../owlbear` with the path
+   to the clone.
+
+   Expected outcome: uv resolves the `cockpit` command from owlbear while Cockpit keeps
+   the project directory as its runtime working directory.
+
+---
+
 ## Project-Specific Customization
 
 ### Adding local agents
@@ -202,6 +236,8 @@ Set these in `.vscode/mcp.json` under the server's `env` key:
 | Skills not auto-loading | `chat.agentSkillsLocations` missing or path wrong | Check `.vscode/settings.json`; re-run `init.py` if the key is absent |
 | Instructions ignored | `chat.instructionsFilesLocations` missing | Check `.vscode/settings.json`; verify `*.instructions.md` files exist in the registered directory |
 | MCP server fails to start | Missing dependency or `uv` not on PATH | Run `uv --version` to confirm installation; check MCP server logs in VS Code Output panel |
+| `uv run cockpit` says the command is missing | Command was run from the consumer project without `--project` | Use `uv run --project ../owlbear --directory "$PWD" cockpit` from the project root |
+| Cockpit shows the wrong board or cannot find `.owlbear/kanban` | Cockpit was launched from the wrong working directory | Run from the project root with `--directory "$PWD"`, or set `KANBAN_DIR` explicitly |
 | `ValueError` on setup | Cross-drive path resolution | Place owlbear and your project on the same Windows drive |
 | Hook file not refreshed on rerun | Existing local `.owlbear/hooks/` file differs from seed | Re-run `init.py --replace-hooks` to overwrite, or choose `replace` when prompted interactively |
 | Agent name conflict | Same-name agent in both owlbear and project locations | Give project agents unique names (see Customization section above) |
