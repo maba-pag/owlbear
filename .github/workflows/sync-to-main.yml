@@ -367,7 +367,7 @@ jobs:
       - name: Build cockpit SPA
         if: ${{ env.SYNC_COCKPIT == 'true' }}
         working-directory: serve/cockpit/web
-        run: npm ci && npm run build
+        run: npm ci && npm run sync:pds && npm run build
 
       - name: Install Chromium for cockpit E2E
         if: ${{ env.SYNC_COCKPIT == 'true' }}
