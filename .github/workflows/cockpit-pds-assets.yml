@@ -1,0 +1,74 @@
+---
+name: Cockpit PDS Assets
+
+"on":
+  pull_request:
+    branches:
+      - dev
+    paths:
+      - ".github/workflows/cockpit-pds-assets.yml"
+      - "serve/cockpit/web/package.json"
+      - "serve/cockpit/web/package-lock.json"
+      - "serve/cockpit/web/scripts/sync-pds-assets.mjs"
+      - "serve/cockpit/web/public/porsche-design-system/**"
+      - "serve/cockpit/web/src/**"
+      - "serve/cockpit/web/index.html"
+      - "serve/cockpit/web/vite.config.ts"
+  push:
+    branches:
+      - dev
+    paths:
+      - ".github/workflows/cockpit-pds-assets.yml"
+      - "serve/cockpit/web/package.json"
+      - "serve/cockpit/web/package-lock.json"
+      - "serve/cockpit/web/scripts/sync-pds-assets.mjs"
+      - "serve/cockpit/web/public/porsche-design-system/**"
+      - "serve/cockpit/web/src/**"
+      - "serve/cockpit/web/index.html"
+      - "serve/cockpit/web/vite.config.ts"
+  workflow_dispatch:
+
+concurrency:
+  group: cockpit-pds-assets-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  pds-assets:
+    name: Verify Cockpit PDS assets
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0
+        with:
+          node-version-file: serve/cockpit/web/.nvmrc
+          cache: npm
+          cache-dependency-path: serve/cockpit/web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: serve/cockpit/web
+        run: npm ci
+
+      - name: Refresh self-hosted PDS assets
+        working-directory: serve/cockpit/web
+        run: npm run sync:pds
+
+      - name: Build Cockpit SPA
+        working-directory: serve/cockpit/web
+        run: npm run build
+
+      - name: Assert committed PDS assets are current
+        run: |
+          if ! git diff --quiet -- serve/cockpit/web/public/porsche-design-system; then
+            echo "PDS assets are stale for the package-lock.json version."
+            echo "Run 'npm run sync:pds' in serve/cockpit/web and commit the changed public assets."
+            git --no-pager diff --stat -- serve/cockpit/web/public/porsche-design-system
+            exit 1
+          fi

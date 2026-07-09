@@ -51,6 +51,23 @@
       "automerge": true
     },
     {
+      "description": "Review Porsche Design System updates with refreshed self-hosted assets",
+      "matchManagers": [
+        "npm"
+      ],
+      "matchPackageNames": [
+        "@porsche-design-system/components-js",
+        "@porsche-design-system/components-react"
+      ],
+      "labels": [
+        "dependencies",
+        "renovate",
+        "cockpit",
+        "pds"
+      ],
+      "automerge": false
+    },
+    {
       "description": "Major version bumps get individual PRs",
       "matchUpdateTypes": [
         "major"
