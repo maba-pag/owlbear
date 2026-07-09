@@ -75,18 +75,37 @@ Consumer installs launch Cockpit from the prebuilt SPA bundle in `serve/cockpit/
 The consumer tree does not need `serve/cockpit/web/` and does not require Node/npm to
 run Cockpit.
 
+Run Cockpit from the consumer project root, not from the owlbear clone. `--project`
+points uv at the shared owlbear installation, while `--directory` keeps Cockpit scoped
+to the current project so `.owlbear/kanban/` and `.owlbear/memory/` resolve correctly.
+
+macOS / Linux:
+
+```shell
+cd ~/Dev/my-project
+uv run --project ../owlbear --directory "$PWD" cockpit
+```
+
+Windows PowerShell:
+
 ```powershell
-uv run cockpit
+cd C:\Dev\my-project
+uv run --project ..\owlbear --directory "$PWD" cockpit
 ```
 
 Cockpit starts on `http://127.0.0.1:8420` by default and serves static assets from the
-bundled `dist/` directory.
+bundled `dist/` directory in the owlbear clone.
+
+`uv run cockpit` without `--project` is only for running from inside the owlbear
+repository itself. Consumer projects should use the command above or set `KANBAN_DIR`
+and `MEMORY_DIR` explicitly.
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `COCKPIT_PORT` | `8420` | Override listen port (1-65535) |
 | `COCKPIT_NO_OPEN` | unset | Set to `1` to suppress browser auto-open |
-| `KANBAN_DIR` | `.owlbear/kanban/` | Override kanban directory path |
+| `KANBAN_DIR` | `$PWD/.owlbear/kanban/` | Override kanban directory path |
+| `MEMORY_DIR` | `$PWD/.owlbear/memory/` | Override memory directory path |
 
 If Cockpit fails because `dist/` assets are missing, refresh from the latest `main`
 branch release artifacts (the sync-to-main workflow builds and stages `serve/cockpit/dist/`).
