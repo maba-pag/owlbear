@@ -57,7 +57,7 @@ at the sibling owlbear clone:
 
 ```shell
 cd ~/Dev/my-project
-uv run --project ../owlbear --directory "$PWD" cockpit
+uv run --project ../owlbear cockpit
 ```
 
 This serves the prebuilt Cockpit bundle from owlbear while keeping `.owlbear/kanban/` and
@@ -148,7 +148,7 @@ organization agent registry as a complement to the local installation.
 |---------|------------|
 | `ValueError` during `init.py` | Ensure owlbear and project are on the same Windows drive |
 | Agents missing after setup | Run `init.py` again; check that `.vscode/settings.json` was created and contains `chat.agentFilesLocations` pointing to the owlbear installation |
-| Cockpit command not found in project | Run `uv run --project ../owlbear --directory "$PWD" cockpit` from the project root instead of plain `uv run cockpit` |
+| Cockpit command not found in project | Run `uv run --project ../owlbear cockpit` from the project root instead of plain `uv run cockpit` |
 | Cockpit opens the wrong board | Launch from the project root or set `KANBAN_DIR` to the intended `.owlbear/kanban` directory |
 | Hook updates not taking effect after `git pull` | Re-run `init.py`; use `--replace-hooks` if local hook files differ and you want the seeded versions restored |
 | `uv` not found | Install uv globally: `pip install uv` or see [uv docs](https://docs.astral.sh/uv/) |

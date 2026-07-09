@@ -43,7 +43,7 @@ Launch against a consumer project that references a sibling owlbear clone:
 
 ```bash
 cd ../my-project
-uv run --project ../owlbear --directory "$PWD" cockpit
+uv run --project ../owlbear cockpit
 ```
 
 `uv run cockpit` serves `serve/cockpit/dist/`, starts on `127.0.0.1:8420` by default,
@@ -91,7 +91,7 @@ Activity events use a `source` field for attribution:
   build/test/lint workflows.
 - Consumer branch (`main`): sync-to-main builds and stages prebuilt
   `serve/cockpit/dist/` artifacts; consumers launch Cockpit from their project root with
-  `uv run --project ../owlbear --directory "$PWD" cockpit` and do not need Node/npm.
+  `uv run --project ../owlbear cockpit` and do not need Node/npm.
 
 ## Dependencies
 
