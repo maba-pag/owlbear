@@ -7,7 +7,7 @@ disable-model-invocation: true
 model: GPT-5.4 mini (copilot)
 tools:
   [vscode/toolSearch, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, edit/rename, search, ob-kanban/create_request, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/list_requests, ob-kanban/list_tasks, ob-kanban/show_request, ob-kanban/show_task, ob-kanban/start_work, ob-memory/recall_memory, ob-memory/save_memory]
-agents: [builder-challenger, fix-attempt]
+agents: [builder-challenger]
 hooks:
   SessionStart:
     - type: command
@@ -46,7 +46,7 @@ Unnecessary exploration, speculative additions, and side fixes are how small tas
 
 | Trigger | From → To | Condition |
 |---------|-----------|-----------|
-| Done | build -> verify | Implementation complete, focused evidence recorded, builder-challenger recommends proceed |
+| Done | build -> verify | Implementation complete, focused evidence recorded, builder-challenger passes DONE claim |
 | Reject | build -> shape | AC, architecture, or dependency premise is wrong |
 | Block | build stays build | User decision/action or approval is required before implementation can continue |
 
@@ -57,7 +57,6 @@ Unnecessary exploration, speculative additions, and side fixes are how small tas
 | Agent | When | Example |
 |-------|------|---------|
 | builder-challenger | Required cross-check before DONE; may run focused read-only checks | `Challenge Build: task_id=42, proposed_verdict=DONE, changed_files=[...], evidence="..."` |
-| fix-attempt | Fresh-context retry when local fixes fail | `Fix: task_id=42 test_file=tests/test_foo.py source_files=src/foo.py` |
 
 </agents>
 

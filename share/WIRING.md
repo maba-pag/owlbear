@@ -11,8 +11,6 @@ Agents marked `(ND3)` may be called at nesting depth >= 3 and require `disable-m
 | shaper-challenger | `false` | shaper |
 | builder-challenger | `false` | builder |
 | verifier-challenger | `false` | verifier |
-| fix-attempt | `false` | builder |
-| code-reader | `false` | verifier |
 | ideation-critic | `false` | ideation-architect, ideation-data, ideation-enduser, ideation-security |
 
 Built-in agents (`Explore`, `General Purpose`) resolve at any depth.
@@ -53,8 +51,6 @@ Built-in agents (`Explore`, `General Purpose`) resolve at any depth.
 | shaper-challenger | h-ac-quality, r-pipeline-protocol | `req` | python.instructions | `applyTo` |
 | builder-challenger | r-pipeline-protocol | `req` | h-pytest-and-linting, h-vitest-and-linting, python/frontend instructions | `organic` / `applyTo` |
 | verifier-challenger | r-pipeline-protocol | `req` | python/frontend instructions | `applyTo` |
-| code-reader | r-pipeline-protocol | `req` | python.instructions | `applyTo` |
-| fix-attempt | w-fix-attempt | `req` | python.instructions | `applyTo` |
 
 ### Support
 
@@ -76,11 +72,10 @@ Built-in agents (`Explore`, `General Purpose`) resolve at any depth.
 
 | File | Regular Consumers |
 |------|-------------------|
-| r-pipeline-protocol | orchestrator, shaper, builder, verifier, collector, shaper-challenger, builder-challenger, verifier-challenger, code-reader, memory-curator |
+| r-pipeline-protocol | orchestrator, shaper, builder, verifier, collector, shaper-challenger, builder-challenger, verifier-challenger, memory-curator |
 | w-orchestration | orchestrator |
 | w-research | shaper |
 | w-task-decomposition | shaper |
-| w-fix-attempt | fix-attempt |
 | w-test-curation | test-curator |
 | w-mem-curation | memory-curator |
 | h-ac-quality | shaper, shaper-challenger |
@@ -97,7 +92,5 @@ Built-in agents (`Explore`, `General Purpose`) resolve at any depth.
 |----------|-----------------|--------------|
 | shaper-challenger | shaper | Shape approval loses Sonnet cross-check |
 | builder-challenger | builder | Build DONE loses cheap lint/proof/adversarial cross-check |
-| verifier-challenger | verifier | PASS loses cheap final objection |
-| fix-attempt | builder | Fresh-context local repair unavailable |
-| code-reader | verifier | Deep read-only code analysis unavailable |
+| verifier-challenger | verifier | PASS loses cheap intent/code/proof/scope cross-check |
 | ideation-critic | ideation panel agents | Ideation challenge loop degraded |

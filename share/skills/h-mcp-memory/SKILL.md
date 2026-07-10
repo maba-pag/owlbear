@@ -21,7 +21,7 @@ For curation workflow, see `w-mem-curation`.
 | Ideation agents (11) | discoverer, outsider, critic, pragmatist, mediator, data, security, architect, enduser, firstprinciples, simplifier | `save_memory`, `recall_memory` |
 | Knowledge workers (2) | knowledge-ingestor, knowledge-enricher | `save_memory`, `recall_memory` |
 | Memory curator (1) | memory-curator | `list_memories`, `read_memory`, `curate_memory`, `delete_memory`, `save_memory` |
-| Utility agents | fix-attempt, code-reader, shaper-challenger, builder-challenger, verifier-challenger | None |
+| Utility agents | shaper-challenger, builder-challenger, verifier-challenger | None |
 
 `approve_memory` is not exposed to any agent — user-initiated only via the memory review prompt.
 

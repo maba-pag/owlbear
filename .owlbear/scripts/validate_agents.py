@@ -49,12 +49,10 @@ _AGENTS_DIR = Path(__file__).resolve().parents[2] / "share" / "agents"
 # See share/WIRING.md § "Nesting Depth" for the canonical list.
 ND3_AGENTS: frozenset[str] = frozenset(
     {
-        "challenger",
-        "scribe",
-        "fix-attempt",
-        "code-reader",
+        "shaper-challenger",
+        "builder-challenger",
+        "verifier-challenger",
         "ideation-critic",
-        "quality-runner",
     }
 )
 
