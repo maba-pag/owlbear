@@ -51,7 +51,6 @@ ND3_AGENTS: frozenset[str] = frozenset(
     {
         "challenger",
         "scribe",
-        "planner",
         "fix-attempt",
         "code-reader",
         "ideation-critic",

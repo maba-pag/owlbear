@@ -1,12 +1,12 @@
 ---
 name: w-task-decomposition
-description: "Workflow: Task decomposition — break features into atomic tasks with dependency graphs"
+description: "Workflow: Task decomposition — shaper-owned decomposition into atomic child tasks with dependency graphs"
 user-invocable: false
 ---
 
 # Task Decomposition
 
-Break complex features into atomic kanban tasks with explicit dependency graphs and priority assignments.
+Break complex shape work into atomic kanban child tasks with explicit dependency graphs, parent intent preservation, and collector-ready aggregate gates.
 
 **Kanban operations:** See `h-mcp-kanban` skill — section `## Agent Lifecycle Pattern`.
 
@@ -17,7 +17,8 @@ Break complex features into atomic kanban tasks with explicit dependency graphs 
 - Break features into atomic tasks.
 - Draft AC using `h-ac-quality` rules.
 - Assign priorities and dependency graphs.
-- Route tasks to `shape` unless the caller explicitly requests another valid status.
+- Route build-ready child tasks directly to `build`; leave only unresolved shaping work at `shape`.
+- Preserve parent/EPIC intent or Brief links so collector can verify aggregate fulfillment later.
 
 ### Out of Scope
 
@@ -30,17 +31,11 @@ Break complex features into atomic kanban tasks with explicit dependency graphs 
 
 Read `h-ac-quality` skill and use it as the authoritative AC validation checklist while drafting task acceptance criteria.
 
-**Claiming:** When **orchestrator-dispatched** (parent task ID provided), claim the parent task via `start_work` — it returns the task body, making a separate `show_task` call redundant. When **user-invoked**, read the task via `show_task` without claiming.
+Use this workflow after shaper has claimed the parent task with `start_work`. `start_work` returns the task body, making a separate `show_task` call redundant. If `start_work` fails, stop; a `ToolError` means the task is blocked, already claimed, or missing.
 
-**If `start_work` fails, stop.** A `ToolError` means the task is blocked, already claimed, or missing. Report the error and exit.
+**Knowledge pre-flight:** After claiming, call `recall_memory(agent="shaper")` to load reviewed entries. Apply returned entries as context. If the call fails or returns empty, proceed normally.
 
-**Knowledge pre-flight:** After claiming, call `recall_memory(agent="planner")` to load reviewed entries. Apply returned entries as context. If the call fails or returns empty, proceed normally.
-
-**Execution mode:** Determined by the caller's prompt prefix (mirrors `planner.agent.md` three-tier convention):
-
-- **`Plan and create: #{id} — ...`** → dispatch mode: execute `create_task` calls directly and report created IDs.
-- **`Plan: ...`** → user mode: present planned breakdown → `askQuestions` approval → create on approve. See Step 5b.
-- **No prefix detected** → fallback: if pipeline markers are present, abort with an error asking the caller to use `Plan and create:` prefix; otherwise default to user mode.
+**Execution mode:** Shaper owns decomposition directly. Create child tasks only after material user decisions are resolved; do not ask for approval on purely mechanical splitting when the parent intent and constraints are already clear.
 
 ## Step 1 — Read the Plan
 
@@ -48,7 +43,7 @@ Read input (free-text, plan doc section, or requirements). Identify phase number
 
 If the parent task body contains a `## Brief` or `## Problem` section (Brief artifact, produced by ideation), use it to derive scope, investment tier, and approach constraints for decomposition. Include `Brief: see parent #{id}` reference in each child task body.
 
-When the parent contains an approved ideation Brief, the planner sequences or splits Brief requirements but does not delete them. If a Brief requirement cannot fit one atomic task, split it across tasks. If a Brief requirement appears invalid, conflicting, or impossible, surface that conflict in the planning note instead of dropping the requirement.
+When the parent contains an approved ideation Brief, shaper sequences or splits Brief requirements but does not delete them. If a Brief requirement cannot fit one atomic task, split it across tasks. If a Brief requirement appears invalid, conflicting, or impossible, surface that conflict in Shape Notes instead of dropping the requirement.
 
 Announce: "Decomposing: {name}. Expected: {N} tasks in {M} layers."
 
@@ -59,10 +54,10 @@ Before decomposition, detect whether the request is exactly one follow-up task w
 If yes, use the shortcut flow:
 
 - Skip Step 1b, Steps 2–4, and Step 7.
-- Continue with Steps 5, 5a, 5b (user mode only), and 6.
-- Preserve caller metadata verbatim where provided: title, parent ID, and tags.
-- Status routing: caller should specify target status when needed. Default is `shape`; normalize old `todo`, `backlog`, `research`, `in-progress`, `review`, `docs`, and `done` requests to `shape` unless the user explicitly asks for legacy artifact cleanup.
-- Naming: no phase-based `P{phase}-{nn}` prefix in shortcut mode. Use caller-provided title directly.
+- Continue with Steps 5, 5a, and 6.
+- Preserve parent metadata where provided: title, parent ID, and tags.
+- Status routing: create build-ready tasks with `status="build"`; use `shape` only when the follow-up still needs shaping. Normalize old `todo`, `backlog`, `research`, `in-progress`, `review`, `docs`, and `done` requests to `build` only after shaping makes the task build-ready.
+- Naming: no phase-based `P{phase}-{nn}` prefix in shortcut mode. Use the parent-provided title directly.
 - TDD pairing is not used.
 - Return the created task ID explicitly in your response message (for downstream linking and parent-child follow-up operations).
 
@@ -74,7 +69,7 @@ Apply this step when the input plan, parent task, or brief references existing c
 
 This step may be skipped only for greenfield requests with no existing code references.
 
-1. Identify target source files from caller context (plan text, parent task, brief, or referenced module paths).
+1. Identify target source files from parent context (plan text, parent task, brief, or referenced module paths).
 2. Read each target source file before drafting AC.
 3. Extract and record referenced symbols that may be cited in AC text:
     - function signatures and return types
@@ -89,13 +84,13 @@ Do not continue to Step 2 until this guard is complete when triggered.
 ### good_example — symbol guard applied
 
 - Parent task references `computeSignal` and card status enums in an existing UI module.
-- Planner reads the module first, records `computeSignal(...): CardSignal` and `CardSignal = "dr-pending" | "blocked" | "claimed" | "deps-unmet" | "ready" | "unknown"`.
-- Planner drafts AC lines that use only those exact symbols and values.
+- Shaper reads the module first, records `computeSignal(...): CardSignal` and `CardSignal = "dr-pending" | "blocked" | "claimed" | "deps-unmet" | "ready" | "unknown"`.
+- Shaper drafts AC lines that use only those exact symbols and values.
 
 ### bad_example — source-read skipped
 
-- Planner drafts AC from memory and writes `computeSignal` returns an object with `state`.
-- Planner also lists statuses as `green/yellow/red/gray/stale`.
+- Shaper drafts AC from memory and writes `computeSignal` returns an object with `state`.
+- Shaper also lists statuses as `green/yellow/red/gray/stale`.
 - AC is factually incorrect because symbol references were not validated against source.
 
 ## Step 2 — Check Board State
@@ -114,7 +109,7 @@ Each task must be:
 
 ### Task Complexity Budget
 
-Draft tasks to fit this budget before asking the shaper to refine them:
+Draft tasks to fit this budget before creating them:
 
 - **AC target:** 3 acceptance criteria or fewer.
 - **AC hard cap:** 5 acceptance criteria. If a task needs more, split it.
@@ -170,7 +165,7 @@ Build an explicit dependency graph:
 
 - **Priority:** count dependents (`high` if 3+, `medium` if 1-2, `low` otherwise)
 - **Tags (decomposition mode):** always `phase-{n}` + `scope:{domain}` + at least one category tag
-- **Tags (shortcut mode):** preserve caller-provided tags verbatim; do not add phase tags unless the caller explicitly provided them
+- **Tags (shortcut mode):** preserve parent-provided tags verbatim; do not add phase tags unless they are already part of the parent scope
 
 See `r-project-standards` for the full priority scheme and tag taxonomy.
 
@@ -199,53 +194,29 @@ Before creating any task, validate every planned task:
 
 If a planned task fails: refine the title and body or stop. Never create a placeholder task.
 
-## Step 5b — Approval (user mode only)
+## Step 5b — User Decision Gate
 
-Skip this step if invoked in dispatch mode (`Plan and create:` prefix) — proceed directly to Step 6.
+Ask the user only for material product, architecture, scope, or trade-off choices. Do not ask for approval on mechanical decomposition when the parent intent, constraints, and dependencies are already clear.
 
-In shortcut mode, present a simplified single-task approval payload inline:
-
-- One follow-up summary line: title, priority, status, tags
-- No task table, no Mermaid dependency graph, no phase summary (decomposition-only artifacts)
-
-Then call `askQuestions` with two options:
-
-- "Approve — create follow-up task"
-- "Reject — cancel"
-
-On approve, proceed to Step 6. On reject, stop without creating tasks.
-
-In decomposition mode, present the planned breakdown inline in the chat:
-
-- Task list table (title, priority, dependencies, tags)
-- Dependency graph (Mermaid)
-- Summary: total count, dependency layers, phase
-
-Call `askQuestions` with two options:
-
-- "Approve — create all {N} tasks"
-- "Reject — cancel without creating tasks"
-
-**On approve:** proceed to Step 6.
-**On reject:** stop, report cancellation to the user. Do NOT call `create_task`.
+When a material choice exists, present exactly one decision item with status quo, problem, options with pros/cons/risks/confidence, recommendation, and expected outcome. On approval, revise the planned tasks and proceed to Step 6. On rejection or unresolved scope, stop without creating tasks and leave the parent in `shape` or block it through `create_request` per `r-pipeline-protocol`.
 
 ## Step 6 — Create Tasks
 
 **Decomposition naming convention only:** `P{phase}-{nn}: {Title}` — phase inherited from plan, sequence `nn` zero-padded, unique within phase.
 
-**Shortcut naming:** preserve the caller-provided title verbatim (no phase prefix).
+**Shortcut naming:** preserve the parent-provided title verbatim (no phase prefix).
 
-Create each task via `create_task` with title, priority, tags, depends_on, `ac`, body (supporting context including `Proof guidance:`), and `parent` when provided by the caller. Do not pass `status` to `create_task`; tasks are created at `BoardConfig.entry_status` (`shape`).
+Create each build-ready child via `create_task` with title, `status="build"`, priority, tags, depends_on, `ac`, body (supporting context including `Proof guidance:`), and `parent={parent_id}`. Use `status="shape"` only for a child whose scope still requires later shaping.
 
 Do not create consolidation-test tasks automatically. If aggregate verification is needed, express it as parent/EPIC collect criteria or a normal shaped task with its own product-facing purpose.
 
-**Parent completion gate:** When child work must complete before a parent can collect, add child IDs as dependencies on the parent task via `edit_task(id={parent_id}, add_dep=[...])`.
+**Parent completion gate:** For parent/EPIC decomposition, create or route the aggregate parent at `collect` after adding all required child IDs as dependencies via `edit_task(id={parent_id}, add_dep=[...])`. This parks the parent behind child completion; dependency filtering keeps collector from receiving the parent while any required child is still active.
 
 Group by dependency layer (independent first, then dependents). Record created task IDs for the report.
 
 In shortcut mode, report the created task ID as a top-level result line (for example, `Created follow-up task: #{id}`).
 
-If dispatched with a parent task ID, include the planning summary in your `end_work` note.
+Include the planning summary in the parent task's `end_work` note.
 
 ## Step 7 — Visualize Dependencies
 
@@ -253,18 +224,17 @@ Produce a Mermaid diagram showing task relationships. Arrows: dependency toward 
 
 ## Step 8 — Advance
 
-**Post-task reflection:** Before advancing, write 3-5 bullets on problems faced, workarounds applied, patterns discovered. Skip if nothing notable. Use `save_memory(title=..., content=..., categories=[...], confidence=0.8, source_agent="planner")` for each notable finding.
+**Post-task reflection:** Before advancing, write 3-5 bullets on problems faced, workarounds applied, patterns discovered. Skip if nothing notable. Use `save_memory(title=..., content=..., categories=[...], confidence=0.8, source_agent="shaper")` for each notable finding.
 
-If dispatched with a parent task ID, advance via `end_work` to release the claim and move status.
+For aggregate parent/EPIC tasks with no direct implementation work, put the parent in `collect` after child dependencies are attached. If creating a new aggregate parent, pass `status="collect"` to `create_task`; if shaping an existing parent, use `end_work(outcome="success", move_to="collect")`. For a parent that still owns direct implementation AC, create build-ready children instead of sending the aggregate parent to build.
 
-Return Channel A signal: `DONE | {N} tasks planned`
+Return Channel A using shaper's normal verdict format: `APPROVED #{id} -> collect` for aggregate parents parked behind children, `APPROVED #{id} -> build` for directly buildable parents, or `REFINE` / `BLOCK` when decomposition exposes unresolved scope or decisions.
 
 ## Output Template
 
-Append to parent task body (if dispatched with parent ID):
+Append decomposition details inside shaper's `## Shape Notes` section:
 
 ```
-## Planning
 ### Decomposition: {name}
 - Tasks created: {N}
 - Dependency layers: {M}

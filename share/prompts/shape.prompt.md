@@ -21,5 +21,5 @@ Each decision item must include: status quo, problem, options with pro/con/risk/
 1. The shaper turns intent into build-ready scope and acceptance criteria.
 2. When local context is insufficient, the shaper runs source-grounded research and records it in Shape Notes or `.owlbear/research/`.
 3. Important user choices are discussed through `askQuestions` before approval or blocking.
-4. Over-broad work may be decomposed through `planner`, with child tasks created at `shape`.
+4. Over-broad work may be decomposed by shaper, with child tasks created at `shape` and aggregate parents parked in `collect` behind child dependencies.
 5. Approved tasks move to `build`; unresolved decisions stay in `shape` or become blocked through `create_request`.

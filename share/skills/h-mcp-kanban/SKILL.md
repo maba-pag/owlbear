@@ -14,7 +14,7 @@ For pipeline conventions and claiming protocol, see `r-pipeline-protocol`.
 
 ## Tool Summary
 
-Exactly 9 tools are exposed:
+Exactly 11 tools are exposed:
 
 <!-- markdownlint-disable MD056 -- pipe chars in Python union types (str | None) inside table cells -->
 | Tool | Signature |
@@ -22,11 +22,14 @@ Exactly 9 tools are exposed:
 | `list_tasks` | `list_tasks(status: str | None = None, priority: str | None = None, tag: str | None = None, archival_reason: str | None = None, ids: list[int] | None = None, unclaimed: bool = False, blocked: bool | None = None, parent: int | None = None, search: str | None = None, sort: str | None = None, reverse: bool = False, limit: int = 0)` |
 | `show_task` | `show_task(id: str | int, section: str | None = None)` |
 | `pick_tasks` | `pick_tasks(wave_size: int | None = None, max_waves: int = 3)` |
-| `create_task` | `create_task(title: str, body: str = "", priority: str = "", tags: list[str] | None = None, parent: int | None = None, depends_on: list[int] | None = None, ac: list[str] | None = None, proof_bundle: str | None = None)` |
+| `create_task` | `create_task(title: str, body: str = "", status: str = "", priority: str = "", tags: list[str] | None = None, parent: int | None = None, depends_on: list[int] | None = None, ac: list[str] | None = None, proof_bundle: str | None = None)` |
 | `edit_task` | `edit_task(id: str | int, title: str | None = None, body: str | None = None, append_body: str | None = None, timestamp: bool = False, priority: str | None = None, parent: int | None = None, ac: list[str] | None = None, add_ac: list[str] | None = None, remove_ac: list[str] | None = None, proof_bundle: str | None = None, add_dep: list[int] | None = None, remove_dep: list[int] | None = None, add_tag: list[str] | None = None, remove_tag: list[str] | None = None, block_reason: str | None = None, archival_reason: str | None = None, archival_refs: list[int] | None = None)` |
 | `move_task` | `move_task(id: str | int, status: str, archival_reason: str | None = None, archival_refs: list[int] | None = None)` |
 | `start_work` | `start_work(id: str | int)` |
 | `end_work` | `end_work(id: str | int, outcome: str, move_to: str | None = None, note: str | None = None, archival_reason: str | None = None, archival_refs: list[int] | None = None, block_reason: str | None = None)` |
+| `create_request` | `create_request(task_id: str | int, kind: str, title: str, summary: str, agent: str, options: list[dict] | None = None, body: str = "")` |
+| `list_requests` | `list_requests(status: str = "pending", task_id: str | int | None = None)` |
+| `show_request` | `show_request(request_id: str)` |
 <!-- markdownlint-enable MD056 -->
 
 ### Filter and Retrieval Additions
@@ -37,6 +40,7 @@ Exactly 9 tools are exposed:
 
 ### Creation Semantics
 
+- `create_task.status`: omitted or `""` uses the product topology entry status (`shape`). Pass `"build"` for build-ready leaf tasks and `"collect"` for aggregate parent/EPIC tasks parked behind child dependencies.
 - `create_task.priority`: omitted or `""` uses the product topology default priority (`medium`). Pass an explicit value when a different priority is intended.
 
 ### edit_task Semantics
@@ -179,7 +183,7 @@ Do not use `edit_task` to append agent notes — use `end_work(note="...")` inst
 |-----------|------------------|
 | Normal lifecycle (claim, work, advance) | `start_work` → `end_work` |
 | Block mid-task | `end_work(outcome="block", block_reason="...")` |
-| Reject (send back in pipeline) | `end_work(outcome="reject", move_to="todo")` |
+| Reject (send back in pipeline) | `end_work(outcome="reject", move_to="shape")` |
 | Inspect without claiming | `show_task` only |
 | Scan the board | `list_tasks` with filters |
 | Edit fields on a claimed task | `edit_task` (auto-resolves claim) |

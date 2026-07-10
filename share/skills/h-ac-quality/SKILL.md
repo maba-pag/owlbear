@@ -1,6 +1,6 @@
 ---
 name: h-ac-quality
-description: "Handbook: Unified two-tier acceptance-criteria quality schema for planner drafting and shaper/challenger validation"
+description: "Handbook: Unified two-tier acceptance-criteria quality schema for shaper drafting and challenger validation"
 user-invocable: false
 ---
 
@@ -118,8 +118,8 @@ Mechanical pass failing means rewrite before semantic review. Semantic failure m
 
 ### P2 Example (Observable Artifact/State)
 
-- Bad: "Planner should prepare decomposition output."
-- Good: "Planner creates one backlog follow-up task with depends_on set to the parent implementation task IDs."
+- Bad: "The decomposition output should be prepared."
+- Good: "Shaper creates one `shape` child task with `parent` set to the aggregate parent and `depends_on` set to prerequisite child task IDs."
 
 ### P3 Example (Verification Method)
 
@@ -168,7 +168,7 @@ Use this when AC lines cite concrete literals that must match source-of-truth to
 
 Use this checklist for both drafting and validation.
 
-### Planner Draft Checklist
+### Shaper Draft Checklist
 
 - [ ] Line has exactly one primary target (B1 or P1 scope).
 - [ ] Line includes concrete input and concrete observable output when behavior-related (B2).

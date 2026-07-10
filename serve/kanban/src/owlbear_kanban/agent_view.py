@@ -489,6 +489,7 @@ class AgentView:
         *,
         title: str,
         body: str = "",
+        status: str = "",
         priority: str = "",
         tags: list[str] | None = None,
         parent: int | None = None,
@@ -496,15 +497,16 @@ class AgentView:
         ac: list[str] | None = None,
         proof_bundle: str | None = None,
     ) -> SingleTaskResponse:
-        """Create a new task at the board's entry_status.
+        """Create a new task at the requested status or the board's entry_status.
 
-        Tasks are always created at ``BoardConfig.entry_status``; there is no
-        ``status`` parameter (D50).  The entry_status predicate is evaluated
+        Omitted or empty ``status`` creates the task at
+        ``BoardConfig.entry_status``.  The target status predicate is evaluated
         against *body* before the task is written.
 
         Args:
             title:      Task title (must be non-empty).
             body:       Initial markdown body.  Must not exceed 500 KB.
+            status:     Optional target status; defaults to entry_status.
             priority:   Task priority; defaults to ``BoardConfig.defaults.priority``.
             tags:       Initial tag list.
             parent:     Optional parent task ID; must refer to an existing task.
@@ -548,9 +550,9 @@ class AgentView:
             )
 
         config = self.engine.board_config()
-        entry_status = config.pipeline.entry_status
+        target_status = status or config.pipeline.entry_status
         self.engine.validate_status_predicate(
-            target_status=entry_status,
+            target_status=target_status,
             body=body,
             config=config,
         )
@@ -559,7 +561,7 @@ class AgentView:
             task = self.engine.create_task(
                 title=title,
                 body=body,
-                status=entry_status,
+                status=target_status,
                 priority=priority,
                 tags=tags,
                 parent=parent,

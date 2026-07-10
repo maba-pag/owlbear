@@ -190,4 +190,4 @@ Session complete:
 - **Structured return ≠ needs orchestrator cleanup.** When an agent returns a structured verdict (`DONE`, `FAIL`, `BLOCK`, etc.), it called `end_work` and managed its own task state. Never call `end_work`, `edit_task`, or `move_task` on a task whose agent returned a structured signal — that overwrites the agent's intentional state transition.
 - **Crash retry requires claim release.** A crashed agent may have claimed the task before failing. Release with `end_work(outcome="release")` before retrying, otherwise the retry can hit `ERR_ALREADY_CLAIMED`.
 - **No dispatch decisions from housekeeping output.** Curator output is informational only; `pick_tasks` reads fresh board state each cycle.
-- **Legacy wave planner drift:** Do not reintroduce manual bucket planning in this skill. `pick_tasks` is the single wave-assembly authority.
+- **Legacy wave assembly drift:** Do not reintroduce manual bucket planning in this skill. `pick_tasks` is the single wave-assembly authority.

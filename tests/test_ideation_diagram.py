@@ -385,10 +385,10 @@ class TestFromAC_IdeationPhase2Mediation:
         assert "brief" in all_text, "Brief output not found at M5"
 
     def test_m6_pipeline_handoff_present(self, diagram_data: dict) -> None:
-        """Happy: M6 (Pipeline Handoff) is labeled with kanban or planner reference."""
+        """Happy: M6 (Pipeline Handoff) is labeled with kanban or shaper reference."""
         all_text = _all_element_text(diagram_data)
         assert "m6" in all_text, "M6 moment label not found"
-        has_handoff = "handoff" in all_text or "planner" in all_text or "kanban" in all_text
+        has_handoff = "handoff" in all_text or "shaper" in all_text or "kanban" in all_text
         assert has_handoff, "Pipeline handoff not found at M6"
 
 
@@ -520,10 +520,10 @@ class TestFromAC_IdeationStructuralConnections:
         """Structural: M6 has a bound arrow to the pipeline handoff element."""
         m6_elem = _find_elem_by_text(diagram_data, "m6")
         assert m6_elem is not None, "M6 element not found"
-        handoff = _find_elem_by_text(diagram_data, "handoff") or _find_elem_by_text(diagram_data, "planner")
+        handoff = _find_elem_by_text(diagram_data, "handoff") or _find_elem_by_text(diagram_data, "shaper")
         assert handoff is not None, "Pipeline handoff element not found"
         arrows = _arrows_between(diagram_data, m6_elem["id"], handoff["id"])
-        assert len(arrows) >= 1, "No bound arrow from M6 to handoff/planner"
+        assert len(arrows) >= 1, "No bound arrow from M6 to handoff/shaper"
 
 
 # ===========================================================================
@@ -1447,7 +1447,7 @@ class TestFromAC_IdeationPhase2ChainProof:
     S9e: M4 -> O15                          PASS (arr_m4_o15 exists)
     S9f: O15 -> M5                          PASS (arr_o15_m5 exists)
     S9g: M5 -> M6                           PASS (arr_m5_m6 exists)
-    S9h: M6 -> handoff/planner              PASS (arr_m6_handoff exists)
+    S9h: M6 -> handoff/shaper               PASS (arr_m6_handoff exists)
     """
 
     @pytest.mark.parametrize(

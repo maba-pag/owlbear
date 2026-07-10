@@ -297,28 +297,27 @@ class TestFromAC_D46NoExpectedUpdatedParam:
 
 
 # ---------------------------------------------------------------------------
-# TestFromAC_D50NoStatusParam
+# TestFromAC_CreateTaskStatusParam
 #
-# D50 executable proof (added in retry cycle per reviewer finding):
-# AgentView.create_task must NOT accept a `status` parameter — tasks are
-# always created at BoardConfig.entry_status.  The param was never present;
-# this test guards against accidental re-addition.
+# AgentView.create_task accepts an optional `status` parameter for shaped
+# routing. Omitting it still creates tasks at BoardConfig.entry_status.
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_D50NoStatusParam:
-    """D50 regression proof: AgentView.create_task rejects unexpected `status` kwarg."""
+class TestFromAC_CreateTaskStatusParam:
+    """AgentView.create_task supports explicit routing and entry-status defaulting."""
 
-    def test_create_task_rejects_status_kwarg(self, tmp_path: Path) -> None:
-        """D50: AgentView.create_task(..., status=...) raises TypeError.
-
-        The `status` parameter must never appear in the AgentView.create_task
-        signature — tasks are always created at BoardConfig.entry_status.
-        Passing it must produce a TypeError at call time.
-        """
+    def test_create_task_accepts_status_kwarg(self, tmp_path: Path) -> None:
+        """Explicit status routes a task directly to a valid pipeline gate."""
         view, _kanban_dir = _make_view(tmp_path)
-        with pytest.raises(TypeError, match="unexpected keyword argument"):
-            view.create_task(title="Task", status="todo")  # type: ignore[call-arg]
+        task = view.create_task(title="Task", status="build")
+        assert task.status == "build"
+
+    def test_create_task_without_status_uses_entry_status(self, tmp_path: Path) -> None:
+        """Omitted status remains the default shape intake path."""
+        view, _kanban_dir = _make_view(tmp_path)
+        task = view.create_task(title="Task")
+        assert task.status == "shape"
 
 
 # --- merged from tests/test_engine_create_edit_1203.py ---

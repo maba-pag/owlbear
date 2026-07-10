@@ -65,8 +65,8 @@ Capture the expectation signal with contrastive questions. Each answer should st
 - During discovery and mediation, `context.md` carries the living expectation signal.
 - `decisions.md` records accepted trade-offs and supersedes older expectation text only when the user explicitly chooses the change.
 - At Brief approval, `brief.md` becomes the binding product promise for downstream work.
-- The active phase agent owns fidelity while it owns the moment: discovery through M2, mediation through Brief approval and M6. Shaper turns the promise into buildable task shape; planner may decompose under shaper control but does not own product trade-offs.
-- Shaper output and any child tasks created through planner decompose the approved Brief; they are not a new scope authority.
+- The active phase agent owns fidelity while it owns the moment: discovery through M2, mediation through Brief approval and M6. Shaper turns the promise into buildable task shape and decomposition; task splits sequence the approved Brief but do not own product trade-offs.
+- Shaper output and any child tasks created during decomposition express the approved Brief; they are not a new scope authority.
 
 ### Tier-Scaled Fidelity Checks
 

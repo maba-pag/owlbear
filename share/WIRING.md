@@ -11,7 +11,6 @@ Agents marked `(ND3)` may be called at nesting depth >= 3 and require `disable-m
 | shaper-challenger | `false` | shaper |
 | builder-challenger | `false` | builder |
 | verifier-challenger | `false` | verifier |
-| planner | `false` | shaper |
 | fix-attempt | `false` | builder |
 | code-reader | `false` | verifier |
 | ideation-critic | `false` | ideation-architect, ideation-data, ideation-enduser, ideation-security |
@@ -37,7 +36,7 @@ Built-in agents (`Explore`, `General Purpose`) resolve at any depth.
 
 | Agent | Regularly | Connection | Seldom | Connection |
 |-------|-----------|------------|--------|------------|
-| shaper | r-pipeline-protocol, h-ac-quality, w-research | `req` | h-mcp-kanban, r-project-standards | `companion` |
+| shaper | r-pipeline-protocol, h-ac-quality, w-task-decomposition, w-research | `req` | h-mcp-kanban, r-project-standards | `companion` |
 
 ### Execution Board
 
@@ -61,7 +60,6 @@ Built-in agents (`Explore`, `General Purpose`) resolve at any depth.
 
 | Agent | Regularly | Connection | Seldom | Connection |
 |-------|-----------|------------|--------|------------|
-| planner | w-task-decomposition, h-ac-quality | `req` | h-mcp-kanban, r-architecture-standards | `body-ref` |
 | test-curator | w-test-curation | `req` | h-python-conventions, h-vitest-and-linting | `companion` |
 | memory-curator | w-mem-curation | `req` | h-mcp-memory, h-memory-structure | `companion` / `directed` |
 
@@ -78,14 +76,14 @@ Built-in agents (`Explore`, `General Purpose`) resolve at any depth.
 
 | File | Regular Consumers |
 |------|-------------------|
-| r-pipeline-protocol | orchestrator, shaper, builder, verifier, collector, shaper-challenger, builder-challenger, verifier-challenger, code-reader, planner, memory-curator |
+| r-pipeline-protocol | orchestrator, shaper, builder, verifier, collector, shaper-challenger, builder-challenger, verifier-challenger, code-reader, memory-curator |
 | w-orchestration | orchestrator |
 | w-research | shaper |
-| w-task-decomposition | planner |
+| w-task-decomposition | shaper |
 | w-fix-attempt | fix-attempt |
 | w-test-curation | test-curator |
 | w-mem-curation | memory-curator |
-| h-ac-quality | shaper, shaper-challenger, planner |
+| h-ac-quality | shaper, shaper-challenger |
 | h-mcp-kanban | pipeline/support agents on demand |
 | h-pytest-and-linting | builder-challenger/test-curator on demand |
 | h-vitest-and-linting | builder-challenger/test-curator/frontend work on demand |
@@ -100,7 +98,6 @@ Built-in agents (`Explore`, `General Purpose`) resolve at any depth.
 | shaper-challenger | shaper | Shape approval loses Sonnet cross-check |
 | builder-challenger | builder | Build DONE loses cheap lint/proof/adversarial cross-check |
 | verifier-challenger | verifier | PASS loses cheap final objection |
-| planner | shaper | Decomposition/follow-up creation unavailable |
 | fix-attempt | builder | Fresh-context local repair unavailable |
 | code-reader | verifier | Deep read-only code analysis unavailable |
 | ideation-critic | ideation panel agents | Ideation challenge loop degraded |

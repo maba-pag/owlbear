@@ -126,7 +126,7 @@ Classify every finding before acting:
 
 ### Create Follow-Up Tasks
 
-Create concrete follow-up tasks at `shape` or delegate decomposition to planner via `Plan and create:`. For findings requiring user decisions, use `askQuestions` when the user is present or `create_request` when the board must be blocked.
+Create concrete follow-up tasks at `shape` or use `w-task-decomposition` for multi-task splits. For findings requiring user decisions, use `askQuestions` when the user is present or `create_request` when the board must be blocked.
 
 ## Step 6 — Finalize Artifacts
 
