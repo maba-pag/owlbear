@@ -444,9 +444,7 @@ mcp = FastMCP("owlbear-knowledge", lifespan=app_lifespan)
 claim_enrichment_batch = mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))(
     claim_enrichment_batch
 )
-store_enrichment = mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))(
-    store_enrichment
-)
+store_enrichment = mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))(store_enrichment)
 retry_enrichment = mcp.tool(
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True)
 )(retry_enrichment)
