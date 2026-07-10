@@ -15,6 +15,7 @@ packages = ["src/owlbear_tools"]
 [project.scripts]
 commit-owned = "owlbear_tools.commit_owned:main"
 doc-index = "owlbear_tools.doc_index:main"
+semble = "owlbear_tools.semble:main"
 test-root = "owlbear_tools.test_root:main"
 lint = "owlbear_tools.lint:lint"
 lint-all = "owlbear_tools.lint:lint_all"
