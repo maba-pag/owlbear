@@ -4,7 +4,7 @@ description: "Early challenger — reframes the problem through analogous domain
 argument-hint: "Outsider lens: {problem and outcomes}"
 user-invocable: false
 disable-model-invocation: true
-tools: [vscode/toolSearch, read/readFile, edit/createDirectory, edit/createFile, edit/editFiles, search, ob-memory/recall_memory, ob-memory/save_memory]
+tools: [vscode/toolSearch, read/readFile, edit/createDirectory, edit/createFile, edit/editFiles, search, ob-memory/recall_memory]
 agents: []
 hooks:
   PreToolUse:

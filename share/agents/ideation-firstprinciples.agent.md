@@ -4,7 +4,7 @@ description: "Early challenger — strips the problem to its irreducible claims 
 argument-hint: "First-principles check: {problem and outcomes}"
 user-invocable: false
 disable-model-invocation: true
-tools: [vscode/toolSearch, read/readFile, edit/createDirectory, edit/createFile, edit/editFiles, search, ob-memory/recall_memory, ob-memory/save_memory]
+tools: [vscode/toolSearch, read/readFile, edit/createDirectory, edit/createFile, edit/editFiles, search, ob-memory/recall_memory]
 agents: []
 hooks:
   PreToolUse:

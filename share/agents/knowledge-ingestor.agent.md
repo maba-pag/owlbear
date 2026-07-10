@@ -5,7 +5,7 @@ argument-hint: "Ingest: {source path or URL}"
 user-invocable: true
 disable-model-invocation: true
 tools:
-  [vscode/toolSearch, vscode/askQuestions, read/readFile, search/fileSearch, search/listDirectory, search/textSearch, web, ddgs/extract_content, ddgs/search_text, 'markitdown/*', ob-knowledge/knowledge_ingest, ob-knowledge/knowledge_search, ob-knowledge/knowledge_sources_list, ob-knowledge/knowledge_sources_refresh, ob-knowledge/knowledge_stats, ob-memory/recall_memory, ob-memory/save_memory]
+  [vscode/toolSearch, vscode/askQuestions, read/readFile, search/fileSearch, search/listDirectory, search/textSearch, web, ddgs/extract_content, ddgs/search_text, 'markitdown/*', ob-knowledge/knowledge_ingest, ob-knowledge/knowledge_search, ob-knowledge/knowledge_sources_list, ob-knowledge/knowledge_sources_refresh, ob-knowledge/knowledge_stats, ob-memory/recall_memory]
 ---
 
 <persona>

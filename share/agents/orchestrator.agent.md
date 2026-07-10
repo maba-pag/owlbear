@@ -4,7 +4,7 @@ description: "Dispatch loop — plan, dispatch agents, re-plan from fresh board 
 argument-hint: "Orchestrate: {scope_or-filter — e.g., 'phase-2', 'status:build', 'tag:parser'}"
 user-invocable: true
 disable-model-invocation: true
-tools: [vscode/toolSearch, read/readFile, agent, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/pick_tasks, ob-memory/recall_memory, ob-memory/save_memory]
+tools: [vscode/toolSearch, read/readFile, agent, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/pick_tasks, ob-memory/assess_memories, ob-memory/recall_memory, ob-memory/save_memory]
 agents:
   - builder
   - verifier
