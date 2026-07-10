@@ -28,7 +28,6 @@ For each recalled memory entry, categorize your experience:
 | builder | DONE / REJECT / BLOCK | ## Builder Notes |
 | verifier | PASS / REJECT / RESHAPE | ## Verify Notes |
 | collector | ARCHIVED / REJECT | ## Collect Notes |
-| planner | DONE | ## Planning |
 | memory-curator | DONE | ## Curation |
 
 ## User-Action Detection Responsibilities

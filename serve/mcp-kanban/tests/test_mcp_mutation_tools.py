@@ -11,7 +11,7 @@ Tests verify:
 
 AC coverage:
 - create_task: title, body, priority, tags, parent, depends_on forwarded to AgentView
-- create_task: no status parameter (engine controls entry status per D50)
+- create_task: optional status parameter defaults to entry status when omitted
 - create_task: SingleTaskResponse returned
 - create_task: dep validation delegated — ValidationError(ERR_DEP_NOT_FOUND) → ToolError (AC24)
 - edit_task: all 13 params forwarded to AgentView.edit_task
@@ -143,7 +143,7 @@ def app_ctx_with_mock_agent_view(
     kanban_dir = _make_board(tmp_path)
     engine = KanbanEngine(kanban_dir)
     # Create one task so edit_task calls have a valid target
-    engine.create_task("Initial task", status="todo", priority="important")
+    engine.create_task("Initial task", status="build", priority="medium")
     engine.list_tasks()  # populate id_to_filename cache
     mock_av = MagicMock()
     mock_av.create_task.return_value = _make_single_task_response()
@@ -250,12 +250,21 @@ class TestFromAC_CreateTaskAdapter:
             f"passthrough fidelity required; got {type(result).__name__}"
         )
 
-    def test_create_task_has_no_status_parameter(self) -> None:
-        """create_task must not accept a status parameter — engine controls entry status (D50)."""
+    def test_create_task_exposes_status_parameter(self) -> None:
+        """create_task accepts an optional status; omitted status still uses the entry status."""
         params = inspect.signature(create_task).parameters
-        assert "status" not in params, (
-            f"create_task must not expose a 'status' parameter per D50; got params: {list(params)}"
-        )
+        assert "status" in params, f"create_task must expose status; got params: {list(params)}"
+
+    @pytest.mark.asyncio
+    async def test_create_task_forwards_status_when_provided(
+        self, app_ctx_with_mock_agent_view: tuple[AppContext, MagicMock]
+    ) -> None:
+        """status must be forwarded to AgentView.create_task."""
+        app_ctx, mock_av = app_ctx_with_mock_agent_view
+        ctx = _make_mcp_ctx(app_ctx)
+        await create_task(ctx, title="T", status="collect")
+        _, kwargs = mock_av.create_task.call_args
+        assert kwargs.get("status") == "collect", "status not forwarded to AgentView.create_task"
 
     @pytest.mark.asyncio
     async def test_create_task_dep_not_found_raises_tool_error(

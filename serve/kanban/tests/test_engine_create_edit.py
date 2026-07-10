@@ -173,13 +173,19 @@ class TestFromAC_CreateTask:
     """
 
     def test_create_task_uses_entry_status_not_defaults_status(self, tmp_path: Path) -> None:
-        """D50: tasks created at PRODUCT_TOPOLOGY.entry_status ('research'), not config entry_status.
+        """D50: tasks created at PRODUCT_TOPOLOGY.entry_status ('shape'), not config entry_status.
 
-        Board has entry_status='backlog' in config, but PRODUCT_TOPOLOGY overrides to 'research'.
+        Board has entry_status='backlog' in config, but PRODUCT_TOPOLOGY overrides to 'shape'.
         """
         view, _ = _make_view(tmp_path, _ENTRY_BACKLOG_CONFIG)
         result = view.create_task(title="X")
-        assert result.status == "research"
+        assert result.status == "shape"
+
+    def test_create_task_accepts_explicit_pipeline_status(self, tmp_path: Path) -> None:
+        """Explicit status lets agents create shaped tasks directly at their target gate."""
+        view, _ = _make_view(tmp_path)
+        result = view.create_task(title="X", status="build")
+        assert result.status == "build"
 
     def test_create_task_dep_not_found_raises_validation_error(self, tmp_path: Path) -> None:
         """AC24: create_task with non-existent depends_on ID → ValidationError(ERR_DEP_NOT_FOUND)."""
@@ -231,7 +237,7 @@ class TestFromAC_CreateTask:
         result = view.create_task(title="X", body="No sections here.")
         # Task should be created successfully (no predicate raises)
         assert result is not None
-        assert result.status == "research"
+        assert result.status == "shape"
         # Verify the task file was written
         assert len(list((kanban_dir / "tasks").glob("*.md"))) == 1
 

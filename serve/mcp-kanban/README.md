@@ -23,7 +23,7 @@ The server exposes 11 tools:
 | `list_tasks` | `list_tasks(status: str \| None = None, priority: str \| None = None, tag: str \| None = None, archival_reason: str \| None = None, ids: list[int] \| None = None, unclaimed: bool = False, blocked: bool \| None = None, parent: int \| None = None, search: str \| None = None, sort: str \| None = None, reverse: bool = False, limit: int = 0)` |
 | `show_task` | `show_task(id: str \| int, section: str \| None = None)` |
 | `pick_tasks` | `pick_tasks(wave_size: int \| None = None, max_waves: int = 3)` |
-| `create_task` | `create_task(title: str, body: str = "", priority: str = "", tags: list[str] \| None = None, parent: int \| None = None, depends_on: list[int] \| None = None, ac: list[str] \| None = None, proof_bundle: str \| None = None)` |
+| `create_task` | `create_task(title: str, body: str = "", status: str = "", priority: str = "", tags: list[str] \| None = None, parent: int \| None = None, depends_on: list[int] \| None = None, ac: list[str] \| None = None, proof_bundle: str \| None = None)` |
 | `edit_task` | `edit_task(id: str \| int, title: str \| None = None, body: str \| None = None, append_body: str \| None = None, timestamp: bool = False, priority: str \| None = None, parent: int \| None = None, ac: list[str] \| None = None, add_ac: list[str] \| None = None, remove_ac: list[str] \| None = None, proof_bundle: str \| None = None, add_dep: list[int] \| None = None, remove_dep: list[int] \| None = None, add_tag: list[str] \| None = None, remove_tag: list[str] \| None = None, block_reason: str \| None = None, archival_reason: str \| None = None, archival_refs: list[int] \| None = None)` |
 | `move_task` | `move_task(id: str \| int, status: str, archival_reason: str \| None = None, archival_refs: list[int] \| None = None)` |
 | `start_work` | `start_work(id: str \| int)` |
@@ -34,7 +34,8 @@ The server exposes 11 tools:
 
 ### Lifecycle and dispatch semantics
 
-- `create_task.priority`: omitted or `""` uses the product topology default priority (`important`). Pass an explicit value when a different priority is intended.
+- `create_task.status`: omitted or `""` uses the product topology entry status (`shape`). Pass `"build"` for build-ready leaf tasks and `"collect"` for aggregate parent/EPIC tasks parked behind child dependencies.
+- `create_task.priority`: omitted or `""` uses the product topology default priority (`medium`). Pass an explicit value when a different priority is intended.
 
 - `pick_tasks` computes dispatch waves from task state. It sweeps pending request state as part of dispatch, so it is not read-only.
 - `start_work` delegates to engine claim logic. If a rival claim is still live, the call fails; if the rival claim is expired, the claim is reclaimed and the task is claimed for the caller.

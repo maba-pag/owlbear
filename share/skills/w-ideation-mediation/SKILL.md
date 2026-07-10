@@ -158,7 +158,7 @@ Apply O15 to every Critic pass. See the Critic Validation section above for the 
 
 1. Create the parent kanban task from the approved Brief.
 2. Invoke `shaper` with the canonical prefix: `Shape: #{parent_id} — {brief summary}`.
-3. Write `shaping-summary.md` from the shaper result: parent task, resulting task shape, child-task list when shaper invoked planner, Brief coverage, expected-experience coverage, omissions, and repair actions.
+3. Write `shaping-summary.md` from the shaper result: parent task, resulting task shape, child-task list when shaper decomposed the parent, Brief coverage, expected-experience coverage, omissions, and repair actions.
 4. Apply the tier-scaled M6 handoff check from `h-ideation` against `brief.md`, `shaping-summary.md`, and the created or shaped tasks:
    - `Scratch` and `Tool`: no formal M6 fidelity check.
    - `Shared`: post-shaping expectation-fidelity Critic check.

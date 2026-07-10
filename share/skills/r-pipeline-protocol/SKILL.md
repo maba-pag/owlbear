@@ -39,7 +39,7 @@ Load these via `read_file` when the referenced capability is needed:
 - **Shaper** is user-facing and prompt-driven. It decides what should be built and what evidence would be meaningful.
 - **Builder** changes product files, runs focused proof, and calls builder-challenger before every DONE. Durable tests are optional and must earn their maintenance cost.
 - **Verifier** validates the result, may patch small local issues, and calls verifier-challenger before every PASS.
-- **Collector** works parent and `EPIC:` tasks. Ordinary subtasks should not receive a second detailed review in `collect`.
+- **Collector** works aggregate parents: tasks with child links, parent/EPIC intent, or explicit aggregate collect criteria. Ordinary subtasks should not receive a second detailed review in `collect`.
 
 ### Model Routing
 
@@ -134,7 +134,6 @@ Append the full agent section through the `note` parameter of `end_work`; the no
 | builder | DONE / REJECT / BLOCK | `## Builder Notes` |
 | verifier | PASS / REJECT / RESHAPE | `## Verify Notes` |
 | collector | ARCHIVED / REJECT | `## Collect Notes` |
-| planner | DONE | `## Planning` |
 | memory-curator | DONE | `## Curation` |
 
 If a single section exceeds about 1500 tokens, write details to `.owlbear/scratch/{task-id}-{agent}.md` and reference it from the body.

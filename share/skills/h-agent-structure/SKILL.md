@@ -206,7 +206,7 @@ VS Code has a limitation: at nesting depth ≥2 (3rd-level subagents), agents wi
 3. **Every dispatching agent** must have an `<agents>` body section listing all agents from its frontmatter `agents:` array — this is the only discovery mechanism at depth ≥2.
 4. ND3 agents are tagged with `(ND3)` in their `description` field for identification.
 
-**Current ND3 agents:** shaper-challenger, builder-challenger, verifier-challenger, planner, fix-attempt, code-reader, ideation-critic.
+**Current ND3 agents:** shaper-challenger, builder-challenger, verifier-challenger, fix-attempt, code-reader, ideation-critic.
 
 Caller inventory is intentionally not duplicated here. The source of truth for caller → subagent relationships is each caller's frontmatter `agents:` array plus its `<agents>` body table; see [share/WIRING.md](../../WIRING.md) for the inverse ecosystem map. When adding a new caller, update the caller's agent file. When adding a new ND3 agent, set `disable-model-invocation: false`, tag the description with `(ND3)`, and add it to this list.
 
@@ -269,9 +269,7 @@ exists for "Evidence," the agent must find evidence to fill it.}
 - {pitfall}: {avoidance}
 ```
 
-**Step 0 applies to:** Workflow skills where the agent claims and processes a task, such as `w-mem-curation`, `w-task-decomposition`, and `w-test-curation`.
-
-**Step 0 without claiming:** w-task-decomposition (creates tasks, doesn't claim one).
+**Step 0 applies to:** Workflow skills where the agent claims and processes a task, such as `w-mem-curation` and `w-task-decomposition`.
 
 **No Step 0:** w-orchestration (own dispatch pattern), w-test-curation (suite-scoped inventory, not task-scoped).
 

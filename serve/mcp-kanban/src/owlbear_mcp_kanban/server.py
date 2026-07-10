@@ -387,6 +387,7 @@ async def create_task(  # noqa: PLR0913
     *,
     title: str,
     body: str = "",
+    status: str = "",
     depends_on: list[int] | None = None,
     parent: int | None = None,
     priority: str = "",
@@ -400,6 +401,7 @@ async def create_task(  # noqa: PLR0913
     kwargs: dict[str, object] = {
         "title": title,
         "body": normalized_body,
+        "status": status,
         "priority": priority,
         "tags": tags,
         "parent": parent,

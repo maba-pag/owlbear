@@ -147,7 +147,7 @@ Standards: `r-pipeline-protocol` section Per-Agent Signal Mapping, `share/README
 - Signal mapping mismatch between protocol and agent `<output_format>`
 - Tier assignment mismatch
 - Tool allowlist missing required tools or including out-of-tier tools
-- Agent naming inconsistency (`planner`, `builder-challenger`)
+- Agent naming inconsistency (`shaper-challenger`, `builder-challenger`)
 
 **Routing source-of-truth check:** Compare every routing claim against the current `r-pipeline-protocol` confidence thresholds and escalation routing. Do not rely on copied routing rows in this prompt.
 
