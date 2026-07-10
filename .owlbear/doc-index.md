@@ -1177,16 +1177,17 @@
 - ## `Step 0 — Setup`
 - ## `Research Gate Checklist`
 - ## `Step 1 — Clarify Scope`
-- ### `Step 1.5 — Pre-Flight: Check for Existing Research`
-- ## `Step 2 — Gather Sources`
-- ## `Step 3 — Analyze and Compare`
-- ### `Step 3.5 — Challenge Proposed Recommendation`
-- ## `Step 4 — Write Research Document`
-- ## `Step 5 — Classify Outcome and Create Follow-Up Tasks`
+- ## `Step 2 — Check Existing Research`
+- ## `Step 3 — Research Depth Gate`
+- ## `Step 4 — Gather Sources`
+- ## `Step 5 — Analyze and Compare`
+- ## `Step 6 — Challenge Proposed Recommendation`
+- ## `Step 7 — Write Research Document`
+- ## `Step 8 — Classify Outcome and Create Follow-Up Tasks`
 - ### `Tier Classification`
 - ### `Create Follow-Up Tasks`
-- ## `Step 6 — Finalize Artifacts`
-- ## `Step 7 — Record In Shape Notes And Advance`
+- ## `Step 9 — Finalize Artifacts`
+- ## `Step 10 — Record In Shape Notes And Advance`
 - ## `Output Template`
 - ## `Verification Checklist`
 - ## `Known Pitfalls`

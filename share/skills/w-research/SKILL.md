@@ -52,28 +52,41 @@ If the task has scoped content but needs clarification:
 - Present structured options to the user.
 - Read `.github/copilot-instructions.md` for tech stack and principles.
 
-### Step 1.5 — Pre-Flight: Check for Existing Research
+## Step 2 — Check Existing Research
 
 Before gathering sources:
 
 1. Search `.owlbear/research/` for the task ID and topic keywords. If a doc references this task, read it first.
 2. Check task body for `See .owlbear/research/` links.
-3. If a complete, recent doc exists: do a validation pass instead of full research — confirm the doc is current, verify codebase state, skip to Step 5 if findings hold.
+3. If a complete, recent doc exists: do a validation pass instead of full research — confirm the doc is current, verify codebase state, skip to Step 8 if findings hold.
 
 > Skipping this check is the most common research time-sink.
 
-## Step 2 — Gather Sources
+## Step 3 — Research Depth Gate
+
+Preliminary orientation is autonomous: inspect local code and documentation, use focused web/source-page lookups, and identify whether a real research question remains.
+
+Before either of these costly activities, obtain explicit user approval through `askQuestions`:
+
+- **Deep research:** a multi-source or comparative investigation beyond preliminary orientation.
+- **Repository cloning:** cloning an external repository to inspect its structure, implementation, or cross-file patterns.
+
+Present the remaining question, why preliminary orientation is insufficient, the proposed scope (including repository URLs when applicable), expected outcome, cost level, and a narrower alternative. Do not start deep research or clone a repository until the user approves. If the user is unavailable, create a blocking request and keep the task in `shape`.
+
+For an approved clone, use `.owlbear/scratch/research/{repo-name}/`, inspect it only, record the repository URL and resolved commit/ref in the research findings, and delete the clone in Step 9. Do not execute repository code, setup scripts, package installs, or hooks.
+
+## Step 4 — Gather Sources
 
 Find 2+ authoritative sources per claim:
 
 - **Codebase:** search tools for related existing code.
 - **Explore:** use the `Explore` subagent for broad read-only codebase context when local search would be noisy.
 - **Web:** use the `web` toolset for direct pages and `ddgs/search_text` / `ddgs/extract_content` for search and extraction; use `markitdown/*` when document conversion is needed.
-- **External repositories:** prefer source pages, docs, and extracted files. If deep clone-based analysis is truly required, create a request or shape a separate task with the needed tool access; shaper does not clone repositories directly.
+- **External repositories:** prefer source pages, docs, and extracted files for preliminary orientation. After Step 3 approval, clone when source-level inspection is needed to answer the shaping question.
 
 Track: name, URL, what was taken, relevance score (0.0–1.0).
 
-## Step 3 — Analyze and Compare
+## Step 5 — Analyze and Compare
 
 Structure analysis as trade-off matrices:
 
@@ -82,13 +95,13 @@ Structure analysis as trade-off matrices:
 - Risks and mitigations for each option.
 - Apply KISS, YAGNI, DRY principles.
 
-### Step 3.5 — Challenge Proposed Recommendation
+## Step 6 — Challenge Proposed Recommendation
 
 Before approving a build-bound shape after non-trivial research, challenge the shaping recommendation using `shaper-challenger`. Mandatory when Step 3 produces a recommendation; skip for info-only or trivial research.
 
 **Fallback:** If the subagent call errors, do not approve solely on unchallenged research. Either run a narrower local check, ask the user, or `REFINE -> shape` with the missing challenge noted.
 
-## Step 4 — Write Research Document
+## Step 7 — Write Research Document
 
 Create `.owlbear/research/{slug}.md`:
 
@@ -110,7 +123,7 @@ Max 200 lines. Every claim needs a source reference.
 
 Include challenge note in section 4 when a recommendation affects build approval: `Challenge: {proceed|reconsider|block} — confidence in original: {score}`
 
-## Step 5 — Classify Outcome and Create Follow-Up Tasks
+## Step 8 — Classify Outcome and Create Follow-Up Tasks
 
 ### Tier Classification
 
@@ -128,12 +141,12 @@ Classify every finding before acting:
 
 Create concrete follow-up tasks with explicit statuses: build-ready follow-ups in `build`, aggregate follow-ups in `collect`, and no staging task for unresolved findings. Use `w-task-decomposition` for multi-task splits. For findings requiring user decisions, use `askQuestions` when the user is present or `create_request` when an existing board task must be blocked.
 
-## Step 6 — Finalize Artifacts
+## Step 9 — Finalize Artifacts
 
 1. Add rows to `.owlbear/sources/overview.md` for external sources (see `r-project-standards` → Attribution).
 2. Delete any cloned repos from `.owlbear/scratch/research/`.
 
-## Step 7 — Record In Shape Notes And Advance
+## Step 10 — Record In Shape Notes And Advance
 
 Include the research summary and challenge results in `## Shape Notes` through the `end_work` note.
 
@@ -181,6 +194,7 @@ Append to task body before advancing:
 ## Known Pitfalls
 
 - **Skipping pre-flight check:** Multiple research cycles have been wasted because existing docs were missed. Always check `.owlbear/research/` first.
+- **Skipping research-depth approval:** Do not hide an expensive investigation behind a routine lookup. Ask before deep research or cloning, and bound the approved scope.
 - **Follow-up tasks without AC:** Every follow-up task needs concrete acceptance criteria. "Improve X" without measurable conditions is not actionable.
 - **T3 without request:** New capabilities and architecture changes need a blocking request via `create_request` when the user is not resolving it live. Proceeding without approval risks reversal.
 - **Over-long research docs:** 200-line cap exists to force conciseness. If you need more, the analysis is not focused enough.
