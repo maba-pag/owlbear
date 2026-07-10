@@ -8,9 +8,9 @@ categories:
 confidence: 0.84
 state: approved
 scope_agents:
-- reviewer
-- auditor
-- architect
+- verifier
+- collector
+- shaper
 source_agent: reviewer
 created_at: '2026-05-15T21:58:46.625789Z'
 updated_at: '2026-05-16T21:44:45.346801Z'

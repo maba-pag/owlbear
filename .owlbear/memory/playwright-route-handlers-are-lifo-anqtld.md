@@ -9,8 +9,7 @@ confidence: 0.9
 state: approved
 scope_agents:
 - builder
-- test-writer
-- reviewer
+- verifier
 source_agent: copilot
 created_at: '2026-05-17T01:34:35.497571Z'
 updated_at: '2026-05-17T03:13:27.704406Z'

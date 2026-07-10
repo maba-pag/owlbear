@@ -1,10 +1,15 @@
 ---
 approved_at: null
-categories: [pitfall, process, tool-usage]
+categories:
+- pitfall
+- process
+- tool-usage
 confidence: 0.86
 created_at: '2026-05-17T01:35:51.946837Z'
 id: 67b38fbb-9690-4ba3-9356-094640e2a479
-scope_agents: [reviewer, test-writer, builder]
+scope_agents:
+- verifier
+- builder
 source_agent: copilot
 state: curated
 title: Atomicity proof must exercise rename and rollback

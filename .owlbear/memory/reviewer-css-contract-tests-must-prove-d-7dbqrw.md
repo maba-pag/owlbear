@@ -1,6 +1,6 @@
 ---
 id: de291fc9-9aa9-4416-bf56-975fc81e3355
-title: 'Reviewer: CSS contract tests must prove declarations and search all shared
+title: 'Verifier: CSS contract tests must prove declarations and search all shared
   imports'
 categories:
 - pitfall
@@ -9,10 +9,9 @@ categories:
 confidence: 0.86
 state: approved
 scope_agents:
-- reviewer
-- architect
+- verifier
+- shaper
 - builder
-- test-writer
 source_agent: reviewer
 created_at: '2026-05-13T23:47:38.344791Z'
 updated_at: '2026-05-15T20:43:03.825798Z'

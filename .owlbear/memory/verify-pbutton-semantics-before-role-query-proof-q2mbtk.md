@@ -9,8 +9,7 @@ confidence: 0.86
 state: approved
 scope_agents:
 - builder
-- test-writer
-- reviewer
+- verifier
 source_agent: builder
 created_at: '2026-05-14T06:32:10.008051Z'
 updated_at: '2026-05-16T23:05:55.399743Z'

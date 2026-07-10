@@ -8,7 +8,7 @@ confidence: 0.86
 state: curated
 scope_agents:
 - planner
-- architect
+- shaper
 source_agent: copilot
 created_at: '2026-05-17T01:35:32.263441Z'
 updated_at: '2026-05-17T01:48:10.645555Z'

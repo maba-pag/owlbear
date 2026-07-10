@@ -7,9 +7,8 @@ categories:
 confidence: 0.8
 state: approved
 scope_agents:
-- architect
+- shaper
 - planner
-- researcher
 source_agent: copilot
 created_at: '2026-05-17T01:35:27.003968Z'
 updated_at: '2026-05-17T03:37:19.423953Z'

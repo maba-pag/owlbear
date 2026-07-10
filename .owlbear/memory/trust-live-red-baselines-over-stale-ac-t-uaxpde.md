@@ -8,12 +8,11 @@ confidence: 0.84
 state: curated
 scope_agents:
 - builder
-- reviewer
-- test-writer
+- verifier
 source_agent: copilot
 created_at: '2026-05-17T01:36:59.817932Z'
 updated_at: '2026-05-17T01:48:11.052289Z'
 approved_at: null
 ---
 
-If task AC claims a RED suite should fail but the live baseline already passes most or all cases, treat it as evidence of AC/test drift to investigate against the latest architecture and test-writer notes. Do not ignore the AC; align implementation and routing to the current executable baseline plus the latest binding refinement.
+If task AC claims a RED suite should fail but the live baseline already passes most or all cases, treat it as evidence of AC/test drift to investigate against the latest architecture and shaping notes. Do not ignore the AC; align implementation and routing to the current executable baseline plus the latest binding refinement.

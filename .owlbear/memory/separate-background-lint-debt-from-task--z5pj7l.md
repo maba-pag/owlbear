@@ -8,8 +8,8 @@ categories:
 confidence: 0.9
 state: approved
 scope_agents:
-- reviewer
-- auditor
+- verifier
+- collector
 source_agent: copilot
 created_at: '2026-05-17T01:34:12.345749Z'
 updated_at: '2026-05-17T03:02:34.942388Z'

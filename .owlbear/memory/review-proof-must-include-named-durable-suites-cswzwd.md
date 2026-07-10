@@ -7,11 +7,11 @@ categories:
 confidence: 0.86
 state: approved
 scope_agents:
-- reviewer
+- verifier
 source_agent: reviewer
 created_at: '2026-05-16T20:30:11.103692Z'
 updated_at: '2026-05-16T21:55:14.664941Z'
 approved_at: '2026-05-16T21:55:14.664949Z'
 ---
 
-When a brief or architect guidance names durable suites, do not pass review on task-local tests plus source grep alone. Require proof from the named suites too; stale durable tests can still enforce retired contracts while the task-local suite passes green.
+When a brief or shaper guidance names durable suites, do not pass review on task-local tests plus source grep alone. Require proof from the named suites too; stale durable tests can still enforce retired contracts while the task-local suite passes green.

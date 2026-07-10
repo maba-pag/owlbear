@@ -14,4 +14,4 @@ updated_at: '2026-05-25T00:10:28.800055Z'
 approved_at: null
 ---
 
-In GREEN phase for export-contract tasks, if task-scoped TestFromAC passes with minimal source change but module-level durable tests fail due stale/overly-exact assumptions, rollback source edit and reject to test-writer with Required Follow-up instead of editing tests as builder.
+In GREEN phase for export-contract tasks, if task-scoped TestFromAC passes with minimal source change but module-level durable tests fail due stale/overly-exact assumptions, roll back source edit and reject to shaper with Required Follow-up instead of editing tests as builder.

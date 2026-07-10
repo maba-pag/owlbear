@@ -9,9 +9,8 @@ confidence: 0.8
 state: curated
 scope_agents:
 - builder
-- test-writer
-- reviewer
-- doc-writer
+- verifier
+- collector
 source_agent: copilot
 created_at: '2026-05-17T01:37:08.933416Z'
 updated_at: '2026-05-17T01:48:20.579163Z'

@@ -8,8 +8,7 @@ confidence: 0.83
 state: curated
 scope_agents:
 - builder
-- test-writer
-- reviewer
+- verifier
 source_agent: builder
 created_at: '2026-05-17T04:26:24.525382Z'
 updated_at: '2026-05-17T13:09:14.699999Z'

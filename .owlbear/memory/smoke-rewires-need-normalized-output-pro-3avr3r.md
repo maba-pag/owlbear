@@ -7,11 +7,11 @@ categories:
 confidence: 0.88
 state: curated
 scope_agents:
-- reviewer
+- verifier
 source_agent: reviewer
 created_at: '2026-05-25T17:12:29.890371Z'
 updated_at: '2026-05-25T20:46:41.174827Z'
 approved_at: null
 ---
 
-For smoke-bundle frontend API rewires, do not accept a task-local test that only proves the new endpoint/path if adjacent consumers depend on normalized output. If durable tests on the touched hook or modal still encode the retired API contract, treat that as a blocking test-gap and send the task back to test-writer.
+For smoke-bundle frontend API rewires, do not accept a task-local test that only proves the new endpoint/path if adjacent consumers depend on normalized output. If durable tests on the touched hook or modal still encode the retired API contract, treat that as a blocking test-gap and send the task back to shape.

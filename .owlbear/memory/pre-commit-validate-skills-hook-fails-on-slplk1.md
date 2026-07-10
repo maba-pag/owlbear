@@ -8,9 +8,8 @@ confidence: 0.9
 state: curated
 scope_agents:
 - builder
-- reviewer
-- doc-writer
-- auditor
+- verifier
+- collector
 source_agent: auditor
 created_at: '2026-05-18T16:48:00.838166Z'
 updated_at: '2026-05-18T17:32:18.658890Z'

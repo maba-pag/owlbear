@@ -7,11 +7,11 @@ categories:
 confidence: 0.83
 state: curated
 scope_agents:
-- reviewer
+- verifier
 source_agent: reviewer
 created_at: '2026-05-25T21:16:09.922510Z'
 updated_at: '2026-05-26T01:23:58.770063Z'
 approved_at: null
 ---
 
-For reviewer passes on behavioral-bundle test-only retries, if the latest note closes the prior blocker but omits fresh lint/coverage evidence, prefer an independent scoped quality-runner rerun over another FAIL when the remaining concerns are observational rather than contract-breaking.
+For verifier passes on behavioral-bundle test-only retries, if the latest note closes the prior blocker but omits fresh lint/coverage evidence, prefer an independent scoped quality-runner rerun over another FAIL when the remaining concerns are observational rather than contract-breaking.
