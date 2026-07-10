@@ -33,12 +33,12 @@ user-invocable: false
 
 | Tier | File naming | Lifespan | Authority |
 |------|------------|----------|-----------|
-| **Task-scoped** (transient) | `tests/test_{module}_{task_id}.py` | Active pipeline only | Test-writer creates, builder implements, reviewer validates. Immutable during pipeline. Test-curator cleans up post-archive. |
+| **Task-scoped** (transient) | `tests/test_{module}_{task_id}.py` | Legacy/task artifact only | Created only when a task explicitly needs temporary proof. Test-curator removes or mines after archive. |
 | **Module-level** (durable, canonical) | `serve/{package}/tests/test_{module}.py` | Permanent | Test-curator mines coverage gaps from task-scoped tests and writes new module-level assertions. |
 
 - **Task-scoped tests** are scaffolding. They verify acceptance criteria for a single task and are removed by the test-curator after the task is archived.
 - **Module-level tests** are the durable test suite. Canonical location is `serve/{package}/tests/test_{module}.py`. Existing root `tests/test_{module}.py` durable files are legacy until E2 migration.
-- Builders run both the task-scoped file and the module's durable file (if it exists) during GREEN phase.
+- Builder/verifier run focused proof commands proportional to the task risk. There is no mandatory GREEN phase or coverage target.
 
 ## Known Gotchas
 

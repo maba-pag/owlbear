@@ -86,7 +86,7 @@ Keep the project root clean. Every file created during a task goes to its design
 | Prompts | `share/prompts/` | `{name}.prompt.md` | Yes |
 | Decision requests | `.owlbear/kanban/decisions/pending/` | `{task-id}-{slug}.md` | Yes |
 
-Before marking a task `done`, delete all `.owlbear/scratch/{task-id}-*` files created for that task.
+Before closing task work, delete all `.owlbear/scratch/{task-id}-*` files created for that task.
 
 ## 7. Project Layout
 

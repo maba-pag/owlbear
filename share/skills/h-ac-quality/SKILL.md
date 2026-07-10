@@ -1,6 +1,6 @@
 ---
 name: h-ac-quality
-description: "Handbook: Unified two-tier acceptance-criteria quality schema for planner drafting and architect/challenger validation"
+description: "Handbook: Unified two-tier acceptance-criteria quality schema for planner drafting and shaper/challenger validation"
 user-invocable: false
 ---
 
@@ -108,13 +108,13 @@ Mechanical pass failing means rewrite before semantic review. Semantic failure m
 
 ### B3 Example (No Naked Quantifiers)
 
-- Bad: "Reviewer checks all AC lines correctly."
-- Good: "Reviewer checks AC-1 through AC-4 and records one evidence row per AC line in Review Evidence."
+- Bad: "Verifier checks all AC lines correctly."
+- Good: "Verifier checks AC-1 through AC-4 and records one evidence row per AC line in Verify Notes."
 
 ### P1 Example (Agent/Stage-Scoped)
 
 - Bad: "Add validation before moving tasks."
-- Good: "Architect validates AC quality in backlog before moving task backlog -> todo."
+- Good: "Shaper validates AC quality in shape before moving task shape -> build."
 
 ### P2 Example (Observable Artifact/State)
 
@@ -123,8 +123,8 @@ Mechanical pass failing means rewrite before semantic review. Semantic failure m
 
 ### P3 Example (Verification Method)
 
-- Bad: "Auditor confirms the handoff is complete."
-- Good: "Auditor verifies handoff completeness by artifact inspection of '## Review Evidence' in the task body and stage-transition audit of review -> docs."
+- Bad: "Collector confirms the handoff is complete."
+- Good: "Collector verifies aggregate completion by inspecting child status, `## Verify Notes`, and parent/EPIC acceptance criteria."
 
 ## Canonical Literal Verification
 
@@ -179,7 +179,7 @@ Use this checklist for both drafting and validation.
 - [ ] Numbering is stable and unambiguous.
 - [ ] Line can be verified without author intent.
 
-### Architect/Challenger Validation Checklist
+### Shaper/Challenger Validation Checklist
 
 - [ ] Mechanical pass complete: B3 banned words, P1 token, numbering.
 - [ ] Semantic pass complete: independent verifiability confirmed per line.

@@ -30,15 +30,6 @@ Head cataloger for institutional memory. Agents deposit raw learnings into MCP a
 
 </critical_rules>
 
-<agents>
-
-None. The memory-curator resolves all issues through its own two modes:
-
-- **Periodic:** leaves uncertain entries pending and reports their entry IDs
-- **Manual:** resolves interactively via `askQuestions`
-
-</agents>
-
 <output_format>
 
 ### Channel A
@@ -61,6 +52,7 @@ Channel B does not apply — the curation actions and Channel A summary signal a
 
 <boundaries>
 
+- The memory-curator resolves issues through two modes: periodic mode leaves uncertain entries pending and reports their entry IDs; manual mode resolves interactively via `askQuestions`.
 - When in doubt, keep the entry as unreviewed — don't over-prune.
 - Don't spend tokens on entries already reviewed and stable.
 
@@ -84,7 +76,7 @@ Channel B does not apply — the curation actions and Channel A summary signal a
 (pruned), 4 generic observations (pruned — restated common knowledge),
 2 contradictory retry strategies (left pending with entry IDs and conflict
 summary), and 4 actionable patterns promoted via curate_memory with targeted
-builder/reviewer scopes. 2 items deferred for manual curation.
+builder/verifier scopes. 2 items deferred for manual curation.
 Final: 4 promoted, 9 pruned, 2 deferred.
 </good_example>
 

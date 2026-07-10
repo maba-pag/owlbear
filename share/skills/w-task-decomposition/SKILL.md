@@ -1,12 +1,12 @@
 ---
 name: w-task-decomposition
-description: "Workflow: Task decomposition — break features into atomic TDD-paired tasks with dependency graphs"
+description: "Workflow: Task decomposition — break features into atomic tasks with dependency graphs"
 user-invocable: false
 ---
 
 # Task Decomposition
 
-Break complex features into atomic, test-driven kanban tasks with explicit dependency graphs and priority assignments.
+Break complex features into atomic kanban tasks with explicit dependency graphs and priority assignments.
 
 **Kanban operations:** See `h-mcp-kanban` skill — section `## Agent Lifecycle Pattern`.
 
@@ -16,17 +16,15 @@ Break complex features into atomic, test-driven kanban tasks with explicit depen
 
 - Break features into atomic tasks.
 - Draft AC using `h-ac-quality` rules.
-- Create consolidation-test tasks when two or more implementation siblings exist.
 - Assign priorities and dependency graphs.
-- Route tasks to `backlog` (or `research` for researcher follow-ups).
+- Route tasks to `shape` unless the caller explicitly requests another valid status.
 
 ### Out of Scope
 
-- Architecture evaluation — architect (`w-arch-review`).
-- AC quality validation — architect/challenger (`w-arch-review`, `challenger`).
-- Implementation — builder (`w-tdd-green`).
-- Test writing — test-writer (`w-tdd-red`).
-- Moving tasks to `todo` — architect (`w-arch-review`).
+- Shape approval — shaper.
+- Implementation — builder.
+- Verification — verifier.
+- Creating mandatory test-only pairs.
 
 ## Step 0 — Setup
 
@@ -56,19 +54,19 @@ Announce: "Decomposing: {name}. Expected: {N} tasks in {M} layers."
 
 ## Step 1a — Single-Task Shortcut
 
-Before decomposition, detect whether the request is exactly one follow-up task with no dependency graph or TDD-paired implementation split required.
+Before decomposition, detect whether the request is exactly one follow-up task with no dependency graph or multi-domain split required.
 
 If yes, use the shortcut flow:
 
 - Skip Step 1b, Steps 2–4, and Step 7.
 - Continue with Steps 5, 5a, 5b (user mode only), and 6.
 - Preserve caller metadata verbatim where provided: title, parent ID, and tags.
-- Status routing: caller should specify target status (for example, "at backlog" or "at research"). Default is `backlog`; researcher follow-ups use `research`; never create `todo` (normalize caller-requested `todo` to `backlog`, or `research` for researcher follow-ups).
+- Status routing: caller should specify target status when needed. Default is `shape`; normalize old `todo`, `backlog`, `research`, `in-progress`, `review`, `docs`, and `done` requests to `shape` unless the user explicitly asks for legacy artifact cleanup.
 - Naming: no phase-based `P{phase}-{nn}` prefix in shortcut mode. Use caller-provided title directly.
-- TDD pairing is not required in shortcut mode (single follow-up tasks are not feature implementation decompositions).
+- TDD pairing is not used.
 - Return the created task ID explicitly in your response message (for downstream linking and parent-child follow-up operations).
 
-Typical shortcut cases: "fix off-by-one", "delete stale docs", "architect calibration".
+Typical shortcut cases: "fix off-by-one", "delete stale docs", "shaper calibration".
 
 ## Step 1b — Source-Read & Symbol Capture Guard
 
@@ -112,11 +110,11 @@ Each task must be:
 - **Domain scoped:** one primary domain per task (see `r-architecture-standards` domain taxonomy). Multi-domain tasks must be split.
 - **Testable:** clear pass/fail criterion
 - **Small:** ~2 hours of focused work max
-- **Self-contained TDD:** each implementation task carries its own RED→GREEN cycle through the pipeline (test-writer writes RED, builder implements GREEN). Do not create separate test-only tasks paired with implementation tasks — this deadlocks the pipeline because test-only tasks can never pass the builder/reviewer green-test gates. When test design is complex, create a preceding **research** task instead (delivers findings to `.owlbear/research/`, not test code).
+- **Self-contained proof:** each task names the proof mode the builder/verifier should use, but does not require a separate test-writing task.
 
 ### Task Complexity Budget
 
-Draft tasks to fit this budget before asking the architect to refine them:
+Draft tasks to fit this budget before asking the shaper to refine them:
 
 - **AC target:** 3 acceptance criteria or fewer.
 - **AC hard cap:** 5 acceptance criteria. If a task needs more, split it.
@@ -141,8 +139,8 @@ Split the planned task when any trigger applies:
 Ordering heuristic:
 
 1. Model/schema tasks first (data structures)
-2. Test tasks before their implementation counterparts
-3. Integration tests after unit components
+2. Shared model/schema tasks before callers
+3. Integration proof after unit components
 4. CLI/UI tasks last (depend on core logic)
 
 ## Durability Principles
@@ -161,36 +159,32 @@ When drafting AC for planned tasks:
 
 Build an explicit dependency graph:
 
-- Research depends on nothing (or prior schema)
-- Implementation depends on its research task (when one exists)
+- Shape/context tasks depend on nothing (or prior schema)
+- Implementation tasks depend on prerequisite shape/context tasks when they exist
 - Schema, CRUD, agent, CLI layers form a natural hierarchy
 - Cross-phase dependencies only when strictly necessary
 - Every dependency references a concrete task ID
-- Do not create test → implementation dependency chains — each task carries its own TDD cycle
+- Do not create ceremonial test → implementation dependency chains
 
 ## Step 5 — Assign Priority and Tags
 
-- **Priority:** count dependents (critical if 3+, needed if 1-2, important otherwise)
+- **Priority:** count dependents (`high` if 3+, `medium` if 1-2, `low` otherwise)
 - **Tags (decomposition mode):** always `phase-{n}` + `scope:{domain}` + at least one category tag
 - **Tags (shortcut mode):** preserve caller-provided tags verbatim; do not add phase tags unless the caller explicitly provided them
 
 See `r-project-standards` for the full priority scheme and tag taxonomy.
 
-## Step 5c — Assign Proof Bundle
+## Step 5c — Assign Proof Guidance
 
-Assign one proof bundle to every planned task before creation.
+Add a short `Proof guidance:` line to each task body. This is guidance for builder/verifier, not a routing field.
 
-**Selection guide:**
-
-| Signal | Likely bundle |
-|--------|---------------|
-| Docs/process-only change with no executable behavior change | `skip` |
-| Change validated by pre-existing named tests only | `existing` |
-| Narrow behavior change needing a small focused test slice | `smoke` |
-| New/changed behavior requiring full task-scoped TDD proof | `behavioral` |
-| High-risk/core-path change requiring full-suite scrutiny | `critical` |
-
-If the bundle is `existing`, capture proof boundaries as `Existing proof scope:` using a glob or explicit file list.
+| Signal | Guidance |
+|--------|----------|
+| Docs/process-only change with no executable behavior change | `no executable proof expected; cite changed artifact` |
+| Change validated by pre-existing named checks | `run named focused check: {command}` |
+| Narrow behavior change | `run focused behavior check or import/config smoke` |
+| Shared/core-path change | `run focused check plus downstream-impact scan` |
+| UI/browser change | `run package-local frontend check; add screenshot only if visual framing matters` |
 
 ## Step 5a — Validate Planned Tasks
 
@@ -201,7 +195,7 @@ Before creating any task, validate every planned task:
 - **Reject oversized tasks** — no task may exceed the Task Complexity Budget unless it has a `Complexity waiver:` note.
 - **Reject scratch-only proof** — if required proof can only live in `.owlbear/scratch/`, split or add a tracked-artifact deliverable owned by an agent that can write it.
 - **Reject hidden downstream impact** — behavior-changing refactors must name affected durable suites/consumers or include a downstream-impact scan task.
-- **Reject test-artifact-only tasks with `behavioral`/`critical` bundle** — tasks whose sole deliverable is a test file deadlock the pipeline (builder can't make tests green without implementation). Use a research task for complex test design, and let the implementation task carry the TDD cycle.
+- **Reject proof-artifact-only tasks unless the artifact itself is the product deliverable** — proof should support the change, not become a fake task.
 
 If a planned task fails: refine the title and body or stop. Never create a placeholder task.
 
@@ -241,20 +235,11 @@ Call `askQuestions` with two options:
 
 **Shortcut naming:** preserve the caller-provided title verbatim (no phase prefix).
 
-Create each task via `create_task` with title, priority, tags, depends_on, `ac`, `proof_bundle`, body (supporting context only), and `parent` when provided by the caller (shortcut mode). Do not embed `Proof bundle: {value}` as a body line. If `{value}` is `existing`, include `Existing proof scope: {glob-or-file-list}` in the body. Do not pass `status` to `create_task`; tasks are created at `BoardConfig.entry_status`.
+Create each task via `create_task` with title, priority, tags, depends_on, `ac`, body (supporting context including `Proof guidance:`), and `parent` when provided by the caller. Do not pass `status` to `create_task`; tasks are created at `BoardConfig.entry_status` (`shape`).
 
-- Decomposition mode default status: `research`; create and leave at entry status.
-- Shortcut mode status: caller-provided status, default `backlog` (or `research` for researcher follow-ups). For `backlog`, create first, then call `move_task(id={created_id}, status="backlog")`.
-- Never create or move tasks to `todo`. `todo` is architect-gated and only reached via `backlog -> todo` promotion.
+Do not create consolidation-test tasks automatically. If aggregate verification is needed, express it as parent/EPIC collect criteria or a normal shaped task with its own product-facing purpose.
 
-When decomposition mode yields two or more implementation tasks (excluding test tasks) under a common parent, create exactly one consolidation-test task after creating the implementation siblings:
-
-- Title pattern: `consolidation test: {feature name}`
-- Tags: include `consolidation-test`
-- `depends_on`: all sibling implementation task IDs
-- Status: `backlog` via create, then `move_task(id={created_id}, status="backlog")`
-
-**Parent completion gate:** After creating the consolidation test, add its ID as a dependency on the parent task via `edit_task(id={parent_id}, add_dep=[{consolidation_id}])`. This ensures the parent shows `dep_status: blocked` until all child work is verified, and prevents the parent from being prematurely moved to `done`.
+**Parent completion gate:** When child work must complete before a parent can collect, add child IDs as dependencies on the parent task via `edit_task(id={parent_id}, add_dep=[...])`.
 
 Group by dependency layer (independent first, then dependents). Record created task IDs for the report.
 
@@ -297,7 +282,7 @@ Append to parent task body (if dispatched with parent ID):
 ## Verification Checklist
 
 - [ ] Announced decomposition plan and expected count
-- [ ] Every task carries its own RED→GREEN TDD cycle (no separate test-only tasks)
+- [ ] Every task has proportional proof guidance
 - [ ] No task has multiple responsibilities
 - [ ] Every task fits the Task Complexity Budget or has a `Complexity waiver:` note
 - [ ] No task mixes multiple proof modes without being split
@@ -307,7 +292,7 @@ Append to parent task body (if dispatched with parent ID):
 - [ ] Priority reflects blocking potential
 - [ ] Tags include `phase-{n}` + category (decomposition mode only)
 - [ ] No cycles in dependency graph
-- [ ] Parent task has `depends_on` pointing to the consolidation test (completion gate)
+- [ ] Parent task has `depends_on` pointing to required children when it is an aggregate/EPIC gate
 - [ ] Mermaid diagram matches task list (decomposition mode only)
 - [ ] Total 20 tasks or fewer
 - [ ] AC describes "done", not "how"
@@ -317,7 +302,7 @@ Append to parent task body (if dispatched with parent ID):
 
 ## Known Pitfalls
 
-- **Splitting RED and GREEN into separate tasks:** Do not create test-only tasks paired with implementation tasks — this deadlocks the pipeline (test-only tasks can never pass green-test gates). Each implementation task carries its own RED→GREEN cycle. Use research tasks for complex test design.
+- **Creating proof-only tasks:** Do not create test-only/proof-only tasks unless the proof artifact is itself the product deliverable.
 - **Cross-phase dependencies:** These create long dependency chains that block parallelism. Use only when strictly necessary.
 - **Placeholder tasks:** Never create tasks with vague titles or empty bodies — they accumulate as board noise.
 - **Broad AC piles:** Many clear AC lines can still create an unclear task when they require different proof modes or failure domains. Split by proof burden, not just by wording quality.

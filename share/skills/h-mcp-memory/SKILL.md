@@ -17,11 +17,11 @@ For curation workflow, see `w-mem-curation`.
 
 | Role | Agents | Available Tools |
 |------|--------|----------------|
-| Pipeline agents (10) | researcher, architect, builder, test-writer, reviewer, doc-writer, auditor, planner, orchestrator, test-curator | `save_memory`, `recall_memory` |
+| Pipeline/support agents | shaper, builder, verifier, collector, planner, orchestrator, test-curator | `save_memory`, `recall_memory` |
 | Ideation agents (11) | discoverer, outsider, critic, pragmatist, mediator, data, security, architect, enduser, firstprinciples, simplifier | `save_memory`, `recall_memory` |
 | Knowledge workers (2) | knowledge-ingestor, knowledge-enricher | `save_memory`, `recall_memory` |
 | Memory curator (1) | memory-curator | `list_memories`, `read_memory`, `curate_memory`, `delete_memory`, `save_memory` |
-| Utility agents (4) | fix-attempt, quality-runner, code-reader, challenger | None |
+| Utility agents | fix-attempt, code-reader, shaper-challenger, builder-challenger, verifier-challenger | None |
 
 `approve_memory` is not exposed to any agent — user-initiated only via the memory review prompt.
 
@@ -215,7 +215,7 @@ save_memory(
 ```text
 list_memories(states=["pending"], categories=["tool-usage"])
 read_memory(entry_id="...")
-curate_memory(entry_id="...", scope_agents=["builder", "reviewer"])
+curate_memory(entry_id="...", scope_agents=["builder", "verifier"])
 ```
 
 ```text

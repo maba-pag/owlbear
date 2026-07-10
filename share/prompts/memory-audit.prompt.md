@@ -28,7 +28,7 @@ Treat `does this solve a non-obvious recurring problem?` as the first review que
 
 Do not add filler sections. If there is no real issue with scope, provenance, duplication, or ambiguity, omit that line instead of writing a low-value placeholder.
 
-Keep the prose tight. Prefer one sharp sentence over two soft ones. Skip generic lead-ins and reviewer boilerplate.
+Keep the prose tight. Prefer one sharp sentence over two soft ones. Skip generic lead-ins and review boilerplate.
 
 For option analysis:
 
@@ -151,23 +151,23 @@ When deeper context is needed, load only the minimum necessary:
 
 If no source task is found and the entry also lacks independently checkable evidence such as exact files, tools, tests, or commands, lower review confidence. Do not fill provenance gaps with optimism.
 
-### 3.5 Mandatory Challenger Lane
+### 3.5 Mandatory Adversarial Lane
 
 Do not rely on self-critique alone.
 
 For each batch:
 
-1. Call the `challenger` subagent once with the batch entries and the initial save/drop cases.
+1. Call `General Purpose` once with the batch entries and the initial save/drop cases.
 2. Ask it to attack every entry that is not an obvious drop.
 3. It must argue for `Drop` or `Salvage`, focusing on clutter, overfit specificity, weak retrieval, stale assumptions, duplicate meaning, scope mismatch, and low memory value.
-4. If the challenger clearly wins on an entry, downgrade the verdict.
-5. If the challenger lands a real hit but the item still may survive, optionally call `General Purpose` to argue the strongest real `Keep` case for that entry only.
+4. If the adversarial pass clearly wins on an entry, downgrade the verdict.
+5. If the adversarial pass lands a real hit but the item still may survive, optionally run a second `General Purpose` call with a narrow prompt to argue the strongest real `Keep` case for that entry only.
 
-Do not call the pro lane on obvious drops, obvious salvages, or clear keeps that the challenger fails to meaningfully weaken. The positive case is already the side this prompt overproduces.
+Do not call the pro lane on obvious drops, obvious salvages, or clear keeps that the adversarial pass fails to meaningfully weaken. The positive case is already the side this prompt overproduces.
 
 ### 3.6 Forced Batch Ranking And Scarcity
 
-After the challenger pass, force-rank the batch from strongest keep candidate to weakest memory candidate.
+After the adversarial pass, force-rank the batch from strongest keep candidate to weakest memory candidate.
 
 Apply the scarcity rule:
 
@@ -194,7 +194,7 @@ Do not use numeric review confidence in memory audit cards. It has repeatedly en
 
 Use only these labels:
 
-- `Clear` = the batch ranking, save/drop cases, and challenger pass point the same way.
+- `Clear` = the batch ranking, save/drop cases, and adversarial pass point the same way.
 - `Close` = the entry has real save value and real drop pressure; user judgment matters.
 - `Unresolved` = context is insufficient or the adversarial passes conflict; gather more context or skip.
 
@@ -242,7 +242,7 @@ For approved re-audit mode, use this structure instead:
 > {content}
 **Save case:** {the strongest concrete reason this memory would save future mistakes, retries, or false results}
 **Drop case:** {the strongest concrete reason this memory might be clutter, overfit, stale, or not worth retrieval}
-**Challenger note:** {include when challenger lands a substantive hit}
+**Adversarial note:** {include when the adversarial pass lands a substantive hit}
 **Pro note:** {include only when General Purpose was used to defend a close survivor}
 **Batch rank:** {rank}/{batch_size} strongest keep candidate, with one phrase explaining the relative position
 **Verdict:** {Keep|Salvage|Drop}

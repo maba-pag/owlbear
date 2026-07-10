@@ -1,15 +1,15 @@
 # share/ — Agent Ecosystem
 
-OwlBear's agent ecosystem: 28 agents, 36 skills, 7 instructions, 11 prompts. This directory is the single source of truth for agent definitions and their supporting documents.
+OwlBear's agent ecosystem: 26 agents, 29 skills, 7 instructions, 12 prompts. This directory is the single source of truth for agent definitions and their supporting documents.
 
 ## Directory Layout
 
 | Directory | Contents | Count |
 |-----------|----------|-------|
-| `agents/` | Agent definitions (`.agent.md`) | 28 |
-| `skills/` | Reusable domain knowledge (`SKILL.md`) | 35 |
+| `agents/` | Agent definitions (`.agent.md`) | 26 |
+| `skills/` | Reusable domain knowledge (`SKILL.md`) | 28 |
 | `instructions/` | Auto-loaded instruction files (`.instructions.md`) | 7 |
-| `prompts/` | User-invocable one-shot commands (`.prompt.md`) | 11 |
+| `prompts/` | User-invocable one-shot commands (`.prompt.md`) | 12 |
 | `diagrams/` | Shared visual assets (Excalidraw, SVG) | — |
 
 ## Loading Model
@@ -56,14 +56,14 @@ These load into every agent's context on every turn:
 
 ## Agents
 
-28 agent definitions (`.agent.md` files).
+26 agent definitions (`.agent.md` files).
 
 | Tier | Count | Agents |
 |------|-------|--------|
 | T1 — Orchestrator | 3 | orchestrator, ideation-discoverer, ideation-mediator |
-| T2 — Pipeline | 7 | researcher, architect, test-writer, builder, reviewer, doc-writer, auditor |
+| T2 — Pipeline | 4 | shaper, builder, verifier, collector |
 | T3 — Support | 3 | planner, test-curator, memory-curator |
-| T4 — Tools/Panel | 13 | quality-runner, code-reader, fix-attempt, challenger, ideation-architect, ideation-critic, ideation-data, ideation-enduser, ideation-firstprinciples, ideation-outsider, ideation-pragmatist, ideation-security, ideation-simplifier |
+| T4 — Tools/Panel | 14 | code-reader, fix-attempt, shaper-challenger, builder-challenger, verifier-challenger, ideation-architect, ideation-critic, ideation-data, ideation-enduser, ideation-firstprinciples, ideation-outsider, ideation-pragmatist, ideation-security, ideation-simplifier |
 | T5 — Knowledge | 2 | knowledge-enricher, knowledge-ingestor |
 
 Ideation has two user-facing entrypoints: `ideation-discoverer` (Phase 1 — problem framing) and `ideation-mediator` (Phase 2 — synthesis, decisions, Brief).
@@ -72,19 +72,19 @@ Ideation has two user-facing entrypoints: `ideation-discoverer` (Phase 1 — pro
 
 VS Code does not inject the agents catalog at nesting depth ≥2. Agents at depth ≥3 (ND3) must have `disable-model-invocation: false` to be resolvable, and dispatching agents rely on their `<agents>` body section — not the system-injected catalog — for subagent discovery.
 
-**ND3 agents** (marked with `(ND3)` in their description): challenger, planner, fix-attempt, code-reader, ideation-critic, quality-runner.
+**ND3 agents** (marked with `(ND3)` in their description): shaper-challenger, builder-challenger, verifier-challenger, planner, fix-attempt, code-reader, ideation-critic.
 
 See `h-agent-structure` § Nesting Depth & DMI for the full rule and ND3 agent table.
 
 ## Skills
 
-36 skill definitions (`share/skills/{name}/SKILL.md`).
+29 skill definitions (`share/skills/{name}/SKILL.md`).
 
 | Prefix | Count | Purpose |
 |--------|-------|---------|
-| `w-` | 15 | Workflow — step-by-step procedures |
+| `w-` | 9 | Workflow — step-by-step procedures |
 | `r-` | 4 | Rules — shared conventions |
-| `h-` | 17 | Handbook — domain knowledge |
+| `h-` | 16 | Handbook — domain knowledge |
 
 ## Instructions
 
@@ -103,15 +103,15 @@ See `h-agent-structure` § Nesting Depth & DMI for the full rule and ND3 agent t
 |------|---------|-----------|
 | `python.instructions.md` | `**/*.py` | `h-python-conventions` |
 | `frontend.instructions.md` | `**/*.tsx,**/*.jsx,**/*.vue,**/*.svelte,**/*.css,**/*.scss` | `h-frontend-conventions` |
-| `research-docs.instructions.md` | `.owlbear/research/*.md` | `w-research` |
 | `agent-ecosystem.instructions.md` | `share/agents/**,share/skills/**,share/instructions/**,share/prompts/**,.owlbear/agents/**,.owlbear/skills/**,.owlbear/instructions/**,.owlbear/prompts/**` | `share/README.md` + `h-agent-structure` |
 | `doc-standards.instructions.md` | `README.md,README-consumer.md,SECURITY.md,serve/*/README.md,share/README.md,setup/*.md` | `r-doc-standards` |
+| `research-docs.instructions.md` | `.owlbear/research/*.md` | `w-research` |
 
 Stubs catch agents editing files without the relevant skill loaded. They do not duplicate the skill content — they direct the agent to load it.
 
 ## Prompts
 
-11 prompt files (`.prompt.md`). Prompts are user-invocable one-shot commands triggered from the VS Code chat command palette. Many accept `${input:...}` variable substitution.
+12 prompt files (`.prompt.md`). Prompts are user-invocable one-shot commands triggered from the VS Code chat command palette. Many accept `${input:...}` variable substitution.
 
 **Naming convention:**
 
@@ -124,7 +124,7 @@ Stubs catch agents editing files without the relevant skill loaded. They do not 
 
 | Group | Prompts |
 |-------|--------|
-| Orchestration | `orchestrate` |
+| Orchestration | `shape`, `orchestrate` |
 | Agent audits | `agent-broad-audit`, `agent-deep-audit` |
 | Audits | `frontend-audit`, `memory-audit`, `legacy-audit` |
 | Ideation | `ideation-discover`, `ideation-mediate` |

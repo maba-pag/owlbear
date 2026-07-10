@@ -10,7 +10,7 @@ All commands below run from the Cockpit frontend package root: `serve/cockpit/we
 
 For other projects, substitute the equivalent frontend package root.
 
-Quality-runner's normal frontend evidence path is Vitest plus ESLint. Use the Playwright, build, CSS, or HTML commands below when AC, Architecture Review notes, or caller instructions explicitly require those proof types.
+The normal frontend evidence path is Vitest plus ESLint. Use Playwright, build, CSS, or HTML commands only when AC, Shape Notes, Verify Notes, or caller instructions explicitly require those proof types.
 
 ## Vitest Commands
 
@@ -178,7 +178,7 @@ Imports and shims applied before every test:
 
 ## Known Gotchas
 
-- **Must `cd` to your frontend package root first.** This is the #1 cause of quality-runner frontend failures. Vitest reads `vite.config.ts` from the cwd, so running from the repo root skips the jsdom environment entirely.
+- **Must `cd` to your frontend package root first.** This is the #1 cause of frontend test failures. Vitest reads `vite.config.ts` from the cwd, so running from the repo root skips the jsdom environment entirely.
   > Example (OwlBear-dev): `cd serve/cockpit/web`
 - **Build failures can mask E2E assertions.** When Playwright fails before tests run, inspect the build output first; the failure may belong to TypeScript/Vite rather than the E2E test body.
 - **Full E2E is opt-in.** `npm run test:e2e` is intentionally the fast sync gate. Use `npm run test:e2e:all` only for deliberate full sweeps; archived visual, accessibility, layout, and RED-era task proofs can be expensive.

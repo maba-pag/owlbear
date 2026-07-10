@@ -3,7 +3,7 @@ description: "Start the orchestrator to read the kanban board, plan execution wa
 agent: orchestrator
 ---
 
-Orchestrate: ${input:scope_or_filter:Scope filter — e.g. 'phase-7', 'all todo', 'tag:linting', 'tasks 82-88', default: 'all'}
+Orchestrate: ${input:scope_or_filter:Scope filter — e.g. 'phase-7', 'status:build', 'tag:linting', 'tasks 82-88', default: 'all'}
 
 ## Interaction Protocol
 

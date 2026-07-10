@@ -38,6 +38,7 @@
 - [uv](https://docs.astral.sh/uv/)
 - [VS Code](https://code.visualstudio.com/)
 - [README-consumer.md](README-consumer.md)
+- [README-consumer.md](README-consumer.md#cockpit-consumer-launch)
 - [serve/mcp-knowledge/README.md](serve/mcp-knowledge/README.md)
 
 ## SECURITY.md
@@ -445,6 +446,25 @@
 ### Outbound links
 - [the docs](https://docs.pytest.org/en/stable/how-to/cache.html)
 
+## megalinter-reports/megalinter-report.md
+- ## `✅[MegaLinter](https://megalinter.io/9.5.0) analysis: Success`
+
+### Outbound links
+- [MegaLinter](https://megalinter.io/9.5.0)
+- [actionlint](https://megalinter.io/9.5.0/descriptors/action_actionlint)
+- [stylelint](https://megalinter.io/9.5.0/descriptors/css_stylelint)
+- [editorconfig-checker](https://megalinter.io/9.5.0/descriptors/editorconfig_editorconfig_checker)
+- [htmlhint](https://megalinter.io/9.5.0/descriptors/html_htmlhint)
+- [jsonlint](https://megalinter.io/9.5.0/descriptors/json_jsonlint)
+- [markdownlint](https://megalinter.io/9.5.0/descriptors/markdown_markdownlint)
+- [ruff](https://megalinter.io/9.5.0/descriptors/python_ruff)
+- [ruff-format](https://megalinter.io/9.5.0/descriptors/python_ruff_format)
+- [trivy](https://megalinter.io/9.5.0/descriptors/repository_trivy)
+- [eslint](https://megalinter.io/9.5.0/descriptors/typescript_eslint)
+- [yamllint](https://megalinter.io/9.5.0/descriptors/yaml_yamllint)
+- [![MegaLinter is graciously provided by OX Security](https://raw.githubusercontent.com/oxsecurity/megalinter/main/docs/assets/images/ox-banner.png)
+- [**starring ⭐ the repository**](https://github.com/oxsecurity/megalinter)
+
 ## seed/.github/copilot-instructions.md
 - # `Project Copilot Instructions`
 - ## `1. Project Identity`
@@ -469,6 +489,7 @@
 - # `owlbear-cockpit — Steering Cockpit Package`
 - ## `Launch / Usage`
 - ## `Frontend Surface`
+- ## `Audit Trail`
 - ## `Configuration`
 - ## `Delivery Packaging`
 - ## `Dependencies`
@@ -659,6 +680,7 @@
 - ## `What Setup Creates`
 - ## `Shared vs Copied`
 - ## `Verify It Works`
+- ## `Launch Cockpit`
 - ## `Project-Specific Customization`
 - ### `Adding local agents`
 - ### `Overriding instructions`
@@ -712,57 +734,35 @@
 - [WIRING.md](WIRING.md)
 
 ## share/WIRING.md
-- # `Agent ↔ File Mapping Tables`
-- ## `Connection Methods`
+- # `Agent <-> File Mapping Tables`
 - ## `Nesting Depth (ND3 Agents)`
-- ## `Universal Files (apply to ALL agents/prompts)`
-- ## `Table 1: Agent/Prompt → Relevant Files`
-- ### `T1 — Orchestrators`
-- ### `T2 — Pipeline Agents`
-- ### `T3 — Support Agents`
-- ### `T1 — Ideation Orchestrators`
-- ### `T4 — Ideation Panel (9 agents)`
-- ### `T4 — Utility Agents`
-- ### `Prompts`
-- ## `Table 2: File → Agents/Prompts (Inverse)`
-- ### `Skills`
-- ### `Skills with ZERO regular consumers`
-- ### `Instructions`
-- ## `Table 3: Subagent Dependencies`
-- ## `Gap Analysis`
-- ### `Potential Gaps (file has no regular consumer)`
-- ### `Potential Gaps (agent has sparse file coverage)`
-- ### `Observation`
+- ## `Universal Files`
+- ## `Agent -> Files`
+- ### `Orchestration`
+- ### `Shape Entry`
+- ### `Execution Board`
+- ### `Pipeline Challengers`
+- ### `Support`
+- ### `Ideation And Knowledge`
+- ## `File -> Agents`
+- ## `Subagent Dependencies`
 
-## share/agents/architect.agent.md
+## share/agents/builder-challenger.agent.md
 - ### `Channel A`
 - ### `Channel B`
-- ### `Kanban protocol`
-
-## share/agents/auditor.agent.md
-- ### `Channel A`
-- ### `Channel B`
-- ### `Kanban protocol`
 
 ## share/agents/builder.agent.md
 - ### `Channel A`
 - ### `Channel B`
 - ### `Kanban protocol`
 
-## share/agents/challenger.agent.md
-- ### `Channel A`
-- ### `Channel B`
-- ### `Required Input Fields`
-- ### `Required Output Sections (all 6, in order — every section appears even if "No issues found", but justify that finding)`
-
 ## share/agents/code-reader.agent.md
 - ### `Channel A`
 - ### `Channel B`
 
-## share/agents/doc-writer.agent.md
+## share/agents/collector.agent.md
 - ### `Channel A`
 - ### `Channel B`
-- ### `Kanban protocol`
 
 ## share/agents/fix-attempt.agent.md
 - ### `Channel A`
@@ -849,28 +849,21 @@
 - ### `Channel B`
 - ### `Kanban protocol`
 
-## share/agents/quality-runner.agent.md
-- ### `Channel A`
-- ### `Channel B`
+## share/agents/shaper-challenger.agent.md
 
-## share/agents/researcher.agent.md
+## share/agents/shaper.agent.md
 - ### `Channel A`
 - ### `Channel B`
-- ### `Kanban protocol`
-
-## share/agents/reviewer.agent.md
-- ### `Channel A`
-- ### `Channel B`
-- ### `Kanban protocol`
 
 ## share/agents/test-curator.agent.md
 - ### `Channel A`
 - ### `Channel B`
 
-## share/agents/test-writer.agent.md
+## share/agents/verifier-challenger.agent.md
+
+## share/agents/verifier.agent.md
 - ### `Channel A`
 - ### `Channel B`
-- ### `Kanban protocol`
 
 ## share/diagrams/cockpit.excalidraw
 describes: serve/cockpit/src/**, serve/cockpit/web/src/**
@@ -879,7 +872,7 @@ describes: serve/cockpit/src/**, serve/cockpit/web/src/**
 describes: share/skills/h-ideation/**, share/skills/w-ideation-discovery/**, share/skills/w-ideation-mediation/**, share/skills/h-ideation-panel/**, share/agents/ideation-*.agent.md
 
 ## share/diagrams/kanban.excalidraw
-describes: serve/kanban/src/**, serve/mcp-kanban/src/**, .owlbear/kanban/**
+describes: serve/kanban/**, serve/mcp-kanban/**, .owlbear/kanban/**
 
 ## share/diagrams/mcp-topology.excalidraw
 describes: serve/mcp-*/src/**, serve/kanban/src/**, serve/knowledge/src/**, .vscode/mcp.json
@@ -1021,7 +1014,7 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ### `3.2 Initial Save/Drop Cases`
 - ### `3.3 Keep Test`
 - ### `3.4 Context Escalation`
-- ### `3.5 Mandatory Challenger Lane`
+- ### `3.5 Mandatory Adversarial Lane`
 - ### `3.6 Forced Batch Ranking And Scarcity`
 - ## `4. Ratings`
 - ### `4.1 Keep Value`
@@ -1037,6 +1030,11 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 
 ## share/prompts/orchestrate.prompt.md
 - ## `Interaction Protocol`
+
+## share/prompts/shape.prompt.md
+- ## `Interaction Protocol`
+- ## `Input Modes`
+- ## `What Happens`
 
 ## share/prompts/test-curation.prompt.md
 - ## `Interaction Protocol`
@@ -1066,7 +1064,7 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ### `Canonical Source Map`
 - ## `Validation Checklist`
 - ### `Planner Draft Checklist`
-- ### `Architect/Challenger Validation Checklist`
+- ### `Shaper/Challenger Validation Checklist`
 
 ## share/skills/h-agent-structure/SKILL.md
 - # `Agent Ecosystem Structure`
@@ -1234,7 +1232,7 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ### ``synthesis-idea-panel.md``
 - ### ``synthesis.md``
 - ### ``brief.md``
-- ### ``planning-summary.md``
+- ### ``shaping-summary.md``
 - ### ``stances/*-proposal.md``
 - ## `Shared Interaction Contract`
 - ### `Investigative Turns (Investigator Mode — M1-M3)`
@@ -1356,8 +1354,8 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 ## share/skills/h-pytest-and-linting/SKILL.md
 - # `pytest, ruff, and coverage Reference`
 - ## `Commands`
-- ### `Scoped (builder, reviewer, test-writer)`
-- ### `Full suite (auditor)`
+- ### `Scoped`
+- ### `Full suite`
 - ### `With coverage`
 - ### `ruff`
 - ### `Default flags`
@@ -1375,13 +1373,6 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ### `Two-Tier Test Model`
 - ## `Known Gotchas`
 - ## `Patterns`
-
-## share/skills/h-quality-runner/SKILL.md
-- # `Quality-Runner Subagent`
-- ## `Consumer Invocation Pattern`
-- ## `Input Fields`
-- ### `Frontend Optional Proof Types`
-- ## `Output Format`
 
 ## share/skills/h-visual-output/SKILL.md
 - # `Visual Output Reference`
@@ -1441,38 +1432,26 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 ## share/skills/r-pipeline-protocol/SKILL.md
 - # `Pipeline Protocol`
 - ## `Companion Skills`
-- ## `1. Task Setup`
-- ### `Task Discipline`
+- ## `1. Lifecycle`
+- ### `Role Boundaries`
+- ### `Model Routing`
+- ## `2. Task Setup`
+- ### `One Task`
 - ### `Claiming`
-- ### `Knowledge Pre-flight`
-- ### `Resolved Decision Pre-flight`
-- ### `Entry-Gate Agents`
-- ## `2. Working Standards`
-- ### `Evidence Principles`
-- ### `Reviewer Contract (D2 trust-the-builder)`
-- ### `Quality-Runner Mandate`
-- ### `Quality-Runner Environment Fallback`
-- ### `Tool Availability`
-- ### `Defense-in-Depth`
-- ### `Confidence Thresholds (source of truth)`
-- ### `Process Habits`
-- ### `Proof-Bundle Taxonomy`
-- ### `Escalation Modifiers`
-- ### `Builder-Skip on Test-Only Retry`
-- ### `Follow-up Task Quality`
-- ## `3. Communication`
-- ### `Channel A — Routing Signal`
-- ### `Channel B — Task Body`
-- ### `Per-Agent Signal Mapping`
-- ### `Body Size Rule`
-- ### `Reading Rules`
-- ### `Required Follow-up (Negative Signal Format)`
-- ## `4. Closing`
+- ### `Resolved Decisions`
+- ### `Memory`
+- ## `3. Working Standards`
+- ### `Evidence`
+- ### `Rent Test For Durable Tests`
+- ### `Proof Checks And Challengers`
+- ## `4. Communication`
+- ### `Channel A`
+- ### `Channel B`
+- ### `Required Follow-up`
+- ## `5. Closing`
+- ### `Before `end_work``
 - ### `Who Commits What`
-- ### `Post-task Reflection`
-- ## `5. Escalation`
-- ### `Escalation Routing`
-- #### `DR Required on Agent Block`
+- ## `6. Escalation`
 - ### `Decision Tiers`
 
 ## share/skills/r-project-standards/SKILL.md
@@ -1485,67 +1464,12 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ## `3. Priority Scheme`
 - ## `4. Tag Taxonomy`
 
-## share/skills/w-arch-review/SKILL.md
-- # `Architecture Review`
-- ## `Scope`
-- ### `In Scope`
-- ### `Out of Scope`
-- ## `Step 0 — Setup`
-- ## `Step 1 — Analyze Codebase Context`
-- ## `Step 2 — Evaluate Architecture`
-- ## `Step 2.1 — Proof-Bundle Validation`
-- ## `Step 2.3 — Conditional Design Diverge`
-- ## `Step 2.5 — Challenge Proposed Verdict`
-- ## `Step 3 — Decide and Act`
-- ## `Output Template`
-- ## `Verification Checklist`
-- ## `Known Pitfalls`
-
-## share/skills/w-code-review/SKILL.md
-- # `Code Review`
-- ## `Scope`
-- ### `In Scope`
-- ### `Out of Scope`
-- ## `Step 0 — Setup`
-- ## `Step 1 — Scope the Review`
-- ## `Step 2 — Gather Builder Evidence First`
-- ### `Depth-Aware Dispatch`
-- ### `Code-Reader Consumer Contract`
-- ## `Step 3 — Build Evidence Packet`
-- ## `Step 4 — Run the 3-Item Checklist`
-- ### `4.1 AC→Code Mapping`
-- ### `4.2 Test→AC Alignment`
-- ### `4.3 Proof Sufficiency`
-- ### `4.4 Safety & Security`
-- ## `Step 5 — Batch Findings and Decide`
-- ## `Step 6 — Advance`
-- ## `Output Template`
-- ## `Verification Checklist`
-
-## share/skills/w-doc-update/SKILL.md
-- # `Documentation Update (v3)`
-- ## `Scope`
-- ### `In Scope`
-- ### `Out of Scope`
-- ## `Step 0 — Setup`
-- ## `Step 1 — Convention Mapping`
-- ## `Step 2 — Relevance-Gated Checklist (Exactly 4 Items)`
-- ### `Item 1: README Verification`
-- ### `Item 2: External Attribution`
-- ### `Item 3: Research Doc`
-- ### `Item 4: Deletion Detection`
-- ## `Step 3 — Two-Layer Verification`
-- ## `Step 4 — Clean Scratch Files`
-- ## `Step 5 — Commit & Advance`
-- ## `Output Template`
-- ## `Verification Checklist`
-
 ## share/skills/w-fix-attempt/SKILL.md
 - # `Fix-Attempt`
 - ## `Input Contract`
 - ## `Output Contract`
 - ## `Step 1 — Parse Inputs`
-- ## `Step 2 — Read Failing Tests`
+- ## `Step 2 — Read Failing Proof`
 - ## `Step 3 — Read Source Files`
 - ## `Step 4 — Apply Fix`
 - ## `Step 5 — Verify`
@@ -1644,7 +1568,7 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ### `Tier Classification`
 - ### `Create Follow-Up Tasks`
 - ## `Step 6 — Finalize Artifacts`
-- ## `Step 7 — Commit & Advance`
+- ## `Step 7 — Record In Shape Notes And Advance`
 - ## `Output Template`
 - ## `Verification Checklist`
 - ## `Known Pitfalls`
@@ -1667,72 +1591,12 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ## `Durability Principles`
 - ## `Step 4 — Build Dependency Graph`
 - ## `Step 5 — Assign Priority and Tags`
-- ## `Step 5c — Assign Proof Bundle`
+- ## `Step 5c — Assign Proof Guidance`
 - ## `Step 5a — Validate Planned Tasks`
 - ## `Step 5b — Approval (user mode only)`
 - ## `Step 6 — Create Tasks`
 - ## `Step 7 — Visualize Dependencies`
 - ## `Step 8 — Advance`
-- ## `Output Template`
-- ## `Verification Checklist`
-- ## `Known Pitfalls`
-
-## share/skills/w-task-verification/SKILL.md
-- # `Task Verification`
-- ## `Scope`
-- ### `In Scope`
-- ### `Out of Scope`
-- ## `Step 0 — Setup`
-- ## `Step 1 — Verify the task`
-- ## `Step 1a — Research task verification`
-- ## `Step 2 — Architect quality audit`
-- ## `Step 3 — Score and decide`
-- ## `Step 4 — Verify upstream commits`
-- ## `Step 5 — Advance`
-- ## `Step 6 — Commit kanban state`
-- ## `Output Template`
-- ## `Verification Checklist`
-- ## `Known Pitfalls`
-
-## share/skills/w-tdd-green/SKILL.md
-- # `TDD GREEN Phase`
-- ## `Scope`
-- ### `In Scope`
-- ### `Out of Scope`
-- ## `Step 0 — Setup`
-- ### `Step 0a — Bundle-Based Routing`
-- ## `Step 1 — Plan the Change`
-- ## `Step 2 — Read Existing Tests`
-- ### `Module-Level Test Visibility`
-- ## `Step 3 — Implement Minimal Code (GREEN)`
-- ## `Step 4 — Handle Missing Blocking Edge Cases`
-- ## `Step 5 — Refactor (If Needed)`
-- ## `Step 6 — Verify`
-- ### `Step 6.1 — Pass: Continue`
-- ### `Step 6.2 — Fail: Same-Context Retry`
-- ### `Step 6.3 — Fail Again: Delegate to fix-attempt`
-- ## `Step 7 — Commit & Advance`
-- ## `Output Template`
-- ## `Verification Checklist`
-- ## `Known Pitfalls`
-
-## share/skills/w-tdd-red/SKILL.md
-- # `TDD RED Phase`
-- ## `Scope`
-- ### `In Scope`
-- ### `Out of Scope`
-- ## `Step 0 — Setup`
-- ## `Step 1 — Assess Task Type`
-- ### `Step 1a — Pass-Through for Non-Implementation Tasks`
-- ### `Step 1b — Retry-Cycle Handling (Surgical Fill Mode)`
-- #### `Step 1b.1 — Direct-to-Review Advance (Test-Only Retry)`
-- ### `Step 1d — Proof-Bundle Pass-Through`
-- ## `Step 2 — Search Codebase`
-- ### `Step 2a — Non-Implementation Assessment`
-- ## `Step 3 — Plan Test Categories`
-- ## `Step 4 — Write Tests`
-- ## `Step 5 — Verify RED`
-- ## `Step 6 — Commit & Advance`
 - ## `Output Template`
 - ## `Verification Checklist`
 - ## `Known Pitfalls`

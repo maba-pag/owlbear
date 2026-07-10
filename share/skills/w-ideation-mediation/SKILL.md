@@ -157,22 +157,22 @@ Apply O15 to every Critic pass. See the Critic Validation section above for the 
 ## Step 6 — M6: Handoff — "Go"
 
 1. Create the parent kanban task from the approved Brief.
-2. Invoke `planner` with the canonical prefix: `Plan and create: #{parent_id} — {brief summary}`.
-3. Write `planning-summary.md` from the planner result: parent task, child-task list, Brief coverage, expected-experience coverage, omissions, and repair actions.
-4. Apply the tier-scaled M6 handoff check from `h-ideation` against `brief.md`, `planning-summary.md`, and the created child tasks:
+2. Invoke `shaper` with the canonical prefix: `Shape: #{parent_id} — {brief summary}`.
+3. Write `shaping-summary.md` from the shaper result: parent task, resulting task shape, child-task list when shaper invoked planner, Brief coverage, expected-experience coverage, omissions, and repair actions.
+4. Apply the tier-scaled M6 handoff check from `h-ideation` against `brief.md`, `shaping-summary.md`, and the created or shaped tasks:
    - `Scratch` and `Tool`: no formal M6 fidelity check.
-   - `Shared`: post-planner expectation-fidelity Critic check.
-   - `Production`: post-planner expectation-fidelity Critic check.
+   - `Shared`: post-shaping expectation-fidelity Critic check.
+   - `Production`: post-shaping expectation-fidelity Critic check.
 5. Use additive-only repair for M6 gaps:
-   - coverage omissions go back to planner as additional tasks
+   - coverage omissions go back to shaper for task or child-task repair
    - value or scope trade-offs go back to the user
    - unclear cases go back to the user
-   - do not delete, merge, or materially rewrite existing child tasks during M6 repair
+   - do not delete, merge, or materially rewrite existing shaped tasks during M6 repair
 6. Commit the final Working Directory state: `git add .owlbear/briefs/draft-{name}/ && git commit -m "ideation: complete Phase 2 mediation for {name}"`
 7. Report the handoff result to the user:
    - parent task ID and title
-   - number of child tasks created by planner
-   - what happens next (architect reviews, then pipeline proceeds automatically)
+   - shaped task IDs and any child tasks created
+   - what happens next (`/orchestrate` can run build/verify/collect after shaping approves build)
 
 ## Verification Checklist
 
@@ -193,5 +193,5 @@ Apply O15 to every Critic pass. See the Critic Validation section above for the 
 - [ ] Post-hybridization dual Critic passes were executed and both were triaged with O15.
 - [ ] Expectation fit is represented in `synthesis.md` before Brief drafting.
 - [ ] Approved `brief.md` contains no mandatory/recommended tiers and carries the binding product promise.
-- [ ] `planning-summary.md` records child-task coverage against the approved Brief and expected experience.
+- [ ] `shaping-summary.md` records task coverage against the approved Brief and expected experience.
 - [ ] Tier-scaled M6 handoff check ran when required, with additive-only repair for coverage omissions.

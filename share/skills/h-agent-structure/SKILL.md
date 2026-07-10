@@ -52,7 +52,7 @@ Default: user-facing one-shot commands use `.prompt.md` unless auto-loading or c
 
 ### Precedent
 
-`quality-runner` extracted from `builder`: independent failure domain (quality failures reported, not propagated) + distinct tool needs (test runner, linter) + reused by reviewer.
+`builder-challenger` extracted from `builder`: independent cheap cross-check, distinct model, and deterministic auto-fix/reporting boundary.
 
 ## Principles
 
@@ -131,7 +131,7 @@ Lists the skills this agent needs in 90%+ of sessions. These are Level 0 (direct
 <required_reading>
 
 - `r-pipeline-protocol` — task lifecycle, communication, quality
-- `w-tdd-green` — primary workflow
+- `r-pipeline-protocol` — primary workflow/rules source
 
 </required_reading>
 ```
@@ -169,8 +169,8 @@ Compact transition table showing what triggers this agent and what it produces:
 ```markdown
 | Trigger | From → To | Condition |
 |---------|-----------|-----------|
-| Success | done → archived | confidence ≥ .95 |
-| Reject  | done → review | fixable gaps |
+| Done    | build → verify | implementation and focused evidence complete |
+| Reject  | build → shape  | scope, AC, or dependency premise is wrong |
 ```
 
 **`<agents>`** — Only agents that delegate to sub-agents.
@@ -178,7 +178,7 @@ Compact transition table showing what triggers this agent and what it produces:
 ```markdown
 | Agent | When | Example |
 |-------|------|---------|
-| challenger | AC quality review during architecture | `Challenge: task_id=42, proposed_verdict=approve, reasoning="..."` |
+| shaper-challenger | AC quality and scope review during shaping | `Challenge Shape: task_id=42, proposed_verdict=APPROVED, reasoning="..."` |
 ```
 
 The `<agents>` table must list every agent in the frontmatter `agents:` array and vice versa. This is the **only** source of subagent knowledge at nesting depth ≥2 (VS Code does not inject the agents catalog at that depth). A CI validation script enforces alignment — see `.owlbear/scripts/validate_agents.py`.
@@ -206,7 +206,7 @@ VS Code has a limitation: at nesting depth ≥2 (3rd-level subagents), agents wi
 3. **Every dispatching agent** must have an `<agents>` body section listing all agents from its frontmatter `agents:` array — this is the only discovery mechanism at depth ≥2.
 4. ND3 agents are tagged with `(ND3)` in their `description` field for identification.
 
-**Current ND3 agents:** challenger, planner, fix-attempt, code-reader, ideation-critic, quality-runner.
+**Current ND3 agents:** shaper-challenger, builder-challenger, verifier-challenger, planner, fix-attempt, code-reader, ideation-critic.
 
 Caller inventory is intentionally not duplicated here. The source of truth for caller → subagent relationships is each caller's frontmatter `agents:` array plus its `<agents>` body table; see [share/WIRING.md](../../WIRING.md) for the inverse ecosystem map. When adding a new caller, update the caller's agent file. When adding a new ND3 agent, set `disable-model-invocation: false`, tag the description with `(ND3)`, and add it to this list.
 
@@ -240,9 +240,9 @@ user-invocable: {true|false}
 
 ### Naming Grammar
 
-- **Agent names** are **role nouns** (reviewer, builder, auditor).
-- **Skill names** are **domain-action compounds** — use verbs/actions, not plural nouns. E.g., `code-review` not `code-reviews`, `decision-routing` not `decision-requests`, `tdd-green` not `tdd-workflow`.
-- The `w-` prefix replaces the word "workflow" — don't use both (e.g., `w-research` not `w-research-workflow`).
+- **Agent names** are **role nouns** or role compounds (builder, verifier, builder-challenger).
+- **Skill names** are **domain-action compounds** — use verbs/actions, not plural nouns. E.g., `test-curation` not `test-curations`, `decision-routing` not `decision-requests`, `task-decomposition` not `task-workflow`.
+- The `w-` prefix replaces the word "workflow" — don't use both (e.g., `w-test-curation` not `w-test-curation-workflow`).
 
 ### Workflow Skill Structure
 
@@ -269,7 +269,7 @@ exists for "Evidence," the agent must find evidence to fill it.}
 - {pitfall}: {avoidance}
 ```
 
-**Step 0 applies to:** All workflow skills where the agent claims and processes a task (w-tdd-red, w-tdd-green, w-code-review, w-doc-update, w-task-verification, w-arch-review, w-research, w-mem-curation).
+**Step 0 applies to:** Workflow skills where the agent claims and processes a task, such as `w-mem-curation`, `w-task-decomposition`, and `w-test-curation`.
 
 **Step 0 without claiming:** w-task-decomposition (creates tasks, doesn't claim one).
 

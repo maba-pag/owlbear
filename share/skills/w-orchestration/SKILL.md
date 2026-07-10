@@ -45,6 +45,8 @@ Empty `waves` means nothing dispatchable for this cycle.
 
 **Pipeline subagent output:** Channel A diagnostic line. Read for outcome detection: `FAIL` signals a task failure, `TOOL_UNAVAILABLE` signals tool degradation, any other return is success. Do not parse for routing.
 
+`shape` tasks are excluded from routine dispatch. They require the user-facing `/shape` prompt because shaper may ask product, architecture, scope, or action-request questions through `askQuestions`.
+
 ## Step 1 — Housekeeping
 
 At the **start of every cycle**, perform lightweight housekeeping. Decision/action request resolution is a Cockpit/user operation, not part of orchestration.
@@ -126,7 +128,7 @@ Orchestrator dispatches waves in returned order. No local re-bucketing or re-ass
 
 Classify agent returns top-to-bottom. First match wins.
 
-**Structured vs crash classification:** A return that starts with a recognized verdict keyword (`DONE`, `FAIL`, `PASS`, `REJECT`, `REJECTED`, `ARCHIVED`, `APPROVED`, `REFINE`, `SPLIT`, `MERGE`, `BLOCK`) is a *structured return* — the agent completed its lifecycle and called `end_work`. Any other return (error, empty, unrecognized) is a *crash* — the agent did NOT call `end_work`.
+**Structured vs crash classification:** A return that starts with a recognized verdict keyword (`APPROVED`, `REFINE`, `BLOCK`, `DONE`, `REJECT`, `PASS`, `RESHAPE`, `ARCHIVED`, `FAIL`) is a *structured return* — the agent completed its lifecycle and called `end_work`. Any other return (error, empty, unrecognized) is a *crash* — the agent did NOT call `end_work`.
 
 1. **TOOL_UNAVAILABLE** (return contains `TOOL_UNAVAILABLE`):
    - Re-dispatch the same agent on the same task immediately.
@@ -162,8 +164,8 @@ During execution:
 
 ```
 Cycle 1 (Plan): Running pick_tasks(wave_size=None, max_waves=3)...
-Cycle 1 (Wave 1/3): #101 (architect), #103 (builder), #105 (reviewer)
-Cycle 1 (Done): 4/5 succeeded, 1 crashed (#112)
+Cycle 1 (Wave 1/3): #103 (builder), #105 (verifier)
+Cycle 1 (Done): 3/4 succeeded, 1 crashed (#112)
 ```
 
 At end of session:
