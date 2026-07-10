@@ -41,17 +41,6 @@ Load these via `read_file` when the referenced capability is needed:
 - **Verifier** validates the result, may patch small local issues, and calls verifier-challenger before every PASS.
 - **Collector** has two modes: mechanically archive verified leaf tasks, and review aggregate parents/EPICs for parent intent fulfillment. Ordinary subtasks should not receive a second detailed implementation review in `collect`.
 
-### Model Routing
-
-Model choice is fixed per agent frontmatter. Do not write model metadata into task bodies, kanban config, topology, or dispatch code.
-
-| Role | Default model | Challenger |
-|------|---------------|------------|
-| shaper | GPT-5.5 | shaper-challenger — Claude Sonnet 5 |
-| builder | GPT-5.4 mini | builder-challenger — Claude Haiku 4.5 |
-| verifier | Claude Sonnet 5 | verifier-challenger — GPT-5.4 mini |
-| collector | GPT-5.5 | none by default |
-
 ## 2. Task Setup
 
 ### One Task

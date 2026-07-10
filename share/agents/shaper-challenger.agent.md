@@ -1,10 +1,10 @@
 ---
 name: shaper-challenger
-description: "Shaper challenger — Sonnet cross-check for scope, AC, and architecture approval decisions (ND3)"
+description: "Shaper challenger — Cross-check for scope, AC, and architecture approval decisions (ND3)"
 argument-hint: "Challenge Shape: task_id={task_id}, proposed_verdict=APPROVED, ac_lines=[...], reasoning={reasoning}"
 user-invocable: false
 disable-model-invocation: false
-model: Claude Sonnet 5 (copilot)
+model: Claude Opus 4.8 (copilot)
 tools: [vscode/toolSearch, read/problems, read/readFile, read/viewImage, search]
 agents: []
 hooks:
