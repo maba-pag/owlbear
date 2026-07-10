@@ -118,7 +118,7 @@ Classify every finding before acting:
 
 | Tier | Category | Action |
 |------|----------|--------|
-| T1 — Autonomous | Bug fix, refactor, config, perf | Shape directly — update AC/notes or create follow-up `shape` tasks |
+| T1 — Autonomous | Bug fix, refactor, config, perf | Shape directly — update AC/notes or create routed follow-up tasks |
 | T2 — Advisory | Trade-offs, no T3 triggers | Ask the user via `askQuestions` when present; otherwise create advisory request via `create_request` |
 | T3 — Mandatory | New capability, arch/security/breaking change | Create blocking request via `create_request` |
 
@@ -126,7 +126,7 @@ Classify every finding before acting:
 
 ### Create Follow-Up Tasks
 
-Create concrete follow-up tasks at `shape` or use `w-task-decomposition` for multi-task splits. For findings requiring user decisions, use `askQuestions` when the user is present or `create_request` when the board must be blocked.
+Create concrete follow-up tasks with explicit statuses: build-ready follow-ups in `build`, aggregate follow-ups in `collect`, and no staging task for unresolved findings. Use `w-task-decomposition` for multi-task splits. For findings requiring user decisions, use `askQuestions` when the user is present or `create_request` when an existing board task must be blocked.
 
 ## Step 6 — Finalize Artifacts
 
@@ -154,7 +154,7 @@ Append to task body before advancing:
 - Research doc: .owlbear/research/{slug}.md
 - Sources: {N} studied, {M} high-relevance
 - Recommendation: {brief} (confidence: {.XX})
-- Follow-up tasks created: {list of IDs at shape}
+- Follow-up tasks created: {list of IDs with statuses}
 - Decision requests: {N created, or "none"}
 
 ## Challenge Results
@@ -169,7 +169,7 @@ Append to task body before advancing:
 - [ ] Every claim has 2+ sources
 - [ ] Analysis uses comparison tables with confidence scores
 - [ ] Research doc 200 lines or fewer
-- [ ] Follow-up kanban tasks are concrete and actionable (created at `shape`)
+- [ ] Follow-up kanban tasks are concrete and actionable; build-ready follow-ups are created in `build`, aggregate follow-ups in `collect`, and unresolved follow-ups are not created as staging tasks
 - [ ] Did NOT create/edit source code
 - [ ] External sources logged in `.owlbear/sources/overview.md`
 - [ ] Cloned repos deleted from `.owlbear/scratch/research/`

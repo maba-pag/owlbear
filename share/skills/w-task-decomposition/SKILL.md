@@ -17,7 +17,7 @@ Break complex shape work into atomic kanban child tasks with explicit dependency
 - Break features into atomic tasks.
 - Draft AC using `h-ac-quality` rules.
 - Assign priorities and dependency graphs.
-- Route build-ready child tasks directly to `build`; leave only unresolved shaping work at `shape`.
+- Route build-ready child tasks directly to `build`; do not create `shape` staging tasks.
 - Preserve parent/EPIC intent or Brief links so collector can verify aggregate fulfillment later.
 
 ### Out of Scope
@@ -31,11 +31,13 @@ Break complex shape work into atomic kanban child tasks with explicit dependency
 
 Read `h-ac-quality` skill and use it as the authoritative AC validation checklist while drafting task acceptance criteria.
 
-Use this workflow after shaper has claimed the parent task with `start_work`. `start_work` returns the task body, making a separate `show_task` call redundant. If `start_work` fails, stop; a `ToolError` means the task is blocked, already claimed, or missing.
+Use this workflow after shaper has claimed the parent task with `start_work` when a parent task ID exists. `start_work` returns the task body, making a separate `show_task` call redundant. If `start_work` fails, stop; a `ToolError` means the task is blocked, already claimed, or missing. For free-text ideas with no parent task ID, do not create a temporary `shape` task; shape the idea directly into routed outputs or stop without board mutation if it remains unresolved.
 
 **Knowledge pre-flight:** After claiming, call `recall_memory(agent="shaper")` to load reviewed entries. Apply returned entries as context. If the call fails or returns empty, proceed normally.
 
 **Execution mode:** Shaper owns decomposition directly. Create child tasks only after material user decisions are resolved; do not ask for approval on purely mechanical splitting when the parent intent and constraints are already clear.
+
+**Status discipline:** Shaper-created tasks never rely on the `create_task` default. Pass `status="build"` for every build-ready leaf task and `status="collect"` for every aggregate parent/EPIC. `shape` is reserved for user-created intake and tasks rejected back from later pipeline stages.
 
 ## Step 1 — Read the Plan
 
@@ -56,7 +58,7 @@ If yes, use the shortcut flow:
 - Skip Step 1b, Steps 2–4, and Step 7.
 - Continue with Steps 5, 5a, and 6.
 - Preserve parent metadata where provided: title, parent ID, and tags.
-- Status routing: create build-ready tasks with `status="build"`; use `shape` only when the follow-up still needs shaping. Normalize old `todo`, `backlog`, `research`, `in-progress`, `review`, `docs`, and `done` requests to `build` only after shaping makes the task build-ready.
+- Status routing: create build-ready tasks with `status="build"`. If the follow-up still needs shaping, ask/refine instead of creating a `shape` task. Normalize old `todo`, `backlog`, `research`, `in-progress`, `review`, `docs`, and `done` requests to `build` only after shaping makes the task build-ready.
 - Naming: no phase-based `P{phase}-{nn}` prefix in shortcut mode. Use the parent-provided title directly.
 - TDD pairing is not used.
 - Return the created task ID explicitly in your response message (for downstream linking and parent-child follow-up operations).
@@ -154,7 +156,7 @@ When drafting AC for planned tasks:
 
 Build an explicit dependency graph:
 
-- Shape/context tasks depend on nothing (or prior schema)
+- Context/discovery tasks depend on nothing (or prior schema) and are created only when build-ready
 - Implementation tasks depend on prerequisite shape/context tasks when they exist
 - Schema, CRUD, agent, CLI layers form a natural hierarchy
 - Cross-phase dependencies only when strictly necessary
@@ -198,7 +200,7 @@ If a planned task fails: refine the title and body or stop. Never create a place
 
 Ask the user only for material product, architecture, scope, or trade-off choices. Do not ask for approval on mechanical decomposition when the parent intent, constraints, and dependencies are already clear.
 
-When a material choice exists, present exactly one decision item with status quo, problem, options with pros/cons/risks/confidence, recommendation, and expected outcome. On approval, revise the planned tasks and proceed to Step 6. On rejection or unresolved scope, stop without creating tasks and leave the parent in `shape` or block it through `create_request` per `r-pipeline-protocol`.
+When a material choice exists, present exactly one decision item with status quo, problem, options with pros/cons/risks/confidence, recommendation, and expected outcome. On approval, revise the planned tasks and proceed to Step 6. On rejection or unresolved scope, stop without creating new tasks; for an existing parent, leave it in `shape` or block it through `create_request` per `r-pipeline-protocol`.
 
 ## Step 6 — Create Tasks
 
@@ -206,17 +208,29 @@ When a material choice exists, present exactly one decision item with status quo
 
 **Shortcut naming:** preserve the parent-provided title verbatim (no phase prefix).
 
-Create each build-ready child via `create_task` with title, `status="build"`, priority, tags, depends_on, `ac`, body (supporting context including `Proof guidance:`), and `parent={parent_id}`. Use `status="shape"` only for a child whose scope still requires later shaping.
+Create each build-ready child via `create_task` with title, `status="build"`, priority, tags, depends_on, `ac`, and body (supporting context including `Proof guidance:`). If an existing parent task ID is available, include `parent={parent_id}`. If there is no existing parent and aggregate closure is needed, create the child tasks first, then create the aggregate parent with `status="collect"` and `depends_on=[child_ids]`, then set each child `parent={aggregate_id}` via `edit_task`.
 
 Do not create consolidation-test tasks automatically. If aggregate verification is needed, express it as parent/EPIC collect criteria or a normal shaped task with its own product-facing purpose.
 
-**Parent completion gate:** For parent/EPIC decomposition, create or route the aggregate parent at `collect` after adding all required child IDs as dependencies via `edit_task(id={parent_id}, add_dep=[...])`. This parks the parent behind child completion; dependency filtering keeps collector from receiving the parent while any required child is still active.
+**Parent completion gate:** For parent/EPIC decomposition with an existing parent, route the aggregate parent to `collect` after adding all required child IDs as dependencies via `edit_task(id={parent_id}, add_dep=[...])`. For a new aggregate parent, create it directly with `status="collect"` and `depends_on=[child_ids]`. This parks the parent behind child completion; dependency filtering keeps collector from receiving the parent while any required child is still active.
 
 Group by dependency layer (independent first, then dependents). Record created task IDs for the report.
 
 In shortcut mode, report the created task ID as a top-level result line (for example, `Created follow-up task: #{id}`).
 
 Include the planning summary in the parent task's `end_work` note.
+
+## Step 6a — Audit Created Board State
+
+After every task-creation batch, call `list_tasks(ids=[...])` for all created and routed IDs before returning or advancing the parent. Verify:
+
+- Every build-ready leaf task is in `build`.
+- Every aggregate parent/EPIC is in `collect`.
+- No shaper-created task is in `shape` unless the user explicitly requested raw manual intake.
+- Every aggregate parent/EPIC depends on all required child IDs.
+- Every child task points to the aggregate parent when a parent exists.
+
+If a status is wrong, correct it immediately with `move_task` before final output. If a dependency or parent link is wrong, correct it with `edit_task`. Do not return an approval while the board state contradicts the intended routing.
 
 ## Step 7 — Visualize Dependencies
 
@@ -225,6 +239,8 @@ Produce a Mermaid diagram showing task relationships. Arrows: dependency toward 
 ## Step 8 — Advance
 
 **Post-task reflection:** Before advancing, write 3-5 bullets on problems faced, workarounds applied, patterns discovered. Skip if nothing notable. Use `save_memory(title=..., content=..., categories=[...], confidence=0.8, source_agent="shaper")` for each notable finding.
+
+Call `shaper-challenger` after Step 6a, when concrete task IDs, statuses, dependencies, AC, and aggregate routing are visible. If the challenger finds a correctable issue, edit/move the created tasks and repeat Step 6a before final approval. Do not use the challenger only on a rough pre-creation plan.
 
 For aggregate parent/EPIC tasks with no direct implementation work, put the parent in `collect` after child dependencies are attached. If creating a new aggregate parent, pass `status="collect"` to `create_task`; if shaping an existing parent, use `end_work(outcome="success", move_to="collect")`. For a parent that still owns direct implementation AC, create build-ready children instead of sending the aggregate parent to build.
 
@@ -263,6 +279,9 @@ Append decomposition details inside shaper's `## Shape Notes` section:
 - [ ] Tags include `phase-{n}` + category (decomposition mode only)
 - [ ] No cycles in dependency graph
 - [ ] Parent task has `depends_on` pointing to required children when it is an aggregate/EPIC gate
+- [ ] Created/routed task statuses were verified with `list_tasks(ids=[...])`
+- [ ] No shaper-created task remains in `shape` unless explicitly requested as raw manual intake
+- [ ] Shaper-challenger reviewed concrete created/routed task IDs after the status audit
 - [ ] Mermaid diagram matches task list (decomposition mode only)
 - [ ] Total 20 tasks or fewer
 - [ ] AC describes "done", not "how"
