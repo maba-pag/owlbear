@@ -3,7 +3,7 @@
 > Audit date: 2026-05-16
 > Method: Live screenshots + code inspection + PDS v4.1.0 docs cross-reference
 > Scope: All visible surfaces at 1440px (light + dark), sidecar detail, filter panel, context menu
-> Previous audits: `cockpit-visual-audit.md` (May 14), `cockpit-visual-audit-new.md` (May 14)
+> Previous audit: `cockpit-visual-audit.md` (May 14)
 
 ---
 

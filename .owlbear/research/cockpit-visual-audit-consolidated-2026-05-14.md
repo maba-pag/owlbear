@@ -22,7 +22,7 @@ Audit question: what is wrong visually and structurally, what can Porsche Design
 | `npm run lint:css`, `npm run lint:html` | Static lint passes despite poor UI | 0.90 |
 | Targeted Playwright E2E | Responsive/a11y still fails: 320px overflow and scrollable-region focusability | 0.94 |
 
-Existing notes reviewed after the independent pass: `.owlbear/research/cockpit-visual-audit.md` and `.owlbear/research/cockpit-visual-audit-new.md`. This file does not overwrite them; it consolidates and extends them.
+Existing notes reviewed after the independent pass: `.owlbear/research/cockpit-visual-audit.md`. This file does not overwrite it; it consolidates and extends it.
 
 ## 3. Overall Verdict
 
