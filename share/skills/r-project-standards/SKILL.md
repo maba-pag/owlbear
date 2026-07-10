@@ -23,7 +23,10 @@ type: description (#task-id, context)
 ### Rules
 
 - One logical commit per agent per task. No micro-commits, no multi-task batches.
-- Commit only files touched by your current task. Check `git status --short` and `git diff --cached` before committing.
+- Commit only files touched by your current task. A mixed index is not a reason to skip a task-owned commit.
+- Use the shared scoped helper: `uv --project ../owlbear run commit-owned -m "type: description (#task-id, agent)" -- path [path...]`.
+- The helper preserves unrelated staged paths and unstages only its own paths if `git commit` fails. It rejects owned paths that were already staged, because it cannot safely distinguish user work from the agent's changes in one path.
+- Pipeline agents commit their task-owned durable changes before successful lifecycle advancement. Builders own product and durable proof files, verifiers own local fixes, and collectors own Kanban/archive changes they make.
 - Never push. The user pushes manually.
 
 ### VS Code Auto-Staging Trap
