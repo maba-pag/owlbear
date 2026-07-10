@@ -28,12 +28,25 @@ _MANAGE_TODO_LIST = "manage_todo_list"
 # Canonical VS Code built-in toolset prefixes.
 # Source: VS Code Copilot cheat sheet 2026-03-25 + docs/research/stale-tool-names.md
 # Update this set when VS Code adds new toolsets.
-KNOWN_TOOLSETS: frozenset[str] = frozenset({"agent", "browser", "edit", "execute", "read", "search", "web", "vscode"})
+KNOWN_TOOLSETS: frozenset[str] = frozenset(
+    {
+        "agent",
+        "browser",
+        "edit",
+        "execute",
+        "read",
+        "search",
+        "web",
+        "vscode",
+        "vscodeGeneral",
+        "vscodeTasks",
+    }
+)
 
 # Standalone tool names not under any toolset prefix.
 # Source: VS Code Copilot cheat sheet 2026-03-25 + docs/research/stale-tool-names.md
 # Update this set when VS Code adds new standalone tools.
-KNOWN_STANDALONE_TOOLS: frozenset[str] = frozenset({"newWorkspace", "selection"})
+KNOWN_STANDALONE_TOOLS: frozenset[str] = frozenset({"newWorkspace", "selection", "vscode.mermaid-markdown-features"})
 
 # MCP server names whose tools may appear as 'server/tool_name' or 'server/*'.
 # Update this set when a new MCP server is added to the workspace.
