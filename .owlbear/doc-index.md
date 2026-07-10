@@ -95,332 +95,6 @@
 - ## `2. Placement Mapping`
 - ## `3. Audience Targets`
 
-## .owlbear/memory/ac-cleanup-tests-can-enforce-literal-rem-r635y1.md
-
-## .owlbear/memory/ac-literals-must-be-verified-against-can-8hvk88.md
-
-## .owlbear/memory/ac-narrowing-can-conflict-with-injected--li37g1.md
-
-## .owlbear/memory/ac-proof-needs-adversarial-scope-and-ind-rbhyen.md
-
-## .owlbear/memory/ac11-docstring-tests-are-exact-string-se-szlytm.md
-
-## .owlbear/memory/adapter-contract-tests-need-live-signatu-iwmcrr.md
-
-## .owlbear/memory/aggregate-wave-assertions-hide-duplicate-9t2gug.md
-
-## .owlbear/memory/architecture-reviews-must-audit-downstre-64py5d.md
-
-## .owlbear/memory/ast-merge-scripts-can-drop-pytest-fixtur-rs7jh8.md
-
-## .owlbear/memory/atomicity-proof-must-exercise-rename-and-r6t2be.md
-
-## .owlbear/memory/avoid-hasattr-getattr-branch-checks-on-m-718pof.md
-
-## .owlbear/memory/avoid-to-thread-on-shared-sqlite-app-lif-l1goak.md
-
-## .owlbear/memory/backend-briefs-must-read-live-implementa-5jjc0q.md
-
-## .owlbear/memory/behavioral-retry-evidence-gap-handling-msdrrt.md
-
-## .owlbear/memory/boundary-wiring-reviews-can-rely-on-adja-fsfff9.md
-
-## .owlbear/memory/brief-completeness-model-no-mandatory-re-9qw1o4.md
-
-## .owlbear/memory/builder-gate-superseding-proof-file-must-r8qqtc.md
-
-## .owlbear/memory/builder-reject-when-durable-tests-confli-7uy8tz.md
-
-## .owlbear/memory/builder-reject-when-testfromac-contract--ag5exr.md
-
-## .owlbear/memory/chain-acs-need-linkage-proof-nb72j5.md
-
-## .owlbear/memory/check-atomicity-claims-against-file-tran-1h08eb.md
-
-## .owlbear/memory/check-diagram-overlaps-after-coordinate--grs5em.md
-
-## .owlbear/memory/check-every-gather-result-slot-return-exceptions-tjbvq5.md
-
-## .owlbear/memory/check-staged-set-before-committing-z3mtdp.md
-
-## .owlbear/memory/cockpit-host-level-tabindex-audits-need-host-proof-utk6yq.md
-
-## .owlbear/memory/cockpit-ptextarea-tests-need-pds-event-p-hkdldb.md
-
-## .owlbear/memory/cockpit-visual-screenshots-need-contract-bound-polish-findings-1rbgv2.md
-
-## .owlbear/memory/collision-proof-needs-namespace-check-hded0m.md
-
-## .owlbear/memory/compare-task-ac-against-public-protocol--svhqm5.md
-
-## .owlbear/memory/create-or-resolve-acs-need-both-branches-wk22ee.md
-
-## .owlbear/memory/critical-bundle-notes-need-full-proof-no-jawcsv.md
-
-## .owlbear/memory/cross-check-refined-red-test-ac-against--3g8evt.md
-
-## .owlbear/memory/css-migrations-can-break-inline-style-as-3ndjo0.md
-
-## .owlbear/memory/debounce-proofs-need-distinguishable-int-3x93a8.md
-
-## .owlbear/memory/default-helper-args-can-hide-path-sensit-fpnx3n.md
-
-## .owlbear/memory/delete-patch-may-not-remove-files-on-dis-55e9p4.md
-
-## .owlbear/memory/deletion-reviews-require-structural-abse-zkw2hs.md
-
-## .owlbear/memory/design-system-acs-need-exact-selectors-a-qe17ic.md
-
-## .owlbear/memory/discriminated-config-needs-cross-field-p-ckzdl3.md
-
-## .owlbear/memory/distinct-child-proof-needs-identity-not--60t6us.md
-
-## .owlbear/memory/do-not-infer-tool-authorship-without-evi-1d7rjn.md
-
-## .owlbear/memory/doc-chain-migrations-need-stale-text-sca-yvwzcg.md
-
-## .owlbear/memory/docs-only-proof-can-still-use-quality-ru-7fj46v.md
-
-## .owlbear/memory/eventsource-guards-must-cover-every-call-m7jp6o.md
-
-## .owlbear/memory/exact-di-acs-need-full-arg-proof-z9xx64.md
-
-## .owlbear/memory/exact-filter-contract-vs-post-filter-heu-akj4ay.md
-
-## .owlbear/memory/exact-trigger-focus-return-proof-c5gg1f.md
-
-## .owlbear/memory/excalidraw-arrows-need-binding-graph-che-ccpkrj.md
-
-## .owlbear/memory/excluded-frontend-tests-can-still-hide-r-h16s8p.md
-
-## .owlbear/memory/explicit-negative-ac-clauses-need-direct-87xihg.md
-
-## .owlbear/memory/fallback-when-apply-patch-delete-silentl-1n01ep.md
-
-## .owlbear/memory/false-return-mutation-failures-need-dire-lg0lyb.md
-
-## .owlbear/memory/fastapi-response-model-strips-undeclared-zg03sg.md
-
-## .owlbear/memory/filter-tests-need-surviving-set-proof-5twwjm.md
-
-## .owlbear/memory/follow-up-creation-is-not-task-completio-3t2tdn.md
-
-## .owlbear/memory/follow-up-tasks-need-live-board-and-sour-qshq3r.md
-
-## .owlbear/memory/full-file-apply-patch-rewrites-need-sepa-fwj7ed.md
-
-## .owlbear/memory/green-local-tests-need-tracked-ownership-vebojs.md
-
-## .owlbear/memory/handler-reviews-must-distinguish-ingest--ji4dn1.md
-
-## .owlbear/memory/happy-path-delete-assertions-need-exact--ypr6zf.md
-
-## .owlbear/memory/import-failures-can-be-valid-red-evidenc-ztd7g3.md
-
-## .owlbear/memory/independently-enumerate-coverage-relevan-8a56ph.md
-
-## .owlbear/memory/instruction-applyto-needs-built-in-file--fmk0i2.md
-
-## .owlbear/memory/keyword-selector-proof-gates-can-become--f66fq7.md
-
-## .owlbear/memory/knowledge-package-enforces-type-checking-1kwl0t.md
-
-## .owlbear/memory/layout-acs-need-explicit-regression-asse-zhwaql.md
-
-## .owlbear/memory/lazy-route-config-reviews-need-eager-vs--qhjn5l.md
-
-## .owlbear/memory/loop-breaker-counts-use-task-evidence-se-1sxka7.md
-
-## .owlbear/memory/magicmock-can-hide-slotted-context-branc-fqn6re.md
-
-## .owlbear/memory/manual-evaluation-tasks-need-action-requ-hyqcsy.md
-
-## .owlbear/memory/mcp-kanban-tool-additions-need-durable-s-45icby.md
-
-## .owlbear/memory/mcp-knowledge-server-runs-from-dev-branc-cjdgyb.md
-
-## .owlbear/memory/mcp-rename-fallout-can-break-durable-tes-7xe0dr.md
-
-## .owlbear/memory/mcp-rename-tasks-need-full-durable-impor-iz7q8l.md
-
-## .owlbear/memory/mcp-tool-ids-use-sanitized-truncated-ser-u1f7et.md
-
-## .owlbear/memory/megalinter-apply-fixes-needs-explicit-pu-bsuhkx.md
-
-## .owlbear/memory/mutation-contract-reviews-need-all-write-8lmcpl.md
-
-## .owlbear/memory/named-css-selectors-need-selector-scoped-proof-1ni0bj.md
-
-## .owlbear/memory/named-observables-need-direct-proof-in-s-lx3pae.md
-
-## .owlbear/memory/nested-css-selector-extractors-can-be-in-l7trzu.md
-
-## .owlbear/memory/no-disk-write-proof-needs-persisted-entr-nkywzy.md
-
-## .owlbear/memory/omitted-and-empty-mutation-inputs-differ-50c9sg.md
-
-## .owlbear/memory/omitted-if-empty-acs-need-negative-proof-tgu8gy.md
-
-## .owlbear/memory/pairwise-precedence-tests-need-positive--d95h79.md
-
-## .owlbear/memory/parent-tasks-should-not-embed-live-child-8k91g0.md
-
-## .owlbear/memory/patch-the-actual-file-api-under-test-32gt63.md
-
-## .owlbear/memory/pcheckbox-onchange-does-not-expose-detai-frmcei.md
-
-## .owlbear/memory/pds-p-button-variant-is-a-dom-property-f1ndyi.md
-
-## .owlbear/memory/pds-select-positive-only-proof-can-false-9v8t9h.md
-
-## .owlbear/memory/per-hit-provenance-needs-full-multi-row--twlk4d.md
-
-## .owlbear/memory/playwright-route-handlers-are-lifo-anqtld.md
-
-## .owlbear/memory/playwright-specs-may-bypass-scoped-quali-vahyv8.md
-
-## .owlbear/memory/polling-hooks-need-in-flight-protection--3odckp.md
-
-## .owlbear/memory/pre-commit-validate-skills-hook-fails-on-slplk1.md
-
-## .owlbear/memory/pydantic-extra-forbid-needs-explicit-leg-nvjnnh.md
-
-## .owlbear/memory/pydantic-model-copy-does-not-revalidate--5q6c5e.md
-
-## .owlbear/memory/pytest-k-gate-can-fail-on-unrelated-coll-o35s42.md
-
-## .owlbear/memory/quality-runner-coverage-target-for-owlbe-9mv02d.md
-
-## .owlbear/memory/quality-runner-full-mode-timeout-fallbac-rbcl8e.md
-
-## .owlbear/memory/quality-runner-lint-clean-can-omit-targe-q30taw.md
-
-## .owlbear/memory/quality-runner-subagent-can-need-prompt--9s1s47.md
-
-## .owlbear/memory/quality-runner-supports-pytest-selector--1cjjxe.md
-
-## .owlbear/memory/quote-negated-globs-in-zsh-b0f2nv.md
-
-## .owlbear/memory/raw-public-scripts-need-window-globals-in-vitest-4hnuow.md
-
-## .owlbear/memory/recommendations-need-pro-con-risk-confid-xr6k9c.md
-
-## .owlbear/memory/ref-stabilized-callbacks-need-stale-ref--oo0ttg.md
-
-## .owlbear/memory/refetch-success-flows-need-visibility-pr-a9qchm.md
-
-## .owlbear/memory/refined-tasks-need-artifact-to-scope-checks-kh1z3f.md
-
-## .owlbear/memory/refresh-proof-after-test-only-retry-ekab8j.md
-
-## .owlbear/memory/regex-based-css-tests-depend-on-line-ind-yybdqm.md
-
-## .owlbear/memory/reject-when-full-file-ac-conflicts-with--nylf5e.md
-
-## .owlbear/memory/removed-focus-triggers-need-explicit-fallback-targets-t0v9lv.md
-
-## .owlbear/memory/removed-parameters-need-behavioral-rejec-f2rvq3.md
-
-## .owlbear/memory/rename-tests-need-positive-proof-vfh16h.md
-
-## .owlbear/memory/repo-wide-string-search-acs-need-full-de-d5w4j2.md
-
-## .owlbear/memory/rerun-scoped-proof-when-builder-notes-co-p4sm2h.md
-
-## .owlbear/memory/reset-failed-reviews-need-mixed-schema-p-szeo20.md
-
-## .owlbear/memory/retry-contracts-can-false-green-after-de-qcys2k.md
-
-## .owlbear/memory/retry-reviews-must-not-drift-beyond-operative-ac-l0uxlh.md
-
-## .owlbear/memory/retry-safe-acs-need-replay-proof-585muf.md
-
-## .owlbear/memory/review-proof-must-include-named-durable-suites-cswzwd.md
-
-## .owlbear/memory/reviewer-css-contract-tests-must-prove-d-7dbqrw.md
-
-## .owlbear/memory/reviewer-parent-coordination-closures-ne-erw7ss.md
-
-## .owlbear/memory/reviewer-pass-with-sub-90-coverage-needs-ht4oiv.md
-
-## .owlbear/memory/rollback-paths-need-deep-snapshots-and-c-10sehn.md
-
-## .owlbear/memory/root-level-pytest-selector-proof-risk-5o6wvk.md
-
-## .owlbear/memory/route-allowlists-need-field-level-proof--hfp5x7.md
-
-## .owlbear/memory/ruf022-all-sorting-is-case-sensitive-3qy9ca.md
-
-## .owlbear/memory/ruff-ruf022-enforces-sorted-all-in-proto-k7g48y.md
-
-## .owlbear/memory/ruff-s608-on-dynamic-sql-in-sqlite-helpe-6gxn4h.md
-
-## .owlbear/memory/scope-quality-runner-lint-paths-to-touch-xzj3jj.md
-
-## .owlbear/memory/separate-background-lint-debt-from-task--z5pj7l.md
-
-## .owlbear/memory/separate-polling-badge-counts-can-stale--oocdge.md
-
-## .owlbear/memory/set-returning-acs-need-exclusion-proof-1r17ip.md
-
-## .owlbear/memory/show-full-decision-context-before-askque-pk0az9.md
-
-## .owlbear/memory/smoke-rewires-need-normalized-output-pro-3avr3r.md
-
-## .owlbear/memory/source-fetcher-tests-patch-module-level--m3u8a6.md
-
-## .owlbear/memory/split-tasks-by-proof-burden-and-failure--ijj1sa.md
-
-## .owlbear/memory/stale-durable-suites-can-block-green-n6firw.md
-
-## .owlbear/memory/starlette-sync-testclient-deadlocks-on-s-c3899n.md
-
-## .owlbear/memory/structural-import-acs-require-exact-impo-j8l25a.md
-
-## .owlbear/memory/testfromac-assertions-carry-ac-proof-6mwkqm.md
-
-## .owlbear/memory/threshold-acs-need-exact-edge-proof-6eflrb.md
-
-## .owlbear/memory/timer-clearing-tests-need-pending-timer--wyc61h.md
-
-## .owlbear/memory/transport-state-acs-need-negative-proof-4x4rnm.md
-
-## .owlbear/memory/trust-live-red-baselines-over-stale-ac-t-uaxpde.md
-
-## .owlbear/memory/type-shape-assertions-need-executable-en-9bsoqp.md
-
-## .owlbear/memory/uniqueness-acs-need-duplicate-active-tes-0bhv9w.md
-
-## .owlbear/memory/use-mcp-mutation-specific-parameters-tytavx.md
-
-## .owlbear/memory/use-non-default-fixtures-to-expose-hardc-7sw0ws.md
-
-## .owlbear/memory/use-noqa-tc001-for-protocol-runtime-type-82e64u.md
-
-## .owlbear/memory/use-pds-web-component-event-contracts-in-5y6ui1.md
-
-## .owlbear/memory/use-rg-files-without-match-not-l-sde9yc.md
-
-## .owlbear/memory/v8-tsx-coverage-can-show-phantom-misses-st1h30.md
-
-## .owlbear/memory/verify-destructive-apply-patch-results-o-09kmoz.md
-
-## .owlbear/memory/verify-pbutton-semantics-before-role-query-proof-q2mbtk.md
-
-## .owlbear/memory/verify-sibling-and-parent-brief-consiste-piv668.md
-
-## .owlbear/memory/verify-working-tree-after-delegated-git--v4vsdi.md
-
-## .owlbear/memory/visual-baselines-can-ratify-unfinished-c-5el0e7.md
-
-## .owlbear/memory/vite-config-path-fixes-need-build-proof-htavnx.md
-
-## .owlbear/memory/vs-code-pytest-fallback-may-need-explici-lkwtvd.md
-
-## .owlbear/memory/widely-consumed-api-refactors-need-regre-jw5uya.md
-
-## .owlbear/memory/work-in-owlbear-dev-not-sibling-owlbear-yjfv0m.md
-
 ## .owlbear/prompts/arch-audit.prompt.md
 - # `Architecture Module Quality Audit`
 - ## `Step 1 - Load the standard first`
@@ -439,31 +113,6 @@
 - ## `6. Diagram Ownership`
 - ## `7. Describes-Based Diagram Verification`
 - ## `8. Verification and Closeout`
-
-## .pytest_cache/README.md
-- # `pytest cache directory #`
-
-### Outbound links
-- [the docs](https://docs.pytest.org/en/stable/how-to/cache.html)
-
-## megalinter-reports/megalinter-report.md
-- ## `✅[MegaLinter](https://megalinter.io/9.5.0) analysis: Success`
-
-### Outbound links
-- [MegaLinter](https://megalinter.io/9.5.0)
-- [actionlint](https://megalinter.io/9.5.0/descriptors/action_actionlint)
-- [stylelint](https://megalinter.io/9.5.0/descriptors/css_stylelint)
-- [editorconfig-checker](https://megalinter.io/9.5.0/descriptors/editorconfig_editorconfig_checker)
-- [htmlhint](https://megalinter.io/9.5.0/descriptors/html_htmlhint)
-- [jsonlint](https://megalinter.io/9.5.0/descriptors/json_jsonlint)
-- [markdownlint](https://megalinter.io/9.5.0/descriptors/markdown_markdownlint)
-- [ruff](https://megalinter.io/9.5.0/descriptors/python_ruff)
-- [ruff-format](https://megalinter.io/9.5.0/descriptors/python_ruff_format)
-- [trivy](https://megalinter.io/9.5.0/descriptors/repository_trivy)
-- [eslint](https://megalinter.io/9.5.0/descriptors/typescript_eslint)
-- [yamllint](https://megalinter.io/9.5.0/descriptors/yaml_yamllint)
-- [![MegaLinter is graciously provided by OX Security](https://raw.githubusercontent.com/oxsecurity/megalinter/main/docs/assets/images/ox-banner.png)
-- [**starring ⭐ the repository**](https://github.com/oxsecurity/megalinter)
 
 ## seed/.github/copilot-instructions.md
 - # `Project Copilot Instructions`
@@ -756,15 +405,7 @@
 - ### `Channel B`
 - ### `Kanban protocol`
 
-## share/agents/code-reader.agent.md
-- ### `Channel A`
-- ### `Channel B`
-
 ## share/agents/collector.agent.md
-- ### `Channel A`
-- ### `Channel B`
-
-## share/agents/fix-attempt.agent.md
 - ### `Channel A`
 - ### `Channel B`
 
@@ -844,11 +485,6 @@
 - ### `Channel A`
 - ### `Session Output`
 
-## share/agents/planner.agent.md
-- ### `Channel A`
-- ### `Channel B`
-- ### `Kanban protocol`
-
 ## share/agents/shaper-challenger.agent.md
 
 ## share/agents/shaper.agent.md
@@ -866,25 +502,18 @@
 - ### `Channel B`
 
 ## share/diagrams/cockpit.excalidraw
-describes: serve/cockpit/src/**, serve/cockpit/web/src/**
 
 ## share/diagrams/ideation.excalidraw
-describes: share/skills/h-ideation/**, share/skills/w-ideation-discovery/**, share/skills/w-ideation-mediation/**, share/skills/h-ideation-panel/**, share/agents/ideation-*.agent.md
 
 ## share/diagrams/kanban.excalidraw
-describes: serve/kanban/**, serve/mcp-kanban/**, .owlbear/kanban/**
 
 ## share/diagrams/mcp-topology.excalidraw
-describes: serve/mcp-*/src/**, serve/kanban/src/**, serve/knowledge/src/**, .vscode/mcp.json
 
 ## share/diagrams/memory-layers.excalidraw
-describes: serve/mcp-memory/src/**, .owlbear/memory/**, share/skills/h-memory-structure/**, share/skills/h-mcp-memory/**, share/instructions/owlbear-system.instructions.md
 
 ## share/diagrams/pipeline.excalidraw
-describes: share/instructions/owlbear-system.instructions.md, share/skills/r-pipeline-protocol/**, share/agents/*.agent.md
 
 ## share/diagrams/project-overview.excalidraw
-describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 
 ## share/instructions/agent-ecosystem.instructions.md
 
@@ -1035,6 +664,7 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ## `Interaction Protocol`
 - ## `Input Modes`
 - ## `What Happens`
+- ## `Routing Rules`
 
 ## share/prompts/test-curation.prompt.md
 - ## `Interaction Protocol`
@@ -1063,7 +693,7 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ### `5-Step Verifier Procedure`
 - ### `Canonical Source Map`
 - ## `Validation Checklist`
-- ### `Planner Draft Checklist`
+- ### `Shaper Draft Checklist`
 - ### `Shaper/Challenger Validation Checklist`
 
 ## share/skills/h-agent-structure/SKILL.md
@@ -1460,21 +1090,10 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ### `Format`
 - ### `Rules`
 - ### `VS Code Auto-Staging Trap`
-- ## `2. Attribution`
-- ## `3. Priority Scheme`
-- ## `4. Tag Taxonomy`
-
-## share/skills/w-fix-attempt/SKILL.md
-- # `Fix-Attempt`
-- ## `Input Contract`
-- ## `Output Contract`
-- ## `Step 1 — Parse Inputs`
-- ## `Step 2 — Read Failing Proof`
-- ## `Step 3 — Read Source Files`
-- ## `Step 4 — Apply Fix`
-- ## `Step 5 — Verify`
-- ## `Step 6 — Single Retry (max 1)`
-- ## `Known Pitfalls`
+- ## `2. File Placement`
+- ## `3. Attribution`
+- ## `4. Priority Scheme`
+- ## `5. Tag Taxonomy`
 
 ## share/skills/w-ideation-discovery/SKILL.md
 - # `Ideation Discovery`
@@ -1593,8 +1212,9 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ## `Step 5 — Assign Priority and Tags`
 - ## `Step 5c — Assign Proof Guidance`
 - ## `Step 5a — Validate Planned Tasks`
-- ## `Step 5b — Approval (user mode only)`
+- ## `Step 5b — User Decision Gate`
 - ## `Step 6 — Create Tasks`
+- ## `Step 6a — Audit Created Board State`
 - ## `Step 7 — Visualize Dependencies`
 - ## `Step 8 — Advance`
 - ## `Output Template`

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import re
 from pathlib import Path
@@ -19,8 +18,10 @@ _EXCLUDED_PATHS: frozenset[Path] = frozenset(
         ".owlbear/kanban",
         ".owlbear/briefs",
         ".owlbear/sources",
+        ".owlbear/memory",
         "store",
         "tests",
+        "megalinter-reports",
     ]
 )
 
@@ -29,6 +30,7 @@ _EXCLUDED_NAMES: frozenset[str] = frozenset(
         "node_modules",
         ".git",
         ".venv",
+        ".pytest_cache",
         "dist",
         "build",
     }
@@ -120,28 +122,20 @@ def _render_entry(rel_path: Path, doc_path: Path) -> str:
     lines: list[str] = [f"## {rel_path.as_posix()}"]
 
     if doc_path.suffix == ".excalidraw":
-        try:
-            data = json.loads(doc_path.read_text())
-        except (json.JSONDecodeError, OSError):
-            data = {}
-        describes = data.get("describes", [])
-        if isinstance(describes, list) and describes:
-            lines.append(f"describes: {', '.join(describes)}")
-        elif isinstance(describes, str) and describes:
-            lines.append(f"describes: {describes}")
-    else:
-        content = doc_path.read_text()
-        headings, links = _parse_markdown(content)
-        for h in headings:
-            parts = h.split(" ", 1)
-            level_str = parts[0]
-            text = parts[1] if len(parts) > 1 else ""
-            lines.append(f"- {level_str} `{text}`")
-        if links:
-            lines.append("")
-            lines.append("### Outbound links")
-            for link_text, url in links:
-                lines.append(f"- [{link_text}]({url})")
+        return "\n".join(lines)
+
+    content = doc_path.read_text()
+    headings, links = _parse_markdown(content)
+    for h in headings:
+        parts = h.split(" ", 1)
+        level_str = parts[0]
+        text = parts[1] if len(parts) > 1 else ""
+        lines.append(f"- {level_str} `{text}`")
+    if links:
+        lines.append("")
+        lines.append("### Outbound links")
+        for link_text, url in links:
+            lines.append(f"- [{link_text}]({url})")
 
     return "\n".join(lines)
 

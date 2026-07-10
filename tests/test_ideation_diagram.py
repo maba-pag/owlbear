@@ -29,7 +29,6 @@ AC coverage:
   AC4  — footer text element: Last verified: YYYY-MM-DD (commit-hash)
   AC5  — descriptive (not authoritative) note is present
   AC6  — 6 mechanical Excalidraw convention sub-criteria (unchanged from 4th cycle)
-  AC-idx — doc-index includes ideation.excalidraw entry with all 6 required globs
 
 """
 
@@ -37,12 +36,9 @@ from __future__ import annotations
 
 import json
 import re
-import shutil
 from pathlib import Path
 
 import pytest
-
-from owlbear_tools.doc_index import generate_index
 # Promoted from archived task #1034.
 
 # ---------------------------------------------------------------------------
@@ -51,7 +47,6 @@ from owlbear_tools.doc_index import generate_index
 
 _PROJECT_ROOT = Path(__file__).parent.parent
 _DIAGRAM_PATH = _PROJECT_ROOT / "share" / "diagrams" / "ideation.excalidraw"
-_DOC_INDEX_PATH = _PROJECT_ROOT / ".owlbear" / "doc-index.md"
 
 # AC3 (6th-cycle update) — 6 required describes globs (was 4, added phase skills)
 _REQUIRED_DESCRIBES_GLOBS = [
@@ -722,121 +717,6 @@ class TestFromAC_IdeationExcalidrawConventions:
         assert not overlapping_pairs, (
             f"{len(overlapping_pairs)} overlapping standalone text element pair(s) found "
             f"(violates AC6 sub-criterion 6): {overlapping_pairs}"
-        )
-
-
-# ===========================================================================
-# TestFromAC_IdeationDocIndexIntegration — AC-idx (updated for 6 globs)
-# ===========================================================================
-
-
-class TestFromAC_IdeationDocIndexIntegration:
-    """AC-idx: generate_index() on a tree with ideation.excalidraw produces
-    an entry with all 6 required describes globs (updated from 4 in 5th cycle)."""
-
-    def _generate_entry(self, tmp_path: Path) -> str:
-        dest = tmp_path / "share" / "diagrams" / "ideation.excalidraw"
-        dest.parent.mkdir(parents=True)
-        shutil.copy(_DIAGRAM_PATH, dest)
-        index_path = tmp_path / "doc-index.md"
-        generate_index(tmp_path, index_path)
-        text = index_path.read_text()
-        assert "## share/diagrams/ideation.excalidraw" in text, (
-            "ideation.excalidraw entry not found in generated doc-index"
-        )
-        start = text.index("## share/diagrams/ideation.excalidraw")
-        nxt = text.find("\n## ", start + 1)
-        return text[start:] if nxt == -1 else text[start:nxt]
-
-    def test_doc_index_entry_includes_describes_line(self, tmp_path: Path) -> None:
-        """Happy: generate_index emits a describes: line in the entry."""
-        entry = self._generate_entry(tmp_path)
-        assert "describes:" in entry, "No describes: line in ideation.excalidraw doc-index entry"
-
-    def test_doc_index_entry_includes_all_six_required_globs(self, tmp_path: Path) -> None:
-        """Happy: all 6 required globs appear in the generated doc-index entry.
-        Fails for the 2 new phase-specific globs until the diagram is updated."""
-        entry = self._generate_entry(tmp_path)
-        for glob in _REQUIRED_DESCRIBES_GLOBS:
-            assert glob in entry, f"Required glob {glob!r} not found in generated doc-index entry"
-
-
-# ===========================================================================
-# TestFromAC_IdeationCommittedDocIndex — AC-idx committed (updated for 6 globs)
-# ===========================================================================
-
-
-class TestFromAC_IdeationCommittedDocIndex:
-    """AC-idx (committed): the checked-in .owlbear/doc-index.md contains the
-    ideation.excalidraw section with all 6 required describes globs."""
-
-    def _ideation_entry_text(self) -> str:
-        assert _DOC_INDEX_PATH.exists(), f"Committed doc-index not found: {_DOC_INDEX_PATH}"
-        text = _DOC_INDEX_PATH.read_text()
-        assert "## share/diagrams/ideation.excalidraw" in text, (
-            "Committed .owlbear/doc-index.md has no entry for share/diagrams/ideation.excalidraw"
-        )
-        start = text.index("## share/diagrams/ideation.excalidraw")
-        nxt = text.find("\n## ", start + 1)
-        return text[start:] if nxt == -1 else text[start:nxt]
-
-    def test_committed_doc_index_has_ideation_entry(self) -> None:
-        """Regression: the committed doc-index contains the ideation.excalidraw section header."""
-        entry = self._ideation_entry_text()
-        assert "## share/diagrams/ideation.excalidraw" in entry
-
-    def test_committed_doc_index_has_describes_line(self) -> None:
-        """Regression: the committed doc-index entry has a describes: line."""
-        entry = self._ideation_entry_text()
-        assert "describes:" in entry, "No describes: line in committed doc-index ideation entry"
-
-    @pytest.mark.parametrize("glob", _REQUIRED_DESCRIBES_GLOBS)
-    def test_committed_doc_index_ideation_entry_contains_glob(self, glob: str) -> None:
-        """Regression: each required describes glob appears in the committed
-        doc-index ideation entry. Fails for 2 new phase-specific globs
-        until diagram and doc-index are rebuilt and recommitted."""
-        entry = self._ideation_entry_text()
-        assert glob in entry, f"Required glob {glob!r} not found in committed .owlbear/doc-index.md ideation entry"
-
-    def test_committed_doc_index_has_exactly_six_describes_globs(
-        self,
-    ) -> None:
-        """Boundary: committed doc-index ideation entry references exactly 6 globs."""
-        entry = self._ideation_entry_text()
-        found = [g for g in _REQUIRED_DESCRIBES_GLOBS if g in entry]
-        assert len(found) == len(_REQUIRED_DESCRIBES_GLOBS), (
-            f"Expected {len(_REQUIRED_DESCRIBES_GLOBS)} globs in committed entry, found {len(found)}: {found}"
-        )
-
-    def test_committed_doc_index_ideation_entry_has_no_extra_describes_globs(
-        self,
-    ) -> None:
-        """Boundary (13th-cycle exactness): the committed doc-index ideation entry's
-        describes line contains exactly 6 glob entries when parsed — no extras.
-
-        The prior test only counts how many *required* globs appear in the entry
-        text.  It would still pass if a 7th (or more) glob were silently added.
-        This test parses the actual `describes:` line and counts every entry,
-        failing whenever the count diverges from exactly 6.
-        """
-        entry = self._ideation_entry_text()
-        describes_line = next(
-            (ln for ln in entry.splitlines() if ln.strip().startswith("describes:")),
-            None,
-        )
-        assert describes_line is not None, (
-            "No 'describes:' line found in the committed doc-index ideation entry. "
-            "Regenerate the doc-index with 'uv run doc-index' after updating the diagram."
-        )
-        after_prefix = describes_line.split("describes:", 1)[1].strip()
-        actual_globs = [g.strip() for g in after_prefix.split(",") if g.strip()]
-        assert len(actual_globs) == len(_REQUIRED_DESCRIBES_GLOBS), (
-            f"Committed doc-index ideation entry has {len(actual_globs)} describes "
-            f"glob(s) (parsed from line), expected exactly "
-            f"{len(_REQUIRED_DESCRIBES_GLOBS)}. "
-            f"Actual parsed globs: {actual_globs}. "
-            "Remove any extra globs not in the AC3 required list and regenerate "
-            "the doc-index."
         )
 
 

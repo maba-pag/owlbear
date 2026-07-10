@@ -35,7 +35,7 @@ entries = parse_index(index_content)  # list[DocEntry]
 
 ### Excluded directories
 
-The following paths are never indexed: `.owlbear/scratch`, `.owlbear/research`, `.owlbear/kanban`, `.owlbear/briefs`, `.owlbear/sources`, `store`, `tests`, `node_modules`, `.git`, `dist`, `build`.
+The index includes source documentation and discoverable diagram filenames. It excludes workspace state, generated artifacts, caches, external stores, and test fixtures. Current excluded roots/names are `.owlbear/scratch`, `.owlbear/research`, `.owlbear/kanban`, `.owlbear/briefs`, `.owlbear/sources`, `.owlbear/memory`, `store`, `tests`, `megalinter-reports`, `node_modules`, `.git`, `.venv`, `.pytest_cache`, `dist`, and `build`.
 
 ## Configuration
 
