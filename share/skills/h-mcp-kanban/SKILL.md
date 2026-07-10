@@ -1,6 +1,6 @@
 ---
 name: h-mcp-kanban
-description: "Handbook: Owlbear Kanban MCP tool reference — 9 tools for programmatic board management"
+description: "Handbook: Owlbear Kanban MCP tool reference — 11 tools for programmatic board management"
 user-invocable: false
 ---
 
@@ -40,7 +40,7 @@ Exactly 11 tools are exposed:
 
 ### Creation Semantics
 
-- `create_task.status`: omitted or `""` uses the product topology entry status (`shape`). Pass `"build"` for build-ready leaf tasks and `"collect"` for aggregate parent/EPIC tasks parked behind child dependencies.
+- `create_task.status`: omitted or `""` uses the product topology entry status (`shape`). Pipeline agents should pass this explicitly: `"build"` for build-ready leaf tasks and `"collect"` for aggregate parent/EPIC tasks parked behind child dependencies. Shaper should not rely on the default except for explicit raw manual intake.
 - `create_task.priority`: omitted or `""` uses the product topology default priority (`medium`). Pass an explicit value when a different priority is intended.
 
 ### edit_task Semantics

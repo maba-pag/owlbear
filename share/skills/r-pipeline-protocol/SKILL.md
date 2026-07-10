@@ -29,17 +29,17 @@ Load these via `read_file` when the referenced capability is needed:
 
 | Status | Agent | Purpose | Success route | Reject route |
 |--------|-------|---------|---------------|--------------|
-| `shape` | shaper via `/shape` | Turn intent into buildable scope, AC, and dependency shape | `build` | stays `shape` |
+| `shape` | shaper via `/shape` | Turn intent into buildable scope, AC, and dependency shape | `build` for build-ready leaves; `collect` for aggregate parents/EPICs | stays `shape` |
 | `build` | builder | Implement shaped work and choose proportional proof | `verify` | `shape` |
 | `verify` | verifier | Verify task intent and evidence; patch small local defects | `collect` | `build` or `shape` |
 | `collect` | collector | Verify parent/EPIC aggregate intent and archive readiness | `archived` | `shape` |
 
 ### Role Boundaries
 
-- **Shaper** is user-facing and prompt-driven. It decides what should be built and what evidence would be meaningful.
+- **Shaper** is user-facing and prompt-driven. It decides what should be built and what evidence would be meaningful. Shaper-created tasks use explicit routing: build-ready leaves in `build`, aggregate parents/EPICs in `collect`; `shape` is for manual intake and rejected work.
 - **Builder** changes product files, runs focused proof, and calls builder-challenger before every DONE. Durable tests are optional and must earn their maintenance cost.
 - **Verifier** validates the result, may patch small local issues, and calls verifier-challenger before every PASS.
-- **Collector** works aggregate parents: tasks with child links, parent/EPIC intent, or explicit aggregate collect criteria. Ordinary subtasks should not receive a second detailed review in `collect`.
+- **Collector** has two modes: mechanically archive verified leaf tasks, and review aggregate parents/EPICs for parent intent fulfillment. Ordinary subtasks should not receive a second detailed implementation review in `collect`.
 
 ### Model Routing
 
