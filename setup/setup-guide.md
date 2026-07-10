@@ -128,13 +128,13 @@ so it reads this project's `.owlbear/kanban/` and `.owlbear/memory/` directories
    macOS / Linux:
 
    ```shell
-  uv run --project ../owlbear cockpit
+   uv run --project ../owlbear cockpit
    ```
 
    Windows PowerShell:
 
    ```powershell
-  uv run --project ..\owlbear cockpit
+   uv run --project ..\owlbear cockpit
    ```
 
    Expected outcome: Cockpit opens `http://127.0.0.1:8420` and shows this project's
