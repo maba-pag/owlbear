@@ -4,7 +4,7 @@ description: "Architectural domain panelist — reads problem context, forms a s
 argument-hint: "Architect: {problem and outcome context for architectural analysis}"
 user-invocable: false
 disable-model-invocation: true
-tools: [vscode/toolSearch, read/readFile, read/viewImage, agent, edit/createDirectory, edit/createFile, edit/editFiles, search, ob-memory/recall_memory, ob-memory/save_memory]
+tools: [vscode/toolSearch, read/readFile, read/viewImage, agent, edit/createDirectory, edit/createFile, edit/editFiles, search, ob-memory/recall_memory]
 agents: [ideation-critic]
 hooks:
   PreToolUse:

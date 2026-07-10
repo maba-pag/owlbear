@@ -1,12 +1,12 @@
 ---
 name: h-mcp-memory
-description: "Handbook: OwlBear Memory MCP tool reference — 7 shipped tools for agent institutional knowledge"
+description: "Handbook: OwlBear Memory MCP tool reference — 8 shipped tools for agent institutional knowledge"
 user-invocable: false
 ---
 
 # MCP Memory Tool Reference
 
-> **Audience:** Any agent with `save_memory` or `recall_memory` in its tools list (21 pipeline + ideation agents), plus the memory-curator agent. **When:** Pre-flight knowledge loading, post-task reflection, and curation sessions. **Why:** Authoritative reference for all 7 MCP memory tools — parameters, behavior, error cases, and usage patterns.
+> **Audience:** Any agent with `save_memory` or `recall_memory` in its tools list, plus the memory-curator agent. **When:** Pre-flight knowledge loading, post-task reflection, and curation sessions. **Why:** Authoritative reference for all 8 MCP memory tools — parameters, behavior, error cases, and usage patterns.
 
 The `ob-memory` MCP server exposes memory operations over stdio. The FastMCP app name is `owlbear-memory`; VS Code registers it in `.vscode/mcp.json` as `ob-memory`.
 
@@ -17,11 +17,10 @@ For curation workflow, see `w-mem-curation`.
 
 | Role | Agents | Available Tools |
 |------|--------|----------------|
-| Pipeline/support agents | shaper, builder, verifier, collector, orchestrator, test-curator | `save_memory`, `recall_memory` |
-| Ideation agents (11) | discoverer, outsider, critic, pragmatist, mediator, data, security, architect, enduser, firstprinciples, simplifier | `save_memory`, `recall_memory` |
-| Knowledge workers (2) | knowledge-ingestor, knowledge-enricher | `save_memory`, `recall_memory` |
-| Memory curator (1) | memory-curator | `list_memories`, `read_memory`, `curate_memory`, `delete_memory`, `save_memory` |
-| Utility agents | shaper-challenger, builder-challenger, verifier-challenger | None |
+| Pipeline agents | orchestrator, shaper, builder, verifier, collector, test-curator, memory-curator, shaper-challenger, builder-challenger, verifier-challenger | `assess_memories`, `save_memory`, `recall_memory` |
+| Ideation agents (11) | discoverer, outsider, critic, pragmatist, mediator, data, security, architect, enduser, firstprinciples, simplifier | `recall_memory` |
+| Knowledge workers (2) | knowledge-ingestor, knowledge-enricher | `recall_memory` |
+| Memory curator (1) | memory-curator | `assess_memories`, `list_memories`, `read_memory`, `recall_memory`, `curate_memory`, `delete_memory`, `save_memory` |
 
 `approve_memory` is not exposed to any agent — user-initiated only via the memory review prompt.
 
@@ -60,6 +59,7 @@ The `--project` path must point to the OwlBear installation root. Find the corre
 | `list_memories` | List metadata filtered by state/category/scope | `states`, `categories`, `scope_agents` |
 | `recall_memory` | Recall scoped memory blocks for agent pre-flight | `agent`, `categories`, `limit` |
 | `read_memory` | Read one full memory entry by ID | `entry_id` |
+| `assess_memories` | Record whether recalled entries were useful for a completed task | `task_id`, `assessments` |
 | `curate_memory` | Curator mutation and code-managed state transition tool | `entry_id`, optional mutable fields, `scope_agents` |
 | `delete_memory` | Lifecycle-aware deletion with hard/soft semantics | `entry_id` |
 | `approve_memory` | Promote `curated -> approved` | `entry_id` |

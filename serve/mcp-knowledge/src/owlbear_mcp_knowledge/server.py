@@ -103,7 +103,7 @@ _install_legacy_event_loop_policy()
 globals()["ContentInjectionGuard"] = object
 
 
-async def knowledge_enrichment_claim_batch(ctx: Context, limit: int = 10) -> list[EnrichmentChunk]:
+async def claim_enrichment_batch(ctx: Context, limit: int = 10) -> list[EnrichmentChunk]:
     """Atomically claim a batch of chunks ready for enrichment.
 
     Chunks are eligible when state is pending, or when a previous claim lease
@@ -161,7 +161,7 @@ async def knowledge_enrichment_claim_batch(ctx: Context, limit: int = 10) -> lis
     return response
 
 
-async def knowledge_enrichment_store(
+async def store_enrichment(
     ctx: Context,
     chunk_id: str | None = None,
     entities: list[dict[str, Any]] | None = None,
@@ -310,7 +310,7 @@ def _parse_protocol_relation_type(edge: dict[str, Any]) -> ProtocolRelationType:
         raise ValueError(msg) from exc
 
 
-async def knowledge_enrichment_retry(
+async def retry_enrichment(
     ctx: Context,
     chunk_ids: list[str] | None = None,
     limit: int = 100,
@@ -441,15 +441,13 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
 
 mcp = FastMCP("owlbear-knowledge", lifespan=app_lifespan)
 
-knowledge_enrichment_claim_batch = mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))(
-    knowledge_enrichment_claim_batch
+claim_enrichment_batch = mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))(
+    claim_enrichment_batch
 )
-knowledge_enrichment_store = mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))(
-    knowledge_enrichment_store
-)
-knowledge_enrichment_retry = mcp.tool(
+store_enrichment = mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))(store_enrichment)
+retry_enrichment = mcp.tool(
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True)
-)(knowledge_enrichment_retry)
+)(retry_enrichment)
 
 
 __all__ = [
@@ -457,19 +455,19 @@ __all__ = [
     "AppContext",
     "_apply_tool_exclusions",
     "app_lifespan",
-    "knowledge_enrichment_claim_batch",
-    "knowledge_enrichment_retry",
-    "knowledge_enrichment_store",
-    "knowledge_entity_lookup",
+    "claim_enrichment_batch",
+    "delete_knowledge_source",
     "knowledge_ingest",
     "knowledge_search",
-    "knowledge_sources_delete",
-    "knowledge_sources_list",
-    "knowledge_sources_refresh",
-    "knowledge_sources_register",
     "knowledge_stats",
+    "list_knowledge_sources",
+    "lookup_knowledge_entity",
     "mcp",
+    "refresh_knowledge_source",
+    "register_knowledge_source",
+    "retry_enrichment",
     "select_content_fetcher",
+    "store_enrichment",
 ]
 
 
@@ -569,7 +567,7 @@ async def knowledge_search(
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
-async def knowledge_sources_list(ctx: Context, scope: str | None = None) -> list[SourceInfo]:
+async def list_knowledge_sources(ctx: Context, scope: str | None = None) -> list[SourceInfo]:
     """List all registered knowledge sources."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     store = app_ctx.source_store_v2
@@ -597,7 +595,7 @@ async def knowledge_sources_list(ctx: Context, scope: str | None = None) -> list
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
-async def knowledge_entity_lookup(
+async def lookup_knowledge_entity(
     ctx: Context,
     entity_id: str | None = None,
     entity_name: str | None = None,
@@ -669,7 +667,7 @@ async def knowledge_entity_lookup(
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
-async def knowledge_sources_register(  # noqa: PLR0913
+async def register_knowledge_source(  # noqa: PLR0913
     ctx: Context,
     name: str,
     kind: str,
@@ -848,7 +846,7 @@ async def knowledge_stats(ctx: Context) -> StatsResult:
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
-async def knowledge_sources_refresh(ctx: Context, source_id: str) -> dict[str, Any]:
+async def refresh_knowledge_source(ctx: Context, source_id: str) -> dict[str, Any]:
     """Trigger re-ingestion of a registered knowledge source by its ID.
 
     Returns source_id, sources_refreshed, and serialized refresh errors.
@@ -892,7 +890,7 @@ async def knowledge_sources_refresh(ctx: Context, source_id: str) -> dict[str, A
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True))
-async def knowledge_sources_delete(ctx: Context, source_id: str) -> dict[str, Any]:
+async def delete_knowledge_source(ctx: Context, source_id: str) -> dict[str, Any]:
     """Delete a source through ingest-coordinator purge orchestration."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     source_store = app_ctx.source_store_v2

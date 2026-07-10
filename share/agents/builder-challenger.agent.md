@@ -5,7 +5,7 @@ argument-hint: "Challenge Build: task_id={task_id}, proposed_verdict=DONE, chang
 user-invocable: false
 disable-model-invocation: false
 model: MAI-Code-1-Flash (copilot)
-tools: [vscode/toolSearch, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, search]
+tools: [vscode/toolSearch, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, search, ob-memory/assess_memories, ob-memory/recall_memory, ob-memory/save_memory]
 agents: []
 hooks:
   PostToolUse:

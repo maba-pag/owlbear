@@ -5,7 +5,7 @@ argument-hint: "Curate tests"
 user-invocable: true
 disable-model-invocation: true
 tools:
-  [vscode/toolSearch, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createFile, edit/editFiles, edit/rename, search, ob-kanban/list_tasks, ob-kanban/show_task, ob-memory/recall_memory, ob-memory/save_memory]
+  [vscode/toolSearch, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createFile, edit/editFiles, edit/rename, search, ob-kanban/list_tasks, ob-kanban/show_task, ob-memory/assess_memories, ob-memory/recall_memory, ob-memory/save_memory]
 agents: []
 hooks:
   PreToolUse:

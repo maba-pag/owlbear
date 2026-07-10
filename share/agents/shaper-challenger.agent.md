@@ -5,7 +5,7 @@ argument-hint: "Challenge Shape: task_id={task_id}, proposed_verdict=APPROVED, a
 user-invocable: false
 disable-model-invocation: false
 model: Claude Opus 4.8 (copilot)
-tools: [vscode/toolSearch, read/problems, read/readFile, read/viewImage, search]
+tools: [vscode/toolSearch, read/problems, read/readFile, read/viewImage, search, ob-memory/assess_memories, ob-memory/recall_memory, ob-memory/save_memory]
 agents: []
 hooks:
   PreToolUse:

@@ -5,7 +5,7 @@ model: Claude Opus 4.8 (copilot)
 argument-hint: "Critique: {position or claim to challenge}"
 user-invocable: false
 disable-model-invocation: false
-tools: [vscode/toolSearch, read/problems, read/readFile, read/viewImage, search, ob-memory/recall_memory, ob-memory/save_memory]
+tools: [vscode/toolSearch, read/problems, read/readFile, read/viewImage, search, ob-memory/recall_memory]
 agents: []
 hooks:
   PreToolUse:

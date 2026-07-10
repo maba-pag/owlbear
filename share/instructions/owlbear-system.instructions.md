@@ -46,7 +46,9 @@ For file placement rules, commit format, priorities, and tags, see `r-project-st
 
 The VS Code built-in `/memories/` store is retired for OwlBear agents. Do not write user, session, repo inbox, or fallback notes there; if the built-in memory tool appears, treat it as unavailable for agent learning. Use `ob-memory` for institutional memory and normal project artifacts for task context.
 
-Do NOT store as memory: architecture decisions, research findings, code snippets, or task-specific working notes. See `r-pipeline-protocol` → Knowledge Pre-flight and Post-task Reflection.
+Do NOT store as memory: architecture decisions, research findings, code snippets, or task-specific working notes.
+
+Before completing material work, decide whether you learned a specific, non-obvious, reusable fact that would have improved the work had it been available at the start. Save each distinct qualifying insight via the `save_memory` MCP tool. Do not save generic advice or information already documented elsewhere. Save candidates; the memory curator decides which entries are retained, scoped, and made recallable.
 
 ## 4. Operational Fundamentals
 

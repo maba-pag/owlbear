@@ -5,7 +5,7 @@ argument-hint: "Challenge Verify: task_id={task_id}, proposed_verdict=PASS, chan
 user-invocable: false
 disable-model-invocation: false
 model: GPT-5.6 Terra (copilot)
-tools: [vscode/toolSearch, read/problems, read/readFile, read/viewImage, search]
+tools: [vscode/toolSearch, read/problems, read/readFile, read/viewImage, search, ob-memory/assess_memories, ob-memory/recall_memory, ob-memory/save_memory]
 agents: []
 hooks:
   PreToolUse:
