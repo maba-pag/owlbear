@@ -1064,7 +1064,6 @@
 - ## `Companion Skills`
 - ## `1. Lifecycle`
 - ### `Role Boundaries`
-- ### `Model Routing`
 - ## `2. Task Setup`
 - ### `One Task`
 - ### `Claiming`

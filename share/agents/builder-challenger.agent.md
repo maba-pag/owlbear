@@ -4,7 +4,7 @@ description: "Cheap builder cross-check — adversarial proof and lint/typecheck
 argument-hint: "Challenge Build: task_id={task_id}, proposed_verdict=DONE, changed_files=[...], evidence={evidence}"
 user-invocable: false
 disable-model-invocation: false
-model: Claude Haiku 4.5 (copilot)
+model: MAI-Code-1-Flash (copilot)
 tools: [vscode/toolSearch, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, search]
 agents: []
 hooks:

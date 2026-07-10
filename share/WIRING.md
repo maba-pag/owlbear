@@ -90,7 +90,7 @@ Built-in agents (`Explore`, `General Purpose`) resolve at any depth.
 
 | Subagent | Affected Agents | Failure Mode |
 |----------|-----------------|--------------|
-| shaper-challenger | shaper | Shape approval loses Sonnet cross-check |
+| shaper-challenger | shaper | Shape approval loses cross-check |
 | builder-challenger | builder | Build DONE loses cheap lint/proof/adversarial cross-check |
 | verifier-challenger | verifier | PASS loses cheap intent/code/proof/scope cross-check |
 | ideation-critic | ideation panel agents | Ideation challenge loop degraded |
