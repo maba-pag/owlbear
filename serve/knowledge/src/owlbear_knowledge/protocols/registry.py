@@ -78,15 +78,15 @@ have no vector storage.
 MCP_TOOL_ROUTING: Final[Mapping[str, str]] = {
     "knowledge_search": "QueryFacade.search",
     "knowledge_ingest": "IngestCoordinator.ingest",
-    "knowledge_sources_list": "SourceStore.list_sources",
-    "knowledge_sources_register": "SourceStore.register_source",
-    "knowledge_sources_delete": "IngestCoordinator.delete_source",
-    "knowledge_sources_refresh": "IngestCoordinator.refresh",
-    "knowledge_entity_lookup": "QueryFacade.lookup_entity",
+    "list_knowledge_sources": "SourceStore.list_sources",
+    "register_knowledge_source": "SourceStore.register_source",
+    "delete_knowledge_source": "IngestCoordinator.delete_source",
+    "refresh_knowledge_source": "IngestCoordinator.refresh",
+    "lookup_knowledge_entity": "QueryFacade.lookup_entity",
     "knowledge_stats": "IngestCoordinator.stats",
-    "knowledge_enrichment_claim_batch": "EnrichmentStore.claim_batch",
-    "knowledge_enrichment_store": "EnrichmentStore.submit_extractions",
-    "knowledge_enrichment_retry": "EnrichmentStore.reset_failed",
+    "claim_enrichment_batch": "EnrichmentStore.claim_batch",
+    "store_enrichment": "EnrichmentStore.submit_extractions",
+    "retry_enrichment": "EnrichmentStore.reset_failed",
 }
 """Maps MCP tool name → Protocol.method responsible for handling the call.
 

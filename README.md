@@ -106,7 +106,7 @@ Release packaging boundary:
 
 ## Knowledge Base
 
-Knowledge base sources are registered and refreshed via the MCP server tools (`knowledge_sources_register`, `knowledge_sources_refresh`). See [serve/mcp-knowledge/README.md](serve/mcp-knowledge/README.md) for the full tool reference.
+Knowledge base sources are registered and refreshed via the MCP server tools (`register_knowledge_source`, `refresh_knowledge_source`). See [serve/mcp-knowledge/README.md](serve/mcp-knowledge/README.md) for the full tool reference.
 
 Set `OWLBEAR_LOCAL_KB_PATH` to override the default `.owlbear/knowledge/local.db` location (`OWLBEAR_KB_PATH` is still accepted as a fallback).
 

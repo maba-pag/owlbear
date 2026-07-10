@@ -30,7 +30,7 @@ from owlbear_knowledge.protocols.enrichment import EnrichmentPurgeResult
 from owlbear_knowledge.protocols.graph import EvidenceInvalidationResult
 from owlbear_knowledge.protocols.ingest import PurgeResult, PurgeStatus
 from owlbear_knowledge.protocols.sources import SourceDeletionInfo
-from owlbear_mcp_knowledge.server import knowledge_sources_delete as remove_source
+from owlbear_mcp_knowledge.server import delete_knowledge_source as remove_source
 
 
 # ---------------------------------------------------------------------------

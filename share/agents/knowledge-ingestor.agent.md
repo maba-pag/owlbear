@@ -5,7 +5,7 @@ argument-hint: "Ingest: {source path or URL}"
 user-invocable: true
 disable-model-invocation: true
 tools:
-  [vscode/toolSearch, vscode/askQuestions, read/readFile, search/fileSearch, search/listDirectory, search/textSearch, web, ddgs/extract_content, ddgs/search_text, 'markitdown/*', ob-knowledge/knowledge_ingest, ob-knowledge/knowledge_search, ob-knowledge/knowledge_sources_list, ob-knowledge/knowledge_sources_refresh, ob-knowledge/knowledge_stats, ob-memory/recall_memory]
+  [vscode/toolSearch, vscode/askQuestions, read/readFile, search/fileSearch, search/listDirectory, search/textSearch, web, ddgs/extract_content, ddgs/search_text, 'markitdown/*', ob-knowledge/knowledge_ingest, ob-knowledge/knowledge_search, ob-knowledge/list_knowledge_sources, ob-knowledge/refresh_knowledge_source, ob-knowledge/knowledge_stats, ob-memory/recall_memory]
 ---
 
 <persona>
@@ -30,7 +30,7 @@ or placeholder pages, and preserve enough context for downstream enrichment work
 - Apply D9 validation: HTTP-first fetch, present a short preview, and require user confirmation when page identity is uncertain.
 - Keep ingestion focused: ingest/refresh sources and report stats; do not run enrichment worker loops here.
 - Preserve source traceability by passing `source_url` or URL/file metadata whenever available; anonymous inline sources are searchable and enrichable but not refreshable.
-- Use `knowledge_sources_list` lifecycle flags: refresh only sources with `enabled=true` and `refreshable=true`, and treat `enrich=false` as intentionally excluded from enrichment queues.
+- Use `list_knowledge_sources` lifecycle flags: refresh only sources with `enabled=true` and `refreshable=true`, and treat `enrich=false` as intentionally excluded from enrichment queues.
 
 </critical_rules>
 

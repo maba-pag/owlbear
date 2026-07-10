@@ -909,13 +909,13 @@
 - ## `Tool Reference`
 - ### `knowledge_search`
 - ### `knowledge_ingest`
-- ### `knowledge_sources_list`
-- ### `knowledge_sources_refresh`
-- ### `knowledge_sources_delete`
+- ### `list_knowledge_sources`
+- ### `refresh_knowledge_source`
+- ### `delete_knowledge_source`
 - ### `knowledge_stats`
-- ### `knowledge_enrichment_claim_batch`
-- ### `knowledge_enrichment_retry`
-- ### `knowledge_enrichment_store`
+- ### `claim_enrichment_batch`
+- ### `retry_enrichment`
+- ### `store_enrichment`
 - ## `Decision Tree`
 - ## `Scope Conventions`
 - ## `Domain Reference`

@@ -29,7 +29,7 @@ from mcp.server.fastmcp.exceptions import ToolError
 from owlbear_knowledge.protocols.ingest import RefreshError, RefreshRequest, RefreshResult
 from owlbear_knowledge.protocols.sources import SourceState
 from owlbear_mcp_knowledge import server
-from owlbear_mcp_knowledge.server import AppContext, knowledge_sources_refresh
+from owlbear_mcp_knowledge.server import AppContext, refresh_knowledge_source as knowledge_sources_refresh
 
 
 class TestSourceFetcherWiring:

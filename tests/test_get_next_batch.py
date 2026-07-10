@@ -34,7 +34,7 @@ from owlbear_knowledge.protocols.enrichment import (
     EnrichmentQueueItem,
     EnrichmentState,
 )
-from owlbear_mcp_knowledge.server import knowledge_enrichment_claim_batch
+from owlbear_mcp_knowledge.server import claim_enrichment_batch as knowledge_enrichment_claim_batch
 
 
 # ---------------------------------------------------------------------------

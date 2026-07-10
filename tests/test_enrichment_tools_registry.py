@@ -33,16 +33,16 @@ _ROOT = Path(__file__).parent.parent
 
 _NEW_ENRICHMENT_NAMES: frozenset[str] = frozenset(
     {
+        "claim_enrichment_batch",
+        "store_enrichment",
+        "retry_enrichment",
+    }
+)
+_REPLACED_ENRICHMENT_NAMES: frozenset[str] = frozenset(
+    {
         "knowledge_enrichment_claim_batch",
         "knowledge_enrichment_store",
         "knowledge_enrichment_retry",
-    }
-)
-_OLD_ENRICHMENT_NAMES: frozenset[str] = frozenset(
-    {
-        "get_next_batch",
-        "store_enrichment",
-        "retry_failed_enrichment",
     }
 )
 
@@ -64,35 +64,35 @@ class TestEnrichmentToolRename:
         """AC1: MCP_TOOL_ROUTING contains 3 new enrichment entries with correct routing values."""
         from owlbear_knowledge.protocols.registry import MCP_TOOL_ROUTING
 
-        assert MCP_TOOL_ROUTING.get("knowledge_enrichment_claim_batch") == "EnrichmentStore.claim_batch"
-        assert MCP_TOOL_ROUTING.get("knowledge_enrichment_store") == "EnrichmentStore.submit_extractions"
-        assert MCP_TOOL_ROUTING.get("knowledge_enrichment_retry") == "EnrichmentStore.reset_failed"
+        assert MCP_TOOL_ROUTING.get("claim_enrichment_batch") == "EnrichmentStore.claim_batch"
+        assert MCP_TOOL_ROUTING.get("store_enrichment") == "EnrichmentStore.submit_extractions"
+        assert MCP_TOOL_ROUTING.get("retry_enrichment") == "EnrichmentStore.reset_failed"
 
     def test_ac2_new_function_names_callable_and_in_all(self) -> None:
         """AC2: 3 enrichment functions renamed in server.py; new names callable and in __all__."""
         from owlbear_mcp_knowledge import server
 
-        assert callable(server.knowledge_enrichment_claim_batch)
-        assert callable(server.knowledge_enrichment_store)
-        assert callable(server.knowledge_enrichment_retry)
-        assert "knowledge_enrichment_claim_batch" in server.__all__
-        assert "knowledge_enrichment_store" in server.__all__
-        assert "knowledge_enrichment_retry" in server.__all__
-        assert "retry_failed_enrichment" not in server.__all__
+        assert callable(server.claim_enrichment_batch)
+        assert callable(server.store_enrichment)
+        assert callable(server.retry_enrichment)
+        assert "claim_enrichment_batch" in server.__all__
+        assert "store_enrichment" in server.__all__
+        assert "retry_enrichment" in server.__all__
+        assert "knowledge_enrichment_retry" not in server.__all__
 
     def test_ac3_dead_bare_retry_definition_removed(self) -> None:
         """AC3: Dead bare-function definition of retry_failed_enrichment removed; one def per renamed tool."""
         src = (_ROOT / "serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py").read_text()
 
-        assert "def retry_failed_enrichment" not in src
-        assert src.count("def knowledge_enrichment_retry") == 1
+        assert "def knowledge_enrichment_retry" not in src
+        assert src.count("def retry_enrichment") == 1
 
     def test_ac4_agent_file_allowlist_uses_new_names(self) -> None:
         """AC4: knowledge-enricher.agent.md tools allowlist and prose updated to new names."""
         content = (_ROOT / "share/agents/knowledge-enricher.agent.md").read_text()
 
-        assert "ob-knowledge/knowledge_enrichment_claim_batch" in content
-        assert "ob-knowledge/get_next_batch" not in content
+        assert "ob-knowledge/claim_enrichment_batch" in content
+        assert "ob-knowledge/knowledge_enrichment_claim_batch" not in content
 
     def test_ac5_doc_files_contain_no_old_enrichment_names(self) -> None:
         """AC5: No old enrichment tool names remain in the 4 affected doc files."""
@@ -102,7 +102,11 @@ class TestEnrichmentToolRename:
             "share/skills/w-knowledge-enrichment/SKILL.md",
             "share/prompts/kb-enrich.prompt.md",
         ]
-        old_names = ("get_next_batch", "store_enrichment", "retry_failed_enrichment")
+        old_names = (
+            "knowledge_enrichment_claim_batch",
+            "knowledge_enrichment_store",
+            "knowledge_enrichment_retry",
+        )
 
         for doc_path in doc_files:
             content = (_ROOT / doc_path).read_text()
@@ -112,8 +116,8 @@ class TestEnrichmentToolRename:
     def test_ac6_affected_test_files_use_new_import_names(self) -> None:
         """AC6: test_get_next_batch.py and test_store_enrichment_phase1.py import new names."""
         expected_new_names = {
-            "tests/test_get_next_batch.py": "knowledge_enrichment_claim_batch",
-            "tests/test_store_enrichment_phase1.py": "knowledge_enrichment_store",
+            "tests/test_get_next_batch.py": "claim_enrichment_batch",
+            "tests/test_store_enrichment_phase1.py": "store_enrichment",
         }
 
         for test_file, new_name in expected_new_names.items():
@@ -145,8 +149,8 @@ class TestEnrichmentToolRename:
         Ensures the registry was updated and no stale old-name registration remains.
         """
         registry = _registered_tool_names()
-        still_present = _OLD_ENRICHMENT_NAMES & registry
-        assert not still_present, f"Old enrichment tool names still in live MCP registry: {sorted(still_present)}"
+        still_present = _REPLACED_ENRICHMENT_NAMES & registry
+        assert not still_present, f"Replaced enrichment tool names still in live MCP registry: {sorted(still_present)}"
 
     # ------------------------------------------------------------------
     # AC4 retry-fill — full three-pair rename coverage in agent file
@@ -169,5 +173,5 @@ class TestEnrichmentToolRename:
         This test proves the full old-name removal.
         """
         content = (_ROOT / "share/agents/knowledge-enricher.agent.md").read_text()
-        still_present = [name for name in sorted(_OLD_ENRICHMENT_NAMES) if f"ob-knowledge/{name}" in content]
-        assert not still_present, f"Old enrichment names still in agent allowlist: {still_present}"
+        still_present = [name for name in sorted(_REPLACED_ENRICHMENT_NAMES) if f"ob-knowledge/{name}" in content]
+        assert not still_present, f"Replaced enrichment names still in agent allowlist: {still_present}"
