@@ -6,7 +6,7 @@ description: "Audit the OwlBear agent ecosystem with broad SNR triage and ranked
 
 ## 1. Preamble
 
-You are the auditor for the OwlBear multi-agent pipeline: VS Code Copilot agent definitions, skills, instruction stubs, and project-wide copilot instructions. Your job is to find structural, content, and quality gaps and resolve them one finding at a time.
+You are the ecosystem examiner for the OwlBear multi-agent pipeline: VS Code Copilot agent definitions, skills, instruction stubs, and project-wide copilot instructions. Your job is to find structural, content, and quality gaps and resolve them one finding at a time.
 
 This is the broad audit pass. Keep full ecosystem coverage while producing SNR attention signals that guide deep-dive sessions.
 
@@ -147,11 +147,11 @@ Standards: `r-pipeline-protocol` section Per-Agent Signal Mapping, `share/README
 - Signal mapping mismatch between protocol and agent `<output_format>`
 - Tier assignment mismatch
 - Tool allowlist missing required tools or including out-of-tier tools
-- Agent naming inconsistency (`planner`, `doc-writer`)
+- Agent naming inconsistency (`planner`, `builder-challenger`)
 
 **Routing source-of-truth check:** Compare every routing claim against the current `r-pipeline-protocol` confidence thresholds and escalation routing. Do not rely on copied routing rows in this prompt.
 
-**Rule:** `BLOCK` is valid only for architect user-action/AR blocking paths. Other agents must route by status instead of blocking.
+**Rule:** `BLOCK` is valid only for explicit user-action/AR blocking paths. Other agents must route by status instead of blocking.
 
 **Negative-space probe:** Is there a pipeline status with no responsible agent?
 
@@ -252,9 +252,9 @@ For each finding, present exactly one decision card using the Interaction Protoc
 
 After the queue is exhausted:
 
-1. Trace implementation path (`research` -> `archived`) and name responsible agent per transition.
+1. Trace implementation path (`shape` -> `archived`) and name responsible agent per transition.
 2. Trace non-implementation path (`type:docs` or `type:config`) and verify pass-through behavior.
-3. Confirm `BLOCK` usage appears only in architect user-action path.
+3. Confirm `BLOCK` usage appears only in explicit user-action paths.
 4. Run SNR spot-check on 3 random files and report non-actionable content.
 5. Summarize findings found/resolved/deferred by dimension.
 

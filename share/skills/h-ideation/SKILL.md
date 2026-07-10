@@ -18,7 +18,7 @@ Phase agents load this file for shared rules and their own phase skill for steps
 | Phase               | User-facing Agent     | Owns                                                        | Primary Outputs                                                                       |
 | ------------------- | --------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------- |
 | Phase 1 — Discovery | `ideation-discoverer` | M1-M2, early challenge lane, first research bridge          | `context.md`, `decisions.md`, `research-notes.md`, optional `synthesis-idea-panel.md` |
-| Phase 2 — Mediation | `ideation-mediator`   | M3-M6, late-domain panel, Critic validation, Brief, handoff | `synthesis.md`, `brief.md`, `planning-summary.md`, kanban parent task                |
+| Phase 2 — Mediation | `ideation-mediator`   | M3-M6, late-domain panel, Critic validation, Brief, handoff | `synthesis.md`, `brief.md`, `shaping-summary.md`, kanban parent task                |
 
 ## Moment Reference
 
@@ -65,8 +65,8 @@ Capture the expectation signal with contrastive questions. Each answer should st
 - During discovery and mediation, `context.md` carries the living expectation signal.
 - `decisions.md` records accepted trade-offs and supersedes older expectation text only when the user explicitly chooses the change.
 - At Brief approval, `brief.md` becomes the binding product promise for downstream work.
-- The active phase agent owns fidelity while it owns the moment: discovery through M2, mediation through Brief approval and M6. Planner decomposes the promise; it does not own product trade-offs.
-- Planner output and child tasks decompose the approved Brief; they are not a new scope authority.
+- The active phase agent owns fidelity while it owns the moment: discovery through M2, mediation through Brief approval and M6. Shaper turns the promise into buildable task shape; planner may decompose under shaper control but does not own product trade-offs.
+- Shaper output and any child tasks created through planner decompose the approved Brief; they are not a new scope authority.
 
 ### Tier-Scaled Fidelity Checks
 
@@ -74,8 +74,8 @@ Capture the expectation signal with contrastive questions. Each answer should st
 |---|---|
 | Scratch | 0 formal checks; keep the expectation signal lightweight or omit it when the work is truly throwaway. |
 | Tool | One pre-Brief expectation-fidelity Critic check before `brief.md` is approved. |
-| Shared | M2 expectation-fidelity Critic check, pre-Brief expectation-fidelity Critic check, and post-planner expectation-fidelity Critic check. |
-| Production | M2 expectation-fidelity Critic check, pre-Brief expectation-fidelity Critic check, and post-planner expectation-fidelity Critic check. |
+| Shared | M2 expectation-fidelity Critic check, pre-Brief expectation-fidelity Critic check, and post-shaping expectation-fidelity Critic check. |
+| Production | M2 expectation-fidelity Critic check, pre-Brief expectation-fidelity Critic check, and post-shaping expectation-fidelity Critic check. |
 
 ### Fidelity Rules
 
@@ -131,7 +131,7 @@ Use for:
   synthesis-idea-panel.md
   synthesis.md
   brief.md
-  planning-summary.md
+  shaping-summary.md
 ```
 
 ## Shared Artifact Meanings
@@ -160,9 +160,9 @@ Late-domain panel synthesis for Phase 2.
 
 Approved product promise for downstream planning.
 
-### `planning-summary.md`
+### `shaping-summary.md`
 
-M6 record of planner output against the approved Brief: parent task, child-task coverage, expected-experience coverage, omissions, and repair actions. It proves decomposition coverage; it does not supersede `brief.md` or child-task bodies.
+M6 record of shaper output against the approved Brief: parent task, task coverage, child-task coverage when decomposition happened, expected-experience coverage, omissions, and repair actions. It proves shaping coverage; it does not supersede `brief.md` or task bodies.
 
 ### `stances/*-proposal.md`
 

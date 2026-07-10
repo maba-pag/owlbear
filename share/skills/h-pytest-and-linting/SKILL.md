@@ -10,13 +10,13 @@ Command reference and pitfalls for tests and linting. For Python conventions and
 
 ## Commands
 
-### Scoped (builder, reviewer, test-writer)
+### Scoped
 
 ```shell
 uv run pytest tests/test_{module}.py -q --tb=short
 ```
 
-### Full suite (auditor)
+### Full suite
 
 ```shell
 uv run pytest tests/ serve/ -m "not api" -q --tb=short

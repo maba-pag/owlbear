@@ -30,7 +30,7 @@ applyTo: "**"
 ### Pipeline
 
 ```
-research → (researcher) → backlog → (architect) → todo → (test-writer) → in-progress → (builder) → review → (reviewer) → docs → (doc-writer) → done → (auditor) → archived
+shape → (/shape + shaper) → build → (builder) → verify → (verifier) → collect → (collector) → archived
 ```
 
 For file placement rules, commit format, priorities, and tags, see `r-project-standards`.

@@ -24,13 +24,10 @@ For each recalled memory entry, categorize your experience:
 
 | Agent | Verdict tokens | Body section |
 |-------|---------------|--------------|
-| researcher | DONE | ## Research |
-| architect | APPROVED / REFINE / SPLIT / MERGE / REJECT / BLOCK | ## Architecture Review |
-| test-writer | DONE | ## Test-Writer Notes |
-| builder | DONE / REJECT | ## Builder Notes |
-| reviewer | PASS / FAIL | ## Review Evidence |
-| doc-writer | DONE / REJECTED | ## Docs Gate |
-| auditor | ARCHIVED / REJECTED | ## Audit |
+| shaper | APPROVED / REFINE / BLOCK | ## Shape Notes |
+| builder | DONE / REJECT / BLOCK | ## Builder Notes |
+| verifier | PASS / REJECT / RESHAPE | ## Verify Notes |
+| collector | ARCHIVED / REJECT | ## Collect Notes |
 | planner | DONE | ## Planning |
 | memory-curator | DONE | ## Curation |
 
@@ -40,10 +37,9 @@ All agents should recognise — but only some must act on — `type:user-action`
 
 | Agent | Responsibility | Action |
 |-------|---------------|--------|
-| researcher | Provisional detection | Tag `type:user-action` if AC meets any detection heuristic |
-| architect | **Mandatory gate** | Confirm/remove tag; create AR via `create_dr`; block task |
-| orchestrator | Mechanical enforcement | `pick_tasks` excludes blocked tasks |
-| test-writer / builder / reviewer | Pass-through | `NON_IMPL_TAGS` exempts from TDD gate; process normally after unblock |
-| auditor | Convention verification | Confirm AR was created, block was issued, and a `## Decision Request` summary with `response: approved` appears in task body |
+| shaper | **Mandatory gate** | Confirm/remove tag; create AR via `create_request`; block task |
+| orchestrator | Mechanical enforcement | `pick_tasks` excludes blocked tasks; `shape` remains prompt-driven through `/shape` |
+| builder / verifier | Pass-through | Process normally after unblock when the action is complete |
+| collector | Convention verification | Confirm AR was created, block was issued, and a `## Decision Request` summary with `response: approved` appears in task body for parent/EPIC closure |
 
-See `w-arch-review` step 13 for detection heuristics (M/S/C rule) and `h-decision-requests` for the `create_dr` contract.
+See `h-decision-requests` for the request tool contracts.

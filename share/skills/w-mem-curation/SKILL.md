@@ -67,8 +67,8 @@ Every promoted entry needs non-empty `scope_agents`.
 
 | Scope | Use when |
 |-------|----------|
-| `['builder']`, `['reviewer']`, etc. | The learning applies to one or a few roles |
-| `['builder', 'reviewer']` | A shared handoff or quality pattern spans roles |
+| `['builder']`, `['verifier']`, etc. | The learning applies to one or a few roles |
+| `['builder', 'verifier']` | A shared handoff or quality pattern spans roles |
 | `['*']` | The learning applies to nearly every agent |
 
 Prefer targeted scopes. Use `['*']` only for broadly reusable process/tool guidance. Never promote with an empty scope.

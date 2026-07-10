@@ -42,7 +42,7 @@ Adapt patterns to the project's naming convention. The key signal is a numeric t
 
 1. Extract task IDs from filenames.
 2. Check each task via `show_task`. Keep only files whose task is **archived**.
-3. **Protect** files for tasks in any active state (backlog through docs).
+3. **Protect** files for tasks in any active state (`shape`, `build`, `verify`, `collect`).
 4. **Protect** files that active-task tests import or reference.
 
 If no archived task-tests exist across any suite, report "nothing to curate" and stop.
@@ -101,7 +101,7 @@ When a task-test has assertions worth preserving:
 
 After mining (or for zero-value tests, directly):
 
-1. **Run affected tests** to confirm nothing breaks. Use the project's quality-runner if available, otherwise run the relevant test command directly (pytest for Python, vitest/jest for frontend, playwright for E2E).
+1. **Run affected tests** to confirm nothing breaks. Run the relevant command directly (pytest for Python, vitest/jest for frontend, playwright for E2E).
 
 2. **Delete** the task-test files:
 
@@ -150,6 +150,5 @@ git add -A && git commit -m "test: curate {N} task-tests — {D} deleted, {M} mi
 
 | Skill | When | Purpose |
 |-------|------|---------|
-| `h-quality-runner` | Verify and full-suite gate | Test/lint execution |
 | `h-python-conventions` | Mining Python assertions | Naming and structure |
 | `h-vitest-and-linting` | Frontend/E2E curation | Frontend tooling commands |

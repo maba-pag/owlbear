@@ -37,7 +37,7 @@ Exactly 9 tools are exposed:
 
 ### Creation Semantics
 
-- `create_task.priority`: omitted or `""` uses the product topology default priority (`important`). Pass an explicit value when a different priority is intended.
+- `create_task.priority`: omitted or `""` uses the product topology default priority (`medium`). Pass an explicit value when a different priority is intended.
 
 ### edit_task Semantics
 
@@ -111,7 +111,7 @@ Mutation and lifecycle responses include `guidance: list[str]`.
 | `end_work(outcome="success")` | Always (commit-pushed reminder) |
 | `move_task` to a status > 1 slot ahead | Forward-skip warning |
 
-**Agent obligation:** If `guidance` is non-empty, read it before proceeding — it may require an immediate follow-up action (e.g., create a Decision Request via the create_request tool).
+**Agent obligation:** If `guidance` is non-empty, read it before proceeding — it may require an immediate follow-up action such as creating a Decision Request with `create_request`.
 
 ### `block:user` Tag Exemption
 
@@ -131,7 +131,7 @@ On failure: raises `ToolError` (MCP `isError: true`).
 
 Counterpart to `start_work`. Appends a timestamped note, resolves the task based on `outcome`, and releases the claim.
 
-`done` is the pipeline's terminal status, not the archive. In the normal pipeline, the doc-writer advances to `done`; the auditor claims that task and `end_work(outcome="success")` archives it because `done` is the last configured status. For direct user-directed cleanup outside the pipeline, do not report a task as closed while it remains in `done`; either leave it intentionally for auditor dispatch or archive it explicitly before calling the work complete.
+`collect` is the pipeline's terminal on-board status. When a collector calls `end_work(outcome="success")` from `collect`, the task archives because `collect` is the last configured status. For direct user-directed cleanup outside the pipeline, do not report a task as closed while it remains in `collect`; either leave it intentionally for collector dispatch or archive it explicitly before calling the work complete.
 
 Required outcomes to use in agent workflows:
 
@@ -143,7 +143,7 @@ Required outcomes to use in agent workflows:
 | `release` | Release claim, no status change (note appended if provided; no-op when unclaimed) |
 | `block` | Mark blocked with `block_reason`, release claim. Optionally move to `move_to` status. |
 
-**Forward skip:** `end_work(outcome="success", move_to="review")` advances directly to `review` (skipping intermediate statuses).
+**Forward skip:** `end_work(outcome="success", move_to="verify")` advances directly to `verify` (skipping intermediate statuses).
 
 On failure: raises `ToolError` (MCP `isError: true`).
 

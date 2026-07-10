@@ -30,7 +30,13 @@ type: description (#task-id, context)
 
 VS Code silently re-serializes and stages `.agent.md` files when it detects new tool capabilities. Always run `git diff --cached share/agents/` before committing and unstage any auto-generated reverts with `git reset HEAD <file>`.
 
-## 2. Attribution
+## 2. File Placement
+
+- Follow the workspace-specific file placement table in the active project instructions.
+- Keep generated scratch, debug, and temporary files out of durable project locations.
+- Before closing task work, delete scratch files created for that task.
+
+## 3. Attribution
 
 External code and patterns must be logged in `.owlbear/sources/overview.md`:
 
@@ -42,17 +48,15 @@ External code and patterns must be logged in `.owlbear/sources/overview.md`:
 | Where Used | Where it appears in OwlBear (file path or module) |
 | Date | When it was adopted |
 
-## 3. Priority Scheme
+## 4. Priority Scheme
 
 | Priority | Meaning | When to use |
 |----------|---------|-------------|
-| `someday` | Future vision, no commitment | Ideas we might never build |
-| `nice-to-have` | Useful improvement, no urgency | Build when everything important is done |
-| `important` | Clear value, scheduled **(default)** | Most feature work |
-| `needed` | Core capability, do soon | Required for next milestone |
-| `critical` | Can't function without it | Current blocker |
+| `low` | Worth keeping, no urgency | Opportunistic cleanup or later idea |
+| `medium` | Normal priority **(default)** | Most planned work |
+| `high` | Current blocker or strong dependency fan-out | Work that unblocks multiple tasks or active use |
 
-## 4. Tag Taxonomy
+## 5. Tag Taxonomy
 
 Tags are free-form. Conventions:
 
@@ -61,6 +65,6 @@ Tags are free-form. Conventions:
 | Phase | `phase-1` … `phase-12` | Group by project phase |
 | Category | `config`, `tooling`, `docs`, `test`, `cli`, `agent` | Area touched |
 | Type | `type:build`, `type:test`, `type:docs`, `type:user-action` | Kind of work |
-| | `type:user-action` — requires physical user action before pipeline can continue; architect creates AR, blocks task, and uses fast-path on re-entry (see r-pipeline-protocol §5) | |
+| | `type:user-action` — requires physical user action before pipeline can continue; shaper creates AR, blocks task, and records the resolved decision on re-entry (see r-pipeline-protocol §6) | |
 | Scope | `scope:copilot`, `scope:core`, `scope:cli` | Codebase part |
 | Rigor | `rigor:lean`, `rigor:standard`, `rigor:thorough` | Quality-vs-speed profile |

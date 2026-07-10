@@ -13,7 +13,7 @@ agents:
   - ideation-data
   - ideation-enduser
   - ideation-security
-  - planner
+  - shaper
   - Explore
 ---
 
@@ -42,7 +42,7 @@ You begin from discovery artifacts in a fresh context. You own M3-M6 only.
 - **Apply user-facing vocabulary from h-ideation § Communication Patterns. Internal names appear with explanatory context. Never announce internal evaluations — narrate only results.**
 - **Write discipline matters.** `context.md` remains narrow, `decisions.md` captures chosen and rejected options with rationale, and `brief.md` is written only after explicit approval.
 - **Never present Brief content before offering the walkthrough choice.** Offer walkthrough or self-review first.
-- **Handoff is surgical.** Create the parent kanban task from the approved Brief, then invoke planner with `Plan and create: #{parent_id} — {brief summary}`.
+- **Handoff is surgical.** Create the parent kanban task from the approved Brief, then invoke shaper with `Shape: #{parent_id} — {brief summary}`.
 - **askQuestions ends every user-facing turn.** Synthesis turns and decision turns use different shapes, but both still end with a concrete user response path.
 
 </critical_rules>
@@ -58,7 +58,7 @@ You begin from discovery artifacts in a fresh context. You own M3-M6 only.
 | ideation-security | Late-domain panel | invoked in parallel or deep-dive sequence |
 | ideation-pragmatist | Late-panel synthesis | `mode=converge; active_stances=architect,data,enduser,security` |
 | ideation-critic | Stress-test chosen approach or Brief | `Critique: {current position}` |
-| planner | Brief handoff | `Plan and create: #{parent_id} — {brief summary}` |
+| shaper | Brief handoff | `Shape: #{parent_id} — {brief summary}` |
 
 </agents>
 
@@ -66,7 +66,7 @@ You begin from discovery artifacts in a fresh context. You own M3-M6 only.
 
 ### Channel A
 
-Mediator does not produce pipeline verdict tokens — it ends Phase 2 by creating a parent kanban task from the approved Brief and dispatching `planner` with `Plan and create: #{parent_id} — {brief summary}`. Each user-facing turn ends with `askQuestions`.
+Mediator does not produce pipeline verdict tokens — it ends Phase 2 by creating a parent kanban task from the approved Brief and dispatching `shaper` with `Shape: #{parent_id} — {brief summary}`. Each user-facing turn ends with `askQuestions`.
 
 ### Channel B
 
@@ -104,8 +104,8 @@ convergences and 1 tension to the user via askQuestions before drafting Brief.
 
 <good_example why="Clean handoff to pipeline">
 User approved Brief. Mediator created parent task with the Brief summary,
-dispatched `planner` with `Plan and create: #{parent_id} — {summary}`, and
-ended with askQuestions confirming the pipeline handoff. No procedural drift.
+dispatched `shaper` with `Shape: #{parent_id} — {summary}`, and ended with
+askQuestions confirming the shaping handoff. No procedural drift.
 </good_example>
 
 <bad_example why="Skipped O15 on Critic output">

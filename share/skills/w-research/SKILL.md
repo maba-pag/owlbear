@@ -1,26 +1,36 @@
 ---
 name: w-research
-description: "Workflow: Research — structured analysis producing findings and follow-up tasks"
+description: "Workflow: Research — source-grounded shaping research for uncertain scope, architecture, or prior art"
 user-invocable: false
 ---
 
 # Research
 
-Investigate a topic, produce structured findings with trade-off matrices, write a research document, and create actionable follow-up tasks.
+Investigate a shaping question, produce structured findings with trade-off matrices, write a focused research document when useful, and convert findings into buildable `shape` tasks or decision/action requests.
+
+This workflow is owned by `shaper`. It is not a separate kanban status.
 
 **Kanban operations:** See `h-mcp-kanban` skill — section `## Agent Lifecycle Pattern`.
 
 ## Step 0 — Setup
 
-Read `r-pipeline-protocol` skill if not already loaded.
+Read `r-pipeline-protocol` and `h-ac-quality` if not already loaded.
 
-Claim the task via `start_work` (atomic claim + retrieves task body). Check the retrieved body for resolved decision/action requests per pipeline-protocol → Task Setup → Resolved Decision Pre-flight.
+Run this only after shaper has claimed a `shape` task with `start_work`. Use the claimed task body as the research context. Do not claim a second task and do not move the task into any `research` status.
 
-Verify the task is in `research` status.
+Research is required before `APPROVED -> build` when any condition applies:
+
+- Architecture, dependency, storage, security, or user-facing behavior choice is not obvious from the codebase.
+- The task asks for a new capability or a meaningful change to agent/pipeline behavior.
+- Existing code has no clear owner or precedent for the requested pattern.
+- External API/library/tool behavior affects feasibility.
+- A previous research doc is cited but may be stale.
+
+For trivial edits, local code search plus a one-line rationale in `## Shape Notes` is enough.
 
 ## Research Gate Checklist
 
-Before a task can leave `research`, complete this checklist. Items 1–6 are **mandatory**; items 7–8 are **recommended**.
+Before research can justify `APPROVED -> build`, complete the relevant checklist items. Items 1–6 are mandatory for non-trivial shaping research; items 7–8 are recommended.
 
 1. **Theoretical validity** — Sound concept? Right approach?
 2. **Environment audit** — Capability already provided by IDE, runtime, extensions, or existing tooling?
@@ -29,13 +39,13 @@ Before a task can leave `research`, complete this checklist. Items 1–6 are **m
 5. **Architecture fit** — Integrates with existing OwlBear components? Interfaces?
 6. **Implementation approach** — Patterns, idioms, data structures to adopt.
 7. **Testing strategy** _(recommended)_ — How to test? Unit, integration, mocks? Coverage?
-8. **Findings documented** _(recommended)_ — Notes in task body or linked `.owlbear/research/{slug}.md`.
+8. **Findings documented** _(recommended)_ — Notes in `## Shape Notes` or linked `.owlbear/research/{slug}.md`.
 
 For trivial tasks (rename, typo, config tweak): items 1–4 get a one-liner `N/A — trivial change, rationale: X`.
 
 ## Step 1 — Clarify Scope
 
-**Fail fast on invalid inputs.** `TEMP-*` titles or empty bodies = create a DR via `create_dr`, release claim.
+**Fail fast on invalid inputs.** `TEMP-*` titles or empty bodies = use `askQuestions` if the user is present; otherwise create a blocking request via `create_request` and block the task.
 
 If the task has scoped content but needs clarification:
 
@@ -57,8 +67,9 @@ Before gathering sources:
 Find 2+ authoritative sources per claim:
 
 - **Codebase:** search tools for related existing code.
+- **Explore:** use the `Explore` subagent for broad read-only codebase context when local search would be noisy.
 - **Web:** use the `web` toolset for direct pages and `ddgs/search_text` / `ddgs/extract_content` for search and extraction; use `markitdown/*` when document conversion is needed.
-- **Clone for deep analysis:** `.owlbear/scratch/research/{repo-name}/` — analyze, then delete when done.
+- **External repositories:** prefer source pages, docs, and extracted files. If deep clone-based analysis is truly required, create a request or shape a separate task with the needed tool access; shaper does not clone repositories directly.
 
 Track: name, URL, what was taken, relevance score (0.0–1.0).
 
@@ -73,11 +84,9 @@ Structure analysis as trade-off matrices:
 
 ### Step 3.5 — Challenge Proposed Recommendation
 
-Before writing the research doc, challenge your recommendation using the **challenger** subagent. Mandatory when Step 3 produces a recommendation; skip for info-only or trivial research.
+Before approving a build-bound shape after non-trivial research, challenge the shaping recommendation using `shaper-challenger`. Mandatory when Step 3 produces a recommendation; skip for info-only or trivial research.
 
-Apply per `r-pipeline-protocol` → Confidence Thresholds (Challenger row).
-
-**Fallback:** If `runSubagent` errors, proceed without challenge. Note: `Challenge: FALLBACK — {reason}`.
+**Fallback:** If the subagent call errors, do not approve solely on unchallenged research. Either run a narrower local check, ask the user, or `REFINE -> shape` with the missing challenge noted.
 
 ## Step 4 — Write Research Document
 
@@ -87,7 +96,8 @@ Create `.owlbear/research/{slug}.md`:
 # {Title}
 
 > **Owning task:** #{id} — {title}
-> **Date:** {date} **Status:** Complete
+> **Date:** {date}
+> **Question:** {specific shaping question}
 
 ## 1. Context and Question
 ## 2. Sources Studied (table)
@@ -98,7 +108,7 @@ Create `.owlbear/research/{slug}.md`:
 
 Max 200 lines. Every claim needs a source reference.
 
-Include challenge note in section 4: `Challenge: {proceed|reconsider|block} — confidence in original: {score}`
+Include challenge note in section 4 when a recommendation affects build approval: `Challenge: {proceed|reconsider|block} — confidence in original: {score}`
 
 ## Step 5 — Classify Outcome and Create Follow-Up Tasks
 
@@ -108,34 +118,30 @@ Classify every finding before acting:
 
 | Tier | Category | Action |
 |------|----------|--------|
-| T1 — Autonomous | Bug fix, refactor, config, perf | Proceed directly — create follow-up tasks |
-| T2 — Advisory | Trade-offs, no T3 triggers | Create advisory DR via `create_dr` (5-day auto-resolve) |
-| T3 — Mandatory | New capability, arch/security/breaking change | Create blocking DR via `create_dr` (no auto-resolve) |
+| T1 — Autonomous | Bug fix, refactor, config, perf | Shape directly — update AC/notes or create follow-up `shape` tasks |
+| T2 — Advisory | Trade-offs, no T3 triggers | Ask the user via `askQuestions` when present; otherwise create advisory request via `create_request` |
+| T3 — Mandatory | New capability, arch/security/breaking change | Create blocking request via `create_request` |
 
 **T3 triggers (any one makes it T3):** Adds new capability, changes architecture, modifies agent/pipeline behavior, alters security policy, changes user-facing behavior, proposes deprecation.
 
 ### Create Follow-Up Tasks
 
-Delegate follow-up task creation to planner via `Plan and create:` using single-task or decomposition mode as needed, and set status to `research`. For findings requiring user decisions, create a decision request via `create_dr`.
+Create concrete follow-up tasks at `shape` or delegate decomposition to planner via `Plan and create:`. For findings requiring user decisions, use `askQuestions` when the user is present or `create_request` when the board must be blocked.
 
 ## Step 6 — Finalize Artifacts
 
 1. Add rows to `.owlbear/sources/overview.md` for external sources (see `r-project-standards` → Attribution).
 2. Delete any cloned repos from `.owlbear/scratch/research/`.
 
-## Step 7 — Commit & Advance
+## Step 7 — Record In Shape Notes And Advance
 
-**Commit your deliverables** (see `r-pipeline-protocol` → Who Commits What):
+Include the research summary and challenge results in `## Shape Notes` through the `end_work` note.
 
-```shell
-git add .owlbear/research/{doc}.md .owlbear/sources/overview.md && git commit -m "docs: research {topic} (#{id}, researcher)"
-```
+Then use shaper's normal route:
 
-Stage only files you created or modified. Verify with `git diff --cached --name-only` if uncertain.
-
-Include the research summary and challenge results in your `end_work` note.
-
-Then advance via `end_work` (moves to `backlog` + releases claim).
+- `APPROVED -> build` when research supports buildable AC and shaper-challenger agrees.
+- `REFINE -> shape` when research exposes missing scope, dependency, or feasibility work.
+- `BLOCK -> shape` when `create_request` is required.
 
 Return Channel A signal per `r-pipeline-protocol`.
 
@@ -148,14 +154,14 @@ Append to task body before advancing:
 - Research doc: .owlbear/research/{slug}.md
 - Sources: {N} studied, {M} high-relevance
 - Recommendation: {brief} (confidence: {.XX})
-- Follow-up tasks created: {list of IDs at research}
+- Follow-up tasks created: {list of IDs at shape}
 - Decision requests: {N created, or "none"}
 
 ## Challenge Results
 - Challenger: {proceed/reconsider/block} (or FALLBACK — {reason})
 - Confidence in original: {score}
 - Key challenges: {list}
-- Researcher response: {accepted/rebutted/revised} — {rationale}
+- Shaper response: {accepted/rebutted/revised} — {rationale}
 ```
 
 ## Verification Checklist
@@ -163,20 +169,19 @@ Append to task body before advancing:
 - [ ] Every claim has 2+ sources
 - [ ] Analysis uses comparison tables with confidence scores
 - [ ] Research doc 200 lines or fewer
-- [ ] Follow-up kanban tasks are concrete and actionable (created at `research`)
+- [ ] Follow-up kanban tasks are concrete and actionable (created at `shape`)
 - [ ] Did NOT create/edit source code
 - [ ] External sources logged in `.owlbear/sources/overview.md`
 - [ ] Cloned repos deleted from `.owlbear/scratch/research/`
-- [ ] Challenger invoked for recommendation (or fallback noted)
+- [ ] Shaper-challenger invoked for build-bound recommendation (or fallback routed to refine/block)
 - [ ] Tier classification applied to every finding (T1/T2/T3)
-- [ ] Research files committed before advancing
-- [ ] Task advanced to `backlog` and claim released
+- [ ] Research summary appears in `## Shape Notes`
+- [ ] Task either moved to `build`, stayed in `shape`, or was blocked with a request
 
 ## Known Pitfalls
 
 - **Skipping pre-flight check:** Multiple research cycles have been wasted because existing docs were missed. Always check `.owlbear/research/` first.
 - **Follow-up tasks without AC:** Every follow-up task needs concrete acceptance criteria. "Improve X" without measurable conditions is not actionable.
-- **Forgetting to delete cloned repos:** `.owlbear/scratch/research/` repos accumulate if not cleaned. Delete after analysis.
-- **T3 without DR:** New capabilities and architecture changes MUST have a blocking DR via `create_dr`. Proceeding without approval risks reversal.
+- **T3 without request:** New capabilities and architecture changes need a blocking request via `create_request` when the user is not resolving it live. Proceeding without approval risks reversal.
 - **Over-long research docs:** 200-line cap exists to force conciseness. If you need more, the analysis is not focused enough.
-- **Forgetting to commit:** The commit in Step 7 is a hard gate — never call `end_work` with uncommitted files. If in doubt, run `git status` to check.
+- **Separate research column:** Keep research inside `shape`; do not reintroduce a separate `research` status.

@@ -95,8 +95,8 @@ class BoardDefaults(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    status: str = "research"
-    priority: str = "important"
+    status: str = "shape"
+    priority: str = "medium"
 
 
 class PathsConfig(BaseModel):
@@ -119,13 +119,13 @@ class PipelineConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    entry_status: str = "research"
-    terminal_status: str = "done"
+    entry_status: str = "shape"
+    terminal_status: str = "collect"
     statuses: list[str] = Field(default_factory=list)
     priorities: list[str] = Field(default_factory=list)
     wave_size: int = 4
     claim_timeout: str = "1h"
-    default_priority: str = "important"
+    default_priority: str = "medium"
 
 
 class AgentsConfig(BaseModel):
@@ -270,9 +270,9 @@ class BoardConfig(BaseModel):
         if not is_grouped_schema:
             # Propagate legacy defaults → entry_status/default_priority
             if "entry_status" not in data and isinstance(defaults, dict):
-                data["entry_status"] = defaults.get("status", "research")
+                data["entry_status"] = defaults.get("status", "shape")
             if "default_priority" not in data and isinstance(defaults, dict):
-                data["default_priority"] = defaults.get("priority", "important")
+                data["default_priority"] = defaults.get("priority", "medium")
 
             # Legacy boards often omit agent_map entirely; derive a permissive
             # status-complete map only in that case so explicit {} still fails.
@@ -292,13 +292,13 @@ class BoardConfig(BaseModel):
             pipeline = data.get("pipeline")
             if not isinstance(pipeline, dict):
                 data["pipeline"] = {
-                    "entry_status": data.get("entry_status", "research"),
-                    "terminal_status": data.get("terminal_status", "done"),
+                    "entry_status": data.get("entry_status", "shape"),
+                    "terminal_status": data.get("terminal_status", "collect"),
                     "statuses": data.get("statuses", []),
                     "priorities": data.get("priorities", []),
                     "wave_size": data.get("wave_size", 4),
                     "claim_timeout": data.get("claim_timeout", "1h"),
-                    "default_priority": data.get("default_priority", "important"),
+                    "default_priority": data.get("default_priority", "medium"),
                 }
             else:
                 had_pipeline_statuses = "statuses" in pipeline
@@ -358,13 +358,13 @@ class BoardConfig(BaseModel):
                 "archive_dir": data.get("archive_dir", "archive"),
             }
             data["pipeline"] = {
-                "entry_status": data.get("entry_status", "research"),
-                "terminal_status": data.get("terminal_status", "done"),
+                "entry_status": data.get("entry_status", "shape"),
+                "terminal_status": data.get("terminal_status", "collect"),
                 "statuses": data.get("statuses", []),
                 "priorities": data.get("priorities", []),
                 "wave_size": data.get("wave_size", 4),
                 "claim_timeout": data.get("claim_timeout", "1h"),
-                "default_priority": data.get("default_priority", "important"),
+                "default_priority": data.get("default_priority", "medium"),
             }
             data["agents"] = {
                 "agent_map": data.get("agent_map", {}),

@@ -8,7 +8,7 @@ user-invocable: false
 
 Use structured request tools when an agent needs a user decision or user action to unblock work.
 
-Tools in scope:
+Tool in scope for pipeline agents:
 
 - `create_request`
 - `list_requests`

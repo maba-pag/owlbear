@@ -488,8 +488,8 @@ def _migrate_config(  # noqa: C901, PLR0911, PLR0915
 
     # entry_status from defaults.status or first status
     defaults = plain_raw.get("defaults", {})
-    entry_status = defaults.get("status", new_cfg["statuses"][0] if new_cfg["statuses"] else "research")
-    default_priority = defaults.get("priority", "important")
+    entry_status = defaults.get("status", new_cfg["statuses"][0] if new_cfg["statuses"] else "shape")
+    default_priority = defaults.get("priority", "medium")
     wave_size = 4
     claim_timeout = plain_raw.get("claim_timeout", "1h")
     agent_map = {status: [] for status in new_cfg["statuses"]}
@@ -524,7 +524,7 @@ def _migrate_config(  # noqa: C901, PLR0911, PLR0915
     }
     new_cfg["pipeline"] = {
         "entry_status": entry_status,
-        "terminal_status": plain_raw.get("terminal_status", "done"),
+        "terminal_status": plain_raw.get("terminal_status", "collect"),
         "wave_size": wave_size,
         "claim_timeout": claim_timeout,
         "default_priority": default_priority,

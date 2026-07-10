@@ -19,8 +19,8 @@ _REVIEW = "review"
 _FRONTMATTER_PARTS = 3
 _LOGGER = logging.getLogger(__name__)
 _SESSION_TO_ACTOR = {
-    _CURATION: "curator",
-    _REVIEW: "reviewer",
+    _CURATION: "memory-curator",
+    _REVIEW: "verifier",
 }
 
 
