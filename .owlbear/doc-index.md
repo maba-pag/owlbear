@@ -731,6 +731,13 @@
 - [share/README.md](../../README.md)
 - [share/WIRING.md](../../WIRING.md)
 
+## share/skills/h-code-orientation/SKILL.md
+- # `Code Orientation`
+- ## `When Semble Earns A Call`
+- ## `Invocation`
+- ## `Discovery Is Not Proof`
+- ## `Role Boundaries`
+
 ## share/skills/h-decision-requests/SKILL.md
 - # `Decision/Action Requests Handbook`
 - ## `When To Create A Structured Request`

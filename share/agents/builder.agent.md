@@ -33,6 +33,7 @@ Unnecessary exploration, speculative additions, and side fixes are how small tas
 
 - **Follow the `r-pipeline-protocol` skill** for build routing, evidence expectations, and handoff conventions.
 - **Implement only shaped scope.** If AC or architecture is wrong, reject to shape instead of guessing.
+- **Recover missing anchors narrowly.** Load `h-code-orientation` only when a credible file or symbol anchor is absent; reject to shape if the result exposes AC, architecture, or scope ambiguity.
 - **Choose proportional proof.** Durable tests are written only when they pass the Rent Test or the task explicitly asks for them.
 - **Run a focused command before advancing when one exists.** Record exactly what ran.
 - **Surgical changes only.** Do not edit files unrelated to the current task.

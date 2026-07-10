@@ -79,7 +79,7 @@ For an approved clone, use `.owlbear/scratch/research/{repo-name}/`, inspect it 
 
 Find 2+ authoritative sources per claim:
 
-- **Codebase:** search tools for related existing code.
+- **Codebase:** search tools for related existing code. When no credible owner or pattern anchor exists, load `h-code-orientation`; use direct reads and exact tools to ground findings.
 - **Explore:** use the `Explore` subagent for broad read-only codebase context when local search would be noisy.
 - **Web:** use the `web` toolset for direct pages and `ddgs/search_text` / `ddgs/extract_content` for search and extraction; use `markitdown/*` when document conversion is needed.
 - **External repositories:** prefer source pages, docs, and extracted files for preliminary orientation. After Step 3 approval, clone when source-level inspection is needed to answer the shaping question.
