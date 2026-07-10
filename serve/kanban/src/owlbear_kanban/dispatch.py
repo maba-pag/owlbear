@@ -5,10 +5,10 @@ tasks ready for agent dispatch.
 
 Rank maps use *execution priority* order, which is intentionally the inverse of
 the config.yml display order:
-  - PRIORITY_RANK: critical=0 (highest) → someday=4 (lowest)
-    Config display order: someday first, critical last (opposite).
-    - STATUS_RANK: released=0 (highest) → research=7 (lowest)
-    Config display order: research first, done last (opposite).
+    - PRIORITY_RANK: high=0 (highest) → low=2 (lowest)
+        Config display order: low first, high last (opposite).
+    - STATUS_RANK: collect=0 (highest) → shape=3 (lowest)
+    Config display order: shape first, collect last (opposite).
 """
 
 from __future__ import annotations
@@ -29,22 +29,16 @@ from owlbear_kanban.topology import PRODUCT_TOPOLOGY
 # ---------------------------------------------------------------------------
 
 PRIORITY_RANK: dict[str, int] = {
-    "critical": 0,
-    "needed": 1,
-    "important": 2,
-    "nice-to-have": 3,
-    "someday": 4,
+    "high": 0,
+    "medium": 1,
+    "low": 2,
 }
 
 STATUS_RANK: dict[str, int] = {
-    "released": 0,
-    "done": 1,
-    "docs": 2,
-    "review": 3,
-    "in-progress": 4,
-    "todo": 5,
-    "backlog": 6,
-    "research": 7,
+    "collect": 0,
+    "verify": 1,
+    "build": 2,
+    "shape": 3,
 }
 
 # ---------------------------------------------------------------------------
@@ -53,7 +47,7 @@ STATUS_RANK: dict[str, int] = {
 
 _AC_PATTERN = re.compile(r"(?m)^\s*(-\s|\d+\.\s)")
 
-_CLARITY_STATUSES = frozenset({"todo", "in-progress", "review", "docs", "done"})
+_CLARITY_STATUSES = frozenset({"build", "verify", "collect"})
 
 _NON_IMPL_TAGS = PRODUCT_TOPOLOGY.non_impl_tags
 
@@ -78,31 +72,10 @@ def _claim_is_active(task: Task, timeout: timedelta) -> bool:
     return datetime.now(tz=UTC) < claimed_dt + timeout
 
 
-def _passes_tdd_gate(task: Task) -> bool:
-    """Return True if the task passes the TDD gate.
-
-    Gate applies only to in-progress tasks:
-    - PASS if body contains '## Test-Writer Notes'
-    - PASS if body contains '## Builder Notes' or '## Review Evidence'
-      (task re-entered in-progress after a review cycle)
-    - PASS if any tag is a non-impl tag (exempt from TDD requirement)
-    - FAIL otherwise
-    """
-    if task.status != "in-progress":
-        return True
-    body: str = task.body or ""
-    if "## Test-Writer Notes" in body:
-        return True
-    if "## Builder Notes" in body or "## Review Evidence" in body:
-        return True
-    tags: list[str] = task.tags or []
-    return bool(_NON_IMPL_TAGS.intersection(tags))
-
-
 def _passes_clarity_gate(task: Task) -> bool:
     """Return True if the task passes the clarity gate.
 
-    Gate applies to active statuses (todo, in-progress, review, docs, done):
+    Gate applies to build/verify/collect tasks:
     - PASS if the structured ac field has entries
     - PASS if body contains a bullet or numbered list item
     - FAIL if body is empty or prose-only with no structured AC
@@ -133,9 +106,7 @@ def _passes_dependency_gate(task: Task, active_ids: frozenset[int]) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def pick_dispatchable(  # noqa: C901
-    engine: KanbanEngine, *, limit: int = 25, tag: str = ""
-) -> list[Task]:
+def pick_dispatchable(engine: KanbanEngine, *, limit: int = 25, tag: str = "") -> list[Task]:
     """Return a gate-filtered, sorted list of dispatchable tasks.
 
     Reads full Task objects (including body) directly from the filesystem so
@@ -148,8 +119,7 @@ def pick_dispatchable(  # noqa: C901
     3. Dependency gate — tasks whose depends_on IDs are still active are excluded.
     4. Claimed exclusion — tasks with an active (non-expired) claim are excluded.
     5. Tag filter — when tag is non-empty, only tasks carrying that tag pass.
-    6. TDD gate — in-progress tasks need ## Test-Writer Notes or a non-impl tag.
-    7. Clarity gate — active-status tasks need at least one bullet/numbered AC line.
+    6. Clarity gate — build/verify/collect tasks need at least one bullet/numbered AC line.
 
     Results are sorted by (PRIORITY_RANK, STATUS_RANK) ascending and capped at limit.
 
@@ -188,8 +158,6 @@ def pick_dispatchable(  # noqa: C901
         if _claim_is_active(task, claim_timeout):
             continue
         if tag and tag not in (task.tags or []):
-            continue
-        if not _passes_tdd_gate(task):
             continue
         if not _passes_clarity_gate(task):
             continue

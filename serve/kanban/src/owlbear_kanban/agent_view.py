@@ -282,12 +282,10 @@ class AgentView:
            ``claim_timeout``), archived, ``blocked=True``, and
            tasks with unresolved active dependencies, archived, ``blocked=True``,
            and ``dep_status="blocked"`` tasks; rehydrate each candidate with
-           ``show_task()`` to obtain the full body, skip any whose
-           ``status == "archived"`` (post-rehydrate guard), then apply the
-           TDD gate (in-progress tasks require ``## Test-Writer Notes`` or a
-           non-impl tag) and the clarity gate (active-status tasks require
-           at least one bullet/numbered AC line).  Gate predicates are
-           resolved from ``owlbear_kanban.dispatch``.
+           ``show_task()`` to obtain the full body, skip entry-status tasks
+           that require user-facing shaping, skip any whose ``status ==
+           "archived"`` (post-rehydrate guard), then apply the clarity gate.
+           Gate predicates are resolved from ``owlbear_kanban.dispatch``.
           3. **Sort** — deterministic ordering: ``priority_rank ASC``,
            age (oldest first) ``DESC``, ``id ASC``.
           4. **Greedy wave assembly** — fill waves respecting three constraints:
@@ -358,8 +356,12 @@ class AgentView:
         # list_tasks computes dep_status against the full active snapshot before
         # filters, so use the projected value directly to avoid reclassifying
         # dependencies based on the filtered subset.
-        dispatchable = [task for task in active if task.dep_status != "blocked" and task.status != "archived"]
-        passes_tdd = dispatch_module._passes_tdd_gate  # noqa: SLF001
+        user_shaped_statuses = {config.pipeline.entry_status}
+        dispatchable = [
+            task
+            for task in active
+            if task.dep_status != "blocked" and task.status not in {"archived", *user_shaped_statuses}
+        ]
         passes_clarity = dispatch_module._passes_clarity_gate  # noqa: SLF001
 
         gated_dispatchable: list[Task] = []
@@ -370,15 +372,19 @@ class AgentView:
                 continue
             if full_task.status == "archived":
                 continue
-            if not passes_tdd(full_task):
-                continue
             if not passes_clarity(full_task):
                 continue
             gated_dispatchable.append(full_task)
 
         dispatchable = gated_dispatchable
         if not dispatchable:
-            return PickTasksResponse(waves=[], guidance=[])
+            guidance = []
+            pending_shape_count = sum(1 for task in active if task.status in user_shaped_statuses)
+            if pending_shape_count:
+                guidance.append(
+                    f"{pending_shape_count} task(s) are waiting in shape; use /shape to run the user-facing shaper."
+                )
+            return PickTasksResponse(waves=[], guidance=guidance)
 
         created_rank = {task.id: index for index, task in enumerate(active)}
 
