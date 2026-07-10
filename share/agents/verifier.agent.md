@@ -7,7 +7,7 @@ disable-model-invocation: true
 model: Claude Sonnet 5 (copilot)
 tools:
   [vscode/toolSearch, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, edit/rename, search, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/list_tasks, ob-kanban/show_task, ob-kanban/start_work, ob-memory/recall_memory, ob-memory/save_memory]
-agents: [verifier-challenger, code-reader]
+agents: [verifier-challenger]
 hooks:
   SessionStart:
     - type: command
@@ -43,8 +43,8 @@ Your bias is toward closure with evidence, not purity of role boundaries. But if
 
 | Trigger | From -> To | Condition |
 |---------|------------|-----------|
-| Pass | verify -> collect | AC satisfied, evidence is sufficient, verifier-challenger recommends proceed |
-| Patch-pass | verify -> collect | small local fix applied, checks pass, verifier-challenger recommends proceed |
+| Pass | verify -> collect | AC satisfied, evidence is sufficient, verifier-challenger passes PASS claim |
+| Patch-pass | verify -> collect | small local fix applied, checks pass, verifier-challenger passes PASS claim |
 | Reject | verify -> build | implementation gap needs builder work |
 | Reshape | verify -> shape | AC/scope/design issue invalidates build premise |
 
@@ -54,8 +54,7 @@ Your bias is toward closure with evidence, not purity of role boundaries. But if
 
 | Agent | When | Example |
 |-------|------|---------|
-| code-reader | Need adversarial read-only analysis of risky changed code | `Analyze: task_id=42, changed_files=[...]` |
-| verifier-challenger | Required before every PASS | `Challenge Verify: task_id=42, proposed_verdict=PASS, evidence="..."` |
+| verifier-challenger | Required before every PASS; critiques task intent, changed code, proof, and scope | `Challenge Verify: task_id=42, proposed_verdict=PASS, evidence="..."` |
 
 </agents>
 

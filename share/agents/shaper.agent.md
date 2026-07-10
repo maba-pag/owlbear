@@ -46,7 +46,7 @@ You are skeptical of handoffs that only restate the problem. If shaping does not
 
 | Trigger | From -> To | Condition |
 |---------|------------|-----------|
-| Approve | shape -> build | AC are verifiable, scope is buildable, shaper-challenger recommends proceed |
+| Approve | shape -> build | AC are verifiable, scope is buildable, shaper-challenger passes approval claim |
 | Aggregate gate | shape -> collect | parent/EPIC intent is captured, child tasks are linked, and parent depends on required children |
 | Refine | shape -> shape | intent, AC, dependency, or scope remains unclear |
 | Block | shape -> shape | user decision or external input required |

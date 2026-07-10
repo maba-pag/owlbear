@@ -106,9 +106,11 @@ Delete or update stale task-scoped tests when they preserve old workflow assumpt
 The agent proposing a route owns the evidence for that route. Do not hand evidence ownership to an unnamed utility role.
 
 - Builder runs the focused command that best proves the change, then calls builder-challenger before DONE.
-- Builder-challenger may run focused lint, typecheck, import smoke, or named tests. It may run deterministic auto-fix commands such as `ruff check --fix` or established package-local lint-fix commands. It reports concrete blockers and every auto-fixed file; it never performs manual edits.
-- Verifier runs any additional checks needed for verification, then calls verifier-challenger before PASS.
+- Builder-challenger may run focused lint, typecheck, import smoke, or named tests. It may run deterministic auto-fix commands such as `ruff check --fix` or established package-local lint-fix commands. It returns `decision: pass|fail`, reports any concrete DONE defect, and notes every auto-fixed file; it never performs manual edits.
+- Verifier runs any additional checks needed for verification, then calls verifier-challenger before PASS. Verifier-challenger returns `decision: pass|fail` after checking task intent to code, proof sufficiency, scope drift, and unresolved AC.
 - Collector runs aggregate checks directly only when parent/EPIC closure needs them.
+
+Challenger decisions are advisory to the caller, not pipeline verdicts. `decision: pass` means the caller may continue with the proposed route. `decision: fail` means the caller must not continue with that route until the named problem is resolved or routed by the owning agent.
 
 Only use the challenger agents named in the caller's agent file. If no challenger is named, run the required proof directly or route the task to the owning status.
 

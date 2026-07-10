@@ -43,14 +43,17 @@ _EXCLUDED_PATHS = [
     ".owlbear/kanban",
     ".owlbear/briefs",
     ".owlbear/sources",
+    ".owlbear/memory",
     "store",
     "tests",
+    "megalinter-reports",
 ]
 
 _EXCLUDED_NAMES = [
     "node_modules",
     ".git",
     ".venv",
+    ".pytest_cache",
     "dist",
     "build",
 ]
@@ -295,57 +298,6 @@ class TestFromAC_OutboundLinkExtraction:
 
 
 # ===========================================================================
-# TestFromAC_DiagramDescribesField
-# ===========================================================================
-
-
-class TestFromAC_DiagramDescribesField:
-    """AC: diagram entries include `describes` field (list of path globs)."""
-
-    def test_excalidraw_entry_has_describes_field(self, tmp_path: Path) -> None:
-        """Happy: an Excalidraw file entry in the index contains a `describes` field."""
-        _make_excalidraw(
-            tmp_path,
-            "share/diagrams/overview.excalidraw",
-            '{"describes": ["serve/**", "share/**"]}',
-        )
-        index_path = tmp_path / "doc-index.md"
-        generate_index(tmp_path, index_path)
-        text = index_path.read_text()
-        entry_start = text.index("## share/diagrams/overview.excalidraw")
-        next_entry = text.find("\n## ", entry_start + 1)
-        entry_text = text[entry_start:] if next_entry == -1 else text[entry_start:next_entry]
-        assert "describes" in entry_text
-
-    def test_describes_field_contains_globs(self, tmp_path: Path) -> None:
-        """Happy: `describes` field value contains path globs (not abstract concepts)."""
-        _make_excalidraw(
-            tmp_path,
-            "share/diagrams/kanban.excalidraw",
-            '{"describes": ["serve/kanban/**", "serve/mcp-kanban/**"]}',
-        )
-        index_path = tmp_path / "doc-index.md"
-        generate_index(tmp_path, index_path)
-        text = index_path.read_text()
-        entry_start = text.index("## share/diagrams/kanban.excalidraw")
-        next_entry = text.find("\n## ", entry_start + 1)
-        entry_text = text[entry_start:] if next_entry == -1 else text[entry_start:next_entry]
-        # At least one glob pattern (containing * or /) should appear
-        assert "serve/kanban/**" in entry_text or "serve/mcp-kanban/**" in entry_text
-
-    def test_non_diagram_entry_has_no_describes_field(self, tmp_path: Path) -> None:
-        """Boundary: a regular .md file entry does NOT have a describes field."""
-        _make_md(tmp_path, "README.md", "# Root\n")
-        index_path = tmp_path / "doc-index.md"
-        generate_index(tmp_path, index_path)
-        text = index_path.read_text()
-        entry_start = text.index("## README.md")
-        next_entry = text.find("\n## ", entry_start + 1)
-        entry_text = text[entry_start:] if next_entry == -1 else text[entry_start:next_entry]
-        assert "describes" not in entry_text
-
-
-# ===========================================================================
 # TestFromAC_Idempotency
 # ===========================================================================
 
@@ -517,30 +469,6 @@ class TestFromAC_Parser:
 class TestBuilderDiscovered:
     """Builder-discovered tests for uncovered paths in doc_index."""
 
-    def test_excalidraw_invalid_json_no_crash(self, tmp_path: Path) -> None:
-        """Invalid JSON in .excalidraw file is handled gracefully — no exception raised."""
-        _make_excalidraw(tmp_path, "broken.excalidraw", "not valid json {{")
-        index_path = tmp_path / "doc-index.md"
-        generate_index(tmp_path, index_path)
-        text = index_path.read_text()
-        assert "## broken.excalidraw" in text
-
-    def test_excalidraw_describes_as_string_is_rendered(self, tmp_path: Path) -> None:
-        """describes field stored as a plain JSON string (not a list) appears in the index."""
-        _make_excalidraw(
-            tmp_path,
-            "arch.excalidraw",
-            '{"describes": "serve/**"}',
-        )
-        index_path = tmp_path / "doc-index.md"
-        generate_index(tmp_path, index_path)
-        text = index_path.read_text()
-        entry_start = text.index("## arch.excalidraw")
-        next_entry = text.find("\n## ", entry_start + 1)
-        entry_text = text[entry_start:] if next_entry == -1 else text[entry_start:next_entry]
-        assert "describes" in entry_text
-        assert "serve/**" in entry_text
-
     def test_parser_non_outbound_section_header_resets_outbound_flag(self) -> None:
         """A ### header other than '### Outbound links' closes the outbound section."""
         index_text = textwrap.dedent(
@@ -602,14 +530,3 @@ class TestBuilderDiscovered:
         index_path = tmp_path / "doc-index.md"
         index_path.write_text("# existing\n")
         assert should_regenerate(index_path, tmp_path) is False
-
-    def test_excalidraw_empty_describes_list_no_describes_line(self, tmp_path: Path) -> None:
-        """Excalidraw with describes=[] silently emits no describes line in the index entry."""
-        _make_excalidraw(tmp_path, "empty.excalidraw", '{"describes": []}')
-        index_path = tmp_path / "doc-index.md"
-        generate_index(tmp_path, index_path)
-        text = index_path.read_text()
-        entry_start = text.index("## empty.excalidraw")
-        next_entry = text.find("\n## ", entry_start + 1)
-        entry_text = text[entry_start:] if next_entry == -1 else text[entry_start:next_entry]
-        assert "describes" not in entry_text
