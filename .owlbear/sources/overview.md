@@ -2,6 +2,12 @@
 
 External repos and resources studied during OwlBear development.
 
+## Agent Workflow Patterns
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| addyosmani/agent-skills | <https://github.com/addyosmani/agent-skills/tree/4e8bd9fde4a38cd009053e649f4cdc7cd36b568b> | Outcome-oriented vertical task slicing, adapted to preserve OwlBear domain and proof boundaries | `share/skills/w-task-decomposition/SKILL.md` | 2026-07-11 |
+
 ## EnrichmentStore — Extractions & Purge (Task #1876)
 
 | Source | URL | What | Where Used | Date |
