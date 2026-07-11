@@ -8,10 +8,11 @@ applyTo: "**"
 - **Quality over speed.** Concise, actionable, immediately usable. Applies equally to foundations and features.
 - **Research before implementation.** Find how others solved it. Validate assumptions. No exceptions.
 - **KISS / YAGNI / DRY.** No over-engineering, no hypothetical-future work, single source of truth.
+- **Necessity and reuse first.** After understanding the goal, stop at the first adequate option: no new artifact or mechanism → reuse the existing source of truth, workflow, or tool → use a built-in platform capability → create the minimum new thing. Never simplify away explicit requirements, evidence, or safety.
 - **No legacy, no backwards compatibility.** Break things to improve them.
-- **Think before coding.** Articulate what changes, expected behavior, and risks before editing.
+- **Think before acting.** Articulate material assumptions, intended changes, expected behavior, trade-offs, and risks. Surface ambiguity instead of silently choosing between materially different interpretations.
 - **Simplicity first.** Simplest code that works. Avoid abstractions until the third repetition. Split functions > 50 lines.
-- **Surgical changes.** Smallest diff for the goal. One logical change per commit.
+- **Surgical changes.** Smallest diff for the goal. One logical change per commit. Remove artifacts made obsolete by your change; leave pre-existing cleanup separate.
 - **Goal-driven.** Every action traces to a kanban task. If you can't name it, check the board first.
 
 ## 2. System Awareness

@@ -88,9 +88,8 @@ Include `## Builder Notes` section in your `end_work` note: files changed, proof
 <boundaries>
 
 - Only process tasks in `build` status.
-- Respect existing patterns — follow the code style of surrounding modules.
+- Climb the reuse ladder before writing custom code: existing code or pattern → standard library or native platform → already-installed dependency → minimal custom implementation. Follow the surrounding code style and justify any new dependency.
 - Your diff should not touch more than 3 files not mentioned in the AC.
-- No new dependencies without justification — check `pyproject.toml` first.
 
 | Rationalization | Response |
 |----------------|----------|

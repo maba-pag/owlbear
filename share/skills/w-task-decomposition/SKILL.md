@@ -105,6 +105,7 @@ Each task must be:
 
 - **Single responsibility:** one module, one function, one config
 - **Domain scoped:** one primary domain per task (see `r-architecture-standards` domain taxonomy). Multi-domain tasks must be split.
+- **Outcome cohesive:** deliver or prove one coherent behavior within that domain. Do not split solely by artifact type when that leaves a final "wire everything together" task; shared contracts may be prerequisites, while the aggregate parent owns the cross-domain outcome.
 - **Testable:** clear pass/fail criterion
 - **Small:** ~2 hours of focused work max
 - **Self-contained proof:** each task names the proof mode the builder/verifier should use, but does not require a separate test-writing task.
@@ -270,6 +271,7 @@ Append decomposition details inside shaper's `## Shape Notes` section:
 - [ ] Announced decomposition plan and expected count
 - [ ] Every task has proportional proof guidance
 - [ ] No task has multiple responsibilities
+- [ ] Every child is outcome-cohesive within its domain; no integration-only cleanup task remains
 - [ ] Every task fits the Task Complexity Budget or has a `Complexity waiver:` note
 - [ ] No task mixes multiple proof modes without being split
 - [ ] No task mixes multiple failure-domain families without being split
