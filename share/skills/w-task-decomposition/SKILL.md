@@ -39,15 +39,36 @@ Use this workflow after shaper has claimed the parent task with `start_work` whe
 
 **Status discipline:** Shaper-created tasks never rely on the `create_task` default. Pass `status="build"` for every build-ready leaf task and `status="collect"` for every aggregate parent/EPIC. `shape` is reserved for user-created intake and tasks rejected back from later pipeline stages.
 
-## Step 1 — Read the Plan
+## Step 1 — Read and Classify the Planning Source
 
 Read input (free-text, plan doc section, or requirements). Identify phase number, deliverables, and implicit ordering.
+
+When the input is a native OpenSpec change, use `openspec status --change <name> --json` to resolve
+the active schema and concrete artifact paths. Read all existing planning artifacts reported by the
+CLI. For stock `spec-driven`, apply this authority model:
+
+| Artifact | Shaper use | Authority |
+|----------|------------|-----------|
+| `proposal.md` | Preserve problem, expectation signal, scope, impact, confirmed investment tier, material user decisions, assumptions, and preserved remainder | Product intent; active user decisions require explicit agreement to supersede |
+| `specs/**/*.md` | Derive observable behavior and acceptance boundaries from capability requirements and scenarios | Normative product behavior |
+| `design.md` | Reuse grounded architecture, contract evidence, trade-offs, risks, and migration constraints | Technical plan, subject to source and contract verification |
+| `tasks.md` | Mine candidate outcomes, ordering, and proof ideas | Advisory only; never board shape or execution metadata |
+
+Do not flatten the package into a synthetic Brief or require OwlBear-specific frontmatter. The
+shaper writes the final Kanban graph after reconciling the whole package with current source. It may
+merge, split, reorder, rename, or reject OpenSpec task suggestions. Record material departures and
+their reasons in `## Shape Notes`; do not silently change Proposal intent or normative Specs.
+
+When Proposal records a First Useful Step, treat it as sequencing rather than final scope. Preserve
+the stated remaining promise in the task graph or surface an explicit accepted deferral. If Proposal
+records a Shared or Production investment tier, run the tier-scaled post-shaping expectation-fidelity
+check against the concrete task layout before approval.
 
 If the parent task body contains a `## Brief` or `## Problem` section (Brief artifact, produced by ideation), use it to derive scope, investment tier, and approach constraints for decomposition. Include `Brief: see parent #{id}` reference in each child task body.
 
 When the parent contains an approved ideation Brief, shaper sequences or splits Brief requirements but does not delete them. If a Brief requirement cannot fit one atomic task, split it across tasks. If a Brief requirement appears invalid, conflicting, or impossible, surface that conflict in Shape Notes instead of dropping the requirement.
 
-### Brief Readiness Gate
+### Planning Readiness Gate
 
 Before decomposition, confirm the source provides four load-bearing elements:
 
@@ -61,7 +82,7 @@ Before decomposition, confirm the source provides four load-bearing elements:
     retained, migrated, removed, or explicitly deferred.
 
 For a narrow follow-up, these elements may be established by the existing task and nearby source;
-they do not require a formal Brief section. For a multi-domain feature or external integration,
+they do not require a formal planning package. For a multi-domain feature or external integration,
 missing material elements are not implementation details. Resolve one material user decision at a
 time through Step 5b, or stop without creating tasks. Do not turn an unresolved product or contract
 choice into builder discretion.
@@ -89,7 +110,7 @@ Typical shortcut cases: "fix off-by-one", "delete stale docs", "shaper calibrati
 
 ## Step 1b — Source And Contract Authority Guard
 
-Apply this step when the input plan, parent task, or brief references existing codebase modules,
+Apply this step when the input plan, OpenSpec package, parent task, or Brief references existing codebase modules,
 generated interfaces, external APIs, schemas, protocols, or symbols that will appear in AC text.
 
 This step may be skipped only for greenfield requests with no existing or external contract.
@@ -113,7 +134,7 @@ This step may be skipped only for greenfield requests with no existing or extern
 6. If a load-bearing claim remains assumed, create a build-ready probe/research prerequisite only
     when its evidence method and tracked output are concrete; otherwise resolve it through the user
     decision gate. Do not create dependent implementation tasks first.
-7. If the Brief or requested AC contradicts a canonical source, stop and surface the contradiction.
+7. If the planning source or requested AC contradicts a canonical source, stop and surface the contradiction.
     Do not invent an alias, fallback, or fixture contract to make both appear true.
 
 Do not continue to Step 2 until this guard is complete when triggered.
