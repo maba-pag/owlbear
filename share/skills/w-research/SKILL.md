@@ -51,7 +51,7 @@ If the task has scoped content but needs clarification:
 
 - Present structured options to the user.
 - Follow `h-project-orientation` to establish the local stack and project boundaries. Apply principles
-	from shared OwlBear rules, not from project-specific instructions.
+ from shared OwlBear rules, not from project-specific instructions.
 
 ## Step 2 — Check Existing Research
 

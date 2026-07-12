@@ -32,7 +32,7 @@ If these don't exist yet, use `/ideation-discover` first.
 5. **Critic Validation (O15)** — adversarial stress-test findings are triaged before affecting the recommendation, including whether the plan preserves what was wanted rather than merely satisfying bare function
 6. **M5: Brief Drafting** — walkthrough or self-review of the Brief before approval; after approval the Brief is the binding product promise
 7. **M6: Shaping Handoff** — the approved Brief path, unresolved decisions, and exact `/shape`
-	command are reported; no Kanban task is created and shaper is not dispatched
+ command are reported; no Kanban task is created and shaper is not dispatched
 
 ## Tips
 
