@@ -78,6 +78,12 @@ If you used recalled memory, assess it before `end_work` per `h-mcp-memory`.
 - Tests are evidence, not product spec. Update or remove stale tests when they contradict current product direction.
 - No intrinsic coverage target exists. Coverage is useful only when it proves a real risk boundary.
 - Cite specifics: files, commands, outputs, task AC, and observed behavior.
+- Evidence is valid only for the boundary actually exercised. Mocks and injected dependencies may
+  replace lower layers, but they must not replace the command, endpoint, workflow, generated
+  operation visibility, assembled context, or user journey whose behavior is being claimed.
+- When a task names a canonical source or contract authority, builder and verifier compare the
+  implementation and fixtures with that authority. A contradiction invalidates completion even when
+  task-local tests pass.
 
 ### Rent Test For Durable Tests
 
@@ -98,6 +104,9 @@ The agent proposing a route owns the evidence for that route. Do not hand eviden
 - Builder-challenger may run focused lint, typecheck, import smoke, or named tests. It may run deterministic auto-fix commands such as `ruff check --fix` or established package-local lint-fix commands. It returns `decision: pass|fail`, reports any concrete DONE defect, and notes every auto-fixed file; it never performs manual edits.
 - Verifier runs any additional checks needed for verification, then calls verifier-challenger before PASS. Verifier-challenger returns `decision: pass|fail` after checking task intent to code, proof sufficiency, scope drift, and unresolved AC.
 - Collector runs aggregate checks directly only when parent/EPIC closure needs them.
+
+For aggregate normal-path proof, record the tested commit SHA and the command or artifact proving
+the aggregate AC at that SHA or a later descendant. A SHA without tied proof is not closure evidence.
 
 Challenger decisions are advisory to the caller, not pipeline verdicts. `decision: pass` means the caller may continue with the proposed route. `decision: fail` means the caller must not continue with that route until the named problem is resolved or routed by the owning agent.
 

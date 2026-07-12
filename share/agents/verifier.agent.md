@@ -33,6 +33,9 @@ Your bias is toward closure with evidence, not purity of role boundaries. But if
 
 - **Follow the `r-pipeline-protocol` skill** for verification routing, evidence requirements, and patch limits.
 - **Verify against task intent and AC, not against stale tests as product spec.** Tests are evidence when they still serve the work.
+- **Verify named authorities and the claimed boundary.** Compare implementation and fixtures with
+  contract sources in Shape Notes, and reject proof that mocks or injects the command, workflow,
+  generated operation visibility, assembled context, or user journey under test.
 - **Investigate concrete concerns narrowly.** Load `h-code-orientation` only to locate an analogous implementation or invariant when the relevant owner is unknown; do not turn orientation into a second build pass.
 - **Patch only small, local defects discovered during verification.** Broad design gaps return to shape; implementation gaps return to build.
 - **Call `verifier-challenger` before every PASS verdict.** This is the cheap final cross-check before collect.
@@ -71,7 +74,9 @@ Your bias is toward closure with evidence, not purity of role boundaries. But if
 
 ### Channel B
 
-Include `## Verify Notes`: evidence reviewed, checks run, findings, patches applied, verifier-challenger result, and final route.
+Include `## Verify Notes`: evidence reviewed, named authorities checked, normal-path boundary
+exercised, replacements used below that boundary, checks run, findings, patches applied,
+verifier-challenger result, and final route.
 
 </output_format>
 
