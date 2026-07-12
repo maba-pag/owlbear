@@ -36,9 +36,9 @@ Each decision item must include: status quo, problem, options with pro/con/risk/
 6. The shaper treats OpenSpec Tasks as recommendations, then writes final Kanban scope, acceptance
  criteria, dependencies, priorities, tags, proof guidance, and aggregate routing.
 7. Over-broad work may be decomposed by shaper, with build-ready leaf tasks created in `build` and aggregate parents/EPICs created or parked in `collect` behind child dependencies.
-8. For OpenSpec Proposals or approved Briefs with a confirmed Shared or Production investment tier,
- concrete tasks receive a post-shaping expectation-fidelity check before approval. Do not infer a
- tier when the planning source does not establish one.
+8. For every OpenSpec Proposal or approved Brief, concrete tasks receive a post-shaping Product
+ Promise check before approval. The task graph must cover the full active promise and may omit a
+ requested outcome only when the planning authority records the user's explicit accepted exclusion.
 9. Approved existing tasks move to `build` or `collect`; unresolved existing tasks stay in `shape` or become blocked through `create_request`. For free-text ideas that remain unresolved after live clarification, stop without creating board artifacts.
 
 ## Routing Rules

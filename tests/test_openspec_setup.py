@@ -114,9 +114,13 @@ def test_rules_add_value_without_replacing_native_artifacts(tmp_path: Path) -> N
     assert max(map(len, config_text.splitlines())) <= 100
     assert set(config["rules"]) == {"proposal", "specs", "design", "tasks"}
     assert any("Decision Register" in rule for rule in config["rules"]["proposal"])
-    assert any("Expectation Signal" in rule for rule in config["rules"]["proposal"])
-    assert any("investment tier" in rule for rule in config["rules"]["proposal"])
-    assert any("First Useful Step" in rule for rule in config["rules"]["specs"])
+    assert any("full Product Promise" in rule for rule in config["rules"]["proposal"])
+    assert any("concrete behaviors" in rule for rule in config["rules"]["proposal"])
+    assert any("explicit user agreement" in rule for rule in config["rules"]["proposal"])
+    assert any("every active Product Promise outcome" in rule for rule in config["rules"]["specs"])
+    assert "investment tier" not in config_text
+    assert "First Useful Step" not in config_text
+    assert any("independent adversarial review" in rule for rule in config["rules"]["design"])
     assert any("normal assembled proof boundary" in rule for rule in config["rules"]["design"])
     assert any("advisory input" in rule for rule in config["rules"]["tasks"])
     assert any("Do not add OwlBear-specific YAML" in rule for rule in config["rules"]["tasks"])

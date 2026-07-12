@@ -35,7 +35,10 @@ Do not use it when:
    product, scope, behavior, risk, and trade-off choices to the user.
 5. **Do not invent decisions.** Most refinement questions clarify the idea. Compare options only
    when materially different choices actually exist.
-6. **Do not enact the idea.** Stop at confirmed understanding. Do not create code, tasks, or
+6. **Preserve the full promise.** Identify the concrete effects that make the idea worth using. Do
+   not ask what can arrive first merely to shrink the proposal. If a user-stated outcome may be
+   excluded or reduced, present that as a real scope choice and require explicit agreement.
+7. **Do not enact the idea.** Stop at confirmed understanding. Do not create code, tasks, or
    destination-specific artifacts unless the caller owns that later step.
 
 ## Step 1 - Establish the Rough Idea
@@ -48,9 +51,9 @@ Restate the starting point in two to four sentences without pretending it is alr
 - what is known versus still vague.
 
 Build a private, dependency-ordered question tree from the idea. Potential branches include user
-value, normal workflow, observable behavior, boundaries, preserved behavior, constraints, failure
-handling, and success. Include only branches whose answers could materially change what gets
-proposed. Do not display the tree as a questionnaire.
+value, the concrete effects that make the result worth using, normal workflow, observable behavior,
+boundaries, preserved behavior, constraints, failure handling, and success. Include only branches
+whose answers could materially change what gets proposed. Do not display the tree as a questionnaire.
 
 ## Step 2 - Investigate Before Asking
 
@@ -72,6 +75,7 @@ Choose the unresolved question with the highest downstream leverage. A useful qu
 least one of:
 
 - why the idea is worth implementing and for whom;
+- which concrete behavior or effect makes the result worth using;
 - the normal invocation or operating path;
 - observable behavior or result;
 - scope boundaries and preserved behavior;
@@ -96,6 +100,12 @@ When genuine alternatives have materially different consequences, expand the sam
 four options and their benefits, costs, risks, and confidence. Do not create an options table for a
 simple clarification, and do not pad it with weak choices.
 
+Do not introduce a smaller first delivery as a routine refinement question. This workflow defines
+the complete change being proposed, not a first building block with an untracked remainder. When a
+scope option would remove or weaken an outcome the user asked for, state the lost value plainly and
+record the exclusion only after the user explicitly accepts it. Do not call omitted work "deferred"
+unless it has a durable destination outside the current proposal.
+
 After asking, stop. Wait for the answer before following another branch.
 
 ## Step 4 - Update the Working Understanding
@@ -115,8 +125,11 @@ Ambiguous answers are not confirmation. Narrow the same branch with the next sin
 The idea is refined enough only when:
 
 - the intended outcome and beneficiary are concrete;
+- the behaviors or effects that make the result worth using are concrete;
 - the normal workflow and observable result are understandable;
 - scope boundaries and preserved behavior are explicit where material;
+- every reduction of a user-stated outcome is explicitly accepted and no remainder disappears
+   merely because it was omitted from the proposed change;
 - repository facts have been investigated rather than delegated to the user;
 - genuine user-owned choices are confirmed or explicitly deferred;
 - assumptions are labeled with an owner or consequence;
@@ -135,7 +148,11 @@ After confirmation, produce this summary. Omit a section only when it is genuine
 ## Refined Idea Summary
 
 ### Idea and Intended Outcome
-<The starting idea, beneficiary, promised end state, and why it is worth implementing.>
+<The starting idea, beneficiary, and full promised end state.>
+
+### User Value
+- Worth using because: <concrete behavior, interaction, or product effect>
+- Active product promise: <the complete outcome represented by this proposal>
 
 ### Normal Workflow
 <Concrete invocation or operating path and observable result.>
@@ -144,6 +161,7 @@ After confirmation, produce this summary. Omit a section only when it is genuine
 - In scope: ...
 - Out of scope: ...
 - Preserved behavior: ...
+- Accepted exclusions: <only user-approved reductions of an originally stated outcome, or none>
 
 ### Confirmed Refinements and Choices
 - <clarification or choice, its basis, and any accepted trade-off>
@@ -160,7 +178,7 @@ After confirmation, produce this summary. Omit a section only when it is genuine
 ### Technically Done but Wrong
 - ...
 
-### Open Facts and Accepted Deferrals
+### Open Facts and Accepted Exclusions
 - ...
 ```
 
@@ -190,5 +208,7 @@ the feature serves. Ceremony has replaced refinement.
 - **Fact polling:** investigate repository behavior rather than asking the user to recall it.
 - **Decision theater:** compare options only when genuine alternatives emerge.
 - **Premature convergence:** use the readiness gate, not conversational fatigue.
+- **Disappearing remainder:** do not turn a smaller first slice into the whole proposal; record only
+   exclusions the user explicitly accepts.
 - **Destination leakage:** keep planning-tool mechanics in the caller.
 - **Chat-only understanding:** always finish with the confirmed Refined Idea Summary.

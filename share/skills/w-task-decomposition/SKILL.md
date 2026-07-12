@@ -49,7 +49,7 @@ CLI. For stock `spec-driven`, apply this authority model:
 
 | Artifact | Shaper use | Authority |
 |----------|------------|-----------|
-| `proposal.md` | Preserve problem, expectation signal, scope, impact, confirmed investment tier, material user decisions, assumptions, and preserved remainder | Product intent; active user decisions require explicit agreement to supersede |
+| `proposal.md` | Preserve problem, full Product Promise, user value, scope, impact, material user decisions, accepted exclusions, and assumptions | Product intent; active user decisions require explicit agreement to supersede |
 | `specs/**/*.md` | Derive observable behavior and acceptance boundaries from capability requirements and scenarios | Normative product behavior |
 | `design.md` | Reuse grounded architecture, contract evidence, trade-offs, risks, and migration constraints | Technical plan, subject to source and contract verification |
 | `tasks.md` | Mine candidate outcomes, ordering, and proof ideas | Advisory only; never board shape or execution metadata |
@@ -59,12 +59,12 @@ shaper writes the final Kanban graph after reconciling the whole package with cu
 merge, split, reorder, rename, or reject OpenSpec task suggestions. Record material departures and
 their reasons in `## Shape Notes`; do not silently change Proposal intent or normative Specs.
 
-When Proposal records a First Useful Step, treat it as sequencing rather than final scope. Preserve
-the stated remaining promise in the task graph or surface an explicit accepted deferral. If Proposal
-records a Shared or Production investment tier, run the tier-scaled post-shaping expectation-fidelity
-check against the concrete task layout before approval.
+Treat Proposal's full active Product Promise as scope authority. Every stated outcome must appear in
+the task graph. An omission is valid only when Proposal records the user's explicit accepted
+exclusion; do not reinterpret unowned omitted work as a later phase, deferral, or smaller first slice.
+Run a post-shaping Product Promise check against the concrete task layout before approval.
 
-If the parent task body contains a `## Brief` or `## Problem` section (Brief artifact, produced by ideation), use it to derive scope, investment tier, and approach constraints for decomposition. Include `Brief: see parent #{id}` reference in each child task body.
+If the parent task body contains a `## Brief` or `## Problem` section (Brief artifact, produced by ideation), use it to derive the full active scope, accepted exclusions, and approach constraints for decomposition. Include `Brief: see parent #{id}` reference in each child task body.
 
 When the parent contains an approved ideation Brief, shaper sequences or splits Brief requirements but does not delete them. If a Brief requirement cannot fit one atomic task, split it across tasks. If a Brief requirement appears invalid, conflicting, or impossible, surface that conflict in Shape Notes instead of dropping the requirement.
 
@@ -425,6 +425,8 @@ Append decomposition details inside shaper's `## Shape Notes` section:
 - [ ] Proposed module boundaries pass the depth, locality, and Deletion Test diagnostics
 - [ ] External/generated contract claims record authority, evidence state, and confidence
 - [ ] Every product invariant has exactly one owning task and one normal-path proof
+- [ ] Task layout covers the full active Product Promise; every omitted requested outcome has an
+    explicit user-approved exclusion in the planning authority
 - [ ] Mocks or injected dependencies replace only layers below the boundary being proved
 - [ ] Every task has proportional proof guidance
 - [ ] No task has multiple responsibilities

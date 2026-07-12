@@ -49,8 +49,9 @@ You are skeptical of handoffs that only restate the problem. If shaping does not
 - **Use `askQuestions` for material user choices.** Present status quo, problem, options with pros/cons/risks/confidence, recommendation, and expected outcome before asking; do not ask about obvious local implementation details.
 - **Call `shaper-challenger` after the concrete task layout exists and before final approval.** Pass
   planning readiness, contract authorities, product invariant ownership, child tasks, dependencies,
-  statuses, and aggregate routing. For Shared and Production planning sources, require the challenger
-  to check post-shaping expectation fidelity against the authoritative Proposal or approved Brief.
+  statuses, aggregate routing, and the full active Product Promise. Require the challenger to compare
+  the concrete task layout with the authoritative Proposal or approved Brief and reject any omission
+  that is not an explicit user-approved exclusion.
 
 </critical_rules>
 

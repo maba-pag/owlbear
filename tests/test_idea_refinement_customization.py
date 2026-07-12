@@ -40,9 +40,33 @@ def test_idea_refinement_preserves_grilling_method_without_decision_theater() ->
     assert "Ask one question at a time" in skill
     assert "Recommend an answer" in skill
     assert "Do not invent decisions" in skill
+    assert "Preserve the full promise" in skill
+    assert "concrete behavior or effect makes the result worth using" in skill
+    assert "Accepted exclusions" in skill
+    assert "Do not introduce a smaller first delivery" in skill
+    assert "First Useful Step" not in skill
+    assert "investment tier" not in skill
     assert "Good:" in skill
     assert "Bad:" in skill
     assert "/opsx:" not in skill
+
+
+def test_active_planning_path_preserves_full_promise_without_tier_gate() -> None:
+    paths = (
+        "share/skills/w-idea-refinement/SKILL.md",
+        "share/openspec/owlbear/config.yaml",
+        "share/prompts/shape.prompt.md",
+        "share/skills/w-task-decomposition/SKILL.md",
+        "share/agents/shaper.agent.md",
+        "share/agents/shaper-challenger.agent.md",
+    )
+    active_surface = "\n".join(_read(path) for path in paths)
+
+    assert "investment tier" not in active_surface
+    assert "First Useful Step" not in active_surface
+    assert "full Product Promise" in active_surface
+    assert "explicit user-approved exclusion" in active_surface
+    assert "post-shaping Product Promise check" in active_surface
 
 
 def test_architecture_review_consumes_generic_idea_refinement() -> None:
