@@ -631,8 +631,10 @@ class TestFromAC_ModelValidationBoundary:
 
         # Explicit agent_map={} — bypasses auto-fill logic
         cfg = BoardConfig(
+            schema="grouped",
             statuses=["research", "done"],
             priorities=["important"],
+            pipeline={"entry_status": "research", "terminal_status": "done"},
             agents={"agent_map": {}, "agent_types": {}, "agent_compatibility": {}},
         )
         assert cfg.statuses == ["research", "done"]
