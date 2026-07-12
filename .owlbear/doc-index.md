@@ -387,6 +387,7 @@
 - ## `Agent -> Files`
 - ### `Orchestration`
 - ### `Shape Entry`
+- ### `User Planning And Design`
 - ### `Execution Board`
 - ### `Pipeline Challengers`
 - ### `Support`
@@ -537,38 +538,6 @@
 
 ## share/instructions/research-docs.instructions.md
 
-## share/openspec/owlbear/grill-me/SKILL.md
-
-## share/openspec/owlbear/schema/templates/brief.md
-- # `Brief: [Change Name]`
-- ## `Problem and Intended Outcome`
-- ## `Normal Workflow`
-- ## `Requirements`
-- ## `Boundaries`
-- ## `Technically Done but Wrong`
-- ## `Decision Register`
-- ## `Success and Completion`
-
-## share/openspec/owlbear/schema/templates/delivery.md
-- ## `Delivery: [Change Name]`
-- ## `Delivery Strategy`
-- ## `Deliverables`
-- ### `T001 - [Outcome-cohesive deliverable]`
-- ## `Requirement Coverage`
-- ## `Completion Contract`
-
-## share/openspec/owlbear/schema/templates/design.md
-- # `Design: [Change Name]`
-- ## `Brief Alignment`
-- ## `Current System`
-- ## `Evidence and Authorities`
-- ## `Architecture`
-- ## `Interfaces and Data Contracts`
-- ## `Decisions and Alternatives`
-- ## `Migration and Removal`
-- ## `Risks and Open Evidence`
-- ## `Integrated Proof Boundaries`
-
 ## share/prompts/agent-broad-audit.prompt.md
 - # `Agent Ecosystem Broad Audit`
 - ## `1. Preamble`
@@ -623,6 +592,13 @@
 - ## `9. Final Deliverable Format`
 - ## `10. Continuation Protocol`
 
+## share/prompts/architecture-review.prompt.md
+- # `Architecture Review`
+- ## `Step 1 - Load Context`
+- ## `Step 2 - Explore Friction`
+- ## `Step 3 - Present Candidates`
+- ## `Step 4 - Explore the Selected Design`
+
 ## share/prompts/frontend-audit.prompt.md
 - # `Cockpit Frontend Audit`
 - ## `Interaction Protocol`
@@ -631,6 +607,8 @@
 - ## `Step 3 - Execute audit`
 - ## `Step 4 - Verify and guardrails`
 - ## `Guardrails`
+
+## share/prompts/ideate.prompt.md
 
 ## share/prompts/ideation-discover.prompt.md
 - ## `Interaction Protocol`
@@ -1082,6 +1060,8 @@
 - # `Architecture Standards`
 - ## `Module Quality Vocabulary`
 - ### `Deletion Test`
+- ### `Interface Is the Test Surface`
+- ### `Seam Discipline`
 - ### `Dependency Classification`
 - ## `MCP Server Conventions`
 - ### `Error Handling`
@@ -1135,6 +1115,19 @@
 - ## `3. Attribution`
 - ## `4. Priority Scheme`
 - ## `5. Tag Taxonomy`
+
+## share/skills/w-idea-refinement/SKILL.md
+- # `Idea Refinement`
+- ## `When to Use`
+- ## `Core Method`
+- ## `Step 1 - Establish the Rough Idea`
+- ## `Step 2 - Investigate Before Asking`
+- ## `Step 3 - Ask the Next Refinement Question`
+- ## `Step 4 - Update the Working Understanding`
+- ## `Proposal-Readiness Gate`
+- ## `Refined Idea Summary`
+- ## `Examples`
+- ## `Known Pitfalls`
 
 ## share/skills/w-ideation-discovery/SKILL.md
 - # `Ideation Discovery`
@@ -1240,8 +1233,8 @@
 - ### `In Scope`
 - ### `Out of Scope`
 - ## `Step 0 — Setup`
-- ## `Step 1 — Read the Plan`
-- ### `Brief Readiness Gate`
+- ## `Step 1 — Read and Classify the Planning Source`
+- ### `Planning Readiness Gate`
 - ## `Step 1a — Single-Task Shortcut`
 - ## `Step 1b — Source And Contract Authority Guard`
 - ### `Change Module Map`

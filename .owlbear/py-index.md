@@ -5,13 +5,11 @@
 Root conftest.py — shared fixtures and marker registrations for v2 tests.
 
 ### Imports
-
 - `__future__`
 - `pathlib`
 - `pytest`
 
 ### Interfaces
-
 - `def project_root() -> Path`
 - `def pytest_configure(config: pytest.Config) -> None`
 - `def pytest_xdist_auto_num_workers(config: pytest.Config) -> int`
@@ -21,14 +19,12 @@ Root conftest.py — shared fixtures and marker registrations for v2 tests.
 allow-stances-only.py — PreToolUse hook for ideation domain panelists.
 
 ### Imports
-
 - `__future__`
 - `json`
 - `re`
 - `sys`
 
 ### Interfaces
-
 - `def _extract_paths(tool_input: object) -> list[str]`
 - `def _normalize(path: str) -> str`
 - `def main() -> None`
@@ -38,7 +34,6 @@ allow-stances-only.py — PreToolUse hook for ideation domain panelists.
 deny-non-doc-writes.py — PreToolUse hook for bounded-output non-code roles.
 
 ### Imports
-
 - `__future__`
 - `json`
 - `pathlib`
@@ -46,7 +41,6 @@ deny-non-doc-writes.py — PreToolUse hook for bounded-output non-code roles.
 - `sys`
 
 ### Interfaces
-
 - `def _extract_paths(tool_input: object) -> list[str]`
 - `def _normalize(path: str) -> str`
 - `def _is_denied(normalized: str) -> bool`
@@ -57,14 +51,12 @@ deny-non-doc-writes.py — PreToolUse hook for bounded-output non-code roles.
 deny-src-writes.py — PreToolUse hook for test-only roles.
 
 ### Imports
-
 - `__future__`
 - `json`
 - `re`
 - `sys`
 
 ### Interfaces
-
 - `def _extract_paths(tool_input: object) -> list[str]`
 - `def main() -> None`
 
@@ -73,14 +65,12 @@ deny-src-writes.py — PreToolUse hook for test-only roles.
 deny-writes.py — PreToolUse hook for read-only agents with scratch access.
 
 ### Imports
-
 - `__future__`
 - `json`
 - `re`
 - `sys`
 
 ### Interfaces
-
 - `def _extract_paths(tool_input: object) -> list[str]`
 - `def _normalize(path: str) -> str`
 - `def _is_scratch_path(normalized: str) -> bool`
@@ -91,7 +81,6 @@ deny-writes.py — PreToolUse hook for read-only agents with scratch access.
 lint-changed.py — PostToolUse hook for the builder agent.
 
 ### Imports
-
 - `__future__`
 - `json`
 - `pathlib`
@@ -99,7 +88,6 @@ lint-changed.py — PostToolUse hook for the builder agent.
 - `sys`
 
 ### Interfaces
-
 - `def _extract_paths(tool_name: str, tool_input: object) -> list[str]`
 - `def main() -> None`
 
@@ -108,14 +96,12 @@ lint-changed.py — PostToolUse hook for the builder agent.
 session-context.py — SessionStart hook for pipeline agents.
 
 ### Imports
-
 - `__future__`
 - `json`
 - `subprocess`
 - `sys`
 
 ### Interfaces
-
 - `def main() -> None`
 
 ## .owlbear/scripts/clean_scratch.py
@@ -123,7 +109,6 @@ session-context.py — SessionStart hook for pipeline agents.
 Clean up stale files from the .owlbear/scratch directory.
 
 ### Imports
-
 - `__future__`
 - `argparse`
 - `pathlib`
@@ -131,7 +116,6 @@ Clean up stale files from the .owlbear/scratch directory.
 - `time`
 
 ### Interfaces
-
 - `def _parse_args(argv: list[str] | None = None) -> argparse.Namespace`
 - `def _is_protected(path: Path) -> bool`
 - `def _is_stale(path: Path, now: float) -> bool`
@@ -143,7 +127,6 @@ Clean up stale files from the .owlbear/scratch directory.
 Generate a standalone HTML knowledge graph viewer from the SQLite database.
 
 ### Imports
-
 - `__future__`
 - `argparse`
 - `json`
@@ -152,7 +135,6 @@ Generate a standalone HTML knowledge graph viewer from the SQLite database.
 - `sys`
 
 ### Interfaces
-
 - `def _load_graph(db_path: str) -> tuple[list[dict], list[dict]]`
 - `def generate(db_path: str, out_path: str) -> None`
 - `def main() -> None`
@@ -162,14 +144,12 @@ Generate a standalone HTML knowledge graph viewer from the SQLite database.
 Discover the test root (cwd + toolchain) for a given test file path.
 
 ### Imports
-
 - `__future__`
 - `json`
 - `pathlib`
 - `sys`
 
 ### Interfaces
-
 - `def find_test_root(test_path: str) -> dict[str, str]`
 
 ## .owlbear/scripts/validate_agents.py
@@ -177,14 +157,12 @@ Discover the test root (cwd + toolchain) for a given test file path.
 Validate OwlBear agent files against conventions.
 
 ### Imports
-
 - `__future__`
 - `pathlib`
 - `re`
 - `sys`
 
 ### Interfaces
-
 - `def _frontmatter_lines(content: str) -> list[str]`
 - `def _tools_text(fm_lines: list[str]) -> str`
 - `def _is_valid_tool(name: str) -> bool`
@@ -200,7 +178,6 @@ Validate OwlBear agent files against conventions.
 Validate OwlBear skill directories against the Agent Skills Spec.
 
 ### Imports
-
 - `__future__`
 - `pathlib`
 - `skills_ref.errors`
@@ -209,7 +186,6 @@ Validate OwlBear skill directories against the Agent Skills Spec.
 - `sys`
 
 ### Interfaces
-
 - `def validate_skill(skill_dir: Path) -> list[str]`
 - `def main(argv: list[str] | None = None) -> int`
 
@@ -218,7 +194,6 @@ Validate OwlBear skill directories against the Agent Skills Spec.
 skills_ref — SKILL.md frontmatter parser and validator for OwlBear skills.
 
 ### Imports
-
 - `__future__`
 
 ## .owlbear/scripts/skills_ref/errors.py
@@ -226,11 +201,9 @@ skills_ref — SKILL.md frontmatter parser and validator for OwlBear skills.
 skills_ref.errors — custom exception types for skills_ref.
 
 ### Imports
-
 - `__future__`
 
 ### Interfaces
-
 - `class ParseError(Exception)`
 
 ## .owlbear/scripts/skills_ref/parser.py
@@ -238,14 +211,12 @@ skills_ref.errors — custom exception types for skills_ref.
 skills_ref.parser — YAML frontmatter parsing for SKILL.md files.
 
 ### Imports
-
 - `__future__`
 - `pathlib`
 - `ruamel.yaml`
 - `skills_ref.errors`
 
 ### Interfaces
-
 - `def find_skill_md(skill_dir: Path) -> Path | None`
 - `def parse_frontmatter(content: str) -> tuple[dict, str]`
 
@@ -254,13 +225,11 @@ skills_ref.parser — YAML frontmatter parsing for SKILL.md files.
 skills_ref.validator — validate skill metadata against the Agent Skills Spec.
 
 ### Imports
-
 - `__future__`
 - `pathlib`
 - `re`
 
 ### Interfaces
-
 - `def _validate_naming_convention(value: str, label: str) -> list[str]`
 - `def validate_metadata(metadata: dict, skill_dir: Path) -> list[str]`
 
@@ -269,14 +238,12 @@ skills_ref.validator — validate skill metadata against the Agent Skills Spec.
 allow-stances-only.py — PreToolUse hook for ideation domain panelists.
 
 ### Imports
-
 - `__future__`
 - `json`
 - `re`
 - `sys`
 
 ### Interfaces
-
 - `def _extract_paths(tool_input: object) -> list[str]`
 - `def _normalize(path: str) -> str`
 - `def main() -> None`
@@ -286,7 +253,6 @@ allow-stances-only.py — PreToolUse hook for ideation domain panelists.
 deny-non-doc-writes.py — PreToolUse hook for bounded-output non-code roles.
 
 ### Imports
-
 - `__future__`
 - `json`
 - `pathlib`
@@ -294,7 +260,6 @@ deny-non-doc-writes.py — PreToolUse hook for bounded-output non-code roles.
 - `sys`
 
 ### Interfaces
-
 - `def _extract_paths(tool_input: object) -> list[str]`
 - `def _normalize(path: str) -> str`
 - `def _is_denied(normalized: str) -> bool`
@@ -305,14 +270,12 @@ deny-non-doc-writes.py — PreToolUse hook for bounded-output non-code roles.
 deny-src-writes.py — PreToolUse hook for test-only roles.
 
 ### Imports
-
 - `__future__`
 - `json`
 - `re`
 - `sys`
 
 ### Interfaces
-
 - `def _extract_paths(tool_input: object) -> list[str]`
 - `def main() -> None`
 
@@ -321,14 +284,12 @@ deny-src-writes.py — PreToolUse hook for test-only roles.
 deny-writes.py — PreToolUse hook for read-only agents with scratch access.
 
 ### Imports
-
 - `__future__`
 - `json`
 - `re`
 - `sys`
 
 ### Interfaces
-
 - `def _extract_paths(tool_input: object) -> list[str]`
 - `def _normalize(path: str) -> str`
 - `def _is_scratch_path(normalized: str) -> bool`
@@ -339,7 +300,6 @@ deny-writes.py — PreToolUse hook for read-only agents with scratch access.
 lint-changed.py — PostToolUse hook for the builder agent.
 
 ### Imports
-
 - `__future__`
 - `json`
 - `pathlib`
@@ -347,7 +307,6 @@ lint-changed.py — PostToolUse hook for the builder agent.
 - `sys`
 
 ### Interfaces
-
 - `def _extract_paths(tool_name: str, tool_input: object) -> list[str]`
 - `def main() -> None`
 
@@ -356,14 +315,12 @@ lint-changed.py — PostToolUse hook for the builder agent.
 session-context.py — SessionStart hook for pipeline agents.
 
 ### Imports
-
 - `__future__`
 - `json`
 - `subprocess`
 - `sys`
 
 ### Interfaces
-
 - `def main() -> None`
 
 ## seed/.owlbear/scripts/test-root.py
@@ -371,14 +328,12 @@ session-context.py — SessionStart hook for pipeline agents.
 Discover the test root (cwd + toolchain) for a given test file path.
 
 ### Imports
-
 - `__future__`
 - `json`
 - `pathlib`
 - `sys`
 
 ### Interfaces
-
 - `def find_test_root(test_path: str) -> dict[str, str]`
 
 ## serve/browser/src/owlbear_browser/__init__.py
@@ -386,7 +341,6 @@ Discover the test root (cwd + toolchain) for a given test file path.
 OwlBear browser package — authenticated web content extraction via Playwright.
 
 ### Imports
-
 - `owlbear_browser._errors`
 - `owlbear_browser.extractor`
 - `owlbear_browser.fetcher`
@@ -397,11 +351,9 @@ OwlBear browser package — authenticated web content extraction via Playwright.
 Shared error types for the owlbear_browser package.
 
 ### Imports
-
 - `__future__`
 
 ### Interfaces
-
 - `class AuthenticationRequired(Exception)`
 - `class SSOExtensionNotFoundError(RuntimeError)`
 
@@ -410,14 +362,12 @@ Shared error types for the owlbear_browser package.
 HTML noise stripper and markdown converter for owlbear_browser.
 
 ### Imports
-
 - `__future__`
 - `lxml`
 - `re`
 - `typing`
 
 ### Interfaces
-
 - `def _remove_noise_tags(doc: HtmlElement, tags: frozenset[str]) -> None`
 - `def _remove_cookie_elements(doc: HtmlElement) -> None`
 - `def strip_noise(html_str: str) -> str`
@@ -439,13 +389,11 @@ HTML noise stripper and markdown converter for owlbear_browser.
 HTML content extractor for owlbear_browser.
 
 ### Imports
-
 - `__future__`
 - `owlbear_browser.cleaner`
 - `trafilatura`
 
 ### Interfaces
-
 - `def extract(html: str) -> str`
 - `def extract_content(html: str, url: str | None = None) -> str`
 
@@ -454,13 +402,11 @@ HTML content extractor for owlbear_browser.
 BrowserContentFetcher — authenticated fetch via Playwright.
 
 ### Imports
-
 - `__future__`
 - `owlbear_browser.extractor`
 - `typing`
 
 ### Interfaces
-
 - `class BrowserContentFetcher`
   - `def __init__(self, context: BrowserContext) -> None`
   - `async def fetch(self, url: str) -> str`
@@ -470,7 +416,6 @@ BrowserContentFetcher — authenticated fetch via Playwright.
 Playwright-based browser launcher with Microsoft SSO extension support.
 
 ### Imports
-
 - `__future__`
 - `os`
 - `owlbear_browser._errors`
@@ -479,7 +424,6 @@ Playwright-based browser launcher with Microsoft SSO extension support.
 - `typing`
 
 ### Interfaces
-
 - `def find_sso_extension() -> Path`
 - `def build_playwright_args(sso_ext_path: Path) -> list[str]`
 - `class PlaywrightLauncher`
@@ -496,7 +440,6 @@ Playwright-based browser launcher with Microsoft SSO extension support.
 owlbear_cockpit — Cockpit package for the OwlBear kanban UI.
 
 ### Imports
-
 - `__future__`
 
 ## serve/cockpit/src/owlbear_cockpit/cache.py
@@ -504,14 +447,12 @@ owlbear_cockpit — Cockpit package for the OwlBear kanban UI.
 Mtime-scan cache for the cockpit tasks directory.
 
 ### Imports
-
 - `__future__`
 - `hashlib`
 - `os`
 - `typing`
 
 ### Interfaces
-
 - `class MtimeScanCache`
   - `def __init__(self, tasks_dir: Path) -> None`
   - `def scan(self) -> int`
@@ -529,7 +470,6 @@ Mtime-scan cache for the cockpit tasks directory.
 Cockpit FastAPI dependency callables.
 
 ### Imports
-
 - `__future__`
 - `fastapi`
 - `owlbear_cockpit.cache`
@@ -539,7 +479,6 @@ Cockpit FastAPI dependency callables.
 - `weakref`
 
 ### Interfaces
-
 - `def get_engine() -> KanbanEngine`
 - `def get_memory_engine() -> MemoryEngine`
 - `def get_cache(engine = Depends(get_engine)) -> MtimeScanCache`
@@ -552,7 +491,6 @@ Cockpit FastAPI dependency callables.
 Cockpit FastAPI application.
 
 ### Imports
-
 - `__future__`
 - `contextlib`
 - `fastapi`
@@ -575,7 +513,6 @@ Cockpit FastAPI application.
 - `webbrowser`
 
 ### Interfaces
-
 - `def _error_envelope(code: str, message: str) -> dict[str, str]`
 - `def _kanban_status(exc: KanbanError) -> int`
 - `def handle_kanban_error(_request: Request, exc: KanbanError) -> JSONResponse`
@@ -591,12 +528,10 @@ Cockpit FastAPI application.
 Pydantic response model for the cockpit GET /api/board endpoint.
 
 ### Imports
-
 - `__future__`
 - `pydantic`
 
 ### Interfaces
-
 - `class BoardOut(BaseModel)`
 
 ## serve/cockpit/src/owlbear_cockpit/view.py
@@ -604,13 +539,11 @@ Pydantic response model for the cockpit GET /api/board endpoint.
 CockpitView facade for cockpit-facing Kanban operations.
 
 ### Imports
-
 - `__future__`
 - `owlbear_kanban.models`
 - `typing`
 
 ### Interfaces
-
 - `class CockpitView`
   - `def __init__(self, engine: KanbanEngine) -> None`
   - `def list_tasks(self, *, status: str = '', tag: str = '', priority: str = '', archival_reason: str = '', ids: list[int] | None = None, parent: int | None = None, search: str = '', sort: str = '', unclaimed: bool = False, archived: bool = False, limit: int = 0, reverse: bool = False, blocked: bool | None = None) -> ListTasksResponse`
@@ -639,7 +572,6 @@ Cockpit routes package.
 Cockpit SSE routes for kanban surface invalidation events.
 
 ### Imports
-
 - `__future__`
 - `fastapi`
 - `json`
@@ -652,7 +584,6 @@ Cockpit SSE routes for kanban surface invalidation events.
 - `watchfiles`
 
 ### Interfaces
-
 - `def _resolve(path: Path | str) -> Path`
 - `def _is_direct_md(path: Path, parent_dir: Path) -> bool`
 - `def _build_watch_filter(tasks_dir: Path, archive_dir: Path, decisions_pending_dir: Path, activity_path: Path) -> callable`
@@ -666,7 +597,6 @@ Cockpit SSE routes for kanban surface invalidation events.
 Ideas API routes for reading and persisting shared markdown content.
 
 ### Imports
-
 - `__future__`
 - `datetime`
 - `fastapi`
@@ -678,7 +608,6 @@ Ideas API routes for reading and persisting shared markdown content.
 - `typing`
 
 ### Interfaces
-
 - `class IdeasResponse(BaseModel)`
 - `class IdeasUpdateRequest(BaseModel)`
 - `def _ideas_updated_at(ideas_path: Path) -> str | None`
@@ -691,7 +620,6 @@ Ideas API routes for reading and persisting shared markdown content.
 Memory management routes for cockpit API.
 
 ### Imports
-
 - `__future__`
 - `fastapi`
 - `owlbear_cockpit.deps`
@@ -700,7 +628,6 @@ Memory management routes for cockpit API.
 - `typing`
 
 ### Interfaces
-
 - `class MemoryEntryResponse(BaseModel)`
 - `class MemoriesResponse(BaseModel)`
 - `class MemoryEntryEnvelope(BaseModel)`
@@ -719,7 +646,6 @@ Memory management routes for cockpit API.
 Cockpit mutation API routes — move, edit, release, sweep, scan, repair, compact-activity.
 
 ### Imports
-
 - `__future__`
 - `fastapi`
 - `owlbear_cockpit.deps`
@@ -730,7 +656,6 @@ Cockpit mutation API routes — move, edit, release, sweep, scan, repair, compac
 - `typing`
 
 ### Interfaces
-
 - `class MoveRequest(BaseModel)`
 - `class EditRequest(BaseModel)`
 - `class ReleaseRequest(BaseModel)`
@@ -755,7 +680,6 @@ Cockpit mutation API routes — move, edit, release, sweep, scan, repair, compac
 Cockpit read-only API routes.
 
 ### Imports
-
 - `__future__`
 - `fastapi`
 - `owlbear_cockpit.cache`
@@ -768,7 +692,6 @@ Cockpit read-only API routes.
 - `typing`
 
 ### Interfaces
-
 - `class CockpitListTasksResponse(ListTasksResponse)`
 - `class SessionsResponse(BaseModel)`
 - `def _filter_cached_tasks(tasks: list, *, status: str, priority: str, tag: str, blocked: bool | None) -> list`
@@ -783,7 +706,6 @@ Cockpit read-only API routes.
 Cockpit requests API routes.
 
 ### Imports
-
 - `__future__`
 - `fastapi`
 - `logging`
@@ -793,7 +715,6 @@ Cockpit requests API routes.
 - `uuid`
 
 ### Interfaces
-
 - `class RequestOptionResponse(BaseModel)`
 - `class PendingRequestResponse(BaseModel)`
 - `class ResolveRequestBody(BaseModel)`
@@ -808,7 +729,6 @@ Cockpit requests API routes.
 OwlBear kanban engine package.
 
 ### Imports
-
 - `__future__`
 - `owlbear_kanban.agent_view`
 - `owlbear_kanban.engine`
@@ -819,14 +739,12 @@ OwlBear kanban engine package.
 ## serve/kanban/src/owlbear_kanban/_duration.py
 
 ### Imports
-
 - `__future__`
 - `datetime`
 - `owlbear_kanban.errors`
 - `re`
 
 ### Interfaces
-
 - `def _parse_duration(s: str) -> timedelta`
 
 ## serve/kanban/src/owlbear_kanban/_naming.py
@@ -834,7 +752,6 @@ OwlBear kanban engine package.
 Shared filename/path safety helpers for kanban storage modules.
 
 ### Imports
-
 - `__future__`
 - `owlbear_kanban.errors`
 - `pathlib`
@@ -842,7 +759,6 @@ Shared filename/path safety helpers for kanban storage modules.
 - `typing`
 
 ### Interfaces
-
 - `def generate_slug(title: str) -> str`
 - `def make_task_filename(task_id: int, title: str) -> str`
 - `def validate_path_containment(tasks_dir: Path, path: Path) -> None`
@@ -854,7 +770,6 @@ Shared filename/path safety helpers for kanban storage modules.
 Activity stream append/query/compact for kanban boards (Brief C §7).
 
 ### Imports
-
 - `__future__`
 - `datetime`
 - `json`
@@ -863,7 +778,6 @@ Activity stream append/query/compact for kanban boards (Brief C §7).
 - `pathlib`
 
 ### Interfaces
-
 - `def append_activity_event(event: ActivityEvent, kanban_dir: Path) -> None`
 - `def list_activity_events(kanban_dir: Path, *, task_id: int | None = None, action: str | None = None, source: str | None = None, since: str | None = None, until: str | None = None, limit: int | None = None) -> list[ActivityEvent]`
 - `def compact_activity_log(kanban_dir: Path, before_dt: datetime | None = None) -> ActivityCompactionResult`
@@ -877,7 +791,6 @@ Activity stream append/query/compact for kanban boards (Brief C §7).
 Word pool for session-stable agent-name generation.
 
 ### Imports
-
 - `__future__`
 
 ## serve/kanban/src/owlbear_kanban/agent_view.py
@@ -885,7 +798,6 @@ Word pool for session-stable agent-name generation.
 Agent-facing Kanban view facade.
 
 ### Imports
-
 - `__future__`
 - `datetime`
 - `importlib`
@@ -899,7 +811,6 @@ Agent-facing Kanban view facade.
 - `re`
 
 ### Interfaces
-
 - `class AgentView`
   - `def __init__(self, engine: KanbanEngine) -> None`
   - `def _to_single_response(task: Task, guidance: list[str] | None = None) -> SingleTaskResponse`
@@ -919,13 +830,11 @@ Agent-facing Kanban view facade.
 Markdown body parser for kanban task bodies (Brief C §2.4).
 
 ### Imports
-
 - `__future__`
 - `owlbear_kanban.models`
 - `re`
 
 ### Interfaces
-
 - `def _normalize_atx_heading(raw_heading: str) -> str`
 - `def parse_body(markdown: str) -> list[Section]`
 - `def render_body(sections: list[Section]) -> str`
@@ -935,7 +844,6 @@ Markdown body parser for kanban task bodies (Brief C §2.4).
 Config loader for .owlbear/kanban/config.yml using ruamel.yaml round-trip mode.
 
 ### Imports
-
 - `__future__`
 - `owlbear_kanban._duration`
 - `owlbear_kanban.models`
@@ -944,7 +852,6 @@ Config loader for .owlbear/kanban/config.yml using ruamel.yaml round-trip mode.
 - `typing`
 
 ### Interfaces
-
 - `def load_config(kanban_dir: Path) -> BoardConfig`
 - `def _validate_claim_timeout(config: BoardConfig) -> None`
 - `def _to_plain(obj: Any) -> Any`
@@ -954,7 +861,6 @@ Config loader for .owlbear/kanban/config.yml using ruamel.yaml round-trip mode.
 Corruption detection and repair for kanban task files (Brief C §4).
 
 ### Imports
-
 - `__future__`
 - `io`
 - `owlbear_kanban._naming`
@@ -969,7 +875,6 @@ Corruption detection and repair for kanban task files (Brief C §4).
 - `typing`
 
 ### Interfaces
-
 - `def _normalize_code(code: str | type[object]) -> str`
 - `def _configured_statuses(_config: BoardConfig) -> list[str]`
 - `def _configured_priorities(_config: BoardConfig) -> list[str]`
@@ -992,7 +897,6 @@ Corruption detection and repair for kanban task files (Brief C §4).
 Decision request file helpers for kanban agents.
 
 ### Imports
-
 - `.errors`
 - `__future__`
 - `io`
@@ -1003,7 +907,6 @@ Decision request file helpers for kanban agents.
 - `typing`
 
 ### Interfaces
-
 - `class DecisionEngine(Protocol)`
   - `def edit_task(self, task_id: int | str, **kwargs: object) -> object`
 - `def _slugify(text: str) -> str`
@@ -1023,7 +926,6 @@ Decision request file helpers for kanban agents.
 Dispatch logic for the owlbear kanban engine.
 
 ### Imports
-
 - `__future__`
 - `datetime`
 - `owlbear_kanban.topology`
@@ -1032,7 +934,6 @@ Dispatch logic for the owlbear kanban engine.
 - `warnings`
 
 ### Interfaces
-
 - `def _claim_is_active(task: Task, timeout: timedelta) -> bool`
 - `def _passes_clarity_gate(task: Task) -> bool`
 - `def _passes_dependency_gate(task: Task, active_ids: frozenset[int]) -> bool`
@@ -1043,7 +944,6 @@ Dispatch logic for the owlbear kanban engine.
 KanbanEngine — native read/write engine for the owlbear kanban board.
 
 ### Imports
-
 - `__future__`
 - `collections`
 - `contextlib`
@@ -1075,7 +975,6 @@ KanbanEngine — native read/write engine for the owlbear kanban board.
 - `uuid`
 
 ### Interfaces
-
 - `class WorkSession`
 - `def _classify_end_work_state(detail: str) -> str`
 - `def _classify_end_work_outcome(detail: str) -> str`
@@ -1158,12 +1057,10 @@ KanbanEngine — native read/write engine for the owlbear kanban board.
 Kanban engine domain error catalogue and exception hierarchy.
 
 ### Imports
-
 - `__future__`
 - `importlib`
 
 ### Interfaces
-
 - `class KanbanError(Exception)`
   - `def __init__(self, code: str, user_message: str) -> None`
 - `class ValidationError(KanbanError)`
@@ -1178,7 +1075,6 @@ Kanban engine domain error catalogue and exception hierarchy.
 kanban-migrate: migration script for owlbear-kanban boards.
 
 ### Imports
-
 - `__future__`
 - `argparse`
 - `datetime`
@@ -1194,7 +1090,6 @@ kanban-migrate: migration script for owlbear-kanban boards.
 - `typing`
 
 ### Interfaces
-
 - `def _make_yaml_rt() -> YAML`
 - `def _make_yaml_safe() -> YAML`
 - `def _normalise_timestamp(ts: object) -> str | None`
@@ -1219,7 +1114,6 @@ kanban-migrate: migration script for owlbear-kanban boards.
 Engine-internal Pydantic models for the native kanban engine.
 
 ### Imports
-
 - `__future__`
 - `owlbear_kanban`
 - `owlbear_kanban._duration`
@@ -1228,7 +1122,6 @@ Engine-internal Pydantic models for the native kanban engine.
 - `typing`
 
 ### Interfaces
-
 - `def _validate_status_and_priority(statuses: list[str], priorities: list[str]) -> None`
 - `def _validate_entry_and_terminal(statuses: list[str], entry_status: str, terminal_status: str) -> None`
 - `def _validate_agent_compatibility(compatibility: dict[str, Any]) -> None`
@@ -1268,14 +1161,12 @@ Engine-internal Pydantic models for the native kanban engine.
 Section-based predicate DSL for kanban task gates (Brief C §6).
 
 ### Imports
-
 - `__future__`
 - `markdown_it`
 - `owlbear_kanban.body_parser`
 - `typing`
 
 ### Interfaces
-
 - `def _get_sections(task: Task) -> list[Section]`
 - `def _section_matches(section: Section, name: str) -> bool`
 - `def required_sections(task: Task, section_names: list[str]) -> bool`
@@ -1287,7 +1178,6 @@ Section-based predicate DSL for kanban task gates (Brief C §6).
 Pydantic models for structured decision/action requests.
 
 ### Imports
-
 - `__future__`
 - `datetime`
 - `pydantic`
@@ -1295,7 +1185,6 @@ Pydantic models for structured decision/action requests.
 - `uuid`
 
 ### Interfaces
-
 - `class RequestOption(BaseModel)`
 - `class Resolution(BaseModel)`
 - `class _RequestBase(BaseModel)`
@@ -1309,56 +1198,11 @@ Pydantic models for structured decision/action requests.
 - `class RequestRecord(BaseModel)`
   - `def from_request(cls, request: DecisionRequest | ActionRequest, body: str) -> RequestRecord`
 
-## serve/kanban/src/owlbear_kanban/spec_import.py
-
-Import an OpenSpec OwlBear delivery manifest into the native Kanban engine.
-
-### Imports
-
-- `__future__`
-- `argparse`
-- `collections`
-- `json`
-- `owlbear_kanban.engine`
-- `pathlib`
-- `pydantic`
-- `re`
-- `sys`
-- `typing`
-- `yaml`
-
-### Interfaces
-
-- `class SpecImportError(ValueError)`
-- `class AggregateManifest(BaseModel)`
-  - `def _reject_placeholders(self) -> AggregateManifest`
-- `class TaskManifest(BaseModel)`
-  - `def _reject_duplicate_dependencies(cls, value: list[str]) -> list[str]`
-  - `def _validate_proof_bundle(cls, value: str) -> str`
-  - `def _reject_placeholders(self) -> TaskManifest`
-- `class OwlBearManifest(BaseModel)`
-  - `def _validate_graph(self) -> OwlBearManifest`
-- `class ImportDocument(BaseModel)`
-- `def _ensure_resolved_strings(values: list[str]) -> None`
-- `def _topological_order(tasks: list[TaskManifest]) -> list[str]`
-- `def _read_frontmatter(path: Path) -> dict[str, object]`
-- `def load_import_document(delivery_file: Path) -> ImportDocument`
-- `def _validate_requirement_coverage(spec_file: Path, manifest: OwlBearManifest) -> None`
-- `def _import_tag(feature: str) -> str`
-- `def build_import_preview(document: ImportDocument) -> dict[str, object]`
-- `def _task_body(document: ImportDocument, task: TaskManifest) -> str`
-- `def _aggregate_body(document: ImportDocument) -> str`
-- `def apply_import(document: ImportDocument, kanban_dir: Path) -> dict[str, object]`
-- `def _rollback_created_tasks(engine: KanbanEngine, task_ids: list[int]) -> None`
-- `def _build_parser() -> argparse.ArgumentParser`
-- `def main(argv: list[str] | None = None) -> int`
-
 ## serve/kanban/src/owlbear_kanban/storage.py
 
 Public storage persistence surface for owlbear-kanban (Brief C §1.3).
 
 ### Imports
-
 - `__future__`
 - `contextlib`
 - `datetime`
@@ -1377,7 +1221,6 @@ Public storage persistence surface for owlbear-kanban (Brief C §1.3).
 - `yaml`
 
 ### Interfaces
-
 - `class YAML12SafeLoader(yaml.SafeLoader)`
 - `def _make_yaml() -> YAML`
 - `def _allocation_thread_lock(kanban_dir: Path) -> threading.Lock`
@@ -1405,7 +1248,6 @@ Public storage persistence surface for owlbear-kanban (Brief C §1.3).
 Crash-safe atomic text write utility.
 
 ### Imports
-
 - `__future__`
 - `contextlib`
 - `os`
@@ -1413,7 +1255,6 @@ Crash-safe atomic text write utility.
 - `tempfile`
 
 ### Interfaces
-
 - `def atomic_write(target: Path, content: str) -> None`
 
 ## serve/kanban/src/owlbear_kanban/topology.py
@@ -1421,13 +1262,11 @@ Crash-safe atomic text write utility.
 Canonical product topology constants for the kanban engine.
 
 ### Imports
-
 - `__future__`
 - `dataclasses`
 - `typing`
 
 ### Interfaces
-
 - `class ProductTopology`
 
 ## serve/kanban/src/owlbear_kanban/yaml_rt.py
@@ -1435,12 +1274,10 @@ Canonical product topology constants for the kanban engine.
 Shared ruamel.yaml round-trip factory for the kanban package.
 
 ### Imports
-
 - `__future__`
 - `ruamel.yaml`
 
 ### Interfaces
-
 - `def make_yaml(*, explicit_start: bool = False) -> YAML`
 
 ## serve/knowledge/src/owlbear_knowledge/__init__.py
@@ -1448,7 +1285,6 @@ Shared ruamel.yaml round-trip factory for the kanban package.
 OwlBear knowledge package.
 
 ### Imports
-
 - `__future__`
 - `owlbear_knowledge`
 
@@ -1457,12 +1293,10 @@ OwlBear knowledge package.
 Workspace path sandboxing utilities.
 
 ### Imports
-
 - `__future__`
 - `typing`
 
 ### Interfaces
-
 - `def sandbox_path(root: Path, path: Path | str) -> Path`
 
 ## serve/knowledge/src/owlbear_knowledge/_ssrf.py
@@ -1470,7 +1304,6 @@ Workspace path sandboxing utilities.
 SSRF preflight checks for outbound knowledge HTTP fetches.
 
 ### Imports
-
 - `__future__`
 - `asyncio`
 - `ipaddress`
@@ -1478,7 +1311,6 @@ SSRF preflight checks for outbound knowledge HTTP fetches.
 - `urllib.parse`
 
 ### Interfaces
-
 - `class SSRFProtectionError(ValueError)`
 - `def _is_blocked_ip(ip_str: str) -> bool`
 - `async def check_url_allowed(url: str) -> None`
@@ -1488,12 +1320,10 @@ SSRF preflight checks for outbound knowledge HTTP fetches.
 Cancellation signal protocol and composition utilities.
 
 ### Imports
-
 - `__future__`
 - `typing`
 
 ### Interfaces
-
 - `class CancelSignal(Protocol)`
   - `def is_set(self) -> bool`
 - `class LinkedCancelSignal`
@@ -1505,13 +1335,11 @@ Cancellation signal protocol and composition utilities.
 Recursive separator-based text chunker for knowledge ingestion.
 
 ### Imports
-
 - `__future__`
 - `pydantic`
 - `typing`
 
 ### Interfaces
-
 - `def _token_count(text: str) -> int`
 - `class Chunk(BaseModel)`
 - `class TextChunker`
@@ -1528,11 +1356,9 @@ Recursive separator-based text chunker for knowledge ingestion.
 Untrusted content wrapping utility.
 
 ### Imports
-
 - `__future__`
 
 ### Interfaces
-
 - `def should_wrap(source_type: str | None) -> bool`
 - `def wrap_untrusted_content(text: str, *, source_url: str | None = None) -> str`
 
@@ -1541,7 +1367,6 @@ Untrusted content wrapping utility.
 Embedding generation — protocol + BGE-M3 adapter.
 
 ### Imports
-
 - `__future__`
 - `gc`
 - `pydantic`
@@ -1550,7 +1375,6 @@ Embedding generation — protocol + BGE-M3 adapter.
 - `typing`
 
 ### Interfaces
-
 - `class SparseVector(BaseModel)`
 - `class HybridEmbedding(BaseModel)`
 - `class EmbeddingProvider(Protocol)`
@@ -1568,14 +1392,12 @@ Embedding generation — protocol + BGE-M3 adapter.
 HttpxContentFetcher — unauthenticated fetch via httpx.
 
 ### Imports
-
 - `__future__`
 - `httpx`
 - `owlbear_knowledge._ssrf`
 - `typing`
 
 ### Interfaces
-
 - `class ContentFetcher(Protocol)`
   - `async def fetch(self, url: str) -> str`
 - `class HttpxContentFetcher(ContentFetcher)`
@@ -1586,7 +1408,6 @@ HttpxContentFetcher — unauthenticated fetch via httpx.
 Ingest coordinator implementation for protocol-based knowledge ingest.
 
 ### Imports
-
 - `__future__`
 - `datetime`
 - `logging`
@@ -1598,7 +1419,6 @@ Ingest coordinator implementation for protocol-based knowledge ingest.
 - `typing`
 
 ### Interfaces
-
 - `class IngestCoordinator`
   - `def __init__(self, *, sources: SourceStore, content: ContentStore, enrichment: EnrichmentStore, graph: GraphStore, fetcher: SourceFetcher | None = None) -> None`
   - `async def ingest(self, request: IngestRequest) -> IngestResult`
@@ -1612,7 +1432,6 @@ Ingest coordinator implementation for protocol-based knowledge ingest.
 Content intake: read files, URLs, or plain text into IntakeResult.
 
 ### Imports
-
 - `__future__`
 - `asyncio`
 - `datetime`
@@ -1622,7 +1441,6 @@ Content intake: read files, URLs, or plain text into IntakeResult.
 - `typing`
 
 ### Interfaces
-
 - `class IntakeResult(BaseModel)`
 - `async def read_file(path: Path, *, workspace_root: Path) -> IntakeResult`
 - `async def read_url(url: str) -> IntakeResult`
@@ -1633,7 +1451,6 @@ Content intake: read files, URLs, or plain text into IntakeResult.
 Qdrant-backed vector storage for hybrid search.
 
 ### Imports
-
 - `__future__`
 - `datetime`
 - `math`
@@ -1642,7 +1459,6 @@ Qdrant-backed vector storage for hybrid search.
 - `uuid`
 
 ### Interfaces
-
 - `def _cosine_similarity(a: list[float], b: list[float]) -> float`
 - `def _point_id(entity_or_doc_id: str) -> str`
 - `class QdrantVectorStore`
@@ -1659,14 +1475,12 @@ Qdrant-backed vector storage for hybrid search.
 Query facade implementation for combined content and graph search.
 
 ### Imports
-
 - `__future__`
 - `owlbear_knowledge.protocols.content`
 - `owlbear_knowledge.protocols.graph`
 - `owlbear_knowledge.protocols.query`
 
 ### Interfaces
-
 - `class QueryFacade`
   - `def __init__(self, *, content: ContentStore, graph: GraphStore) -> None`
   - `async def search(self, request: QueryRequest) -> QueryResult`
@@ -1688,7 +1502,6 @@ Query facade implementation for combined content and graph search.
 Source fetcher adapter implementing the SourceFetcher protocol.
 
 ### Imports
-
 - `__future__`
 - `owlbear_knowledge`
 - `owlbear_knowledge._paths`
@@ -1698,7 +1511,6 @@ Source fetcher adapter implementing the SourceFetcher protocol.
 - `typing`
 
 ### Interfaces
-
 - `class CompositeSourceFetcher(SourceFetcher)`
   - `def __init__(self, *, workspace_root: Path, content_fetcher_factory: Callable[[FetchTransport], ContentFetcher]) -> None`
   - `async def fetch_source(self, source: ConfiguredSourceRecord, *, cancel: CancelSignal | None = None) -> FetchResult`
@@ -1712,7 +1524,6 @@ Source fetcher adapter implementing the SourceFetcher protocol.
 owlbear_knowledge.protocols — Public boundary types and store protocols.
 
 ### Imports
-
 - `owlbear_knowledge.protocols.common`
 - `owlbear_knowledge.protocols.content`
 - `owlbear_knowledge.protocols.enrichment`
@@ -1728,7 +1539,6 @@ owlbear_knowledge.protocols — Public boundary types and store protocols.
 Shared boundary foundations for the knowledge module protocol surface.
 
 ### Imports
-
 - `__future__`
 - `enum`
 - `pydantic`
@@ -1736,7 +1546,6 @@ Shared boundary foundations for the knowledge module protocol surface.
 - `unicodedata`
 
 ### Interfaces
-
 - `class BoundaryModel(BaseModel)`
 - `class EntityType(StrEnum)`
 - `class RelationType(StrEnum)`
@@ -1747,7 +1556,6 @@ Shared boundary foundations for the knowledge module protocol surface.
 ContentStore Protocol — Content module public surface.
 
 ### Imports
-
 - `__future__`
 - `datetime`
 - `enum`
@@ -1756,7 +1564,6 @@ ContentStore Protocol — Content module public surface.
 - `typing`
 
 ### Interfaces
-
 - `class ContentIngestState(StrEnum)`
 - `class ContentIngestRequest(BoundaryModel)`
 - `class ContentDocument(BoundaryModel)`
@@ -1780,7 +1587,6 @@ ContentStore Protocol — Content module public surface.
 EnrichmentStore Protocol — Enrichment module public surface.
 
 ### Imports
-
 - `__future__`
 - `datetime`
 - `enum`
@@ -1789,7 +1595,6 @@ EnrichmentStore Protocol — Enrichment module public surface.
 - `typing`
 
 ### Interfaces
-
 - `class EnrichmentState(StrEnum)`
 - `class ExtractedEntity(BoundaryModel)`
 - `class ExtractedRelation(BoundaryModel)`
@@ -1818,14 +1623,12 @@ EnrichmentStore Protocol — Enrichment module public surface.
 Source fetcher protocol and boundary models for source refresh.
 
 ### Imports
-
 - `__future__`
 - `owlbear_knowledge.protocols.common`
 - `pydantic`
 - `typing`
 
 ### Interfaces
-
 - `class FetchedDocument(BoundaryModel)`
 - `class FetchError(BoundaryModel)`
 - `class FetchResult(BoundaryModel)`
@@ -1837,7 +1640,6 @@ Source fetcher protocol and boundary models for source refresh.
 GraphStore Protocol — Graph module public surface.
 
 ### Imports
-
 - `__future__`
 - `datetime`
 - `enum`
@@ -1846,7 +1648,6 @@ GraphStore Protocol — Graph module public surface.
 - `typing`
 
 ### Interfaces
-
 - `class EvidenceClaimType(StrEnum)`
 - `class TraversalDirection(StrEnum)`
 - `class EntityInput(BoundaryModel)`
@@ -1884,7 +1685,6 @@ GraphStore Protocol — Graph module public surface.
 IngestCoordinator Protocol — Ingest module public surface.
 
 ### Imports
-
 - `__future__`
 - `datetime`
 - `enum`
@@ -1897,7 +1697,6 @@ IngestCoordinator Protocol — Ingest module public surface.
 - `typing`
 
 ### Interfaces
-
 - `class IngestRequest(BoundaryModel)`
 - `class IngestDocument(BoundaryModel)`
 - `class IngestResult(BoundaryModel)`
@@ -1918,7 +1717,6 @@ IngestCoordinator Protocol — Ingest module public surface.
 QueryFacade Protocol — Query module public surface.
 
 ### Imports
-
 - `__future__`
 - `owlbear_knowledge.protocols.common`
 - `owlbear_knowledge.protocols.content`
@@ -1927,7 +1725,6 @@ QueryFacade Protocol — Query module public surface.
 - `typing`
 
 ### Interfaces
-
 - `class QueryRequest(BoundaryModel)`
 - `class EntityLookupRequest(BoundaryModel)`
   - `def _check_id_or_name(self) -> EntityLookupRequest`
@@ -1946,13 +1743,11 @@ QueryFacade Protocol — Query module public surface.
 CI-enforceable registries — single source of truth for ownership mappings.
 
 ### Imports
-
 - `__future__`
 - `enum`
 - `typing`
 
 ### Interfaces
-
 - `class KnowledgeModule(StrEnum)`
 
 ## serve/knowledge/src/owlbear_knowledge/protocols/sources.py
@@ -1960,7 +1755,6 @@ CI-enforceable registries — single source of truth for ownership mappings.
 SourceStore Protocol — Sources module public surface.
 
 ### Imports
-
 - `__future__`
 - `datetime`
 - `enum`
@@ -1969,7 +1763,6 @@ SourceStore Protocol — Sources module public surface.
 - `typing`
 
 ### Interfaces
-
 - `class SourceKind(StrEnum)`
 - `class FetchTransport(StrEnum)`
 - `class SourceState(StrEnum)`
@@ -2002,7 +1795,6 @@ SourceStore Protocol — Sources module public surface.
 Knowledge protocol store implementations.
 
 ### Imports
-
 - `__future__`
 - `owlbear_knowledge.stores.content`
 - `owlbear_knowledge.stores.graph`
@@ -2013,7 +1805,6 @@ Knowledge protocol store implementations.
 SQLite implementation of the ContentStore protocol.
 
 ### Imports
-
 - `__future__`
 - `datetime`
 - `hashlib`
@@ -2025,7 +1816,6 @@ SQLite implementation of the ContentStore protocol.
 - `uuid`
 
 ### Interfaces
-
 - `def compute_content_hash(content: str) -> str`
 - `class ContentStore(ContentStoreProtocol)`
   - `def __init__(self, *, db: sqlite3.Connection, vector_store: object, embedding_provider: EmbeddingProvider, chunker: TextChunker) -> None`
@@ -2060,7 +1850,6 @@ SQLite implementation of the ContentStore protocol.
 SQLite-backed Enrichment queue state-machine store.
 
 ### Imports
-
 - `__future__`
 - `datetime`
 - `itertools`
@@ -2073,7 +1862,6 @@ SQLite-backed Enrichment queue state-machine store.
 - `uuid`
 
 ### Interfaces
-
 - `class EnrichmentStore(EnrichmentStoreProtocol)`
   - `def __init__(self, *, db: sqlite3.Connection, graph: GraphStore | None = None, content: ContentStore | None = None) -> None`
   - `def ensure_tables(self) -> None`
@@ -2100,7 +1888,6 @@ SQLite-backed Enrichment queue state-machine store.
 SQLite-backed GraphStore implementation for entity and edge operations.
 
 ### Imports
-
 - `__future__`
 - `collections`
 - `dataclasses`
@@ -2112,7 +1899,6 @@ SQLite-backed GraphStore implementation for entity and edge operations.
 - `uuid`
 
 ### Interfaces
-
 - `class SqliteGraphStore(GraphStore)`
   - `def __init__(self, conn: sqlite3.Connection) -> None`
   - `def ensure_tables(self) -> None`
@@ -2157,7 +1943,6 @@ SQLite-backed GraphStore implementation for entity and edge operations.
 SQLite implementation of the SourceStore protocol.
 
 ### Imports
-
 - `__future__`
 - `datetime`
 - `json`
@@ -2167,7 +1952,6 @@ SQLite implementation of the SourceStore protocol.
 - `uuid`
 
 ### Interfaces
-
 - `class SqliteSourceStore(SourceStore)`
   - `def __init__(self, conn: sqlite3.Connection) -> None`
   - `def ensure_tables(self) -> None`
@@ -2195,7 +1979,6 @@ SQLite implementation of the SourceStore protocol.
 OwlBear MCP browser server — exposes browser content fetching via MCP.
 
 ### Imports
-
 - `owlbear_mcp_browser`
 - `owlbear_mcp_browser.server`
 
@@ -2204,7 +1987,6 @@ OwlBear MCP browser server — exposes browser content fetching via MCP.
 Entry point for ``python -m owlbear_mcp_browser``.
 
 ### Imports
-
 - `__future__`
 - `owlbear_mcp_browser.server`
 
@@ -2213,12 +1995,10 @@ Entry point for ``python -m owlbear_mcp_browser``.
 Domain allowlist for browser MCP navigation.
 
 ### Imports
-
 - `__future__`
 - `urllib.parse`
 
 ### Interfaces
-
 - `class DomainAllowlist`
   - `def __init__(self, domains: list[str]) -> None`
   - `def check(self, url: str) -> None`
@@ -2228,7 +2008,6 @@ Domain allowlist for browser MCP navigation.
 OwlBear MCP browser server — browser-control tools with domain allowlist.
 
 ### Imports
-
 - `__future__`
 - `asyncio`
 - `contextlib`
@@ -2249,7 +2028,6 @@ OwlBear MCP browser server — browser-control tools with domain allowlist.
 - `urllib.parse`
 
 ### Interfaces
-
 - `def _is_blocked_ip(ip_str: str) -> bool`
 - `async def _check_ssrf(url: str) -> None`
 - `class AppContext`
@@ -2267,7 +2045,6 @@ OwlBear MCP browser server — browser-control tools with domain allowlist.
 OwlBear MCP kanban package.
 
 ### Imports
-
 - `__future__`
 
 ## serve/mcp-kanban/src/owlbear_mcp_kanban/__main__.py
@@ -2275,7 +2052,6 @@ OwlBear MCP kanban package.
 Entry point for ``python -m owlbear_mcp_kanban``.
 
 ### Imports
-
 - `__future__`
 - `owlbear_mcp_kanban.server`
 
@@ -2284,12 +2060,10 @@ Entry point for ``python -m owlbear_mcp_kanban``.
 Contextual guidance messages for kanban MCP operations.
 
 ### Imports
-
 - `__future__`
 - `typing`
 
 ### Interfaces
-
 - `def collect_guidance(operation: str, before: KanbanTask | None, after: KanbanTask, **kwargs: object) -> list[str]`
 - `def _is_block_operation(operation: str, after: KanbanTask, kwargs: dict[str, object]) -> bool`
 - `def _is_success_operation(operation: str, kwargs: dict[str, object]) -> bool`
@@ -2301,13 +2075,11 @@ Contextual guidance messages for kanban MCP operations.
 Pydantic models for kanban-md task data at the MCP protocol boundary.
 
 ### Imports
-
 - `__future__`
 - `pydantic`
 - `typing`
 
 ### Interfaces
-
 - `class MCPParamsBase(BaseModel)`
 - `class ListTasksParams(MCPParamsBase)`
   - `def _validate_ids_exclusivity(self) -> ListTasksParams`
@@ -2326,7 +2098,6 @@ Pydantic models for kanban-md task data at the MCP protocol boundary.
 OwlBear MCP kanban server — exposes KanbanEngine operations as MCP tools.
 
 ### Imports
-
 - `__future__`
 - `asyncio`
 - `contextlib`
@@ -2347,7 +2118,6 @@ OwlBear MCP kanban server — exposes KanbanEngine operations as MCP tools.
 - `uuid`
 
 ### Interfaces
-
 - `def _coerce_to_str(v: str | int) -> str`
 - `def _resolve_kanban_dir() -> Path`
 - `def _normalize_escaped_newlines(text: str) -> tuple[str, bool]`
@@ -2387,7 +2157,6 @@ OwlBear MCP kanban server — exposes KanbanEngine operations as MCP tools.
 OwlBear MCP knowledge package.
 
 ### Imports
-
 - `__future__`
 
 ## serve/mcp-knowledge/src/owlbear_mcp_knowledge/__main__.py
@@ -2395,7 +2164,6 @@ OwlBear MCP knowledge package.
 Entry point for the owlbear-mcp-knowledge MCP server.
 
 ### Imports
-
 - `__future__`
 - `owlbear_mcp_knowledge.server`
 
@@ -2404,7 +2172,6 @@ Entry point for the owlbear-mcp-knowledge MCP server.
 Utility functions: normalization and serialization helpers.
 
 ### Imports
-
 - `._types`
 - `__future__`
 - `mcp.server.fastmcp.exceptions`
@@ -2413,7 +2180,6 @@ Utility functions: normalization and serialization helpers.
 - `typing`
 
 ### Interfaces
-
 - `def _sanitize_error(raw: str | None) -> str | None`
 - `def select_content_fetcher(method: str) -> ContentFetcher`
 - `def _serialize_search_entities(value: object) -> list[SearchEntity]`
@@ -2432,12 +2198,10 @@ Utility functions: normalization and serialization helpers.
 Shared TypedDicts and constants for owlbear-mcp-knowledge.
 
 ### Imports
-
 - `__future__`
 - `typing`
 
 ### Interfaces
-
 - `class SearchResult(TypedDict)`
 - `class SearchEntity(TypedDict)`
 - `class RelatedSource(TypedDict)`
@@ -2455,7 +2219,6 @@ Shared TypedDicts and constants for owlbear-mcp-knowledge.
 FastMCP server for owlbear-mcp-knowledge: knowledge ingestion and search tools.
 
 ### Imports
-
 - `._helpers`
 - `._types`
 - `__future__`
@@ -2489,7 +2252,6 @@ FastMCP server for owlbear-mcp-knowledge: knowledge ingestion and search tools.
 - `typing`
 
 ### Interfaces
-
 - `class _LegacyCompatibleEventLoopPolicy(asyncio.DefaultEventLoopPolicy)`
   - `def get_event_loop(self) -> asyncio.AbstractEventLoop`
 - `def _install_legacy_event_loop_policy() -> None`
@@ -2524,7 +2286,6 @@ Stub package for owlbear_mcp_memory.
 Entry point for ``python -m owlbear_mcp_memory``.
 
 ### Imports
-
 - `__future__`
 - `owlbear_mcp_memory.server`
 
@@ -2533,7 +2294,6 @@ Entry point for ``python -m owlbear_mcp_memory``.
 Markdown frontmatter file engine for memory entries.
 
 ### Imports
-
 - `__future__`
 - `contextlib`
 - `logging`
@@ -2548,7 +2308,6 @@ Markdown frontmatter file engine for memory entries.
 - `yaml`
 
 ### Interfaces
-
 - `def _slugify(value: str) -> str`
 - `def _random_suffix(length: int = _SUFFIX_LEN) -> str`
 - `class MtimeScanCache`
@@ -2568,7 +2327,6 @@ Markdown frontmatter file engine for memory entries.
 Git helpers for mcp-memory batch commit operations.
 
 ### Imports
-
 - `__future__`
 - `argparse`
 - `logging`
@@ -2579,7 +2337,6 @@ Git helpers for mcp-memory batch commit operations.
 - `yaml`
 
 ### Interfaces
-
 - `def _git(repo_dir: Path, *args: str) -> str`
 - `def _state_from_file(file_path: Path) -> str | None`
 - `def commit_batch(memory_dir: Path, *, session_type: str) -> str`
@@ -2590,7 +2347,6 @@ Git helpers for mcp-memory batch commit operations.
 Pydantic models for owlbear-mcp-memory.
 
 ### Imports
-
 - `__future__`
 - `datetime`
 - `enum`
@@ -2598,7 +2354,6 @@ Pydantic models for owlbear-mcp-memory.
 - `re`
 
 ### Interfaces
-
 - `class MemoryCategory(enum.StrEnum)`
 - `class MemoryState(enum.StrEnum)`
 - `class MemoryEntry(BaseModel)`
@@ -2613,7 +2368,6 @@ Pydantic models for owlbear-mcp-memory.
 OwlBear MCP memory server for markdown-frontmatter memory operations.
 
 ### Imports
-
 - `__future__`
 - `contextlib`
 - `dataclasses`
@@ -2627,7 +2381,6 @@ OwlBear MCP memory server for markdown-frontmatter memory operations.
 - `typing`
 
 ### Interfaces
-
 - `class AppContext`
 - `async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]`
 - `async def save_memory(ctx: Context, *, title: _Title, content: _Content, categories: _Categories, confidence: _Confidence, source_agent: _Agent, scope_agents: list[str] | None = None) -> dict[str, Any]`
@@ -2644,7 +2397,6 @@ OwlBear MCP memory server for markdown-frontmatter memory operations.
 MCP tool implementations for markdown-backed memory entries.
 
 ### Imports
-
 - `__future__`
 - `mcp.server.fastmcp.exceptions`
 - `owlbear_memory`
@@ -2652,7 +2404,6 @@ MCP tool implementations for markdown-backed memory entries.
 - `typing`
 
 ### Interfaces
-
 - `def _allowed_assessment_values() -> str`
 - `def _engine_from_ctx(ctx: Context) -> MemoryEngine`
 - `def _allowed_category_values() -> str`
@@ -2683,7 +2434,6 @@ MCP tool implementations for markdown-backed memory entries.
 owlbear-memory package exports.
 
 ### Imports
-
 - `__future__`
 - `owlbear_memory.engine`
 - `owlbear_memory.errors`
@@ -2694,7 +2444,6 @@ owlbear-memory package exports.
 Memory engine with state transitions, OCC, and mtime-based caching.
 
 ### Imports
-
 - `__future__`
 - `datetime`
 - `logging`
@@ -2708,7 +2457,6 @@ Memory engine with state transitions, OCC, and mtime-based caching.
 - `uuid`
 
 ### Interfaces
-
 - `def compute_score(confidence: float, outstanding_count: int, unremarkable_count: int) -> float`
 - `def check_slot_efficiency(entry: MemoryEntry) -> bool`
 - `class EditPayload(TypedDict)`
@@ -2741,11 +2489,9 @@ Memory engine with state transitions, OCC, and mtime-based caching.
 Domain exception types for memory primitives.
 
 ### Imports
-
 - `__future__`
 
 ### Interfaces
-
 - `class NotFoundError(Exception)`
 - `class ConcurrencyError(Exception)`
 - `class ValidationError(Exception)`
@@ -2756,7 +2502,6 @@ Domain exception types for memory primitives.
 memory-migrate: migrate legacy memory entries to score-based fields.
 
 ### Imports
-
 - `__future__`
 - `argparse`
 - `os`
@@ -2765,7 +2510,6 @@ memory-migrate: migrate legacy memory entries to score-based fields.
 - `sys`
 
 ### Interfaces
-
 - `def _resolve_memory_dir(value: Path | None) -> Path`
 - `def main() -> None`
 
@@ -2774,7 +2518,6 @@ memory-migrate: migrate legacy memory entries to score-based fields.
 Pydantic data models for memory entries.
 
 ### Imports
-
 - `__future__`
 - `datetime`
 - `enum`
@@ -2782,7 +2525,6 @@ Pydantic data models for memory entries.
 - `re`
 
 ### Interfaces
-
 - `class MemoryCategory(enum.StrEnum)`
 - `class MemoryState(enum.StrEnum)`
 - `class MemoryEntry(BaseModel)`
@@ -2797,7 +2539,6 @@ Pydantic data models for memory entries.
 File I/O primitives for markdown-backed memory entries.
 
 ### Imports
-
 - `__future__`
 - `contextlib`
 - `io`
@@ -2812,7 +2553,6 @@ File I/O primitives for markdown-backed memory entries.
 - `typing`
 
 ### Interfaces
-
 - `def _assert_within_memory_dir(path: Path, memory_dir: Path) -> None`
 - `def _reject_symlink(path: Path) -> None`
 - `def read_entry(path: Path) -> MemoryEntry | None`
@@ -2824,7 +2564,6 @@ File I/O primitives for markdown-backed memory entries.
 OwlBear utility tools package.
 
 ### Imports
-
 - `__future__`
 
 ## serve/tools/src/owlbear_tools/commit_owned.py
@@ -2832,7 +2571,6 @@ OwlBear utility tools package.
 Commit explicitly owned paths without disturbing an existing Git index.
 
 ### Imports
-
 - `__future__`
 - `argparse`
 - `pathlib`
@@ -2841,7 +2579,6 @@ Commit explicitly owned paths without disturbing an existing Git index.
 - `typing`
 
 ### Interfaces
-
 - `class CommitOwnedError(RuntimeError)`
   - `def __init__(self, detail: str) -> None`
 - `def _git(cwd: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]`
@@ -2855,7 +2592,6 @@ Commit explicitly owned paths without disturbing an existing Git index.
 Doc-index generator and parser for the OwlBear workspace.
 
 ### Imports
-
 - `__future__`
 - `argparse`
 - `os`
@@ -2864,7 +2600,6 @@ Doc-index generator and parser for the OwlBear workspace.
 - `typing`
 
 ### Interfaces
-
 - `class LinkEntry(TypedDict)`
 - `class DocEntry(TypedDict)`
 - `def _is_excluded_dir(dirpath: Path, root: Path) -> bool`
@@ -2881,7 +2616,6 @@ Doc-index generator and parser for the OwlBear workspace.
 Regenerate all OwlBear navigation indexes concurrently.
 
 ### Imports
-
 - `__future__`
 - `argparse`
 - `concurrent.futures`
@@ -2891,7 +2625,6 @@ Regenerate all OwlBear navigation indexes concurrently.
 - `pathlib`
 
 ### Interfaces
-
 - `def generate_indexes(root: Path) -> None`
 - `def main() -> None`
 
@@ -2900,7 +2633,6 @@ Regenerate all OwlBear navigation indexes concurrently.
 Lint shortcuts — thin wrappers around pre-commit.
 
 ### Imports
-
 - `__future__`
 - `os`
 - `pathlib`
@@ -2909,7 +2641,6 @@ Lint shortcuts — thin wrappers around pre-commit.
 - `sys`
 
 ### Interfaces
-
 - `def _run(args: list[str], *, hint: str = '') -> None`
 - `def lint() -> None`
 - `def lint_all() -> None`
@@ -2924,7 +2655,6 @@ Lint shortcuts — thin wrappers around pre-commit.
 Generate a structural index of Python source files.
 
 ### Imports
-
 - `__future__`
 - `argparse`
 - `ast`
@@ -2932,7 +2662,6 @@ Generate a structural index of Python source files.
 - `pathlib`
 
 ### Interfaces
-
 - `def _annotation(node: ast.expr | None) -> str`
 - `def _argument(argument: ast.arg, default: ast.expr | None = None, *, prefix: str = '') -> str`
 - `def _arguments(arguments: ast.arguments) -> str`
@@ -2947,13 +2676,11 @@ Generate a structural index of Python source files.
 Launch the Semble CLI without making it an OwlBear dependency.
 
 ### Imports
-
 - `__future__`
 - `subprocess`
 - `sys`
 
 ### Interfaces
-
 - `def main(arguments: list[str] | None = None) -> int`
 
 ## serve/tools/src/owlbear_tools/source_index.py
@@ -2961,14 +2688,12 @@ Launch the Semble CLI without making it an OwlBear dependency.
 Shared filesystem and rendering helpers for source indexes.
 
 ### Imports
-
 - `__future__`
 - `os`
 - `pathlib`
 - `typing`
 
 ### Interfaces
-
 - `def _is_excluded_dir(path: Path, root: Path) -> bool`
 - `def collect_sources(root: Path, suffixes: Collection[str]) -> list[Path]`
 - `def clean_line(text: str) -> str`
@@ -2978,7 +2703,6 @@ Shared filesystem and rendering helpers for source indexes.
 Generate a structural index of TypeScript and JavaScript source files.
 
 ### Imports
-
 - `__future__`
 - `argparse`
 - `owlbear_tools.source_index`
@@ -2987,7 +2711,6 @@ Generate a structural index of TypeScript and JavaScript source files.
 - `typing`
 
 ### Interfaces
-
 - `def _language(path: Path) -> str`
 - `def _text(node: Node, source: bytes) -> str`
 - `def _prefix_through(node: Node, source: bytes, stop_types: set[str]) -> str`
@@ -3003,10 +2726,10 @@ Generate a structural index of TypeScript and JavaScript source files.
 OwlBear workspace initialiser — setup/init.py.
 
 ### Imports
-
 - `__future__`
 - `contextlib`
 - `difflib`
+- `importlib.util`
 - `json`
 - `os`
 - `pathlib`
@@ -3016,7 +2739,7 @@ OwlBear workspace initialiser — setup/init.py.
 - `warnings`
 
 ### Interfaces
-
+- `def _install_openspec(target_dir: Path) -> None`
 - `def _strip_jsonc_comments(text: str) -> str`
 - `def _merge_settings(owlbear: dict, existing: dict) -> dict`
 - `def _replace_placeholders(content: str, replacements: dict[str, str]) -> str`
@@ -3037,7 +2760,6 @@ OwlBear workspace initialiser — setup/init.py.
 Install the pinned OwlBear OpenSpec workflow into a target repository.
 
 ### Imports
-
 - `__future__`
 - `argparse`
 - `os`
@@ -3047,11 +2769,17 @@ Install the pinned OwlBear OpenSpec workflow into a target repository.
 - `yaml`
 
 ### Interfaces
-
+- `class _IndentedSafeDumper(yaml.SafeDumper)`
+  - `def increase_indent(self, flow: bool = False, indentless: bool = False) -> None`
+- `def _openspec_env() -> dict[str, str]`
+- `def _has_pinned_version(executable: str) -> bool`
+- `def _ensure_openspec_cli() -> str`
 - `def _run_openspec_init(target: Path) -> None`
-- `def _install_schema(target: Path) -> None`
+- `def _remove_legacy_schema(target: Path) -> None`
+- `def _without_managed_context(context: str, managed_context: str) -> str`
 - `def _configure_schema(target: Path) -> None`
-- `def _install_grill_skill(target: Path) -> None`
+- `def _remove_legacy_grill_skill(target: Path) -> None`
+- `def _remove_legacy_speckit(target: Path) -> None`
 - `def _update_gitignore(target: Path) -> None`
 - `def install(target: Path, *, initialize: bool = True) -> None`
 - `def _build_parser() -> argparse.ArgumentParser`

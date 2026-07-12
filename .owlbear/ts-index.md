@@ -3,28 +3,23 @@
 ## serve/cockpit/web/eslint.config.js
 
 ### Imports
-
 - `import js from "@eslint/js"`
 - `import tseslint from "typescript-eslint"`
 
 ### Interfaces
-
 - `export default tseslint.config( { ignores: [ "dist/**", "coverage/**", "playwright-report/**", "node_modules/**", "public/porsche-design-system/**", "*.config.js", "*.config.ts", ], }, js.configs.recommended, ...tseslint.configs.recommended, { languageOptions: { ecmaVersion: 2022, sourceType: "module", parserOptions: { ecmaFeatures: { jsx: true }, }, globals: { window: "readonly", document: "readonly", console: "readonly", fetch: "readonly", setTimeout: "readonly", clearTimeout: "readonly", setInterval: "readonly", clearInterval: "readonly", }, }, rules: { // Project-wide overrides intentionally minimal. // Add React/Hook rules in a follow-up if/when needed. "@typescript-eslint/no-unused-vars": [ "warn", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }, ], // Ban raw PDS custom elements — use React wrappers from // @porsche-design-system/components-react instead. // Raw custom elements + React 19 SyntheticEvent = broken event.detail. "no-restricted-syntax": [ "error", { selector: "JSXOpeningElement[name.name='p-select']", message: "Use <PSelect> from @porsche-design-system/components-react instead of raw <p-select>.", }, { selector: "JSXOpeningElement[name.name='p-button']", message: "Use <PButton> from @porsche-design-system/components-react instead of raw <p-button>.", }, { selector: "JSXOpeningElement[name.name='p-input-search']", message: "Use <PInputSearch> from @porsche-design-system/components-react instead of raw <p-input-search>.", }, { selector: "JSXOpeningElement[name.name='p-input-text']", message: "Use <PInputText> from @porsche-design-system/components-react instead of raw <p-input-text>.", }, { selector: "JSXOpeningElement[name.name='p-tag']", message: "Use <PTag> from @porsche-design-system/components-react instead of raw <p-tag>.", }, ], }, }, { files: ["scripts/**/*.mjs"], languageOptions: { globals: { process: "readonly", Buffer: "readonly", console: "readonly", }, }, }, )`
 
 ## serve/cockpit/web/playwright.config.ts
 
 ### Imports
-
 - `import { defineConfig, devices } from '@playwright/test'`
 
 ### Interfaces
-
 - `export default defineConfig({ testDir: 'e2e', use: { baseURL: 'http://localhost:4173', headless: true, }, projects: [ { name: 'chromium', use: { ...devices['Desktop Chrome'] }, }, ], webServer: { command: 'npm run build && npm run preview', url: 'http://localhost:4173', reuseExistingServer: !process.env['CI'], }, })`
 
 ## serve/cockpit/web/vite.config.ts
 
 ### Imports
-
 - `import { defineConfig } from 'vitest/config'`
 - `import react, { reactCompilerPreset } from '@vitejs/plugin-react'`
 - `import tailwindcss from '@tailwindcss/vite'`
@@ -34,7 +29,6 @@
 - `import { join } from 'node:path'`
 
 ### Interfaces
-
 - `function cspPlugin()`
 - `function pdsVersionCheckPlugin()`
 - `export default defineConfig({ plugins: [tailwindcss(), react(), babel({ presets: [reactCompilerPreset()] }), pdsVersionCheckPlugin(), cspPlugin()], build: { outDir: '../dist', emptyOutDir: true, }, css: { lightningcss: { exclude: Features.LightDark, }, }, test: { environment: 'jsdom', setupFiles: ['./vitest.setup.ts'], globals: true, include: ['src/**/*.{test,spec}.{ts,tsx}'], testTimeout: 20_000, teardownTimeout: 3_000, // Suppress React act() warnings — thousands of these drown real errors. // Keep all other console output for debugging. onConsoleLog(log) { if (log.includes('not wrapped in act')) return false }, }, })`
@@ -42,7 +36,6 @@
 ## serve/cockpit/web/vitest.setup.ts
 
 ### Imports
-
 - `import '@porsche-design-system/components-react/jsdom-polyfill'`
 - `import '@testing-library/jest-dom/vitest'`
 - `import { skipCheckForPorscheDesignSystemProviderDuringTests, skipPorscheDesignSystemCDNRequestsDuringTests, } from '@porsche-design-system/components-react'`
@@ -51,11 +44,9 @@
 ## serve/cockpit/web/e2e/support/workspace-readiness.ts
 
 ### Imports
-
 - `import { type Page } from '@playwright/test'`
 
 ### Interfaces
-
 - `const DEFAULT_TIMEOUT_MS`
 - `const TRANSFORM_EPSILON`
 - `type WorkspaceReadinessOptions = { routeContentSelector?: string timeout?: number }`
@@ -73,7 +64,6 @@
 ## serve/cockpit/web/src/App.tsx
 
 ### Imports
-
 - `import { useMemo, type ReactNode } from 'react'`
 - `import { createBrowserRouter, RouterProvider } from 'react-router'`
 - `import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'`
@@ -83,7 +73,6 @@
 - `import * as EventSourceProviderModule from './hooks/EventSourceProvider'`
 
 ### Interfaces
-
 - `function PassthroughProvider({ children }: { children: ReactNode; url?: string })`
 - `const EventSourceProvider =`
 - `function CockpitRuntime()`
@@ -93,7 +82,6 @@
 ## serve/cockpit/web/src/KanbanBoard.tsx
 
 ### Imports
-
 - `import { useState, useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from 'react'`
 - `import { PButton, PTag } from '@porsche-design-system/components-react'`
 - `import { Column } from './components/Column'`
@@ -107,7 +95,6 @@
 - `import { ApiError } from './api/errors'`
 
 ### Interfaces
-
 - `interface ContextMenuState`
 - `interface ArchivalModalState`
 - `const EMPTY_FILTER: FilterState`
@@ -129,7 +116,6 @@
 ## serve/cockpit/web/src/Shell.tsx
 
 ### Imports
-
 - `import { Suspense, useCallback, useRef, useEffect, useMemo, useState, type ComponentType, type CSSProperties } from 'react'`
 - `import { useLocation, useNavigate } from 'react-router'`
 - `import { AnimatePresence, motion } from 'motion/react'`
@@ -151,7 +137,6 @@
 - `import { OPEN_TASK_DETAIL_EVENT, readOpenTaskDetailEvent } from './utils/openTaskDetail'`
 
 ### Interfaces
-
 - `function isHealthBadgeItem(item: ScanPollingItem): item is HealthBadgeItem`
 - `function syncHeadingTagAttr(tag: 'h1' | 'h2', size?: 'large' | 'medium' | 'small')`
 - `function syncTagVariantAttr(variant: string)`
@@ -165,7 +150,6 @@
 ## serve/cockpit/web/src/main.tsx
 
 ### Imports
-
 - `import { StrictMode } from 'react'`
 - `import { createRoot } from 'react-dom/client'`
 - `import { load } from '@porsche-design-system/components-js'`
@@ -174,7 +158,6 @@
 - `import App from './App'`
 
 ### Interfaces
-
 - `const REQUIRED_PDS_ELEMENTS`
 - `function applyTokenFallbacks(): void`
 - `function installPdsCdnTrap(): void`
@@ -184,12 +167,10 @@
 ## serve/cockpit/web/src/routes.ts
 
 ### Imports
-
 - `import { lazy, type ComponentType, type LazyExoticComponent } from 'react'`
 - `import KanbanBoard, { type KanbanBoardProps } from './KanbanBoard'`
 
 ### Interfaces
-
 - `const DecisionsPage`
 - `const IdeasPage`
 - `const MemoryTab`
@@ -202,11 +183,9 @@
 ## serve/cockpit/web/src/api/cleanup.ts
 
 ### Imports
-
 - `import { getResponseErrorMessage } from './errorMessage'`
 
 ### Interfaces
-
 - `export interface SkippedCleanupItem`
 - `export interface CleanupResult`
 - `export async function cleanupTasks(): Promise<CleanupResult>`
@@ -214,12 +193,10 @@
 ## serve/cockpit/web/src/api/decisions.ts
 
 ### Imports
-
 - `import { ApiError } from './errors'`
 - `import { getResponseErrorMessage } from './errorMessage'`
 
 ### Interfaces
-
 - `export interface ResolveRequest`
 - `export interface ResolveResponse`
 - `export async function resolveDR(id: string, request: ResolveRequest): Promise<ResolveResponse>`
@@ -227,7 +204,6 @@
 ## serve/cockpit/web/src/api/errorMessage.ts
 
 ### Interfaces
-
 - `function readValidationField(loc: unknown): string | null`
 - `function readDetailArray(detail: unknown): string | null`
 - `function readMessageField(payload: unknown): string | null`
@@ -236,7 +212,6 @@
 ## serve/cockpit/web/src/api/errors.ts
 
 ### Interfaces
-
 - `export class ApiError extends Error`
   - `readonly status: number`
   - `constructor(status: number, message: string)`
@@ -244,12 +219,10 @@
 ## serve/cockpit/web/src/api/ideas.ts
 
 ### Imports
-
 - `import { getResponseErrorMessage } from './errorMessage'`
 - `import { ApiError } from './errors'`
 
 ### Interfaces
-
 - `interface IdeasResponse`
 - `interface IdeasSaveOptions`
 - `export class IdeasSaveConflictError extends Error`
@@ -262,12 +235,10 @@
 ## serve/cockpit/web/src/api/memories.ts
 
 ### Imports
-
 - `import { getResponseErrorMessage } from './errorMessage'`
 - `import { ApiError } from './errors'`
 
 ### Interfaces
-
 - `export type MemoryState = 'pending' | 'curated' | 'approved' | 'deleted'`
 - `export interface MemoryEntry`
 - `export interface MemoryEditPayload`
@@ -289,23 +260,19 @@
 ## serve/cockpit/web/src/api/repair.ts
 
 ### Imports
-
 - `import { getResponseErrorMessage } from './errorMessage'`
 
 ### Interfaces
-
 - `export interface RepairOutcome`
 - `export async function repairStorage(): Promise<RepairOutcome[]>`
 
 ## serve/cockpit/web/src/api/tasks.ts
 
 ### Imports
-
 - `import { getResponseErrorMessage } from './errorMessage'`
 - `import { ApiError } from './errors'`
 
 ### Interfaces
-
 - `export interface TaskDetail`
 - `export interface MoveRequest`
 - `export interface EditRequest`
@@ -320,7 +287,6 @@
 ## serve/cockpit/web/src/components/ActivityTab.tsx
 
 ### Imports
-
 - `import { useState, useEffect, useRef } from 'react'`
 - `import { PButton } from '@porsche-design-system/components-react'`
 - `import { type Session } from './HistorySubtab'`
@@ -329,7 +295,6 @@
 - `import './SessionRows.css'`
 
 ### Interfaces
-
 - `export interface ActivityTabProps`
 - `type FilterType = 'all' | 'active' | 'blocked' | 'stuck' | 'released'`
 - `function formatDuration(duration: number | null): string`
@@ -339,14 +304,12 @@
 ## serve/cockpit/web/src/components/ArchivalModal.tsx
 
 ### Imports
-
 - `import { useEffect, useId, useMemo, useRef, useState } from 'react'`
 - `import { PButton, PHeading, PInlineNotification, PInputText, PModal, PSelect, PSelectOption, PText, } from '@porsche-design-system/components-react'`
 - `import { moveTask, type TaskDetail } from '../api/tasks'`
 - `import { ApiError } from '../api/errors'`
 
 ### Interfaces
-
 - `const TAB_FOCUSABLE_SELECTOR`
 - `const LEGACY_TAB_FOCUSABLE_SELECTOR =`
 - `export const ARCHIVAL_REASONS`
@@ -362,14 +325,12 @@
 ## serve/cockpit/web/src/components/Card.tsx
 
 ### Imports
-
 - `import { PIcon, PTag, type IconName } from '@porsche-design-system/components-react'`
 - `import { motion } from 'motion/react'`
 - `import type { Task } from '../hooks/useBoard'`
 - `import { computeSignal, type CardSignal } from '../utils/computeSignal'`
 
 ### Interfaces
-
 - `const SIGNAL_ICON_NAME: Partial<Record<CardSignal, IconName>>`
 - `const SIGNAL_LABEL: Record<string, string>`
 - `function isRedundantDecisionTag(tag: string, signal: CardSignal): boolean`
@@ -380,14 +341,12 @@
 ## serve/cockpit/web/src/components/CleanupPanel.tsx
 
 ### Imports
-
 - `import { useEffect, useRef } from 'react'`
 - `import { createPortal } from 'react-dom'`
 - `import { PButton, PButtonPure, PModal, PSpinner, PText } from '@porsche-design-system/components-react'`
 - `import { useCleanupFlow } from '../hooks/useCleanupFlow'`
 
 ### Interfaces
-
 - `export interface CleanupPanelProps`
 - `function renderSkippedItems(skippedItems: Array<{ path: string; reason: string }>)`
 - `export default function CleanupPanel({ compact = false, onSuccess, portalConfirmDialog = false }: CleanupPanelProps)`
@@ -395,13 +354,11 @@
 ## serve/cockpit/web/src/components/Column.tsx
 
 ### Imports
-
 - `import { useCallback, useEffect, useRef, useState } from 'react'`
 - `import { Card } from './Card'`
 - `import type { Task } from '../hooks/useBoard'`
 
 ### Interfaces
-
 - `const PRIORITY_RANK: Record<string, number>`
 - `export interface ColumnProps`
 - `function toDisplayStatus(status: string): string`
@@ -414,12 +371,10 @@
 ## serve/cockpit/web/src/components/ConfirmDialog.tsx
 
 ### Imports
-
 - `import { useEffect, useMemo, useRef } from 'react'`
 - `import { PButton, PModal } from '@porsche-design-system/components-react'`
 
 ### Interfaces
-
 - `const TAB_FOCUSABLE_SELECTOR`
 - `export interface ConfirmDialogProps`
 - `export default function ConfirmDialog({ type, targetStatus, blockReason, onCancel, onConfirm, }: ConfirmDialogProps)`
@@ -427,24 +382,20 @@
 ## serve/cockpit/web/src/components/ConflictBanner.tsx
 
 ### Imports
-
 - `import { PButton } from '@porsche-design-system/components-react'`
 
 ### Interfaces
-
 - `export interface ConflictBannerProps`
 - `export default function ConflictBanner({ showConflict, showConflictOverwrite, conflictChangedFields, conflictRemoteValues, conflictLocalValues, onAcknowledgeOverwrite, onDiscardChanges, onForceSave, }: ConflictBannerProps)`
 
 ## serve/cockpit/web/src/components/DRStatusIndicator.tsx
 
 ### Imports
-
 - `import { useEffect, useRef, useState } from 'react'`
 - `import { PButton, PText } from '@porsche-design-system/components-react'`
 - `import type { PendingDR } from '../hooks/usePendingDRs'`
 
 ### Interfaces
-
 - `export interface DRStatusIndicatorProps`
 - `function getAnchoredPopoverPosition(trigger: HTMLElement): { top: string; left: string }`
 - `function formatAge(created: string): string`
@@ -454,12 +405,10 @@
 ## serve/cockpit/web/src/components/DecisionViewport.tsx
 
 ### Imports
-
 - `import { PLinkPure, PText } from '@porsche-design-system/components-react'`
 - `import type { PendingDR } from '../hooks/usePendingDRs'`
 
 ### Interfaces
-
 - `export interface DecisionViewportProps`
 - `function formatAge(created: string): string`
 - `export default function DecisionViewport({ items, isLoading, error, onItemClick }: DecisionViewportProps)`
@@ -467,18 +416,15 @@
 ## serve/cockpit/web/src/components/DecisionsListView.tsx
 
 ### Imports
-
 - `import type { ReactNode } from 'react'`
 
 ### Interfaces
-
 - `interface DecisionsListViewProps`
 - `export default function DecisionsListView({ children }: DecisionsListViewProps)`
 
 ## serve/cockpit/web/src/components/DetailTab.tsx
 
 ### Imports
-
 - `import { useEffect, useMemo, useRef, useState } from 'react'`
 - `import { PButton, PDivider, PHeading, } from '@porsche-design-system/components-react'`
 - `import HistorySubtab, { type Session } from './HistorySubtab'`
@@ -493,7 +439,6 @@
 - `import { getTask } from '../api/tasks'`
 
 ### Interfaces
-
 - `interface TaskDetail`
 - `export interface DetailTabProps`
 - `export type { TaskDetail }`
@@ -505,13 +450,11 @@
 ## serve/cockpit/web/src/components/ErrorBoundary.tsx
 
 ### Imports
-
 - `import { PButton, PHeading } from '@porsche-design-system/components-react'`
 - `import { Component, type ErrorInfo, type ReactNode } from 'react'`
 - `import './ErrorBoundary.css'`
 
 ### Interfaces
-
 - `interface Props`
 - `interface State`
 - `function syncHeadingTagAttr(element: HTMLElement | null): void`
@@ -524,14 +467,12 @@
 ## serve/cockpit/web/src/components/FilterPanel.tsx
 
 ### Imports
-
 - `import { useEffect, useRef } from 'react'`
 - `import { PButton, PCheckbox, PInputSearch, PMultiSelect, PMultiSelectOption, PSelect, PSelectOption, } from '@porsche-design-system/components-react'`
 - `import './FilterPanel.css'`
 - `import type { FilterState } from '../utils/filterTasks'`
 
 ### Interfaces
-
 - `export interface FilterPanelProps`
 - `const EMPTY_FILTER: FilterState`
 - `type ControlValueEvent = { target?: unknown currentTarget?: unknown detail?: { value?: unknown } }`
@@ -544,13 +485,11 @@
 ## serve/cockpit/web/src/components/HealthBadge.tsx
 
 ### Imports
-
 - `import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'`
 - `import { createPortal } from 'react-dom'`
 - `import { PText } from '@porsche-design-system/components-react'`
 
 ### Interfaces
-
 - `export interface ScanItem`
 - `export interface HealthBadgeProps`
 - `function getAnchoredPopoverPosition(trigger: HTMLElement): { top: string; left: string }`
@@ -559,11 +498,9 @@
 ## serve/cockpit/web/src/components/HistorySubtab.tsx
 
 ### Imports
-
 - `import './SessionRows.css'`
 
 ### Interfaces
-
 - `export interface Session`
 - `export interface HistorySubtabProps`
 - `type HistoryRow = Session & { kind: 'created' | 'session' }`
@@ -575,14 +512,12 @@
 ## serve/cockpit/web/src/components/MarkdownPreview.tsx
 
 ### Imports
-
 - `import type { ComponentProps, HTMLAttributes } from 'react'`
 - `import ReactMarkdown from 'react-markdown'`
 - `import rehypeSanitize from 'rehype-sanitize'`
 - `import remarkGfm from 'remark-gfm'`
 
 ### Interfaces
-
 - `type ReactMarkdownProps = ComponentProps<typeof ReactMarkdown>`
 - `export const MARKDOWN_PREVIEW_CLASSNAME`
 - `export interface MarkdownPreviewProps extends Omit<HTMLAttributes<HTMLDivElement>, 'children'>`
@@ -591,7 +526,6 @@
 ## serve/cockpit/web/src/components/RepairPanel.tsx
 
 ### Imports
-
 - `import type { RepairOutcome } from '../api/repair'`
 - `import { useEffect, useRef } from 'react'`
 - `import { createPortal } from 'react-dom'`
@@ -600,7 +534,6 @@
 - `import './RepairPanel.css'`
 
 ### Interfaces
-
 - `export interface RepairPanelProps`
 - `function renderOutcomeRows(outcomes: RepairOutcome[])`
 - `export default function RepairPanel({ corruptionCount, onSuccess, files = [], portalConfirmDialog = false }: RepairPanelProps)`
@@ -608,7 +541,6 @@
 ## serve/cockpit/web/src/components/ResolveModal.tsx
 
 ### Imports
-
 - `import { useCallback, useEffect, useRef, useState } from 'react'`
 - `import { PButton, PHeading, PInlineNotification, PModal, PTag, PText, PTextarea, } from '@porsche-design-system/components-react'`
 - `import type { PendingDR } from '../hooks/usePendingDRs'`
@@ -619,7 +551,6 @@
 - `import MarkdownPreview from './MarkdownPreview'`
 
 ### Interfaces
-
 - `const TAB_FOCUSABLE_SELECTOR`
 - `export type PendingDRWithBody = PendingDR`
 - `export interface ResolveModalProps`
@@ -634,7 +565,6 @@
 ## serve/cockpit/web/src/components/TaskActions.tsx
 
 ### Imports
-
 - `import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'`
 - `import { PButton } from '@porsche-design-system/components-react'`
 - `import ConfirmDialog from './ConfirmDialog'`
@@ -643,7 +573,6 @@
 - `import { formatStatusLabel } from '../utils/taskTransitions'`
 
 ### Interfaces
-
 - `type ConfirmType = 'unblock' | 'unclaim'`
 - `export interface TaskActionsProps`
 - `export default function TaskActions({ task, moveTargets, canArchive, runMutation, onArchive, }: TaskActionsProps)`
@@ -651,7 +580,6 @@
 ## serve/cockpit/web/src/components/TaskFieldsEditor.tsx
 
 ### Imports
-
 - `import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'`
 - `import { createPortal } from 'react-dom'`
 - `import { PButton, PInputText, PSelect, PSelectOption, PTag, PTagDismissible, PTextarea, } from '@porsche-design-system/components-react'`
@@ -661,7 +589,6 @@
 - `import { formatStatusLabel } from '../utils/taskTransitions'`
 
 ### Interfaces
-
 - `export type TaskEditPayload = Record<string, unknown> & { updated: string title: string priority: string body: string ac: string[] tags: string[] depends_on: number[] parent: number | null block_reason: string | null proof_bundle: string | null }`
 - `export interface TaskFieldsEditorProps`
 - `export interface TaskReferenceSummary`
@@ -684,7 +611,6 @@
 ## serve/cockpit/web/src/components/ThemeToggle.tsx
 
 ### Imports
-
 - `import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react'`
 - `import { createPortal } from 'react-dom'`
 - `import { PButtonPure, PIcon } from '@porsche-design-system/components-react'`
@@ -692,7 +618,6 @@
 - `import type { Theme } from '../hooks/useTheme'`
 
 ### Interfaces
-
 - `const THEME_LABELS`
 - `const THEME_OPTIONS: Theme[]`
 - `function getMenuPosition(trigger: HTMLElement): { top: string; left: string }`
@@ -702,11 +627,9 @@
 ## serve/cockpit/web/src/components/WorkspaceHeader.tsx
 
 ### Imports
-
 - `import type { ReactNode } from 'react'`
 
 ### Interfaces
-
 - `interface WorkspaceHeaderProps`
 - `interface WorkspaceHeaderMetricProps`
 - `interface WorkspaceHeaderPillProps`
@@ -717,7 +640,6 @@
 ## serve/cockpit/web/src/hooks/CockpitProvider.tsx
 
 ### Imports
-
 - `import { createContext, useContext, useEffect, useRef, useState, type PropsWithChildren, type ReactElement, } from 'react'`
 - `import { ApiError } from '../api/errors'`
 - `import { getTask, type TaskDetail } from '../api/tasks'`
@@ -726,7 +648,6 @@
 - `import { useScanPolling } from './useScanPolling'`
 
 ### Interfaces
-
 - `type BoardStateValue = { board: ReturnType<typeof useBoard>['board'] tasks: ReturnType<typeof useBoard>['tasks'] loading: ReturnType<typeof useBoard>['loading'] error: ReturnType<typeof useBoard>['error'] health: ReturnType<typeof useBoard>['health'] refetchTasks: ReturnType<typeof useBoard>['refetchTasks'] items: ReturnType<typeof useScanPolling>['items'] isLoading: ReturnType<typeof useScanPolling>['isLoading'] scanError: ReturnType<typeof useScanPolling>['error'] refetch: ReturnType<typeof useScanPolling>['refetch'] }`
 - `type TaskSelectionValue = { selectedTaskId: number | null selectedTask: TaskDetail | null selectedTaskError: string | null select: (taskId: number) => void clear: () => void update: (nextTask?: TaskDetail) => void }`
 - `type DRStateValue = { count: ReturnType<typeof usePendingDRs>['count'] items: ReturnType<typeof usePendingDRs>['items'] isLoading: ReturnType<typeof usePendingDRs>['isLoading'] error: ReturnType<typeof usePendingDRs>['error'] refetch: ReturnType<typeof usePendingDRs>['refetch'] selectedDRId: string | null setSelectedDRId: (id: string | null) => void selectedDR: ReturnType<typeof usePendingDRs>['items'][number] | null }`
@@ -741,11 +662,9 @@
 ## serve/cockpit/web/src/hooks/EventSourceProvider.tsx
 
 ### Imports
-
 - `import { createContext, type ReactElement, type PropsWithChildren, useContext, useEffect, useRef, useState, } from 'react'`
 
 ### Interfaces
-
 - `type EventSourceStatus = 'connecting' | 'open' | 'closed'`
 - `const EVENT_TYPES`
 - `const STALL_TIMEOUT_MS`
@@ -762,7 +681,6 @@
 ## serve/cockpit/web/src/hooks/useBoard.ts
 
 ### Imports
-
 - `import { useState, useEffect, useRef } from 'react'`
 - `import { useConnectionHealth, type HealthState } from './useConnectionHealth'`
 - `import { usePollingFetch } from './usePollingFetch'`
@@ -770,7 +688,6 @@
 - `import { getResponseErrorMessage } from '../api/errorMessage'`
 
 ### Interfaces
-
 - `export interface BoardStatus`
 - `export interface Board`
 - `export interface Task`
@@ -781,12 +698,10 @@
 ## serve/cockpit/web/src/hooks/useCleanupFlow.ts
 
 ### Imports
-
 - `import { useState } from 'react'`
 - `import { cleanupTasks, type CleanupResult } from '../api/cleanup'`
 
 ### Interfaces
-
 - `export type CleanupPhase = 'idle' | 'confirming' | 'running' | 'done' | 'error'`
 - `export interface UseCleanupFlowOptions`
 - `export interface UseCleanupFlowResult`
@@ -795,11 +710,9 @@
 ## serve/cockpit/web/src/hooks/useConflictDraft.ts
 
 ### Imports
-
 - `import { useCallback, useMemo, useState } from 'react'`
 
 ### Interfaces
-
 - `export interface ConflictLocalDraft`
 - `export interface ConflictRemoteTask`
 - `export interface UseConflictDraftResult`
@@ -809,11 +722,9 @@
 ## serve/cockpit/web/src/hooks/useConnectionHealth.ts
 
 ### Imports
-
 - `import { useState, useRef } from 'react'`
 
 ### Interfaces
-
 - `export type HealthState = 'green' | 'yellow' | 'red'`
 - `function computeHealth(elapsed: number): HealthState`
 - `export function useConnectionHealth()`
@@ -821,12 +732,10 @@
 ## serve/cockpit/web/src/hooks/usePendingDRs.ts
 
 ### Imports
-
 - `import { useEffect, useRef, useState } from 'react'`
 - `import { usePollingFetch } from './usePollingFetch'`
 
 ### Interfaces
-
 - `const DEFAULT_INTERVAL_MS`
 - `export interface PendingDR`
 - `export interface PendingDROption`
@@ -840,12 +749,10 @@
 ## serve/cockpit/web/src/hooks/usePendingMemoryCount.ts
 
 ### Imports
-
 - `import { useEffect, useRef, useState } from 'react'`
 - `import { usePollingFetch } from './usePollingFetch'`
 
 ### Interfaces
-
 - `export const MEMORY_PENDING_COUNT_EVENT`
 - `interface MemoryPendingCountEventDetail`
 - `type MemoryState = 'pending' | 'curated' | 'approved' | 'deleted'`
@@ -857,12 +764,10 @@
 ## serve/cockpit/web/src/hooks/usePollingFetch.ts
 
 ### Imports
-
 - `import { useCallback, useEffect, useRef, useState } from 'react'`
 - `import { getResponseErrorMessage } from '../api/errorMessage'`
 
 ### Interfaces
-
 - `const DEFAULT_INTERVAL_MS`
 - `type PollReason = 'initial' | 'interval' | 'manual'`
 - `export interface UsePollingFetchOptions<TPayload>`
@@ -872,12 +777,10 @@
 ## serve/cockpit/web/src/hooks/useRepairFlow.ts
 
 ### Imports
-
 - `import { useState } from 'react'`
 - `import { repairStorage, type RepairOutcome } from '../api/repair'`
 
 ### Interfaces
-
 - `export type RepairPhase = 'idle' | 'confirming' | 'repairing' | 'done' | 'error'`
 - `export interface GroupedRepairOutcomes`
 - `export interface UseRepairFlowOptions`
@@ -888,12 +791,10 @@
 ## serve/cockpit/web/src/hooks/useScanPolling.ts
 
 ### Imports
-
 - `import { useEffect, useRef, useState } from 'react'`
 - `import { usePollingFetch } from './usePollingFetch'`
 
 ### Interfaces
-
 - `const DEFAULT_INTERVAL_MS`
 - `export interface ScanItem`
 - `export interface UseScanPollingOptions`
@@ -903,7 +804,6 @@
 ## serve/cockpit/web/src/hooks/useTaskMutation.ts
 
 ### Imports
-
 - `import { useEffect, useState } from 'react'`
 - `import { ApiError } from '../api/errors'`
 - `import { editTask, getTask, moveTask, releaseTask, type EditRequest, type MoveRequest, type ReleaseRequest, } from '../api/tasks'`
@@ -912,7 +812,6 @@
 - `import type { ConflictLocalDraft } from './useConflictDraft'`
 
 ### Interfaces
-
 - `export interface UseTaskMutationOptions`
 - `export interface MutationRunOptions`
 - `export interface UseTaskMutationResult`
@@ -921,11 +820,9 @@
 ## serve/cockpit/web/src/hooks/useTheme.ts
 
 ### Imports
-
 - `import { useEffect, useMemo, useState } from 'react'`
 
 ### Interfaces
-
 - `const THEME_STORAGE_KEY`
 - `const VALID_STORAGE_THEMES`
 - `type ResolvedTheme = 'dark' | 'light'`
@@ -941,7 +838,6 @@
 ## serve/cockpit/web/src/pages/DecisionsPage.tsx
 
 ### Imports
-
 - `import { useMemo } from 'react'`
 - `import { PButton, PIcon, PTag, PText } from '@porsche-design-system/components-react'`
 - `import { WorkspaceHeader, WorkspaceHeaderMetric } from '../components/WorkspaceHeader'`
@@ -950,7 +846,6 @@
 - `import { openTaskDetail } from '../utils/openTaskDetail'`
 
 ### Interfaces
-
 - `function formatKindLabel(value: 'decision' | 'action'): 'Decision' | 'Action'`
 - `function formatOptionCount(count: number): string`
 - `function formatConfidenceWidth(confidence: number): string`
@@ -962,7 +857,6 @@
 ## serve/cockpit/web/src/pages/IdeasPage.tsx
 
 ### Imports
-
 - `import { useCallback, useEffect, useMemo, useRef, useState } from 'react'`
 - `import { useBeforeUnload, useBlocker } from 'react-router'`
 - `import { PButton, PModal } from '@porsche-design-system/components-react'`
@@ -971,7 +865,6 @@
 - `import { WorkspaceHeader } from '../components/WorkspaceHeader'`
 
 ### Interfaces
-
 - `type IdeasConflictSnapshot = { content: string updatedAt: string | null }`
 - `function formatNumber(value: number): string`
 - `function formatLastSavedAt(updatedAt: string | null): string`
@@ -981,7 +874,6 @@
 ## serve/cockpit/web/src/pages/MemoryTab.tsx
 
 ### Imports
-
 - `import { useCallback, useEffect, useMemo, useRef, useState } from 'react'`
 - `import { PButton, PHeading, PInputNumber, PInputSearch, PInputText, PModal, PMultiSelect, PMultiSelectOption, PSelect, PSelectOption, PTag, PTagDismissible, PTextarea, } from '@porsche-design-system/components-react'`
 - `import rehypeSanitize from 'rehype-sanitize'`
@@ -992,7 +884,6 @@
 - `import { usePollingFetch } from '../hooks/usePollingFetch'`
 
 ### Interfaces
-
 - `interface MemoryFilterState`
 - `const DEFAULT_STATES: MemoryState[]`
 - `const ALL_AGENTS_SCOPE`
@@ -1027,11 +918,9 @@
 ## serve/cockpit/web/src/utils/cardVariants.ts
 
 ### Imports
-
 - `import type { TagVariant } from '@porsche-design-system/components-react'`
 
 ### Interfaces
-
 - `const STATUS_VARIANTS: Record<string, TagVariant>`
 - `const PRIORITY_VARIANTS: Record<string, TagVariant>`
 - `function normalize(value: string): string`
@@ -1041,7 +930,6 @@
 ## serve/cockpit/web/src/utils/computeSignal.ts
 
 ### Interfaces
-
 - `export type CardSignal = 'dr-pending' | 'blocked' | 'claimed' | 'deps-unmet' | 'ready' | 'unknown'`
 - `interface SignalInput`
 - `function isSignalInput(task: unknown): task is SignalInput`
@@ -1050,7 +938,6 @@
 ## serve/cockpit/web/src/utils/decisionBrief.ts
 
 ### Interfaces
-
 - `export type DecisionBriefSource = { title: string task_id: number body: string body_preview: string }`
 - `export type DecisionBrief = { title: string summary: string context: string | null options: string[] recommendation: string | null consequence: string | null request: string | null isStructured: boolean }`
 - `function truncatePreview(value: string): string`
@@ -1076,18 +963,15 @@
 ## serve/cockpit/web/src/utils/filterTasks.ts
 
 ### Imports
-
 - `import type { Task } from '../hooks/useBoard'`
 
 ### Interfaces
-
 - `export interface FilterState`
 - `export function filterTasks(tasks: Task[], filter: FilterState): Task[]`
 
 ## serve/cockpit/web/src/utils/format.ts
 
 ### Interfaces
-
 - `const EMPTY_FALLBACK`
 - `const UNKNOWN_SIGNAL`
 - `const SIGNAL_LABELS: Record<string, string>`
@@ -1100,7 +984,6 @@
 ## serve/cockpit/web/src/utils/openTaskDetail.ts
 
 ### Interfaces
-
 - `export const OPEN_TASK_DETAIL_EVENT`
 - `interface OpenTaskDetailEventDetail`
 - `export function openTaskDetail(taskId: number): void`
@@ -1109,11 +992,9 @@
 ## serve/cockpit/web/src/utils/taskTransitions.ts
 
 ### Imports
-
 - `import type { Board } from '../hooks/useBoard'`
 
 ### Interfaces
-
 - `export function formatStatusLabel(status: string): string`
 - `export function getOrderedTransitionTargets(board: Board, status: string): string[]`
 - `export function shouldShowArchiveAction(status: string): boolean`
