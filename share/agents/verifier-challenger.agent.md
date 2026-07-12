@@ -4,7 +4,7 @@ description: "Verifier challenger — cheap final cross-check before collect (ND
 argument-hint: "Challenge Verify: task_id={task_id}, proposed_verdict=PASS, changed_files=[...], evidence={evidence}"
 user-invocable: false
 disable-model-invocation: false
-model: GPT-5.6 Terra (copilot)
+model: GPT-5.6 Luna (copilot)
 tools: [vscode/toolSearch, read/problems, read/readFile, read/viewImage, search, ob-memory/assess_memories, ob-memory/recall_memory, ob-memory/save_memory]
 agents: []
 hooks:

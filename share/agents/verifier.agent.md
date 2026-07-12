@@ -4,7 +4,7 @@ description: "Verify gate — evidence-based verification with small local patch
 argument-hint: "Verify: {task_id}"
 user-invocable: false
 disable-model-invocation: true
-model: GPT-5.6 Luna (copilot)
+model: GPT-5.6 Terra (copilot)
 tools:
   [vscode/toolSearch, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, edit/rename, search, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/list_tasks, ob-kanban/show_task, ob-kanban/start_work, ob-memory/assess_memories, ob-memory/recall_memory, ob-memory/save_memory]
 agents: [verifier-challenger]
