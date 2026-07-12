@@ -34,6 +34,7 @@ artifacts/
 # Testing and coverage
 .*cache
 .coverage
+.coverage.*
 coverage.json
 coverage.xml
 htmlcov/
@@ -119,4 +120,7 @@ store/audit/
 .owlbear/kanban/tasks/.*.lock
 .owlbear/kanban/archive/.*.lock
 .owlbear/kanban/activity.jsonl
-.coverage.*
+
+# --- OwlBear OpenSpec generated commands ---
+.github/skills/openspec-*/
+.github/prompts/opsx-*.prompt.md
