@@ -67,8 +67,8 @@ class TestFromAC_ParentClearSemantics:
         `parent > 0` is False — parent is never forwarded and no effective change is detected.
         """
         engine = _make_engine(tmp_path)
-        parent_task = engine.create_task("Parent", status="todo", priority="needed")
-        child_task = engine.create_task("Child", status="todo", priority="needed")
+        parent_task = engine.create_task("Parent", status="build", priority="high")
+        child_task = engine.create_task("Child", status="build", priority="high")
         parent_id = parent_task.id
         child_id = child_task.id
 
@@ -89,8 +89,8 @@ class TestFromAC_ParentClearSemantics:
         """
         board = _make_board(tmp_path)
         engine = KanbanEngine(board, activity_log=False)
-        parent_task = engine.create_task("Parent", status="todo", priority="needed")
-        child_task = engine.create_task("Child", status="todo", priority="needed")
+        parent_task = engine.create_task("Parent", status="build", priority="high")
+        child_task = engine.create_task("Child", status="build", priority="high")
         parent_id = parent_task.id
         child_id = child_task.id
 

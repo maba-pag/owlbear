@@ -110,7 +110,7 @@ class TestEndToEndDecisionResolution:
         client: TestClient,
         engine: KanbanEngine,
     ) -> None:
-        task_id = int(engine.create_task("Decision target", status="todo").id)
+        task_id = int(engine.create_task("Decision target", status="build").id)
         request = engine.create_request(
             task_id,
             "decision",
@@ -146,7 +146,7 @@ class TestEndToEndDecisionResolution:
         engine: KanbanEngine,
     ) -> None:
         """Reviewer gap: pending response must prove ALL public contract fields, not just kind and options count."""
-        task_id = int(engine.create_task("Field check target", status="todo").id)
+        task_id = int(engine.create_task("Field check target", status="build").id)
         request = engine.create_request(
             task_id,
             "decision",
@@ -191,7 +191,7 @@ class TestEndToEndDecisionResolution:
         engine: KanbanEngine,
     ) -> None:
         """Reviewer gap: writeback must prove the SUBMITTED option_id is resolved, not hardcoded first/recommended."""
-        task_id = int(engine.create_task("Non-recommended target", status="todo").id)
+        task_id = int(engine.create_task("Non-recommended target", status="build").id)
         request = engine.create_request(
             task_id,
             "decision",
@@ -225,7 +225,7 @@ class TestEndToEndActionResolution:
         client: TestClient,
         engine: KanbanEngine,
     ) -> None:
-        task_id = int(engine.create_task("Action target", status="todo").id)
+        task_id = int(engine.create_task("Action target", status="build").id)
         request = engine.create_request(
             task_id,
             "action",
@@ -252,7 +252,7 @@ class TestEndToEndActionResolution:
         engine: KanbanEngine,
     ) -> None:
         """Reviewer gap: bare-complete normalization must produce empty string outcome, not None/null/placeholder."""
-        task_id = int(engine.create_task("Bare complete target", status="todo").id)
+        task_id = int(engine.create_task("Bare complete target", status="build").id)
         request = engine.create_request(
             task_id,
             "action",
@@ -295,7 +295,7 @@ class TestConditionalUnblockWithSiblings:
         client: TestClient,
         engine: KanbanEngine,
     ) -> None:
-        task_id = int(engine.create_task("Sibling target", status="todo").id)
+        task_id = int(engine.create_task("Sibling target", status="build").id)
         first = engine.create_request(
             task_id,
             "action",
@@ -335,7 +335,7 @@ class TestSweepViaPickTasksIntegration:
         self,
         engine: KanbanEngine,
     ) -> None:
-        task_id = int(engine.create_task("Sweep target", status="todo").id)
+        task_id = int(engine.create_task("Sweep target", status="build").id)
         request = engine.create_request(
             task_id,
             "action",

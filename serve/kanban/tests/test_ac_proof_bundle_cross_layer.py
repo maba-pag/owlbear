@@ -20,45 +20,7 @@ from owlbear_kanban.migrate import _migrate_proof_bundle_field
 # Shared board configuration
 # ---------------------------------------------------------------------------
 
-_BASE_CONFIG = """\
-schema: grouped
-statuses:
-  - research
-  - backlog
-  - todo
-  - in-progress
-  - review
-  - done
-priorities:
-  - someday
-  - nice-to-have
-  - important
-  - needed
-  - critical
-next_id: 1
-paths:
-    tasks_dir: tasks
-    archive_dir: archive
-pipeline:
-    entry_status: research
-    terminal_status: done
-    wave_size: 4
-    claim_timeout: 1h
-agents:
-    agent_map:
-        research: researcher
-        backlog: architect
-        todo: builder
-        in-progress: builder
-        review: reviewer
-        done: auditor
-    agent_types: {}
-    agent_compatibility: {}
-policy:
-    non_impl_tags: [research, docs]
-    archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
-    status_predicates: {}
-"""
+_BASE_CONFIG = "next_id: 1\n"
 
 
 def _make_board(base_dir: Path) -> tuple[AgentView, KanbanEngine]:
@@ -196,8 +158,8 @@ def _write_task_file(
     fm = (
         f"id: {task_id}\n"
         f"title: Fixture Task\n"
-        f"status: research\n"
-        f"priority: important\n"
+        f"status: shape\n"
+        f"priority: medium\n"
         f"created: '2026-01-01T00:00:00+00:00'\n"
         f"updated: '2026-01-01T00:00:00+00:00'\n"
         f"tags: []\n"

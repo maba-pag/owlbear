@@ -49,37 +49,6 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 _CONFIG_YAML = """\
-statuses:
-    - research
-    - backlog
-    - todo
-    - in-progress
-    - review
-    - docs
-    - done
-priorities:
-    - someday
-    - nice-to-have
-    - important
-    - needed
-    - critical
-entry_status: research
-terminal_status: done
-wave_size: 4
-agent_map:
-    research: researcher
-    backlog: architect
-    todo: test-writer
-    in-progress: builder
-    review: reviewer
-    docs: doc-writer
-    done: auditor
-agent_types: {}
-agent_compatibility: {}
-non_impl_tags: [research, docs]
-archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
-status_predicates: {}
-claim_timeout: 1h
 next_id: 1
 """
 
@@ -142,8 +111,8 @@ def two_task_board(tmp_path: Path) -> Path:
     """
     kanban_dir = _make_board(tmp_path)
     seed = KanbanEngine(kanban_dir)
-    seed.create_task("Alpha task", status="todo", priority="important")
-    seed.create_task("Beta task", status="todo", priority="needed")
+    seed.create_task("Alpha task", status="build", priority="medium")
+    seed.create_task("Beta task", status="build", priority="high")
     seed.list_tasks()
     # Force task 1 to have an older mtime so deleting it does not change max-mtime.
     tasks_dir = kanban_dir / "tasks"
@@ -460,8 +429,8 @@ class TestFromAC_MutationCacheInvalidation:
 
         kanban_dir = _make_board(tmp_path / "board3")
         seed = KanbanEngine(kanban_dir)
-        seed.create_task("Alpha task", status="todo", priority="important")
-        seed.create_task("Beta task", status="todo", priority="needed")
+        seed.create_task("Alpha task", status="build", priority="medium")
+        seed.create_task("Beta task", status="build", priority="high")
         seed.list_tasks()
         tasks_dir = kanban_dir / "tasks"
 
@@ -508,8 +477,8 @@ class TestFromAC_MutationCacheInvalidation:
 
         kanban_dir = _make_board(tmp_path / "board3b")
         seed = KanbanEngine(kanban_dir)
-        seed.create_task("Alpha task", status="todo", priority="important")
-        seed.create_task("Beta task", status="todo", priority="needed")
+        seed.create_task("Alpha task", status="build", priority="medium")
+        seed.create_task("Beta task", status="build", priority="high")
         seed.list_tasks()
         tasks_dir = kanban_dir / "tasks"
         archive_dir = kanban_dir / "archive"
@@ -558,10 +527,10 @@ class TestFromAC_MutationCacheInvalidation:
         than calling the cockpit mutation route.  This test drives the full
         mutation-route → read-route cycle exactly as a real client would:
 
-          1. Prime cache via GET /api/tasks (both tasks visible in 'todo').
-          2. Move task 1 to 'in-progress' via POST /api/tasks/1/move.
+          1. Prime cache via GET /api/tasks (both tasks visible in 'build').
+          2. Move task 1 to 'verify' via POST /api/tasks/1/move.
           3. The route rewrites the task file on disk → file mtime changes.
-          4. GET /api/tasks?status=todo must exclude task 1 (cache invalidated).
+          4. GET /api/tasks?status=build must exclude task 1 (cache invalidated).
 
         Fails if cache.scan() still returns the old signature (e.g. because the
         mutation route does not touch files in tasks_dir or the signature ignores
@@ -575,8 +544,8 @@ class TestFromAC_MutationCacheInvalidation:
 
         kanban_dir = _make_board(tmp_path / "board_mutation")
         seed = KanbanEngine(kanban_dir)
-        seed.create_task("Alpha task", status="todo", priority="important")
-        seed.create_task("Beta task", status="todo", priority="needed")
+        seed.create_task("Alpha task", status="build", priority="medium")
+        seed.create_task("Beta task", status="build", priority="high")
         seed.list_tasks()
 
         eng = KanbanEngine(kanban_dir)
@@ -588,29 +557,29 @@ class TestFromAC_MutationCacheInvalidation:
         try:
             client = TestClient(app)
 
-            # Prime the cache with both tasks in 'todo'.
+            # Prime the cache with both tasks in 'build'.
             resp_prime = client.get("/api/tasks")
             assert resp_prime.status_code == 200
-            todo_ids_before = {t["id"] for t in resp_prime.json()["tasks"] if t["status"] == "todo"}
-            assert 1 in todo_ids_before, "Precondition: task 1 must be in 'todo'"
+            build_ids_before = {t["id"] for t in resp_prime.json()["tasks"] if t["status"] == "build"}
+            assert 1 in build_ids_before, "Precondition: task 1 must be in 'build'"
 
             # Move task 1 from 'todo' to 'in-progress' via the cockpit mutation route.
             task = eng.show_task("1")
             move_resp = client.post(
                 "/api/tasks/1/move",
-                json={"status": "in-progress", "updated": task.updated},
+                json={"status": "verify", "updated": task.updated},
             )
             assert move_resp.status_code == 200, (
                 f"POST /api/tasks/1/move returned {move_resp.status_code}: {move_resp.json()}"
             )
 
             # GET /api/tasks?status=todo must NOT include task 1 (now in-progress).
-            resp_after = client.get("/api/tasks", params={"status": "todo"})
+            resp_after = client.get("/api/tasks", params={"status": "build"})
             assert resp_after.status_code == 200
             todo_ids_after = {t["id"] for t in resp_after.json()["tasks"]}
 
             assert 1 not in todo_ids_after, (
-                "Task 1 was moved from 'todo' to 'in-progress' via POST /api/tasks/1/move, "
+                "Task 1 was moved from 'build' to 'verify' via POST /api/tasks/1/move, "
                 "but GET /api/tasks?status=todo still returns it. "
                 "The cache was not invalidated after the mutation route rewrote the task "
                 "file on disk. AC3/AC7 requires deterministic cache invalidation after "
@@ -1026,7 +995,7 @@ class TestFromAC_EditReleaseCacheInvalidation:
 
         kanban_dir = _make_board(tmp_path / "board_edit_title")
         seed = KanbanEngine(kanban_dir)
-        seed.create_task("Original title", status="todo", priority="important")
+        seed.create_task("Original title", status="build", priority="medium")
         seed.list_tasks()
 
         eng = KanbanEngine(kanban_dir)
@@ -1089,7 +1058,7 @@ class TestFromAC_EditReleaseCacheInvalidation:
 
         kanban_dir = _make_board(tmp_path / "board_edit_tags")
         seed = KanbanEngine(kanban_dir)
-        seed.create_task("Tag test task", status="todo", priority="important")
+        seed.create_task("Tag test task", status="build", priority="medium")
         seed.list_tasks()
         # Set up known initial tags so we can assert the removed tag is absent.
         seed.edit_task("1", add_tags=["old-tag", "keep-tag"])
@@ -1154,7 +1123,7 @@ class TestFromAC_EditReleaseCacheInvalidation:
 
         kanban_dir = _make_board(tmp_path / "board_release")
         seed = KanbanEngine(kanban_dir)
-        seed.create_task("Claimed task", status="in-progress", priority="important")
+        seed.create_task("Claimed task", status="build", priority="medium")
         seed.list_tasks()
         seed.claim_task("1")
 

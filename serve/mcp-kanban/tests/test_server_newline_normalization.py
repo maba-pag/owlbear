@@ -68,7 +68,7 @@ def _has_norm_guidance(guidance: list[str]) -> bool:
 def mock_view_ctx(tmp_path: Path) -> tuple[AppContext, MagicMock]:
     kanban_dir = _make_board(tmp_path)
     engine = KanbanEngine(kanban_dir)
-    engine.create_task("Seed", status="todo", priority="important")
+    engine.create_task("Seed", status="build", priority="medium")
     engine.list_tasks()
 
     mock_view = MagicMock()

@@ -167,8 +167,8 @@ _VALID_TASK = """\
 ---
 id: 1001
 title: Valid task
-status: todo
-priority: needed
+status: shape
+priority: medium
 created: "2026-04-21T10:00:00+00:00"
 updated: "2026-04-21T10:00:00+00:00"
 tags: []

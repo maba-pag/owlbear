@@ -320,11 +320,11 @@ class TestFromAC_WarmCacheFailureRecovery:
 
         # Prepare genuine ListTasksResponse objects via the real view so that
         # FastAPI's response_model serialization succeeds.
-        eng.create_task("Alpha", status="todo", priority="important")
+        eng.create_task("Alpha", status="build", priority="medium")
         real_view = CockpitView(eng)
         prime_response = real_view.list_tasks()  # 1 task
 
-        eng.create_task("Beta", status="todo", priority="needed")
+        eng.create_task("Beta", status="build", priority="high")
         fresh_response = real_view.list_tasks()  # 2 tasks
 
         assert len(prime_response.tasks) == 1, "Precondition: prime has 1 task."

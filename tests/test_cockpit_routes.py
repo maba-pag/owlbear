@@ -57,14 +57,14 @@ def _make_board(base_dir: Path) -> Path:
 def board_dir(tmp_path: Path) -> Path:
     """Board with 2 tasks.
 
-    Task 1: status=todo, priority=important, no tags (mtime + block-lifecycle target)
-    Task 2: status=todo, priority=needed, tags=[scope:cockpit, block:user], blocked=True
+    Task 1: status=build, priority=medium, no tags (mtime + block-lifecycle target)
+    Task 2: status=build, priority=high, tags=[scope:cockpit, block:user], blocked=True
             (pre-blocked for conflict and unblock tests)
     """
     kanban_dir = _make_board(tmp_path)
     seed = KanbanEngine(kanban_dir)
-    seed.create_task("Alpha task", status="todo", priority="important")
-    seed.create_task("Beta blocked", status="todo", priority="needed", tags=["scope:cockpit"])
+    seed.create_task("Alpha task", status="build", priority="medium")
+    seed.create_task("Beta blocked", status="build", priority="high", tags=["scope:cockpit"])
     seed.list_tasks()  # populate id→filename cache
     seed.edit_task("2", blocked=True, block_reason="setup block", add_tags=["block:user"])
     return kanban_dir

@@ -35,7 +35,7 @@ _TASK_TMPL = """\
 id: {task_id}
 title: Task {task_id}
 status: {status}
-priority: needed
+priority: medium
 created: "2026-01-01T10:00:00+00:00"
 updated: "2026-01-01T10:00:00+00:00"
 tags: []
@@ -68,7 +68,7 @@ def _write_task(
     kanban_dir: Path,
     *,
     task_id: int,
-    status: str = "todo",
+    status: str = "build",
     claimed_at: str = "null",
     archival_reason: str = "null",
 ) -> Path:
@@ -98,7 +98,7 @@ class TestClaimRelease:
     def test_expired_claim_id_appears_in_released_claim_ids(self, tmp_path: Path) -> None:
         """Task with an expired claimed_at appears in released_claim_ids after cleanup()."""
         board = _make_board(tmp_path)
-        _write_task(board, task_id=1, status="todo", claimed_at=_EXPIRED_TS)
+        _write_task(board, task_id=1, status="build", claimed_at=_EXPIRED_TS)
         engine = KanbanEngine(board, activity_log=False)
 
         result = engine.cleanup()
@@ -108,7 +108,7 @@ class TestClaimRelease:
     def test_expired_claimed_at_is_cleared_on_disk(self, tmp_path: Path) -> None:
         """cleanup() writes cleared claimed_at to disk; re-reading the task shows None."""
         board = _make_board(tmp_path)
-        _write_task(board, task_id=2, status="todo", claimed_at=_EXPIRED_TS)
+        _write_task(board, task_id=2, status="build", claimed_at=_EXPIRED_TS)
         engine = KanbanEngine(board, activity_log=False)
 
         engine.cleanup()
@@ -223,7 +223,7 @@ class TestSkipHandling:
     def test_clean_task_is_not_skipped(self, tmp_path: Path) -> None:
         """A well-formed task with no archived status produces no skipped_items entry."""
         board = _make_board(tmp_path)
-        _write_task(board, task_id=1, status="todo")
+        _write_task(board, task_id=1, status="build")
         engine = KanbanEngine(board, activity_log=False)
 
         result = engine.cleanup()
@@ -400,7 +400,7 @@ class TestNoImplicitCleanup:
     def test_pick_tasks_does_not_call_cleanup(self, tmp_path: Path) -> None:
         """AgentView.pick_tasks must not invoke KanbanEngine.cleanup()."""
         board = _make_board(tmp_path)
-        _write_task(board, task_id=1, status="todo")
+        _write_task(board, task_id=1, status="build")
         engine = KanbanEngine(board, activity_log=False)
         engine.list_tasks()
         with mock.patch.object(engine, "cleanup") as mock_cleanup:
@@ -411,7 +411,7 @@ class TestNoImplicitCleanup:
     def test_start_work_does_not_call_cleanup(self, tmp_path: Path) -> None:
         """KanbanEngine.start_work must not invoke cleanup()."""
         board = _make_board(tmp_path)
-        _write_task(board, task_id=1, status="todo")
+        _write_task(board, task_id=1, status="build")
         engine = KanbanEngine(board, activity_log=False)
         engine.list_tasks()
         with mock.patch.object(engine, "cleanup") as mock_cleanup:
@@ -461,7 +461,7 @@ class TestStaleStateSkip:
         """AC-5: cleanup() skips archive move when on-disk status changes after initial read.
 
         Simulates concurrent state drift: the initial read returns an archived
-        record, then the file is overwritten to status=in-progress before the
+        record, then the file is overwritten to status=verify before the
         re-read that the new implementation performs immediately before moving.
 
         Current implementation (no re-read): moves the stale file and adds the
@@ -485,11 +485,11 @@ class TestStaleStateSkip:
             result = real_read_task(path, config=config)
             if path == source and per_path_calls[path] == 1:
                 # After returning the archived record, rewrite to simulate a
-                # concurrent writer changing status to in-progress before re-read.
+                # concurrent writer changing status to verify before re-read.
                 source.write_text(
                     _TASK_TMPL.format(
                         task_id=1,
-                        status="in-progress",
+                        status="verify",
                         claimed_at="null",
                         archival_reason="null",
                     ),
@@ -501,7 +501,7 @@ class TestStaleStateSkip:
             result = engine.cleanup()
 
         assert 1 not in result.archived_task_ids, (
-            "task whose on-disk status changed to in-progress must not appear "
+            "task whose on-disk status changed to verify must not appear "
             "in archived_task_ids — cleanup() must re-read before moving"
         )
         assert source.exists(), "source file must remain in tasks/ when cleanup skips due to stale-state drift"

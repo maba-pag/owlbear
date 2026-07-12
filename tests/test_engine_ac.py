@@ -99,8 +99,8 @@ def _write_task(  # noqa: PLR0913
     kanban_dir: Path,
     task_id: int = 1,
     title: str = "Task",
-    status: str = "todo",
-    priority: str = "needed",
+    status: str = "build",
+    priority: str = "high",
     body: str = "Body.",
     extra_fields: str = "",
 ) -> Path:

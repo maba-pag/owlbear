@@ -410,8 +410,8 @@ class TestFromAC_WriteReadRoundTrip:
         task = Task(
             id=1,
             title="YAML 1.1 String Survival",
-            status="todo",
-            priority="needed",
+            status="build",
+            priority="medium",
             created="2026-04-09T03:24:26.6974428+02:00",
             updated="2026-04-17T20:16:32.171661+00:00",
             blocked=False,
@@ -434,8 +434,8 @@ class TestFromAC_WriteReadRoundTrip:
         task = Task(
             id=2,
             title="Bool Round-Trip",
-            status="in-progress",
-            priority="critical",
+            status="verify",
+            priority="high",
             created="2026-04-09T03:24:26.6974428+02:00",
             updated="2026-04-17T20:16:32.171661+00:00",
             blocked=True,
@@ -459,8 +459,8 @@ class TestFromAC_WriteReadRoundTrip:
         task = Task(
             id=99,
             title="Realistic Round-Trip Test",
-            status="review",
-            priority="important",
+            status="verify",
+            priority="medium",
             created=ts_7,
             updated=ts_6,
             blocked=False,

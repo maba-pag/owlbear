@@ -98,7 +98,7 @@ def app_ctx_with_mock_agent_view(tmp_path: Path) -> tuple[AppContext, MagicMock]
 
     kanban_dir = _make_board(tmp_path)
     engine = KanbanEngine(kanban_dir)
-    engine.create_task("Initial task", status="todo", priority="important")
+    engine.create_task("Initial task", status="build", priority="medium")
     engine.list_tasks()
     mock_av = MagicMock()
     mock_av.create_task.return_value = _make_single_task_response()

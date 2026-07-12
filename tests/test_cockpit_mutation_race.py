@@ -69,13 +69,13 @@ def _make_board(base_dir: Path) -> Path:
 
 @pytest.fixture
 def board_dir(tmp_path: Path) -> Path:
-    """Board with one task in todo status.
+    """Board with one task in build status.
 
-    Task 1: status=todo, priority=important (unclaimed — target for all AC tests)
+    Task 1: status=build, priority=medium (unclaimed — target for all AC tests)
     """
     kanban_dir = _make_board(tmp_path)
     seed = KanbanEngine(kanban_dir)
-    seed.create_task("Alpha task", status="todo", priority="important")
+    seed.create_task("Alpha task", status="build", priority="medium")
     seed.list_tasks()  # populate id→filename cache
     return kanban_dir
 
@@ -173,7 +173,7 @@ class TestFromAC_MoveOCCContrast:
         with mock.patch.object(engine, "move_task", wraps=engine.move_task) as mocked:
             response = client.post(
                 "/api/tasks/1/move",
-                json={"status": "in-progress", "updated": task.updated},
+                json={"status": "verify", "updated": task.updated},
             )
         assert response.status_code == 200
         assert mocked.called, "engine.move_task must have been called"
@@ -259,7 +259,7 @@ class TestFromAC_SchemaBaseline:
         task = engine.show_task("1")
         response = client.post(
             "/api/tasks/1/move",
-            json={"status": "in-progress", "updated": task.updated},
+            json={"status": "verify", "updated": task.updated},
         )
         assert response.status_code == 200
         missing = _TASK_DETAIL_KEYS - set(response.json().keys())

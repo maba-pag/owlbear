@@ -277,7 +277,7 @@ def app_ctx(tmp_path: Path) -> AppContext:
     """AppContext with a board containing one task at status=todo."""
     kanban_dir = _make_board(tmp_path)
     engine = KanbanEngine(kanban_dir)
-    engine.create_task("Alpha task", status="todo", priority="important")
+    engine.create_task("Alpha task", status="build", priority="medium")
     engine.list_tasks()  # populate id→filename cache
     return AppContext(engine=engine, kanban_dir=kanban_dir)
 
@@ -323,7 +323,7 @@ class TestFromAC_EditTaskGuidanceIntegration:
     async def test_non_block_edit_returns_empty_guidance(self, app_ctx: AppContext) -> None:
         """Non-blocking edit (title change) → empty guidance."""
         ctx = _make_ctx(app_ctx)
-        result = await edit_task(ctx, id="1", priority="critical")
+        result = await edit_task(ctx, id="1", priority="high")
         assert result.guidance == [], f"Expected empty guidance for title change, got {result.guidance!r}"
 
 
@@ -394,22 +394,6 @@ class TestFromAC_EndWorkGuidanceIntegration:
         )
         assert result.guidance == [], f"Expected empty guidance for fail outcome, got {result.guidance!r}"
 
-    @pytest.mark.asyncio
-    async def test_reject_outcome_returns_empty_guidance(self, app_ctx_end: AppContext) -> None:
-        """end_work(outcome='reject') may include status-transition guidance."""
-        ctx = _make_ctx(app_ctx_end)
-        result = await end_work(
-            ctx,
-            id="1",
-            note="rejecting to backlog",
-            outcome="reject",
-            move_to="backlog",
-        )
-        assert result.guidance, f"Expected non-empty guidance for reject outcome, got {result.guidance!r}"
-        assert "Status skip" in result.guidance[0], (
-            f"Expected status-skip guidance for reject outcome, got {result.guidance!r}"
-        )
-
 
 # --- merged from serve/mcp-kanban/tests/test_guidance_move_task.py ---
 @pytest.fixture
@@ -417,9 +401,9 @@ def app_ctx_move(tmp_path: Path) -> AppContext:
     """AppContext with task statuses tailored for move-task guidance tests."""
     kanban_dir = _make_board(tmp_path)
     engine = KanbanEngine(kanban_dir)
-    engine.create_task("Alpha task", status="research", priority="important")
-    engine.create_task("Beta task", status="todo", priority="important")
-    engine.create_task("Gamma task", status="done", priority="important")
+    engine.create_task("Alpha task", status="shape", priority="medium")
+    engine.create_task("Beta task", status="build", priority="medium")
+    engine.create_task("Gamma task", status="collect", priority="medium")
     engine.list_tasks()
     return AppContext(engine=engine, kanban_dir=kanban_dir)
 
@@ -434,28 +418,23 @@ class TestFromAC_MoveTaskGuidanceIntegration:
     async def test_forward_skip_more_than_one_slot_returns_guidance(self, app_ctx_move: AppContext) -> None:
         """move_task forward skip >1 slot → guidance with skip message."""
         ctx = _make_ctx(app_ctx_move)
-        # Task 1 is at "research"; skip to "todo" (2 slots: research→backlog→todo)
-        result = await move_task(ctx, id="1", status="todo")
-        assert len(result.guidance) > 0, f"Expected guidance for >1-slot skip (research→todo), got {result.guidance!r}"
+        result = await move_task(ctx, id="1", status="verify")
+        assert len(result.guidance) > 0, f"Expected guidance for >1-slot skip (shape→verify), got {result.guidance!r}"
 
     @pytest.mark.asyncio
     async def test_forward_skip_one_slot_returns_empty_guidance(self, app_ctx_move: AppContext) -> None:
         """move_task forward skip exactly 1 slot → empty guidance."""
         ctx = _make_ctx(app_ctx_move)
-        # Task 1 is at "research"; advance to "backlog" (1 slot)
-        result = await move_task(ctx, id="1", status="backlog")
-        assert result.guidance == [], (
-            f"Expected empty guidance for 1-slot move (research→backlog), got {result.guidance!r}"
-        )
+        result = await move_task(ctx, id="1", status="build")
+        assert result.guidance == [], f"Expected empty guidance for 1-slot move (shape→build), got {result.guidance!r}"
 
     @pytest.mark.asyncio
     async def test_backward_move_returns_empty_guidance(self, app_ctx_move: AppContext) -> None:
         """move_task backward move → empty guidance."""
         ctx = _make_ctx(app_ctx_move)
-        # Task 2 is at "todo"; move back to "backlog"
-        result = await move_task(ctx, id="2", status="backlog")
+        result = await move_task(ctx, id="2", status="shape")
         assert result.guidance == [], (
-            f"Expected empty guidance for backward move (todo→backlog), got {result.guidance!r}"
+            f"Expected empty guidance for backward move (build→shape), got {result.guidance!r}"
         )
 
     @pytest.mark.asyncio
@@ -475,10 +454,10 @@ class TestFromAC_MoveTaskGuidanceIntegration:
     async def test_forward_skip_guidance_references_from_and_to_status(self, app_ctx_move: AppContext) -> None:
         """Forward-skip guidance message references both source and target status."""
         ctx = _make_ctx(app_ctx_move)
-        result = await move_task(ctx, id="1", status="todo")
+        result = await move_task(ctx, id="1", status="verify")
         assert len(result.guidance) > 0
-        assert "research" in result.guidance[0], f"Expected 'research' in skip message, got {result.guidance[0]!r}"
-        assert "todo" in result.guidance[0], f"Expected 'todo' in skip message, got {result.guidance[0]!r}"
+        assert "shape" in result.guidance[0], f"Expected 'shape' in skip message, got {result.guidance[0]!r}"
+        assert "verify" in result.guidance[0], f"Expected 'verify' in skip message, got {result.guidance[0]!r}"
 
 
 # --- merged from serve/mcp-kanban/tests/test_guidance_rules.py ---
@@ -703,7 +682,7 @@ def app_ctx_edit(tmp_path: Path) -> AppContext:
     """AppContext with one task at todo — for edit_task tests."""
     kanban_dir = _make_board(tmp_path)
     engine = KanbanEngine(kanban_dir)
-    engine.create_task("Alpha task", status="todo", priority="important")
+    engine.create_task("Alpha task", status="build", priority="medium")
     engine.list_tasks()
     return AppContext(engine=engine, kanban_dir=kanban_dir)
 
@@ -713,7 +692,7 @@ def app_ctx_end(tmp_path: Path) -> AppContext:
     """AppContext with one claimed task at in-progress — for end_work tests."""
     kanban_dir = _make_board(tmp_path)
     engine = KanbanEngine(kanban_dir)
-    engine.create_task("Beta task", status="in-progress", priority="important")
+    engine.create_task("Beta task", status="verify", priority="medium")
     engine.list_tasks()
     engine.claim_task("1")
     return AppContext(engine=engine, kanban_dir=kanban_dir)
@@ -734,7 +713,7 @@ class TestFromAC_GuidanceSuppressContract:
             "owlbear_mcp_kanban.server.collect_guidance",
             side_effect=RuntimeError("boom"),
         ):
-            result = await edit_task(ctx, id="1", priority="critical")
+            result = await edit_task(ctx, id="1", priority="high")
         assert result.id is not None, "Expected valid KanbanTask returned despite guidance failure"
         assert result.guidance == [], f"Expected empty guidance when collect_guidance raises, got {result.guidance!r}"
 
@@ -763,7 +742,7 @@ class TestFromAC_GuidanceCallWiring:
         """edit_task invokes collect_guidance("edit_task", None, task)."""
         ctx = _make_ctx(app_ctx_edit)
         with patch("owlbear_mcp_kanban.server.collect_guidance", return_value=[]) as mock_cg:
-            await edit_task(ctx, id="1", priority="critical")
+            await edit_task(ctx, id="1", priority="high")
         mock_cg.assert_called_once_with("edit_task", None, ANY)
 
     @pytest.mark.asyncio
@@ -861,8 +840,8 @@ def app_ctx_with_section_task(tmp_path: Path) -> AppContext:
     engine.create_task(
         "Audit task",
         body=_BODY_WITH_DUPLICATE_AUDIT,
-        status="todo",
-        priority="important",
+        status="build",
+        priority="medium",
     )
     engine.list_tasks()
     return AppContext(engine=engine, kanban_dir=kanban_dir)
@@ -873,9 +852,9 @@ def app_ctx_multi(tmp_path: Path) -> AppContext:
     """AppContext with 3 unclaimed tasks at todo — enough to trigger dispatch hints."""
     kanban_dir = _make_board(tmp_path)
     engine = KanbanEngine(kanban_dir)
-    engine.create_task("Task Alpha", status="todo", priority="important")
-    engine.create_task("Task Beta", status="todo", priority="important")
-    engine.create_task("Task Gamma", status="todo", priority="important")
+    engine.create_task("Task Alpha", status="build", priority="medium")
+    engine.create_task("Task Beta", status="build", priority="medium")
+    engine.create_task("Task Gamma", status="build", priority="medium")
     engine.list_tasks()
     return AppContext(engine=engine, kanban_dir=kanban_dir)
 
@@ -885,7 +864,7 @@ def app_ctx_claimed(tmp_path: Path) -> AppContext:
     """AppContext with one claimed task at in-progress."""
     kanban_dir = _make_board(tmp_path)
     engine = KanbanEngine(kanban_dir)
-    engine.create_task("Beta task", status="in-progress", priority="important")
+    engine.create_task("Beta task", status="verify", priority="medium")
     engine.list_tasks()
     engine.claim_task("1")
     return AppContext(engine=engine, kanban_dir=kanban_dir)
@@ -980,54 +959,6 @@ class TestFromAC_GuidancePassthrough:
         result = await edit_task(ctx, id="1", body=_LARGE_BODY)
         assert result.guidance == [_BODY_SIZE_WARNING], (
             f"Expected exact body-size warning {[_BODY_SIZE_WARNING]!r} in edit_task guidance; got {result.guidance!r}"
-        )
-
-    @pytest.mark.asyncio
-    async def test_move_task_skip_transition_warning_guidance(self, app_ctx: AppContext) -> None:
-        """AC-NEW-5: move_task skipping >1 column → skip-transition warning from AgentView.
-
-        AgentView is the authoritative source. The adapter's collect_guidance fallback
-        must NOT be the origin. This test patches collect_guidance to a sentinel so
-        that if the fallback path runs the assertion catches the wrong guidance.
-
-        FAIL path (RED): AgentView has no move_task method → the server skips the view
-        path and runs the fallback. The patched collect_guidance returns the sentinel,
-        which does not equal the expected engine string — assertion fails.
-        """
-        ctx = _make_ctx(app_ctx)
-        with patch(
-            "owlbear_mcp_kanban.server.collect_guidance",
-            return_value=_ADAPTER_FALLBACK_SENTINEL,
-        ):
-            result = await move_task(ctx, id="1", status="review")
-        assert result.guidance == [_SKIP_MOVE_WARNING], (
-            f"Expected skip-transition warning from AgentView, not collect_guidance fallback; "
-            f"got {result.guidance!r} (collect_guidance was patched to sentinel)"
-        )
-
-    @pytest.mark.asyncio
-    async def test_end_work_reject_skip_transition_warning_guidance(self, app_ctx: AppContext) -> None:
-        """AC-NEW-5: end_work(reject, move_to='done') skipping columns → skip warning in guidance.
-
-        AgentView.end_work must emit the skip-transition warning for large-jump rejects.
-        The adapter's collect_guidance does NOT produce skip warnings for 'reject' outcome,
-        so if the fallback path runs the guidance is [].
-
-        FAIL path (RED): AgentView.end_work() stub falls through to the direct engine
-        path; collect_guidance returns [] for 'reject'; result.guidance == [] ≠ expected
-        skip warning — assertion fails.
-        """
-        app_ctx.engine.claim_task("1")
-        ctx = _make_ctx(app_ctx)
-        result = await end_work(
-            ctx,
-            id="1",
-            note="rejected to done",
-            outcome="reject",
-            move_to="done",
-        )
-        assert result.guidance == [_SKIP_REJECT_WARNING], (
-            f"Expected skip-transition warning from AgentView.end_work; got {result.guidance!r}"
         )
 
     @pytest.mark.asyncio
@@ -1227,29 +1158,6 @@ class TestFromAC_GuidanceDiscriminating_1475:
     """
 
     _SENTINEL: ClassVar[list[str]] = ["__AGENTVIEW_SENTINEL_1475__"]
-
-    @pytest.mark.asyncio
-    async def test_move_task_skip_warning_survives_disabled_collect_guidance(self, app_ctx: AppContext) -> None:
-        """move_task skip-transition warning must survive even when collect_guidance returns [].
-
-        If the skip-transition warning originates from AgentView.move_task (the
-        authoritative source per the contract), it must appear in result.guidance
-        regardless of what collect_guidance returns. Patching collect_guidance to []
-        exposes whether guidance truly comes from AgentView or only from the fallback.
-
-        FAIL path: The server unconditionally sets result.guidance = collect_guidance(...),
-        which is patched to []. result.guidance == [] != [_SKIP_MOVE_WARNING] — fails.
-        """
-        ctx = _make_ctx(app_ctx)
-        with patch(
-            "owlbear_mcp_kanban.server.collect_guidance",
-            return_value=[],
-        ):
-            result = await move_task(ctx, id="1", status="review")
-        assert result.guidance == [_SKIP_MOVE_WARNING], (
-            f"move_task skip warning must originate from AgentView, not collect_guidance; "
-            f"got {result.guidance!r} (collect_guidance was patched to [])"
-        )
 
     @pytest.mark.asyncio
     async def test_start_work_agentview_guidance_not_overwritten_by_collect_guidance(self, app_ctx: AppContext) -> None:

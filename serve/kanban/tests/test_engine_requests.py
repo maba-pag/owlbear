@@ -63,46 +63,14 @@ from owlbear_kanban import KanbanEngine, NotFoundError, ValidationError
 # Board / task scaffolding
 # ---------------------------------------------------------------------------
 
-_CONFIG_YAML = """\
-statuses:
-  - research
-  - backlog
-  - todo
-  - in-progress
-  - review
-  - docs
-  - done
-priorities:
-  - someday
-  - nice-to-have
-  - important
-  - needed
-  - critical
-entry_status: research
-wave_size: 4
-agent_map:
-  research: []
-  backlog: []
-  todo: []
-  in-progress: []
-  review: []
-  docs: []
-  done: []
-agent_types: {}
-agent_compatibility: {}
-non_impl_tags: [research, docs]
-archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
-status_predicates: {}
-claim_timeout: 1h
-next_id: 1001
-"""
+_CONFIG_YAML = "next_id: 1001\n"
 
 _TASK_TMPL = """\
 ---
 id: {task_id}
 title: Task {task_id}
-status: todo
-priority: needed
+status: build
+priority: medium
 created: "2026-01-01T10:00:00+00:00"
 updated: "2026-01-01T10:00:00+00:00"
 tags: []

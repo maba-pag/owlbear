@@ -1,4 +1,4 @@
-"""Tests for deterministic Spec Kit to OwlBear Kanban import."""
+"""Tests for deterministic OpenSpec to OwlBear Kanban import."""
 
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ def _manifest(*, second_depends_on: list[str] | None = None) -> dict[str, object
         "schema_version": 1,
         "feature": "alert-repair",
         "spec": "spec.md",
-        "plan": "plan.md",
+        "design": "design.md",
         "aggregate": {
             "title": "Prepare trustworthy alert evidence",
             "priority": "high",
@@ -73,11 +73,11 @@ def _write_feature(tmp_path: Path, manifest: dict[str, object]) -> Path:
     requirements = sorted({requirement_id for task in manifest["tasks"] for requirement_id in task["requirement_ids"]})
     spec_text = "# Spec\n\n" + "\n".join(f"- **{requirement_id}**: Requirement" for requirement_id in requirements)
     (feature_dir / "spec.md").write_text(f"{spec_text}\n", encoding="utf-8")
-    (feature_dir / "plan.md").write_text("# Plan\n", encoding="utf-8")
+    (feature_dir / "design.md").write_text("# Design\n", encoding="utf-8")
     frontmatter = yaml.safe_dump({"owlbear": manifest}, sort_keys=False)
-    tasks_file = feature_dir / "tasks.md"
-    tasks_file.write_text(f"---\n{frontmatter}---\n# Tasks\n", encoding="utf-8")
-    return tasks_file
+    delivery_file = feature_dir / "delivery.md"
+    delivery_file.write_text(f"---\n{frontmatter}---\n# Delivery\n", encoding="utf-8")
+    return delivery_file
 
 
 def test_load_and_preview_preserve_dependency_order(tmp_path: Path) -> None:
@@ -88,7 +88,7 @@ def test_load_and_preview_preserve_dependency_order(tmp_path: Path) -> None:
     assert [task["key"] for task in preview["tasks"]] == ["T001", "T002"]
     assert preview["tasks"][1]["depends_on"] == ["T001"]
     assert preview["aggregate"]["depends_on"] == ["T001", "T002"]
-    assert preview["import_tag"] == "spec-kit:alert-repair"
+    assert preview["import_tag"] == "openspec:alert-repair"
 
 
 def test_apply_creates_build_leaves_and_collect_parent(tmp_path: Path) -> None:
@@ -107,7 +107,7 @@ def test_apply_creates_build_leaves_and_collect_parent(tmp_path: Path) -> None:
     assert second.parent == aggregate.id
     assert aggregate.status == "collect"
     assert aggregate.depends_on == [first.id, second.id]
-    assert "spec-kit:alert-repair" in aggregate.tags
+    assert "openspec:alert-repair" in aggregate.tags
     assert first.ac == ["Given the assembled context, AlertsList is visible and callable"]
     assert "Boundary: assembled security analyst context" in str(first.body)
 

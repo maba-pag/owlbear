@@ -60,6 +60,7 @@ def _make_board(base_dir: Path) -> Path:
 
 def _write(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    content = content.replace("status: todo", "status: shape").replace("priority: needed", "priority: medium")
     path.write_text(content, encoding="utf-8")
 
 
@@ -67,8 +68,8 @@ _VALID_TASK = """\
 ---
 id: 1001
 title: Valid task
-status: todo
-priority: needed
+status: shape
+priority: medium
 created: "2026-04-21T10:00:00+00:00"
 updated: "2026-04-21T10:00:00+00:00"
 tags: []
@@ -1168,8 +1169,8 @@ _VALID_TASK = """\
 ---
 id: 1001
 title: Valid task
-status: todo
-priority: needed
+status: shape
+priority: medium
 created: "2026-04-21T10:00:00+00:00"
 updated: "2026-04-21T10:00:00+00:00"
 tags: []

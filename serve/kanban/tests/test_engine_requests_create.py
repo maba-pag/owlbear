@@ -79,8 +79,8 @@ _TASK_TMPL = """\
 ---
 id: {task_id}
 title: Task {task_id}
-status: todo
-priority: needed
+status: build
+priority: medium
 created: "2026-01-01T10:00:00+00:00"
 updated: "2026-01-01T10:00:00+00:00"
 tags: []

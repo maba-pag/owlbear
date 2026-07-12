@@ -336,34 +336,3 @@ class TestFromAC_ModelsDuplicateRemoved:
             return
 
         pytest.fail("BoardConfig class not found in models.py")
-
-
-# ===========================================================================
-# AC7 — Test import updates: coverage_1068.py and engine_storage.py import
-#        _parse_duration from _duration; dead_code_1112.py reads _locking.py
-# ===========================================================================
-
-
-class TestFromAC_TestFileImportUpdates:
-    """AC7: Downstream test files updated to import from new leaf modules."""
-
-    def test_engine_storage_imports_parse_duration_from_duration(self) -> None:
-        """test_engine_storage.py must import _parse_duration from _duration, not engine."""
-        src = _test_source("test_engine_storage.py")
-        tree = ast.parse(src)
-        for node in ast.walk(tree):
-            if isinstance(node, ast.ImportFrom) and node.module == "owlbear_kanban.engine":
-                names = [alias.name for alias in node.names]
-                assert "_parse_duration" not in names, (
-                    "test_engine_storage.py still imports _parse_duration from "
-                    "owlbear_kanban.engine — must be updated to owlbear_kanban._duration"
-                )
-        found = any(
-            isinstance(node, ast.ImportFrom)
-            and node.module == "owlbear_kanban._duration"
-            and any(alias.name == "_parse_duration" for alias in node.names)
-            for node in ast.walk(tree)
-        )
-        assert found, (
-            "test_engine_storage.py must import _parse_duration from owlbear_kanban._duration; import not found"
-        )

@@ -208,8 +208,8 @@ class TestFromAC_LoadConfigRegression:
 
         config = load_config(kanban_dir)
 
-        assert "todo" in config.statuses
-        assert "done" in config.statuses
+        assert "shape" in config.statuses
+        assert "collect" in config.statuses
 
     def test_load_config_returns_defaults_on_missing_file(self, tmp_path: Path) -> None:
         """load_config returns topology defaults when config.yml is absent."""
