@@ -2,6 +2,18 @@
 
 External repos and resources studied during OwlBear development.
 
+## Spec-Driven Development Frameworks
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Fission-AI/OpenSpec | <https://github.com/Fission-AI/OpenSpec/tree/0a99f410457271aa773d8b106f03f637f7c6b3c0> | Delta requirements, declarative artifact graphs, custom schemas, and machine-readable diagnostic contracts | `.owlbear/research/sdd-framework-comparison.md` | 2026-07-11 |
+| open-gsd/gsd-core | <https://github.com/open-gsd/gsd-core/tree/30feeaa8be86b71616dd7d47bbd157d4ee0d2736> | Current/Target/Acceptance requirements, negative coverage, traceability, validation maps, and fresh-context orchestration | `.owlbear/research/sdd-framework-comparison.md` | 2026-07-11 |
+| github/spec-kit | <https://github.com/github/spec-kit/tree/1be42992e64b08ff0dce3d7a914eaabf04284ffb> | User-journey specifications, bounded clarification, and cross-artifact consistency analysis | `.owlbear/research/sdd-framework-comparison.md` | 2026-07-11 |
+| changkun/wallfacer | <https://github.com/changkun/wallfacer/tree/fa6616e82d20901fc4e666a333da006113732bad> | Spec lifecycle, stale/drift semantics, reality-grounded design records, and spec/task graphs | `.owlbear/research/sdd-framework-comparison.md` | 2026-07-11 |
+| rpamis/comet | <https://github.com/rpamis/comet/tree/a2b804d575bc99574b245fd52b45fa42016a130c> | Typed phase guards, evidence codes, checkpoints, recovery, and mandatory decision points | `.owlbear/research/sdd-framework-comparison.md` | 2026-07-11 |
+| mattpocock/skills | <https://github.com/mattpocock/skills> | Composable `grill-me`, `grill-with-docs`, and `to-spec` interaction and artifact boundaries | `.owlbear/research/sdd-framework-comparison.md` | 2026-07-12 |
+| Matt Pocock, "5 Agent Skills I Use Every Day" | <https://www.aihero.dev/5-agent-skills-i-use-every-day> | Rationale and practical usage for conversation-first grilling before artifact generation | `.owlbear/research/sdd-framework-comparison.md` | 2026-07-12 |
+
 ## Agent Workflow Patterns
 
 | Source | URL | What | Where Used | Date |
