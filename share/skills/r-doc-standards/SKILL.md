@@ -28,7 +28,9 @@ Audit findings cite rule IDs so every finding is traceable to a specific rule.
 
 `PLC-1` Each doc type belongs in exactly one location. Do not duplicate a doc across locations.
 
-`PLC-2` For general file placement rules (source files, tests, research, scratch), defer to `r-project-standards` § File Placement. This section covers only documentation files.
+`PLC-2` For OwlBear-managed research and scratch placement, defer to `r-workspace-governance` §
+OwlBear-Managed Artifact Placement. Project-owned source and test placement comes from local
+manifests and established structure. This section covers only documentation files.
 
 `PLC-5` A doc file in the wrong location is a placement violation regardless of content quality.
 
@@ -40,7 +42,8 @@ Audit findings cite rule IDs so every finding is traceable to a specific rule.
 
 `XREF-3` No orphan references: if a doc is removed or renamed, all links pointing to it must be updated or removed in the same commit.
 
-`XREF-4` Cross-doc references to rule IDs (for example, `r-project-standards` § `File Placement`) use the pattern `{skill-name} § {section-heading}`. Section headings must match exactly.
+`XREF-4` Cross-doc references to rule IDs (for example, `r-workspace-governance` § `Commit
+Discipline`) use the pattern `{skill-name} § {section-heading}`. Section headings must match exactly.
 
 `XREF-5` Circular references (A references B while B references A for the same content) are a duplication violation. One becomes the source of truth, the other links to it.
 

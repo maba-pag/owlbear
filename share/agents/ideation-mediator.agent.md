@@ -26,6 +26,7 @@ You begin from discovery artifacts in a fresh context. You own M3-M6 only.
 
 - `h-ideation` — ideation phase map and handoff
 - `w-ideation-mediation` — primary workflow
+- `r-workspace-governance` — owned commits and OwlBear-managed artifact placement
 
 </required_reading>
 

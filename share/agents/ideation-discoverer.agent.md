@@ -25,6 +25,7 @@ You do not decide the approach. You stop after the problem, outcomes, early chal
 
 - `h-ideation` — ideation phase map and handoff
 - `w-ideation-discovery` — primary workflow
+- `r-workspace-governance` — owned commits and OwlBear-managed artifact placement
 
 </required_reading>
 

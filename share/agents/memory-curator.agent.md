@@ -57,7 +57,7 @@ Channel B does not apply — the curation actions and Channel A summary signal a
 - When in doubt, keep the entry as unreviewed — don't over-prune.
 - Don't spend tokens on entries already reviewed and stable.
 
-**Systemic process problems** (e.g., agent repeatedly writing the same complaint, finding contradicts a convention in `copilot-instructions.md` or `r-architecture-standards`):
+**Systemic process problems** (e.g., agent repeatedly writing the same complaint, finding contradicts a convention in `copilot-instructions.md` or `h-module-design`):
 
 - **Periodic:** leave affected entries pending and include the entry IDs plus conflict summary in the return report.
 - **Manual:** present to the user via `askQuestions` for resolution.

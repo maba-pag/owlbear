@@ -115,7 +115,7 @@ generated interfaces, external APIs, schemas, protocols, or symbols that will ap
 
 This step may be skipped only for greenfield requests with no existing or external contract.
 
-1. Follow `h-project-orientation`. Regenerate the indexes, search them narrowly,
+1. Follow `h-codebase-orientation`. Regenerate the indexes, search them narrowly,
    and identify target source files and contract authorities from parent context. Authorities may
     include generated operation inventories, schemas, official documentation, verified production
     observations, and existing public CLI or API surfaces.
@@ -186,7 +186,7 @@ Read the current board via `list_tasks` to note: highest existing ID, existing d
 
 ### Deep Module Check
 
-Apply `r-architecture-standards` before selecting module and task boundaries:
+Apply `h-module-design` before selecting module and task boundaries:
 
 - Prefer cohesive modules that hide substantial functionality behind a small stable interface.
 - Do not create forwarding wrappers, one-function modules, or speculative adapters merely to satisfy
@@ -201,7 +201,8 @@ Each task must be:
 
 - **Single outcome responsibility:** one coherent product or integration outcome; module or function
     count alone does not justify splitting an invariant across tasks.
-- **Domain scoped:** one primary domain per task (see `r-architecture-standards` domain taxonomy). Multi-domain tasks must be split.
+- **Domain scoped:** one primary domain per task. Use the consuming project's local architecture map
+    or instructions for domain ownership; multi-domain tasks must be split.
 - **Outcome cohesive:** deliver or prove one coherent behavior within that domain. Do not split solely by artifact type when that leaves a final "wire everything together" task; shared contracts may be prerequisites, while the aggregate parent owns the cross-domain outcome.
 - **Testable:** clear pass/fail criterion
 - **Small:** ~2 hours of focused work max
@@ -269,6 +270,8 @@ When drafting AC for planned tasks:
 - AC must be understandable without reading the codebase first.
 - Every task must include explicit scope boundaries (in-scope and out-of-scope).
 - No implementation prescriptions: describe WHAT must be true, not HOW to code it.
+- Do not prescribe test files, test counts, or one-test-per-AC proof unless a maintained test artifact
+    is itself the deliverable.
 
 ## Step 4 — Build Dependency Graph
 
@@ -287,7 +290,7 @@ Build an explicit dependency graph:
 - **Tags (decomposition mode):** always `phase-{n}` + `scope:{domain}` + at least one category tag
 - **Tags (shortcut mode):** preserve parent-provided tags verbatim; do not add phase tags unless they are already part of the parent scope
 
-See `r-project-standards` for the full priority scheme and tag taxonomy.
+See `r-pipeline-protocol` § Task Metadata for the priority scheme and tag taxonomy.
 
 ## Step 5c — Assign Proof Guidance
 
@@ -296,8 +299,9 @@ Add a short `Proof guidance:` line to each task body. This is guidance for build
 | Signal | Guidance |
 |--------|----------|
 | Docs/process-only change with no executable behavior change | `no executable proof expected; cite changed artifact` |
+| Config, deletion, wording, or local wiring change covered by existing validation | `no durable test expected; run the cheapest existing focused check` |
 | Change validated by pre-existing named checks | `run named focused check: {command}` |
-| Narrow behavior change | `run focused behavior check or import/config smoke` |
+| Narrow behavior change with no uncovered recurrence risk | `run focused behavior check or import/config smoke; no durable test expected` |
 | Shared/core-path change | `run focused check plus downstream-impact scan` |
 | UI/browser change | `run package-local frontend check; add screenshot only if visual framing matters` |
 
@@ -311,6 +315,8 @@ Before creating any task, validate every planned task:
 - **Reject scratch-only proof** — if required proof can only live in `.owlbear/scratch/`, split or add a tracked-artifact deliverable owned by an agent that can write it.
 - **Reject hidden downstream impact** — behavior-changing refactors must name affected durable suites/consumers or include a downstream-impact scan task.
 - **Reject proof-artifact-only tasks unless the artifact itself is the product deliverable** — proof should support the change, not become a fake task.
+- **Reject test-prescriptive proof** — do not turn AC into one test each or require new durable tests
+    when an existing check or transient observation proves the boundary.
 - **Reject orphaned invariants** — every invariant-map row names one owning task and that task has a
     normal-path AC.
 - **Reject boundary-bypassing proof** — proof guidance must not replace the callable, command,
@@ -414,7 +420,7 @@ Append decomposition details inside shaper's `## Shape Notes` section:
 
 - [ ] Announced decomposition plan and expected count
 - [ ] Brief readiness gate passed or material gaps were resolved interactively
-- [ ] Brownfield modules were located through `h-project-orientation` and verified from source
+- [ ] Brownfield modules were located through `h-codebase-orientation` and verified from source
 - [ ] Change Module Map records responsibility, planned change, interface impact, and owning task
 - [ ] Proposed module boundaries pass the depth, locality, and Deletion Test diagnostics
 - [ ] External/generated contract claims record authority, evidence state, and confidence

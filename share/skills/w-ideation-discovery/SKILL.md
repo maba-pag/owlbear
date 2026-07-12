@@ -19,6 +19,8 @@ Shared rules (interaction turns, decision template, handoff contract) are in `h-
 - Do not lock approach decisions in Phase 1. Phase 1 sharpens the problem and the outcomes; Phase 2 owns approach choice.
 - Preserve expectation fidelity from `h-ideation`: discovery may sequence or split expectation, but it must not silently shrink the user's promise into the First Useful Step.
 - Explore before asking: if a question is answerable from the codebase, run a targeted lookup first using `Explore` subagent, `read_file`, `semantic_search`, or `grep_search`.
+- For direct brownfield investigation beyond a delegated Explore result, load
+   `h-codebase-orientation` and stop at the first source-grounded answer.
 
 ## Conditional Denoise
 
@@ -97,7 +99,7 @@ The tier calibrates all subsequent moments:
    - ensure `context.md` is a narrow current-state snapshot
    - ensure `decisions.md` contains rejected options and rationale where real choices occurred
    - ensure `research-notes.md` is present and bounded
-6. Commit the Working Directory: `git add .owlbear/briefs/draft-{name}/ && git commit -m "ideation: complete Phase 1 discovery for {name}"`
+6. Commit the Working Directory per `r-workspace-governance`, owning only the phase artifacts.
 7. End Phase 1 with an explicit handoff message that:
    - summarises what was discovered (1–3 sentences)
    - names `@ideation-mediator` as the Phase 2 owner

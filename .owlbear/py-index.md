@@ -88,19 +88,26 @@ deny-writes.py — PreToolUse hook for read-only agents with scratch access.
 
 ## .owlbear/hooks/lint-changed.py
 
-lint-changed.py — PostToolUse hook for the builder agent.
+PostToolUse lint and non-blocking minimum-change feedback for pipeline agents.
 
 ### Imports
 
 - `__future__`
 - `json`
 - `pathlib`
+- `re`
 - `subprocess`
 - `sys`
 
 ### Interfaces
 
 - `def _extract_paths(tool_name: str, tool_input: object) -> list[str]`
+- `def _git(root: Path, *arguments: str) -> subprocess.CompletedProcess[str]`
+- `def _repository_root() -> Path | None`
+- `def _resolve_path(root: Path, raw_path: str) -> tuple[Path, str] | None`
+- `def _is_test_path(relative_path: str) -> bool`
+- `def _change_stats(root: Path, path: Path, relative_path: str) -> tuple[int, int, int, bool]`
+- `def _minimum_change_warnings(candidate_paths: list[str], root: Path) -> list[str]`
 - `def main() -> None`
 
 ## .owlbear/hooks/session-context.py
@@ -336,19 +343,26 @@ deny-writes.py — PreToolUse hook for read-only agents with scratch access.
 
 ## seed/.owlbear/hooks/lint-changed.py
 
-lint-changed.py — PostToolUse hook for the builder agent.
+PostToolUse lint and non-blocking minimum-change feedback for pipeline agents.
 
 ### Imports
 
 - `__future__`
 - `json`
 - `pathlib`
+- `re`
 - `subprocess`
 - `sys`
 
 ### Interfaces
 
 - `def _extract_paths(tool_name: str, tool_input: object) -> list[str]`
+- `def _git(root: Path, *arguments: str) -> subprocess.CompletedProcess[str]`
+- `def _repository_root() -> Path | None`
+- `def _resolve_path(root: Path, raw_path: str) -> tuple[Path, str] | None`
+- `def _is_test_path(relative_path: str) -> bool`
+- `def _change_stats(root: Path, path: Path, relative_path: str) -> tuple[int, int, int, bool]`
+- `def _minimum_change_warnings(candidate_paths: list[str], root: Path) -> list[str]`
 - `def main() -> None`
 
 ## seed/.owlbear/hooks/session-context.py

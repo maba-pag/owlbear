@@ -12,7 +12,10 @@ applyTo: "**"
 - **No legacy, no backwards compatibility.** Break things to improve them.
 - **Think before acting.** Articulate material assumptions, intended changes, expected behavior, trade-offs, and risks. Surface ambiguity instead of silently choosing between materially different interpretations.
 - **Simplicity first.** Simplest code that works. Avoid abstractions until the third repetition. Split functions > 50 lines.
-- **Surgical changes.** Smallest diff for the goal. One logical change per commit. Remove artifacts made obsolete by your change; leave pre-existing cleanup separate.
+- **Minimum necessary change.** Preserve existing code by default and edit the smallest region that
+  satisfies the request. Do not rewrite whole files, generalize behavior, add compatibility paths,
+  or perform adjacent cleanup unless the requested outcome requires it. Stop when the requested
+  behavior is satisfied and proportionally validated.
 - **Goal-driven.** Every action traces to a kanban task. If you can't name it, check the board first.
 
 ## 2. System Awareness
@@ -34,7 +37,8 @@ applyTo: "**"
 shape → (/shape + shaper) → build → (builder) → verify → (verifier) → collect → (collector) → archived
 ```
 
-For file placement rules, commit format, priorities, and tags, see `r-project-standards`.
+For commits and OwlBear-managed artifact placement, see `r-workspace-governance`. For task priority
+and tags, see `r-pipeline-protocol`.
 
 ## 3. Memory Governance
 
@@ -67,4 +71,4 @@ Before completing material work, decide whether you learned a specific, non-obvi
 - **Loop detection.** Tier 1: same approach twice — change approach. Tier 2: two different approaches failed — narrow scope (deliver what you can, note what you can't). Tier 3: 3+ attempts — stop, write what failed, escalate per §5 Escalation Routing in `r-pipeline-protocol`.
 - **Terminal.** `uv run` for all Python tools.
 - **Scratch files.** Terminal output, temp/debug files, and one-off scripts go to `.owlbear/scratch/`, never the project root.
-- **Commits.** Follow `r-project-standards` for format, types, and git discipline.
+- **Commits.** Follow `r-workspace-governance` for format, ownership, and git discipline.

@@ -26,7 +26,7 @@ Your bias is toward closure with evidence, not purity of role boundaries. But if
 <required_reading>
 
 - `r-pipeline-protocol` — task lifecycle, communication, verification, and the verifier-challenger contract
-- `h-project-orientation` — indexes, exact search, Semble, and Change Module Map verification
+- `h-codebase-orientation` — indexes, exact search, Semble, and source-proof boundaries
 
 </required_reading>
 
@@ -37,8 +37,12 @@ Your bias is toward closure with evidence, not purity of role boundaries. But if
 - **Verify named authorities and the claimed boundary.** Compare implementation and fixtures with
   contract sources in Shape Notes, and reject proof that mocks or injects the command, workflow,
   generated operation visibility, assembled context, or user journey under test.
-- **Check the shaped module map.** Follow `h-project-orientation`; compare actual changed modules and interface impact with the map, investigate deviations narrowly, and reshape architecture or scope drift.
-- **Patch only small, local defects discovered during verification.** Broad design gaps return to shape; implementation gaps return to build.
+- **Check the shaped module map.** Follow `r-pipeline-protocol`; use `h-codebase-orientation` to compare
+  changed modules and interface impact with the map, investigate deviations narrowly, and reshape
+  architecture or scope drift.
+- **Patch only small, local defects discovered during verification.** Patch-pass does not create new
+  durable tests, helpers, abstractions, or generalized behavior. Broad design gaps return to shape;
+  implementation gaps return to build.
 - **Call `verifier-challenger` before every PASS verdict.** This is the cheap final cross-check before collect.
 - **Record every command and patch in `## Verify Notes`.**
 
@@ -87,6 +91,8 @@ verifier-challenger result, and final route.
 - Only process tasks in `verify` status.
 - Patch limit: local fixes in the touched slice only; no unrelated cleanup.
 - Do not create mandatory TDD artifacts or coverage targets unless the task itself requires them.
+- Insufficient proof does not automatically require a new test. Use the cheapest valid existing
+  proof or reject to build when implementation work is needed.
 
 </boundaries>
 

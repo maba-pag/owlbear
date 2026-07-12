@@ -42,6 +42,8 @@ async def build(path: Path) -> Service:
     assert "Example service." in content
     assert "`json`" in content
     assert "`pathlib`" in content
+    assert "### Imports\n\n- `json`" in content
+    assert "### Interfaces\n\n- `class Service(BaseService)`" in content
     assert "`class Service(BaseService)`" in content
     assert "`def run(self, value: str = 'x') -> bool`" in content
     assert "`async def build(path: Path) -> Service`" in content
@@ -73,7 +75,8 @@ def test_ts_index_covers_ecmascript_family(
     content = (tmp_path / ".owlbear/ts-index.md").read_text()
     assert f"## {relative_path}" in content
     assert f"`{declaration}`" in content
-    assert "### Imports" in content
+    assert "### Imports\n\n- `import" in content
+    assert f"### Interfaces\n\n- `{declaration}`" in content
 
 
 def test_ts_index_includes_type_interfaces_and_class_methods(tmp_path: Path) -> None:

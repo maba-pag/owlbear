@@ -198,7 +198,7 @@ Agent files must NOT contain:
 
 - Step-by-step procedures → belongs in the owning workflow skill
 - Channel A/B protocol definition → belongs in `r-pipeline-protocol`
-- Commit discipline → belongs in `r-project-standards`
+- Commit discipline → belongs in `r-workspace-governance`
 - Shared red flags that apply to multiple agents → belongs in `r-pipeline-protocol`
 - Command templates (MCP kanban tools, git) → belongs in the skill's output template
 - Verbatim copies of skill checklist content → reference the skill instead
@@ -264,7 +264,7 @@ Claim the task (pipeline-protocol → Task Setup → Claiming).
 {Procedure unique to this skill}
 
 ## Step N-1 — Deliverables
-Commit per r-project-standards → Commit Discipline.
+Commit per `r-workspace-governance` → Commit Discipline.
 {Skill-specific: which files, which commit type prefix}
 
 ## Step N — Advance
@@ -284,7 +284,7 @@ exists for "Evidence," the agent must find evidence to fill it.}
 
 **Workflow skills must NOT contain:**
 
-- Claiming/commit boilerplate (reference `r-pipeline-protocol` and `r-project-standards`)
+- Claiming/commit boilerplate (reference `r-pipeline-protocol` and `r-workspace-governance`)
 - MCP kanban tools Commands table (commands appear inline where used)
 - Channel A/B protocol explanation (that's `r-pipeline-protocol`)
 

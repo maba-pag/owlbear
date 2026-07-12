@@ -26,21 +26,26 @@ Unnecessary exploration, speculative additions, and side fixes are how small tas
 <required_reading>
 
 - `r-pipeline-protocol` — task lifecycle, communication, build proof, and the builder-challenger contract
-- `h-project-orientation` — indexes, exact search, Semble, and continuous Change Module Map use
+- `h-codebase-orientation` — indexes, exact search, Semble, and source-proof boundaries
 
 </required_reading>
 
 <critical_rules>
 
 - **Follow the `r-pipeline-protocol` skill** for build routing, evidence expectations, and handoff conventions.
-- **Implement only shaped scope.** If AC or architecture is wrong, reject to shape instead of guessing.
+- **Implement only shaped scope.** Before editing, define the `r-pipeline-protocol` change envelope.
+  If AC or architecture is wrong, reject to shape instead of guessing.
 - **Reject canonical-source contradictions.** If an AC, fixture, generated name, or external contract
   conflicts with a named authority, record the contradiction and return to shape; do not add aliases
   or fallbacks to satisfy both.
-- **Carry the shaped module map.** Follow `h-project-orientation`; start from mapped modules, record justified deviations in Builder Notes, and reject to shape when source exposes architecture or scope ambiguity.
-- **Choose proportional proof.** Durable tests are written only when they pass the Rent Test or the task explicitly asks for them.
+- **Carry the shaped module map.** Follow `r-pipeline-protocol`; use `h-codebase-orientation` to verify
+  mapped modules, record justified deviations in Builder Notes, and reject to shape when source
+  exposes architecture or scope ambiguity.
+- **Choose proportional proof.** Start with zero new durable tests. Add one only when the task
+  explicitly requires the artifact or a concrete uncovered regression passes the Rent Test.
 - **Run a focused command before advancing when one exists.** Record exactly what ran.
-- **Surgical changes only.** Do not edit files unrelated to the current task.
+- **Enforce the change envelope.** Preserve unaffected code; do not replace a file when a targeted
+  edit works. Stop and reassess when the diff expands beyond expected files or symbols.
 - **Call `builder-challenger` before every DONE verdict.** Fix any concrete blockers it reports before advancing.
 - **Never create subtasks.** Missing prerequisite work, vague AC, or wrong dependency shape is a reject to `shape`.
 - **Use decision/action requests for blocked user choices.** If build cannot continue without a user decision, external action, or approval of a new trade-off, load `h-decision-requests`, call `create_request`, then block the task with the returned reason.
@@ -77,7 +82,9 @@ Unnecessary exploration, speculative additions, and side fixes are how small tas
 
 ### Channel B
 
-Include `## Builder Notes` section in your `end_work` note: files changed, Change Module Map deviations, proof selected, commands run, builder-challenger result, and any follow-up risks.
+Include `## Builder Notes` section in your `end_work` note: change envelope, files changed, Change
+Module Map deviations, proof selected, durable-test justification when tests were added, commands
+run, builder-challenger result, and any follow-up risks.
 
 ### Kanban protocol
 
@@ -93,11 +100,13 @@ Include `## Builder Notes` section in your `end_work` note: files changed, Chang
 
 - Only process tasks in `build` status.
 - Climb the reuse ladder before writing custom code: existing code or pattern → standard library or native platform → already-installed dependency → minimal custom implementation. Follow the surrounding code style and justify any new dependency.
-- Your diff should not touch more than 3 files not mentioned in the AC.
+- Every new file, helper, fallback, compatibility branch, and test must trace to shaped scope or an
+  observed defect. Otherwise remove it before DONE.
 
 | Rationalization | Response |
 |----------------|----------|
 | "I'll refactor this neighbor module while I'm here." | Surgical changes only. Unrelated edits get their own task. |
+| "A test for every AC is safer." | AC are outcomes, not test cases. Use the cheapest proof at the shared boundary; the default durable-test delta is zero. |
 | "The AC is vague but I know what they meant." | REJECT. Vague AC produces vague implementations. |
 
 </boundaries>

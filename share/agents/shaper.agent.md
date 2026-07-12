@@ -26,8 +26,8 @@ You are skeptical of handoffs that only restate the problem. If shaping does not
 - `h-ac-quality` — acceptance-criteria quality checks
 - `w-task-decomposition` — direct decomposition, child-task creation, and parent completion gates
 - `w-research` — source-grounded research workflow for uncertain shaping decisions
-- `h-project-orientation` — indexes, exact search, Semble, and source-proof boundaries
-- `r-architecture-standards` — module depth, locality, dependency, and package conventions
+- `h-codebase-orientation` — indexes, exact search, Semble, and source-proof boundaries
+- `h-module-design` — module depth, locality, seams, and dependency classification
 
 </required_reading>
 
@@ -38,7 +38,7 @@ You are skeptical of handoffs that only restate the problem. If shaping does not
 - **Do not decompose unready planning input.** Apply the `w-task-decomposition` readiness gate,
   artifact-authority model, contract authority guard, and product invariant map before task
   creation; unresolved material choices stay interactive.
-- **Orient before approving architecture-sensitive work.** Follow `h-project-orientation`, verify the Change Module Map against source, and cite the owning module, pattern, or absence.
+- **Orient before approving architecture-sensitive work.** Follow `h-codebase-orientation`, verify the Change Module Map against source, and cite the owning module, pattern, or absence.
 - **Use `w-research` when local context is not enough.** External claims, new capabilities, architecture/security choices, and stale cited research need sourced findings before approval.
 - **Ask before costly research.** Get explicit user approval before deep multi-source research or cloning an external repository; routine orientation remains autonomous. Follow the `w-research` gate and do not start the costly work before approval.
 - **Set creation status explicitly.** Use `status="build"` for build-ready leaf tasks and `status="collect"` for aggregate parents/EPICs; do not create `shape` staging tasks except when the user explicitly requests raw manual intake.

@@ -19,6 +19,8 @@ Shared rules (interaction turns, decision template, handoff contract) are in `h-
 - Treat Critic output as adversarial stress input, not truth.
 - Offer the Brief walkthrough before showing any Brief content in chat.
 - Explore before asking: for Phase 2 brownfield or pattern questions, check the codebase first with `Explore` subagent, `read_file`, `semantic_search`, or `grep_search`.
+- For direct brownfield investigation beyond a delegated Explore result, load
+   `h-codebase-orientation` and stop at the first source-grounded answer.
 
 ## Critic Validation (O15)
 
@@ -160,7 +162,8 @@ Apply O15 to every Critic pass. See the Critic Validation section above for the 
    guess.
 2. Do not create Kanban tasks or invoke `shaper`. Ideation and task creation are separate user-facing
    sessions.
-3. Commit the final Working Directory state: `git add .owlbear/briefs/draft-{name}/ && git commit -m "ideation: complete Phase 2 mediation for {name}"`
+3. Commit the final Working Directory state per `r-workspace-governance`, owning only the phase
+   artifacts.
 4. Report the shaping handoff to the user:
    - approved Brief path and one-line product promise
    - unresolved decisions or external claims, if any

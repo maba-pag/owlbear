@@ -182,10 +182,10 @@ class TestFromAC_ExplicitShapingHandoff:
         assert "no Kanban task is created and shaper is not dispatched" in prompt
 
     def test_shape_prompt_accepts_approved_brief(self) -> None:
-        text = _read("share/prompts/shape.prompt.md")
+        text = " ".join(_read("share/prompts/shape.prompt.md").split())
         for needle in [
             "approved `brief.md` path",
-            "Brief-readiness gate",
+            "planning-readiness gate",
             "contract authority guard",
             "product invariant map",
         ]:
@@ -198,7 +198,7 @@ class TestFromAC_ShapeGroundingContracts:
     def test_decomposition_requires_readiness_authority_and_invariant_map(self) -> None:
         text = _read("share/skills/w-task-decomposition/SKILL.md")
         for needle in [
-            "### Brief Readiness Gate",
+            "### Planning Readiness Gate",
             "## Step 1b — Source And Contract Authority Guard",
             "### Product Invariant Map",
             "Every invariant has exactly one owner",

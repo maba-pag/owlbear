@@ -14,8 +14,8 @@ This is a read-only review. Do not edit production code.
 
 Read and follow:
 
-1. `../skills/r-architecture-standards/SKILL.md`
-2. `../skills/h-project-orientation/SKILL.md`
+1. `../skills/h-module-design/SKILL.md`
+2. `../skills/h-codebase-orientation/SKILL.md`
 3. `../skills/h-visual-output/SKILL.md`
 4. `../skills/w-idea-refinement/SKILL.md`
 
@@ -48,7 +48,7 @@ must include:
 - a plain-language deepening direction, without committing to a final interface;
 - before/after visualization;
 - expected testing effect;
-- dependency category from `r-architecture-standards`;
+- dependency category from `h-module-design`;
 - recommendation strength: `strong`, `worth exploring`, or `speculative`.
 
 End with one top recommendation and why it has the best evidence-to-effort ratio. Open the report and

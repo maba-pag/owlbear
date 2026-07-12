@@ -8,39 +8,63 @@ user-invocable: false
 
 Command reference and pitfalls for tests and linting. For Python conventions and test patterns, see `h-python-conventions`.
 
-## Commands
+## Discover Project Configuration
+
+Before constructing a command, inspect the nearest applicable configuration and workspace files:
+
+1. `pyproject.toml`, `pytest.ini`, `tox.ini`, or `setup.cfg` for `testpaths`, `addopts`, markers,
+   coverage sources, and Ruff settings.
+2. Package or workspace manifests for source roots and package boundaries.
+3. Lockfiles and project documentation for the configured runner: `uv run`, Poetry, Hatch, tox,
+   nox, or the active virtual environment.
+4. The changed path or failing test for the narrowest relevant package and test target.
+
+Use these placeholders below:
+
+| Placeholder | Meaning |
+|-------------|---------|
+| `{project-runner}` | Configured execution prefix, such as `uv run`, `poetry run`, or empty in an active environment |
+| `{focused-test}` | One test file, node ID, or package-local test target |
+| `{test-roots}` | Configured test directories; omit when pytest `testpaths` already provides complete discovery |
+| `{source-roots}` | Maintained Python source directories from project configuration or package manifests |
+
+Do not assume `serve/`, `src/`, `tests/`, or `packages/` exists. OwlBear itself uses `uv run`; that is
+a verified local runner, not a requirement for consuming projects.
+
+## Command Templates
 
 ### Scoped
 
 ```shell
-uv run pytest tests/test_{module}.py -q --tb=short
+{project-runner} pytest {focused-test} -q --tb=short
 ```
 
 ### Full suite
 
 ```shell
-uv run pytest tests/ serve/ -m "not api" -q --tb=short
+{project-runner} pytest {test-roots} -q --tb=short
 ```
 
-Use `mode=async` for full suite runs — output exceeds the 60 KB terminal capture limit:
-
-```shell
-run_in_terminal(command="uv run pytest tests/ serve/ -m 'not api' -q --tb=short", mode=async)
-```
+Omit `{test-roots}` when configured discovery is authoritative. Add marker expressions only after
+reading the project's marker definitions; do not copy another repository's exclusions.
 
 ### With coverage
 
 ```shell
-uv run pytest tests/test_{module}.py --cov --cov-report=term-missing --cov-fail-under=0 -q --tb=short
+{project-runner} pytest {focused-test} --cov --cov-report=term-missing -q --tb=short
 ```
 
-Only bare `--cov` works — `--cov=module.name` crashes pydantic, `--cov=path/` reports 0%. Coverage reads `source_pkgs` from `pyproject.toml`.
+Prefer the coverage source and threshold already configured by the project. Do not add a temporary
+threshold that contradicts CI or claim package coverage from an unrelated focused test.
 
 ### ruff
 
 ```shell
-uv run ruff check serve/ tests/
+{project-runner} ruff check {source-roots} {test-roots}
 ```
+
+When Ruff's configured include/exclude rules cover the repository correctly, `ruff check .` is
+acceptable. For focused validation, pass only the changed Python files or owning package.
 
 ### Default flags
 
@@ -49,44 +73,55 @@ uv run ruff check serve/ tests/
 | pytest | `-q --tb=short` (add `-v` only for debugging) |
 | ruff | none needed |
 
-## Markers
-
-| Marker | Meaning |
-|--------|---------|
-| `api` | Requires live network — exclude with `-m "not api"` |
-| `slow` | Long-running — exclude with `-m "not slow"` |
-| `integration` | Requires `kanban-md` binary |
-| `e2e` | Excluded by default via `addopts`; include explicitly with `-m e2e` |
-
 ## No Piping
 
-The terminal tool captures stdout + stderr (60 KB limit). Never pipe output — no `| tee`, `2>&1 | cat`, `> file.log`, no redirect operators. **Run commands plain.**
+The terminal tool captures stdout and stderr. Run test and lint commands directly; do not pipe an
+interactive or potentially prompting command through `tee`, `tail`, `grep`, or another filter.
 
 ## File-Capture Fallback
 
-When terminal output is truncated, use `uv run python` as the I/O layer. **`uv run python` is load-bearing** — it resolves to `.venv` with all project dependencies. Bare `python3` or heredocs (`python3 << 'EOF'`) resolve to system Python which lacks project packages.
+When direct output is actually truncated, use the discovered project runner and its Python
+interpreter as the I/O layer. Write temporary output under OwlBear's supplied scratch directory.
 
 ```shell
-uv run python -c "import subprocess,sys,pathlib; r=subprocess.run([sys.executable,'-m','pytest','tests/','serve/','-m','not api','-q','--tb=line'], capture_output=True, text=True); pathlib.Path('.owlbear/scratch/pytest-output.txt').write_text(r.stdout+'\n'+r.stderr); print('exit:', r.returncode)"
+{project-runner} python -c "import subprocess,sys,pathlib; r=subprocess.run([sys.executable,'-m','pytest','{focused-test}','-q','--tb=line'], capture_output=True, text=True); pathlib.Path('.owlbear/scratch/pytest-output.txt').write_text(r.stdout+'\n'+r.stderr); print('exit:', r.returncode)"
 ```
 
 Read `.owlbear/scratch/pytest-output.txt` then delete it.
 
-## Gotchas
+## General Gotchas
 
 - **Stale cache in retry cycles.** `.pytest_cache` can return cached results from prior runs, causing incorrect totals. In retries, clear first: `rm -rf .pytest_cache` or add `-p no:cacheprovider`.
 
 - **ruff `# noqa` placement.** On multiline signatures, `# noqa: C901` must go on the `def` line, not continuation lines.
 
-- **`asyncio_mode = strict`.** Bare `async def test_*` won't be collected — always add `@pytest.mark.asyncio`.
+- **Async tests.** Read the configured async plugin and mode. Under `pytest-asyncio` strict mode, bare
+  `async def test_*` functions require `@pytest.mark.asyncio`.
 
-- **Timeouts.** `pytest-timeout` kills individual tests after 30s and the entire session after 300s (configured in `pyproject.toml`).
+## OwlBear Workspace Notes
 
-- **Plugin auto-loading disabled.** Some VS Code terminal sessions export `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1`. This hides `pytest-xdist`, `pytest-cov`, `pytest-asyncio`, and `pytest-timeout`, breaking `addopts` flags like `-n auto --dist loadfile`. Fix: use `.venv/bin/pytest` and explicitly load plugins: `-p xdist.plugin -p pytest_cov -p pytest_asyncio.plugin -p pytest_timeout`.
+Apply these only when the target is the OwlBear repository or matching configuration is verified:
 
-## Windows-Only Pitfalls
+| Marker | Local meaning |
+|--------|---------------|
+| `api` | Requires live network; routine local runs exclude it with `-m "not api"` |
+| `slow` | Long-running |
+| `integration` | Requires the `kanban-md` binary |
+| `e2e` | Excluded by default through `addopts`; include explicitly with `-m e2e` |
 
-These apply only when running on Windows with PowerShell.
+- **Runner.** Use `uv run`; bare system Python does not resolve OwlBear workspace dependencies.
+- **Coverage.** Bare `--cov` reads `source_pkgs` from `pyproject.toml`. Locally observed explicit
+  module/path forms can conflict with Pydantic instrumentation or report misleading zero coverage.
+- **Timeouts.** `pytest-timeout` uses the values configured in OwlBear's `pyproject.toml`; inspect the
+  current file rather than copying numeric limits.
+- **Plugin auto-loading disabled.** Some VS Code terminal sessions export
+  `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1`. This hides `pytest-xdist`, `pytest-cov`, `pytest-asyncio`, and
+  `pytest-timeout`, breaking configured plugin flags. Use the workspace interpreter and explicitly
+  load only the configured plugins when this environment variable is present.
+
+### Windows-Only Notes
+
+These are observed OwlBear workspace workarounds for Windows with PowerShell:
 
 - **Startup instability.** If scoped runs show plugin errors, set `$env:PYTEST_DISABLE_PLUGIN_AUTOLOAD='1'` then add `-p pytest_asyncio.plugin -p xdist -n 0`. Or selectively disable logfire: `-p no:logfire -p no:pytest_logfire`.
 

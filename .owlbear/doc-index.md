@@ -59,17 +59,6 @@
 - ## `4. Cockpit Backend`
 - ## `5. Test Domain Mapping`
 
-## .github/prompts/knowledge-audit.prompt.md
-- ## `What This Module Does`
-- ## `Audit Scope`
-- ## `Known Past Issues (context, not constraints)`
-- ## `Classification Rules`
-- ## `Presentation And Approval`
-- ## `Additional Instructions`
-- ### `Interpreting User Input`
-- ### `Decisions And Questions`
-- ### `Session Continuation`
-
 ## .owlbear/ideas.md
 - ## `Kanban`
 - ### `Status quo`
@@ -92,13 +81,11 @@
 - ## `2. Placement Mapping`
 - ## `3. Audience Targets`
 
-## .owlbear/prompts/arch-audit.prompt.md
-- # `Architecture Module Quality Audit`
-- ## `Step 1 - Load the standard first`
-- ## `Step 2 - Discover and define audit units`
-- ## `Step 3 - Evaluate with full vocabulary`
-- ## `Step 4 - Output format`
-- ## `Step 5 - Optional follow-up tasks`
+## .owlbear/instructions/mcp-server.instructions.md
+- ## `Error Handling`
+- ## `Tool Contracts`
+- ## `Lifespan and Configuration`
+- ## `Public Surface`
 
 ## .owlbear/prompts/doc-audit.prompt.md
 - # `Documentation Audit`
@@ -110,6 +97,17 @@
 - ## `6. Diagram Ownership`
 - ## `7. Describes-Based Diagram Verification`
 - ## `8. Verification and Closeout`
+
+## .owlbear/prompts/knowledge-audit.prompt.md
+- ## `What This Module Does`
+- ## `Audit Scope`
+- ## `Known Past Issues (context, not constraints)`
+- ## `Classification Rules`
+- ## `Presentation And Approval`
+- ## `Additional Instructions`
+- ### `Interpreting User Input`
+- ### `Decisions And Questions`
+- ### `Session Continuation`
 
 ## seed/.github/copilot-instructions.md
 - # `Project Copilot Instructions`
@@ -592,6 +590,14 @@
 - ## `9. Final Deliverable Format`
 - ## `10. Continuation Protocol`
 
+## share/prompts/arch-audit.prompt.md
+- # `Architecture Module Quality Audit`
+- ## `Step 1 - Load the standard first`
+- ## `Step 2 - Discover and define audit units`
+- ## `Step 3 - Evaluate with full vocabulary`
+- ## `Step 4 - Output format`
+- ## `Step 5 - Optional follow-up tasks`
+
 ## share/prompts/architecture-review.prompt.md
 - # `Architecture Review`
 - ## `Step 1 - Load Context`
@@ -600,12 +606,12 @@
 - ## `Step 4 - Explore the Selected Design`
 
 ## share/prompts/frontend-audit.prompt.md
-- # `Cockpit Frontend Audit`
+- # `Frontend Audit`
 - ## `Interaction Protocol`
-- ## `Step 1 - Load context`
+- ## `Step 1 - Load standards and discover context`
 - ## `Step 2 - Plan and scope`
 - ## `Step 3 - Execute audit`
-- ## `Step 4 - Verify and guardrails`
+- ## `Step 4 - Present and close`
 - ## `Guardrails`
 
 ## share/prompts/ideate.prompt.md
@@ -681,7 +687,7 @@
 - # `AC Quality Schema`
 - ## `Meta-Rule`
 - ## `Tier 1 - Behavior AC (Code Changes)`
-- ### `B1 - Function-Scoped`
+- ### `B1 - Boundary-Scoped`
 - ### `B2 - Input -> Output Pairs`
 - ### `B3 - No Naked Quantifiers`
 - ### `B4 - Boundary-Valid Proof`
@@ -691,7 +697,7 @@
 - ### `P3 - Verification Method Stated`
 - ## `Two-Pass Validation`
 - ## `Bad -> Good Transformations`
-- ### `B1 Example (Function-Scoped)`
+- ### `B1 Example (Boundary-Scoped)`
 - ### `B2 Example (Input -> Output)`
 - ### `B3 Example (No Naked Quantifiers)`
 - ### `B4 Example (Boundary-Valid Proof)`
@@ -700,8 +706,8 @@
 - ### `P3 Example (Verification Method)`
 - ## `Canonical Literal Verification`
 - ### `Bad -> Good Examples`
-- ### `5-Step Verifier Procedure`
-- ### `Canonical Source Map`
+- ### `Authority Discovery`
+- ### `Verifier Procedure`
 - ## `Validation Checklist`
 - ### `Shaper Draft Checklist`
 - ### `Shaper/Challenger Validation Checklist`
@@ -740,6 +746,16 @@
 ### Outbound links
 - [share/README.md](../../README.md)
 - [share/WIRING.md](../../WIRING.md)
+
+## share/skills/h-codebase-orientation/SKILL.md
+- # `Codebase Orientation`
+- ## `Establish Project Context`
+- ## `Refresh the Indexes`
+- ## `Find the Test Boundary`
+- ## `Orientation Ladder`
+- ## `Semble`
+- ## `Discovery Is Not Proof`
+- ## `Companion Skills`
 
 ## share/skills/h-decision-requests/SKILL.md
 - # `Decision/Action Requests Handbook`
@@ -823,22 +839,21 @@
 
 ## share/skills/h-frontend-conventions/SKILL.md
 - # `Frontend Conventions`
+- ## `Discover Project Policy`
 - ## `Design System`
-- ### `Cockpit PDS Testing Patterns`
-- ## `Accessibility (a11y)`
-- ## `Component Structure`
-- ## `Responsive Design`
-- ## `Testing`
-- ### `PDS Test Environment Setup (Vitest + jsdom)`
-
-### Outbound links
-- [Porsche Design System](https://designsystem.porsche.com/)
+- ## `Accessibility and Input`
+- ## `Component and Module Structure`
+- ## `Responsive and Visual Behavior`
+- ## `Testing and Proof`
+- ## `Cockpit/PDS/React Profile`
 
 ## share/skills/h-frontend-design/SKILL.md
 - # `Frontend Design Reference`
-- ## `Design Context`
+- ## `Project Context`
 - ## `Design Domain Index`
-- ## `Universal Blockers`
+- ## `Quality Classification`
+- ### `Objective Blockers`
+- ### `Contextual Heuristics`
 - ## `Design Domains`
 - ### `Typography`
 - ### `Color and Contrast`
@@ -848,7 +863,8 @@
 - ### `Responsive Design`
 - ### `UX Writing`
 - ## `Anti-Pattern Classification`
-- ## `Cockpit Defaults`
+- ## `Product-Type Starting Points`
+- ## `State and Evidence Discipline`
 - ## `Known Gotchas`
 
 ## share/skills/h-ideation/SKILL.md
@@ -990,37 +1006,39 @@
 - ## `Content-Quality Bar`
 - ## `Anti-Patterns`
 
-## share/skills/h-project-orientation/SKILL.md
-- # `Project Orientation`
-- ## `Establish Project Context`
-- ## `Refresh The Indexes`
-- ## `Find The Test Boundary`
-- ## `Orientation Ladder`
-- ## `Semble`
-- ## `Discovery Is Not Proof`
-- ## `Continuous Change Map`
-- ## `Role Boundaries`
+## share/skills/h-module-design/SKILL.md
+- # `Module Design`
+- ## `Module Quality Vocabulary`
+- ## `Deletion Test`
+- ## `Interface Is the Test Surface`
+- ## `Seam Discipline`
+- ## `Dependency Classification`
+- ## `Applying the Diagnostics`
 
 ## share/skills/h-pytest-and-linting/SKILL.md
 - # `pytest, ruff, and coverage Reference`
-- ## `Commands`
+- ## `Discover Project Configuration`
+- ## `Command Templates`
 - ### `Scoped`
 - ### `Full suite`
 - ### `With coverage`
 - ### `ruff`
 - ### `Default flags`
-- ## `Markers`
 - ## `No Piping`
 - ## `File-Capture Fallback`
-- ## `Gotchas`
-- ## `Windows-Only Pitfalls`
+- ## `General Gotchas`
+- ## `OwlBear Workspace Notes`
+- ### `Windows-Only Notes`
 
 ## share/skills/h-python-conventions/SKILL.md
 - # `Python Conventions`
 - ## `Package Management`
 - ## `Code Style`
 - ## `Testing`
-- ### `Two-Tier Test Model`
+- ### `Proof Is Not Automatically a Test`
+- ### `Durable Test Admission`
+- ### `Assertion Quality`
+- ### `Test Lifecycle and Placement`
 - ## `Known Gotchas`
 - ## `Patterns`
 
@@ -1041,37 +1059,16 @@
 
 ## share/skills/h-vitest-and-linting/SKILL.md
 - # `Frontend Test, Lint, and Coverage Reference`
-- ## `Vitest Commands`
-- ### `Working directory`
-- ### `Scoped runs`
-- ### `Full suite`
-- ### `Default flags`
-- ## `ESLint`
-- ### `Exit codes`
-- ## `CSS and HTML Lint`
-- ## `Build and E2E`
-- ## `Coverage`
-- ## `Vitest Configuration`
-- ### `Setup file (`vitest.setup.ts`)`
-- ### `PDS component testing notes`
+- ## `Discover the Owning Package`
+- ## `Select Proof by Claim`
+- ## `Command Templates`
+- ### `Unit or component tests`
+- ### `Lint and build`
+- ### `Browser/E2E`
+- ### `Coverage`
+- ## `Durable Frontend Test Admission`
+- ## `Cockpit/PDS Profile`
 - ## `Known Gotchas`
-
-## share/skills/r-architecture-standards/SKILL.md
-- # `Architecture Standards`
-- ## `Module Quality Vocabulary`
-- ### `Deletion Test`
-- ### `Interface Is the Test Surface`
-- ### `Seam Discipline`
-- ### `Dependency Classification`
-- ## `MCP Server Conventions`
-- ### `Error Handling`
-- #### `Anti-pattern: double-prefix`
-- ### `Tool Annotations`
-- ### `Return Types`
-- ### `Lifespan Pattern`
-- ### `Tool Exclusion`
-- ### `Module Exports`
-- ## `Configuration`
 
 ## share/skills/r-doc-standards/SKILL.md
 - # `Documentation Quality Standards`
@@ -1091,9 +1088,12 @@
 - ### `Claiming`
 - ### `Resolved Decisions`
 - ### `Memory`
+- ### `Task Metadata`
 - ## `3. Working Standards`
+- ### `Minimum Change Contract`
 - ### `Evidence`
 - ### `Rent Test For Durable Tests`
+- ### `Continuous Change Module Map`
 - ### `Proof Checks And Challengers`
 - ## `4. Communication`
 - ### `Channel A`
@@ -1105,16 +1105,14 @@
 - ## `6. Escalation`
 - ### `Decision Tiers`
 
-## share/skills/r-project-standards/SKILL.md
-- # `Project Standards`
-- ## `1. Commit Discipline`
+## share/skills/r-workspace-governance/SKILL.md
+- # `Workspace Governance`
+- ## `Commit Discipline`
 - ### `Format`
 - ### `Rules`
 - ### `VS Code Auto-Staging Trap`
-- ## `2. File Placement`
-- ## `3. Attribution`
-- ## `4. Priority Scheme`
-- ## `5. Tag Taxonomy`
+- ## `OwlBear-Managed Artifact Placement`
+- ## `Attribution`
 
 ## share/skills/w-idea-refinement/SKILL.md
 - # `Idea Refinement`

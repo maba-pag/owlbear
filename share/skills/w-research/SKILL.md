@@ -50,7 +50,7 @@ For trivial tasks (rename, typo, config tweak): items 1–4 get a one-liner `N/A
 If the task has scoped content but needs clarification:
 
 - Present structured options to the user.
-- Follow `h-project-orientation` to establish the local stack and project boundaries. Apply principles
+- Follow `h-codebase-orientation` to establish the local stack and project boundaries. Apply principles
  from shared OwlBear rules, not from project-specific instructions.
 
 ## Step 2 — Check Existing Research
@@ -80,7 +80,8 @@ For an approved clone, use `.owlbear/scratch/research/{repo-name}/`, inspect it 
 
 Find 2+ authoritative sources per claim:
 
-- **Codebase:** follow `h-project-orientation` for indexes, exact search, and Semble. Use direct reads and exact tools to ground findings.
+- **Codebase:** follow `h-codebase-orientation` for indexes, exact search, and Semble. Use direct reads
+  and exact tools to ground findings.
 - **Explore:** use the `Explore` subagent for broad read-only codebase context when local search would be noisy.
 - **Web:** use the `web` toolset for direct pages and `ddgs/search_text` / `ddgs/extract_content` for search and extraction; use `markitdown/*` when document conversion is needed.
 - **External repositories:** prefer source pages, docs, and extracted files for preliminary orientation. After Step 3 approval, clone when source-level inspection is needed to answer the shaping question.
@@ -144,7 +145,8 @@ Create concrete follow-up tasks with explicit statuses: build-ready follow-ups i
 
 ## Step 9 — Finalize Artifacts
 
-1. Add rows to `.owlbear/sources/overview.md` for external sources (see `r-project-standards` → Attribution).
+1. Add rows to `.owlbear/sources/overview.md` for external sources (see
+   `r-workspace-governance` → Attribution).
 2. Delete any cloned repos from `.owlbear/scratch/research/`.
 
 ## Step 10 — Record In Shape Notes And Advance

@@ -1,0 +1,59 @@
+"""Regression tests for intentional agent loading of shared project authorities."""
+
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+_REPO_ROOT = Path(__file__).parent.parent
+_AGENTS_ROOT = _REPO_ROOT / "share/agents"
+_SHARE_ROOT = _REPO_ROOT / "share"
+
+_EXPECTED_REQUIRED_READERS = {
+    "h-codebase-orientation": {"builder", "shaper", "verifier"},
+    "h-module-design": {"ideation-architect", "shaper", "shaper-challenger"},
+    "r-workspace-governance": {"ideation-discoverer", "ideation-mediator"},
+}
+
+
+def _required_skills(path: Path) -> set[str]:
+    content = path.read_text(encoding="utf-8")
+    match = re.search(r"<required_reading>(.*?)</required_reading>", content, re.DOTALL)
+    assert match is not None, f"Missing required_reading in {path.name}"
+    return set(re.findall(r"`([hwr]-[a-z0-9-]+)`", match.group(1)))
+
+
+def test_authorities_have_intentional_regular_agent_readers() -> None:
+    """Regular loading stays limited to roles that need an authority in nearly every session."""
+    actual = {skill: set() for skill in _EXPECTED_REQUIRED_READERS}
+    for agent_path in _AGENTS_ROOT.glob("*.agent.md"):
+        for skill in _required_skills(agent_path):
+            if skill in actual:
+                actual[skill].add(agent_path.name.removesuffix(".agent.md"))
+
+    assert actual == _EXPECTED_REQUIRED_READERS
+
+
+def test_on_demand_authority_paths_are_declared() -> None:
+    """Roles with situational needs can discover the authority without regular loading."""
+    orientation = (_REPO_ROOT / "share/skills/h-codebase-orientation/SKILL.md").read_text(encoding="utf-8")
+    protocol = (_REPO_ROOT / "share/skills/r-pipeline-protocol/SKILL.md").read_text(encoding="utf-8")
+    discovery = (_REPO_ROOT / "share/skills/w-ideation-discovery/SKILL.md").read_text(encoding="utf-8")
+    mediation = (_REPO_ROOT / "share/skills/w-ideation-mediation/SKILL.md").read_text(encoding="utf-8")
+
+    assert "`h-module-design`" in orientation
+    assert "`r-workspace-governance`" in protocol
+    assert "`h-codebase-orientation`" in discovery
+    assert "`h-codebase-orientation`" in mediation
+
+
+def test_retired_authority_names_are_absent_from_shared_ecosystem() -> None:
+    """Shared consumers use one current name for each authority."""
+    retired = {"h-project-orientation", "r-project-standards", "r-architecture-standards"}
+    offenders: list[str] = []
+    for path in _SHARE_ROOT.rglob("*.md"):
+        content = path.read_text(encoding="utf-8")
+        if any(name in content for name in retired):
+            offenders.append(str(path.relative_to(_REPO_ROOT)))
+
+    assert not offenders, f"Retired authority references remain: {offenders}"

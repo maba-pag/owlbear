@@ -50,8 +50,8 @@ def test_architecture_review_consumes_generic_idea_refinement() -> None:
 
     assert not (REPO_ROOT / "share/skills/w-architecture-review/SKILL.md").exists()
     for dependency in (
-        "r-architecture-standards",
-        "h-project-orientation",
+        "h-module-design",
+        "h-codebase-orientation",
         "h-visual-output",
         "w-idea-refinement",
     ):

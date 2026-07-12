@@ -67,7 +67,7 @@ Load in this exact order before evaluating any file:
 3. `h-agent-structure`
 4. `h-memory-structure`
 5. `r-pipeline-protocol`
-6. `r-project-standards`
+6. `r-workspace-governance`
 
 **References, not restates.** Findings must cite specific rules from these skills. If you cannot cite a rule, reconsider the finding.
 
@@ -103,7 +103,7 @@ Standard: `h-agent-structure` section Rule of Two.
 
 - Same rule appears in 3+ locations
 - Agent file restates `r-pipeline-protocol`
-- Agent file restates `r-project-standards`
+- Agent file restates `r-workspace-governance`
 - Skill contains claiming/commit boilerplate that belongs in shared protocol
 - `<output_format>` contains full command templates instead of verdict tokens + skill reference
 

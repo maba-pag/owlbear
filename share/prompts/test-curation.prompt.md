@@ -1,5 +1,5 @@
 ---
-description: "Run test suite curation — scan for archived task-tests, mine coverage gaps, clean up"
+description: "Run test suite curation — remove stale task-tests and preserve durable regression guards"
 agent: test-curator
 ---
 
@@ -7,7 +7,9 @@ Curate tests
 
 ## Interaction Protocol
 
-Use the user's language unless they ask otherwise. When presenting candidate cleanup findings, coverage-gap choices, or continuation decisions, present exactly one decision item at a time before calling `askQuestions`.
+Use the user's language unless they ask otherwise. When presenting candidate cleanup findings,
+regression-value choices, or continuation decisions, present exactly one decision item at a time
+before calling `askQuestions`.
 
 Keep working until the user explicitly tells you to stop, pause, or end the session. Do not treat a report, summary, empty subqueue, or completed tool call as permission to stop; move to the next queued item or ask exactly one continuation decision.
 

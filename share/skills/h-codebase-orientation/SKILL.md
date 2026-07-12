@@ -1,10 +1,10 @@
 ---
-name: h-project-orientation
-description: "Handbook: Understand what is where and choose the right navigation or proof tool"
+name: h-codebase-orientation
+description: "Handbook: Discover project context, locate code, and choose navigation or proof tools"
 user-invocable: false
 ---
 
-# Project Orientation
+# Codebase Orientation
 
 Use the smallest navigation aid that can locate the relevant artifact, module, or symbol. Generated
 indexes and Semble are wayfinders, not authorities. Read the source before making a claim or edit.
@@ -22,7 +22,7 @@ Use this order to establish context without turning local instructions into univ
 3. Current structure and interfaces: generated indexes, then direct source reads.
 4. Shared OwlBear behavior: shared agents, skills, and instructions, never copied project notes.
 
-## Refresh The Indexes
+## Refresh the Indexes
 
 Regenerate all indexes before orienting in a changed working tree:
 
@@ -41,7 +41,7 @@ The command always regenerates these fixed, committed artifacts concurrently:
 The artifacts are advisory. Source files remain authoritative. Search indexes with `rg`; do not load
 an entire index when one path, symbol, or topic query will do.
 
-## Find The Test Boundary
+## Find the Test Boundary
 
 When a repository contains multiple package roots or test runners, resolve the owning test boundary:
 
@@ -66,8 +66,8 @@ Stop at the first adequate option:
 5. **Unknown behavioral owner or analogous implementation:** use Semble once to obtain a small set of
    candidates, then read source.
 
-Do not call Semble when a known file, symbol, index result, or exact search already provides a credible
-anchor. Do not repeat a Semble query after it returns a usable location.
+Do not call Semble when a known file, symbol, index result, or exact search already provides a
+credible anchor. Do not repeat a Semble query after it returns a usable location.
 
 ## Semble
 
@@ -95,23 +95,9 @@ research workflow controls clone approval, recording, and cleanup.
 5. Stop after one or two focused searches. If ownership remains unclear, follow the caller's role
    boundary rather than broadening indefinitely.
 
-## Continuous Change Map
+## Companion Skills
 
-When Shape Notes provide a Change Module Map, use it as the working model throughout build and verify:
-
-- Start from its named responsibilities and planned interface impact.
-- Keep implementation inside the mapped modules unless source evidence requires a change.
-- Record justified deviations; do not silently expand scope.
-- Return to shape when a deviation changes architecture, ownership, interfaces, or task scope.
-- Never treat the map as stronger authority than current source.
-
-## Role Boundaries
-
-| Role | Orientation use | If the map or orientation is insufficient |
-|------|-----------------|-------------------------------------------|
-| Shaper | Verify owners, responsibilities, interfaces, precedents, and architecture boundaries. | Refine, research, or request the missing decision. |
-| Builder | Start from the Change Module Map; recover one missing implementation anchor or narrow precedent. | Reject to shape when source contradicts scope or architecture. |
-| Verifier | Compare changed modules with the map; investigate one concrete concern or adjacent invariant. | Reject to build or reshape; do not become a second builder. |
-
-Collector and challengers do not run open-ended orientation by default. Their work is bounded closure
-or cross-checking against the shaped map and direct evidence.
+| Skill | Load when |
+|-------|-----------|
+| `h-module-design` | Source evidence requires judging module depth, locality, seams, or dependency placement rather than locating code |
+| `r-workspace-governance` | Creating or committing OwlBear-managed artifacts |
