@@ -10,21 +10,39 @@ Conventions that are **not obvious best practices**. If it's standard Python or 
 
 ## Module Quality Vocabulary
 
-Shared terminology for evaluating module quality across the pipeline (derived from Ousterhout's *A Philosophy of Software Design*).
+Use these terms consistently when evaluating or designing code. A module is scale-agnostic: a
+function, class, package, or tier-spanning slice can all be modules.
 
-| Concept       | Definition                                                  | Diagnostic                                                                           |
-| ------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| **Depth**     | Ratio of implementation complexity to interface complexity   | Deep modules do a lot behind a simple interface. Shallow modules expose everything.  |
-| **Leverage**  | How many callers benefit from a module                      | High leverage = change once, benefit everywhere.                                     |
-| **Locality**  | How much context you need to understand a change            | Good locality = changes are contained within one module boundary.                    |
-| **Seam**      | A boundary where you can substitute implementations         | Real seam: 2+ implementations. Hypothetical seam: 1 adapter = speculative.           |
-| **Adapter**   | Translates between two interfaces at a seam                 | One adapter = hypothetical seam. Two adapters = real seam earning its keep.           |
+| Concept | Definition | Diagnostic |
+|---------|------------|------------|
+| **Module** | Something with an interface and an implementation | Name the responsibility it hides, not its file type or framework role. |
+| **Interface** | Everything a caller must know to use a module correctly, including invariants, ordering, errors, configuration, and performance | If callers must understand internals, the effective interface is larger than its type signature. |
+| **Implementation** | Behavior hidden inside a module | Internal composition does not need to become caller knowledge or an external seam. |
+| **Depth** | Leverage delivered through the interface | Deep modules expose substantial behavior through a small interface; shallow modules make callers coordinate the behavior. |
+| **Leverage** | Capability callers receive per unit of interface they must learn | One implementation pays back across multiple callers and tests. |
+| **Locality** | Degree to which change, bugs, knowledge, and verification concentrate in one place | Good locality means a behavior change is understood and fixed once. |
+| **Seam** | Location where behavior can vary without editing the caller | A seam is justified by real variation, usually at least two adapters. |
+| **Adapter** | A concrete participant that satisfies an interface at a seam | It names the substitutable role, not a generic forwarding wrapper. |
 
 ### Deletion Test
 
-Imagine deleting a module entirely. If the complexity it managed **vanishes** (callers become simpler), the module was a pure pass-through — inline it or delete it. If the complexity **reappears across N callers**, the module is earning its keep.
+Imagine deleting a module entirely. If deleting it removes only forwarding while callers become
+simpler, it was shallow. If its hidden complexity reappears across callers, it was earning its keep.
 
 Apply when evaluating new abstractions, adapters, and wrapper modules. A module that fails the Deletion Test is a candidate for removal or deepening (absorbing more responsibility behind a simpler interface).
+
+### Interface Is the Test Surface
+
+Callers and durable behavioral tests should cross the same interface. Tests may replace a dependency
+below that interface, but should not bypass the behavior being claimed. If tests routinely need to
+reach past the interface, reconsider the module shape before adding more test-only seams.
+
+### Seam Discipline
+
+- One adapter usually indicates a hypothetical seam; two adapters establish actual variation.
+- A deep module may contain private internal seams without exposing them to callers.
+- Prefer replacing a dependency below the tested interface over layering tests across every shallow
+    internal module.
 
 ### Dependency Classification
 
