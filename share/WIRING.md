@@ -64,7 +64,7 @@ Built-in agents (`Explore`, `General Purpose`) resolve at any depth.
 | Agent Group | Regularly | Connection |
 |-------------|-----------|------------|
 | ideation-discoverer | h-ideation, w-ideation-discovery | `req` |
-| ideation-mediator | h-ideation, w-ideation-mediation | `req`; dispatches shaper at M6 |
+| ideation-mediator | h-ideation, w-ideation-mediation | `req`; hands approved Brief to user-triggered `/shape` |
 | ideation panel agents | h-ideation-panel | `req` |
 | knowledge-ingestor, knowledge-enricher | h-knowledge-ops | `req` |
 

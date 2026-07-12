@@ -1,9 +1,9 @@
 ---
-description: "Start the user-facing shaper for a shape task or simple idea"
+description: "Start the user-facing shaper for an approved Brief, shape task, or simple idea"
 agent: shaper
 ---
 
-Shape: ${input:task_or_idea:Task number or simple idea — e.g. '#123' or 'make Cockpit request handling less noisy'}
+Shape: ${input:task_brief_or_idea:Task number, approved Brief path, or simple idea — e.g. '#123' or '.owlbear/briefs/draft-export/brief.md'}
 
 ## Interaction Protocol
 
@@ -14,15 +14,22 @@ Each decision item must include: status quo, problem, options with pro/con/risk/
 ## Input Modes
 
 - If the input is a task number, shape that existing task.
+- If the input is an approved `brief.md` path, read the Brief and its sibling `decisions.md` before
+	task creation. Apply the Brief-readiness gate, contract authority guard, and product invariant map.
 - If the input is a simple idea, shape it directly into routed task artifacts. Do not create a temporary `shape` staging task.
 
 ## What Happens
 
-1. The shaper turns intent into build-ready scope and acceptance criteria.
-2. When local context is insufficient, the shaper runs source-grounded research and records it in Shape Notes or `.owlbear/research/`.
-3. Important user choices are discussed through `askQuestions` before approval or blocking.
-4. Over-broad work may be decomposed by shaper, with build-ready leaf tasks created in `build` and aggregate parents/EPICs created or parked in `collect` behind child dependencies.
-5. Approved existing tasks move to `build` or `collect`; unresolved existing tasks stay in `shape` or become blocked through `create_request`. For free-text ideas that remain unresolved after live clarification, stop without creating board artifacts.
+1. The shaper confirms product invocation, existing-system fit and authorities, normal-path proof,
+	and the completion/change contract before decomposition.
+2. The shaper records load-bearing contract claims and maps each product invariant to one owning task
+	and one normal-path proof.
+3. When local context is insufficient, the shaper runs source-grounded research and records it in Shape Notes or `.owlbear/research/`.
+4. Important user choices are discussed through `askQuestions` before approval or blocking.
+5. Over-broad work may be decomposed by shaper, with build-ready leaf tasks created in `build` and aggregate parents/EPICs created or parked in `collect` behind child dependencies.
+6. For Shared and Production Briefs, concrete tasks receive a post-shaping expectation-fidelity check
+	before approval.
+7. Approved existing tasks move to `build` or `collect`; unresolved existing tasks stay in `shape` or become blocked through `create_request`. For free-text ideas that remain unresolved after live clarification, stop without creating board artifacts.
 
 ## Routing Rules
 

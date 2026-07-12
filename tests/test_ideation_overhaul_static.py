@@ -165,6 +165,68 @@ class TestFromAC_SharedWorkflowContract:
                 assert needle in text, f"Decision template missing field in {path}: {needle}"
 
 
+class TestFromAC_ExplicitShapingHandoff:
+    """Approved Briefs enter a separate interactive shaping session."""
+
+    def test_mediator_cannot_mutate_kanban_or_dispatch_shaper(self) -> None:
+        text = _read("share/agents/ideation-mediator.agent.md")
+        assert "ob-kanban/" not in text
+        assert "  - shaper" not in text
+        assert "do not create Kanban tasks or invoke shaper" in text
+
+    def test_mediation_handoff_names_brief_and_shape_command(self) -> None:
+        workflow = _read("share/skills/w-ideation-mediation/SKILL.md")
+        prompt = _read("share/prompts/ideation-mediate.prompt.md")
+        for needle in ["approved Brief path", "/shape", "Do not create Kanban tasks"]:
+            assert needle in workflow, f"Mediation workflow missing explicit handoff contract: {needle}"
+        assert "no Kanban task is created and shaper is not dispatched" in prompt
+
+    def test_shape_prompt_accepts_approved_brief(self) -> None:
+        text = _read("share/prompts/shape.prompt.md")
+        for needle in [
+            "approved `brief.md` path",
+            "Brief-readiness gate",
+            "contract authority guard",
+            "product invariant map",
+        ]:
+            assert needle in text, f"Shape prompt missing approved-Brief contract: {needle}"
+
+
+class TestFromAC_ShapeGroundingContracts:
+    """Shaping records authority, invariant ownership, and normal-path proof."""
+
+    def test_decomposition_requires_readiness_authority_and_invariant_map(self) -> None:
+        text = _read("share/skills/w-task-decomposition/SKILL.md")
+        for needle in [
+            "### Brief Readiness Gate",
+            "## Step 1b — Source And Contract Authority Guard",
+            "### Product Invariant Map",
+            "Every invariant has exactly one owner",
+            "Prefer roughly 3",
+            "outcome-cohesive tasks",
+        ]:
+            assert needle in text, f"Task decomposition missing grounding contract: {needle}"
+
+    def test_ac_and_pipeline_proof_cannot_replace_claimed_boundary(self) -> None:
+        ac_quality = _read("share/skills/h-ac-quality/SKILL.md")
+        protocol = _read("share/skills/r-pipeline-protocol/SKILL.md")
+        assert "### B4 - Boundary-Valid Proof" in ac_quality
+        assert "may replace only a layer below the boundary being proved" in ac_quality
+        assert "must not replace the command, endpoint, workflow" in protocol
+        assert "A SHA without tied proof is not closure evidence" in protocol
+
+    def test_pipeline_roles_enforce_authority_and_aggregate_proof(self) -> None:
+        builder = _read("share/agents/builder.agent.md")
+        verifier = _read("share/agents/verifier.agent.md")
+        collector = _read("share/agents/collector.agent.md")
+        challenger = _read("share/agents/shaper-challenger.agent.md")
+        assert "Reject canonical-source contradictions" in builder
+        assert "Verify named authorities and the claimed boundary" in verifier
+        assert "Require SHA-linked aggregate proof" in collector
+        assert "product invariant" in challenger
+        assert "no owning task" in challenger
+
+
 class TestFromAC_AgentContracts:
     """Agent prompts keep narrow file contracts and avoid model-string coupling."""
 

@@ -154,25 +154,20 @@ Apply O15 to every Critic pass. See the Critic Validation section above for the 
 5. No mandatory/recommended tiers: everything in the approved Brief is a requirement. If an item should not be built, remove it or record an accepted trade-off before approval.
 6. Write `brief.md` only after user approval. Once approved, the Brief is the binding product promise for downstream planning.
 
-## Step 6 — M6: Handoff — "Go"
+## Step 6 — M6: Shaping Handoff — "Ready to Shape"
 
-1. Create the parent kanban task from the approved Brief.
-2. Invoke `shaper` with the canonical prefix: `Shape: #{parent_id} — {brief summary}`.
-3. Write `shaping-summary.md` from the shaper result: parent task, resulting task shape, child-task list when shaper decomposed the parent, Brief coverage, expected-experience coverage, omissions, and repair actions.
-4. Apply the tier-scaled M6 handoff check from `h-ideation` against `brief.md`, `shaping-summary.md`, and the created or shaped tasks:
-   - `Scratch` and `Tool`: no formal M6 fidelity check.
-   - `Shared`: post-shaping expectation-fidelity Critic check.
-   - `Production`: post-shaping expectation-fidelity Critic check.
-5. Use additive-only repair for M6 gaps:
-   - coverage omissions go back to shaper for task or child-task repair
-   - value or scope trade-offs go back to the user
-   - unclear cases go back to the user
-   - do not delete, merge, or materially rewrite existing shaped tasks during M6 repair
-6. Commit the final Working Directory state: `git add .owlbear/briefs/draft-{name}/ && git commit -m "ideation: complete Phase 2 mediation for {name}"`
-7. Report the handoff result to the user:
-   - parent task ID and title
-   - shaped task IDs and any child tasks created
-   - what happens next (`/orchestrate` can run build/verify/collect after shaping approves build)
+1. Confirm `brief.md` is approved, saved, and names any unresolved decisions that shaping must not
+   guess.
+2. Do not create Kanban tasks or invoke `shaper`. Ideation and task creation are separate user-facing
+   sessions.
+3. Commit the final Working Directory state: `git add .owlbear/briefs/draft-{name}/ && git commit -m "ideation: complete Phase 2 mediation for {name}"`
+4. Report the shaping handoff to the user:
+   - approved Brief path and one-line product promise
+   - unresolved decisions or external claims, if any
+   - exact next command: `/shape {brief_path}`
+5. The later interactive shaping session owns task creation and the tier-scaled post-shaping
+   expectation-fidelity check. For `Shared` and `Production`, shaper must not approve until that
+   check passes against the approved Brief and concrete task layout.
 
 ## Verification Checklist
 
@@ -193,5 +188,7 @@ Apply O15 to every Critic pass. See the Critic Validation section above for the 
 - [ ] Post-hybridization dual Critic passes were executed and both were triaged with O15.
 - [ ] Expectation fit is represented in `synthesis.md` before Brief drafting.
 - [ ] Approved `brief.md` contains no mandatory/recommended tiers and carries the binding product promise.
-- [ ] `shaping-summary.md` records task coverage against the approved Brief and expected experience.
-- [ ] Tier-scaled M6 handoff check ran when required, with additive-only repair for coverage omissions.
+- [ ] No Kanban task was created and shaper was not invoked by mediation.
+- [ ] The final handoff names the approved Brief path, unresolved decisions, and `/shape` command.
+- [ ] `Shared` and `Production` handoffs assign post-shaping expectation-fidelity checking to the
+   later interactive shaping session.

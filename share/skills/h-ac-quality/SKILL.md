@@ -46,6 +46,21 @@ Banned words (7):
 
 Allowed exception: a banned word may appear only when followed by exhaustive enumeration that makes pass or fail mechanically decidable.
 
+### B4 - Boundary-Valid Proof
+
+When an AC claims integration, command, endpoint, generated-operation, assembled-context, or user
+journey behavior, it names the normal assembled boundary under test and the observable result at
+that boundary.
+
+- A mock or injected dependency may replace only a layer below the boundary being proved.
+- An injected completed workflow cannot prove CLI registration or application assembly.
+- A mocked generated-tool caller cannot prove operation naming or context visibility.
+- A fixture may prove normalization behavior only when its shape is grounded in the named contract
+  authority.
+
+Reject an AC whose proposed evidence bypasses the callable, command, workflow, or assembled context
+that the AC claims works.
+
 ## Tier 2 - Process AC (Workflow Changes)
 
 Use Tier 2 for requirements that change agent behavior, stage transitions, or pipeline policy.
@@ -91,6 +106,8 @@ Run validation in order:
 - Confirm each line has sufficient detail for independent verification.
 - Confirm scope is not split across multiple hidden assumptions.
 - Confirm pass/fail is objective and does not require author interpretation.
+- For cross-boundary behavior, confirm the AC names the normal assembled boundary and does not
+  replace that boundary in its proof setup.
 
 Mechanical pass failing means rewrite before semantic review. Semantic failure means clarify scope, inputs, outputs, or verification method.
 
@@ -110,6 +127,13 @@ Mechanical pass failing means rewrite before semantic review. Semantic failure m
 
 - Bad: "Verifier checks all AC lines correctly."
 - Good: "Verifier checks AC-1 through AC-4 and records one evidence row per AC line in Verify Notes."
+
+### B4 Example (Boundary-Valid Proof)
+
+- Bad: "Given an injected workflow runner, the CLI command returns JSON."
+- Good: "Given the real CLI application with remote HTTP transport replaced, invoking
+  `alerts prepare` resolves normal configuration, crosses the assembled workflow boundary, and
+  writes one JSON document to stdout."
 
 ### P1 Example (Agent/Stage-Scoped)
 
@@ -164,6 +188,12 @@ Use this when AC lines cite concrete literals that must match source-of-truth to
 | CSS custom properties for semantic signals | `serve/cockpit/web/src/tokens.css` | `--pds-signal-claimed`, `--pds-notification-warning` |
 | PDS component prop/type literals | `@porsche-design-system/components-react` type exports | component prop union literal from package type definitions |
 
+For repositories outside the examples above, the shaper records the applicable canonical source in
+`## Shape Notes`. Generated operation inventories, public command trees, schemas, official external
+documentation, and bounded verified production observations may be canonical authorities for their
+specific claims. Evidence scope must remain explicit; a sampled production envelope does not prove
+unobserved variants.
+
 ## Validation Checklist
 
 Use this checklist for both drafting and validation.
@@ -178,6 +208,7 @@ Use this checklist for both drafting and validation.
 - [ ] Process line includes explicit verification method (P3).
 - [ ] Numbering is stable and unambiguous.
 - [ ] Line can be verified without author intent.
+- [ ] Cross-boundary line names the normal assembled boundary and replaces only lower dependencies.
 
 ### Shaper/Challenger Validation Checklist
 
@@ -185,5 +216,6 @@ Use this checklist for both drafting and validation.
 - [ ] Semantic pass complete: independent verifiability confirmed per line.
 - [ ] Hidden assumptions removed from each line.
 - [ ] Every line has objective pass/fail evidence path.
+- [ ] Integration proof does not inject or mock the boundary whose behavior is claimed.
 - [ ] Vague phrasing rewritten to executable, inspectable statements.
 - [ ] Rule violations are returned with bad -> good rewrite guidance.
