@@ -34,14 +34,14 @@ Built-in agents (`Explore`, `General Purpose`) resolve at any depth.
 
 | Agent | Regularly | Connection | Seldom | Connection |
 |-------|-----------|------------|--------|------------|
-| shaper | r-pipeline-protocol, h-ac-quality, w-task-decomposition, w-research | `req` | h-code-orientation, h-mcp-kanban, r-project-standards | `companion` |
+| shaper | r-pipeline-protocol, h-ac-quality, w-task-decomposition, w-research, h-project-orientation, r-architecture-standards | `req` | h-mcp-kanban, r-project-standards | `companion` |
 
 ### Execution Board
 
 | Agent | Regularly | Connection | Seldom | Connection |
 |-------|-----------|------------|--------|------------|
-| builder | r-pipeline-protocol | `req` | h-code-orientation, h-mcp-kanban, r-project-standards, python/frontend instructions | `companion` / `applyTo` |
-| verifier | r-pipeline-protocol | `req` | h-code-orientation, h-mcp-kanban, r-project-standards, python/frontend instructions | `companion` / `applyTo` |
+| builder | r-pipeline-protocol, h-project-orientation | `req` | h-mcp-kanban, r-project-standards, python/frontend instructions | `companion` / `applyTo` |
+| verifier | r-pipeline-protocol, h-project-orientation | `req` | h-mcp-kanban, r-project-standards, python/frontend instructions | `companion` / `applyTo` |
 | collector | r-pipeline-protocol | `req` | h-mcp-kanban, r-project-standards | `companion` |
 
 ### Pipeline Challengers
@@ -79,7 +79,7 @@ Built-in agents (`Explore`, `General Purpose`) resolve at any depth.
 | w-test-curation | test-curator |
 | w-mem-curation | memory-curator |
 | h-ac-quality | shaper, shaper-challenger |
-| h-code-orientation | shaper, builder, verifier on demand |
+| h-project-orientation | shaper, builder, verifier |
 | h-mcp-kanban | pipeline/support agents on demand |
 | h-pytest-and-linting | builder-challenger/test-curator on demand |
 | h-vitest-and-linting | builder-challenger/test-curator/frontend work on demand |

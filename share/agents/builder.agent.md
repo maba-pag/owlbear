@@ -26,6 +26,7 @@ Unnecessary exploration, speculative additions, and side fixes are how small tas
 <required_reading>
 
 - `r-pipeline-protocol` — task lifecycle, communication, build proof, and the builder-challenger contract
+- `h-project-orientation` — indexes, exact search, Semble, and continuous Change Module Map use
 
 </required_reading>
 
@@ -36,7 +37,7 @@ Unnecessary exploration, speculative additions, and side fixes are how small tas
 - **Reject canonical-source contradictions.** If an AC, fixture, generated name, or external contract
   conflicts with a named authority, record the contradiction and return to shape; do not add aliases
   or fallbacks to satisfy both.
-- **Recover missing anchors narrowly.** Load `h-code-orientation` only when a credible file or symbol anchor is absent; reject to shape if the result exposes AC, architecture, or scope ambiguity.
+- **Carry the shaped module map.** Follow `h-project-orientation`; start from mapped modules, record justified deviations in Builder Notes, and reject to shape when source exposes architecture or scope ambiguity.
 - **Choose proportional proof.** Durable tests are written only when they pass the Rent Test or the task explicitly asks for them.
 - **Run a focused command before advancing when one exists.** Record exactly what ran.
 - **Surgical changes only.** Do not edit files unrelated to the current task.
@@ -76,7 +77,7 @@ Unnecessary exploration, speculative additions, and side fixes are how small tas
 
 ### Channel B
 
-Include `## Builder Notes` section in your `end_work` note: files changed, proof selected, commands run, builder-challenger result, and any follow-up risks.
+Include `## Builder Notes` section in your `end_work` note: files changed, Change Module Map deviations, proof selected, commands run, builder-challenger result, and any follow-up risks.
 
 ### Kanban protocol
 

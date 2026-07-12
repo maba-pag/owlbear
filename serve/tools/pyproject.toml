@@ -2,8 +2,8 @@
 name = "owlbear-tools"
 version = "0.1.0"
 requires-python = ">=3.12.13"
-description = "OwlBear utility tools — doc-index and related scripts"
-dependencies = []
+description = "OwlBear utility tools — indexes and related scripts"
+dependencies = ["tree-sitter-language-pack>=1.12.5,<2"]
 
 [build-system]
 requires = ["hatchling"]
@@ -15,7 +15,10 @@ packages = ["src/owlbear_tools"]
 [project.scripts]
 commit-owned = "owlbear_tools.commit_owned:main"
 doc-index = "owlbear_tools.doc_index:main"
+indexes = "owlbear_tools.indexes:main"
+py-index = "owlbear_tools.py_index:main"
 semble = "owlbear_tools.semble:main"
+ts-index = "owlbear_tools.ts_index:main"
 test-root = "owlbear_tools.test_root:main"
 lint = "owlbear_tools.lint:lint"
 lint-all = "owlbear_tools.lint:lint_all"

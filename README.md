@@ -41,7 +41,7 @@ Open VS Code with `code .`.
 | `serve/mcp-kanban/`       | MCP server wrapping kanban operations                  |
 | `serve/mcp-knowledge/`    | MCP server exposing knowledge operations               |
 | `serve/mcp-memory/`       | MCP server for persistent agent memory (file-based) |
-| `serve/tools/`            | Workspace utility scripts — `doc-index` CLI            |
+| `serve/tools/`            | Workspace utility scripts — project indexes, lint, test routing |
 | `share/agents/`           | Agent definitions (`.agent.md`)                        |
 | `share/skills/`           | Agent skills (`SKILL.md`, agentskills.io style)        |
 | `share/instructions/`     | Shared instruction files (`*.instructions.md`)         |
@@ -110,15 +110,17 @@ Knowledge base sources are registered and refreshed via the MCP server tools (`r
 
 Set `OWLBEAR_LOCAL_KB_PATH` to override the default `.owlbear/knowledge/local.db` location (`OWLBEAR_KB_PATH` is still accepted as a fallback).
 
-## Doc Index
+## Project Indexes
 
-Generate or update the workspace documentation index at `.owlbear/doc-index.md`:
+Regenerate the documentation, Python, and ECMAScript navigation indexes concurrently:
 
 ```bash
-uv run doc-index
+uv run indexes
 ```
 
-Skips regeneration when the index is newer than all collected docs. Override output path with `--output <path>` (must stay inside workspace root).
+The command always writes `.owlbear/doc-index.md`, `.owlbear/py-index.md`, and
+`.owlbear/ts-index.md`. The generated files are advisory; source remains authoritative. Individual
+commands (`doc-index`, `py-index`, and `ts-index`) are also available.
 
 ## Development
 

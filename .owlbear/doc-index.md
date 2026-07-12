@@ -28,7 +28,7 @@
 - ## `How It Works`
 - ## `Cockpit`
 - ## `Knowledge Base`
-- ## `Doc Index`
+- ## `Project Indexes`
 - ## `Development`
 - ## `Pre-commit Hooks`
 - ### `VS Code auto-staging trap`
@@ -57,10 +57,7 @@
 - ## `Directory Structure`
 - ## `3. Cockpit Frontend`
 - ## `4. Cockpit Backend`
-- ## `5. Tools Package`
-- ## `6. File Placement`
-- ## `7. Project Layout`
-- ## `8. Test Domain Mapping`
+- ## `5. Test Domain Mapping`
 
 ## .github/prompts/knowledge-audit.prompt.md
 - ## `What This Module Does`
@@ -328,6 +325,7 @@
 - ## `Quick Start`
 - ## `What Setup Creates`
 - ## `Shared vs Copied`
+- ## `Optional Specification Workflow`
 - ## `Verify It Works`
 - ## `Launch Cockpit`
 - ## `Project-Specific Customization`
@@ -370,7 +368,7 @@
 - ### `Two-Tier Skill Loading`
 - ### `Belts and Suspenders`
 - ### `Transitive Dependencies`
-- ## `Universal Files`
+- ## `Always-Loaded Context`
 - ## `Agents`
 - ### `Nesting Depth`
 - ## `Skills`
@@ -539,6 +537,38 @@
 
 ## share/instructions/research-docs.instructions.md
 
+## share/openspec/owlbear/grill-me/SKILL.md
+
+## share/openspec/owlbear/schema/templates/brief.md
+- # `Brief: [Change Name]`
+- ## `Problem and Intended Outcome`
+- ## `Normal Workflow`
+- ## `Requirements`
+- ## `Boundaries`
+- ## `Technically Done but Wrong`
+- ## `Decision Register`
+- ## `Success and Completion`
+
+## share/openspec/owlbear/schema/templates/delivery.md
+- ## `Delivery: [Change Name]`
+- ## `Delivery Strategy`
+- ## `Deliverables`
+- ### `T001 - [Outcome-cohesive deliverable]`
+- ## `Requirement Coverage`
+- ## `Completion Contract`
+
+## share/openspec/owlbear/schema/templates/design.md
+- # `Design: [Change Name]`
+- ## `Brief Alignment`
+- ## `Current System`
+- ## `Evidence and Authorities`
+- ## `Architecture`
+- ## `Interfaces and Data Contracts`
+- ## `Decisions and Alternatives`
+- ## `Migration and Removal`
+- ## `Risks and Open Evidence`
+- ## `Integrated Proof Boundaries`
+
 ## share/prompts/agent-broad-audit.prompt.md
 - # `Agent Ecosystem Broad Audit`
 - ## `1. Preamble`
@@ -676,6 +706,7 @@
 - ### `B1 - Function-Scoped`
 - ### `B2 - Input -> Output Pairs`
 - ### `B3 - No Naked Quantifiers`
+- ### `B4 - Boundary-Valid Proof`
 - ## `Tier 2 - Process AC (Workflow Changes)`
 - ### `P1 - Agent/Stage-Scoped`
 - ### `P2 - Observable Artifact or State Change`
@@ -685,6 +716,7 @@
 - ### `B1 Example (Function-Scoped)`
 - ### `B2 Example (Input -> Output)`
 - ### `B3 Example (No Naked Quantifiers)`
+- ### `B4 Example (Boundary-Valid Proof)`
 - ### `P1 Example (Agent/Stage-Scoped)`
 - ### `P2 Example (Observable Artifact/State)`
 - ### `P3 Example (Verification Method)`
@@ -707,7 +739,7 @@
 - ### `Precedent`
 - ## `Principles`
 - ### `Rule of Two`
-- ### `80% Rule`
+- ### `Project Instructions Boundary`
 - ### `Implicit Encoding`
 - ## `Agent File Structure (.agent.md)`
 - ### `Frontmatter (YAML)`
@@ -730,13 +762,6 @@
 ### Outbound links
 - [share/README.md](../../README.md)
 - [share/WIRING.md](../../WIRING.md)
-
-## share/skills/h-code-orientation/SKILL.md
-- # `Code Orientation`
-- ## `When Semble Earns A Call`
-- ## `Invocation`
-- ## `Discovery Is Not Proof`
-- ## `Role Boundaries`
 
 ## share/skills/h-decision-requests/SKILL.md
 - # `Decision/Action Requests Handbook`
@@ -869,7 +894,6 @@
 - ### ``synthesis-idea-panel.md``
 - ### ``synthesis.md``
 - ### ``brief.md``
-- ### ``shaping-summary.md``
 - ### ``stances/*-proposal.md``
 - ## `Shared Interaction Contract`
 - ### `Investigative Turns (Investigator Mode — M1-M3)`
@@ -987,6 +1011,17 @@
 - ## `Deduplication Rules`
 - ## `Content-Quality Bar`
 - ## `Anti-Patterns`
+
+## share/skills/h-project-orientation/SKILL.md
+- # `Project Orientation`
+- ## `Establish Project Context`
+- ## `Refresh The Indexes`
+- ## `Find The Test Boundary`
+- ## `Orientation Ladder`
+- ## `Semble`
+- ## `Discovery Is Not Proof`
+- ## `Continuous Change Map`
+- ## `Role Boundaries`
 
 ## share/skills/h-pytest-and-linting/SKILL.md
 - # `pytest, ruff, and coverage Reference`
@@ -1132,7 +1167,7 @@
 - ## `Step 3 — M4: Decision — "What are we doing and why?"`
 - ## `Step 4 — Critic Validation Pass`
 - ## `Step 5 — M5: The Brief — "Here's the plan"`
-- ## `Step 6 — M6: Handoff — "Go"`
+- ## `Step 6 — M6: Shaping Handoff — "Ready to Shape"`
 - ## `Verification Checklist`
 
 ## share/skills/w-knowledge-enrichment/SKILL.md
@@ -1206,12 +1241,17 @@
 - ### `Out of Scope`
 - ## `Step 0 — Setup`
 - ## `Step 1 — Read the Plan`
+- ### `Brief Readiness Gate`
 - ## `Step 1a — Single-Task Shortcut`
-- ## `Step 1b — Source-Read & Symbol Capture Guard`
+- ## `Step 1b — Source And Contract Authority Guard`
+- ### `Change Module Map`
 - ### `good_example — symbol guard applied`
 - ### `bad_example — source-read skipped`
+- ### `good_example — generated and external contract grounded`
 - ## `Step 2 — Check Board State`
 - ## `Step 3 — Decompose into Atomic Tasks`
+- ### `Deep Module Check`
+- ### `Product Invariant Map`
 - ### `Task Complexity Budget`
 - ### `Mandatory Split Triggers`
 - ## `Durability Principles`

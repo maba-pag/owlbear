@@ -74,7 +74,10 @@ Before decomposition, detect whether the request is exactly one follow-up task w
 
 If yes, use the shortcut flow:
 
-- Skip Step 1b, Steps 2–4, and Step 7.
+- If the request is truly greenfield with no existing or external contract, skip Steps 1b, 2–4, and 7.
+- If the request touches existing modules, generated interfaces, external contracts, or an approved
+    Brief, complete Step 1b, the Change Module Map, and the Deep Module Check before applying the rest
+    of the shortcut.
 - Continue with Steps 5, 5a, and 6.
 - Preserve parent metadata where provided: title, parent ID, and tags.
 - Status routing: create build-ready tasks with `status="build"`. If the follow-up still needs shaping, ask/refine instead of creating a `shape` task. Normalize old `todo`, `backlog`, `research`, `in-progress`, `review`, `docs`, and `done` requests to `build` only after shaping makes the task build-ready.
@@ -91,7 +94,8 @@ generated interfaces, external APIs, schemas, protocols, or symbols that will ap
 
 This step may be skipped only for greenfield requests with no existing or external contract.
 
-1. Identify target source files and contract authorities from parent context. Authorities may
+1. Follow `h-project-orientation`. Regenerate the indexes, search them narrowly,
+   and identify target source files and contract authorities from parent context. Authorities may
     include generated operation inventories, schemas, official documentation, verified production
     observations, and existing public CLI or API surfaces.
 2. Read each local source and the smallest sufficient external evidence before drafting AC.
@@ -113,6 +117,24 @@ This step may be skipped only for greenfield requests with no existing or extern
     Do not invent an alias, fallback, or fixture contract to make both appear true.
 
 Do not continue to Step 2 until this guard is complete when triggered.
+
+### Change Module Map
+
+For brownfield work, record the verified working model in `## Shape Notes` before choosing task
+boundaries. Greenfield work records planned modules and marks current responsibility as `new`.
+
+| Module | Current Responsibility | Planned Change | Interface Impact | Owning Task |
+|--------|------------------------|----------------|------------------|-------------|
+| {source path or package} | {verified responsibility or new} | {add, modify, remove, read-only} | {none, changed, new, removed} | {task ID or pending} |
+
+Rules:
+
+- Read each mapped source module; indexes and Semble may locate it but cannot verify it.
+- Include modules that own changed behavior or interfaces. Do not list every transitive dependency.
+- Assign one owning task once decomposition is concrete.
+- Builders record justified deviations. Interface, ownership, architecture, or scope deviations return
+    to shape instead of silently rewriting the map.
+- Verifiers compare actual changed modules and interface impact with the map.
 
 ### good_example — symbol guard applied
 
@@ -140,6 +162,19 @@ Do not continue to Step 2 until this guard is complete when triggered.
 Read the current board via `list_tasks` to note: highest existing ID, existing dependencies, and current phase landscape.
 
 ## Step 3 — Decompose into Atomic Tasks
+
+### Deep Module Check
+
+Apply `r-architecture-standards` before selecting module and task boundaries:
+
+- Prefer cohesive modules that hide substantial functionality behind a small stable interface.
+- Do not create forwarding wrappers, one-function modules, or speculative adapters merely to satisfy
+    "single responsibility."
+- Split when responsibilities, change reasons, failure domains, or proof modes genuinely diverge.
+- Apply the Deletion Test: if deleting a proposed module only removes forwarding code while its
+    complexity stays in callers, inline it or deepen it.
+- Favor locality: a likely behavior change should require understanding and editing as few module
+    boundaries as practical.
 
 Each task must be:
 
@@ -330,6 +365,11 @@ Append decomposition details inside shaper's `## Shape Notes` section:
 |-------|-----------|----------------|------------|
 | {claim} | {source} | {observed|documented|assumed} | {value} |
 
+### Change Module Map
+| Module | Current Responsibility | Planned Change | Interface Impact | Owning Task |
+|--------|------------------------|----------------|------------------|-------------|
+| {module} | {responsibility or new} | {change} | {impact} | {task ID} |
+
 ### Product Invariant Map
 | Product Invariant | Owning Task | Normal-Path Boundary | Proof / Allowed Replacement |
 |-------------------|-------------|----------------------|-----------------------------|
@@ -353,6 +393,9 @@ Append decomposition details inside shaper's `## Shape Notes` section:
 
 - [ ] Announced decomposition plan and expected count
 - [ ] Brief readiness gate passed or material gaps were resolved interactively
+- [ ] Brownfield modules were located through `h-project-orientation` and verified from source
+- [ ] Change Module Map records responsibility, planned change, interface impact, and owning task
+- [ ] Proposed module boundaries pass the depth, locality, and Deletion Test diagnostics
 - [ ] External/generated contract claims record authority, evidence state, and confidence
 - [ ] Every product invariant has exactly one owning task and one normal-path proof
 - [ ] Mocks or injected dependencies replace only layers below the boundary being proved

@@ -37,6 +37,9 @@ _EXCLUDED_NAMES: frozenset[str] = frozenset(
 )
 
 _DOC_SUFFIXES: frozenset[str] = frozenset({".md", ".excalidraw"})
+_GENERATED_INDEX_PATHS: frozenset[Path] = frozenset(
+    {Path(".owlbear/doc-index.md"), Path(".owlbear/py-index.md"), Path(".owlbear/ts-index.md")}
+)
 
 _HEADING_RE = re.compile(r"^(#{1,6})\s+(.*)")
 _LINK_RE = re.compile(r"\[([^\]]*)\]\(([^)]+)\)")
@@ -140,10 +143,15 @@ def _render_entry(rel_path: Path, doc_path: Path) -> str:
     return "\n".join(lines)
 
 
-def generate_index(root: Path, index_path: Path) -> None:
-    """Write the doc index to *index_path* from all docs collected under *root*."""
+def generate_index(root: Path) -> None:
+    """Write the documentation index under *root*."""
+    index_path = root / ".owlbear/doc-index.md"
     resolved_index = index_path.resolve()
-    docs = [d for d in collect_docs(root) if d.resolve() != resolved_index]
+    docs = [
+        doc
+        for doc in collect_docs(root)
+        if doc.resolve() != resolved_index and doc.relative_to(root) not in _GENERATED_INDEX_PATHS
+    ]
     sections: list[str] = [_AUTO_GENERATED_HEADER]
     for doc in docs:
         rel = doc.relative_to(root)
@@ -151,14 +159,6 @@ def generate_index(root: Path, index_path: Path) -> None:
     content = "\n\n".join(sections) + "\n"
     index_path.parent.mkdir(parents=True, exist_ok=True)
     index_path.write_text(content)
-
-
-def should_regenerate(index_path: Path, root: Path) -> bool:
-    """Return True when the index is absent or older than any collected doc."""
-    if not index_path.exists():
-        return True
-    index_mtime = index_path.stat().st_mtime
-    return any(doc.stat().st_mtime > index_mtime for doc in collect_docs(root))
 
 
 def _update_entry(line: str, entry: DocEntry, *, in_outbound: bool) -> bool:
@@ -204,16 +204,6 @@ def main() -> None:
     """CLI entry point: regenerate the doc index for a workspace root."""
     parser = argparse.ArgumentParser(description="Generate or update the OwlBear doc index.")
     parser.add_argument("root", nargs="?", default=".", help="Workspace root directory")
-    parser.add_argument(
-        "--output",
-        default=".owlbear/doc-index.md",
-        help="Output path for the index (relative to root)",
-    )
     args = parser.parse_args()
     root = Path(args.root).resolve()
-    index_path = (root / args.output).resolve()
-    if not index_path.is_relative_to(root):
-        msg = f"error: output path must be inside workspace root: {index_path}"
-        raise SystemExit(msg)
-    if should_regenerate(index_path, root):
-        generate_index(root, index_path)
+    generate_index(root)

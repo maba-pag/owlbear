@@ -111,15 +111,17 @@ Standard: `h-agent-structure` section Rule of Two.
 
 ### D3 - Content Placement
 
-Standards: `h-agent-structure` section 80% Rule, section Rule of Two.
+Standards: `h-agent-structure` section Project Instructions Boundary, section Rule of Two.
 
 **Positive probes:**
 
-- Content in `copilot-instructions.md` used by fewer than 80% of agents
+- Portable OwlBear behavior, tool manuals, file-placement policy, or pipeline rules in `copilot-instructions.md`
+- Current-project identity, topology, stack, commands, or resources misplaced in shared universal files
 - Content in `r-pipeline-protocol` needed by only one agent
 - Content repeated identically in 2+ agent files
 
-**Negative-space probe:** Which content belongs in `copilot-instructions.md` because >80% of agents need it, but is currently repeated elsewhere?
+**Negative-space probe:** Which repeatedly inferred current-project fact belongs in
+`copilot-instructions.md`, and which repeated portable behavior needs a shared skill or protocol?
 
 ### D4 - Quality
 
