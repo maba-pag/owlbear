@@ -18,6 +18,7 @@ from __future__ import annotations
 import importlib.util
 import types
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -37,6 +38,25 @@ def _load_init() -> types.ModuleType:
 @pytest.fixture(scope="module")
 def init_module() -> types.ModuleType:
     return _load_init()
+
+
+@pytest.fixture(autouse=True)
+def install_openspec(init_module: types.ModuleType) -> MagicMock:
+    with patch.object(init_module, "_install_openspec") as mocked:
+        yield mocked
+
+
+def test_init_delegates_to_openspec_setup(
+    tmp_path: Path,
+    init_module: types.ModuleType,
+    install_openspec: MagicMock,
+) -> None:
+    target = tmp_path / "project"
+    target.mkdir()
+
+    init_module.init(target, _REPO_ROOT, interactive=False)
+
+    install_openspec.assert_called_once_with(target)
 
 
 # ---------------------------------------------------------------------------

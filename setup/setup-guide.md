@@ -94,6 +94,48 @@ entry, so setup does not seed a separate memory store.
 
 ---
 
+## Optional Specification Workflow
+
+OwlBear can install pinned OpenSpec commands for changes that benefit from durable
+product intent, requirements, architecture, and delivery planning. This requires Node.js with `npx`.
+From the consumer project root, run:
+
+```shell
+uv run --project ../owlbear python ../owlbear/setup/openspec.py .
+```
+
+The installer initializes OpenSpec's stock `spec-driven` workflow for GitHub Copilot and
+adds OwlBear context and per-artifact rules in `openspec/config.yaml`. OwlBear provides
+`/ideate` through its shared prompt set. The installer ignores only generated OpenSpec
+command copies; change artifacts under `openspec/changes/` remain version-controlled and
+continue to follow OpenSpec's community-maintained artifact graph.
+
+Use `/ideate` before `/opsx:propose` when the starting idea is still rough. The first command uses a
+one-question interview to produce a confirmed Refined Idea Summary; the second maps it into durable
+native artifacts. The resulting flow is deliberately memorable and sequential:
+
+```text
+/ideate -> /opsx:propose
+proposal.md -> specs/**/*.md + design.md -> tasks.md
+```
+
+OwlBear rules add material decision provenance, scope boundaries, evidence authorities,
+and normal-path proof guidance without replacing the stock templates. Do not rely on chat
+context after Proposal creation: load-bearing decisions belong in Proposal, Specs, or Design.
+
+After reviewing the package, pass the change to OwlBear shaper:
+
+```text
+/shape openspec/changes/<change>/
+```
+
+The shaper reads Proposal, Specs, Design, and Tasks together. Proposal and Specs constrain
+the intended outcome; grounded Design decisions constrain the technical plan; Tasks are
+advisory decomposition. The shaper writes the final Kanban task graph, acceptance criteria,
+dependencies, priorities, tags, and proof guidance.
+
+---
+
 ## Verify It Works
 
 After opening the project in VS Code, use the **Diagnostics view** to confirm everything loaded correctly:
