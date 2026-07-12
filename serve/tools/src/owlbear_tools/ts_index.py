@@ -88,7 +88,7 @@ def _render_module(path: Path, root: Path) -> str:
         if node.type in {"import_statement", "export_statement"} and node.child_by_field_name("source") is not None
     ]
     if imports:
-        lines.extend(["", "### Imports", *[f"- `{item}`" for item in imports]])
+        lines.extend(["", "### Imports", "", *[f"- `{item}`" for item in imports]])
     interfaces: list[str] = []
     for node in tree.root_node.named_children:
         prefix = ""
@@ -103,7 +103,7 @@ def _render_module(path: Path, root: Path) -> str:
         interfaces.append(f"- `{prefix}{_declaration(declaration, source)}`")
         interfaces.extend(f"  - `{member}`" for member in _members(declaration, source))
     if interfaces:
-        lines.extend(["", "### Interfaces", *interfaces])
+        lines.extend(["", "### Interfaces", "", *interfaces])
     return "\n".join(lines)
 
 

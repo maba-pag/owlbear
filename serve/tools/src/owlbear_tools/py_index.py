@@ -72,7 +72,7 @@ def _render_module(path: Path, root: Path) -> str:
         lines.extend(["", docstring.splitlines()[0]])
     imports = _imports(tree)
     if imports:
-        lines.extend(["", "### Imports", *[f"- `{name}`" for name in imports]])
+        lines.extend(["", "### Imports", "", *[f"- `{name}`" for name in imports]])
     interfaces: list[str] = []
     for node in tree.body:
         if isinstance(node, ast.ClassDef):
@@ -86,7 +86,7 @@ def _render_module(path: Path, root: Path) -> str:
         elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             interfaces.append(f"- `{_function_signature(node)}`")
     if interfaces:
-        lines.extend(["", "### Interfaces", *interfaces])
+        lines.extend(["", "### Interfaces", "", *interfaces])
     return "\n".join(lines)
 
 

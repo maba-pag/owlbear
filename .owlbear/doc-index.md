@@ -95,7 +95,7 @@
 ## .owlbear/prompts/arch-audit.prompt.md
 - # `Architecture Module Quality Audit`
 - ## `Step 1 - Load the standard first`
-- ## `Step 2 - Define the audit unit`
+- ## `Step 2 - Discover and define audit units`
 - ## `Step 3 - Evaluate with full vocabulary`
 - ## `Step 4 - Output format`
 - ## `Step 5 - Optional follow-up tasks`
