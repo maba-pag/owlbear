@@ -7,7 +7,6 @@ dependencies = ["pydantic>=2.13.4", "ruamel.yaml>=0.19.1", "pyyaml>=6.0.3", "mar
 
 [project.scripts]
 kanban-migrate = "owlbear_kanban.migrate:main"
-owlbear-spec-import = "owlbear_kanban.spec_import:main"
 
 [build-system]
 requires = ["hatchling"]
