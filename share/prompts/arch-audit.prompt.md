@@ -1,26 +1,35 @@
 ---
-description: "Run a codebase-wide architecture audit of serve/ packages using Module Quality Vocabulary and the Deletion Test"
+description: "Run a codebase-wide architecture audit using Module Quality Vocabulary and the Deletion Test"
 ---
 
 # Architecture Module Quality Audit
 
-You are running a read-only architecture audit over all top-level packages in `serve/`.
+You are running a read-only architecture audit over the repository's implementation-bearing
+modules.
 
 ## Step 1 - Load the standard first
 
 Before any scanning or conclusions, read:
 
-- `share/skills/r-architecture-standards/SKILL.md`
+- `share/skills/h-module-design/SKILL.md`
 - The section `## Module Quality Vocabulary`
 - The subsections `### Deletion Test` and `### Dependency Classification`
 
 Do not continue until these terms are loaded and used as the authority for labels.
 
-## Step 2 - Define the audit unit
+## Step 2 - Discover and define audit units
 
-Audit unit is each top-level package directory under `serve/` (for example: `serve/mcp-kanban/`, `serve/knowledge/`, `serve/mcp-memory/`).
+Inspect the repository structure and its build or package manifests to identify the top-level
+implementation units that make sense in this project. These might be applications, packages,
+libraries, services, modules, or feature areas; do not assume a particular source root or
+language. Exclude generated output, third-party dependencies, and tooling-only directories
+unless they expose a maintained product interface.
 
-For each package, inspect:
+State the selected audit units and why they are the appropriate boundaries before evaluating
+them. If the repository does not provide a clear boundary, use the smallest stable
+implementation directories with distinct public interfaces, and state that assumption.
+
+For each audit unit, inspect:
 
 - Public interfaces exposed to callers
 - Primary caller set and call sites
@@ -47,9 +56,9 @@ Evidence must be concrete. Reference affected callers, interfaces, and complexit
 
 ## Step 4 - Output format
 
-Return one structured table row per package with exactly these columns:
+Return one structured table row per audit unit with exactly these columns:
 
-| Package | Depth (deep/shallow) | Leverage (caller count) | Locality (self-contained/leaky) | Seam status (real/hypothetical/none) | Deletion Test result (earning-keep/pass-through/candidate-for-removal) | Evidence | Recommendation |
+| Audit unit | Depth (deep/shallow) | Leverage (caller count) | Locality (self-contained/leaky) | Seam status (real/hypothetical/none) | Deletion Test result (earning-keep/pass-through/candidate-for-removal) | Evidence | Recommendation |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 
 Within `Evidence`, explicitly include the dependency classification label (`in-process`, `local-substitutable`, `remote-but-owned`, or `true-external`) and the concrete caller/dependency proof supporting that label.
@@ -62,10 +71,12 @@ After the table, add a short summary:
 
 ## Step 5 - Optional follow-up tasks
 
-If clear improvements are identified, you may create kanban tasks. Keep them atomic and include:
+If clear improvements are identified and the repository has an available task tracker, you may
+create follow-up tasks in that tracker. Keep them atomic and include:
 
-- Package in scope
+- Audit unit in scope
 - Which vocabulary dimension failed
 - Concrete remediation target and expected impact
 
-This audit remains read-only unless task creation is explicitly needed for actionable follow-up.
+This audit remains read-only unless task creation is explicitly requested or needed for
+actionable follow-up.
