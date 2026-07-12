@@ -35,9 +35,24 @@ VS Code silently re-serializes and stages `.agent.md` files when it detects new 
 
 ## 2. File Placement
 
-- Follow the workspace-specific file placement table in the active project instructions.
-- Keep generated scratch, debug, and temporary files out of durable project locations.
-- Before closing task work, delete scratch files created for that task.
+OwlBear-managed artifacts use the same locations in every project:
+
+| Artifact | Location | Rule |
+|----------|----------|------|
+| Temporary output, debug files, and one-off scripts | `.owlbear/scratch/{task-id}-{description}.{ext}` | Untracked; delete before task closure. |
+| Approved external repository clones | `.owlbear/scratch/research/{repo-name}/` | Inspect only; delete before task closure. |
+| Durable research findings | `.owlbear/research/{slug}.md` | Tracked; include the task reference. |
+| External source attribution | `.owlbear/sources/overview.md` | Tracked; use the Attribution schema below. |
+| Decision and action requests | `.owlbear/kanban/decisions/` | Create through the Kanban tools; do not hand-author alternate locations. |
+| Generated navigation indexes | `.owlbear/doc-index.md`, `.owlbear/py-index.md`, `.owlbear/ts-index.md` | Regenerate with `uv run --project {owlbear-root} indexes {project-root}`. |
+
+Project-owned source, test, documentation, and benchmark locations come from the local project map,
+manifests, and existing structure. Use `h-project-orientation` to discover them; do not impose
+OwlBear's own monorepo layout on consumer projects.
+
+Shared agent ecosystem assets follow `h-agent-structure`; project-local customizations live under
+the corresponding `.owlbear/agents/`, `.owlbear/skills/`, `.owlbear/instructions/`, and
+`.owlbear/prompts/` directories.
 
 ## 3. Attribution
 

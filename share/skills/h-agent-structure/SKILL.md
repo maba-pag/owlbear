@@ -28,7 +28,9 @@ Default: user-facing one-shot commands use `.prompt.md` unless auto-loading or c
 
 | Condition | Tier |
 |-----------|------|
-| ≥ 80% of agents need this content | `copilot-instructions.md` |
+| Current-project identity, topology, stack, commands, or resources | `copilot-instructions.md` |
+| Universal OwlBear behavior needed by every agent | Authority `.instructions.md` such as `owlbear-system.instructions.md` |
+| Reusable behavior needed by multiple but not all roles | Shared skill or protocol |
 | Content is loaded from `<critical_rules>` | Skill-tier minimum (SKILL.md or authority `.instructions.md`) |
 | Content applies to a single agent only | Agent file body |
 | Content is a step-by-step procedure invoked on-demand | Workflow skill (SKILL.md) |
@@ -60,14 +62,20 @@ Default: user-facing one-shot commands use `.prompt.md` unless auto-loading or c
 
 A fact appears in at most **two** places:
 
-1. **Source of truth** — the most specific location (skill > protocol > copilot-instructions)
+1. **Source of truth** — the most specific shared skill, protocol, instruction, or project-fact source
 2. **One inline reference** — a 1-line summary or pointer in the consumer
 
-If a rule applies to 2+ agents identically, it belongs in `r-pipeline-protocol`, `r-project-standards`, or `copilot-instructions.md` — not repeated in each agent.
+If a rule applies to 2+ agents identically, it belongs in a shared skill, protocol, or authority
+instruction, not in local project instructions and not repeated in each agent.
 
-### 80% Rule
+### Project Instructions Boundary
 
-Content in `copilot-instructions.md` must benefit ≥ 80% of agents. Below that threshold, it goes to a more specific skill or `r-pipeline-protocol`.
+`copilot-instructions.md` describes the current project. It may contain identity, repository topology,
+technology choices, package-specific commands, and primary project resources. It must not contain
+portable OwlBear workflows, agent behavior, tool manuals, file-placement policy, or pipeline rules.
+
+Shared behavior belongs in `owlbear-system.instructions.md` only when every agent needs it on every
+turn. Otherwise use the narrowest shared skill or protocol and load it from the relevant roles.
 
 ### Implicit Encoding
 
@@ -140,7 +148,8 @@ Lists the skills this agent needs in 90%+ of sessions. These are Level 0 (direct
 
 - First item: "**Follow the `{primary_skill}` skill** for {1-line summary}."
 - Pipeline agents (T1-T3): second item references `r-pipeline-protocol` for shared conventions.
-- Every remaining rule must be **unique** to this agent. If the same rule would appear in 2+ agents, it belongs in `r-pipeline-protocol` or `copilot-instructions.md`.
+- Every remaining rule must be **unique** to this agent. If the same rule would appear in 2+ agents,
+  it belongs in a shared skill, protocol, or authority instruction.
 - Each rule must be **actionable** — it can be verified as followed or violated.
 
 **`<output_format>`** — The agent's communication interface.

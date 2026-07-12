@@ -18,7 +18,7 @@ Content reaches agents through four mechanisms, ordered by cost:
 
 | Mechanism | When it loads | Cost | Use for |
 |-----------|--------------|------|---------|
-| `copilot-instructions.md` | Every turn, every agent | ~200 tokens/turn | Universal project identity |
+| `copilot-instructions.md` | Every turn, every agent | Project-dependent | Current-project identity, topology, stack, commands, and resources |
 | Instructions (`.instructions.md`) | Every turn when `applyTo` glob matches a touched file | ~20–70 tokens/turn | Safety-net stubs, pipeline protocol |
 | Skill frontmatter | Every turn, every agent (YAML header only) | ~20 tokens/skill/turn | Discovery — VS Code uses this to decide when to suggest the skill |
 | Skill body (`read_file`) | Once per session, on demand | One-time read (~300–500 tokens) | Procedures, protocol, domain knowledge |
@@ -45,14 +45,14 @@ Skills can declare companion skills that consumers should load when needed:
 - **Level 1 (transitive):** Skill A → skill B, declared in A's companion table or Step 0
 - Only Level 0 goes in `<required_reading>`. Level 1 is the skill's responsibility.
 
-## Universal Files
+## Always-Loaded Context
 
 These load into every agent's context on every turn:
 
-| File | Mechanism |
-|------|-----------|
-| `.github/copilot-instructions.md` | Workspace instructions (always present) |
-| `owlbear-system.instructions.md` | `applyTo: "**"` (fires on any file touch) |
+| File | Mechanism | Authority |
+|------|-----------|-----------|
+| `.github/copilot-instructions.md` | Workspace instructions (always present) | Current-project facts only; never shared OwlBear behavior |
+| `owlbear-system.instructions.md` | `applyTo: "**"` (fires on any file touch) | Universal OwlBear behavior |
 
 ## Agents
 
