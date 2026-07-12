@@ -36,6 +36,13 @@ Built-in agents (`Explore`, `General Purpose`) resolve at any depth.
 |-------|-----------|------------|--------|------------|
 | shaper | r-pipeline-protocol, h-ac-quality, w-task-decomposition, w-research, h-project-orientation, r-architecture-standards | `req` | h-mcp-kanban, r-project-standards | `companion` |
 
+### User Planning And Design
+
+| Prompt              | Regularly                                                                          | Connection  | Seldom                   | Connection |
+| ------------------- | ---------------------------------------------------------------------------------- | ----------- | ------------------------ | ---------- |
+| ideate              | w-idea-refinement                                                                  | `directed`  | OpenSpec `/opsx:propose` | `handoff`  |
+| architecture-review | r-architecture-standards, h-project-orientation, h-visual-output, w-idea-refinement | `companion` | `/opsx:propose`, `/shape` | `handoff`  |
+
 ### Execution Board
 
 | Agent | Regularly | Connection | Seldom | Connection |
@@ -76,6 +83,7 @@ Built-in agents (`Explore`, `General Purpose`) resolve at any depth.
 | w-orchestration | orchestrator |
 | w-research | shaper |
 | w-task-decomposition | shaper |
+| w-idea-refinement | ideate prompt, architecture-review prompt |
 | w-test-curation | test-curator |
 | w-mem-curation | memory-curator |
 | h-ac-quality | shaper, shaper-challenger |

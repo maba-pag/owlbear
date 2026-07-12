@@ -1,15 +1,15 @@
 # share/ — Agent Ecosystem
 
-OwlBear's agent ecosystem: 23 agents, 29 skills, 7 instructions, 12 prompts. This directory is the single source of truth for agent definitions and their supporting documents.
+OwlBear's agent ecosystem: 23 agents, 30 skills, 7 instructions, 14 prompts. This directory is the single source of truth for agent definitions and their supporting documents.
 
 ## Directory Layout
 
 | Directory | Contents | Count |
 |-----------|----------|-------|
 | `agents/` | Agent definitions (`.agent.md`) | 23 |
-| `skills/` | Reusable domain knowledge (`SKILL.md`) | 29 |
+| `skills/` | Reusable domain knowledge (`SKILL.md`) | 30 |
 | `instructions/` | Auto-loaded instruction files (`.instructions.md`) | 7 |
-| `prompts/` | User-invocable one-shot commands (`.prompt.md`) | 12 |
+| `prompts/` | User-invocable one-shot commands (`.prompt.md`) | 14 |
 | `diagrams/` | Shared visual assets (Excalidraw, SVG) | — |
 
 ## Loading Model
@@ -78,11 +78,11 @@ See `h-agent-structure` § Nesting Depth & DMI for the full rule and ND3 agent t
 
 ## Skills
 
-28 skill definitions (`share/skills/{name}/SKILL.md`).
+30 skill definitions (`share/skills/{name}/SKILL.md`).
 
 | Prefix | Count | Purpose |
 |--------|-------|---------|
-| `w-` | 8 | Workflow — step-by-step procedures |
+| `w-` | 9 | Workflow — step-by-step procedures |
 | `r-` | 4 | Rules — shared conventions |
 | `h-` | 17 | Handbook — domain knowledge |
 
@@ -111,7 +111,7 @@ Stubs catch agents editing files without the relevant skill loaded. They do not 
 
 ## Prompts
 
-12 prompt files (`.prompt.md`). Prompts are user-invocable one-shot commands triggered from the VS Code chat command palette. Many accept `${input:...}` variable substitution.
+14 prompt files (`.prompt.md`). Prompts are user-invocable one-shot commands triggered from the VS Code chat command palette. Many accept `${input:...}` variable substitution.
 
 **Naming convention:**
 
@@ -125,6 +125,7 @@ Stubs catch agents editing files without the relevant skill loaded. They do not 
 | Group | Prompts |
 |-------|--------|
 | Orchestration | `shape`, `orchestrate` |
+| Planning and design | `ideate`, `architecture-review` |
 | Agent audits | `agent-broad-audit`, `agent-deep-audit` |
 | Audits | `frontend-audit`, `memory-audit`, `legacy-audit` |
 | Ideation | `ideation-discover`, `ideation-mediate` |
