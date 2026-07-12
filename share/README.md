@@ -1,6 +1,6 @@
 # share/ — Agent Ecosystem
 
-OwlBear's agent ecosystem: 23 agents, 30 skills, 7 instructions, 14 prompts. This directory is the single source of truth for agent definitions and their supporting documents.
+OwlBear's agent ecosystem: 23 agents, 30 skills, 7 instructions, 13 prompts. This directory is the single source of truth for agent definitions and their supporting documents.
 
 ## Directory Layout
 
@@ -9,7 +9,7 @@ OwlBear's agent ecosystem: 23 agents, 30 skills, 7 instructions, 14 prompts. Thi
 | `agents/` | Agent definitions (`.agent.md`) | 23 |
 | `skills/` | Reusable domain knowledge (`SKILL.md`) | 30 |
 | `instructions/` | Auto-loaded instruction files (`.instructions.md`) | 7 |
-| `prompts/` | User-invocable one-shot commands (`.prompt.md`) | 14 |
+| `prompts/` | User-invocable one-shot commands (`.prompt.md`) | 13 |
 | `diagrams/` | Shared visual assets (Excalidraw, SVG) | — |
 
 ## Loading Model
@@ -111,7 +111,7 @@ Stubs catch agents editing files without the relevant skill loaded. They do not 
 
 ## Prompts
 
-14 prompt files (`.prompt.md`). Prompts are user-invocable one-shot commands triggered from the VS Code chat command palette. Many accept `${input:...}` variable substitution.
+13 prompt files (`.prompt.md`). Prompts are user-invocable one-shot commands triggered from the VS Code chat command palette. Many accept `${input:...}` variable substitution.
 
 **Naming convention:**
 
@@ -126,8 +126,7 @@ Stubs catch agents editing files without the relevant skill loaded. They do not 
 |-------|--------|
 | Orchestration | `shape`, `orchestrate` |
 | Planning and design | `ideate`, `architecture-review` |
-| Agent audits | `agent-broad-audit`, `agent-deep-audit` |
-| Audits | `frontend-audit`, `memory-audit`, `legacy-audit` |
+| Audits | `arch-audit`, `frontend-audit`, `memory-audit`, `legacy-audit` |
 | Ideation | `ideation-discover`, `ideation-mediate` |
 | Knowledge | `kb-ingest`, `kb-enrich` |
 | Curation | `test-curation` |
