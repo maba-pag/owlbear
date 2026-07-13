@@ -1,10 +1,10 @@
 ---
 id: 1929
 title: Enforce pipeline-owned commits at task closure
-status: collect
+status: archived
 priority: high
 created: 2026-07-14T00:44:01.023216+02:00
-updated: 2026-07-14T01:06:33.875055+02:00
+updated: 2026-07-14T01:07:59.324685+02:00
 tags:
   - agent
   - kanban
@@ -21,7 +21,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Objective
@@ -84,3 +84,13 @@ Current protocol requires commits before `end_work`, but `end_work` itself appen
 - Patches applied: none.
 - Verifier challenger: pass; no concrete blocker.
 - Final route: PASS to collect.
+
+[[2026-07-14T01:07:59+02:00]]
+## Collect Notes
+
+- Classification: leaf; no child tasks, aggregate title/tags, or parent intent contract.
+- Leaf verification evidence: latest `## Verify Notes` records PASS with verifier-challenger pass and no verifier patches.
+- Committed implementation evidence: base `de3687a7b22840a9b0ba8c4ead2099fa74ede663`; recovery repair `f5d6406387fb9117860b04715ebcc815c92f5c6b`; verify transition `5941985b3022a72166ef17b6cf2ada153a17223f`.
+- Focused proof: 9 tests passed; Ruff clean; all 23 agent definitions valid.
+- Residual decisions/follow-up: none. Earlier verifier follow-up was adopted and re-verified.
+- Archive rationale: final task-state commit ordering, dirty-worktree isolation, collector archive path handling, and commit-failure containment are implemented and verified.
