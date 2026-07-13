@@ -498,7 +498,7 @@
 ## share/agents/shaper-challenger.agent.md
 
 ## share/agents/shaper.agent.md
-- ### `Channel A`
+- ### `User Output`
 - ### `Channel B`
 
 ## share/agents/test-curator.agent.md
@@ -634,9 +634,8 @@
 - ## `Interaction Protocol`
 
 ## share/prompts/shape.prompt.md
+- ## `Entry And Mode Selection`
 - ## `Interaction Protocol`
-- ## `Input Modes`
-- ## `What Happens`
 - ## `Routing Rules`
 
 ## share/prompts/test-curation.prompt.md
@@ -709,7 +708,7 @@
 ## share/skills/h-codebase-orientation/SKILL.md
 - # `Codebase Orientation`
 - ## `Establish Project Context`
-- ## `Refresh the Indexes`
+- ## `Use Existing Indexes`
 - ## `Find the Test Boundary`
 - ## `Orientation Ladder`
 - ## `Semble`
@@ -929,6 +928,7 @@
 - ### `start_work`
 - ### `end_work`
 - ## `Agent Lifecycle Pattern`
+- ### `Task-context boundary`
 - ### `edit_task (advanced)`
 - ## `Compound vs Single Tool Guidance`
 - ## `Error Handling`
@@ -1043,7 +1043,7 @@
 - ## `1. Lifecycle`
 - ### `Role Boundaries`
 - ## `2. Task Setup`
-- ### `One Task`
+- ### `Invocation Scope`
 - ### `Claiming`
 - ### `Resolved Decisions`
 - ### `Memory`
@@ -1060,6 +1060,7 @@
 - ### `Required Follow-up`
 - ## `5. Closing`
 - ### `Before `end_work``
+- ### `After `end_work``
 - ### `Who Commits What`
 - ## `6. Escalation`
 - ### `Decision Tiers`
@@ -1070,6 +1071,7 @@
 - ### `Format`
 - ### `Rules`
 - ### `VS Code Auto-Staging Trap`
+- ### `Owned Auto-Staging Recovery`
 - ## `OwlBear-Managed Artifact Placement`
 - ## `Attribution`
 
@@ -1117,7 +1119,7 @@
 - ## `Step 3 — M4: Decision — "What are we doing and why?"`
 - ## `Step 4 — Critic Validation Pass`
 - ## `Step 5 — M5: The Brief — "Here's the plan"`
-- ## `Step 6 — M6: Shaping Handoff — "Ready to Shape"`
+- ## `Step 6 — M6: Proposal Handoff — "Ready for OpenSpec"`
 - ## `Verification Checklist`
 
 ## share/skills/w-knowledge-enrichment/SKILL.md
@@ -1166,22 +1168,30 @@
 
 ## share/skills/w-research/SKILL.md
 - # `Research`
-- ## `Step 0 — Setup`
-- ## `Research Gate Checklist`
-- ## `Step 1 — Clarify Scope`
+- ## `Step 1 — Frame The Question`
 - ## `Step 2 — Check Existing Research`
-- ## `Step 3 — Research Depth Gate`
-- ## `Step 4 — Gather Sources`
-- ## `Step 5 — Analyze and Compare`
-- ## `Step 6 — Challenge Proposed Recommendation`
-- ## `Step 7 — Write Research Document`
-- ## `Step 8 — Classify Outcome and Create Follow-Up Tasks`
-- ### `Tier Classification`
-- ### `Create Follow-Up Tasks`
-- ## `Step 9 — Finalize Artifacts`
-- ## `Step 10 — Record In Shape Notes And Advance`
-- ## `Output Template`
-- ## `Verification Checklist`
+- ## `Step 3 — Research Scope Gate`
+- ## `Step 4 — Gather Proportional Evidence`
+- ## `Step 5 — Analyze And Compare`
+- ## `Step 6 — Preserve Durable Findings When Useful`
+- ## `Step 7 — Return Evidence To The Caller`
+- ## `Known Pitfalls`
+
+## share/skills/w-spec-shaping/SKILL.md
+- # `Spec Shaping`
+- ## `Companion Skills`
+- ## `Step 1 - Resolve The Planning Package`
+- ## `Step 2 - Ground The Draft`
+- ## `Step 3 - Conduct The Staged Implementation Review`
+- ### `Stage A - Product And Scope`
+- ### `Stage B - Architecture And Interfaces`
+- ### `Stage C - Trade-offs And Completion`
+- ## `Step 4 - Reconcile The OpenSpec Artifacts`
+- ## `Step 5 - Draft And Challenge The Graph`
+- ## `Step 6 - Obtain Graph Approval`
+- ## `Step 7 - Commit And Audit The Graph`
+- ## `Step 8 - Return A Human Summary`
+- ## `Commit Gate`
 - ## `Known Pitfalls`
 
 ## share/skills/w-task-decomposition/SKILL.md
@@ -1209,13 +1219,24 @@
 - ## `Step 5 — Assign Priority and Tags`
 - ## `Step 5c — Assign Proof Guidance`
 - ## `Step 5a — Validate Planned Tasks`
-- ## `Step 5b — User Decision Gate`
-- ## `Step 6 — Create Tasks`
+- ### `Step 5b — Return The Provisional Graph`
+- ## `Step 6 — Commit An Approved Graph`
 - ## `Step 6a — Audit Created Board State`
 - ## `Step 7 — Visualize Dependencies`
-- ## `Step 8 — Advance`
+- ## `Step 8 — Return The Board Audit`
 - ## `Output Template`
 - ## `Verification Checklist`
+- ## `Known Pitfalls`
+
+## share/skills/w-task-repair/SKILL.md
+- # `Task Repair`
+- ## `Companion Skills`
+- ## `Step 1 - Resolve Ownership And Read The Rejection Chain`
+- ## `Step 2 - Classify The Repair`
+- ## `Step 3 - Apply Explicit Non-Material Repairs`
+- ## `Step 4 - Escalate Material Expansion`
+- ## `Step 5 - Record Task History`
+- ## `Step 6 - Return A Human Summary`
 - ## `Known Pitfalls`
 
 ## share/skills/w-test-curation/SKILL.md

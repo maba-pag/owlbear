@@ -402,6 +402,7 @@ OwlBear browser package — authenticated web content extraction via Playwright.
 ### Imports
 
 - `owlbear_browser._errors`
+- `owlbear_browser.contract`
 - `owlbear_browser.extractor`
 - `owlbear_browser.fetcher`
 - `owlbear_browser.playwright_launcher`
@@ -448,6 +449,39 @@ HTML noise stripper and markdown converter for owlbear_browser.
 - `def _normalize_content(text: str) -> str`
 - `def clean(html_str: str) -> str`
 
+## serve/browser/src/owlbear_browser/contract.py
+
+Typed, side-effect-free browser acquisition contract and content helpers.
+
+### Imports
+
+- `__future__`
+- `dataclasses`
+- `datetime`
+- `enum`
+- `hashlib`
+- `lxml`
+- `re`
+- `typing`
+- `urllib.parse`
+
+### Interfaces
+
+- `class AcquisitionStatus(StrEnum)`
+- `class AcquisitionRequest`
+  - `def __post_init__(self) -> None`
+- `class Diagnostics`
+  - `def __post_init__(self) -> None`
+- `class AcquisitionSuccess`
+  - `def __post_init__(self) -> None`
+- `class AcquisitionFailure`
+  - `def __post_init__(self) -> None`
+- `def normalize_markdown(markdown: str) -> str`
+- `def content_hash(markdown: str) -> str`
+- `def normalize_links(links: list[str] | tuple[str, ...], base_url: str) -> tuple[str, ...]`
+- `def redact_diagnostics(value: Any) -> Any`
+- `def _sanitize_diagnostic_html(value: str) -> str`
+
 ## serve/browser/src/owlbear_browser/extractor.py
 
 HTML content extractor for owlbear_browser.
@@ -465,19 +499,26 @@ HTML content extractor for owlbear_browser.
 
 ## serve/browser/src/owlbear_browser/fetcher.py
 
-BrowserContentFetcher — authenticated fetch via Playwright.
+BrowserContentFetcher — rendered content acquisition via Playwright.
 
 ### Imports
 
 - `__future__`
+- `asyncio`
+- `datetime`
+- `owlbear_browser.contract`
 - `owlbear_browser.extractor`
+- `re`
+- `time`
 - `typing`
+- `urllib.parse`
 
 ### Interfaces
 
 - `class BrowserContentFetcher`
   - `def __init__(self, context: BrowserContext) -> None`
-  - `async def fetch(self, url: str) -> str`
+  - `async def fetch(self, request: AcquisitionRequest | str) -> AcquisitionResult | str`
+  - `async def acquire(self, request: AcquisitionRequest) -> AcquisitionResult`
 
 ## serve/browser/src/owlbear_browser/playwright_launcher.py
 
@@ -486,6 +527,7 @@ Playwright-based browser launcher with Microsoft SSO extension support.
 ### Imports
 
 - `__future__`
+- `dataclasses`
 - `os`
 - `owlbear_browser._errors`
 - `pathlib`
@@ -494,16 +536,19 @@ Playwright-based browser launcher with Microsoft SSO extension support.
 
 ### Interfaces
 
+- `class AuthenticationCapabilities`
 - `def find_sso_extension() -> Path`
 - `def build_playwright_args(sso_ext_path: Path) -> list[str]`
 - `class PlaywrightLauncher`
-  - `def __init__(self, sso_ext_path: Path | None = None, user_data_dir: str = '') -> None`
-  - `def context(self) -> BrowserContext | None`
+  - `def __init__(self, sso_ext_path: Path | None = None, user_data_dir: str = '', max_pending_pages: int = 1) -> None`
+  - `def capabilities(self) -> AuthenticationCapabilities`
+  - `def context(self) -> BrowserContext`
   - `async def launch(self) -> None`
+  - `async def pending_page(self, url: str) -> Page`
   - `async def close(self) -> None`
   - `async def __aenter__(self) -> Self`
   - `async def __aexit__(self, *_: object) -> None`
-  - `def page(self) -> Page`
+  - `async def page(self) -> Page`
 
 ## serve/cockpit/src/owlbear_cockpit/__init__.py
 
@@ -2208,6 +2253,7 @@ OwlBear MCP browser server — browser-control tools with domain allowlist.
 - `mcp.server.fastmcp.exceptions`
 - `mcp.types`
 - `os`
+- `owlbear_browser`
 - `owlbear_browser._errors`
 - `owlbear_browser.extractor`
 - `owlbear_browser.fetcher`
@@ -2225,6 +2271,8 @@ OwlBear MCP browser server — browser-control tools with domain allowlist.
 - `class AppContext`
 - `def _apply_tool_exclusions(server: FastMCP) -> set[str]`
 - `async def app_lifespan(server: FastMCP) -> AsyncGenerator[AppContext, None]`
+- `def _serialize_acquisition(result: AcquisitionSuccess | AcquisitionFailure) -> dict[str, Any]`
+- `async def acquire(ctx: Context, url: str, readiness_selector: str | None = None, content_selector: str | None = None, navigation_timeout_ms: int = 30000, readiness_timeout_ms: int = 10000, include_diagnostic_html: bool = False) -> dict[str, Any]`
 - `async def navigate(ctx: Context, url: str) -> str`
 - `async def click(ctx: Context, selector: str) -> str`
 - `async def type_input(ctx: Context, selector: str, text: str) -> str`
