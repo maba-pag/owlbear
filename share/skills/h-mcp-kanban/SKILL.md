@@ -184,6 +184,11 @@ the agent's explicit task-owned durable paths and the resulting task record. For
 include both the old task path and new archive path. Do not return the Channel A success verdict until
 that scoped commit succeeds, even when unrelated worktree or index changes exist.
 
+If that commit cannot be repaired in the current invocation, apply the `COMMIT_FAILED` containment
+from `r-workspace-governance`: block an advanced on-board task with `edit_task(block_reason=...)`
+before returning. Clear the block with `edit_task(block_reason="")` only after the original scoped
+commit has succeeded and commit that unblock separately.
+
 For the section header to use per agent, see `pipeline-agents.instructions.md` — `## Per-Agent Section Mapping`.
 
 ### edit_task (advanced)

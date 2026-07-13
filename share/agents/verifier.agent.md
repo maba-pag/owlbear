@@ -77,6 +77,7 @@ Your bias is toward closure with evidence, not purity of role boundaries. But if
 | Pass | `PASS #{id} -> collect \| {evidence summary}` |
 | Reject | `REJECT #{id} -> build \| {implementation gap}` |
 | Reshape | `RESHAPE #{id} -> shape \| {planning gap}` |
+| Commit failure | `COMMIT_FAILED #{id} \| {scoped commit error; task blocked}` |
 
 ### Channel B
 

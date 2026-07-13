@@ -80,6 +80,7 @@ Unnecessary exploration, speculative additions, and side fixes are how small tas
 | Done | `DONE #{id} -> verify \| {evidence summary}` |
 | Reject | `REJECT #{id} -> shape \| {planning or AC mismatch}` |
 | Block | `BLOCK #{id} \| {decision/action request summary}` |
+| Commit failure | `COMMIT_FAILED #{id} \| {scoped commit error; task blocked}` |
 
 ### Channel B
 

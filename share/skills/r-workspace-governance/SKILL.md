@@ -41,9 +41,17 @@ without behavior change).
   include both the former `.owlbear/kanban/tasks/{slug}.md` path and the resulting
   `.owlbear/kanban/archive/{slug}.md` path so Git records the move.
 - `end_work` success is not agent completion. Do not return `DONE`, `PASS`, or `ARCHIVED` until the
-  scoped commit succeeds. If it fails, repair or retry the scoped commit without advancing or
-  mutating other tasks; report the commit failure instead of a success verdict if it cannot be
-  completed.
+  scoped commit succeeds. If it fails, repair or retry the same scoped commit without mutating
+  another task.
+- If the scoped commit still cannot succeed and the task remains on-board, immediately call
+  `edit_task(id={task-id}, block_reason="COMMIT_FAILED: {concise error and recovery command}")`.
+  Return `COMMIT_FAILED`, never a success verdict. The filesystem block prevents orchestrator
+  redispatch even though the block itself is not yet committed. An archived task is already
+  off-board; return `COMMIT_FAILED` with the same recovery command and do not claim success.
+- Recover a `COMMIT_FAILED` task by completing the original explicit-path commit first. For an
+  on-board task, then clear the block with `edit_task(id={task-id}, block_reason="")` and make a
+  task-record-only recovery commit. These two recovery commits are the explicit exception to the
+  one-commit rule because the first restores durable ownership and the second restores dispatch.
 - Never push. The user pushes manually.
 
 ### VS Code Auto-Staging Trap

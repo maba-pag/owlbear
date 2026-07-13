@@ -69,6 +69,10 @@ def test_pipeline_commit_gate_includes_final_task_state() -> None:
     assert "### After `end_work`" in protocol
     assert "Include the final task record in every pipeline commit" in protocol
     assert "both its former task path and final archive path" in protocol
+    assert 'block_reason="COMMIT_FAILED:' in governance
+    assert "filesystem block prevents orchestrator" in governance
+    assert 'block_reason=""' in governance
+    assert re.search(r"archived\s+tasks are already off-board", protocol, re.IGNORECASE)
 
 
 def test_retired_authority_names_are_absent_from_shared_ecosystem() -> None:

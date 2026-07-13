@@ -1,10 +1,10 @@
 ---
 id: 1929
 title: Enforce pipeline-owned commits at task closure
-status: build
+status: verify
 priority: high
 created: 2026-07-14T00:44:01.023216+02:00
-updated: 2026-07-14T00:56:06.174810+02:00
+updated: 2026-07-14T01:02:28.048112+02:00
 tags:
   - agent
   - kanban
@@ -62,3 +62,13 @@ Current protocol requires commits before `end_work`, but `end_work` itself appen
 | # | Target Agent | Action Required | File(s) | Evidence |
 |---|-------------|----------------|---------|----------|
 | 1 | builder | Adopt the drafted COMMIT_FAILED contract and ordinary dirty-worktree regression as builder-owned changes; validate and commit them before returning to verify. | `share/agents/{builder,verifier,collector}.agent.md`, `share/skills/{r-workspace-governance,r-pipeline-protocol,h-mcp-kanban}/SKILL.md`, `tests/test_skill_authority_wiring.py`, `serve/tools/tests/test_commit_owned.py` | Verifier challenger rejected patch-pass ownership; current focused suite has 9 passing tests. |
+
+[[2026-07-14T01:02:28+02:00]]
+## Builder Notes
+
+- Repair adopted from verifier follow-up: defined `COMMIT_FAILED` containment and recovery for post-`end_work` commit failures; restored final-task closure ordering and required-reader wiring.
+- On-board failure state: retry scoped commit, then block with a `COMMIT_FAILED` recovery reason before returning so orchestrator cannot redispatch. Archived tasks remain off-board and report `COMMIT_FAILED` without false archival success.
+- Recovery: complete the original owned commit, clear an on-board block, and commit the unblock task record separately.
+- Added ordinary advancement proof: final task status and owned implementation commit together while unrelated tracked, staged, and untracked changes survive. Existing archive proof covers both sides of the task-to-archive move.
+- Proof: `uv run pytest tests/test_skill_authority_wiring.py serve/tools/tests/test_commit_owned.py -q` -> 9 passed; Ruff -> clean; agent validator -> 23/23 pass; diff check -> clean.
+- Builder challenger: pass; no concrete blocker.

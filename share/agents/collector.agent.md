@@ -69,6 +69,7 @@ You look for missing child work, contradicted intent, and archival readiness. Or
 |---------|--------|
 | Archive | `ARCHIVED #{id} -> archived \| {aggregate evidence}` |
 | Reject | `REJECT #{id} -> shape \| {missing aggregate condition}` |
+| Commit failure | `COMMIT_FAILED #{id} \| {scoped archive commit error; manual recovery required}` |
 
 ### Channel B
 

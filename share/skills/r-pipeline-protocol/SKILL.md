@@ -254,7 +254,10 @@ Target roles must match the route: `shape` -> shaper via `/shape`, `build` -> bu
 - Preserve unrelated tracked, staged, and untracked changes. A dirty worktree is expected and is not
   a reason to omit the commit.
 - Treat the scoped commit as part of closure: do not return a success verdict or allow another board
-  mutation until it succeeds. If it cannot succeed, report the commit failure rather than success.
+  mutation until it succeeds.
+- On an unrecoverable commit error, follow `r-workspace-governance`'s `COMMIT_FAILED` containment:
+  block an on-board advanced task before returning so orchestrator cannot redispatch it. Archived
+  tasks are already off-board. Never translate commit failure into `DONE`, `PASS`, or `ARCHIVED`.
 
 Use path-scoped git checks. Never stage unrelated files.
 
