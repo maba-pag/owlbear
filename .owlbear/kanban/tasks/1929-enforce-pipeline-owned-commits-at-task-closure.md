@@ -1,10 +1,10 @@
 ---
 id: 1929
 title: Enforce pipeline-owned commits at task closure
-status: verify
+status: build
 priority: high
 created: 2026-07-14T00:44:01.023216+02:00
-updated: 2026-07-14T00:49:49.689606+02:00
+updated: 2026-07-14T00:56:06.174810+02:00
 tags:
   - agent
   - kanban
@@ -48,3 +48,17 @@ Current protocol requires commits before `end_work`, but `end_work` itself appen
 - Durable test justification: one static authority/order regression prevents instruction drift; one real-Git rename test protects collector archival with unrelated staged and untracked dirt.
 - Proof: `uv run pytest tests/test_skill_authority_wiring.py serve/tools/tests/test_commit_owned.py -q` -> 8 passed; `uv run ruff check tests/test_skill_authority_wiring.py serve/tools/tests/test_commit_owned.py` -> clean; `uv run python .owlbear/scripts/validate_agents.py` -> all 23 pass; VS Code diagnostics -> none.
 - Builder challenger: pass; no concrete blocker.
+
+[[2026-07-14T00:56:06+02:00]]
+## Verify Notes
+
+- Builder commit reviewed: `de3687a7b22840a9b0ba8c4ead2099fa74ede663`.
+- Initial verification found commit-failure containment missing after `end_work`; follow-up draft added `COMMIT_FAILED` blocking/recovery semantics.
+- Second verification found ordinary dirty-worktree advancement proof incomplete; follow-up draft added a real-Git task-record test preserving unrelated tracked, staged, and untracked changes.
+- Current proof: 9 focused tests pass; Ruff clean; all 23 agent files validate; diagnostics none.
+- Verifier challenger final result: fail because these follow-up changes include durable regression tests, which verifier patch-pass cannot own.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Adopt the drafted COMMIT_FAILED contract and ordinary dirty-worktree regression as builder-owned changes; validate and commit them before returning to verify. | `share/agents/{builder,verifier,collector}.agent.md`, `share/skills/{r-workspace-governance,r-pipeline-protocol,h-mcp-kanban}/SKILL.md`, `tests/test_skill_authority_wiring.py`, `serve/tools/tests/test_commit_owned.py` | Verifier challenger rejected patch-pass ownership; current focused suite has 9 passing tests. |
