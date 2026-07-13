@@ -36,15 +36,16 @@
                 "owlbear_mcp_memory"
             ]
         },
-        "ddgs": {
+        "ob-browser": {
             "type": "stdio",
             "command": "uv",
             "args": [
                 "--project",
                 "../owlbear",
                 "run",
-                "ddgs",
-                "mcp"
+                "python",
+                "-m",
+                "owlbear_mcp_browser"
             ]
         },
         "markitdown": {

@@ -289,7 +289,7 @@ def create_mcp_config(target_dir: Path, owlbear_dir: Path) -> None:
       - ob-kanban (owlbear_mcp_kanban)
       - ob-knowledge (owlbear_mcp_knowledge)
       - ob-memory (owlbear_mcp_memory)
-      - ddgs (DuckDuckGo search)
+    - ob-browser (owlbear_mcp_browser)
       - microsoft/markitdown
 
     Standalone entry point for callers that only need the MCP config written.

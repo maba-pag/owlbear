@@ -13,6 +13,7 @@ Before running setup, ensure the following are installed on your machine:
 | VS Code | IDE | [code.visualstudio.com](https://code.visualstudio.com/) |
 | GitHub Copilot extension | Chat and agents | VS Code Extensions marketplace |
 | Git | Clone and version control | [git-scm.com](https://git-scm.com/) |
+| Chromium | Browser MCP runtime | Run `playwright install chromium` after setup |
 
 > **Windows limitation:** owlbear and your project must be on the **same drive**.
 > `init.py` uses relative paths, and `os.path.relpath` raises `ValueError` when
@@ -54,7 +55,7 @@ Running `init.py` writes the following files into your project directory:
 | File / Directory | Purpose | Idempotency |
 |------------------|---------|-------------|
 | `.vscode/settings.json` | Points VS Code at owlbear agents, skills, and instructions; enables `mermaid-chat.enabled` for Mermaid diagram rendering in chat | Merged (owlbear keys as defaults; your existing keys are preserved) |
-| `.vscode/mcp.json` | Registers 5 MCP servers (3 owlbear stdio + ddgs web search + markitdown) | Merged (owlbear servers as defaults; your existing servers are preserved) |
+| `.vscode/mcp.json` | Registers 5 MCP servers (4 owlbear stdio, including browser access, + markitdown) | Merged (owlbear servers as defaults; your existing servers are preserved) |
 | `.owlbear/kanban/tasks/.gitkeep` | Ensures tasks directory exists in version control | Always written |
 | `.owlbear/kanban/decisions/pending/` | Ensures decisions inbox directory exists | Always created (`mkdir`, `exist_ok=True`) |
 | `.owlbear/kanban/decisions/resolved/` | Ensures decisions resolved directory exists | Always created (`mkdir`, `exist_ok=True`) |
