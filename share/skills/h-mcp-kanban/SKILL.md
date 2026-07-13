@@ -184,6 +184,10 @@ the agent's explicit task-owned durable paths and the resulting task record. For
 include both the old task path and new archive path. Do not return the Channel A success verdict until
 that scoped commit succeeds, even when unrelated worktree or index changes exist.
 
+If `commit-owned` reports that either collector archive path is already staged, follow
+`r-workspace-governance` -> Owned Auto-Staging Recovery. Inspect both exact paths before unstaging;
+never treat an ambiguous staged path as collector-owned.
+
 If that commit cannot be repaired in the current invocation, apply the `COMMIT_FAILED` containment
 from `r-workspace-governance`: block an advanced on-board task with `edit_task(block_reason=...)`
 before returning. Clear the block with `edit_task(block_reason="")` only after the original scoped

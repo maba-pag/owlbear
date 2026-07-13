@@ -60,6 +60,22 @@ VS Code may re-serialize and stage `.agent.md` files when it detects new tool ca
 `git diff --cached share/agents/` before committing and unstage unrelated generated changes without
 reverting them.
 
+### Owned Auto-Staging Recovery
+
+An editor or file watcher may stage a collector's task-to-archive rename before `commit-owned` runs.
+When the helper reports that the owned task or archive path is already staged:
+
+1. Inspect only both owned paths with
+  `git diff --cached --name-status -- .owlbear/kanban/tasks/{slug}.md .owlbear/kanban/archive/{slug}.md`.
+2. Continue only when the staged change is exactly the current task's expected rename and contains
+  no ambiguous or pre-existing user content. Otherwise apply `COMMIT_FAILED`; do not unstage it.
+3. Unstage only those verified owned paths with
+  `git reset HEAD -- .owlbear/kanban/tasks/{slug}.md .owlbear/kanban/archive/{slug}.md`.
+4. Retry `commit-owned` with both paths so it stages and commits the complete final archive state.
+
+The reset command may print a summary of every remaining unstaged change. That output does not mean
+those unrelated paths were modified or unstaged by the exact pathspec.
+
 ## OwlBear-Managed Artifact Placement
 
 | Artifact | Location | Rule |

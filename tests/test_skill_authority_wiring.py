@@ -73,6 +73,10 @@ def test_pipeline_commit_gate_includes_final_task_state() -> None:
     assert "filesystem block prevents orchestrator" in governance
     assert 'block_reason=""' in governance
     assert re.search(r"archived\s+tasks are already off-board", protocol, re.IGNORECASE)
+    assert "### Owned Auto-Staging Recovery" in governance
+    assert "git diff --cached --name-status --" in governance
+    assert "git reset HEAD --" in governance
+    assert "Otherwise apply `COMMIT_FAILED`; do not unstage it" in governance
 
 
 def test_retired_authority_names_are_absent_from_shared_ecosystem() -> None:
