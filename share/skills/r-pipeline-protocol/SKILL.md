@@ -53,7 +53,15 @@ If a dispatch prompt contradicts your agent `<critical_rules>`, follow the criti
 
 - Claim your task before mutating anything.
 - Never move, edit, claim, or release tasks that are not yours.
-- `start_work` returns the full task body. Do not call `show_task` first.
+- After loading required skills, make `start_work` the first read of the assigned task. It returns
+  the full authoritative task body; do not precede it with `show_task` or a direct read of the
+  task's Markdown file.
+- Inspect other tasks without claiming them: use `list_tasks` for summaries and `show_task` for
+  full context or `show_task(section=...)` for one body section. Never use `start_work` merely to
+  inspect a dependency, parent, sibling, or referenced task.
+- Treat `.owlbear/kanban/tasks/*.md` and archive task Markdown as storage representations. Read
+  them directly only when the task is specifically about storage, serialization, corruption, or
+  filesystem behavior; normal task context comes through the MCP task tools.
 - If `start_work` fails, stop. Do not fall through to unclaimed work.
 
 For tool syntax, load `h-mcp-kanban`.

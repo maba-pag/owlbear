@@ -165,7 +165,14 @@ task = start_work(id=480)
 end_work(id=480, note="## Builder Notes\n- Files changed: ...\n\n12 tests passed, ruff clean", outcome="success")
 ```
 
-> **Anti-pattern:** Do NOT call `show_task` before `start_work`. `start_work` already returns the full task body — a preceding `show_task` is a redundant read. Use `show_task` only for secondary lookups (dependencies, parent briefs, re-reads).
+### Task-context boundary
+
+After loading required skills, call `start_work` before any other read of the assigned task. It
+already returns the full authoritative body, so a preceding `show_task` or direct read of the task
+Markdown is redundant. For dependencies, parents, siblings, and other referenced tasks, use
+`list_tasks` for summaries or `show_task` (optionally with `section`) for read-only context; never
+claim them merely to inspect them. Read task Markdown directly only when investigating storage,
+serialization, corruption, or filesystem behavior.
 
 Put your full agent section (header + content + summary) into the `note` parameter of `end_work`. The note is appended to the task body with a timestamp, then the task advances and the claim is released — all atomically.
 
