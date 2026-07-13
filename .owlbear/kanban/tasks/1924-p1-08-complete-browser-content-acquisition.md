@@ -1,10 +1,10 @@
 ---
 id: 1924
 title: 'P1-08: Complete browser content acquisition'
-status: shape
+status: collect
 priority: high
 created: 2026-07-13T03:42:07.356146+02:00
-updated: 2026-07-13T15:47:59.662941+02:00
+updated: 2026-07-13T16:35:12.581224+02:00
 tags:
   - phase-1
   - scope:browser
@@ -41,7 +41,7 @@ ac:
     and no crawling or knowledge-ingestion behavior is introduced.'
 blocked: false
 block_reason:
-claimed_at: 2026-07-13T13:16:05.745424+02:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -185,3 +185,72 @@ Archive rationale: REJECT. Child completion and invariant coverage are present, 
 | # | Target Agent | Action Required | File(s) | Evidence |
 |---|-------------|----------------|---------|----------|
 | 1 | shaper via `/shape` | Restore a build/verify path that commits the final browser-core implementation and produces a real MCP-client through FastMCP, Playwright, and public acquisition proof tied to that commit SHA or a later descendant; then return the aggregate to collect. | `serve/browser/src/owlbear_browser/contract.py`, `serve/browser/src/owlbear_browser/fetcher.py`, `serve/browser/src/owlbear_browser/playwright_launcher.py`, `serve/browser/tests/test_acquisition.py`, plus the existing MCP proof surface | `git rev-parse HEAD` returned `89eb9059f8139e5d1ada18d5c829a4153d69856d`; `git status --short` showed all four task-owned files modified, so no tested commit represents the assembled state. |
+
+[[2026-07-13T16:35:12+02:00]]
+## Shape Notes
+
+### Refinement Source and Readiness
+- Re-entry cause: collector rejected aggregate closure because task-owned browser-core files were uncommitted at tested `HEAD` `89eb9059f8139e5d1ada18d5c829a4153d69856d`; no real MCP/Playwright proof was tied to a commit containing the final browser state.
+- Planning source: native OpenSpec change `openspec/changes/complete-browser-content-acquisition/`, schema `spec-driven`. `openspec status` resolved Proposal, Design, two Specs, and advisory Tasks; `openspec validate complete-browser-content-acquisition --strict` passed.
+- Product outcome and invocation remain unchanged: a known HTTP(S) URL is acquired through the agent-callable MCP operation and reusable Python API as structured meaningful Markdown with provenance, inert links, session-assisted authentication, and explicit non-success states.
+- Completion/change contract remains unchanged: DDGS is retired; built-in public web access, MarkItDown, and interactive browser operations retain their owned roles; crawling, approval, registration, refresh, and knowledge ingestion remain the Proposal's explicit preserved remainder for a separate change.
+
+### Source and Contract Findings
+- Current source confirms `serve/browser` owns request/result semantics and acquisition behavior; `serve/mcp-browser` owns FastMCP composition.
+- The uncommitted final delta in `contract.py`, `fetcher.py`, `playwright_launcher.py`, and `test_acquisition.py` includes bounded authentication retry and ambiguous-page rejection but is not represented by the prior tested commit.
+- `PlaywrightLauncher.context` currently exposes raw `BrowserContext`, contradicting the final #1917 verified boundary because callers can reach cookie and storage-state APIs.
+- MCP `acquire` currently calls the interactive `DomainAllowlist`, contradicting Proposal and spec authorization for an explicitly supplied syntactically valid private/intranet HTTP(S) URL. Interactive operations retain their existing allowlist and SSRF policy.
+- No deep external research was needed: current source, complete OpenSpec authorities, and archived leaf evidence resolved ownership and proof requirements.
+
+### Corrective Change Module Map
+| Module | Current Responsibility | Planned Change | Interface Impact | Owning Task |
+|---|---|---|---|---|
+| `serve/browser` contract, fetcher, launcher | Shared result semantics, acquisition, persistent lifecycle | Reconcile uncommitted final behavior and replace raw-context exposure with launcher-owned acquisition composition | public API corrected | #1925 |
+| `serve/mcp-browser` server | FastMCP lifespan, tool registration, serialization | Compose through corrected browser API, remove acquisition-only allowlist contradiction, preserve interactive policy | acquisition operation corrected | #1926 |
+| dependency/setup and agent guidance surfaces | DDGS removal and routing | Read-only; already completed | none | #1923 and #1922 |
+| knowledge packages | Future source lifecycle/ingestion consumer | Read-only explicit preserved remainder | none | #1924 |
+
+### Corrective Product Invariant Map
+| Product Invariant | Owning Task | Normal-Path Boundary | Proof / Allowed Replacement |
+|---|---|---|---|
+| Final reusable acquisition and persistent-session behavior is committed without exposing raw session-secret APIs | #1925 | public browser acquisition and launcher API through real Playwright | local page host may replace remote site |
+| Explicit private/intranet HTTP(S) acquisition works through the registered agent operation while interactive policy remains unchanged | #1926 | real stdio MCP client through FastMCP lifespan and public browser acquisition | local page host may replace remote site |
+| Aggregate delayed-render and session-reuse proof identifies a commit containing final browser and MCP state | #1926 | real stdio MCP client through FastMCP and Playwright | no replacement of MCP registration, lifespan, public acquisition, or Playwright |
+| DDGS stays absent and supported web/document/interactive ownership remains intact | #1923 and #1922 | clean install/setup plus distributed customization inspection | temporary initialized workspace may replace user workspace |
+| Linked-page approval and knowledge ingestion remain owned future work | #1924 | Proposal scope and changed-path inspection | no implementation permitted in this change |
+
+### Corrective Decomposition
+- Created #1925 `P1-09: Finalize browser acquisition lifecycle boundary` in `build`, parent #1924, no dependencies.
+- Created #1926 `P1-10: Prove assembled browser acquisition at a committed revision` in `build`, parent #1924, depends on #1925.
+- Parent #1924 now depends on archived-completed #1917 through #1923 plus active #1925 and #1926. It owns no direct implementation and returns to `collect` behind those dependencies.
+- The split follows repository ownership and proof mode: browser-core lifecycle/public API first; MCP authorization/composition and commit-bound assembled proof second.
+
+```mermaid
+flowchart LR
+    T1925[1925 Finalize browser lifecycle boundary] --> T1926[1926 Commit-bound assembled MCP proof]
+    T1917[1917 completed] --> T1924[1924 aggregate collect gate]
+    T1918[1918 completed] --> T1924
+    T1919[1919 completed] --> T1924
+    T1920[1920 completed] --> T1924
+    T1921[1921 completed] --> T1924
+    T1922[1922 completed] --> T1924
+    T1923[1923 completed] --> T1924
+    T1925 --> T1924
+    T1926 --> T1924
+```
+
+### AC and Product Promise Check
+- #1925 has two behavior AC covering the final public acquisition behavior and the non-exposing launcher composition boundary.
+- #1926 has two behavior AC covering private/intranet acquisition without changing interactive policy and real stdio MCP-to-Playwright evidence tied to the task commit SHA.
+- Parent AC-1 through AC-3 remain aggregate criteria and are fulfilled transitively by completed leaves plus #1925/#1926; collector must cite those leaf proofs rather than re-derive an untethered aggregate claim.
+- The concrete graph covers the full active Proposal. The only omitted end-state outcomes are linked-page approval, source registration, refresh, and knowledge ingestion, which Proposal explicitly records as a user-approved separate change.
+
+### Challenger Result
+- Decision: pass.
+- Challenger independently confirmed the raw-context and acquisition-allowlist source contradictions, dependency order, statuses, acceptance criteria, invariant ownership, normal-path proof boundary, DDGS ownership, and complete Product Promise coverage.
+- Collection guard: archive only after #1925 and #1926 complete, and tie aggregate proof to #1926's recorded tested commit rather than the rejected `89eb9059` state.
+
+### Shaper Evidence
+- Board audit confirmed #1925 and #1926 are `build` leaves with parent #1924; #1926 depends on #1925; parent dependencies include #1917 through #1923, #1925, and #1926.
+- Shaper-owned board artifacts committed as `f01d49858acd7fa19c7130d4bc7a9cb7b2ba1c28`.
+- Saved reusable memory candidate `8853908d-b4c0-4509-9166-537d6375fc78` about matching aggregate proof to committed final state.
