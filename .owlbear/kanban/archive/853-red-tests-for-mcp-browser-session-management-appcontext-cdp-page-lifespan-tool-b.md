@@ -3,7 +3,7 @@ id: 853
 title: 'RED: Tests for mcp-browser session management (AppContext CDP/Page, lifespan,
   tool bodies)'
 status: archived
-priority: important
+priority: medium
 created: '2026-04-12T14:03:37.122556+00:00'
 updated: '2026-04-14T21:45:32.933734+00:00'
 tags:

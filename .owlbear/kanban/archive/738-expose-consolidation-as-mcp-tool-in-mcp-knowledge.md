@@ -2,7 +2,7 @@
 id: 738
 title: Expose consolidation as MCP tool in mcp-knowledge
 status: archived
-priority: important
+priority: medium
 created: '2026-04-10T04:24:39.3164593+02:00'
 updated: '2026-04-10T06:07:08.881378+00:00'
 tags:

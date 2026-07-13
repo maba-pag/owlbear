@@ -2,7 +2,7 @@
 id: 177
 title: Document KB curation process
 status: archived
-priority: important
+priority: medium
 created: 2026-03-29 19:50:54.093837+02:00
 updated: 2026-03-30 05:06:44.238957+02:00
 started: 2026-03-30 05:06:09.693558+02:00

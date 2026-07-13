@@ -2,7 +2,7 @@
 id: 1560
 title: 'P2-01: Decide Cockpit PDS policy and redesign constraints'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-14T18:25:57.129252+00:00
 updated: 2026-05-14T20:02:04.225804+00:00
 tags:

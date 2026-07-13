@@ -2,7 +2,7 @@
 id: 956
 title: Setup Playwright E2E infrastructure in cockpit web
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-18T13:49:17.508633+00:00
 updated: 2026-04-18T16:03:30.450778+00:00
 tags:

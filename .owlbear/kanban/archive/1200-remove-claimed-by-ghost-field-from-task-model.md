@@ -2,7 +2,7 @@
 id: 1200
 title: Remove claimed_by ghost field from Task model
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-30 15:28:55.673059+00:00
 updated: 2026-05-01T21:28:15.099659+00:00
 tags:

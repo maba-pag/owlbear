@@ -2,7 +2,7 @@
 id: 824
 title: Create dispatch.py with pick_dispatchable()
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-10T21:23:09.122392+00:00'
 updated: '2026-04-15T14:38:23.518126+00:00'
 tags:

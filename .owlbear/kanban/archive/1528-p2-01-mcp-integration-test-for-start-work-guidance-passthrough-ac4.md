@@ -2,7 +2,7 @@
 id: 1528
 title: 'P2-01: MCP integration test for start_work guidance passthrough (AC4)'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-13T12:18:01.416962+00:00
 updated: 2026-05-13T16:57:01.537988+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 1015
 title: 'Execute React Compiler enablement: install babel-plugin-react-compiler + vite.config.ts'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-19 16:44:26.745900+00:00
 updated: 2026-04-19 17:57:11.090635+00:00
 tags:

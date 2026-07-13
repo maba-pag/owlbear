@@ -2,7 +2,7 @@
 id: 627
 title: 'Update parent #483 completion criteria to reflect #576 closure as superseded'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-05T10:25:19.9880362+02:00
 updated: 2026-04-05T23:50:33.0383872+02:00
 started: 2026-04-05T23:50:33.0383872+02:00

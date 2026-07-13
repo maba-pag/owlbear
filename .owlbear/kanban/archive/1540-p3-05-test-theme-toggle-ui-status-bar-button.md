@@ -2,7 +2,7 @@
 id: 1540
 title: 'P3-05: test — theme toggle UI: status bar button'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-13T18:41:58.336718+00:00
 updated: 2026-05-13T22:09:32.085375+00:00
 tags:

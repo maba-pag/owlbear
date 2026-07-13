@@ -2,7 +2,7 @@
 id: 55
 title: Add ingest and graph tools to mcp-knowledge server
 status: archived
-priority: important
+priority: medium
 created: 2026-03-26 19:12:49.292342+01:00
 updated: 2026-03-30 14:34:46.457312+02:00
 started: 2026-03-30 14:34:39.361031+02:00

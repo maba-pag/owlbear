@@ -2,7 +2,7 @@
 id: 1601
 title: 'P1-08: Tests — shell layout'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-16T03:35:41.083212+00:00
 updated: 2026-05-16T15:04:29.982833+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 646
 title: 'P4-06: Create pragmatist-voice.agent.md'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-06T07:01:14.5070148+02:00
 updated: 2026-04-07T00:29:50.4621473+02:00
 started: 2026-04-07T00:29:50.4621473+02:00

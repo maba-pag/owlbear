@@ -2,7 +2,7 @@
 id: 200
 title: Implement canonical tool registry validation in validate_agents.py
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-30 03:21:21.863649+02:00
 updated: 2026-03-30 06:28:19.709333+02:00
 started: 2026-03-30 06:28:19.709333+02:00

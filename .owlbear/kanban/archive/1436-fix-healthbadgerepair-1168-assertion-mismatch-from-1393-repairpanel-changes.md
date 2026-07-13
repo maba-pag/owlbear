@@ -2,7 +2,7 @@
 id: 1436
 title: 'Fix HealthBadgeRepair_1168 assertion mismatch from #1393 RepairPanel changes'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-08T12:04:38.739894+00:00
 updated: 2026-05-08T16:03:46.303202+00:00
 tags:

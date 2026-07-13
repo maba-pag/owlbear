@@ -2,7 +2,7 @@
 id: 1396
 title: 'P3-06: Implement Cockpit accessibility and PDS verification gate'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-06T01:09:43.591872+00:00
 updated: 2026-05-11T13:46:34.172637+00:00
 tags:

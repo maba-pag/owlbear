@@ -2,7 +2,7 @@
 id: 1171
 title: Audit and unify config write paths before schema grouping
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-28T22:52:50.250562+00:00
 updated: 2026-04-29T02:13:49.112742+00:00
 tags:

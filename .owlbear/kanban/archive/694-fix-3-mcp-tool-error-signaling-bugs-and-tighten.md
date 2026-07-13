@@ -2,7 +2,7 @@
 id: 694
 title: Fix 3 MCP tool error signaling bugs and tighten convention docs
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-08T21:24:23.3457999+02:00
 updated: 2026-04-09T05:42:04.7119722+02:00
 started: 2026-04-09T05:42:04.7119722+02:00

@@ -2,7 +2,7 @@
 id: 1616
 title: 'P2-07: Sidecar information architecture'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-16T03:37:02.251956+00:00
 updated: 2026-05-17T16:03:44.431383+02:00
 tags:

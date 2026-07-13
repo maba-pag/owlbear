@@ -2,7 +2,7 @@
 id: 1647
 title: 'P2-02: ResolveModal integration + modal snapshot SSE guard'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-18T00:50:17.184817+02:00
 updated: 2026-05-20T10:13:48.343985+02:00
 tags:

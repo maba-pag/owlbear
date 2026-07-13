@@ -2,7 +2,7 @@
 id: 1698
 title: Fix task detail field label layout loss
 status: archived
-priority: important
+priority: medium
 created: 2026-05-21T20:22:11.464140+02:00
 updated: 2026-05-24T10:50:01.220036+02:00
 tags:

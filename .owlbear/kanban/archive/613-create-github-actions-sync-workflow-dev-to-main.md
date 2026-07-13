@@ -2,7 +2,7 @@
 id: 613
 title: Create GitHub Actions sync workflow (dev to main)
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-04T21:55:26.1899523+02:00
 updated: 2026-04-06T19:24:04.4464041+02:00
 started: 2026-04-06T19:24:04.4464041+02:00

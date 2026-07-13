@@ -2,7 +2,7 @@
 id: 1104
 title: 'Engine write-before-log atomicity: append-failure resilience tests'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-22T20:16:05.719721+00:00
 updated: 2026-04-24T02:35:45.529073+00:00
 tags:

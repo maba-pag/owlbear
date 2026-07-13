@@ -2,7 +2,7 @@
 id: 1310
 title: 'P1-09+10: Git integration — batch commit with scoped staging fix'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-04T01:32:27.314281+00:00
 updated: 2026-05-06T04:14:56.070457+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 804
 title: Add refresh_config + fix config staleness
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-10T21:21:04.269881+00:00'
 updated: '2026-04-13T11:32:40.227877+00:00'
 tags:

@@ -2,7 +2,7 @@
 id: 1771
 title: Cockpit post header interaction-state sweep
 status: archived
-priority: important
+priority: medium
 created: 2026-05-23T23:58:03+02:00
 updated: 2026-05-24T10:50:02.248997+02:00
 tags:

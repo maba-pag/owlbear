@@ -3,7 +3,7 @@ id: 1407
 title: 'B1: Reviewer rewrite — batch findings, finding vs opinion, trust builder evidence,
   protocol update'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-07T23:16:25.214918+00:00
 updated: 2026-05-09T02:42:52.157230+00:00
 tags:

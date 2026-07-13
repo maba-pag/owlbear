@@ -2,7 +2,7 @@
 id: 1002
 title: Add agent-extraction markers to h-agent-structure
 status: archived
-priority: important
+priority: medium
 created: 2026-04-18 21:34:45.363367+00:00
 updated: 2026-04-19 11:53:44.343429+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 640
 title: Fix 3 remaining pipeline protocol MCP callout tests (test_mcp_tool_references_574.py)
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-06T06:42:11.1505594+02:00
 updated: 2026-04-06T10:14:34.2979986+02:00
 started: 2026-04-06T10:14:34.2979986+02:00

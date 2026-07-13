@@ -2,7 +2,7 @@
 id: 768
 title: 'P1-15: Tests — Content safety: IDPI + wrapping for AUTHENTICATED_WEB'
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-10T10:56:34.256076+00:00'
 updated: '2026-04-14T21:58:56.232873+00:00'
 tags:

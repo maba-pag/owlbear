@@ -2,7 +2,7 @@
 id: 924
 title: 'P1-03: Cockpit package skeleton + engine adapter boundary test'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-17T19:57:10.951841+00:00
 updated: 2026-04-18T10:19:02.808374+00:00
 tags:

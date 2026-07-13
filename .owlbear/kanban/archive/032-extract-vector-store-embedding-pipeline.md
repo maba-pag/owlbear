@@ -2,7 +2,7 @@
 id: 32
 title: Extract vector store + embedding pipeline
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-26 18:33:43.753881+01:00
 updated: 2026-03-30 20:26:32.096869+02:00
 started: 2026-03-30 20:25:18.650288+02:00

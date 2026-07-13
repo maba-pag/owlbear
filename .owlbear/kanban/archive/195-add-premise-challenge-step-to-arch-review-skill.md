@@ -2,7 +2,7 @@
 id: 195
 title: Add premise challenge step to arch-review skill
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-29 23:08:21.445756+02:00
 updated: 2026-03-30 04:28:53.252160+02:00
 started: 2026-03-30 04:28:48.269760+02:00

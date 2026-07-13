@@ -2,7 +2,7 @@
 id: 680
 title: Standardize MCP tool error signaling (ToolError vs error strings)
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-08T18:40:23.4451397+02:00
 updated: 2026-04-09T01:14:34.7390953+02:00
 started: 2026-04-09T01:14:34.7390953+02:00

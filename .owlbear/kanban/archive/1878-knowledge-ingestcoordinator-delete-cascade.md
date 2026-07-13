@@ -2,7 +2,7 @@
 id: 1878
 title: 'Knowledge: IngestCoordinator — delete cascade'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-25T19:04:37.443482+02:00
 updated: 2026-05-27T00:51:51.231436+02:00
 tags:

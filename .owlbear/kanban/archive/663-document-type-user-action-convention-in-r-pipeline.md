@@ -2,7 +2,7 @@
 id: 663
 title: Document type:user-action convention in r-pipeline-protocol and agent-common
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-06T16:39:07.7325145+02:00
 updated: 2026-04-06T23:18:31.3354218+02:00
 started: 2026-04-06T23:18:31.3354218+02:00

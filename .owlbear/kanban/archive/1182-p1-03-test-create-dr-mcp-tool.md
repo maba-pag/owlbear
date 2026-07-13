@@ -2,7 +2,7 @@
 id: 1182
 title: 'P1-03: Test create_dr MCP tool'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-30T00:51:39.532255+00:00
 updated: 2026-04-30T05:13:06.502597+00:00
 tags:

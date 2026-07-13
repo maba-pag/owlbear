@@ -2,7 +2,7 @@
 id: 1723
 title: Create decision request model brief input
 status: archived
-priority: important
+priority: medium
 created: 2026-05-23T02:07:23+0200
 updated: 2026-05-24T10:50:01.578333+02:00
 tags:

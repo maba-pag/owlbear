@@ -2,7 +2,7 @@
 id: 183
 title: Add curation process cross-reference to knowledge-ops skill
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-29 20:22:08.827045+02:00
 updated: 2026-03-30 03:53:35.679940+02:00
 started: 2026-03-30 03:53:30.488451+02:00

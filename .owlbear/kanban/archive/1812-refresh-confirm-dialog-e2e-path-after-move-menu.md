@@ -2,7 +2,7 @@
 id: 1812
 title: Refresh ConfirmDialog e2e path after move menu
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T08:49:00+02:00
 updated: 2026-05-24T10:50:02.789096+02:00
 tags:

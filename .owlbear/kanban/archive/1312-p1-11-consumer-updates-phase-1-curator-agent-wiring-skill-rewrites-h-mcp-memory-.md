@@ -3,7 +3,7 @@ id: 1312
 title: 'P1-11: Consumer updates Phase 1 — Curator agent wiring + skill rewrites (h-mcp-memory,
   h-memory-structure, w-mem-curation)'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-04T01:32:27.358510+00:00
 updated: 2026-05-05T15:50:37.437948+00:00
 tags:

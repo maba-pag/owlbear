@@ -2,7 +2,7 @@
 id: 98
 title: 'Test: Port instruction files'
 status: archived
-priority: important
+priority: medium
 created: 2026-03-28 03:53:35.197807+01:00
 updated: 2026-03-29 05:22:53.736243+02:00
 started: 2026-03-29 05:22:49.104272+02:00

@@ -2,7 +2,7 @@
 id: 501
 title: Complete ToolAnnotations on mcp-knowledge server
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-31 16:49:47.394658+02:00
 updated: 2026-04-01 04:56:41.194725+02:00
 started: 2026-03-31 17:11:27.486470+02:00

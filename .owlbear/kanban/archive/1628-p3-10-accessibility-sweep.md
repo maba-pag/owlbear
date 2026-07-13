@@ -2,7 +2,7 @@
 id: 1628
 title: 'P3-10: Accessibility sweep'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-16T03:37:44.860840+00:00
 updated: 2026-05-17T10:09:57.399149+02:00
 tags:

@@ -2,7 +2,7 @@
 id: 1653
 title: 'P1-04: Verify handler equivalence for URL_LIST retype'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-18T03:11:06.930657+02:00
 updated: 2026-05-18T14:54:39.133992+02:00
 tags:

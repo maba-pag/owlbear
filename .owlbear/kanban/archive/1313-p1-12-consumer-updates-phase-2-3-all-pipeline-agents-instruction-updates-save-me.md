@@ -3,7 +3,7 @@ id: 1313
 title: 'P1-12: Consumer updates Phase 2-3 — All pipeline agents + instruction updates
   (save_memory, recall_memory rollout)'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-04T01:32:27.397472+00:00
 updated: 2026-05-05T17:21:09.833521+00:00
 tags:

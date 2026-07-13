@@ -2,7 +2,7 @@
 id: 1643
 title: 'P1-03: Route-conditional sidecar — suppress sidecar DOM on non-kanban routes'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-18T00:49:27.343819+02:00
 updated: 2026-05-19T20:24:12.224781+02:00
 tags:

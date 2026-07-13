@@ -2,7 +2,7 @@
 id: 918
 title: Curator agent definition + workflow skill
 status: archived
-priority: critical
+priority: medium
 created: 2026-04-17T11:52:23.667240+00:00
 updated: 2026-04-17T20:04:12.089237+00:00
 tags:

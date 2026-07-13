@@ -2,7 +2,7 @@
 id: 1366
 title: 'P1-03: Test Cockpit PDS runtime loading under CSP'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-06T00:58:33.557890+00:00
 updated: 2026-05-06T16:19:05.079524+00:00
 tags:

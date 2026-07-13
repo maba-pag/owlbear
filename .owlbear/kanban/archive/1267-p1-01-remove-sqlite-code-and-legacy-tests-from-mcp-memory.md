@@ -2,7 +2,7 @@
 id: 1267
 title: 'P1-01: Remove SQLite code and legacy tests from mcp-memory'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-02T03:43:26.887977+00:00
 updated: 2026-05-02T06:23:47.164014+00:00
 tags:
@@ -198,7 +198,7 @@ Commit: c9000b43
 [[2026-05-02]]
 ## Planning
 
-Created follow-up task #1275 "Fix stale test assertions in test_mcp_memory_1267.py" at backlog under epic #1266. Tags: scope:mcp-memory, cleanup. Priority: nice-to-have. Four stale file-absence assertions need updating or removal now that subsequent epic tasks recreated those files with new implementations.[[2026-05-02]]
+Created follow-up task #1275 "Fix stale test assertions in test_mcp_memory_1267.py" at backlog under epic #1266. Tags: scope:mcp-memory, cleanup. priority: medium. Four stale file-absence assertions need updating or removal now that subsequent epic tasks recreated those files with new implementations.[[2026-05-02]]
 ## Audit
 
 ### AC Verification

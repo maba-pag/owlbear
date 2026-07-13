@@ -2,7 +2,7 @@
 id: 1377
 title: 'P2-02: Implement Cockpit task detail context model'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-06T01:04:31.145299+00:00
 updated: 2026-05-08T16:45:14.096349+00:00
 tags:

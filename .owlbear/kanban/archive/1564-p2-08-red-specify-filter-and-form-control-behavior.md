@@ -2,7 +2,7 @@
 id: 1564
 title: 'P2-08 RED: Specify filter and form control behavior'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-14T18:26:23.465310+00:00
 updated: 2026-05-15T11:25:39.859319+00:00
 tags:

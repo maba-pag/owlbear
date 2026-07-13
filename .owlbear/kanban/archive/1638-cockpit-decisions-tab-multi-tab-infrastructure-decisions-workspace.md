@@ -2,7 +2,7 @@
 id: 1638
 title: Cockpit Decisions Tab — multi-tab infrastructure + decisions workspace
 status: archived
-priority: important
+priority: medium
 created: 2026-05-18T00:45:49.502884+02:00
 updated: 2026-05-20T12:36:56.627346+02:00
 tags:

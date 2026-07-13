@@ -2,7 +2,7 @@
 id: 206
 title: 'Test: intake, document_store, and ingest pipeline modules'
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-30 08:14:52.468527+02:00
 updated: 2026-03-30 14:15:18.197761+02:00
 started: 2026-03-30 14:14:54.329889+02:00

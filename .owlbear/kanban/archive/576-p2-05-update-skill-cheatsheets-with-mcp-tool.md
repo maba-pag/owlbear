@@ -2,7 +2,7 @@
 id: 576
 title: 'P2-05: Update skill cheatsheets with MCP tool alternatives alongside CLI'
 status: archived
-priority: critical
+priority: medium
 created: 2026-04-03 11:15:13.773817+02:00
 updated: 2026-04-05 13:28:09.471154+02:00
 started: 2026-04-05 13:28:09.471154+02:00

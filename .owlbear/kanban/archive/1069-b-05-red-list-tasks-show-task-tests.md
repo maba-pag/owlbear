@@ -2,7 +2,7 @@
 id: 1069
 title: 'B-05: RED — list_tasks + show_task tests'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-21T10:48:33.304571+00:00
 updated: 2026-04-25T01:53:24.605549+00:00
 tags:

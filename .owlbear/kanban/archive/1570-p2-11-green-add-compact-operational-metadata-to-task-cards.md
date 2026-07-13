@@ -2,7 +2,7 @@
 id: 1570
 title: 'P2-11 GREEN: Add compact operational metadata to task cards'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-14T18:26:42.531941+00:00
 updated: 2026-05-15T12:56:42.238804+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 1107
 title: 'Engine mutation atomicity: task-write-before-event-append gap'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-22T22:41:43.892451+00:00
 updated: 2026-04-23T09:25:37.544032+00:00
 tags: []

@@ -2,7 +2,7 @@
 id: 86
 title: Evaluate agent-scoped hooks for pipeline enforcement (scoped AC)
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-27 13:36:44.439454+01:00
 updated: 2026-03-30 09:53:59.291158+02:00
 started: 2026-03-30 09:53:58.967401+02:00

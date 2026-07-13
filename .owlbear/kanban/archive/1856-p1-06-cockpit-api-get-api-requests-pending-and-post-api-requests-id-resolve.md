@@ -2,7 +2,7 @@
 id: 1856
 title: 'P1-06: Cockpit API — GET /api/requests/pending and POST /api/requests/{id}/resolve'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-24T20:58:51.312492+02:00
 updated: 2026-05-25T12:29:53.350240+02:00
 tags:

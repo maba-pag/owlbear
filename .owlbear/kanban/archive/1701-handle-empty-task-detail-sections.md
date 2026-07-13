@@ -2,7 +2,7 @@
 id: 1701
 title: Handle empty task detail sections
 status: archived
-priority: important
+priority: medium
 created: 2026-05-21T20:22:56.770746+02:00
 updated: 2026-05-24T10:50:01.258525+02:00
 tags:

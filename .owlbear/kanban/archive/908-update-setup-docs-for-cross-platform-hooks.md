@@ -2,7 +2,7 @@
 id: 908
 title: Update setup docs for cross-platform hooks
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-17T08:43:52.908745+00:00
 updated: 2026-04-17T10:07:28.622185+00:00
 tags:

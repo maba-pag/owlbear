@@ -2,7 +2,7 @@
 id: 617
 title: Expose scope parameters in mcp-knowledge tool signatures
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-05T01:26:23.6081166+02:00
 updated: 2026-04-06T12:44:50.962686+02:00
 started: 2026-04-06T12:44:50.962686+02:00

@@ -2,7 +2,7 @@
 id: 1730
 title: Remove Kanban clipped leading column sliver
 status: archived
-priority: important
+priority: medium
 created: 2026-05-23T03:36:07+0200
 updated: 2026-05-24T10:50:01.675487+02:00
 tags:

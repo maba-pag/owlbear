@@ -2,7 +2,7 @@
 id: 607
 title: Update live references to new folder paths
 status: archived
-priority: critical
+priority: medium
 created: 2026-04-04T20:31:40.9085909+02:00
 updated: 2026-04-05T14:12:10.1753657+02:00
 started: 2026-04-05T14:12:10.1753657+02:00

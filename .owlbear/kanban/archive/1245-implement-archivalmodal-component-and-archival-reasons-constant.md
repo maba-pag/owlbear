@@ -2,7 +2,7 @@
 id: 1245
 title: 'Implement: ArchivalModal component and ARCHIVAL_REASONS constant'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-01T03:08:07.623554+00:00
 updated: 2026-05-02T01:51:18.438124+00:00
 tags:

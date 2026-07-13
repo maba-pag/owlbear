@@ -2,7 +2,7 @@
 id: 1574
 title: 'P2-14 RED: Specify column polish and empty-state behavior'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-14T18:33:43.120318+00:00
 updated: 2026-05-15T02:02:22.164688+00:00
 tags:

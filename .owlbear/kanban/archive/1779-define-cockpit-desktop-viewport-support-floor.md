@@ -2,7 +2,7 @@
 id: 1779
 title: Define Cockpit desktop viewport support floor
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T00:49:02.653772+02:00
 updated: 2026-05-24T10:50:02.344617+02:00
 tags:

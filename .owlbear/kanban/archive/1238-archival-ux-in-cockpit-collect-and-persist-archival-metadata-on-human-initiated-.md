@@ -2,7 +2,7 @@
 id: 1238
 title: 'Closeout: Archival UX in Cockpit — verify all child tasks complete'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-01T03:04:34.449352+00:00
 updated: 2026-05-02T07:23:54.533344+00:00
 tags:

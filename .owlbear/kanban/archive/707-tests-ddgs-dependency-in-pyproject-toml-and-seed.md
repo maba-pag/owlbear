@@ -2,7 +2,7 @@
 id: 707
 title: 'Tests: ddgs dependency in pyproject.toml and seed MCP config entry'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-09T02:40:17.7654675+02:00
 updated: 2026-04-09T09:19:26.4484416+02:00
 started: 2026-04-09T09:19:26.4484416+02:00

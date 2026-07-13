@@ -2,7 +2,7 @@
 id: 538
 title: Verify structuredContent behavior for KanbanTask MCP tools
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-02 05:25:08.426284+02:00
 updated: 2026-04-02 17:46:06.040935+02:00
 started: 2026-04-02 17:45:56.763996+02:00

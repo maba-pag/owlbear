@@ -2,7 +2,7 @@
 id: 1460
 title: 'B1-agent: Update reviewer agent file to match new w-code-review model'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-08T19:47:16.726901+00:00
 updated: 2026-05-09T10:53:05.173592+00:00
 tags:

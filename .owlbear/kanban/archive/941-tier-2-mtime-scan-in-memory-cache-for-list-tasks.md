@@ -2,7 +2,7 @@
 id: 941
 title: 'Tier 2: Mtime-scan in-memory cache for list_tasks()'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-17T20:16:32.182032+00:00
 updated: 2026-04-17T21:52:08.649641+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 1880
 title: 'Knowledge: QueryFacade — entity lookup & render'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-25T19:05:09.183316+02:00
 updated: 2026-05-27T10:52:27.317202+02:00
 tags:

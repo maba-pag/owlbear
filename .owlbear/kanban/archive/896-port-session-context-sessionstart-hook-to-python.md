@@ -2,7 +2,7 @@
 id: 896
 title: Port session-context SessionStart hook to Python
 status: archived
-priority: critical
+priority: medium
 created: 2026-04-16T22:53:50.262201+00:00
 updated: 2026-04-17T04:39:34.753052+00:00
 tags:

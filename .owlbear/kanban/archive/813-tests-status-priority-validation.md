@@ -2,7 +2,7 @@
 id: 813
 title: Tests — status/priority validation
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-10T21:21:54.982332+00:00'
 updated: '2026-04-13T17:25:41.295200+00:00'
 tags:

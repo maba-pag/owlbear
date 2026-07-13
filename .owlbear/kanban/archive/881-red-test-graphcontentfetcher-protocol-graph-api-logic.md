@@ -2,7 +2,7 @@
 id: 881
 title: RED — Test GraphContentFetcher protocol + Graph API logic
 status: archived
-priority: someday
+priority: medium
 created: '2026-04-14T20:25:52.920823+00:00'
 updated: '2026-04-15T03:52:56.299378+00:00'
 tags:

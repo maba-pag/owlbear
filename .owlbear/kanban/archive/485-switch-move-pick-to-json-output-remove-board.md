@@ -2,7 +2,7 @@
 id: 485
 title: Switch move/pick to JSON output, remove board_context — tests
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-31 06:21:02.721636+02:00
 updated: 2026-03-31 13:50:10.869919+02:00
 started: 2026-03-31 13:49:52.496269+02:00

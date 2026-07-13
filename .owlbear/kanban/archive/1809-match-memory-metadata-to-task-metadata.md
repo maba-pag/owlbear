@@ -2,7 +2,7 @@
 id: 1809
 title: Match memory metadata to task metadata
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T07:33:29.083387+02:00
 updated: 2026-05-24T10:50:02.749968+02:00
 tags:

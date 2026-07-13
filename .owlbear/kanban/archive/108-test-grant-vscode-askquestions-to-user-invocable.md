@@ -2,7 +2,7 @@
 id: 108
 title: 'Test: Grant vscode/askQuestions to user-invocable agents'
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-28 15:10:25.072916+01:00
 updated: 2026-03-29 01:17:31.219303+01:00
 started: 2026-03-29 01:17:30.921945+01:00

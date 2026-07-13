@@ -2,7 +2,7 @@
 id: 136
 title: Extract bookmark pipeline, refresh orchestrator, bookmark MCP tools
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-29 12:07:36.706582+02:00
 updated: 2026-04-06 21:15:15.839232+02:00
 started: 2026-04-06 21:15:15.839232+02:00

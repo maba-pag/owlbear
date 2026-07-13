@@ -3,7 +3,7 @@ id: 1262
 title: Extend SSE watcher to recursive kanban_dir with typed multi-surface 
   events
 status: archived
-priority: someday
+priority: medium
 created: 2026-05-01T09:53:38.519349+00:00
 updated: 2026-05-02T11:53:39.805646+00:00
 tags:

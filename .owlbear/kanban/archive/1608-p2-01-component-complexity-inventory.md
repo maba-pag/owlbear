@@ -2,7 +2,7 @@
 id: 1608
 title: 'P2-01: Component complexity inventory'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-16T03:36:20.585323+00:00
 updated: 2026-05-17T19:36:08.980251+02:00
 tags:

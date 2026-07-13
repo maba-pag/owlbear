@@ -2,7 +2,7 @@
 id: 1142
 title: Fix stale actor field in cockpit mutation audit-log tests
 status: archived
-priority: important
+priority: medium
 created: 2026-04-27T07:19:58.344351+00:00
 updated: 2026-04-27T15:46:18.731633+00:00
 tags:

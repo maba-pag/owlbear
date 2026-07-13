@@ -3,7 +3,7 @@ id: 754
 title: 'P1-01: Tests — Schema: source type, entity/relation types, source_pages, source_id
   FK'
 status: archived
-priority: critical
+priority: medium
 created: '2026-04-10T10:55:24.860558+00:00'
 updated: '2026-04-15T08:15:57.504644+00:00'
 tags:

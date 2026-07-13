@@ -2,7 +2,7 @@
 id: 619
 title: Migrate dispatcher to pick_tasks MCP tool in owlbear-kanban
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-05T01:30:40.2393944+02:00
 updated: 2026-04-06T03:48:49.8371734+02:00
 started: 2026-04-05T11:14:35.6735559+02:00

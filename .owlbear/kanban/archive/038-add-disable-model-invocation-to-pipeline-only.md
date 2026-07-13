@@ -2,7 +2,7 @@
 id: 38
 title: Add disable-model-invocation to pipeline-only agents
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-26 18:45:14.941565+01:00
 updated: 2026-03-29 04:19:46.737306+02:00
 started: 2026-03-29 04:19:42.255109+02:00

@@ -2,7 +2,7 @@
 id: 977
 title: 'GREEN: Cockpit block:user tag lifecycle'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-18T21:18:03.821522+00:00
 updated: 2026-04-19T03:07:03.601434+00:00
 tags:

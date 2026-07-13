@@ -2,7 +2,7 @@
 id: 584
 title: 'P2-B5: Update copilot-instructions.md to MCP-primary'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-03 16:42:56.807306+02:00
 updated: 2026-04-04 23:06:22.358029+02:00
 started: 2026-04-04 23:03:31.448088+02:00

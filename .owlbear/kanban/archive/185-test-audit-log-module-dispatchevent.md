@@ -2,7 +2,7 @@
 id: 185
 title: 'Test: audit log module (DispatchEvent + CompletionEvent)'
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-29 20:29:44.118640+02:00
 updated: 2026-03-30 04:26:28.478001+02:00
 started: 2026-03-29 20:30:01.800931+02:00

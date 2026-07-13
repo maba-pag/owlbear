@@ -3,7 +3,7 @@ id: 1237
 title: 'Architect calibration: dependency-graph direction and infeasible test gates
   in frontend refactor AC'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-01T02:10:20.377775+00:00
 updated: 2026-05-01T08:35:17.619451+00:00
 tags:

@@ -3,7 +3,7 @@ id: 1296
 title: 'Dead code sweep: remove Copilot CLI/ACP orchestrator and owlbear-project.json
   infrastructure'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-02T19:38:57.607549+00:00
 updated: 2026-05-03T12:16:42.424868+00:00
 tags:

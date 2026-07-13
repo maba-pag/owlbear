@@ -2,7 +2,7 @@
 id: 777
 title: Expand cdp-spike.py (#776) with trafilatura extraction quality test
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-10T12:16:53.902954+00:00'
 updated: '2026-04-15T11:16:45.092344+00:00'
 tags:

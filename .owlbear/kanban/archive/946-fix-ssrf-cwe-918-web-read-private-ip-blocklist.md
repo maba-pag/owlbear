@@ -2,7 +2,7 @@
 id: 946
 title: 'Fix SSRF CWE-918 in _web_read: add private/loopback IP blocklist'
 status: archived
-priority: critical
+priority: medium
 created: 2026-04-18T00:00:00+00:00
 updated: 2026-04-18T01:02:15.768975+00:00
 tags:

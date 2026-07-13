@@ -2,7 +2,7 @@
 id: 1158
 title: 'HB-02: HealthBadge component'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-28T17:33:46.613143+00:00
 updated: 2026-04-28T22:01:56.214277+00:00
 tags:

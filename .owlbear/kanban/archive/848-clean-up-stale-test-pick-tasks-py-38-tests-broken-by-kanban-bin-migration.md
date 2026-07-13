@@ -2,7 +2,7 @@
 id: 848
 title: Clean up stale test_pick_tasks.py — 38 tests broken by kanban_bin migration
 status: archived
-priority: nice-to-have
+priority: medium
 created: '2026-04-12T12:13:32.236167+00:00'
 updated: '2026-04-15T01:16:35.433723+00:00'
 tags:

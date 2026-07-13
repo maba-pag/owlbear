@@ -2,7 +2,7 @@
 id: 1370
 title: 'P1-07: Test Cockpit backend error envelope and guidance contract'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-06T00:58:41.555448+00:00
 updated: 2026-05-06T07:37:05.520511+00:00
 tags:

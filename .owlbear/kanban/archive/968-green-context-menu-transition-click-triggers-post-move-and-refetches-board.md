@@ -2,7 +2,7 @@
 id: 968
 title: 'GREEN: Context menu transition-click triggers POST /move and refetches board'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-18T16:07:43.830829+00:00
 updated: 2026-04-18T19:53:40.041914+00:00
 tags:

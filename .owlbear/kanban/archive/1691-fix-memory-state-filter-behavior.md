@@ -2,7 +2,7 @@
 id: 1691
 title: Fix memory state filter behavior
 status: archived
-priority: important
+priority: medium
 created: 2026-05-21T19:53:12.805354+02:00
 updated: 2026-05-24T10:50:01.129289+02:00
 tags:

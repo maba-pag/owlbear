@@ -2,7 +2,7 @@
 id: 1344
 title: Fix Cockpit detail edit workflow contract
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-04T17:27:34.891597+00:00
 updated: 2026-05-05T21:47:07.633212+00:00
 tags:

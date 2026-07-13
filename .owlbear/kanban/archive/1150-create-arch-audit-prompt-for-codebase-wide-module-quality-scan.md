@@ -2,7 +2,7 @@
 id: 1150
 title: Create arch-audit prompt for codebase-wide module quality scan
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-27T21:51:43.242550+00:00
 updated: 2026-04-28T00:03:44.714715+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 1165
 title: 'RF-03: useRepairFlow hook — tests + implementation'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-28T17:38:24.621390+00:00
 updated: 2026-04-29T10:29:13.113776+00:00
 tags:

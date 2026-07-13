@@ -2,7 +2,7 @@
 id: 65
 title: 'Test: Scaffold mcp-kanban MCP server package'
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-26 19:58:03.542384+01:00
 updated: 2026-03-27 22:15:43.851684+01:00
 started: 2026-03-27 22:15:43.851684+01:00

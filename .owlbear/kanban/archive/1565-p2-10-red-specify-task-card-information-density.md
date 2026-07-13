@@ -2,7 +2,7 @@
 id: 1565
 title: 'P2-10 RED: Specify task card information density'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-14T18:26:23.493454+00:00
 updated: 2026-05-15T06:01:46.760239+00:00
 tags:

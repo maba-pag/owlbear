@@ -2,7 +2,7 @@
 id: 702
 title: Enable mermaid-chat.enabled in seed template and document diagram rendering paths for agents
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-08T21:56:26.0224615+02:00
 updated: 2026-04-09T04:46:03.8214308+02:00
 started: 2026-04-09T04:46:03.8214308+02:00

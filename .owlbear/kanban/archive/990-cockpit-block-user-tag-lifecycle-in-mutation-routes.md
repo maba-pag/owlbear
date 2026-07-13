@@ -2,7 +2,7 @@
 id: 990
 title: Cockpit `block:user` tag lifecycle in mutation routes
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-18T21:23:00.867289+00:00
 updated: 2026-04-19T02:08:29.739798+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 785
 title: Schema v9 migration (source_pages, source_id FK)
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-10T12:31:05.190224+00:00'
 updated: '2026-04-13T04:56:48.023209+00:00'
 tags:

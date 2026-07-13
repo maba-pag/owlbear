@@ -2,7 +2,7 @@
 id: 1336
 title: Fix raw engine end_work success default and terminal archive contract
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-04T15:00:05.698435+00:00
 updated: 2026-05-05T00:53:24.269767+00:00
 tags:

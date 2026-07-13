@@ -2,7 +2,7 @@
 id: 1459
 title: 'B1-agent: Update code-reader agent to match new w-code-review contract'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-08T19:47:13.556859+00:00
 updated: 2026-05-09T10:23:26.801346+00:00
 tags:

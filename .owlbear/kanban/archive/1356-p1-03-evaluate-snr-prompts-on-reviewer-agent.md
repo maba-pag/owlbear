@@ -2,7 +2,7 @@
 id: 1356
 title: 'P1-03: Evaluate SNR prompts on reviewer agent'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-04T21:22:32.042665+00:00
 updated: 2026-05-05T20:22:46.287855+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 1604
 title: 'P1-05: Formatting utilities'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-16T03:36:07.011240+00:00
 updated: 2026-05-16T08:55:18.485051+00:00
 tags:

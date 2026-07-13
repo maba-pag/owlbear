@@ -2,7 +2,7 @@
 id: 1135
 title: Add OCC token to cockpit move route
 status: archived
-priority: important
+priority: medium
 created: 2026-04-26T16:00:48.002067+00:00
 updated: 2026-04-27T04:55:30.661772+00:00
 tags:

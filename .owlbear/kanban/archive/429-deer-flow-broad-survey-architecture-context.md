@@ -3,7 +3,7 @@ id: 429
 title: 'deer-flow broad survey: architecture, context engineering, guardrails, tooling
   patterns'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-30 21:18:12.043961+02:00
 updated: 2026-04-01 21:02:35.670608+02:00
 started: 2026-04-01 21:02:30.677493+02:00

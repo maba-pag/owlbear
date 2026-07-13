@@ -2,7 +2,7 @@
 id: 1181
 title: 'P1-02: Implement decisions.py module'
 status: archived
-priority: critical
+priority: medium
 created: 2026-04-30T00:51:35.539925+00:00
 updated: 2026-04-30T10:10:09.333886+00:00
 tags:

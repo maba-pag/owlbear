@@ -2,7 +2,7 @@
 id: 928
 title: 'P1-04: RED — Cockpit read API tests'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-17T19:57:46.920354+00:00
 updated: 2026-04-18T12:31:48.344936+00:00
 tags:

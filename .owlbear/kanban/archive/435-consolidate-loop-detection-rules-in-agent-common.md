@@ -2,7 +2,7 @@
 id: 435
 title: Consolidate loop detection rules in agent-common.instructions.md
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-30 21:45:53.967800+02:00
 updated: 2026-03-31 05:33:02.335277+02:00
 started: 2026-03-31 05:32:35.285164+02:00

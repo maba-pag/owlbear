@@ -2,7 +2,7 @@
 id: 1892
 title: 'Knowledge: MCP wire store_enrichment phase-1 to submit_extractions'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-27T01:00:59.321864+02:00
 updated: 2026-05-27T12:29:49.253912+02:00
 tags:

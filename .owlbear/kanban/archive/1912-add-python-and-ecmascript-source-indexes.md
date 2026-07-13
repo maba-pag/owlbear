@@ -1,10 +1,10 @@
 ---
 id: 1912
 title: Add Python and ECMAScript source indexes
-status: collect
+status: archived
 priority: medium
 created: 2026-07-12T03:03:56.818108+02:00
-updated: 2026-07-12T03:38:22.131528+02:00
+updated: 2026-07-13T03:49:50.624062+02:00
 tags:
   - scope:tools
   - feature
@@ -21,7 +21,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Objective
@@ -51,3 +51,11 @@ Proof guidance: run focused tools tests and both commands against the workspace.
 - Package-wide ruff check/format passed.
 - Verifier challenger: PASS after export completeness repair.
 - No replacement or mock used at the command boundary.
+
+[[2026-07-13T03:49:50+02:00]]
+## Collect Notes
+- Classification: leaf. The task has no children, aggregate/EPIC markers, aggregate intent section, or aggregate collect criteria; its `parent: 1914` relationship does not make it an aggregate owner.
+- Leaf verification evidence: `## Verify Notes` records public CLI-boundary exercise of `doc-index`, `py-index`, `ts-index`, and `indexes`; deterministic hash agreement; fixed output, authority-header, exclusion, parse-error, and export-form checks; 76 focused tools tests passing; package-wide ruff check/format passing; verifier challenger PASS.
+- Invariant map coverage: no shaper-created Change Module Map was supplied; the verifier explicitly covered all three task AC through the command boundary.
+- Dependency and decision state: no dependencies, no pending requests, no block, and no unresolved Required Follow-up.
+- Rationale: verifier PASS evidence is complete and residual state is clear, so leaf archival is ready without aggregate SHA proof or implementation re-review.

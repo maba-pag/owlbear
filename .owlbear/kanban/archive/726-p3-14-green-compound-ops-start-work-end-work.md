@@ -2,7 +2,7 @@
 id: 726
 title: 'P3-14: GREEN — compound ops (start_work, end_work)'
 status: archived
-priority: critical
+priority: medium
 created: 2026-04-09T03:27:37.7135664+02:00
 updated: 2026-04-09T23:25:20.4706984+02:00
 started: 2026-04-09T23:25:20.4706984+02:00

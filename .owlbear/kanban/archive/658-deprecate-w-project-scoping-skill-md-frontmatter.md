@@ -2,7 +2,7 @@
 id: 658
 title: Deprecate w-project-scoping SKILL.md frontmatter and body
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-06T07:23:34.0157731+02:00
 updated: 2026-04-06T21:29:23.87231+02:00
 started: 2026-04-06T21:29:23.87231+02:00

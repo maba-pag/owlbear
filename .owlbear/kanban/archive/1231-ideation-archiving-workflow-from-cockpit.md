@@ -2,7 +2,7 @@
 id: 1231
 title: Ideation — archiving workflow from cockpit
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-30 16:31:18.665338+00:00
 updated: 2026-05-01T17:00:34.989323+00:00
 tags:

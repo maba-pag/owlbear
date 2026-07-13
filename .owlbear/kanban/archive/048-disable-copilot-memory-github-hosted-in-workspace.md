@@ -2,7 +2,7 @@
 id: 48
 title: Disable Copilot Memory (GitHub-hosted) in workspace settings
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-26 18:56:50.078276+01:00
 updated: 2026-03-27 05:23:10.854583+01:00
 started: 2026-03-26 19:19:11.826711+01:00

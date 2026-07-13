@@ -2,7 +2,7 @@
 id: 973
 title: Block-Time Guidance from owlbear-kanban MCP
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-18T21:13:44.384255+00:00
 updated: 2026-04-19T01:33:05.586573+00:00
 tags:

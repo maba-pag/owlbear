@@ -2,7 +2,7 @@
 id: 467
 title: Create challenger.agent.md (adversarial pre-decision review subagent)
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-31 05:04:45.728403+02:00
 updated: 2026-03-31 15:39:37.655324+02:00
 started: 2026-03-31 15:39:09.505979+02:00

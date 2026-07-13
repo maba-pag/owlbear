@@ -2,7 +2,7 @@
 id: 953
 title: Extend WorkSession model with agent, started_at, duration, outcome fields
 status: archived
-priority: important
+priority: medium
 created: 2026-04-18T10:45:23.829337+00:00
 updated: 2026-04-18T12:37:08.932026+00:00
 tags:

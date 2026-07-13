@@ -2,7 +2,7 @@
 id: 1378
 title: 'P2-03: Test Cockpit task detail edit validation and dirty state'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-06T01:04:32.576780+00:00
 updated: 2026-05-08T19:56:56.784710+00:00
 tags:

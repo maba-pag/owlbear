@@ -2,7 +2,7 @@
 id: 735
 title: Add untrusted content wrapping to mcp-knowledge URL intake
 status: archived
-priority: important
+priority: medium
 created: '2026-04-10T04:23:51.9053217+02:00'
 updated: '2026-04-10T05:05:07.463029+00:00'
 tags:

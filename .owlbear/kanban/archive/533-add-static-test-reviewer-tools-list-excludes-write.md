@@ -2,7 +2,7 @@
 id: 533
 title: 'Add static test: reviewer tools list excludes write tools'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-01 20:49:32.912936+02:00
 updated: 2026-04-02 02:35:55.167417+02:00
 started: 2026-04-02 02:35:54.708900+02:00

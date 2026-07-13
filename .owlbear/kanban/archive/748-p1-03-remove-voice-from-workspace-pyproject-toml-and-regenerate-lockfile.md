@@ -2,7 +2,7 @@
 id: 748
 title: 'P1-03: Remove voice from workspace pyproject.toml and regenerate lockfile'
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-10T10:36:47.060472+00:00'
 updated: '2026-04-12T21:13:45.226689+00:00'
 tags:

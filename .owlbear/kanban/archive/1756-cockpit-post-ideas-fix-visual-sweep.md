@@ -2,7 +2,7 @@
 id: 1756
 title: Cockpit post Ideas fix visual sweep
 status: archived
-priority: important
+priority: medium
 created: 2026-05-23T15:49:12+0200
 updated: 2026-05-24T10:50:02.041968+02:00
 tags:

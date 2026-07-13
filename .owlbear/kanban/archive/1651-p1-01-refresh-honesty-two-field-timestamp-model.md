@@ -2,7 +2,7 @@
 id: 1651
 title: 'P1-01: Refresh honesty — two-field timestamp model'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-18T03:11:06.841802+02:00
 updated: 2026-05-18T13:26:38.107687+02:00
 tags:

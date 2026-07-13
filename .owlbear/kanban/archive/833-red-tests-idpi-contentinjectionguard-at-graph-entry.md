@@ -2,7 +2,7 @@
 id: 833
 title: RED tests — IDPI ContentInjectionGuard at graph entry
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-11T15:08:15.025856+00:00'
 updated: '2026-04-13T00:13:21.464224+00:00'
 tags:

@@ -2,7 +2,7 @@
 id: 123
 title: 'Test: Revert askQuestions from all agents'
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-29 06:33:50.389824+02:00
 updated: 2026-03-29 09:11:33.232099+02:00
 started: 2026-03-29 09:11:28.725958+02:00

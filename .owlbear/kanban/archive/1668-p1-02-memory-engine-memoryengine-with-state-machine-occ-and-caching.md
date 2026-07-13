@@ -2,7 +2,7 @@
 id: 1668
 title: 'P1-02: Memory engine — MemoryEngine with state machine, OCC, and caching'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-18T17:43:08.887647+02:00
 updated: 2026-05-19T04:26:52.371080+02:00
 tags:

@@ -2,7 +2,7 @@
 id: 1577
 title: Prevent blocked refresh content persistence
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-15T00:58:33.908483+00:00
 updated: 2026-05-15T01:57:57.499858+00:00
 tags:

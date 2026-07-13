@@ -2,7 +2,7 @@
 id: 1283
 title: 'P1-03: Update cross-references in README, WIRING, h-agent-structure, h-memory-structure'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-02T16:01:10.613477+00:00
 updated: 2026-05-03T15:05:39.462988+00:00
 tags:

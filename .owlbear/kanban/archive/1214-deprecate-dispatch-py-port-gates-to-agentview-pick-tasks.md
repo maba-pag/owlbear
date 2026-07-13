@@ -2,7 +2,7 @@
 id: 1214
 title: Deprecate dispatch.py — port gates to AgentView.pick_tasks
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-30 15:29:15.245023+00:00
 updated: 2026-05-04T02:36:35.780480+00:00
 tags:

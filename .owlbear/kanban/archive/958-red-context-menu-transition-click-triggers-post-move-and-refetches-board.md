@@ -2,7 +2,7 @@
 id: 958
 title: 'RED: Context menu transition-click triggers POST /move and refetches board'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-18T14:45:58.165747+00:00
 updated: 2026-04-18T18:38:10.890873+00:00
 tags:

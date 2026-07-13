@@ -2,7 +2,7 @@
 id: 1875
 title: 'Knowledge: EnrichmentStore — queue state machine'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-25T19:03:53.062341+02:00
 updated: 2026-05-26T05:56:10.641837+02:00
 tags:

@@ -2,7 +2,7 @@
 id: 603
 title: Move project ops data to .owlbear/
 status: archived
-priority: critical
+priority: medium
 created: 2026-04-04 20:30:51.991962+02:00
 updated: 2026-04-05 08:34:57.759748+02:00
 started: 2026-04-05 08:34:57.759748+02:00

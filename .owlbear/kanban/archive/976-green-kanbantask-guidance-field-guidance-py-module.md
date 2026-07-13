@@ -2,7 +2,7 @@
 id: 976
 title: 'GREEN: KanbanTask.guidance field + guidance.py module'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-18T21:18:03.809586+00:00
 updated: 2026-04-19T02:24:20.827316+00:00
 tags:

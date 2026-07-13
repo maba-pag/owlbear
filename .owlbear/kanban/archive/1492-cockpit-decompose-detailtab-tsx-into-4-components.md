@@ -2,7 +2,7 @@
 id: 1492
 title: 'Cockpit: Decompose DetailTab.tsx into 4 components'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-11T23:15:07.557623+00:00
 updated: 2026-05-12T21:54:51.989772+00:00
 tags:

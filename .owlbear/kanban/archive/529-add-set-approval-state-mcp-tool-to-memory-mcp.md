@@ -2,7 +2,7 @@
 id: 529
 title: Add set_approval_state MCP tool to memory-mcp
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-01 19:12:57.825057+02:00
 updated: 2026-04-03 17:40:33.976986+02:00
 started: 2026-04-03 17:39:42.472444+02:00

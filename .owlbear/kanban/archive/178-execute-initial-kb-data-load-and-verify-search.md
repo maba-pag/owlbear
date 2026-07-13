@@ -2,7 +2,7 @@
 id: 178
 title: Execute initial KB data load and verify search quality
 status: archived
-priority: important
+priority: medium
 created: 2026-03-29 19:51:00.985486+02:00
 updated: 2026-04-02 15:20:20.029842+02:00
 started: 2026-04-02 15:20:14.250479+02:00

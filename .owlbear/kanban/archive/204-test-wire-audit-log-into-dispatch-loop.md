@@ -2,7 +2,7 @@
 id: 204
 title: 'Test: Wire audit log into dispatch loop'
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-30 08:11:23.257669+02:00
 updated: 2026-04-02 07:51:11.906343+02:00
 started: 2026-04-02 07:51:06.887208+02:00

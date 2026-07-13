@@ -2,7 +2,7 @@
 id: 1582
 title: Retire bookmark/scope/consolidation dead code from knowledge module
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-15T16:22:28.247084+00:00
 updated: 2026-05-16T13:24:31.288165+00:00
 tags:

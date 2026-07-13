@@ -2,7 +2,7 @@
 id: 110
 title: 'Implement: update instructions/README.md for v2'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-28 22:23:30.253662+01:00
 updated: 2026-03-29 01:19:04.539245+01:00
 started: 2026-03-29 01:19:04.539245+01:00

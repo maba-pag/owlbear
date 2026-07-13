@@ -2,7 +2,7 @@
 id: 53
 title: Define owlbear-project.json schema specification
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-26 19:11:49.390721+01:00
 updated: 2026-03-27 08:49:23.282795+01:00
 started: 2026-03-27 08:49:07.235593+01:00

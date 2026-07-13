@@ -2,7 +2,7 @@
 id: 1051
 title: 'C-06: RED — predicate tests'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-21T10:42:50.287239+00:00
 updated: 2026-04-23T03:13:54.530724+00:00
 tags:

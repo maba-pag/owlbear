@@ -2,7 +2,7 @@
 id: 1216
 title: Split engine.py — extract agent_view.py
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-30 15:29:15.267734+00:00
 updated: 2026-05-04T12:46:50.914729+00:00
 tags:

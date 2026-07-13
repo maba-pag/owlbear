@@ -2,7 +2,7 @@
 id: 1111
 title: 'Quality: close engine.py 90pct coverage gate for task 1063'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-24T07:43:52.933655+00:00
 updated: 2026-04-24T10:35:40.015452+00:00
 tags: []

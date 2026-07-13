@@ -2,7 +2,7 @@
 id: 1729
 title: Bound Kanban and Memory workspace height
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-23T03:26:48+0200
 updated: 2026-05-24T10:50:01.661027+02:00
 tags:

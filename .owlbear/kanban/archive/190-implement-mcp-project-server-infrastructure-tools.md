@@ -2,7 +2,7 @@
 id: 190
 title: Implement mcp-project server infrastructure + tools (server.py part 1)
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-29 22:43:56.360255+02:00
 updated: 2026-03-30 07:12:41.833386+02:00
 started: 2026-03-29 22:44:26.874600+02:00

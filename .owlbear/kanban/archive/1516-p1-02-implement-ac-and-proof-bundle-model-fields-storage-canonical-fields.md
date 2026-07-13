@@ -2,7 +2,7 @@
 id: 1516
 title: 'P1-02: Implement ac and proof_bundle model fields + storage canonical fields'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-13T02:29:16.772741+00:00
 updated: 2026-05-13T03:47:54.901280+00:00
 tags:

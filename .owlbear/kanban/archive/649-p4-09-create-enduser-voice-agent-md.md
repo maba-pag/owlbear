@@ -2,7 +2,7 @@
 id: 649
 title: 'P4-09: Create enduser-voice.agent.md'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-06T07:01:44.3789771+02:00
 updated: 2026-04-07T01:39:36.1006208+02:00
 started: 2026-04-07T01:39:36.1006208+02:00

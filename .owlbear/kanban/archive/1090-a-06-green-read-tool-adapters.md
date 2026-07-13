@@ -2,7 +2,7 @@
 id: 1090
 title: 'A-06: GREEN — read tool adapters'
 status: archived
-priority: critical
+priority: medium
 created: 2026-04-21 10:54:20.345618+00:00
 updated: 2026-04-28T09:53:04.266879+00:00
 tags:

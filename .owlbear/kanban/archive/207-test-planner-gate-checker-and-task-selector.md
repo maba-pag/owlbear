@@ -2,7 +2,7 @@
 id: 207
 title: 'Test: planner gate checker and task selector'
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-30 08:22:01.995930+02:00
 updated: 2026-03-31 23:48:45.876889+02:00
 started: 2026-03-31 23:48:45.375336+02:00

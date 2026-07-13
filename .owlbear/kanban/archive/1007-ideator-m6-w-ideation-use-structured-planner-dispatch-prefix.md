@@ -2,7 +2,7 @@
 id: 1007
 title: 'Ideator M6 + w-ideation: use structured planner dispatch prefix'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-18 21:54:42.565983+00:00
 updated: 2026-04-19 13:16:37.045483+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 189
 title: 'Test: ErrorJournal module (ErrorEntry + JSONL persistence)'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-29 20:53:53.178433+02:00
 updated: 2026-03-30 04:07:07.771859+02:00
 started: 2026-03-30 04:04:56.853249+02:00

@@ -2,7 +2,7 @@
 id: 218
 title: Sync non-impl tag list cross-references across skill files
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-30 14:54:54.311161+02:00
 updated: 2026-04-03 03:31:16.912296+02:00
 started: 2026-04-03 03:30:39.447178+02:00

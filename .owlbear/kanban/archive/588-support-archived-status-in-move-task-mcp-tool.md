@@ -2,7 +2,7 @@
 id: 588
 title: Support 'archived' status in move_task MCP tool
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-04 07:08:49.826519+02:00
 updated: 2026-04-04 18:17:38.048799+02:00
 started: 2026-04-04 18:17:38.048799+02:00

@@ -2,7 +2,7 @@
 id: 124
 title: Document how to add project-specific MCP servers
 status: archived
-priority: important
+priority: medium
 created: 2026-03-29 06:33:52.367210+02:00
 updated: 2026-03-29 15:36:41.493360+02:00
 started: 2026-03-29 15:36:41.493360+02:00

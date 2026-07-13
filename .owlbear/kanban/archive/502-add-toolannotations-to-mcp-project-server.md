@@ -2,7 +2,7 @@
 id: 502
 title: Add ToolAnnotations to mcp-project server
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-31 16:49:55.412473+02:00
 updated: 2026-04-01 07:04:05.591398+02:00
 started: 2026-04-01 07:04:04.966828+02:00

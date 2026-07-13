@@ -2,7 +2,7 @@
 id: 1276
 title: Create EventSourceProvider context and useSSEEvent hook
 status: archived
-priority: someday
+priority: medium
 created: 2026-05-02T12:10:47.668244+00:00
 updated: 2026-05-02T19:37:39.491534+00:00
 tags:

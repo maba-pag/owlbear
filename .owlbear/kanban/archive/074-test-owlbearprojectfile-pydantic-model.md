@@ -2,7 +2,7 @@
 id: 74
 title: 'Test: OwlbearProjectFile Pydantic model'
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-26 20:30:19.623265+01:00
 updated: 2026-03-29 09:15:17.053764+02:00
 started: 2026-03-29 09:15:12.628466+02:00

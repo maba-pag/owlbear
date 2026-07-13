@@ -2,7 +2,7 @@
 id: 1649
 title: 'Consolidation test: Cockpit Decisions Tab multi-tab infrastructure'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-18T00:50:31.900068+02:00
 updated: 2026-05-20T11:45:49.205172+02:00
 tags:

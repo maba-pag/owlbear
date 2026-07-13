@@ -2,7 +2,7 @@
 id: 1613
 title: 'P2-10: Tests — complex integrations (modals → PModal)'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-16T03:36:42.443740+00:00
 updated: 2026-05-16T15:04:55.472657+00:00
 tags:

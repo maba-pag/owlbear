@@ -2,7 +2,7 @@
 id: 20
 title: Build dispatch planner
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-26 17:22:22.893769+01:00
 updated: 2026-04-01 22:36:43.900289+02:00
 started: 2026-04-01 22:36:43.377059+02:00

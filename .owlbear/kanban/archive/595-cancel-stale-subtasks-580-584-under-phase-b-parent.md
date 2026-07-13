@@ -2,7 +2,7 @@
 id: 595
 title: 'Cancel stale subtasks #580-#584 under Phase B parent #484'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-04 19:26:42.450412+02:00
 updated: 2026-04-04 23:10:49.005728+02:00
 started: 2026-04-04 23:01:55.876881+02:00

@@ -2,7 +2,7 @@
 id: 1677
 title: Polish nav dock shadow treatment
 status: archived
-priority: important
+priority: medium
 created: 2026-05-21T19:51:06.666942+02:00
 updated: 2026-05-24T10:50:00.943407+02:00
 tags:

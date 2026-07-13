@@ -2,7 +2,7 @@
 id: 1515
 title: 'P1-01: Tests for ac and proof_bundle model fields + storage canonical fields'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-13T02:29:10.022396+00:00
 updated: 2026-05-13T03:30:07.839962+00:00
 tags:

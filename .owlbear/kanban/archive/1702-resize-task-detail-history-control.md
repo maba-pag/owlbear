@@ -2,7 +2,7 @@
 id: 1702
 title: Resize task detail history control
 status: archived
-priority: important
+priority: medium
 created: 2026-05-21T20:23:09.378280+02:00
 updated: 2026-05-24T10:50:01.273248+02:00
 tags:

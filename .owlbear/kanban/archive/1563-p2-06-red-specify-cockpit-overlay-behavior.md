@@ -2,7 +2,7 @@
 id: 1563
 title: 'P2-06 RED: Specify Cockpit overlay behavior'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-14T18:26:23.435162+00:00
 updated: 2026-05-15T08:49:57.753558+00:00
 tags:

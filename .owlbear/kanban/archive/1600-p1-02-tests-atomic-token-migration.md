@@ -2,7 +2,7 @@
 id: 1600
 title: 'P1-02: Tests — atomic token migration'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-16T03:35:41.045394+00:00
 updated: 2026-05-16T15:04:24.212468+00:00
 tags:

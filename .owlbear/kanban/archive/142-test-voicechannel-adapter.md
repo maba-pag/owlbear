@@ -2,7 +2,7 @@
 id: 142
 title: 'Test: VoiceChannel adapter'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-29 16:01:31.558582+02:00
 updated: 2026-03-30 09:01:48.634053+02:00
 started: 2026-03-29 16:01:45.807680+02:00

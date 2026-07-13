@@ -3,7 +3,7 @@ id: 1650
 title: Knowledge source lifecycle fixes — health exposure, refresh honesty, 
   retype, remove tool
 status: archived
-priority: important
+priority: medium
 created: 2026-05-18T03:05:20.577820+02:00
 updated: 2026-05-18T19:30:54.425606+02:00
 tags:

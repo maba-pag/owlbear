@@ -2,7 +2,7 @@
 id: 170
 title: Update stale agent path in agent-audit prompt
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-29 19:49:39.629722+02:00
 updated: 2026-03-30 15:36:02.082696+02:00
 started: 2026-03-30 15:18:49.532401+02:00

@@ -2,7 +2,7 @@
 id: 631
 title: Revisit blocked-task DR scan when notification channel is enabled
 status: archived
-priority: someday
+priority: medium
 created: 2026-04-05T12:53:09.6563754+02:00
 updated: 2026-04-05T23:49:51.5361147+02:00
 started: 2026-04-05T23:49:51.5361147+02:00

@@ -2,7 +2,7 @@
 id: 733
 title: 'Decompose #712: Native kanban engine into atomic subtasks (Phase 1-3)'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-09T03:49:14.6128637+02:00
 updated: 2026-04-09T10:52:03.413364+02:00
 started: 2026-04-09T10:52:03.413364+02:00

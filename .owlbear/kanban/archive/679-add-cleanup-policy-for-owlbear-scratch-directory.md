@@ -2,7 +2,7 @@
 id: 679
 title: Add cleanup policy for .owlbear/scratch directory
 status: archived
-priority: someday
+priority: medium
 created: 2026-04-08T18:35:53.3462402+02:00
 updated: 2026-04-09T00:31:27.8009419+02:00
 started: 2026-04-09T00:31:27.8009419+02:00

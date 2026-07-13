@@ -2,7 +2,7 @@
 id: 790
 title: Tests — owlbear_mcp_browser MCP server and domain allowlist
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-10T12:31:33.683712+00:00'
 updated: '2026-04-13T03:31:52.978211+00:00'
 tags:

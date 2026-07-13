@@ -2,7 +2,7 @@
 id: 455
 title: Add loop-detection red flag to reviewer agent
 status: archived
-priority: important
+priority: medium
 created: 2026-03-30 23:40:45.994719+02:00
 updated: 2026-04-01 02:28:24.968135+02:00
 started: 2026-04-01 02:28:04.251176+02:00

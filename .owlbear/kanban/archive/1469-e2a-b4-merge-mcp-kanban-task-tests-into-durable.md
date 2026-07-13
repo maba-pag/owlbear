@@ -2,7 +2,7 @@
 id: 1469
 title: 'E2a-B4: Merge mcp_kanban task tests into durable'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-09T07:21:35.691519+00:00
 updated: 2026-05-09T18:07:48.633502+00:00
 tags:

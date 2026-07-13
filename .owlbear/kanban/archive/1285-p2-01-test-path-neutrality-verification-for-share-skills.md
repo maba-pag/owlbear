@@ -2,7 +2,7 @@
 id: 1285
 title: 'P2-01: Test — path neutrality verification for share/skills/'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-02T16:01:17.041733+00:00
 updated: 2026-05-03T17:36:21.350296+00:00
 tags:

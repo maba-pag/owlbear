@@ -2,7 +2,7 @@
 id: 1548
 title: 'P3-06: impl — theme toggle UI: status bar button'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-13T18:43:23.870309+00:00
 updated: 2026-05-14T11:14:36.085871+00:00
 tags:

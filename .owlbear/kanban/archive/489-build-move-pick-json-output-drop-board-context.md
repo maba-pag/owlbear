@@ -2,7 +2,7 @@
 id: 489
 title: 'Build: move/pick JSON output, drop board_context'
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-31 06:21:33.245938+02:00
 updated: 2026-03-31 21:22:10.576316+02:00
 started: 2026-03-31 13:46:49.453514+02:00

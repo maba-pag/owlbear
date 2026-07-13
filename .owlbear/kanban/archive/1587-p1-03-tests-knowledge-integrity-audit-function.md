@@ -2,7 +2,7 @@
 id: 1587
 title: 'P1-03: Tests — knowledge integrity audit function'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-15T16:24:36.952846+00:00
 updated: 2026-05-16T12:12:19.544743+00:00
 tags:

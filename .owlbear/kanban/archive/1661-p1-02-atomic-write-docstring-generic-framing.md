@@ -2,7 +2,7 @@
 id: 1661
 title: 'P1-02: atomic_write docstring — generic framing'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-18T17:41:31.871473+02:00
 updated: 2026-05-20T13:13:05.459263+02:00
 tags:

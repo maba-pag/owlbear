@@ -2,7 +2,7 @@
 id: 222
 title: 'Test: analysis module pattern detectors'
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-30 16:42:42.151010+02:00
 updated: 2026-03-30 20:58:10.324307+02:00
 started: 2026-03-30 16:42:46.855635+02:00

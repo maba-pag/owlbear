@@ -2,7 +2,7 @@
 id: 51
 title: Implement voice addon TTS with Kokoro and pyttsx3 fallback
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-26 18:57:30.584841+01:00
 updated: 2026-03-30 06:33:38.942444+02:00
 started: 2026-03-30 06:33:11.833946+02:00

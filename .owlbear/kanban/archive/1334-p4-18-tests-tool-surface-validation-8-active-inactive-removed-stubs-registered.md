@@ -3,7 +3,7 @@ id: 1334
 title: 'P4-18: Tests — Tool surface validation (8 active, inactive removed, stubs
   registered)'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-04T05:48:50.188392+00:00
 updated: 2026-05-07T14:57:39.344881+00:00
 tags:

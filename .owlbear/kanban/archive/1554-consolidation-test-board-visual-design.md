@@ -2,7 +2,7 @@
 id: 1554
 title: 'consolidation test: board visual design'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-13T18:43:53.303013+00:00
 updated: 2026-05-14T13:33:15.044972+00:00
 tags:

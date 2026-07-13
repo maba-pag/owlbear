@@ -2,7 +2,7 @@
 id: 100
 title: 'Test: owlbear-voice workspace package scaffolding'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-28 04:10:07.825246+01:00
 updated: 2026-03-29 04:59:25.287435+02:00
 started: 2026-03-29 04:59:20.473326+02:00

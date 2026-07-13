@@ -2,7 +2,7 @@
 id: 1159
 title: '[MERGED into #1157] HB-03: Implement useScanPolling hook'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-28T17:34:42.736707+00:00
 updated: 2026-04-29T09:37:12.674454+00:00
 tags:

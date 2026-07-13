@@ -3,7 +3,7 @@ id: 1427
 title: Implement planner skill updates — h-ac-quality wiring, consolidation-test
   logic, routing enforcement
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-08T00:47:38.789879+00:00
 updated: 2026-05-08T14:31:00.409939+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 432
 title: Implement loop-detection pattern in agent instructions
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-30 21:37:43.855377+02:00
 updated: 2026-03-30 22:19:13.838265+02:00
 started: 2026-03-30 22:19:13.838265+02:00

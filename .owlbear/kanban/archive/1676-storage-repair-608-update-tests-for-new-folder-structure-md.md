@@ -2,7 +2,7 @@
 id: 1676
 title: 'Storage repair: 608-update-tests-for-new-folder-structure.md'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-19T12:38:16.799178+02:00
 updated: 2026-05-19T17:33:57.295639+02:00
 tags:

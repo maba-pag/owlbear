@@ -2,7 +2,7 @@
 id: 780
 title: Tests — Schema v9 migration (source_pages, source_id FK)
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-10T12:30:43.970655+00:00'
 updated: '2026-04-13T02:55:28.471632+00:00'
 tags:

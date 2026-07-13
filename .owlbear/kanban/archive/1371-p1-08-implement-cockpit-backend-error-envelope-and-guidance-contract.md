@@ -2,7 +2,7 @@
 id: 1371
 title: 'P1-08: Implement Cockpit backend error envelope and guidance contract'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-06T00:58:43.072416+00:00
 updated: 2026-05-06T16:56:35.813173+00:00
 tags:

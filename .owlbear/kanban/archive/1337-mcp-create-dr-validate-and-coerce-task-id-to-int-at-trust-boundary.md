@@ -2,7 +2,7 @@
 id: 1337
 title: Validate MCP task IDs at every task endpoint trust boundary
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-04T15:00:05.722955+00:00
 updated: 2026-05-05T03:11:46.441578+00:00
 tags:

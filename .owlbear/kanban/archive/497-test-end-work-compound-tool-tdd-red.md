@@ -2,7 +2,7 @@
 id: 497
 title: 'Test: end_work compound tool (TDD RED)'
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-31 07:18:55.955328+02:00
 updated: 2026-04-01 04:46:48.130612+02:00
 started: 2026-04-01 04:46:43.387961+02:00

@@ -2,7 +2,7 @@
 id: 925
 title: 'P2-01: Frontend scaffold (Vite + React 19 + TS + Porsche DS)'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-17T19:57:10.963361+00:00
 updated: 2026-04-18T11:32:53.468007+00:00
 tags:

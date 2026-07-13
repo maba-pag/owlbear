@@ -2,7 +2,7 @@
 id: 78
 title: 'Test: voice addon TTS backends and factory'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-26 21:17:56.964085+01:00
 updated: 2026-03-30 04:13:15.636194+02:00
 started: 2026-03-30 04:12:44.182649+02:00

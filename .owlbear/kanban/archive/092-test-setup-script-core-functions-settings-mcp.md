@@ -2,7 +2,7 @@
 id: 92
 title: 'Test: setup script core functions (settings, mcp, kanban, idempotency)'
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-28 01:41:20.811558+01:00
 updated: 2026-03-28 21:43:50.205724+01:00
 started: 2026-03-28 21:43:45.139781+01:00

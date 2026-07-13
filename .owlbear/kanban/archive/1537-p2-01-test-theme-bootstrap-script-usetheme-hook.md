@@ -2,7 +2,7 @@
 id: 1537
 title: 'P2-01: test — theme bootstrap script + useTheme hook'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-13T18:41:58.250976+00:00
 updated: 2026-05-14T01:31:50.669089+00:00
 tags:

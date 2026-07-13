@@ -2,7 +2,7 @@
 id: 630
 title: Fix TDD gate to exempt non-impl pass-through tags
 status: archived
-priority: important
+priority: medium
 created: 2026-04-05T12:02:40.4394245+02:00
 updated: 2026-04-06T01:00:13.3953837+02:00
 started: 2026-04-06T01:00:13.3953837+02:00

@@ -2,7 +2,7 @@
 id: 1195
 title: 'P1-02: Add resolved-file collision protection to resolve_pending_drs'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-30T06:39:19.775572+00:00
 updated: 2026-04-30T08:42:20.293782+00:00
 tags:

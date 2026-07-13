@@ -2,7 +2,7 @@
 id: 1667
 title: 'P1-01: Memory engine package — models, errors, and storage primitives'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-18T17:42:50.987918+02:00
 updated: 2026-05-19T02:46:32.701548+02:00
 tags:

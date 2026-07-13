@@ -2,7 +2,7 @@
 id: 1224
 title: Backend — relocate CockpitView from kanban to cockpit package
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-30 16:31:18.599723+00:00
 updated: 2026-05-01T12:21:07.874390+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 1359
 title: Fix tool count drift in h-mcp-kanban SKILL.md (8 → 9 tools)
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-05-05T08:55:03.657866+00:00
 updated: 2026-05-05T11:01:59.400419+00:00
 tags:

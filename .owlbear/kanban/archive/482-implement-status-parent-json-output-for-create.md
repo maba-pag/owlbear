@@ -2,7 +2,7 @@
 id: 482
 title: Implement status, parent, JSON output for create_task MCP tool
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-31 06:20:17.304642+02:00
 updated: 2026-03-31 08:08:37.067081+02:00
 started: 2026-03-31 08:08:37.067081+02:00

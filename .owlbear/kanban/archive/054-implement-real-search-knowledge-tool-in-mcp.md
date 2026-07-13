@@ -2,7 +2,7 @@
 id: 54
 title: Implement real search_knowledge tool in mcp-knowledge
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-26 19:12:42.117805+01:00
 updated: 2026-03-30 22:56:49.235468+02:00
 started: 2026-03-30 22:56:17.086487+02:00

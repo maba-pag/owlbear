@@ -2,7 +2,7 @@
 id: 469
 title: Expand Challenger to researcher agent (Phase 2)
 status: archived
-priority: important
+priority: medium
 created: 2026-03-31 05:04:58.672845+02:00
 updated: 2026-04-01 17:45:01.548915+02:00
 started: 2026-04-01 17:45:00.950489+02:00

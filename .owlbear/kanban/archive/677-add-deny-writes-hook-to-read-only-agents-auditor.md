@@ -2,7 +2,7 @@
 id: 677
 title: Add deny-writes hook to read-only agents (auditor, code-reader, challenger)
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-08T18:30:31.9568749+02:00
 updated: 2026-04-09T00:05:22.5075568+02:00
 started: 2026-04-09T00:05:22.5075568+02:00

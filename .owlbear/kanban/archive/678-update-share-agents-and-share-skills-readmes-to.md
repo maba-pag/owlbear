@@ -2,7 +2,7 @@
 id: 678
 title: Update share/agents and share/skills READMEs to reflect current counts
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-08T18:34:28.3160163+02:00
 updated: 2026-04-09T00:23:06.8671575+02:00
 started: 2026-04-09T00:23:06.8671575+02:00

@@ -2,7 +2,7 @@
 id: 1388
 title: 'P2-13: Test Cockpit decision viewport and resolution UX'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-06T01:04:50.731483+00:00
 updated: 2026-05-09T03:44:36.612396+00:00
 tags:

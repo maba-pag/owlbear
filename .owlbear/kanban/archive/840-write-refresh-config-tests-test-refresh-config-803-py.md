@@ -2,7 +2,7 @@
 id: 840
 title: Write refresh_config() tests — test_refresh_config_803.py
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-11T19:54:13.575476+00:00'
 updated: '2026-04-12T03:18:24.904867+00:00'
 tags:

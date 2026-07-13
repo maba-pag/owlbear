@@ -3,7 +3,7 @@ id: 459
 title: Update decision-requests skill with impact_tier field and T3 indefinite 
   blocking
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-31 03:39:53.060500+02:00
 updated: 2026-03-31 11:14:59.738569+02:00
 started: 2026-03-31 11:14:59.118333+02:00

@@ -2,7 +2,7 @@
 id: 202
 title: 'Test: CLI trigger commands'
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-30 07:54:24.585759+02:00
 updated: 2026-04-02 02:19:58.075141+02:00
 started: 2026-03-30 07:54:31.461780+02:00

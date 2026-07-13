@@ -2,7 +2,7 @@
 id: 666
 title: Update NON_IMPL_TAGS skill doc references for type:user-action
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-06T16:47:04.4677636+02:00
 updated: 2026-04-07T05:46:10.5544035+02:00
 started: 2026-04-07T05:46:10.5544035+02:00

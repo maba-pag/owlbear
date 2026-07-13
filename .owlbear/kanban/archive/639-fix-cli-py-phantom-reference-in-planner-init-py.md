@@ -2,7 +2,7 @@
 id: 639
 title: Fix cli.py phantom reference in planner/__init__.py docstring
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-06T02:35:22.7621528+02:00
 updated: 2026-04-06T05:50:26.8317838+02:00
 started: 2026-04-06T05:50:26.8317838+02:00

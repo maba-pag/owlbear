@@ -2,7 +2,7 @@
 id: 758
 title: 'P1-04: Impl — Edge launcher + CDP connection manager'
 status: archived
-priority: critical
+priority: medium
 created: '2026-04-10T10:55:57.179743+00:00'
 updated: '2026-04-10T16:42:09.868675+00:00'
 tags:

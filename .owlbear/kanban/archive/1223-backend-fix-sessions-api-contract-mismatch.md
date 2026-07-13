@@ -2,7 +2,7 @@
 id: 1223
 title: Backend — fix sessions API contract mismatch
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-30 16:31:18.589039+00:00
 updated: 2026-05-01T00:57:19.208853+00:00
 tags:

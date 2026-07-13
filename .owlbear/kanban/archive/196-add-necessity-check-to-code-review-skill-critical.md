@@ -2,7 +2,7 @@
 id: 196
 title: Add necessity check to code-review skill critical checks
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-29 23:08:30.248244+02:00
 updated: 2026-03-30 16:52:55.811106+02:00
 started: 2026-03-30 15:25:48.124752+02:00

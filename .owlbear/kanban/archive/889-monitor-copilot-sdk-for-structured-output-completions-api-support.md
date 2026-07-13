@@ -2,7 +2,7 @@
 id: 889
 title: Monitor Copilot SDK for structured output / completions API support
 status: archived
-priority: nice-to-have
+priority: medium
 created: '2026-04-15T15:00:20.268602+00:00'
 updated: '2026-04-15T20:43:40.505669+00:00'
 tags:

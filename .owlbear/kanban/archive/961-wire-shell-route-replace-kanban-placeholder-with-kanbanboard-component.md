@@ -2,7 +2,7 @@
 id: 961
 title: 'Wire Shell route: replace kanban placeholder with KanbanBoard component'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-18T14:45:58.189018+00:00
 updated: 2026-04-18T18:45:27.625200+00:00
 tags:

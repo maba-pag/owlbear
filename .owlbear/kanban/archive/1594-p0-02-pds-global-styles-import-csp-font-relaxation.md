@@ -2,7 +2,7 @@
 id: 1594
 title: 'P0-02: PDS global-styles import + CSP font relaxation'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-16T03:35:01.700586+00:00
 updated: 2026-05-16T13:43:07.735479+00:00
 tags:

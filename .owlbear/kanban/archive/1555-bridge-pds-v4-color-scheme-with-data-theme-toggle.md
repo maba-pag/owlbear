@@ -2,7 +2,7 @@
 id: 1555
 title: Bridge PDS v4 color-scheme with data-theme toggle
 status: archived
-priority: important
+priority: medium
 created: 2026-05-14T05:57:42.186424+00:00
 updated: 2026-05-14T09:50:31.978183+00:00
 tags:

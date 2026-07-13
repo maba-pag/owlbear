@@ -2,7 +2,7 @@
 id: 1117
 title: Ideation overhaul test proof hardening
 status: archived
-priority: important
+priority: medium
 created: 2026-04-24T11:05:42.733550+00:00
 updated: 2026-04-24T13:48:11.395603+00:00
 tags: []

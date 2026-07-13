@@ -2,7 +2,7 @@
 id: 1867
 title: 'Kanban: promote atomic_write to __all__ exports'
 status: archived
-priority: someday
+priority: medium
 created: 2026-05-25T00:06:59.338718+02:00
 updated: 2026-05-25T03:22:46.523906+02:00
 tags:

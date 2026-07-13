@@ -2,7 +2,7 @@
 id: 721
 title: 'P3-09: RED — task CRUD (create with next_id, edit fields, move status)'
 status: archived
-priority: critical
+priority: medium
 created: 2026-04-09T03:25:55.6660108+02:00
 updated: 2026-04-09T17:45:21.2893576+02:00
 started: 2026-04-09T17:45:21.2893576+02:00

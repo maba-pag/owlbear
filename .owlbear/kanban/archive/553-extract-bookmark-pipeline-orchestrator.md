@@ -2,7 +2,7 @@
 id: 553
 title: Extract bookmark pipeline orchestrator
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-02 16:06:30.320659+02:00
 updated: 2026-04-03 06:07:12.042942+02:00
 started: 2026-04-03 06:06:30.029075+02:00

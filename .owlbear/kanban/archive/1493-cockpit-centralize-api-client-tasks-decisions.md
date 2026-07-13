@@ -2,7 +2,7 @@
 id: 1493
 title: 'Cockpit: Centralize API client (tasks + decisions)'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-11T23:15:20.997863+00:00
 updated: 2026-05-12T22:01:22.647967+00:00
 tags:

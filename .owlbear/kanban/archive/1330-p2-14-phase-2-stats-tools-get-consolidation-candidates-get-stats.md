@@ -2,7 +2,7 @@
 id: 1330
 title: 'P2-14: Phase 2 + stats tools (get_consolidation_candidates, get_stats)'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-04T05:48:50.144282+00:00
 updated: 2026-05-07T13:34:00.528281+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 1386
 title: 'P2-11: Test Cockpit decision data contract and refetch flow'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-06T01:04:46.991799+00:00
 updated: 2026-05-08T12:51:32.146047+00:00
 tags:

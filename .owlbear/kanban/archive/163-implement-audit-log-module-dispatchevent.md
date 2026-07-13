@@ -2,7 +2,7 @@
 id: 163
 title: Implement audit log module (DispatchEvent + CompletionEvent)
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-29 19:44:17.033830+02:00
 updated: 2026-03-30 02:50:37.954471+02:00
 started: 2026-03-30 02:49:57.095193+02:00

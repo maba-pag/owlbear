@@ -2,7 +2,7 @@
 id: 1521
 title: 'P3-03: Pipeline skill updates for frontmatter ac/proof_bundle'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-13T02:29:51.822731+00:00
 updated: 2026-05-13T08:01:28.455609+00:00
 tags:

@@ -3,7 +3,7 @@ id: 387
 title: Design per-agent institutional knowledge system via dedicated memory-mcp 
   server
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-30 20:59:19.098327+02:00
 updated: 2026-04-02 15:10:49.216033+02:00
 started: 2026-04-02 15:10:48.818328+02:00

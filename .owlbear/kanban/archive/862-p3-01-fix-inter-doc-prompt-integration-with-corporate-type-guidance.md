@@ -2,7 +2,7 @@
 id: 862
 title: 'P3-01: Fix inter-doc prompt integration with corporate type guidance'
 status: archived
-priority: nice-to-have
+priority: medium
 created: '2026-04-13T19:16:55.084666+00:00'
 updated: '2026-04-15T19:55:50.811552+00:00'
 tags:

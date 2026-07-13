@@ -2,7 +2,7 @@
 id: 1619
 title: 'P3-01: Tests — success feedback (PToast)'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-16T03:37:25.051633+00:00
 updated: 2026-05-16T15:04:59.702309+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 1017
 title: 'P0-01: r-doc-standards skill'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-19 23:51:24.288053+00:00
 updated: 2026-04-20 00:46:26.396564+00:00
 tags:

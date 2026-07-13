@@ -2,7 +2,7 @@
 id: 1065
 title: 'B-01: RED — models + errors tests'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-21T10:47:39.046535+00:00
 updated: 2026-04-24T02:30:20.665517+00:00
 tags:

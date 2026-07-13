@@ -2,7 +2,7 @@
 id: 1689
 title: Simplify ideas notebook draft wording
 status: archived
-priority: important
+priority: medium
 created: 2026-05-21T19:52:59.015387+02:00
 updated: 2026-05-24T10:50:01.104633+02:00
 tags:

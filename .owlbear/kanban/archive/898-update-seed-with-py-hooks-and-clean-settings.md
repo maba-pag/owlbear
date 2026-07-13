@@ -2,7 +2,7 @@
 id: 898
 title: Update seed/ with .py hooks and clean settings
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-16T22:54:12.457895+00:00
 updated: 2026-04-17T09:30:24.119118+00:00
 tags:

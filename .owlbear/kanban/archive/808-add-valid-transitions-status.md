@@ -2,7 +2,7 @@
 id: 808
 title: Add valid_transitions(status)
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-10T21:21:23.793444+00:00'
 updated: '2026-04-13T13:27:39.638507+00:00'
 tags:

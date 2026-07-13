@@ -2,7 +2,7 @@
 id: 1774
 title: Keep mobile task edit primary actions visible
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T00:36:03.714982+02:00
 updated: 2026-05-24T10:50:02.276529+02:00
 tags:

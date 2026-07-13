@@ -2,7 +2,7 @@
 id: 661
 title: Pipeline handling for user-action-required tasks
 status: archived
-priority: critical
+priority: medium
 created: 2026-04-06T08:25:07.1782653+02:00
 updated: 2026-04-06T23:01:24.1300673+02:00
 started: 2026-04-06T23:01:24.1300673+02:00

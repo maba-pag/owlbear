@@ -2,7 +2,7 @@
 id: 705
 title: Update graph builders to await async StructuredExtractor.extract()
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-09T00:56:04.9684971+02:00
 updated: 2026-04-10T03:32:10.7470195+02:00
 started: 2026-04-10T03:32:10.7470195+02:00

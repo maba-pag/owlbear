@@ -2,7 +2,7 @@
 id: 1810
 title: Use PDS counter for memory content edit
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T08:08:57+02:00
 updated: 2026-05-24T10:50:02.762743+02:00
 tags:

@@ -2,7 +2,7 @@
 id: 1877
 title: 'Knowledge: IngestCoordinator — ingest & refresh'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-25T19:04:22.644852+02:00
 updated: 2026-05-26T09:32:16.319154+02:00
 tags:

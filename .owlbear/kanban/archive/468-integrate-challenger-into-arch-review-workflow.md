@@ -2,7 +2,7 @@
 id: 468
 title: Integrate Challenger into arch-review workflow (Step 3.5)
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-31 05:04:52.503978+02:00
 updated: 2026-04-01 02:01:57.268211+02:00
 started: 2026-04-01 02:01:52.548537+02:00

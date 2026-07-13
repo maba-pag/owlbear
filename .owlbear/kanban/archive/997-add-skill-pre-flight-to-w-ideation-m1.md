@@ -2,7 +2,7 @@
 id: 997
 title: Add skill pre-flight to w-ideation M1
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-18T21:26:18.187211+00:00
 updated: 2026-04-19T16:26:05.054014+00:00
 tags:

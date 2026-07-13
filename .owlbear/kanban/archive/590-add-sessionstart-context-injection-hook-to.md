@@ -2,7 +2,7 @@
 id: 590
 title: Add SessionStart context injection hook to pipeline agents (Phase 4)
 status: archived
-priority: someday
+priority: medium
 created: 2026-04-04 07:56:04.932767+02:00
 updated: 2026-04-07 00:10:42.319204+02:00
 started: 2026-04-07 00:10:42.319204+02:00

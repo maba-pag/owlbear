@@ -2,7 +2,7 @@
 id: 1471
 title: Add In Scope / Out of Scope sections to all pipeline agent skill files
 status: archived
-priority: important
+priority: medium
 created: 2026-05-09T08:33:41.860392+00:00
 updated: 2026-05-09T20:05:33.274906+00:00
 tags:

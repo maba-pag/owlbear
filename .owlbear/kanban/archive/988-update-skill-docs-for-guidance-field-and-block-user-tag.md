@@ -2,7 +2,7 @@
 id: 988
 title: Update skill docs for guidance field and `block:user` tag
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-18T21:23:00.852313+00:00
 updated: 2026-04-19T01:56:30.264695+00:00
 tags:

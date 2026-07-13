@@ -2,7 +2,7 @@
 id: 699
 title: 'Tests: MCP knowledge graph wiring and integration'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-08T21:37:24.4459836+02:00
 updated: 2026-04-09T15:27:26.5169645+02:00
 started: 2026-04-09T15:27:26.5169645+02:00

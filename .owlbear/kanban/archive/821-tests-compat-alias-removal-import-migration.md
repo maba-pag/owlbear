@@ -2,7 +2,7 @@
 id: 821
 title: Tests — Compat alias removal + import migration
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-10T21:22:46.872069+00:00'
 updated: '2026-04-15T12:49:15.109707+00:00'
 tags:

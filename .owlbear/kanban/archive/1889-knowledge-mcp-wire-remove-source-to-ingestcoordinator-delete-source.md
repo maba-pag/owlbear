@@ -2,7 +2,7 @@
 id: 1889
 title: 'Knowledge: MCP wire remove_source to IngestCoordinator.delete_source'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-27T01:00:59.181782+02:00
 updated: 2026-05-27T04:56:16.665481+02:00
 tags:

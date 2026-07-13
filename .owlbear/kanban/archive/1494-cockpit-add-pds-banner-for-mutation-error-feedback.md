@@ -2,7 +2,7 @@
 id: 1494
 title: 'Cockpit: Add PDS banner for mutation error feedback'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-11T23:15:34.497443+00:00
 updated: 2026-05-12T16:28:05.495397+00:00
 tags:

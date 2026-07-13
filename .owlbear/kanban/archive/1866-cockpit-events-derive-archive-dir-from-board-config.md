@@ -2,7 +2,7 @@
 id: 1866
 title: 'Cockpit events: derive archive_dir from board_config'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-05-25T00:06:59.320927+02:00
 updated: 2026-05-25T02:06:36.046621+02:00
 tags:

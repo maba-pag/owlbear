@@ -2,7 +2,7 @@
 id: 582
 title: 'P2-B3: Update inline-ref skills to MCP-only'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-03 16:42:36.595601+02:00
 updated: 2026-04-05 15:50:57.782642+02:00
 started: 2026-04-05 15:50:57.782642+02:00

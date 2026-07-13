@@ -2,7 +2,7 @@
 id: 1431
 title: 'P1-03: Directive rewrite + tier presentation in w-ideation-discovery/SKILL.md'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-08T01:00:48.482707+00:00
 updated: 2026-05-08T14:32:14.164937+00:00
 tags:

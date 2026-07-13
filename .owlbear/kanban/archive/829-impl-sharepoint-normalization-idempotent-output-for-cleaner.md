@@ -2,7 +2,7 @@
 id: 829
 title: Impl — SharePoint normalization + idempotent output for cleaner
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-11T01:39:05.631411+00:00'
 updated: '2026-04-12T13:32:29.904244+00:00'
 tags:

@@ -2,7 +2,7 @@
 id: 1840
 title: 'P2-01: State machine — contested, disputed, stale states'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-24T19:00:51.542397+02:00
 updated: 2026-05-25T01:34:42.246267+02:00
 tags:

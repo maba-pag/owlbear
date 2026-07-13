@@ -2,7 +2,7 @@
 id: 1075
 title: 'B-10: GREEN — move_task + start_work'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-21T10:49:32.320431+00:00
 updated: 2026-04-25T15:48:52.989567+00:00
 tags:

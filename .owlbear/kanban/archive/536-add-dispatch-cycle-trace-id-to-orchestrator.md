@@ -2,7 +2,7 @@
 id: 536
 title: Add dispatch-cycle trace ID to orchestrator protocol
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-30 21:37:56.972591+02:00
 updated: 2026-04-02 10:12:57.805202+02:00
 started: 2026-04-02 10:12:57.805202+02:00

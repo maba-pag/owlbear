@@ -3,7 +3,7 @@ id: 386
 title: Research deer-flow repo for adoptable patterns across harness, memory, 
   subagents, and context
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-30 20:57:13.618438+02:00
 updated: 2026-03-31 06:53:52.346440+02:00
 started: 2026-03-31 06:53:23.238228+02:00

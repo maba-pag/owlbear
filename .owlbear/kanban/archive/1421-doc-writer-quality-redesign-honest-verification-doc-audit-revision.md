@@ -2,7 +2,7 @@
 id: 1421
 title: Doc-writer quality redesign — honest verification + doc-audit revision
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-08T00:30:10.683534+00:00
 updated: 2026-05-08T16:28:22.765521+00:00
 tags:

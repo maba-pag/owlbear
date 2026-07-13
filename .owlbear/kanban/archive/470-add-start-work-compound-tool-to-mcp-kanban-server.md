@@ -2,7 +2,7 @@
 id: 470
 title: Add start_work compound tool to mcp-kanban server
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-31 05:21:07.051504+02:00
 updated: 2026-03-31 22:22:24.480219+02:00
 started: 2026-03-31 22:22:24.012139+02:00

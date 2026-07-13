@@ -2,7 +2,7 @@
 id: 1803
 title: Reorder task reference edit rows
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T06:42:31.419990+02:00
 updated: 2026-05-24T10:50:02.668480+02:00
 tags:

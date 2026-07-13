@@ -2,7 +2,7 @@
 id: 1495
 title: 'Cockpit: Research PDS v4 local hosting and scope CDN patch'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-11T23:15:45.844267+00:00
 updated: 2026-05-12T15:58:16.675211+00:00
 tags:

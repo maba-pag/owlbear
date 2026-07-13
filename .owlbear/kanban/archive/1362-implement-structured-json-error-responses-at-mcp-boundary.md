@@ -2,7 +2,7 @@
 id: 1362
 title: Implement structured JSON error responses at MCP boundary
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-05T23:35:00.574972+00:00
 updated: 2026-05-06T05:16:51.026760+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 1531
 title: Body newline normalization at MCP kanban ingress
 status: archived
-priority: important
+priority: medium
 created: 2026-05-13T12:28:14.408067+00:00
 updated: 2026-05-13T15:55:08.596336+00:00
 tags:

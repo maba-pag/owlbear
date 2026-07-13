@@ -2,7 +2,7 @@
 id: 1853
 title: 'P1-03: Engine API — resolve_request with conditional unblock'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-24T20:58:16.414102+02:00
 updated: 2026-05-25T07:27:25.152911+02:00
 tags:

@@ -3,7 +3,7 @@ id: 492
 title: Add outputSchema and tool annotations to knowledge and project MCP 
   servers
 status: archived
-priority: important
+priority: medium
 created: 2026-03-31 06:37:12.617166+02:00
 updated: 2026-04-04 07:09:58.942671+02:00
 started: 2026-04-04 07:09:33.307502+02:00

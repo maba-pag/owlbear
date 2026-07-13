@@ -2,7 +2,7 @@
 id: 756
 title: 'P1-05: Tests — HTML→markdown cleaner'
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-10T10:55:24.919476+00:00'
 updated: '2026-04-14T08:51:22.022629+00:00'
 tags:

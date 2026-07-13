@@ -2,7 +2,7 @@
 id: 1234
 title: Implement SSE endpoint with watchfiles-based file watcher
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-30 16:48:42.978432+00:00
 updated: 2026-05-02T01:21:37.114379+00:00
 tags:

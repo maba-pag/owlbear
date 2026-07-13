@@ -2,7 +2,7 @@
 id: 1010
 title: Implement topic-chunk walkthrough + Mediator commentary in w-ideation
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-18 21:57:35.503430+00:00
 updated: 2026-04-19 15:17:43.295685+00:00
 tags:

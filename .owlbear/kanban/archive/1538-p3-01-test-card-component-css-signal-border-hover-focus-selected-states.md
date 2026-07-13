@@ -2,7 +2,7 @@
 id: 1538
 title: 'P3-01: test — card component CSS: signal border, hover, focus, selected states'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-13T18:41:58.279132+00:00
 updated: 2026-05-14T01:45:07.119528+00:00
 tags:

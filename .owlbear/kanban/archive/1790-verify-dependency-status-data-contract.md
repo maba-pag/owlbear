@@ -2,7 +2,7 @@
 id: 1790
 title: Verify dependency status data contract
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-24T01:57:03.801111+02:00
 updated: 2026-05-24T10:50:02.495896+02:00
 tags:

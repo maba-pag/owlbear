@@ -2,7 +2,7 @@
 id: 466
 title: 'Test: CLI entrypoint for analysis pipeline'
 status: archived
-priority: important
+priority: medium
 created: 2026-03-31 04:56:48.231485+02:00
 updated: 2026-03-31 11:29:00.990835+02:00
 started: 2026-03-31 04:57:02.291055+02:00

@@ -2,7 +2,7 @@
 id: 685
 title: Add scratch-only-allow write hook to quality-runner agent
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-08T20:54:05.4426172+02:00
 updated: 2026-04-09T02:24:01.6612457+02:00
 started: 2026-04-09T02:24:01.6612457+02:00

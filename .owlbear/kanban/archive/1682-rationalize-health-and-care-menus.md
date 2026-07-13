@@ -2,7 +2,7 @@
 id: 1682
 title: Rationalize health and care menus
 status: archived
-priority: important
+priority: medium
 created: 2026-05-21T19:51:50.706576+02:00
 updated: 2026-05-24T10:50:01.014830+02:00
 tags:

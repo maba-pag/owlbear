@@ -2,7 +2,7 @@
 id: 884
 title: RED — Test RefreshOrchestrator SHAREPOINT_API dispatch
 status: archived
-priority: someday
+priority: medium
 created: '2026-04-14T20:26:17.606276+00:00'
 updated: '2026-04-15T05:34:13.532339+00:00'
 tags:

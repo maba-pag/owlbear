@@ -2,7 +2,7 @@
 id: 1798
 title: Fix Kanban tag filter selection
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-24T05:50:33.420550+02:00
 updated: 2026-05-24T10:50:02.600869+02:00
 tags:

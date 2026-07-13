@@ -2,7 +2,7 @@
 id: 506
 title: 'Standardize error: prefix across mcp-knowledge and mcp-project'
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-31 23:40:53.221387+02:00
 updated: 2026-04-01 05:31:05.125234+02:00
 started: 2026-04-01 05:31:00.490944+02:00

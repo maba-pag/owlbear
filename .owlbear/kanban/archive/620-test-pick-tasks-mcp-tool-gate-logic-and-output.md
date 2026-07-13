@@ -2,7 +2,7 @@
 id: 620
 title: 'Test: pick_tasks MCP tool gate logic and output format'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-05T01:30:52.3984607+02:00
 updated: 2026-04-05T17:25:20.3856593+02:00
 started: 2026-04-05T17:25:20.3856593+02:00

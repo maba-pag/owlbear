@@ -2,7 +2,7 @@
 id: 635
 title: 'Fix #616 decision: scribe fabricated approval from needs-info response'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-05T22:45:51.0003611+02:00
 updated: 2026-04-06T00:09:36.3059286+02:00
 started: 2026-04-06T00:09:36.3059286+02:00

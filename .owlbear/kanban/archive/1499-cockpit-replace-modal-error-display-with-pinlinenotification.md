@@ -2,7 +2,7 @@
 id: 1499
 title: 'Cockpit: Replace modal error display with PInlineNotification'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-12T02:38:27.712681+00:00
 updated: 2026-05-12T09:53:15.758801+00:00
 tags:

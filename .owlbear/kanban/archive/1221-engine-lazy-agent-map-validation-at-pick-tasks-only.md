@@ -2,7 +2,7 @@
 id: 1221
 title: Engine — lazy agent_map validation at pick_tasks only
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-30 16:31:18.568412+00:00
 updated: 2026-05-01T03:18:38.465932+00:00
 tags:

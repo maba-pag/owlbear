@@ -2,7 +2,7 @@
 id: 1631
 title: 'Architect calibration: planner AC accuracy for PDS decomposition'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-05-16T07:50:38.652054+00:00
 updated: 2026-05-16T12:44:03.324923+00:00
 tags:

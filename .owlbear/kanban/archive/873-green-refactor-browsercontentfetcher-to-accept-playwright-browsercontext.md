@@ -2,7 +2,7 @@
 id: 873
 title: 'GREEN: Refactor BrowserContentFetcher to accept Playwright BrowserContext'
 status: archived
-priority: critical
+priority: medium
 created: '2026-04-14T01:51:43.508330+00:00'
 updated: '2026-04-15T09:13:57.823876+00:00'
 tags:

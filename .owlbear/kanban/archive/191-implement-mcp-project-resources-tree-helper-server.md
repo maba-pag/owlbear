@@ -2,7 +2,7 @@
 id: 191
 title: Implement mcp-project resources + tree helper (server.py part 2)
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-29 22:44:09.026693+02:00
 updated: 2026-03-30 21:08:55.797075+02:00
 started: 2026-03-29 22:44:30.318217+02:00

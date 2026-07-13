@@ -2,7 +2,7 @@
 id: 985
 title: Wire guidance into `edit_task` + remove `block:user` on MCP block
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-18T21:22:36.961973+00:00
 updated: 2026-04-19T01:47:44.838895+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 1838
 title: Review task acceptance criteria edit affordance
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T12:39:41.796906+02:00
 updated: 2026-05-24T23:32:21.768933+02:00
 tags:

@@ -2,7 +2,7 @@
 id: 307
 title: Create Code-Reader subagent (agent.md)
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-30 20:29:35.258911+02:00
 updated: 2026-03-31 05:52:00.474638+02:00
 started: 2026-03-31 05:51:37.424203+02:00

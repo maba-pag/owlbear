@@ -2,7 +2,7 @@
 id: 1273
 title: 'P1-07: Implement MCP tool layer with access control'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-02T03:43:38.542522+00:00
 updated: 2026-05-03T13:28:22.933473+00:00
 tags:

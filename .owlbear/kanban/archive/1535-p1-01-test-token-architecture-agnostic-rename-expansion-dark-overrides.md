@@ -2,7 +2,7 @@
 id: 1535
 title: 'P1-01: test — token architecture: agnostic rename + expansion + dark overrides'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-13T18:41:58.189617+00:00
 updated: 2026-05-13T23:13:03.081498+00:00
 tags:

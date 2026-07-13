@@ -2,7 +2,7 @@
 id: 995
 title: '2: Rewrite agent-audit.prompt.md per Brief 5-section structure'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-18T21:23:39.614381+00:00
 updated: 2026-04-19T13:23:52.961303+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 1031
 title: 'P2-07: Memory layers diagram'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-19 23:53:28.570554+00:00
 updated: 2026-04-20 05:16:06.248100+00:00
 tags:

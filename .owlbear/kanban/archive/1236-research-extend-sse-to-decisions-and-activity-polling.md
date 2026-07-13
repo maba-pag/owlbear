@@ -2,7 +2,7 @@
 id: 1236
 title: Research — extend SSE to decisions and activity polling
 status: archived
-priority: someday
+priority: medium
 created: 2026-04-30 16:48:43.009769+00:00
 updated: 2026-05-03T23:26:33.815775+00:00
 tags:

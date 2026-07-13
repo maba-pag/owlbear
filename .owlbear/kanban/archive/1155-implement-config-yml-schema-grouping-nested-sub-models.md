@@ -2,7 +2,7 @@
 id: 1155
 title: Config schema grouping — decomposition parent (closeout)
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-28T16:56:28.330827+00:00
 updated: 2026-04-29T10:23:51.177443+00:00
 tags:

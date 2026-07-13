@@ -2,7 +2,7 @@
 id: 1026
 title: 'P2-02: serve/* READMEs sweep'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-19 23:52:56.658285+00:00
 updated: 2026-04-20 03:59:04.368927+00:00
 tags:

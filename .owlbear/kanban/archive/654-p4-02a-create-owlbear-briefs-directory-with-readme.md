@@ -2,7 +2,7 @@
 id: 654
 title: 'P4-02a: Create .owlbear/briefs/ directory with README and .gitkeep'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-06T07:17:22.2149049+02:00
 updated: 2026-04-06T19:34:44.1534209+02:00
 started: 2026-04-06T19:34:44.1534209+02:00

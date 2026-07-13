@@ -2,7 +2,7 @@
 id: 52
 title: Create owlbear-voice workspace package
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-26 18:57:37.151058+01:00
 updated: 2026-03-29 15:27:19.200098+02:00
 started: 2026-03-29 15:26:58.615976+02:00

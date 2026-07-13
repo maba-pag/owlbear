@@ -2,7 +2,7 @@
 id: 827
 title: Migrate task_io.py from PyYAML to ruamel.yaml
 status: archived
-priority: nice-to-have
+priority: medium
 created: '2026-04-11T01:12:00.740638+00:00'
 updated: '2026-04-14T23:41:39.891800+00:00'
 tags:

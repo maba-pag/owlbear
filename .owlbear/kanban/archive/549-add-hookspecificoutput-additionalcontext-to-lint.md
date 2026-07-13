@@ -2,7 +2,7 @@
 id: 549
 title: Add hookSpecificOutput.additionalContext to lint-changed.ps1
 status: archived
-priority: important
+priority: medium
 created: 2026-04-02 15:59:05.737478+02:00
 updated: 2026-04-02 16:35:25.853836+02:00
 started: 2026-04-02 16:35:25.853836+02:00

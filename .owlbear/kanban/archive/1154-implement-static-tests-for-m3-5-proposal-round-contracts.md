@@ -2,7 +2,7 @@
 id: 1154
 title: Implement static tests for M3.5 proposal-round contracts
 status: archived
-priority: important
+priority: medium
 created: 2026-04-28T01:02:59.048361+00:00
 updated: 2026-04-28T09:27:38.481953+00:00
 tags: []

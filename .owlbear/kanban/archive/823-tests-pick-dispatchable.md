@@ -2,7 +2,7 @@
 id: 823
 title: Tests — pick_dispatchable()
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-10T21:23:01.614181+00:00'
 updated: '2026-04-13T18:26:43.647978+00:00'
 tags:

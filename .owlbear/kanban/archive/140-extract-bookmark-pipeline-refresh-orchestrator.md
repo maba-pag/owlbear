@@ -2,7 +2,7 @@
 id: 140
 title: Extract bookmark pipeline + refresh orchestrator
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-29 14:51:50.492045+02:00
 updated: 2026-04-04 07:09:51.512909+02:00
 started: 2026-04-04 07:09:25.595607+02:00

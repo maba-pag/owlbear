@@ -2,7 +2,7 @@
 id: 1024
 title: 'P1-02: doc-writer v2 implementation (GREEN)'
 status: archived
-priority: critical
+priority: medium
 created: 2026-04-19 23:52:28.175472+00:00
 updated: 2026-04-20 02:54:02.949322+00:00
 tags:

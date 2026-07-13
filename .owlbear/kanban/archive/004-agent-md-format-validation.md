@@ -2,7 +2,7 @@
 id: 4
 title: .agent.md format validation
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-26 17:18:37.580069+01:00
 updated: 2026-03-28 03:36:28.706129+01:00
 started: 2026-03-28 03:36:23.009010+01:00

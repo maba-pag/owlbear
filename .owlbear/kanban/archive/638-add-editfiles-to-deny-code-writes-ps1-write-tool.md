@@ -2,7 +2,7 @@
 id: 638
 title: Add editFiles to deny-code-writes.ps1 write-tool gate after schema verification
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-06T02:18:41.0051204+02:00
 updated: 2026-04-06T13:26:50.1862519+02:00
 started: 2026-04-06T13:26:50.1862519+02:00

@@ -2,7 +2,7 @@
 id: 1632
 title: 'Planner guard: mandatory source-read + symbol validation before AC authoring'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-16T08:36:17.257578+00:00
 updated: 2026-05-16T13:08:10.668299+00:00
 tags:

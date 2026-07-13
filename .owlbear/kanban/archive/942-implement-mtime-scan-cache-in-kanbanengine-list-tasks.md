@@ -2,7 +2,7 @@
 id: 942
 title: Implement mtime-scan cache in KanbanEngine.list_tasks()
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-17T21:13:56.835009+00:00
 updated: 2026-04-17T22:49:10.960946+00:00
 tags:

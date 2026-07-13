@@ -2,7 +2,7 @@
 id: 628
 title: Update pick_tasks AC to add optional tag parameter
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-05T10:41:53.2291189+02:00
 updated: 2026-04-06T02:23:55.9695903+02:00
 started: 2026-04-06T02:23:55.9695903+02:00

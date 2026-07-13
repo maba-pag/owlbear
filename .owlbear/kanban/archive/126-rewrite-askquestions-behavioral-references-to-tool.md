@@ -2,7 +2,7 @@
 id: 126
 title: Rewrite askQuestions behavioral references to tool-agnostic language
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-29 07:03:36.736260+02:00
 updated: 2026-03-29 10:38:13.840189+02:00
 started: 2026-03-29 10:38:07.917347+02:00

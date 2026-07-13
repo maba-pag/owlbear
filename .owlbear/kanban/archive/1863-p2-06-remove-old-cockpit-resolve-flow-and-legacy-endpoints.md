@@ -2,7 +2,7 @@
 id: 1863
 title: 'P2-06: Remove old Cockpit resolve flow and legacy endpoints'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T21:00:04.160667+02:00
 updated: 2026-05-26T10:33:53.244050+02:00
 tags:

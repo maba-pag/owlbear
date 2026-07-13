@@ -2,7 +2,7 @@
 id: 1414
 title: 'E1: legacy-audit.prompt.md — cleanup scan prompt for stale references'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-07T23:16:25.305798+00:00
 updated: 2026-05-08T12:50:22.390150+00:00
 tags:

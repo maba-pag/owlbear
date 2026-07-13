@@ -2,7 +2,7 @@
 id: 1105
 title: Write append-failure injection tests for 6 engine mutators
 status: archived
-priority: important
+priority: medium
 created: 2026-04-22T21:08:24.061291+00:00
 updated: 2026-04-22T22:48:03.078113+00:00
 tags: []

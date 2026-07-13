@@ -2,7 +2,7 @@
 id: 897
 title: 'Update agent.md command: fields to uv run python'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-16T22:54:12.431883+00:00
 updated: 2026-04-17T05:25:56.491746+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 164
 title: Wire audit log into orchestrator dispatch loop
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-29 19:44:23.629242+02:00
 updated: 2026-04-02 14:45:33.703724+02:00
 started: 2026-04-02 14:45:33.263031+02:00

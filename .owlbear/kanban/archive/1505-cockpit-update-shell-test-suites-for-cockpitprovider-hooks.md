@@ -2,7 +2,7 @@
 id: 1505
 title: 'Cockpit: Update Shell test suites for CockpitProvider hooks'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-12T02:59:59.249161+00:00
 updated: 2026-05-12T16:56:24.800080+00:00
 tags:

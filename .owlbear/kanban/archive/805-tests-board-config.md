@@ -2,7 +2,7 @@
 id: 805
 title: Tests — board_config
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-10T21:21:09.498916+00:00'
 updated: '2026-04-13T11:46:10.444712+00:00'
 tags:

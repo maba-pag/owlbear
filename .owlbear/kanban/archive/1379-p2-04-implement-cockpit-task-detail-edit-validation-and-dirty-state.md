@@ -2,7 +2,7 @@
 id: 1379
 title: 'P2-04: Implement Cockpit task detail edit validation and dirty state'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-06T01:04:34.112524+00:00
 updated: 2026-05-09T01:29:05.117398+00:00
 tags:

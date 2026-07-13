@@ -3,7 +3,7 @@ id: 1305
 title: 'P1-04: GREEN — State machine implementation (auto-state logic, scope gate,
   hard/soft deletion)'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-04T01:32:18.519500+00:00
 updated: 2026-05-04T14:41:04.452587+00:00
 tags:

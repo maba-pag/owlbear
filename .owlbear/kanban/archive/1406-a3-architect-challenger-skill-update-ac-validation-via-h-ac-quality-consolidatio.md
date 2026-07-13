@@ -3,7 +3,7 @@ id: 1406
 title: 'A3: Architect/challenger skill update — AC validation via h-ac-quality, consolidation-test
   backstop'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-07T23:16:25.200360+00:00
 updated: 2026-05-08T12:51:31.655778+00:00
 tags:

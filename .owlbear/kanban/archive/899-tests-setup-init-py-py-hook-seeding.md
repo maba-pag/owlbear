@@ -2,7 +2,7 @@
 id: 899
 title: 'Tests: setup/init.py .py hook seeding'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-16T22:54:12.469696+00:00
 updated: 2026-04-17T06:04:22.287405+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 1009
 title: Implement skill pre-flight sub-step in w-ideation M1
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-18 21:57:35.239825+00:00
 updated: 2026-04-19 16:40:39.540051+00:00
 tags:

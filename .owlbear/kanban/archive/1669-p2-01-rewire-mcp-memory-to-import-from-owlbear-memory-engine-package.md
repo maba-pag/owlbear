@@ -2,7 +2,7 @@
 id: 1669
 title: 'P2-01: Rewire mcp-memory to import from owlbear-memory engine package'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-18T17:43:21.686691+02:00
 updated: 2026-05-19T09:51:35.162264+02:00
 tags:
@@ -274,7 +274,7 @@ No research doc needed (trivial — work already done).
 ## Planning
 
 Created follow-up task #1674 at backlog:
-- **Fix test_package_boundary.py: add owlbear_memory namespace to ALLOWED_IMPORTS** — priority: needed, tags: phase-2, backend
+- **Fix test_package_boundary.py: add owlbear_memory namespace to ALLOWED_IMPORTS** — priority: medium, tags: phase-2, backend
 
 Single-task shortcut used (stand-alone fix, no TDD pair needed — test file is the target itself).
 

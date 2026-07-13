@@ -2,7 +2,7 @@
 id: 1364
 title: 'P1-01: Test Cockpit PDS v4 build compatibility'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-06T00:58:30.519362+00:00
 updated: 2026-05-06T06:34:04.704160+00:00
 tags:

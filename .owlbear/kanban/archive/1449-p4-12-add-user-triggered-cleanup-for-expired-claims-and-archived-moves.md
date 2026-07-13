@@ -2,7 +2,7 @@
 id: 1449
 title: 'P4-12: Add user-triggered cleanup for expired claims and archived moves'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-08T19:32:12.180001+00:00
 updated: 2026-05-11T08:06:06.358789+00:00
 tags:

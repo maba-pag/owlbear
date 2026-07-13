@@ -2,7 +2,7 @@
 id: 532
 title: Verify PostToolUse hook output routing in subagent context
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-01 20:37:14.013663+02:00
 updated: 2026-04-02 20:50:42.362222+02:00
 started: 2026-04-01 21:26:02.031371+02:00

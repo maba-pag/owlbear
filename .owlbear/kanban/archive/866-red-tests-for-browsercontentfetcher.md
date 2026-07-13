@@ -2,7 +2,7 @@
 id: 866
 title: RED — Tests for BrowserContentFetcher + HttpxContentFetcher
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-12T02:23:15.779913Z'
 updated: '2026-04-14T00:38:37.091838+00:00'
 tags:

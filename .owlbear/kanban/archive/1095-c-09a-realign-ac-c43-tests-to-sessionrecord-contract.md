@@ -2,7 +2,7 @@
 id: 1095
 title: 'C-09a: Realign AC-C43 tests to SessionRecord contract'
 status: archived
-priority: critical
+priority: medium
 created: 2026-04-21T18:31:42.942691+00:00
 updated: 2026-04-22T04:09:29.487611+00:00
 tags:

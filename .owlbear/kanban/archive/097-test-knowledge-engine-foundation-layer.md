@@ -2,7 +2,7 @@
 id: 97
 title: 'Test: Knowledge engine foundation layer'
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-28 03:43:11.357637+01:00
 updated: 2026-03-30 15:36:00.849490+02:00
 started: 2026-03-30 15:18:48.042985+02:00

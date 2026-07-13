@@ -2,7 +2,7 @@
 id: 527
 title: Build memory migration CLI tool
 status: archived
-priority: important
+priority: medium
 created: 2026-04-01 16:11:40.972773+02:00
 updated: 2026-04-02 22:09:23.861275+02:00
 started: 2026-04-02 22:09:23.347461+02:00

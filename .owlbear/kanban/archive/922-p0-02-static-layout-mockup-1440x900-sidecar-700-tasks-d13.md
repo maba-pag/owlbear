@@ -2,7 +2,7 @@
 id: 922
 title: 'P0-02: Static layout mockup 1440x900 + sidecar + 700 tasks (D13)'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-17T19:56:44.195555+00:00
 updated: 2026-04-18T13:29:19.927916+00:00
 tags:

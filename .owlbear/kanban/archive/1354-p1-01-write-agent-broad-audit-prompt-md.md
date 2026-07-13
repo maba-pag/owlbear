@@ -2,7 +2,7 @@
 id: 1354
 title: 'P1-01: Write agent-broad-audit.prompt.md'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-04T21:22:32.017764+00:00
 updated: 2026-05-05T17:18:33.670651+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 982
 title: 'Docs: skill updates for guidance + block:user'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-18T21:18:36.281028+00:00
 updated: 2026-04-19T14:52:11.048526+00:00
 tags:

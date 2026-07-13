@@ -2,7 +2,7 @@
 id: 9
 title: Port skills to agentskills.io format
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-26 17:19:53.993489+01:00
 updated: 2026-03-30 15:35:58.748967+02:00
 started: 2026-03-30 15:18:45.992803+02:00

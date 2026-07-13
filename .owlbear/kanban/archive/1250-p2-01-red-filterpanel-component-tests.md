@@ -2,7 +2,7 @@
 id: 1250
 title: 'P2-01: RED — FilterPanel component tests'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-01T04:34:48.876923+00:00
 updated: 2026-05-02T14:01:41.519048+00:00
 tags:

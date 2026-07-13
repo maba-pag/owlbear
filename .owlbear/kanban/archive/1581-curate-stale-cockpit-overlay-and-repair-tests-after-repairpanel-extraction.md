@@ -3,7 +3,7 @@ id: 1581
 title: Curate stale Cockpit overlay and repair tests after RepairPanel 
   extraction
 status: archived
-priority: important
+priority: medium
 created: 2026-05-15T12:19:29.765021+00:00
 updated: 2026-05-15T13:55:01.095840+00:00
 tags:

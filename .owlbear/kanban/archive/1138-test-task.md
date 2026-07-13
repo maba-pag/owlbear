@@ -2,7 +2,7 @@
 id: 1138
 title: Fix test_engine_init_1068.py CockpitView stub drift — 4 failures
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-26T16:55:56.034709+00:00
 updated: 2026-04-27T04:57:08.940873+00:00
 tags:

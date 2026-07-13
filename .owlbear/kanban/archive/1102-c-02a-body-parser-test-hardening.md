@@ -2,7 +2,7 @@
 id: 1102
 title: 'C-02a: body_parser test hardening'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-22T01:31:44.721688+00:00
 updated: 2026-04-23T04:41:03.755188+00:00
 tags: []
@@ -20,7 +20,7 @@ archival_refs: []
 ## Brief
 Follow-up from #1047 review cycles. Reviewer-identified gaps beyond #1047 AC scope.
 Parent: #1043 (Brief C). Tags: phase:storage, brief:c, scope:kanban, test, quality.
-Depends on: #1047. Priority: nice-to-have.
+Depends on: #1047. priority: medium.
 
 ## Acceptance Criteria
 

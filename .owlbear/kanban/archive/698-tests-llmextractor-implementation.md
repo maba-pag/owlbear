@@ -2,7 +2,7 @@
 id: 698
 title: 'Tests: LLMExtractor implementation'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-08T21:37:23.930035+02:00
 updated: 2026-04-09T11:13:12.74308+02:00
 started: 2026-04-09T11:13:12.74308+02:00

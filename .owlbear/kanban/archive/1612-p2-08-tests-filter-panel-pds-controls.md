@@ -2,7 +2,7 @@
 id: 1612
 title: 'P2-08: Tests — filter panel PDS controls'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-16T03:36:42.417384+00:00
 updated: 2026-05-16T15:04:50.953711+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 745
 title: Remove voice I/O infrastructure from OwlBear
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-10T10:33:33.249761+00:00'
 updated: '2026-04-15T09:51:48.824063+00:00'
 tags:

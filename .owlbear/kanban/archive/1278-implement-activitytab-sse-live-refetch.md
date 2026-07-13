@@ -2,7 +2,7 @@
 id: 1278
 title: Implement ActivityTab SSE live refetch
 status: archived
-priority: someday
+priority: medium
 created: 2026-05-02T12:10:47.689197+00:00
 updated: 2026-05-03T17:26:07.203920+00:00
 tags:

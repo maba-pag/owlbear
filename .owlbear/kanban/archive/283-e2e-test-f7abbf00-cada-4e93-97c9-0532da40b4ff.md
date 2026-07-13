@@ -2,7 +2,7 @@
 id: 283
 title: E2E-Test-f7abbf00-cada-4e93-97c9-0532da40b4ff
 status: archived
-priority: important
+priority: medium
 created: 2026-03-30 20:01:38.138486+02:00
 updated: 2026-03-30 20:01:39.074440+02:00
 started: 2026-03-30 20:01:39.074440+02:00

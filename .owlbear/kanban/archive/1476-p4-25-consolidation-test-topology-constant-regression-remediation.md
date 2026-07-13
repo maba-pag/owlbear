@@ -2,7 +2,7 @@
 id: 1476
 title: 'P4-25: consolidation test: topology-constant regression remediation'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-09T08:46:53.962568+00:00
 updated: 2026-05-10T18:18:57.355674+00:00
 tags:

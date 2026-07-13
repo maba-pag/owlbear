@@ -2,7 +2,7 @@
 id: 927
 title: 'P2-02: RED — App shell tests'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-17T19:57:29.203479+00:00
 updated: 2026-04-18T12:24:06.870465+00:00
 tags:

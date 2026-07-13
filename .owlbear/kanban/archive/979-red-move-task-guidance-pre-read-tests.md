@@ -2,7 +2,7 @@
 id: 979
 title: 'RED: move_task guidance + pre-read tests'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-18T21:18:15.559609+00:00
 updated: 2026-04-19T12:20:39.347267+00:00
 tags:

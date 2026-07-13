@@ -2,7 +2,7 @@
 id: 668
 title: Fix megalinter for private repo constraints
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-06T22:22:31.9554503+02:00
 updated: 2026-04-07T11:47:49.3239216+02:00
 started: 2026-04-07T11:47:49.3239216+02:00

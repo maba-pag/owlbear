@@ -2,7 +2,7 @@
 id: 1503
 title: 'Cockpit: Migrate components to centralized API client'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-12T02:43:28.748468+00:00
 updated: 2026-05-12T21:43:30.359212+00:00
 tags:

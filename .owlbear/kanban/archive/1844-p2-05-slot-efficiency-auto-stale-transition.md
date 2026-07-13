@@ -2,7 +2,7 @@
 id: 1844
 title: 'P2-05: Slot-efficiency — auto-stale transition'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-24T19:01:24.904500+02:00
 updated: 2026-05-25T04:43:25.735890+02:00
 tags:

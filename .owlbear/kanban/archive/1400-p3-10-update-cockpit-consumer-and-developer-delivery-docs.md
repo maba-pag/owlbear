@@ -2,7 +2,7 @@
 id: 1400
 title: 'P3-10: Update Cockpit consumer and developer delivery docs'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-06T01:09:50.523051+00:00
 updated: 2026-05-11T21:03:53.092439+00:00
 tags:

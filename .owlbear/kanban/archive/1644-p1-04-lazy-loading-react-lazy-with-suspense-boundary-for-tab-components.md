@@ -2,7 +2,7 @@
 id: 1644
 title: 'P1-04: Lazy loading — React.lazy() with Suspense boundary for tab components'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-18T00:49:27.367267+02:00
 updated: 2026-05-19T12:32:25.885344+02:00
 tags:

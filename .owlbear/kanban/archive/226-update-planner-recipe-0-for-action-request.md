@@ -2,7 +2,7 @@
 id: 226
 title: Update planner Recipe 0 for action request resolution
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-30 16:57:32.068259+02:00
 updated: 2026-03-31 21:30:47.492940+02:00
 started: 2026-03-31 21:30:47.026369+02:00

@@ -2,7 +2,7 @@
 id: 1408
 title: 'B2: Loop-breaker protocol update — 2-batch-cycle threshold'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-07T23:16:25.227004+00:00
 updated: 2026-05-09T05:57:45.508256+00:00
 tags:

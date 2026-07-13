@@ -2,7 +2,7 @@
 id: 1233
 title: Research — WebSocket/SSE real-time updates for cockpit
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-30 16:31:18.682845+00:00
 updated: 2026-05-01T08:50:05.173203+00:00
 tags:

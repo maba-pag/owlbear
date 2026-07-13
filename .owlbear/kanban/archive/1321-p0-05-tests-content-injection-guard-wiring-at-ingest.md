@@ -2,7 +2,7 @@
 id: 1321
 title: 'P0-05: Tests — Content injection guard wiring at ingest'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-04T05:48:37.782310+00:00
 updated: 2026-05-04T10:20:54.072536+00:00
 tags:

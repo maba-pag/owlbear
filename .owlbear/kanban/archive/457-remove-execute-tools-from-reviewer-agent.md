@@ -2,7 +2,7 @@
 id: 457
 title: Remove execute/* tools from reviewer agent
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-30 23:47:55.003669+02:00
 updated: 2026-04-06 06:33:09.258631+02:00
 started: 2026-04-06 06:33:09.258631+02:00

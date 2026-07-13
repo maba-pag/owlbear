@@ -2,7 +2,7 @@
 id: 1453
 title: 'P4-16: Wire create_dr end to end for agents and guidance'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-08T19:32:28.041895+00:00
 updated: 2026-05-11T11:37:27.307271+00:00
 tags:

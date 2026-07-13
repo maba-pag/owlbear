@@ -2,7 +2,7 @@
 id: 858
 title: Rename knowledge DBs (local.db/global.db) and add sync tools
 status: archived
-priority: important
+priority: medium
 created: '2026-04-12T22:04:00.060405+00:00'
 updated: '2026-04-14T14:43:38.123786+00:00'
 tags:

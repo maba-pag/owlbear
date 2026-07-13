@@ -2,7 +2,7 @@
 id: 1772
 title: Widen mobile task detail edit modal
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T00:03:04+02:00
 updated: 2026-05-24T10:50:02.264711+02:00
 tags:

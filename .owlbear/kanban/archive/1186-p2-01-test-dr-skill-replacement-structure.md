@@ -2,7 +2,7 @@
 id: 1186
 title: 'P2-01: Test DR skill replacement structure'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-30T00:51:55.701005+00:00
 updated: 2026-04-30T02:27:02.192383+00:00
 tags:

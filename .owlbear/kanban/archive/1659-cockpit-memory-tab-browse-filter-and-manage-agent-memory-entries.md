@@ -2,7 +2,7 @@
 id: 1659
 title: Cockpit Memory Tab — browse, filter, and manage agent memory entries
 status: archived
-priority: important
+priority: medium
 created: 2026-05-18T17:40:16.810102+02:00
 updated: 2026-05-20T12:25:14.540435+02:00
 tags:

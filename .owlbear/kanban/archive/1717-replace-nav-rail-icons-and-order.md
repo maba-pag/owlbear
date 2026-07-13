@@ -2,7 +2,7 @@
 id: 1717
 title: Replace nav rail icons and order
 status: archived
-priority: important
+priority: medium
 created: 2026-05-22T01:01:09.630391+02:00
 updated: 2026-05-24T10:50:01.468106+02:00
 tags:

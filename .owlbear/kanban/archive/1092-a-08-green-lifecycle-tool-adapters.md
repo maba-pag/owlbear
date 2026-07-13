@@ -2,7 +2,7 @@
 id: 1092
 title: 'A-08: GREEN — lifecycle tool adapters'
 status: archived
-priority: critical
+priority: medium
 created: 2026-04-21 10:54:37.271169+00:00
 updated: 2026-04-28T14:46:52.932756+00:00
 tags:

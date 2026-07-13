@@ -2,7 +2,7 @@
 id: 21
 title: Build audit log
 status: archived
-priority: important
+priority: medium
 created: 2026-03-26 17:22:35.597887+01:00
 updated: 2026-03-30 15:35:59.152123+02:00
 started: 2026-03-30 15:18:46.525621+02:00

@@ -2,7 +2,7 @@
 id: 1799
 title: Rework task detail tag editor flow
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T05:50:41.289265+02:00
 updated: 2026-05-24T10:50:02.613101+02:00
 tags:

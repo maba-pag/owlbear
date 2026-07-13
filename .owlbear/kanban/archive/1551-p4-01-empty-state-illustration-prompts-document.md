@@ -2,7 +2,7 @@
 id: 1551
 title: 'P4-01: empty state illustration prompts document'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-05-13T18:43:53.131232+00:00
 updated: 2026-05-13T22:19:40.734681+00:00
 tags:

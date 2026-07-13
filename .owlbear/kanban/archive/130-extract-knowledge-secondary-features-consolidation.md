@@ -3,7 +3,7 @@ id: 130
 title: Extract knowledge secondary features (consolidation, evaluator, bookmark 
   pipeline, refresh)
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-29 08:06:41.412836+02:00
 updated: 2026-03-29 14:52:32.550132+02:00
 started: 2026-03-29 14:52:32.550132+02:00

@@ -2,7 +2,7 @@
 id: 594
 title: 'Re-scope #575 AC for v2 architecture: 10 agents, per-agent MCP lifecycle blocks'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-04 19:17:51.528669+02:00
 updated: 2026-04-04 21:48:04.523495+02:00
 started: 2026-04-04 21:48:04.523495+02:00

@@ -3,7 +3,7 @@ id: 198
 title: Expand validate_agents.py to check all tool names against canonical 
   registry
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-29 23:08:48.213859+02:00
 updated: 2026-03-31 03:31:19.816115+02:00
 started: 2026-03-31 03:30:11.318028+02:00

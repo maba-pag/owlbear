@@ -2,7 +2,7 @@
 id: 1706
 title: Reconsider priority chip on task cards
 status: archived
-priority: important
+priority: medium
 created: 2026-05-21T20:23:55.395881+02:00
 updated: 2026-05-24T10:50:01.324023+02:00
 tags:

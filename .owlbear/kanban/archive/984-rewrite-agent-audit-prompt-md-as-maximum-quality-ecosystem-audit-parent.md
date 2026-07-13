@@ -2,7 +2,7 @@
 id: 984
 title: Rewrite agent-audit.prompt.md as maximum-quality ecosystem audit (parent)
 status: archived
-priority: important
+priority: medium
 created: 2026-04-18T21:21:13.595363+00:00
 updated: 2026-04-19T16:56:57.571885+00:00
 tags:

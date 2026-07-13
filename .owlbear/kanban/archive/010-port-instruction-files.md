@@ -2,7 +2,7 @@
 id: 10
 title: Port instruction files
 status: archived
-priority: important
+priority: medium
 created: 2026-03-26 17:20:03.836269+01:00
 updated: 2026-03-29 03:45:30.926242+02:00
 started: 2026-03-29 03:45:26.448526+02:00

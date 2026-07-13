@@ -2,7 +2,7 @@
 id: 504
 title: 'Delete dead knowledge modules: dedup.py and reranker.py'
 status: archived
-priority: important
+priority: medium
 created: 2026-03-04 07:38:16.879398+01:00
 updated: 2026-03-07 18:07:58.447301+01:00
 started: 2026-03-06 19:25:59.366257+01:00

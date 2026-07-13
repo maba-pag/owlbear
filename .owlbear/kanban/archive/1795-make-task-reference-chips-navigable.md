@@ -2,7 +2,7 @@
 id: 1795
 title: Make task reference chips navigable
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T03:09:50.740084+02:00
 updated: 2026-05-24T10:50:02.561948+02:00
 tags:

@@ -2,7 +2,7 @@
 id: 1585
 title: 'P1-01: Tests — knowledge schema constraint enforcement'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-15T16:24:12.183832+00:00
 updated: 2026-05-16T04:16:52.134055+00:00
 tags:

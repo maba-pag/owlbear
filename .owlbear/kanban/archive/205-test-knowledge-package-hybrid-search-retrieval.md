@@ -2,7 +2,7 @@
 id: 205
 title: 'Test: Knowledge package hybrid search + retrieval'
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-30 08:13:51.224589+02:00
 updated: 2026-03-30 14:22:08.248342+02:00
 started: 2026-03-30 14:21:42.498130+02:00

@@ -2,7 +2,7 @@
 id: 1340
 title: Set coherent Python runtime floor and Renovate policy before sync
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-04T15:00:05.846058+00:00
 updated: 2026-05-04T22:48:03.301767+00:00
 tags:

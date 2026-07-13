@@ -2,7 +2,7 @@
 id: 951
 title: Prefix end_work activity log detail with outcome type
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-18T09:43:38.688692+00:00
 updated: 2026-04-18T11:06:59.243714+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 146
 title: Implement orchestrator dispatch loop
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-29 16:23:47.253029+02:00
 updated: 2026-04-01 21:40:45.171582+02:00
 started: 2026-04-01 21:40:39.288848+02:00

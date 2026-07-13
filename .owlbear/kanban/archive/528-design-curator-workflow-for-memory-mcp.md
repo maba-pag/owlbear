@@ -2,7 +2,7 @@
 id: 528
 title: Design curator workflow for memory-mcp
 status: archived
-priority: important
+priority: medium
 created: 2026-04-01 16:11:51.042577+02:00
 updated: 2026-04-03 10:22:07.083576+02:00
 started: 2026-04-01 19:15:15.466078+02:00

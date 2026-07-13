@@ -2,7 +2,7 @@
 id: 1782
 title: Improve Ideas preview contrast and edit affordance
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T01:20:05.062245+02:00
 updated: 2026-05-24T10:50:02.384793+02:00
 tags:

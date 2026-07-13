@@ -2,7 +2,7 @@
 id: 1086
 title: 'A-03: RED — read tool adapter tests'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-21 10:53:39.529461+00:00
 updated: 2026-04-28T02:45:16.142673+00:00
 tags:

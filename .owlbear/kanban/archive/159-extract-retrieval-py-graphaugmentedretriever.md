@@ -2,7 +2,7 @@
 id: 159
 title: Extract retrieval.py (GraphAugmentedRetriever)
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-29 19:37:22.741034+02:00
 updated: 2026-04-04 07:09:54.166191+02:00
 started: 2026-04-04 07:09:28.296898+02:00

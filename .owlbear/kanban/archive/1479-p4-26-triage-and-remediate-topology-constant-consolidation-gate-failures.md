@@ -2,7 +2,7 @@
 id: 1479
 title: 'P4-26: triage and remediate topology-constant consolidation gate failures'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-10T09:21:41.555644+00:00
 updated: 2026-05-10T17:05:24.950352+00:00
 tags:

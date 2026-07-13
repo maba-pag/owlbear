@@ -2,7 +2,7 @@
 id: 1143
 title: Reconcile pre-D31 session-state taxonomy in legacy test suites
 status: archived
-priority: important
+priority: medium
 created: 2026-04-27T09:14:24.436648+00:00
 updated: 2026-04-27T11:18:42.407152+00:00
 tags:

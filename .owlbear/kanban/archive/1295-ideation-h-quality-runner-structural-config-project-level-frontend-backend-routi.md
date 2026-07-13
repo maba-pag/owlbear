@@ -3,7 +3,7 @@ id: 1295
 title: 'Ideation: h-quality-runner structural config — project-level frontend/backend
   routing mechanism'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-05-02T16:08:21.876412+00:00
 updated: 2026-05-04T21:27:38.340507+00:00
 tags:

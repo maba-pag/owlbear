@@ -2,7 +2,7 @@
 id: 1041
 title: Ideation overhaul validation artifacts
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-20T23:33:20.352087+00:00
 updated: 2026-04-24T10:26:49.000498+00:00
 tags:

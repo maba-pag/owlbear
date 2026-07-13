@@ -2,7 +2,7 @@
 id: 544
 title: 'Test: TypedDict return types for mcp-knowledge outputSchema'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-02 08:08:03.446618+02:00
 updated: 2026-04-02 20:30:12.903437+02:00
 started: 2026-04-02 20:30:12.487110+02:00

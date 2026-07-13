@@ -2,7 +2,7 @@
 id: 875
 title: 'P3-06: Implement LLMExtractor with openai SDK'
 status: archived
-priority: important
+priority: medium
 created: '2026-04-14T15:28:36.373364+00:00'
 updated: '2026-04-14T22:28:42.252004+00:00'
 tags:

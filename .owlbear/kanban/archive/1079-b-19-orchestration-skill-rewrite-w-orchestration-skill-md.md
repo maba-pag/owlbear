@@ -2,7 +2,7 @@
 id: 1079
 title: 'B-19: orchestration skill rewrite — w-orchestration/SKILL.md'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-21T10:50:12.228673+00:00
 updated: 2026-04-25T12:43:30.418045+00:00
 tags:

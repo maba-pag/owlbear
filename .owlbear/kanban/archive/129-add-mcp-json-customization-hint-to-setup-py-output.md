@@ -2,7 +2,7 @@
 id: 129
 title: Add mcp.json customization hint to setup.py output
 status: archived
-priority: important
+priority: medium
 created: 2026-03-29 07:06:54.736519+02:00
 updated: 2026-03-29 14:40:06.571296+02:00
 started: 2026-03-29 07:34:09.389332+02:00

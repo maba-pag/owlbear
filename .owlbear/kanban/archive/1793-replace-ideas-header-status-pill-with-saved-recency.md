@@ -2,7 +2,7 @@
 id: 1793
 title: Replace Ideas header status pill with saved recency
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T01:57:03.868117+02:00
 updated: 2026-05-24T10:50:02.537511+02:00
 tags:

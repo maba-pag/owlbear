@@ -2,7 +2,7 @@
 id: 1787
 title: Clarify task detail move and archive actions
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T01:57:03.618227+02:00
 updated: 2026-05-24T10:50:02.453626+02:00
 tags:

@@ -2,7 +2,7 @@
 id: 374
 title: 'Remove #209 stop commit guard artifacts (script, tests, hooks YAML)'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-30 20:46:30.378350+02:00
 updated: 2026-04-02 08:06:56.599839+02:00
 started: 2026-04-02 08:06:56.126933+02:00

@@ -2,7 +2,7 @@
 id: 850
 title: 'GREEN: Add ctx: Context to all 6 mcp-browser tools, use lifespan allowlist'
 status: archived
-priority: important
+priority: medium
 created: '2026-04-12T12:52:52.115593+00:00'
 updated: '2026-04-14T21:37:44.329797+00:00'
 tags:

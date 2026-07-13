@@ -2,7 +2,7 @@
 id: 1864
 title: 'consolidation test: structured decision requests'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-24T21:00:15.672050+02:00
 updated: 2026-05-26T12:52:58.929113+02:00
 tags:

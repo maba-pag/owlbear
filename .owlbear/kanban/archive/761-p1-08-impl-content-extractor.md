@@ -2,7 +2,7 @@
 id: 761
 title: 'P1-08: Impl — Content extractor'
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-10T10:55:57.270970+00:00'
 updated: '2026-04-13T04:36:48.693773+00:00'
 tags:

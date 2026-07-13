@@ -2,7 +2,7 @@
 id: 1259
 title: Add paused option to usePollingFetch
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-05-01T09:34:21.381409+00:00
 updated: 2026-05-01T21:29:54.921057+00:00
 tags:

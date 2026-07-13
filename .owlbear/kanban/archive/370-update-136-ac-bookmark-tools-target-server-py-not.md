@@ -2,7 +2,7 @@
 id: 370
 title: 'Update #136 AC: bookmark tools target server.py not tools.py'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-30 20:46:21.911180+02:00
 updated: 2026-04-04 07:09:56.296915+02:00
 started: 2026-04-04 07:09:30.646974+02:00

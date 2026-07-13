@@ -2,7 +2,7 @@
 id: 1484
 title: 'P1-03: Add proof-bundle validation to w-arch-review'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-11T08:59:01.930089+00:00
 updated: 2026-05-11T15:48:47.781008+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 1591
 title: 'P0-01: Tests — PDS global-styles import + CSP font relaxation'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-16T03:34:43.205432+00:00
 updated: 2026-05-16T12:21:50.639320+00:00
 tags:

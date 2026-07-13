@@ -2,7 +2,7 @@
 id: 1062
 title: 'C-17: GREEN — engine storage integration'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-21T10:44:12.250703+00:00
 updated: 2026-04-24T02:52:55.553428+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 1655
 title: 'Consolidation test: knowledge source lifecycle'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-18T03:11:28.669033+02:00
 updated: 2026-05-18T18:45:42.240606+02:00
 tags:

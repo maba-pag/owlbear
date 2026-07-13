@@ -2,7 +2,7 @@
 id: 475
 title: Add status and parent params to create_task, switch to JSON output
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-31 06:06:12.578276+02:00
 updated: 2026-03-31 16:36:30.687084+02:00
 started: 2026-03-31 16:36:30.117568+02:00

@@ -2,7 +2,7 @@
 id: 1249
 title: 'P1-02: GREEN — filterTasks pure function + FilterState type'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-01T04:34:45.636679+00:00
 updated: 2026-05-01T20:26:10.790165+00:00
 tags:

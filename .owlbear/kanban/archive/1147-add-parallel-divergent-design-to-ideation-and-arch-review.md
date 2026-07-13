@@ -2,7 +2,7 @@
 id: 1147
 title: Add parallel divergent design to ideation and arch review
 status: archived
-priority: important
+priority: medium
 created: 2026-04-27T21:27:43.776613+00:00
 updated: 2026-04-28T00:05:31.005559+00:00
 tags:

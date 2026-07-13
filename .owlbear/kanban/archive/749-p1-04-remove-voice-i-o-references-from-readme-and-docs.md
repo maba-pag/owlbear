@@ -2,7 +2,7 @@
 id: 749
 title: 'P1-04: Remove voice I/O references from README and docs'
 status: archived
-priority: important
+priority: medium
 created: '2026-04-10T10:36:47.149977+00:00'
 updated: '2026-04-13T12:14:26.475658+00:00'
 tags:

@@ -3,7 +3,7 @@ id: 513
 title: Fix dispatch failure audit logging gap — dispatch_entry never emits 
   CompletionEvent on failure
 status: archived
-priority: important
+priority: medium
 created: 2026-04-01 06:00:49.887913+02:00
 updated: 2026-04-01 21:23:15.757975+02:00
 started: 2026-04-01 06:00:56.862906+02:00

@@ -2,7 +2,7 @@
 id: 1376
 title: 'P2-01: Test Cockpit task detail context model'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-06T01:04:29.741762+00:00
 updated: 2026-05-08T12:43:49.316861+00:00
 tags:

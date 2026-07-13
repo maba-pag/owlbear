@@ -2,7 +2,7 @@
 id: 1713
 title: Tighten nav rail icon spacing
 status: archived
-priority: important
+priority: medium
 created: 2026-05-21T23:23:56.241185+02:00
 updated: 2026-05-24T10:50:01.413887+02:00
 tags:

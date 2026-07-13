@@ -2,7 +2,7 @@
 id: 1001
 title: Create h-memory-structure handbook skill
 status: archived
-priority: important
+priority: medium
 created: 2026-04-18 21:34:33.195499+00:00
 updated: 2026-04-19 02:48:52.510150+00:00
 tags:

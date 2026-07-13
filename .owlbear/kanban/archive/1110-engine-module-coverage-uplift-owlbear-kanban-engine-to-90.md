@@ -2,7 +2,7 @@
 id: 1110
 title: 'Engine module coverage uplift: owlbear_kanban.engine to 90%+'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-23T16:03:23.771419+00:00
 updated: 2026-04-24T03:45:50.279769+00:00
 tags:

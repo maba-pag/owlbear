@@ -2,7 +2,7 @@
 id: 76
 title: 'Test: Add search_structured method to KnowledgeQueryService'
 status: archived
-priority: important
+priority: medium
 created: 2026-03-26 20:40:19.702702+01:00
 updated: 2026-03-28 00:53:29.365567+01:00
 started: 2026-03-28 00:52:52.310062+01:00

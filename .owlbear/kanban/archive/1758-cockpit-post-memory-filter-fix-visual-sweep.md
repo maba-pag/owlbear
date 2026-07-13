@@ -2,7 +2,7 @@
 id: 1758
 title: Cockpit post Memory filter fix visual sweep
 status: archived
-priority: important
+priority: medium
 created: 2026-05-23T16:10:51+0200
 updated: 2026-05-24T10:50:02.068490+02:00
 tags:

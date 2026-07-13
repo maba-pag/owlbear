@@ -2,7 +2,7 @@
 id: 1309
 title: 'P1-08: MCP-surface proof — recall_memory registration and invocation test'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-04T01:32:27.284697+00:00
 updated: 2026-05-05T17:19:12.966526+00:00
 tags:

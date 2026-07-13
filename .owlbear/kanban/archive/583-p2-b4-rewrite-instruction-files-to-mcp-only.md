@@ -2,7 +2,7 @@
 id: 583
 title: 'P2-B4: Rewrite instruction files to MCP-only'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-03 16:42:46.152360+02:00
 updated: 2026-04-04 23:05:56.065725+02:00
 started: 2026-04-04 23:03:31.431568+02:00

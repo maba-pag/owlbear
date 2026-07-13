@@ -2,7 +2,7 @@
 id: 224
 title: Update decision-requests skill for action request type
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-30 16:57:14.035359+02:00
 updated: 2026-03-30 23:28:23.193891+02:00
 started: 2026-03-30 23:28:17.023063+02:00

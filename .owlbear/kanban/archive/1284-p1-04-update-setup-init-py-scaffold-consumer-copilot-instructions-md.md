@@ -2,7 +2,7 @@
 id: 1284
 title: 'P1-04: Update setup/init.py — scaffold consumer copilot-instructions.md'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-02T16:01:10.625508+00:00
 updated: 2026-05-03T14:09:44.613465+00:00
 tags:

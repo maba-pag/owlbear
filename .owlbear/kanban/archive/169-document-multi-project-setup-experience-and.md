@@ -2,7 +2,7 @@
 id: 169
 title: Document multi-project setup experience and sharing guide
 status: archived
-priority: important
+priority: medium
 created: 2026-03-29 19:49:38.970111+02:00
 updated: 2026-03-30 00:56:09.504217+02:00
 started: 2026-03-30 00:55:20.089115+02:00

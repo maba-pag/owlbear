@@ -2,7 +2,7 @@
 id: 263
 title: Create Quality-Runner subagent (agent.md + skill)
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-30 19:30:52.012916+02:00
 updated: 2026-04-04 18:43:24.062687+02:00
 started: 2026-04-04 18:43:24.062687+02:00

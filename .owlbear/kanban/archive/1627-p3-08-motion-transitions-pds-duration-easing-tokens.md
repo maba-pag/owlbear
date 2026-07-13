@@ -2,7 +2,7 @@
 id: 1627
 title: 'P3-08: Motion/transitions — PDS duration + easing tokens'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-16T03:37:44.829874+00:00
 updated: 2026-05-17T17:29:02.169919+02:00
 tags:

@@ -2,7 +2,7 @@
 id: 1174
 title: Delete config_loader.save_config and _merge_into dead code
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-28T23:07:10.988412+00:00
 updated: 2026-04-29T04:29:43.636082+00:00
 tags:

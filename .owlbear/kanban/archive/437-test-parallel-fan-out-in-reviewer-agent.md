@@ -2,7 +2,7 @@
 id: 437
 title: 'Test: parallel fan-out in reviewer agent'
 status: archived
-priority: important
+priority: medium
 created: 2026-03-30 21:47:34.636807+02:00
 updated: 2026-04-05 16:04:47.874660+02:00
 started: 2026-04-05 16:04:47.874660+02:00

@@ -2,7 +2,7 @@
 id: 937
 title: 'P3-01: Launch command (uv run cockpit) + browser auto-open'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-17T19:59:26.716250+00:00
 updated: 2026-04-19T15:02:14.279716+00:00
 tags:

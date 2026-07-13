@@ -2,7 +2,7 @@
 id: 844
 title: Tests — Config staleness fix in create_task
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-11T11:40:50.781085+00:00'
 updated: '2026-04-12T22:26:51.784372+00:00'
 tags:

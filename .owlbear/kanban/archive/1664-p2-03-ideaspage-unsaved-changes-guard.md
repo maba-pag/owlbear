@@ -2,7 +2,7 @@
 id: 1664
 title: 'P2-03: IdeasPage — unsaved-changes guard'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-18T17:42:08.375696+02:00
 updated: 2026-05-20T17:59:32.650489+02:00
 tags:

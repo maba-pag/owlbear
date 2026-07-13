@@ -2,7 +2,7 @@
 id: 906
 title: fix watcher storm causing MCP server deadlock on kanban writes
 status: archived
-priority: critical
+priority: medium
 created: 2026-04-16T23:45:01.418957+00:00
 updated: 2026-04-17T00:46:04.618134+00:00
 tags:

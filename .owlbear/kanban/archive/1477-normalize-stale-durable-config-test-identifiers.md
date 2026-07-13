@@ -2,7 +2,7 @@
 id: 1477
 title: Normalize stale durable config test identifiers
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-05-09T14:12:06.498671+00:00
 updated: 2026-05-09T18:00:23.313678+00:00
 tags:

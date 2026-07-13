@@ -2,7 +2,7 @@
 id: 1241
 title: 'Test: ArchivalModal component'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-01T03:07:55.116658+00:00
 updated: 2026-05-01T14:26:52.784232+00:00
 tags:

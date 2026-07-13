@@ -2,7 +2,7 @@
 id: 1322
 title: 'P0-06: Content injection guard wiring at ingest pipeline'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-04T05:48:37.792577+00:00
 updated: 2026-05-04T12:13:44.541148+00:00
 tags:

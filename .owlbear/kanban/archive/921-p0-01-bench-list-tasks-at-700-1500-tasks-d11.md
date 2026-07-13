@@ -2,7 +2,7 @@
 id: 921
 title: 'P0-01: Bench list_tasks() at 700/1500 tasks (D11)'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-17T19:56:44.165954+00:00
 updated: 2026-04-17T21:02:32.911970+00:00
 tags:

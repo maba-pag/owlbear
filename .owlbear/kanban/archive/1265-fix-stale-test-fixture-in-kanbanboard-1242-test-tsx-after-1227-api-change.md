@@ -2,7 +2,7 @@
 id: 1265
 title: 'Fix stale test fixture in KanbanBoard_1242.test.tsx after #1227 API change'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-01T10:02:21.826578+00:00
 updated: 2026-05-01T14:41:54.675023+00:00
 tags:

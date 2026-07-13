@@ -3,7 +3,7 @@ id: 1293
 title: 'Ideation: value audit of share/ files — which skills carry signal vs. restate
   common knowledge?'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-05-02T16:08:21.853770+00:00
 updated: 2026-05-04T21:27:38.327110+00:00
 tags:

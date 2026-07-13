@@ -2,7 +2,7 @@
 id: 1137
 title: Wire updated OCC token through cockpit frontend move flow
 status: archived
-priority: important
+priority: medium
 created: 2026-04-26T16:29:17.620093+00:00
 updated: 2026-04-27T09:25:09.144884+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 1338
 title: Fix storage round-trip timestamp and archive claimed_by leaks
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-04T15:00:05.755705+00:00
 updated: 2026-05-04T23:23:26.456948+00:00
 tags:

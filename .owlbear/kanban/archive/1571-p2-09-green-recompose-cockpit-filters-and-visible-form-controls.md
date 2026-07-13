@@ -2,7 +2,7 @@
 id: 1571
 title: 'P2-09 GREEN: Recompose Cockpit filters and visible form controls'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-14T18:26:50.109551+00:00
 updated: 2026-05-15T14:30:16.614928+00:00
 tags:

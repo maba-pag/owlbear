@@ -2,7 +2,7 @@
 id: 1437
 title: Simplify kanban topology for deployment readiness
 status: archived
-priority: important
+priority: medium
 created: 2026-05-08T19:26:13.098440+00:00
 updated: 2026-05-09T00:51:41.548916+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 1903
 title: 'Knowledge: fix retry_failed_enrichment duplicate definition'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-05-27T21:12:15.503668+02:00
 updated: 2026-05-27T21:34:29.566216+02:00
 tags:

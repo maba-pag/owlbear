@@ -2,7 +2,7 @@
 id: 1740
 title: Task detail edit-mode visual sweep
 status: archived
-priority: important
+priority: medium
 created: 2026-05-23T10:19:12+0200
 updated: 2026-05-24T10:50:01.817413+02:00
 tags:

@@ -2,7 +2,7 @@
 id: 1707
 title: Remove low-value kanban drag and drop
 status: archived
-priority: important
+priority: medium
 created: 2026-05-21T23:22:56.124550+02:00
 updated: 2026-05-24T10:50:01.336879+02:00
 tags:

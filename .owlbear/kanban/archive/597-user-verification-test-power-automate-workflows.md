@@ -2,7 +2,7 @@
 id: 597
 title: 'User verification: test Power Automate Workflows webhook in corp Teams'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-04 20:14:08.544114+02:00
 updated: 2026-04-06 18:46:13.046264+02:00
 started: 2026-04-06 18:46:13.046264+02:00

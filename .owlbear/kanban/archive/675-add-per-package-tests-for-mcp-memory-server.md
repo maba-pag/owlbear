@@ -2,7 +2,7 @@
 id: 675
 title: Add per-package tests for mcp-memory server
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-08T18:14:33.571087+02:00
 updated: 2026-04-09T03:59:01.2969341+02:00
 started: 2026-04-09T03:59:01.2969341+02:00

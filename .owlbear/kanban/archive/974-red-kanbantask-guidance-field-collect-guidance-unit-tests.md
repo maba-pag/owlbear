@@ -2,7 +2,7 @@
 id: 974
 title: 'RED: KanbanTask.guidance field + collect_guidance unit tests'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-18T21:17:49.860532+00:00
 updated: 2026-04-19T01:18:32.064542+00:00
 tags:

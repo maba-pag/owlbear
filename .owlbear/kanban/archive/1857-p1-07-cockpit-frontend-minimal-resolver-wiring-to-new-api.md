@@ -2,7 +2,7 @@
 id: 1857
 title: 'P1-07: Cockpit frontend — minimal resolver wiring to new API'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-24T20:59:01.793534+02:00
 updated: 2026-05-25T22:11:22.015064+02:00
 tags:

@@ -2,7 +2,7 @@
 id: 1542
 title: 'P3-09: test — Shell.css + secondary component CSS migration'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-13T18:41:58.403715+00:00
 updated: 2026-05-14T05:27:20.537651+00:00
 tags:

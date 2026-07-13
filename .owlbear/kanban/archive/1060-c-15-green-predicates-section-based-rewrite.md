@@ -2,7 +2,7 @@
 id: 1060
 title: 'C-15: GREEN — predicates section-based rewrite'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-21T10:43:41.533670+00:00
 updated: 2026-04-23T17:36:48.045618+00:00
 tags:

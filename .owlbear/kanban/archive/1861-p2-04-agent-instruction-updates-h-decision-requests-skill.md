@@ -2,7 +2,7 @@
 id: 1861
 title: 'P2-04: Agent instruction updates — h-decision-requests skill'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-24T20:59:38.739082+02:00
 updated: 2026-05-26T03:43:25.839590+02:00
 tags:

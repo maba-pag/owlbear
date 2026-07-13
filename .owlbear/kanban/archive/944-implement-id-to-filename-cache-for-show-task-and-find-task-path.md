@@ -2,7 +2,7 @@
 id: 944
 title: Implement _id_to_filename cache for show_task() and _find_task_path()
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-17T22:57:35.591784+00:00
 updated: 2026-04-17T23:56:29.642131+00:00
 tags:

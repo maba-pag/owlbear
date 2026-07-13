@@ -2,7 +2,7 @@
 id: 1450
 title: 'P4-13: Probe MCP list filters, annotations, and error envelopes'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-08T19:32:15.603480+00:00
 updated: 2026-05-09T03:58:10.274265+00:00
 tags:

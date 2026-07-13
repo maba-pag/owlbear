@@ -2,7 +2,7 @@
 id: 1044
 title: Brief B — Kanban Engine + Cockpit Backend/API Surface
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-21T09:48:03.854046+00:00
 updated: 2026-04-22T06:51:58.599338+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 1882
 title: 'Knowledge: MCP tools — write operations'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-25T19:05:34.718298+02:00
 updated: 2026-05-27T01:33:15.459331+02:00
 tags:

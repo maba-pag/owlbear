@@ -2,7 +2,7 @@
 id: 15
 title: Extract knowledge engine from v1
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-26 17:21:09.612643+01:00
 updated: 2026-03-29 16:05:02.303883+02:00
 started: 2026-03-29 16:04:25.804447+02:00

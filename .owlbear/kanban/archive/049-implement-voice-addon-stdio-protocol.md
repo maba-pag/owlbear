@@ -2,7 +2,7 @@
 id: 49
 title: Implement voice addon stdio protocol
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-26 18:57:17.008134+01:00
 updated: 2026-03-30 15:35:59.968220+02:00
 started: 2026-03-30 15:31:30.839261+02:00

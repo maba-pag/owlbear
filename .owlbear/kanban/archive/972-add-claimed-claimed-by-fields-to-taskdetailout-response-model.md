@@ -2,7 +2,7 @@
 id: 972
 title: Add claimed/claimed_by fields to TaskDetailOut response model
 status: archived
-priority: important
+priority: medium
 created: 2026-04-18T17:51:15.338842+00:00
 updated: 2026-04-18T19:56:04.165662+00:00
 tags:

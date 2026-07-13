@@ -2,7 +2,7 @@
 id: 1127
 title: Fix release outcome to append notes per Brief B D52
 status: archived
-priority: important
+priority: medium
 created: 2026-04-25 18:07:12.599139+00:00
 updated: 2026-04-26T15:19:14.979798+00:00
 tags: []

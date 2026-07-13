@@ -2,7 +2,7 @@
 id: 197
 title: Calibrate auditor confidence scoring with deduction rubric
 status: archived
-priority: important
+priority: medium
 created: 2026-03-29 23:08:40.671442+02:00
 updated: 2026-03-30 05:21:03.365295+02:00
 started: 2026-03-30 05:20:28.073927+02:00

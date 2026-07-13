@@ -2,7 +2,7 @@
 id: 1888
 title: 'Knowledge: MCP lifespan — add protocol stores to AppContext'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-27T01:00:31.607797+02:00
 updated: 2026-05-27T03:02:20.239256+02:00
 tags:

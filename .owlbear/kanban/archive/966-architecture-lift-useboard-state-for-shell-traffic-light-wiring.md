@@ -2,7 +2,7 @@
 id: 966
 title: 'Architecture: lift useBoard state for Shell traffic-light wiring'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-18T15:59:11.234422+00:00
 updated: 2026-04-18T21:20:17.336585+00:00
 tags:

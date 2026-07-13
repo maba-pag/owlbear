@@ -2,7 +2,7 @@
 id: 810
 title: Add revision counter
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-10T21:21:35.834128+00:00'
 updated: '2026-04-15T12:04:42.229741+00:00'
 tags:

@@ -2,7 +2,7 @@
 id: 139
 title: Extract consolidation + evaluator stubs
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-29 14:51:25.933119+02:00
 updated: 2026-03-30 07:31:05.319189+02:00
 started: 2026-03-29 14:51:55.863175+02:00

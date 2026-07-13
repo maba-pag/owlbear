@@ -2,7 +2,7 @@
 id: 1523
 title: 'P2-04: Implement proof_bundle migration script'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-13T02:30:03.824088+00:00
 updated: 2026-05-13T06:15:38.540858+00:00
 tags:

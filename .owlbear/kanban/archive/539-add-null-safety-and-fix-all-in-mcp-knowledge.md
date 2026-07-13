@@ -2,7 +2,7 @@
 id: 539
 title: Add null safety and fix __all__ in mcp-knowledge server
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-02 05:59:31.026470+02:00
 updated: 2026-04-02 15:48:51.141734+02:00
 started: 2026-04-02 15:48:44.723558+02:00

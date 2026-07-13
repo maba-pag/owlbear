@@ -2,7 +2,7 @@
 id: 1343
 title: 'Config validation cleanup: remove agent_name while preserving lazy agent_map'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-04T15:10:51.036581+00:00
 updated: 2026-05-05T10:14:04.569709+00:00
 tags:

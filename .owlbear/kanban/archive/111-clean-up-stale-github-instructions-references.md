@@ -2,7 +2,7 @@
 id: 111
 title: Clean up stale .github/instructions/ references
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-28 22:24:22.933331+01:00
 updated: 2026-03-30 04:50:20.127222+02:00
 started: 2026-03-30 04:47:07.550699+02:00

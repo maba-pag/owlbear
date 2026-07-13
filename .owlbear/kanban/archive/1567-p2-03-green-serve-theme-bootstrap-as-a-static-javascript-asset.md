@@ -2,7 +2,7 @@
 id: 1567
 title: 'P2-03 GREEN: Serve theme-bootstrap as a static JavaScript asset'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-14T18:26:42.415783+00:00
 updated: 2026-05-15T02:59:36.872305+00:00
 tags:

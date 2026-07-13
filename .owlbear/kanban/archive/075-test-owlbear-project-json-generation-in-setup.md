@@ -2,7 +2,7 @@
 id: 75
 title: 'Test: owlbear-project.json generation in setup script'
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-26 20:37:44.188149+01:00
 updated: 2026-03-30 00:12:41.452048+02:00
 started: 2026-03-30 00:12:41.114170+02:00

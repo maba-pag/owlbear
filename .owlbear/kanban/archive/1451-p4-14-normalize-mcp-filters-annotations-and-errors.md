@@ -2,7 +2,7 @@
 id: 1451
 title: 'P4-14: Normalize MCP filters, annotations, and errors'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-08T19:32:19.525089+00:00
 updated: 2026-05-11T09:09:27.303628+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 1084
 title: 'A-01: RED — MCP boundary models tests'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-21T10:53:19.162858+00:00
 updated: 2026-04-24T12:30:04.398054+00:00
 tags:

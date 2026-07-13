@@ -2,7 +2,7 @@
 id: 1418
 title: Fix uv.lock exclusion in MegaLinter and add mcp-browser to ruff src
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-07T23:29:04.456182+00:00
 updated: 2026-05-08T16:26:42.455134+00:00
 tags:

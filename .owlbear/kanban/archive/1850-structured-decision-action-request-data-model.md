@@ -2,7 +2,7 @@
 id: 1850
 title: Structured decision/action request data model
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T20:54:25.775843+02:00
 updated: 2026-05-26T13:25:42.384971+02:00
 tags:

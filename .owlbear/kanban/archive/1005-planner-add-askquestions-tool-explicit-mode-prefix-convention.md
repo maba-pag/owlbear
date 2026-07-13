@@ -2,7 +2,7 @@
 id: 1005
 title: 'Planner: add askQuestions tool + explicit mode prefix convention'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-18 21:54:25.167093+00:00
 updated: 2026-04-19 03:09:24.370526+00:00
 tags:

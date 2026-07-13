@@ -2,7 +2,7 @@
 id: 33
 title: Extract entity extraction + graph builders
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-26 18:33:48.389441+01:00
 updated: 2026-03-31 07:52:43.329923+02:00
 started: 2026-03-31 07:52:23.751466+02:00

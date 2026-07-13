@@ -2,7 +2,7 @@
 id: 714
 title: 'P3-02: GREEN — Pydantic models for BoardConfig and TaskRecord'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-09T03:24:35.9375742+02:00
 updated: 2026-04-09T08:39:19.8800999+02:00
 started: 2026-04-09T08:39:19.8800999+02:00

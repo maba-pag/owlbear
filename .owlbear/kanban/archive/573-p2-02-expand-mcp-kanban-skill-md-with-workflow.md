@@ -2,7 +2,7 @@
 id: 573
 title: 'P2-02: Expand mcp-kanban SKILL.md with workflow pattern + per-tool reference'
 status: archived
-priority: critical
+priority: medium
 created: 2026-04-03 11:14:49.209709+02:00
 updated: 2026-04-03 12:39:10.226195+02:00
 started: 2026-04-03 12:39:10.226195+02:00

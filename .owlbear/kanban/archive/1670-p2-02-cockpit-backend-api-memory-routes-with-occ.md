@@ -2,7 +2,7 @@
 id: 1670
 title: 'P2-02: Cockpit backend API — memory routes with OCC'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-18T17:43:36.416614+02:00
 updated: 2026-05-19T10:06:39.199498+02:00
 tags:

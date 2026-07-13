@@ -2,7 +2,7 @@
 id: 624
 title: Evaluate and clean up orchestrator planner/ package
 status: archived
-priority: important
+priority: medium
 created: 2026-04-05T01:31:32.2092633+02:00
 updated: 2026-04-06T02:35:35.5633278+02:00
 started: 2026-04-06T02:35:35.5633278+02:00

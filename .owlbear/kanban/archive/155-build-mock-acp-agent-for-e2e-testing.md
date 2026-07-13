@@ -2,7 +2,7 @@
 id: 155
 title: Build mock ACP agent for E2E testing
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-29 19:33:50.555516+02:00
 updated: 2026-03-30 15:29:40.647104+02:00
 started: 2026-03-30 15:29:04.911862+02:00

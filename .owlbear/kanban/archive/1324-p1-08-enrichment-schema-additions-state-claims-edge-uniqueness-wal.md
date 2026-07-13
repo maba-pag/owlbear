@@ -2,7 +2,7 @@
 id: 1324
 title: 'P1-08: Enrichment schema additions (state, claims, edge uniqueness, WAL)'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-04T05:48:50.076796+00:00
 updated: 2026-05-05T00:36:24.451796+00:00
 tags:

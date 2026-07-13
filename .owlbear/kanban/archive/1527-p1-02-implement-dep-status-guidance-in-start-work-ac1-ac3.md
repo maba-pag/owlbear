@@ -2,7 +2,7 @@
 id: 1527
 title: 'P1-02: implement dep-status guidance in start_work (AC1-AC3)'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-13T12:17:51.690274+00:00
 updated: 2026-05-13T16:16:40.516571+00:00
 tags:

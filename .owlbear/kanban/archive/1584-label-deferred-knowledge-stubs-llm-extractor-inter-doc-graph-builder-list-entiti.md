@@ -3,7 +3,7 @@ id: 1584
 title: Label deferred knowledge stubs (llm_extractor, inter_doc_graph_builder, 
   list_entities)
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-05-15T16:22:28.292693+00:00
 updated: 2026-05-16T05:11:02.224251+00:00
 tags:

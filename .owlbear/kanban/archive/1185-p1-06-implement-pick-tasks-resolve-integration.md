@@ -2,7 +2,7 @@
 id: 1185
 title: 'P1-06: Implement pick_tasks resolve integration'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-30T00:51:51.711195+00:00
 updated: 2026-04-30T11:38:34.349984+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 1728
 title: Cockpit post-markdown visual sweep
 status: archived
-priority: important
+priority: medium
 created: 2026-05-23T03:24:04+0200
 updated: 2026-05-24T10:50:01.650125+02:00
 tags:

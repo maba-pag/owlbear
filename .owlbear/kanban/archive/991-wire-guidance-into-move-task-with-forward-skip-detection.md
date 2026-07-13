@@ -2,7 +2,7 @@
 id: 991
 title: Wire guidance into `move_task` with forward-skip detection
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-18T21:23:00.874612+00:00
 updated: 2026-04-19T02:15:04.578213+00:00
 tags:

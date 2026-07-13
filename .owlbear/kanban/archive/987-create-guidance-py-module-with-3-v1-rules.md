@@ -2,7 +2,7 @@
 id: 987
 title: Create `guidance.py` module with 3 V1 rules
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-18T21:22:36.980680+00:00
 updated: 2026-04-19T01:53:55.676774+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 1333
 title: 'P3-17: Agent definitions + prompts (knowledge-ingestor + knowledge-enricher)'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-04T05:48:50.177453+00:00
 updated: 2026-05-06T02:32:17.723710+00:00
 tags:

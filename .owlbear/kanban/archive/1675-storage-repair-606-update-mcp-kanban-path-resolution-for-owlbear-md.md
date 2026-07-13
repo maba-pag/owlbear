@@ -2,7 +2,7 @@
 id: 1675
 title: 'Storage repair: 606-update-mcp-kanban-path-resolution-for-owlbear.md'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-19T12:38:16.786988+02:00
 updated: 2026-05-19T17:22:43.179449+02:00
 tags:

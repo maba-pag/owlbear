@@ -2,7 +2,7 @@
 id: 1911
 title: 'Knowledge: Wire SourceFetcher in MCP server and replace refresh handler'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-28T01:41:45.877792+02:00
 updated: 2026-05-28T06:11:16.683906+02:00
 tags:

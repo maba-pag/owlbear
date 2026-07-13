@@ -2,7 +2,7 @@
 id: 1395
 title: 'P3-05: Test Cockpit accessibility and PDS verification gate'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-06T01:09:42.087185+00:00
 updated: 2026-05-11T09:17:48.615795+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 728
 title: 'P3-16: GREEN — activity.jsonl logging'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-09T03:28:26.0758289+02:00
 updated: 2026-04-09T22:27:42.8340411+02:00
 started: 2026-04-09T22:27:42.8340411+02:00

@@ -2,7 +2,7 @@
 id: 19
 title: Build ACP client library
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-26 17:22:08.852232+01:00
 updated: 2026-03-30 06:53:27.300101+02:00
 started: 2026-03-30 06:52:49.233582+02:00

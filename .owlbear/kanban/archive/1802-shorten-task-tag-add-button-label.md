@@ -2,7 +2,7 @@
 id: 1802
 title: Shorten task tag add button label
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-24T06:42:25.713651+02:00
 updated: 2026-05-24T10:50:02.654627+02:00
 tags:

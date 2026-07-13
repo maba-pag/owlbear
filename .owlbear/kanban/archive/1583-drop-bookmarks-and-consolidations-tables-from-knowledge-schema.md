@@ -2,7 +2,7 @@
 id: 1583
 title: Drop bookmarks and consolidations tables from knowledge schema
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-05-15T16:22:28.270394+00:00
 updated: 2026-05-16T07:31:40.585446+00:00
 tags:

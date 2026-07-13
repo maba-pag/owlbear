@@ -2,7 +2,7 @@
 id: 1569
 title: 'P2-07 GREEN: Replace in-flow disclosures with Cockpit overlays'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-14T18:26:42.474114+00:00
 updated: 2026-05-15T12:46:06.564151+00:00
 tags:

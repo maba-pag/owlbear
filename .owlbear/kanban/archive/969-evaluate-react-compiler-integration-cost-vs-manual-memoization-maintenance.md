@@ -3,7 +3,7 @@ id: 969
 title: Evaluate React Compiler integration cost vs manual memoization
   maintenance
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-18T16:09:24.966912+00:00
 updated: 2026-04-18T19:17:33.577818+00:00
 tags:

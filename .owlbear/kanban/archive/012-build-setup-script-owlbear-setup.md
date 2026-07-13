@@ -2,7 +2,7 @@
 id: 12
 title: Build setup script (owlbear setup)
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-26 17:20:25.397837+01:00
 updated: 2026-03-29 05:56:33.444224+02:00
 started: 2026-03-29 05:56:28.982159+02:00

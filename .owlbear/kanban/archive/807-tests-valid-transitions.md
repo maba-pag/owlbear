@@ -2,7 +2,7 @@
 id: 807
 title: Tests — valid_transitions
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-10T21:21:18.809894+00:00'
 updated: '2026-04-13T12:30:39.113310+00:00'
 tags:

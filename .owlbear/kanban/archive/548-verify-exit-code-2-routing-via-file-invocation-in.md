@@ -2,7 +2,7 @@
 id: 548
 title: Verify exit code 2 routing via -File invocation in subagent context
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-02 14:52:11.663043+02:00
 updated: 2026-04-04 18:08:53.301537+02:00
 started: 2026-04-04 18:08:53.301537+02:00

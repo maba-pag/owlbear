@@ -2,7 +2,7 @@
 id: 1463
 title: 'E2a: Delete/merge stale Python root tests (82 files in tests/)'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-09T03:32:04.142951+00:00
 updated: 2026-05-09T13:21:19.529597+00:00
 tags:

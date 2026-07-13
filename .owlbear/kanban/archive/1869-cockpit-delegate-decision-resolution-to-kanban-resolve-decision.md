@@ -2,7 +2,7 @@
 id: 1869
 title: 'Cockpit: delegate decision resolution to kanban resolve_decision()'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-25T00:20:42.926678+02:00
 updated: 2026-05-25T05:54:26.323845+02:00
 tags:

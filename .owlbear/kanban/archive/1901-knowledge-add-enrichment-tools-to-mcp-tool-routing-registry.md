@@ -2,7 +2,7 @@
 id: 1901
 title: 'Knowledge: add enrichment tools to MCP_TOOL_ROUTING registry'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-27T18:18:59.181169+02:00
 updated: 2026-05-27T23:12:23.528119+02:00
 tags:

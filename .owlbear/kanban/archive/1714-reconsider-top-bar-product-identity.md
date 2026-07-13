@@ -2,7 +2,7 @@
 id: 1714
 title: Reconsider top bar product identity
 status: archived
-priority: important
+priority: medium
 created: 2026-05-21T23:24:05.487044+02:00
 updated: 2026-05-24T10:50:01.427508+02:00
 tags:

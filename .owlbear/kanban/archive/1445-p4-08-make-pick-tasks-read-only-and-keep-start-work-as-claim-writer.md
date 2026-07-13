@@ -2,7 +2,7 @@
 id: 1445
 title: 'P4-08: Make pick_tasks read-only and keep start_work as claim writer'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-08T19:32:02.327561+00:00
 updated: 2026-05-11T03:10:21.943902+00:00
 tags:

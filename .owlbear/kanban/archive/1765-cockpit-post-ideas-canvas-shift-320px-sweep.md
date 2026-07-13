@@ -2,7 +2,7 @@
 id: 1765
 title: Cockpit post Ideas canvas-shift 320px sweep
 status: archived
-priority: important
+priority: medium
 created: 2026-05-23T17:06:12.586171+02:00
 updated: 2026-05-24T10:50:02.162994+02:00
 tags:

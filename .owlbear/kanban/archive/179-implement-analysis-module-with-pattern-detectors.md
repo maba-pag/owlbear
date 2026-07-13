@@ -2,7 +2,7 @@
 id: 179
 title: Implement analysis module with pattern detectors
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-29 19:51:21.741292+02:00
 updated: 2026-03-31 00:29:22.476225+02:00
 started: 2026-03-31 00:22:20.575225+02:00

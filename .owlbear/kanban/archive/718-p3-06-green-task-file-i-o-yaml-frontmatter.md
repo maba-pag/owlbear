@@ -2,7 +2,7 @@
 id: 718
 title: 'P3-06: GREEN — task file I/O (YAML frontmatter + markdown body)'
 status: archived
-priority: critical
+priority: medium
 created: 2026-04-09T03:25:30.2736084+02:00
 updated: 2026-04-09T16:03:12.8300135+02:00
 started: 2026-04-09T16:03:12.8300135+02:00

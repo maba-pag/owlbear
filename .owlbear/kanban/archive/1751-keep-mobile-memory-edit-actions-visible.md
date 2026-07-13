@@ -2,7 +2,7 @@
 id: 1751
 title: Keep mobile Memory edit actions visible
 status: archived
-priority: important
+priority: medium
 created: 2026-05-23T11:29:42+0200
 updated: 2026-05-24T10:50:01.970710+02:00
 tags:

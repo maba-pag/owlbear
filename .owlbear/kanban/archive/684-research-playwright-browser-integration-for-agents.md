@@ -2,7 +2,7 @@
 id: 684
 title: 'Research: Playwright browser integration for agents'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-08T19:18:22.1617576+02:00
 updated: 2026-04-09T02:06:50.3662149+02:00
 started: 2026-04-09T02:06:50.3662149+02:00

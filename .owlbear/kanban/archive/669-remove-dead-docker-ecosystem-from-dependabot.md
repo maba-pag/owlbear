@@ -2,7 +2,7 @@
 id: 669
 title: Remove dead Docker ecosystem from dependabot
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-06T22:22:41.1186478+02:00
 updated: 2026-04-07T11:52:12.1065394+02:00
 started: 2026-04-07T11:52:12.1065394+02:00

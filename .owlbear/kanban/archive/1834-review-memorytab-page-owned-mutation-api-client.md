@@ -2,7 +2,7 @@
 id: 1834
 title: Review MemoryTab page-owned mutation API client
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T12:05:05.086598+02:00
 updated: 2026-05-24T23:32:49.433010+02:00
 tags:

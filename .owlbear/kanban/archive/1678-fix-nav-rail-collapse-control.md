@@ -2,7 +2,7 @@
 id: 1678
 title: Fix nav rail collapse control
 status: archived
-priority: important
+priority: medium
 created: 2026-05-21T19:51:15.660250+02:00
 updated: 2026-05-24T10:50:00.967528+02:00
 tags:

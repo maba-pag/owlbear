@@ -2,7 +2,7 @@
 id: 647
 title: 'P4-07: Create architect-voice.agent.md'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-06T07:01:27.4188843+02:00
 updated: 2026-04-07T00:41:55.7261438+02:00
 started: 2026-04-07T00:41:55.7261438+02:00

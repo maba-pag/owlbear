@@ -2,7 +2,7 @@
 id: 480
 title: Split bootstrap.py into focused submodules
 status: archived
-priority: important
+priority: medium
 created: 2026-03-04 07:37:58.173438+01:00
 updated: 2026-03-09 19:36:04.021111+01:00
 started: 2026-03-06 23:05:03.893834+01:00

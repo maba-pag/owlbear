@@ -2,7 +2,7 @@
 id: 24
 title: General KB initial data load
 status: archived
-priority: important
+priority: medium
 created: 2026-03-26 17:23:17.822970+01:00
 updated: 2026-03-30 23:08:59.983850+02:00
 started: 2026-03-30 23:08:59.983850+02:00

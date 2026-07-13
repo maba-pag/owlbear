@@ -2,7 +2,7 @@
 id: 834
 title: Impl — IDPI ContentInjectionGuard at graph entry
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-11T15:08:22.983610+00:00'
 updated: '2026-04-12T13:59:02.174723+00:00'
 tags:

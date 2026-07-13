@@ -2,7 +2,7 @@
 id: 1491
 title: 'Cockpit: Extract CockpitProvider from Shell.tsx'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-11T23:14:53.705441+00:00
 updated: 2026-05-12T13:41:04.826663+00:00
 tags:

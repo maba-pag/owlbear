@@ -2,7 +2,7 @@
 id: 742
 title: Create Excalidraw skill reference files (element-templates, json-schema, color-palette)
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-10T05:10:18.1482528+02:00'
 updated: '2026-04-10T06:19:27.592472+00:00'
 tags:

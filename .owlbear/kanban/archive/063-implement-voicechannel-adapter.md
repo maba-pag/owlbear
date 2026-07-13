@@ -2,7 +2,7 @@
 id: 63
 title: Implement VoiceChannel adapter
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-26 19:33:48.974337+01:00
 updated: 2026-04-06 06:23:54.278943+02:00
 started: 2026-04-06 06:23:54.278943+02:00

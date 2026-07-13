@@ -2,7 +2,7 @@
 id: 1402
 title: Harden cache populate ordering in MtimeScanCache
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-05-06T03:40:51.447745+00:00
 updated: 2026-05-06T08:29:26.673712+00:00
 tags:

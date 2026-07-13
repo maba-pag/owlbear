@@ -2,7 +2,7 @@
 id: 602
 title: Rename data/ to store/
 status: archived
-priority: critical
+priority: medium
 created: 2026-04-04 20:30:39.445184+02:00
 updated: 2026-04-05 15:30:06.257474+02:00
 started: 2026-04-05 15:30:06.257474+02:00

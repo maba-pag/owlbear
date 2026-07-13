@@ -2,7 +2,7 @@
 id: 1759
 title: Fix Ideas mobile preview toolbar clipping
 status: archived
-priority: important
+priority: medium
 created: 2026-05-23T16:16:27+0200
 updated: 2026-05-24T10:50:02.080797+02:00
 tags:

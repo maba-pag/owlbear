@@ -2,7 +2,7 @@
 id: 132
 title: Add pre-commit guard against agent tool name regression
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-29 08:15:13.052016+02:00
 updated: 2026-03-29 14:56:44.296284+02:00
 started: 2026-03-29 14:56:44.296284+02:00

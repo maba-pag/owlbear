@@ -2,7 +2,7 @@
 id: 1077
 title: 'B-11: RED — end_work tests'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-21 10:50:12.206656+00:00
 updated: 2026-04-26T13:30:29.044379+00:00
 tags:

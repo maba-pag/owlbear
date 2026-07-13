@@ -2,7 +2,7 @@
 id: 565
 title: Update pipeline agent files with MCP tool references alongside CLI
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-03 07:46:22.191013+02:00
 updated: 2026-04-03 12:39:01.257788+02:00
 started: 2026-04-03 12:39:01.257788+02:00

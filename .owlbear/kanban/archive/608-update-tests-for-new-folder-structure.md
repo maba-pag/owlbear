@@ -2,7 +2,7 @@
 id: 608
 title: Update tests for new folder structure
 status: archived
-priority: critical
+priority: medium
 created: 2026-04-04T20:31:51.963696+02:00
 updated: 2026-04-05T22:16:26.8769249+02:00
 started: 2026-04-05T22:16:26.8769249+02:00

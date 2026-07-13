@@ -2,7 +2,7 @@
 id: 1114
 title: 'Research: config.yml schema grouping after Brief A/B/C'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-24 12:00:00+00:00
 updated: 2026-04-28T20:18:30.232246+00:00
 tags:

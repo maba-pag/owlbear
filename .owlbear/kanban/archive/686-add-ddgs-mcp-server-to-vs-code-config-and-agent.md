@@ -2,7 +2,7 @@
 id: 686
 title: Add ddgs MCP server to VS Code config and agent tool allowlists
 status: archived
-priority: important
+priority: medium
 created: 2026-04-08T20:54:21.8216945+02:00
 updated: 2026-04-09T07:56:33.3911376+02:00
 started: 2026-04-09T07:56:33.3911376+02:00

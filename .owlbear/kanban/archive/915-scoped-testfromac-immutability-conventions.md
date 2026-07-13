@@ -2,7 +2,7 @@
 id: 915
 title: Scoped TestFromAC immutability conventions
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-17T11:52:08.016899+00:00
 updated: 2026-04-17T20:04:08.505239+00:00
 tags:

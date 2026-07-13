@@ -2,7 +2,7 @@
 id: 1230
 title: Frontend — PDS migration (design system consistency)
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-30 16:31:18.656061+00:00
 updated: 2026-05-02T05:51:45.643920+00:00
 tags:

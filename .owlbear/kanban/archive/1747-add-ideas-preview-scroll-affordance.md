@@ -2,7 +2,7 @@
 id: 1747
 title: Add Ideas preview scroll affordance
 status: archived
-priority: important
+priority: medium
 created: 2026-05-23T11:03:43+0200
 updated: 2026-05-24T10:50:01.918287+02:00
 tags:

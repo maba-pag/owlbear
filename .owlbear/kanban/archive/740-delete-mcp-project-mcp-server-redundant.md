@@ -2,7 +2,7 @@
 id: 740
 title: Delete mcp-project MCP server (redundant)
 status: archived
-priority: important
+priority: medium
 created: '2026-04-10T04:24:57.2943192+02:00'
 updated: '2026-04-10T06:50:16.858434+00:00'
 tags:

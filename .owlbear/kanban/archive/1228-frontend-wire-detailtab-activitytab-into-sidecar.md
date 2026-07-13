@@ -2,7 +2,7 @@
 id: 1228
 title: Frontend — wire DetailTab + ActivityTab into sidecar
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-30 16:31:18.636409+00:00
 updated: 2026-05-01T13:30:58.959611+00:00
 tags:

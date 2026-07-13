@@ -2,7 +2,7 @@
 id: 215
 title: Add tag-based exemptions to Gate 4 TW:MISSING check
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-30 14:22:41.798918+02:00
 updated: 2026-03-30 20:50:10.060107+02:00
 started: 2026-03-30 20:49:13.987598+02:00

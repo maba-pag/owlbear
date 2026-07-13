@@ -2,7 +2,7 @@
 id: 1266
 title: Restructure mcp-memory module to markdown+frontmatter file engine
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-02T03:41:10.811109+00:00
 updated: 2026-05-02T15:00:34.243247+00:00
 tags:

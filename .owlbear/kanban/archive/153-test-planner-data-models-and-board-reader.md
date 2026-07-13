@@ -2,7 +2,7 @@
 id: 153
 title: 'Test: planner data models and board reader'
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-29 19:26:49.053208+02:00
 updated: 2026-03-30 17:02:25.153314+02:00
 started: 2026-03-29 19:26:53.836495+02:00

@@ -2,7 +2,7 @@
 id: 933
 title: 'P2-05: GREEN — Kanban board surface'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-17T19:58:25.632962+00:00
 updated: 2026-04-18T15:39:13.477665+00:00
 tags:

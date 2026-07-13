@@ -2,7 +2,7 @@
 id: 1498
 title: 'Cockpit: Wire PBanner mutation error feedback in Shell'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-12T02:38:27.681040+00:00
 updated: 2026-05-12T05:39:39.360885+00:00
 tags:

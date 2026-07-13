@@ -2,7 +2,7 @@
 id: 1532
 title: 'P1-01: Tests for body newline normalization at MCP kanban ingress'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-13T12:29:10.026075+00:00
 updated: 2026-05-13T15:31:12.001370+00:00
 tags:

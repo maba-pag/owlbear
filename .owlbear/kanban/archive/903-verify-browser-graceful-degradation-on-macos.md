@@ -2,7 +2,7 @@
 id: 903
 title: Verify browser graceful degradation on macOS
 status: archived
-priority: important
+priority: medium
 created: 2026-04-16T22:54:41.795853+00:00
 updated: 2026-04-17T03:21:42.002039+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 952
 title: Fix end_work() detail format for session classification
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-18T10:45:23.819905+00:00
 updated: 2026-04-18T11:47:16.787634+00:00
 tags:

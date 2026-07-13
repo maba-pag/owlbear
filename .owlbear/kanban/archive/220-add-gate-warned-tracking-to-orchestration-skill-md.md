@@ -2,7 +2,7 @@
 id: 220
 title: Add gate_warned tracking to orchestration SKILL.md
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-30 15:17:02.002813+02:00
 updated: 2026-03-31 06:30:52.187341+02:00
 started: 2026-03-31 06:30:35.288094+02:00

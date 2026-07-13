@@ -2,7 +2,7 @@
 id: 1350
 title: Remove legacy dispatch export and refresh kanban docs
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-04T18:27:23.261100+00:00
 updated: 2026-05-05T12:59:42.160638+00:00
 tags:

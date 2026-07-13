@@ -2,7 +2,7 @@
 id: 1161
 title: 'HB-05: Tests for Shell health badge integration'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-28T17:35:08.979042+00:00
 updated: 2026-04-29T02:28:08.389673+00:00
 tags:

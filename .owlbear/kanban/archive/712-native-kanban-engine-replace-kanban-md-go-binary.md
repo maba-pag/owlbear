@@ -2,7 +2,7 @@
 id: 712
 title: 'Native kanban engine: replace kanban-md Go binary with Python engine'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-09T03:16:18.2333914+02:00
 updated: 2026-04-09T07:40:04.1082029+02:00
 started: 2026-04-09T07:40:04.1082029+02:00

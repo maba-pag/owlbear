@@ -2,7 +2,7 @@
 id: 731
 title: 'P3-19: Integration — 700-file round-trip parity test'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-09T03:28:58.5750642+02:00
 updated: 2026-04-10T03:04:50.8179873+02:00
 started: 2026-04-10T03:04:50.8179873+02:00

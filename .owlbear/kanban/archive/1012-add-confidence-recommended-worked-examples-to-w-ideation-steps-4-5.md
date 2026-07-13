@@ -2,7 +2,7 @@
 id: 1012
 title: Add confidence/recommended worked examples to w-ideation Steps 4–5
 status: archived
-priority: important
+priority: medium
 created: 2026-04-18 23:29:08.851410+00:00
 updated: 2026-04-19 16:07:46.619523+00:00
 tags:

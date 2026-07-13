@@ -2,7 +2,7 @@
 id: 581
 title: 'P2-B2: Rewrite skill cheatsheet tables to MCP-only'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-03 16:42:28.384900+02:00
 updated: 2026-04-04 23:05:43.574137+02:00
 started: 2026-04-04 23:03:31.415228+02:00

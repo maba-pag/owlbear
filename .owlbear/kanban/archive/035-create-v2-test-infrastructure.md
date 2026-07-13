@@ -2,7 +2,7 @@
 id: 35
 title: Create v2 test infrastructure
 status: archived
-priority: critical
+priority: medium
 created: 2026-03-26 18:34:45.665977+01:00
 updated: 2026-03-28 04:15:44.878166+01:00
 started: 2026-03-28 04:14:39.480275+01:00

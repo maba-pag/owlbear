@@ -2,7 +2,7 @@
 id: 266
 title: Add fresh-context retry to builder agent
 status: archived
-priority: important
+priority: medium
 created: 2026-03-30 19:31:28.635773+02:00
 updated: 2026-04-04 07:24:33.653117+02:00
 started: 2026-04-04 07:24:33.653117+02:00

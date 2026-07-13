@@ -2,7 +2,7 @@
 id: 621
 title: Implement pick_tasks tool in owlbear-kanban server
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-05T01:31:03.9704718+02:00
 updated: 2026-04-05T18:14:16.2703649+02:00
 started: 2026-04-05T18:14:16.2703649+02:00

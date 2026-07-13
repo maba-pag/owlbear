@@ -2,7 +2,7 @@
 id: 1617
 title: 'P2-09: Filter panel PDS controls'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-16T03:37:02.279043+00:00
 updated: 2026-05-17T15:26:05.824165+02:00
 tags:

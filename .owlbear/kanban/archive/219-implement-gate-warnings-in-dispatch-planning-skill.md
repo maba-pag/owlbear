@@ -2,7 +2,7 @@
 id: 219
 title: Implement gate_warnings in dispatch-planning SKILL.md
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-30 15:16:54.620407+02:00
 updated: 2026-03-30 21:17:04.108654+02:00
 started: 2026-03-30 21:16:12.974056+02:00

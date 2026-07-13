@@ -2,7 +2,7 @@
 id: 1452
 title: 'P4-15: Probe create_dr guidance and pipeline integration'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-08T19:32:26.111021+00:00
 updated: 2026-05-09T07:35:01.679590+00:00
 tags:

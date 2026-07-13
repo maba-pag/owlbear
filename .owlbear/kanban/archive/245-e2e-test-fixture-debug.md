@@ -2,7 +2,7 @@
 id: 245
 title: E2E-Test-fixture-debug
 status: archived
-priority: important
+priority: medium
 created: 2026-03-30 19:00:52.131570+02:00
 updated: 2026-03-30 19:01:13.749175+02:00
 started: 2026-03-30 19:01:13.749175+02:00

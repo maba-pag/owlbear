@@ -2,7 +2,7 @@
 id: 1217
 title: Document orchestrator CLI status (possibly deprecated)
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-30T15:29:15.278460+00:00
 updated: 2026-04-30T17:20:22.834700+00:00
 tags:

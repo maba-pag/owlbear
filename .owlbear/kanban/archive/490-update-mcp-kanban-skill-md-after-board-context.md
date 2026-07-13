@@ -2,7 +2,7 @@
 id: 490
 title: Update mcp-kanban SKILL.md after board_context removal
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-31 06:22:01.712166+02:00
 updated: 2026-04-01 01:58:07.232862+02:00
 started: 2026-04-01 01:58:06.726862+02:00

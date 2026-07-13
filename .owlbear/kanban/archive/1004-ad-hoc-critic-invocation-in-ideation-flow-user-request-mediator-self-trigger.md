@@ -3,7 +3,7 @@ id: 1004
 title: Ad-hoc Critic invocation in ideation flow (user-request + Mediator
   self-trigger)
 status: archived
-priority: important
+priority: medium
 created: 2026-04-18 21:47:42.612522+00:00
 updated: 2026-04-19 11:43:40.133224+00:00
 tags:

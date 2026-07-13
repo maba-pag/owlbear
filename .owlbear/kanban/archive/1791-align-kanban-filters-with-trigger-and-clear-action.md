@@ -2,7 +2,7 @@
 id: 1791
 title: Align Kanban filters with trigger and clear action
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T01:57:03.822491+02:00
 updated: 2026-05-24T10:50:02.511279+02:00
 tags:
@@ -68,8 +68,8 @@ User prefers trying a popover pattern for Kanban filters, similar in interaction
 - `.owlbear/scratch/1716-wide-cockpit/1791-kanban-filter-popover-1440.png`
 
 ## Screenshot Metrics
-- 1024 viewport: panel left 248, right 968, width 720; result count `1 / 3 tasks`; active chip `Priority: Critical`.
-- 1440 viewport: panel left 664, right 1384, width 720; result count `1 / 3 tasks`; active chip `Priority: Critical`.
+- 1024 viewport: panel left 248, right 968, width 720; result count `1 / 3 tasks`; active chip `priority: medium`.
+- 1440 viewport: panel left 664, right 1384, width 720; result count `1 / 3 tasks`; active chip `priority: medium`.
 
 [[2026-05-24T05:02:21+02:00]]
 Implemented the approved Kanban filter popover polish: right-anchored filter panel, active-state Clear filters action outside the popover, focused behavioral/source tests, lint/build, and screenshots at 1024 and 1440.

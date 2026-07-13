@@ -2,7 +2,7 @@
 id: 1220
 title: Cockpit config — populate agent_map and remove flat duplicate keys
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-30 16:31:18.556842+00:00
 updated: 2026-04-30T22:56:50.656977+00:00
 tags:

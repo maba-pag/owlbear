@@ -2,7 +2,7 @@
 id: 1206
 title: Clean up load_config double-validation chain
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-30 15:29:06.219146+00:00
 updated: 2026-05-02T19:37:35.874796+00:00
 tags:

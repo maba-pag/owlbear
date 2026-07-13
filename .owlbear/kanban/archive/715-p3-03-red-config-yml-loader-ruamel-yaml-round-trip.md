@@ -2,7 +2,7 @@
 id: 715
 title: 'P3-03: RED — config.yml loader (ruamel.yaml round-trip)'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-09T03:25:03.4706335+02:00
 updated: 2026-04-09T12:42:46.9877315+02:00
 started: 2026-04-09T12:42:46.9877315+02:00

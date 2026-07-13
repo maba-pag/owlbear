@@ -2,7 +2,7 @@
 id: 580
 title: 'P2-B1: Remove CLI refs from agent files, MCP-only'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-03 16:42:18.923378+02:00
 updated: 2026-04-04 23:04:53.854279+02:00
 started: 2026-04-04 23:03:31.398349+02:00

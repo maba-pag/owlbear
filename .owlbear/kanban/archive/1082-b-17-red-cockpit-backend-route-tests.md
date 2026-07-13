@@ -2,7 +2,7 @@
 id: 1082
 title: 'B-17: RED — cockpit backend route tests'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-21 10:50:43.401807+00:00
 updated: 2026-04-27T21:53:27.680048+00:00
 tags:

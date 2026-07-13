@@ -2,7 +2,7 @@
 id: 1829
 title: Review RepairPanel quarantine wording expectation
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T11:19:10.413939+02:00
 updated: 2026-05-24T23:22:55.558390+02:00
 tags:

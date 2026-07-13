@@ -2,7 +2,7 @@
 id: 1566
 title: 'P2-12 RED: Specify Cockpit responsive contract'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-14T18:26:23.522300+00:00
 updated: 2026-05-15T02:28:03.279355+00:00
 tags:

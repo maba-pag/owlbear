@@ -2,7 +2,7 @@
 id: 1529
 title: 'P2-02: implement MCP start_work guidance passthrough (AC4)'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-13T12:18:10.756634+00:00
 updated: 2026-05-13T17:26:02.538903+00:00
 tags:

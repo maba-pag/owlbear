@@ -2,7 +2,7 @@
 id: 852
 title: Wire BrowserContentFetcher into MCP browser server tools
 status: archived
-priority: important
+priority: medium
 created: '2026-04-12T14:03:06.606752+00:00'
 updated: '2026-04-15T14:50:15.581798+00:00'
 tags:

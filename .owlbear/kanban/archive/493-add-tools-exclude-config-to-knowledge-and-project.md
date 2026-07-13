@@ -2,7 +2,7 @@
 id: 493
 title: Add TOOLS_EXCLUDE config to knowledge and project MCP servers
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-31 06:37:25.241201+02:00
 updated: 2026-04-02 02:58:52.964543+02:00
 started: 2026-04-02 02:58:52.515744+02:00

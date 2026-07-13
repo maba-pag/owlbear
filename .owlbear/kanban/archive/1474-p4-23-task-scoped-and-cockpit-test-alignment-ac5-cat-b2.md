@@ -2,7 +2,7 @@
 id: 1474
 title: 'P4-23: Task-scoped and cockpit test alignment (AC5 Cat-B2)'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-09T08:46:53.940620+00:00
 updated: 2026-05-10T00:38:20.567113+00:00
 tags:

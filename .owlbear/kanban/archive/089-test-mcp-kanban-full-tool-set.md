@@ -2,7 +2,7 @@
 id: 89
 title: 'Test: mcp-kanban full tool set'
 status: archived
-priority: important
+priority: medium
 created: 2026-03-27 22:47:10.852010+01:00
 updated: 2026-03-30 06:59:35.482829+02:00
 started: 2026-03-30 06:58:49.694304+02:00

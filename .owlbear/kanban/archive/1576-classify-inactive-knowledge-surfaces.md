@@ -2,7 +2,7 @@
 id: 1576
 title: Classify inactive knowledge surfaces
 status: archived
-priority: important
+priority: medium
 created: 2026-05-14T18:47:54.230692+00:00
 updated: 2026-05-15T18:25:15.441641+00:00
 tags:

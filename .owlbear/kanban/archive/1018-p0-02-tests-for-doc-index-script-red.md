@@ -2,7 +2,7 @@
 id: 1018
 title: 'P0-02: Tests for doc-index script (RED)'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-19 23:51:24.321480+00:00
 updated: 2026-04-20 01:20:06.268504+00:00
 tags:

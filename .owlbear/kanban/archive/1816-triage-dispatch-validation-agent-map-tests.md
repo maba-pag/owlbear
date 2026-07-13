@@ -2,7 +2,7 @@
 id: 1816
 title: Repair dispatch validation and agent map tests
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T09:23:21+02:00
 updated: 2026-05-24T10:50:02.842425+02:00
 tags:

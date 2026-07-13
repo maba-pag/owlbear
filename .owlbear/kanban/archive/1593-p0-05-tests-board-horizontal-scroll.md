@@ -2,7 +2,7 @@
 id: 1593
 title: 'P0-05: Tests — board horizontal scroll'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-16T03:34:43.248583+00:00
 updated: 2026-05-16T14:09:23.461491+00:00
 tags:

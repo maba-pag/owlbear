@@ -2,7 +2,7 @@
 id: 1268
 title: 'P1-02: Test — MemoryEntry model validation and state machine'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-02T03:43:27.840296+00:00
 updated: 2026-05-02T06:57:20.175556+00:00
 tags:

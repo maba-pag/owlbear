@@ -2,7 +2,7 @@
 id: 104
 title: 'Test: FastMCP server and lifespan wiring for mcp-knowledge'
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-28 14:01:13.729874+01:00
 updated: 2026-03-29 08:27:24.430974+02:00
 started: 2026-03-29 08:27:20.250700+02:00

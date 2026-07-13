@@ -2,7 +2,7 @@
 id: 1112
 title: 'Dead code: remove dict-status branches + pragma Windows branch in engine.py'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-24T07:54:12.876694+00:00
 updated: 2026-04-24T12:36:53.324309+00:00
 tags: []

@@ -2,7 +2,7 @@
 id: 1510
 title: 'Cockpit: Sync PDS local assets in public/ with npm package version'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-12T09:09:32.883043+00:00
 updated: 2026-05-12T19:24:24.791553+00:00
 tags:

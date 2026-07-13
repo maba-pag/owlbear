@@ -2,7 +2,7 @@
 id: 1124
 title: 'Research: reconcile end-work outcome contract'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-25 17:19:08.063026+00:00
 updated: 2026-04-26T13:55:01.521205+00:00
 tags:

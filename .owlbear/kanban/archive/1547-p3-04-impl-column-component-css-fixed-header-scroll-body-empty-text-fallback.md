@@ -3,7 +3,7 @@ id: 1547
 title: 'P3-04: impl — column component CSS: fixed header, scroll body, empty text
   fallback'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-13T18:43:23.829051+00:00
 updated: 2026-05-14T03:36:41.300798+00:00
 tags:

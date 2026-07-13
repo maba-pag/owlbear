@@ -2,7 +2,7 @@
 id: 692
 title: Document analysis CLI in orchestration workflow skill
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-08T21:16:13.4503881+02:00
 updated: 2026-04-09T03:05:56.5730094+02:00
 started: 2026-04-09T03:05:56.5730094+02:00

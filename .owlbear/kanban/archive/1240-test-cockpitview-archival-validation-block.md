@@ -2,7 +2,7 @@
 id: 1240
 title: 'Test: CockpitView archival validation block'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-01T03:07:52.852822+00:00
 updated: 2026-05-01T08:08:18.348749+00:00
 tags:

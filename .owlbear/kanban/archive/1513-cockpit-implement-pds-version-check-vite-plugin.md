@@ -2,7 +2,7 @@
 id: 1513
 title: 'Cockpit: Implement PDS version check Vite plugin'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-05-12T17:32:51.825110+00:00
 updated: 2026-05-12T22:25:16.743629+00:00
 tags:

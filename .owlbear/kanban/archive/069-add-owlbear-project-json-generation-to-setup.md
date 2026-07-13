@@ -2,7 +2,7 @@
 id: 69
 title: Add owlbear-project.json generation to setup script
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-26 20:05:10.730334+01:00
 updated: 2026-03-30 02:46:05.522949+02:00
 started: 2026-03-30 02:46:00.627571+02:00

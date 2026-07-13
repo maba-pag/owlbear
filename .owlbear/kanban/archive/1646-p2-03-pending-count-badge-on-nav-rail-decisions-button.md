@@ -2,7 +2,7 @@
 id: 1646
 title: 'P2-03: Pending count badge on nav-rail decisions button'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-18T00:49:44.996891+02:00
 updated: 2026-05-19T20:33:18.864009+02:00
 tags:

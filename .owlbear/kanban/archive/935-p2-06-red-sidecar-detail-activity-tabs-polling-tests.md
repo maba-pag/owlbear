@@ -2,7 +2,7 @@
 id: 935
 title: 'P2-06: RED — Sidecar (Detail + Activity tabs) + polling tests'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-17T19:58:48.870731+00:00
 updated: 2026-04-18T20:33:27.784917+00:00
 tags:

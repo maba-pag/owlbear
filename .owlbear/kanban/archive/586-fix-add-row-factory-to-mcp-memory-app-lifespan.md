@@ -2,7 +2,7 @@
 id: 586
 title: 'Fix: add row-factory to mcp-memory app_lifespan'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-03 17:54:52.400374+02:00
 updated: 2026-04-04 21:20:53.129987+02:00
 started: 2026-04-04 21:20:53.129987+02:00

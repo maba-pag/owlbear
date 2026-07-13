@@ -2,7 +2,7 @@
 id: 568
 title: Add owlbear-memory tool access to all pipeline agents
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-03 10:40:51.446723+02:00
 updated: 2026-04-03 17:09:29.042953+02:00
 started: 2026-04-03 17:06:30.636038+02:00

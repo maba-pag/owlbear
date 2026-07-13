@@ -2,7 +2,7 @@
 id: 1778
 title: Improve Decision resolver responsive fit
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T00:37:24.558145+02:00
 updated: 2026-05-24T10:50:02.332915+02:00
 tags:

@@ -2,7 +2,7 @@
 id: 1055
 title: 'C-10: GREEN — storage_io atomic-write & ID-allocation'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-21T10:43:21.197242+00:00
 updated: 2026-04-23T03:01:03.365921+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 39
 title: Scaffold mcp-kanban MCP server package
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-26 18:49:54.134108+01:00
 updated: 2026-03-27 22:15:34.929296+01:00
 started: 2026-03-27 22:15:34.929296+01:00

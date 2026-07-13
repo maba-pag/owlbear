@@ -2,7 +2,7 @@
 id: 456
 title: Implement audit-centric dispatch-cycle trace ID
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-30 23:47:25.363350+02:00
 updated: 2026-04-03 01:13:11.367111+02:00
 started: 2026-04-03 01:13:11.367111+02:00

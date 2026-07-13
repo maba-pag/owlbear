@@ -2,7 +2,7 @@
 id: 1625
 title: 'P3-04: Dark mode audit — border contrast + token compliance'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-16T03:37:44.735785+00:00
 updated: 2026-05-17T22:12:09.050404+02:00
 tags:

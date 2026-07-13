@@ -2,7 +2,7 @@
 id: 1833
 title: Review PCanvas shadow DOM override boundary
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T11:59:04.211544+02:00
 updated: 2026-05-24T23:44:20.213457+02:00
 tags:

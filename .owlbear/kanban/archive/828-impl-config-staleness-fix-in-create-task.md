@@ -2,7 +2,7 @@
 id: 828
 title: Impl — Config staleness fix in create_task
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-11T11:40:50.810920+00:00'
 updated: '2026-04-11T19:18:22.356901+00:00'
 tags:

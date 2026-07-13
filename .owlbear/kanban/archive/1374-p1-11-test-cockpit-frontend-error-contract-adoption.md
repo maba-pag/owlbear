@@ -2,7 +2,7 @@
 id: 1374
 title: 'P1-11: Test Cockpit frontend error-contract adoption'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-06T00:58:52.272079+00:00
 updated: 2026-05-07T21:31:06.033198+00:00
 tags:

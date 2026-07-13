@@ -2,7 +2,7 @@
 id: 1830
 title: Review DetailTab information architecture region order
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T11:24:06.524711+02:00
 updated: 2026-05-24T23:34:10.940930+02:00
 tags:

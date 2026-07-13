@@ -2,7 +2,7 @@
 id: 1602
 title: 'P1-10: Tests — sidecar structure'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-16T03:35:41.122973+00:00
 updated: 2026-05-16T15:04:34.422208+00:00
 tags:

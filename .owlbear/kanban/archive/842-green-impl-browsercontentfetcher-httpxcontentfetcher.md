@@ -2,7 +2,7 @@
 id: 842
 title: GREEN — Impl BrowserContentFetcher + HttpxContentFetcher
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-12T02:23:26.431396+00:00'
 updated: '2026-04-12T21:51:29.927703+00:00'
 tags:

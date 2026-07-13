@@ -2,7 +2,7 @@
 id: 1665
 title: 'P2-04: IdeasPage — external-edit awareness and conflict resolution'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-18T17:42:08.396906+02:00
 updated: 2026-05-20T21:15:38.861412+02:00
 tags:

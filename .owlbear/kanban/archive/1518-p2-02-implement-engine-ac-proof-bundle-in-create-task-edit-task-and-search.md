@@ -2,7 +2,7 @@
 id: 1518
 title: 'P2-02: Implement engine ac/proof_bundle in create_task, edit_task, and search'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-13T02:29:31.968335+00:00
 updated: 2026-05-13T06:44:14.055861+00:00
 tags:

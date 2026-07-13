@@ -2,7 +2,7 @@
 id: 1561
 title: 'P2-02 RED: Guard theme-bootstrap static serving'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-14T18:26:23.375667+00:00
 updated: 2026-05-14T21:35:52.218154+00:00
 tags:

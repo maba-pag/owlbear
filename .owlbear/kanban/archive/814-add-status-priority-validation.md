@@ -2,7 +2,7 @@
 id: 814
 title: Add status/priority validation
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-10T21:22:01.275308+00:00'
 updated: '2026-04-15T14:07:45.301366+00:00'
 tags:

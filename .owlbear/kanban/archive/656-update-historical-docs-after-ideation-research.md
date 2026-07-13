@@ -2,7 +2,7 @@
 id: 656
 title: Update historical docs after ideation→research rename
 status: archived
-priority: someday
+priority: medium
 created: 2026-04-06T07:19:45.7935685+02:00
 updated: 2026-04-07T12:54:51.6771696+02:00
 started: 2026-04-07T12:54:51.6771696+02:00

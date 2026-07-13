@@ -2,7 +2,7 @@
 id: 30
 title: Research voice addon architecture
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-26 18:05:24.833345+01:00
 updated: 2026-03-27 12:40:23.599484+01:00
 started: 2026-03-27 12:38:58.653198+01:00

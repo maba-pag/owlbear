@@ -2,7 +2,7 @@
 id: 1353
 title: Agent & Skill SNR Compression Tooling
 status: archived
-priority: important
+priority: medium
 created: 2026-05-04T21:20:12.818826+00:00
 updated: 2026-05-05T19:31:26.994057+00:00
 tags:

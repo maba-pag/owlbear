@@ -2,7 +2,7 @@
 id: 508
 title: Document MCP server conventions in copilot-instructions.md
 status: archived
-priority: important
+priority: medium
 created: 2026-03-31 23:41:06.504902+02:00
 updated: 2026-04-01 17:50:31.189334+02:00
 started: 2026-04-01 17:50:30.631594+02:00

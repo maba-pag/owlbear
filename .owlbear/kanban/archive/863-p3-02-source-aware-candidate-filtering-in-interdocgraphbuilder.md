@@ -2,7 +2,7 @@
 id: 863
 title: 'P3-02: Source-aware candidate filtering in InterDocGraphBuilder'
 status: archived
-priority: nice-to-have
+priority: medium
 created: '2026-04-13T19:16:55.146615+00:00'
 updated: '2026-04-15T01:49:37.583725+00:00'
 tags:

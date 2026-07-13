@@ -2,7 +2,7 @@
 id: 1040
 title: Ideation overhaul static completion
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-20T23:11:12.988247+00:00
 updated: 2026-04-24T11:11:10.205461+00:00
 tags:

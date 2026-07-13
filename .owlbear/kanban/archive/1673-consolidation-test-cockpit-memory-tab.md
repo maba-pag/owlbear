@@ -2,7 +2,7 @@
 id: 1673
 title: 'Consolidation test: Cockpit Memory Tab'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-18T17:44:22.449391+02:00
 updated: 2026-05-20T11:07:41.496152+02:00
 tags:

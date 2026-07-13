@@ -2,7 +2,7 @@
 id: 1801
 title: Simplify Kanban filter summary counter
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T06:03:00+02:00
 updated: 2026-05-24T10:50:02.640992+02:00
 tags:

@@ -2,7 +2,7 @@
 id: 1345
 title: Align Cockpit decision responses with DR resolver
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-04T17:27:34.911141+00:00
 updated: 2026-05-05T15:22:09.933140+00:00
 tags:

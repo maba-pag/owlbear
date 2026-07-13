@@ -2,7 +2,7 @@
 id: 1043
 title: Brief C — Kanban Storage Layer
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-21T09:47:55.186057+00:00
 updated: 2026-04-22T03:31:59.627497+00:00
 tags:

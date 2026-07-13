@@ -2,7 +2,7 @@
 id: 965
 title: 'RED: useBoard polling + mtime-skip + error state tests'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-18T15:59:11.225393+00:00
 updated: 2026-04-18T21:05:03.161250+00:00
 tags:

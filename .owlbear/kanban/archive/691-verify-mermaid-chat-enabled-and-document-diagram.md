@@ -2,7 +2,7 @@
 id: 691
 title: Verify mermaid-chat.enabled and document diagram rendering paths for agents
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-08T21:12:20.6641375+02:00
 updated: 2026-04-09T02:33:41.7606291+02:00
 started: 2026-04-09T02:33:41.7606291+02:00

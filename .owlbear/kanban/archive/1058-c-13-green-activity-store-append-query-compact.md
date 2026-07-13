@@ -2,7 +2,7 @@
 id: 1058
 title: 'C-13: GREEN — activity_store append/query/compact'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-21T10:43:21.228592+00:00
 updated: 2026-04-23T16:46:56.853131+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 1146
 title: Remove dead cockpit response models (TaskSummaryOut, TaskDetailOut, etc.)
 status: archived
-priority: someday
+priority: medium
 created: 2026-04-27T18:30:12.019145+00:00
 updated: 2026-04-27T23:53:33.440163+00:00
 tags:

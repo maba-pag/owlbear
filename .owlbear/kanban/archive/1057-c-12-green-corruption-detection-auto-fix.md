@@ -2,7 +2,7 @@
 id: 1057
 title: 'C-12: GREEN — corruption detection & auto-fix'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-21T10:43:21.218408+00:00
 updated: 2026-04-23T05:01:20.787654+00:00
 tags:

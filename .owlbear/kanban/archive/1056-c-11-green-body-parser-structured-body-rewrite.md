@@ -2,7 +2,7 @@
 id: 1056
 title: 'C-11: GREEN — body_parser structured-body rewrite'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-21T10:43:21.208221+00:00
 updated: 2026-04-22T18:25:39.731042+00:00
 tags:

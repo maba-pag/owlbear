@@ -2,7 +2,7 @@
 id: 591
 title: Add PreToolUse path guard hook to doc-writer agent (Phase 5)
 status: archived
-priority: someday
+priority: medium
 created: 2026-04-04 07:56:05.254254+02:00
 updated: 2026-04-06 10:37:37.520149+02:00
 started: 2026-04-06 10:37:37.520149+02:00

@@ -2,7 +2,7 @@
 id: 227
 title: Create action request file for blocked task 167
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-30 16:57:45.526096+02:00
 updated: 2026-03-31 06:46:02.939370+02:00
 started: 2026-03-31 06:45:29.120959+02:00

@@ -2,7 +2,7 @@
 id: 1893
 title: 'Knowledge: MCP wire ingest_document to IngestCoordinator.ingest'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-27T01:00:59.346799+02:00
 updated: 2026-05-27T11:51:05.888084+02:00
 tags:

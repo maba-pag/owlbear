@@ -2,7 +2,7 @@
 id: 1465
 title: 'E2c: Delete/merge stale frontend tests (44 files in serve/cockpit/web/src/__tests__/)'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-09T03:32:04.287026+00:00
 updated: 2026-05-09T18:57:24.970671+00:00
 tags:

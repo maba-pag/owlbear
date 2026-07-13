@@ -2,7 +2,7 @@
 id: 1815
 title: Repair engine accessor migration root tests
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T09:23:21+02:00
 updated: 2026-05-24T10:50:02.826067+02:00
 tags:

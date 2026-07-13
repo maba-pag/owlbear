@@ -2,7 +2,7 @@
 id: 1063
 title: 'C-18: GREEN — engine activity/session wiring'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-21T10:44:12.261314+00:00
 updated: 2026-04-24T18:11:50.013034+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 46
 title: Add agent-client-protocol to orchestrator deps
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-26 18:56:04.399233+01:00
 updated: 2026-03-29 09:18:41.391010+02:00
 started: 2026-03-29 08:44:15.335912+02:00

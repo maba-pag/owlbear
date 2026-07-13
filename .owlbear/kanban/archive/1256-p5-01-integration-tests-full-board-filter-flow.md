@@ -2,7 +2,7 @@
 id: 1256
 title: 'P5-01: Integration tests — full board filter flow'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-01T04:35:07.029411+00:00
 updated: 2026-05-03T22:22:06.059396+00:00
 tags:

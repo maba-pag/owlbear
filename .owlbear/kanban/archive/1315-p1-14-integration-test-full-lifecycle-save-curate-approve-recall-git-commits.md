@@ -3,7 +3,7 @@ id: 1315
 title: 'P1-14: Integration test — Full lifecycle (save → curate → approve → recall
   + git commits)'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-04T01:32:27.514360+00:00
 updated: 2026-05-07T07:39:31.529654+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 5
 title: Copilot Memory boundary testing
 status: archived
-priority: important
+priority: medium
 created: 2026-03-26 17:18:48.593531+01:00
 updated: 2026-03-29 03:16:13.415476+02:00
 started: 2026-03-29 03:16:08.985494+02:00

@@ -2,7 +2,7 @@
 id: 1003
 title: 'Rewrite agent-audit.prompt.md per Brief #984'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-18 21:35:10.131608+00:00
 updated: 2026-04-19 13:22:26.348121+00:00
 tags:

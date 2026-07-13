@@ -2,7 +2,7 @@
 id: 1454
 title: 'P4-17: Probe documentation and agent guidance contract'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-08T19:32:31.483304+00:00
 updated: 2026-05-09T03:25:37.796816+00:00
 tags:

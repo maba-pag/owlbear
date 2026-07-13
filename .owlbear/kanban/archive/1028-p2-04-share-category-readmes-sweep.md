@@ -2,7 +2,7 @@
 id: 1028
 title: 'P2-04: share-category READMEs sweep'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-19 23:52:56.675044+00:00
 updated: 2026-04-20 04:52:11.053219+00:00
 tags:

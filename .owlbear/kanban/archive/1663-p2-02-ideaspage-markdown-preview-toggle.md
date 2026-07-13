@@ -2,7 +2,7 @@
 id: 1663
 title: 'P2-02: IdeasPage — markdown preview toggle'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-18T17:42:08.354112+02:00
 updated: 2026-05-20T17:40:42.164973+02:00
 tags:

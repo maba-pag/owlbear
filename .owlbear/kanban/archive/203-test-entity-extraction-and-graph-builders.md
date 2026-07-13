@@ -2,7 +2,7 @@
 id: 203
 title: 'Test: Entity extraction and graph builders'
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-30 08:11:19.885743+02:00
 updated: 2026-03-31 00:35:22.818168+02:00
 started: 2026-03-30 08:11:24.668594+02:00

@@ -2,7 +2,7 @@
 id: 522
 title: Wire ErrorLogger adapter at AcpClient construction sites
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-01 15:15:04.161398+02:00
 updated: 2026-04-10 02:14:58.286651+02:00
 started: 2026-04-06 07:08:31.396061+02:00

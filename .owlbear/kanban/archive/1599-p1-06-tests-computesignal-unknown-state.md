@@ -2,7 +2,7 @@
 id: 1599
 title: 'P1-06: Tests — computeSignal unknown state'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-16T03:35:25.284760+00:00
 updated: 2026-05-16T06:52:25.155110+00:00
 tags:

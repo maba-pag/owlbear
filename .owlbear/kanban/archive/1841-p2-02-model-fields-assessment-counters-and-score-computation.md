@@ -2,7 +2,7 @@
 id: 1841
 title: 'P2-02: Model fields — assessment counters and score computation'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-24T19:00:51.563620+02:00
 updated: 2026-05-25T01:27:41.693939+02:00
 tags:

@@ -2,7 +2,7 @@
 id: 56
 title: Expand mcp-kanban to full kanban-md tool set
 status: archived
-priority: important
+priority: medium
 created: 2026-03-26 19:20:05.696176+01:00
 updated: 2026-03-28 03:46:08.974369+01:00
 started: 2026-03-28 03:46:08.974369+01:00

@@ -2,7 +2,7 @@
 id: 118
 title: Fix copilotMemory.enabled discrepancy in workspace settings
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-29 03:24:19.255426+02:00
 updated: 2026-03-29 05:59:38.074258+02:00
 started: 2026-03-29 05:59:33.263940+02:00

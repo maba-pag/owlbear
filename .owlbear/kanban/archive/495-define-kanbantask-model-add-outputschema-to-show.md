@@ -2,7 +2,7 @@
 id: 495
 title: Define KanbanTask model + add outputSchema to show/move/pick
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-31 06:47:09.589536+02:00
 updated: 2026-04-01 06:18:42.903355+02:00
 started: 2026-04-01 06:18:39.009286+02:00

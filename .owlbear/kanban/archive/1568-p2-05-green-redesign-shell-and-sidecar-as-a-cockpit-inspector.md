@@ -2,7 +2,7 @@
 id: 1568
 title: 'P2-05 GREEN: Redesign shell and sidecar as a Cockpit inspector'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-14T18:26:42.445078+00:00
 updated: 2026-05-15T10:59:42.039662+00:00
 tags:

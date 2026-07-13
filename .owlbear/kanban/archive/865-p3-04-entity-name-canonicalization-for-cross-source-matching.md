@@ -2,7 +2,7 @@
 id: 865
 title: 'P3-04: Entity name canonicalization for cross-source matching'
 status: archived
-priority: someday
+priority: medium
 created: '2026-04-13T19:16:55.238306+00:00'
 updated: '2026-04-15T02:49:08.611676+00:00'
 tags:

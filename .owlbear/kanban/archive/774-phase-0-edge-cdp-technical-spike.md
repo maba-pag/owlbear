@@ -2,7 +2,7 @@
 id: 774
 title: 'Phase 0: Edge CDP Technical Spike'
 status: archived
-priority: critical
+priority: medium
 created: '2026-04-10T11:45:08.130424+00:00'
 updated: '2026-04-10T16:43:38.571848+00:00'
 tags:

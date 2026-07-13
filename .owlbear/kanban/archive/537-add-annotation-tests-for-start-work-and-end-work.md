@@ -2,7 +2,7 @@
 id: 537
 title: Add annotation tests for start_work and end_work tools
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-02 05:25:08.101791+02:00
 updated: 2026-04-02 17:39:18.112019+02:00
 started: 2026-04-02 17:39:09.315020+02:00

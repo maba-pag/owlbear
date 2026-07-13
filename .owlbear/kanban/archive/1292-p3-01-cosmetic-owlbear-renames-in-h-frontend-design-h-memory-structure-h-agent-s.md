@@ -3,7 +3,7 @@ id: 1292
 title: 'P3-01: Cosmetic OwlBear renames in h-frontend-design, h-memory-structure,
   h-agent-structure, doc-standards'
 status: archived
-priority: someday
+priority: medium
 created: 2026-05-02T16:01:17.140513+00:00
 updated: 2026-05-02T19:21:09.062231+00:00
 tags:

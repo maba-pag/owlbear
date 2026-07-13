@@ -2,7 +2,7 @@
 id: 1885
 title: 'Knowledge: ContentFetcher protocol — fetch abstraction for refresh'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-26T06:08:59.378851+02:00
 updated: 2026-05-26T10:04:31.086045+02:00
 tags:

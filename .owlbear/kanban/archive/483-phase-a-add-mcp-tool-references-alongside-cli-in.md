@@ -2,7 +2,7 @@
 id: 483
 title: 'Phase A: Add MCP tool references alongside CLI in all agents and skills'
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-31 06:20:39.278976+02:00
 updated: 2026-04-04 07:24:34.959818+02:00
 started: 2026-04-04 07:24:34.959818+02:00

@@ -2,7 +2,7 @@
 id: 36
 title: Rename todo tool reference to todos in all .agent.md files
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-26 18:45:04.748447+01:00
 updated: 2026-03-27 12:45:51.830304+01:00
 started: 2026-03-27 12:45:46.802168+01:00

@@ -2,7 +2,7 @@
 id: 1172
 title: Fix MCP server.py L481 status_names dict-form assumption
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-28T22:52:50.258936+00:00
 updated: 2026-04-29T03:49:12.643119+00:00
 tags:

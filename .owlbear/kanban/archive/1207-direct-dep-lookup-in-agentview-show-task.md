@@ -2,7 +2,7 @@
 id: 1207
 title: Direct dep lookup in AgentView.show_task
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-30 15:29:06.229446+00:00
 updated: 2026-05-02T18:09:55.583099+00:00
 tags:

@@ -3,7 +3,7 @@ id: 1462
 title: 'B2-impl: Update loop-breaker terminology to batch-review-cycle and add cycle-3
   escalation'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-09T03:31:13.416517+00:00
 updated: 2026-05-09T07:48:47.358272+00:00
 tags:

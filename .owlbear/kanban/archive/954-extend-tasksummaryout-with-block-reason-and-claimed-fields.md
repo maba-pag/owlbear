@@ -2,7 +2,7 @@
 id: 954
 title: Extend TaskSummaryOut with block_reason and claimed fields
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-18T13:41:19.335936+00:00
 updated: 2026-04-18T14:18:52.778555+00:00
 tags:

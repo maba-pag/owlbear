@@ -2,7 +2,7 @@
 id: 1347
 title: Prove dev-code MCP runtime before main sync
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-04T18:02:22.883451+00:00
 updated: 2026-05-05T23:40:51.608058+00:00
 tags:

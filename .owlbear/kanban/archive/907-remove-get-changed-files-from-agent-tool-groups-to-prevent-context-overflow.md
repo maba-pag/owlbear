@@ -3,7 +3,7 @@ id: 907
 title: remove get_changed_files from agent tool groups to prevent context
   overflow
 status: archived
-priority: critical
+priority: medium
 created: 2026-04-16T23:53:20.950904+00:00
 updated: 2026-04-17T00:52:37.270853+00:00
 tags:

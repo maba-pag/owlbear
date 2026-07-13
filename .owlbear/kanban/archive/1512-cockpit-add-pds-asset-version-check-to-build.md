@@ -2,7 +2,7 @@
 id: 1512
 title: 'Cockpit: Add PDS asset version check to build'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-05-12T15:49:55.128056+00:00
 updated: 2026-05-12T18:46:01.419133+00:00
 tags:

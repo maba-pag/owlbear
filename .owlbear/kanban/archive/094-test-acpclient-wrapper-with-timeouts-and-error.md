@@ -2,7 +2,7 @@
 id: 94
 title: 'Test: AcpClient wrapper with timeouts and error classification'
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-28 01:50:49.053873+01:00
 updated: 2026-03-29 15:37:46.739483+02:00
 started: 2026-03-29 15:37:46.444402+02:00

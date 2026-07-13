@@ -2,7 +2,7 @@
 id: 1346
 title: Fix Cockpit cache and SSE invalidation
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-04T17:27:34.924833+00:00
 updated: 2026-05-06T05:21:32.257290+00:00
 tags:

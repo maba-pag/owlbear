@@ -2,7 +2,7 @@
 id: 1549
 title: 'P3-08: impl — sidecar collapse toggle'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-13T18:43:23.907745+00:00
 updated: 2026-05-14T04:25:21.203817+00:00
 tags:

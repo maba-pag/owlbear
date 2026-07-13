@@ -2,7 +2,7 @@
 id: 1166
 title: 'RF-04: Implement useRepairFlow hook'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-28T17:38:24.630886+00:00
 updated: 2026-04-29T11:00:51.416480+00:00
 tags:

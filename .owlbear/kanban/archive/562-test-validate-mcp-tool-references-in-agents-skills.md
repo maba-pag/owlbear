@@ -2,7 +2,7 @@
 id: 562
 title: 'Test: Validate MCP tool references in agents, skills, and instructions'
 status: archived
-priority: critical
+priority: medium
 created: 2026-04-03 07:45:45.881938+02:00
 updated: 2026-04-03 11:00:04.345617+02:00
 started: 2026-04-03 10:59:59.553792+02:00

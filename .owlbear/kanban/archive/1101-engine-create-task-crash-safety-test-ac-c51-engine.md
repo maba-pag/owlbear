@@ -2,7 +2,7 @@
 id: 1101
 title: Engine create_task crash-safety test (AC-C51-engine)
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-22T01:04:42.648587+00:00
 updated: 2026-04-22T22:45:28.880499+00:00
 tags: []

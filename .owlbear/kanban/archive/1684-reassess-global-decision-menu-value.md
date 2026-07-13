@@ -2,7 +2,7 @@
 id: 1684
 title: Reassess global decision menu value
 status: archived
-priority: important
+priority: medium
 created: 2026-05-21T19:52:10.714317+02:00
 updated: 2026-05-24T10:50:01.039882+02:00
 tags:

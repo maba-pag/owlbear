@@ -2,7 +2,7 @@
 id: 1020
 title: 'P0-03: doc-index script + serve/tools/ package (GREEN)'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-19 23:51:49.112468+00:00
 updated: 2026-04-20 02:03:40.104595+00:00
 tags:

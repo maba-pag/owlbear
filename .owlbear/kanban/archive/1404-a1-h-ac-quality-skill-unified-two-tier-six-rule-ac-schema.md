@@ -2,7 +2,7 @@
 id: 1404
 title: 'A1: h-ac-quality skill — unified two-tier, six-rule AC schema'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-07T23:16:25.145713+00:00
 updated: 2026-05-08T00:35:57.675250+00:00
 tags:

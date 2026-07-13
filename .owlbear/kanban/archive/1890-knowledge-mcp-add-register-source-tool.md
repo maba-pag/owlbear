@@ -2,7 +2,7 @@
 id: 1890
 title: 'Knowledge: MCP add register_source tool'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-27T01:00:59.214408+02:00
 updated: 2026-05-27T11:00:38.207025+02:00
 tags:

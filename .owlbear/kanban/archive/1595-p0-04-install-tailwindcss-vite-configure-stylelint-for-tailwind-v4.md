@@ -2,7 +2,7 @@
 id: 1595
 title: 'P0-04: Install @tailwindcss/vite + configure Stylelint for Tailwind v4'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-16T03:35:01.729375+00:00
 updated: 2026-05-16T12:52:59.956367+00:00
 tags:

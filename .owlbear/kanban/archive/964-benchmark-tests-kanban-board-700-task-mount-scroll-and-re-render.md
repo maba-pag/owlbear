@@ -2,7 +2,7 @@
 id: 964
 title: 'Benchmark tests: kanban board 700-task mount, scroll, and re-render'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-18T15:51:06.555742+00:00
 updated: 2026-04-19T00:49:09.434004+00:00
 tags:

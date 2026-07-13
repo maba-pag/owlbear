@@ -2,7 +2,7 @@
 id: 1191
 title: 'P3-03: Test DR status indicator + popover components'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-30T00:52:17.480756+00:00
 updated: 2026-04-30T05:35:19.786864+00:00
 tags:

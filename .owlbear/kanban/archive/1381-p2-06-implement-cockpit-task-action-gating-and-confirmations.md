@@ -2,7 +2,7 @@
 id: 1381
 title: 'P2-06: Implement Cockpit task action gating and confirmations'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-06T01:04:37.405026+00:00
 updated: 2026-05-09T19:07:31.736662+00:00
 tags:

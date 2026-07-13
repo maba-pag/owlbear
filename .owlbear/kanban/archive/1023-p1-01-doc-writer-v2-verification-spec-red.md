@@ -2,7 +2,7 @@
 id: 1023
 title: 'P1-01: doc-writer v2 verification spec (RED)'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-19 23:52:14.064115+00:00
 updated: 2026-04-20 02:23:15.344750+00:00
 tags:

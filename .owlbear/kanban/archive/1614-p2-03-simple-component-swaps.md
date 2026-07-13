@@ -2,7 +2,7 @@
 id: 1614
 title: 'P2-03: Simple component swaps'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-16T03:37:02.195428+00:00
 updated: 2026-05-17T10:27:52.746982+02:00
 tags:

@@ -2,7 +2,7 @@
 id: 1444
 title: 'P4-07: Probe read-only dispatch and atomic claim reclamation'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-08T19:32:00.424170+00:00
 updated: 2026-05-09T00:33:52.068734+00:00
 tags:

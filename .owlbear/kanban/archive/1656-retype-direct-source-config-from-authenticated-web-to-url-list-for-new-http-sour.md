@@ -3,7 +3,7 @@ id: 1656
 title: Retype _direct_source_config from AUTHENTICATED_WEB to URL_LIST for new 
   HTTP sources
 status: archived
-priority: important
+priority: medium
 created: 2026-05-18T03:27:04.998459+02:00
 updated: 2026-05-18T16:15:19.302007+02:00
 tags:

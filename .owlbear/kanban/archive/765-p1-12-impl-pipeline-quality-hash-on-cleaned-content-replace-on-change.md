@@ -2,7 +2,7 @@
 id: 765
 title: 'P1-12: Impl — Pipeline quality: hash on cleaned content + replace-on-change'
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-10T10:55:57.388835+00:00'
 updated: '2026-04-15T19:05:13.114901+00:00'
 tags:

@@ -2,7 +2,7 @@
 id: 1125
 title: Restore fail outcome to AgentView end_work and align MCP model
 status: archived
-priority: important
+priority: medium
 created: 2026-04-25 17:32:33.022138+00:00
 updated: 2026-04-27T04:31:35.917429+00:00
 tags: []

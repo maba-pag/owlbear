@@ -2,7 +2,7 @@
 id: 510
 title: Add AST-based package boundary enforcement test
 status: archived
-priority: important
+priority: medium
 created: 2026-04-01 00:12:37.333486+02:00
 updated: 2026-04-01 13:07:10.090548+02:00
 started: 2026-04-01 13:07:09.643795+02:00

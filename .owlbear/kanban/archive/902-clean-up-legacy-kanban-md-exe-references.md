@@ -2,7 +2,7 @@
 id: 902
 title: Clean up legacy kanban-md.exe references
 status: archived
-priority: important
+priority: medium
 created: 2026-04-16T22:54:41.784445+00:00
 updated: 2026-04-17T03:04:33.858549+00:00
 tags:

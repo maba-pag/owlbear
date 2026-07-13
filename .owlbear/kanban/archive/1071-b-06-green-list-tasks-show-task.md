@@ -2,7 +2,7 @@
 id: 1071
 title: 'B-06: GREEN — list_tasks + show_task'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-21T10:48:51.277671+00:00
 updated: 2026-04-25T08:52:40.426137+00:00
 tags:

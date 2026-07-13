@@ -2,7 +2,7 @@
 id: 1176
 title: 'P3-02: Migrate support modules, cleanup compat layer, and live config'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-29T07:36:12.009209+00:00
 updated: 2026-04-30T03:49:11.961407+00:00
 tags:

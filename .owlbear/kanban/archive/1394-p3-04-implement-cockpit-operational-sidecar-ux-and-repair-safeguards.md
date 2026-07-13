@@ -2,7 +2,7 @@
 id: 1394
 title: 'P3-04: Implement Cockpit operational sidecar UX and repair safeguards'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-06T01:09:39.582140+00:00
 updated: 2026-05-08T16:03:49.003137+00:00
 tags:

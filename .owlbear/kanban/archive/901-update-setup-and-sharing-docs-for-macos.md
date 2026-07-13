@@ -2,7 +2,7 @@
 id: 901
 title: Update setup and sharing docs for macOS
 status: archived
-priority: important
+priority: medium
 created: 2026-04-16T22:54:41.755078+00:00
 updated: 2026-04-17T10:07:13.418031+00:00
 tags:

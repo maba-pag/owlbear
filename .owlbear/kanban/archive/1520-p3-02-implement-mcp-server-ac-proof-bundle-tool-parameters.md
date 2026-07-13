@@ -2,7 +2,7 @@
 id: 1520
 title: 'P3-02: Implement MCP server ac/proof_bundle tool parameters'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-13T02:29:42.731951+00:00
 updated: 2026-05-13T09:14:23.732223+00:00
 tags:

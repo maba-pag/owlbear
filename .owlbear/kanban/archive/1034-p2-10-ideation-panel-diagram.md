@@ -2,7 +2,7 @@
 id: 1034
 title: 'P2-10: Ideation panel diagram'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-19T23:53:28.594403+00:00
 updated: 2026-04-23T21:24:01.991631+00:00
 tags:

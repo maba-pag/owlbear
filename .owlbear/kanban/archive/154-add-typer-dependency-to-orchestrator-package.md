@@ -2,7 +2,7 @@
 id: 154
 title: Add Typer dependency to orchestrator package
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-29 19:27:30.130441+02:00
 updated: 2026-03-30 00:17:15.959051+02:00
 started: 2026-03-30 00:17:15.603552+02:00

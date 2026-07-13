@@ -2,7 +2,7 @@
 id: 1019
 title: 'P0-04: Tests for deny-code-writes refactor (RED)'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-19 23:51:24.330603+00:00
 updated: 2026-04-20 01:15:28.227889+00:00
 tags:

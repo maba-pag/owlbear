@@ -2,7 +2,7 @@
 id: 1257
 title: Amend cockpit brief D6/D14 to reflect approved SSE direction
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-05-01T05:33:27.534058+00:00
 updated: 2026-05-01T12:53:37.356114+00:00
 tags:

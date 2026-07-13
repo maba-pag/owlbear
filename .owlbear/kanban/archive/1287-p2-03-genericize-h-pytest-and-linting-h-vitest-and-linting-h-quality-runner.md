@@ -2,7 +2,7 @@
 id: 1287
 title: 'P2-03: Genericize h-pytest-and-linting, h-vitest-and-linting, h-quality-runner'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-02T16:01:17.076781+00:00
 updated: 2026-05-03T19:44:57.497166+00:00
 tags:

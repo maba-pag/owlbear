@@ -2,7 +2,7 @@
 id: 1886
 title: 'Knowledge: IngestCoordinator.refresh() — implement refresh with fetcher'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-26T06:08:59.608970+02:00
 updated: 2026-05-26T11:28:29.609676+02:00
 tags:

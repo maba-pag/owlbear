@@ -2,7 +2,7 @@
 id: 1654
 title: 'P1-02: Expose source health in list_sources'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-18T03:11:18.823946+02:00
 updated: 2026-05-18T16:52:36.763445+02:00
 tags:

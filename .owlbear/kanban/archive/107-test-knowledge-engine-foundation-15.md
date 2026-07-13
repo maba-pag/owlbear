@@ -2,7 +2,7 @@
 id: 107
 title: 'Test: Knowledge engine foundation (#15)'
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-28 15:04:38.229940+01:00
 updated: 2026-03-29 04:16:46.326227+02:00
 started: 2026-03-29 04:16:45.999767+02:00

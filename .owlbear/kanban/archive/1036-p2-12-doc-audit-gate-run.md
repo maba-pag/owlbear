@@ -2,7 +2,7 @@
 id: 1036
 title: 'P2-12: doc-audit gate run'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-19T23:53:48.225574+00:00
 updated: 2026-04-24T03:10:05.396902+00:00
 tags:

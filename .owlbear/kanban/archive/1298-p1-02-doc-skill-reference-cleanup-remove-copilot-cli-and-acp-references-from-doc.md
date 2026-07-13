@@ -3,7 +3,7 @@ id: 1298
 title: 'P1-02: Doc/skill reference cleanup — remove Copilot CLI and ACP references
   from docs'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-02T19:40:07.788907+00:00
 updated: 2026-05-03T10:12:24.905658+00:00
 tags:

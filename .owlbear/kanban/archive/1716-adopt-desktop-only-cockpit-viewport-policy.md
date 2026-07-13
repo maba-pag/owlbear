@@ -2,7 +2,7 @@
 id: 1716
 title: Adopt desktop-only Cockpit viewport policy
 status: archived
-priority: important
+priority: medium
 created: 2026-05-22T00:56:41.749806+02:00
 updated: 2026-05-24T10:50:01.455536+02:00
 tags:

@@ -3,7 +3,7 @@ id: 127
 title: Add confidence scoring and structured options rules to 
   copilot-instructions.md
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-29 07:03:49.567621+02:00
 updated: 2026-03-29 10:21:27.116973+02:00
 started: 2026-03-29 07:29:09.345736+02:00

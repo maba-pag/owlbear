@@ -2,7 +2,7 @@
 id: 911
 title: Fix test suite Pydantic model drift (254 failures)
 status: archived
-priority: important
+priority: medium
 created: 2026-04-17T10:47:30.452675+00:00
 updated: 2026-04-17T20:04:08.487577+00:00
 tags:

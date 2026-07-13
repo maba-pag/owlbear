@@ -2,7 +2,7 @@
 id: 917
 title: Task verification two-tier awareness — w-task-verification
 status: archived
-priority: important
+priority: medium
 created: 2026-04-17T11:52:08.047612+00:00
 updated: 2026-04-17T20:04:08.520326+00:00
 tags:

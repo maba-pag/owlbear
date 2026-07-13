@@ -2,7 +2,7 @@
 id: 1590
 title: Cockpit Visual Redesign — PDS v4 Foundation + Full Migration
 status: archived
-priority: important
+priority: medium
 created: 2026-05-16T03:28:48.217109+00:00
 updated: 2026-05-19T04:31:44.330342+02:00
 tags:

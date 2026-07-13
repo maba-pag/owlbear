@@ -2,7 +2,7 @@
 id: 1049
 title: 'C-04: RED — activity_store tests'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-21T10:42:50.268061+00:00
 updated: 2026-04-23T04:21:44.431242+00:00
 tags:

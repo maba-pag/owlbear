@@ -2,7 +2,7 @@
 id: 1618
 title: 'P2-11: Complex integrations — modals → PModal'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-16T03:37:02.326584+00:00
 updated: 2026-05-17T16:23:11.462877+02:00
 tags:

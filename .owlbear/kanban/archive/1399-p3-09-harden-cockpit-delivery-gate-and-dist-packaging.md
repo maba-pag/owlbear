@@ -2,7 +2,7 @@
 id: 1399
 title: 'P3-09: Harden Cockpit delivery gate and dist packaging'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-06T01:09:48.720545+00:00
 updated: 2026-05-11T20:16:25.000512+00:00
 tags:

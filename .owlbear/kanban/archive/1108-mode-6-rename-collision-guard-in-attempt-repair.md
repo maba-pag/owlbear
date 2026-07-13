@@ -2,7 +2,7 @@
 id: 1108
 title: Mode-6 rename collision guard in attempt_repair
 status: archived
-priority: important
+priority: medium
 created: 2026-04-22T23:36:37.892632+00:00
 updated: 2026-04-23T09:25:37.544565+00:00
 tags: []

@@ -2,7 +2,7 @@
 id: 1156
 title: Cockpit session history polish
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-28T17:28:32.776197+00:00
 updated: 2026-04-28T20:35:42.127612+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 931
 title: 'P2-04: RED — Kanban board surface tests'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-17T19:58:06.421846+00:00
 updated: 2026-04-18T14:29:12.152883+00:00
 tags:

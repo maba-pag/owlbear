@@ -2,7 +2,7 @@
 id: 1461
 title: 'C1-impl: Apply 4-pillar auditor model to w-task-verification and auditor.agent.md'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-09T03:30:08.726831+00:00
 updated: 2026-05-09T13:33:25.680923+00:00
 tags:

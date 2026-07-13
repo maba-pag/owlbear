@@ -2,7 +2,7 @@
 id: 994
 title: '1c: Add delegation / operational-isolation extraction rule'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-18T21:23:32.421869+00:00
 updated: 2026-04-19T12:46:29.338447+00:00
 tags:

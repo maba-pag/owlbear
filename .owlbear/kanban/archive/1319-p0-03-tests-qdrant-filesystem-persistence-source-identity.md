@@ -2,7 +2,7 @@
 id: 1319
 title: 'P0-03: Tests — Qdrant filesystem persistence + source identity'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-04T05:48:37.762103+00:00
 updated: 2026-05-04T11:58:49.272144+00:00
 tags:

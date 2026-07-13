@@ -2,7 +2,7 @@
 id: 1202
 title: Narrow exception handling (BLE001) in engine.py
 status: archived
-priority: important
+priority: medium
 created: 2026-04-30 15:28:57.610272+00:00
 updated: 2026-05-01T13:46:58.532157+00:00
 tags:

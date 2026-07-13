@@ -2,7 +2,7 @@
 id: 1288
 title: 'P2-04: Genericize w-doc-update and w-code-review'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-02T16:01:17.090078+00:00
 updated: 2026-05-03T20:33:26.422918+00:00
 tags:

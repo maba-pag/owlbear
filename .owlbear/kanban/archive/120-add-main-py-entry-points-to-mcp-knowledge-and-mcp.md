@@ -2,7 +2,7 @@
 id: 120
 title: Add __main__.py entry points to mcp-knowledge and mcp-project
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-29 06:32:41.471337+02:00
 updated: 2026-03-29 11:10:02.362458+02:00
 started: 2026-03-29 11:10:02.362458+02:00

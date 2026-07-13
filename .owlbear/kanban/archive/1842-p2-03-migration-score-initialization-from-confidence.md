@@ -2,7 +2,7 @@
 id: 1842
 title: 'P2-03: Migration — score initialization from confidence'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-24T19:01:24.804040+02:00
 updated: 2026-05-25T06:00:49.663141+02:00
 tags:

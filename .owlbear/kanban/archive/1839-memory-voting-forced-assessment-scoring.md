@@ -2,7 +2,7 @@
 id: 1839
 title: Memory voting — forced assessment scoring
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-24T18:57:20.675933+02:00
 updated: 2026-05-25T11:42:00.425598+02:00
 tags:

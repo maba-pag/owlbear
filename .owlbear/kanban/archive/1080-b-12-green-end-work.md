@@ -2,7 +2,7 @@
 id: 1080
 title: 'B-12: GREEN — end_work'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-21 10:50:32.621365+00:00
 updated: 2026-04-26T16:07:05.580652+00:00
 tags:

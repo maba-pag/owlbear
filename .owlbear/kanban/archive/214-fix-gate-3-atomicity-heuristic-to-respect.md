@@ -2,7 +2,7 @@
 id: 214
 title: Fix Gate 3 atomicity heuristic to respect architect approval
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-30 14:22:41.474924+02:00
 updated: 2026-03-30 20:36:49.171772+02:00
 started: 2026-03-30 20:36:17.049005+02:00

@@ -2,7 +2,7 @@
 id: 1106
 title: Implement engine mutator atomicity wrapper for write+event ordering
 status: archived
-priority: important
+priority: medium
 created: 2026-04-22T21:08:29.760232+00:00
 updated: 2026-04-23T05:10:52.167510+00:00
 tags: []

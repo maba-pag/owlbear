@@ -2,7 +2,7 @@
 id: 1666
 title: 'consolidation test: Ideas Notebook end-to-end'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-18T17:42:19.064317+02:00
 updated: 2026-05-20T21:58:19.956616+02:00
 tags:

@@ -2,7 +2,7 @@
 id: 642
 title: 'P4-02: Create .owlbear/briefs/ directory structure'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-06T07:00:06.4035573+02:00
 updated: 2026-04-06T11:38:24.8395501+02:00
 started: 2026-04-06T11:38:24.8395501+02:00

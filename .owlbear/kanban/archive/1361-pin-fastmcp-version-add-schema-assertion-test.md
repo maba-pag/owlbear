@@ -2,7 +2,7 @@
 id: 1361
 title: Pin FastMCP version + add schema assertion test
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-05T23:34:57.032184+00:00
 updated: 2026-05-06T00:52:24.641062+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 509
 title: 'Test: audit-centric dispatch-cycle trace ID'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-31 23:53:17.881707+02:00
 updated: 2026-04-02 00:14:23.927106+02:00
 started: 2026-04-02 00:14:13.139638+02:00

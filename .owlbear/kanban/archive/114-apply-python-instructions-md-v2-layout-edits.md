@@ -2,7 +2,7 @@
 id: 114
 title: Apply python.instructions.md v2 layout edits
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-29 00:44:20.598112+01:00
 updated: 2026-03-29 03:27:04.209054+02:00
 started: 2026-03-29 01:46:10.993091+01:00

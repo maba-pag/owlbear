@@ -2,7 +2,7 @@
 id: 1130
 title: Implement cockpit mutation OCC parity (move/edit/release)
 status: archived
-priority: important
+priority: medium
 created: 2026-04-26T15:37:49.084530+00:00
 updated: 2026-04-27T03:51:34.817444+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 904
 title: Delete .ps1 hook files from .owlbear/ and seed/
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-16T22:54:41.805109+00:00
 updated: 2026-04-17T09:16:36.737269+00:00
 tags:

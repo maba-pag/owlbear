@@ -2,7 +2,7 @@
 id: 531
 title: Build approve_memory CLI wrapper for set_approval_state
 status: archived
-priority: important
+priority: medium
 created: 2026-04-01 19:13:11.407948+02:00
 updated: 2026-04-05 09:32:59.489769+02:00
 started: 2026-04-05 09:32:59.489769+02:00

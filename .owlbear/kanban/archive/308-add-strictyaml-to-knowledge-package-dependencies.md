@@ -2,7 +2,7 @@
 id: 308
 title: Add strictyaml to knowledge package dependencies
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-30 20:30:35.143878+02:00
 updated: 2026-03-31 04:34:46.045266+02:00
 started: 2026-03-31 04:34:45.514238+02:00

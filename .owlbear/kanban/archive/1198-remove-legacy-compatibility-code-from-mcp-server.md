@@ -2,7 +2,7 @@
 id: 1198
 title: Remove legacy compatibility code from MCP server
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-30 15:28:54.145200+00:00
 updated: 2026-05-01T03:38:19.025788+00:00
 tags:

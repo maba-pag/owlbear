@@ -2,7 +2,7 @@
 id: 1737
 title: Cockpit interaction surface visual sweep
 status: archived
-priority: important
+priority: medium
 created: 2026-05-23T04:49:00+0200
 updated: 2026-05-24T10:50:01.775301+02:00
 tags:

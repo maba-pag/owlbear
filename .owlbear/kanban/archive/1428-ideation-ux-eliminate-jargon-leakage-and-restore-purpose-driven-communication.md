@@ -2,7 +2,7 @@
 id: 1428
 title: 'Ideation UX: eliminate jargon leakage and restore purpose-driven communication'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-08T00:58:29.125370+00:00
 updated: 2026-05-09T10:55:46.454893+00:00
 tags:

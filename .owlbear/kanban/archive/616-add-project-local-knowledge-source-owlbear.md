@@ -2,7 +2,7 @@
 id: 616
 title: Add project-local knowledge source (.owlbear/knowledge/) to mcp-knowledge
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-05T00:16:00.8159576+02:00
 updated: 2026-04-06T13:05:12.2677343+02:00
 started: 2026-04-06T13:05:12.2677343+02:00

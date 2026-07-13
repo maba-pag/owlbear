@@ -2,7 +2,7 @@
 id: 819
 title: Tests — MCP adapter slimming regression
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-10T21:22:34.474123+00:00'
 updated: '2026-04-15T12:38:08.254491+00:00'
 tags:

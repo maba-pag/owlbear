@@ -2,7 +2,7 @@
 id: 1843
 title: 'P2-04: Recall — reserved explore and challenge slots'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-24T19:01:24.850020+02:00
 updated: 2026-05-25T04:41:12.548112+02:00
 tags:

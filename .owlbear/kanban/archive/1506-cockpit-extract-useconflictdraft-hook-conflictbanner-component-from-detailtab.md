@@ -2,7 +2,7 @@
 id: 1506
 title: 'Cockpit: Extract useConflictDraft hook + ConflictBanner component from DetailTab'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-12T03:04:43.984524+00:00
 updated: 2026-05-12T15:14:22.586246+00:00
 tags:

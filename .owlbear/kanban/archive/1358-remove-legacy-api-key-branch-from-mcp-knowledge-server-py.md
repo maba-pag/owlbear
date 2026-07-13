@@ -2,7 +2,7 @@
 id: 1358
 title: Remove legacy API key branch from mcp-knowledge server.py
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-05T08:18:53.248842+00:00
 updated: 2026-05-05T10:12:13.673880+00:00
 tags:

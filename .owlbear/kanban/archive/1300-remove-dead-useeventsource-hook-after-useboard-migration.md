@@ -2,7 +2,7 @@
 id: 1300
 title: Remove dead useEventSource hook after useBoard migration
 status: archived
-priority: someday
+priority: medium
 created: 2026-05-02T19:48:32.676272+00:00
 updated: 2026-05-03T16:48:12.988874+00:00
 tags:

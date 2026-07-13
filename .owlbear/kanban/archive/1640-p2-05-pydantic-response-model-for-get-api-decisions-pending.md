@@ -2,7 +2,7 @@
 id: 1640
 title: 'P2-05: Pydantic response model for GET /api/decisions/pending'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-18T00:49:02.493590+02:00
 updated: 2026-05-19T10:48:39.405095+02:00
 tags:

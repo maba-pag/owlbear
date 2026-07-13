@@ -2,7 +2,7 @@
 id: 1416
 title: Add push/PR triggers to MegaLinter workflow
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-07T23:28:55.138508+00:00
 updated: 2026-05-08T01:34:17.620252+00:00
 tags:

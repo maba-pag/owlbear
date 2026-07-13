@@ -2,7 +2,7 @@
 id: 1648
 title: 'P2-04: Remove DecisionViewport from sidecar'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-18T00:50:17.215196+02:00
 updated: 2026-05-20T05:02:22.772840+02:00
 tags:

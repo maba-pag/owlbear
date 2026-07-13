@@ -2,7 +2,7 @@
 id: 90
 title: Update pytest-and-linting skill for v2 paths
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-28 01:40:27.810303+01:00
 updated: 2026-03-30 07:23:06.650421+02:00
 started: 2026-03-30 07:22:23.882760+02:00

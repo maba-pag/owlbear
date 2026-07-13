@@ -2,7 +2,7 @@
 id: 1355
 title: 'P1-02: Write agent-deep-audit.prompt.md'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-04T21:22:32.030360+00:00
 updated: 2026-05-05T16:47:45.062902+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 1788
 title: Clarify task detail hierarchy and labels
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T01:57:03.645306+02:00
 updated: 2026-05-24T10:50:02.470203+02:00
 tags:

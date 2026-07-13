@@ -2,7 +2,7 @@
 id: 1586
 title: 'P1-02: Knowledge schema constraint enforcement'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-15T16:24:24.505992+00:00
 updated: 2026-05-16T06:29:24.912129+00:00
 tags:

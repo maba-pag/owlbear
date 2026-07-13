@@ -2,7 +2,7 @@
 id: 711
 title: 'Smoke test: ddgs MCP server startup and tool discovery'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-09T02:40:53.1431314+02:00
 updated: 2026-04-09T09:19:26.4955885+02:00
 started: 2026-04-09T09:19:26.4955885+02:00

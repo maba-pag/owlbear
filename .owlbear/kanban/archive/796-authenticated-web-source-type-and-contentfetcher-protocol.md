@@ -2,7 +2,7 @@
 id: 796
 title: AUTHENTICATED_WEB source type and ContentFetcher protocol
 status: archived
-priority: important
+priority: medium
 created: '2026-04-10T12:31:51.950715+00:00'
 updated: '2026-04-14T00:49:29.478237+00:00'
 tags:

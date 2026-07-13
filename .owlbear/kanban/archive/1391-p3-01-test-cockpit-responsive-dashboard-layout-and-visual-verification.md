@@ -2,7 +2,7 @@
 id: 1391
 title: 'P3-01: Test Cockpit responsive dashboard layout and visual verification'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-06T01:09:35.035217+00:00
 updated: 2026-05-11T00:05:07.295925+00:00
 tags:

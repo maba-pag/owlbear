@@ -2,7 +2,7 @@
 id: 981
 title: 'GREEN: move_task guidance + pre-read'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-18T21:18:27.039443+00:00
 updated: 2026-04-19T14:14:27.536453+00:00
 tags:

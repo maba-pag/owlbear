@@ -2,7 +2,7 @@
 id: 1027
 title: 'P2-03: setup/*.md sweep'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-19 23:52:56.667184+00:00
 updated: 2026-04-20 04:13:30.722499+00:00
 tags:

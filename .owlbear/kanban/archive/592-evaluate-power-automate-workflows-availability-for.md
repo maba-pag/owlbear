@@ -2,7 +2,7 @@
 id: 592
 title: Evaluate Power Automate Workflows availability for Teams notifications
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-04 18:01:47.458701+02:00
 updated: 2026-04-06 05:47:23.342839+02:00
 started: 2026-04-06 05:47:23.342839+02:00

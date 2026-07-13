@@ -2,7 +2,7 @@
 id: 1335
 title: 'P4-19: Tool surface cleanup + scope stubs'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-04T05:48:50.199644+00:00
 updated: 2026-05-07T15:28:26.229593+00:00
 tags:

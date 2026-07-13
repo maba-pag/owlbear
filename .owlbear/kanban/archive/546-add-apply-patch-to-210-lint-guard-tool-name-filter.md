@@ -2,7 +2,7 @@
 id: 546
 title: 'Add apply_patch to #210 lint guard tool_name filter'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-02 14:51:56.299224+02:00
 updated: 2026-04-05 14:37:04.147034+02:00
 started: 2026-04-05 14:37:04.147034+02:00

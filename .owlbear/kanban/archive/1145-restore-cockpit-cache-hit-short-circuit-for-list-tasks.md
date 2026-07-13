@@ -2,7 +2,7 @@
 id: 1145
 title: Restore cockpit cache-hit short-circuit for list_tasks
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-27T18:29:56.708569+00:00
 updated: 2026-04-27T20:57:24.736480+00:00
 tags:

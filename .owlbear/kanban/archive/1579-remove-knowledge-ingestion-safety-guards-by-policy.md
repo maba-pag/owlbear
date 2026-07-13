@@ -2,7 +2,7 @@
 id: 1579
 title: Remove knowledge ingestion safety guards by policy
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-15T01:50:28.448767+00:00
 updated: 2026-05-15T05:44:12.636607+00:00
 tags:

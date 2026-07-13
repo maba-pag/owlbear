@@ -2,7 +2,7 @@
 id: 593
 title: 'Rewrite #486 AC to match current architecture'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-04 19:16:32.657697+02:00
 updated: 2026-04-05 10:30:52.995510+02:00
 started: 2026-04-05 10:30:52.995510+02:00

@@ -2,7 +2,7 @@
 id: 1042
 title: Ideate cockpit consumption of new kanban engine maintenance surface
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-21 08:08:06.219579+00:00
 updated: 2026-05-01T17:00:34.987446+00:00
 tags:

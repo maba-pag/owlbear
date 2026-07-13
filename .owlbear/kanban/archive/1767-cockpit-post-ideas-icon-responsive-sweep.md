@@ -2,7 +2,7 @@
 id: 1767
 title: Cockpit post Ideas icon responsive sweep
 status: archived
-priority: important
+priority: medium
 created: 2026-05-23T17:13:37.339322+02:00
 updated: 2026-05-24T10:50:02.189786+02:00
 tags:

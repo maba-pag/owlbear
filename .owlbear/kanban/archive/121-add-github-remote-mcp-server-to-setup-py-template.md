@@ -2,7 +2,7 @@
 id: 121
 title: Add GitHub remote MCP server to setup.py template
 status: archived
-priority: important
+priority: medium
 created: 2026-03-29 06:32:56.319132+02:00
 updated: 2026-03-30 01:06:07.995052+02:00
 started: 2026-03-30 01:05:49.196463+02:00

@@ -2,7 +2,7 @@
 id: 1519
 title: 'P3-01: Tests for MCP server ac/proof_bundle tool parameters'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-13T02:29:38.031602+00:00
 updated: 2026-05-13T07:49:51.466336+00:00
 tags:

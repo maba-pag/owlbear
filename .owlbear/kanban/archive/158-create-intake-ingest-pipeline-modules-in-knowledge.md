@@ -2,7 +2,7 @@
 id: 158
 title: Create intake + ingest pipeline modules in knowledge package
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-29 19:35:58.858424+02:00
 updated: 2026-03-30 23:39:56.086021+02:00
 started: 2026-03-30 23:39:07.825702+02:00

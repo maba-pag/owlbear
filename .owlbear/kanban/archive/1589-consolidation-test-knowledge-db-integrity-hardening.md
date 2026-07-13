@@ -2,7 +2,7 @@
 id: 1589
 title: 'Consolidation test: knowledge DB integrity hardening'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-15T16:25:02.116082+00:00
 updated: 2026-05-17T00:44:46.635917+00:00
 tags:

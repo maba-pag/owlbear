@@ -3,7 +3,7 @@ id: 1536
 title: 'P1-03: test — card signal data model: type extension, DR cross-reference,
   signal computation'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-13T18:41:58.221454+00:00
 updated: 2026-05-13T22:44:53.427408+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 1846
 title: 'P2-07: assess_memories MCP tool'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-24T19:01:40.081966+02:00
 updated: 2026-05-25T08:27:50.608290+02:00
 tags:

@@ -2,7 +2,7 @@
 id: 1189
 title: 'P3-01: Test decisions API endpoints'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-30T00:52:09.506007+00:00
 updated: 2026-04-30T03:02:14.342410+00:00
 tags:

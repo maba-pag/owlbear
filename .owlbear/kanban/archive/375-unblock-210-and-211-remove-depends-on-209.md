@@ -2,7 +2,7 @@
 id: 375
 title: 'Unblock #210 and #211: remove depends_on #209'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-30 20:46:37.559523+02:00
 updated: 2026-04-01 20:47:42.847912+02:00
 started: 2026-04-01 20:47:07.295550+02:00

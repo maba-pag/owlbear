@@ -2,7 +2,7 @@
 id: 1072
 title: 'B-08: GREEN — create_task + edit_task'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-21T10:48:51.287524+00:00
 updated: 2026-04-25T04:00:48.784681+00:00
 tags:

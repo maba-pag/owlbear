@@ -2,7 +2,7 @@
 id: 845
 title: Tests — TaskSummary adoption in server.py list_tasks
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-11T11:41:03.139406+00:00'
 updated: '2026-04-14T00:30:11.040631+00:00'
 tags:

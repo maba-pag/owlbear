@@ -2,7 +2,7 @@
 id: 948
 title: 'Fix SSRF CWE-918 in HttpxContentFetcher.fetch: add private/loopback IP blocklist'
 status: archived
-priority: critical
+priority: medium
 created: 2026-04-18T00:12:36.295205+00:00
 updated: 2026-04-18T01:56:06.140886+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 1783
 title: Improve Kanban active work discoverability at desktop floor
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T01:20:30.722675+02:00
 updated: 2026-05-24T10:50:02.399645+02:00
 tags:

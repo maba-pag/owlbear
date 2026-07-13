@@ -2,7 +2,7 @@
 id: 157
 title: Create E2E smoke test script for real Copilot CLI
 status: archived
-priority: important
+priority: medium
 created: 2026-03-29 19:34:05.215049+02:00
 updated: 2026-04-02 16:43:57.634341+02:00
 started: 2026-04-02 16:43:57.169984+02:00

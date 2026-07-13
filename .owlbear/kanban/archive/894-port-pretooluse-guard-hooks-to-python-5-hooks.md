@@ -2,7 +2,7 @@
 id: 894
 title: Port PreToolUse guard hooks to Python (5 hooks)
 status: archived
-priority: critical
+priority: medium
 created: 2026-04-16T22:53:50.224775+00:00
 updated: 2026-04-17T04:02:54.293002+00:00
 tags:

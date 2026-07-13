@@ -2,7 +2,7 @@
 id: 72
 title: 'Test: Implement real search_knowledge tool'
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-26 20:18:53.041990+01:00
 updated: 2026-03-28 13:57:43.766664+01:00
 started: 2026-03-28 13:57:39.535744+01:00

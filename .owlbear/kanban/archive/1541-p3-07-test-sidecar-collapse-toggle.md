@@ -2,7 +2,7 @@
 id: 1541
 title: 'P3-07: test — sidecar collapse toggle'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-13T18:41:58.362901+00:00
 updated: 2026-05-14T02:56:32.966203+00:00
 tags:

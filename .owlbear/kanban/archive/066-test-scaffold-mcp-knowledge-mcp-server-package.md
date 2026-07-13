@@ -2,7 +2,7 @@
 id: 66
 title: 'Test: Scaffold mcp-knowledge MCP server package'
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-26 19:58:25.019009+01:00
 updated: 2026-03-27 22:15:47.186772+01:00
 started: 2026-03-27 22:15:47.186772+01:00

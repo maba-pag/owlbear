@@ -2,7 +2,7 @@
 id: 900
 title: Update setup/init.py for .py hooks
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-16T22:54:19.247222+00:00
 updated: 2026-04-17T09:30:05.999570+00:00
 tags:

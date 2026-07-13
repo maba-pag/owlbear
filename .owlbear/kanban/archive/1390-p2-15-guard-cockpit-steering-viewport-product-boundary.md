@@ -2,7 +2,7 @@
 id: 1390
 title: 'P2-15: Guard Cockpit steering viewport product boundary'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-06T01:04:54.084895+00:00
 updated: 2026-05-07T08:16:07.693135+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 1282
 title: 'P1-02: Split owlbear-system.instructions.md — extract directory table to .github/copilot-instructions.md'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-02T16:01:10.599380+00:00
 updated: 2026-05-03T10:08:52.176335+00:00
 tags:

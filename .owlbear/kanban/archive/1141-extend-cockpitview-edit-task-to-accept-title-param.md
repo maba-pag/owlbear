@@ -2,7 +2,7 @@
 id: 1141
 title: Extend CockpitView.edit_task to accept title param
 status: archived
-priority: important
+priority: medium
 created: 2026-04-27T06:38:54.526915+00:00
 updated: 2026-04-27T08:27:21.201813+00:00
 tags:

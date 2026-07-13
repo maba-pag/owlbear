@@ -2,7 +2,7 @@
 id: 1434
 title: Fix Shell_1372 stale assertion after AC8 error-envelope body-only return
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-08T01:18:13.984319+00:00
 updated: 2026-05-08T09:27:17.870132+00:00
 tags:

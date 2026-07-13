@@ -2,7 +2,7 @@
 id: 1173
 title: Fix server.py L481 status_names dict-form and stale test mock
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-28T22:57:44.273925+00:00
 updated: 2026-04-29T04:14:38.107909+00:00
 tags:

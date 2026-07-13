@@ -2,7 +2,7 @@
 id: 1435
 title: Add pre-advance commit verification rule to r-pipeline-protocol
 status: archived
-priority: important
+priority: medium
 created: 2026-05-08T06:58:54.587335+00:00
 updated: 2026-05-08T14:37:07.585748+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 1545
 title: 'P2-02: impl — theme bootstrap script + useTheme hook'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-13T18:42:22.373573+00:00
 updated: 2026-05-14T05:48:33.130806+00:00
 tags:

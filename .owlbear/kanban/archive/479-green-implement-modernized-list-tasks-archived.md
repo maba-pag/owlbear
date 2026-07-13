@@ -3,7 +3,7 @@ id: 479
 title: 'GREEN: implement modernized list_tasks (archived, limit, reverse, blocked
   tri-state, lean JSON)'
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-31 06:13:51.254161+02:00
 updated: 2026-04-01 03:03:08.403964+02:00
 started: 2026-04-01 03:03:03.587195+02:00

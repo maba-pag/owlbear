@@ -2,7 +2,7 @@
 id: 1769
 title: Fix mobile header health indicator clipping
 status: archived
-priority: important
+priority: medium
 created: 2026-05-23T17:19:35.025005+02:00
 updated: 2026-05-24T10:50:02.220106+02:00
 tags:

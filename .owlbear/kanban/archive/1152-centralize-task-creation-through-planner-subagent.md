@@ -2,7 +2,7 @@
 id: 1152
 title: Centralize task creation through planner subagent
 status: archived
-priority: important
+priority: medium
 created: 2026-04-27T22:21:17.673409+00:00
 updated: 2026-04-28T03:52:25.184104+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 636
 title: 'DUPLICATE of #635 — delete'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-05T22:46:02.36518+02:00
 updated: 2026-04-06T00:12:01.6572465+02:00
 started: 2026-04-06T00:12:01.6572465+02:00

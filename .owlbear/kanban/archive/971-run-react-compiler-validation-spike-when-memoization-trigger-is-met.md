@@ -2,7 +2,7 @@
 id: 971
 title: Run React Compiler validation spike when memoization trigger is met
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-18T17:00:32.289510+00:00
 updated: 2026-04-19T16:58:57.302941+00:00
 tags:

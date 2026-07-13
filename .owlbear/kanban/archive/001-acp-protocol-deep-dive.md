@@ -2,7 +2,7 @@
 id: 1
 title: ACP protocol deep-dive
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-26 17:18:05.230743+01:00
 updated: 2026-03-31 15:05:13.194346+02:00
 started: 2026-03-29 15:49:28.475384+02:00

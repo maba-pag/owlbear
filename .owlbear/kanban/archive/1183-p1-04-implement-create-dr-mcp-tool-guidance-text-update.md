@@ -2,7 +2,7 @@
 id: 1183
 title: 'P1-04: Implement create_dr MCP tool + guidance text update'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-30T00:51:43.218458+00:00
 updated: 2026-04-30T11:17:13.565967+00:00
 tags:

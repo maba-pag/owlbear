@@ -2,7 +2,7 @@
 id: 1852
 title: 'P1-02: Engine API — create_request and get_request'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-24T20:58:06.152479+02:00
 updated: 2026-05-25T05:44:18.600747+02:00
 tags:

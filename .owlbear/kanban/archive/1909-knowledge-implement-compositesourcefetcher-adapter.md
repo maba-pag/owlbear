@@ -2,7 +2,7 @@
 id: 1909
 title: 'Knowledge: Implement CompositeSourceFetcher adapter'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-28T01:41:35.432412+02:00
 updated: 2026-05-28T04:39:52.849791+02:00
 tags:

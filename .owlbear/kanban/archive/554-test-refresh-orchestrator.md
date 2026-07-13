@@ -2,7 +2,7 @@
 id: 554
 title: 'Test: Refresh orchestrator'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-02 16:07:01.483946+02:00
 updated: 2026-04-03 06:16:37.037538+02:00
 started: 2026-04-03 06:15:47.363969+02:00

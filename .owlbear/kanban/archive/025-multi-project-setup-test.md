@@ -2,7 +2,7 @@
 id: 25
 title: Multi-project setup test
 status: archived
-priority: important
+priority: medium
 created: 2026-03-26 17:23:32.282707+01:00
 updated: 2026-03-30 15:35:59.569613+02:00
 started: 2026-03-30 15:18:47.020136+02:00

@@ -2,7 +2,7 @@
 id: 1480
 title: Audit frontend prompt workflow value
 status: archived
-priority: important
+priority: medium
 created: 2026-05-11T01:27:03.160056+00:00
 updated: 2026-05-11T01:40:11.706678+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 151
 title: 'Test: Vector store and embedding pipeline'
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-29 19:13:47.482802+02:00
 updated: 2026-03-30 17:08:09.887528+02:00
 started: 2026-03-30 17:07:45.910311+02:00

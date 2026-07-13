@@ -2,7 +2,7 @@
 id: 540
 title: Clarify dual error pattern in MCP convention docs
 status: archived
-priority: important
+priority: medium
 created: 2026-04-02 05:59:38.529706+02:00
 updated: 2026-04-02 15:58:27.217841+02:00
 started: 2026-04-02 15:58:26.818576+02:00

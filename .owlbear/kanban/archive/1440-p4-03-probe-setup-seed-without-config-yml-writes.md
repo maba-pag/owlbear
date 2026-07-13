@@ -2,7 +2,7 @@
 id: 1440
 title: 'P4-03: Probe setup seed without config.yml writes'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-08T19:31:51.041322+00:00
 updated: 2026-05-09T00:25:41.696230+00:00
 tags:

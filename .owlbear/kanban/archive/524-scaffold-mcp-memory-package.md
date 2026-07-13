@@ -2,7 +2,7 @@
 id: 524
 title: Scaffold mcp-memory package
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-01 16:11:09.992105+02:00
 updated: 2026-04-02 16:34:23.762841+02:00
 started: 2026-04-02 16:33:44.270849+02:00

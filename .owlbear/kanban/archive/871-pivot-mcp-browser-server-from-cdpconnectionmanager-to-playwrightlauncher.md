@@ -2,7 +2,7 @@
 id: 871
 title: Pivot MCP browser server from CDPConnectionManager to PlaywrightLauncher
 status: archived
-priority: critical
+priority: medium
 created: '2026-04-13T23:22:45.535455+00:00'
 updated: '2026-04-14T22:11:54.446438+00:00'
 tags:
@@ -288,7 +288,7 @@ Task returned to backlog by reviewer (confidence .68, FAIL). AC7 failure attribu
 | click, type_input, select | `raise ToolError("No browser session")` | Interactive — physically require a browser page, no fallback |
 | read_text, snapshot | Return `last_content` fallback (may be "") | Supports ContentFetcher pipeline: navigate→fetch→last_content→read_text |
 
-**Follow-up task created:** #877 — "Resolve page=None behavior conflict in mcp-browser tools" (depends_on: 871, status: backlog, priority: needed). Contains precise AC for the 3-line server.py change + 5 test file updates.
+**Follow-up task created:** #877 — "Resolve page=None behavior conflict in mcp-browser tools" (depends_on: 871, status: backlog, priority: medium). Contains precise AC for the 3-line server.py change + 5 test file updates.
 
 ### AC7 Refinement
 

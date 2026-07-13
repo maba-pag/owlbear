@@ -2,7 +2,7 @@
 id: 653
 title: 'P4-13: Update pipeline agents with Brief context'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-06T07:03:44.1448783+02:00
 updated: 2026-04-07T06:06:39.0470432+02:00
 started: 2026-04-07T06:06:39.0470432+02:00

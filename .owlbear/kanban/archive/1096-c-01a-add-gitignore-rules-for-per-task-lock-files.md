@@ -2,7 +2,7 @@
 id: 1096
 title: 'C-01a: Add gitignore rules for per-task lock files'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-21T19:26:03.707441+00:00
 updated: 2026-04-23T09:27:10.565223+00:00
 tags:

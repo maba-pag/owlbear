@@ -2,7 +2,7 @@
 id: 926
 title: 'P1-02: GREEN — list_sessions() engine helper implementation'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-17T19:57:29.172023+00:00
 updated: 2026-04-18T11:35:12.666833+00:00
 tags:

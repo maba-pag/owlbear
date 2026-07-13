@@ -2,7 +2,7 @@
 id: 1674
 title: 'Fix test_package_boundary.py: add owlbear_memory namespace to ALLOWED_IMPORTS'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-19T06:27:15.486710+02:00
 updated: 2026-05-19T10:36:16.602369+02:00
 tags:

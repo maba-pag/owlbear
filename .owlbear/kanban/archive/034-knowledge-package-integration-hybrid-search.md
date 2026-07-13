@@ -2,7 +2,7 @@
 id: 34
 title: Knowledge package integration + hybrid search
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-26 18:33:53.223130+01:00
 updated: 2026-04-03 05:52:18.096265+02:00
 started: 2026-04-03 05:45:49.207538+02:00

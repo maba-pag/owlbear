@@ -2,7 +2,7 @@
 id: 700
 title: SourceEvaluator backward-compat constructor — accept model string without crash
 status: archived
-priority: important
+priority: medium
 created: 2026-04-08T21:39:48.0119819+02:00
 updated: 2026-04-09T02:44:13.6031765+02:00
 started: 2026-04-09T02:44:13.6031765+02:00

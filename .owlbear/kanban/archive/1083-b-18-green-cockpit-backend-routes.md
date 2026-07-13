@@ -2,7 +2,7 @@
 id: 1083
 title: 'B-18: GREEN — cockpit backend routes'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-21 10:50:53.767229+00:00
 updated: 2026-04-28T01:04:22.539877+00:00
 tags:

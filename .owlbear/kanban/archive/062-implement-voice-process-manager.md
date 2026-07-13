@@ -2,7 +2,7 @@
 id: 62
 title: Implement voice process manager
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-26 19:33:42.816816+01:00
 updated: 2026-04-05 21:35:52.920249+02:00
 started: 2026-04-05 21:35:52.920249+02:00

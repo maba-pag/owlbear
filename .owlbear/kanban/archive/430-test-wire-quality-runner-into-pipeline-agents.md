@@ -2,7 +2,7 @@
 id: 430
 title: 'Test: Wire Quality-Runner into pipeline agents'
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-30 21:24:44.643360+02:00
 updated: 2026-04-05 04:01:58.195202+02:00
 started: 2026-04-05 04:01:58.195202+02:00

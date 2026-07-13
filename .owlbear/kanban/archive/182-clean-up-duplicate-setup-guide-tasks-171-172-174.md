@@ -2,7 +2,7 @@
 id: 182
 title: 'Clean up duplicate setup-guide tasks (#171 #172 #174 #175)'
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-29 20:13:44.401074+02:00
 updated: 2026-03-30 03:15:25.615314+02:00
 started: 2026-03-29 20:29:33.084876+02:00

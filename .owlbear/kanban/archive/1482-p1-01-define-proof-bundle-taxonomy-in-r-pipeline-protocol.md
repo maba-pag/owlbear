@@ -2,7 +2,7 @@
 id: 1482
 title: 'P1-01: Define proof-bundle taxonomy in r-pipeline-protocol'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-11T08:58:34.021832+00:00
 updated: 2026-05-11T11:43:54.186254+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 1557
 title: Repair manual enrichment graph persistence contract
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-14T15:47:32.454745+00:00
 updated: 2026-05-15T16:12:08.570040+00:00
 tags:

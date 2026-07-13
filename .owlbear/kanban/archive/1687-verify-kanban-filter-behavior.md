@@ -2,7 +2,7 @@
 id: 1687
 title: Verify kanban filter behavior
 status: archived
-priority: important
+priority: medium
 created: 2026-05-21T19:52:36.134394+02:00
 updated: 2026-05-24T10:50:01.078241+02:00
 tags:
@@ -47,7 +47,7 @@ Use this task as a product/audit todo item, not an instruction to hand off to th
 - Product classification: no real data-filter defect was reproduced. The only browser failure observed was a test false positive: Playwright pierces open PDS shadow DOM, so `#filter-panel input[type="checkbox"]` matched the internal `p-checkbox` input. The assertion now verifies that no duplicate light-DOM native checkbox fallback exists.
 - Product improvement: active filter constraints are now named in the Kanban header as chips, so a narrowed board explains itself instead of relying only on `Filters (N)` and `M / N tasks` counts.
 - Status filter decision: not added. Status is already the board's primary column dimension, so a separate status filter would duplicate the main layout unless future user evidence shows a concrete workflow need.
-- Screenshot evidence: `.owlbear/scratch/1716-wide-cockpit/kanban-filters-1687.png` shows the real 2560px Cockpit with `Search: filter`, `Priority: Important`, `3 matching`, and `3 / 43 tasks` visible.
+- Screenshot evidence: `.owlbear/scratch/1716-wide-cockpit/kanban-filters-1687.png` shows the real 2560px Cockpit with `Search: filter`, `priority: medium`, `3 matching`, and `3 / 43 tasks` visible.
 
 ## Verification
 - `npx vitest run src/__tests__/filterTasks.test.ts src/__tests__/FilterPanel.test.tsx src/__tests__/FilterPanel.pds-controls.test.tsx src/__tests__/KanbanBoard.filter-e2e.test.tsx src/__tests__/FilterAccessibility.test.tsx --reporter=json --outputFile=/Users/markus/Projects/owlbear-dev/.owlbear/scratch/1687-vitest-filter.json` -> 31 suites, 99 tests passed.

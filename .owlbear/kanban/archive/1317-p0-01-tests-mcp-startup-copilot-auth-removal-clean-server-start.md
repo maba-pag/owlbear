@@ -2,7 +2,7 @@
 id: 1317
 title: 'P0-01: Tests — MCP startup (copilot_auth removal, clean server start)'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-04T05:48:37.741242+00:00
 updated: 2026-05-04T10:12:52.495196+00:00
 tags:

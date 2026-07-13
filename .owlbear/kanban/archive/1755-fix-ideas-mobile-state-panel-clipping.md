@@ -2,7 +2,7 @@
 id: 1755
 title: Fix Ideas mobile state panel clipping
 status: archived
-priority: important
+priority: medium
 created: 2026-05-23T15:36:05+0200
 updated: 2026-05-24T10:50:02.028059+02:00
 tags:

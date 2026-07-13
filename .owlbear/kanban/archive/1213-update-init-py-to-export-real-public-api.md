@@ -2,7 +2,7 @@
 id: 1213
 title: Update __init__.py to export real public API
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-30 15:29:15.233442+00:00
 updated: 2026-05-03T23:10:24.219584+00:00
 tags:

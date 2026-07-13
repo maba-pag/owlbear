@@ -2,7 +2,7 @@
 id: 949
 title: Assess SSRF surface in BrowserContentFetcher (page.goto)
 status: archived
-priority: important
+priority: medium
 created: 2026-04-18T01:09:19.403442+00:00
 updated: 2026-04-18T02:00:47.612065+00:00
 tags:

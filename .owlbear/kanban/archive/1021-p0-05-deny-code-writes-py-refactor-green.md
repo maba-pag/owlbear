@@ -2,7 +2,7 @@
 id: 1021
 title: 'P0-05: deny-code-writes.py refactor (GREEN)'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-19 23:51:49.154972+00:00
 updated: 2026-04-20 01:58:19.766303+00:00
 tags:

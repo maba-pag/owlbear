@@ -2,7 +2,7 @@
 id: 1630
 title: 'Narrow #1582 proof gate scope to task-owned test files'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-16T04:34:46.549127+00:00
 updated: 2026-05-16T12:31:18.253847+00:00
 tags:

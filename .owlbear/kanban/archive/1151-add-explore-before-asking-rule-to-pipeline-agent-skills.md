@@ -2,7 +2,7 @@
 id: 1151
 title: Add "Explore Before Asking" rule to pipeline agent skills
 status: archived
-priority: important
+priority: medium
 created: 2026-04-27T22:10:07.559936+00:00
 updated: 2026-04-28T00:06:45.819642+00:00
 tags:

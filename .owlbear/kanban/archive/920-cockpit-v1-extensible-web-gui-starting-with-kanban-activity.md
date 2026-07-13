@@ -2,7 +2,7 @@
 id: 920
 title: Cockpit v1 — extensible web GUI starting with kanban + activity
 status: archived
-priority: important
+priority: medium
 created: 2026-04-17T19:51:26.484351+00:00
 updated: 2026-04-17T20:49:57.977090+00:00
 tags:

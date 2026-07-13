@@ -2,7 +2,7 @@
 id: 837
 title: Implement browser session management in mcp-browser AppContext
 status: archived
-priority: important
+priority: medium
 created: '2026-04-11T15:28:49.551640+00:00'
 updated: '2026-04-15T17:24:11.362826+00:00'
 tags:

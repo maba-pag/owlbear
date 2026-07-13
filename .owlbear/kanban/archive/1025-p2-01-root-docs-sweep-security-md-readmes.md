@@ -2,7 +2,7 @@
 id: 1025
 title: 'P2-01: Root docs sweep (SECURITY.md, READMEs)'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-19 23:52:56.624771+00:00
 updated: 2026-04-20 03:52:01.920969+00:00
 tags:

@@ -3,7 +3,7 @@ id: 478
 title: 'RED: tests for modernized list_tasks (archived, limit, reverse, blocked tri-state,
   lean JSON)'
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-31 06:13:41.401837+02:00
 updated: 2026-04-02 05:57:23.362765+02:00
 started: 2026-04-02 05:57:22.908674+02:00

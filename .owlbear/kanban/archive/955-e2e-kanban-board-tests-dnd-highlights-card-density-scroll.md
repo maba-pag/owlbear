@@ -2,7 +2,7 @@
 id: 955
 title: 'E2E kanban board tests: DnD highlights, card density, scroll'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-18T13:41:19.344390+00:00
 updated: 2026-04-18T14:50:02.970472+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 673
 title: 'P4-14: Add Brief-from-parent convention to pipeline skill files'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-07T05:38:11.8618391+02:00
 updated: 2026-04-07T06:32:37.721706+02:00
 started: 2026-04-07T06:32:37.721706+02:00

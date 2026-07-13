@@ -2,7 +2,7 @@
 id: 803
 title: Tests — refresh_config + config staleness fix
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-10T21:20:57.293478+00:00'
 updated: '2026-04-15T13:48:18.176519+00:00'
 tags:

@@ -2,7 +2,7 @@
 id: 1175
 title: Harden storage.save_config for grouped config output
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-28T23:07:11.208593+00:00
 updated: 2026-04-29T05:31:32.215842+00:00
 tags:

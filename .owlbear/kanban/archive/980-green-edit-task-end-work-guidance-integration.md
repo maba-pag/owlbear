@@ -2,7 +2,7 @@
 id: 980
 title: 'GREEN: edit_task + end_work guidance integration'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-18T21:18:27.029383+00:00
 updated: 2026-04-19T14:03:40.464005+00:00
 tags:

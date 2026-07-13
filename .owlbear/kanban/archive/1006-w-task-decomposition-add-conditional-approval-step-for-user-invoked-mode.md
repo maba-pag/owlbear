@@ -2,7 +2,7 @@
 id: 1006
 title: 'w-task-decomposition: add conditional approval step for user-invoked mode'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-18 21:54:33.726798+00:00
 updated: 2026-04-19 13:07:51.881344+00:00
 tags:

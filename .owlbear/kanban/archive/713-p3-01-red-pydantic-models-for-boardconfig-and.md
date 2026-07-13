@@ -2,7 +2,7 @@
 id: 713
 title: 'P3-01: RED — Pydantic models for BoardConfig and TaskRecord'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-09T03:24:26.6974428+02:00
 updated: 2026-04-09T06:32:07.968443+02:00
 started: 2026-04-09T06:32:07.968443+02:00

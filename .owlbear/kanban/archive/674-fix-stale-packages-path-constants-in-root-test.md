@@ -2,7 +2,7 @@
 id: 674
 title: Fix stale `packages/` path constants in root test files
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-08T17:12:36.9831345+02:00
 updated: 2026-04-08T23:53:48.1298679+02:00
 started: 2026-04-08T23:53:48.1298679+02:00

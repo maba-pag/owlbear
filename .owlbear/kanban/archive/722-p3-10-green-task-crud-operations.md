@@ -2,7 +2,7 @@
 id: 722
 title: 'P3-10: GREEN — task CRUD operations'
 status: archived
-priority: critical
+priority: medium
 created: 2026-04-09T03:26:03.5311612+02:00
 updated: 2026-04-09T20:45:26.7611292+02:00
 started: 2026-04-09T20:45:26.7611292+02:00

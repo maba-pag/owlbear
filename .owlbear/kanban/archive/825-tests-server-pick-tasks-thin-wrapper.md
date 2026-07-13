@@ -2,7 +2,7 @@
 id: 825
 title: Tests — Server pick_tasks thin wrapper
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-10T21:23:15.034176+00:00'
 updated: '2026-04-12T16:18:34.742518+00:00'
 tags:

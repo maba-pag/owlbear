@@ -2,7 +2,7 @@
 id: 1872
 title: 'Knowledge: ContentStore — search & purge'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-25T19:03:11.262484+02:00
 updated: 2026-05-26T21:52:04.281447+02:00
 tags:

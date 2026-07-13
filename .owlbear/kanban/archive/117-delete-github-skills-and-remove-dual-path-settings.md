@@ -2,7 +2,7 @@
 id: 117
 title: Delete .github/skills/ and remove dual-path settings
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-29 01:40:59.188160+01:00
 updated: 2026-03-29 23:08:04.470536+02:00
 started: 2026-03-29 23:08:04.145290+02:00

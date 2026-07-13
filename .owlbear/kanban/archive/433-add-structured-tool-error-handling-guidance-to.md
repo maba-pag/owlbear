@@ -2,7 +2,7 @@
 id: 433
 title: Add structured tool-error handling guidance to agent instructions
 status: archived
-priority: important
+priority: medium
 created: 2026-03-30 21:37:50.654922+02:00
 updated: 2026-03-31 15:54:36.838789+02:00
 started: 2026-03-31 15:54:31.921818+02:00

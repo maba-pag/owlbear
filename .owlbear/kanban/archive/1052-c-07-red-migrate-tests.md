@@ -2,7 +2,7 @@
 id: 1052
 title: 'C-07: RED — migrate tests'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-21T10:42:50.297290+00:00
 updated: 2026-04-23T12:40:30.637704+00:00
 tags:

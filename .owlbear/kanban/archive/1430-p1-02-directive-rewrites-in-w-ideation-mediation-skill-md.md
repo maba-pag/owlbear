@@ -2,7 +2,7 @@
 id: 1430
 title: 'P1-02: Directive rewrites in w-ideation-mediation/SKILL.md'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-08T01:00:48.467318+00:00
 updated: 2026-05-08T15:33:53.964838+00:00
 tags:

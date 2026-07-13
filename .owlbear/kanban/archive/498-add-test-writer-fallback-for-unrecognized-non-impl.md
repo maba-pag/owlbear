@@ -2,7 +2,7 @@
 id: 498
 title: Add test-writer fallback for unrecognized non-impl tasks
 status: archived
-priority: important
+priority: medium
 created: 2026-03-31 09:01:15.812724+02:00
 updated: 2026-04-01 12:25:53.742129+02:00
 started: 2026-04-01 12:25:53.244791+02:00

@@ -2,7 +2,7 @@
 id: 1562
 title: 'P2-04 RED: Specify shell and sidecar inspector behavior'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-14T18:26:23.406539+00:00
 updated: 2026-05-15T08:09:57.922038+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 687
 title: Make StructuredExtractor protocol async and update EntityExtractor await
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-08T21:06:18.9396962+02:00
 updated: 2026-04-09T08:13:00.0660454+02:00
 started: 2026-04-09T08:13:00.0660454+02:00

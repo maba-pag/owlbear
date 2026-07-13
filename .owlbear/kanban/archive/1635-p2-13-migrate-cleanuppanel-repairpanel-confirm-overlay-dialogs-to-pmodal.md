@@ -2,7 +2,7 @@
 id: 1635
 title: 'P2-13: Migrate CleanupPanel/RepairPanel confirm-overlay dialogs to PModal'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-17T19:35:46.931221+02:00
 updated: 2026-05-17T20:58:07.297729+02:00
 tags:

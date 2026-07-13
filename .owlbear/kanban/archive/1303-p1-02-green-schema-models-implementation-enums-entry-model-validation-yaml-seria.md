@@ -3,7 +3,7 @@ id: 1303
 title: 'P1-02: GREEN — Schema models implementation (enums, entry model, validation,
   YAML serialization)'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-04T01:32:18.491117+00:00
 updated: 2026-05-04T07:12:03.714123+00:00
 tags:

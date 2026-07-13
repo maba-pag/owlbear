@@ -2,7 +2,7 @@
 id: 93
 title: Rewrite README.md for v2 architecture
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-28 01:48:37.047642+01:00
 updated: 2026-03-29 16:17:50.694915+02:00
 started: 2026-03-29 16:17:50.371168+02:00

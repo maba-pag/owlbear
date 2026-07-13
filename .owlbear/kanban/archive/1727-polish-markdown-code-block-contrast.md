@@ -2,7 +2,7 @@
 id: 1727
 title: Polish markdown code block contrast
 status: archived
-priority: important
+priority: medium
 created: 2026-05-23T03:17:00+0200
 updated: 2026-05-24T10:50:01.632783+02:00
 tags:

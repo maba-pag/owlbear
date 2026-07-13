@@ -2,7 +2,7 @@
 id: 64
 title: Rename bearclaw-voice to owlbear-voice across tasks and docs
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-26 19:34:28.749440+01:00
 updated: 2026-03-28 03:47:54.145534+01:00
 started: 2026-03-28 03:46:05.781399+01:00

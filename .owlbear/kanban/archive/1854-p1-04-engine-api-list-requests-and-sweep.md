@@ -2,7 +2,7 @@
 id: 1854
 title: 'P1-04: Engine API — list_requests and sweep'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-24T20:58:29.519700+02:00
 updated: 2026-05-25T09:59:22.714006+02:00
 tags:

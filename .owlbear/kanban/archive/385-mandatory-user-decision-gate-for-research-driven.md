@@ -3,7 +3,7 @@ id: 385
 title: Mandatory user-decision gate for research-driven features and 
   architectural changes
 status: archived
-priority: critical
+priority: medium
 created: 2026-03-30 20:56:31.651150+02:00
 updated: 2026-03-31 08:38:16.775382+02:00
 started: 2026-03-31 08:38:13.095432+02:00

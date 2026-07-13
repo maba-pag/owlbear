@@ -2,7 +2,7 @@
 id: 152
 title: 'Test: mcp-knowledge Phase A remaining tools'
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-29 19:20:21.379881+02:00
 updated: 2026-03-30 15:39:18.286251+02:00
 started: 2026-03-30 15:38:33.927622+02:00

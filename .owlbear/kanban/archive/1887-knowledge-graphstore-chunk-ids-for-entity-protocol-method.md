@@ -2,7 +2,7 @@
 id: 1887
 title: 'Knowledge: GraphStore — chunk_ids_for_entity protocol method'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-27T00:36:20.507539+02:00
 updated: 2026-05-27T01:42:50.251194+02:00
 tags:

@@ -2,7 +2,7 @@
 id: 1487
 title: 'P1-06: Update w-code-review routing with proof-bundle'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-11T08:59:01.968663+00:00
 updated: 2026-05-11T13:11:21.309013+00:00
 tags:

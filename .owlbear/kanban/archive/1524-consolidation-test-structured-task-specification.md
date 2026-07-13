@@ -2,7 +2,7 @@
 id: 1524
 title: 'Consolidation test: structured task specification'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-13T02:30:11.908839+00:00
 updated: 2026-05-13T10:01:15.187502+00:00
 tags:

@@ -3,7 +3,7 @@ id: 1311
 title: 'P1-10: GREEN — Git integration (batch commit for curation runs and review
   sessions)'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-04T01:32:27.341678+00:00
 updated: 2026-05-06T06:25:00.030202+00:00
 tags:

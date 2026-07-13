@@ -2,7 +2,7 @@
 id: 1332
 title: 'P3-16: Search result provenance contract'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-04T05:48:50.166605+00:00
 updated: 2026-05-05T11:39:34.051078+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 1748
 title: Cockpit mobile interaction-state sweep
 status: archived
-priority: important
+priority: medium
 created: 2026-05-23T11:10:19+0200
 updated: 2026-05-24T10:50:01.931913+02:00
 tags:

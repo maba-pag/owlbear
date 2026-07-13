@@ -2,7 +2,7 @@
 id: 934
 title: 'P1-07: GREEN — Cockpit mutation API'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-17T19:58:48.844016+00:00
 updated: 2026-04-18T16:59:58.864641+00:00
 tags:

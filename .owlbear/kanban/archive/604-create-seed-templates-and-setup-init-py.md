@@ -2,7 +2,7 @@
 id: 604
 title: Create seed/ templates and setup/init.py
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-04 20:31:05.532385+02:00
 updated: 2026-04-05 09:22:27.254663+02:00
 started: 2026-04-05 09:22:27.254663+02:00

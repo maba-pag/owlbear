@@ -2,7 +2,7 @@
 id: 1170
 title: Resolve version field semantics for grouped config schema
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-28T22:52:50.036092+00:00
 updated: 2026-04-29T02:14:31.273092+00:00
 tags:

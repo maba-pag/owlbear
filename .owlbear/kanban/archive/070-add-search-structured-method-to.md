@@ -2,7 +2,7 @@
 id: 70
 title: Add search_structured method to KnowledgeQueryService
 status: archived
-priority: important
+priority: medium
 created: 2026-03-26 20:13:07.231759+01:00
 updated: 2026-03-29 09:21:54.446219+02:00
 started: 2026-03-29 09:21:50.167023+02:00

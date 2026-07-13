@@ -2,7 +2,7 @@
 id: 886
 title: Remove Graph API SharePoint code — dead path per v1 auth failure
 status: archived
-priority: nice-to-have
+priority: medium
 created: '2026-04-15T12:41:52.520931+00:00'
 updated: '2026-04-15T20:04:50.618644+00:00'
 tags:

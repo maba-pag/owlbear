@@ -2,7 +2,7 @@
 id: 1239
 title: 'Test: MoveRequest archival fields and route pass-through'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-01T03:07:50.539456+00:00
 updated: 2026-05-01T05:40:59.982145+00:00
 tags:

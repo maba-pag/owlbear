@@ -2,7 +2,7 @@
 id: 1368
 title: 'P1-05: Test kanban corruption scanner encoding hardening'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-06T00:58:38.511616+00:00
 updated: 2026-05-06T06:32:37.887704+00:00
 tags:

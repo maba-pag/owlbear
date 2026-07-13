@@ -2,7 +2,7 @@
 id: 743
 title: Expand Excalidraw skill with missing patterns and large-diagram strategy
 status: archived
-priority: important
+priority: medium
 created: '2026-04-10T05:10:18.5942378+02:00'
 updated: '2026-04-10T06:31:20.697221+00:00'
 tags:

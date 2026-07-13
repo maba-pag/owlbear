@@ -2,7 +2,7 @@
 id: 1473
 title: 'P4-22: Durable config test alignment (AC5 Cat-B1)'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-09T08:46:53.927445+00:00
 updated: 2026-05-09T15:25:16.842553+00:00
 tags:

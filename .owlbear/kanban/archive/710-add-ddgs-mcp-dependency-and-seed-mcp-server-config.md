@@ -2,7 +2,7 @@
 id: 710
 title: Add ddgs[mcp] dependency and seed MCP server config
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-09T02:40:39.8301993+02:00
 updated: 2026-04-09T09:19:26.4803796+02:00
 started: 2026-04-09T09:19:26.4803796+02:00

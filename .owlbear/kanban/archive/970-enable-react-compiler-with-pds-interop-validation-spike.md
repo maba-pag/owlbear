@@ -2,7 +2,7 @@
 id: 970
 title: Enable React Compiler with PDS interop validation spike
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-18T16:42:45.224158+00:00
 updated: 2026-04-18T19:35:23.373306+00:00
 tags:

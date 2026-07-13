@@ -2,7 +2,7 @@
 id: 1472
 title: 'P4-21: Kanban package test alignment (AC5 Cat-A)'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-09T08:46:53.913029+00:00
 updated: 2026-05-09T16:56:56.021518+00:00
 tags:

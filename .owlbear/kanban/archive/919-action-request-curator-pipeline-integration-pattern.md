@@ -2,7 +2,7 @@
 id: 919
 title: Action request — curator pipeline integration pattern
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-17T11:52:32.640374+00:00
 updated: 2026-04-17T20:04:12.105606+00:00
 tags:

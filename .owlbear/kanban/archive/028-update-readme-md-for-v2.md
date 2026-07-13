@@ -2,7 +2,7 @@
 id: 28
 title: Update README.md for v2
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-26 17:43:30.111972+01:00
 updated: 2026-03-29 01:21:46.274496+01:00
 started: 2026-03-29 01:21:41.655447+01:00

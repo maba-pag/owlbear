@@ -2,7 +2,7 @@
 id: 1153
 title: Add static coverage for ideation M3.5 proposal-round contracts
 status: archived
-priority: important
+priority: medium
 created: 2026-04-28T00:56:29.501550+00:00
 updated: 2026-04-28T02:59:41.620425+00:00
 tags:

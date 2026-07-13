@@ -3,7 +3,7 @@ id: 37
 title: Research agent-scoped hooks for tool access, lifecycle, and pipeline 
   enforcement
 status: archived
-priority: important
+priority: medium
 created: 2026-03-26 18:45:09.795589+01:00
 updated: 2026-04-05 14:45:36.006096+02:00
 started: 2026-04-05 14:45:36.006096+02:00

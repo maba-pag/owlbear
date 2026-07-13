@@ -2,7 +2,7 @@
 id: 525
 title: Implement memory-mcp tools
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-01 16:11:21.612432+02:00
 updated: 2026-04-03 10:18:15.513597+02:00
 started: 2026-04-02 07:38:31.230978+02:00

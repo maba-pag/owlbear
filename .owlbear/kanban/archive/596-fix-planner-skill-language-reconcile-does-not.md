@@ -2,7 +2,7 @@
 id: 596
 title: 'Fix planner skill language: reconcile "does NOT claim" with end_work usage'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-04 20:09:51.968555+02:00
 updated: 2026-04-06 06:00:09.948201+02:00
 started: 2026-04-06 06:00:09.948201+02:00

@@ -2,7 +2,7 @@
 id: 145
 title: Implement planner gate checker and task selector
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-29 16:23:38.870766+02:00
 updated: 2026-03-31 23:57:01.458483+02:00
 started: 2026-03-31 23:56:51.565100+02:00

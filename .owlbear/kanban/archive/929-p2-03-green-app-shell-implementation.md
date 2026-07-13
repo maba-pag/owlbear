@@ -2,7 +2,7 @@
 id: 929
 title: 'P2-03: GREEN — App shell implementation'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-17T19:57:46.937827+00:00
 updated: 2026-04-18T13:25:27.997534+00:00
 tags:

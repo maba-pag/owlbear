@@ -2,7 +2,7 @@
 id: 41
 title: Scaffold mcp-project MCP server package
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-26 18:50:07.713415+01:00
 updated: 2026-03-27 22:15:35.597279+01:00
 started: 2026-03-27 22:15:35.597279+01:00

@@ -2,7 +2,7 @@
 id: 719
 title: 'P3-07: RED — task listing with filters'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-09T03:25:39.267676+02:00
 updated: 2026-04-09T18:11:30.9536645+02:00
 started: 2026-04-09T18:11:30.9536645+02:00

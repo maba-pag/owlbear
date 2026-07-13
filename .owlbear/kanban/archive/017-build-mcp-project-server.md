@@ -2,7 +2,7 @@
 id: 17
 title: Build mcp-project server
 status: archived
-priority: important
+priority: medium
 created: 2026-03-26 17:21:36.141397+01:00
 updated: 2026-04-01 06:24:21.329468+02:00
 started: 2026-04-01 06:23:55.603791+02:00

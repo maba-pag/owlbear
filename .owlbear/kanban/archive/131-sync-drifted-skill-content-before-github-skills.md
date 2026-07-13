@@ -2,7 +2,7 @@
 id: 131
 title: Sync drifted skill content before .github/skills/ deletion
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-29 08:06:55.313257+02:00
 updated: 2026-03-29 11:57:58.029304+02:00
 started: 2026-03-29 08:29:09.204196+02:00

@@ -2,7 +2,7 @@
 id: 1193
 title: 'P3-05: Test resolve modal component'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-30T00:52:25.642042+00:00
 updated: 2026-04-30T05:12:32.083113+00:00
 tags:

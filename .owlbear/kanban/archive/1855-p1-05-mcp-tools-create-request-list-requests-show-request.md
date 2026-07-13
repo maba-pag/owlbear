@@ -2,7 +2,7 @@
 id: 1855
 title: 'P1-05: MCP tools — create_request, list_requests, show_request'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-24T20:58:39.096212+02:00
 updated: 2026-05-26T00:32:01.163857+02:00
 tags:

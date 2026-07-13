@@ -2,7 +2,7 @@
 id: 1552
 title: 'P4-02: migration verification grep gate'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-13T18:43:53.193530+00:00
 updated: 2026-05-14T12:33:25.728539+00:00
 tags:

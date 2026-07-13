@@ -2,7 +2,7 @@
 id: 1807
 title: Frame decision resolver metadata as section
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T07:23:36.019757+02:00
 updated: 2026-05-24T10:50:02.721894+02:00
 tags:

@@ -2,7 +2,7 @@
 id: 623
 title: Deprecate dispatcher agent definition
 status: archived
-priority: important
+priority: medium
 created: 2026-04-05T01:31:22.2282042+02:00
 updated: 2026-04-05T23:02:21.1228177+02:00
 started: 2026-04-05T23:02:21.1228177+02:00

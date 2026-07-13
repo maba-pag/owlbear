@@ -2,7 +2,7 @@
 id: 1423
 title: 'P1-02: Rewrite w-doc-update skill — 4-item checklist + verification layers'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-08T00:32:18.617094+00:00
 updated: 2026-05-09T05:44:46.055171+00:00
 tags:

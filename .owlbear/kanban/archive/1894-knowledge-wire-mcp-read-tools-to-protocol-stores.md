@@ -2,7 +2,7 @@
 id: 1894
 title: 'Knowledge: wire MCP read tools to protocol stores'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-27T11:05:26.124244+02:00
 updated: 2026-05-27T18:11:57.513965+02:00
 tags:

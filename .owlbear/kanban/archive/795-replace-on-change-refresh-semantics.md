@@ -2,7 +2,7 @@
 id: 795
 title: Replace-on-change refresh semantics
 status: archived
-priority: important
+priority: medium
 created: '2026-04-10T12:31:51.917663+00:00'
 updated: '2026-04-13T12:43:51.024905+00:00'
 tags:

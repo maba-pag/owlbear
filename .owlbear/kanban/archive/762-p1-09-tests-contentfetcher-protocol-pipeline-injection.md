@@ -2,7 +2,7 @@
 id: 762
 title: 'P1-09: Tests — ContentFetcher protocol + pipeline injection'
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-10T10:55:57.297626+00:00'
 updated: '2026-04-12T00:24:25.064844+00:00'
 tags:

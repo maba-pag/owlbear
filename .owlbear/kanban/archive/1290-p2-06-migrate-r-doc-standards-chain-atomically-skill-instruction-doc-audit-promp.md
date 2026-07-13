@@ -3,7 +3,7 @@ id: 1290
 title: 'P2-06: Migrate r-doc-standards chain atomically (skill + instruction + doc-audit
   prompt)'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-02T16:01:17.114235+00:00
 updated: 2026-05-03T19:43:45.866461+00:00
 tags:

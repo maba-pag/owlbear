@@ -2,7 +2,7 @@
 id: 541
 title: Add TypedDict return types for outputSchema specificity on mcp-knowledge
 status: archived
-priority: important
+priority: medium
 created: 2026-04-02 06:16:15.547930+02:00
 updated: 2026-04-03 04:34:33.230259+02:00
 started: 2026-04-03 04:33:01.763170+02:00

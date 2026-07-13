@@ -2,7 +2,7 @@
 id: 1525
 title: Add dep-status guidance to start_work()
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-05-13T12:16:29.865068+00:00
 updated: 2026-05-13T17:38:03.403865+00:00
 tags:

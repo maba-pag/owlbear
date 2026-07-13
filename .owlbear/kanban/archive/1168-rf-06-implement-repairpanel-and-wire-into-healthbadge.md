@@ -2,7 +2,7 @@
 id: 1168
 title: 'RF-06: Implement RepairPanel and wire into HealthBadge'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-28T17:38:24.649104+00:00
 updated: 2026-04-29T19:11:57.495714+00:00
 tags:

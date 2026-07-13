@@ -2,7 +2,7 @@
 id: 148
 title: Wire ErrorJournal into AcpClient when v2 error infrastructure exists
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-29 18:53:05.705807+02:00
 updated: 2026-04-04 07:09:52.740465+02:00
 started: 2026-04-04 07:09:26.939511+02:00

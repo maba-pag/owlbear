@@ -2,7 +2,7 @@
 id: 963
 title: 'Memoize KanbanBoard: React.memo on Card/Column, useMemo on filter/sort'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-18T15:51:06.546063+00:00
 updated: 2026-04-18T18:22:18.225618+00:00
 tags:

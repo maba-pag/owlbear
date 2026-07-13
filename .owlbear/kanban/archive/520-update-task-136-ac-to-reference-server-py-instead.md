@@ -2,7 +2,7 @@
 id: 520
 title: 'Update task #136 AC to reference server.py instead of tools.py'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-01 15:04:50.890777+02:00
 updated: 2026-04-03 04:47:29.672163+02:00
 started: 2026-04-03 04:45:48.531173+02:00

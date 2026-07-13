@@ -2,7 +2,7 @@
 id: 1201
 title: Unify error hierarchy — CorruptionError → KanbanError subclass
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-30 15:28:56.411894+00:00
 updated: 2026-04-30T21:56:52.357544+00:00
 tags:

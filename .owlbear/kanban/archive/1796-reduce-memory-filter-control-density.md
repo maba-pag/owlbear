@@ -2,7 +2,7 @@
 id: 1796
 title: Reduce Memory filter control density
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T03:13:48.718875+02:00
 updated: 2026-05-24T10:50:02.573849+02:00
 tags:

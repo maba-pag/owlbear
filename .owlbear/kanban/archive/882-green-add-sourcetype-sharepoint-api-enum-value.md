@@ -2,7 +2,7 @@
 id: 882
 title: GREEN — Add SourceType.SHAREPOINT_API enum value
 status: archived
-priority: someday
+priority: medium
 created: '2026-04-14T20:26:07.366493+00:00'
 updated: '2026-04-15T04:14:14.172953+00:00'
 tags:

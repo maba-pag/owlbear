@@ -2,7 +2,7 @@
 id: 116
 title: Update .github/skills/ references to skills/ after copy
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-29 01:40:51.004916+01:00
 updated: 2026-03-29 10:26:53.095753+02:00
 started: 2026-03-29 10:26:52.802731+02:00

@@ -2,7 +2,7 @@
 id: 1692
 title: Polish memory filter count summary
 status: archived
-priority: important
+priority: medium
 created: 2026-05-21T19:53:18.742929+02:00
 updated: 2026-05-24T10:50:01.141587+02:00
 tags:

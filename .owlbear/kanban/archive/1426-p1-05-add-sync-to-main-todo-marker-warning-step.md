@@ -2,7 +2,7 @@
 id: 1426
 title: 'P1-05: Add sync-to-main TODO marker warning step'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-08T00:41:08.358257+00:00
 updated: 2026-05-09T10:05:36.743434+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 975
 title: 'RED: Cockpit block:user tag lifecycle tests'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-18T21:17:49.871765+00:00
 updated: 2026-04-19T01:21:02.034754+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 683
 title: 'Research: diagram rendering tool for agents'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-08T19:18:21.6102963+02:00
 updated: 2026-04-09T01:26:37.2871535+02:00
 started: 2026-04-09T01:26:37.2871535+02:00

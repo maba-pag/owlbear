@@ -2,7 +2,7 @@
 id: 1365
 title: 'P1-02: Fix Cockpit PDS v4 build compatibility'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-06T00:58:31.995607+00:00
 updated: 2026-05-06T09:46:18.802209+00:00
 tags:

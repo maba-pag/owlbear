@@ -2,7 +2,7 @@
 id: 47
 title: Document ACP error handling strategy
 status: archived
-priority: important
+priority: medium
 created: 2026-03-26 18:56:10.838213+01:00
 updated: 2026-03-27 05:35:34.174563+01:00
 started: 2026-03-27 05:35:15.995341+01:00

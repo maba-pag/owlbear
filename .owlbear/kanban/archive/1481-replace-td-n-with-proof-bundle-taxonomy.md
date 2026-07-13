@@ -2,7 +2,7 @@
 id: 1481
 title: Replace td:N with proof-bundle taxonomy
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-11T08:54:43.332169+00:00
 updated: 2026-05-11T09:20:56.604029+00:00
 tags:

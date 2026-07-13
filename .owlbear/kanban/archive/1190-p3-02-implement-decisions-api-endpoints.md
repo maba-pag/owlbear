@@ -2,7 +2,7 @@
 id: 1190
 title: 'P3-02: Implement decisions API endpoints'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-30T00:52:13.248574+00:00
 updated: 2026-04-30T12:02:42.844467+00:00
 tags:

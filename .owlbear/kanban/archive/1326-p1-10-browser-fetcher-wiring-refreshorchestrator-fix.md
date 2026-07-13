@@ -2,7 +2,7 @@
 id: 1326
 title: 'P1-10: Browser fetcher wiring + RefreshOrchestrator fix'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-04T05:48:50.100105+00:00
 updated: 2026-05-05T08:21:49.816279+00:00
 tags:

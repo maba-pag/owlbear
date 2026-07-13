@@ -2,7 +2,7 @@
 id: 671
 title: Bootstrap CI workflows to main branch
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-06T22:23:06.3075808+02:00
 updated: 2026-04-07T16:04:35.0147617+02:00
 started: 2026-04-07T16:04:35.0147617+02:00

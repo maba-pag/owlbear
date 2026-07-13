@@ -2,7 +2,7 @@
 id: 1704
 title: Show task acceptance criteria in detail
 status: archived
-priority: important
+priority: medium
 created: 2026-05-21T20:23:32.985106+02:00
 updated: 2026-05-24T10:50:01.299317+02:00
 tags:

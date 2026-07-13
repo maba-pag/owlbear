@@ -2,7 +2,7 @@
 id: 1768
 title: Cockpit current state visual sweep after Ideas polish
 status: archived
-priority: important
+priority: medium
 created: 2026-05-23T17:15:50.693550+02:00
 updated: 2026-05-24T10:50:02.204674+02:00
 tags:

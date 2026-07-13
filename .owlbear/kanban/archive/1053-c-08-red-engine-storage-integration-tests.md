@@ -2,7 +2,7 @@
 id: 1053
 title: 'C-08: RED — engine storage-integration tests'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-21T10:42:50.306120+00:00
 updated: 2026-04-23T05:49:48.724597+00:00
 tags:

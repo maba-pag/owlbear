@@ -2,7 +2,7 @@
 id: 641
 title: 'P4-01: Rename kanban status "ideation" to "research"'
 status: archived
-priority: critical
+priority: medium
 created: 2026-04-06T06:59:48.4573621+02:00
 updated: 2026-04-06T11:15:56.3310132+02:00
 started: 2026-04-06T11:15:56.3310132+02:00

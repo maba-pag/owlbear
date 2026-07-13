@@ -2,7 +2,7 @@
 id: 1592
 title: 'P0-03: Tests — Tailwind v4 Vite plugin + Stylelint config'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-16T03:34:43.226946+00:00
 updated: 2026-05-16T08:54:58.572522+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 1509
 title: 'Cockpit: Playwright E2E test for mutation error banner'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-05-12T08:33:03.181002+00:00
 updated: 2026-05-12T20:19:00.650708+00:00
 tags:

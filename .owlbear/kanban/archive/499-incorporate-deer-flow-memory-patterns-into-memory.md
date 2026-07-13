@@ -2,7 +2,7 @@
 id: 499
 title: Incorporate deer-flow memory patterns into memory-mcp design (#387)
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-31 13:40:21.370194+02:00
 updated: 2026-04-04 07:30:43.137471+02:00
 started: 2026-04-04 07:30:33.235830+02:00

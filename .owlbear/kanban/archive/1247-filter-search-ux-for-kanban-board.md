@@ -2,7 +2,7 @@
 id: 1247
 title: Filter/Search UX for Kanban Board
 status: archived
-priority: important
+priority: medium
 created: 2026-05-01T04:32:36.348648+00:00
 updated: 2026-05-01T12:45:17.571859+00:00
 tags:

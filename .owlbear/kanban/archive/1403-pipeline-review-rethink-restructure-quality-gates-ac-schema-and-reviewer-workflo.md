@@ -3,7 +3,7 @@ id: 1403
 title: Pipeline review rethink — restructure quality gates, AC schema, and 
   reviewer workflow
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-07T23:14:02.161749+00:00
 updated: 2026-05-08T00:30:05.355414+00:00
 tags:

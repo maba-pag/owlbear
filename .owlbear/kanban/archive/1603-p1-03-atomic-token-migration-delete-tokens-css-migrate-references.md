@@ -2,7 +2,7 @@
 id: 1603
 title: 'P1-03: Atomic token migration — delete tokens.css + migrate references'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-16T03:36:06.954546+00:00
 updated: 2026-05-17T16:22:37.957444+02:00
 tags:

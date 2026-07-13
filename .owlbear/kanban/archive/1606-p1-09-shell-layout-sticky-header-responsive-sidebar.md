@@ -2,7 +2,7 @@
 id: 1606
 title: 'P1-09: Shell layout — sticky header + responsive sidebar'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-16T03:36:07.069416+00:00
 updated: 2026-05-17T23:00:26.086233+02:00
 tags:

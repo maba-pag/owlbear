@@ -2,7 +2,7 @@
 id: 1387
 title: 'P2-12: Implement Cockpit decision data contract and refetch flow'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-06T01:04:49.160414+00:00
 updated: 2026-05-08T16:49:54.930995+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 6
 title: Monorepo tooling research
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-26 17:19:14.234658+01:00
 updated: 2026-03-27 13:33:18.328437+01:00
 started: 2026-03-27 13:33:13.834112+01:00

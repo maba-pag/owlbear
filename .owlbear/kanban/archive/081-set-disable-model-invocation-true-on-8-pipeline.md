@@ -2,7 +2,7 @@
 id: 81
 title: 'Set disable-model-invocation: true on 8 pipeline agents'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-27 04:51:29.816969+01:00
 updated: 2026-03-30 15:36:00.421570+02:00
 started: 2026-03-30 15:18:47.510114+02:00

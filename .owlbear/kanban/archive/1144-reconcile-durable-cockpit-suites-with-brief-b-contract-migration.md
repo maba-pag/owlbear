@@ -2,7 +2,7 @@
 id: 1144
 title: Reconcile durable cockpit suites with Brief-B contract migration
 status: archived
-priority: important
+priority: medium
 created: 2026-04-27T18:06:58.012479+00:00
 updated: 2026-04-27T20:29:02.980346+00:00
 tags:

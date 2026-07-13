@@ -2,7 +2,7 @@
 id: 1868
 title: 'Kanban: add resolve_decision() to decisions module with unit tests'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-25T00:20:38.487099+02:00
 updated: 2026-05-25T04:50:27.813656+02:00
 tags:

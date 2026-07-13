@@ -2,7 +2,7 @@
 id: 1907
 title: 'P1-03: Update test_persistence_source_wiring.py to v2 ingest interface'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-28T00:34:20.741704+02:00
 updated: 2026-05-28T04:09:22.064461+02:00
 tags:

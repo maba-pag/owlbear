@@ -3,7 +3,7 @@ id: 1658
 title: Cockpit Ideas Notebook — freeform markdown tab backed by 
   .owlbear/ideas.md
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-05-18T17:38:48.428527+02:00
 updated: 2026-05-20T22:13:59.157959+02:00
 tags:

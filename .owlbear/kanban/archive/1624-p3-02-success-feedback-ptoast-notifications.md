@@ -2,7 +2,7 @@
 id: 1624
 title: 'P3-02: Success feedback — PToast notifications'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-16T03:37:44.703987+00:00
 updated: 2026-05-17T19:26:14.291097+02:00
 tags:

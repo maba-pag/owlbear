@@ -2,7 +2,7 @@
 id: 1488
 title: 'P1-07: Update pipeline-agents.instructions.md and agent files'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-11T09:00:01.154177+00:00
 updated: 2026-05-11T17:12:06.839907+00:00
 tags:

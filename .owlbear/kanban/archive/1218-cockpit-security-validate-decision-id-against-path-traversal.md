@@ -2,7 +2,7 @@
 id: 1218
 title: Cockpit security — validate decision_id against path traversal
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-30 16:31:07.651363+00:00
 updated: 2026-04-30T22:42:42.921028+00:00
 tags:

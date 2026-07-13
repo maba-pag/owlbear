@@ -2,7 +2,7 @@
 id: 1244
 title: 'Implement: CockpitView archival validation block'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-01T03:08:05.317883+00:00
 updated: 2026-05-01T13:46:39.754008+00:00
 tags:

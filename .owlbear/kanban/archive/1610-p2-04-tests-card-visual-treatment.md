@@ -2,7 +2,7 @@
 id: 1610
 title: 'P2-04: Tests — card visual treatment'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-16T03:36:42.364176+00:00
 updated: 2026-05-16T15:04:42.691587+00:00
 tags:

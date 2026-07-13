@@ -2,7 +2,7 @@
 id: 1061
 title: 'C-16: GREEN — kanban-migrate entry point'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-21T10:44:12.239610+00:00
 updated: 2026-04-24T08:29:50.381457+00:00
 tags:
@@ -864,7 +864,7 @@ Fixture: task file with ALL canonical fields present and correct values, but non
 title: misordered task
 id: 1001
 status: todo
-priority: needed
+priority: medium
 created: "2026-01-15T08:00:00+00:00"
 updated: "2026-01-15T08:00:00+00:00"
 tags: []

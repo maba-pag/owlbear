@@ -2,7 +2,7 @@
 id: 555
 title: Extract refresh orchestrator
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-02 16:07:24.529750+02:00
 updated: 2026-04-03 19:12:31.993281+02:00
 started: 2026-04-03 19:12:31.485403+02:00

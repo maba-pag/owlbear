@@ -2,7 +2,7 @@
 id: 1197
 title: Remove Mock from MCP server production code
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-30 15:28:53.011300+00:00
 updated: 2026-05-01T14:47:25.045366+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 1500
 title: 'Cockpit: Tests for mutation error banner and inline notification'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-12T02:38:27.742252+00:00
 updated: 2026-05-12T14:45:28.171665+00:00
 tags:

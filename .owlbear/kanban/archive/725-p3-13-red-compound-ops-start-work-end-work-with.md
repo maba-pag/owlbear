@@ -2,7 +2,7 @@
 id: 725
 title: 'P3-13: RED — compound ops (start_work, end_work) with status advancement'
 status: archived
-priority: critical
+priority: medium
 created: 2026-04-09T03:27:23.3581319+02:00
 updated: 2026-04-09T22:58:20.0952952+02:00
 started: 2026-04-09T22:58:20.0952952+02:00

@@ -2,7 +2,7 @@
 id: 1750
 title: Add mobile resolver scroll affordance
 status: archived
-priority: important
+priority: medium
 created: 2026-05-23T11:19:40+0200
 updated: 2026-05-24T10:50:01.957934+02:00
 tags:

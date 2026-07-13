@@ -2,7 +2,7 @@
 id: 1501
 title: 'Cockpit: Implement api/tasks.ts module'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-12T02:43:28.689799+00:00
 updated: 2026-05-12T13:14:29.977127+00:00
 tags:

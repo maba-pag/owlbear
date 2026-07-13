@@ -2,7 +2,7 @@
 id: 1199
 title: Remove KANBAN_TOOLS_EXCLUDE capability from MCP server
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-30T15:28:54.925794+00:00
 updated: 2026-04-30T17:42:19.073176+00:00
 tags:

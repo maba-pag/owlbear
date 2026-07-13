@@ -2,7 +2,7 @@
 id: 1546
 title: 'P3-02: impl — card component CSS: signal border, hover, focus, selected states'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-13T18:43:23.784270+00:00
 updated: 2026-05-14T05:57:16.395452+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 428
 title: 'deer-flow deep dive: memory system + subagent delegation patterns'
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-30 21:17:52.680831+02:00
 updated: 2026-04-02 05:35:12.483860+02:00
 started: 2026-04-02 05:35:12.019332+02:00

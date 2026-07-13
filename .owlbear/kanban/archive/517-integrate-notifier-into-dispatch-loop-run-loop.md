@@ -2,7 +2,7 @@
 id: 517
 title: Integrate Notifier into dispatch loop (run_loop)
 status: archived
-priority: someday
+priority: medium
 created: 2026-04-01 07:07:35.025478+02:00
 updated: 2026-04-04 07:10:35.455456+02:00
 started: 2026-04-04 07:09:45.825429+02:00

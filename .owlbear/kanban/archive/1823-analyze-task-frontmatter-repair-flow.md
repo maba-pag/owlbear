@@ -2,7 +2,7 @@
 id: 1823
 title: Analyze task frontmatter repair flow
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T10:17:50+02:00
 updated: 2026-05-24T10:50:02.937812+02:00
 tags:

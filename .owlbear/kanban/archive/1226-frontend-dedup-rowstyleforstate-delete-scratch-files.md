@@ -2,7 +2,7 @@
 id: 1226
 title: Frontend — dedup rowStyleForState + delete scratch files
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-30 16:31:18.617727+00:00
 updated: 2026-05-01T12:55:46.428656+00:00
 tags:

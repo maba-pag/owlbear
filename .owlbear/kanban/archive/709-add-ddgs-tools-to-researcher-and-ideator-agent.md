@@ -2,7 +2,7 @@
 id: 709
 title: Add ddgs tools to researcher and ideator agent allowlists
 status: archived
-priority: important
+priority: medium
 created: 2026-04-09T02:40:37.8278236+02:00
 updated: 2026-04-09T09:19:26.4657853+02:00
 started: 2026-04-09T09:19:26.4657853+02:00

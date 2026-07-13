@@ -2,7 +2,7 @@
 id: 1575
 title: 'P2-15 GREEN: Polish kanban columns and empty states'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-14T18:34:00.455181+00:00
 updated: 2026-05-15T08:17:25.859345+00:00
 tags:

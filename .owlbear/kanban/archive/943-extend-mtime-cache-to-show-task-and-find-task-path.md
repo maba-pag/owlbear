@@ -2,7 +2,7 @@
 id: 943
 title: Extend mtime cache to show_task() and _find_task_path()
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-17T21:14:07.923757+00:00
 updated: 2026-04-17T23:25:52.020293+00:00
 tags:

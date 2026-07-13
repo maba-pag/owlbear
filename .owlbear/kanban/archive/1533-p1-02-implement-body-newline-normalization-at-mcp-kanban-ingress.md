@@ -2,7 +2,7 @@
 id: 1533
 title: 'P1-02: Implement body newline normalization at MCP kanban ingress'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-13T12:29:21.909969+00:00
 updated: 2026-05-13T16:06:11.851308+00:00
 tags:

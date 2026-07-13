@@ -2,7 +2,7 @@
 id: 890
 title: macOS compatibility — cross-platform hook system and consumer workflow
 status: archived
-priority: critical
+priority: medium
 created: 2026-04-16T22:48:50.548501+00:00
 updated: 2026-04-17T01:58:16.756752+00:00
 tags:

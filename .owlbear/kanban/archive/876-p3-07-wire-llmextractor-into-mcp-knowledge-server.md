@@ -2,7 +2,7 @@
 id: 876
 title: 'P3-07: Wire LLMExtractor into MCP knowledge server'
 status: archived
-priority: important
+priority: medium
 created: '2026-04-14T15:28:36.425659+00:00'
 updated: '2026-04-14T23:33:34.629424+00:00'
 tags:

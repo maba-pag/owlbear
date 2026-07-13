@@ -2,7 +2,7 @@
 id: 1895
 title: 'Knowledge: rename MCP tools to match registry'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-27T11:05:45.483741+02:00
 updated: 2026-05-27T21:05:24.784086+02:00
 tags:

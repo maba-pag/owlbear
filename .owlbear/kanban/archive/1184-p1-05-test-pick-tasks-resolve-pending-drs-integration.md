@@ -2,7 +2,7 @@
 id: 1184
 title: 'P1-05: Test pick_tasks resolve_pending_drs integration'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-30T00:51:47.776679+00:00
 updated: 2026-04-30T02:26:53.493343+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 184
 title: Create v2 ErrorJournal module with append-only JSONL persistence
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-29 20:23:15.501960+02:00
 updated: 2026-03-31 03:20:50.450161+02:00
 started: 2026-03-31 03:20:26.023387+02:00

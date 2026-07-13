@@ -2,7 +2,7 @@
 id: 1805
 title: Add memory detail action spacing
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-24T06:42:43.178804+02:00
 updated: 2026-05-24T10:50:02.694726+02:00
 tags:

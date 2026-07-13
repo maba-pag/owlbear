@@ -2,7 +2,7 @@
 id: 1263
 title: Wire usePendingDRs to SSE decisions-changed early-refetch
 status: archived
-priority: someday
+priority: medium
 created: 2026-05-01T09:53:38.534934+00:00
 updated: 2026-05-02T17:38:56.281572+00:00
 tags:

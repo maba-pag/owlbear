@@ -2,7 +2,7 @@
 id: 885
 title: GREEN — Wire RefreshOrchestrator SHAREPOINT_API dispatch
 status: archived
-priority: someday
+priority: medium
 created: '2026-04-14T20:26:22.853194+00:00'
 updated: '2026-04-15T05:02:56.807756+00:00'
 tags:

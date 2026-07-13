@@ -2,7 +2,7 @@
 id: 1331
 title: 'P3-15: Tests — Search result provenance contract'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-04T05:48:50.155044+00:00
 updated: 2026-05-05T05:32:34.241538+00:00
 tags:

@@ -3,7 +3,7 @@ id: 105
 title: Evaluate adding vscode/askQuestions and search/changes tools to agent 
   toolkits
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-28 14:33:43.062943+01:00
 updated: 2026-03-29 04:07:09.580660+02:00
 started: 2026-03-29 04:07:09.580660+02:00

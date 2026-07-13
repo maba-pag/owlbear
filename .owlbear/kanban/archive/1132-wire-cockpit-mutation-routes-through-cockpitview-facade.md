@@ -2,7 +2,7 @@
 id: 1132
 title: Wire cockpit mutation routes through CockpitView facade
 status: archived
-priority: important
+priority: medium
 created: 2026-04-26T15:52:11.982906+00:00
 updated: 2026-04-27T11:22:42.199867+00:00
 tags:

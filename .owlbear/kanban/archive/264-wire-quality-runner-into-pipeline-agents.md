@@ -2,7 +2,7 @@
 id: 264
 title: Wire Quality-Runner into pipeline agents
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-30 19:31:12.486788+02:00
 updated: 2026-04-05 11:52:25.747392+02:00
 started: 2026-04-05 11:52:25.747392+02:00

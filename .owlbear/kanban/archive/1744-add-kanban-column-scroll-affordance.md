@@ -2,7 +2,7 @@
 id: 1744
 title: Add Kanban column scroll affordance
 status: archived
-priority: important
+priority: medium
 created: 2026-05-23T10:46:10+0200
 updated: 2026-05-24T10:50:01.871804+02:00
 tags:

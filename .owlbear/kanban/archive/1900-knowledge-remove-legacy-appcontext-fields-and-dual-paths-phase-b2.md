@@ -3,7 +3,7 @@ id: 1900
 title: 'Knowledge: Remove legacy AppContext fields and dual-paths (Phase B2a — pure
   cleanup)'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-27T17:56:21.002017+02:00
 updated: 2026-05-28T01:24:56.005866+02:00
 tags:

@@ -2,7 +2,7 @@
 id: 1709
 title: Fix invisible kanban tag overflow
 status: archived
-priority: important
+priority: medium
 created: 2026-05-21T23:23:14.191883+02:00
 updated: 2026-05-24T10:50:01.361568+02:00
 tags:

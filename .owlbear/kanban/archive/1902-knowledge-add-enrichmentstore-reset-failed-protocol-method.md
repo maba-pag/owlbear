@@ -2,7 +2,7 @@
 id: 1902
 title: 'Knowledge: add EnrichmentStore.reset_failed() Protocol method'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-27T21:12:15.484583+02:00
 updated: 2026-05-27T22:15:15.735101+02:00
 tags:

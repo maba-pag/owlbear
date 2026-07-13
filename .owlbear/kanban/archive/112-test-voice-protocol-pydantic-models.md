@@ -2,7 +2,7 @@
 id: 112
 title: 'Test: Voice protocol Pydantic models'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-28 22:26:21.697237+01:00
 updated: 2026-03-30 04:45:34.364885+02:00
 started: 2026-03-30 04:45:00.965129+02:00

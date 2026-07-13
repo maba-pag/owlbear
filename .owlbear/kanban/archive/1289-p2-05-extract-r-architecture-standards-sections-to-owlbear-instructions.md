@@ -2,7 +2,7 @@
 id: 1289
 title: 'P2-05: Extract r-architecture-standards sections to .owlbear/instructions/'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-02T16:01:17.102347+00:00
 updated: 2026-05-03T19:08:23.365506+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 1883
 title: 'Knowledge: Legacy code deletion'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-25T19:05:51.888164+02:00
 updated: 2026-05-27T16:24:34.685445+02:00
 tags:

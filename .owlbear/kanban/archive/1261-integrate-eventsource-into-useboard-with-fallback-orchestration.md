@@ -2,7 +2,7 @@
 id: 1261
 title: Integrate EventSource into useBoard with fallback orchestration
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-05-01T09:34:27.630685+00:00
 updated: 2026-05-02T19:19:43.616340+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 1131
 title: Add cockpit mutation route OCC characterization tests
 status: archived
-priority: important
+priority: medium
 created: 2026-04-26T15:37:53.908968+00:00
 updated: 2026-04-27T06:16:14.568408+00:00
 tags:

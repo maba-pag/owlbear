@@ -2,7 +2,7 @@
 id: 747
 title: 'P1-02: Delete all voice I/O code and test files'
 status: archived
-priority: critical
+priority: medium
 created: '2026-04-10T10:36:20.186913+00:00'
 updated: '2026-04-10T13:43:34.212440+00:00'
 tags:

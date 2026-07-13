@@ -2,7 +2,7 @@
 id: 1301
 title: Memory MCP Tool UX Refactor
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-04T01:25:41.522821+00:00
 updated: 2026-05-04T04:08:43.650861+00:00
 tags:

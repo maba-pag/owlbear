@@ -2,7 +2,7 @@
 id: 916
 title: Builder visibility expansion — w-tdd-green
 status: archived
-priority: important
+priority: medium
 created: 2026-04-17T11:52:08.039917+00:00
 updated: 2026-04-17T20:04:08.516283+00:00
 tags:

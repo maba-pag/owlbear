@@ -2,7 +2,7 @@
 id: 1580
 title: Harden knowledge database integrity invariants
 status: archived
-priority: important
+priority: medium
 created: 2026-05-15T02:08:03.693696+00:00
 updated: 2026-05-17T01:13:03.371337+00:00
 tags:

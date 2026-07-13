@@ -2,7 +2,7 @@
 id: 703
 title: Remove dead SourceType.CRAWL stubs from knowledge engine
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-08T22:02:27.130349+02:00
 updated: 2026-04-09T06:47:29.9302258+02:00
 started: 2026-04-09T06:47:29.9302258+02:00

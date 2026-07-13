@@ -3,7 +3,7 @@ id: 1639
 title: 'P1-01: Tab routing infrastructure — route config + Routes rendering + skeleton
   page'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-18T00:49:02.441398+02:00
 updated: 2026-05-19T06:39:43.221141+02:00
 tags:

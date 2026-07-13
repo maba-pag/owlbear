@@ -2,7 +2,7 @@
 id: 1735
 title: Improve Kanban active-work initial positioning
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-23T04:24:00+0200
 updated: 2026-05-24T10:50:01.743104+02:00
 tags:

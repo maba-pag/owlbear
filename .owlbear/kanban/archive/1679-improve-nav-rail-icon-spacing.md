@@ -2,7 +2,7 @@
 id: 1679
 title: Improve nav rail icon spacing
 status: archived
-priority: important
+priority: medium
 created: 2026-05-21T19:51:24.066039+02:00
 updated: 2026-05-24T10:50:00.978084+02:00
 tags:

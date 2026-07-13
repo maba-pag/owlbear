@@ -2,7 +2,7 @@
 id: 1752
 title: Cockpit mobile post-fix visual sweep
 status: archived
-priority: important
+priority: medium
 created: 2026-05-23T11:43:17+0200
 updated: 2026-05-24T10:50:01.985562+02:00
 tags:

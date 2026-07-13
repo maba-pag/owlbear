@@ -2,7 +2,7 @@
 id: 1490
 title: 'P1-07: Cross-cutting td:N cleanup in instructions and agents'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-11T09:00:35.655841+00:00
 updated: 2026-05-11T09:01:35.315838+00:00
 tags:

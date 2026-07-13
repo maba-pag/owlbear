@@ -3,7 +3,7 @@ id: 95
 title: Evaluate new VS Code tools for v2 agents (search/usages, search/changes, 
   vscode/askQuestions)
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-28 01:59:30.069530+01:00
 updated: 2026-03-30 04:37:55.008020+02:00
 started: 2026-03-30 04:37:50.343645+02:00

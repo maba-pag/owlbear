@@ -2,7 +2,7 @@
 id: 1906
 title: 'P1-02: Update test_search_provenance.py to v2 QueryFacade interface'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-28T00:34:20.718643+02:00
 updated: 2026-05-28T11:07:48.236213+02:00
 tags:

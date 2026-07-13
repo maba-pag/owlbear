@@ -2,7 +2,7 @@
 id: 1683
 title: Fix status menu outside dismissal
 status: archived
-priority: important
+priority: medium
 created: 2026-05-21T19:52:00.709405+02:00
 updated: 2026-05-24T10:50:01.027118+02:00
 tags:

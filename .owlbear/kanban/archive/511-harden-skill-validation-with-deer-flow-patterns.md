@@ -2,7 +2,7 @@
 id: 511
 title: Harden skill validation with deer-flow patterns
 status: archived
-priority: important
+priority: medium
 created: 2026-04-01 00:12:45.102616+02:00
 updated: 2026-04-01 23:56:29.613123+02:00
 started: 2026-04-01 23:56:15.607237+02:00

@@ -2,7 +2,7 @@
 id: 1246
 title: 'Implement: handleTransitionClick archive intercept'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-01T03:08:09.832815+00:00
 updated: 2026-05-02T04:20:46.797546+00:00
 tags:

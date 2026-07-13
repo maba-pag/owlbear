@@ -2,7 +2,7 @@
 id: 1008
 title: 'Architect: update planner delegation to use structured prefix'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-18 21:54:49.289730+00:00
 updated: 2026-04-19 14:19:20.367559+00:00
 tags:

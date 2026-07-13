@@ -2,7 +2,7 @@
 id: 436
 title: Add loop-pattern detection to reviewer checklist
 status: archived
-priority: important
+priority: medium
 created: 2026-03-30 21:45:59.710284+02:00
 updated: 2026-03-31 03:51:52.967781+02:00
 started: 2026-03-31 03:51:52.967781+02:00

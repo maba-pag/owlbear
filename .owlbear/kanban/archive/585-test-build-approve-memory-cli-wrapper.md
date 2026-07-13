@@ -2,7 +2,7 @@
 id: 585
 title: 'Test: Build approve_memory CLI wrapper'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-03 17:54:42.345022+02:00
 updated: 2026-04-04 16:46:14.804190+02:00
 started: 2026-04-04 16:46:14.804190+02:00

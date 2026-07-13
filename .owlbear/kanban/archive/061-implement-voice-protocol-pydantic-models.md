@@ -2,7 +2,7 @@
 id: 61
 title: Implement voice protocol Pydantic models
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-26 19:33:36.008518+01:00
 updated: 2026-03-30 03:38:25.619138+02:00
 started: 2026-03-30 03:38:25.293551+02:00

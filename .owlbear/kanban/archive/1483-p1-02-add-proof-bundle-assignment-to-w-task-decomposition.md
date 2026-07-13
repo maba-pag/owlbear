@@ -2,7 +2,7 @@
 id: 1483
 title: 'P1-02: Add proof-bundle assignment to w-task-decomposition'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-11T08:59:01.915026+00:00
 updated: 2026-05-11T13:46:58.077002+00:00
 tags:

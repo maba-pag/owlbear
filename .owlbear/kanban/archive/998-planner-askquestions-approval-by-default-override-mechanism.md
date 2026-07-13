@@ -2,7 +2,7 @@
 id: 998
 title: 'Planner: askQuestions approval by default + override mechanism'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-18T21:26:18.196561+00:00
 updated: 2026-04-19T16:10:22.894807+00:00
 tags:

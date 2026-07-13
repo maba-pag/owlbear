@@ -2,7 +2,7 @@
 id: 1785
 title: Auto-expand Kanban cards to show all tags
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T01:57:03.560862+02:00
 updated: 2026-05-24T10:50:02.428039+02:00
 tags:

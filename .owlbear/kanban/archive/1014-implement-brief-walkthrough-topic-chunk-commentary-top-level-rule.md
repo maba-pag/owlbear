@@ -2,7 +2,7 @@
 id: 1014
 title: Implement Brief Walkthrough topic-chunk + commentary + top-level rule
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-18 23:35:19.098920+00:00
 updated: 2026-04-19 01:57:42.383771+00:00
 tags:

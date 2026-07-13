@@ -2,7 +2,7 @@
 id: 1032
 title: 'P2-08: MCP topology diagram'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-19 23:53:28.578540+00:00
 updated: 2026-04-20 06:03:33.179681+00:00
 tags:

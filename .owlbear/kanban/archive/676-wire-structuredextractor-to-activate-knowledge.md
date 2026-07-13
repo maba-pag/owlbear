@@ -2,7 +2,7 @@
 id: 676
 title: Wire StructuredExtractor to activate knowledge graph layer
 status: archived
-priority: important
+priority: medium
 created: 2026-04-08T18:26:20.7985508+02:00
 updated: 2026-04-09T05:11:05.9146714+02:00
 started: 2026-04-09T05:11:05.9146714+02:00

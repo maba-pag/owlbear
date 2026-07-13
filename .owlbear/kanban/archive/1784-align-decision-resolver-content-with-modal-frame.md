@@ -2,7 +2,7 @@
 id: 1784
 title: Align task and decision detail content with modal frames
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T01:22:56.044270+02:00
 updated: 2026-05-24T10:50:02.413181+02:00
 tags:

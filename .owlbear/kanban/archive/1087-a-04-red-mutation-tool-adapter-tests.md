@@ -2,7 +2,7 @@
 id: 1087
 title: 'A-04: RED — mutation tool adapter tests'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-21 10:53:48.099115+00:00
 updated: 2026-04-28T05:37:50.430721+00:00
 tags:

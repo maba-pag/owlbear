@@ -2,7 +2,7 @@
 id: 1279
 title: 'Architect calibration: carry PDS component contracts from brief into AC lines'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-05-02T14:02:13.981726+00:00
 updated: 2026-05-02T17:43:32.882923+00:00
 tags:

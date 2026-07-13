@@ -2,7 +2,7 @@
 id: 659
 title: Update h-agent-structure user-invocable example to not list deprecated skill
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-06T07:23:34.6813674+02:00
 updated: 2026-04-06T21:48:19.2541601+02:00
 started: 2026-04-06T21:48:19.2541601+02:00

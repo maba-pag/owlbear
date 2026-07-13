@@ -2,7 +2,7 @@
 id: 1637
 title: Unblock full Playwright e2e:all gate for cockpit consolidation
 status: archived
-priority: important
+priority: medium
 created: 2026-05-18T00:03:29.061592+02:00
 updated: 2026-05-18T03:14:42.874383+02:00
 tags:

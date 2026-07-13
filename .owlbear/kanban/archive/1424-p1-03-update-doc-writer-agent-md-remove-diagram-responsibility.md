@@ -2,7 +2,7 @@
 id: 1424
 title: 'P1-03: Update doc-writer.agent.md — remove diagram responsibility'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-08T00:32:21.566488+00:00
 updated: 2026-05-09T09:48:55.171173+00:00
 tags:

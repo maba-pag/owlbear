@@ -2,7 +2,7 @@
 id: 88
 title: Enforce scratch dir for agent temp files
 status: archived
-priority: critical
+priority: medium
 created: 2026-03-27 22:03:20.819724+01:00
 updated: 2026-03-28 03:12:21.215223+01:00
 started: 2026-03-28 03:12:17.074134+01:00

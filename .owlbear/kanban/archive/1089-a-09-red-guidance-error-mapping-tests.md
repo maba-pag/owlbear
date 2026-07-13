@@ -2,7 +2,7 @@
 id: 1089
 title: 'A-09: RED — guidance + error mapping tests'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-21 10:54:09.278833+00:00
 updated: 2026-04-28T04:21:16.990266+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 44
 title: Add skills-ref validation to CI
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-26 18:55:53.178981+01:00
 updated: 2026-04-04 07:30:31.295705+02:00
 started: 2026-04-04 07:30:31.295705+02:00

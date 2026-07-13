@@ -2,7 +2,7 @@
 id: 1761
 title: Fix Memory mobile edit left edge clipping
 status: archived
-priority: important
+priority: medium
 created: 2026-05-23T16:27:11+0200
 updated: 2026-05-24T10:50:02.109114+02:00
 tags:

@@ -3,7 +3,7 @@ id: 1534
 title: Board Visual Design — PDS token architecture, card signal model, dark 
   theme, component styling
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-13T18:37:36.137975+00:00
 updated: 2026-05-14T18:51:29.775382+00:00
 tags:

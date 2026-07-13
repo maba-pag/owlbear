@@ -2,7 +2,7 @@
 id: 1272
 title: 'P1-06/07: MCP tool layer — tests, implementation, access control, query filters'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-02T03:43:35.329682+00:00
 updated: 2026-05-03T00:37:35.880391+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 727
 title: 'P3-15: RED — activity.jsonl logging'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-09T03:27:45.3139969+02:00
 updated: 2026-04-09T21:36:42.9077916+02:00
 started: 2026-04-09T21:36:42.9077916+02:00

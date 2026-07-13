@@ -2,7 +2,7 @@
 id: 1412
 title: 'D1: Pre-end_work scoped commit check — domain-scoped uncommitted file verification'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-07T23:16:25.281801+00:00
 updated: 2026-05-08T17:07:42.964434+00:00
 tags:

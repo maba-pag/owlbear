@@ -2,7 +2,7 @@
 id: 1074
 title: 'B-13: RED — pick_tasks tests'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-21T10:49:15.735084+00:00
 updated: 2026-04-25T07:59:38.655083+00:00
 tags:

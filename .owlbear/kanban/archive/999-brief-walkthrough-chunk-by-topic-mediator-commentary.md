@@ -2,7 +2,7 @@
 id: 999
 title: 'Brief Walkthrough: chunk by topic + Mediator commentary'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-18T21:26:18.205271+00:00
 updated: 2026-04-19T16:23:02.562872+00:00
 tags:

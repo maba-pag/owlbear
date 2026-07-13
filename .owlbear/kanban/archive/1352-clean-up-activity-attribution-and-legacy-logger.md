@@ -2,7 +2,7 @@
 id: 1352
 title: Clean up activity attribution and legacy logger
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-04T18:45:18.968070+00:00
 updated: 2026-05-05T20:23:46.882194+00:00
 tags:

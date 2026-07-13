@@ -2,7 +2,7 @@
 id: 1681
 title: Redesign shared top status line
 status: archived
-priority: important
+priority: medium
 created: 2026-05-21T19:51:40.481282+02:00
 updated: 2026-05-24T10:50:01.001573+02:00
 tags:

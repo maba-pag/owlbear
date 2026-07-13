@@ -2,7 +2,7 @@
 id: 655
 title: 'P4-02b: Update .gitignore for briefs draft-new/ pattern'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-06T07:17:22.9176335+02:00
 updated: 2026-04-06T19:52:08.899772+02:00
 started: 2026-04-06T19:52:08.899772+02:00

@@ -2,7 +2,7 @@
 id: 1314
 title: 'P1-13: Review prompt — Create memory-review.prompt.md (guided approval workflow)'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-04T01:32:27.475911+00:00
 updated: 2026-05-05T18:46:36.559547+00:00
 tags:

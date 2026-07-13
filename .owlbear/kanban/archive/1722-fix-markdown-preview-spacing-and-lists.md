@@ -2,7 +2,7 @@
 id: 1722
 title: Fix markdown preview spacing and lists
 status: archived
-priority: important
+priority: medium
 created: 2026-05-23T02:07:23+0200
 updated: 2026-05-24T10:50:01.566240+02:00
 tags:

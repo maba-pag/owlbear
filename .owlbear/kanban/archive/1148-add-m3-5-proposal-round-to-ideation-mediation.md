@@ -2,7 +2,7 @@
 id: 1148
 title: Add M3.5 proposal round to ideation mediation
 status: archived
-priority: important
+priority: medium
 created: 2026-04-27T21:43:30.790296+00:00
 updated: 2026-04-28T01:17:33.008180+00:00
 tags:

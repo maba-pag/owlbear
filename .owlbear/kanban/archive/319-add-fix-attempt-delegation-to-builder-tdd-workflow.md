@@ -2,7 +2,7 @@
 id: 319
 title: Add fix-attempt delegation to builder tdd-workflow
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-30 20:38:22.464745+02:00
 updated: 2026-04-05 16:57:16.665754+02:00
 started: 2026-04-05 16:57:16.665754+02:00

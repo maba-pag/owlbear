@@ -2,7 +2,7 @@
 id: 1118
 title: Harden ideation-overhaul static test proofs with glob-based discovery
 status: archived
-priority: important
+priority: medium
 created: 2026-04-24T11:10:50.379753+00:00
 updated: 2026-04-24T19:10:46.969529+00:00
 tags: []

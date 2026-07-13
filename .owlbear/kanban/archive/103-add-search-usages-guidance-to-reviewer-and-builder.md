@@ -2,7 +2,7 @@
 id: 103
 title: Add search/usages guidance to reviewer and builder skill workflows
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-28 13:34:53.199642+01:00
 updated: 2026-03-29 14:32:37.888852+02:00
 started: 2026-03-29 14:32:18.914557+02:00

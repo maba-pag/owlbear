@@ -2,7 +2,7 @@
 id: 1910
 title: 'Knowledge: Fix IngestCoordinator.refresh() to propagate fetch errors'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-28T01:41:35.456164+02:00
 updated: 2026-05-28T04:47:41.438507+02:00
 tags:

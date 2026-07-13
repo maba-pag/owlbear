@@ -2,7 +2,7 @@
 id: 578
 title: Register owlbear-project server in workspace mcp.json
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-03 11:38:44.931713+02:00
 updated: 2026-04-03 14:28:31.814612+02:00
 started: 2026-04-03 14:28:09.396623+02:00

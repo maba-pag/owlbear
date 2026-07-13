@@ -2,7 +2,7 @@
 id: 1486
 title: 'P1-05: Update w-tdd-green handling for skip/existing bundles'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-11T08:59:01.954913+00:00
 updated: 2026-05-11T16:13:45.510044+00:00
 tags:

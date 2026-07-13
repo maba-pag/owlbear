@@ -2,7 +2,7 @@
 id: 717
 title: 'P3-05: RED — task file I/O (read, write, round-trip)'
 status: archived
-priority: critical
+priority: medium
 created: 2026-04-09T03:25:21.0909825+02:00
 updated: 2026-04-09T12:14:21.8399236+02:00
 started: 2026-04-09T12:14:21.8399236+02:00

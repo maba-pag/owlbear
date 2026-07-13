@@ -2,7 +2,7 @@
 id: 912
 title: Test lifecycle management — curator agent + two-tier test model
 status: archived
-priority: critical
+priority: medium
 created: 2026-04-17T10:56:46.604506+00:00
 updated: 2026-04-17T20:04:15.466585+00:00
 tags:

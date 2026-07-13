@@ -2,7 +2,7 @@
 id: 1274
 title: 'P1-08: Update memory skill documentation'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-02T03:43:38.563184+00:00
 updated: 2026-05-03T17:55:48.457105+00:00
 tags:

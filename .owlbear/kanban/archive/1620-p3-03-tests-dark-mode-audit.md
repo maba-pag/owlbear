@@ -2,7 +2,7 @@
 id: 1620
 title: 'P3-03: Tests — dark mode audit'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-16T03:37:25.101843+00:00
 updated: 2026-05-16T15:05:03.886426+00:00
 tags:

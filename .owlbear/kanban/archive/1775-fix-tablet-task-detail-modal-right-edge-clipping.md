@@ -2,7 +2,7 @@
 id: 1775
 title: Fix tablet task detail modal right-edge clipping
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T00:36:19.235089+02:00
 updated: 2026-05-24T10:50:02.290818+02:00
 tags:

@@ -2,7 +2,7 @@
 id: 1327
 title: 'P2-11: Tests — Phase 1 enrichment tools (get_next_batch, store_enrichment)'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-04T05:48:50.111772+00:00
 updated: 2026-05-05T21:47:02.872165+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 1865
 title: 'Kanban: expose resolve_decision() and delegate from Cockpit'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-25T00:06:59.303292+02:00
 updated: 2026-05-25T06:50:10.290014+02:00
 tags:

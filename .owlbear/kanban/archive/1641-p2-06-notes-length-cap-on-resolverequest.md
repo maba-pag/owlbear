@@ -2,7 +2,7 @@
 id: 1641
 title: 'P2-06: Notes length cap on ResolveRequest'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-18T00:49:02.572224+02:00
 updated: 2026-05-19T09:29:41.458808+02:00
 tags:

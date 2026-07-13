@@ -2,7 +2,7 @@
 id: 162
 title: 'Integration test: full ingest-to-search cycle'
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-29 19:37:50.969785+02:00
 updated: 2026-04-01 02:07:59.111917+02:00
 started: 2026-04-01 02:07:58.624747+02:00

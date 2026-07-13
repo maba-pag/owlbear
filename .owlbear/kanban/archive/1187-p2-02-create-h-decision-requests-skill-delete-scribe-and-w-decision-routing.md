@@ -2,7 +2,7 @@
 id: 1187
 title: 'P2-02: Create h-decision-requests skill + delete scribe and w-decision-routing'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-30T00:52:00.447027+00:00
 updated: 2026-04-30T05:17:14.679275+00:00
 tags:

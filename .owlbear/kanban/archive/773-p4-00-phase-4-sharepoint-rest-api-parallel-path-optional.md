@@ -2,7 +2,7 @@
 id: 773
 title: 'P4-00: Phase 4 — SharePoint REST API parallel path (optional)'
 status: archived
-priority: someday
+priority: medium
 created: '2026-04-10T10:56:34.413256+00:00'
 updated: '2026-04-15T02:35:47.143139+00:00'
 tags:

@@ -2,7 +2,7 @@
 id: 736
 title: Evaluate Excalidraw skill reliability for diagram generation
 status: archived
-priority: important
+priority: medium
 created: '2026-04-10T04:24:23.565609+02:00'
 updated: '2026-04-10T05:58:05.900183+00:00'
 tags:

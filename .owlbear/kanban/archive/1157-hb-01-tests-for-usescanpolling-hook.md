@@ -2,7 +2,7 @@
 id: 1157
 title: 'HB-01: Tests for useScanPolling hook'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-28T17:33:46.600495+00:00
 updated: 2026-04-28T22:12:57.317162+00:00
 tags:

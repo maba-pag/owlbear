@@ -2,7 +2,7 @@
 id: 1432
 title: 'P1-04: Agent enforcement lines + verification criteria updates'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-08T01:00:48.495798+00:00
 updated: 2026-05-08T14:37:03.485211+00:00
 tags:

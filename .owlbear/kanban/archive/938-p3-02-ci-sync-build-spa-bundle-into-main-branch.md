@@ -2,7 +2,7 @@
 id: 938
 title: 'P3-02: CI sync — build SPA bundle into main branch'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-17T19:59:26.740493+00:00
 updated: 2026-04-19T16:00:32.976466+00:00
 tags:

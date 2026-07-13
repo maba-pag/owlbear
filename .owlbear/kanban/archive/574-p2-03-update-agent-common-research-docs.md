@@ -2,7 +2,7 @@
 id: 574
 title: 'P2-03: Update agent-common + research-docs instructions with MCP alternatives'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-03 11:14:59.330643+02:00
 updated: 2026-04-04 23:10:09.139677+02:00
 started: 2026-04-04 23:10:09.139677+02:00

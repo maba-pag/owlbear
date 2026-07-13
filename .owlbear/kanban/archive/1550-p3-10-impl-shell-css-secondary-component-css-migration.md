@@ -2,7 +2,7 @@
 id: 1550
 title: 'P3-10: impl — Shell.css + secondary component CSS migration'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-13T18:43:23.937036+00:00
 updated: 2026-05-14T06:46:02.337644+00:00
 tags:

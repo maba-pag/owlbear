@@ -2,7 +2,7 @@
 id: 1160
 title: '[MERGED into #1158] HB-04: Implement HealthBadge component'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-28T17:34:42.748680+00:00
 updated: 2026-04-29T04:12:52.953627+00:00
 tags:

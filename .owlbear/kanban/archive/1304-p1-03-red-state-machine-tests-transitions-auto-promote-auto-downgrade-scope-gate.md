@@ -3,7 +3,7 @@ id: 1304
 title: 'P1-03: RED — State machine tests (transitions, auto-promote, auto-downgrade,
   scope gate, deletion)'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-04T01:32:18.507736+00:00
 updated: 2026-05-04T12:44:01.152933+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 1078
 title: 'B-15: RED — CockpitView tests'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-21 10:50:12.218304+00:00
 updated: 2026-04-27T15:40:29.683597+00:00
 tags:

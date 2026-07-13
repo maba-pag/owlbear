@@ -2,7 +2,7 @@
 id: 50
 title: Implement voice addon STT with Moonshine
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-26 18:57:23.883855+01:00
 updated: 2026-04-01 17:57:36.100602+02:00
 started: 2026-04-01 17:57:26.243473+02:00

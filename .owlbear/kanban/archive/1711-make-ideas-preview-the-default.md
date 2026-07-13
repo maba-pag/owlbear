@@ -2,7 +2,7 @@
 id: 1711
 title: Make ideas preview the default
 status: archived
-priority: important
+priority: medium
 created: 2026-05-21T23:23:33.745696+02:00
 updated: 2026-05-24T10:50:01.387624+02:00
 tags:

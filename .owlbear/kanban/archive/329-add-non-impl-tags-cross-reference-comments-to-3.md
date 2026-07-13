@@ -2,7 +2,7 @@
 id: 329
 title: Add NON_IMPL_TAGS cross-reference comments to 3 skill files
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-30 20:39:07.921439+02:00
 updated: 2026-04-04 07:09:55.225420+02:00
 started: 2026-04-04 07:09:29.566996+02:00

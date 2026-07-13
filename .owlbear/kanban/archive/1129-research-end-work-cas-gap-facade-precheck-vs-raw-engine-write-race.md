@@ -2,7 +2,7 @@
 id: 1129
 title: 'Research: end_work CAS gap — facade precheck vs raw engine write race'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-26T13:59:36.933609+00:00
 updated: 2026-04-27T04:56:35.572942+00:00
 tags:

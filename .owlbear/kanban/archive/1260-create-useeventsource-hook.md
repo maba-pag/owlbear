@@ -2,7 +2,7 @@
 id: 1260
 title: Create useEventSource hook
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-05-01T09:34:24.718353+00:00
 updated: 2026-05-02T01:54:00.567330+00:00
 tags:

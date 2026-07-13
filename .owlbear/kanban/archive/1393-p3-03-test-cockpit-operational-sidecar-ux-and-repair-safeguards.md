@@ -2,7 +2,7 @@
 id: 1393
 title: 'P3-03: Test Cockpit operational sidecar UX and repair safeguards'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-06T01:09:38.127439+00:00
 updated: 2026-05-08T12:05:03.641903+00:00
 tags:

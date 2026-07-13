@@ -3,7 +3,7 @@ id: 1294
 title: 'Investigate dead code: serve/orchestrator/ module and owlbear-project.json
   usage'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-05-02T16:08:21.865625+00:00
 updated: 2026-05-02T21:53:10.111851+00:00
 tags:

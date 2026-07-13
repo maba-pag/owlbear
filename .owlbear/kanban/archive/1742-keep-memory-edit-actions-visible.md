@@ -2,7 +2,7 @@
 id: 1742
 title: Keep memory edit actions visible
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-23T10:28:21+0200
 updated: 2026-05-24T10:50:01.842633+02:00
 tags:

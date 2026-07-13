@@ -2,7 +2,7 @@
 id: 978
 title: 'RED: edit_task + end_work guidance integration tests'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-18T21:18:15.549754+00:00
 updated: 2026-04-19T12:05:13.099764+00:00
 tags:

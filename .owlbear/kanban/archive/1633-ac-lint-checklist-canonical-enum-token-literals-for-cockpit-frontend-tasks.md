@@ -2,7 +2,7 @@
 id: 1633
 title: 'AC lint checklist: canonical enum/token literals for cockpit/frontend tasks'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-16T08:36:17.402556+00:00
 updated: 2026-05-16T13:57:38.902486+00:00
 tags:

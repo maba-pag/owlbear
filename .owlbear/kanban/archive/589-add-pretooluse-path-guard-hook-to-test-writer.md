@@ -2,7 +2,7 @@
 id: 589
 title: Add PreToolUse path guard hook to test-writer agent (Phase 3)
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-04 07:55:54.280674+02:00
 updated: 2026-04-05 19:04:51.379219+02:00
 started: 2026-04-05 19:04:51.379219+02:00

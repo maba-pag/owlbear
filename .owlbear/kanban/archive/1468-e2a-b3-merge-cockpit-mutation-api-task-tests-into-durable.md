@@ -2,7 +2,7 @@
 id: 1468
 title: 'E2a-B3: Merge cockpit_mutation_api task tests into durable'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-09T07:21:35.681226+00:00
 updated: 2026-05-09T18:27:18.953591+00:00
 tags:

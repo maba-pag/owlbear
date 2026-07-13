@@ -2,7 +2,7 @@
 id: 1348
 title: Define MCP edit_task set and clear semantics
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-04T18:17:29.586768+00:00
 updated: 2026-05-05T17:17:31.537428+00:00
 tags:

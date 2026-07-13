@@ -2,7 +2,7 @@
 id: 1419
 title: Document SAST coverage and run baseline CI scan
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-05-07T23:29:18.911471+00:00
 updated: 2026-05-08T19:04:34.987707+00:00
 tags:

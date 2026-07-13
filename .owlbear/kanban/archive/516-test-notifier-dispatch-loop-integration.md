@@ -2,7 +2,7 @@
 id: 516
 title: 'Test: Notifier dispatch loop integration'
 status: archived
-priority: someday
+priority: medium
 created: 2026-04-01 07:07:25.153140+02:00
 updated: 2026-04-04 07:10:33.609818+02:00
 started: 2026-04-04 07:09:44.684714+02:00

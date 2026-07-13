@@ -2,7 +2,7 @@
 id: 822
 title: Remove compat alias + migrate all workspace imports
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-10T21:22:52.811363+00:00'
 updated: '2026-04-12T15:42:18.660832+00:00'
 tags:

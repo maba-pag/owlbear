@@ -2,7 +2,7 @@
 id: 1467
 title: 'E2a-B2: Merge cockpit_decisions_api task tests into durable'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-09T07:21:35.670259+00:00
 updated: 2026-05-09T16:07:37.695620+00:00
 tags:

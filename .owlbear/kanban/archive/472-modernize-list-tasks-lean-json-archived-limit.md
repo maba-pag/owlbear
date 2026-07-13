@@ -2,7 +2,7 @@
 id: 472
 title: 'Modernize list_tasks: lean JSON, archived, limit, blocked tri-state'
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-31 05:21:21.435638+02:00
 updated: 2026-04-01 05:55:52.087354+02:00
 started: 2026-04-01 05:55:47.385837+02:00

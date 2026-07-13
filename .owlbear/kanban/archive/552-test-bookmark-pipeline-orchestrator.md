@@ -2,7 +2,7 @@
 id: 552
 title: 'Test: Bookmark pipeline orchestrator'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-02 16:06:05.079882+02:00
 updated: 2026-04-03 03:11:07.461674+02:00
 started: 2026-04-03 03:10:11.207044+02:00

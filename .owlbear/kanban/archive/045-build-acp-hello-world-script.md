@@ -2,7 +2,7 @@
 id: 45
 title: Build ACP hello-world script
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-26 18:55:56.681249+01:00
 updated: 2026-03-29 04:40:24.576081+02:00
 started: 2026-03-29 04:40:19.216051+02:00

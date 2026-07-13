@@ -2,7 +2,7 @@
 id: 1862
 title: 'P2-05: Remove old create_dr MCP tool and engine function'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T20:59:51.125636+02:00
 updated: 2026-05-26T08:31:03.518292+02:00
 tags:

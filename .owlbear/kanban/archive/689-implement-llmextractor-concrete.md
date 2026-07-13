@@ -2,7 +2,7 @@
 id: 689
 title: Implement LLMExtractor concrete StructuredExtractor using PydanticAI
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-08T21:06:19.8005764+02:00
 updated: 2026-04-09T13:07:58.3495833+02:00
 started: 2026-04-09T13:07:58.3495833+02:00

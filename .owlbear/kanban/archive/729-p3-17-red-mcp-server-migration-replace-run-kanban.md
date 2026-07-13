@@ -2,7 +2,7 @@
 id: 729
 title: 'P3-17: RED — MCP server migration (replace _run_kanban with engine)'
 status: archived
-priority: critical
+priority: medium
 created: 2026-04-09T03:28:35.8186809+02:00
 updated: 2026-04-10T00:22:06.4494198+02:00
 started: 2026-04-10T00:22:06.4494198+02:00

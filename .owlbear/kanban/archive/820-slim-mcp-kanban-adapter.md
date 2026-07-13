@@ -2,7 +2,7 @@
 id: 820
 title: Slim mcp-kanban adapter
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-10T21:22:41.393257+00:00'
 updated: '2026-04-15T18:12:04.133674+00:00'
 tags:

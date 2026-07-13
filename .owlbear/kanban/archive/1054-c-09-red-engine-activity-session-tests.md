@@ -2,7 +2,7 @@
 id: 1054
 title: 'C-09: RED — engine activity/session tests'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-21T10:42:50.316514+00:00
 updated: 2026-04-23T01:49:36.152687+00:00
 tags:

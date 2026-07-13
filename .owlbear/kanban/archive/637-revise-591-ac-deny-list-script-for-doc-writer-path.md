@@ -2,7 +2,7 @@
 id: 637
 title: 'Revise #591 AC: deny-list script for doc-writer path guard'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-06T01:22:50.5411623+02:00
 updated: 2026-04-06T02:19:28.8775587+02:00
 started: 2026-04-06T02:19:28.8775587+02:00

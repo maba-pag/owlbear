@@ -2,7 +2,7 @@
 id: 1597
 title: 'P1-01: Token provenance map'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-16T03:35:25.235271+00:00
 updated: 2026-05-17T20:16:52.343627+02:00
 tags:

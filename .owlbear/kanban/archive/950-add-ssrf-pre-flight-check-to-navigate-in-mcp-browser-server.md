@@ -2,7 +2,7 @@
 id: 950
 title: Add SSRF pre-flight check to navigate() in mcp-browser server
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-18T01:22:38.865118+00:00
 updated: 2026-04-18T02:28:28.505858+00:00
 tags:

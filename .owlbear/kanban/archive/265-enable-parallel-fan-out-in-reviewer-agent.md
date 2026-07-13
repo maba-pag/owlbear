@@ -2,7 +2,7 @@
 id: 265
 title: Enable parallel fan-out in reviewer agent
 status: archived
-priority: important
+priority: medium
 created: 2026-03-30 19:31:23.560659+02:00
 updated: 2026-04-05 15:04:47.313955+02:00
 started: 2026-04-05 15:04:47.313955+02:00

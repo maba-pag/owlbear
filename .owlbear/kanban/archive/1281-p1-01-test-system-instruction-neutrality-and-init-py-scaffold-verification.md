@@ -2,7 +2,7 @@
 id: 1281
 title: 'P1-01: Test — system instruction neutrality and init.py scaffold verification'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-02T16:01:10.581833+00:00
 updated: 2026-05-03T16:42:39.242037+00:00
 tags:

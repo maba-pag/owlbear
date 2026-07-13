@@ -2,7 +2,7 @@
 id: 801
 title: Tests — TaskSummary model
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-10T21:20:41.798290+00:00'
 updated: '2026-04-14T18:15:48.721802+00:00'
 tags:

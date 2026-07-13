@@ -2,7 +2,7 @@
 id: 1382
 title: 'P2-07: Test Cockpit task conflict resolution workflow'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-06T01:04:39.067978+00:00
 updated: 2026-05-10T00:38:43.090002+00:00
 tags:

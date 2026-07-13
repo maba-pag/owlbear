@@ -2,7 +2,7 @@
 id: 905
 title: Full macOS validation (ruff + pytest + smoke test)
 status: archived
-priority: critical
+priority: medium
 created: 2026-04-16T22:54:53.396876+00:00
 updated: 2026-04-17T10:53:11.848251+00:00
 tags:

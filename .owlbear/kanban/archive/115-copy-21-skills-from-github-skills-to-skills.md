@@ -2,7 +2,7 @@
 id: 115
 title: Copy 21 skills from .github/skills/ to skills/
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-29 01:40:43.470987+01:00
 updated: 2026-03-29 06:15:15.659306+02:00
 started: 2026-03-29 06:14:48.124690+02:00

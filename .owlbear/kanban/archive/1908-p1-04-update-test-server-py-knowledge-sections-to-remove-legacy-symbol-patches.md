@@ -2,7 +2,7 @@
 id: 1908
 title: 'P1-04: Update test_server.py knowledge sections to remove legacy symbol patches'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-28T00:34:20.763020+02:00
 updated: 2026-05-28T04:27:12.143898+02:00
 tags:

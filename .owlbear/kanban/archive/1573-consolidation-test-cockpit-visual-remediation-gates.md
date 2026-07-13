@@ -2,7 +2,7 @@
 id: 1573
 title: 'consolidation test: Cockpit visual remediation gates'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-14T18:27:04.901264+00:00
 updated: 2026-05-15T22:11:55.492205+00:00
 tags:

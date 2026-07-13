@@ -2,7 +2,7 @@
 id: 1255
 title: 'P4-02: GREEN — Filter accessibility implementation'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-01T04:35:04.101862+00:00
 updated: 2026-05-03T20:49:08.726450+00:00
 tags:

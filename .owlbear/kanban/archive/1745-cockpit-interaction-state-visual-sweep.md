@@ -2,7 +2,7 @@
 id: 1745
 title: Cockpit interaction-state visual sweep
 status: archived
-priority: important
+priority: medium
 created: 2026-05-23T10:55:13+0200
 updated: 2026-05-24T10:50:01.886730+02:00
 tags:

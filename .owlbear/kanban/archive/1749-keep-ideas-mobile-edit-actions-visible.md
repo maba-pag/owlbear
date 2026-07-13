@@ -2,7 +2,7 @@
 id: 1749
 title: Keep Ideas mobile edit actions visible
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-23T11:14:09+0200
 updated: 2026-05-24T10:50:01.943467+02:00
 tags:

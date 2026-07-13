@@ -2,7 +2,7 @@
 id: 1235
 title: Replace useBoard polling with EventSource client
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-30 16:48:42.996529+00:00
 updated: 2026-05-01T14:13:02.212770+00:00
 tags:

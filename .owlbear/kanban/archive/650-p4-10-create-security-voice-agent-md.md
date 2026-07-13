@@ -2,7 +2,7 @@
 id: 650
 title: 'P4-10: Create security-voice.agent.md'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-06T07:03:14.8495037+02:00
 updated: 2026-04-07T01:54:39.2810286+02:00
 started: 2026-04-07T01:54:39.2810286+02:00

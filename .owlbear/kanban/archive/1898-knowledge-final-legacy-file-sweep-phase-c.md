@@ -2,7 +2,7 @@
 id: 1898
 title: 'Knowledge: Final legacy file sweep (Phase C)'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-27T16:19:59.014229+02:00
 updated: 2026-05-28T11:18:58.907997+02:00
 tags:

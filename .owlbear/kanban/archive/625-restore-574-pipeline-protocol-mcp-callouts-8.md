@@ -2,7 +2,7 @@
 id: 625
 title: 'Restore #574 pipeline protocol MCP callouts — 8 failing tests'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-05T07:41:30.2992757+02:00
 updated: 2026-04-05T17:38:56.4404678+02:00
 started: 2026-04-05T17:38:56.4404678+02:00

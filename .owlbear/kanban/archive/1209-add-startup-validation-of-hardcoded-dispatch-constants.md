@@ -2,7 +2,7 @@
 id: 1209
 title: Add startup validation of hardcoded dispatch constants
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-30 15:29:06.250180+00:00
 updated: 2026-05-03T00:07:45.676134+00:00
 tags:

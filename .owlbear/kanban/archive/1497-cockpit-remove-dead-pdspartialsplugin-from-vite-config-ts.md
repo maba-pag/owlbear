@@ -2,7 +2,7 @@
 id: 1497
 title: 'Cockpit: Remove dead pdsPartialsPlugin from vite.config.ts'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-05-12T02:37:04.151323+00:00
 updated: 2026-05-12T18:46:06.724947+00:00
 tags:

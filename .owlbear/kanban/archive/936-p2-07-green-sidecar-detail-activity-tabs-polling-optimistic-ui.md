@@ -2,7 +2,7 @@
 id: 936
 title: 'P2-07: GREEN — Sidecar (Detail + Activity tabs) + polling + optimistic UI'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-17T19:59:03.599720+00:00
 updated: 2026-04-19T12:45:15.935345+00:00
 tags:

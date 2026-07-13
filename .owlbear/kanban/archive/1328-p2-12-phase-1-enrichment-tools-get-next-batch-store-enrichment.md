@@ -2,7 +2,7 @@
 id: 1328
 title: 'P2-12: Phase 1 enrichment tools (get_next_batch, store_enrichment)'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-04T05:48:50.122372+00:00
 updated: 2026-05-05T23:42:34.205901+00:00
 tags:

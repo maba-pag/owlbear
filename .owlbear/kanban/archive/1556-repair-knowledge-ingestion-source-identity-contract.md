@@ -2,7 +2,7 @@
 id: 1556
 title: Repair knowledge ingestion source identity contract
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-14T14:55:46.450427+00:00
 updated: 2026-05-15T10:45:11.251130+00:00
 tags:

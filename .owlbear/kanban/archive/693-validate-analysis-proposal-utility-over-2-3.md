@@ -2,7 +2,7 @@
 id: 693
 title: Validate analysis proposal utility over 2-3 orchestration cycles
 status: archived
-priority: someday
+priority: medium
 created: 2026-04-08T21:16:13.8840637+02:00
 updated: 2026-04-09T04:21:08.8789704+02:00
 started: 2026-04-09T04:21:08.8789704+02:00

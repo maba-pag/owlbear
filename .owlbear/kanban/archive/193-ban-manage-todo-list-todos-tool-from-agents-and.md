@@ -2,7 +2,7 @@
 id: 193
 title: Ban manage_todo_list/todos tool from agents and validator
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-29 22:56:35.373614+02:00
 updated: 2026-03-30 19:32:36.744981+02:00
 started: 2026-03-30 19:30:33.102910+02:00

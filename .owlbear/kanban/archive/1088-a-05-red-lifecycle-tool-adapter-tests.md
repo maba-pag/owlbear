@@ -2,7 +2,7 @@
 id: 1088
 title: 'A-05: RED — lifecycle tool adapter tests'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-21 10:53:58.270590+00:00
 updated: 2026-04-28T04:08:22.370237+00:00
 tags:

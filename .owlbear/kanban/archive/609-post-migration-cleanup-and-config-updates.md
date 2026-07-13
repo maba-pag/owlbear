@@ -2,7 +2,7 @@
 id: 609
 title: Post-migration cleanup and config updates
 status: archived
-priority: critical
+priority: medium
 created: 2026-04-04T20:32:03.4328653+02:00
 updated: 2026-04-05T16:42:07.1846601+02:00
 started: 2026-04-05T16:42:07.1846601+02:00

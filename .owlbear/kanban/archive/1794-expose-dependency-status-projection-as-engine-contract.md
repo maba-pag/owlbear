@@ -2,7 +2,7 @@
 id: 1794
 title: Expose dependency status projection as engine contract
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T02:02:33.566320+02:00
 updated: 2026-05-24T10:50:02.550451+02:00
 tags:

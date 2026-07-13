@@ -2,7 +2,7 @@
 id: 1323
 title: 'P1-07: Tests — Enrichment schema (state column, claim table, edge uniqueness)'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-04T05:48:50.064935+00:00
 updated: 2026-05-04T14:53:08.877898+00:00
 tags:

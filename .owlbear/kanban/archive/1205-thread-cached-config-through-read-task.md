@@ -2,7 +2,7 @@
 id: 1205
 title: Thread cached config through read_task
 status: archived
-priority: important
+priority: medium
 created: 2026-04-30 15:29:06.208450+00:00
 updated: 2026-05-02T12:42:55.878634+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 133
 title: Add mcp[cli] dependency to mcp-knowledge and mcp-project pyproject.toml
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-29 10:27:06.281778+02:00
 updated: 2026-03-29 15:40:25.084055+02:00
 started: 2026-03-29 15:40:24.796220+02:00

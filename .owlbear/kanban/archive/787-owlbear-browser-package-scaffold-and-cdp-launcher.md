@@ -2,7 +2,7 @@
 id: 787
 title: owlbear_browser package scaffold and CDP launcher
 status: archived
-priority: critical
+priority: medium
 created: '2026-04-10T12:31:05.248695+00:00'
 updated: '2026-04-14T08:39:28.782512+00:00'
 tags:

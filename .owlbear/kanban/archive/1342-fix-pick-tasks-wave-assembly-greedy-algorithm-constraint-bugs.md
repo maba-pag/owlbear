@@ -2,7 +2,7 @@
 id: 1342
 title: Curate stale pick_tasks RED suite after clarity-gate integration
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-04T15:10:47.698484+00:00
 updated: 2026-05-05T11:42:05.683636+00:00
 tags:

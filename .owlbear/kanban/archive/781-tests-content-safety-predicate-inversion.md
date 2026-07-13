@@ -2,7 +2,7 @@
 id: 781
 title: Tests — Content safety predicate inversion
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-10T12:30:43.995109+00:00'
 updated: '2026-04-14T09:37:41.997925+00:00'
 tags:

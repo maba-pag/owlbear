@@ -2,7 +2,7 @@
 id: 1126
 title: Remove dead try/except TypeError fallback chain in MCP server end_work
 status: archived
-priority: important
+priority: medium
 created: 2026-04-25 17:32:36.614244+00:00
 updated: 2026-04-26T13:28:03.249213+00:00
 tags: []

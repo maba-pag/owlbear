@@ -2,7 +2,7 @@
 id: 1693
 title: Emphasize memory detail content
 status: archived
-priority: important
+priority: medium
 created: 2026-05-21T19:53:24.732852+02:00
 updated: 2026-05-24T10:50:01.154070+02:00
 tags:

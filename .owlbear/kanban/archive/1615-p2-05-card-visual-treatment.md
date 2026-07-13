@@ -2,7 +2,7 @@
 id: 1615
 title: 'P2-05: Card visual treatment'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-16T03:37:02.225503+00:00
 updated: 2026-05-17T16:06:44.704078+02:00
 tags:

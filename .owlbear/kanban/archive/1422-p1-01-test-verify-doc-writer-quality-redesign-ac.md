@@ -2,7 +2,7 @@
 id: 1422
 title: 'P1-01: Test — verify doc-writer quality redesign AC'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-08T00:32:15.467895+00:00
 updated: 2026-05-08T22:26:59.893590+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 1672
 title: 'P3-02: Memory accordion detail and state-dependent actions'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-18T17:44:11.043517+02:00
 updated: 2026-05-21T01:12:02.265231+02:00
 tags:

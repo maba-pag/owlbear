@@ -2,7 +2,7 @@
 id: 734
 title: 'Archive redundant ddgs subtasks #707–#711'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-09T07:53:35.6733643+02:00
 updated: 2026-04-09T11:43:11.9711068+02:00
 started: 2026-04-09T11:43:11.9711068+02:00

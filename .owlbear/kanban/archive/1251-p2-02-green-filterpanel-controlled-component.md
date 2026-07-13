@@ -2,7 +2,7 @@
 id: 1251
 title: 'P2-02: GREEN — FilterPanel controlled component'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-01T04:34:51.936867+00:00
 updated: 2026-05-02T19:41:11.904428+00:00
 tags:

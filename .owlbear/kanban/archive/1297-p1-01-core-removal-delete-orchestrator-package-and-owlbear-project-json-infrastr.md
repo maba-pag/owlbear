@@ -3,7 +3,7 @@ id: 1297
 title: 'P1-01: Core removal — delete orchestrator package and owlbear-project.json
   infrastructure'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-02T19:40:07.773168+00:00
 updated: 2026-05-02T23:32:51.248858+00:00
 tags:

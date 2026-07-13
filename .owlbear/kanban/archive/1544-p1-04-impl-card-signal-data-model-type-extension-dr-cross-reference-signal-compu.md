@@ -3,7 +3,7 @@ id: 1544
 title: 'P1-04: impl — card signal data model: type extension, DR cross-reference,
   signal computation'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-13T18:42:22.319464+00:00
 updated: 2026-05-14T02:56:00.969468+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 1417
 title: Add SARIF upload to GitHub Code Scanning in MegaLinter workflow
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-05-07T23:28:57.957311+00:00
 updated: 2026-05-08T15:40:02.989357+00:00
 tags:

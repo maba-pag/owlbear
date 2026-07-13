@@ -2,7 +2,7 @@
 id: 1339
 title: Reconcile MCP lifecycle tools, guidance, and 9-tool contract
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-04T15:00:05.806598+00:00
 updated: 2026-05-05T13:09:12.425085+00:00
 tags:

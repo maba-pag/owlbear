@@ -2,7 +2,7 @@
 id: 893
 title: 'Tests: session-context SessionStart hook equivalence'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-16T22:53:29.692464+00:00
 updated: 2026-04-17T03:27:11.187822+00:00
 tags:

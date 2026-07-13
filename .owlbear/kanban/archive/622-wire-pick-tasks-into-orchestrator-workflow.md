@@ -2,7 +2,7 @@
 id: 622
 title: Wire pick_tasks into orchestrator workflow
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-05T01:31:13.8750468+02:00
 updated: 2026-04-05T21:26:14.3033493+02:00
 started: 2026-04-05T21:26:14.3033493+02:00

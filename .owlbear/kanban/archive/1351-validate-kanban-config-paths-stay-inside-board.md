@@ -2,7 +2,7 @@
 id: 1351
 title: Validate kanban config paths stay inside board
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-04T18:45:17.182693+00:00
 updated: 2026-05-05T07:17:05.858193+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 1634
 title: 'P2-12: Migrate unowned simple swaps (option→PSelectOption, anchor→PLinkPure)'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-17T16:51:40.816862+02:00
 updated: 2026-05-17T21:02:38.938504+02:00
 tags:

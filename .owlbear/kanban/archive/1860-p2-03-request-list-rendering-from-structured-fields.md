@@ -2,7 +2,7 @@
 id: 1860
 title: 'P2-03: Request list rendering from structured fields'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-24T20:59:27.659879+02:00
 updated: 2026-05-26T05:32:37.053588+02:00
 tags:

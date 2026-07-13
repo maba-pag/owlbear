@@ -2,7 +2,7 @@
 id: 1858
 title: 'P2-01: Decision resolver UI with option cards'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-24T20:59:10.619728+02:00
 updated: 2026-05-26T02:36:58.853881+02:00
 tags:

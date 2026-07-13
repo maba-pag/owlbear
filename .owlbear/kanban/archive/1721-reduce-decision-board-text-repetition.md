@@ -2,7 +2,7 @@
 id: 1721
 title: Reduce decision board text repetition
 status: archived
-priority: important
+priority: medium
 created: 2026-05-23T01:44:00+02:00
 updated: 2026-05-24T10:50:01.550881+02:00
 tags:

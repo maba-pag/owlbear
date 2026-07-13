@@ -2,7 +2,7 @@
 id: 1264
 title: Wire ActivityTab to SSE activity-changed live updates
 status: archived
-priority: someday
+priority: medium
 created: 2026-05-01T09:53:38.547262+00:00
 updated: 2026-05-04T05:55:07.972157+00:00
 tags:
@@ -23,7 +23,7 @@ Refactor ActivityTab from one-shot useEffect fetch to a refetchable pattern (e.g
 [[2026-05-02]]
 ## Planning
 
-Created 3 follow-up research tasks (all parent #1236, tags: cockpit/frontend, priority: someday):
+Created 3 follow-up research tasks (all parent #1236, tags: cockpit/frontend, priority: medium):
 
 | ID | Title | Depends on |
 |----|-------|-----------|

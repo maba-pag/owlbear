@@ -2,7 +2,7 @@
 id: 1845
 title: 'P2-06: Confirmation cycle — factually-wrong to contested/disputed'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-24T19:01:24.983062+02:00
 updated: 2026-05-25T05:57:21.300355+02:00
 tags:

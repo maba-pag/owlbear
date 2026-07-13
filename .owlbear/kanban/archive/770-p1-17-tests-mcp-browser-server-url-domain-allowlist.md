@@ -2,7 +2,7 @@
 id: 770
 title: 'P1-17: Tests — MCP browser server + URL domain allowlist'
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-10T10:56:34.316989+00:00'
 updated: '2026-04-15T10:49:09.116231+00:00'
 tags:

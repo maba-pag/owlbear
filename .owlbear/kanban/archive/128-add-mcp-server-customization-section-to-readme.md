@@ -2,7 +2,7 @@
 id: 128
 title: Add MCP server customization section to README
 status: archived
-priority: important
+priority: medium
 created: 2026-03-29 07:06:43.608754+02:00
 updated: 2026-03-29 14:35:30.138547+02:00
 started: 2026-03-29 14:35:18.632805+02:00

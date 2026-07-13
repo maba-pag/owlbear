@@ -3,7 +3,7 @@ id: 1302
 title: 'P1-01: RED — Schema model tests (categories, states, entry fields, validation,
   serialization)'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-04T01:32:18.473705+00:00
 updated: 2026-05-04T05:29:23.162492+00:00
 tags:

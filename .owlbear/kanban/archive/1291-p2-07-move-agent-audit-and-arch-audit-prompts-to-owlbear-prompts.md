@@ -2,7 +2,7 @@
 id: 1291
 title: 'P2-07: Move agent-audit and arch-audit prompts to .owlbear/prompts/'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-02T16:01:17.128331+00:00
 updated: 2026-05-03T19:13:35.519854+00:00
 tags:

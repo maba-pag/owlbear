@@ -2,7 +2,7 @@
 id: 1163
 title: 'RF-01: Tests for repairStorage API client'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-28T17:38:24.600049+00:00
 updated: 2026-04-29T05:32:20.881178+00:00
 tags:

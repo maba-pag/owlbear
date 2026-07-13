@@ -2,7 +2,7 @@
 id: 1318
 title: 'P0-02: MCP startup fix — remove copilot_auth from lifespan'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-04T05:48:37.751521+00:00
 updated: 2026-05-04T12:02:37.713544+00:00
 tags:

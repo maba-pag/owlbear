@@ -2,7 +2,7 @@
 id: 1578
 title: Repair manifest loader for pilot knowledge corpus
 status: archived
-priority: important
+priority: medium
 created: 2026-05-15T01:23:46.788046+00:00
 updated: 2026-05-16T04:30:37.041158+00:00
 tags:

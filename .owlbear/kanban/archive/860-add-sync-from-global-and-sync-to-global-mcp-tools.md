@@ -2,7 +2,7 @@
 id: 860
 title: Add sync_from_global and sync_to_global MCP tools
 status: archived
-priority: important
+priority: medium
 created: '2026-04-13T13:55:19.633331+00:00'
 updated: '2026-04-14T19:56:53.212874+00:00'
 tags:

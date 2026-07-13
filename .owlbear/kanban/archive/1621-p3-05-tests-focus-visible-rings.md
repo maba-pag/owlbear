@@ -2,7 +2,7 @@
 id: 1621
 title: 'P3-05: Tests — focus-visible rings'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-16T03:37:25.145759+00:00
 updated: 2026-05-16T15:05:08.430561+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 1715
 title: Clarify kanban card decision signals
 status: archived
-priority: important
+priority: medium
 created: 2026-05-22T00:56:33.010224+02:00
 updated: 2026-05-24T10:50:01.440478+02:00
 tags:

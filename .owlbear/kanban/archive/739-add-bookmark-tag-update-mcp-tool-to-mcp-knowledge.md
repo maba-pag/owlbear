@@ -2,7 +2,7 @@
 id: 739
 title: Add bookmark tag update MCP tool to mcp-knowledge
 status: archived
-priority: important
+priority: medium
 created: '2026-04-10T04:24:46.8732866+02:00'
 updated: '2026-04-10T05:49:11.335912+00:00'
 tags:

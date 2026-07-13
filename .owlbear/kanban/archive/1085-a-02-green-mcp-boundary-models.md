@@ -2,7 +2,7 @@
 id: 1085
 title: 'A-02: GREEN — MCP boundary models'
 status: archived
-priority: critical
+priority: medium
 created: 2026-04-21T10:53:28.584627+00:00
 updated: 2026-04-24T14:30:05.491066+00:00
 tags:

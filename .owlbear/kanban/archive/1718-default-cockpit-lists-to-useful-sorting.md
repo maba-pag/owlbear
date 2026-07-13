@@ -2,7 +2,7 @@
 id: 1718
 title: Default cockpit lists to useful sorting
 status: archived
-priority: important
+priority: medium
 created: 2026-05-22T01:01:18.310876+02:00
 updated: 2026-05-24T10:50:01.480201+02:00
 tags:

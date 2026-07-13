@@ -2,7 +2,7 @@
 id: 1093
 title: 'A-10: GREEN — guidance + error mapping'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-21 10:54:47.282679+00:00
 updated: 2026-04-29T02:15:24.054985+00:00
 tags:

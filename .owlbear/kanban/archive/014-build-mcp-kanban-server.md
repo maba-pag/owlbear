@@ -2,7 +2,7 @@
 id: 14
 title: Build mcp-kanban server
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-26 17:20:58.592393+01:00
 updated: 2026-03-29 06:35:43.977140+02:00
 started: 2026-03-29 06:35:38.942403+02:00

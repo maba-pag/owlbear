@@ -2,7 +2,7 @@
 id: 446
 title: E2E-Test-ad4722be-fae8-49bf-b3b5-44d8f9498abb
 status: archived
-priority: important
+priority: medium
 created: 2026-03-30 22:52:54.340166+02:00
 updated: 2026-03-30 22:52:56.326435+02:00
 started: 2026-03-30 22:52:56.326435+02:00

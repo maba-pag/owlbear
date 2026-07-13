@@ -2,7 +2,7 @@
 id: 1873
 title: 'Knowledge: GraphStore — entities & edges'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-25T19:03:25.225852+02:00
 updated: 2026-05-26T00:53:21.874105+02:00
 tags:

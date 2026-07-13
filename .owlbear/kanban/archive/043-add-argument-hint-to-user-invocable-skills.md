@@ -2,7 +2,7 @@
 id: 43
 title: Add argument-hint to user-invocable skills
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-26 18:55:45.977053+01:00
 updated: 2026-03-28 01:56:47.298560+01:00
 started: 2026-03-28 01:56:42.051268+01:00

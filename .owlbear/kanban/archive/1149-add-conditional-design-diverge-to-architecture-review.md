@@ -2,7 +2,7 @@
 id: 1149
 title: Add conditional design-diverge to architecture review
 status: archived
-priority: important
+priority: medium
 created: 2026-04-27T21:43:42.045987+00:00
 updated: 2026-04-27T23:40:13.505170+00:00
 tags:

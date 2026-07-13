@@ -2,7 +2,7 @@
 id: 605
 title: Extract system instructions from copilot-instructions.md
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-04 20:31:16.804802+02:00
 updated: 2026-04-05 12:08:07.342607+02:00
 started: 2026-04-05 12:08:07.342607+02:00

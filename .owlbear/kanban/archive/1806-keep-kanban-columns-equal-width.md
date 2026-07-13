@@ -2,7 +2,7 @@
 id: 1806
 title: Keep Kanban columns equal width
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T07:01:29.828173+02:00
 updated: 2026-05-24T10:50:02.709408+02:00
 tags:

@@ -3,7 +3,7 @@ id: 1134
 title: Fix edit route to pass expected_updated to engine and handle 
   ConcurrencyError
 status: archived
-priority: important
+priority: medium
 created: 2026-04-26T16:00:44.066635+00:00
 updated: 2026-04-27T08:35:29.830753+00:00
 tags:

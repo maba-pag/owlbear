@@ -2,7 +2,7 @@
 id: 634
 title: Update test_validate_skills_ci.py DevDependency tests for validation group
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-05T14:28:59.7832139+02:00
 updated: 2026-04-05T22:42:43.7191203+02:00
 started: 2026-04-05T22:42:43.7191203+02:00

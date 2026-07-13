@@ -2,7 +2,7 @@
 id: 109
 title: Update instructions/README.md for v2
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-28 21:46:19.035227+01:00
 updated: 2026-03-30 04:41:38.086520+02:00
 started: 2026-03-30 04:40:53.863477+02:00

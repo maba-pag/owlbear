@@ -2,7 +2,7 @@
 id: 31
 title: Self-improvement analysis pipeline
 status: archived
-priority: important
+priority: medium
 created: 2026-03-26 18:05:35.109813+01:00
 updated: 2026-04-04 07:09:50.470155+02:00
 started: 2026-04-04 07:09:24.389261+02:00

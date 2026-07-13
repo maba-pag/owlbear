@@ -2,7 +2,7 @@
 id: 730
 title: 'P3-18: GREEN — MCP server migration (wire KanbanEngine into server.py)'
 status: archived
-priority: critical
+priority: medium
 created: 2026-04-09T03:28:46.4629227+02:00
 updated: 2026-04-10T00:52:44.945502+02:00
 started: 2026-04-10T00:52:44.945502+02:00

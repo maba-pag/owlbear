@@ -3,7 +3,7 @@ id: 1299
 title: 'P1-03: Diagram cleanup — remove orchestrator/ACP elements from excalidraw
   files'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-02T19:40:07.803534+00:00
 updated: 2026-05-03T11:57:48.000162+00:00
 tags:

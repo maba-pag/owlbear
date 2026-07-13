@@ -2,7 +2,7 @@
 id: 225
 title: Update agent-common handoff to reference action requests
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-30 16:57:22.038895+02:00
 updated: 2026-03-31 05:39:09.222694+02:00
 started: 2026-03-31 05:35:37.973642+02:00

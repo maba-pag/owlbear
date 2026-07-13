@@ -2,7 +2,7 @@
 id: 996
 title: Fix ideator/w-ideation askQuestions instruction conflict
 status: archived
-priority: important
+priority: medium
 created: 2026-04-18T21:26:18.176169+00:00
 updated: 2026-04-19T12:56:59.654202+00:00
 tags:

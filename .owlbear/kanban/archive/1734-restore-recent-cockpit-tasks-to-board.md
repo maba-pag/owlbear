@@ -2,7 +2,7 @@
 id: 1734
 title: Restore recent Cockpit tasks to board
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-23T04:16:00+0200
 updated: 2026-05-24T10:50:01.730844+02:00
 tags:

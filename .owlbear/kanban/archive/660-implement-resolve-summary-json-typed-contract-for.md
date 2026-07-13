@@ -2,7 +2,7 @@
 id: 660
 title: Implement resolve-summary.json typed contract for scribe↔orchestrator boundary
 status: archived
-priority: important
+priority: medium
 created: 2026-04-06T08:01:24.034837+02:00
 updated: 2026-04-06T20:13:42.3712061+02:00
 started: 2026-04-06T20:13:42.3712061+02:00

@@ -2,7 +2,7 @@
 id: 836
 title: 'Refactor mcp-browser tools to use ctx: Context + AppContext pattern'
 status: archived
-priority: important
+priority: medium
 created: '2026-04-11T15:28:49.513238+00:00'
 updated: '2026-04-15T19:27:59.197415+00:00'
 tags:

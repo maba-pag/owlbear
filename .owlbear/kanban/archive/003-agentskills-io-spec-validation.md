@@ -2,7 +2,7 @@
 id: 3
 title: agentskills.io spec validation
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-26 17:18:26.772286+01:00
 updated: 2026-03-29 01:25:07.078250+01:00
 started: 2026-03-29 01:25:06.779633+01:00

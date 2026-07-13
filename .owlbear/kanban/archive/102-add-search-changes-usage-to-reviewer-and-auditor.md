@@ -2,7 +2,7 @@
 id: 102
 title: Add search/changes usage to reviewer and auditor skill workflows
 status: archived
-priority: important
+priority: medium
 created: 2026-03-28 13:34:47.158349+01:00
 updated: 2026-03-29 03:41:32.701118+02:00
 started: 2026-03-29 03:41:27.838056+02:00

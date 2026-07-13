@@ -2,7 +2,7 @@
 id: 521
 title: 'Test: Wire ErrorJournal into AcpClient'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-01 15:14:45.431847+02:00
 updated: 2026-04-10 02:02:10.434689+02:00
 started: 2026-04-02 01:03:55.809090+02:00

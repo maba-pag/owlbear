@@ -2,7 +2,7 @@
 id: 1588
 title: 'P1-04: Knowledge integrity audit function'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-15T16:24:50.332910+00:00
 updated: 2026-05-16T13:30:35.489608+00:00
 tags:

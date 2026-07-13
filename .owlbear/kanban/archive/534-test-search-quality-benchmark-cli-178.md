@@ -2,7 +2,7 @@
 id: 534
 title: 'Test: search quality benchmark CLI (#178)'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-02 01:43:22.634970+02:00
 updated: 2026-04-02 04:31:25.664120+02:00
 started: 2026-04-02 04:31:25.108111+02:00

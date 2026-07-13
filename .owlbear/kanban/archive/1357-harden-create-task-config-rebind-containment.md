@@ -2,7 +2,7 @@
 id: 1357
 title: Harden create_task config rebind containment
 status: archived
-priority: important
+priority: medium
 created: 2026-05-05T06:01:35.068451+00:00
 updated: 2026-05-05T10:20:18.153457+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 664
 title: Add architect user-action gate rule and post-AR fast-path to w-arch-review
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-06T16:39:08.3017247+02:00
 updated: 2026-04-07T02:10:42.0009029+02:00
 started: 2026-04-07T02:10:42.0009029+02:00

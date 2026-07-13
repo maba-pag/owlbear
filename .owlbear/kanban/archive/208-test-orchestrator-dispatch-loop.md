@@ -2,7 +2,7 @@
 id: 208
 title: 'Test: orchestrator dispatch loop'
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-30 08:24:37.373445+02:00
 updated: 2026-03-31 00:05:27.096062+02:00
 started: 2026-03-30 08:24:41.981619+02:00

@@ -2,7 +2,7 @@
 id: 473
 title: Add KANBAN_TOOLS_EXCLUDE config for selective tool exposure
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-31 05:21:29.128148+02:00
 updated: 2026-04-02 15:00:26.070110+02:00
 started: 2026-04-02 15:00:25.666688+02:00

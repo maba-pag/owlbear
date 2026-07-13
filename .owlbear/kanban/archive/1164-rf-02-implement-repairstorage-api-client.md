@@ -2,7 +2,7 @@
 id: 1164
 title: 'RF-02: Implement repairStorage API client'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-28T17:38:24.612604+00:00
 updated: 2026-04-29T07:33:08.812421+00:00
 tags:

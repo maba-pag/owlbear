@@ -2,7 +2,7 @@
 id: 519
 title: Add blocked-task scan for decision-request notifications
 status: archived
-priority: someday
+priority: medium
 created: 2026-04-01 07:07:54.348003+02:00
 updated: 2026-04-04 07:10:39.086109+02:00
 started: 2026-04-04 07:09:48.428350+02:00

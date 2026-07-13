@@ -2,7 +2,7 @@
 id: 1905
 title: 'P1-01: Delete stale task-scoped knowledge test files (1888, 1881, 1895)'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-28T00:34:20.691200+02:00
 updated: 2026-05-28T05:07:19.819600+02:00
 tags:

@@ -2,7 +2,7 @@
 id: 518
 title: 'Test: Decision-request notification scan'
 status: archived
-priority: someday
+priority: medium
 created: 2026-04-01 07:07:44.706718+02:00
 updated: 2026-04-04 07:10:37.322693+02:00
 started: 2026-04-04 07:09:47.054252+02:00

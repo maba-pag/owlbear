@@ -2,7 +2,7 @@
 id: 751
 title: Authenticated Content Pipeline
 status: archived
-priority: critical
+priority: medium
 created: '2026-04-10T10:46:49.305763+00:00'
 updated: '2026-04-14T07:04:36.576097+00:00'
 tags:

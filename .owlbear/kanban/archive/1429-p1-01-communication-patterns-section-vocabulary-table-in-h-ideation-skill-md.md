@@ -2,7 +2,7 @@
 id: 1429
 title: 'P1-01: Communication Patterns section + vocabulary table in h-ideation/SKILL.md'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-08T01:00:48.444590+00:00
 updated: 2026-05-08T09:27:21.623753+00:00
 tags:

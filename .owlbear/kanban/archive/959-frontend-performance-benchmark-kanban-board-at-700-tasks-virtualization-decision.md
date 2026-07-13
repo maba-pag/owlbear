@@ -3,7 +3,7 @@ id: 959
 title: 'Frontend performance benchmark: kanban board at 700 tasks + virtualization
   decision'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-18T14:45:58.174437+00:00
 updated: 2026-04-18T20:25:11.455536+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 846
 title: Impl — TaskSummary adoption in server.py list_tasks
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-11T11:41:03.169553+00:00'
 updated: '2026-04-15T13:04:10.643763+00:00'
 tags:

@@ -2,7 +2,7 @@
 id: 1645
 title: 'P2-01: Decisions list page with empty state'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-18T00:49:44.974074+02:00
 updated: 2026-05-20T00:04:59.275851+02:00
 tags:

@@ -2,7 +2,7 @@
 id: 1254
 title: 'P4-01: RED — Filter accessibility tests'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-01T04:35:01.084199+00:00
 updated: 2026-05-03T19:57:37.870586+00:00
 tags:

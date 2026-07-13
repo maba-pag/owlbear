@@ -2,7 +2,7 @@
 id: 1884
 title: 'Knowledge: SourceStore protocol — add last_refreshed_at write path'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-26T06:08:59.357802+02:00
 updated: 2026-05-26T09:42:15.846654+02:00
 tags:

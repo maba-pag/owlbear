@@ -2,7 +2,7 @@
 id: 1210
 title: Break circular imports — extract leaf modules
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-30 15:29:06.259647+00:00
 updated: 2026-05-03T16:15:04.428582+00:00
 tags:

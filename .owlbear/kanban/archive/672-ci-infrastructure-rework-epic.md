@@ -2,7 +2,7 @@
 id: 672
 title: CI infrastructure rework (epic)
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-06T22:41:55.5351404+02:00
 updated: 2026-04-07T16:04:42.1156629+02:00
 started: 2026-04-07T16:04:42.1156629+02:00

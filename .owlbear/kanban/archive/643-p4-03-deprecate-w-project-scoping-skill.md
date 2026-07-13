@@ -2,7 +2,7 @@
 id: 643
 title: 'P4-03: Deprecate w-project-scoping skill'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-06T07:00:16.8966876+02:00
 updated: 2026-04-06T12:17:29.1037377+02:00
 started: 2026-04-06T12:17:29.1037377+02:00

@@ -2,7 +2,7 @@
 id: 484
 title: 'Phase B: Remove CLI fallback, MCP-only kanban for all agents'
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-31 06:20:55.324670+02:00
 updated: 2026-04-05 13:33:14.188953+02:00
 started: 2026-04-05 13:33:14.188953+02:00

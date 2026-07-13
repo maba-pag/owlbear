@@ -2,7 +2,7 @@
 id: 213
 title: 'Fix #210 and #211 AC to use command-execution hook model'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-30 14:07:05.452852+02:00
 updated: 2026-03-30 20:25:33.834705+02:00
 started: 2026-03-30 20:24:40.261733+02:00

@@ -2,7 +2,7 @@
 id: 1442
 title: 'P4-05: Probe scan-based task ID allocation and activity events'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-08T19:31:56.603397+00:00
 updated: 2026-05-09T01:46:55.362815+00:00
 tags:

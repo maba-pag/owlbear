@@ -2,7 +2,7 @@
 id: 1122
 title: 'GREEN: fix archived-task edit persistence'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-24 23:20:30.734062+00:00
 updated: 2026-04-26T01:21:01.756009+00:00
 tags:

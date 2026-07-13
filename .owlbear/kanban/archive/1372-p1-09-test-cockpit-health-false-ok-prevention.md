@@ -2,7 +2,7 @@
 id: 1372
 title: 'P1-09: Test Cockpit health false-OK prevention'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-06T00:58:49.363309+00:00
 updated: 2026-05-07T18:58:13.675442+00:00
 tags:

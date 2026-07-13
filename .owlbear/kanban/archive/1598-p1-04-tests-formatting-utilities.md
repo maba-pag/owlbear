@@ -2,7 +2,7 @@
 id: 1598
 title: 'P1-04: Tests — formatting utilities'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-16T03:35:25.261581+00:00
 updated: 2026-05-16T06:42:19.245272+00:00
 tags:

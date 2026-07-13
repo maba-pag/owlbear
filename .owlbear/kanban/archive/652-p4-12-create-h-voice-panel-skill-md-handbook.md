@@ -2,7 +2,7 @@
 id: 652
 title: 'P4-12: Create h-voice-panel/SKILL.md handbook'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-06T07:03:34.3182692+02:00
 updated: 2026-04-07T05:40:51.3134115+02:00
 started: 2026-04-07T05:40:51.3134115+02:00

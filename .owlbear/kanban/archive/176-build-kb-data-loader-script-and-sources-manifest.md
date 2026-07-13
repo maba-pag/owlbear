@@ -2,7 +2,7 @@
 id: 176
 title: Build KB data loader script and sources manifest
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-29 19:50:47.477056+02:00
 updated: 2026-04-01 04:38:21.685927+02:00
 started: 2026-04-01 04:38:17.410880+02:00

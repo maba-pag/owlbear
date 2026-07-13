@@ -2,7 +2,7 @@
 id: 690
 title: Wire LLMExtractor into MCP knowledge server app_lifespan
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-08T21:06:20.2270499+02:00
 updated: 2026-04-09T19:32:05.1098042+02:00
 started: 2026-04-09T19:32:05.1098042+02:00

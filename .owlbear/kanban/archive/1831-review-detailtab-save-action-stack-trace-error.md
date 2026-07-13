@@ -2,7 +2,7 @@
 id: 1831
 title: Review DetailTab save action stack trace error
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T11:24:06.544691+02:00
 updated: 2026-05-24T23:52:41.166479+02:00
 tags:

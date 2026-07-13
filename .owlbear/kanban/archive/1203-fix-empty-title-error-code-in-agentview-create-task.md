@@ -2,7 +2,7 @@
 id: 1203
 title: Fix empty-title error code in AgentView.create_task
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-30T15:28:58.458476+00:00
 updated: 2026-04-30T17:52:44.303186+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 1363
 title: Cockpit audit remediation
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-06T00:58:14.547083+00:00
 updated: 2026-05-11T21:20:04.410298+00:00
 tags:

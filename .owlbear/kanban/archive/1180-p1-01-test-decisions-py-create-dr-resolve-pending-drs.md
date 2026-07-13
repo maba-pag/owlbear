@@ -2,7 +2,7 @@
 id: 1180
 title: 'P1-01: Test decisions.py create_dr + resolve_pending_drs'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-30T00:51:30.965405+00:00
 updated: 2026-04-30T08:24:32.161259+00:00
 tags:

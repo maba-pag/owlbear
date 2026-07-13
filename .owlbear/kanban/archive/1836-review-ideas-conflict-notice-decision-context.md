@@ -2,7 +2,7 @@
 id: 1836
 title: Review Ideas conflict notice decision context
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T12:24:57.808395+02:00
 updated: 2026-05-24T23:32:34.759873+02:00
 tags:

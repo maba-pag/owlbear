@@ -2,7 +2,7 @@
 id: 1316
 title: Knowledge Engine Activation
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-04T05:44:46.924003+00:00
 updated: 2026-05-09T15:16:38.500893+00:00
 tags:

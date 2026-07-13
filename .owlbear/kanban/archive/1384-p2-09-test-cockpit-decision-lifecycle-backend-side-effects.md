@@ -2,7 +2,7 @@
 id: 1384
 title: 'P2-09: Test Cockpit decision lifecycle backend side effects'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-06T01:04:42.356752+00:00
 updated: 2026-05-07T09:26:12.600662+00:00
 tags:

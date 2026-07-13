@@ -2,7 +2,7 @@
 id: 545
 title: Decision-request Slack notifications
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-02 10:28:27.827401+02:00
 updated: 2026-04-05 03:55:00.172739+02:00
 started: 2026-04-05 03:55:00.172739+02:00

@@ -2,7 +2,7 @@
 id: 1000
 title: 'Expand h-agent-structure: instruction taxonomy + boundary fitness'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-18 21:34:33.183531+00:00
 updated: 2026-04-19 02:33:55.010234+00:00
 tags:

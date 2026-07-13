@@ -2,7 +2,7 @@
 id: 716
 title: 'P3-04: GREEN — config.yml loader'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-09T03:25:11.7301647+02:00
 updated: 2026-04-09T14:08:35.3097978+02:00
 started: 2026-04-09T14:08:35.3097978+02:00

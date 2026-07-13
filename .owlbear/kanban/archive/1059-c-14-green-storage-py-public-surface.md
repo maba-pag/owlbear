@@ -2,7 +2,7 @@
 id: 1059
 title: 'C-14: GREEN — storage.py public surface'
 status: archived
-priority: critical
+priority: medium
 created: 2026-04-21T10:43:41.520550+00:00
 updated: 2026-04-23T17:18:20.527147+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 1258
 title: 'Update w-arch-review: enforce import-chain direction + suite-health gate checks'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-01T07:16:19.028154+00:00
 updated: 2026-05-01T10:36:47.682841+00:00
 tags:

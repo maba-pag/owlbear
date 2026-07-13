@@ -3,7 +3,7 @@ id: 1103
 title: Harden test_engine_activity source-of-truth mock and legacy-format 
   resilience
 status: archived
-priority: important
+priority: medium
 created: 2026-04-22T07:02:02.746583+00:00
 updated: 2026-04-23T03:46:51.871391+00:00
 tags: []

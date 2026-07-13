@@ -2,7 +2,7 @@
 id: 514
 title: 'Test: Notifier protocol and SlackNotifier'
 status: archived
-priority: someday
+priority: medium
 created: 2026-04-01 07:07:05.261776+02:00
 updated: 2026-04-04 07:10:07.839160+02:00
 started: 2026-04-04 07:09:42.150941+02:00

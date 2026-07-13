@@ -2,7 +2,7 @@
 id: 992
 title: '1a: Expand h-agent-structure — stub vs. authority taxonomy + boundary-fitness'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-18T21:23:32.394740+00:00
 updated: 2026-04-19T01:35:39.569109+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 1766
 title: Use PDS button icons in Ideas toolbar
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-05-23T17:09:20.023658+02:00
 updated: 2026-05-24T10:50:02.176593+02:00
 tags:

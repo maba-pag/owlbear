@@ -2,7 +2,7 @@
 id: 57
 title: Add mcp-kanban integration tests with real kanban-md binary
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-26 19:20:10.426487+01:00
 updated: 2026-03-30 03:46:44.143466+02:00
 started: 2026-03-30 03:46:43.822646+02:00

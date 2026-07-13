@@ -2,7 +2,7 @@
 id: 1851
 title: 'P1-01: Pydantic models for structured decision requests'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-24T20:57:55.018006+02:00
 updated: 2026-05-25T02:03:37.807966+02:00
 tags:

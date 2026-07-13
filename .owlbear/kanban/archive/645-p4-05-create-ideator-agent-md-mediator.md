@@ -2,7 +2,7 @@
 id: 645
 title: 'P4-05: Create ideator.agent.md (Mediator)'
 status: archived
-priority: critical
+priority: medium
 created: 2026-04-06T07:01:04.2471939+02:00
 updated: 2026-04-06T22:29:42.0716891+02:00
 started: 2026-04-06T22:29:42.0716891+02:00

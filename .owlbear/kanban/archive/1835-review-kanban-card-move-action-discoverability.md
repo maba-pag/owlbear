@@ -2,7 +2,7 @@
 id: 1835
 title: Review Kanban card move action discoverability
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T12:17:30.160637+02:00
 updated: 2026-05-24T23:32:28.233151+02:00
 tags:

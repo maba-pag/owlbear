@@ -2,7 +2,7 @@
 id: 1067
 title: 'B-03: RED — engine init + config validation tests'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-21T10:47:58.331777+00:00
 updated: 2026-04-24T10:00:40.154186+00:00
 tags:

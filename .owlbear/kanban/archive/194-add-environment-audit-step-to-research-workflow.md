@@ -2,7 +2,7 @@
 id: 194
 title: Add environment audit step to research-workflow skill
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-29 23:08:12.686527+02:00
 updated: 2026-03-30 05:00:59.555101+02:00
 started: 2026-03-30 05:00:33.842204+02:00

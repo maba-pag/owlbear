@@ -2,7 +2,7 @@
 id: 168
 title: Delete empty .github/agents/ and clean stale settings
 status: archived
-priority: important
+priority: medium
 created: 2026-03-29 19:49:32.553258+02:00
 updated: 2026-03-29 20:41:37.283642+02:00
 started: 2026-03-29 20:41:37.283642+02:00

@@ -2,7 +2,7 @@
 id: 945
 title: Tests for show_task() and _find_task_path() cache integration (TDD RED)
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-17T22:57:35.601340+00:00
 updated: 2026-04-18T00:05:12.871324+00:00
 tags:

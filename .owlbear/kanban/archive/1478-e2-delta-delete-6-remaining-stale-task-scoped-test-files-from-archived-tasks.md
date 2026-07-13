@@ -2,7 +2,7 @@
 id: 1478
 title: 'E2-delta: Delete 6 remaining stale task-scoped test files from archived tasks'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-09T20:00:32.661200+00:00
 updated: 2026-05-10T09:19:33.572244+00:00
 tags:

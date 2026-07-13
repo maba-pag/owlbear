@@ -2,7 +2,7 @@
 id: 1046
 title: 'C-01: RED — storage_io atomic-write & ID-allocation tests'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-21T10:42:50.236472+00:00
 updated: 2026-04-22T19:03:11.034317+00:00
 tags:

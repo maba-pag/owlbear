@@ -2,7 +2,7 @@
 id: 688
 title: Fix SourceEvaluator wiring — model string passed where EvaluateFn callable expected
 status: archived
-priority: important
+priority: medium
 created: 2026-04-08T21:06:19.3482222+02:00
 updated: 2026-04-09T02:02:09.8763578+02:00
 started: 2026-04-09T02:02:09.8763578+02:00

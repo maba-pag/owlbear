@@ -2,7 +2,7 @@
 id: 505
 title: Fix stale test_server.py _FAKE_STDOUT test and output_schema underspec
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-31 22:15:57.237239+02:00
 updated: 2026-04-02 07:01:51.462365+02:00
 started: 2026-04-02 07:01:51.003773+02:00

@@ -2,7 +2,7 @@
 id: 16
 title: Build mcp-knowledge server
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-26 17:21:28.095110+01:00
 updated: 2026-03-31 05:53:48.047066+02:00
 started: 2026-03-31 05:43:56.634546+02:00

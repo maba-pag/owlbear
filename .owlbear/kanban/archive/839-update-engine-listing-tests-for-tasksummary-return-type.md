@@ -2,7 +2,7 @@
 id: 839
 title: Update engine listing tests for TaskSummary return type
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-11T19:50:30.044129+00:00'
 updated: '2026-04-12T17:17:50.363689+00:00'
 tags:

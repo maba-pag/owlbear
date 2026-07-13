@@ -2,7 +2,7 @@
 id: 125
 title: 'Clean up askQuestions references: decouple confidence patterns from tool usage'
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-29 06:34:47.219217+02:00
 updated: 2026-03-29 09:49:39.074765+02:00
 started: 2026-03-29 09:49:35.097168+02:00

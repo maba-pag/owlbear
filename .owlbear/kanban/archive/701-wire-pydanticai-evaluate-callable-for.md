@@ -2,7 +2,7 @@
 id: 701
 title: Wire PydanticAI evaluate callable for SourceEvaluator in MCP server
 status: archived
-priority: important
+priority: medium
 created: 2026-04-08T21:39:48.5461622+02:00
 updated: 2026-04-09T08:50:54.8284499+02:00
 started: 2026-04-09T08:50:54.8284499+02:00

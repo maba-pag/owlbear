@@ -2,7 +2,7 @@
 id: 1425
 title: 'P1-04: Revise doc-audit.prompt.md — TODO resolution + diagram ownership'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-08T00:32:24.572908+00:00
 updated: 2026-05-09T15:00:37.934270+00:00
 tags:

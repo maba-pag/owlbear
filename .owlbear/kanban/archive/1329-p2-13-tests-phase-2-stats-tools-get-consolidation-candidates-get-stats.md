@@ -2,7 +2,7 @@
 id: 1329
 title: 'P2-13: Tests — Phase 2 + stats tools (get_consolidation_candidates, get_stats)'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-04T05:48:50.133593+00:00
 updated: 2026-05-07T12:32:47.394593+00:00
 tags:

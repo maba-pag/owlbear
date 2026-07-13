@@ -2,7 +2,7 @@
 id: 1392
 title: 'P3-02: Implement Cockpit responsive dashboard layout and visual design pass'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-06T01:09:36.552112+00:00
 updated: 2026-05-11T07:11:24.157034+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 1891
 title: 'Knowledge: MCP wire get_next_batch to EnrichmentStore.claim_batch'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-27T01:00:59.243665+02:00
 updated: 2026-05-27T10:10:32.526755+02:00
 tags:

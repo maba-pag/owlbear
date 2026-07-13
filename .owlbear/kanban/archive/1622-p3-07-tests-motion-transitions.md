@@ -2,7 +2,7 @@
 id: 1622
 title: 'P3-07: Tests — motion/transitions'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-16T03:37:25.187720+00:00
 updated: 2026-05-16T15:05:28.128264+00:00
 tags:

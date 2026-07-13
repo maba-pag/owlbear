@@ -2,7 +2,7 @@
 id: 723
 title: 'P3-11: RED — claiming protocol and agent-name generation'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-09T03:26:15.7601787+02:00
 updated: 2026-04-09T21:27:58.7216339+02:00
 started: 2026-04-09T21:27:58.7216339+02:00

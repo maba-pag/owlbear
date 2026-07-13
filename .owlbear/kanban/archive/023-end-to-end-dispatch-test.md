@@ -2,7 +2,7 @@
 id: 23
 title: End-to-end dispatch test
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-26 17:22:57.617577+01:00
 updated: 2026-04-01 19:27:17.297903+02:00
 started: 2026-04-01 19:27:16.729202+02:00

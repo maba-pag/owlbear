@@ -2,7 +2,7 @@
 id: 119
 title: Fix MCP module names in setup.py (mcp_kanban -> owlbear_mcp_kanban)
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-29 06:32:33.087279+02:00
 updated: 2026-03-29 10:32:55.725350+02:00
 started: 2026-03-29 10:32:55.417309+02:00

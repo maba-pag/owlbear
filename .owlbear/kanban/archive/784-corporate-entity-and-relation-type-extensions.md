@@ -2,7 +2,7 @@
 id: 784
 title: Corporate entity and relation type extensions
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-10T12:31:05.162187+00:00'
 updated: '2026-04-13T10:28:49.483107+00:00'
 tags:

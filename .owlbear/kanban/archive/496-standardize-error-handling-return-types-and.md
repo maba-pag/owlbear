@@ -2,7 +2,7 @@
 id: 496
 title: Standardize error handling, return types, and exports across MCP servers
 status: archived
-priority: important
+priority: medium
 created: 2026-03-31 06:52:31.074813+02:00
 updated: 2026-04-02 17:30:08.384077+02:00
 started: 2026-04-02 17:30:07.973611+02:00

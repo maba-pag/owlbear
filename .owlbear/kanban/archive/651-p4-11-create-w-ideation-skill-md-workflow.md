@@ -2,7 +2,7 @@
 id: 651
 title: 'P4-11: Create w-ideation/SKILL.md workflow'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-06T07:03:25.0128472+02:00
 updated: 2026-04-07T05:28:45.0237277+02:00
 started: 2026-04-07T05:28:45.0237277+02:00

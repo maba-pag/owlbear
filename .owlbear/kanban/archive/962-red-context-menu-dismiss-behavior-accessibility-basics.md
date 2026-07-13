@@ -2,7 +2,7 @@
 id: 962
 title: 'RED: Context menu dismiss behavior + accessibility basics'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-18T14:54:37.227649+00:00
 updated: 2026-04-18T19:10:39.142448+00:00
 tags:

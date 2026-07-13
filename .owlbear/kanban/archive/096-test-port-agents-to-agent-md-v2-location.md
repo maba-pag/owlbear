@@ -2,7 +2,7 @@
 id: 96
 title: 'Test: Port agents to agent-md v2 location'
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-28 03:42:21.979229+01:00
 updated: 2026-03-29 15:16:08.481771+02:00
 started: 2026-03-29 15:16:08.184776+02:00

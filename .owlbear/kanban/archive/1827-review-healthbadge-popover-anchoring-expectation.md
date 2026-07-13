@@ -2,7 +2,7 @@
 id: 1827
 title: Review HealthBadge popover anchoring expectation
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T11:19:10.382135+02:00
 updated: 2026-05-24T23:20:50.529592+02:00
 tags:

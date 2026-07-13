@@ -3,7 +3,7 @@ id: 1539
 title: 'P3-03: test — column component CSS: fixed header, scroll body, empty text
   fallback'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-13T18:41:58.306824+00:00
 updated: 2026-05-13T23:04:13.726561+00:00
 tags:

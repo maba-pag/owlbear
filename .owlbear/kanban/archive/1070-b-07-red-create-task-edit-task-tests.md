@@ -2,7 +2,7 @@
 id: 1070
 title: 'B-07: RED — create_task + edit_task tests'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-21T10:48:33.317250+00:00
 updated: 2026-04-24T23:58:04.164708+00:00
 tags:

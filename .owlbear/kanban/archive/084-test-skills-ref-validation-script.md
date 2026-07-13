@@ -2,7 +2,7 @@
 id: 84
 title: 'Test: skills-ref validation script'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-27 05:24:29.868156+01:00
 updated: 2026-03-29 00:40:19.319646+01:00
 started: 2026-03-29 00:40:13.883572+01:00

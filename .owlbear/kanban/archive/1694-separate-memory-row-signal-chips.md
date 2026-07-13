@@ -2,7 +2,7 @@
 id: 1694
 title: Separate memory row signal chips
 status: archived
-priority: important
+priority: medium
 created: 2026-05-21T19:53:32.451580+02:00
 updated: 2026-05-24T10:50:01.166506+02:00
 tags:

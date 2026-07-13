@@ -2,7 +2,7 @@
 id: 1558
 title: Ideate knowledge source lifecycle ownership
 status: archived
-priority: important
+priority: medium
 created: 2026-05-14T17:24:27.895979+00:00
 updated: 2026-05-18T03:31:50.461584+02:00
 tags:

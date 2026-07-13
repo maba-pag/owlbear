@@ -2,7 +2,7 @@
 id: 909
 title: Remove .ps1 attribution comment from session-context.py hook
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-17T10:47:30.435452+00:00
 updated: 2026-04-17T10:48:45.120420+00:00
 tags:

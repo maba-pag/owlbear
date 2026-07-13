@@ -2,7 +2,7 @@
 id: 1496
 title: 'Cockpit: Replace PDS appendChild monkeypatch with property trap on document.porscheDesignSystem.cdn'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-12T02:37:00.298093+00:00
 updated: 2026-05-12T21:32:45.953826+00:00
 tags:

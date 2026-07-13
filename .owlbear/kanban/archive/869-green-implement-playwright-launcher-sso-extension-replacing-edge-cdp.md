@@ -2,7 +2,7 @@
 id: 869
 title: 'GREEN: Implement Playwright launcher + SSO extension replacing Edge CDP'
 status: archived
-priority: critical
+priority: medium
 created: '2026-04-13T23:21:47.239423+00:00'
 updated: '2026-04-14T16:49:18.074651+00:00'
 tags:

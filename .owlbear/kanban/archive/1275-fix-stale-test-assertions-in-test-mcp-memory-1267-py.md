@@ -2,7 +2,7 @@
 id: 1275
 title: Fix stale test assertions in test_mcp_memory_1267.py
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-05-02T06:23:30.198676+00:00
 updated: 2026-05-02T12:48:10.295416+00:00
 tags:

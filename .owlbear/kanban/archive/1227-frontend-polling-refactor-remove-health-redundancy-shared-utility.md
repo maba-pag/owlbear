@@ -2,7 +2,7 @@
 id: 1227
 title: 'Frontend — polling refactor: remove /health redundancy + shared utility'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-30 16:31:18.626374+00:00
 updated: 2026-05-01T21:10:03.557046+00:00
 tags:

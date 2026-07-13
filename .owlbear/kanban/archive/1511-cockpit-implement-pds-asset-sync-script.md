@@ -2,7 +2,7 @@
 id: 1511
 title: 'Cockpit: Implement PDS asset sync script'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-12T15:49:55.060614+00:00
 updated: 2026-05-12T20:50:47.661916+00:00
 tags:

@@ -3,7 +3,7 @@ id: 135
 title: Extract CancelSignal, sandbox_path, consolidation, and evaluator into 
   knowledge package
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-29 12:07:28.958565+02:00
 updated: 2026-04-02 00:49:27.691249+02:00
 started: 2026-04-02 00:49:18.561386+02:00

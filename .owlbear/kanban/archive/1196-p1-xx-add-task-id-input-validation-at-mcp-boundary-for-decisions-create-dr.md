@@ -2,7 +2,7 @@
 id: 1196
 title: 'P1-XX: Add task_id input validation at MCP boundary for decisions.create_dr'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-30T07:17:17.451013+00:00
 updated: 2026-04-30T11:15:42.564304+00:00
 tags:

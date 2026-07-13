@@ -2,7 +2,7 @@
 id: 1871
 title: 'Knowledge: ContentStore — ingest & dedup'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-25T19:02:58.711699+02:00
 updated: 2026-05-26T04:52:21.532800+02:00
 tags:

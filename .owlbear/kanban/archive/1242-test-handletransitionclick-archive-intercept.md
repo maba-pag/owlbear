@@ -2,7 +2,7 @@
 id: 1242
 title: 'Test: handleTransitionClick archive intercept'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-01T03:07:57.562942+00:00
 updated: 2026-05-01T20:24:50.490244+00:00
 tags:

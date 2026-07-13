@@ -2,7 +2,7 @@
 id: 1522
 title: 'P2-03: Tests for proof_bundle migration script'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-13T02:29:59.211402+00:00
 updated: 2026-05-13T05:38:13.992114+00:00
 tags:

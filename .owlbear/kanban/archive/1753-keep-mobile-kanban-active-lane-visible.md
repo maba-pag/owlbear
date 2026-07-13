@@ -2,7 +2,7 @@
 id: 1753
 title: Keep mobile Kanban active lane visible
 status: archived
-priority: important
+priority: medium
 created: 2026-05-23T11:49:57+0200
 updated: 2026-05-24T10:50:01.999577+02:00
 tags:

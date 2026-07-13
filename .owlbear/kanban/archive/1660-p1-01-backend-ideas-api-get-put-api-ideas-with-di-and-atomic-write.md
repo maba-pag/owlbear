@@ -2,7 +2,7 @@
 id: 1660
 title: 'P1-01: Backend Ideas API — GET/PUT /api/ideas with DI and atomic_write'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-18T17:41:31.832363+02:00
 updated: 2026-05-20T13:28:16.410011+02:00
 tags:

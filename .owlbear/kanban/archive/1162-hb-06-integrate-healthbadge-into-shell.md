@@ -2,7 +2,7 @@
 id: 1162
 title: 'HB-06: Integrate HealthBadge into Shell'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-28T17:35:08.991715+00:00
 updated: 2026-04-29T00:20:15.141956+00:00
 tags:

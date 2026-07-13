@@ -2,7 +2,7 @@
 id: 87
 title: Fix pytest collecting v1 archive tests
 status: archived
-priority: critical
+priority: medium
 created: 2026-03-27 22:01:45.413144+01:00
 updated: 2026-03-28 03:14:53.373459+01:00
 started: 2026-03-28 03:14:53.069266+01:00

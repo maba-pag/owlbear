@@ -2,7 +2,7 @@
 id: 983
 title: 'Verify: seed propagation + full regression'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-18T21:18:42.531388+00:00
 updated: 2026-04-19T15:38:44.312950+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 648
 title: 'P4-08: Create data-voice.agent.md'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-06T07:01:36.1434924+02:00
 updated: 2026-04-07T01:03:46.9096137+02:00
 started: 2026-04-07T01:03:46.9096137+02:00

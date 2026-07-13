@@ -2,7 +2,7 @@
 id: 667
 title: Rewrite sync-to-main with incremental commit strategy
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-06T22:22:21.0482147+02:00
 updated: 2026-04-07T11:40:25.9271826+02:00
 started: 2026-04-07T11:40:25.9271826+02:00

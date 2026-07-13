@@ -2,7 +2,7 @@
 id: 887
 title: 'Research: Copilot SDK vs OpenAI-compat endpoint for knowledge extraction LLM'
 status: archived
-priority: important
+priority: medium
 created: '2026-04-15T13:34:22.037145+00:00'
 updated: '2026-04-15T19:42:14.879091+00:00'
 tags:

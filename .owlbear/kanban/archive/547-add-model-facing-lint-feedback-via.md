@@ -3,7 +3,7 @@ id: 547
 title: Add model-facing lint feedback via additionalContext to builder 
   PostToolUse hook
 status: archived
-priority: important
+priority: medium
 created: 2026-04-02 14:52:03.192269+02:00
 updated: 2026-04-04 20:33:30.685167+02:00
 started: 2026-04-04 20:33:02.909974+02:00

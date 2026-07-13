@@ -2,7 +2,7 @@
 id: 1514
 title: Structured task specification in frontmatter (AC + proof_bundle)
 status: archived
-priority: important
+priority: medium
 created: 2026-05-13T02:24:46.546754+00:00
 updated: 2026-05-13T10:21:23.763388+00:00
 tags:

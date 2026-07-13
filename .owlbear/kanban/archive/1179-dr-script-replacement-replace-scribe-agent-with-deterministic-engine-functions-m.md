@@ -2,7 +2,7 @@
 id: 1179
 title: DR Script Replacement — decomposition parent (tracking)
 status: archived
-priority: important
+priority: medium
 created: 2026-04-30T00:48:49.954557+00:00
 updated: 2026-04-30T04:12:35.478341+00:00
 tags:

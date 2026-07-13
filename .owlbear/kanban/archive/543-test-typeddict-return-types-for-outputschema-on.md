@@ -2,7 +2,7 @@
 id: 543
 title: 'Test: TypedDict return types for outputSchema on mcp-project'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-02 07:53:54.895174+02:00
 updated: 2026-04-04 17:49:43.537522+02:00
 started: 2026-04-02 07:54:11.386398+02:00

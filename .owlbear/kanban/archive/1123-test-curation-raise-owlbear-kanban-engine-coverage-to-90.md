@@ -2,7 +2,7 @@
 id: 1123
 title: 'TEST-CURATION: raise owlbear_kanban.engine coverage to 90%'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-25T07:24:08.169707+00:00
 updated: 2026-04-25T09:23:38.560756+00:00
 tags: []

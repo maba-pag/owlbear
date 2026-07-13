@@ -2,7 +2,7 @@
 id: 763
 title: 'P1-10: Impl — ContentFetcher protocol + pipeline injection'
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-10T10:55:57.329386+00:00'
 updated: '2026-04-15T09:59:45.826926+00:00'
 tags:

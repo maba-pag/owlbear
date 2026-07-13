@@ -2,7 +2,7 @@
 id: 1373
 title: 'P1-10: Implement Cockpit health false-OK prevention'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-06T00:58:50.761743+00:00
 updated: 2026-05-07T19:53:19.079650+00:00
 tags:

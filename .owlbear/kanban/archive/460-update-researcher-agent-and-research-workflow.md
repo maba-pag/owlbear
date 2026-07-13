@@ -3,7 +3,7 @@ id: 460
 title: Update researcher agent and research-workflow skill with tier 
   classification
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-31 03:40:02.128799+02:00
 updated: 2026-03-31 08:51:41.594064+02:00
 started: 2026-03-31 08:51:40.994403+02:00

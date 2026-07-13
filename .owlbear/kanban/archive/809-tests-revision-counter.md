@@ -2,7 +2,7 @@
 id: 809
 title: Tests — revision counter
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-10T21:21:30.609548+00:00'
 updated: '2026-04-12T07:18:11.187451+00:00'
 tags:

@@ -2,7 +2,7 @@
 id: 611
 title: Create dev branch, push to remote
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-04T21:54:56.0860979+02:00
 updated: 2026-04-06T17:00:55.4376218+02:00
 started: 2026-04-06T17:00:55.4376218+02:00

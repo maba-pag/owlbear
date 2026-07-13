@@ -2,7 +2,7 @@
 id: 1776
 title: Rebalance mobile Memory filter density
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-05-24T00:36:29.337556+02:00
 updated: 2026-05-24T10:50:02.305955+02:00
 tags:

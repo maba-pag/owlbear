@@ -2,7 +2,7 @@
 id: 1039
 title: Ideation overhaul Wave 1 foundation implementation
 status: archived
-priority: important
+priority: medium
 created: 2026-04-20T22:46:36.851409+00:00
 updated: 2026-04-24T12:10:42.058891+00:00
 tags:

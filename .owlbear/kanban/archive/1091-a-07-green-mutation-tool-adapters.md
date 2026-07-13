@@ -2,7 +2,7 @@
 id: 1091
 title: 'A-07: GREEN — mutation tool adapters'
 status: archived
-priority: critical
+priority: medium
 created: 2026-04-21 10:54:28.949075+00:00
 updated: 2026-04-28T11:09:39.985315+00:00
 tags:

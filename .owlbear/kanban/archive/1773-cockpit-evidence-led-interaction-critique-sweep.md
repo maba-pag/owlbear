@@ -2,7 +2,7 @@
 id: 1773
 title: Cockpit evidence-led interaction critique sweep
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T00:33:26.614960+02:00
 updated: 2026-05-24T22:03:37.428989+02:00
 tags:

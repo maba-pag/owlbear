@@ -2,7 +2,7 @@
 id: 8
 title: Port agents to .agent.md format
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-26 17:19:41.251373+01:00
 updated: 2026-03-29 11:14:57.118123+02:00
 started: 2026-03-29 11:14:56.821059+02:00

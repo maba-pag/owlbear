@@ -2,7 +2,7 @@
 id: 1825
 title: Review Ideas unsaved-navigation guard internals
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T11:03:07.492170+02:00
 updated: 2026-05-24T11:26:04.366401+02:00
 tags:

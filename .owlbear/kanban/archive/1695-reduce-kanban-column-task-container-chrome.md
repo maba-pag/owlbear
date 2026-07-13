@@ -2,7 +2,7 @@
 id: 1695
 title: Reduce kanban column task container chrome
 status: archived
-priority: important
+priority: medium
 created: 2026-05-21T20:21:27.887459+02:00
 updated: 2026-05-24T10:50:01.177761+02:00
 tags:

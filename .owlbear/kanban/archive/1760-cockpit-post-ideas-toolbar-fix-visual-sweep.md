@@ -2,7 +2,7 @@
 id: 1760
 title: Cockpit post Ideas toolbar fix visual sweep
 status: archived
-priority: important
+priority: medium
 created: 2026-05-23T16:22:31+0200
 updated: 2026-05-24T10:50:02.095457+02:00
 tags:

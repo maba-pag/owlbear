@@ -3,7 +3,7 @@ id: 1401
 title: Add GET-after-mutation cache invalidation proofs for cockpit edit and 
   release routes
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-05-06T03:40:00.756804+00:00
 updated: 2026-05-06T15:59:07.987429+00:00
 tags:

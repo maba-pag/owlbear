@@ -2,7 +2,7 @@
 id: 91
 title: Update python.instructions.md for v2 layout
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-28 01:40:33.702672+01:00
 updated: 2026-03-29 05:03:40.081676+02:00
 started: 2026-03-29 05:03:35.737124+02:00

@@ -2,7 +2,7 @@
 id: 1800
 title: Keep task edit actions fixed cleanly
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T05:50:50.602184+02:00
 updated: 2026-05-24T10:50:02.624763+02:00
 tags:

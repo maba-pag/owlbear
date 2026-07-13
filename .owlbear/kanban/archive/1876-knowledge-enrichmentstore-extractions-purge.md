@@ -2,7 +2,7 @@
 id: 1876
 title: 'Knowledge: EnrichmentStore — extractions & purge'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-25T19:04:07.626934+02:00
 updated: 2026-05-26T08:52:35.908668+02:00
 tags:

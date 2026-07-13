@@ -2,7 +2,7 @@
 id: 1192
 title: 'P3-04: Implement DR status indicator + popover'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-30T00:52:21.318056+00:00
 updated: 2026-04-30T13:39:13.030907+00:00
 tags:

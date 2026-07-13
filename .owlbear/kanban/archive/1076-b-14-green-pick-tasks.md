@@ -2,7 +2,7 @@
 id: 1076
 title: 'B-14: GREEN — pick_tasks'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-21T10:49:32.330314+00:00
 updated: 2026-04-25T11:22:56.398177+00:00
 tags:

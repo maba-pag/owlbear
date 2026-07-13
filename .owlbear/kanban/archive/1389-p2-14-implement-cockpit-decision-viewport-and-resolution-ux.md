@@ -2,7 +2,7 @@
 id: 1389
 title: 'P2-14: Implement Cockpit decision viewport and resolution UX'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-06T01:04:52.300671+00:00
 updated: 2026-05-09T11:56:27.035684+00:00
 tags:

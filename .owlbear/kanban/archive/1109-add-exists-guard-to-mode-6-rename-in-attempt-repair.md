@@ -2,7 +2,7 @@
 id: 1109
 title: Add exists-guard to mode-6 rename in attempt_repair
 status: archived
-priority: important
+priority: medium
 created: 2026-04-23T00:10:27.649126+00:00
 updated: 2026-04-23T16:51:16.338664+00:00
 tags:

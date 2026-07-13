@@ -2,7 +2,7 @@
 id: 1140
 title: Fix test_engine_crash_safety_1101.py routing drift — 4 failures
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-26T16:56:45.310009+00:00
 updated: 2026-04-27T04:32:18.411411+00:00
 tags:

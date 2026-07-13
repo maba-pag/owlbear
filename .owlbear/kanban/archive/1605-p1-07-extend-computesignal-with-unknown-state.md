@@ -2,7 +2,7 @@
 id: 1605
 title: 'P1-07: Extend computeSignal with unknown state'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-16T03:36:07.039801+00:00
 updated: 2026-05-16T07:51:20.823482+00:00
 tags:

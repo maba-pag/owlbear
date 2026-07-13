@@ -2,7 +2,7 @@
 id: 491
 title: Implement KANBAN_TOOLS_EXCLUDE in mcp-kanban server
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-31 06:22:24.604127+02:00
 updated: 2026-03-31 16:31:28.195935+02:00
 started: 2026-03-31 16:31:14.271717+02:00

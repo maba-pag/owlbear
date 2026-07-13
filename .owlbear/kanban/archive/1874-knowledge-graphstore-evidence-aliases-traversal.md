@@ -2,7 +2,7 @@
 id: 1874
 title: 'Knowledge: GraphStore — evidence, aliases & traversal'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-25T19:03:39.489495+02:00
 updated: 2026-05-26T05:29:42.340213+02:00
 tags:

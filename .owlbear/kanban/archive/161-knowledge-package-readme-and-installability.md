@@ -2,7 +2,7 @@
 id: 161
 title: Knowledge package README and installability verification
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-29 19:37:41.208434+02:00
 updated: 2026-04-02 03:53:15.702768+02:00
 started: 2026-04-02 03:53:15.247008+02:00

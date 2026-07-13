@@ -2,7 +2,7 @@
 id: 1420
 title: Reset todo tasks to backlog for AC re-gate under new quality rules
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-07T23:54:22.341303+00:00
 updated: 2026-05-08T13:19:20.215592+00:00
 tags:

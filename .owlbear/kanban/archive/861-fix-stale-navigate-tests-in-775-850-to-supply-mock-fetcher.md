@@ -2,7 +2,7 @@
 id: 861
 title: 'Fix stale navigate tests in #775/#850 to supply mock fetcher'
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-13T17:30:58.511797+00:00'
 updated: '2026-04-14T18:27:29.079198+00:00'
 tags:

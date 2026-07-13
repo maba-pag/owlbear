@@ -3,7 +3,7 @@ id: 101
 title: Grant vscode/askQuestions to user-invocable agents (orchestrator, 
   kanban-planner, curator)
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-28 13:34:40.547327+01:00
 updated: 2026-03-29 12:01:31.231650+02:00
 started: 2026-03-29 06:22:54.163854+02:00

@@ -2,7 +2,7 @@
 id: 113
 title: Update pytest-and-linting skill content for v2 monorepo paths
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-29 00:38:45.402729+01:00
 updated: 2026-03-30 08:39:27.293531+02:00
 started: 2026-03-30 08:39:26.981246+02:00

@@ -2,7 +2,7 @@
 id: 1696
 title: Remove redundant kanban card status chip
 status: archived
-priority: important
+priority: medium
 created: 2026-05-21T20:21:45.242959+02:00
 updated: 2026-05-24T10:50:01.188815+02:00
 tags:

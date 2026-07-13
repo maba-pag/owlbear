@@ -2,7 +2,7 @@
 id: 1828
 title: Review DetailTab PDS payload timeout
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T11:19:10.398096+02:00
 updated: 2026-05-24T23:22:59.795179+02:00
 tags:

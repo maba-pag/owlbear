@@ -2,7 +2,7 @@
 id: 1119
 title: Add authority-surface assertions to ideation-overhaul static tests
 status: archived
-priority: important
+priority: medium
 created: 2026-04-24T11:15:06.676064+00:00
 updated: 2026-04-24T13:05:25.921939+00:00
 tags: []

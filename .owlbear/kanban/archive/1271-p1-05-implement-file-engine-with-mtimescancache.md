@@ -2,7 +2,7 @@
 id: 1271
 title: 'P1-05: Implement file engine with MtimeScanCache'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-02T03:43:35.312728+00:00
 updated: 2026-05-02T22:09:17.655102+00:00
 tags:

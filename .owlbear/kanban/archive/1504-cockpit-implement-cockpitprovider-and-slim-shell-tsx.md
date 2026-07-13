@@ -2,7 +2,7 @@
 id: 1504
 title: 'Cockpit: Implement CockpitProvider and slim Shell.tsx'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-12T02:59:59.210772+00:00
 updated: 2026-05-12T20:34:27.923948+00:00
 tags:

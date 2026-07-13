@@ -2,7 +2,7 @@
 id: 556
 title: 'Test: Implement memory-mcp tools'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-02 16:34:22.295344+02:00
 updated: 2026-04-03 01:06:37.026621+02:00
 started: 2026-04-03 01:05:38.640059+02:00

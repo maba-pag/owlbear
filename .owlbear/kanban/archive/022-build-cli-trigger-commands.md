@@ -2,7 +2,7 @@
 id: 22
 title: Build CLI trigger commands
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-26 17:22:48.617522+01:00
 updated: 2026-04-01 18:57:07.573825+02:00
 started: 2026-04-01 18:57:06.941307+02:00

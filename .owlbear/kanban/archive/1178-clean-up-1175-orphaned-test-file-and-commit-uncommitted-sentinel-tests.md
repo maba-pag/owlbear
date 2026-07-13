@@ -2,7 +2,7 @@
 id: 1178
 title: 'Clean up #1175 orphaned test file and commit uncommitted sentinel tests'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-30T00:39:02.728003+00:00
 updated: 2026-04-30T02:05:23.562158+00:00
 tags:

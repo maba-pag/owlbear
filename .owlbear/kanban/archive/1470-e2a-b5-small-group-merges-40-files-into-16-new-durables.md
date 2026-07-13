@@ -2,7 +2,7 @@
 id: 1470
 title: 'E2a-B5: Small-group merges — 40 files into 16 new durables'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-09T07:21:35.702938+00:00
 updated: 2026-05-09T23:09:30.757228+00:00
 tags:

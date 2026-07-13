@@ -2,7 +2,7 @@
 id: 1066
 title: 'B-02: GREEN — models + errors'
 status: archived
-priority: critical
+priority: medium
 created: 2026-04-21T10:47:48.612099+00:00
 updated: 2026-04-24T07:53:20.409414+00:00
 tags:

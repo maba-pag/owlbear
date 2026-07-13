@@ -2,7 +2,7 @@
 id: 1212
 title: Remove storage.py re-exports — direct consumer imports
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-30 15:29:15.222006+00:00
 updated: 2026-05-03T22:28:56.509267+00:00
 tags:

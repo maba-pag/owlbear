@@ -2,7 +2,7 @@
 id: 1464
 title: 'E2b: Delete/merge stale package-local Python tests (43 files in serve/*/tests/)'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-09T03:32:04.274801+00:00
 updated: 2026-05-09T18:10:11.454475+00:00
 tags:

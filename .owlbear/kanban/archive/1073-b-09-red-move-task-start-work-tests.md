@@ -2,7 +2,7 @@
 id: 1073
 title: 'B-09: RED — move_task + start_work tests'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-21T10:49:15.724135+00:00
 updated: 2026-04-25T12:31:32.543833+00:00
 tags:

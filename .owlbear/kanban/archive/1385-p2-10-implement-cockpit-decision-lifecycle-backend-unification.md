@@ -2,7 +2,7 @@
 id: 1385
 title: 'P2-10: Implement Cockpit decision lifecycle backend unification'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-06T01:04:45.316826+00:00
 updated: 2026-05-07T11:43:15.107196+00:00
 tags:

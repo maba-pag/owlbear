@@ -2,7 +2,7 @@
 id: 732
 title: 'P3-20: Cleanup sweep — remove binary refs, update docs/guides/skills/setup'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-09T03:29:09.5970795+02:00
 updated: 2026-04-10T03:19:23.4697427+02:00
 started: 2026-04-10T03:19:23.4697427+02:00

@@ -2,7 +2,7 @@
 id: 1369
 title: 'P1-06: Harden kanban corruption scanner encoding handling'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-06T00:58:39.965961+00:00
 updated: 2026-05-06T08:59:46.088138+00:00
 tags:

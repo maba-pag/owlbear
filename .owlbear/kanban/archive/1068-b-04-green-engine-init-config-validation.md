@@ -2,7 +2,7 @@
 id: 1068
 title: 'B-04: GREEN — engine init + config validation'
 status: archived
-priority: critical
+priority: medium
 created: 2026-04-21T10:48:09.323285+00:00
 updated: 2026-04-24T20:49:41.612168+00:00
 tags:

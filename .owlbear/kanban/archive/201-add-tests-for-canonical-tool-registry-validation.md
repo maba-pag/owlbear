@@ -2,7 +2,7 @@
 id: 201
 title: Add tests for canonical tool registry validation
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-30 03:21:27.761933+02:00
 updated: 2026-04-01 20:30:53.784386+02:00
 started: 2026-04-01 20:30:53.207286+02:00

@@ -3,7 +3,7 @@ id: 1904
 title: 'Knowledge: Implement SourceFetcher adapter and migrate refresh to IngestCoordinator
   (Phase B2b)'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-27T23:24:10.601235+02:00
 updated: 2026-05-28T11:23:10.209263+02:00
 tags:

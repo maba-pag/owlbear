@@ -2,7 +2,7 @@
 id: 1821
 title: Repair kanban board split root tests
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T09:23:21+02:00
 updated: 2026-05-24T10:50:02.912078+02:00
 tags:

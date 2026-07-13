@@ -2,7 +2,7 @@
 id: 1741
 title: Keep task detail edit actions visible
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-23T10:21:47+0200
 updated: 2026-05-24T10:50:01.830857+02:00
 tags:

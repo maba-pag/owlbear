@@ -2,7 +2,7 @@
 id: 1662
 title: 'P2-01: IdeasPage core — edit mode, API client, save, dirty state'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-18T17:42:08.330672+02:00
 updated: 2026-05-20T15:46:48.325599+02:00
 tags:

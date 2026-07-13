@@ -2,7 +2,7 @@
 id: 1455
 title: 'P4-18: Update deployment docs and agent guidance'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-08T19:32:33.602172+00:00
 updated: 2026-05-11T18:17:42.872320+00:00
 tags:

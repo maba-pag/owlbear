@@ -2,7 +2,7 @@
 id: 695
 title: Full ToolError unification across all MCP servers (gated on evidence)
 status: archived
-priority: someday
+priority: medium
 created: 2026-04-08T21:24:23.792112+02:00
 updated: 2026-04-10T04:28:16.5225155+02:00
 started: 2026-04-10T04:28:16.5225155+02:00

@@ -2,7 +2,7 @@
 id: 1253
 title: 'P3-02: GREEN — KanbanBoard filter state and layout integration'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-01T04:34:58.097220+00:00
 updated: 2026-05-03T14:14:12.911039+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 60
 title: Extend classify_error for ACP RequestError codes
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-26 19:27:33.303189+01:00
 updated: 2026-03-28 00:49:29.198957+01:00
 started: 2026-03-28 00:49:24.397867+01:00

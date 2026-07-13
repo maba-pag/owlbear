@@ -2,7 +2,7 @@
 id: 841
 title: Tests for daemon _log_to_journal async (RED)
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-16T12:41:17.4543961+01:00
 updated: 2026-03-18T13:13:47.4739752+01:00
 started: 2026-03-18T13:13:25.1287689+01:00

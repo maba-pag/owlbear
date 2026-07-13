@@ -2,7 +2,7 @@
 id: 601
 title: Rename packages/ to serve/
 status: archived
-priority: critical
+priority: medium
 created: 2026-04-04 20:30:31.252074+02:00
 updated: 2026-04-05 07:09:38.685115+02:00
 started: 2026-04-05 07:09:38.685115+02:00

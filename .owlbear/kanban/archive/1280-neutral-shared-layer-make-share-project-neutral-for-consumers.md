@@ -2,7 +2,7 @@
 id: 1280
 title: Neutral shared layer — make share/ project-neutral for consumers
 status: archived
-priority: important
+priority: medium
 created: 2026-05-02T15:57:04.708580+00:00
 updated: 2026-05-02T19:21:17.273425+00:00
 tags:

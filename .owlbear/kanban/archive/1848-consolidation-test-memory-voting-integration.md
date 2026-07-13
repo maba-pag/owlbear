@@ -2,7 +2,7 @@
 id: 1848
 title: 'Consolidation test: memory voting integration'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T19:01:58.079687+02:00
 updated: 2026-05-25T10:25:26.650878+02:00
 tags:

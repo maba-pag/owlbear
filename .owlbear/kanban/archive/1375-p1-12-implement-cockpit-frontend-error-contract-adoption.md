@@ -2,7 +2,7 @@
 id: 1375
 title: 'P1-12: Implement Cockpit frontend error-contract adoption'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-06T00:58:53.765221+00:00
 updated: 2026-05-08T01:17:33.960486+00:00
 tags:

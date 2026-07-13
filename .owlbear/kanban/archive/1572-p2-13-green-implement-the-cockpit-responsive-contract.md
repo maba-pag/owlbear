@@ -2,7 +2,7 @@
 id: 1572
 title: 'P2-13 GREEN: Implement the Cockpit responsive contract'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-14T18:26:54.868007+00:00
 updated: 2026-05-15T17:42:32.046651+00:00
 tags:

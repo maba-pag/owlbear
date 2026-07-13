@@ -2,7 +2,7 @@
 id: 530
 title: Update curator agent and skill for memory-mcp
 status: archived
-priority: important
+priority: medium
 created: 2026-04-01 19:13:05.355839+02:00
 updated: 2026-04-04 17:29:26.342067+02:00
 started: 2026-04-04 17:29:26.342067+02:00

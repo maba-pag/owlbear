@@ -2,7 +2,7 @@
 id: 150
 title: Add ingest_document tool to mcp-knowledge (phase B)
 status: archived
-priority: important
+priority: medium
 created: 2026-03-29 19:04:10.414978+02:00
 updated: 2026-03-31 06:36:59.242599+02:00
 started: 2026-03-31 06:36:59.242599+02:00

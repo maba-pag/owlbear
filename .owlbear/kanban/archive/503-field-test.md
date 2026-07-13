@@ -2,7 +2,7 @@
 id: 503
 title: FIELD-TEST
 status: archived
-priority: important
+priority: medium
 created: 2026-03-31 21:35:12.630196+02:00
 updated: 2026-04-01 02:56:54.161681+02:00
 started: 2026-03-31 23:33:55.405183+02:00

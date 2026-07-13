@@ -2,7 +2,7 @@
 id: 464
 title: Update dispatch-planning Recipe 0 to skip auto-resolve for impact_tier=3
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-31 03:54:57.049046+02:00
 updated: 2026-03-31 22:33:33.160235+02:00
 started: 2026-03-31 22:33:32.665506+02:00

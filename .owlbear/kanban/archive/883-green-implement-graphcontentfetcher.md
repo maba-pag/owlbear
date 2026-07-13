@@ -2,7 +2,7 @@
 id: 883
 title: GREEN — Implement GraphContentFetcher
 status: archived
-priority: someday
+priority: medium
 created: '2026-04-14T20:26:07.450055+00:00'
 updated: '2026-04-15T04:41:12.041738+00:00'
 tags:

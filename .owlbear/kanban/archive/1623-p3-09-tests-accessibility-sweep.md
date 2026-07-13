@@ -2,7 +2,7 @@
 id: 1623
 title: 'P3-09: Tests — accessibility sweep'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-16T03:37:25.230397+00:00
 updated: 2026-05-16T15:05:50.277949+00:00
 tags:

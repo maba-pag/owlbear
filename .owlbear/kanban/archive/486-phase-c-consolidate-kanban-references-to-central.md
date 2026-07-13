@@ -2,7 +2,7 @@
 id: 486
 title: 'Phase C: Consolidate kanban references to central skill + minimal agent config'
 status: archived
-priority: critical
+priority: medium
 created: 2026-03-31 06:21:08.953728+02:00
 updated: 2026-04-05 01:51:37.332886+02:00
 started: 2026-04-05 01:51:37.332886+02:00

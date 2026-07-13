@@ -2,7 +2,7 @@
 id: 141
 title: 'Test: Voice process manager'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-29 15:39:36.741832+02:00
 updated: 2026-04-03 02:47:24.701523+02:00
 started: 2026-04-03 02:44:48.737032+02:00

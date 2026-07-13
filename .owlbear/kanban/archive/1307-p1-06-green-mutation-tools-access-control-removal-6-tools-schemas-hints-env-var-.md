@@ -3,7 +3,7 @@ id: 1307
 title: 'P1-06: GREEN — Mutation tools + access control removal (6 tools, schemas,
   hints, env var cleanup)'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-04T01:32:18.543007+00:00
 updated: 2026-05-05T07:11:31.475640+00:00
 tags:

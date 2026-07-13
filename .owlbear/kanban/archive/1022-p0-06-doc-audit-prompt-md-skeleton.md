@@ -2,7 +2,7 @@
 id: 1022
 title: 'P0-06: doc-audit.prompt.md skeleton'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-19 23:51:49.165749+00:00
 updated: 2026-04-20 01:42:58.708152+00:00
 tags:

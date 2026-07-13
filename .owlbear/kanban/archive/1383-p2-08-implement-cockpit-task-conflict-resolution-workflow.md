@@ -2,7 +2,7 @@
 id: 1383
 title: 'P2-08: Implement Cockpit task conflict resolution workflow'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-06T01:04:40.670986+00:00
 updated: 2026-05-10T18:12:07.390239+00:00
 tags:

@@ -3,7 +3,7 @@ id: 1415
 title: 'E2: Stale test cleanup — delete/archive 219 task-scoped tests from completed
   tasks'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-07T23:16:25.317145+00:00
 updated: 2026-05-10T17:12:16.790094+00:00
 tags:

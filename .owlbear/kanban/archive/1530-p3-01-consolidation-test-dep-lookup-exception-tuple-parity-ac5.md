@@ -2,7 +2,7 @@
 id: 1530
 title: 'P3-01: consolidation test — dep-lookup exception tuple parity (AC5)'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-13T12:18:18.887371+00:00
 updated: 2026-05-13T16:53:14.725598+00:00
 tags:

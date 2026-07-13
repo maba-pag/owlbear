@@ -2,7 +2,7 @@
 id: 1738
 title: Bound task detail modal to viewport
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-23T04:58:00+0200
 updated: 2026-05-24T10:50:01.788019+02:00
 tags:

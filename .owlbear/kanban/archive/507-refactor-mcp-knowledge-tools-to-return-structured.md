@@ -2,7 +2,7 @@
 id: 507
 title: Refactor mcp-knowledge tools to return structured data
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-31 23:40:59.957574+02:00
 updated: 2026-04-01 06:08:14.056062+02:00
 started: 2026-04-01 06:08:13.559038+02:00

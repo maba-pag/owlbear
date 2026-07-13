@@ -2,7 +2,7 @@
 id: 1270
 title: 'P1-04: Malformed memory file handling — test + fix'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-02T03:43:31.733852+00:00
 updated: 2026-05-02T18:26:37.417662+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 1243
 title: 'Implement: MoveRequest archival fields and route pass-through'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-01T03:08:02.839683+00:00
 updated: 2026-05-01T09:14:13.544984+00:00
 tags:

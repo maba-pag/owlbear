@@ -2,7 +2,7 @@
 id: 892
 title: 'Tests: lint-changed PostToolUse hook equivalence'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-16T22:53:29.680503+00:00
 updated: 2026-04-17T02:55:16.060880+00:00
 tags:

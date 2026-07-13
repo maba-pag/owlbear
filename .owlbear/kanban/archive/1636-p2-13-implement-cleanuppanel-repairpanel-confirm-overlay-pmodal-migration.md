@@ -2,7 +2,7 @@
 id: 1636
 title: 'P2-13: Implement CleanupPanel/RepairPanel confirm-overlay PModal migration'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-17T19:54:11.481740+02:00
 updated: 2026-05-17T23:04:44.510866+02:00
 tags:

@@ -2,7 +2,7 @@
 id: 1380
 title: 'P2-05: Test Cockpit task action gating and confirmations'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-06T01:04:35.632458+00:00
 updated: 2026-05-09T14:09:32.597107+00:00
 tags:

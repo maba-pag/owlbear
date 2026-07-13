@@ -2,7 +2,7 @@
 id: 811
 title: Tests — actor field in activity log
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-10T21:21:41.924380+00:00'
 updated: '2026-04-13T14:22:43.222023+00:00'
 tags:

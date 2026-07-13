@@ -2,7 +2,7 @@
 id: 1475
 title: 'P4-24: Consumer package test alignment (AC5 Cat-C)'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-09T08:46:53.952014+00:00
 updated: 2026-05-09T17:37:13.303926+00:00
 tags:

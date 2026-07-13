@@ -2,7 +2,7 @@
 id: 134
 title: Implement validate_agents.py pre-commit hook
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-29 12:02:19.486995+02:00
 updated: 2026-03-30 04:39:34.664939+02:00
 started: 2026-03-30 04:38:30.041294+02:00

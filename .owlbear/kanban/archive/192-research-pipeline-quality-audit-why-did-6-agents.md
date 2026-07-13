@@ -2,7 +2,7 @@
 id: 192
 title: 'Research: pipeline quality audit — why did 6 agents miss an obvious redundancy?'
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-29 22:54:56.845597+02:00
 updated: 2026-03-30 03:47:15.857804+02:00
 started: 2026-03-30 03:47:08.488167+02:00

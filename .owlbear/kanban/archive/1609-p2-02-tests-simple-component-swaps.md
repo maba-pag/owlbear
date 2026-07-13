@@ -2,7 +2,7 @@
 id: 1609
 title: 'P2-02: Tests — simple component swaps'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-16T03:36:42.305002+00:00
 updated: 2026-05-16T15:04:38.228996+00:00
 tags:

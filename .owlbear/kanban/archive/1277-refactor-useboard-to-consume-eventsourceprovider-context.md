@@ -2,7 +2,7 @@
 id: 1277
 title: Refactor useBoard to consume EventSourceProvider context
 status: archived
-priority: someday
+priority: medium
 created: 2026-05-02T12:10:47.678864+00:00
 updated: 2026-05-03T13:19:57.982007+00:00
 tags:

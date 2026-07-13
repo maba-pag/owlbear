@@ -2,7 +2,7 @@
 id: 1685
 title: Remove low-value kanban lane count
 status: archived
-priority: important
+priority: medium
 created: 2026-05-21T19:52:20.507771+02:00
 updated: 2026-05-24T10:50:01.054002+02:00
 tags:

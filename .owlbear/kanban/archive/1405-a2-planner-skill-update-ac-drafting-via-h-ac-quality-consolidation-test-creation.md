@@ -3,7 +3,7 @@ id: 1405
 title: 'A2: Planner skill update — AC drafting via h-ac-quality, consolidation-test
   creation, routing'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-07T23:16:25.183704+00:00
 updated: 2026-05-08T07:05:58.466239+00:00
 tags:

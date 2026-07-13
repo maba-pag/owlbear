@@ -2,7 +2,7 @@
 id: 704
 title: 'Tests: graph builder and inter-doc builder async extractor migration'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-09T00:55:49.1829555+02:00
 updated: 2026-04-10T01:47:50.870268+02:00
 started: 2026-04-10T01:47:50.870268+02:00

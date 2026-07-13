@@ -2,7 +2,7 @@
 id: 223
 title: Clean up dead tools.py and test_search_knowledge.py in mcp-knowledge
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-30 16:48:43.763424+02:00
 updated: 2026-04-03 03:00:20.745260+02:00
 started: 2026-03-30 20:46:51.745746+02:00

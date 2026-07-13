@@ -2,7 +2,7 @@
 id: 1439
 title: 'P4-02: Collapse kanban engine topology into product constants'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-08T19:31:49.034076+00:00
 updated: 2026-05-10T19:41:12.090158+00:00
 tags:

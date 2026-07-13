@@ -2,7 +2,7 @@
 id: 681
 title: Research web search options for agent pipeline
 status: archived
-priority: important
+priority: medium
 created: 2026-04-08T19:03:20.5804986+02:00
 updated: 2026-04-09T00:58:34.7604341+02:00
 started: 2026-04-09T00:58:34.7604341+02:00

@@ -2,7 +2,7 @@
 id: 670
 title: Create .cspell.json for project vocabulary
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-06T22:22:52.1798651+02:00
 updated: 2026-04-07T12:13:55.3882245+02:00
 started: 2026-04-07T12:13:55.3882245+02:00

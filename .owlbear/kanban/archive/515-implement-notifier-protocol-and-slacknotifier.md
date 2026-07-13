@@ -2,7 +2,7 @@
 id: 515
 title: Implement Notifier protocol and SlackNotifier (webhook + urllib)
 status: archived
-priority: someday
+priority: medium
 created: 2026-04-01 07:07:15.848253+02:00
 updated: 2026-04-04 07:10:32.003959+02:00
 started: 2026-04-04 07:09:43.371953+02:00

@@ -2,7 +2,7 @@
 id: 2
 title: MCP Python SDK deep-dive
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-26 17:18:16.597897+01:00
 updated: 2026-03-28 01:20:14.897962+01:00
 started: 2026-03-28 01:20:02.845478+01:00

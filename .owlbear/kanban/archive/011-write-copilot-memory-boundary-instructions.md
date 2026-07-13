@@ -2,7 +2,7 @@
 id: 11
 title: Write Copilot Memory boundary instructions
 status: archived
-priority: important
+priority: medium
 created: 2026-03-26 17:20:13.964208+01:00
 updated: 2026-03-30 05:06:04.049720+02:00
 started: 2026-03-30 05:01:31.669763+02:00

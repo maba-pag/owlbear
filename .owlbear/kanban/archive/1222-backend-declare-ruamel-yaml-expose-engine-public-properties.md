@@ -2,7 +2,7 @@
 id: 1222
 title: Backend — declare ruamel.yaml + expose engine public properties
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-30 16:31:18.578610+00:00
 updated: 2026-05-01T01:33:45.669078+00:00
 tags:

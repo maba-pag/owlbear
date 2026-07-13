@@ -2,7 +2,7 @@
 id: 816
 title: Fix timestamp sort
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-10T21:22:13.158053+00:00'
 updated: '2026-04-13T18:17:41.687282+00:00'
 tags:

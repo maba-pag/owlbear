@@ -3,7 +3,7 @@ id: 1308
 title: 'P1-07+08: Recall tool — tighten test proof quality (assertion gaps in format,
   ordering, default limit)'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-04T01:32:18.553275+00:00
 updated: 2026-05-05T00:37:01.345973+00:00
 tags:

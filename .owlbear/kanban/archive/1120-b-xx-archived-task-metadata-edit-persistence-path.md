@@ -2,7 +2,7 @@
 id: 1120
 title: 'B-XX: Archived-task metadata edit persistence path'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-24T23:12:27.011812+00:00
 updated: 2026-04-25T13:51:28.801177+00:00
 tags: []

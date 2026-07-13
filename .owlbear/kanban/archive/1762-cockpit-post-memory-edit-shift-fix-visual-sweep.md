@@ -2,7 +2,7 @@
 id: 1762
 title: Cockpit post Memory edit shift fix visual sweep
 status: archived
-priority: important
+priority: medium
 created: 2026-05-23T16:41:44+0200
 updated: 2026-05-24T10:50:02.124138+02:00
 tags:

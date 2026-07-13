@@ -2,7 +2,7 @@
 id: 1447
 title: 'P4-10: Add retry-safe resolve_drs MCP operation'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-08T19:32:07.308897+00:00
 updated: 2026-05-11T06:31:57.848166+00:00
 tags:

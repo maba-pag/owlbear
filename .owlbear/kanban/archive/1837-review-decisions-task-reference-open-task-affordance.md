@@ -2,7 +2,7 @@
 id: 1837
 title: Review Decisions task reference open-task affordance
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T12:32:00.730098+02:00
 updated: 2026-05-24T23:32:15.933529+02:00
 tags:

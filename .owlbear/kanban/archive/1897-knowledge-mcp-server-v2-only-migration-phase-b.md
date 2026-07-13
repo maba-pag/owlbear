@@ -2,7 +2,7 @@
 id: 1897
 title: 'Knowledge: MCP server v2-only migration (Phase B)'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-27T16:19:48.281533+02:00
 updated: 2026-05-27T18:03:49.057978+02:00
 tags:

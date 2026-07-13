@@ -3,7 +3,7 @@ id: 1458
 title: 'B1-impl: Rewrite w-code-review skill — batch findings, 3-item checklist, trust
   builder evidence'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-08T19:47:09.269589+00:00
 updated: 2026-05-09T06:33:45.344382+00:00
 tags:

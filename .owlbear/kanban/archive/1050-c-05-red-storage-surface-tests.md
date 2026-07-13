@@ -2,7 +2,7 @@
 id: 1050
 title: 'C-05: RED — storage surface tests'
 status: archived
-priority: critical
+priority: medium
 created: 2026-04-21T10:42:50.277750+00:00
 updated: 2026-04-22T22:34:25.266837+00:00
 tags:

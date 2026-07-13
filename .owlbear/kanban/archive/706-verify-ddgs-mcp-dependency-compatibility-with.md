@@ -2,7 +2,7 @@
 id: 706
 title: Verify ddgs[mcp] dependency compatibility with workspace mcp SDK
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-09T02:40:04.9777961+02:00
 updated: 2026-04-09T07:24:56.4306282+02:00
 started: 2026-04-09T07:24:56.4306282+02:00

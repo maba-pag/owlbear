@@ -3,7 +3,7 @@ id: 1013
 title: Implement ad-hoc Critic invocation rules in w-ideation + h-ideation-panel
   cross-ref
 status: archived
-priority: important
+priority: medium
 created: 2026-04-18 23:33:06.671427+00:00
 updated: 2026-04-19 14:10:48.245669+00:00
 tags:

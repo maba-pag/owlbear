@@ -2,7 +2,7 @@
 id: 569
 title: 'Test: Add set_approval_state MCP tool to memory-mcp'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-03 10:57:25.825073+02:00
 updated: 2026-04-03 15:37:05.690552+02:00
 started: 2026-04-03 15:36:45.584782+02:00

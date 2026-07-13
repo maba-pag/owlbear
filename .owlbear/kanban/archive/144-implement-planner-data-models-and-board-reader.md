@@ -2,7 +2,7 @@
 id: 144
 title: Implement planner data models and board reader
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-29 16:23:29.225829+02:00
 updated: 2026-03-30 19:22:38.641827+02:00
 started: 2026-03-30 19:21:42.245752+02:00

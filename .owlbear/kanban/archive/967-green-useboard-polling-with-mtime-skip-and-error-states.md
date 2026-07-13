@@ -2,7 +2,7 @@
 id: 967
 title: 'GREEN: useBoard polling with mtime-skip and error states'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-18T15:59:11.242411+00:00
 updated: 2026-04-18T21:33:51.666413+00:00
 tags:

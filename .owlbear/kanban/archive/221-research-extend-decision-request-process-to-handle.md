@@ -2,7 +2,7 @@
 id: 221
 title: 'Research: Extend decision-request process to handle user action requests'
 status: archived
-priority: important
+priority: medium
 created: 2026-03-30 15:32:02.339385+02:00
 updated: 2026-03-30 23:37:14.735609+02:00
 started: 2026-03-30 23:37:09.236586+02:00

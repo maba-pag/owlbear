@@ -2,7 +2,7 @@
 id: 665
 title: 'Test: type:user-action in NON_IMPL_TAGS gate sets'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-06T16:46:57.2190253+02:00
 updated: 2026-04-06T23:58:16.467589+02:00
 started: 2026-04-06T23:58:16.467589+02:00

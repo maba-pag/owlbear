@@ -2,7 +2,7 @@
 id: 1033
 title: 'P2-09: Pipeline diagram'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-19 23:53:28.586415+00:00
 updated: 2026-04-20 05:48:50.616446+00:00
 tags:

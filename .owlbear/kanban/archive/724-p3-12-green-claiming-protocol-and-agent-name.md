@@ -2,7 +2,7 @@
 id: 724
 title: 'P3-12: GREEN — claiming protocol and agent-name generation'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-09T03:26:31.782724+02:00
 updated: 2026-04-09T22:17:56.227326+02:00
 started: 2026-04-09T22:17:56.227326+02:00

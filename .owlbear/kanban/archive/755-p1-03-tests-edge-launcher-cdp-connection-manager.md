@@ -2,7 +2,7 @@
 id: 755
 title: 'P1-03: Tests — Edge launcher + CDP connection manager'
 status: archived
-priority: critical
+priority: medium
 created: '2026-04-10T10:55:24.890231+00:00'
 updated: '2026-04-10T16:01:03.059182+00:00'
 tags:

@@ -2,7 +2,7 @@
 id: 930
 title: 'P1-05: GREEN — Cockpit read API + mtime-scan cache'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-17T19:58:06.396709+00:00
 updated: 2026-04-18T13:32:07.948804+00:00
 tags:

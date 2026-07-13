@@ -3,7 +3,7 @@ id: 1306
 title: 'P1-05: RED — Mutation tool tests (save, list, read, curate, delete, approve
   — validation + hints)'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-04T01:32:18.531671+00:00
 updated: 2026-05-05T00:22:07.696320+00:00
 tags:

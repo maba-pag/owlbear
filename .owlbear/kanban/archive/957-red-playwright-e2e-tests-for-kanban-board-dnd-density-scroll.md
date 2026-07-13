@@ -2,7 +2,7 @@
 id: 957
 title: 'RED: Playwright E2E tests for kanban board DnD, density, scroll'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-18T13:49:17.523985+00:00
 updated: 2026-04-18T20:13:21.482783+00:00
 tags:

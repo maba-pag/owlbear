@@ -2,7 +2,7 @@
 id: 939
 title: 'P3-03: Docs — engine surface + future-surface contract + hello-world walkthrough'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-17T19:59:26.751674+00:00
 updated: 2026-04-19T16:16:21.810139+00:00
 tags:

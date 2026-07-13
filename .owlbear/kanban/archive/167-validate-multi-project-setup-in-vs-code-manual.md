@@ -2,7 +2,7 @@
 id: 167
 title: Validate multi-project setup in VS Code (manual)
 status: archived
-priority: important
+priority: medium
 created: 2026-03-29 19:49:30.924564+02:00
 updated: 2026-04-05 18:24:06.301413+02:00
 started: 2026-04-05 18:24:06.301413+02:00

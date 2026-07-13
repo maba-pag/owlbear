@@ -2,7 +2,7 @@
 id: 1411
 title: 'C3: Role boundary documentation — in-scope/out-of-scope for each agent skill'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-07T23:16:25.269760+00:00
 updated: 2026-05-09T13:22:39.512729+00:00
 tags:
@@ -44,7 +44,7 @@ Created follow-up task #1471 "Add In Scope / Out of Scope sections to all pipeli
 - Parent: #1403
 - Depends on: #1411
 - Tags: pipeline, ws-roles, scope:agents
-- Priority: important
+- priority: medium
 - 7 target skill files, P2-tier AC, content sourced from research doc §3.3
 [[2026-05-09]]
 ## Research

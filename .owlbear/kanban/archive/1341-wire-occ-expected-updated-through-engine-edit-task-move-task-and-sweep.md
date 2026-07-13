@@ -3,7 +3,7 @@ id: 1341
 title: Wire OCC (expected_updated) through engine edit_task, move_task, and 
   sweep
 status: archived
-priority: important
+priority: medium
 created: 2026-05-04T15:00:05.889996+00:00
 updated: 2026-05-04T20:28:53.491923+00:00
 tags:

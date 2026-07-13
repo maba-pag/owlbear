@@ -2,7 +2,7 @@
 id: 1607
 title: 'P1-11: Sidecar structure — padding, sections, typography'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-16T03:36:07.096771+00:00
 updated: 2026-05-17T19:09:08.735794+02:00
 tags:

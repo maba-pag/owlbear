@@ -2,7 +2,7 @@
 id: 1629
 title: 'Consolidation test: cockpit visual redesign'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-16T03:37:57.297125+00:00
 updated: 2026-05-19T03:25:41.213652+02:00
 tags:

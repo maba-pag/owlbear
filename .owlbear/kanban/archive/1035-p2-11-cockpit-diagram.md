@@ -2,7 +2,7 @@
 id: 1035
 title: 'P2-11: Cockpit diagram'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-19 23:53:28.601773+00:00
 updated: 2026-04-20 06:11:39.175194+00:00
 tags:

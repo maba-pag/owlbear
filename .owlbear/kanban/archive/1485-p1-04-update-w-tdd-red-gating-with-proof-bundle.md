@@ -2,7 +2,7 @@
 id: 1485
 title: 'P1-04: Update w-tdd-red gating with proof-bundle'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-11T08:59:01.942836+00:00
 updated: 2026-05-11T13:17:13.647968+00:00
 tags:

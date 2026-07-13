@@ -2,7 +2,7 @@
 id: 1896
 title: 'Knowledge: Delete dead legacy code (Phase A)'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-27T16:19:40.136779+02:00
 updated: 2026-05-27T17:48:14.847770+02:00
 tags:

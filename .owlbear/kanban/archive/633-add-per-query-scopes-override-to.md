@@ -2,7 +2,7 @@
 id: 633
 title: Add per-query scopes override to KnowledgeQueryService.query()
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-05T12:59:29.4655727+02:00
 updated: 2026-04-06T10:00:19.6841263+02:00
 started: 2026-04-06T10:00:19.6841263+02:00

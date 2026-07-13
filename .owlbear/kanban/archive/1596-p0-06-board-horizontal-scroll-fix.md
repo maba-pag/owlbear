@@ -2,7 +2,7 @@
 id: 1596
 title: 'P0-06: Board horizontal scroll fix'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-16T03:35:01.759388+00:00
 updated: 2026-05-16T15:12:42.685864+00:00
 tags:

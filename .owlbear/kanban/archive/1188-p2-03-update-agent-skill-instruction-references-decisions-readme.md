@@ -2,7 +2,7 @@
 id: 1188
 title: 'P2-03: Update agent/skill/instruction references + decisions README'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-30T00:52:05.085246+00:00
 updated: 2026-04-30T06:18:57.244395+00:00
 tags:

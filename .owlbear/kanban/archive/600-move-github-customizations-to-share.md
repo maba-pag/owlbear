@@ -2,7 +2,7 @@
 id: 600
 title: Move .github/ customizations to share/
 status: archived
-priority: critical
+priority: medium
 created: 2026-04-04 20:30:21.323724+02:00
 updated: 2026-04-05 04:50:52.218737+02:00
 started: 2026-04-05 04:50:52.218737+02:00

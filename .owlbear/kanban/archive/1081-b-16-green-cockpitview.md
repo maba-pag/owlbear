@@ -2,7 +2,7 @@
 id: 1081
 title: 'B-16: GREEN — CockpitView'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-21 10:50:32.631056+00:00
 updated: 2026-04-27T17:02:20.919798+00:00
 tags:

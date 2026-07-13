@@ -2,7 +2,7 @@
 id: 1194
 title: 'P3-06: Implement resolve modal'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-30T00:52:29.646843+00:00
 updated: 2026-04-30T14:49:17.459916+00:00
 tags:

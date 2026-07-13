@@ -2,7 +2,7 @@
 id: 1786
 title: Make theme switcher icon round and transparent
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T01:57:03.588400+02:00
 updated: 2026-05-24T10:50:02.440740+02:00
 tags:

@@ -2,7 +2,7 @@
 id: 83
 title: Add skills-ref dev dependency and pre-commit validation hook
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-27 04:56:44.051489+01:00
 updated: 2026-03-27 05:24:19.924245+01:00
 started: 2026-03-27 05:24:19.924245+01:00

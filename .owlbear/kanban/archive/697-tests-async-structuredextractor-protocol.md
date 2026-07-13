@@ -2,7 +2,7 @@
 id: 697
 title: 'Tests: async StructuredExtractor protocol'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-08T21:37:23.4121614+02:00
 updated: 2026-04-09T04:14:12.4530475+02:00
 started: 2026-04-09T04:14:12.4530475+02:00

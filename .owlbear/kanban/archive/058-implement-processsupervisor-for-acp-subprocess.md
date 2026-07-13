@@ -2,7 +2,7 @@
 id: 58
 title: Implement ProcessSupervisor for ACP subprocess lifecycle
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-26 19:27:17.032928+01:00
 updated: 2026-03-29 14:52:45.245595+02:00
 started: 2026-03-29 14:52:24.487484+02:00

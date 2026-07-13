@@ -2,7 +2,7 @@
 id: 1367
 title: 'P1-04: Fix Cockpit PDS runtime loading under CSP'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-06T00:58:35.956282+00:00
 updated: 2026-05-07T09:24:32.865809+00:00
 tags:

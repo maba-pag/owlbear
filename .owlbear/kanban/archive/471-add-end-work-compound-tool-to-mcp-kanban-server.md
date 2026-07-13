@@ -2,7 +2,7 @@
 id: 471
 title: Add end_work compound tool to mcp-kanban server
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-31 05:21:15.447030+02:00
 updated: 2026-04-01 16:00:27.448372+02:00
 started: 2026-04-01 16:00:15.235633+02:00

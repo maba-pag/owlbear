@@ -2,7 +2,7 @@
 id: 1139
 title: Fix test_engine_coverage_1110.py session outcome token — 1 failure
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-26T16:56:13.225546+00:00
 updated: 2026-04-27T04:30:52.568313+00:00
 tags:

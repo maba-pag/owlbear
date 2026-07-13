@@ -2,7 +2,7 @@
 id: 1899
 title: 'Knowledge: Migrate consolidation logic into EnrichmentStore (Phase B1)'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-27T17:56:11.886991+02:00
 updated: 2026-05-27T19:46:19.195605+02:00
 tags:

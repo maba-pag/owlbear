@@ -2,7 +2,7 @@
 id: 317
 title: Evaluate execute/* tool removal from reviewer agent
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-03-30 20:32:19.163898+02:00
 updated: 2026-04-03 03:41:06.268215+02:00
 started: 2026-04-03 03:40:11.910115+02:00

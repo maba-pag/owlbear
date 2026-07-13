@@ -2,7 +2,7 @@
 id: 1686
 title: Clarify kanban lane color meaning
 status: archived
-priority: important
+priority: medium
 created: 2026-05-21T19:52:28.209451+02:00
 updated: 2026-05-24T10:50:01.066819+02:00
 tags:

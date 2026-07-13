@@ -2,7 +2,7 @@
 id: 644
 title: 'P4-04: Create critic-voice.agent.md'
 status: archived
-priority: critical
+priority: medium
 created: 2026-04-06T07:00:33.6982746+02:00
 updated: 2026-04-06T19:11:11.872112+02:00
 started: 2026-04-06T19:11:11.872112+02:00

@@ -2,7 +2,7 @@
 id: 1398
 title: 'P3-08: Test Cockpit delivery gate and dist packaging checks'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-06T01:09:47.053865+00:00
 updated: 2026-05-11T19:17:38.495467+00:00
 tags:

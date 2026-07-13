@@ -3,7 +3,7 @@ id: 563
 title: Expand mcp-kanban SKILL.md with agent workflow pattern and per-tool 
   reference
 status: archived
-priority: critical
+priority: medium
 created: 2026-04-03 07:45:59.821346+02:00
 updated: 2026-04-03 15:09:23.845944+02:00
 started: 2026-04-03 15:09:23.394274+02:00

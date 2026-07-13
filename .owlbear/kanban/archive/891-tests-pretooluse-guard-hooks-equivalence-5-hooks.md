@@ -2,7 +2,7 @@
 id: 891
 title: 'Tests: PreToolUse guard hooks equivalence (5 hooks)'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-16T22:53:29.635169+00:00
 updated: 2026-04-17T02:19:47.799345+00:00
 tags:

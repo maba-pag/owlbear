@@ -2,7 +2,7 @@
 id: 775
 title: 'Phase 1: Browser Package + Pipeline Quality + Schema'
 status: archived
-priority: critical
+priority: medium
 created: '2026-04-10T11:45:08.164060+00:00'
 updated: '2026-04-10T18:50:29.197355+00:00'
 tags:

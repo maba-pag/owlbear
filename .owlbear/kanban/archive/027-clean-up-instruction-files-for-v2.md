@@ -2,7 +2,7 @@
 id: 27
 title: Clean up instruction files for v2
 status: archived
-priority: critical
+priority: medium
 created: 2026-03-26 17:38:30.468509+01:00
 updated: 2026-03-27 02:49:11.343020+01:00
 started: 2026-03-27 02:49:06.759385+01:00

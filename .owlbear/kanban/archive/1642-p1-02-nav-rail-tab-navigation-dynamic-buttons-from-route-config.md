@@ -2,7 +2,7 @@
 id: 1642
 title: 'P1-02: Nav-rail tab navigation — dynamic buttons from route config'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-18T00:49:27.319192+02:00
 updated: 2026-05-19T18:42:28.879312+02:00
 tags:

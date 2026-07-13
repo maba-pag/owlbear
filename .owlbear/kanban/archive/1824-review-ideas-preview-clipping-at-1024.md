@@ -2,7 +2,7 @@
 id: 1824
 title: Review Ideas preview clipping at 1024
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T10:56:15.436214+02:00
 updated: 2026-05-24T11:01:12.714108+02:00
 tags:

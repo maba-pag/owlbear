@@ -2,7 +2,7 @@
 id: 1456
 title: 'P4-20: consolidation test: fixed-topology deployment readiness'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-08T19:32:35.891593+00:00
 updated: 2026-05-11T19:07:31.835062+00:00
 tags:

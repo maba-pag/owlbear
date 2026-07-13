@@ -2,7 +2,7 @@
 id: 1559
 title: 'P2-00: Cockpit visual remediation coordination parent'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-14T18:24:25.783282+00:00
 updated: 2026-05-16T00:26:12.830693+00:00
 tags:

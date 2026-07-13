@@ -2,7 +2,7 @@
 id: 1502
 title: 'Cockpit: Implement api/decisions.ts module'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-12T02:43:28.721141+00:00
 updated: 2026-05-12T13:48:29.288539+00:00
 tags:

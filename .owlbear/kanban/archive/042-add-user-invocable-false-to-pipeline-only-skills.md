@@ -2,7 +2,7 @@
 id: 42
 title: 'Add user-invocable: false to pipeline-only skills'
 status: archived
-priority: important
+priority: medium
 created: 2026-03-26 18:55:38.450539+01:00
 updated: 2026-04-02 22:57:59.707986+02:00
 started: 2026-03-30 00:29:06.054882+02:00

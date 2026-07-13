@@ -2,7 +2,7 @@
 id: 1121
 title: 'RED: archived-task edit persistence tests'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-24T23:20:26.935285+00:00
 updated: 2026-04-25T11:26:51.506041+00:00
 tags:

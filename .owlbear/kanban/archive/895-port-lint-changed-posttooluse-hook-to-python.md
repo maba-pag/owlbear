@@ -2,7 +2,7 @@
 id: 895
 title: Port lint-changed PostToolUse hook to Python
 status: archived
-priority: critical
+priority: medium
 created: 2026-04-16T22:53:50.250881+00:00
 updated: 2026-04-17T04:23:37.234729+00:00
 tags:

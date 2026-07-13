@@ -2,7 +2,7 @@
 id: 1438
 title: 'P4-01: Probe fixed kanban topology contract'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-08T19:31:45.300155+00:00
 updated: 2026-05-09T01:52:47.640292+00:00
 tags:

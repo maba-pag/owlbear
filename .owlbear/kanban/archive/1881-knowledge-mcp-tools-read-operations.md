@@ -2,7 +2,7 @@
 id: 1881
 title: 'Knowledge: MCP tools — read operations'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-25T19:05:23.030124+02:00
 updated: 2026-05-27T16:11:04.227034+02:00
 tags:

@@ -2,7 +2,7 @@
 id: 629
 title: Clean up dispatcher references after pick_tasks migration
 status: archived
-priority: important
+priority: medium
 created: 2026-04-05T10:42:19.8702275+02:00
 updated: 2026-04-05T23:29:47.7272256+02:00
 started: 2026-04-05T23:29:47.7272256+02:00

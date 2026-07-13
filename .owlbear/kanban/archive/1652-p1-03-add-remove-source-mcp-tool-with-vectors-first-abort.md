@@ -2,7 +2,7 @@
 id: 1652
 title: 'P1-03: Add remove_source MCP tool with vectors-first abort'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-18T03:11:06.889695+02:00
 updated: 2026-05-18T14:36:24.296799+02:00
 tags:

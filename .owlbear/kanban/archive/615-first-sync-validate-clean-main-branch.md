@@ -2,7 +2,7 @@
 id: 615
 title: 'First sync: validate clean main branch'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-04T21:55:56.253579+02:00
 updated: 2026-04-06T20:44:02.8471743+02:00
 started: 2026-04-06T20:44:02.8471743+02:00

@@ -2,7 +2,7 @@
 id: 476
 title: Add dep/parent/title params to edit_task, switch to JSON output
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-31 06:06:19.073728+02:00
 updated: 2026-04-03 04:12:30.996049+02:00
 started: 2026-04-03 04:11:19.471823+02:00

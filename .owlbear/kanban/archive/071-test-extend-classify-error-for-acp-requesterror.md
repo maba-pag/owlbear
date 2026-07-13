@@ -2,7 +2,7 @@
 id: 71
 title: 'Test: Extend classify_error for ACP RequestError codes'
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-26 20:17:59.470395+01:00
 updated: 2026-03-27 13:28:52.525430+01:00
 started: 2026-03-27 13:28:24.978684+01:00

@@ -2,7 +2,7 @@
 id: 1847
 title: 'P2-08: Pipeline instruction — assessment protocol'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-24T19:01:58.026379+02:00
 updated: 2026-05-25T09:12:41.754342+02:00
 tags:

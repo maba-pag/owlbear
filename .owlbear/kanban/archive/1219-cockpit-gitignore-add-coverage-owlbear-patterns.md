@@ -2,7 +2,7 @@
 id: 1219
 title: Cockpit gitignore — add .coverage + .owlbear* patterns
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-30T16:31:18.543327+00:00
 updated: 2026-04-30T17:37:30.642670+00:00
 tags:

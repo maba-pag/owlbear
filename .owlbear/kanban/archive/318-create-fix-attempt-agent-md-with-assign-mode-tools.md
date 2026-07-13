@@ -2,7 +2,7 @@
 id: 318
 title: Create fix-attempt.agent.md with assign-mode tools
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-30 20:38:16.829750+02:00
 updated: 2026-04-04 19:48:51.749520+02:00
 started: 2026-04-04 19:48:51.749520+02:00

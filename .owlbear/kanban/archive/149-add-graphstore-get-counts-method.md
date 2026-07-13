@@ -2,7 +2,7 @@
 id: 149
 title: Add GraphStore.get_counts() method
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-29 19:04:04.626941+02:00
 updated: 2026-03-30 15:36:01.651254+02:00
 started: 2026-03-30 15:18:49.051867+02:00

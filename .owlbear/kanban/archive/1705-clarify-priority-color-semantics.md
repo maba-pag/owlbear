@@ -2,7 +2,7 @@
 id: 1705
 title: Clarify priority color semantics
 status: archived
-priority: important
+priority: medium
 created: 2026-05-21T20:23:43.490277+02:00
 updated: 2026-05-24T10:50:01.310650+02:00
 tags:

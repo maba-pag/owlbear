@@ -2,7 +2,7 @@
 id: 1703
 title: Include task creation in history
 status: archived
-priority: important
+priority: medium
 created: 2026-05-21T20:23:20.827522+02:00
 updated: 2026-05-24T10:50:01.285667+02:00
 tags:

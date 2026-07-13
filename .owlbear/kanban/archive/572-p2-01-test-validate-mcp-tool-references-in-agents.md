@@ -2,7 +2,7 @@
 id: 572
 title: 'P2-01: Test — Validate MCP tool references in agents, skills, instructions'
 status: archived
-priority: critical
+priority: medium
 created: 2026-04-03 11:14:37.000752+02:00
 updated: 2026-04-03 16:02:19.128777+02:00
 started: 2026-04-03 16:02:18.583552+02:00

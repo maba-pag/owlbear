@@ -2,7 +2,7 @@
 id: 1826
 title: Review HealthBadge accessible label wording
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T11:19:10.363983+02:00
 updated: 2026-05-24T23:18:34.666929+02:00
 tags:

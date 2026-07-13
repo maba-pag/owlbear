@@ -2,7 +2,7 @@
 id: 1736
 title: Cockpit post-Kanban positioning visual sweep
 status: archived
-priority: important
+priority: medium
 created: 2026-05-23T04:42:00+0200
 updated: 2026-05-24T10:50:01.759166+02:00
 tags:

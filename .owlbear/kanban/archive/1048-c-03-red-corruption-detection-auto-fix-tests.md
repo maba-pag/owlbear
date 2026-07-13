@@ -2,7 +2,7 @@
 id: 1048
 title: 'C-03: RED — corruption detection & auto-fix tests'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-21T10:42:50.258020+00:00
 updated: 2026-04-22T03:35:52.503680+00:00
 tags:

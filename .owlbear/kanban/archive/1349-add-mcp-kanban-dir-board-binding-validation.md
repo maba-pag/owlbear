@@ -2,7 +2,7 @@
 id: 1349
 title: Add MCP KANBAN_DIR board binding validation
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-04T18:17:29.608220+00:00
 updated: 2026-05-05T09:28:10.835840+00:00
 tags:

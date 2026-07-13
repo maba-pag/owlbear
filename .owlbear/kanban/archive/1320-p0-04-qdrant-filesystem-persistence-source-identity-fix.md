@@ -2,7 +2,7 @@
 id: 1320
 title: 'P0-04: Qdrant filesystem persistence + source identity fix'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-04T05:48:37.771717+00:00
 updated: 2026-05-04T13:26:36.656245+00:00
 tags:

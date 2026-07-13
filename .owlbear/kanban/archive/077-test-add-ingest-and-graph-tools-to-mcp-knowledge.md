@@ -2,7 +2,7 @@
 id: 77
 title: 'Test: Add ingest and graph tools to mcp-knowledge'
 status: archived
-priority: important
+priority: medium
 created: 2026-03-26 21:02:00.183327+01:00
 updated: 2026-03-30 01:01:29.796792+02:00
 started: 2026-03-30 01:01:02.313149+02:00

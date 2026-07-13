@@ -2,7 +2,7 @@
 id: 798
 title: Kanban Engine Restructuring — Multi-Consumer Foundation
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-10T21:10:19.882817+00:00'
 updated: '2026-04-15T11:44:11.266734+00:00'
 tags:

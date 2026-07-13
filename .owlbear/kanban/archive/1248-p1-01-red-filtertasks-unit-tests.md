@@ -2,7 +2,7 @@
 id: 1248
 title: 'P1-01: RED — filterTasks unit tests'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-01T04:34:42.374850+00:00
 updated: 2026-05-01T11:17:33.653511+00:00
 tags:

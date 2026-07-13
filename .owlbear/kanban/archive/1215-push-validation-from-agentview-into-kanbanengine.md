@@ -2,7 +2,7 @@
 id: 1215
 title: Push validation from AgentView into KanbanEngine
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-30 15:29:15.255749+00:00
 updated: 2026-05-04T10:19:16.692900+00:00
 tags:

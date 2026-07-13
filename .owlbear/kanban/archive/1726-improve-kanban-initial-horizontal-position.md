@@ -2,7 +2,7 @@
 id: 1726
 title: Improve kanban initial horizontal position
 status: archived
-priority: important
+priority: medium
 created: 2026-05-23T02:51:20+0200
 updated: 2026-05-24T10:50:01.618315+02:00
 tags:

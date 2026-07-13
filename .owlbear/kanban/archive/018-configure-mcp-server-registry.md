@@ -2,7 +2,7 @@
 id: 18
 title: Configure MCP server registry
 status: archived
-priority: important
+priority: medium
 created: 2026-03-26 17:21:51.105499+01:00
 updated: 2026-03-30 01:28:09.836076+02:00
 started: 2026-03-30 01:27:42.747067+02:00

@@ -2,7 +2,7 @@
 id: 1688
 title: Redesign decisions workspace workflow
 status: archived
-priority: important
+priority: medium
 created: 2026-05-21T19:52:44.922500+02:00
 updated: 2026-05-24T10:50:01.091312+02:00
 tags:

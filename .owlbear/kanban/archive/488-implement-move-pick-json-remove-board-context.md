@@ -2,7 +2,7 @@
 id: 488
 title: Implement move pick JSON remove board_context
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-31 06:21:29.515305+02:00
 updated: 2026-03-31 07:40:08.322522+02:00
 started: 2026-03-31 06:54:41.179059+02:00

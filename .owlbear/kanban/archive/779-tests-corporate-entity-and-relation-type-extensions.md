@@ -2,7 +2,7 @@
 id: 779
 title: Tests — Corporate entity and relation type extensions
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-10T12:30:43.945435+00:00'
 updated: '2026-04-13T17:12:25.295317+00:00'
 tags:

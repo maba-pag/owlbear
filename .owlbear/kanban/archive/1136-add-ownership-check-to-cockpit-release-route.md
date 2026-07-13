@@ -2,7 +2,7 @@
 id: 1136
 title: Add ownership check to cockpit release route
 status: archived
-priority: important
+priority: medium
 created: 2026-04-26T16:00:48.060978+00:00
 updated: 2026-04-26T16:57:38.576204+00:00
 tags:

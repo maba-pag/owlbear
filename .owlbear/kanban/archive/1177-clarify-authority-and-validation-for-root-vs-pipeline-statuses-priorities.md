@@ -2,7 +2,7 @@
 id: 1177
 title: Clarify authority and validation for root vs pipeline statuses/priorities
 status: archived
-priority: important
+priority: medium
 created: 2026-04-29T20:06:53.546478+00:00
 updated: 2026-04-29T21:07:39.011560+00:00
 tags:

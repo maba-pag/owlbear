@@ -2,7 +2,7 @@
 id: 1225
 title: Frontend — split KanbanBoard into Card + Column + Board
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-30 16:31:18.609234+00:00
 updated: 2026-05-01T02:09:22.374351+00:00
 tags:

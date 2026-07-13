@@ -2,7 +2,7 @@
 id: 708
 title: 'Tests: ddgs tools in researcher and ideator agent allowlists'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-09T02:40:20.9927911+02:00
 updated: 2026-04-09T09:16:32.9944812+02:00
 started: 2026-04-09T09:16:32.9944812+02:00

@@ -2,7 +2,7 @@
 id: 1167
 title: 'RF-05: Tests for RepairPanel component'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-28T17:38:24.640853+00:00
 updated: 2026-04-29T13:01:49.389580+00:00
 tags:

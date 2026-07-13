@@ -2,7 +2,7 @@
 id: 989
 title: Wire guidance into `end_work` + remove `block:user` on MCP block
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-18T21:23:00.860323+00:00
 updated: 2026-04-19T02:05:19.409511+00:00
 tags:

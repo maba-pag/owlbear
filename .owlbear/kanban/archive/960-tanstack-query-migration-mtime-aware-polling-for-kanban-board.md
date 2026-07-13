@@ -2,7 +2,7 @@
 id: 960
 title: TanStack Query migration + mtime-aware polling for kanban board
 status: archived
-priority: important
+priority: medium
 created: 2026-04-18T14:45:58.181560+00:00
 updated: 2026-04-18T18:25:11.584597+00:00
 tags:

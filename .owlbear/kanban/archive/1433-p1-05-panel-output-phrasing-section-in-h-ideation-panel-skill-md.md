@@ -2,7 +2,7 @@
 id: 1433
 title: 'P1-05: Panel Output Phrasing section in h-ideation-panel/SKILL.md'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-08T01:00:48.510035+00:00
 updated: 2026-05-08T17:05:18.086547+00:00
 tags:

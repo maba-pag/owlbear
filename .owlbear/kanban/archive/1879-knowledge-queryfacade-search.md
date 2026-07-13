@@ -2,7 +2,7 @@
 id: 1879
 title: 'Knowledge: QueryFacade — search'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-25T19:04:53.456937+02:00
 updated: 2026-05-27T00:32:04.042913+02:00
 tags:

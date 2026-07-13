@@ -2,7 +2,7 @@
 id: 1870
 title: 'Knowledge: SourceStore implementation'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-25T19:02:43.180075+02:00
 updated: 2026-05-26T00:36:43.356759+02:00
 tags:

@@ -2,7 +2,7 @@
 id: 1457
 title: 'P4-19: Expose maintenance cleanup through Cockpit'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-08T19:37:26.531942+00:00
 updated: 2026-05-11T15:59:56.475975+00:00
 tags:

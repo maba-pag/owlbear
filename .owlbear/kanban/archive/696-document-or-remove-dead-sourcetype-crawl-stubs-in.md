@@ -2,7 +2,7 @@
 id: 696
 title: Document or remove dead SourceType.CRAWL stubs in knowledge engine
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-08T21:31:29.3651006+02:00
 updated: 2026-04-09T03:24:28.3678891+02:00
 started: 2026-04-09T03:24:28.3678891+02:00

@@ -2,7 +2,7 @@
 id: 567
 title: 'Curator: write curation-report.json to store/memory/'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-03 10:25:09.248154+02:00
 updated: 2026-04-05 17:05:26.999963+02:00
 started: 2026-04-05 17:05:26.999963+02:00

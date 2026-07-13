@@ -2,7 +2,7 @@
 id: 68
 title: Implement OwlbearProjectFile Pydantic model in mcp-project
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-26 20:05:03.263626+01:00
 updated: 2026-03-29 15:09:26.139424+02:00
 started: 2026-03-29 15:09:21.545572+02:00

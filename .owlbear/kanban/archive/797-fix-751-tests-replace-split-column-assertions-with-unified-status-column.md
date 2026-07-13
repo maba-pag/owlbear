@@ -2,7 +2,7 @@
 id: 797
 title: 'Fix #751 tests: replace split-column assertions with unified status column'
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-10T16:05:19.844611+00:00'
 updated: '2026-04-14T18:06:29.270636+00:00'
 tags:

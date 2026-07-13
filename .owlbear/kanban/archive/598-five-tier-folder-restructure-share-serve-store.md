@@ -2,7 +2,7 @@
 id: 598
 title: Five-tier folder restructure (share/serve/store/seed/.owlbear)
 status: archived
-priority: critical
+priority: medium
 created: 2026-04-04 20:30:01.091472+02:00
 updated: 2026-04-06 02:05:57.660783+02:00
 started: 2026-04-06 02:05:57.660783+02:00

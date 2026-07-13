@@ -2,7 +2,7 @@
 id: 872
 title: 'RED: Tests for BrowserContentFetcher accepting Playwright BrowserContext'
 status: archived
-priority: critical
+priority: medium
 created: '2026-04-14T01:51:21.630834+00:00'
 updated: '2026-04-14T17:07:22.106919+00:00'
 tags:

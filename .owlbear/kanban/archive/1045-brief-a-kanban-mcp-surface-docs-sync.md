@@ -2,7 +2,7 @@
 id: 1045
 title: Brief A — Kanban MCP Surface + Docs Sync
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-21T09:48:09.660203+00:00
 updated: 2026-04-22T23:35:12.275591+00:00
 tags:

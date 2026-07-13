@@ -2,7 +2,7 @@
 id: 1859
 title: 'P2-02: Action resolver UI with Complete button'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-24T20:59:19.178037+02:00
 updated: 2026-05-26T02:25:40.362779+02:00
 tags:

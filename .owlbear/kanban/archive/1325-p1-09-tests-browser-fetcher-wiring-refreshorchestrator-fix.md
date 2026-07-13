@@ -2,7 +2,7 @@
 id: 1325
 title: 'P1-09: Tests — Browser fetcher wiring + RefreshOrchestrator fix'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-04T05:48:50.088181+00:00
 updated: 2026-05-04T23:07:01.749717+00:00
 tags:

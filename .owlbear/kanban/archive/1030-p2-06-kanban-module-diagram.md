@@ -2,7 +2,7 @@
 id: 1030
 title: 'P2-06: Kanban module diagram'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-19 23:53:28.559838+00:00
 updated: 2026-04-20 05:04:26.902361+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 720
 title: 'P3-08: GREEN — task listing with filters'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-09T03:25:47.5994845+02:00
 updated: 2026-04-09T20:07:17.6318009+02:00
 started: 2026-04-09T20:07:17.6318009+02:00

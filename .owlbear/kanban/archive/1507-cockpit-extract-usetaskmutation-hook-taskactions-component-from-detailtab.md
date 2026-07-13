@@ -2,7 +2,7 @@
 id: 1507
 title: 'Cockpit: Extract useTaskMutation hook + TaskActions component from DetailTab'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-12T03:04:44.023243+00:00
 updated: 2026-05-12T15:31:33.878667+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 1543
 title: 'P1-02: impl — token architecture: agnostic rename + expansion + dark overrides'
 status: archived
-priority: critical
+priority: medium
 created: 2026-05-13T18:42:22.266810+00:00
 updated: 2026-05-14T02:07:04.973359+00:00
 tags:

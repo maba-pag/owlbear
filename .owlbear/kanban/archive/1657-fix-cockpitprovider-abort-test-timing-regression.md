@@ -2,7 +2,7 @@
 id: 1657
 title: Fix CockpitProvider abort-test timing regression
 status: archived
-priority: important
+priority: medium
 created: 2026-05-18T13:52:14.874519+02:00
 updated: 2026-05-18T15:23:15.284708+02:00
 tags:

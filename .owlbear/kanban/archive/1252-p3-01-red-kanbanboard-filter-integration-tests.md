@@ -2,7 +2,7 @@
 id: 1252
 title: 'P3-01: RED — KanbanBoard filter integration tests'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-01T04:34:55.076834+00:00
 updated: 2026-05-03T11:21:43.918409+00:00
 tags:

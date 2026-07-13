@@ -2,7 +2,7 @@
 id: 106
 title: Document setup process for new users
 status: archived
-priority: important
+priority: medium
 created: 2026-03-28 14:56:10.844147+01:00
 updated: 2026-03-29 07:50:56.953369+02:00
 started: 2026-03-29 07:50:56.633242+02:00

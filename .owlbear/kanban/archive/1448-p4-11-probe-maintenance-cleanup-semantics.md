@@ -2,7 +2,7 @@
 id: 1448
 title: 'P4-11: Probe maintenance cleanup semantics'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-08T19:32:09.582469+00:00
 updated: 2026-05-09T04:21:20.103485+00:00
 tags:

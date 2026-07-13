@@ -2,7 +2,7 @@
 id: 1508
 title: 'Cockpit: Extract TaskFieldsEditor + reduce DetailTab to container'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-12T03:04:44.051072+00:00
 updated: 2026-05-12T21:31:06.620998+00:00
 tags:

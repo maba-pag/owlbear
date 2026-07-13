@@ -2,7 +2,7 @@
 id: 1286
 title: 'P2-02: Extract file-placement and layout sections to .github/copilot-instructions.md'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-02T16:01:17.059804+00:00
 updated: 2026-05-03T19:09:32.901596+00:00
 tags:

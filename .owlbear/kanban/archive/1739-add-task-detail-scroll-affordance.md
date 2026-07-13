@@ -2,7 +2,7 @@
 id: 1739
 title: Add task detail scroll affordance
 status: archived
-priority: important
+priority: medium
 created: 2026-05-23T10:10:47+0200
 updated: 2026-05-24T10:50:01.803353+02:00
 tags:

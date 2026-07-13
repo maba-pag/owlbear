@@ -3,7 +3,7 @@ id: 1410
 title: 'C2: Test-writer skill update — exact-value assertions, structural test separation,
   convention updates'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-07T23:16:25.254649+00:00
 updated: 2026-05-08T01:03:32.316491+00:00
 tags:

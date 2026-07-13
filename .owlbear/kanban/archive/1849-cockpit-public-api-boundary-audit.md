@@ -2,7 +2,7 @@
 id: 1849
 title: Cockpit public API boundary audit
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T19:25:18.570388+02:00
 updated: 2026-05-25T02:38:30.930046+02:00
 tags:

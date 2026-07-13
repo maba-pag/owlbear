@@ -2,7 +2,7 @@
 id: 1397
 title: 'P3-07: Curate Cockpit frontend structure and workflow tests'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-06T01:09:45.089526+00:00
 updated: 2026-05-11T17:41:34.989875+00:00
 tags:

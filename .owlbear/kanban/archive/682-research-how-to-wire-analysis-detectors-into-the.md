@@ -2,7 +2,7 @@
 id: 682
 title: 'Research: how to wire analysis detectors into the agent pipeline'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-08T19:03:48.470505+02:00
 updated: 2026-04-09T01:21:43.813235+02:00
 started: 2026-04-09T01:21:43.813235+02:00

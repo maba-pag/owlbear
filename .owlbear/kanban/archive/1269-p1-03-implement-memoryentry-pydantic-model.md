@@ -2,7 +2,7 @@
 id: 1269
 title: 'P1-03: Implement MemoryEntry Pydantic model'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-02T03:43:31.714748+00:00
 updated: 2026-05-02T13:29:21.404998+00:00
 tags:

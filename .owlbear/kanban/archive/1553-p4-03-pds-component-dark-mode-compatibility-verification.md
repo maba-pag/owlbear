@@ -2,7 +2,7 @@
 id: 1553
 title: 'P4-03: PDS component dark-mode compatibility verification'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-13T18:43:53.233186+00:00
 updated: 2026-05-14T06:54:56.324628+00:00
 tags:

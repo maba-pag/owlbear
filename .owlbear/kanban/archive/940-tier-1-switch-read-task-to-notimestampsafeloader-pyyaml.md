@@ -2,7 +2,7 @@
 id: 940
 title: 'Tier 1: Switch read_task() to NoTimestampSafeLoader (PyYAML)'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-17T20:16:32.171661+00:00
 updated: 2026-04-17T22:12:14.717008+00:00
 tags:

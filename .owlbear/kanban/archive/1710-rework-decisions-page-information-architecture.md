@@ -2,7 +2,7 @@
 id: 1710
 title: Rework decisions page information architecture
 status: archived
-priority: important
+priority: medium
 created: 2026-05-21T23:23:24.567462+02:00
 updated: 2026-05-24T10:50:01.374220+02:00
 tags:

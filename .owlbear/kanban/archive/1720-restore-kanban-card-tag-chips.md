@@ -2,7 +2,7 @@
 id: 1720
 title: Restore kanban card tag chips
 status: archived
-priority: important
+priority: medium
 created: 2026-05-23T01:27:54+02:00
 updated: 2026-05-24T10:50:01.518667+02:00
 tags:

@@ -2,7 +2,7 @@
 id: 73
 title: 'Test: ProcessSupervisor for ACP subprocess lifecycle'
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-26 20:23:24.413326+01:00
 updated: 2026-03-28 16:20:21.785354+01:00
 started: 2026-03-28 16:20:21.462291+01:00

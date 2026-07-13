@@ -2,7 +2,7 @@
 id: 1811
 title: Use tag editor for memory categories and scope agents
 status: archived
-priority: important
+priority: medium
 created: 2026-05-24T08:08:57+02:00
 updated: 2026-05-24T10:50:02.776096+02:00
 tags:

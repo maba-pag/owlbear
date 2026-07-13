@@ -2,7 +2,7 @@
 id: 986
 title: 'Add `guidance: list[str]` field to KanbanTask model'
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-18T21:22:36.972344+00:00
 updated: 2026-04-19T01:50:16.604409+00:00
 tags:

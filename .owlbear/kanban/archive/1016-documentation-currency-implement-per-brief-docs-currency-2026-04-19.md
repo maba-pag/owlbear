@@ -2,7 +2,7 @@
 id: 1016
 title: Documentation currency — implement per Brief docs-currency-2026-04-19
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-19 23:45:06.730729+00:00
 updated: 2026-04-20 00:36:36.798342+00:00
 tags:

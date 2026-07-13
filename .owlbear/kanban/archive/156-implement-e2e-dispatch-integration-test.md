@@ -2,7 +2,7 @@
 id: 156
 title: Implement E2E dispatch integration test
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-29 19:33:58.200794+02:00
 updated: 2026-04-01 23:46:29.091714+02:00
 started: 2026-04-01 23:46:28.473290+02:00

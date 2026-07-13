@@ -2,7 +2,7 @@
 id: 632
 title: 'Disposition #575: release claim, archive as resolved-by-architecture'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-05T12:57:54.0576608+02:00
 updated: 2026-04-06T17:53:52.2103722+02:00
 started: 2026-04-06T17:53:52.2103722+02:00

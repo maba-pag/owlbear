@@ -2,7 +2,7 @@
 id: 1037
 title: 'Update w-ideation SKILL.md: no bulk-ratify rule'
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-19 23:53:48.265360+00:00
 updated: 2026-04-20 01:28:10.711590+00:00
 tags:

@@ -2,7 +2,7 @@
 id: 1208
 title: Add full=True parameter to list_tasks to avoid body re-reads
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-30 15:29:06.239755+00:00
 updated: 2026-05-02T19:48:52.789248+00:00
 tags:

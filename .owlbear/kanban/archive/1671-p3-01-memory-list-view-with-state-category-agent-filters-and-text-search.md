@@ -2,7 +2,7 @@
 id: 1671
 title: 'P3-01: Memory list view with state/category/agent filters and text search'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-18T17:43:52.849841+02:00
 updated: 2026-05-19T20:11:16.668868+02:00
 tags:

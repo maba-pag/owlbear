@@ -2,7 +2,7 @@
 id: 662
 title: Add type:user-action to NON_IMPL_TAGS (gates.py + server.py)
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-06T16:39:07.1761895+02:00
 updated: 2026-04-07T02:34:51.8632883+02:00
 started: 2026-04-07T02:34:51.8632883+02:00

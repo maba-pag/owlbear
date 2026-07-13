@@ -2,7 +2,7 @@
 id: 612
 title: Write consumer-focused README for main branch
 status: archived
-priority: needed
+priority: medium
 created: 2026-04-04T21:55:11.0661506+02:00
 updated: 2026-04-05T11:03:00.4050389+02:00
 started: 2026-04-05T11:03:00.4050389+02:00

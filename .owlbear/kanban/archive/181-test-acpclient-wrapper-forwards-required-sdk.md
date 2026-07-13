@@ -2,7 +2,7 @@
 id: 181
 title: 'Test: AcpClient wrapper forwards required SDK parameters'
 status: archived
-priority: needed
+priority: medium
 created: 2026-03-29 20:03:34.543667+02:00
 updated: 2026-03-30 16:59:07.704985+02:00
 started: 2026-03-30 16:58:48.459426+02:00

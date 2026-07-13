@@ -2,7 +2,7 @@
 id: 523
 title: Wire LLM callable injection into ConsolidationService and SourceEvaluator
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-01 15:27:37.967271+02:00
 updated: 2026-04-02 22:22:02.274762+02:00
 started: 2026-04-02 22:21:59.456745+02:00

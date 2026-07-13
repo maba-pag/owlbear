@@ -2,7 +2,7 @@
 id: 610
 title: 'Dual-branch model: dev (workspace) + main (consumer sync)'
 status: archived
-priority: critical
+priority: medium
 created: 2026-04-04T21:54:46.295562+02:00
 updated: 2026-04-06T22:14:23.5990048+02:00
 started: 2026-04-06T22:14:23.5990048+02:00

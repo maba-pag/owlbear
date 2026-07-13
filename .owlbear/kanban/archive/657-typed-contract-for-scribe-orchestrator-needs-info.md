@@ -2,7 +2,7 @@
 id: 657
 title: Typed contract for scribe↔orchestrator NEEDS-INFO boundary
 status: archived
-priority: nice-to-have
+priority: medium
 created: 2026-04-06T07:22:30.99221+02:00
 updated: 2026-04-06T13:38:15.5290908+02:00
 started: 2026-04-06T13:38:15.5290908+02:00

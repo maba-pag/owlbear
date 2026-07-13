@@ -2,7 +2,7 @@
 id: 870
 title: Clean up superseded Edge/CDP code and test files
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-13T23:22:02.247779+00:00'
 updated: '2026-04-14T18:38:15.568366+00:00'
 tags:

@@ -2,7 +2,7 @@
 id: 1466
 title: 'E2a-B1: Safe ops — renames, broken-test delete, low-risk merges'
 status: archived
-priority: important
+priority: medium
 created: 2026-05-09T07:21:35.470966+00:00
 updated: 2026-05-09T11:44:49.169865+00:00
 tags:

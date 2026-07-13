@@ -2,7 +2,7 @@
 id: 766
 title: 'P1-13: Tests — Updated extraction prompt with corporate domain examples'
 status: archived
-priority: needed
+priority: medium
 created: '2026-04-10T10:55:57.417675+00:00'
 updated: '2026-04-15T10:23:39.896668+00:00'
 tags:

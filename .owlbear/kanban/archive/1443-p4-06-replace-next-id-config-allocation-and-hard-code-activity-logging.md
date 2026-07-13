@@ -2,7 +2,7 @@
 id: 1443
 title: 'P4-06: Replace next_id config allocation and hard-code activity logging'
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-08T19:31:58.431269+00:00
 updated: 2026-05-10T22:57:46.914247+00:00
 tags:

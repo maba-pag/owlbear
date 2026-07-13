@@ -2,7 +2,7 @@
 id: 1360
 title: Remove MCP dual-path dead code (~100 lines)
 status: archived
-priority: needed
+priority: medium
 created: 2026-05-05T23:34:52.820872+00:00
 updated: 2026-05-06T05:14:00.366476+00:00
 tags:

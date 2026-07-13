@@ -2,7 +2,7 @@
 id: 932
 title: 'P1-06: RED — Cockpit mutation API tests'
 status: archived
-priority: important
+priority: medium
 created: 2026-04-17T19:58:25.607234+00:00
 updated: 2026-04-18T14:59:25.336712+00:00
 tags:
