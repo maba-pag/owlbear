@@ -1,59 +1,58 @@
 {
-  "inputs": [],
-  "servers": {
-    "ob-kanban": {
-      "type": "stdio",
-      "command": "uv",
-      "args": [
-        "--project",
-        "../owlbear",
-        "run",
-        "python",
-        "-m",
-        "owlbear_mcp_kanban"
-      ]
-    },
-    "ob-knowledge": {
-      "type": "stdio",
-      "command": "uv",
-      "args": [
-        "--project",
-        "../owlbear",
-        "run",
-        "python",
-        "-m",
-        "owlbear_mcp_knowledge"
-      ]
-    },
-    "ob-memory": {
-      "type": "stdio",
-      "command": "uv",
-      "args": [
-        "--project",
-        "../owlbear",
-        "run",
-        "python",
-        "-m",
-        "owlbear_mcp_memory"
-      ]
-    },
-    "ddgs": {
-      "type": "stdio",
-      "command": "uv",
-      "args": [
-        "--project",
-        "../owlbear",
-        "run",
-        "ddgs",
-        "mcp"
-      ]
-    },
-    "markitdown": {
-      "type": "stdio",
-      "command": "uvx",
-      "args": [
-        "markitdown-mcp"
-      ]
+    "servers": {
+        "ob-kanban": {
+            "type": "stdio",
+            "command": "uv",
+            "args": [
+                "--project",
+                "../owlbear",
+                "run",
+                "python",
+                "-m",
+                "owlbear_mcp_kanban"
+            ]
+        },
+        "ob-knowledge": {
+            "type": "stdio",
+            "command": "uv",
+            "args": [
+                "--project",
+                "../owlbear-dev",
+                "run",
+                "python",
+                "-m",
+                "owlbear_mcp_knowledge"
+            ]
+        },
+        "ob-memory": {
+            "type": "stdio",
+            "command": "uv",
+            "args": [
+                "--project",
+                "../owlbear",
+                "run",
+                "python",
+                "-m",
+                "owlbear_mcp_memory"
+            ]
+        },
+        "ddgs": {
+            "type": "stdio",
+            "command": "uv",
+            "args": [
+                "--project",
+                "../owlbear",
+                "run",
+                "ddgs",
+                "mcp"
+            ]
+        },
+        "markitdown": {
+            "type": "stdio",
+            "command": "uvx",
+            "args": [
+                "markitdown-mcp"
+            ]
+        }
     }
-  }
 }
