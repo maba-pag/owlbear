@@ -1,10 +1,10 @@
 ---
 id: 1930
 title: Document auto-staged collector archive recovery
-status: build
+status: verify
 priority: medium
 created: 2026-07-14T01:12:22.720349+02:00
-updated: 2026-07-14T01:32:56.509387+02:00
+updated: 2026-07-14T01:42:05.410231+02:00
 tags:
   - agent
   - kanban
@@ -76,3 +76,12 @@ Define the safe recovery procedure when collector archival is auto-staged before
 | # | Target Agent | Action Required | File(s) | Evidence |
 |---|-------------|----------------|---------|----------|
 | 1 | builder | State the recovery as narrow to cached `R100` stale pure renames; explain that collector-authored final content remains in the working tree and is staged by the retry. Fail closed for every other staged shape/blob. | `share/skills/r-workspace-governance/SKILL.md`, `tests/test_skill_authority_wiring.py` | Verifier challenger reassessment: proposed precision resolves blocker. |
+
+[[2026-07-14T01:42:05+02:00]]
+## Builder Notes
+
+- Final precision: recovery applies only to cached `R100` stale pure renames whose staged archive blob equals the pre-archive HEAD task blob.
+- This proves collector-authored final archive content remains unstaged in the working tree; after exact-path reset, `commit-owned` stages that complete current archive state.
+- Every missing object, blob mismatch, or non-`R100` shape fails closed through `COMMIT_FAILED` without reset.
+- Focused tests: 4 passed; Ruff and diff check clean.
+- Builder challenger: pass; no concrete blocker.

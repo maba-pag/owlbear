@@ -78,6 +78,8 @@ def test_pipeline_commit_gate_includes_final_task_state() -> None:
     assert "git rev-parse HEAD:.owlbear/kanban/tasks/{slug}.md" in governance
     assert "git rev-parse :.owlbear/kanban/archive/{slug}.md" in governance
     assert "blob IDs are identical" in governance
+    assert "exactly `R100`" in governance
+    assert "collector-authored final archive content remains in the" in governance
     assert "git reset HEAD --" in governance
     assert "apply `COMMIT_FAILED`; do not unstage it" in governance
 

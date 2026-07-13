@@ -70,11 +70,14 @@ When the helper reports that the owned task or archive path is already staged:
 2. Prove the staged archive contains no extra content by comparing
   `git rev-parse HEAD:.owlbear/kanban/tasks/{slug}.md` with
   `git rev-parse :.owlbear/kanban/archive/{slug}.md`. Continue only when both commands succeed, the
-  blob IDs are identical, and step 1 shows exactly the current task's expected rename. A mismatch,
-  missing object, or unexpected staged shape is ambiguous: apply `COMMIT_FAILED`; do not unstage it.
+  blob IDs are identical, and step 1 shows exactly `R100` for the current task's rename. This proves
+  only the stale pure rename is staged; the collector-authored final archive content remains in the
+  working tree. A mismatch, missing object, or any staged shape other than `R100` is ambiguous:
+  apply `COMMIT_FAILED`; do not unstage it.
 3. Unstage only those verified owned paths with
   `git reset HEAD -- .owlbear/kanban/tasks/{slug}.md .owlbear/kanban/archive/{slug}.md`.
-4. Retry `commit-owned` with both paths so it stages and commits the complete final archive state.
+4. Retry `commit-owned` with both paths so it stages the current working-tree archive, including the
+  collector-authored final content, and commits the complete final archive state.
 
 The reset command may print a summary of every remaining unstaged change. That output does not mean
 those unrelated paths were modified or unstaged by the exact pathspec.
