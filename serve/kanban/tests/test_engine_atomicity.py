@@ -22,46 +22,14 @@ from owlbear_kanban.storage import read_task
 # Board / task scaffolding
 # ---------------------------------------------------------------------------
 
-_CONFIG_YAML = """\
-statuses:
-  - research
-  - backlog
-  - todo
-  - in-progress
-  - review
-  - docs
-  - done
-priorities:
-  - someday
-  - nice-to-have
-  - important
-  - needed
-  - critical
-entry_status: research
-wave_size: 4
-agent_map:
-  research: []
-  backlog: []
-  todo: []
-  in-progress: []
-  review: []
-  docs: []
-  done: []
-agent_types: {}
-agent_compatibility: {}
-non_impl_tags: [research, docs]
-archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
-status_predicates: {}
-claim_timeout: 1h
-next_id: 1001
-"""
+_CONFIG_YAML = "next_id: 1001\n"
 
 _TASK_TEMPLATE = """\
 ---
 id: {task_id}
 title: Task {task_id}
 status: {status}
-priority: needed
+priority: medium
 created: "2026-04-21T10:00:00+00:00"
 updated: "2026-04-21T10:00:00+00:00"
 tags: []
@@ -100,6 +68,7 @@ def _make_task_file(
     status: str = "todo",
     claimed_at: str | None = None,
 ) -> Path:
+    status = {"todo": "build", "in-progress": "verify", "done": "collect"}.get(status, status)
     claimed_at_value = f'"{claimed_at}"' if claimed_at else "null"
     content = _TASK_TEMPLATE.format(
         task_id=task_id,
@@ -194,7 +163,7 @@ class TestFromAC_EngineAtomicity:
             patch(_EMIT_PATCH, side_effect=OSError("disk full")),
             pytest.raises(OSError, match="disk full"),
         ):
-            engine.move_task("1001", "in-progress")
+            engine.move_task("1001", "verify")
 
         after = read_task(task_path)
         assert after.status == before.status, "status must be rolled back on emit failure"
@@ -425,7 +394,7 @@ class TestFromAC_EngineAtomicity:
             patch(_EMIT_PATCH, side_effect=OSError("disk full")),
             pytest.raises(OSError, match="disk full"),
         ):
-            engine.move_task("1001", "in-progress")
+            engine.move_task("1001", "verify")
 
         after = read_task(task_path)
         assert after.model_dump() == before.model_dump(), (
@@ -632,7 +601,7 @@ class TestFromAC_EngineAtomicity:
             patch(_EMIT_PATCH, side_effect=OSError("disk full")),
             pytest.raises(OSError, match="disk full"),
         ):
-            engine.end_work("1001", note="Rejected back", outcome="reject", move_to="research")
+            engine.end_work("1001", note="Rejected back", outcome="reject", move_to="shape")
 
         after = read_task(task_path)
         assert after.status == before.status, "status must not change to 'research' on emit failure"
@@ -679,7 +648,7 @@ class TestFromAC_EngineAtomicity:
             patch(_EMIT_PATCH, side_effect=OSError("disk full")),
             pytest.raises(OSError, match="disk full"),
         ):
-            engine.end_work("1001", note="Rejected back", outcome="reject", move_to="research")
+            engine.end_work("1001", note="Rejected back", outcome="reject", move_to="shape")
 
         after = read_task(task_path)
         assert after.model_dump() == before.model_dump(), (

@@ -119,7 +119,7 @@ def _get_tool_annotations(tool_name: str) -> object | None:
 def app_ctx(tmp_path: Path) -> AppContext:
     kanban_dir = _make_board(tmp_path)
     engine = KanbanEngine(kanban_dir)
-    engine.create_task("Task 1", status="todo", priority="needed")
+    engine.create_task("Task 1", status="build", priority="medium")
     return AppContext(engine=engine, kanban_dir=kanban_dir)
 
 

@@ -16,12 +16,16 @@ Every AC line must be independently verifiable by a downstream agent without acc
 
 Use Tier 1 for requirements that change runtime behavior, interfaces, or outputs.
 
-### B1 - Function-Scoped
+### B1 - Boundary-Scoped
 
-Each AC line names the concrete target under test (function, endpoint, command, class method, or module entrypoint).
+Each AC line names one observable boundary or maintained artifact under test, such as a public
+function, endpoint, command, user workflow, rendered surface, persisted record, schema, or generated
+output.
 
-- Reject: AC line references only a feature area with no executable target.
-- Pass: AC line identifies one concrete callable or endpoint name.
+- Reject: AC line references only a feature area with no observable boundary.
+- Reject: AC line requires a private implementation detail when the requested behavior is observable
+  through a public boundary.
+- Pass: AC line identifies the public surface or durable artifact where pass or fail is observed.
 
 ### B2 - Input -> Output Pairs
 
@@ -45,6 +49,21 @@ Banned words (7):
 - appropriate
 
 Allowed exception: a banned word may appear only when followed by exhaustive enumeration that makes pass or fail mechanically decidable.
+
+### B4 - Boundary-Valid Proof
+
+When an AC claims integration, command, endpoint, generated-operation, assembled-context, or user
+journey behavior, it names the normal assembled boundary under test and the observable result at
+that boundary.
+
+- A mock or injected dependency may replace only a layer below the boundary being proved.
+- An injected completed workflow cannot prove CLI registration or application assembly.
+- A mocked generated-tool caller cannot prove operation naming or context visibility.
+- A fixture may prove normalization behavior only when its shape is grounded in the named contract
+  authority.
+
+Reject an AC whose proposed evidence bypasses the callable, command, workflow, or assembled context
+that the AC claims works.
 
 ## Tier 2 - Process AC (Workflow Changes)
 
@@ -74,6 +93,8 @@ Allowed methods:
 - stage-transition audit
 - field-presence check
 - diff comparison
+- tool or API query
+- command output
 
 ## Two-Pass Validation
 
@@ -91,15 +112,18 @@ Run validation in order:
 - Confirm each line has sufficient detail for independent verification.
 - Confirm scope is not split across multiple hidden assumptions.
 - Confirm pass/fail is objective and does not require author interpretation.
+- For cross-boundary behavior, confirm the AC names the normal assembled boundary and does not
+  replace that boundary in its proof setup.
 
 Mechanical pass failing means rewrite before semantic review. Semantic failure means clarify scope, inputs, outputs, or verification method.
 
 ## Bad -> Good Transformations
 
-### B1 Example (Function-Scoped)
+### B1 Example (Boundary-Scoped)
 
 - Bad: "System handles archival requests."
-- Good: "POST /api/tasks/{id}/release records archival_reason in the archived task metadata."
+- Good: "Given an active task, POST /api/tasks/{id}/release records archival_reason in the archived
+  task metadata."
 
 ### B2 Example (Input -> Output)
 
@@ -110,6 +134,13 @@ Mechanical pass failing means rewrite before semantic review. Semantic failure m
 
 - Bad: "Verifier checks all AC lines correctly."
 - Good: "Verifier checks AC-1 through AC-4 and records one evidence row per AC line in Verify Notes."
+
+### B4 Example (Boundary-Valid Proof)
+
+- Bad: "Given an injected workflow runner, the CLI command returns JSON."
+- Good: "Given the real CLI application with remote HTTP transport replaced, invoking
+  `alerts prepare` resolves normal configuration, crosses the assembled workflow boundary, and
+  writes one JSON document to stdout."
 
 ### P1 Example (Agent/Stage-Scoped)
 
@@ -132,37 +163,58 @@ Use this when AC lines cite concrete literals that must match source-of-truth to
 
 ### Bad -> Good Examples
 
-1. Enum/union literals (`CardSignal`)
+1. Enum or union literal
 
-- Bad: "Task cards must show green/yellow/red/gray/stale status labels in Cockpit."
-- Good: "Task cards use `CardSignal` literals from `serve/cockpit/web/src/utils/computeSignal.ts`: `dr-pending | blocked | claimed | deps-unmet | ready | unknown`."
+- Bad: "The endpoint accepts every valid order status."
+- Good: "POST /orders accepts the `OrderStatus` literals declared by the project schema:
+  `pending | paid | cancelled`; any other status returns HTTP 422."
 
-2. PDS design token
+2. Design token
 
 - Bad: "Use standard medium spacing for card gaps."
-- Good: "Use `--pds-spacing-md` from `serve/cockpit/web/src/tokens.css` for card gap spacing."
+- Good: "The result grid uses the project's canonical medium-spacing token, identified in Shape
+  Notes, for its column and row gaps."
 
-3. CSS custom property
+3. Command choice
 
-- Bad: "Claimed cards should use the purple claimed color variable."
-- Good: "Claimed cards use `--pds-signal-claimed` from `serve/cockpit/web/src/tokens.css`."
+- Bad: "The export command supports the appropriate output formats."
+- Good: "`export --format` accepts the parser-declared literals `json | csv`; `xml` exits non-zero
+  and names the accepted values."
 
-### 5-Step Verifier Procedure
+4. OwlBear board transition
 
-1. Identify each literal in the AC line (enum value, token name, prop value, or CSS custom property).
-2. Locate the canonical source file for that literal category.
-3. Confirm exact spelling and allowed values via `grep_search` or `read_file`.
-4. Compare AC wording to the canonical source; treat paraphrased labels as mismatch.
-5. Rewrite AC to cite the exact literal and source path when any mismatch is found.
+- Bad: "Shaper moves the task to the next valid status."
+- Good: "After AC validation passes, Shaper moves the task from `shape` to `build` and verifies the
+  resulting status through the OwlBear Kanban MCP."
 
-### Canonical Source Map
+### Authority Discovery
 
-| Category | Source file | Example |
-|----------|-------------|---------|
-| Enum/union state literals | `serve/cockpit/web/src/utils/computeSignal.ts` | `CardSignal values: dr-pending, blocked, claimed, deps-unmet, ready, unknown` |
-| PDS design tokens used in Cockpit styles | `serve/cockpit/web/src/tokens.css` | `--pds-spacing-md` |
-| CSS custom properties for semantic signals | `serve/cockpit/web/src/tokens.css` | `--pds-signal-claimed`, `--pds-notification-warning` |
-| PDS component prop/type literals | `@porsche-design-system/components-react` type exports | component prop union literal from package type definitions |
+Locate the strongest authority available in the target project. Prefer sources in this order:
+
+| Priority | Authority | Suitable claims |
+|----------|-----------|-----------------|
+| 1 | Checked-in schema, type, configuration, or public source declaration | Allowed literals, fields, transitions, tokens, defaults |
+| 2 | Generated public inventory, command tree, API schema, or compiled contract | Registered operations and assembled public surface |
+| 3 | Installed dependency types, schema, or package metadata | External component props, events, and supported values |
+| 4 | Version-matched official external documentation | Contracts not represented locally |
+| 5 | Bounded verified runtime observation | Only the observed request, response, state, or environment |
+
+Do not use a test fixture, stale planning document, or paraphrased UI label as canonical when a
+stronger authority exists. A sampled production envelope does not prove unobserved variants.
+
+### Verifier Procedure
+
+1. Identify each literal claim in the AC line: enum value, transition, token, prop, event, flag,
+   command choice, field name, or generated operation.
+2. Discover the strongest applicable authority using the priority table.
+3. Confirm spelling, allowed values, version, and relevant constraints through targeted source or
+   structured contract inspection.
+4. Record the authority and evidence scope in Shape Notes when it is not already obvious from the AC
+   or task context.
+5. Compare the AC wording with the authority; treat invented aliases and unsupported values as
+   contradictions, not harmless paraphrases.
+6. Rewrite the AC with the verified literals. If two credible authorities disagree, record the
+   contradiction and block shaping until ownership is resolved; do not choose silently.
 
 ## Validation Checklist
 
@@ -170,7 +222,7 @@ Use this checklist for both drafting and validation.
 
 ### Shaper Draft Checklist
 
-- [ ] Line has exactly one primary target (B1 or P1 scope).
+- [ ] Line has exactly one observable boundary or maintained artifact (B1 or P1 scope).
 - [ ] Line includes concrete input and concrete observable output when behavior-related (B2).
 - [ ] Line contains none of the 7 banned words unless exhaustively enumerated (B3).
 - [ ] Process line names agent/skill/stage (P1).
@@ -178,6 +230,8 @@ Use this checklist for both drafting and validation.
 - [ ] Process line includes explicit verification method (P3).
 - [ ] Numbering is stable and unambiguous.
 - [ ] Line can be verified without author intent.
+- [ ] Cross-boundary line names the normal assembled boundary and replaces only lower dependencies.
+- [ ] Literal claims cite or record the strongest applicable canonical authority.
 
 ### Shaper/Challenger Validation Checklist
 
@@ -185,5 +239,7 @@ Use this checklist for both drafting and validation.
 - [ ] Semantic pass complete: independent verifiability confirmed per line.
 - [ ] Hidden assumptions removed from each line.
 - [ ] Every line has objective pass/fail evidence path.
+- [ ] Integration proof does not inject or mock the boundary whose behavior is claimed.
+- [ ] Canonical authorities were checked and unresolved contradictions block shaping.
 - [ ] Vague phrasing rewritten to executable, inspectable statements.
 - [ ] Rule violations are returned with bad -> good rewrite guidance.

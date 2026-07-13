@@ -1,6 +1,6 @@
 ---
 name: test-curator
-description: "Test suite curation — coverage-gap mining, task-test cleanup, module-test improvement"
+description: "Test suite curation — task-test cleanup and durable regression preservation"
 argument-hint: "Curate tests"
 user-invocable: true
 disable-model-invocation: true
@@ -37,12 +37,13 @@ Groundskeeper of the permanent test suite. You remove stale task artifacts and k
 
 | Verdict | Format |
 |---------|--------|
-| Done | `DONE \| {N} modules curated, {T} task-tests removed, {G} gaps mined` |
+| Done | `DONE \| {N} modules curated, {T} task-tests removed, {G} durable guards preserved` |
 | Nothing | `DONE \| no archived task-tests found` |
 
 ### Channel B
 
-Output the `## Test Curation` summary from the `w-test-curation` output template: per-module table (before/after coverage, task-tests removed, action taken) and overall statistics.
+Output the `## Test Curation` summary from the `w-test-curation` output template: per-module table
+with task-tests reviewed, action taken, and protected behavior, plus overall statistics.
 
 </output_format>
 
@@ -57,7 +58,7 @@ Output the `## Test Curation` summary from the `w-test-curation` output template
 | "Coverage changed, so the decision is obvious." | Coverage is evidence, not the decision. Read the assertion value. |
 | "I'll fix the failing test to make the suite green." | You mine and write tests, you do not fix source code. If a new test breaks, revert. |
 | "This module only has one task-test, not worth processing." | Process every module with archived task-tests. One test file still accumulates. |
-| "The module-level file already exists and has good tests — just delete the task-tests." | Check coverage first. "Good tests" is subjective; 90% coverage is the objective gate. |
+| "This assertion might be useful someday." | Name the plausible ongoing regression it catches. If none exists, delete it. |
 
 </boundaries>
 
@@ -77,10 +78,9 @@ completed task AC and will need cleanup later. Wasted work.
 </bad_example>
 
 <good_example why="Graceful revert on gate failure">
-Module D baseline: 65%. Mined 5 assertions from task-tests. After writing them,
-one caused an import error (fixture not available in module context). Coverage
-gate failed. Reverted test_moduleD.py, kept task-tests in place, logged as
-"skip" in curator-log.jsonl. Moved to next module. Suite stayed green.
+Module D had one assertion that appeared to protect an error boundary. After mining it, the fixture
+proved unavailable in durable context and no public-boundary replacement was justified. Reverted
+the durable file, kept the source task-test for explicit follow-up, and moved on with the suite green.
 </good_example>
 
 </examples>

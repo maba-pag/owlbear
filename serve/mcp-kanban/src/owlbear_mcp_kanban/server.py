@@ -198,7 +198,7 @@ def _validate_archival_constraints(
         config = app_ctx.engine.board_config()
         app_ctx.engine.validate_archival(
             task_id=task_id,
-            can_mark_completed=(current_status == "done"),
+            can_mark_completed=(current_status == config.pipeline.terminal_status),
             config=config,
             archival_reason=archival_reason,
             archival_refs=list(archival_refs or []),

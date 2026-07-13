@@ -1,81 +1,113 @@
 ---
-description: "Run a read-only Cockpit frontend audit for an optional scope using frontend design and convention guidance."
+description: "Run a read-only, evidence-calibrated frontend audit for an optional project scope"
 ---
 
-# Cockpit Frontend Audit
+# Frontend Audit
 
-You are running a read-only Cockpit frontend audit and producing a severity-ranked report. This prompt is for critique and task discovery only; it does not edit source files.
+Run a read-only frontend audit and produce a ranked queue of actionable findings. This prompt is
+for critique and task discovery only; do not edit source files.
 
 Optional scope input: ${input:scope:Files or feature area to audit (optional)}
 
 ## Interaction Protocol
 
-Use the user's language unless they ask otherwise. When presenting findings, proposed actions, or pause/continuation choices, present exactly one decision item at a time before calling `askQuestions`. Do not list multiple findings and ask for one bulk decision.
+Use the user's language unless they ask otherwise. Present exactly one finding or decision at a
+time before calling `askQuestions`; do not ask for one bulk decision across multiple findings.
 
-Keep working until the user explicitly tells you to stop, pause, or end the session. Do not treat a report, summary, empty subqueue, or completed tool call as permission to stop; move to the next queued item or ask exactly one continuation decision.
+For each finding, state:
 
-Each decision item must include: status quo, problem, options with pro/con/risk/confidence, recommendation with reason, and expected outcome. Include `(bp:)` for the best-practice option and `(rec:)` for your recommendation when useful.
+- status quo and concrete evidence;
+- user or product impact;
+- options with pro, con, risk, and confidence;
+- recommendation and expected outcome.
 
-## Step 1 - Load context
+Use `(bp:)` for the best-practice option and `(rec:)` for the recommendation when useful. Continue
+through the ranked queue until it is exhausted or the user pauses or stops. A completed queue is a
+valid terminal condition; summarize it without manufacturing a continuation decision.
+
+## Step 1 - Load standards and discover context
 
 1. Read `../skills/h-frontend-design/SKILL.md`.
 2. Read `../skills/h-frontend-conventions/SKILL.md`.
-3. If the scope includes test, lint, build, or E2E evidence, read `../skills/h-vitest-and-linting/SKILL.md`.
-4. Use the frontend-design two-tier anti-pattern classification: blocker and heuristic.
-5. Treat Cockpit as an internal developer-operations tool: dense but calm layout, predictable controls, clear status, and low decorative overhead.
-6. Determine the target surface:
-   - Use `${input:scope}` when provided.
-   - If no scope is provided, choose one Cockpit page, route, component, or workflow and state it.
+3. When test, lint, build, or browser evidence is relevant, load the project's applicable testing
+   guidance and inspect its package scripts or equivalent configuration. Load
+   `../skills/h-vitest-and-linting/SKILL.md` only when the project uses that toolchain.
+4. Discover, rather than assume:
+   - frontend package roots, framework, build tool, and test/browser tooling;
+   - project design system, tokens, and established component patterns;
+   - product audience, primary user jobs, brand or interaction intent, and supported viewports;
+   - routes, navigation, or entry points that define the candidate user workflows.
+5. Treat project documentation and established source patterns as context, then verify behavioral
+   and visual claims against the running interface when possible.
+
+Use `${input:scope}` when provided. Without it, select the primary user workflow supported by the
+strongest route, navigation, or product evidence and state the rationale. If the repository contains
+multiple materially different frontend applications and no primary target is evident, ask the user
+to select one before continuing.
 
 ## Step 2 - Plan and scope
 
-Before auditing, write a short plan that states:
+Before auditing, state:
 
-1. What surface is in scope.
-2. Which checks you will run in each required category.
-3. Any constraints that could limit audit confidence.
-4. Whether evidence can be gathered by file inspection, Vitest/jsdom, or Playwright/browser proof.
+1. The selected workflow or surface and its primary user goal.
+2. Relevant states to inspect: normal, loading, empty, error, destructive or confirmation, and
+   permission-limited states where the product supports them.
+3. Applicable audit dimensions and project-specific conventions.
+4. Available evidence levels and constraints that limit confidence.
 
 ## Step 3 - Execute audit
 
-Inspect the scoped surface and build an internal ranked queue across these categories:
+Trace the selected workflow end to end. Audit only dimensions relevant to that workflow:
 
-1. accessibility
-2. responsive behavior
-3. design-system consistency
-4. anti-patterns
-5. test/proof adequacy
+1. Product fit and workflow completeness
+2. Information hierarchy, content, and action clarity
+3. Interaction behavior, state feedback, recovery, and destructive-action safety
+4. Visual and design-system consistency
+5. Responsive behavior at project-supported viewports
+6. Accessibility blockers that prevent use or contradict project requirements
+7. Test and proof adequacy for the behavior being claimed
 
-Classify every finding with these tiers:
+Use this evidence ladder:
 
-- blocker: must-fix issues that block release quality.
-- heuristic: warning-level issues for consistency or polish.
+- **E1 - source evidence:** implementation, styles, configuration, or static test inspection;
+- **E2 - runtime evidence:** component/integration execution with observable behavior;
+- **E3 - browser evidence:** real layout geometry, interaction, viewport behavior, or screenshot.
 
-Rank findings by severity within each category. Present findings to the user one at a time with concrete evidence (affected files, selectors, components, or states) and the Interaction Protocol decision card.
+Do not claim overlap, clipping, visibility, reachability, responsive correctness, or visual quality
+from E1 evidence alone. Use E3 for those claims. If browser proof is unavailable, describe the
+specific risk and confidence limit instead of presenting it as observed harm.
 
-Cockpit-specific checks:
+Record three independent attributes for every accepted finding:
 
-- Prefer Porsche Design System components and tokens where they match the interaction.
-- Flag PDS jsdom assumptions when tests rely on native roles or events that PDS custom elements do not expose.
-- For responsive/layout claims, distinguish static CSS evidence from real browser geometry proof.
-- Flag edit-style recommendations that should become kanban tasks instead of direct prompt-driven code changes.
+- **Impact:** `critical`, `high`, `medium`, or `low`, based on affected user goal and frequency.
+- **Confidence:** `high`, `medium`, or `low`, based on evidence level and reproducibility.
+- **Type:** `objective defect` or `contextual heuristic`.
 
-## Step 4 - Verify and guardrails
+Reject taste-only findings that cannot be tied to the discovered audience, workflow, brand intent,
+design system, or an observable usability cost. Distinguish observed harm from theoretical risk.
+Rank objective defects before heuristics, then by impact, confidence, and breadth of affected users.
 
-Before final output:
+## Step 4 - Present and close
 
-1. Confirm this prompt does not edit code files and is report-only.
-2. Confirm findings are severity-ranked and each finding is tagged blocker or
-   heuristic.
-3. Recommend one of these outcomes:
-   - no action, with rationale.
-   - a small direct follow-up for the user to approve.
-   - a kanban task when the change needs implementation, tests, or review.
-4. If multiple findings remain, summarize counts only and ask which single item to inspect next.
+Present findings one at a time using the Interaction Protocol. Each finding must name the affected
+workflow state, evidence level, impact, confidence, type, and concrete source or browser anchor.
+
+For an approved follow-up, use the project's available task tracker when configured and include the
+reproduction evidence, expected user-visible outcome, and required proof level. Do not create tasks
+for rejected findings or unverified taste preferences.
+
+When the queue is exhausted:
+
+1. Summarize accepted, rejected, and deferred finding counts.
+2. List any audit dimensions or states that lacked adequate evidence.
+3. State whether the audited workflow has no remaining known issues or where residual risk remains.
 
 ## Guardrails
 
 - Do not edit or modify source files during this audit.
 - Do not silently broaden scope beyond the selected surface.
-- If structural issues are out of scope, record them as follow-up tasks.
-- Do not recommend deleted frontend prompt commands as next steps.
+- Do not run destructive actions or submit real production mutations while gathering evidence.
+- Do not infer project conventions from OwlBear, Cockpit, Porsche Design System, React, or any other
+  specific product or stack unless the target repository provides that evidence.
+- Keep out-of-scope structural observations separate from findings; propose them only as optional
+  follow-ups with explicit user approval.

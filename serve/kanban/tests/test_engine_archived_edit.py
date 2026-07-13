@@ -57,38 +57,7 @@ _EMIT_PATCH = "owlbear_kanban.activity_store.append_activity_event"
 # Board + task helpers
 # ---------------------------------------------------------------------------
 
-_BASE_CONFIG = """\
-statuses:
-  - research
-  - backlog
-  - todo
-  - in-progress
-  - review
-  - done
-priorities:
-  - someday
-  - nice-to-have
-  - important
-  - needed
-  - critical
-entry_status: research
-terminal_status: done
-wave_size: 4
-agent_map:
-  research: researcher
-  backlog: architect
-  todo: builder
-  in-progress: builder
-  review: reviewer
-  done: auditor
-agent_types: {}
-agent_compatibility: {}
-non_impl_tags: [research, docs]
-archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
-status_predicates: {}
-claim_timeout: 1h
-next_id: 10
-"""
+_BASE_CONFIG = "next_id: 10\n"
 
 _TASK_TMPL = """\
 ---
@@ -132,6 +101,8 @@ def _write_task(  # noqa: PLR0913
     body: str = "Body.",
     subdir: str = "tasks",
 ) -> Path:
+    status = {"todo": "build", "done": "collect"}.get(status, status)
+    priority = {"needed": "medium"}.get(priority, priority)
     content = _TASK_TMPL.format(
         task_id=task_id,
         title=title,
@@ -319,9 +290,9 @@ class TestFromAC_ArchivedTaskEditPersistence:
             subdir="archive",
         )
 
-        result = engine.edit_task("1", priority="critical")
+        result = engine.edit_task("1", priority="high")
 
-        assert result.priority == "critical"
+        assert result.priority == "high"
 
     def test_core_engine_edit_archived_priority_reread_from_archive(self, tmp_path: Path) -> None:
         """AC-4: after engine.edit_task, re-reading from archive shows the updated priority on disk."""
@@ -335,10 +306,10 @@ class TestFromAC_ArchivedTaskEditPersistence:
             subdir="archive",
         )
 
-        engine.edit_task("1", priority="critical")
+        engine.edit_task("1", priority="high")
 
         reread = engine.show_task("1")
-        assert reread.priority == "critical"
+        assert reread.priority == "high"
 
     # ------------------------------------------------------------------
     # AC-5: file stays in archive/, no duplicate in tasks/
@@ -519,9 +490,9 @@ class TestFromAC_ArchivedTaskEditPersistence:
         tasks_file.rename(archive_file)
 
         # edit_task must succeed via archive fallback.
-        result = engine.edit_task("1", priority="critical")
+        result = engine.edit_task("1", priority="high")
 
-        assert result.priority == "critical", "priority must be updated to 'critical'"
+        assert result.priority == "high", "priority must be updated to 'high'"
         assert archive_file.exists(), "edited file must remain in archive/"
         assert not (kanban_dir / "tasks" / "1-task.md").exists(), (
             "no duplicate must appear in tasks/ after editing via archive fallback"
@@ -554,10 +525,10 @@ class TestFromAC_ArchivedTaskEditPersistence:
             patch(_EMIT_PATCH, side_effect=OSError("disk full")),
             pytest.raises(OSError, match="disk full"),
         ):
-            engine.edit_task("1", priority="critical")
+            engine.edit_task("1", priority="high")
 
         rolled_back = read_task(archive_file)
-        assert rolled_back.priority == "needed", "priority must be rolled back to 'needed' after emit failure"
+        assert rolled_back.priority == "medium", "priority must be rolled back to 'medium' after emit failure"
         assert not (kanban_dir / "tasks" / "1-task.md").exists(), "rollback write must not create a file in tasks/"
         _ = original_content  # retained for readability; content already validated via read_task
 

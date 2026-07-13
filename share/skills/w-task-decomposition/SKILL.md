@@ -39,13 +39,53 @@ Use this workflow after shaper has claimed the parent task with `start_work` whe
 
 **Status discipline:** Shaper-created tasks never rely on the `create_task` default. Pass `status="build"` for every build-ready leaf task and `status="collect"` for every aggregate parent/EPIC. `shape` is reserved for user-created intake and tasks rejected back from later pipeline stages.
 
-## Step 1 — Read the Plan
+## Step 1 — Read and Classify the Planning Source
 
 Read input (free-text, plan doc section, or requirements). Identify phase number, deliverables, and implicit ordering.
 
-If the parent task body contains a `## Brief` or `## Problem` section (Brief artifact, produced by ideation), use it to derive scope, investment tier, and approach constraints for decomposition. Include `Brief: see parent #{id}` reference in each child task body.
+When the input is a native OpenSpec change, use `openspec status --change <name> --json` to resolve
+the active schema and concrete artifact paths. Read all existing planning artifacts reported by the
+CLI. For stock `spec-driven`, apply this authority model:
+
+| Artifact | Shaper use | Authority |
+|----------|------------|-----------|
+| `proposal.md` | Preserve problem, full Product Promise, user value, scope, impact, material user decisions, accepted exclusions, and assumptions | Product intent; active user decisions require explicit agreement to supersede |
+| `specs/**/*.md` | Derive observable behavior and acceptance boundaries from capability requirements and scenarios | Normative product behavior |
+| `design.md` | Reuse grounded architecture, contract evidence, trade-offs, risks, and migration constraints | Technical plan, subject to source and contract verification |
+| `tasks.md` | Mine candidate outcomes, ordering, and proof ideas | Advisory only; never board shape or execution metadata |
+
+Do not flatten the package into a synthetic Brief or require OwlBear-specific frontmatter. The
+shaper writes the final Kanban graph after reconciling the whole package with current source. It may
+merge, split, reorder, rename, or reject OpenSpec task suggestions. Record material departures and
+their reasons in `## Shape Notes`; do not silently change Proposal intent or normative Specs.
+
+Treat Proposal's full active Product Promise as scope authority. Every stated outcome must appear in
+the task graph. An omission is valid only when Proposal records the user's explicit accepted
+exclusion; do not reinterpret unowned omitted work as a later phase, deferral, or smaller first slice.
+Run a post-shaping Product Promise check against the concrete task layout before approval.
+
+If the parent task body contains a `## Brief` or `## Problem` section (Brief artifact, produced by ideation), use it to derive the full active scope, accepted exclusions, and approach constraints for decomposition. Include `Brief: see parent #{id}` reference in each child task body.
 
 When the parent contains an approved ideation Brief, shaper sequences or splits Brief requirements but does not delete them. If a Brief requirement cannot fit one atomic task, split it across tasks. If a Brief requirement appears invalid, conflicting, or impossible, surface that conflict in Shape Notes instead of dropping the requirement.
+
+### Planning Readiness Gate
+
+Before decomposition, confirm the source provides four load-bearing elements:
+
+1. **Product outcome and invocation:** what the user receives and the concrete journey, command,
+    endpoint, or interaction that delivers it.
+2. **Existing-system fit and authority:** the owning architecture, public interface conventions,
+    and canonical sources for external or generated contracts.
+3. **Normal-path proof:** the assembled boundary that must work and which lower dependency may be
+    replaced without bypassing that boundary.
+4. **Completion and change contract:** what makes the work complete and what existing behavior is
+    retained, migrated, removed, or explicitly deferred.
+
+For a narrow follow-up, these elements may be established by the existing task and nearby source;
+they do not require a formal planning package. For a multi-domain feature or external integration,
+missing material elements are not implementation details. Resolve one material user decision at a
+time through Step 5b, or stop without creating tasks. Do not turn an unresolved product or contract
+choice into builder discretion.
 
 Announce: "Decomposing: {name}. Expected: {N} tasks in {M} layers."
 
@@ -55,7 +95,10 @@ Before decomposition, detect whether the request is exactly one follow-up task w
 
 If yes, use the shortcut flow:
 
-- Skip Step 1b, Steps 2–4, and Step 7.
+- If the request is truly greenfield with no existing or external contract, skip Steps 1b, 2–4, and 7.
+- If the request touches existing modules, generated interfaces, external contracts, or an approved
+    Brief, complete Step 1b, the Change Module Map, and the Deep Module Check before applying the rest
+    of the shortcut.
 - Continue with Steps 5, 5a, and 6.
 - Preserve parent metadata where provided: title, parent ID, and tags.
 - Status routing: create build-ready tasks with `status="build"`. If the follow-up still needs shaping, ask/refine instead of creating a `shape` task. Normalize old `todo`, `backlog`, `research`, `in-progress`, `review`, `docs`, and `done` requests to `build` only after shaping makes the task build-ready.
@@ -65,23 +108,54 @@ If yes, use the shortcut flow:
 
 Typical shortcut cases: "fix off-by-one", "delete stale docs", "shaper calibration".
 
-## Step 1b — Source-Read & Symbol Capture Guard
+## Step 1b — Source And Contract Authority Guard
 
-Apply this step when the input plan, parent task, or brief references existing codebase modules or symbols that will appear in AC text.
+Apply this step when the input plan, OpenSpec package, parent task, or Brief references existing codebase modules,
+generated interfaces, external APIs, schemas, protocols, or symbols that will appear in AC text.
 
-This step may be skipped only for greenfield requests with no existing code references.
+This step may be skipped only for greenfield requests with no existing or external contract.
 
-1. Identify target source files from parent context (plan text, parent task, brief, or referenced module paths).
-2. Read each target source file before drafting AC.
-3. Extract and record referenced symbols that may be cited in AC text:
+1. Follow `h-codebase-orientation`. Regenerate the indexes, search them narrowly,
+   and identify target source files and contract authorities from parent context. Authorities may
+    include generated operation inventories, schemas, official documentation, verified production
+    observations, and existing public CLI or API surfaces.
+2. Read each local source and the smallest sufficient external evidence before drafting AC.
+3. Extract and record referenced symbols and claims that may be cited in AC text:
     - function signatures and return types
     - enum or union values
     - component names
     - token names
-4. During AC drafting, cross-check each AC line against the recorded symbols.
-5. If an AC references a function return type, enum value, or component/token name, ensure it exactly matches the source-defined symbol.
+    - generated operation or command names
+    - external field names and envelope variants
+    - observed-versus-assumed behavior
+4. Record each load-bearing external claim in `## Shape Notes` with authority, evidence state
+    (`observed`, `documented`, or `assumed`), and confidence.
+5. During AC drafting, cross-check each literal and behavioral claim against the recorded authority.
+6. If a load-bearing claim remains assumed, create a build-ready probe/research prerequisite only
+    when its evidence method and tracked output are concrete; otherwise resolve it through the user
+    decision gate. Do not create dependent implementation tasks first.
+7. If the planning source or requested AC contradicts a canonical source, stop and surface the contradiction.
+    Do not invent an alias, fallback, or fixture contract to make both appear true.
 
 Do not continue to Step 2 until this guard is complete when triggered.
+
+### Change Module Map
+
+For brownfield work, record the verified working model in `## Shape Notes` before choosing task
+boundaries. Greenfield work records planned modules and marks current responsibility as `new`.
+
+| Module | Current Responsibility | Planned Change | Interface Impact | Owning Task |
+|--------|------------------------|----------------|------------------|-------------|
+| {source path or package} | {verified responsibility or new} | {add, modify, remove, read-only} | {none, changed, new, removed} | {task ID or pending} |
+
+Rules:
+
+- Read each mapped source module; indexes and Semble may locate it but cannot verify it.
+- Include modules that own changed behavior or interfaces. Do not list every transitive dependency.
+- Assign one owning task once decomposition is concrete.
+- Builders record justified deviations. Interface, ownership, architecture, or scope deviations return
+    to shape instead of silently rewriting the map.
+- Verifiers compare actual changed modules and interface impact with the map.
 
 ### good_example — symbol guard applied
 
@@ -95,20 +169,64 @@ Do not continue to Step 2 until this guard is complete when triggered.
 - Shaper also lists statuses as `green/yellow/red/gray/stale`.
 - AC is factually incorrect because symbol references were not validated against source.
 
+### good_example — generated and external contract grounded
+
+- Brief requests a generated alert operation through an assembled runtime context.
+- Shaper records the generated operation inventory as authority for the callable name, production
+    samples as bounded authority for envelope fields, and the existing CLI tree as authority for
+    command hierarchy.
+- Tasks are not created until operation visibility plus invocation has one owner and one
+    assembled-context proof.
+
 ## Step 2 — Check Board State
 
 Read the current board via `list_tasks` to note: highest existing ID, existing dependencies, and current phase landscape.
 
 ## Step 3 — Decompose into Atomic Tasks
 
+### Deep Module Check
+
+Apply `h-module-design` before selecting module and task boundaries:
+
+- Prefer cohesive modules that hide substantial functionality behind a small stable interface.
+- Do not create forwarding wrappers, one-function modules, or speculative adapters merely to satisfy
+    "single responsibility."
+- Split when responsibilities, change reasons, failure domains, or proof modes genuinely diverge.
+- Apply the Deletion Test: if deleting a proposed module only removes forwarding code while its
+    complexity stays in callers, inline it or deepen it.
+- Favor locality: a likely behavior change should require understanding and editing as few module
+    boundaries as practical.
+
 Each task must be:
 
-- **Single responsibility:** one module, one function, one config
-- **Domain scoped:** one primary domain per task (see `r-architecture-standards` domain taxonomy). Multi-domain tasks must be split.
+- **Single outcome responsibility:** one coherent product or integration outcome; module or function
+    count alone does not justify splitting an invariant across tasks.
+- **Domain scoped:** one primary domain per task. Use the consuming project's local architecture map
+    or instructions for domain ownership; multi-domain tasks must be split.
 - **Outcome cohesive:** deliver or prove one coherent behavior within that domain. Do not split solely by artifact type when that leaves a final "wire everything together" task; shared contracts may be prerequisites, while the aggregate parent owns the cross-domain outcome.
 - **Testable:** clear pass/fail criterion
 - **Small:** ~2 hours of focused work max
 - **Self-contained proof:** each task names the proof mode the builder/verifier should use, but does not require a separate test-writing task.
+
+### Product Invariant Map
+
+Before choosing task boundaries, map every load-bearing product invariant to one owning task and one
+cross-boundary proof. Write the final map in `## Shape Notes` so shaper-challenger, verifier, and
+collector can inspect it.
+
+| Product Invariant | Owning Task | Normal-Path Boundary | Proof / Allowed Replacement |
+|-------------------|-------------|----------------------|-----------------------------|
+| {observable promise} | {one task} | {assembled boundary} | {proof; lower dependency that may be replaced} |
+
+Rules:
+
+- Every invariant has exactly one owner, even when several tasks contribute prerequisites.
+- The owning task's AC observes the invariant through its normal assembled boundary.
+- A mock or injected dependency may replace only a layer below the boundary being proved.
+- If decomposition leaves a final "wire everything together" task or no owner for a boundary, redraw
+    the task shape before creation.
+- Prefer roughly 3–6 outcome-cohesive tasks for a major feature. This is a fragmentation warning,
+    not a hard cap; exceed it when distinct failure domains and proof modes genuinely require it.
 
 ### Task Complexity Budget
 
@@ -152,6 +270,8 @@ When drafting AC for planned tasks:
 - AC must be understandable without reading the codebase first.
 - Every task must include explicit scope boundaries (in-scope and out-of-scope).
 - No implementation prescriptions: describe WHAT must be true, not HOW to code it.
+- Do not prescribe test files, test counts, or one-test-per-AC proof unless a maintained test artifact
+    is itself the deliverable.
 
 ## Step 4 — Build Dependency Graph
 
@@ -170,7 +290,7 @@ Build an explicit dependency graph:
 - **Tags (decomposition mode):** always `phase-{n}` + `scope:{domain}` + at least one category tag
 - **Tags (shortcut mode):** preserve parent-provided tags verbatim; do not add phase tags unless they are already part of the parent scope
 
-See `r-project-standards` for the full priority scheme and tag taxonomy.
+See `r-pipeline-protocol` § Task Metadata for the priority scheme and tag taxonomy.
 
 ## Step 5c — Assign Proof Guidance
 
@@ -179,8 +299,9 @@ Add a short `Proof guidance:` line to each task body. This is guidance for build
 | Signal | Guidance |
 |--------|----------|
 | Docs/process-only change with no executable behavior change | `no executable proof expected; cite changed artifact` |
+| Config, deletion, wording, or local wiring change covered by existing validation | `no durable test expected; run the cheapest existing focused check` |
 | Change validated by pre-existing named checks | `run named focused check: {command}` |
-| Narrow behavior change | `run focused behavior check or import/config smoke` |
+| Narrow behavior change with no uncovered recurrence risk | `run focused behavior check or import/config smoke; no durable test expected` |
 | Shared/core-path change | `run focused check plus downstream-impact scan` |
 | UI/browser change | `run package-local frontend check; add screenshot only if visual framing matters` |
 
@@ -194,6 +315,14 @@ Before creating any task, validate every planned task:
 - **Reject scratch-only proof** — if required proof can only live in `.owlbear/scratch/`, split or add a tracked-artifact deliverable owned by an agent that can write it.
 - **Reject hidden downstream impact** — behavior-changing refactors must name affected durable suites/consumers or include a downstream-impact scan task.
 - **Reject proof-artifact-only tasks unless the artifact itself is the product deliverable** — proof should support the change, not become a fake task.
+- **Reject test-prescriptive proof** — do not turn AC into one test each or require new durable tests
+    when an existing check or transient observation proves the boundary.
+- **Reject orphaned invariants** — every invariant-map row names one owning task and that task has a
+    normal-path AC.
+- **Reject boundary-bypassing proof** — proof guidance must not replace the callable, command,
+    workflow, or assembled context whose behavior the AC claims.
+- **Reject unjustified fragmentation** — a major feature with more than six tasks must explain in
+    Shape Notes which distinct failure domains or proof modes require the additional split.
 
 If a planned task fails: refine the title and body or stop. Never create a placeholder task.
 
@@ -252,6 +381,27 @@ Return Channel A using shaper's normal verdict format: `APPROVED #{id} -> collec
 Append decomposition details inside shaper's `## Shape Notes` section:
 
 ```
+### Brief Readiness
+- Product outcome and invocation: {source or decision}
+- Existing-system fit and authority: {sources}
+- Normal-path proof: {assembled boundary}
+- Completion and change contract: {retained, migrated, removed, deferred}
+
+### Contract Authorities
+| Claim | Authority | Evidence State | Confidence |
+|-------|-----------|----------------|------------|
+| {claim} | {source} | {observed|documented|assumed} | {value} |
+
+### Change Module Map
+| Module | Current Responsibility | Planned Change | Interface Impact | Owning Task |
+|--------|------------------------|----------------|------------------|-------------|
+| {module} | {responsibility or new} | {change} | {impact} | {task ID} |
+
+### Product Invariant Map
+| Product Invariant | Owning Task | Normal-Path Boundary | Proof / Allowed Replacement |
+|-------------------|-------------|----------------------|-----------------------------|
+| {invariant} | {task ID} | {boundary} | {proof and allowed replacement} |
+
 ### Decomposition: {name}
 - Tasks created: {N}
 - Dependency layers: {M}
@@ -269,6 +419,15 @@ Append decomposition details inside shaper's `## Shape Notes` section:
 ## Verification Checklist
 
 - [ ] Announced decomposition plan and expected count
+- [ ] Brief readiness gate passed or material gaps were resolved interactively
+- [ ] Brownfield modules were located through `h-codebase-orientation` and verified from source
+- [ ] Change Module Map records responsibility, planned change, interface impact, and owning task
+- [ ] Proposed module boundaries pass the depth, locality, and Deletion Test diagnostics
+- [ ] External/generated contract claims record authority, evidence state, and confidence
+- [ ] Every product invariant has exactly one owning task and one normal-path proof
+- [ ] Task layout covers the full active Product Promise; every omitted requested outcome has an
+    explicit user-approved exclusion in the planning authority
+- [ ] Mocks or injected dependencies replace only layers below the boundary being proved
 - [ ] Every task has proportional proof guidance
 - [ ] No task has multiple responsibilities
 - [ ] Every child is outcome-cohesive within its domain; no integration-only cleanup task remains
@@ -286,6 +445,7 @@ Append decomposition details inside shaper's `## Shape Notes` section:
 - [ ] Shaper-challenger reviewed concrete created/routed task IDs after the status audit
 - [ ] Mermaid diagram matches task list (decomposition mode only)
 - [ ] Total 20 tasks or fewer
+- [ ] More than six tasks for a major feature has a fragmentation rationale in Shape Notes
 - [ ] AC describes "done", not "how"
 - [ ] AC meets durability principles (behavior/interface-first, codebase-independent clarity, explicit scope boundaries, no HOW prescriptions)
 - [ ] Shortcut mode returns created task ID in response message

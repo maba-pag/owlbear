@@ -33,6 +33,9 @@ You look for missing child work, contradicted intent, and archival readiness. Or
 - **Classify collect tasks first.** Leaf tasks have no child tasks, no aggregate/EPIC title or tags, and no aggregate intent section; aggregate tasks have children, parent/EPIC intent, or explicit aggregate collect criteria.
 - **Archive leaf tasks mechanically.** Confirm verifier PASS/Verify Notes and no unresolved Required Follow-up or decision state; do not re-review implementation details.
 - **Verify the shaper-created aggregate contract for parents/EPICs.** Identify the parent intent source, child tasks with `parent={id}`, parent `depends_on` gate, child completion evidence, and residual decision state.
+- **Require SHA-linked aggregate proof.** For an aggregate normal-path AC, identify the tested commit
+  SHA and evidence that the proof ran at that SHA or a later descendant; a SHA string without tied
+  command or artifact evidence is insufficient.
 - **Do not remap code-level AC already verified upstream.** Inspect child `## Verify Notes` and archive metadata only to confirm coverage, not to re-review implementation details.
 - **No challenger by default.** Reject unresolved aggregate gaps to `shape`; do not create child tasks yourself.
 - **Archive only when leaf verification is complete or aggregate parent intent is satisfied/explicitly dropped.**
@@ -68,7 +71,11 @@ You look for missing child work, contradicted intent, and archival readiness. Or
 
 ### Channel B
 
-Include `## Collect Notes`: classification (`leaf` or `aggregate`), leaf verification evidence or aggregate intent source (`## Brief`, `## Problem`, `## Shape Notes`, or explicit scope), child coverage from `list_tasks(parent={id})` when aggregate, parent dependency-gate check when aggregate, child completion/archive summary when aggregate, residual decisions, aggregate evidence when applicable, and archive/reject rationale.
+Include `## Collect Notes`: classification (`leaf` or `aggregate`), leaf verification evidence or
+aggregate intent source (`## Brief`, `## Problem`, `## Shape Notes`, or explicit scope), invariant
+map coverage, child coverage from `list_tasks(parent={id})` when aggregate, parent dependency-gate
+check when aggregate, child completion/archive summary when aggregate, tested commit SHA plus tied
+normal-path proof when applicable, residual decisions, and archive/reject rationale.
 
 </output_format>
 

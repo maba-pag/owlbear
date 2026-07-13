@@ -68,7 +68,7 @@ def _make_single_task_response(**overrides: object) -> SingleTaskResponse:
 def app_ctx_todo(tmp_path: Path) -> AppContext:
     kanban_dir = _make_board(tmp_path)
     engine = KanbanEngine(kanban_dir)
-    engine.create_task("Todo task", status="todo", priority="important")
+    engine.create_task("Todo task", status="build", priority="medium")
     engine.list_tasks()
     return AppContext(engine=engine, kanban_dir=kanban_dir)
 
@@ -77,7 +77,7 @@ def app_ctx_todo(tmp_path: Path) -> AppContext:
 def app_ctx_claimed(tmp_path: Path) -> AppContext:
     kanban_dir = _make_board(tmp_path)
     engine = KanbanEngine(kanban_dir)
-    engine.create_task("Claimed task", status="in-progress", priority="important")
+    engine.create_task("Claimed task", status="verify", priority="medium")
     engine.list_tasks()
     engine.claim_task("1")
     return AppContext(engine=engine, kanban_dir=kanban_dir)
@@ -87,7 +87,7 @@ def app_ctx_claimed(tmp_path: Path) -> AppContext:
 def app_ctx_mock_view(tmp_path: Path) -> tuple[AppContext, MagicMock]:
     kanban_dir = _make_board(tmp_path)
     engine = KanbanEngine(kanban_dir)
-    engine.create_task("Seed task", status="todo", priority="important")
+    engine.create_task("Seed task", status="build", priority="medium")
     engine.list_tasks()
 
     mock_view = MagicMock()

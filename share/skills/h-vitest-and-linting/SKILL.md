@@ -1,189 +1,159 @@
 ---
 name: h-vitest-and-linting
-description: "Handbook: Vitest, Playwright, ESLint, Stylelint, and coverage commands for the Cockpit frontend"
+description: "Handbook: Vitest, Playwright, frontend linting, build proof, and coverage commands"
 user-invocable: false
 ---
 
 # Frontend Test, Lint, and Coverage Reference
 
-All commands below run from the Cockpit frontend package root: `serve/cockpit/web/`. Running Vitest from the repo root causes `ReferenceError: HTMLElement is not defined` because the jsdom environment in `vite.config.ts` is not discovered.
+Use the target project's package manager, scripts, and test configuration. Do not assume a package
+root, framework, browser, or script name.
 
-For other projects, substitute the equivalent frontend package root.
+## Discover the Owning Package
 
-The normal frontend evidence path is Vitest plus ESLint. Use Playwright, build, CSS, or HTML commands only when AC, Shape Notes, Verify Notes, or caller instructions explicitly require those proof types.
+1. Start from the changed source or test file. When available, OwlBear's supplied helper can suggest
+   the working directory and toolchain:
 
-## Vitest Commands
+   ```shell
+   uv run --project {owlbear-root} test-root {test-or-source-path}
+   ```
 
-### Working directory
+2. Verify the result against the nearest `package.json`, workspace manifest, lockfile, and Vitest,
+   Vite, Playwright, ESLint, Stylelint, or framework configuration.
+3. Read package scripts before constructing commands. Prefer maintained scripts over direct binary
+   invocation because scripts may provide environment variables, setup files, reporters, or gates.
+4. Use a repository-root proxy script when it intentionally delegates to the owning package.
+   Otherwise run from the package root when configuration resolution depends on the current working
+   directory.
 
-```shell
-cd serve/cockpit/web
-```
+Use these placeholders:
 
-Every vitest invocation below assumes this cwd.
+| Placeholder | Meaning |
+|-------------|---------|
+| `{package-root}` | Directory owning the relevant frontend manifest and configuration |
+| `{package-runner}` | Package manager command: `npm`, `pnpm`, `yarn`, or `bun` |
+| `{test-script}` | Discovered unit/component test script |
+| `{e2e-script}` | Discovered browser/E2E script |
+| `{lint-script}` | Discovered lint script for the affected file type |
+| `{build-script}` | Discovered typecheck/build script |
 
-### Scoped runs
+## Select Proof by Claim
 
-```shell
-npm test -- src/__tests__/MyComponent.test.tsx
-```
+| Claim | Primary proof |
+|-------|---------------|
+| Pure logic, state transition, serialization, hook, or supported component interaction | Vitest or the configured unit/component runner |
+| Type safety, bundling, imports, generated assets, or static validity | Typecheck, build, or relevant linter |
+| Browser API, assembled workflow, focus behavior, geometry, viewport behavior, or screenshot | Playwright or configured real-browser runner |
+| CSS/HTML syntax or project style policy | Stylelint, HTML linter, or configured framework lint |
 
-Multiple files:
+Do not use jsdom to prove layout geometry, clipping, overlap, element reachability, real focus
+trapping, or viewport behavior. Do not run browser E2E when a smaller test exercises the same public
+contract with equivalent confidence.
 
-```shell
-npm test -- src/__tests__/A.test.tsx src/__tests__/B.test.tsx
-```
+## Command Templates
 
-The `test` script uses `--silent=true` rather than bare `--silent` so npm-forwarded file arguments remain positional test filters.
+Run from `{package-root}` unless a verified root proxy script is used.
 
-### Full suite
+### Unit or component tests
 
-```shell
-npm test
-```
-
-Matches all `src/**/*.{test,spec}.{ts,tsx}` files (configured in `vite.config.ts`).
-
-### Default flags
-
-- `NODE_OPTIONS='--max-old-space-size=2048'` — matches the `test` script in `package.json`. Without it, PDS test suites can OOM.
-- `--silent=true` — baked into `npm test`. Suppresses `console.log` / `console.warn` / `console.error` from test code. PDS components emit hundreds of thousands of console lines in jsdom; without `--silent=true`, output can exceed 600K lines, making logs unreadable. Vitest still reports test names, pass/fail status, and assertion errors — only console noise is hidden.
-- For full console output during debugging, use `npx vitest run` (without `--silent`).
-- `vitest run` (not `vitest`) — `run` disables watch mode. Without it, vitest stays open waiting for file changes.
-
-## ESLint
-
-```shell
-cd serve/cockpit/web && npx eslint src/components/MyComponent.tsx
-```
-
-Lint all source:
-
-```shell
-cd serve/cockpit/web && npx eslint src/
-```
-
-ESLint uses a flat config (`eslint.config.js`) with `@eslint/js` + `typescript-eslint`. The rule set is intentionally minimal — `@typescript-eslint/no-unused-vars` as a warning.
-
-### Exit codes
-
-| Code | Meaning |
-|------|---------|
-| 0 | No violations (or warnings only) |
-| 1 | Lint violations found |
-| 2 | Misconfiguration / fatal error |
-
-## CSS and HTML Lint
-
-CSS lint:
+Scoped:
 
 ```shell
-cd serve/cockpit/web && npm run lint:css
+{package-runner} run {test-script} -- {test-file-or-filter}
 ```
 
-HTML lint:
+Full configured suite:
 
 ```shell
-cd serve/cockpit/web && npm run lint:html
+{package-runner} run {test-script}
 ```
 
-Use these when CSS or `index.html` changed, or when AC names layout/CSS/HTML validity. ESLint does not inspect CSS files.
+When invoking Vitest directly for one-shot proof, use `vitest run`; bare `vitest` enters watch mode.
+Prefer the package script when it already includes `run` and required environment setup.
 
-## Build and E2E
-
-Build:
+### Lint and build
 
 ```shell
-cd serve/cockpit/web && npm run build
+{package-runner} run {lint-script}
+{package-runner} run {build-script}
 ```
 
-Playwright E2E:
+Pass affected files only when the script supports positional filters. Run CSS or HTML lint when those
+file types changed or the claimed behavior depends on their validity; JavaScript lint does not
+validate CSS or HTML.
+
+### Browser/E2E
 
 ```shell
-cd serve/cockpit/web && npm run test:e2e
+{package-runner} run {e2e-script} -- {spec-or-filter}
 ```
 
-The default E2E script is a fast gate. With no extra args it runs only stable contract specs:
+Run the configured fast gate by default. Run every browser spec only when the task, risk, or explicit
+request justifies it. If Playwright fails before assertions execute, inspect web-server, typecheck,
+and build output before attributing the failure to the spec.
 
-- `e2e/smoke.spec.ts`
-- `e2e/mutation-error-banner.spec.ts`
-- `e2e/pds-runtime-csp.spec.ts`
+Browser binaries may require one-time installation. Use the browser set declared by Playwright
+configuration rather than assuming Chromium.
 
-Scoped task proof runs still work by passing a file or filter:
+### Coverage
 
 ```shell
-cd serve/cockpit/web && npm run test:e2e -- e2e/focus-visible-pds-1626.spec.ts
+{package-runner} run {test-script} -- --coverage
 ```
 
-Run every checked-in Playwright spec only when explicitly requested:
+Use the configured provider and thresholds. Coverage identifies unexamined paths; it does not justify
+tests for generated branches, DOM shape, component internals, or compiler output.
 
-```shell
-cd serve/cockpit/web && npm run test:e2e:all
-```
+## Durable Frontend Test Admission
 
-The Playwright config runs Chromium only and starts through `npm run build && npm run preview` on port 4173. If TypeScript or Vite build fails, Playwright may report a webServer/startup failure before any E2E assertions execute.
+A committed test must pass the pipeline Rent Test and protect observable behavior, a public API or
+component contract, a non-obvious state transition, a realistic failure boundary, or a previously
+observed regression.
 
-Browser binaries are not bundled with `@playwright/test`; one-time setup is `npx playwright install chromium`.
+Do not commit tests that merely assert:
 
-## Coverage
+- removed text, files, imports, selectors, or old components are absent;
+- a source file, config key, dependency, export, CSS string, or literal exists;
+- a component has a particular internal DOM shape when users and callers do not depend on it;
+- compiler output, generated cache branches, snapshots, or implementation details remain unchanged.
 
-```shell
-cd serve/cockpit/web && npm test -- --coverage.reporter=text --coverage.provider=v8
-```
+Use search, diff, lint, typecheck, build, or focused manual/browser inspection as task proof for those
+claims. A structural assertion belongs in the durable suite only when it is itself a maintained
+public contract and no owning validator provides cheaper proof.
 
-Scoped with coverage:
+Every durable test should answer: which plausible user-visible, state, or API regression makes this
+fail? Exercise meaningful input and observable output. Add alternate or negative cases only when
+they distinguish the contract from a common incorrect implementation.
 
-```shell
-cd serve/cockpit/web && npm test -- src/__tests__/MyComponent.test.tsx --coverage.reporter=text --coverage.provider=v8
-```
+## Cockpit/PDS Profile
 
-Coverage reports module-level percentages only — no per-branch analysis.
+Apply this profile only when the target package uses Cockpit's scripts and Porsche Design System:
 
-## Vitest Configuration
-
-Config lives in `vite.config.ts` (not a separate `vitest.config.ts`):
-
-```typescript
-test: {
-  environment: 'jsdom',
-  setupFiles: ['./vitest.setup.ts'],
-  globals: true,
-  include: ['src/**/*.{test,spec}.{ts,tsx}'],
-  testTimeout: 10_000,
-  teardownTimeout: 3_000,
-  onConsoleLog(log) {
-    if (log.includes('not wrapped in act')) return false
-  },
-}
-```
-
-### Setup file (`vitest.setup.ts`)
-
-Imports and shims applied before every test:
-
-- `@porsche-design-system/components-react/jsdom-polyfill` — PDS jsdom support
-- `@testing-library/jest-dom/vitest` — DOM matchers
-- `skipPorscheDesignSystemCDNRequestsDuringTests()` — blocks PDS CDN fetches
-- `HTMLDialogElement.showModal` / `.close` — jsdom stub (vitest `vi.fn()`)
-- `HTMLElement.attachInternals` — jsdom stub for PDS form components
-- `EventSource` — closed-by-default stub
-- PDS `ownerDocument` TypeError suppression (global error handler)
-
-### PDS component testing notes
-
-- PDS custom elements are host elements in jsdom. Prefer selectors such as `p-select`, `p-input-text`, and `p-multi-select` when Testing Library roles are unavailable.
-- `PSelect` changes are commonly driven with `CustomEvent('change', { detail: { value }, bubbles: true })`.
-- `PMultiSelect` changes are driven with `CustomEvent('update', { detail: { value: [...] }, bubbles: true })`.
-- If a behavior depends on layout, focus trapping, browser geometry, or actual rendered viewport width, use Playwright instead of Vitest.
+- The package root is discovered from `serve/cockpit/web/package.json`; repository-root proxy scripts
+  are also valid.
+- `npm test` supplies `NODE_OPTIONS=--max-old-space-size=2048`, `vitest run`, and `--silent=true`.
+  Preserve those flags for normal runs; direct `npx vitest run` is useful when debugging console
+  output.
+- Vitest configuration lives in `vite.config.ts` and uses jsdom plus `vitest.setup.ts`. Running a
+  direct Vitest command from the wrong directory can skip this setup and produce environment errors.
+- Setup includes the PDS jsdom polyfill, Testing Library matchers, CDN-request suppression, and local
+  shims for browser APIs such as `HTMLDialogElement`, `HTMLElement.attachInternals`, and `EventSource`.
+- PDS custom elements may not expose native roles in jsdom. Drive their actual host contracts:
+  `PSelect` commonly emits `change` with `detail.value`; `PMultiSelect` emits `update` with
+  `detail.value`.
+- `npm run test:e2e` is Cockpit's maintained fast gate; `npm run test:e2e:all` is the deliberate full
+  sweep. Playwright currently uses Chromium and starts through the configured build/preview server.
+- PDS can emit extremely large jsdom console output. Use the silent package script normally. If
+  output is still truncated, capture it under `.owlbear/scratch/vitest-{task_id}.log` and inspect a
+  bounded summary with `tail` or targeted `grep`; do not load the entire log into model context.
 
 ## Known Gotchas
 
-- **Must `cd` to your frontend package root first.** This is the #1 cause of frontend test failures. Vitest reads `vite.config.ts` from the cwd, so running from the repo root skips the jsdom environment entirely.
-  > Example (OwlBear-dev): `cd serve/cockpit/web`
-- **Build failures can mask E2E assertions.** When Playwright fails before tests run, inspect the build output first; the failure may belong to TypeScript/Vite rather than the E2E test body.
-- **Full E2E is opt-in.** `npm run test:e2e` is intentionally the fast sync gate. Use `npm run test:e2e:all` only for deliberate full sweeps; archived visual, accessibility, layout, and RED-era task proofs can be expensive.
-- **PDS console noise.** PDS components emit thousands of `console.error` / `console.warn` lines in jsdom (e.g. `variant 'tertiary'`, `CDN request blocked`). `npm test` includes `--silent` by default. If you omit `--silent` for debugging (`npx vitest run`), only the vitest summary line (`Test Files: N passed`, `Tests: N passed`) determines pass/fail.
-- **Output volume.** Without `--silent`, PDS noise can produce 600K+ lines. `npm test` includes `--silent` by default. If output is still truncated, use the file-capture fallback: redirect to `.owlbear/scratch/vitest-{task_id}.log` and `grep` or `tail -50` for the summary — **never `read_file` on a vitest log** (they can be hundreds of thousands of lines).
-- **`npx vitest run` vs `npx vitest`.** Always use `run`. Without it, vitest enters watch mode and never exits.
-- **No `--reporter=verbose` by default.** The default reporter is sufficient for summary counts. Use `--reporter=verbose` only when individual test names are needed for debugging.
-- **Never `read_file` on vitest log files.** If you redirected output to a file, use `tail -50` to get the summary or `grep -E 'FAIL|Test Files:|Tests:' <file>` to extract results. Log files can be 600K+ lines; reading them with `read_file` wastes context and tokens.
+- **Configuration resolution.** A wrong working directory can silently select the wrong environment,
+  setup file, aliases, or include patterns. Verify the owning config before diagnosing test failures.
+- **Build failures can mask E2E assertions.** Separate web-server and build startup failures from
+  failures in the browser test body.
+- **One-shot execution.** Use a maintained non-watch script or `vitest run`; do not leave a watcher
+  running as proof.
+- **Output volume.** Prefer normal direct command output. Use OwlBear scratch capture only when output
+  is actually truncated, and inspect bounded summaries rather than entire logs.

@@ -23,7 +23,7 @@ Load these via `read_file` when the referenced capability is needed:
 | `h-mcp-kanban` | Using kanban tools — claiming, editing, moving, blocking tasks |
 | `h-ac-quality` | Drafting or judging acceptance criteria |
 | `h-decision-requests` | Creating DR/AR records |
-| `r-project-standards` | Committing changes |
+| `r-workspace-governance` | Committing changes or creating OwlBear-managed artifacts |
 
 ## 1. Lifecycle
 
@@ -70,7 +70,45 @@ If `recall_memory` is available in your tool allowlist, call it after claiming w
 
 If you used recalled memory, assess it before `end_work` per `h-mcp-memory`.
 
+### Task Metadata
+
+Use `medium` priority by default. Use `high` for a current blocker or work with strong dependency
+fan-out; use `low` for non-urgent cleanup or later ideas.
+
+Tags are free-form but use these conventions when they improve routing or grouping:
+
+| Category | Examples | Purpose |
+|----------|----------|---------|
+| Phase | `phase-1` through `phase-12` | Group work by delivery phase |
+| Category | `config`, `tooling`, `docs`, `test`, `cli`, `agent` | Identify the area touched |
+| Type | `type:build`, `type:test`, `type:docs`, `type:user-action` | Identify the kind of work |
+| Scope | `scope:copilot`, `scope:core`, `scope:cli` | Identify the codebase part |
+| Rigor | `rigor:lean`, `rigor:standard`, `rigor:thorough` | Record the quality-versus-speed profile |
+
+`type:user-action` means physical user action is required before the pipeline can continue. Shaper
+creates an Action Request, blocks the task, and records the resolved decision on re-entry.
+
 ## 3. Working Standards
+
+### Minimum Change Contract
+
+Before the first edit, define a change envelope: the expected files or symbols, the behavior that
+must change, and the cheapest proof that can falsify the implementation. Preserve unaffected code
+verbatim and prefer a targeted edit inside an existing owner over file replacement, reorganization,
+or a new abstraction.
+
+- Every added file, helper, abstraction, fallback, compatibility branch, edge case, and durable test
+  must be required by shaped scope or an observed defect. Anticipated future value is not enough.
+- Do not add cleanup, hardening, documentation, compatibility, or refactors adjacent to the task.
+  Route independently valuable follow-up work separately instead of implementing it now.
+- The default durable-test delta is zero. Validation does not imply committing a test, and AC lines
+  do not map one-to-one to tests. One focused proof may cover several AC when it exercises their
+  shared public boundary.
+- Reuse existing tests and validators before creating proof artifacts. Add a durable test only when
+  it names a plausible meaningful regression, existing durable coverage does not protect that risk,
+  and the Rent Test passes.
+- If the diff expands materially beyond the change envelope, stop and reassess. Reduce your own
+  excess work or return to shape; do not normalize expansion by writing more tests around it.
 
 ### Evidence
 
@@ -78,26 +116,59 @@ If you used recalled memory, assess it before `end_work` per `h-mcp-memory`.
 - Tests are evidence, not product spec. Update or remove stale tests when they contradict current product direction.
 - No intrinsic coverage target exists. Coverage is useful only when it proves a real risk boundary.
 - Cite specifics: files, commands, outputs, task AC, and observed behavior.
+- Evidence is valid only for the boundary actually exercised. Mocks and injected dependencies may
+  replace lower layers, but they must not replace the command, endpoint, workflow, generated
+  operation visibility, assembled context, or user journey whose behavior is being claimed.
+- When a task names a canonical source or contract authority, builder and verifier compare the
+  implementation and fixtures with that authority. A contradiction invalidates completion even when
+  task-local tests pass.
 
 ### Rent Test For Durable Tests
 
-Create or keep durable tests only when at least one is true:
+Create or keep a durable test only when it protects a concrete behavioral risk not already covered
+by the maintained suite and at least one is true:
 
 - The behavior is easy to regress and hard to notice manually.
 - The code path is shared, security-sensitive, or data-loss-prone.
 - The test is cheaper to maintain than repeated manual verification.
 - The task explicitly requires a long-lived regression guard.
 
-Delete or update stale task-scoped tests when they preserve old workflow assumptions rather than product behavior.
+Do not create tests solely because code changed, an AC exists, a coverage report has a gap, or proof
+feels more complete with another case. Delete or update stale task-scoped tests when they preserve
+old workflow assumptions rather than product behavior.
+
+### Continuous Change Module Map
+
+When Shape Notes provide a Change Module Map, carry it through build and verify:
+
+- Shaper verifies named owners, responsibilities, interfaces, and precedents against source before
+  approval.
+- Builder starts from the mapped modules, keeps implementation inside them when source supports the
+  plan, and records justified deviations in Builder Notes.
+- Verifier compares changed modules and interface impact with the map and investigates concrete
+  deviations or adjacent invariants.
+- Return to shape when source contradicts ownership, architecture, interfaces, or task scope. Do not
+  silently expand the map.
+- Current source remains stronger authority than the shaped map.
+
+Collector and challengers do not perform open-ended orientation by default. They check closure or
+the proposed decision against the map and direct evidence within their role boundary.
 
 ### Proof Checks And Challengers
 
 The agent proposing a route owns the evidence for that route. Do not hand evidence ownership to an unnamed utility role.
 
 - Builder runs the focused command that best proves the change, then calls builder-challenger before DONE.
-- Builder-challenger may run focused lint, typecheck, import smoke, or named tests. It may run deterministic auto-fix commands such as `ruff check --fix` or established package-local lint-fix commands. It returns `decision: pass|fail`, reports any concrete DONE defect, and notes every auto-fixed file; it never performs manual edits.
+- Builder-challenger checks the Minimum Change Contract and any new durable tests before running
+  focused lint, typecheck, import smoke, or named tests. It may run deterministic auto-fix commands
+  such as `ruff check --fix` or established package-local lint-fix commands. It returns
+  `decision: pass|fail`, reports any concrete DONE defect, and notes every auto-fixed file; it never
+  performs manual edits.
 - Verifier runs any additional checks needed for verification, then calls verifier-challenger before PASS. Verifier-challenger returns `decision: pass|fail` after checking task intent to code, proof sufficiency, scope drift, and unresolved AC.
 - Collector runs aggregate checks directly only when parent/EPIC closure needs them.
+
+For aggregate normal-path proof, record the tested commit SHA and the command or artifact proving
+the aggregate AC at that SHA or a later descendant. A SHA without tied proof is not closure evidence.
 
 Challenger decisions are advisory to the caller, not pipeline verdicts. `decision: pass` means the caller may continue with the proposed route. `decision: fail` means the caller must not continue with that route until the named problem is resolved or routed by the owning agent.
 

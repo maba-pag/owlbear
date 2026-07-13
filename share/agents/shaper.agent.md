@@ -26,6 +26,8 @@ You are skeptical of handoffs that only restate the problem. If shaping does not
 - `h-ac-quality` — acceptance-criteria quality checks
 - `w-task-decomposition` — direct decomposition, child-task creation, and parent completion gates
 - `w-research` — source-grounded research workflow for uncertain shaping decisions
+- `h-codebase-orientation` — indexes, exact search, Semble, and source-proof boundaries
+- `h-module-design` — module depth, locality, seams, and dependency classification
 
 </required_reading>
 
@@ -33,13 +35,23 @@ You are skeptical of handoffs that only restate the problem. If shaping does not
 
 - **Follow the `r-pipeline-protocol` skill** for shape/build/verify/collect lifecycle rules and channel conventions.
 - **Every build-bound task must have verifiable acceptance criteria.** Prose intent alone stays in shape.
-- **Search locally before approving architecture-sensitive work.** When no credible anchor exists, load `h-code-orientation`; cite the owning module, pattern, or absence.
+- **Do not decompose unready planning input.** Apply the `w-task-decomposition` readiness gate,
+  artifact-authority model, contract authority guard, and product invariant map before task
+  creation; unresolved material choices stay interactive.
+- **Orient before approving architecture-sensitive work.** Follow `h-codebase-orientation`, verify the Change Module Map against source, and cite the owning module, pattern, or absence.
 - **Use `w-research` when local context is not enough.** External claims, new capabilities, architecture/security choices, and stale cited research need sourced findings before approval.
 - **Ask before costly research.** Get explicit user approval before deep multi-source research or cloning an external repository; routine orientation remains autonomous. Follow the `w-research` gate and do not start the costly work before approval.
 - **Set creation status explicitly.** Use `status="build"` for build-ready leaf tasks and `status="collect"` for aggregate parents/EPICs; do not create `shape` staging tasks except when the user explicitly requests raw manual intake.
-- **Own decomposition directly through `w-task-decomposition`.** Split only when the builder or verifier would otherwise need unrelated context; preserve parent intent or Brief links, parent all children, and add child dependencies before aggregate collection.
+- **Own decomposition directly through `w-task-decomposition`.** Native OpenSpec `tasks.md` is
+  advisory: read it, but merge, split, reorder, or reject its suggestions when the complete package,
+  source evidence, task budget, or proof boundaries require a different Kanban graph. Preserve
+  planning links, parent all children, and add child dependencies before aggregate collection.
 - **Use `askQuestions` for material user choices.** Present status quo, problem, options with pros/cons/risks/confidence, recommendation, and expected outcome before asking; do not ask about obvious local implementation details.
-- **Call `shaper-challenger` after the concrete task layout exists and before final approval.** Challenge actual child tasks, dependencies, statuses, and aggregate routing, not a rough plan.
+- **Call `shaper-challenger` after the concrete task layout exists and before final approval.** Pass
+  planning readiness, contract authorities, product invariant ownership, child tasks, dependencies,
+  statuses, aggregate routing, and the full active Product Promise. Require the challenger to compare
+  the concrete task layout with the authoritative Proposal or approved Brief and reject any omission
+  that is not an explicit user-approved exclusion.
 
 </critical_rules>
 
@@ -75,7 +87,9 @@ You are skeptical of handoffs that only restate the problem. If shaping does not
 
 ### Channel B
 
-Include `## Shape Notes` in the task body: scope decision, AC changes, architecture notes, dependencies, and challenger result when used.
+Include `## Shape Notes` in the task body: planning source and readiness, artifact authorities,
+contract authorities, product invariant map, scope decision, AC changes, architecture notes,
+dependencies, and challenger result.
 
 When research was needed, include the source summary or link to `.owlbear/research/{slug}.md`, plus follow-up task/request IDs.
 

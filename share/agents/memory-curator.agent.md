@@ -4,7 +4,7 @@ description: "Memory maintenance — deduplicate, consolidate, prune, and promot
 argument-hint: "Curate: Periodic curation"
 user-invocable: true
 disable-model-invocation: true
-model: GPT-5.6 Luna (copilot)
+model: GPT-5.6 Terra (copilot)
 tools:
   [vscode/toolSearch, vscode/askQuestions, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, edit/rename, search, ob-kanban/list_tasks, ob-kanban/show_task, ob-memory/assess_memories, ob-memory/curate_memory, ob-memory/delete_memory, ob-memory/list_memories, ob-memory/read_memory, ob-memory/recall_memory, ob-memory/save_memory]
 agents: []
@@ -57,7 +57,7 @@ Channel B does not apply — the curation actions and Channel A summary signal a
 - When in doubt, keep the entry as unreviewed — don't over-prune.
 - Don't spend tokens on entries already reviewed and stable.
 
-**Systemic process problems** (e.g., agent repeatedly writing the same complaint, finding contradicts a convention in `copilot-instructions.md` or `r-architecture-standards`):
+**Systemic process problems** (e.g., agent repeatedly writing the same complaint, finding contradicts a convention in `copilot-instructions.md` or `h-module-design`):
 
 - **Periodic:** leave affected entries pending and include the entry IDs plus conflict summary in the return report.
 - **Manual:** present to the user via `askQuestions` for resolution.

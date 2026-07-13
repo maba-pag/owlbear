@@ -1,15 +1,15 @@
 # share/ — Agent Ecosystem
 
-OwlBear's agent ecosystem: 23 agents, 29 skills, 7 instructions, 12 prompts. This directory is the single source of truth for agent definitions and their supporting documents.
+OwlBear's agent ecosystem: 23 agents, 30 skills, 7 instructions, 13 prompts. This directory is the single source of truth for agent definitions and their supporting documents.
 
 ## Directory Layout
 
 | Directory | Contents | Count |
 |-----------|----------|-------|
 | `agents/` | Agent definitions (`.agent.md`) | 23 |
-| `skills/` | Reusable domain knowledge (`SKILL.md`) | 29 |
+| `skills/` | Reusable domain knowledge (`SKILL.md`) | 30 |
 | `instructions/` | Auto-loaded instruction files (`.instructions.md`) | 7 |
-| `prompts/` | User-invocable one-shot commands (`.prompt.md`) | 12 |
+| `prompts/` | User-invocable one-shot commands (`.prompt.md`) | 13 |
 | `diagrams/` | Shared visual assets (Excalidraw, SVG) | — |
 
 ## Loading Model
@@ -18,7 +18,7 @@ Content reaches agents through four mechanisms, ordered by cost:
 
 | Mechanism | When it loads | Cost | Use for |
 |-----------|--------------|------|---------|
-| `copilot-instructions.md` | Every turn, every agent | ~200 tokens/turn | Universal project identity |
+| `copilot-instructions.md` | Every turn, every agent | Project-dependent | Current-project identity, topology, stack, commands, and resources |
 | Instructions (`.instructions.md`) | Every turn when `applyTo` glob matches a touched file | ~20–70 tokens/turn | Safety-net stubs, pipeline protocol |
 | Skill frontmatter | Every turn, every agent (YAML header only) | ~20 tokens/skill/turn | Discovery — VS Code uses this to decide when to suggest the skill |
 | Skill body (`read_file`) | Once per session, on demand | One-time read (~300–500 tokens) | Procedures, protocol, domain knowledge |
@@ -45,14 +45,14 @@ Skills can declare companion skills that consumers should load when needed:
 - **Level 1 (transitive):** Skill A → skill B, declared in A's companion table or Step 0
 - Only Level 0 goes in `<required_reading>`. Level 1 is the skill's responsibility.
 
-## Universal Files
+## Always-Loaded Context
 
 These load into every agent's context on every turn:
 
-| File | Mechanism |
-|------|-----------|
-| `.github/copilot-instructions.md` | Workspace instructions (always present) |
-| `owlbear-system.instructions.md` | `applyTo: "**"` (fires on any file touch) |
+| File | Mechanism | Authority |
+|------|-----------|-----------|
+| `.github/copilot-instructions.md` | Workspace instructions (always present) | Current-project facts only; never shared OwlBear behavior |
+| `owlbear-system.instructions.md` | `applyTo: "**"` (fires on any file touch) | Universal OwlBear behavior |
 
 ## Agents
 
@@ -78,11 +78,11 @@ See `h-agent-structure` § Nesting Depth & DMI for the full rule and ND3 agent t
 
 ## Skills
 
-28 skill definitions (`share/skills/{name}/SKILL.md`).
+30 skill definitions (`share/skills/{name}/SKILL.md`).
 
 | Prefix | Count | Purpose |
 |--------|-------|---------|
-| `w-` | 8 | Workflow — step-by-step procedures |
+| `w-` | 9 | Workflow — step-by-step procedures |
 | `r-` | 4 | Rules — shared conventions |
 | `h-` | 17 | Handbook — domain knowledge |
 
@@ -111,7 +111,7 @@ Stubs catch agents editing files without the relevant skill loaded. They do not 
 
 ## Prompts
 
-12 prompt files (`.prompt.md`). Prompts are user-invocable one-shot commands triggered from the VS Code chat command palette. Many accept `${input:...}` variable substitution.
+13 prompt files (`.prompt.md`). Prompts are user-invocable one-shot commands triggered from the VS Code chat command palette. Many accept `${input:...}` variable substitution.
 
 **Naming convention:**
 
@@ -125,8 +125,8 @@ Stubs catch agents editing files without the relevant skill loaded. They do not 
 | Group | Prompts |
 |-------|--------|
 | Orchestration | `shape`, `orchestrate` |
-| Agent audits | `agent-broad-audit`, `agent-deep-audit` |
-| Audits | `frontend-audit`, `memory-audit`, `legacy-audit` |
+| Planning and design | `ideate`, `architecture-review` |
+| Audits | `arch-audit`, `frontend-audit`, `memory-audit`, `legacy-audit` |
 | Ideation | `ideation-discover`, `ideation-mediate` |
 | Knowledge | `kb-ingest`, `kb-enrich` |
 | Curation | `test-curation` |

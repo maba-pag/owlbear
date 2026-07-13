@@ -6,75 +6,111 @@ user-invocable: false
 
 # Frontend Conventions
 
-Primary scope in this workspace is the Cockpit frontend at `serve/cockpit/web/`: React 19, TypeScript, Vite, React Compiler, React Router, Porsche Design System React components, Vitest/jsdom, and Playwright.
+These are the OwlBear baseline conventions for consuming projects. Explicit project configuration,
+design-system guidance, and local instructions may replace the baseline.
+
+## Discover Project Policy
+
+Before changing frontend code, inspect the owning package and established implementation for:
+
+- framework, language, compiler, router, and state-management approach;
+- component library, design system, tokens, and styling strategy;
+- source organization, naming, colocation, and public module boundaries;
+- supported browsers, input modes, viewports, and accessibility requirements;
+- test, lint, typecheck, build, preview, and browser scripts.
+
+Follow coherent local patterns unless they directly cause the problem being solved. Do not infer
+React, Cockpit, Porsche Design System, Vite, Vitest, or Playwright without repository evidence.
 
 ## Design System
 
-- **Cockpit / Porsche projects:** Use the [Porsche Design System](https://designsystem.porsche.com/) as component library and design language. Follow PDS component APIs, spacing tokens, color tokens, and typography scales. Do not duplicate PDS functionality with custom components.
-- **Non-Porsche projects:** Document the chosen design system in the project definition before starting frontend work. If unspecified, use a minimal, accessible component approach.
+- Use the project's established design system, components, tokens, typography, and interaction
+  patterns when they satisfy the required behavior.
+- Do not recreate controls, layout primitives, or semantic tokens already supplied by that system.
+- When no design system exists, prefer a minimal set of accessible, locally consistent primitives;
+  do not introduce a broad component dependency for one isolated need.
+- Verify third-party component behavior against the installed version's types and runtime contract,
+  especially for custom elements, events, slots, focus, and form participation.
 
-When using PDS:
+For deeper visual and interaction guidance, see `h-frontend-design`.
 
-- In Cockpit React code, import from `@porsche-design-system/components-react`.
-- Use PDS design tokens for spacing, colors, typography — never hardcode pixel values or hex colors with token equivalents
-- Prefer PDS components for controls, modals, selects, inputs, buttons, tabs, and status indicators when jsdom/E2E support is adequate.
-- Component composition follows PDS conventions (slots, named slots, event naming, host-element properties).
-- For PDS custom elements in tests, drive the real element contract: query `p-select`, `p-input-text`, or `p-multi-select` hosts and dispatch the CustomEvent shape the component emits.
+## Accessibility and Input
 
-### Cockpit PDS Testing Patterns
+Use semantic platform elements first and add ARIA only when native semantics cannot express the
+interaction. At minimum:
 
-- `PSelect` and `PInputText` are custom-element hosts in jsdom; do not assume native roles such as `combobox` or `textbox` unless a local test proves them.
-- `PInputText` exposes its value as a JavaScript property on the host element.
-- `PMultiSelect` state changes through `CustomEvent('update', { detail: { value: [...] } })`; do not use native `change` or `input` events for it.
-- `PSelect` tests usually drive `CustomEvent('change', { detail: { value } })` on the `p-select` host.
-- If a PDS component lacks reliable jsdom support for a required behavior, use a real-browser Playwright proof or document a native fallback in builder notes.
+- Associate labels, instructions, and errors with form controls.
+- Preserve meaningful keyboard and pointer operation for supported workflows.
+- Provide meaningful text alternatives for non-text content; decorative images use empty alt text.
+- Maintain logical headings and landmarks.
+- Do not use color alone to communicate required state.
+- Preserve visible focus when native focus indicators are replaced.
 
-For deeper design guidance, see the `h-frontend-design` skill.
+Apply the consuming project's accessibility target and supported input modes. If none is defined,
+use WCAG 2.1 AA and platform conventions as the baseline, then validate the paths users actually
+need rather than treating a generic checklist as proof of usability.
 
-## Accessibility (a11y)
+## Component and Module Structure
 
-Minimum: **WCAG 2.1 Level AA**.
+- Organize code around responsibilities and change locality. Colocate a component's private styles,
+  tests, and helpers when that makes the behavior easier to understand and change together.
+- Follow established project directories for API access, state, routes, components, and utilities;
+  do not impose `src/api/`, `src/hooks/`, or another framework layout on a different architecture.
+- Separate reusable domain or business behavior from rendering when it has independent callers,
+  tests, or change reasons. Small view-state coordination may remain in the component.
+- Split a file when it owns multiple independently changing responsibilities, not merely because it
+  contains more than one small local component.
+- Type public props, events, API payloads, and state boundaries using the project's language and
+  conventions.
+- Keep state ownership explicit: identify where canonical state lives, how updates flow, and which
+  layer handles loading, errors, retries, and optimistic reconciliation.
 
-- All interactive elements: keyboard-navigable
-- Images: meaningful `alt` text (or `alt=""` for decorative)
-- Color contrast: ≥ 4.5:1 normal text, ≥ 3:1 large text
-- Form inputs: associated `<label>` elements
-- ARIA: only when semantic HTML is insufficient — prefer native elements
-- Navigation: logical heading hierarchy, landmark roles for screen readers
+## Responsive and Visual Behavior
 
-## Component Structure
+- Derive supported layout states from project requirements, existing breakpoints, analytics, or the
+  target workflow. Do not assume a fixed viewport matrix or mobile-first policy.
+- Use design-system breakpoint tokens or locally consistent media/container queries.
+- Keep primary content and actions coherent and reachable at each supported layout state.
+- Use stable responsive constraints for grids, boards, toolbars, media, and other fixed-format UI so
+  dynamic content does not cause incoherent shifting or overlap.
+- Static CSS can establish declared rules; only real-browser geometry can prove clipping, overlap,
+  viewport reachability, and rendered layout.
 
-- One component per file — match component name to filename
-- Separate concerns: API clients in `src/api/`, reusable state logic in `src/hooks/`, presentation in components, and layout styling in CSS files or shared utility modules.
-- Props/inputs are typed (TypeScript interfaces or framework-specific typing)
-- State management is explicit — document where state lives and how it flows
-- Avoid embedding reusable business logic in components. Small view-state coordination is acceptable; shared behavior belongs in hooks, API modules, or pure helpers.
-- React Compiler can add generated memo/cache branches. Do not create artificial implementation tests just to satisfy compiled coverage unless the task explicitly targets coverage; behavior-binding assertions are the proof.
+## Testing and Proof
 
-## Responsive Design
+Load `h-vitest-and-linting` when the project uses its covered toolchain. Match proof to the claim:
 
-- Mobile-first: base styles for mobile, progressive enhancement via breakpoints
-- Use design system breakpoint tokens or locally consistent media-query ranges.
-- Test at minimum: 320px, 768px, 1024px, 1440px viewport widths
-- No horizontal scrolling at any supported viewport
-- Runtime geometry claims require Playwright or browser evidence. Vitest/jsdom can check static CSS/source contracts, but it cannot prove bounding boxes, overlap, or viewport reachability.
+- Unit/component tests protect observable behavior, public component contracts, and meaningful state
+  transitions supported by their runtime environment.
+- Typecheck, build, and linters prove compilation and static contracts.
+- Real-browser tests prove browser APIs, assembled workflows, focus behavior, geometry, viewport
+  behavior, and screenshots.
 
-## Testing
+Do not add durable tests for internal DOM shape, source strings, removed files/components, generated
+compiler branches, or configuration presence unless those artifacts are maintained public contracts.
+A durable test must name a plausible user-visible, state, or API regression that would make it fail.
+Use task-local search, diff, lint, typecheck, build, or inspection for one-time structural proof.
 
-- Component tests: framework's testing library (Testing Library, Vitest)
-- Test user behavior, not implementation details — interact via roles, labels, text
-- a11y tests: use `axe-core` or equivalent automated checker
-- Visual regression tests recommended for design-system-critical components
-- Cockpit E2E tests live under `serve/cockpit/web/e2e/` and run with Playwright Chromium via `npm run test:e2e`.
-- Build proof matters for E2E: Playwright starts through `npm run build && npm run preview`, so TypeScript/build failures block E2E before assertions execute.
-- For CSS and HTML quality, use the package scripts `npm run lint:css` and `npm run lint:html` when AC or touched files require them.
-- DOM presence alone is weak proof for visibility, reachability, or exact option contracts. Prefer exact values, full option lists, discriminating negative cases, and real viewport assertions for layout AC.
+Automated accessibility checks can identify classes of violations but do not prove workflow usability.
+Use exact values and discriminating cases for bounded option or event contracts; DOM presence alone
+does not prove visibility or reachability.
 
-### PDS Test Environment Setup (Vitest + jsdom)
+## Cockpit/PDS/React Profile
 
-- `skipPorscheDesignSystemCDNRequestsDuringTests()` is exported from the **main package** (`@porsche-design-system/components-react`), NOT from the `/testing` subpath. The research doc placed it in `/testing` — this is incorrect.
-- Cockpit setup imports `@porsche-design-system/components-react/jsdom-polyfill`, `@testing-library/jest-dom/vitest`, and `skipPorscheDesignSystemCDNRequestsDuringTests()` from `vitest.setup.ts`.
-- jsdom does not implement `attachInternals`. It lives on `HTMLElement`, not `Element` — mock it on `HTMLElement.prototype`, not `Element.prototype`:
+Apply this profile only when the target package uses Cockpit's React and Porsche Design System stack:
+
+- Import components from `@porsche-design-system/components-react` and use PDS spacing, color,
+  typography, component, slot, property, and event contracts rather than duplicating them.
+- PDS custom elements are hosts in jsdom. Do not assume native roles or events unless verified for
+  the installed version. `PInputText` exposes value on its host; `PSelect` commonly emits `change`
+  with `detail.value`; `PMultiSelect` emits `update` with `detail.value`.
+- When jsdom cannot represent layout, focus trapping, or another browser behavior, use Cockpit's
+  Playwright proof rather than replacing the component contract with a native-element assumption.
+- React Compiler may generate memo/cache branches. Do not add implementation tests merely to cover
+  generated branches; behavior-binding assertions are the proof.
+- Cockpit's setup imports the PDS jsdom polyfill, Testing Library DOM matchers, and
+  `skipPorscheDesignSystemCDNRequestsDuringTests()` from the main PDS React package.
+- jsdom does not implement `attachInternals`. It belongs on `HTMLElement`, not `Element`:
 
   ```ts
   if (
@@ -86,3 +122,6 @@ Minimum: **WCAG 2.1 Level AA**.
     ] = vi.fn();
   }
   ```
+
+- Discover Cockpit E2E, build, CSS, and HTML scripts from its package manifest. Build or web-server
+  startup failure can prevent Playwright assertions from running; classify that failure separately.

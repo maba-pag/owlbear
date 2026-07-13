@@ -8,7 +8,8 @@ user-invocable: false
 
 Remove task-scoped tests that no longer provide project value. Mine useful assertions into durable tests before deleting. The goal is not to reduce test count — it is to stop spending compute on tests whose only purpose was proving a task's AC were met.
 
-**Non-blocking:** Runs on demand via prompt. Never gates task dispatch.
+**Non-blocking:** Runs on demand via prompt. Never gates task dispatch. Coverage may help locate
+unexamined code, but it never justifies keeping or adding a test.
 
 ## Goal
 
@@ -71,7 +72,9 @@ For each archived task-test, answer one question: **does this test provide ongoi
 | Tests integration between two modules | Mine if not covered elsewhere |
 | Tests a bug fix (regression guard) | Mine — these are high-value |
 
-**Bias:** When genuinely unsure, keep the test (mark as `skip`). Removing a useful regression guard is worse than one extra test file.
+**Decision rule:** Uncertainty alone is not evidence of value. Inspect the public behavior and nearby
+durable coverage; if no plausible ongoing regression can be named, delete the test. Use `skip` only
+when concrete missing context prevents a responsible decision.
 
 ## Mining
 
@@ -81,8 +84,9 @@ When a task-test has assertions worth preserving:
 
 1. Identify the durable test target — the module-level or package-level test file covering the same source module. If none exists, create one.
 2. Move assertions in with descriptive names (not `TestFromAC_*`).
-3. Add provenance: `# Mined from #{task_id}: {behavior}`.
-4. Adjust imports/fixtures for the durable context.
+3. Preserve only the smallest assertion set that distinguishes the named regression.
+4. Add provenance: `# Mined from #{task_id}: {behavior}`.
+5. Adjust imports/fixtures for the durable context.
 
 ### Frontend (Vitest/Jest)
 
@@ -132,11 +136,11 @@ git add -A && git commit -m "test: curate {N} task-tests — {D} deleted, {M} mi
 - Skipped (protected/uncertain): {S}
 
 ### Decisions
-| File | Task | Verdict | Reason |
-|------|------|---------|--------|
-| test_core_removal_1234.py | #1234 (archived) | delete | removal proof |
-| test_engine_edge_1200.py | #1200 (archived) | mine → engine tests | regression guard |
-| Shell.tab-routing_1639.test.tsx | #1639 (archived) | delete | covered by Shell.test.tsx |
+| File | Task | Verdict | Protected behavior / reason |
+|------|------|---------|-----------------------------|
+| test_core_removal_1234.py | #1234 (archived) | delete | removal proof; no ongoing behavior |
+| test_engine_edge_1200.py | #1200 (archived) | mine → engine tests | malformed input remains atomic |
+| Shell.tab-routing_1639.test.tsx | #1639 (archived) | delete | already protected by Shell.test.tsx |
 ```
 
 ## Known Pitfalls

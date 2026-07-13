@@ -10,6 +10,7 @@ the location of this script.
 from __future__ import annotations
 
 import difflib
+import importlib.util
 import json
 import os
 import re
@@ -66,6 +67,17 @@ _HOOKS_REL_PREFIX = ".owlbear/hooks/"
 # patterns VS Code uses (trailing comments like `true, // old value`).  Does
 # NOT attempt to handle every edge case — just enough for settings.json files.
 _JSONC_LINE_COMMENT_RE = re.compile(r"(?<!:)//.*$", re.MULTILINE)
+
+
+def _install_openspec(target_dir: Path) -> None:
+    setup_path = Path(__file__).with_name("openspec.py")
+    spec = importlib.util.spec_from_file_location("owlbear_openspec_setup", setup_path)
+    if spec is None or spec.loader is None:
+        msg = f"Unable to load OpenSpec setup from {setup_path}"
+        raise RuntimeError(msg)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    module.install(target_dir)
 
 
 def _strip_jsonc_comments(text: str) -> str:
@@ -184,7 +196,7 @@ def _write_mcp(src: Path, dest: Path, replacements: dict[str, str]) -> None:
 
     result = {**owlbear_mcp, **existing, "servers": merged_servers}
     dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_text(json.dumps(result, indent=2), encoding="utf-8")
+    dest.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
 
 
 def _write_seed_file(src: Path, dest: Path, replacements: dict[str, str]) -> None:
@@ -374,6 +386,8 @@ def init(  # noqa: C901
         Path("decisions") / "resolved",
     ):
         (board_root / rel_dir).mkdir(parents=True, exist_ok=True)
+
+    _install_openspec(target_dir)
 
 
 # ---------------------------------------------------------------------------

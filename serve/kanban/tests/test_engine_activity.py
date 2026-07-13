@@ -22,46 +22,14 @@ from owlbear_kanban.storage import SessionRecord
 # Board helpers
 # ---------------------------------------------------------------------------
 
-_CONFIG_YAML = """\
-statuses:
-  - research
-  - backlog
-  - todo
-  - in-progress
-  - review
-  - docs
-  - done
-priorities:
-  - someday
-  - nice-to-have
-  - important
-  - needed
-  - critical
-entry_status: research
-wave_size: 4
-agent_map:
-  research: []
-  backlog: []
-  todo: []
-  in-progress: []
-  review: []
-  docs: []
-  done: []
-agent_types: {}
-agent_compatibility: {}
-non_impl_tags: [research, docs]
-archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
-status_predicates: {}
-claim_timeout: 1h
-next_id: 1001
-"""
+_CONFIG_YAML = "next_id: 1001\n"
 
 _VALID_TASK = """\
 ---
 id: {task_id}
 title: Task {task_id}
 status: {status}
-priority: needed
+priority: medium
 created: "2026-04-21T10:00:00+00:00"
 updated: "2026-04-21T10:00:00+00:00"
 tags: []
@@ -89,7 +57,8 @@ def _make_board(base_dir: Path) -> Path:
     return kanban_dir
 
 
-def _make_task_file(kanban_dir: Path, task_id: int, status: str = "todo") -> Path:
+def _make_task_file(kanban_dir: Path, task_id: int, status: str = "build") -> Path:
+    status = {"todo": "build", "in-progress": "verify"}.get(status, status)
     p = kanban_dir / "tasks" / f"{task_id}-task.md"
     p.write_text(_VALID_TASK.format(task_id=task_id, status=status), encoding="utf-8")
     return p
@@ -134,7 +103,7 @@ class TestFromAC_EngineEmitsActivityEvents:
         _make_task_file(kanban_dir, 1001, "todo")
 
         engine = KanbanEngine(kanban_dir)
-        engine.move_task(1001, "in-progress")
+        engine.move_task(1001, "verify")
 
         events = list_activity_events(kanban_dir, task_id=1001)
         move_events = [e for e in events if e.action == "move"]
@@ -156,7 +125,7 @@ class TestFromAC_EngineEmitsActivityEvents:
         """AC-C42: sweep() appends an ActivityEvent for each released claim."""
         kanban_dir = _make_board(tmp_path)
         expired_ts = (datetime.now(tz=UTC) - timedelta(hours=3)).isoformat()
-        task_content = _VALID_TASK.format(task_id=1001, status="in-progress").replace(
+        task_content = _VALID_TASK.format(task_id=1001, status="verify").replace(
             "claimed_at: null", f'claimed_at: "{expired_ts}"'
         )
         (kanban_dir / "tasks" / "1001-expired.md").write_text(task_content, encoding="utf-8")
@@ -434,7 +403,7 @@ class TestFromAC_ListSessions:
         sessions = engine.list_sessions(filter="all")
         matching = [s for s in sessions if s.task_id == 1001]
         assert matching
-        assert matching[0].task_status_at_start == "todo"
+        assert matching[0].task_status_at_start == "build"
 
     def test_ac_c43_empty_activity_log_returns_empty_list(self, tmp_path: Path) -> None:
         """AC-C43: no activity.jsonl → list_sessions returns []."""

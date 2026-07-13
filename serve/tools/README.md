@@ -1,6 +1,6 @@
 # owlbear-tools — Workspace Utilities
 
-Workspace utility scripts for the OwlBear project. Currently provides the doc-index generator, which scans all documentation files in the workspace and writes a structured index used by agents for navigation.
+Workspace utility scripts for the OwlBear project. Provides generated documentation, Python, and ECMAScript indexes used by agents for navigation.
 
 → Parent: [README.md](../../README.md)
 
@@ -9,38 +9,51 @@ Workspace utility scripts for the OwlBear project. Currently provides the doc-in
 ## Launch / Usage
 
 ```bash
+# Regenerate all indexes concurrently
+uv run indexes
+
 # Regenerate .owlbear/doc-index.md
 uv run doc-index
+
+# Regenerate .owlbear/py-index.md
+uv run py-index
+
+# Regenerate .owlbear/ts-index.md (TypeScript, TSX, JavaScript, and JSX)
+uv run ts-index
 ```
 
-The command skips the write if `doc-index.md` is newer than all collected documentation files.
+Each command regenerates its complete index on every invocation. Generated indexes are advisory navigation aids; source files remain authoritative.
 
 ### Public API
 
 ```python
-from owlbear_tools.doc_index import collect_docs, generate_index, should_regenerate, parse_index
+from owlbear_tools.doc_index import generate_index as generate_doc_index
+from owlbear_tools.indexes import generate_indexes
+from owlbear_tools.py_index import generate_index as generate_py_index
+from owlbear_tools.ts_index import generate_index as generate_ts_index
 
-docs    = collect_docs(root)          # list[DocEntry]
-index   = generate_index(docs)        # str (Markdown)
-skip    = should_regenerate(root)     # bool
-entries = parse_index(index_content)  # list[DocEntry]
+generate_indexes(root)    # writes all three indexes concurrently
+generate_doc_index(root)  # writes .owlbear/doc-index.md
+generate_py_index(root)   # writes .owlbear/py-index.md
+generate_ts_index(root)   # writes .owlbear/ts-index.md
 ```
 
 | Function | Description |
 |----------|-------------|
-| `collect_docs(root)` | Walk the workspace, skip excluded dirs, return parsed `DocEntry` list |
-| `generate_index(docs)` | Render collected entries to the Markdown index format |
-| `should_regenerate(root)` | Return `True` if any doc is newer than the existing index |
-| `parse_index(content)` | Parse an existing index back into `DocEntry` objects |
+| `generate_indexes(root)` | Regenerate all fixed index artifacts concurrently |
+| `doc_index.generate_index(root)` | Regenerate the documentation index |
+| `py_index.generate_index(root)` | Regenerate the Python structure index |
+| `ts_index.generate_index(root)` | Regenerate the TS/TSX/JS/JSX structure index |
+| `doc_index.parse_index(content)` | Parse an existing documentation index into entries |
 
 ### Excluded directories
 
-The index includes source documentation and discoverable diagram filenames. It excludes workspace state, generated artifacts, caches, external stores, and test fixtures. Current excluded roots/names are `.owlbear/scratch`, `.owlbear/research`, `.owlbear/kanban`, `.owlbear/briefs`, `.owlbear/sources`, `.owlbear/memory`, `store`, `tests`, `megalinter-reports`, `node_modules`, `.git`, `.venv`, `.pytest_cache`, `dist`, and `build`.
+The documentation index excludes workspace state, generated indexes, caches, external stores, and test fixtures. Source indexes additionally exclude tests and conventional test filenames, `vendor`, `public`, `generated`, coverage, and build output.
 
 ## Configuration
 
-No environment variables. The index is always written to `.owlbear/doc-index.md`.
+No environment variables or output options. Each command writes its fixed artifact under `.owlbear/`.
 
 ## Dependencies
 
-No third-party dependencies — standard library only.
+Python indexing uses the standard-library AST. ECMAScript indexing uses `tree-sitter-language-pack`.

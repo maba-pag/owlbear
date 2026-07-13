@@ -9,7 +9,7 @@ AC coverage:
   - Outbound link extraction excludes code blocks
   - Diagram entries include `describes` field
   - Index is idempotent (same input → same output)
-  - Conditional regen (skip when index mtime > newest doc mtime)
+    - CLI always regenerates from current documentation
   - CLI entry point `doc-index` is resolvable
   - Parser round-trip — extracts file entries, headings, and outbound links
 """
@@ -17,10 +17,8 @@ AC coverage:
 from __future__ import annotations
 
 import importlib.metadata
-import os
 import sys
 import textwrap
-import time
 from pathlib import Path
 
 import pytest
@@ -30,7 +28,6 @@ from owlbear_tools.doc_index import (
     generate_index,
     main,
     parse_index,
-    should_regenerate,
 )
 
 # ---------------------------------------------------------------------------
@@ -166,7 +163,7 @@ class TestFromAC_MarkdownFormat:
         """Happy: index file starts with the exact auto-generated comment header."""
         _make_md(tmp_path, "README.md", "# Title\n")
         index_path = tmp_path / ".owlbear" / "doc-index.md"
-        generate_index(tmp_path, index_path)
+        generate_index(tmp_path)
         text = index_path.read_text()
         assert text.startswith(_AUTO_GENERATED_HEADER)
 
@@ -174,7 +171,7 @@ class TestFromAC_MarkdownFormat:
         """Happy: header explicitly says DO NOT EDIT."""
         _make_md(tmp_path, "docs/guide.md", "# Guide\n")
         index_path = tmp_path / ".owlbear" / "doc-index.md"
-        generate_index(tmp_path, index_path)
+        generate_index(tmp_path)
         text = index_path.read_text()
         assert "DO NOT EDIT" in text
 
@@ -182,7 +179,7 @@ class TestFromAC_MarkdownFormat:
         """Happy: each file entry starts with '## <relative-path>' (literal path)."""
         _make_md(tmp_path, "share/agents/README.md", "# Agents\n")
         index_path = tmp_path / ".owlbear" / "doc-index.md"
-        generate_index(tmp_path, index_path)
+        generate_index(tmp_path)
         text = index_path.read_text()
         assert "## share/agents/README.md" in text
 
@@ -194,7 +191,7 @@ class TestFromAC_MarkdownFormat:
             "# Setup & Installation\n\n## Configuration\n",
         )
         index_path = tmp_path / ".owlbear" / "doc-index.md"
-        generate_index(tmp_path, index_path)
+        generate_index(tmp_path)
         text = index_path.read_text()
         assert "- # `Setup & Installation`" in text
         assert "- ## `Configuration`" in text
@@ -207,7 +204,7 @@ class TestFromAC_MarkdownFormat:
             "# Page\n\nSee [project](https://example.com).\n",
         )
         index_path = tmp_path / ".owlbear" / "doc-index.md"
-        generate_index(tmp_path, index_path)
+        generate_index(tmp_path)
         text = index_path.read_text()
         assert "### Outbound links" in text
 
@@ -215,7 +212,7 @@ class TestFromAC_MarkdownFormat:
         """Edge: ### Outbound links sub-section is omitted when a file has no links."""
         _make_md(tmp_path, "docs/page.md", "# Page\n\nNo links here.\n")
         index_path = tmp_path / ".owlbear" / "doc-index.md"
-        generate_index(tmp_path, index_path)
+        generate_index(tmp_path)
         # The index for this particular file should not have an Outbound links section
         text = index_path.read_text()
         # Find the section for this specific file
@@ -238,8 +235,8 @@ class TestFromAC_OutboundLinkExtraction:
         """Happy: [text](url) in regular prose is collected as an outbound link."""
         content = "# Page\n\nSee [the repo](https://github.com/org/repo).\n"
         _make_md(tmp_path, "page.md", content)
-        index_path = tmp_path / "doc-index.md"
-        generate_index(tmp_path, index_path)
+        index_path = tmp_path / ".owlbear/doc-index.md"
+        generate_index(tmp_path)
         text = index_path.read_text()
         assert "https://github.com/org/repo" in text
 
@@ -255,8 +252,8 @@ class TestFromAC_OutboundLinkExtraction:
             """
         )
         _make_md(tmp_path, "page.md", content)
-        index_path = tmp_path / "doc-index.md"
-        generate_index(tmp_path, index_path)
+        index_path = tmp_path / ".owlbear/doc-index.md"
+        generate_index(tmp_path)
         text = index_path.read_text()
         # The link from inside the code block must NOT appear in Outbound links
         entry_start = text.index("## page.md")
@@ -268,8 +265,8 @@ class TestFromAC_OutboundLinkExtraction:
         """Edge: link-like text inside backtick inline code is not extracted."""
         content = "# Page\n\nRun `[text](https://example.com)` in the terminal.\n"
         _make_md(tmp_path, "page.md", content)
-        index_path = tmp_path / "doc-index.md"
-        generate_index(tmp_path, index_path)
+        index_path = tmp_path / ".owlbear/doc-index.md"
+        generate_index(tmp_path)
         text = index_path.read_text()
         entry_start = text.index("## page.md")
         next_entry = text.find("\n## ", entry_start + 1)
@@ -288,8 +285,8 @@ class TestFromAC_OutboundLinkExtraction:
             """
         )
         _make_md(tmp_path, "page.md", content)
-        index_path = tmp_path / "doc-index.md"
-        generate_index(tmp_path, index_path)
+        index_path = tmp_path / ".owlbear/doc-index.md"
+        generate_index(tmp_path)
         text = index_path.read_text()
         entry_start = text.index("## page.md")
         next_entry = text.find("\n## ", entry_start + 1)
@@ -309,10 +306,10 @@ class TestFromAC_Idempotency:
         """Happy: calling generate_index twice on the same tree yields bit-for-bit identical files."""
         _make_md(tmp_path, "README.md", "# Root\n\nSee [link](https://example.com).\n")
         _make_md(tmp_path, "docs/guide.md", "# Guide\n\n## Usage\n")
-        index_path = tmp_path / "doc-index.md"
-        generate_index(tmp_path, index_path)
+        index_path = tmp_path / ".owlbear/doc-index.md"
+        generate_index(tmp_path)
         first_output = index_path.read_text()
-        generate_index(tmp_path, index_path)
+        generate_index(tmp_path)
         second_output = index_path.read_text()
         assert first_output == second_output
 
@@ -321,51 +318,12 @@ class TestFromAC_Idempotency:
         _make_md(tmp_path, "z_last.md", "# Z\n")
         _make_md(tmp_path, "a_first.md", "# A\n")
         _make_md(tmp_path, "m_middle.md", "# M\n")
-        index_path = tmp_path / "doc-index.md"
-        generate_index(tmp_path, index_path)
+        index_path = tmp_path / ".owlbear/doc-index.md"
+        generate_index(tmp_path)
         run1 = index_path.read_text()
-        generate_index(tmp_path, index_path)
+        generate_index(tmp_path)
         run2 = index_path.read_text()
         assert run1 == run2
-
-
-# ===========================================================================
-# TestFromAC_ConditionalRegen
-# ===========================================================================
-
-
-class TestFromAC_ConditionalRegen:
-    """AC: conditional regen — skip when index mtime > newest doc mtime."""
-
-    def test_no_regen_needed_when_index_is_newer(self, tmp_path: Path) -> None:
-        """Happy: should_regenerate returns False when the index is newer than all docs."""
-        doc = _make_md(tmp_path, "README.md", "# Root\n")
-        index_path = tmp_path / "doc-index.md"
-        index_path.write_text("# old index\n")
-        # Set doc mtime to the past; index mtime to the future
-        past = time.time() - 100
-        future = time.time() + 100
-        os.utime(doc, (past, past))
-        os.utime(index_path, (future, future))
-        assert should_regenerate(index_path, tmp_path) is False
-
-    def test_regen_needed_when_index_does_not_exist(self, tmp_path: Path) -> None:
-        """Edge: should_regenerate returns True when no index file exists."""
-        _make_md(tmp_path, "README.md", "# Root\n")
-        index_path = tmp_path / "doc-index.md"  # not created
-        assert should_regenerate(index_path, tmp_path) is True
-
-    def test_regen_needed_when_doc_is_newer_than_index(self, tmp_path: Path) -> None:
-        """Boundary: should_regenerate returns True when any doc is newer than the index."""
-        doc = _make_md(tmp_path, "README.md", "# Root\n")
-        index_path = tmp_path / "doc-index.md"
-        index_path.write_text("# old index\n")
-        # Set index mtime to the past; doc mtime to now
-        past = time.time() - 100
-        present = time.time()
-        os.utime(index_path, (past, past))
-        os.utime(doc, (present, present))
-        assert should_regenerate(index_path, tmp_path) is True
 
 
 # ===========================================================================
@@ -455,8 +413,8 @@ class TestFromAC_Parser:
         """Happy: generate_index + parse_index returns one entry per collected doc file."""
         _make_md(tmp_path, "README.md", "# Root\n")
         _make_md(tmp_path, "docs/guide.md", "# Guide\n")
-        index_path = tmp_path / "doc-index.md"
-        generate_index(tmp_path, index_path)
+        index_path = tmp_path / ".owlbear/doc-index.md"
+        generate_index(tmp_path)
         entries = parse_index(index_path.read_text())
         assert len(entries) == 2
 
@@ -500,33 +458,12 @@ class TestBuilderDiscovered:
         assert index_path.exists()
         assert "## README.md" in index_path.read_text()
 
-    def test_main_skips_regen_when_index_is_current(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        """main() does not overwrite the index when it is already up-to-date."""
-        doc = _make_md(tmp_path, "README.md", "# Root\n")
+    def test_main_always_regenerates(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """main() overwrites an existing index from current documentation."""
+        _make_md(tmp_path, "README.md", "# Root\n")
         index_path = tmp_path / ".owlbear" / "doc-index.md"
         index_path.parent.mkdir(parents=True)
         index_path.write_text("existing content")
-        past = time.time() - 100
-        future = time.time() + 100
-        os.utime(doc, (past, past))
-        os.utime(index_path, (future, future))
         monkeypatch.setattr(sys, "argv", ["doc-index", str(tmp_path)])
         main()
-        assert index_path.read_text() == "existing content"
-
-    def test_main_rejects_absolute_output_path(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        """main() raises SystemExit when --output resolves to a path outside the workspace root."""
-        _make_md(tmp_path, "README.md", "# Root\n")
-        monkeypatch.setattr(
-            sys,
-            "argv",
-            ["doc-index", str(tmp_path), "--output", "/tmp/steal.md"],  # noqa: S108
-        )
-        with pytest.raises(SystemExit):
-            main()
-
-    def test_should_regenerate_empty_workspace_with_existing_index(self, tmp_path: Path) -> None:
-        """should_regenerate returns False when no docs exist but an index exists — no stale trigger."""
-        index_path = tmp_path / "doc-index.md"
-        index_path.write_text("# existing\n")
-        assert should_regenerate(index_path, tmp_path) is False
+        assert "## README.md" in index_path.read_text()

@@ -130,6 +130,7 @@ class TestFromAC_TerminalStatusValidation:
                 statuses=["research", "todo", "done"],
                 priorities=["needed"],
                 agent_map={"research": "r", "todo": "b", "done": "d"},
+                entry_status="research",
                 terminal_status="nonexistent",
             )
         assert exc_info.value.code == "ERR_TERMINAL_STATUS_INVALID"
@@ -143,6 +144,7 @@ class TestFromAC_TerminalStatusValidation:
                 statuses=["research", "todo", "done"],
                 priorities=["needed"],
                 agent_map={"research": "r", "todo": "b", "done": "d"},
+                entry_status="research",
                 terminal_status="todo",
             )
         assert exc_info.value.code == "ERR_TERMINAL_STATUS_INVALID"
@@ -156,6 +158,7 @@ class TestFromAC_TerminalStatusValidation:
                 statuses=["research", "todo", "done"],
                 priorities=["needed"],
                 agent_map={"research": "r", "todo": "b", "done": "d"},
+                entry_status="research",
                 terminal_status="research",
             )
         assert exc_info.value.code == "ERR_TERMINAL_STATUS_INVALID"
@@ -404,10 +407,10 @@ def _make_engine(base_dir: Path, config_yaml: str = _BASE_CONFIG) -> KanbanEngin
 
 
 class TestFromAC_EntryStatusDefault:
-    """AC: entry_status defaults to 'research' — omission-path proof required.
+    """AC: entry_status defaults to 'shape' — omission-path proof required.
 
     These tests prove that when entry_status is absent from the YAML config or
-    from a direct BoardConfig() call, the field resolves to 'research'.
+    from a direct BoardConfig() call, the field resolves to 'shape'.
     Mirrors the terminal_status omission-path pattern in TestFromAC_TerminalStatusField.
     """
 
@@ -416,24 +419,24 @@ class TestFromAC_EntryStatusDefault:
         kanban_dir = _make_board(tmp_path, _BASE_CONFIG_NO_ENTRY_STATUS)
         engine = KanbanEngine(kanban_dir)
         cfg = engine.board_config()
-        assert cfg.pipeline.entry_status == "research", (
-            f"Expected entry_status='research' when key absent from YAML, got {cfg.pipeline.entry_status!r}"
+        assert cfg.pipeline.entry_status == "shape", (
+            f"Expected entry_status='shape' when key absent from YAML, got {cfg.pipeline.entry_status!r}"
         )
 
     def test_entry_status_default_on_boardconfig_direct_construct(self) -> None:
         """BoardConfig(statuses=['research',...], ...) without entry_status → .pipeline.entry_status == 'research'."""
         cfg = BoardConfig(
-            statuses=["research", "backlog", "done"],
-            priorities=["needed"],
-            agents=AgentsConfig(agent_map={"research": "r", "backlog": "b", "done": "d"}),
+            statuses=["shape", "build", "collect"],
+            priorities=["medium"],
+            agents=AgentsConfig(agent_map={"shape": "r", "build": "b", "collect": "d"}),
         )
-        assert cfg.pipeline.entry_status == "research", (
-            f"Expected entry_status='research' on direct BoardConfig() omission, got {cfg.pipeline.entry_status!r}"
+        assert cfg.pipeline.entry_status == "shape", (
+            f"Expected entry_status='shape' on direct BoardConfig() omission, got {cfg.pipeline.entry_status!r}"
         )
 
 
 class TestFromAC_TerminalStatusField:
-    """D65: BoardConfig.terminal_status must be a declared field (not model_extra) with default 'done'."""
+    """BoardConfig.terminal_status is a declared field with default 'collect'."""
 
     def test_terminal_status_is_declared_model_field(self) -> None:
         """terminal_status must appear in PipelineConfig.model_fields, not BoardConfig.model_fields."""
@@ -447,23 +450,23 @@ class TestFromAC_TerminalStatusField:
         engine = KanbanEngine(kanban_dir)
         cfg = engine.board_config()
         # Without a declared field, this raises AttributeError — test expects "done"
-        assert cfg.pipeline.terminal_status == "done"
+        assert cfg.pipeline.terminal_status == "collect"
 
     def test_terminal_status_default_on_boardconfig_direct_construct(self) -> None:
         """BoardConfig(statuses=[...'done'], ...) without terminal_status → .pipeline.terminal_status == 'done'."""
         cfg = BoardConfig(
-            statuses=["research", "backlog", "done"],
-            priorities=["needed"],
-            agents=AgentsConfig(agent_map={"research": "r", "backlog": "b", "done": "d"}),
+            statuses=["shape", "build", "collect"],
+            priorities=["medium"],
+            agents=AgentsConfig(agent_map={"shape": "r", "build": "b", "collect": "d"}),
         )
-        assert cfg.pipeline.terminal_status == "done"
+        assert cfg.pipeline.terminal_status == "collect"
 
     def test_terminal_status_engine_init_succeeds_without_yaml_key(self, tmp_path: Path) -> None:
         """Engine init with no terminal_status in YAML must not raise — default 'done' == statuses[-1]."""
         kanban_dir = _make_board(tmp_path, _BASE_CONFIG_NO_TERMINAL_STATUS)
         # Must not raise ConfigError — declared default "done" equals statuses[-1] "done"
         engine = KanbanEngine(kanban_dir)
-        assert engine.board_config().pipeline.terminal_status == "done"
+        assert engine.board_config().pipeline.terminal_status == "collect"
 
 
 class TestFromAC_ArchivalReasonsFrozenSet:
@@ -487,9 +490,9 @@ class TestFromAC_ArchivalReasonsFrozenSet:
     def test_archival_reasons_is_frozenset_on_boardconfig_direct(self) -> None:
         """BoardConfig without explicit archival_reasons → field default is frozenset."""
         cfg = BoardConfig(
-            statuses=["research", "done"],
-            priorities=["needed"],
-            agents=AgentsConfig(agent_map={"research": "r", "done": "d"}),
+            statuses=["shape", "collect"],
+            priorities=["medium"],
+            agents=AgentsConfig(agent_map={"shape": "r", "collect": "d"}),
         )
         assert isinstance(cfg.policy.archival_reasons, frozenset)
 
@@ -598,6 +601,7 @@ class TestFromAC_BoardConfigDirectValidation:
                 statuses=["research", "todo", "done"],
                 priorities=["needed"],
                 agent_map={"research": "r", "todo": "b", "done": "d"},
+                entry_status="research",
                 terminal_status="todo",  # not last
             )
         assert "ERR_TERMINAL_STATUS_INVALID" in exc_info.value.code
@@ -610,6 +614,8 @@ class TestFromAC_BoardConfigDirectValidation:
             statuses=["research", "backlog", "done"],
             priorities=["needed"],
             agent_map={"research": "r", "done": "d"},  # "backlog" missing
+            entry_status="research",
+            terminal_status="done",
         )
         assert cfg is not None
 
@@ -622,6 +628,8 @@ class TestFromAC_BoardConfigDirectValidation:
                 statuses=["research", "done"],
                 priorities=["needed"],
                 agent_map={"research": "r", "done": "d"},
+                entry_status="research",
+                terminal_status="done",
                 claim_timeout="bad_format",
             )
         assert "ERR_INVALID_CLAIM_TIMEOUT" in exc_info.value.code
