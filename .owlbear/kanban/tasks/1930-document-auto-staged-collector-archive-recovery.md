@@ -1,10 +1,10 @@
 ---
 id: 1930
 title: Document auto-staged collector archive recovery
-status: verify
+status: build
 priority: medium
 created: 2026-07-14T01:12:22.720349+02:00
-updated: 2026-07-14T01:27:12.652181+02:00
+updated: 2026-07-14T01:32:56.509387+02:00
 tags:
   - agent
   - kanban
@@ -63,3 +63,16 @@ Define the safe recovery procedure when collector archival is auto-staged before
 - Scope boundary: recovery remains an agent procedure because generic `commit-owned` intentionally lacks Kanban/task semantics and continues to reject all pre-staged owned paths.
 - Proof: focused tests 4 passed; Ruff and diff check clean.
 - Builder challenger: pass after reassessment against the documentation task and helper safety boundary.
+
+[[2026-07-14T01:32:56+02:00]]
+## Verify Notes
+
+- Verified repair commit `03ebc5fedf1923f547b9bc4086f7d3059b7e5224`; tests, lint, and agent validation pass.
+- Initial challenge identified that post-`end_work` content normally differs from HEAD.
+- Reassessment confirmed a safe narrow recovery: require cached `R100` plus staged archive blob equality with the pre-archive HEAD task blob. This proves only the stale pure-rename state observed, where collector-authored final content remains unstaged; reset then lets `commit-owned` stage the complete working-tree archive.
+- No verifier patches applied.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | State the recovery as narrow to cached `R100` stale pure renames; explain that collector-authored final content remains in the working tree and is staged by the retry. Fail closed for every other staged shape/blob. | `share/skills/r-workspace-governance/SKILL.md`, `tests/test_skill_authority_wiring.py` | Verifier challenger reassessment: proposed precision resolves blocker. |
