@@ -1,10 +1,10 @@
 ---
 id: 1930
 title: Document auto-staged collector archive recovery
-status: build
+status: verify
 priority: medium
 created: 2026-07-14T01:12:22.720349+02:00
-updated: 2026-07-14T01:19:22.294972+02:00
+updated: 2026-07-14T01:27:12.652181+02:00
 tags:
   - agent
   - kanban
@@ -53,3 +53,13 @@ Define the safe recovery procedure when collector archival is auto-staged before
 | # | Target Agent | Action Required | File(s) | Evidence |
 |---|-------------|----------------|---------|----------|
 | 1 | builder | Require content-level proof before unstaging: verify the staged archive blob matches the committed pre-archive task blob; route any mismatch or unavailable comparison to `COMMIT_FAILED`. Update the focused assertion. | `share/skills/r-workspace-governance/SKILL.md`, `tests/test_skill_authority_wiring.py` | Verifier challenger: name-status alone cannot establish staged content ownership. |
+
+[[2026-07-14T01:27:12+02:00]]
+## Builder Notes
+
+- Adopted verifier follow-up: name-status alone is insufficient to prove staged content ownership.
+- Recovery now requires content-level proof: compare the committed pre-archive task blob with the staged archive blob using `git rev-parse`; proceed only when both resolve, IDs match, and the staged shape is exactly the expected rename.
+- Any mismatch, missing object, or unexpected staged shape routes to `COMMIT_FAILED` without unstaging.
+- Scope boundary: recovery remains an agent procedure because generic `commit-owned` intentionally lacks Kanban/task semantics and continues to reject all pre-staged owned paths.
+- Proof: focused tests 4 passed; Ruff and diff check clean.
+- Builder challenger: pass after reassessment against the documentation task and helper safety boundary.
