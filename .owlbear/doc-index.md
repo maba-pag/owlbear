@@ -131,15 +131,6 @@
 - ## `Implementation Handoff`
 - ## `Guardrails`
 
-## seed/.github/copilot-instructions.md
-- # `Project Copilot Instructions`
-- ## `1. Project Identity`
-- ## `2. Directory Structure`
-- ## `3. Tech Stack`
-- ## `4. Working Rules`
-- ## `5. Useful Commands`
-- ## `6. Resources`
-
 ## serve/browser/README.md
 - # `owlbear-browser — Browser Content Fetcher`
 - ## `Launch / Usage`
