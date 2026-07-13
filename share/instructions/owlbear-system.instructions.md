@@ -63,7 +63,6 @@ Before completing material work, decide whether you learned a specific, non-obvi
   |---|---|---|---|
   | OwlBear Kanban | `ob-kanban/*` | `mcp_ob-kanban_<tool>` | `"kanban"` |
   | OwlBear Memory | `ob-memory/*` | `mcp_ob-memory_<tool>` | `"memory"` |
-  | DDGS | `ddgs/*` | `mcp_ddgs_<tool>` | `"web search"` |
   | MarkItDown | `markitdown/*` | `mcp_markitdown_<tool>` | `"markdown convert"` |
 
 - **Skill authority.** Skills override dispatch prompts. Dispatch prompts provide context, not procedure.
