@@ -124,8 +124,8 @@ generated interfaces, external APIs, schemas, protocols, or symbols that will ap
 
 This step may be skipped only for greenfield requests with no existing or external contract.
 
-1. Follow `h-codebase-orientation`. Regenerate the indexes, search them narrowly,
-   and identify target source files and contract authorities from parent context. Authorities may
+1. Follow `h-codebase-orientation`. Use existing indexes or source search narrowly and identify
+    target source files and contract authorities from parent context. Authorities may
     include generated operation inventories, schemas, official documentation, verified production
     observations, and existing public CLI or API surfaces.
 2. Read each local source and the smallest sufficient external evidence before drafting AC.
@@ -390,7 +390,9 @@ Produce a Mermaid diagram showing task relationships. Arrows: dependency toward 
 
 ## Step 8 — Return The Board Audit
 
-**Post-task reflection:** Before advancing, write 3-5 bullets on problems faced, workarounds applied, patterns discovered. Skip if nothing notable. Use `save_memory(title=..., content=..., categories=[...], confidence=0.8, source_agent="shaper")` for each notable finding.
+Apply the universal memory qualification gate from `owlbear-system.instructions.md`. Save only a
+specific, non-obvious, reusable fact that would have improved this work if known at the start; task
+notes, ordinary problems, and workarounds do not qualify by themselves.
 
 Do not run a second substantive shaper-challenger review after creation. `w-spec-shaping` challenges
 the complete provisional graph before user approval. After creation, audit only whether the concrete

@@ -6,9 +6,9 @@ user-invocable: false
 
 # Task Repair
 
-Repair a task returned to `shape` by builder, verifier, or collector. Start from the rejection
-evidence. Do not rerun full spec shaping when the downstream agent already supplied a complete,
-non-material correction.
+Repair one task or an explicit connected set returned to `shape` by builder, verifier, or collector.
+Start from the rejection evidence. Do not rerun full spec shaping when the downstream agent already
+supplied a complete, non-material correction.
 
 ## Companion Skills
 
@@ -22,11 +22,14 @@ Load these via `read_file` when needed:
 | `h-ac-quality` | Acceptance criteria need repair |
 | `h-codebase-orientation` | Rejection evidence depends on a current-source claim |
 
-## Step 1 - Claim And Read The Rejection Chain
+## Step 1 - Resolve Ownership And Read The Rejection Chain
 
-Claim the selected `shape` task with `start_work`. Read the latest `### Required Follow-up` and the
-agent section that produced it. Read earlier Shape, Builder, Verify, and Collect Notes only as needed
-to understand the current route and avoid reviving superseded instructions.
+Identify whether the selected work is one task or an explicit connected set that cannot be repaired
+coherently one task at a time. For a connected set, name the complete task IDs and why joint mutation
+is necessary; mere proximity or shared topic is insufficient. Follow `r-pipeline-protocol` to claim
+every existing task before the first write. Read each latest `### Required Follow-up` and the agent
+section that produced it. Read earlier Shape, Builder, Verify, and Collect Notes only as needed to
+understand the current route and avoid reviving superseded instructions.
 
 Treat downstream findings as evidence, not infallible authority. Check a narrow source or board fact
 when it can cheaply disconfirm the requested repair.
@@ -43,8 +46,9 @@ Classify before changing the board:
 | Material reshape | Repair changes product behavior, scope, architecture, compatibility, security, acceptance meaning, or the task graph beyond complete instructions | Escalate interactively |
 | Insufficient rejection | Follow-up is contradictory, incomplete, or cannot identify a valid route | Ask for the missing material decision or record a blocking request |
 
-Task count alone does not make a split material. A split is material when the shaper must invent or
-choose outcomes, boundaries, ownership, or ordering rather than execute complete instructions.
+Task count alone does not make a split or connected repair material. It is material when the shaper
+must invent or choose outcomes, boundaries, ownership, or ordering rather than execute complete
+instructions.
 
 ## Step 3 - Apply Explicit Non-Material Repairs
 
@@ -54,7 +58,8 @@ For a mechanical reroute, local repair, or prescribed split:
 2. Preserve approved intent, unaffected AC, parent links, and dependencies.
 3. Do not repeat broad orientation, research, Product Promise review, or decomposition ceremony when
    the rejection does not call those premises into question.
-4. Audit the resulting status, dependencies, parent links, and required next agent.
+4. Audit every task in the mutation set for resulting status, dependencies, parent links, and
+   required next agent.
 
 Do not ask the user to confirm a complete non-material repair. Report what changed in the final
 human summary.

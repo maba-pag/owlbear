@@ -1,9 +1,9 @@
 ---
-description: "Review an OpenSpec implementation plan or repair a task rejected to shape"
+description: "Review an OpenSpec implementation plan or repair connected work rejected to shape"
 agent: shaper
 ---
 
-Shape: ${input:planning_source:OpenSpec change path or rejected task number; leave empty to choose pending shape work}
+Shape: ${input:planning_source:OpenSpec change path or rejected task number(s); leave empty to choose pending shape work}
 
 ## Entry And Mode Selection
 
@@ -19,7 +19,7 @@ Classify the selected input:
 | Input | Workflow |
 |-------|----------|
 | OpenSpec change directory or native artifact | `w-spec-shaping` |
-| Existing task number in `shape` | `w-task-repair` |
+| Existing task number or explicit connected set in `shape` | `w-task-repair` |
 | Narrow free-text implementation request | Optional shorthand only when one unambiguous outcome clearly needs no OpenSpec change |
 
 Do not accept an approved Brief as a substitute for the repository's OpenSpec planning boundary.

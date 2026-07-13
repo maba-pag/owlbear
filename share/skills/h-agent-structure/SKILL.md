@@ -154,8 +154,12 @@ Lists the skills this agent needs in 90%+ of sessions. These are Level 0 (direct
 
 **`<output_format>`** — The agent's communication interface.
 
-- **Channel A:** verdict tokens + format string. One row per verdict.
-- **Channel B:** body section name + what to include (brief description). Full template lives in the owning workflow skill.
+- Dispatched pipeline agents define **Channel A** verdict tokens and a format string, one row per
+  verdict.
+- A user-facing pipeline agent may define a human summary instead of exposing machine verdicts when
+  its internal route is recorded in task state and the shared protocol declares the exception.
+- **Channel B:** body section name + what to include (brief description). Full template lives in the
+  owning workflow skill.
 - The agent defines WHAT the output looks like. The skill defines HOW to construct it (command syntax, full templates).
 
 **`<boundaries>`** — Agent-specific red flags and failure rationalizations.

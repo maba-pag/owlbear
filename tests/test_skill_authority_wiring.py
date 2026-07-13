@@ -10,8 +10,8 @@ _AGENTS_ROOT = _REPO_ROOT / "share/agents"
 _SHARE_ROOT = _REPO_ROOT / "share"
 
 _EXPECTED_REQUIRED_READERS = {
-    "h-codebase-orientation": {"builder", "shaper", "verifier"},
-    "h-module-design": {"ideation-architect", "shaper", "shaper-challenger"},
+    "h-codebase-orientation": {"builder", "verifier"},
+    "h-module-design": {"ideation-architect", "shaper-challenger"},
     "r-workspace-governance": {"ideation-discoverer", "ideation-mediator"},
 }
 
@@ -40,11 +40,16 @@ def test_on_demand_authority_paths_are_declared() -> None:
     protocol = (_REPO_ROOT / "share/skills/r-pipeline-protocol/SKILL.md").read_text(encoding="utf-8")
     discovery = (_REPO_ROOT / "share/skills/w-ideation-discovery/SKILL.md").read_text(encoding="utf-8")
     mediation = (_REPO_ROOT / "share/skills/w-ideation-mediation/SKILL.md").read_text(encoding="utf-8")
+    spec_shaping = (_REPO_ROOT / "share/skills/w-spec-shaping/SKILL.md").read_text(encoding="utf-8")
+    task_repair = (_REPO_ROOT / "share/skills/w-task-repair/SKILL.md").read_text(encoding="utf-8")
 
     assert "`h-module-design`" in orientation
     assert "`r-workspace-governance`" in protocol
     assert "`h-codebase-orientation`" in discovery
     assert "`h-codebase-orientation`" in mediation
+    assert "`h-codebase-orientation`" in spec_shaping
+    assert "`h-module-design`" in spec_shaping
+    assert "`h-codebase-orientation`" in task_repair
 
 
 def test_retired_authority_names_are_absent_from_shared_ecosystem() -> None:

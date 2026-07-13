@@ -29,6 +29,32 @@ def test_shaper_has_explicit_spec_and_repair_modes() -> None:
     assert "Do not involve, notify, or modify the orchestrator" in flat_prompt
 
 
+def test_shaper_loads_only_the_selected_mode_and_triggered_companions() -> None:
+    agent = _read("share/agents/shaper.agent.md")
+    required = agent.split("<required_reading>", 1)[1].split("</required_reading>", 1)[0]
+    flat_agent = " ".join(agent.split())
+
+    assert "`r-pipeline-protocol`" in required
+    assert "`w-spec-shaping`" not in required
+    assert "`w-task-repair`" not in required
+    assert "`h-codebase-orientation`" not in required
+    assert "`h-module-design`" not in required
+    assert "After classifying the input, immediately load `w-spec-shaping`" in flat_agent
+
+
+def test_orientation_is_read_only_and_memory_uses_universal_gate() -> None:
+    orientation = _read("share/skills/h-codebase-orientation/SKILL.md")
+    decomposition = _read("share/skills/w-task-decomposition/SKILL.md")
+    flat_orientation = " ".join(orientation.split())
+    flat_decomposition = " ".join(decomposition.split())
+
+    assert "Do not regenerate indexes during ordinary orientation" in flat_orientation
+    assert "Regenerate all indexes before orienting" not in orientation
+    assert "specific, non-obvious, reusable fact" in flat_decomposition
+    assert "write 3-5 bullets" not in decomposition
+    assert "confidence=0.8" not in decomposition
+
+
 def test_spec_shaping_challenges_and_gets_approval_before_writes() -> None:
     workflow = _read("share/skills/w-spec-shaping/SKILL.md")
     flat_workflow = _flat("share/skills/w-spec-shaping/SKILL.md")
@@ -118,3 +144,39 @@ def test_shaper_human_output_does_not_remove_channel_b_history() -> None:
     assert "internal route recorded in task state" in protocol
     assert "user-facing human summary; route recorded in task state" in instruction
     assert "## Shape Notes" in instruction
+
+
+def test_shaper_can_own_one_explicit_connected_mutation_set() -> None:
+    protocol = _read("share/skills/r-pipeline-protocol/SKILL.md")
+    prompt = _read("share/prompts/shape.prompt.md")
+    repair = _read("share/skills/w-task-repair/SKILL.md")
+    flat_protocol = " ".join(protocol.split())
+    flat_repair = " ".join(repair.split())
+
+    assert "Builder, verifier, and collector handle one task per invocation" in protocol
+    assert "Shaper handles one shaping subject per invocation" in protocol
+    assert "claim every existing task in deterministic ID order" in flat_protocol
+    assert "release the claims acquired in this invocation and stop without mutation" in flat_protocol
+    assert "Do not add tasks to the mutation set after approval or after writes begin" in flat_protocol
+    assert "Existing task number or explicit connected set" in prompt
+    assert "mere proximity or shared topic is insufficient" in flat_repair
+    assert "claim every existing task before the first write" in flat_repair
+
+
+def test_research_returns_evidence_without_owning_shaper_routing() -> None:
+    research = _read("share/skills/w-research/SKILL.md")
+    flat_research = " ".join(research.split())
+
+    assert "Use the smallest source set that can support or falsify the claim" in flat_research
+    assert "Write `.owlbear/research/{slug}.md` only when" in research
+    assert "Do not create or edit Kanban tasks, invoke `shaper-challenger`, request approval" in flat_research
+    assert "Return Channel A signal" not in research
+    assert "APPROVED -> build" not in research
+
+
+def test_user_facing_agent_output_is_a_structural_exception() -> None:
+    structure = _read("share/skills/h-agent-structure/SKILL.md")
+    flat_structure = " ".join(structure.split())
+
+    assert "A user-facing pipeline agent may define a human summary" in flat_structure
+    assert "internal route is recorded in task state" in flat_structure
