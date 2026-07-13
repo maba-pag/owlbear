@@ -1,10 +1,10 @@
 ---
 id: 1930
 title: Document auto-staged collector archive recovery
-status: collect
+status: archived
 priority: medium
 created: 2026-07-14T01:12:22.720349+02:00
-updated: 2026-07-14T01:43:34.432366+02:00
+updated: 2026-07-14T01:46:01.492846+02:00
 tags:
   - agent
   - kanban
@@ -19,7 +19,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Objective
@@ -95,3 +95,13 @@ Define the safe recovery procedure when collector archival is auto-staged before
 - Checks: 4 focused tests passed; Ruff clean; all 23 agent definitions valid.
 - Patches applied: none.
 - Verifier challenger: pass; final route PASS to collect.
+
+[[2026-07-14T01:46:01+02:00]]
+## Collect Notes
+
+- Classification: leaf; no children or aggregate contract.
+- Latest Verify Notes record PASS with no patches and verifier-challenger approval.
+- Committed evidence: documentation `ddd1ef829`, content guard `03ebc5fed`, final narrow recovery `ad79d7ea`, verify record `b75cf961`.
+- Recovery contract: only exact cached `R100` stale rename plus blob equality may be reset; all ambiguous staged states fail closed through `COMMIT_FAILED`.
+- Checks: 4 focused tests passed; Ruff clean; all 23 agent definitions valid.
+- Residual decisions/follow-up: none; archive as completed.
