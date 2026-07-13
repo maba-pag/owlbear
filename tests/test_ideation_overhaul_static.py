@@ -166,30 +166,31 @@ class TestFromAC_SharedWorkflowContract:
 
 
 class TestFromAC_ExplicitShapingHandoff:
-    """Approved Briefs enter a separate interactive shaping session."""
+    """Approved Briefs pass through OpenSpec before interactive shaping."""
 
     def test_mediator_cannot_mutate_kanban_or_dispatch_shaper(self) -> None:
         text = _read("share/agents/ideation-mediator.agent.md")
         assert "ob-kanban/" not in text
         assert "  - shaper" not in text
-        assert "do not create Kanban tasks or invoke shaper" in text
+        assert "do not create OpenSpec or Kanban artifacts or invoke shaper" in text
 
-    def test_mediation_handoff_names_brief_and_shape_command(self) -> None:
+    def test_mediation_handoff_names_brief_and_openspec_command(self) -> None:
         workflow = _read("share/skills/w-ideation-mediation/SKILL.md")
         prompt = _read("share/prompts/ideation-mediate.prompt.md")
-        for needle in ["approved Brief path", "/shape", "Do not create Kanban tasks"]:
+        for needle in ["approved Brief path", "/opsx:propose", "Do not create OpenSpec artifacts"]:
             assert needle in workflow, f"Mediation workflow missing explicit handoff contract: {needle}"
-        assert "no Kanban task is created and shaper is not dispatched" in prompt
+        assert "no OpenSpec or Kanban artifact is created and shaper is not dispatched" in prompt
 
-    def test_shape_prompt_accepts_approved_brief(self) -> None:
+    def test_shape_prompt_reviews_openspec_instead_of_accepting_brief(self) -> None:
         text = " ".join(_read("share/prompts/shape.prompt.md").split())
         for needle in [
-            "approved `brief.md` path",
-            "planning-readiness gate",
-            "contract authority guard",
-            "product invariant map",
+            "OpenSpec change directory or native artifact",
+            "staged implementation review",
+            "Challenge the complete provisional graph",
+            "only after the user approves that graph",
         ]:
-            assert needle in text, f"Shape prompt missing approved-Brief contract: {needle}"
+            assert needle in text, f"Shape prompt missing interactive OpenSpec contract: {needle}"
+        assert "approved `brief.md` path" not in text
 
 
 class TestFromAC_ShapeGroundingContracts:

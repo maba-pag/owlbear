@@ -24,7 +24,7 @@ For each recalled memory entry, categorize your experience:
 
 | Agent | Verdict tokens | Body section |
 |-------|---------------|--------------|
-| shaper | APPROVED / REFINE / BLOCK | ## Shape Notes |
+| shaper | user-facing human summary; route recorded in task state | ## Shape Notes |
 | builder | DONE / REJECT / BLOCK | ## Builder Notes |
 | verifier | PASS / REJECT / RESHAPE | ## Verify Notes |
 | collector | ARCHIVED / REJECT | ## Collect Notes |

@@ -186,7 +186,8 @@ Only use the challenger agents named in the caller's agent file. If no challenge
 
 ### Channel A
 
-Final return text is at most two lines:
+Builder, verifier, collector, and other orchestrator-dispatched pipeline agents return at most two
+lines:
 
 ```text
 {VERDICT} #{id} -> {target_status} | {one-line evidence}
@@ -194,13 +195,17 @@ Final return text is at most two lines:
 
 The orchestrator does not route from Channel A. It re-plans from board state.
 
+Shaper is user-facing and is not dispatched by orchestrator. It returns the human summary required
+by `w-spec-shaping` or `w-task-repair`; it does not expose a machine verdict as the user interface.
+Board movement and `## Shape Notes` remain the durable routing and history record.
+
 ### Channel B
 
 Append the full agent section through the `note` parameter of `end_work`; the note is timestamped automatically.
 
 | Agent | Verdict tokens | Body section |
 |-------|---------------|--------------|
-| shaper | APPROVED / REFINE / BLOCK | `## Shape Notes` |
+| shaper | internal route recorded in task state | `## Shape Notes` |
 | builder | DONE / REJECT / BLOCK | `## Builder Notes` |
 | verifier | PASS / REJECT / RESHAPE | `## Verify Notes` |
 | collector | ARCHIVED / REJECT | `## Collect Notes` |

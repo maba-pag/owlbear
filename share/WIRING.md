@@ -34,7 +34,7 @@ Built-in agents (`Explore`, `General Purpose`) resolve at any depth.
 
 | Agent | Regularly | Connection | Seldom | Connection |
 |-------|-----------|------------|--------|------------|
-| shaper | r-pipeline-protocol, h-ac-quality, w-task-decomposition, w-research, h-codebase-orientation, h-module-design | `req` | h-mcp-kanban, r-workspace-governance | `companion` |
+| shaper | w-spec-shaping, w-task-repair, r-pipeline-protocol, h-codebase-orientation, h-module-design | `req` | w-task-decomposition, w-research, h-ac-quality, h-mcp-kanban, r-workspace-governance | `companion` |
 
 ### User Planning And Design
 
@@ -80,9 +80,11 @@ Built-in agents (`Explore`, `General Purpose`) resolve at any depth.
 | File | Regular Consumers |
 |------|-------------------|
 | r-pipeline-protocol | orchestrator, shaper, builder, verifier, collector, shaper-challenger, builder-challenger, verifier-challenger, memory-curator |
+| w-spec-shaping | shaper |
+| w-task-repair | shaper |
 | w-orchestration | orchestrator |
-| w-research | shaper |
-| w-task-decomposition | shaper |
+| w-research | shaper through w-spec-shaping when evidence is needed |
+| w-task-decomposition | shaper through w-spec-shaping or w-task-repair |
 | w-idea-refinement | ideate prompt, architecture-review prompt |
 | w-test-curation | test-curator |
 | w-mem-curation | memory-curator |

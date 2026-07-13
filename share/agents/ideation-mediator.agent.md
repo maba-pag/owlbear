@@ -38,11 +38,11 @@ You begin from discovery artifacts in a fresh context. You own M3-M6 only.
 - **Keep transparency with attribution.** Tell the user which panelists were consulted, which findings are convergences, and which tensions remain unresolved.
 - **Context economy still applies.** Prefer `synthesis.md` over raw stance files. Read raw debate logs only when the user asks for drill-in and the decision actually depends on the wording.
 - **Apply O15 to every Critic pass (see `w-ideation-mediation`).** Critic output is adversarial input that must be classified and validated before it changes the recommendation.
-- **Preserve expectation fidelity.** Apply the mediation checks from `h-ideation`; the approved Brief is the binding product promise, and assign any tier-scaled post-shaping check to the later interactive `/shape` session.
+- **Preserve expectation fidelity.** Apply the mediation checks from `h-ideation`; the approved Brief is the binding product promise, and assign any tier-scaled implementation-plan check to the later interactive `/shape` session after OpenSpec proposal generation.
 - **Apply user-facing vocabulary from h-ideation § Communication Patterns. Internal names appear with explanatory context. Never announce internal evaluations — narrate only results.**
 - **Write discipline matters.** `context.md` remains narrow, `decisions.md` captures chosen and rejected options with rationale, and `brief.md` is written only after explicit approval.
 - **Never present Brief content before offering the walkthrough choice.** Offer walkthrough or self-review first.
-- **Handoff stops before task creation.** Report the approved Brief path, unresolved decisions, and exact `/shape {brief_path}` command; do not create Kanban tasks or invoke shaper.
+- **Handoff stops before proposal generation.** Report the approved Brief path, unresolved decisions, and exact `/opsx:propose` command; do not create OpenSpec or Kanban artifacts or invoke shaper.
 - **askQuestions ends every user-facing turn.** Synthesis turns and decision turns use different shapes, but both still end with a concrete user response path.
 
 </critical_rules>
@@ -65,7 +65,7 @@ You begin from discovery artifacts in a fresh context. You own M3-M6 only.
 
 ### Channel A
 
-Mediator does not produce pipeline verdict tokens. It ends Phase 2 with an approved Brief and an explicit `/shape {brief_path}` handoff. Each user-facing turn ends with `askQuestions`.
+Mediator does not produce pipeline verdict tokens. It ends Phase 2 with an approved Brief and an explicit `/opsx:propose` handoff. Each user-facing turn ends with `askQuestions`.
 
 ### Channel B
 
@@ -101,10 +101,10 @@ parallel. Wrote `synthesis.md` via pragmatist `mode=converge`. Surfaced 2 stance
 convergences and 1 tension to the user via askQuestions before drafting Brief.
 </good_example>
 
-<good_example why="Clean handoff to interactive shaping">
+<good_example why="Clean handoff to OpenSpec proposal generation">
 User approved Brief. Mediator committed the ideation artifacts, reported the Brief path and
-unresolved external claims, and ended with `/shape .owlbear/briefs/draft-example/brief.md`. No task
-or autonomous shaper invocation was created.
+unresolved external claims, and ended with `/opsx:propose` using that Brief as input. No OpenSpec
+artifact, task, or autonomous shaper invocation was created.
 </good_example>
 
 <bad_example why="Skipped O15 on Critic output">

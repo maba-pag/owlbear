@@ -6,7 +6,8 @@ user-invocable: false
 
 # Task Decomposition
 
-Break complex shape work into atomic kanban child tasks with explicit dependency graphs, parent intent preservation, and collector-ready aggregate gates.
+Draft and commit atomic Kanban graphs with explicit dependencies, parent intent preservation, and
+collector-ready aggregate gates. The calling shaper workflow owns user review and approval.
 
 **Kanban operations:** See `h-mcp-kanban` skill — section `## Agent Lifecycle Pattern`.
 
@@ -22,7 +23,7 @@ Break complex shape work into atomic kanban child tasks with explicit dependency
 
 ### Out of Scope
 
-- Shape approval — shaper.
+- User-facing review and graph approval — `w-spec-shaping` or `w-task-repair`.
 - Implementation — builder.
 - Verification — verifier.
 - Creating mandatory test-only pairs.
@@ -35,7 +36,15 @@ Use this workflow after shaper has claimed the parent task with `start_work` whe
 
 **Knowledge pre-flight:** After claiming, call `recall_memory(agent="shaper")` to load reviewed entries. Apply returned entries as context. If the call fails or returns empty, proceed normally.
 
-**Execution mode:** Shaper owns decomposition directly. Create child tasks only after material user decisions are resolved; do not ask for approval on purely mechanical splitting when the parent intent and constraints are already clear.
+**Execution mode:** The caller selects one phase:
+
+- `draft` — produce a complete provisional graph and maps without Kanban mutation;
+- `commit` — create or update the exact user-approved graph, then audit concrete board state.
+
+This workflow does not ask the user questions or authorize its own graph. In spec mode,
+`w-spec-shaping` resolves decisions, runs shaper-challenger on the complete draft, and obtains user
+approval before calling the commit phase. In repair mode, `w-task-repair` determines whether explicit
+instructions authorize autonomous commit or material expansion requires user review.
 
 **Status discipline:** Shaper-created tasks never rely on the `create_task` default. Pass `status="build"` for every build-ready leaf task and `status="collect"` for every aggregate parent/EPIC. `shape` is reserved for user-created intake and tasks rejected back from later pipeline stages.
 
@@ -281,7 +290,8 @@ Build an explicit dependency graph:
 - Implementation tasks depend on prerequisite shape/context tasks when they exist
 - Schema, CRUD, agent, CLI layers form a natural hierarchy
 - Cross-phase dependencies only when strictly necessary
-- Every dependency references a concrete task ID
+- In draft phase, every dependency references a stable provisional key; in commit phase, replace it
+    with the concrete task ID and verify the link
 - Do not create ceremonial test → implementation dependency chains
 
 ## Step 5 — Assign Priority and Tags
@@ -326,13 +336,25 @@ Before creating any task, validate every planned task:
 
 If a planned task fails: refine the title and body or stop. Never create a placeholder task.
 
-## Step 5b — User Decision Gate
+### Step 5b — Return The Provisional Graph
 
-Ask the user only for material product, architecture, scope, or trade-off choices. Do not ask for approval on mechanical decomposition when the parent intent, constraints, and dependencies are already clear.
+In draft phase, stop here and return the complete provisional graph to the calling workflow. Use
+stable provisional keys, such as `T1`, `T2`, and `EPIC`, wherever concrete task IDs do not yet exist.
+Include all fields needed for challenge and user review: title, outcome, scope, AC, proof guidance,
+priority, tags, dependencies, parent/aggregate routing, Change Module Map ownership, Product
+Invariant Map ownership, and Product Promise coverage.
 
-When a material choice exists, present exactly one decision item with status quo, problem, options with pros/cons/risks/confidence, recommendation, and expected outcome. On approval, revise the planned tasks and proceed to Step 6. On rejection or unresolved scope, stop without creating new tasks; for an existing parent, leave it in `shape` or block it through `create_request` per `r-pipeline-protocol`.
+Do not create or edit Kanban tasks in draft phase.
 
-## Step 6 — Create Tasks
+## Step 6 — Commit An Approved Graph
+
+Enter this step only in commit phase. The caller must supply either:
+
+- the user-approved graph from `w-spec-shaping`; or
+- a complete non-material repair authorized by `w-task-repair`.
+
+If the supplied graph differs materially from the draft that was approved or explicitly prescribed,
+stop and return control to the caller. Do not normalize expansion by creating extra tasks.
 
 **Decomposition naming convention only:** `P{phase}-{nn}: {Title}` — phase inherited from plan, sequence `nn` zero-padded, unique within phase.
 
@@ -366,15 +388,19 @@ If a status is wrong, correct it immediately with `move_task` before final outpu
 
 Produce a Mermaid diagram showing task relationships. Arrows: dependency toward dependent.
 
-## Step 8 — Advance
+## Step 8 — Return The Board Audit
 
 **Post-task reflection:** Before advancing, write 3-5 bullets on problems faced, workarounds applied, patterns discovered. Skip if nothing notable. Use `save_memory(title=..., content=..., categories=[...], confidence=0.8, source_agent="shaper")` for each notable finding.
 
-Call `shaper-challenger` after Step 6a, when concrete task IDs, statuses, dependencies, AC, and aggregate routing are visible. If the challenger finds a correctable issue, edit/move the created tasks and repeat Step 6a before final approval. Do not use the challenger only on a rough pre-creation plan.
+Do not run a second substantive shaper-challenger review after creation. `w-spec-shaping` challenges
+the complete provisional graph before user approval. After creation, audit only whether the concrete
+board faithfully represents that approved graph. If material divergence is discovered, stop and
+return to the caller instead of editing new scope into the board.
 
 For aggregate parent/EPIC tasks with no direct implementation work, put the parent in `collect` after child dependencies are attached. If creating a new aggregate parent, pass `status="collect"` to `create_task`; if shaping an existing parent, use `end_work(outcome="success", move_to="collect")`. For a parent that still owns direct implementation AC, create build-ready children instead of sending the aggregate parent to build.
 
-Return Channel A using shaper's normal verdict format: `APPROVED #{id} -> collect` for aggregate parents parked behind children, `APPROVED #{id} -> build` for directly buildable parents, or `REFINE` / `BLOCK` when decomposition exposes unresolved scope or decisions.
+Return the concrete task IDs, status/dependency audit, and any mechanical correction to the calling
+workflow. The caller produces the human-facing summary and required task history.
 
 ## Output Template
 
@@ -440,9 +466,12 @@ Append decomposition details inside shaper's `## Shape Notes` section:
 - [ ] Tags include `phase-{n}` + category (decomposition mode only)
 - [ ] No cycles in dependency graph
 - [ ] Parent task has `depends_on` pointing to required children when it is an aggregate/EPIC gate
+- [ ] Draft phase performed no Kanban mutation
+- [ ] Commit phase received a user-approved graph or complete non-material repair authorization
 - [ ] Created/routed task statuses were verified with `list_tasks(ids=[...])`
 - [ ] No shaper-created task remains in `shape` unless explicitly requested as raw manual intake
-- [ ] Shaper-challenger reviewed concrete created/routed task IDs after the status audit
+- [ ] In spec mode, shaper-challenger reviewed the complete provisional graph before user approval
+- [ ] Concrete board state faithfully matches the approved or explicitly prescribed graph
 - [ ] Mermaid diagram matches task list (decomposition mode only)
 - [ ] Total 20 tasks or fewer
 - [ ] More than six tasks for a major feature has a fragmentation rationale in Shape Notes

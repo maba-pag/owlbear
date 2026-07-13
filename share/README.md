@@ -1,6 +1,6 @@
 # share/ — Agent Ecosystem
 
-OwlBear's agent ecosystem: 23 agents, 30 skills, 7 instructions, 13 prompts. This directory is the single source of truth for agent definitions and their supporting documents.
+OwlBear's agent ecosystem: 23 agents, 32 skills, 7 instructions, 13 prompts. This directory is the single source of truth for agent definitions and their supporting documents.
 
 ## Directory Layout
 
@@ -82,7 +82,7 @@ See `h-agent-structure` § Nesting Depth & DMI for the full rule and ND3 agent t
 
 | Prefix | Count | Purpose |
 |--------|-------|---------|
-| `w-` | 9 | Workflow — step-by-step procedures |
+| `w-` | 11 | Workflow — step-by-step procedures |
 | `r-` | 4 | Rules — shared conventions |
 | `h-` | 17 | Handbook — domain knowledge |
 

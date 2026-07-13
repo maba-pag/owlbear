@@ -63,16 +63,21 @@ Before gathering sources:
 
 > Skipping this check is the most common research time-sink.
 
-## Step 3 — Research Depth Gate
+## Step 3 — Research Scope Gate
 
-Preliminary orientation is autonomous: inspect local code and documentation, use focused web/source-page lookups, and identify whether a real research question remains.
+Bounded read-only research needed to assess the active shaping question is autonomous. This includes
+local code and documentation, focused web/source-page lookups, and a proportionate multi-source or
+comparative check when architecture, contracts, or prior art require it.
 
-Before either of these costly activities, obtain explicit user approval through `askQuestions`:
+Obtain explicit user approval through `askQuestions` before:
 
-- **Deep research:** a multi-source or comparative investigation beyond preliminary orientation.
-- **Repository cloning:** cloning an external repository to inspect its structure, implementation, or cross-file patterns.
+- an exceptional-cost or open-ended investigation whose scope materially exceeds the active change;
+- cloning a large external repository when source pages or focused retrieval are insufficient;
+- executing external code, setup scripts, package installs, hooks, or other untrusted operations.
 
-Present the remaining question, why preliminary orientation is insufficient, the proposed scope (including repository URLs when applicable), expected outcome, cost level, and a narrower alternative. Do not start deep research or clone a repository until the user approves. If the user is unavailable, create a blocking request and keep the task in `shape`.
+Present the remaining question, why bounded research is insufficient, proposed scope, expected outcome,
+cost level, and a narrower alternative. If the user is unavailable, create a blocking request and
+keep the task in `shape`.
 
 For an approved clone, use `.owlbear/scratch/research/{repo-name}/`, inspect it only, record the repository URL and resolved commit/ref in the research findings, and delete the clone in Step 9. Do not execute repository code, setup scripts, package installs, or hooks.
 
@@ -84,7 +89,8 @@ Find 2+ authoritative sources per claim:
   and exact tools to ground findings.
 - **Explore:** use the `Explore` subagent for broad read-only codebase context when local search would be noisy.
 - **Web:** use the `web` toolset for known public pages, browser acquisition for rendered or authenticated pages, and `markitdown/*` for supported document conversion. Open-ended DDGS search is unavailable; do not silently substitute another search provider.
-- **External repositories:** prefer source pages, docs, and extracted files for preliminary orientation. After Step 3 approval, clone when source-level inspection is needed to answer the shaping question.
+- **External repositories:** prefer source pages, docs, and extracted files. Clone only when the
+  approved exceptional investigation needs cross-file source inspection.
 
 Track: name, URL, what was taken, relevance score (0.0–1.0).
 
@@ -197,7 +203,8 @@ Append to task body before advancing:
 ## Known Pitfalls
 
 - **Skipping pre-flight check:** Multiple research cycles have been wasted because existing docs were missed. Always check `.owlbear/research/` first.
-- **Skipping research-depth approval:** Do not hide an expensive investigation behind a routine lookup. Ask before deep research or cloning, and bound the approved scope.
+- **Unbounded research:** Bounded evidence gathering is autonomous, but an exceptional-cost or
+  materially broader investigation still needs an explicit scope decision.
 - **Follow-up tasks without AC:** Every follow-up task needs concrete acceptance criteria. "Improve X" without measurable conditions is not actionable.
 - **T3 without request:** New capabilities and architecture changes need a blocking request via `create_request` when the user is not resolving it live. Proceeding without approval risks reversal.
 - **Over-long research docs:** 200-line cap exists to force conciseness. If you need more, the analysis is not focused enough.
