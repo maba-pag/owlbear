@@ -255,10 +255,10 @@ async def recall_memory(
     categories: list[MemoryCategory | str] | None = None,
     limit: int | None = None,
 ) -> str:
-    """Return body-only recall text for a single scoped agent.
+    """Return identity-bearing recall text for a single scoped agent.
 
-    Output format: concatenated markdown blocks using "## {title}" headings
-    followed by each entry body.
+    Output format: concatenated markdown blocks using "## {title}" headings,
+    followed by the entry ID and body on consecutive lines.
     """
     if agent == "*":
         msg = 'wildcard agent "*" is not allowed for recall_memory'
@@ -309,7 +309,7 @@ async def recall_memory(
     selected_entries = explore_pool + challenge_pool + regular_pool
     selected_entries.sort(key=lambda entry: (state_rank[entry.state], -entry.score, entry.id))
 
-    return "\n\n".join(f"## {entry.title}\n{entry.content}" for entry in selected_entries)
+    return "\n\n".join(f"## {entry.title}\nEntry ID: `{entry.id}`\n{entry.content}" for entry in selected_entries)
 
 
 async def _update_entry(  # noqa: C901, PLR0913

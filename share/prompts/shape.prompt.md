@@ -1,45 +1,53 @@
 ---
-description: "Start the user-facing shaper for an OpenSpec change, approved Brief, shape task, or simple idea"
+description: "Review an OpenSpec implementation plan or repair connected work rejected to shape"
 agent: shaper
 ---
 
-Shape: ${input:planning_source:Task number, OpenSpec change path, approved Brief path, or simple idea}
+Shape: ${input:planning_source:OpenSpec change path or rejected task number(s); leave empty to choose pending shape work}
+
+## Entry And Mode Selection
+
+Use the user's language unless they ask otherwise.
+
+If no planning source was supplied, query unclaimed tasks in `shape`. Summarize each candidate by
+title and the latest `### Required Follow-up`, then use `askQuestions` to let the user select one. If
+there are no candidates or the user declines them, ask for an OpenSpec change path. Do not involve,
+notify, or modify the orchestrator.
+
+Classify the selected input:
+
+| Input | Workflow |
+|-------|----------|
+| OpenSpec change directory or native artifact | `w-spec-shaping` |
+| Existing task number or explicit connected set in `shape` | `w-task-repair` |
+| Narrow free-text implementation request | Optional shorthand only when one unambiguous outcome clearly needs no OpenSpec change |
+
+Do not accept an approved Brief as a substitute for the repository's OpenSpec planning boundary.
+Broad, multi-domain, contract-heavy, or materially uncertain free text needs `/opsx:propose` before
+`/shape`; explain that route instead of creating speculative tasks.
 
 ## Interaction Protocol
 
-Use the user's language unless they ask otherwise. When shaping requires a real product, architecture, scope, or trade-off decision, present exactly one decision item before calling `askQuestions`.
+The user may not know or have approved the generated OpenSpec package. In spec mode, do not jump from
+artifact reading to decomposition. Follow the staged implementation review in `w-spec-shaping`:
 
-Each decision item must include: status quo, problem, options with pro/con/risk/confidence, recommendation with reason, and expected outcome. Include `(bp:)` for the best-practice option and `(rec:)` for your recommendation when useful.
+1. Product outcome, workflow, scope, exclusions, and visible failure behavior.
+2. Architecture, module ownership, control/data flow, and exposed interfaces in adaptive depth.
+3. Consequential trade-offs, open facts, proof boundary, and completion.
 
-## Input Modes
+Take an evidence-based position and recommend changes when warranted. Use normal prose questions to
+build understanding. For a material fork, present exactly one decision at a time with status quo,
+problem, options with pros/cons/risks, recommendation, and expected outcome before calling
+`askQuestions`.
 
-- If the input is a task number, shape that existing task.
-- If the input is an OpenSpec change directory or one of its native artifacts, resolve the change
- through `openspec status --change <name> --json`, then read every existing `proposal`, `specs`,
- `design`, and `tasks` path reported by the CLI. Do not assume paths from the stock schema.
-- If the input is an approved `brief.md` path, read the Brief and its sibling `decisions.md` before
- task creation when that sibling exists. Apply the planning-readiness gate, contract authority
- guard, and product invariant map.
-- If the input is a simple idea, shape it directly into routed task artifacts. Do not create a temporary `shape` staging task.
+Accepted material changes must update their owning OpenSpec Proposal, Spec, or Design before tasks
+are drafted. Challenge the complete provisional graph before showing it for approval. Create or
+substantially rewrite Kanban tasks only after the user approves that graph.
 
-## What Happens
-
-1. The shaper classifies planning authority before decomposition. For native OpenSpec, Proposal owns
- product intent and material user decisions; Specs own normative behavior; Design owns verified
- technical decisions; Tasks are advisory suggestions only.
-2. The shaper confirms product invocation, existing-system fit and authorities, normal-path proof,
- and the completion/change contract before decomposition.
-3. The shaper records load-bearing contract claims and maps each product invariant to one owning task
- and one normal-path proof.
-4. When local context is insufficient, the shaper runs source-grounded research and records it in Shape Notes or `.owlbear/research/`.
-5. Important user choices are discussed through `askQuestions` before approval or blocking.
-6. The shaper treats OpenSpec Tasks as recommendations, then writes final Kanban scope, acceptance
- criteria, dependencies, priorities, tags, proof guidance, and aggregate routing.
-7. Over-broad work may be decomposed by shaper, with build-ready leaf tasks created in `build` and aggregate parents/EPICs created or parked in `collect` behind child dependencies.
-8. For every OpenSpec Proposal or approved Brief, concrete tasks receive a post-shaping Product
- Promise check before approval. The task graph must cover the full active promise and may omit a
- requested outcome only when the planning authority records the user's explicit accepted exclusion.
-9. Approved existing tasks move to `build` or `collect`; unresolved existing tasks stay in `shape` or become blocked through `create_request`. For free-text ideas that remain unresolved after live clarification, stop without creating board artifacts.
+In repair mode, begin with the latest Required Follow-up. Apply complete mechanical, local, or
+prescribed-split instructions autonomously. If investigation introduces a new material behavior,
+scope, architecture, compatibility, security, acceptance, or graph decision, stop before mutation
+and conduct a focused interactive review.
 
 ## Routing Rules
 
@@ -49,6 +57,10 @@ When calling `create_task`, pass `status` explicitly unless the user is manually
 |----------|--------|
 | Build-ready leaf task | `build` |
 | Aggregate parent / EPIC with child dependencies | `collect` |
-| Raw unresolved intake | do not create; ask/refine or stop |
+| Unresolved intake | do not create; review, redirect to OpenSpec, or stop |
 
-After creating tasks, verify their statuses with `list_tasks(ids=[...])` before returning.
+After approved writes, verify statuses, dependencies, and parent links with `list_tasks(ids=[...])`.
+For every repaired existing task, append `## Shape Notes` as required Channel B history.
+
+Return a human summary of the reviewed implementation or repair, decisions, artifact changes, task
+graph, route, and unresolved facts. Do not expose a pipeline verdict as the user-facing response.

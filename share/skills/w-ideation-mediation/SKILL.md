@@ -156,21 +156,24 @@ Apply O15 to every Critic pass. See the Critic Validation section above for the 
 5. No mandatory/recommended tiers: everything in the approved Brief is a requirement. If an item should not be built, remove it or record an accepted trade-off before approval.
 6. Write `brief.md` only after user approval. Once approved, the Brief is the binding product promise for downstream planning.
 
-## Step 6 — M6: Shaping Handoff — "Ready to Shape"
+## Step 6 — M6: Proposal Handoff — "Ready for OpenSpec"
 
 1. Confirm `brief.md` is approved, saved, and names any unresolved decisions that shaping must not
    guess.
-2. Do not create Kanban tasks or invoke `shaper`. Ideation and task creation are separate user-facing
-   sessions.
+2. Do not create OpenSpec artifacts, Kanban tasks, or invoke `shaper`. Ideation, autonomous OpenSpec
+   proposal generation, and interactive shaping are separate sessions.
 3. Commit the final Working Directory state per `r-workspace-governance`, owning only the phase
    artifacts.
-4. Report the shaping handoff to the user:
+4. Report the proposal handoff to the user:
    - approved Brief path and one-line product promise
    - unresolved decisions or external claims, if any
-   - exact next command: `/shape {brief_path}`
-5. The later interactive shaping session owns task creation and the tier-scaled post-shaping
-   expectation-fidelity check. For `Shared` and `Production`, shaper must not approve until that
-   check passes against the approved Brief and concrete task layout.
+   - exact next command: `/opsx:propose`, using the approved Brief as input
+5. OpenSpec generates Proposal, Specs, Design, and advisory Tasks. The later `/shape` session reviews
+   that generated implementation plan with the user before task creation and owns the tier-scaled
+   expectation-fidelity check. For `Shared` and `Production`, shaper must not commit a graph until
+   that check passes against the reconciled OpenSpec package and provisional layout, plus the
+   approved Brief when the OpenSpec package records its path. Do not assume `/shape` can discover an
+   unreferenced ideation directory.
 
 ## Verification Checklist
 
@@ -191,7 +194,7 @@ Apply O15 to every Critic pass. See the Critic Validation section above for the 
 - [ ] Post-hybridization dual Critic passes were executed and both were triaged with O15.
 - [ ] Expectation fit is represented in `synthesis.md` before Brief drafting.
 - [ ] Approved `brief.md` contains no mandatory/recommended tiers and carries the binding product promise.
-- [ ] No Kanban task was created and shaper was not invoked by mediation.
-- [ ] The final handoff names the approved Brief path, unresolved decisions, and `/shape` command.
+- [ ] No OpenSpec or Kanban artifact was created and shaper was not invoked by mediation.
+- [ ] The final handoff names the approved Brief path, unresolved decisions, and `/opsx:propose` command.
 - [ ] `Shared` and `Production` handoffs assign post-shaping expectation-fidelity checking to the
    later interactive shaping session.

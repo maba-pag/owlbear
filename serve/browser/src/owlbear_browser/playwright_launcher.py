@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Self
 
@@ -14,6 +15,7 @@ if TYPE_CHECKING:
     from playwright.async_api import BrowserContext, Page
 
 __all__ = [
+    "AuthenticationCapabilities",
     "PlaywrightLauncher",
     "SSOExtensionNotFoundError",
     "build_playwright_args",
@@ -22,6 +24,15 @@ __all__ = [
 
 _SSO_EXT_ID = "ppnbnpeolgkicgegkbkbjmhlideopiji"
 _EXT_REL = Path("Google") / "Chrome" / "User Data" / "Default" / "Extensions" / _SSO_EXT_ID
+
+
+@dataclass(frozen=True, slots=True)
+class AuthenticationCapabilities:
+    """Authentication integrations available to the launched browser."""
+
+    persistent_session: bool
+    visible_manual_auth: bool
+    microsoft_sso: bool
 
 
 def find_sso_extension() -> Path:
@@ -89,35 +100,77 @@ class PlaywrightLauncher:
         self,
         sso_ext_path: Path | None = None,
         user_data_dir: str = "",
+        max_pending_pages: int = 1,
     ) -> None:
         self._sso_ext_path = sso_ext_path
-        self._user_data_dir = user_data_dir
+        self._user_data_dir = user_data_dir or str(Path.home() / ".owlbear" / "browser-profile")
+        if max_pending_pages < 1:
+            msg = "max_pending_pages must be at least 1"
+            raise ValueError(msg)
+        self._max_pending_pages = max_pending_pages
         self._context: BrowserContext | None = None
         self._pw = None
+        self._pending_pages: list[Page] = []
+        self._capabilities = AuthenticationCapabilities(
+            persistent_session=False,
+            visible_manual_auth=False,
+            microsoft_sso=False,
+        )
 
     @property
-    def context(self) -> BrowserContext | None:
-        """Return the active BrowserContext, or None if not launched."""
-        return self._context
+    def capabilities(self) -> AuthenticationCapabilities:
+        """Return authentication capabilities detected at launch."""
+        return self._capabilities
 
     async def launch(self) -> None:
         """Launch Chromium with the SSO extension and open a persistent context."""
-        sso_ext_path = self._sso_ext_path if self._sso_ext_path is not None else find_sso_extension()
+        sso_ext_path = self._sso_ext_path
+        if sso_ext_path is None:
+            try:
+                sso_ext_path = find_sso_extension()
+            except SSOExtensionNotFoundError:
+                sso_ext_path = None
         cm = async_playwright()
         self._pw = await cm.__aenter__()
-        args = build_playwright_args(sso_ext_path)
-        self._context = await self._pw.chromium.launch_persistent_context(
-            self._user_data_dir,  # type: ignore[arg-type]
-            headless=False,
-            args=args,
+        args = build_playwright_args(sso_ext_path) if sso_ext_path is not None else []
+        try:
+            self._context = await self._pw.chromium.launch_persistent_context(
+                self._user_data_dir,  # type: ignore[arg-type]
+                headless=False,
+                args=args,
+            )
+        except Exception:
+            await self._pw.stop()
+            self._pw = None
+            raise
+        self._capabilities = AuthenticationCapabilities(
+            persistent_session=True,
+            visible_manual_auth=True,
+            microsoft_sso=sso_ext_path is not None,
         )
+
+    async def pending_page(self, url: str) -> Page:
+        """Return one visible, reusable page for user-completed authentication."""
+        if self._context is None:
+            msg = "Launcher not started — call launch() first"
+            raise RuntimeError(msg)
+        while len(self._pending_pages) >= self._max_pending_pages:
+            await self._pending_pages.pop(0).close()
+        page = await self._context.new_page()
+        self._pending_pages.append(page)
+        await page.goto(url, wait_until="domcontentloaded")
+        return page
 
     async def close(self) -> None:
         """Close the persistent context and stop the Playwright instance."""
+        for page in self._pending_pages:
+            if not page.is_closed():
+                await page.close()
+        self._pending_pages.clear()
         if self._context is not None:
             await self._context.close()
         if self._pw is not None:
-            self._pw.stop()
+            await self._pw.stop()
 
     async def __aenter__(self) -> Self:
         await self.launch()
@@ -126,10 +179,11 @@ class PlaywrightLauncher:
     async def __aexit__(self, *_: object) -> None:
         await self.close()
 
-    @property
-    def page(self) -> Page:
+    async def page(self) -> Page:
         """Return the first page from the persistent context."""
         if self._context is None:
             msg = "Launcher not started — call launch() first"
             raise RuntimeError(msg)
+        if not self._context.pages:
+            return await self._context.new_page()
         return self._context.pages[0]

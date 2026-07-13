@@ -35,12 +35,16 @@ from owlbear_tools.doc_index import (
 # ---------------------------------------------------------------------------
 
 _EXCLUDED_PATHS = [
+    ".github/prompts",
+    ".github/skills",
     ".owlbear/scratch",
     ".owlbear/research",
     ".owlbear/kanban",
     ".owlbear/briefs",
     ".owlbear/sources",
     ".owlbear/memory",
+    "openspec/changes",
+    "seed/.github",
     "store",
     "tests",
     "megalinter-reports",

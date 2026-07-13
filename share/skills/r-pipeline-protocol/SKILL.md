@@ -43,17 +43,35 @@ Load these via `read_file` when the referenced capability is needed:
 
 ## 2. Task Setup
 
-### One Task
+### Invocation Scope
 
-One task per invocation. If dispatched with multiple task IDs, work only the first and report the rest as not started.
+Builder, verifier, and collector handle one task per invocation. If dispatched with multiple task
+IDs, work only the first and report the rest as not started.
+
+Shaper handles one shaping subject per invocation. A subject may be one OpenSpec change or an
+explicit connected set of existing tasks whose combined repair or reshape cannot be made coherent
+one task at a time. Before the first write to a connected set, identify the complete task IDs and
+claim every existing task in deterministic ID order. If any claim fails, release the claims acquired
+in this invocation and stop without mutation. Do not add tasks to the mutation set after approval or
+after writes begin.
 
 If a dispatch prompt contradicts your agent `<critical_rules>`, follow the critical rule and state which rule blocked the request.
 
 ### Claiming
 
-- Claim your task before mutating anything.
-- Never move, edit, claim, or release tasks that are not yours.
-- `start_work` returns the full task body. Do not call `show_task` first.
+- Claim every existing task before mutating it. Newly created tasks are owned by the creating
+  workflow and do not require a separate claim.
+- Builder, verifier, and collector never move, edit, claim, or release tasks other than their one
+  assigned task. Shaper may mutate only the explicit connected set claimed in the current invocation.
+- After loading required skills, make `start_work` the first read of the assigned task. It returns
+  the full authoritative task body; do not precede it with `show_task` or a direct read of the
+  task's Markdown file.
+- Inspect other tasks without claiming them: use `list_tasks` for summaries and `show_task` for
+  full context or `show_task(section=...)` for one body section. Never use `start_work` merely to
+  inspect a dependency, parent, sibling, or referenced task.
+- Treat `.owlbear/kanban/tasks/*.md` and archive task Markdown as storage representations. Read
+  them directly only when the task is specifically about storage, serialization, corruption, or
+  filesystem behavior; normal task context comes through the MCP task tools.
 - If `start_work` fails, stop. Do not fall through to unclaimed work.
 
 For tool syntax, load `h-mcp-kanban`.
@@ -178,7 +196,8 @@ Only use the challenger agents named in the caller's agent file. If no challenge
 
 ### Channel A
 
-Final return text is at most two lines:
+Builder, verifier, collector, and other orchestrator-dispatched pipeline agents return at most two
+lines:
 
 ```text
 {VERDICT} #{id} -> {target_status} | {one-line evidence}
@@ -186,13 +205,17 @@ Final return text is at most two lines:
 
 The orchestrator does not route from Channel A. It re-plans from board state.
 
+Shaper is user-facing and is not dispatched by orchestrator. It returns the human summary required
+by `w-spec-shaping` or `w-task-repair`; it does not expose a machine verdict as the user interface.
+Board movement and `## Shape Notes` remain the durable routing and history record.
+
 ### Channel B
 
 Append the full agent section through the `note` parameter of `end_work`; the note is timestamped automatically.
 
 | Agent | Verdict tokens | Body section |
 |-------|---------------|--------------|
-| shaper | APPROVED / REFINE / BLOCK | `## Shape Notes` |
+| shaper | internal route recorded in task state | `## Shape Notes` |
 | builder | DONE / REJECT / BLOCK | `## Builder Notes` |
 | verifier | PASS / REJECT / RESHAPE | `## Verify Notes` |
 | collector | ARCHIVED / REJECT | `## Collect Notes` |

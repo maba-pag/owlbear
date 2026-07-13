@@ -6,5 +6,6 @@
 .owlbear/research
 .owlbear/memory
 .owlbear/sources
+openspec/changes
 .venv
 node_modules

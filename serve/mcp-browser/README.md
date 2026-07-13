@@ -19,12 +19,18 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 
 | Tool | Description |
 |------|-------------|
+| `acquire` | Acquire one rendered page and return its structured success or failure result |
 | `navigate` | Navigate to a URL and return the page's plain-text content |
 | `click` | Click an element identified by CSS selector |
 | `type_input` | Type text into an input field identified by CSS selector |
 | `select` | Select an option in a `<select>` element by value |
 | `read_text` | Return the current page's plain-text content without navigating |
 | `snapshot` | Return the current page's raw HTML |
+
+`acquire` accepts a URL, optional readiness/content selectors, timeouts, and an explicit
+diagnostic-HTML opt-in. It does not accept arbitrary browser actions, scripts, credentials, or
+session inputs. Its failure status is returned as part of the structured result rather than being
+converted into a generic transport error.
 
 ## Configuration
 

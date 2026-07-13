@@ -22,15 +22,9 @@ Use this order to establish context without turning local instructions into univ
 3. Current structure and interfaces: generated indexes, then direct source reads.
 4. Shared OwlBear behavior: shared agents, skills, and instructions, never copied project notes.
 
-## Refresh the Indexes
+## Use Existing Indexes
 
-Regenerate all indexes before orienting in a changed working tree:
-
-```text
-uv run --project {owlbear-root} indexes {project-root}
-```
-
-The command always regenerates these fixed, committed artifacts concurrently:
+When present, these committed artifacts are optional wayfinders:
 
 | Artifact | Contents | Best use |
 |----------|----------|----------|
@@ -40,6 +34,15 @@ The command always regenerates these fixed, committed artifacts concurrently:
 
 The artifacts are advisory. Source files remain authoritative. Search indexes with `rg`; do not load
 an entire index when one path, symbol, or topic query will do.
+
+Do not regenerate indexes during ordinary orientation. A stale or missing index is a reason to use
+exact source search or another rung of the orientation ladder, not to mutate the working tree.
+Regenerate the fixed index artifacts only when index maintenance is itself part of the requested
+work, following `r-workspace-governance` for artifact ownership.
+
+```text
+uv run --project {owlbear-root} indexes {project-root}
+```
 
 ## Find the Test Boundary
 
@@ -59,8 +62,8 @@ Stop at the first adequate option:
 
 1. **Known file or symbol:** read it directly. Use language-server references when callers matter.
 2. **Documentation topic:** search `.owlbear/doc-index.md`, then read the candidate document.
-3. **Known language or module area:** search `.owlbear/py-index.md` or `.owlbear/ts-index.md`, then read
-   the candidate source.
+3. **Known language or module area:** search an existing `.owlbear/py-index.md` or
+   `.owlbear/ts-index.md`, or search source directly, then read the candidate source.
 4. **Exact text, symbol, path, or exhaustive claim:** use `rg`, file search, or language-server
    references against source.
 5. **Unknown behavioral owner or analogous implementation:** use Semble once to obtain a small set of

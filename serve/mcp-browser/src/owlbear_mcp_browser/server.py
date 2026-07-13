@@ -19,13 +19,14 @@ from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
+from owlbear_browser import AcquisitionFailure, AcquisitionRequest, AcquisitionSuccess
 from owlbear_browser._errors import AuthenticationRequired
 from owlbear_browser.extractor import extract_content
 from owlbear_browser.fetcher import BrowserContentFetcher
 from owlbear_browser.playwright_launcher import PlaywrightLauncher
 from owlbear_mcp_browser.allowlist import DomainAllowlist
 
-__all__ = ["AppContext", "app_lifespan", "mcp_app"]
+__all__ = ["AppContext", "acquire", "app_lifespan", "mcp_app"]
 
 
 def _is_blocked_ip(ip_str: str) -> bool:
@@ -154,8 +155,63 @@ async def app_lifespan(server: FastMCP) -> AsyncGenerator[AppContext, None]:
 
 
 _MSG_NO_PAGE = "No browser session"
+_MSG_BROWSER_UNAVAILABLE = "Browser unavailable"
 
 _mcp = FastMCP("owlbear-mcp-browser", lifespan=app_lifespan)
+
+
+def _serialize_acquisition(result: AcquisitionSuccess | AcquisitionFailure) -> dict[str, Any]:
+    """Project the shared acquisition contract into an MCP-safe mapping."""
+    diagnostics = {
+        "stage": result.diagnostics.stage,
+        "details": result.diagnostics.details,
+    }
+    if isinstance(result, AcquisitionFailure):
+        return {"status": result.status.value, "diagnostics": diagnostics}
+    return {
+        "status": result.status.value,
+        "requested_url": result.requested_url,
+        "canonical_url": result.canonical_url,
+        "redirect_chain": list(result.redirect_chain),
+        "title": result.title,
+        "markdown": result.markdown,
+        "discovered_links": list(result.discovered_links),
+        "content_hash": result.content_hash,
+        "fetched_at": result.fetched_at.isoformat(),
+        "diagnostics": diagnostics,
+    }
+
+
+@_mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, destructiveHint=False))
+async def acquire(  # noqa: PLR0913
+    ctx: Context,
+    url: str,
+    readiness_selector: str | None = None,
+    content_selector: str | None = None,
+    navigation_timeout_ms: int = 30_000,
+    readiness_timeout_ms: int = 10_000,
+    include_diagnostic_html: bool = False,  # noqa: FBT001, FBT002
+) -> dict[str, Any]:
+    """Acquire one rendered page through the shared browser acquisition contract."""
+    app_ctx = ctx.request_context.lifespan_context
+    if not isinstance(app_ctx, AppContext) or app_ctx.fetcher is None:
+        raise ToolError(_MSG_BROWSER_UNAVAILABLE)
+    try:
+        app_ctx.allowlist.check(url)
+        request = AcquisitionRequest(
+            url=url,
+            readiness_selector=readiness_selector,
+            content_selector=content_selector,
+            navigation_timeout_ms=navigation_timeout_ms,
+            readiness_timeout_ms=readiness_timeout_ms,
+            include_diagnostic_html=include_diagnostic_html,
+        )
+        result = await app_ctx.fetcher.acquire(request)
+    except PermissionError as exc:
+        raise ToolError(str(exc)) from exc
+    except ValueError as exc:
+        raise ToolError(str(exc)) from exc
+    return _serialize_acquisition(result)
 
 
 @_mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True, destructiveHint=False))

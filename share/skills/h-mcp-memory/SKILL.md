@@ -57,7 +57,7 @@ The `--project` path must point to the OwlBear installation root. Find the corre
 |------|-------------|----------------|
 | `save_memory` | Create a new `pending` memory entry | `title`, `content`, `categories`, `confidence`, `source_agent`, `scope_agents` |
 | `list_memories` | List metadata filtered by state/category/scope | `states`, `categories`, `scope_agents` |
-| `recall_memory` | Recall scoped memory blocks for agent pre-flight | `agent`, `categories`, `limit` |
+| `recall_memory` | Recall scoped identity-bearing memory blocks for agent pre-flight | `agent`, `categories`, `limit` |
 | `read_memory` | Read one full memory entry by ID | `entry_id` |
 | `assess_memories` | Record whether recalled entries were useful for a completed task | `task_id`, `assessments` |
 | `curate_memory` | Curator mutation and code-managed state transition tool | `entry_id`, optional mutable fields, `scope_agents` |
@@ -108,7 +108,7 @@ Behavior:
 
 ## recall_memory
 
-Returns body-only markdown blocks scoped to one agent for pre-flight loading.
+Returns identity-bearing markdown blocks scoped to one agent for pre-flight loading.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
@@ -118,9 +118,10 @@ Returns body-only markdown blocks scoped to one agent for pre-flight loading.
 
 Behavior:
 
-- includes only `curated` and `approved` entries scoped to the agent
+- includes `curated`, `approved`, and `contested` entries scoped to the agent
 - returns `approved` entries before `curated`
-- returns markdown body blocks, not full entry metadata
+- formats each block as `## {title}`, `Entry ID: `{id}``, and the body on consecutive lines
+- omits all other entry metadata
 - rejects blank or wildcard agent names
 
 ## curate_memory
