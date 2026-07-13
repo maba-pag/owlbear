@@ -1,10 +1,10 @@
 ---
 id: 1930
 title: Document auto-staged collector archive recovery
-status: verify
+status: build
 priority: medium
 created: 2026-07-14T01:12:22.720349+02:00
-updated: 2026-07-14T01:14:20.958871+02:00
+updated: 2026-07-14T01:19:22.294972+02:00
 tags:
   - agent
   - kanban
@@ -41,3 +41,15 @@ Define the safe recovery procedure when collector archival is auto-staged before
 - Added collector-facing lifecycle pointer and focused static assertions.
 - Proof: `uv run pytest tests/test_skill_authority_wiring.py -q` -> 4 passed; Ruff clean; all 23 agent files validate; diff check clean.
 - Builder challenger: pass; no concrete blocker.
+
+[[2026-07-14T01:19:22+02:00]]
+## Verify Notes
+
+- Verified commit `ddd1ef8292334fb51795833fef76646056df3a7f`; focused tests, Ruff, and agent validation pass.
+- Verifier challenger found the ownership gate insufficient: cached `--name-status` proves the expected rename path but cannot prove the staged archive blob contains no pre-existing user edits.
+- No verifier patches applied.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Require content-level proof before unstaging: verify the staged archive blob matches the committed pre-archive task blob; route any mismatch or unavailable comparison to `COMMIT_FAILED`. Update the focused assertion. | `share/skills/r-workspace-governance/SKILL.md`, `tests/test_skill_authority_wiring.py` | Verifier challenger: name-status alone cannot establish staged content ownership. |
