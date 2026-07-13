@@ -1,10 +1,10 @@
 ---
 id: 1930
 title: Document auto-staged collector archive recovery
-status: verify
+status: collect
 priority: medium
 created: 2026-07-14T01:12:22.720349+02:00
-updated: 2026-07-14T01:42:05.410231+02:00
+updated: 2026-07-14T01:43:34.432366+02:00
 tags:
   - agent
   - kanban
@@ -85,3 +85,13 @@ Define the safe recovery procedure when collector archival is auto-staged before
 - Every missing object, blob mismatch, or non-`R100` shape fails closed through `COMMIT_FAILED` without reset.
 - Focused tests: 4 passed; Ruff and diff check clean.
 - Builder challenger: pass; no concrete blocker.
+
+[[2026-07-14T01:43:34+02:00]]
+## Verify Notes
+
+- Verified committed recovery contract through `ddd1ef829`, `03ebc5fed`, and final `ad79d7ea58dbef1820d4ca07e273ec028f9dd668`.
+- Safety condition: only exact cached `R100` plus staged archive blob equality with the pre-archive task blob qualifies for reset; every other state fails closed.
+- Preservation: collector-authored final content remains in the working tree and is staged by the scoped retry; unrelated paths are outside the reset pathspec.
+- Checks: 4 focused tests passed; Ruff clean; all 23 agent definitions valid.
+- Patches applied: none.
+- Verifier challenger: pass; final route PASS to collect.
