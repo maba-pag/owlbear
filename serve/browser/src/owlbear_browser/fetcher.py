@@ -52,19 +52,12 @@ class BrowserContentFetcher:
                 Diagnostics("validation", {"url": request.url}),
             )
         page = await self._context.new_page()
-        redirect_chain: list[str] = []
         download_detected = False
-
-        def observe(response: object) -> None:
-            response_url = getattr(response, "url", None)
-            if isinstance(response_url, str) and (not redirect_chain or redirect_chain[-1] != response_url):
-                redirect_chain.append(response_url)
 
         def observe_download(_download: object) -> None:
             nonlocal download_detected
             download_detected = True
 
-        page.on("response", observe)
         page.on("download", observe_download)
         try:
             try:
@@ -104,7 +97,7 @@ class BrowserContentFetcher:
                 required_stable_observations = 2
                 stabilized = False
                 while time.monotonic() < deadline:
-                    selector = request.content_selector or request.readiness_selector or "body"
+                    selector = request.readiness_selector or request.content_selector or "body"
                     current_text = await page.locator(selector).first.inner_text()
                     if current_text.strip() and current_text == previous_text:
                         stable_observations += 1
@@ -129,21 +122,44 @@ class BrowserContentFetcher:
                 )
 
             final_url = page.url
+            redirect_chain: list[str] = []
+            document_request = response.request if response is not None else None
+            while document_request is not None:
+                redirect_chain.append(document_request.url)
+                document_request = document_request.redirected_from
+            redirect_chain.reverse()
             if urlparse(final_url).scheme not in {"http", "https"}:
                 return AcquisitionFailure(
                     AcquisitionStatus.UNSUPPORTED_TARGET,
                     Diagnostics("validation", {"url": final_url}),
                 )
             page_text = (await page.locator("body").inner_text()).lower()
-            if re.search(r"(?:sign in|log in|authentication required|consent required)", page_text):
+            page_title = (await page.title()).lower()
+            auth_structure = await page.locator(
+                "form, input[type='password'], input[type='email'], [role='dialog']"
+            ).count()
+            auth_pattern = (
+                r"(?:sign in|log in|authentication required|consent required|trust this device|verify your identity)"
+            )
+            auth_signal = re.search(auth_pattern, page_text[:4000])
+            title_auth_signal = re.search(auth_pattern, page_title)
+            if (auth_structure and auth_signal) or title_auth_signal:
                 return AcquisitionFailure(
                     AcquisitionStatus.AUTHENTICATION_REQUIRED,
-                    Diagnostics("validation", {"url": final_url}),
+                    Diagnostics("validation", {"url": final_url, "signal": "authentication"}),
                 )
-            if re.search(r"(?:access denied|forbidden|insufficient permission)", page_text):
+            denial_signal = re.search(r"(?:access denied|forbidden|insufficient permission)", page_text[:4000])
+            if (response is not None and response.status in {401, 403}) or denial_signal:
                 return AcquisitionFailure(
                     AcquisitionStatus.ACCESS_DENIED,
-                    Diagnostics("validation", {"url": final_url}),
+                    Diagnostics("validation", {"url": final_url, "signal": "access_denied"}),
+                )
+            requested_origin = (urlparse(request.url).scheme, urlparse(request.url).netloc)
+            final_origin = (urlparse(final_url).scheme, urlparse(final_url).netloc)
+            if redirect_chain and requested_origin != final_origin:
+                return AcquisitionFailure(
+                    AcquisitionStatus.REDIRECT_REJECTED,
+                    Diagnostics("validation", {"url": final_url, "signal": "unrelated_redirect"}),
                 )
             if await region.count() == 0:
                 return AcquisitionFailure(
@@ -153,8 +169,8 @@ class BrowserContentFetcher:
             rendered_html = await region.first.inner_html()
             if not rendered_html.strip():
                 return AcquisitionFailure(
-                    AcquisitionStatus.SELECTOR_NOT_FOUND,
-                    Diagnostics("selection", {"selector": request.content_selector}),
+                    AcquisitionStatus.EXTRACTION_FAILED,
+                    Diagnostics("extraction", {"signal": "empty_content"}),
                 )
             markdown = normalize_markdown(extract_content(rendered_html, final_url))
             if not markdown:

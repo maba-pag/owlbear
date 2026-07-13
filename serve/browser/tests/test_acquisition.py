@@ -10,7 +10,7 @@ from owlbear_browser import AcquisitionRequest, AcquisitionStatus, AcquisitionSu
 class _FixtureHandler(BaseHTTPRequestHandler):
     requests: ClassVar[list[str]] = []
 
-    def do_GET(self) -> None:  # noqa: N802
+    def do_GET(self) -> None:  # noqa: N802, PLR0911
         self.requests.append(self.path)
         if self.path == "/start":
             self.send_response(302)
@@ -29,6 +29,35 @@ class _FixtureHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(b"download")
             return
+        if self.path == "/auth":
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.end_headers()
+            self.wfile.write(b"<html><body><form><input type='email'>Sign in</form></body></html>")
+            return
+        if self.path == "/denied":
+            self.send_response(403)
+            self.send_header("Content-Type", "text/html")
+            self.end_headers()
+            self.wfile.write(b"<html><body>Access denied</body></html>")
+            return
+        if self.path == "/unrelated":
+            self.send_response(302)
+            self.send_header("Location", "https://example.com/other")
+            self.end_headers()
+            return
+        if self.path == "/empty":
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.end_headers()
+            self.wfile.write(b"<html><body>Ready<main id='content'></main></body></html>")
+            return
+        if self.path == "/false-positive":
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.end_headers()
+            self.wfile.write(b"<html><body><main id='content'>Our guide explains how to sign in.</main></body></html>")
+            return
         self.send_response(200)
         self.send_header("Content-Type", "text/html")
         self.end_headers()
@@ -37,6 +66,7 @@ class _FixtureHandler(BaseHTTPRequestHandler):
             b'<h1>Rendered title</h1><p id="delayed"></p>'
             b'<a href="/linked#one">first</a><a href="/linked#two">duplicate</a>'
             b'<a href="mailto:test@example.com">mail</a></main>'
+            b'<link rel="stylesheet" href="/style.css">'
             b'<script>setTimeout(() => document.querySelector("#delayed").textContent = "Stable body", 80)</script>'
             b"</body></html>"
         )
@@ -100,6 +130,60 @@ async def test_acquire_reports_missing_content_selector() -> None:
             )
             await browser.close()
         assert result.status is AcquisitionStatus.SELECTOR_NOT_FOUND
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("path", "expected_status"),
+    [
+        ("/auth", AcquisitionStatus.AUTHENTICATION_REQUIRED),
+        ("/denied", AcquisitionStatus.ACCESS_DENIED),
+        ("/unrelated", AcquisitionStatus.REDIRECT_REJECTED),
+        ("/empty", AcquisitionStatus.EXTRACTION_FAILED),
+    ],
+)
+async def test_acquire_rejects_invalid_final_page_states(path: str, expected_status: AcquisitionStatus) -> None:
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _FixtureHandler)
+    Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        from playwright.async_api import async_playwright
+
+        async with async_playwright() as playwright:
+            browser = await playwright.chromium.launch()
+            context = await browser.new_context()
+            request = AcquisitionRequest(
+                f"http://127.0.0.1:{server.server_port}{path}",
+                content_selector="#content" if path == "/empty" else None,
+                readiness_selector="body" if path == "/empty" else None,
+                readiness_timeout_ms=200,
+            )
+            result = await BrowserContentFetcher(context).acquire(request)
+            await browser.close()
+        assert result.status is expected_status
+        assert result.diagnostics.details.get("signal") or expected_status is AcquisitionStatus.EXTRACTION_FAILED
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+@pytest.mark.asyncio
+async def test_acquire_does_not_misclassify_login_terminology() -> None:
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _FixtureHandler)
+    Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        from playwright.async_api import async_playwright
+
+        async with async_playwright() as playwright:
+            browser = await playwright.chromium.launch()
+            context = await browser.new_context()
+            result = await BrowserContentFetcher(context).acquire(
+                AcquisitionRequest(f"http://127.0.0.1:{server.server_port}/false-positive")
+            )
+            await browser.close()
+        assert isinstance(result, AcquisitionSuccess)
     finally:
         server.shutdown()
         server.server_close()
