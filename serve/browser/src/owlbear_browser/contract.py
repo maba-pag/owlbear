@@ -5,12 +5,12 @@ from __future__ import annotations
 import hashlib
 import re
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from urllib.parse import urldefrag, urljoin, urlparse
 
-if TYPE_CHECKING:
-    from datetime import datetime
+from lxml import html
 
 
 class AcquisitionStatus(StrEnum):
@@ -45,7 +45,7 @@ class AcquisitionRequest:
 
     def __post_init__(self) -> None:
         parsed = urlparse(self.url)
-        if parsed.scheme.lower() not in {"http", "https"} or not parsed.netloc:
+        if parsed.scheme.lower() not in {"http", "https"} or not parsed.netloc or parsed.username or parsed.password:
             raise ValueError("acquisition requires an HTTP(S) URL")  # noqa: EM101, TRY003
         if (
             any(
@@ -65,11 +65,15 @@ class Diagnostics:
     stage: str
     details: dict[str, Any] = field(default_factory=dict)
     html: str | None = None
+    include_diagnostic_html: bool = False
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "details", redact_diagnostics(self.details))
-        if self.html is not None and not self.details.get("diagnostic_html_requested", False):
-            object.__setattr__(self, "html", None)
+        if self.html is not None:
+            if not self.include_diagnostic_html:
+                object.__setattr__(self, "html", None)
+            else:
+                object.__setattr__(self, "html", _sanitize_diagnostic_html(self.html))
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,8 +92,8 @@ class AcquisitionSuccess:
     def __post_init__(self) -> None:
         if self.status is not AcquisitionStatus.SUCCESS:
             raise ValueError("success results must have success status")  # noqa: EM101, TRY003
-        if not self.markdown.strip() or self.fetched_at.tzinfo is None:
-            raise ValueError("success results require non-empty Markdown and an aware timestamp")  # noqa: EM101, TRY003
+        if not self.markdown.strip() or self.fetched_at.tzinfo is not UTC:
+            raise ValueError("success results require non-empty Markdown and a UTC timestamp")  # noqa: EM101, TRY003
 
 
 @dataclass(frozen=True, slots=True)
@@ -133,7 +137,12 @@ def normalize_links(links: list[str] | tuple[str, ...], base_url: str) -> tuple[
     return tuple(result)
 
 
-_SENSITIVE = re.compile(r"cookie|storage|authorization|auth|password|credential|secret|token", re.IGNORECASE)
+_SENSITIVE = re.compile(
+    r"cookie|storage|authorization|auth|header|password|credential|secret|token",
+    re.IGNORECASE,
+)
+_DIAGNOSTIC_HTML_LIMIT = 100_000
+_REMOVED_HTML_ELEMENTS = {"base", "embed", "iframe", "link", "object", "script", "style"}
 
 
 def redact_diagnostics(value: Any) -> Any:  # noqa: ANN401
@@ -145,3 +154,25 @@ def redact_diagnostics(value: Any) -> Any:  # noqa: ANN401
     if isinstance(value, str) and _SENSITIVE.search(value):
         return "[REDACTED]"
     return value
+
+
+def _sanitize_diagnostic_html(value: str) -> str:
+    """Keep bounded, non-executable markup for explicitly requested diagnostics."""
+    root = html.fragment_fromstring(value, create_parent=True)
+    for element in root.iter():
+        if element.tag in _REMOVED_HTML_ELEMENTS:
+            element.drop_tree()
+            continue
+        for name, attribute in list(element.attrib.items()):
+            if (
+                name.lower().startswith("on")
+                or (name.lower() in {"href", "src", "action"} and attribute.strip().lower().startswith("javascript:"))
+                or _SENSITIVE.search(name)
+            ):
+                del element.attrib[name]
+        if element.text and _SENSITIVE.search(element.text):
+            element.text = "[REDACTED]"
+        if element.tail and _SENSITIVE.search(element.tail):
+            element.tail = "[REDACTED]"
+    serialized = "".join(html.tostring(child, encoding="unicode", method="html") for child in root)
+    return serialized[:_DIAGNOSTIC_HTML_LIMIT]
