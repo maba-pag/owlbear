@@ -1,12 +1,12 @@
-"""Failing tests for #1308: recall_memory tool — scope filtering, body-only
-format, priority ordering, wildcard block, and limit parameter.
+"""Tests for recall_memory scope filtering, identity-bearing content blocks,
+priority ordering, wildcard block, and limit behavior.
 
 AC coverage:
   AC1 (td:2): recall returns entries where agent name is in scope_agents
   AC2 (td:2): recall includes entries where scope_agents=["*"] (universal)
   AC3 (td:2): recall excludes entries where scope_agents=[] (unscoped)
   AC4 (td:1): recall with agent="*" is code-blocked (raises ToolError)
-  AC5 (td:2): return format is body-only: title as ## heading, content below, no metadata
+    AC5 (td:2): return format has title, entry ID, and content, but no other metadata
   AC6 (td:2): ordering — approved entries first, then curated entries fill remaining slots
   AC7 (td:1): limit parameter works (default 20)
   AC8 (td:0): all tests fail — RED state
@@ -15,7 +15,7 @@ Interface strategy:
   recall_memory does not exist in owlbear_mcp_memory.tools yet.
   The module-level import causes ImportError, guaranteeing RED for every test.
   Expected signature: recall_memory(ctx, *, agent, categories=None, limit=None) -> str
-  Return: concatenated "## {title}\\n{content}" blocks, approved before curated.
+    Return: concatenated "## {title}\\nEntry ID: `{id}`\\n{content}" blocks.
 """
 
 from __future__ import annotations
@@ -302,12 +302,12 @@ class TestFromAC_WildcardAgentBlock:
 
 
 # ---------------------------------------------------------------------------
-# AC5 (td:2): return format is body-only: title as ## heading, content below
+# AC5 (td:2): return format has title, entry ID, and content
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_BodyOnlyFormat:
-    """AC5: result is a plain string with ## title and content — no metadata."""
+class TestFromAC_IdentityBearingFormat:
+    """AC5: result contains identity-bearing content blocks."""
 
     @pytest.mark.asyncio
     async def test_result_is_a_string(self, tmp_path: Path) -> None:
@@ -340,7 +340,7 @@ class TestFromAC_BodyOnlyFormat:
 
     @pytest.mark.asyncio
     async def test_content_appears_below_heading(self, tmp_path: Path) -> None:
-        """Content follows the ## heading in the returned string."""
+        """Content follows the heading and entry ID in the returned string."""
         entry = _make_entry(
             id=_uuid(1),
             title="My Entry",
@@ -355,14 +355,14 @@ class TestFromAC_BodyOnlyFormat:
         result = await _recall(ctx, agent="builder")
 
         assert "This is the body content." in result
-        # Title heading must precede content
         title_pos = result.index("## My Entry")
+        id_pos = result.index(f"Entry ID: `{entry.id}`")
         content_pos = result.index("This is the body content.")
-        assert title_pos < content_pos
+        assert title_pos < id_pos < content_pos
 
     @pytest.mark.asyncio
-    async def test_result_contains_no_metadata_fields(self, tmp_path: Path) -> None:
-        """Metadata fields (id, state, confidence, etc.) do not appear in the result."""
+    async def test_result_contains_entry_id_but_no_other_metadata(self, tmp_path: Path) -> None:
+        """Entry ID appears while unrelated metadata remains absent."""
         entry = _make_entry(
             id=_uuid(1),
             title="My Entry",
@@ -376,9 +376,9 @@ class TestFromAC_BodyOnlyFormat:
 
         result = await _recall(ctx, agent="builder")
 
+        assert f"Entry ID: `{entry.id}`" in result
         assert "curated" not in result
         assert "0.95" not in result
-        assert entry.id not in result
         assert "scope_agents" not in result
 
     @pytest.mark.asyncio
@@ -397,9 +397,8 @@ class TestFromAC_BodyOnlyFormat:
         assert "## Second Entry" in result
 
     @pytest.mark.asyncio
-    async def test_exact_per_entry_format_and_all_metadata_fields_absent(self, tmp_path: Path) -> None:
-        """Pins exact output format and asserts ALL metadata field names and values
-        are absent from the returned string (AC5-fix: discriminating check)."""
+    async def test_exact_per_entry_format_and_other_metadata_fields_absent(self, tmp_path: Path) -> None:
+        """Pin the identity-bearing format and exclude unrelated metadata."""
         entry = _make_entry(
             id=_uuid(99),
             title="Format Pin Test",
@@ -419,11 +418,8 @@ class TestFromAC_BodyOnlyFormat:
 
         result = await _recall(ctx, agent="recall-scope-tester")
 
-        # Pin exact per-entry format: "## {title}\n{content}"
-        assert result == "## Format Pin Test\nPinned body text."
-        # Assert ALL metadata field names absent
+        assert result == f"## Format Pin Test\nEntry ID: `{entry.id}`\nPinned body text."
         for field_name in (
-            "id",
             "state",
             "confidence",
             "categories",
@@ -433,8 +429,6 @@ class TestFromAC_BodyOnlyFormat:
             "updated_at",
         ):
             assert field_name not in result, f"metadata field {field_name!r} leaked into output"
-        # Assert metadata values absent
-        assert _uuid(99) not in result  # id value
         assert "curated" not in result  # state value
         assert "0.92" not in result  # confidence value
         assert "domain-knowledge" not in result  # category value
@@ -443,9 +437,8 @@ class TestFromAC_BodyOnlyFormat:
         assert "2026-02-20T14:15:00Z" not in result  # updated_at value
 
     @pytest.mark.asyncio
-    async def test_two_entries_joined_with_double_newline_separator(self, tmp_path: Path) -> None:
-        """Two matching entries are joined by '\\n\\n' — exact per-entry format pinned
-        (AC5-fix: separator proof)."""
+    async def test_two_entries_keep_ids_paired_and_use_double_newline_separator(self, tmp_path: Path) -> None:
+        """Each ID stays with its entry and complete blocks use a blank separator."""
         e1 = _make_entry(
             id=_uuid(1),
             title="Alpha Entry",
@@ -467,8 +460,9 @@ class TestFromAC_BodyOnlyFormat:
 
         result = await _recall(ctx, agent="builder")
 
-        # _uuid(1) < _uuid(2): same state+confidence, alpha sorts first by id
-        expected = "## Alpha Entry\nAlpha content.\n\n## Beta Entry\nBeta content."
+        expected = (
+            f"## Alpha Entry\nEntry ID: `{e1.id}`\nAlpha content.\n\n## Beta Entry\nEntry ID: `{e2.id}`\nBeta content."
+        )
         assert result == expected
 
 
