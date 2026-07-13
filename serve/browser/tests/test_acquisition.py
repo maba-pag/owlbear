@@ -59,11 +59,74 @@ async def test_acquire_waits_for_rendered_content_and_keeps_links_inert() -> Non
             await browser.close()
         assert isinstance(result, AcquisitionSuccess)
         assert result.status is AcquisitionStatus.SUCCESS
+        assert result.requested_url == f"http://127.0.0.1:{server.server_port}/start"
         assert result.canonical_url.endswith("/page")
         assert result.redirect_chain == (f"http://127.0.0.1:{server.server_port}/start",)
+        assert result.title == "Fixture"
         assert "Stable body" in result.markdown
         assert result.discovered_links == (f"http://127.0.0.1:{server.server_port}/linked",)
+        assert result.content_hash
+        assert result.fetched_at.tzinfo is not None
+        assert result.diagnostics.stage == "complete"
         assert "/linked" not in _FixtureHandler.requests
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+@pytest.mark.asyncio
+async def test_acquire_reports_missing_content_selector() -> None:
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _FixtureHandler)
+    Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        from playwright.async_api import async_playwright
+
+        async with async_playwright() as playwright:
+            browser = await playwright.chromium.launch()
+            context = await browser.new_context()
+            result = await BrowserContentFetcher(context).acquire(
+                AcquisitionRequest(
+                    f"http://127.0.0.1:{server.server_port}/page",
+                    content_selector="#missing",
+                    readiness_timeout_ms=200,
+                )
+            )
+            await browser.close()
+        assert result.status is AcquisitionStatus.SELECTOR_NOT_FOUND
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("content_selector", "readiness_selector", "expected_status"),
+    [
+        ("#delayed", None, AcquisitionStatus.SELECTOR_NOT_FOUND),
+        ("#content", "#missing", AcquisitionStatus.CONTENT_NOT_READY),
+    ],
+)
+async def test_acquire_reports_unready_content(
+    content_selector: str, readiness_selector: str | None, expected_status: AcquisitionStatus
+) -> None:
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _FixtureHandler)
+    Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        from playwright.async_api import async_playwright
+
+        async with async_playwright() as playwright:
+            browser = await playwright.chromium.launch()
+            context = await browser.new_context()
+            result = await BrowserContentFetcher(context).acquire(
+                AcquisitionRequest(
+                    f"http://127.0.0.1:{server.server_port}/page",
+                    content_selector=content_selector,
+                    readiness_selector=readiness_selector,
+                    readiness_timeout_ms=100,
+                )
+            )
+            await browser.close()
+        assert result.status is expected_status
     finally:
         server.shutdown()
         server.server_close()

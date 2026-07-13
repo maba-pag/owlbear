@@ -73,6 +73,12 @@ class BrowserContentFetcher:
                     Diagnostics("navigation", {"url": page.url}),
                 )
             try:
+                region = page.locator(request.content_selector) if request.content_selector else page.locator("body")
+                if request.content_selector and await region.count() == 0:
+                    return AcquisitionFailure(
+                        AcquisitionStatus.SELECTOR_NOT_FOUND,
+                        Diagnostics("selection", {"selector": request.content_selector}),
+                    )
                 if request.readiness_selector:
                     await page.wait_for_selector(request.readiness_selector, timeout=request.readiness_timeout_ms)
                 deadline = time.monotonic() + request.readiness_timeout_ms / 1000
@@ -93,6 +99,11 @@ class BrowserContentFetcher:
                     previous_text = current_text
                     await asyncio.sleep(0.05)
                 if not stabilized:
+                    if request.content_selector and not previous_text.strip():
+                        return AcquisitionFailure(
+                            AcquisitionStatus.SELECTOR_NOT_FOUND,
+                            Diagnostics("selection", {"selector": request.content_selector}),
+                        )
                     raise TimeoutError  # noqa: TRY301
             except Exception as error:  # noqa: BLE001
                 return AcquisitionFailure(
@@ -117,7 +128,6 @@ class BrowserContentFetcher:
                     AcquisitionStatus.ACCESS_DENIED,
                     Diagnostics("validation", {"url": final_url}),
                 )
-            region = page.locator(request.content_selector) if request.content_selector else page.locator("body")
             if await region.count() == 0:
                 return AcquisitionFailure(
                     AcquisitionStatus.SELECTOR_NOT_FOUND,
