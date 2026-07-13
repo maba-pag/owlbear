@@ -54,7 +54,7 @@ def test_idea_refinement_preserves_grilling_method_without_decision_theater() ->
 def test_active_planning_path_preserves_full_promise_without_tier_gate() -> None:
     paths = (
         "share/skills/w-idea-refinement/SKILL.md",
-        "share/openspec/owlbear/config.yaml",
+        "seed/openspec/config.yaml",
         "share/prompts/shape.prompt.md",
         "share/skills/w-task-decomposition/SKILL.md",
         "share/agents/shaper.agent.md",

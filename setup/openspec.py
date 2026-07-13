@@ -18,8 +18,7 @@ _GITIGNORE_BLOCK = """# --- OwlBear OpenSpec generated commands ---
 .github/prompts/opsx-*.prompt.md
 """
 _REPO_ROOT = Path(__file__).resolve().parent.parent
-_INTEGRATION_ROOT = _REPO_ROOT / "share" / "openspec" / "owlbear"
-_CONFIG_PATH = _INTEGRATION_ROOT / "config.yaml"
+_CONFIG_PATH = _REPO_ROOT / "seed" / "openspec" / "config.yaml"
 _CONTEXT_START = "# --- OwlBear OpenSpec context ---"
 _CONTEXT_END = "# --- End OwlBear OpenSpec context ---"
 _RULE_PREFIX = "[OwlBear] "
