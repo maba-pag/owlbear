@@ -45,8 +45,8 @@ class AcquisitionRequest:
 
     def __post_init__(self) -> None:
         parsed = urlparse(self.url)
-        if parsed.scheme.lower() not in {"http", "https"} or not parsed.netloc or parsed.username or parsed.password:
-            raise ValueError("acquisition requires an HTTP(S) URL")  # noqa: EM101, TRY003
+        if parsed.username or parsed.password:
+            raise ValueError("acquisition does not accept URL credentials")  # noqa: EM101, TRY003
         if (
             any(
                 value is not None and value != ""

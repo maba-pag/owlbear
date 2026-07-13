@@ -16,9 +16,8 @@ from owlbear_browser import (
 def test_request_accepts_private_http_url_and_rejects_prohibited_inputs() -> None:
     request = AcquisitionRequest("http://127.0.0.1:8123/page")
     assert request.url.endswith("/page")
-    with pytest.raises(ValueError, match=r"HTTP\(S\)"):
-        AcquisitionRequest("file:///tmp/page.html")
-    with pytest.raises(ValueError, match=r"HTTP\(S\)"):
+    assert AcquisitionRequest("file:///tmp/page.html").url == "file:///tmp/page.html"
+    with pytest.raises(ValueError, match="URL credentials"):
         AcquisitionRequest("https://user:secret@example.test/page")
     with pytest.raises(ValueError, match="credentials"):
         AcquisitionRequest("https://example.test", password="secret")

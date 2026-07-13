@@ -45,15 +45,27 @@ class BrowserContentFetcher:
         return await self.acquire(request)
 
     async def acquire(self, request: AcquisitionRequest) -> AcquisitionResult:  # noqa: C901, PLR0911, PLR0912, PLR0915
+        parsed_request_url = urlparse(request.url)
+        if parsed_request_url.scheme.lower() not in {"http", "https"} or not parsed_request_url.netloc:
+            return AcquisitionFailure(
+                AcquisitionStatus.UNSUPPORTED_TARGET,
+                Diagnostics("validation", {"url": request.url}),
+            )
         page = await self._context.new_page()
         redirect_chain: list[str] = []
+        download_detected = False
 
         def observe(response: object) -> None:
             response_url = getattr(response, "url", None)
             if isinstance(response_url, str) and (not redirect_chain or redirect_chain[-1] != response_url):
                 redirect_chain.append(response_url)
 
+        def observe_download(_download: object) -> None:
+            nonlocal download_detected
+            download_detected = True
+
         page.on("response", observe)
+        page.on("download", observe_download)
         try:
             try:
                 response = await page.goto(
@@ -62,6 +74,11 @@ class BrowserContentFetcher:
                     timeout=request.navigation_timeout_ms,
                 )
             except Exception as error:  # noqa: BLE001
+                if download_detected or "download" in str(error).lower():
+                    return AcquisitionFailure(
+                        AcquisitionStatus.DOWNLOAD_REJECTED,
+                        Diagnostics("navigation", {"url": page.url}),
+                    )
                 return AcquisitionFailure(
                     AcquisitionStatus.NAVIGATION_FAILED,
                     Diagnostics("navigation", {"error": type(error).__name__}),

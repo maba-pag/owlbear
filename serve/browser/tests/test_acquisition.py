@@ -22,6 +22,13 @@ class _FixtureHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(b"linked")
             return
+        if self.path == "/download":
+            self.send_response(200)
+            self.send_header("Content-Disposition", "attachment; filename=fixture.txt")
+            self.send_header("Content-Type", "text/plain")
+            self.end_headers()
+            self.wfile.write(b"download")
+            return
         self.send_response(200)
         self.send_header("Content-Type", "text/html")
         self.end_headers()
@@ -93,6 +100,38 @@ async def test_acquire_reports_missing_content_selector() -> None:
             )
             await browser.close()
         assert result.status is AcquisitionStatus.SELECTOR_NOT_FOUND
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+@pytest.mark.asyncio
+async def test_acquire_reports_unsupported_target_at_public_boundary() -> None:
+    from playwright.async_api import async_playwright
+
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.launch()
+        context = await browser.new_context()
+        result = await BrowserContentFetcher(context).acquire(AcquisitionRequest("file:///tmp/page.html"))
+        await browser.close()
+    assert result.status is AcquisitionStatus.UNSUPPORTED_TARGET
+
+
+@pytest.mark.asyncio
+async def test_acquire_rejects_download_navigation() -> None:
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _FixtureHandler)
+    Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        from playwright.async_api import async_playwright
+
+        async with async_playwright() as playwright:
+            browser = await playwright.chromium.launch()
+            context = await browser.new_context()
+            result = await BrowserContentFetcher(context).acquire(
+                AcquisitionRequest(f"http://127.0.0.1:{server.server_port}/download")
+            )
+            await browser.close()
+        assert result.status is AcquisitionStatus.DOWNLOAD_REJECTED
     finally:
         server.shutdown()
         server.server_close()
