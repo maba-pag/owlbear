@@ -1,10 +1,10 @@
 ---
 id: 1929
 title: Enforce pipeline-owned commits at task closure
-status: verify
+status: collect
 priority: high
 created: 2026-07-14T00:44:01.023216+02:00
-updated: 2026-07-14T01:02:28.048112+02:00
+updated: 2026-07-14T01:06:33.875055+02:00
 tags:
   - agent
   - kanban
@@ -72,3 +72,15 @@ Current protocol requires commits before `end_work`, but `end_work` itself appen
 - Added ordinary advancement proof: final task status and owned implementation commit together while unrelated tracked, staged, and untracked changes survive. Existing archive proof covers both sides of the task-to-archive move.
 - Proof: `uv run pytest tests/test_skill_authority_wiring.py serve/tools/tests/test_commit_owned.py -q` -> 9 passed; Ruff -> clean; agent validator -> 23/23 pass; diff check -> clean.
 - Builder challenger: pass; no concrete blocker.
+
+[[2026-07-14T01:06:33+02:00]]
+## Verify Notes
+
+- Verified committed SHAs: base `de3687a7b22840a9b0ba8c4ead2099fa74ede663`; recovery repair `f5d6406387fb9117860b04715ebcc815c92f5c6b`.
+- Authorities checked: core pipeline required-reading declarations, workspace governance, pipeline protocol, Kanban lifecycle handbook, wiring map, and scoped commit helper behavior.
+- AC proof: final task state ordering and archive path requirements are statically guarded; ordinary advancement and collector archive movement are exercised in real Git repositories with unrelated dirty paths.
+- Commit-failure recovery: on-board advanced tasks are blocked with `COMMIT_FAILED` before return; archived tasks remain off-board; recovery commits ownership before clearing dispatch block.
+- Checks: 9 focused tests passed; Ruff clean; all 23 agent definitions valid.
+- Patches applied: none.
+- Verifier challenger: pass; no concrete blocker.
+- Final route: PASS to collect.
