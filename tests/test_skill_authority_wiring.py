@@ -12,7 +12,14 @@ _SHARE_ROOT = _REPO_ROOT / "share"
 _EXPECTED_REQUIRED_READERS = {
     "h-codebase-orientation": {"builder", "verifier"},
     "h-module-design": {"ideation-architect", "shaper-challenger"},
-    "r-workspace-governance": {"ideation-discoverer", "ideation-mediator"},
+    "r-workspace-governance": {
+        "builder",
+        "collector",
+        "ideation-discoverer",
+        "ideation-mediator",
+        "shaper",
+        "verifier",
+    },
 }
 
 
@@ -50,6 +57,18 @@ def test_on_demand_authority_paths_are_declared() -> None:
     assert "`h-codebase-orientation`" in spec_shaping
     assert "`h-module-design`" in spec_shaping
     assert "`h-codebase-orientation`" in task_repair
+
+
+def test_pipeline_commit_gate_includes_final_task_state() -> None:
+    """Pipeline closure commits after end_work and includes archive moves explicitly."""
+    governance = (_REPO_ROOT / "share/skills/r-workspace-governance/SKILL.md").read_text(encoding="utf-8")
+    protocol = (_REPO_ROOT / "share/skills/r-pipeline-protocol/SKILL.md").read_text(encoding="utf-8")
+
+    assert "call `end_work` first" in governance
+    assert "Do not return `DONE`, `PASS`, or `ARCHIVED`" in governance
+    assert "### After `end_work`" in protocol
+    assert "Include the final task record in every pipeline commit" in protocol
+    assert "both its former task path and final archive path" in protocol
 
 
 def test_retired_authority_names_are_absent_from_shared_ecosystem() -> None:

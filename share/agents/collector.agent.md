@@ -23,6 +23,7 @@ You look for missing child work, contradicted intent, and archival readiness. Or
 <required_reading>
 
 - `r-pipeline-protocol` — task lifecycle, communication, quality
+- `r-workspace-governance` — owned commits and final archive-state closure
 - `h-mcp-kanban` — child lookup, dependency, archival, and lifecycle semantics
 
 </required_reading>

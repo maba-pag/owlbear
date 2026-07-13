@@ -45,6 +45,38 @@ def test_commits_owned_path_without_including_unrelated_staged_path(git_repo: Pa
     assert _git(git_repo, "diff", "--cached", "--name-only").stdout.splitlines() == ["unrelated.txt"]
 
 
+def test_commits_archive_move_without_including_unrelated_dirt(git_repo: Path) -> None:
+    """A collector can commit both sides of an archive move in a dirty worktree."""
+    task_path = git_repo / ".owlbear/kanban/tasks/1-task.md"
+    archive_path = git_repo / ".owlbear/kanban/archive/1-task.md"
+    task_path.parent.mkdir(parents=True)
+    archive_path.parent.mkdir(parents=True)
+    task_path.write_text("status: collect\n", encoding="utf-8")
+    _git(git_repo, "add", task_path.relative_to(git_repo).as_posix())
+    _git(git_repo, "commit", "-m", "add task")
+
+    task_path.rename(archive_path)
+    (git_repo / "unrelated-staged.txt").write_text("staged\n", encoding="utf-8")
+    (git_repo / "unrelated-untracked.txt").write_text("untracked\n", encoding="utf-8")
+    _git(git_repo, "add", "unrelated-staged.txt")
+
+    commit_owned_paths(
+        cwd=git_repo,
+        message="chore: archive task (#1, collector)",
+        paths=[
+            task_path.relative_to(git_repo).as_posix(),
+            archive_path.relative_to(git_repo).as_posix(),
+        ],
+    )
+
+    committed = _git(git_repo, "diff-tree", "--no-commit-id", "--name-status", "-r", "-M", "HEAD").stdout
+    assert committed.splitlines() == [
+        "R100\t.owlbear/kanban/tasks/1-task.md\t.owlbear/kanban/archive/1-task.md"
+    ]
+    assert _git(git_repo, "diff", "--cached", "--name-only").stdout.splitlines() == ["unrelated-staged.txt"]
+    assert (git_repo / "unrelated-untracked.txt").exists()
+
+
 def test_rejects_owned_path_that_was_already_staged(git_repo: Path) -> None:
     """The helper cannot establish ownership of pre-staged changes in one path."""
     (git_repo / "owned.txt").write_text("owned\n", encoding="utf-8")

@@ -25,16 +25,25 @@ without behavior change).
 ### Rules
 
 - One logical commit per agent per task. No micro-commits or multi-task batches.
-- Commit only files owned by the current task. A mixed index is not a reason to skip a task-owned
-  commit.
+- Commit only files owned by the current task. A dirty worktree or mixed index is not a reason to
+  skip a task-owned commit.
 - Use the shared scoped helper:
   `uv --project {owlbear-root} run commit-owned -m "type: description (#task-id, agent)" -- path [path...]`.
 - The helper preserves unrelated staged paths and unstages only its own paths if `git commit` fails.
   It rejects owned paths that were already staged because it cannot distinguish user work from agent
   work in the same path.
-- Pipeline agents commit task-owned durable changes before successful lifecycle advancement.
-  Builders own product and durable proof files, verifiers own local fixes, and collectors own board
-  or archive changes they make.
+- Pipeline agents call `end_work` first so the final note, status, and archive move exist, then
+  immediately commit all task-owned durable changes plus the final task record before returning a
+  success verdict. Builders own product and durable proof files, verifiers own local fixes, and
+  collectors own board or archive changes they make.
+- Pass explicit file paths to `commit-owned`; never pass `.`, `.owlbear/kanban/`, or another broad
+  directory. Include the active task path for ordinary transitions. For archival transitions,
+  include both the former `.owlbear/kanban/tasks/{slug}.md` path and the resulting
+  `.owlbear/kanban/archive/{slug}.md` path so Git records the move.
+- `end_work` success is not agent completion. Do not return `DONE`, `PASS`, or `ARCHIVED` until the
+  scoped commit succeeds. If it fails, repair or retry the scoped commit without advancing or
+  mutating other tasks; report the commit failure instead of a success verdict if it cannot be
+  completed.
 - Never push. The user pushes manually.
 
 ### VS Code Auto-Staging Trap

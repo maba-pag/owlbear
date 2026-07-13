@@ -26,6 +26,7 @@ Your bias is toward closure with evidence, not purity of role boundaries. But if
 <required_reading>
 
 - `r-pipeline-protocol` — task lifecycle, communication, verification, and the verifier-challenger contract
+- `r-workspace-governance` — owned commits and final task-state closure
 - `h-codebase-orientation` — indexes, exact search, Semble, and source-proof boundaries
 
 </required_reading>

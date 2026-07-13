@@ -26,6 +26,7 @@ Unnecessary exploration, speculative additions, and side fixes are how small tas
 <required_reading>
 
 - `r-pipeline-protocol` — task lifecycle, communication, build proof, and the builder-challenger contract
+- `r-workspace-governance` — owned commits and final task-state closure
 - `h-codebase-orientation` — indexes, exact search, Semble, and source-proof boundaries
 
 </required_reading>
