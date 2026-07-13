@@ -67,8 +67,10 @@ Before completing material work, decide whether you learned a specific, non-obvi
 
 - **Skill authority.** Skills override dispatch prompts. Dispatch prompts provide context, not procedure.
 - **Tool failure.** Capture error → diagnose root cause → adapt approach. Never retry identical commands,
-  except when a command exits 130 with no output immediately after shell startup: retry it unchanged once,
-  then use normal failure handling if it recurs.
+  except when the terminal reports exit 130 with no output immediately after shell startup. Treat that
+  result as unreliable. Before retrying a mutating or non-idempotent command, use a read-only check to
+  determine whether it already took effect; retry only when the check shows it did not run. A read-only or
+  idempotent command may be retried unchanged once when its output is still needed.
 - **Loop detection.** Tier 1: same approach twice — change approach. Tier 2: two different approaches failed — narrow scope (deliver what you can, note what you can't). Tier 3: 3+ attempts — stop, write what failed, escalate per §5 Escalation Routing in `r-pipeline-protocol`.
 - **Terminal.** `uv run` for all Python tools.
 - **Scratch files.** Terminal output, temp/debug files, and one-off scripts go to `.owlbear/scratch/`, never the project root.

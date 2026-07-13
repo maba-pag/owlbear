@@ -25,16 +25,33 @@ without behavior change).
 ### Rules
 
 - One logical commit per agent per task. No micro-commits or multi-task batches.
-- Commit only files owned by the current task. A mixed index is not a reason to skip a task-owned
-  commit.
+- Commit only files owned by the current task. A dirty worktree or mixed index is not a reason to
+  skip a task-owned commit.
 - Use the shared scoped helper:
   `uv --project {owlbear-root} run commit-owned -m "type: description (#task-id, agent)" -- path [path...]`.
 - The helper preserves unrelated staged paths and unstages only its own paths if `git commit` fails.
   It rejects owned paths that were already staged because it cannot distinguish user work from agent
   work in the same path.
-- Pipeline agents commit task-owned durable changes before successful lifecycle advancement.
-  Builders own product and durable proof files, verifiers own local fixes, and collectors own board
-  or archive changes they make.
+- Pipeline agents call `end_work` first so the final note, status, and archive move exist, then
+  immediately commit all task-owned durable changes plus the final task record before returning a
+  success verdict. Builders own product and durable proof files, verifiers own local fixes, and
+  collectors own board or archive changes they make.
+- Pass explicit file paths to `commit-owned`; never pass `.`, `.owlbear/kanban/`, or another broad
+  directory. Include the active task path for ordinary transitions. For archival transitions,
+  include both the former `.owlbear/kanban/tasks/{slug}.md` path and the resulting
+  `.owlbear/kanban/archive/{slug}.md` path so Git records the move.
+- `end_work` success is not agent completion. Do not return `DONE`, `PASS`, or `ARCHIVED` until the
+  scoped commit succeeds. If it fails, repair or retry the same scoped commit without mutating
+  another task.
+- If the scoped commit still cannot succeed and the task remains on-board, immediately call
+  `edit_task(id={task-id}, block_reason="COMMIT_FAILED: {concise error and recovery command}")`.
+  Return `COMMIT_FAILED`, never a success verdict. The filesystem block prevents orchestrator
+  redispatch even though the block itself is not yet committed. An archived task is already
+  off-board; return `COMMIT_FAILED` with the same recovery command and do not claim success.
+- Recover a `COMMIT_FAILED` task by completing the original explicit-path commit first. For an
+  on-board task, then clear the block with `edit_task(id={task-id}, block_reason="")` and make a
+  task-record-only recovery commit. These two recovery commits are the explicit exception to the
+  one-commit rule because the first restores durable ownership and the second restores dispatch.
 - Never push. The user pushes manually.
 
 ### VS Code Auto-Staging Trap
@@ -42,6 +59,25 @@ without behavior change).
 VS Code may re-serialize and stage `.agent.md` files when it detects new tool capabilities. Run
 `git diff --cached share/agents/` before committing and unstage unrelated generated changes without
 reverting them.
+
+### Owned Auto-Staging Recovery
+
+An editor or file watcher may stage a collector's task-to-archive rename before `commit-owned` runs.
+When the helper reports that the owned task or archive path is already staged:
+
+1. Inspect only both owned paths with
+  `git diff --cached --name-status -- .owlbear/kanban/tasks/{slug}.md .owlbear/kanban/archive/{slug}.md`.
+2. Prove the staged archive contains no extra content by comparing
+  `git rev-parse HEAD:.owlbear/kanban/tasks/{slug}.md` with
+  `git rev-parse :.owlbear/kanban/archive/{slug}.md`. Continue only when both commands succeed, the
+  blob IDs are identical, and step 1 shows exactly the current task's expected rename. A mismatch,
+  missing object, or unexpected staged shape is ambiguous: apply `COMMIT_FAILED`; do not unstage it.
+3. Unstage only those verified owned paths with
+  `git reset HEAD -- .owlbear/kanban/tasks/{slug}.md .owlbear/kanban/archive/{slug}.md`.
+4. Retry `commit-owned` with both paths so it stages and commits the complete final archive state.
+
+The reset command may print a summary of every remaining unstaged change. That output does not mean
+those unrelated paths were modified or unstaged by the exact pathspec.
 
 ## OwlBear-Managed Artifact Placement
 

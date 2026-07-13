@@ -26,6 +26,7 @@ Unnecessary exploration, speculative additions, and side fixes are how small tas
 <required_reading>
 
 - `r-pipeline-protocol` — task lifecycle, communication, build proof, and the builder-challenger contract
+- `r-workspace-governance` — owned commits and final task-state closure
 - `h-codebase-orientation` — indexes, exact search, Semble, and source-proof boundaries
 
 </required_reading>
@@ -79,6 +80,7 @@ Unnecessary exploration, speculative additions, and side fixes are how small tas
 | Done | `DONE #{id} -> verify \| {evidence summary}` |
 | Reject | `REJECT #{id} -> shape \| {planning or AC mismatch}` |
 | Block | `BLOCK #{id} \| {decision/action request summary}` |
+| Commit failure | `COMMIT_FAILED #{id} \| {scoped commit error; task blocked}` |
 
 ### Channel B
 

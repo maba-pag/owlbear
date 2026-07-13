@@ -34,7 +34,7 @@ Built-in agents (`Explore`, `General Purpose`) resolve at any depth.
 
 | Agent | Regularly | Connection | Seldom | Connection |
 |-------|-----------|------------|--------|------------|
-| shaper | r-pipeline-protocol | `req` | w-spec-shaping or w-task-repair after mode selection; w-task-decomposition, w-research, h-ac-quality, h-codebase-orientation, h-module-design, h-mcp-kanban, r-workspace-governance when triggered | `directed` / `companion` |
+| shaper | r-pipeline-protocol, r-workspace-governance | `req` | w-spec-shaping or w-task-repair after mode selection; w-task-decomposition, w-research, h-ac-quality, h-codebase-orientation, h-module-design, h-mcp-kanban when triggered | `directed` / `companion` |
 
 ### User Planning And Design
 
@@ -47,9 +47,9 @@ Built-in agents (`Explore`, `General Purpose`) resolve at any depth.
 
 | Agent | Regularly | Connection | Seldom | Connection |
 |-------|-----------|------------|--------|------------|
-| builder | r-pipeline-protocol, h-codebase-orientation | `req` | h-module-design, h-mcp-kanban, r-workspace-governance, python/frontend instructions | `companion` / `applyTo` |
-| verifier | r-pipeline-protocol, h-codebase-orientation | `req` | h-module-design, h-mcp-kanban, r-workspace-governance, python/frontend instructions | `companion` / `applyTo` |
-| collector | r-pipeline-protocol | `req` | h-mcp-kanban, r-workspace-governance | `companion` |
+| builder | r-pipeline-protocol, r-workspace-governance, h-codebase-orientation | `req` | h-module-design, h-mcp-kanban, python/frontend instructions | `companion` / `applyTo` |
+| verifier | r-pipeline-protocol, r-workspace-governance, h-codebase-orientation | `req` | h-module-design, h-mcp-kanban, python/frontend instructions | `companion` / `applyTo` |
+| collector | r-pipeline-protocol, r-workspace-governance | `req` | h-mcp-kanban | `companion` |
 
 ### Pipeline Challengers
 
@@ -91,7 +91,7 @@ Built-in agents (`Explore`, `General Purpose`) resolve at any depth.
 | h-ac-quality | shaper, shaper-challenger |
 | h-codebase-orientation | shaper workflows, builder, verifier, and ideation discovery/mediation on demand |
 | h-module-design | shaper workflows on demand, shaper-challenger, ideation-architect; builder/verifier on demand |
-| r-workspace-governance | pipeline agents through r-pipeline-protocol; ideation discoverer/mediator directly |
+| r-workspace-governance | shaper, builder, verifier, collector, ideation discoverer, ideation mediator |
 | h-mcp-kanban | pipeline/support agents on demand |
 | h-pytest-and-linting | builder-challenger/test-curator on demand |
 | h-vitest-and-linting | builder-challenger/test-curator/frontend work on demand |

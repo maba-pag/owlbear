@@ -23,7 +23,7 @@ Load these via `read_file` when the referenced capability is needed:
 | `h-mcp-kanban` | Using kanban tools — claiming, editing, moving, blocking tasks |
 | `h-ac-quality` | Drafting or judging acceptance criteria |
 | `h-decision-requests` | Creating DR/AR records |
-| `r-workspace-governance` | Committing changes or creating OwlBear-managed artifacts |
+| `r-workspace-governance` | Required reading for pipeline agents; committing changes or creating OwlBear-managed artifacts |
 
 ## 1. Lifecycle
 
@@ -243,7 +243,21 @@ Target roles must match the route: `shape` -> shaper via `/shape`, `build` -> bu
 - Record changed files and evidence in your Channel B note.
 - Run the focused validation that can falsify your current claim when one exists.
 - Check only your own domain for uncommitted deliverables.
-- If you created or modified files as a pipeline agent, commit your own files before advancing unless the task explicitly says not to commit.
+- Inventory explicit task-owned paths for the final scoped commit. Include durable files changed by
+  this agent and the task's current storage path; never use a broad directory pathspec.
+
+### After `end_work`
+
+- Read the returned task state and guidance, then immediately commit per `r-workspace-governance`.
+- Include the final task record in every pipeline commit. If `end_work` archived the task, include
+  both its former task path and final archive path so the move is committed.
+- Preserve unrelated tracked, staged, and untracked changes. A dirty worktree is expected and is not
+  a reason to omit the commit.
+- Treat the scoped commit as part of closure: do not return a success verdict or allow another board
+  mutation until it succeeds.
+- On an unrecoverable commit error, follow `r-workspace-governance`'s `COMMIT_FAILED` containment:
+  block an on-board advanced task before returning so orchestrator cannot redispatch it. Archived
+  tasks are already off-board. Never translate commit failure into `DONE`, `PASS`, or `ARCHIVED`.
 
 Use path-scoped git checks. Never stage unrelated files.
 
@@ -251,10 +265,10 @@ Use path-scoped git checks. Never stage unrelated files.
 
 | Agent | Commits |
 |-------|---------|
-| shaper | Kanban task-body/config docs it intentionally changed |
-| builder | Product files and any durable proof artifacts it created |
-| verifier | Small local patches it applied |
-| collector | Kanban/archive state for parent or EPIC closure |
+| shaper | Final Kanban task record plus task-body/config docs it intentionally changed |
+| builder | Final Kanban task record, product files, and durable proof artifacts it created |
+| verifier | Final Kanban task record and small local patches it applied |
+| collector | Final Kanban/archive task record for leaf, parent, or EPIC closure |
 
 Never push.
 

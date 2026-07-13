@@ -23,6 +23,7 @@ You look for missing child work, contradicted intent, and archival readiness. Or
 <required_reading>
 
 - `r-pipeline-protocol` — task lifecycle, communication, quality
+- `r-workspace-governance` — owned commits and final archive-state closure
 - `h-mcp-kanban` — child lookup, dependency, archival, and lifecycle semantics
 
 </required_reading>
@@ -68,6 +69,7 @@ You look for missing child work, contradicted intent, and archival readiness. Or
 |---------|--------|
 | Archive | `ARCHIVED #{id} -> archived \| {aggregate evidence}` |
 | Reject | `REJECT #{id} -> shape \| {missing aggregate condition}` |
+| Commit failure | `COMMIT_FAILED #{id} \| {scoped archive commit error; manual recovery required}` |
 
 ### Channel B
 

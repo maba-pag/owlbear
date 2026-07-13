@@ -153,7 +153,7 @@ On failure: raises `ToolError` (MCP `isError: true`).
 
 ## Agent Lifecycle Pattern
 
-Every pipeline agent follows a 2-call MCP lifecycle per task:
+Every pipeline agent follows the MCP lifecycle and then closes with an owned commit:
 
 ```python
 # 1. Claim + read
@@ -162,7 +162,10 @@ task = start_work(id=480)
 # 2. (do the actual work)
 
 # 3. Append agent notes + advance + release — all in one call
-end_work(id=480, note="## Builder Notes\n- Files changed: ...\n\n12 tests passed, ruff clean", outcome="success")
+result = end_work(id=480, note="## Builder Notes\n- Files changed: ...\n\n12 tests passed, ruff clean", outcome="success")
+
+# 4. Commit explicit owned paths, including the task record at result's final status
+# See r-workspace-governance; this scoped commit is required before the verdict.
 ```
 
 ### Task-context boundary
@@ -175,6 +178,20 @@ claim them merely to inspect them. Read task Markdown directly only when investi
 serialization, corruption, or filesystem behavior.
 
 Put your full agent section (header + content + summary) into the `note` parameter of `end_work`. The note is appended to the task body with a timestamp, then the task advances and the claim is released — all atomically.
+
+The task is not complete when `end_work` returns. Follow `r-workspace-governance` immediately: commit
+the agent's explicit task-owned durable paths and the resulting task record. For collector archival,
+include both the old task path and new archive path. Do not return the Channel A success verdict until
+that scoped commit succeeds, even when unrelated worktree or index changes exist.
+
+If `commit-owned` reports that either collector archive path is already staged, follow
+`r-workspace-governance` -> Owned Auto-Staging Recovery. Inspect both exact paths before unstaging;
+never treat an ambiguous staged path as collector-owned.
+
+If that commit cannot be repaired in the current invocation, apply the `COMMIT_FAILED` containment
+from `r-workspace-governance`: block an advanced on-board task with `edit_task(block_reason=...)`
+before returning. Clear the block with `edit_task(block_reason="")` only after the original scoped
+commit has succeeded and commit that unblock separately.
 
 For the section header to use per agent, see `pipeline-agents.instructions.md` — `## Per-Agent Section Mapping`.
 
