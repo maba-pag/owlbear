@@ -1,10 +1,10 @@
 ---
 id: 1913
 title: Verify continuous codebase orientation without restructuring
-status: collect
+status: archived
 priority: medium
 created: 2026-07-12T03:04:01.048065+02:00
-updated: 2026-07-14T04:55:42.641233+02:00
+updated: 2026-07-14T08:02:41.091792+02:00
 tags:
   - scope:agent-config
   - feature
@@ -27,7 +27,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Objective
@@ -177,3 +177,13 @@ Released without verification. This task was claimed in error while recovering f
 ## Verify Notes
 - Verifier-challenger final result: `decision: pass`. It confirmed the persisted evidence maps to AC-1 through AC-3, includes the focused authority and idea-refinement regressions, records zero product-file changes and no Change Module Map deviation, and exercises the nonmocked artifact-inspection boundary.
 - Final route: PASS -> collect. No patch applied.
+
+[[2026-07-14T08:02:41+02:00]]
+## Collect Notes
+- Classification: leaf. Task #1913 has no child tasks; its Objective, Scope, and AC describe direct implementation work rather than aggregate intent.
+- Leaf verification evidence: final `## Verify Notes` records PASS, verifier-challenger `decision: pass`, no verifier patch, and focused proof: 22 authority tests passed, 4 idea-refinement tests passed, agent validation passed for all 23 agent files, and `git diff --check HEAD` was clean.
+- Invariant map coverage: verifier evidence maps artifact authority and wiring to AC-1, Change Module Map ownership/carry-through to AC-2, and focused regressions plus zero product-file changes to AC-3.
+- Dependency gate: dependency #1912 is archived with reason `completed`; `dep_status` is `ok`.
+- Child coverage: none; `list_tasks(parent=1913)` returned no tasks.
+- Residual decisions: no pending request records, unresolved decision state, or unresolved Required Follow-up remains. The prior collect rejection for absent Verify Notes was resolved by the subsequent verifier PASS.
+- Archive rationale: mechanical leaf closure is complete; archive with reason `completed`.
