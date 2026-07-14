@@ -1,10 +1,10 @@
 ---
 id: 1926
 title: 'P1-10: Prove assembled browser acquisition at a committed revision'
-status: verify
+status: collect
 priority: high
 created: 2026-07-13T15:47:53.790613+02:00
-updated: 2026-07-14T15:21:52.585154+02:00
+updated: 2026-07-14T16:00:31.235774+02:00
 tags:
   - phase-1
   - scope:mcp-browser
@@ -79,3 +79,27 @@ Assembled proof: a real stdio MCP client launched `uv run python -m owlbear_mcp_
 Focused checks at the tested revision: `uv run pytest serve/mcp-browser/tests/ -q --tb=short` -> 21 passed; `uv run pytest serve/browser/tests/ -q --tb=short` -> 20 passed; `uv run pytest tests/test_package_boundary.py -q --tb=short` -> 34 passed; focused Ruff -> passed.
 
 Builder challenger: PASS. It independently confirmed both ACs, the acquisition-versus-interactive authorization distinction, the assembled boundary, and 75 passing tests.
+
+[[2026-07-14T16:00:31+02:00]]
+## Verify Notes
+
+Evidence reviewed: task AC-1/AC-2; OpenSpec authorities named in the task; builder completion and tested implementation commit `ddab6cdefc8a23c92170654a4cf21cb6a09b9309`; current descendant `03f41bdf75b0e88bae03d8d25b91408c4cfdad0e`. `git merge-base --is-ancestor ddab6cdef HEAD` returned 0.
+
+Named authorities checked: `serve/mcp-browser/src/owlbear_mcp_browser/server.py` registers `acquire`, composes FastMCP lifespan through `PlaywrightLauncher`, delegates acquisition through the public `launcher.acquire()` boundary, and serializes both success and failure results. `navigate()` still runs `_check_ssrf(url)` followed by `allowlist.check(url)`; the interactive `click`, `type`, `select`, `read_text`, and `snapshot` tools remain page-bound. The browser public boundary in `serve/browser/src/owlbear_browser/playwright_launcher.py` exposes `acquire()` and `page()`.
+
+Change Module Map: no deviation. The implementation commit touched the mapped MCP owner, its browser-core public boundary, and focused MCP proof. The subsequent task-only commit contains the build-to-verify transition and recorded evidence.
+
+Normal-path boundary exercised: fresh real stdio MCP client launched `uv run python -m owlbear_mcp_browser`, initialized FastMCP, listed the registered `acquire` tool, and invoked it through one real lifespan with headed Playwright and local HTTP fixtures. Delayed-render acquisition returned `success` with non-empty Markdown. Cookie establishment then protected-page acquisition both returned `success`; the protected result included requested/canonical URL, redirect chain, content hash, and timestamp. Authentication returned structured `authentication_required`; missing readiness selector returned structured `content_not_ready`. Local HTTP fixtures replaced only the remote site, below the claimed MCP/lifespan/launcher/Playwright boundary.
+
+Checks run:
+- `uv run pytest serve/mcp-browser/tests/ -q --tb=short` -> 21 passed.
+- `uv run pytest serve/browser/tests/ -q --tb=short` -> 20 passed.
+- `uv run pytest tests/test_package_boundary.py -q --tb=short` -> 34 passed.
+- `uv run ruff check serve/mcp-browser/src/owlbear_mcp_browser/server.py` -> passed.
+- Real stdio smoke checks as described above -> passed for delayed rendering, session reuse, structured authentication, and structured terminal readiness behavior.
+
+Findings and patches: no defect found; no verifier patch applied. One initial ad hoc fixture used too short a readiness window and correctly produced `content_not_ready`; the exact delayed-render retry with a 5-second readiness window returned `success`.
+
+Verifier-challenger: PASS. It confirmed AC-1 and AC-2, real FastMCP registration/stdio/headed-Playwright proof, metadata, structured non-successes, retained interactive policy, and scope.
+
+Final route: PASS -> collect.
