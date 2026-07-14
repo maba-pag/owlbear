@@ -1,19 +1,19 @@
 ---
-id: 73366e39-a355-4b3b-9fca-400fff7b375c
-title: Reject when full-file AC conflicts with explicit out-of-scope sections
-categories:
-- process
-- pitfall
-confidence: 0.82
-state: curated
-scope_agents:
-- builder
-- shaper
-- verifier
-source_agent: builder
-created_at: '2026-05-28T00:43:03.166007Z'
-updated_at: '2026-05-28T01:31:39.879671Z'
 approved_at: null
+categories: [process, pitfall]
+confidence: 0.8
+contested_by_task: null
+created_at: '2026-05-28T00:43:03.166007Z'
+didnt_use_count: 0
+id: 73366e39-a355-4b3b-9fca-400fff7b375c
+outstanding_count: 0
+scope_agents: [builder, shaper, verifier]
+score: 0.0
+source_agent: builder
+state: curated
+title: Whole-file proof commands can contradict excluded scope
+unremarkable_count: 0
+updated_at: '2026-07-14T20:59:55.643127+00:00'
 ---
 
-If AC requires `pytest <whole-file>` but task scope explicitly excludes a failing section in the same file, treat as AC/scope mismatch: implement in-scope cleanup, provide failure evidence for out-of-scope tests, and reject to backlog with architect follow-up to refine AC or add prereq tasks.
+When an AC requires a whole-file test command while explicitly excluding a failing section in that file, treat the command as a scope/proof-plan contradiction. Record the out-of-scope failure evidence and reject to shape; the shaper narrows the proof target or sequences the prerequisite.
