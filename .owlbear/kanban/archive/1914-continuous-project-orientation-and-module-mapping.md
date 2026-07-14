@@ -2,10 +2,10 @@
 id: 1914
 title: Close continuous orientation without disturbing current planning 
   structures
-status: collect
+status: archived
 priority: medium
 created: 2026-07-12T03:04:06.678099+02:00
-updated: 2026-07-14T12:44:12.135496+02:00
+updated: 2026-07-14T12:48:27.712660+02:00
 tags:
   - scope:tools
   - scope:agent-config
@@ -29,7 +29,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Problem
@@ -131,3 +131,14 @@ Proof guidance: inspect the active artifacts and task histories, scan for retire
 - `git diff --check`: clean.
 - Challenger: not required for this mechanical repair; no provisional graph or acceptance meaning changed.
 - Route: #1914 returns to `collect` with dependencies #1912, #1913, and #1916 preserved.
+
+[[2026-07-14T12:48:27+02:00]]
+## Collect Notes
+- Classification: aggregate. Intent source: `## Problem`, `## Decisions`, `## Shape Notes`, and explicit AC-1 through AC-3.
+- Invariant map: AC-1 board/archive state; AC-2 portable orientation authority, Change Module Map carry-through, project/shared authority boundary, active idea-refinement-to-proposal-to-shape path, and retired-name absence; AC-3 no current-skill rename/move, no legacy-ideation edits, and no collector product-file changes.
+- Child coverage: `list_tasks(parent=1914)` returned #1912 and #1913, both archived `completed`. #1916 is an explicit parent dependency and archived `completed`; #1915 is archived `dropped` under the approved deprecation decision.
+- Dependency gate: parent `depends_on` is #1912, #1913, and #1916; live `dep_status` is `ok`.
+- Upstream evidence: #1912 Verify Notes record public CLI index proof with 76 tests passing; #1913 Verify Notes record orientation/module-map/idea-refinement proof with final verifier-challenger PASS; #1916 is archived completed with its authority-boundary contract satisfied.
+- Aggregate normal-path proof: tested commit `aeebaa2d18b0d16b20f2a75a1560a628b55eba79`. `uv run pytest -q tests/test_skill_authority_wiring.py tests/test_skill_extraction.py tests/test_shaper_interaction_contract.py tests/test_idea_refinement_customization.py` passed 26 tests. Exact `rg` scan found no `h-project-orientation` or `r-project-standards` references under `share/`. Scoped `git status` and `git diff` audit for `share/` and the three advisory indexes was empty.
+- Residual decisions: no pending request, no block, and no unresolved Required Follow-up found.
+- Verdict: ARCHIVED. Aggregate intent is satisfied, all required children/dependencies are complete or intentionally dropped, SHA-linked proof is green, and collection introduced no product-file change.
