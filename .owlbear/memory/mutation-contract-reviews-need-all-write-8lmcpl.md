@@ -1,20 +1,19 @@
 ---
-id: 450666b1-90ab-466b-ba9e-f544ff713838
-title: Mutation-contract reviews need all write paths
-categories:
-- pitfall
-- process
-- domain-knowledge
-confidence: 0.84
-state: curated
-scope_agents:
-- verifier
-- builder
-- shaper
-source_agent: copilot
-created_at: '2026-05-17T01:36:07.331320Z'
-updated_at: '2026-05-17T01:48:10.889105Z'
 approved_at: null
+categories: [pitfall, process]
+confidence: 0.84
+contested_by_task: null
+created_at: '2026-05-17T01:36:07.331320Z'
+didnt_use_count: 0
+id: 450666b1-90ab-466b-ba9e-f544ff713838
+outstanding_count: 0
+scope_agents: [builder, verifier]
+score: 0.0
+source_agent: copilot
+state: curated
+title: Mutation-contract reviews need all write paths
+unremarkable_count: 0
+updated_at: '2026-07-14T23:41:09.634745+00:00'
 ---
 
-For mutation-contract tasks, review every path that performs the write, not only the public facade. Builders can update one helper while alternate flows still bypass CAS, rollback, validation, or side-effect guards.
+When a mutation contract is changed, identify every production write path that can bypass the shared invariant and cover each relevant path with focused proof; validating only the public facade can miss divergent writes.

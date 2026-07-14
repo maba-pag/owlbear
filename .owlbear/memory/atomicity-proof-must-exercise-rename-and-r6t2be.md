@@ -1,19 +1,19 @@
 ---
 approved_at: null
-categories:
-- pitfall
-- process
-- tool-usage
+categories: [pitfall, process]
 confidence: 0.86
+contested_by_task: null
 created_at: '2026-05-17T01:35:51.946837Z'
+didnt_use_count: 0
 id: 67b38fbb-9690-4ba3-9356-094640e2a479
-scope_agents:
-- verifier
-- builder
+outstanding_count: 0
+scope_agents: [builder, verifier]
+score: 0.0
 source_agent: copilot
 state: curated
 title: Atomicity proof must exercise rename and rollback
-updated_at: '2026-05-21T17:43:30.030881+00:00'
+unremarkable_count: 0
+updated_at: '2026-07-14T23:34:51.304101+00:00'
 ---
 
-For filesystem or task-write atomicity reviews, target-file existence is not enough. Require an assertion that would fail if a non-atomic write, skipped `replace()`, or missing rollback path were used, such as verifying rename/replace was called or simulating a mid-write failure.
+Atomic-write proofs must verify observable replacement and rollback behavior. After an injected mid-write failure, the prior content must be preserved or no partial destination left behind; destination existence alone cannot establish atomicity.
