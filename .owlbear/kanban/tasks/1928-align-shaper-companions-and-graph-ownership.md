@@ -1,10 +1,10 @@
 ---
 id: 1928
 title: Align shaper companions and graph ownership
-status: verify
+status: collect
 priority: high
 created: 2026-07-14T00:10:46.227791+02:00
-updated: 2026-07-14T00:22:45.005379+02:00
+updated: 2026-07-14T05:00:31.984017+02:00
 tags:
   - scope:agent-config
   - type:build
@@ -68,3 +68,30 @@ Proof guidance: run agent/skill validators and focused tests for shaper interact
 - `git diff --check`: PASS.
 - builder-challenger: PASS; no concrete blocker or invented-complexity concern.
 - `../owlbear` remained clean and untouched.
+
+[[2026-07-14T05:00:31+02:00]]
+## Verify Notes
+
+### Evidence Reviewed
+- Acceptance criteria and Builder Notes on task #1928, including builder commit `0f6b746ce9f7d84a2987465d6e066e3eb3cf34fd` (an ancestor of the verification revision).
+- Direct source review: `share/agents/shaper.agent.md`, `share/skills/w-research/SKILL.md`, `share/skills/r-pipeline-protocol/SKILL.md`, and the focused static contracts.
+- Named authorities checked against the task intent: `r-pipeline-protocol` preserves one-task execution-agent isolation while defining deterministic connected-set shaper ownership; shaper defers mode-specific workflows; research returns evidence only and owns no routing; orientation forbids ordinary index regeneration; decomposition uses the universal memory qualification wording.
+
+### Change Module Map And Boundary
+- Changed configuration and workflow modules remain inside the stated authority boundary: shaper agent/prompt, shared shaper companions, orientation, structure/instruction wiring, and focused static contracts.
+- No module-map deviation or interface expansion found. Normal-path verification reads the actual user-facing shaper and research workflow sources; tests do not replace the workflow/authority boundary with mocks.
+
+### Checks Run
+- `uv run pytest -q tests/test_shaper_interaction_contract.py tests/test_skill_authority_wiring.py` -> `18 passed in 0.28s`.
+- `uv run python .owlbear/scripts/validate_agents.py` -> `PASS — all 23 agent files conform to conventions`.
+- Builder-recorded evidence: skill validator PASS, relevant static regression 81 passed, focused shaper/authority contracts 16 passed, Ruff/format PASS, and `git diff --check` PASS at the builder commit.
+- Attempts to rerun the skill validator during verification were invalid terminal-capture results (delayed unrelated browser-test output), not a skill validation failure.
+
+### Patch Applied
+- Removed trailing whitespace from this task record's AC metadata only. Targeted trailing-whitespace regex check is clean.
+
+### Challenger
+- `verifier-challenger`: `decision: pass`; no concrete AC, evidence, or scope blocker.
+
+### Final Route
+- PASS -> collect.
