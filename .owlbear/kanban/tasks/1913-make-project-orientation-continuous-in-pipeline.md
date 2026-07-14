@@ -1,10 +1,10 @@
 ---
 id: 1913
 title: Verify continuous codebase orientation without restructuring
-status: verify
+status: collect
 priority: medium
 created: 2026-07-12T03:04:01.048065+02:00
-updated: 2026-07-14T01:21:06.658995+02:00
+updated: 2026-07-14T04:55:42.641233+02:00
 tags:
   - scope:agent-config
   - feature
@@ -155,3 +155,25 @@ Proof guidance: inspect the named artifacts, scan for retired authority names, a
 - Retired-name scan under `share/`: no matches.
 - Shaper challenger: pass after correction of the active planning-path premise.
 - Board audit before routing confirmed parent #1914 and dependency #1912.
+
+[[2026-07-14T04:44:58+02:00]]
+Released without verification. This task was claimed in error while recovering from an interrupted read-only command; no task content or implementation was modified.
+
+[[2026-07-14T04:54:58+02:00]]
+## Verify Notes
+- Evidence reviewed: Builder Notes; task AC-1 through AC-3; relevant authority commits `b1f5e92` and `0f6b746`; no unresolved Decision Request was present.
+- Named authorities checked: `share/skills/h-codebase-orientation/SKILL.md` owns `.owlbear/doc-index.md`, `.owlbear/py-index.md`, `.owlbear/ts-index.md`, and direct-source/exact-search proof boundaries. `share/agents/builder.agent.md`, `share/agents/verifier.agent.md`, and `share/WIRING.md` require/wire it as specified. `share/skills/w-task-decomposition/SKILL.md` creates a source-verified Change Module Map; `share/skills/r-pipeline-protocol/SKILL.md` makes Builder and Verifier carry/check it and preserves current source as stronger authority.
+- Change Module Map: no deviation. Historical changes are limited to agent/skill/wiring/test guidance; verification made zero product-file changes. The only verifier-owned change is this task record. Unrelated dirty browser and memory paths were not touched.
+- Normal-path boundary exercised: artifact inspection of the active agent/skill authority, not mocked or injected behavior.
+- Checks run:
+  - `uv run pytest -q tests/test_skill_authority_wiring.py tests/test_skill_extraction.py tests/test_shaper_interaction_contract.py` -> `22 passed in 0.31s`.
+  - `uv run pytest -q tests/test_idea_refinement_customization.py` -> `4 passed in 0.31s`.
+  - `uv run python .owlbear/scripts/validate_agents.py` -> `PASS — all 23 agent files conform to conventions`.
+  - `git diff --check HEAD` -> clean.
+- Findings: the first verifier-challenger review identified the omitted named idea-refinement regression; it was run and passed. No patch was applied.
+- Provisional verdict: PASS pending final verifier-challenger confirmation and lifecycle advance to `collect`.
+
+[[2026-07-14T04:55:42+02:00]]
+## Verify Notes
+- Verifier-challenger final result: `decision: pass`. It confirmed the persisted evidence maps to AC-1 through AC-3, includes the focused authority and idea-refinement regressions, records zero product-file changes and no Change Module Map deviation, and exercises the nonmocked artifact-inspection boundary.
+- Final route: PASS -> collect. No patch applied.
