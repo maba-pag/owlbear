@@ -42,8 +42,9 @@ Unnecessary exploration, speculative additions, and side fixes are how small tas
 - **Carry the shaped module map.** Follow `r-pipeline-protocol`; use `h-codebase-orientation` to verify
   mapped modules, record justified deviations in Builder Notes, and reject to shape when source
   exposes architecture or scope ambiguity.
-- **Choose proportional proof.** Start with zero new durable tests. Add one only when the task
-  explicitly requires the artifact or a concrete uncovered regression passes the Rent Test.
+- **Choose proportional proof.** Start with zero new durable tests. Every addition must protect a
+  concrete uncovered regression and pass the Rent Test. Reject task-prescribed tests that fail it
+  back to shape.
 - **Run a focused command before advancing when one exists.** Record exactly what ran.
 - **Enforce the change envelope.** Preserve unaffected code; do not replace a file when a targeted
   edit works. Stop and reassess when the diff expands beyond expected files or symbols.

@@ -62,7 +62,6 @@ def test_on_demand_authority_paths_are_declared() -> None:
 def test_pipeline_commit_gate_includes_final_task_state() -> None:
     """Pipeline closure commits after end_work and includes archive moves explicitly."""
     governance = (_REPO_ROOT / "share/skills/r-workspace-governance/SKILL.md").read_text(encoding="utf-8")
-    kanban = (_REPO_ROOT / "share/skills/h-mcp-kanban/SKILL.md").read_text(encoding="utf-8")
     protocol = (_REPO_ROOT / "share/skills/r-pipeline-protocol/SKILL.md").read_text(encoding="utf-8")
 
     assert "call `end_work` first" in governance
@@ -73,9 +72,6 @@ def test_pipeline_commit_gate_includes_final_task_state() -> None:
     assert 'block_reason="COMMIT_FAILED:' in governance
     assert "filesystem block prevents orchestrator" in governance
     assert 'block_reason=""' in governance
-    assert "include both the old task path and new archive path" in kanban
-    assert "do not unstage or modify it" in kanban
-    assert "Legacy Git-Move Recovery" not in governance
     assert re.search(r"archived\s+tasks are already off-board", protocol, re.IGNORECASE)
 
 

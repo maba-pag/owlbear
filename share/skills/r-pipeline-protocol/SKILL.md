@@ -125,6 +125,8 @@ or a new abstraction.
 - Reuse existing tests and validators before creating proof artifacts. Add a durable test only when
   it names a plausible meaningful regression, existing durable coverage does not protect that risk,
   and the Rent Test passes.
+- A task or AC that prescribes a durable test does not waive admission. If the requested test fails
+  the Rent Test, reject to shape so proof guidance can be corrected; do not commit the test.
 - If the diff expands materially beyond the change envelope, stop and reassess. Reduce your own
   excess work or return to shape; do not normalize expansion by writing more tests around it.
 
