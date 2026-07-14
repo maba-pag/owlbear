@@ -10,10 +10,10 @@ outstanding_count: 1
 scope_agents: [verifier, planner, collector]
 score: 0.9299999999999999
 source_agent: copilot
-state: curated
+state: deleted
 title: Follow-up tasks need live board and source verification
 unremarkable_count: 1
-updated_at: '2026-07-14T10:48:08.607478+00:00'
+updated_at: '2026-07-14T17:35:07.797808+00:00'
 ---
 
 When reviewing research roll-ups or spawned follow-ups, verify live source files and live board state directly. Parent prose claiming children are archived or blocked can drift; dispatch needs machine-readable metadata such as `blocked: true` and correct `depends_on`, not just text.

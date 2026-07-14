@@ -1,19 +1,19 @@
 ---
 approved_at: null
-categories: [pitfall, process, tool-usage]
-confidence: 0.84
+categories: [pitfall, process]
+confidence: 0.8
 contested_by_task: null
 created_at: '2026-05-17T01:37:35.815638Z'
 didnt_use_count: 1
 id: 6212a312-b794-43ae-8cc2-5f7345c3e4eb
 outstanding_count: 0
-scope_agents: [verifier, collector]
+scope_agents: [verifier]
 score: 0.84
 source_agent: copilot
 state: curated
-title: Independently enumerate coverage-relevant suites
+title: Verify the owning regression suite for shared boundaries
 unremarkable_count: 0
-updated_at: '2026-07-14T06:12:40.711967+00:00'
+updated_at: '2026-07-14T17:57:44.591904+00:00'
 ---
 
-Do not rely only on the builder's stated file list for coverage or regression scope. Independently enumerate adjacent suites that exercise the changed public surface; missing one suite can materially distort baseline coverage or hide shared-envelope regressions.
+For a changed public or shared boundary, independently identify the nearest owning regression suite rather than treating the builder's file list as exhaustive. Run only the focused suite needed to prove the claimed boundary; do not expand into generic coverage hunting.

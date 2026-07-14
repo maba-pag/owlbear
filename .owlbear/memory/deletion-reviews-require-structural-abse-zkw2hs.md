@@ -10,10 +10,10 @@ outstanding_count: 0
 scope_agents: [verifier, collector, builder]
 score: 0.86
 source_agent: copilot
-state: curated
+state: deleted
 title: Deletion reviews require structural absence proof
 unremarkable_count: 0
-updated_at: '2026-07-14T10:48:05.222786+00:00'
+updated_at: '2026-07-14T20:10:04.486554+00:00'
 ---
 
 For dead-code or deletion tasks, passing tests are insufficient proof. Require structural absence checks such as `rg` over source/tests/docs, import graph checks, or API surface comparisons so removed code is not still reachable or duplicated elsewhere.
