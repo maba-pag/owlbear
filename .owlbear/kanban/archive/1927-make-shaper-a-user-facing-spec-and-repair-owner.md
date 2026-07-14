@@ -1,10 +1,10 @@
 ---
 id: 1927
 title: Make shaper a user-facing spec and repair owner
-status: collect
+status: archived
 priority: high
 created: 2026-07-13T17:45:10.523540+02:00
-updated: 2026-07-14T04:59:36.103957+02:00
+updated: 2026-07-14T07:59:37.557072+02:00
 tags:
   - scope:agent-config
   - feature
@@ -27,7 +27,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Objective
@@ -158,3 +158,19 @@ REJECT -> build. No verifier patch applied: the local workflow correction requir
 
 ### Final Route
 PASS: all acceptance criteria are satisfied; task advances to `collect`.
+
+[[2026-07-14T07:59:37+02:00]]
+## Collect Notes
+
+### Classification
+- `leaf`: no child tasks, no aggregate/EPIC title or tags, no aggregate intent section, and no parent dependency gate.
+
+### Closure Evidence
+- Verifier history contains a superseding PASS after the earlier rejection: the standalone spec-graph `## Shape Notes` target was repaired and the prior Required Follow-up was explicitly covered by later Builder and Verify Notes.
+- Final verifier evidence: focused shaper interaction and skill-authority contracts passed (18 tests), agent validation passed for all 23 agent files, and verifier-challenger returned `decision: pass` with no unresolved AC or scope drift.
+- Invariant coverage recorded upstream spans staged review before mutation, OpenSpec artifact reconciliation, complete graph challenge and user approval, repair classification, human-facing summary, and durable Shape Notes history.
+- `list_tasks(parent=1927)` returned no children; `depends_on` is empty and `dep_status` is null.
+- No pending Decision or Action Requests exist; task is unblocked and has no residual decision state.
+
+### Rationale
+ARCHIVED: verified leaf closure is complete. The later PASS supersedes the earlier rejected verification record, and no unresolved follow-up, dependency, child work, or decision remains.
