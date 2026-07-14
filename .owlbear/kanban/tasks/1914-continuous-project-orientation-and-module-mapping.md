@@ -2,10 +2,10 @@
 id: 1914
 title: Close continuous orientation without disturbing current planning 
   structures
-status: shape
+status: collect
 priority: medium
 created: 2026-07-12T03:04:06.678099+02:00
-updated: 2026-07-14T08:13:02.935623+02:00
+updated: 2026-07-14T12:44:12.135496+02:00
 tags:
   - scope:tools
   - scope:agent-config
@@ -105,3 +105,29 @@ Proof guidance: inspect the active artifacts and task histories, scan for retire
 | # | Target Agent | Action Required | File(s) | Evidence |
 |---|-------------|----------------|---------|----------|
 | 1 | shaper via `/shape` | Repair the graph so #1916 has authoritative verifier PASS/Verify Notes and a valid leaf closure history, then return #1914 to collect with SHA-linked aggregate normal-path proof tied to the tested commit. | n/a | #1916 is archived `completed`, but both requested evidence sections are empty; #1914 AC-1 requires verifier PASS evidence. |
+
+[[2026-07-14T12:44:12+02:00]]
+## Shape Notes
+
+### Source And Repair
+- Source: latest Collect Notes and Required Follow-up on #1914.
+- Classification: mechanical reroute after a read-path contradiction; no material reshape.
+- Collector reported that #1916 lacked Verify Notes. Direct full-task inspection shows #1916 has authoritative Verify Notes with PASS, 8 focused tests, exact retired-name scan, clean diff check, verifier-challenger pass, and subsequent Collect Notes.
+
+### Decisions And Authorities
+- No new user decision was required; the previously approved preservation-first contract remains authoritative.
+- No OpenSpec or other planning artifact changed.
+- Current task records are stronger evidence than the collector's empty section projection. #1916 remains archived `completed`; it is not resurrected or rewritten.
+
+### Change Module Map And Product Invariants
+- The approved Change Module Map and Product Invariant Map remain unchanged.
+- Repository facts remain project-local; portable orientation and governance remain shared; current skills and legacy ideation structures remain untouched.
+- No product, proof, dependency, parent, AC, or graph-shape change was made.
+
+### Proof And Route
+- Tested commit: `162e90eadf72abc6b948ae586d134cac39b86784`.
+- `uv run pytest -n 0 tests/test_idea_refinement_customization.py tests/test_skill_authority_wiring.py tests/test_skill_extraction.py -q`: 12 passed in 0.05s.
+- Exact active-share scan found no `h-project-orientation` or `r-project-standards` names.
+- `git diff --check`: clean.
+- Challenger: not required for this mechanical repair; no provisional graph or acceptance meaning changed.
+- Route: #1914 returns to `collect` with dependencies #1912, #1913, and #1916 preserved.
