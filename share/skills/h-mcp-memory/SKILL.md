@@ -120,7 +120,7 @@ Behavior:
 
 - includes `curated`, `approved`, and `contested` entries scoped to the agent
 - returns `approved` entries before `curated`
-- formats each block as `## {title}`, `Entry ID: `{id}``, and the body on consecutive lines
+- formats each block as `## {title}`, `Entry ID:`{id}``, and the body on consecutive lines
 - omits all other entry metadata
 - rejects blank or wildcard agent names
 

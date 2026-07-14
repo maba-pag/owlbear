@@ -30,7 +30,6 @@ import json
 import logging
 import os
 import random
-import subprocess
 import sys
 from collections import defaultdict
 from dataclasses import dataclass
@@ -392,36 +391,10 @@ def _task_id_from_filename(path: Path) -> int | None:
 
 
 def _move_file(src: Path, dest: Path, *, no_overwrite: bool = False) -> None:
-    """Move *src* to *dest*, preferring ``git mv`` when inside a git repo.
-
-    Falls back to :meth:`Path.replace` when ``git`` is unavailable, the file
-    is not tracked, the repo check fails, or ``git mv`` times out.
-
-    ``stdin`` is explicitly closed (``DEVNULL``) to prevent the child process
-    from inheriting the MCP stdin pipe — if ``git`` ever prompted for input it
-    would steal bytes from the protocol stream and deadlock both sides.
-    """
-    try:
-        result = subprocess.run(  # noqa: S603
-            ["git", "mv", str(src), str(dest)],  # noqa: S607
-            capture_output=True,
-            check=False,
-            timeout=5,
-            stdin=subprocess.DEVNULL,
-        )
-        if result.returncode == 0:
-            return
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        # git not installed, or timed out (e.g. waiting for index.lock)
-        pass
-
-    if no_overwrite:
-        # Fail if destination already exists to avoid silent overwrite.
-        if dest.exists():
-            msg = f"Destination already exists: {dest}"
-            raise FileExistsError(msg)
-        src.replace(dest)
-        return
+    """Move *src* to *dest* without modifying external repository state."""
+    if no_overwrite and dest.exists():
+        msg = f"Destination already exists: {dest}"
+        raise FileExistsError(msg)
 
     src.replace(dest)
 
