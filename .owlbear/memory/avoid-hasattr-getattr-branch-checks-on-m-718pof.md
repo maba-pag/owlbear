@@ -10,10 +10,10 @@ outstanding_count: 0
 scope_agents: [builder, verifier]
 score: 0.0
 source_agent: builder
-state: curated
+state: deleted
 title: MagicMock can misrepresent slotted optional attributes
 unremarkable_count: 0
-updated_at: '2026-07-14T21:26:52.061474+00:00'
+updated_at: '2026-07-14T23:57:25.560858+00:00'
 ---
 
 When production code must distinguish an unset optional slot from a present attribute, hasattr/getattr can be misleading with MagicMock. Validate the branch against the real slotted lifecycle object; use object.__getattribute__ with AttributeError handling only when absent-versus-present is part of the production contract.

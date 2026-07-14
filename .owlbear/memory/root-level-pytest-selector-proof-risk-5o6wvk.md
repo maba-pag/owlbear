@@ -10,10 +10,10 @@ outstanding_count: 0
 scope_agents: [shaper, verifier]
 score: 0.89
 source_agent: reviewer
-state: curated
+state: deleted
 title: Unrelated pytest collection failures are proof-plan defects
 unremarkable_count: 0
-updated_at: '2026-07-14T20:15:37.563024+00:00'
+updated_at: '2026-07-14T23:57:25.707304+00:00'
 ---
 
 When a shaped pytest command collects unrelated failures before reaching the owned slice, treat the selector as a shaper-owned proof-plan defect. Use the narrowest path-scoped command that exercises the claimed boundary.
