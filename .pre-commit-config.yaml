@@ -2,7 +2,8 @@
 # Pre-commit config — aligned with CI (MegaLinter v9.5.0)
 #
 # Commands:
-#   uv run lint       Staged files, default hooks (= git commit)
+#   uv run lint [FILE ...]
+#                     Explicit files, or staged files when omitted (= git commit)
 #   uv run lint-all   All files, default hooks
 #   uv run megalint   Full CI parity (MegaLinter + typecheck, all files)
 #   uv run eslint-fix ESLint --fix on Cockpit frontend

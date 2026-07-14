@@ -402,7 +402,8 @@ return to the caller instead of editing new scope into the board.
 For aggregate parent/EPIC tasks with no direct implementation work, put the parent in `collect` after child dependencies are attached. If creating a new aggregate parent, pass `status="collect"` to `create_task`; if shaping an existing parent, use `end_work(outcome="success", move_to="collect")`. For a parent that still owns direct implementation AC, create build-ready children instead of sending the aggregate parent to build.
 
 Return the concrete task IDs, status/dependency audit, and any mechanical correction to the calling
-workflow. The caller produces the human-facing summary and required task history.
+workflow. For a standalone graph, identify the created task that represents the approved outcome
+as the task-history target. The caller produces the human-facing summary and required task history.
 
 ## Output Template
 

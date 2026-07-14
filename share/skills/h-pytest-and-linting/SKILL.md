@@ -102,6 +102,17 @@ Read `.owlbear/scratch/pytest-output.txt` then delete it.
 
 Apply these only when the target is the OwlBear repository or matching configuration is verified:
 
+| Command | Scope |
+|---------|-------|
+| `uv run lint [FILE ...]` | Default hooks on explicit files, or staged files when omitted |
+| `uv run lint-all` | Default hooks on all files |
+| `uv run megalint` | Full CI parity: all files through MegaLinter plus frontend type checking |
+
+Use these workspace entry points instead of invoking individual linters manually. `lint` and
+`lint-all` may auto-fix files through Ruff, markdownlint, and general file hooks; inspect the diff
+afterward. Agents should pass their changed paths explicitly to `lint`; no-argument `lint`, `lint-all`,
+and `megalint` are broad user workflows rather than focused agent validation commands.
+
 | Marker | Local meaning |
 |--------|---------------|
 | `api` | Requires live network; routine local runs exclude it with `-m "not api"` |

@@ -22,7 +22,6 @@ from mcp.types import ToolAnnotations
 from owlbear_browser import AcquisitionFailure, AcquisitionRequest, AcquisitionSuccess
 from owlbear_browser._errors import AuthenticationRequired
 from owlbear_browser.extractor import extract_content
-from owlbear_browser.fetcher import BrowserContentFetcher
 from owlbear_browser.playwright_launcher import PlaywrightLauncher
 from owlbear_mcp_browser.allowlist import DomainAllowlist
 
@@ -95,7 +94,6 @@ class AppContext:
     allowlist: DomainAllowlist
     launcher: PlaywrightLauncher | None = None
     page: Any = None
-    fetcher: BrowserContentFetcher | None = None
     last_content: str = ""
 
 
@@ -130,7 +128,6 @@ async def app_lifespan(server: FastMCP) -> AsyncGenerator[AppContext, None]:
 
     launcher: PlaywrightLauncher | None = None
     page: Any = None
-    fetcher: BrowserContentFetcher | None = None
     try:
         user_data_dir = os.environ.get(
             "PLAYWRIGHT_USER_DATA_DIR",
@@ -138,15 +135,13 @@ async def app_lifespan(server: FastMCP) -> AsyncGenerator[AppContext, None]:
         )
         launcher = PlaywrightLauncher(user_data_dir=user_data_dir)
         await launcher.launch()
-        page = await launcher.context.new_page()  # type: ignore[union-attr]
-        fetcher = BrowserContentFetcher(launcher.context)
+        page = await launcher.page()
     except Exception:  # noqa: BLE001
         launcher = None
         page = None
-        fetcher = None
 
     try:
-        yield AppContext(allowlist=allowlist, launcher=launcher, page=page, fetcher=fetcher)
+        yield AppContext(allowlist=allowlist, launcher=launcher, page=page)
     finally:
         if page is not None:
             await page.close()
@@ -194,10 +189,9 @@ async def acquire(  # noqa: PLR0913
 ) -> dict[str, Any]:
     """Acquire one rendered page through the shared browser acquisition contract."""
     app_ctx = ctx.request_context.lifespan_context
-    if not isinstance(app_ctx, AppContext) or app_ctx.fetcher is None:
+    if not isinstance(app_ctx, AppContext) or app_ctx.launcher is None:
         raise ToolError(_MSG_BROWSER_UNAVAILABLE)
     try:
-        app_ctx.allowlist.check(url)
         request = AcquisitionRequest(
             url=url,
             readiness_selector=readiness_selector,
@@ -206,7 +200,7 @@ async def acquire(  # noqa: PLR0913
             readiness_timeout_ms=readiness_timeout_ms,
             include_diagnostic_html=include_diagnostic_html,
         )
-        result = await app_ctx.fetcher.acquire(request)
+        result = await app_ctx.launcher.acquire(request)
     except PermissionError as exc:
         raise ToolError(str(exc)) from exc
     except ValueError as exc:
@@ -225,17 +219,15 @@ async def navigate(ctx: Context, url: str) -> str:
         raise ToolError(str(exc)) from exc
 
     if isinstance(app_ctx, AppContext):
-        if app_ctx.fetcher is not None:
+        if app_ctx.page is not None:
             try:
-                content = await app_ctx.fetcher.fetch(url)
+                await app_ctx.page.goto(url, wait_until="domcontentloaded")
             except AuthenticationRequired as exc:
                 msg = f"SSO session expired or authentication required: {exc}"
                 raise ToolError(msg) from exc
+            content = extract_content(await app_ctx.page.content(), url)
             app_ctx.last_content = content
             return content
-        if app_ctx.page is not None:
-            await app_ctx.page.goto(url)
-            return url
         return url  # dry-run: allowlist passed, no live page
 
     # Non-AppContext (SimpleNamespace from tests, etc.): only access page if

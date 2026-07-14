@@ -150,7 +150,8 @@ keys with concrete task IDs, then audit statuses, parent links, dependencies, ac
 and Product Promise coverage. This post-write audit is mechanical; do not introduce substantive
 scope after approval.
 
-Record `## Shape Notes` in the aggregate task or existing parent. Include planning sources,
+Record `## Shape Notes` in the aggregate task or existing parent. For a standalone graph, record
+them in the created task that represents the approved outcome. Include planning sources,
 user-approved decisions, artifact revisions, readiness, contract authorities, maps, final graph,
 challenger result, and board audit.
 
