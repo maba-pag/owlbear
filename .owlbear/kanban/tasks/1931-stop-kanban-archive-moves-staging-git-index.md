@@ -1,10 +1,10 @@
 ---
 id: 1931
 title: Stop Kanban archive moves staging Git index
-status: verify
+status: collect
 priority: high
 created: 2026-07-14T01:58:13.250853+02:00
-updated: 2026-07-14T02:09:51.727188+02:00
+updated: 2026-07-14T02:17:29.443429+02:00
 tags:
   - kanban
   - git
@@ -44,3 +44,15 @@ Replace Kanban's `git mv` archive operation with a filesystem-only move so board
 - Durable regression: public `KanbanEngine.move_task` archive in a temporary Git repo must leave the cached index empty; after explicitly staging both paths, Git `-M` must report a rename.
 - Proof: regression failed before fix on non-empty cached index and passes after fix; 80 focused archive/atomicity tests passed; full Kanban domain 882 passed; Ruff and format clean; diff check clean.
 - Builder challenger: pass; no concrete blocker.
+
+[[2026-07-14T02:17:29+02:00]]
+## Verify Notes
+
+- Verified committed SHA `ba682d2e12cee63b5af140e2d219b522ddf26b36`.
+- Root cause confirmed: engine `git mv`, not VS Code or `commit-owned`, created the cached rename.
+- Implementation: filesystem-only guarded `Path.replace`; no Git/subprocess dependency remains in engine moves.
+- Regression boundary: public engine archive leaves index empty; explicit later staging remains rename-detectable via Git `-M`.
+- Preserved behavior: no-overwrite guard and archive rollback/atomicity.
+- Checks: 80 focused archive/atomicity tests passed; full Kanban domain 882 passed in build; Ruff and format clean.
+- Patches applied: none.
+- Verifier challenger: pass; final route PASS to collect.
