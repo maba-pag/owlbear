@@ -1,10 +1,10 @@
 ---
 id: 1916
 title: Preserve the project/shared instruction authority boundary
-status: verify
+status: collect
 priority: medium
 created: 2026-07-12T04:09:21.262709+02:00
-updated: 2026-07-14T01:21:06.675642+02:00
+updated: 2026-07-14T04:57:02.660515+02:00
 tags:
   - scope:agent-config
   - docs
@@ -135,3 +135,40 @@ This preservation-first contract remains current. The connected reshape adds no 
 - Exact scan found no retired authority names under `share/`.
 - Shaper challenger: pass.
 - Board audit confirmed no dependencies and preserved tags.
+
+[[2026-07-14T04:57:02+02:00]]
+## Verify Notes
+
+### Verdict
+PASS. The preservation-first authority boundary is satisfied with zero product-file edits.
+
+### Evidence Reviewed
+- Shape Notes, AC-1 through AC-3, Current Repair Authority, Change Module Map, and Product Invariant Map.
+- Named authorities: `.github/copilot-instructions.md`, `share/skills/h-codebase-orientation/SKILL.md`, and `share/skills/r-workspace-governance/SKILL.md`.
+- Focused proof sources: `tests/test_skill_extraction.py` and `tests/test_skill_authority_wiring.py`.
+
+### Authority And Module-Map Check
+- `.github/copilot-instructions.md` contains repository identity, branch topology, directory structure, Cockpit stack, and test-domain mapping.
+- `h-codebase-orientation` owns indexes, `test-root`, Semble, and source-proof boundary rules.
+- `r-workspace-governance` owns commit discipline and OwlBear-managed artifact placement.
+- No Change Module Map deviation: all named product and proof modules were inspected read-only; only task claim metadata changed.
+- Active shared consumer scan found current `h-codebase-orientation` and `r-workspace-governance` references in agent, workflow, skill, instruction, prompt, and wiring surfaces.
+
+### Normal-Path Boundary
+- The regressions read the real project instruction and shared skill artifacts directly. The shared-ecosystem test scans every Markdown file below `share/`; no command, workflow, generated visibility, assembled context, or user journey named by the task was replaced.
+
+### Checks Run
+- `uv run pytest -n 0 tests/test_skill_extraction.py tests/test_skill_authority_wiring.py -q`: 8 passed in 0.05s.
+- Exact scan for retired `h-project-orientation` and `r-project-standards` names below `share/`: no matches; `rg` exited 1 as expected for an empty result.
+- `git diff --check`: clean.
+- Task-owned diff: `.owlbear/kanban/tasks/1916-separate-shared-orientation-from-project-instructions.md` contains only claim timestamp metadata before completion. Other browser and memory worktree changes are unrelated and untouched.
+
+### Findings And Patches
+- No contradiction or implementation defect found.
+- No patch applied. No product-file edit is needed or permitted by the green-proof route.
+
+### Challenger
+- `verifier-challenger`: pass. It confirmed direct artifact authority proof, sufficient retired-name coverage, zero-product-file scope compliance, and no unresolved AC.
+
+### Final Route
+PASS; advance to collect.
