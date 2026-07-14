@@ -124,6 +124,39 @@ Behavior:
 - omits all other entry metadata
 - rejects blank or wildcard agent names
 
+## assess_memories
+
+Records how useful recalled memory entries were for a completed task. Include every entry returned
+by `recall_memory` in one assessment batch.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `task_id` | str | (required) | Non-empty identifier for the completed task |
+| `assessments` | list[dict[str, str]] | (required) | Non-empty list of per-entry assessments |
+
+Each assessment item requires these fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `entry_id` | str | Recalled memory entry identifier |
+| `bucket` | str | One of the accepted bucket values below |
+
+| Bucket | Meaning |
+|--------|---------|
+| `outstanding` | The entry's guidance was genuinely great for this task |
+| `unremarkable` | The entry was applied or referenced and was adequate |
+| `didnt_use` | The entry was not applied or referenced |
+| `factually_wrong` | The entry contains incorrect information |
+
+Behavior:
+
+- a malformed item or invalid bucket rejects the entire batch before any entry is updated
+- validly shaped items are processed individually
+- entry-level failures such as a missing entry or invalid state are returned in `results` with
+ `success: false`; other valid items may still succeed
+
+Returns: `results`, containing `entry_id` and `success` for each item, plus `error` for failed items.
+
 ## curate_memory
 
 Curator update tool for content edits and lifecycle transitions.
@@ -221,6 +254,16 @@ curate_memory(entry_id="...", scope_agents=["builder", "verifier"])
 
 ```text
 recall_memory(agent="builder", categories=["pitfall"], limit=10)
+```
+
+```text
+assess_memories(
+ task_id="1846",
+ assessments=[
+  {"entry_id": "...", "bucket": "outstanding"},
+  {"entry_id": "...", "bucket": "didnt_use"}
+ ]
+)
 ```
 
 ```text

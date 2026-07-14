@@ -13,10 +13,10 @@ When `recall_memory` was called during the task, run `assess_memories` before `e
 
 For each recalled memory entry, categorize your experience:
 
-- **Outstanding** — this entry's guidance was genuinely great for this task
-- **Used but unremarkable** — I applied or referenced this entry's guidance and it was adequate
-- **Didn't use** — I didn't apply or reference this entry's guidance
-- **Factually wrong** — this entry contains incorrect information
+- `outstanding` — this entry's guidance was genuinely great for this task
+- `unremarkable` — I applied or referenced this entry's guidance and it was adequate
+- `didnt_use` — I didn't apply or reference this entry's guidance
+- `factually_wrong` — this entry contains incorrect information
 
 "Apply or reference" includes: following guidance, avoiding a warned pitfall, or confirming your approach was correct.
 
