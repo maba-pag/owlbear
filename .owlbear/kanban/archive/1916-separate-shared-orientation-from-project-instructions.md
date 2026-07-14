@@ -1,10 +1,10 @@
 ---
 id: 1916
 title: Preserve the project/shared instruction authority boundary
-status: collect
+status: archived
 priority: medium
 created: 2026-07-12T04:09:21.262709+02:00
-updated: 2026-07-14T04:57:02.660515+02:00
+updated: 2026-07-14T08:04:39.018267+02:00
 tags:
   - scope:agent-config
   - docs
@@ -26,7 +26,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Objective
@@ -172,3 +172,30 @@ PASS. The preservation-first authority boundary is satisfied with zero product-f
 
 ### Final Route
 PASS; advance to collect.
+
+[[2026-07-14T08:04:39+02:00]]
+## Collect Notes
+
+### Classification
+- Leaf task: no children, no parent or EPIC intent, no dependencies, and no aggregate tags or criteria.
+
+### Verification Closure
+- Verifier verdict: PASS; zero product-file edits were required by the preservation-first contract.
+- Focused proof: `uv run pytest -n 0 tests/test_skill_extraction.py tests/test_skill_authority_wiring.py -q` completed with 8 passed in 0.05s.
+- Exact active-share scan found no retired `h-project-orientation` or `r-project-standards` references.
+- Verifier challenger passed; `git diff --check` was clean.
+
+### Invariant Map Coverage
+- Repository facts remain owned by `.github/copilot-instructions.md`.
+- Portable orientation remains owned by `h-codebase-orientation`.
+- Commit and managed-artifact governance remains owned by `r-workspace-governance`.
+- Green proof preserved the required zero product-file delta.
+
+### Closure Checks
+- Child coverage: none; `list_tasks(parent=1916)` returned no tasks.
+- Dependency gate: not applicable; `depends_on` is empty and `dep_status` is null.
+- Aggregate SHA-linked proof: not applicable to this leaf task.
+- Residual decisions: no pending requests, no Decision Request section, no Required Follow-up, and no block.
+
+### Rationale
+ARCHIVED. Leaf verification evidence is complete and no unresolved closure state remains.
