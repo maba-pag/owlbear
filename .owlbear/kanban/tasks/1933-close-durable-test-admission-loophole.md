@@ -1,10 +1,10 @@
 ---
 id: 1933
 title: Close durable-test admission loophole
-status: verify
+status: collect
 priority: high
 created: 2026-07-14T04:21:57.038752+02:00
-updated: 2026-07-14T04:23:55.747000+02:00
+updated: 2026-07-14T04:32:05.083537+02:00
 tags:
   - agent
   - test
@@ -42,3 +42,14 @@ Proof guidance: no new durable test expected; inspect the authority diff and run
 - No extra automated policy enforcement added: test value is semantic and already checked at shape, build, and builder challenge; another source-string test would repeat the defect.
 - Proof: existing focused authority test 4 passed; Ruff clean; all 23 agent definitions valid; diff check clean.
 - Builder challenger: pass; Rule of Two and minimum-change contract satisfied.
+
+[[2026-07-14T04:32:05+02:00]]
+## Verify Notes
+
+- Verified builder commit `4e56c2f96` against all three AC.
+- Canonical protocol now makes Rent Test admission non-waivable; builder carries one role-level summary; builder-challenger already checks concrete uncovered risk and justification.
+- Normal shaping already rejects test-prescriptive proof, so failed admission now routes cleanly back to shape.
+- Confirmed test delta only removes three source-string assertions and their unused file read; no replacement test was added.
+- Checks: 4 focused tests passed; Ruff clean; all 23 agent definitions valid.
+- Additional automated enforcement not recommended: test value is semantic, and a source-string policy test would recreate the removed low-value mechanism.
+- Verifier challenger: pass; Rule of Two and proof scope are coherent.
