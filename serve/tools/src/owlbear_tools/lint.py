@@ -2,7 +2,8 @@
 
 Commands
 --------
-uv run lint        Staged files, default hooks (= git commit).
+uv run lint [FILE ...]
+                   Explicit files, or staged files when omitted.
 uv run lint-all    All files, default hooks.
 uv run megalint    lint-all + MegaLinter (Docker) + TypeScript check — full CI parity.
 uv run eslint-fix  ESLint --fix on Cockpit frontend (serve/cockpit/web).
@@ -47,13 +48,13 @@ from pathlib import Path
 LINT_HINT = (
     "\n"
     "\033[1;34m\u2139 Dev commands:\033[0m\n"
-    "  \033[32muv run lint\033[0m        all linters, auto-fix: ruff + markdownlint, staged files only\n"
-    "  \033[32muv run lint-all\033[0m    same as \033[32mlint\033[0m, all files\n"
-    "  \033[32muv run megalint\033[0m    same as \033[32mlint-all\033[0m + MegaLinter + TypeScript\n"
-    "  \033[32muv run eslint-fix\033[0m  ESLint --fix for frontend files\n"
-    "  \033[32muv run todo\033[0m        scan for TODO markers (warning only)\n"
-    "  \033[32muv run pytest\033[0m      Python tests (tests/ + serve/*/tests/)\n"
-    "  \033[32mnpm test\033[0m           Cockpit frontend tests (run from serve/cockpit/web)\n"
+    "  \033[32muv run lint [FILE ...]\033[0m  explicit files, or staged files when omitted\n"
+    "  \033[32muv run lint-all\033[0m         same as \033[32mlint\033[0m, all files\n"
+    "  \033[32muv run megalint\033[0m         same as \033[32mlint-all\033[0m + MegaLinter + TypeScript\n"
+    "  \033[32muv run eslint-fix\033[0m       ESLint --fix for frontend files\n"
+    "  \033[32muv run todo\033[0m             scan for TODO markers (warning only)\n"
+    "  \033[32muv run pytest\033[0m           Python tests (tests/ + serve/*/tests/)\n"
+    "  \033[32mnpm test\033[0m                Cockpit frontend tests (run from serve/cockpit/web)\n"
 )
 
 COCKPIT_WEB = "serve/cockpit/web"
@@ -67,8 +68,10 @@ def _run(args: list[str], *, hint: str = "") -> None:
 
 
 def lint() -> None:
-    """Staged files, default hooks (same as git commit)."""
-    _run(["run"], hint=LINT_HINT)
+    """Run default hooks on explicit files, or staged files when omitted."""
+    files = sys.argv[1:]
+    args = ["run", "--files", *files] if files else ["run"]
+    _run(args, hint=LINT_HINT)
 
 
 def lint_all() -> None:
