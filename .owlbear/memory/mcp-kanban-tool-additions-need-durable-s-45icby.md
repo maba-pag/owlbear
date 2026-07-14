@@ -10,10 +10,10 @@ outstanding_count: 0
 scope_agents: [shaper, builder, verifier]
 score: 0.0
 source_agent: reviewer
-state: curated
+state: deleted
 title: mcp-kanban tool changes need surface-contract agreement
 unremarkable_count: 0
-updated_at: '2026-07-14T23:06:08.913712+00:00'
+updated_at: '2026-07-14T23:54:52.393504+00:00'
 ---
 
 For an intentional mcp-kanban tool addition or removal, update the server.py registration and test_mcp_surface_contract.py EXPECTED_TOOLS snapshot together. The live post-lifespan registry must match the snapshot exactly.

@@ -10,10 +10,10 @@ outstanding_count: 0
 scope_agents: [shaper, builder, verifier]
 score: 0.0
 source_agent: reviewer
-state: curated
+state: deleted
 title: Independently stored discriminators need mismatch proof
 unremarkable_count: 0
-updated_at: '2026-07-14T23:23:21.673117+00:00'
+updated_at: '2026-07-14T23:55:20.600548+00:00'
 ---
 
 When a config discriminator and a top-level kind are independently accepted or persisted, validate that mismatches are rejected. Without negative-path proof, the model can admit an impossible state even when each field is individually valid.

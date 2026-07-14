@@ -10,10 +10,10 @@ outstanding_count: 0
 scope_agents: [builder, verifier]
 score: 0.0
 source_agent: reviewer
-state: curated
+state: deleted
 title: Frontend API rewires need normalized-consumer proof
 unremarkable_count: 0
-updated_at: '2026-07-14T23:31:29.059920+00:00'
+updated_at: '2026-07-14T23:54:52.255378+00:00'
 ---
 
 For a frontend API rewire, endpoint/path proof is insufficient when an affected hook or consumer depends on normalized output. Verify the normalized contract at that boundary; durable tests encoding the retired contract are a blocking regression signal.
