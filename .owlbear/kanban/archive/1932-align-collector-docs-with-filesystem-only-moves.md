@@ -1,10 +1,10 @@
 ---
 id: 1932
 title: Keep collector commit guidance procedural
-status: collect
+status: archived
 priority: high
 created: 2026-07-14T02:40:32.435475+02:00
-updated: 2026-07-14T04:07:28.826417+02:00
+updated: 2026-07-14T04:11:35.728517+02:00
 tags:
   - agent
   - docs
@@ -19,7 +19,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Objective
@@ -41,3 +41,12 @@ Keep collector commit guidance procedural, concise, and independent of Kanban mo
 - Checks: 4 focused tests passed; Ruff clean; all 23 agent definitions valid; rejected historical phrases absent.
 - Patches applied: focused contract assertions only.
 - Verifier challenger: pass; final route PASS to collect.
+
+[[2026-07-14T04:11:35+02:00]]
+## Collect Notes
+
+- Confirmed the committed skills contain only durable collector commit procedure.
+- Confirmed both-path archive commits and pre-staged-path `COMMIT_FAILED` routing are guarded by focused assertions.
+- Builder commit: `5a0fadcb5`; verifier transition: `970b62224`.
+- Verification: 4 focused tests passed; Ruff clean; all 23 agent definitions valid.
+- Archived as completed.
