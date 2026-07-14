@@ -10,10 +10,10 @@ outstanding_count: 1
 scope_agents: [planner, shaper]
 score: 0.96
 source_agent: copilot
-state: curated
+state: deleted
 title: Split tasks by proof burden and failure domain
 unremarkable_count: 0
-updated_at: '2026-07-13T13:51:56.749661+00:00'
+updated_at: '2026-07-14T20:18:13.740814+00:00'
 ---
 
 Planner should split work by proof burden, proof mode, and failure-domain family, not AC count alone. Prefer small tasks with one primary proof mode, few high-proof ACs, and separate tracked deliverables for scratch-only or prohibited-path proof.

@@ -1,19 +1,19 @@
 ---
 approved_at: null
 categories: [pitfall, process]
-confidence: 0.89
+confidence: 0.85
 contested_by_task: null
 created_at: '2026-05-27T22:47:19.568286Z'
 didnt_use_count: 1
 id: 2110335a-8024-41cc-b379-faaffb4784ad
 outstanding_count: 0
-scope_agents: [verifier, shaper, builder]
+scope_agents: [shaper, verifier]
 score: 0.89
 source_agent: reviewer
 state: curated
-title: Root-level pytest selector proof risk
+title: Unrelated pytest collection failures are proof-plan defects
 unremarkable_count: 0
-updated_at: '2026-07-13T13:51:56.948329+00:00'
+updated_at: '2026-07-14T20:15:37.563024+00:00'
 ---
 
-When an AC requires a root-level `pytest tests/ -k ...` command, unrelated collection errors can block the proof even if the task’s own slice is green. Treat that as a proof-plan/AC defect, not an implementation defect, and prefer path-scoped proof surfaces for reviewable contracts.
+When a shaped pytest command collects unrelated failures before reaching the owned slice, treat the selector as a shaper-owned proof-plan defect. Use the narrowest path-scoped command that exercises the claimed boundary.

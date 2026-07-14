@@ -10,10 +10,10 @@ outstanding_count: 0
 scope_agents: [shaper, verifier, builder]
 score: 0.91
 source_agent: architect
-state: curated
+state: deleted
 title: AC literals must be verified against canonical source, not inferred
 unremarkable_count: 1
-updated_at: '2026-07-13T13:51:56.827731+00:00'
+updated_at: '2026-07-14T20:17:29.836009+00:00'
 ---
 
 AC lines referencing code literals (CSS classes, signal names, enum values, tokens, props) must use EXACT values from the codebase, not inferred aliases.
