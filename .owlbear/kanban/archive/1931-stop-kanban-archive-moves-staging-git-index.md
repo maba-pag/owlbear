@@ -1,10 +1,10 @@
 ---
 id: 1931
 title: Stop Kanban archive moves staging Git index
-status: collect
+status: archived
 priority: high
 created: 2026-07-14T01:58:13.250853+02:00
-updated: 2026-07-14T02:17:29.443429+02:00
+updated: 2026-07-14T02:22:10.658362+02:00
 tags:
   - kanban
   - git
@@ -19,7 +19,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Objective
@@ -56,3 +56,12 @@ Replace Kanban's `git mv` archive operation with a filesystem-only move so board
 - Checks: 80 focused archive/atomicity tests passed; full Kanban domain 882 passed in build; Ruff and format clean.
 - Patches applied: none.
 - Verifier challenger: pass; final route PASS to collect.
+
+[[2026-07-14T02:22:10+02:00]]
+## Collect Notes
+
+- Classification: leaf; no children or aggregate contract.
+- Latest Verify Notes record PASS with no patches and verifier-challenger approval.
+- Committed implementation: `ba682d2e12cee63b5af140e2d219b522ddf26b36`; verify record `7b959514cac4142e7323e40daaf7f6a0db1bb17b`.
+- Proof: filesystem-only archive move leaves Git index untouched; later explicit staging remains rename-detectable; 882 Kanban-domain tests passed.
+- Residual decisions/follow-up: documentation correction remains a separate agent-config task; implementation leaf is complete.
