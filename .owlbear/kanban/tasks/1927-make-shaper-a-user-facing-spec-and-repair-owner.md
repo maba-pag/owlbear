@@ -1,10 +1,10 @@
 ---
 id: 1927
 title: Make shaper a user-facing spec and repair owner
-status: verify
+status: build
 priority: high
 created: 2026-07-13T17:45:10.523540+02:00
-updated: 2026-07-13T23:02:59.846746+02:00
+updated: 2026-07-14T04:46:07.566284+02:00
 tags:
   - scope:agent-config
   - feature
@@ -71,3 +71,31 @@ Proof guidance: run agent validators and focused static tests covering review-be
 ### Scope Notes
 - Existing unrelated browser, board, memory, and generated-index changes were not staged or committed.
 - Dedicated raw-wish shaping and `pick_tasks` exclusion remain intentionally outside this task.
+
+[[2026-07-14T04:46:07+02:00]]
+## Verify Notes
+
+### Evidence reviewed
+- Task intent and all four AC lines; Builder Notes and commit `c5c49c6982ba4e3dad6310eb029df86c8816a4ad`.
+- Named authorities: `share/agents/shaper.agent.md`, `share/prompts/shape.prompt.md`, `share/skills/w-spec-shaping/SKILL.md`, `share/skills/w-task-repair/SKILL.md`, `share/skills/w-task-decomposition/SKILL.md`, and `share/agents/shaper-challenger.agent.md`.
+- Change Module Map: changed agent/prompt/workflows, decomposition/challenger/protocol alignment, wiring, and focused static tests match the shaped scope. No deviation into orchestrator, Kanban engine, `pick_tasks`, or OpenSpec-supplied skills.
+
+### Normal-path proof and checks
+- `uv run pytest -q tests/test_shaper_interaction_contract.py tests/test_ideation_overhaul_static.py` -> `68 passed in 0.36s`.
+- `uv run python .owlbear/scripts/validate_agents.py && uv run python .owlbear/scripts/validate_skills.py` -> agent validator passed all 23; combined command exited 0.
+- `git diff --check c5c49c6^ c5c49c6` -> exit 0.
+- The workflow preserves the intended pre-write sequence: staged review -> owning OpenSpec-artifact reconciliation -> complete provisional-graph challenge -> user approval -> board commit/audit. Repair classification permits autonomous mechanical/local/prescribed repairs and pauses material changes for interactive review.
+
+### Finding
+`w-spec-shaping` Step 7 requires `## Shape Notes` only on an aggregate task or existing parent. `w-task-decomposition` permits a standalone build task with neither. Therefore a valid single-task OpenSpec graph has no required durable task-history target, violating AC 4's requirement that existing task repairs retain mandatory `## Shape Notes` history and leaving the spec-shaping workflow's corresponding history contract incomplete.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Make the no-parent/no-aggregate spec-shaping path attach `## Shape Notes` to a concrete created task, preserving the approved graph and post-write audit; add a focused static assertion for this path, then rerun the focused shaper contracts and validators. | `share/skills/w-spec-shaping/SKILL.md`, `share/skills/w-task-decomposition/SKILL.md`, `tests/test_shaper_interaction_contract.py` | verifier-challenger failure: standalone graph can commit with no Shape Notes target |
+
+### Verifier-challenger
+- `decision: fail` — concrete standalone-graph history gap; no other AC or scope blocker reported.
+
+### Final route
+REJECT -> build. No verifier patch applied: the local workflow correction requires a durable regression assertion, which is builder-owned work.
