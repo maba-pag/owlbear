@@ -2,10 +2,10 @@
 id: 1914
 title: Close continuous orientation without disturbing current planning 
   structures
-status: collect
+status: shape
 priority: medium
 created: 2026-07-12T03:04:06.678099+02:00
-updated: 2026-07-14T01:21:06.690539+02:00
+updated: 2026-07-14T08:13:02.935623+02:00
 tags:
   - scope:tools
   - scope:agent-config
@@ -88,3 +88,20 @@ Proof guidance: inspect the active artifacts and task histories, scan for retire
 - Retired-name scan under `share/`: no matches.
 - Shaper challenger initially rejected the unsupported source-deprecation inference; after the user supplied product authority and legacy reachability was preserved as a fact, the corrected graph passed.
 - Pre-route board audit matched titles, parent links, dependencies, and claims.
+
+[[2026-07-14T08:13:02+02:00]]
+## Collect Notes
+
+- Classification: aggregate. Parent intent comes from `## Problem`, `## Decisions`, and the shaper-created `## Shape Notes`, including the Change Module Map, Product Invariant Map, final graph, and explicit aggregate AC.
+- Invariant map coverage: #1912 covers the advisory source indexes; #1913 records verifier PASS for orientation ownership and Change Module Map carry-through; #1915 is archived `dropped` under the user-approved legacy-ideation decision; #1916 is intended to cover the project/shared authority boundary but has no recorded verifier evidence.
+- Child coverage: `list_tasks(parent=1914)` returned no active tasks because relevant children are archived. Direct live ID lookup shows #1912 archived `completed` with `parent: 1914`, #1913 archived `completed` with `parent: 1914`, #1915 archived `dropped`, and #1916 archived `completed` with no parent link. No pending request records exist for #1914 or #1912 through #1916.
+- Parent dependency gate: #1914 depends on #1912, #1913, and #1916; all three are archived `completed`. #1913 reports `dep_status: ok` for its dependency on #1912. #1915 is correctly excluded from the parent dependency list because it is archived `dropped`.
+- Child completion evidence: #1912 has Verify Notes and Collect Notes with public CLI proof, 76 focused tests, ruff proof, verifier-challenger PASS, and completed archival. #1913 has final Verify Notes and Collect Notes with 22 authority tests, 4 idea-refinement tests, agent validation, clean diff check, verifier-challenger PASS, and completed archival. #1915 is archived `dropped` as explicitly authorized. #1916 is archived `completed`, but `show_task(section="Verify Notes")` and `show_task(section="Collect Notes")` both return empty bodies; its full record contains no recoverable verifier PASS evidence.
+- SHA-linked aggregate proof: not run because aggregate AC-1 is already unsatisfied by missing upstream verifier evidence for #1916. A new aggregate regression at HEAD cannot substitute for the required child Verify Notes.
+- Residual decisions: no pending Decision or Action Requests and no block state remain. The unresolved closure gap is evidentiary, not a user decision.
+- Reject rationale: aggregate AC-1 explicitly requires #1916 verifier PASS evidence. Archived-completed metadata alone does not satisfy that condition, and collector must not re-review or reconstruct leaf verification.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | shaper via `/shape` | Repair the graph so #1916 has authoritative verifier PASS/Verify Notes and a valid leaf closure history, then return #1914 to collect with SHA-linked aggregate normal-path proof tied to the tested commit. | n/a | #1916 is archived `completed`, but both requested evidence sections are empty; #1914 AC-1 requires verifier PASS evidence. |
