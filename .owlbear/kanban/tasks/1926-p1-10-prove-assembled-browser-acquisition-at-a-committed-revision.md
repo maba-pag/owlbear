@@ -1,10 +1,10 @@
 ---
 id: 1926
 title: 'P1-10: Prove assembled browser acquisition at a committed revision'
-status: build
+status: verify
 priority: high
 created: 2026-07-13T15:47:53.790613+02:00
-updated: 2026-07-14T13:09:00.557576+02:00
+updated: 2026-07-14T15:21:52.585154+02:00
 tags:
   - phase-1
   - scope:mcp-browser
@@ -27,7 +27,7 @@ ac:
     or Verify Notes record the tested SHA and successful command or artifact.'
 blocked: false
 block_reason:
-claimed_at: 2026-07-14T13:09:00.557576+02:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -64,3 +64,18 @@ Follow-up risk: resolve the local Playwright launcher startup failure, then reru
 
 ## AR: Resolve Playwright launcher startup for assembled browser proof
 - **Outcome:** Resolved: MCP lifespan used removed PlaywrightLauncher.context access after #1925. Restored the public page() capability and migrated acquisition to launcher.acquire(); live lifespan now retains the browser and focused checks pass.
+
+[[2026-07-14T15:21:52+02:00]]
+## Builder Completion
+
+Root cause: browser-core task #1925 removed direct `PlaywrightLauncher.context` exposure in favor of the public `acquire()` boundary, but MCP lifespan still dereferenced `.context`. Chromium therefore launched, MCP raised `AttributeError`, the broad startup fallback converted it to `Browser unavailable`, and cleanup immediately closed the visible window.
+
+Fix: restored the launcher's narrow public `page()` capability for existing interactive tools; MCP lifespan now composes `launcher.page()` and registered acquisition delegates to `launcher.acquire()`. Acquisition no longer applies the interactive allowlist or SSRF preflight, matching the OpenSpec authorization for explicitly supplied private/loopback HTTP(S) URLs; `navigate` and all interactive operations retain their existing policy. Added a focused MCP regression proving loopback acquisition delegation.
+
+Tested commit: `ddab6cdefc8a23c92170654a4cf21cb6a09b9309`.
+
+Assembled proof: a real stdio MCP client launched `uv run python -m owlbear_mcp_browser`, listed the registered `acquire` tool, crossed FastMCP lifespan and public `PlaywrightLauncher.acquire()`, and used real headed Playwright against local fixtures. Results: delayed-render `success` with non-empty Markdown/provenance; session establishment `success`; protected cookie-backed session reuse `success`; login `authentication_required`; empty terminal `content_not_ready` with structured diagnostics.
+
+Focused checks at the tested revision: `uv run pytest serve/mcp-browser/tests/ -q --tb=short` -> 21 passed; `uv run pytest serve/browser/tests/ -q --tb=short` -> 20 passed; `uv run pytest tests/test_package_boundary.py -q --tb=short` -> 34 passed; focused Ruff -> passed.
+
+Builder challenger: PASS. It independently confirmed both ACs, the acquisition-versus-interactive authorization distinction, the assembled boundary, and 75 passing tests.
