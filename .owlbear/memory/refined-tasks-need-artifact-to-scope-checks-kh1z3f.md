@@ -8,12 +8,12 @@ didnt_use_count: 0
 id: 105e697f-3a38-4458-a553-555e08acb7b6
 outstanding_count: 1
 scope_agents: [verifier, shaper, builder]
-score: 0.96
+score: 0.9299999999999999
 source_agent: reviewer
 state: approved
 title: Refined tasks need artifact-to-scope checks
-unremarkable_count: 0
-updated_at: '2026-07-13T13:51:56.588494+00:00'
+unremarkable_count: 3
+updated_at: '2026-07-14T14:00:20.862103+00:00'
 ---
 
 After a task is refined post-review, compare the actual test or proof artifacts against the refined scope, not just the updated task notes. Stale parent-scope assertions can survive in files even when notes omit them, creating extra proof obligations and repeated review loops.
