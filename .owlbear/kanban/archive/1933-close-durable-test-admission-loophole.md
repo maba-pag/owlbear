@@ -1,10 +1,10 @@
 ---
 id: 1933
 title: Close durable-test admission loophole
-status: collect
+status: archived
 priority: high
 created: 2026-07-14T04:21:57.038752+02:00
-updated: 2026-07-14T04:32:05.083537+02:00
+updated: 2026-07-14T04:32:46.886303+02:00
 tags:
   - agent
   - test
@@ -18,7 +18,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Objective
@@ -53,3 +53,12 @@ Proof guidance: no new durable test expected; inspect the authority diff and run
 - Checks: 4 focused tests passed; Ruff clean; all 23 agent definitions valid.
 - Additional automated enforcement not recommended: test value is semantic, and a source-string policy test would recreate the removed low-value mechanism.
 - Verifier challenger: pass; Rule of Two and proof scope are coherent.
+
+[[2026-07-14T04:32:46+02:00]]
+## Collect Notes
+
+- Confirmed the Rent Test remains the canonical admission gate and task wording cannot waive it.
+- Confirmed the builder role summary and mandatory builder challenge enforce the rule at build time.
+- Confirmed the low-value task-1932 assertions were removed without replacement.
+- Builder commit: `4e56c2f96`; verifier transition: `c8c21dbca`.
+- Archived as completed.
