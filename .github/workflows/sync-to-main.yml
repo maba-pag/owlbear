@@ -408,6 +408,10 @@ jobs:
           # .github/copilot-instructions.md — describes owlbear-dev internals
           git rm -f .github/copilot-instructions.md --quiet 2>/dev/null || true
 
+          # Package test suites validate dev; consumers only execute package sources.
+          find serve -mindepth 2 -maxdepth 2 -type d -name tests -print0 \
+            | xargs -0 -r git rm -rf --quiet --
+
           # serve/cockpit/web/ — consumers only need the pre-built dist/
           if [[ "$SYNC_COCKPIT" == "true" ]]; then
             git rm -rf serve/cockpit/web --quiet 2>/dev/null || true
