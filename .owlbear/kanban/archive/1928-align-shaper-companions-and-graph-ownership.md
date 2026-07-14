@@ -1,10 +1,10 @@
 ---
 id: 1928
 title: Align shaper companions and graph ownership
-status: collect
+status: archived
 priority: high
 created: 2026-07-14T00:10:46.227791+02:00
-updated: 2026-07-14T05:00:31.984017+02:00
+updated: 2026-07-14T08:01:22.954929+02:00
 tags:
   - scope:agent-config
   - type:build
@@ -28,7 +28,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Objective
@@ -95,3 +95,17 @@ Proof guidance: run agent/skill validators and focused tests for shaper interact
 
 ### Final Route
 - PASS -> collect.
+
+[[2026-07-14T08:01:22+02:00]]
+## Collect Notes
+
+### Classification
+- Leaf: no child tasks, parent/EPIC markers, aggregate intent section, dependencies, or aggregate collect criteria.
+
+### Closure Evidence
+- Verifier PASS is recorded in `## Verify Notes` with focused proof: 18 focused tests passed, all 23 agent files passed validation, direct authority review completed, and verifier-challenger returned `decision: pass`.
+- Invariant coverage spans the task's stated boundaries: connected-task shaper ownership, mode-dependent loading, evidence-only research, read-only orientation, universal memory qualification, and static authority wiring.
+- No unresolved Required Follow-up, block, dependency, pending decision/action request, or residual decision state remains.
+
+### Rationale
+- Mechanical leaf closure is complete; implementation details were not re-reviewed. Archive as completed.
