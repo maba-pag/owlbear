@@ -1,10 +1,10 @@
 ---
 id: 1926
 title: 'P1-10: Prove assembled browser acquisition at a committed revision'
-status: collect
+status: archived
 priority: high
 created: 2026-07-13T15:47:53.790613+02:00
-updated: 2026-07-14T16:00:31.235774+02:00
+updated: 2026-07-14T16:02:10.541883+02:00
 tags:
   - phase-1
   - scope:mcp-browser
@@ -28,7 +28,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 Planning source: `openspec/changes/complete-browser-content-acquisition/`
@@ -103,3 +103,18 @@ Findings and patches: no defect found; no verifier patch applied. One initial ad
 Verifier-challenger: PASS. It confirmed AC-1 and AC-2, real FastMCP registration/stdio/headed-Playwright proof, metadata, structured non-successes, retained interactive policy, and scope.
 
 Final route: PASS -> collect.
+
+[[2026-07-14T16:02:10+02:00]]
+## Collect Notes
+
+Classification: leaf. Task #1926 has no children, no aggregate/EPIC title or tags, and no aggregate intent section; parent #1924 does not make this task an aggregate.
+
+Leaf verification evidence: `## Verify Notes` records verifier PASS with no patch required and verifier-challenger PASS. AC-1 and AC-2 were covered through the mapped MCP owner and browser public boundary. The normal path used a real stdio MCP client, FastMCP registration and lifespan, public browser acquisition API, headed Playwright, delayed-render and persistent-session local fixtures, required provenance, and structured authentication/readiness non-successes.
+
+Invariant map coverage: interactive `navigate` retains SSRF plus allowlist checks; `click`, `type`, `select`, `read_text`, and `snapshot` remain page-bound. Acquisition delegates through the public launcher boundary and serializes success and failure results. Verify Notes report no Change Module Map deviation.
+
+Dependency gate: `depends_on: [1925]` reports `dep_status: ok`.
+
+Commit-bound proof: tested implementation commit `ddab6cdefc8a23c92170654a4cf21cb6a09b9309`; Verify Notes record `git merge-base --is-ancestor ddab6cdef HEAD` returning 0 at descendant `03f41bdf75b0e88bae03d8d25b91408c4cfdad0e`. Tied commands include MCP-browser tests (21 passed), browser tests (20 passed), package-boundary tests (34 passed), Ruff, and the real stdio assembled smoke described above.
+
+Residual decisions and follow-up: no pending request, block, unresolved Required Follow-up, or residual decision state. Archive rationale: verified leaf closure is complete.
