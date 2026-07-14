@@ -1,10 +1,10 @@
 ---
 id: 1925
 title: 'P1-09: Finalize browser acquisition lifecycle boundary'
-status: collect
+status: archived
 priority: medium
 created: 2026-07-13T15:47:42.616043+02:00
-updated: 2026-07-14T08:09:56.216805+02:00
+updated: 2026-07-14T08:14:28.692946+02:00
 tags:
   - phase-1
   - scope:browser
@@ -28,7 +28,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 Planning source: `openspec/changes/complete-browser-content-acquisition/`
@@ -73,3 +73,13 @@ Product Promise contribution: closes the reusable Python API and persistent-sess
 - Verifier-challenger: final decision pass. It found the repair sufficient, evidence proportionate, and scope within the approved envelope.
 - Final route: PASS to collect.
 
+[[2026-07-14T08:14:28+02:00]]
+## Collect Notes
+- Classification: leaf. Task #1925 has no child tasks and its scope is a concrete browser implementation contribution to parent #1924, not an aggregate promise.
+- Leaf verification evidence: verifier recorded PASS after a local patch, final verifier-challenger decision pass, `uv run pytest serve/browser/tests` with 20 passed, focused Ruff success, and clean browser diff checks.
+- Invariant map coverage: Verify Notes confirm AC-1 and AC-2 against the named OpenSpec and browser contract authorities; the changed implementation stayed within the mapped contract, fetcher, launcher, and existing proof owners.
+- Child coverage: none; `list_tasks(parent=1925)` returned no tasks.
+- Dependency gate: not applicable; task has no dependencies and `dep_status` is unset.
+- Completion evidence: implementation commit `f2d3835c9bf37fde9df3898c6f82ba1533ec5136` is tied in Verify Notes to real Chromium and local HTTP fixture proof through the public launcher boundary, including persistent-session authentication retry and public API inspection.
+- Residual decisions: no pending request records, unresolved Decision Request, block, or Required Follow-up.
+- Rationale: archive mechanically because leaf verification and closure evidence are complete.
