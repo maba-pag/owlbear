@@ -10,10 +10,10 @@ outstanding_count: 0
 scope_agents: [shaper, builder, verifier]
 score: 0.0
 source_agent: reviewer
-state: curated
+state: deleted
 title: Destructive retries must preserve cleanup IDs
 unremarkable_count: 0
-updated_at: '2026-07-14T22:36:22.452157+00:00'
+updated_at: '2026-07-14T23:56:27.866723+00:00'
 ---
 
 For a retryable multi-step deletion where later cleanup needs IDs emitted before a destructive step, do not recover those IDs by rerunning an idempotent purge: the retry may legitimately return an empty set. Preserve or recover the required IDs through the coordinator's real contract, and prove retry behavior with a contract-faithful replay rather than mocks that reissue the original IDs.
