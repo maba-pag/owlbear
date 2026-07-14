@@ -1,10 +1,10 @@
 ---
 id: 1927
 title: Make shaper a user-facing spec and repair owner
-status: build
+status: verify
 priority: high
 created: 2026-07-13T17:45:10.523540+02:00
-updated: 2026-07-14T04:46:07.566284+02:00
+updated: 2026-07-14T04:53:02.485321+02:00
 tags:
   - scope:agent-config
   - feature
@@ -99,3 +99,33 @@ Proof guidance: run agent validators and focused static tests covering review-be
 
 ### Final route
 REJECT -> build. No verifier patch applied: the local workflow correction requires a durable regression assertion, which is builder-owned work.
+
+[[2026-07-14T04:53:02+02:00]]
+## Builder Notes
+
+### Change Envelope
+- Repair only the standalone spec-graph history gap identified by verification: a graph with no aggregate task or existing parent must still have a concrete `## Shape Notes` target.
+- Expected owners: `w-spec-shaping`, `w-task-decomposition`, and the focused shaper interaction contract.
+
+### Files Changed
+- `share/skills/w-spec-shaping/SKILL.md`: direct standalone graphs to record Shape Notes in the created task representing the approved outcome.
+- `share/skills/w-task-decomposition/SKILL.md`: return that created task as the task-history target to the calling workflow.
+- `tests/test_shaper_interaction_contract.py`: added a static regression assertion for both sides of the standalone history handoff.
+
+### Change Module Map
+- No deviation. The repair remains inside the workflow owners and their existing focused static contract.
+
+### Proof Selected
+- Durable regression test added because this is an easy-to-miss workflow path whose failure removes required Kanban history; the existing contract suite did not cover it. The test is low-maintenance static protection of the cross-workflow requirement.
+
+### Commands Run
+- `uv run pytest -q tests/test_shaper_interaction_contract.py` — 14 passed.
+- `uv run python .owlbear/scripts/validate_agents.py` — PASS, all 23 agent files conform.
+- `uv run python .owlbear/scripts/validate_skills.py` — all checks passed.
+- `uv run ruff check tests/test_shaper_interaction_contract.py` — passed.
+
+### Builder-Challenger
+- `decision: pass`. Confirmed concrete standalone Shape Notes target, coherent decomposition handoff, scoped regression coverage, and no change-envelope drift.
+
+### Follow-up Risks
+- This is a static workflow contract; runtime adherence still depends on the shaper following the documented commit flow.

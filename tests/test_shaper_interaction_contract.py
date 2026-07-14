@@ -146,6 +146,14 @@ def test_shaper_human_output_does_not_remove_channel_b_history() -> None:
     assert "## Shape Notes" in instruction
 
 
+def test_standalone_spec_graph_has_a_shape_notes_target() -> None:
+    shaping = _read("share/skills/w-spec-shaping/SKILL.md")
+    decomposition = _read("share/skills/w-task-decomposition/SKILL.md")
+
+    assert "For a standalone graph, record\nthem in the created task" in shaping
+    assert "standalone graph, identify the created task" in decomposition
+
+
 def test_shaper_can_own_one_explicit_connected_mutation_set() -> None:
     protocol = _read("share/skills/r-pipeline-protocol/SKILL.md")
     prompt = _read("share/prompts/shape.prompt.md")
