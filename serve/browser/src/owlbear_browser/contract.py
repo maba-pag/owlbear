@@ -20,6 +20,7 @@ class AcquisitionStatus(StrEnum):
     SELECTOR_NOT_FOUND = "selector_not_found"
     ACCESS_DENIED = "access_denied"
     REDIRECT_REJECTED = "redirect_rejected"
+    AMBIGUOUS_FINAL_PAGE = "ambiguous_final_page"
     UNSUPPORTED_TARGET = "unsupported_target"
     DOWNLOAD_REJECTED = "download_rejected"
     NAVIGATION_FAILED = "navigation_failed"
@@ -55,7 +56,9 @@ class AcquisitionRequest:
             or self.actions
             or self.headers
         ):
-            raise ValueError("credentials, scripts, actions, and session inputs are not accepted")  # noqa: EM101, TRY003
+            raise ValueError(  # noqa: TRY003
+                "credentials, scripts, actions, and session inputs are not accepted"  # noqa: EM101
+            )
         if self.navigation_timeout_ms <= 0 or self.readiness_timeout_ms <= 0:
             raise ValueError("timeouts must be positive")  # noqa: EM101, TRY003
 

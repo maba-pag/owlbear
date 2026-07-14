@@ -1,10 +1,10 @@
 ---
 id: 1925
 title: 'P1-09: Finalize browser acquisition lifecycle boundary'
-status: build
+status: verify
 priority: medium
 created: 2026-07-13T15:47:42.616043+02:00
-updated: 2026-07-13T15:47:42.616043+02:00
+updated: 2026-07-14T05:03:21.162928+02:00
 tags:
   - phase-1
   - scope:browser
@@ -46,3 +46,13 @@ Change envelope: expected production owners are `serve/browser/src/owlbear_brows
 Proof guidance: run the focused browser package checks and real Playwright fixtures; use a local page host below the public acquisition boundary. Record the task commit SHA after committing only owned files. Existing maintained acquisition tests should be extended only for a concrete uncovered regression.
 
 Product Promise contribution: closes the reusable Python API and persistent-session portion of parent #1924; it does not claim agent-callable MCP completion by itself.
+
+[[2026-07-14T05:03:21+02:00]]
+## Builder Notes
+- Change envelope: browser acquisition contract, fetcher, launcher, and existing focused browser proof only.
+- Files changed: `serve/browser/src/owlbear_browser/contract.py`, `serve/browser/src/owlbear_browser/fetcher.py`, `serve/browser/src/owlbear_browser/playwright_launcher.py`, `serve/browser/tests/test_acquisition.py`.
+- Module map: no deviations. Launcher now owns the public `acquire` capability; raw Playwright context/page accessors were removed from the public boundary. Fetcher retains pending authentication state internally and exposes cleanup for launcher shutdown.
+- Proof selected: focused real Playwright browser package suite plus focused Ruff and diff checks; no new durable test file added. Existing authentication lifecycle proof was updated because the prior direct-context path contradicted AC-2.
+- Commands run: `uv run pytest serve/browser/tests` -> 20 passed; `uv run ruff check serve/browser/src/owlbear_browser/contract.py serve/browser/src/owlbear_browser/fetcher.py serve/browser/src/owlbear_browser/playwright_launcher.py serve/browser/tests/test_acquisition.py` -> all checks passed; `git diff --check -- serve/browser` -> clean.
+- Builder challenger: pass, no blockers.
+- Follow-up risk: verifier should confirm the public launcher export surface and persistent-session lifecycle against the OpenSpec contract.

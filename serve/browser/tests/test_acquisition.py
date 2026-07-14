@@ -10,7 +10,7 @@ from owlbear_browser import AcquisitionRequest, AcquisitionStatus, AcquisitionSu
 class _FixtureHandler(BaseHTTPRequestHandler):
     requests: ClassVar[list[str]] = []
 
-    def do_GET(self) -> None:  # noqa: N802, PLR0911
+    def do_GET(self) -> None:  # noqa: C901, N802, PLR0911, PLR0915
         self.requests.append(self.path)
         if self.path == "/start":
             self.send_response(302)
@@ -35,6 +35,12 @@ class _FixtureHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(b"<html><body><form><input type='email'>Sign in</form></body></html>")
             return
+        if self.path == "/protected":
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.end_headers()
+            self.wfile.write(b'<html><body><main id="content">Protected content</main></body></html>')
+            return
         if self.path == "/denied":
             self.send_response(403)
             self.send_header("Content-Type", "text/html")
@@ -57,6 +63,12 @@ class _FixtureHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "text/html")
             self.end_headers()
             self.wfile.write(b"<html><body><main id='content'>Our guide explains how to sign in.</main></body></html>")
+            return
+        if self.path == "/ambiguous":
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.end_headers()
+            self.wfile.write(b"<html><title>Unexpected page</title><body>Rendered but unclassified</body></html>")
             return
         self.send_response(200)
         self.send_header("Content-Type", "text/html")
@@ -112,6 +124,31 @@ async def test_acquire_waits_for_rendered_content_and_keeps_links_inert() -> Non
 
 
 @pytest.mark.asyncio
+async def test_authentication_page_stays_open_and_retry_reuses_it() -> None:
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _FixtureHandler)
+    Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        from owlbear_browser.playwright_launcher import PlaywrightLauncher
+
+        async with PlaywrightLauncher() as launcher:
+            auth_url = f"http://127.0.0.1:{server.server_port}/auth"
+            result = await launcher.acquire(AcquisitionRequest(auth_url))
+            assert result.status is AcquisitionStatus.AUTHENTICATION_REQUIRED
+            retry = await launcher.acquire(
+                AcquisitionRequest(
+                    f"http://127.0.0.1:{server.server_port}/protected",
+                    content_selector="#content",
+                    readiness_timeout_ms=200,
+                )
+            )
+        assert isinstance(retry, AcquisitionSuccess)
+        assert retry.markdown == "Protected content"
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+@pytest.mark.asyncio
 async def test_acquire_reports_missing_content_selector() -> None:
     server = ThreadingHTTPServer(("127.0.0.1", 0), _FixtureHandler)
     Thread(target=server.serve_forever, daemon=True).start()
@@ -143,6 +180,7 @@ async def test_acquire_reports_missing_content_selector() -> None:
         ("/denied", AcquisitionStatus.ACCESS_DENIED),
         ("/unrelated", AcquisitionStatus.REDIRECT_REJECTED),
         ("/empty", AcquisitionStatus.EXTRACTION_FAILED),
+        ("/ambiguous", AcquisitionStatus.AMBIGUOUS_FINAL_PAGE),
     ],
 )
 async def test_acquire_rejects_invalid_final_page_states(path: str, expected_status: AcquisitionStatus) -> None:

@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
 if TYPE_CHECKING:
-    from playwright.async_api import BrowserContext
+    from playwright.async_api import BrowserContext, Page
 
 from owlbear_browser.contract import (
     AcquisitionFailure,
@@ -31,6 +31,13 @@ class BrowserContentFetcher:
 
     def __init__(self, context: BrowserContext) -> None:
         self._context = context
+        self._pending_page: Page | None = None
+
+    async def close(self) -> None:
+        """Close a page retained for manual authentication."""
+        if self._pending_page is not None and not self._pending_page.is_closed():
+            await self._pending_page.close()
+        self._pending_page = None
 
     async def fetch(self, request: AcquisitionRequest | str) -> AcquisitionResult | str:
         """Acquire stable rendered content, or preserve the legacy string API."""
@@ -51,7 +58,9 @@ class BrowserContentFetcher:
                 AcquisitionStatus.UNSUPPORTED_TARGET,
                 Diagnostics("validation", {"url": request.url}),
             )
-        page = await self._context.new_page()
+        page = self._pending_page or await self._context.new_page()
+        self._pending_page = None
+        keep_page_open = False
         download_detected = False
 
         def observe_download(_download: object) -> None:
@@ -144,6 +153,8 @@ class BrowserContentFetcher:
             auth_signal = re.search(auth_pattern, page_text[:4000])
             title_auth_signal = re.search(auth_pattern, page_title)
             if (auth_structure and auth_signal) or title_auth_signal:
+                self._pending_page = page
+                keep_page_open = True
                 return AcquisitionFailure(
                     AcquisitionStatus.AUTHENTICATION_REQUIRED,
                     Diagnostics("validation", {"url": final_url, "signal": "authentication"}),
@@ -160,6 +171,12 @@ class BrowserContentFetcher:
                 return AcquisitionFailure(
                     AcquisitionStatus.REDIRECT_REJECTED,
                     Diagnostics("validation", {"url": final_url, "signal": "unrelated_redirect"}),
+                )
+            semantic_content_count = await page.locator("main, article, [role='main']").count()
+            if request.content_selector is None and semantic_content_count == 0:
+                return AcquisitionFailure(
+                    AcquisitionStatus.AMBIGUOUS_FINAL_PAGE,
+                    Diagnostics("validation", {"url": final_url, "signal": "content_boundary_missing"}),
                 )
             if await region.count() == 0:
                 return AcquisitionFailure(
@@ -189,4 +206,5 @@ class BrowserContentFetcher:
                 Diagnostics("complete", {"response_status": response.status if response else None}),
             )
         finally:
-            await page.close()
+            if not keep_page_open:
+                await page.close()

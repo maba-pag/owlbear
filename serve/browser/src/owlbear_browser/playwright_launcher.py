@@ -10,9 +10,12 @@ from typing import TYPE_CHECKING, Self
 from playwright.async_api import async_playwright
 
 from owlbear_browser._errors import SSOExtensionNotFoundError
+from owlbear_browser.fetcher import BrowserContentFetcher
 
 if TYPE_CHECKING:
-    from playwright.async_api import BrowserContext, Page
+    from playwright.async_api import BrowserContext
+
+    from owlbear_browser.contract import AcquisitionRequest, AcquisitionResult
 
 __all__ = [
     "AuthenticationCapabilities",
@@ -109,8 +112,8 @@ class PlaywrightLauncher:
             raise ValueError(msg)
         self._max_pending_pages = max_pending_pages
         self._context: BrowserContext | None = None
+        self._fetcher: BrowserContentFetcher | None = None
         self._pw = None
-        self._pending_pages: list[Page] = []
         self._capabilities = AuthenticationCapabilities(
             persistent_session=False,
             visible_manual_auth=False,
@@ -149,26 +152,23 @@ class PlaywrightLauncher:
             microsoft_sso=sso_ext_path is not None,
         )
 
-    async def pending_page(self, url: str) -> Page:
-        """Return one visible, reusable page for user-completed authentication."""
-        if self._context is None:
+        self._fetcher = BrowserContentFetcher(self._context)
+
+    async def acquire(self, request: AcquisitionRequest) -> AcquisitionResult:
+        """Acquire content through the launcher's public browser capability."""
+        if self._fetcher is None:
             msg = "Launcher not started — call launch() first"
             raise RuntimeError(msg)
-        while len(self._pending_pages) >= self._max_pending_pages:
-            await self._pending_pages.pop(0).close()
-        page = await self._context.new_page()
-        self._pending_pages.append(page)
-        await page.goto(url, wait_until="domcontentloaded")
-        return page
+        return await self._fetcher.acquire(request)
 
     async def close(self) -> None:
         """Close the persistent context and stop the Playwright instance."""
-        for page in self._pending_pages:
-            if not page.is_closed():
-                await page.close()
-        self._pending_pages.clear()
+        if self._fetcher is not None:
+            await self._fetcher.close()
+            self._fetcher = None
         if self._context is not None:
             await self._context.close()
+            self._context = None
         if self._pw is not None:
             await self._pw.stop()
 
@@ -178,12 +178,3 @@ class PlaywrightLauncher:
 
     async def __aexit__(self, *_: object) -> None:
         await self.close()
-
-    async def page(self) -> Page:
-        """Return the first page from the persistent context."""
-        if self._context is None:
-            msg = "Launcher not started — call launch() first"
-            raise RuntimeError(msg)
-        if not self._context.pages:
-            return await self._context.new_page()
-        return self._context.pages[0]
