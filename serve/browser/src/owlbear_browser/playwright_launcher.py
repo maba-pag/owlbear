@@ -13,7 +13,7 @@ from owlbear_browser._errors import SSOExtensionNotFoundError
 from owlbear_browser.fetcher import BrowserContentFetcher
 
 if TYPE_CHECKING:
-    from playwright.async_api import BrowserContext
+    from playwright.async_api import BrowserContext, Page
 
     from owlbear_browser.contract import AcquisitionRequest, AcquisitionResult
 
@@ -160,6 +160,15 @@ class PlaywrightLauncher:
             msg = "Launcher not started — call launch() first"
             raise RuntimeError(msg)
         return await self._fetcher.acquire(request)
+
+    async def page(self) -> Page:
+        """Return the first page from the persistent context."""
+        if self._context is None:
+            msg = "Launcher not started — call launch() first"
+            raise RuntimeError(msg)
+        if not self._context.pages:
+            return await self._context.new_page()
+        return self._context.pages[0]
 
     async def close(self) -> None:
         """Close the persistent context and stop the Playwright instance."""

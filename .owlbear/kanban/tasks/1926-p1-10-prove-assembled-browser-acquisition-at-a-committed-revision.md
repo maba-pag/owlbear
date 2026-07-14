@@ -4,7 +4,7 @@ title: 'P1-10: Prove assembled browser acquisition at a committed revision'
 status: build
 priority: high
 created: 2026-07-13T15:47:53.790613+02:00
-updated: 2026-07-13T15:47:53.790613+02:00
+updated: 2026-07-14T13:09:00.557576+02:00
 tags:
   - phase-1
   - scope:mcp-browser
@@ -27,7 +27,7 @@ ac:
     or Verify Notes record the tested SHA and successful command or artifact.'
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-07-14T13:09:00.557576+02:00
 archival_reason:
 archival_refs: []
 ---
@@ -46,3 +46,21 @@ Change envelope: expected production owner is `serve/mcp-browser/src/owlbear_mcp
 Proof guidance: after committing task-owned files, record the tested commit SHA and invoke the registered acquisition operation through a real stdio MCP client, FastMCP lifespan, public browser acquisition API, and real Playwright against delayed-render and persistent-session local fixtures. The local page host may replace the remote site; FastMCP registration, lifespan, browser acquisition, and Playwright may not be mocked or injected. Run focused MCP-browser and browser checks plus the relevant package-boundary check.
 
 Product Promise contribution: owns the agent-callable assembled boundary and the SHA-linked aggregate proof required before parent #1924 can collect.
+
+[[2026-07-14T12:52:05+02:00]]
+## Builder Notes
+
+Change envelope: `serve/mcp-browser/src/owlbear_mcp_browser/server.py`, acquisition authorization only; preserve interactive allowlist/SSRF paths and unrelated worktree changes.
+
+Files changed: `serve/mcp-browser/src/owlbear_mcp_browser/server.py` (one-line owner fix); task record updated by this transition. No durable tests added because existing coverage exercises the changed handler and the task requires assembled proof rather than a redundant unit test.
+
+Change Module Map deviations: none. `acquire()` now calls `await _check_ssrf(url)` instead of the interactive `app_ctx.allowlist.check(url)`; `navigate()` retains both SSRF and allowlist checks.
+
+Proof selected: `uv run pytest serve/mcp-browser/tests/` -> 20 passed; `uv run pytest tests/test_package_boundary.py` -> 34 passed; `uv run ruff check serve/mcp-browser/src/owlbear_mcp_browser/server.py` -> passed. `uv run pytest serve/browser/tests/` first reported one delayed-content status mismatch, then rerun passed 20/20; this is unrelated to the changed module. Real stdio MCP client against `python -m owlbear_mcp_browser` listed the registered `acquire` tool and crossed FastMCP lifespan, but returned structured `Browser unavailable` because the Playwright launcher failed internally; installing Chromium did not resolve it. Tested revision before the uncommitted source edit: `b017b31ce974d485fe68e6796fff83b08965066b`; no valid tested commit SHA exists for the new source because the required assembled proof did not complete.
+
+Builder-challenger result: fail. It found the implementation in scope and focused checks passing, but correctly required the AC-2 real stdio/FastMCP/public acquisition/Playwright proof and recorded SHA before DONE.
+
+Follow-up risk: resolve the local Playwright launcher startup failure, then rerun the real stdio acquisition against delayed-render and persistent-session fixtures at a committed revision before moving task to verify.
+
+## AR: Resolve Playwright launcher startup for assembled browser proof
+- **Outcome:** Resolved: MCP lifespan used removed PlaywrightLauncher.context access after #1925. Restored the public page() capability and migrated acquisition to launcher.acquire(); live lifespan now retains the browser and focused checks pass.
