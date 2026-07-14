@@ -49,6 +49,13 @@ def test_success_and_failure_are_discriminated_and_diagnostics_redact_secrets() 
     assert "authorization" not in diagnostics.details
     assert "headers" not in diagnostics.details
     assert diagnostics.html == "<main>ok</main>"
+    url_diagnostics = Diagnostics(
+        "navigation",
+        {"url": "https://example.test/page?api_key=secret&public=value&access_token=token"},
+    )
+    assert url_diagnostics.details["url"] == (
+        "https://example.test/page?api_key=%5BREDACTED%5D&public=value&access_token=%5BREDACTED%5D"
+    )
     success = AcquisitionSuccess(
         AcquisitionStatus.SUCCESS,
         "https://example.test",

@@ -8,7 +8,14 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
-from urllib.parse import urldefrag, urljoin, urlparse
+from urllib.parse import (
+    parse_qsl,
+    urldefrag,
+    urlencode,
+    urljoin,
+    urlparse,
+    urlunparse,
+)
 
 from lxml import html
 
@@ -144,6 +151,10 @@ _SENSITIVE = re.compile(
     r"cookie|storage|authorization|auth|header|password|credential|secret|token",
     re.IGNORECASE,
 )
+_SENSITIVE_QUERY_PARAMETER = re.compile(
+    r"api[_.-]?key|access[_.-]?token|client[_.-]?secret|cookie|password|secret|token",
+    re.IGNORECASE,
+)
 _DIAGNOSTIC_HTML_LIMIT = 100_000
 _REMOVED_HTML_ELEMENTS = {"base", "embed", "iframe", "link", "object", "script", "style"}
 
@@ -154,9 +165,23 @@ def redact_diagnostics(value: Any) -> Any:  # noqa: ANN401
         return {str(key): redact_diagnostics(item) for key, item in value.items() if not _SENSITIVE.search(str(key))}
     if isinstance(value, (list, tuple)):
         return [redact_diagnostics(item) for item in value]
-    if isinstance(value, str) and _SENSITIVE.search(value):
-        return "[REDACTED]"
+    if isinstance(value, str):
+        redacted_url = _redact_url_query(value)
+        return "[REDACTED]" if redacted_url == value and _SENSITIVE.search(value) else redacted_url
     return value
+
+
+def _redact_url_query(value: str) -> str:
+    """Remove credential material from URL query parameters in diagnostics."""
+    parsed = urlparse(value)
+    if not parsed.scheme or not parsed.netloc or not parsed.query:
+        return value
+    query_items = [
+        (key, "[REDACTED]" if _SENSITIVE_QUERY_PARAMETER.search(key) else item)
+        for key, item in parse_qsl(parsed.query)
+    ]
+    query = urlencode(query_items, doseq=True)
+    return urlunparse(parsed._replace(query=query))
 
 
 def _sanitize_diagnostic_html(value: str) -> str:

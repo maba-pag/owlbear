@@ -1,10 +1,10 @@
 ---
 id: 1925
 title: 'P1-09: Finalize browser acquisition lifecycle boundary'
-status: verify
+status: collect
 priority: medium
 created: 2026-07-13T15:47:42.616043+02:00
-updated: 2026-07-14T05:03:21.162928+02:00
+updated: 2026-07-14T08:09:56.216805+02:00
 tags:
   - phase-1
   - scope:browser
@@ -56,3 +56,20 @@ Product Promise contribution: closes the reusable Python API and persistent-sess
 - Commands run: `uv run pytest serve/browser/tests` -> 20 passed; `uv run ruff check serve/browser/src/owlbear_browser/contract.py serve/browser/src/owlbear_browser/fetcher.py serve/browser/src/owlbear_browser/playwright_launcher.py serve/browser/tests/test_acquisition.py` -> all checks passed; `git diff --check -- serve/browser` -> clean.
 - Builder challenger: pass, no blockers.
 - Follow-up risk: verifier should confirm the public launcher export surface and persistent-session lifecycle against the OpenSpec contract.
+
+[[2026-07-14T08:09:56+02:00]]
+## Verify Notes
+- Verdict: PASS after a local verifier patch.
+- Evidence reviewed: AC-1 and AC-2; builder notes; OpenSpec `browser-content-acquisition` specification and design; `contract.py`, `fetcher.py`, `playwright_launcher.py`; existing browser proofs; and final Verify Notes for #1917, #1918, #1919, and #1920.
+- Named authorities checked: the typed contract rejects caller credentials, MFA, scripts, headers, storage state, and actions; diagnostics redact sensitive fields and now redact sensitive URL query parameters. The launcher exposes acquisition and capability operations only, while its Playwright context and fetcher remain private. The fetcher retains an authentication-required page privately, reuses it on retry, and launcher shutdown closes it before the persistent context.
+- Change Module Map: implementation commit `f2d3835c9bf37fde9df3898c6f82ba1533ec5136` changed precisely the mapped contract, fetcher, launcher, and existing acquisition proof. The verifier patch stays in the contract and existing contract-proof owner. No deviations found.
+- Normal-path boundary exercised: real Chromium and a local deterministic HTTP host exercised delayed content, document redirect provenance, selector-scoped Markdown, inert discovered links, terminal-page rejection, and a public `PlaywrightLauncher` authentication-required then protected-page retry. The fixture replaces only served page content below the public acquisition boundary.
+- Replacements used below that boundary: local HTTP fixture only; no replacement of the public acquisition, launcher, persistent-session, or Playwright lifecycle under test.
+- Checks run:
+  - `uv run pytest serve/browser/tests` passed: 20 passed in 13.08s.
+  - `uv run ruff check serve/browser/src/owlbear_browser/contract.py serve/browser/src/owlbear_browser/fetcher.py serve/browser/src/owlbear_browser/playwright_launcher.py serve/browser/tests/test_acquisition.py serve/browser/tests/test_contract.py` passed.
+  - `git diff --check -- serve/browser` passed.
+- Finding and patch: verifier-challenger identified that a diagnostic URL with secret-bearing query parameters could leak values. Updated `contract.py` to structurally redact `api_key`, `access_token`, `client_secret`, cookie, password, secret, and token query values, and extended `test_contract.py` to prove `api_key` and `access_token` redaction while preserving a public query value.
+- Verifier-challenger: final decision pass. It found the repair sufficient, evidence proportionate, and scope within the approved envelope.
+- Final route: PASS to collect.
+
