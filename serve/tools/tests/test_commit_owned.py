@@ -100,9 +100,7 @@ def test_commits_archive_move_without_including_unrelated_dirt(git_repo: Path) -
     )
 
     committed = _git(git_repo, "diff-tree", "--no-commit-id", "--name-status", "-r", "-M", "HEAD").stdout
-    assert committed.splitlines() == [
-        "R100\t.owlbear/kanban/tasks/1-task.md\t.owlbear/kanban/archive/1-task.md"
-    ]
+    assert committed.splitlines() == ["R100\t.owlbear/kanban/tasks/1-task.md\t.owlbear/kanban/archive/1-task.md"]
     assert _git(git_repo, "diff", "--cached", "--name-only").stdout.splitlines() == ["unrelated-staged.txt"]
     assert (git_repo / "unrelated-untracked.txt").exists()
 

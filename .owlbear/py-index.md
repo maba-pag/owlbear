@@ -1128,7 +1128,6 @@ KanbanEngine — native read/write engine for the owlbear kanban board.
 - `random`
 - `ruamel.yaml`
 - `ruamel.yaml.error`
-- `subprocess`
 - `sys`
 - `typing`
 - `uuid`

@@ -1071,7 +1071,6 @@
 - ### `Format`
 - ### `Rules`
 - ### `VS Code Auto-Staging Trap`
-- ### `Owned Auto-Staging Recovery`
 - ## `OwlBear-Managed Artifact Placement`
 - ## `Attribution`
 
