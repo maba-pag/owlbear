@@ -1,10 +1,10 @@
 ---
 id: 1924
 title: 'P1-08: Complete browser content acquisition'
-status: collect
+status: archived
 priority: high
 created: 2026-07-13T03:42:07.356146+02:00
-updated: 2026-07-13T16:35:12.581224+02:00
+updated: 2026-07-14T16:07:19.297073+02:00
 tags:
   - phase-1
   - scope:browser
@@ -42,7 +42,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 Planning source: `openspec/changes/complete-browser-content-acquisition/`
@@ -254,3 +254,15 @@ flowchart LR
 - Board audit confirmed #1925 and #1926 are `build` leaves with parent #1924; #1926 depends on #1925; parent dependencies include #1917 through #1923, #1925, and #1926.
 - Shaper-owned board artifacts committed as `f01d49858acd7fa19c7130d4bc7a9cb7b2ba1c28`.
 - Saved reusable memory candidate `8853908d-b4c0-4509-9166-537d6375fc78` about matching aggregate proof to committed final state.
+
+[[2026-07-14T16:07:19+02:00]]
+## Collect Notes
+
+- Classification: aggregate EPIC (`epic` tag, explicit Aggregate intent, parent AC, and nine child dependency gates).
+- Intent source: planning source `openspec/changes/complete-browser-content-acquisition/`, Aggregate intent, and `## Shape Notes`. The promised boundary is reliable structured single-page acquisition through the reusable Python API and thin MCP surface, session-assisted authentication, and complete DDGS retirement. Linked-page approval, source registration, refresh, crawling, and knowledge ingestion remain explicitly outside this aggregate.
+- Invariant map: AC-1 structured delayed-render Markdown/provenance is covered by browser contract/acquisition children #1918/#1919, MCP exposure #1921, lifecycle repair #1925, and assembled proof #1926. AC-2 persistent-session reuse and structured authentication/invalid-terminal non-successes are covered by #1917/#1920/#1925/#1926. AC-3 DDGS removal and retained tool ownership/interactive separation are covered by #1921/#1922/#1923 and the assembled policy check in #1926.
+- Child coverage: `list_tasks(parent=1924)` returned no active children because all are archived; direct lookup of declared children #1917, #1918, #1919, #1920, #1921, #1922, #1923, #1925, and #1926 confirmed each retains `parent=1924`, is archived with reason `completed`, and has final verifier PASS evidence after any repair cycle.
+- Dependency gate: parent `depends_on` contains all nine child IDs and resolves `dep_status=ok`; no declared child is missing or active.
+- Aggregate normal-path proof: child #1926 records tested implementation commit `ddab6cdefc8a23c92170654a4cf21cb6a09b9309` and ties it to real stdio FastMCP client checks through the registered acquisition operation, headed Playwright, delayed-render success, persistent-session protected-page reuse, structured `authentication_required`, and structured `content_not_ready`. Focused pytest suites reported 21 MCP-browser, 20 browser, and 34 package-boundary tests passed; ruff passed. Collector confirmed `git merge-base --is-ancestor ddab6cdefc8a23c92170654a4cf21cb6a09b9309 HEAD` succeeds at current `HEAD` `0acc66bb54651a90d0925b900d918866cb4b98f7`.
+- Residual decisions: no pending request for #1924, no block reason, and no unresolved Required Follow-up in the final child dispositions. The separately preserved knowledge-integration continuation is excluded scope, not an aggregate gap.
+- Rationale: archive as completed because the authoritative aggregate intent is covered, all child and dependency gates are complete, and SHA-linked assembled proof satisfies the normal-path contract.
