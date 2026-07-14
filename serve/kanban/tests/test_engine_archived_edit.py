@@ -25,6 +25,7 @@ AC coverage (from task #1121):
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 from unittest.mock import patch
 
@@ -87,6 +88,16 @@ def _make_board(base_dir: Path) -> Path:
     (kanban_dir / "tasks").mkdir(exist_ok=True)
     (kanban_dir / "archive").mkdir(exist_ok=True)
     return kanban_dir
+
+
+def _git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["git", *args],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
 
 
 def _write_task(  # noqa: PLR0913
@@ -904,6 +915,35 @@ class TestFromAC_StorageCoveragePaths:
         dest = move_to_archive(1, kanban_dir)
         assert dest.parent == kanban_dir / "archive"
         assert not (kanban_dir / "tasks" / "1-task.md").exists()
+
+    def test_engine_archive_move_does_not_stage_git_index(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Archiving is a filesystem operation; Git infers the rename when later staged."""
+        _git(tmp_path, "init", "-q")
+        _git(tmp_path, "config", "user.email", "test@example.com")
+        _git(tmp_path, "config", "user.name", "Test User")
+        kanban_dir = _make_board(tmp_path)
+        task_path = _write_task(
+            kanban_dir,
+            task_id=1,
+            status="collect",
+            body="\n".join(f"Stable task context line {line}." for line in range(20)),
+        )
+        relative_task = task_path.relative_to(tmp_path).as_posix()
+        relative_archive = (kanban_dir / "archive" / task_path.name).relative_to(tmp_path).as_posix()
+        _git(tmp_path, "add", relative_task, "board/config.yml")
+        _git(tmp_path, "commit", "-qm", "initial board")
+        monkeypatch.chdir(tmp_path)
+
+        KanbanEngine(kanban_dir).move_task("1", "archived", archival_reason="completed")
+
+        assert _git(tmp_path, "diff", "--cached", "--name-only").stdout == ""
+        _git(tmp_path, "add", "--", relative_task, relative_archive)
+        staged = _git(tmp_path, "diff", "--cached", "--name-status", "-M").stdout.splitlines()
+        assert len(staged) == 1
+        assert staged[0].startswith("R")
+        assert staged[0].endswith(f"\t{relative_task}\t{relative_archive}")
 
     def test_move_to_archive_raises_when_file_not_found(self, tmp_path: Path) -> None:
         """move_to_archive raises FileNotFoundError when no file exists for id."""
