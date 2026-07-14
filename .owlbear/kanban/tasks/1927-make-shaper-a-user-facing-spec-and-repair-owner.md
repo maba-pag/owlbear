@@ -1,10 +1,10 @@
 ---
 id: 1927
 title: Make shaper a user-facing spec and repair owner
-status: verify
+status: collect
 priority: high
 created: 2026-07-13T17:45:10.523540+02:00
-updated: 2026-07-14T04:53:02.485321+02:00
+updated: 2026-07-14T04:59:36.103957+02:00
 tags:
   - scope:agent-config
   - feature
@@ -129,3 +129,32 @@ REJECT -> build. No verifier patch applied: the local workflow correction requir
 
 ### Follow-up Risks
 - This is a static workflow contract; runtime adherence still depends on the shaper following the documented commit flow.
+
+[[2026-07-14T04:59:36+02:00]]
+## Verify Notes
+
+### Evidence Reviewed
+- Acceptance criteria: explicit spec and repair modes; staged review plus material-decision gate; artifact reconciliation, challenger review, and user approval before Kanban writes; autonomous complete non-material repair with material escalation; human summary with required Shape Notes history.
+- Named authorities checked: `share/agents/shaper.agent.md`, `share/prompts/shape.prompt.md`, `share/skills/w-spec-shaping/SKILL.md`, `share/skills/w-task-repair/SKILL.md`, `share/skills/w-task-decomposition/SKILL.md`, `share/skills/r-pipeline-protocol/SKILL.md`, and `share/instructions/pipeline-agents.instructions.md`.
+- Change Module Map: the reviewed agent, prompt, workflows, decomposition/protocol alignment, wiring, and static-contract surfaces match the shaped scope. No Kanban runtime, orchestrator, or `pick_tasks` behavior was included.
+
+### Boundary Verification
+- Normal path exercised by static contract: `w-spec-shaping` orders artifact reconciliation, complete provisional-graph challenge, explicit user approval, then graph commit; draft phase prohibits Kanban mutation.
+- The shaper agent and prompt require the selected workflow, stage user review, reconcile accepted OpenSpec decisions into their owning artifacts, and prohibit substantive board writes before approval.
+- `w-task-repair` distinguishes mechanical/local/prescribed repairs from material reshape, permits autonomous complete non-material instructions, and stops before task or OpenSpec mutation for material expansion.
+- User-facing summary and durable `## Shape Notes` history are both retained.
+
+### Checks Run
+- `uv run pytest tests/test_shaper_interaction_contract.py tests/test_skill_authority_wiring.py -q` - 18 passed in 0.29s.
+- `uv run python .owlbear/scripts/validate_agents.py` - PASS, all 23 agent files conform to conventions.
+- The initial validator lookup at `share/scripts/validate_agents.py` was stale; the current validator is `.owlbear/scripts/validate_agents.py`.
+- `validate_skills.py` was invoked but the chained repository diff check reported pre-existing trailing whitespace in unrelated task records, including serialized task text; no workflow-structure defect was reported.
+
+### Findings And Patches
+- No defects found. No patch applied.
+
+### Verifier Challenger
+- `verifier-challenger`: decision `pass`; it confirmed AC coverage, sufficient focused proof, module-map alignment, and no concrete scope drift or unresolved criterion.
+
+### Final Route
+PASS: all acceptance criteria are satisfied; task advances to `collect`.
