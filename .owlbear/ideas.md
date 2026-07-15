@@ -60,3 +60,7 @@ And for `agent_view.py`:
 | `agent_view.py` (residual) | ~720 LOC — `list_tasks`, `show_task`, `create_task`, `edit_task`, `move_task`, `start_work`, `end_work` |
 
 **Expected outcome:** No file > 800 LOC. Public API (`from owlbear_kanban import KanbanEngine, AgentView`) unchanged. Internal modules use explicit parameter passing, not mixins.
+
+## Memory
+
+Rating seems not to be exposed in cockpit, maybe other fields. Leading value there seems to still be confidence.
