@@ -47,11 +47,18 @@
   "chat.subagents.allowInvocationsFromSubagents": true,
   "chat.tools.compressOutput.enabled": true,
   "chat.tools.terminal.autoApprove": {
+    "npm test": true,
+    "openspec": true,
     "Test-Path": true,
     "uv run coverage": true,
+    "uv run eslint-fix": true,
+    "uv run lint": true,
+    "uv run lint-all": true,
+    "uv run megalint": true,
     "uv run pytest": true,
     "uv run python": true,
-    "uv run ruff": true
+    "uv run ruff": true,
+    "uv run todo": true
   },
   "chat.tools.terminal.blockDetectedFileWrites": "never",
   "chat.tools.urls.autoApprove": {
@@ -64,6 +71,11 @@
   "editor.formatOnSave": false,
   "editor.links": false,
   "editor.maxTokenizationLineLength": 2500,
+  "eslint.workingDirectories": [
+    {
+      "directory": "serve/cockpit/web"
+    }
+  ],
   "extensions.experimental.affinity": {
     "charliermarsh.ruff": 3,
     "ms-python.vscode-pylance": 2
@@ -120,11 +132,6 @@
   "python.terminal.useEnvFile": true,
   "python.testing.pytestEnabled": true,
   "redhat.telemetry.enabled": false,
-  "eslint.workingDirectories": [
-    {
-      "directory": "serve/cockpit/web"
-    }
-  ],
   "ruff.importStrategy": "fromEnvironment",
   "scm.defaultViewMode": "tree",
   "scm.graph.pageOnScroll": false,
