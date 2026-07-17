@@ -1,10 +1,10 @@
 ---
 id: 1937
 title: 'P1-01: Kanban task and graph health evidence'
-status: verify
+status: build
 priority: high
 created: 2026-07-17T02:31:31.385612+02:00
-updated: 2026-07-17T05:20:36.459092+02:00
+updated: 2026-07-17T05:22:11.222898+02:00
 tags:
   - phase-1
   - scope:kanban
@@ -54,3 +54,19 @@ Use a focused real-filesystem Kanban behavior check plus a downstream-impact sca
 - Durable-test justification: shared integrity behavior is easy to regress and difficult to notice manually; the test protects complete duplicate-set classification, cycle evidence, and filesystem immutability at the public engine boundary.
 - Builder-challenger: pass; no concrete blockers. It reviewed same-directory, heterogeneous 3+ records, cross-directory archived duplicates, missing references, self-reference, cycles, unreadable findings, and mutation proof.
 - Follow-up risk: no dedicated assertion for every archive-location drift variant beyond the existing archived-in-active-storage finding; outside this task's minimal scope.
+
+[[2026-07-17T05:22:11+02:00]]
+## Verify Notes
+- Evidence reviewed: builder commit `dda9e7e92` changes only the shaped owners: `serve/kanban/src/owlbear_kanban/engine.py` and `serve/kanban/tests/test_engine_task_health.py`; no Change Module Map deviation or interface expansion was found.
+- Named authority checked: OpenSpec `redesign-workspace-health` workspace-health spec requires complete, read-only persisted-file evidence, complete duplicate-ID sets, location drift, broken references, self-reference, and every cycle participant. The public `KanbanEngine.task_health()` boundary is exercised directly with temporary filesystem boards; lower layers only parse persisted files.
+- Normal-path proof: `uv run pytest serve/kanban/tests/test_corruption.py serve/kanban/tests/test_engine_task_health.py -q` passed, 77 tests. The durable test covers complete duplicate-set classification, cycle owner context, archived cross-directory duplicates, and byte/mtime immutability.
+- Additional checks: `git show --check dda9e7e92` and `git diff --check` are clean. Editor diagnostics have no errors for the touched files.
+- Finding: `uv run ruff check serve/kanban/src/owlbear_kanban/engine.py serve/kanban/tests/test_engine_task_health.py` fails with 12 violations: C901, PLR0912, and PLR0915 on `task_health`; six E501 finding constructors; PERF401; RUF005; and W292 (missing final newline in the new test). The formatter did not run because the preceding lint step failed.
+- Patches applied: none. This requires restructuring the builder-owned method and test formatting, beyond a verifier local patch-pass.
+- Verifier-challenger: not invoked because this is a REJECT verdict; it is required only before PASS.
+- Final route: REJECT to build.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Refactor `task_health()` into locally scoped helpers or otherwise satisfy the configured Ruff complexity, branch, statement, line-length, performance, and tuple-construction rules; add the test file's final newline; rerun focused pytest and Ruff check/format. | `serve/kanban/src/owlbear_kanban/engine.py`; `serve/kanban/tests/test_engine_task_health.py` | Ruff reported 12 violations during verification. |
