@@ -1,10 +1,10 @@
 ---
 id: 1937
 title: 'P1-01: Kanban task and graph health evidence'
-status: verify
+status: build
 priority: high
 created: 2026-07-17T02:31:31.385612+02:00
-updated: 2026-07-17T06:58:19.182229+02:00
+updated: 2026-07-17T06:59:45.002593+02:00
 tags:
   - phase-1
   - scope:kanban
@@ -81,3 +81,22 @@ Use a focused real-filesystem Kanban behavior check plus a downstream-impact sca
 - Durable-test justification: retained the existing durable tests because they protect the shared integrity boundary, including complete duplicate-set classification, cycle context, and filesystem immutability.
 - Builder-challenger: pass; no concrete blockers. It confirmed scope, AC coverage, lint, focused tests, and diff cleanliness.
 - Follow-up risk: no dedicated assertion for every archive-location drift variant beyond the existing archived-in-active-storage finding; outside this task's minimal scope.
+
+[[2026-07-17T06:59:45+02:00]]
+## Verify Notes
+- Evidence reviewed: task commits `dda9e7e92` and `018b4881` are ancestor-linked and touch only the shaped owners: `serve/kanban/src/owlbear_kanban/engine.py`, `serve/kanban/tests/test_engine_task_health.py`, and this task record. The broad working tree includes unrelated concurrent work and was excluded from scope review.
+- Named authority checked: OpenSpec `redesign-workspace-health` workspace-health spec requires the public task-health boundary to return all safely determinable readable-file defects, unreadable-file evidence, complete duplicate sets, reference failures, self-reference, every dependency-cycle participant, and archived-state location drift. The implementation maps to the shaped engine and Kanban-test owners without a module-map deviation.
+- Normal-path boundary exercised: `KanbanEngine.task_health()` is called against temporary persisted boards in the dedicated test. It confirms complete duplicate-set classification, cycle-owner evidence, archived cross-directory duplicate repairability, and byte/mtime immutability.
+- Replacements used below boundary: the public method delegates persisted-field collection to `collect_task_health_findings`; no command, workflow, or health-method boundary was mocked or injected.
+- Checks run: `uv run ruff check serve/kanban/src/owlbear_kanban/engine.py serve/kanban/tests/test_engine_task_health.py` passed; `uv run ruff format --check serve/kanban/src/owlbear_kanban/engine.py serve/kanban/tests/test_engine_task_health.py` passed; `uv run pytest serve/kanban/tests/test_corruption.py serve/kanban/tests/test_engine_task_health.py -q` passed (77 tests); `git diff --check` and the isolated task-commit range whitespace check passed; editor diagnostics report no errors in either touched source file.
+- Finding: direct search finds only two `task_health()` calls, both in `test_engine_task_health.py`. The public boundary has no test for AC 1's readable task with two independent persisted-field defects plus unreadable task, and no test for AC 3's missing parent/dependency/archival targets, self-reference, or archived-in-active-storage location finding. `test_corruption.py` validates lower-level `detect_corruption`, not `KanbanEngine.task_health()`, so it cannot prove the required public aggregation boundary.
+- Patches applied: none; adding durable coverage is builder work and exceeds verifier patch-pass limits.
+- Verifier-challenger: not invoked because this is a REJECT verdict; required only before PASS.
+- Final route: REJECT to build.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Add real-filesystem `KanbanEngine.task_health()` regression coverage for a readable file with two independent persisted-field findings plus an unreadable file, asserting findings and filesystem immutability. | `serve/kanban/tests/test_engine_task_health.py` | AC 1 has no direct public-boundary exercise. |
+| 2 | builder | Add public-boundary fixtures and assertions for missing parent, dependency, and archival-reference targets; dependency self-reference; and an archived-state task stored only in active storage, including owner, field, path/location, task ID, and immutability evidence. | `serve/kanban/tests/test_engine_task_health.py` | AC 3 cases are absent from the only task-health test file. |
+| 3 | builder | Rerun the focused Kanban task-health suite and Ruff checks after adding the coverage. | `serve/kanban/src/owlbear_kanban/engine.py`; `serve/kanban/tests/test_engine_task_health.py` | Existing focused checks pass but do not prove the omitted AC scenarios. |
