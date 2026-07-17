@@ -165,6 +165,20 @@ class TestDeterministicRepair:
         assert (kanban_dir / "archive" / "1001-task.md").read_text(encoding="utf-8").endswith("archive\n")
         assert result.unresolved_count == 4
 
+    def test_repair_task_storage_classifies_complete_same_id_set_before_reconciliation(self, tmp_path: Path) -> None:
+        kanban_dir = _make_board(tmp_path)
+        config = load_config(kanban_dir / "config.yml")
+        _write(kanban_dir / "tasks" / "1001-task.md", _duplicate_task("Task", "archived", body="active"))
+        _write(kanban_dir / "tasks" / "1001-other.md", _duplicate_task("Task", "shape", body="other"))
+        _write(kanban_dir / "archive" / "1001-task.md", _duplicate_task("Task", "archived", body="archive"))
+
+        result = repair_task_storage(kanban_dir, config)
+
+        assert (kanban_dir / "tasks" / "1001-task.md").exists()
+        assert (kanban_dir / "tasks" / "1001-other.md").exists()
+        assert (kanban_dir / "archive" / "1001-task.md").read_text(encoding="utf-8").endswith("archive\n")
+        assert result.unresolved_count == 6
+
     def test_repair_task_storage_moves_archived_task_without_overwrite(self, tmp_path: Path) -> None:
         kanban_dir = _make_board(tmp_path)
         config = load_config(kanban_dir / "config.yml")

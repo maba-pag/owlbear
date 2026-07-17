@@ -1,10 +1,10 @@
 ---
 id: 1940
 title: 'P1-03: Deterministic Kanban task repair'
-status: build
+status: verify
 priority: medium
 created: 2026-07-17T02:32:03.458344+02:00
-updated: 2026-07-17T08:28:21.597792+02:00
+updated: 2026-07-17T08:32:50.081233+02:00
 tags:
   - phase-1
   - scope:kanban
@@ -167,3 +167,15 @@ Final route: REJECT to build.
 | # | Target Agent | Action Required | File(s) | Evidence |
 |---|-------------|----------------|---------|----------|
 | 1 | builder | Rework archive reconciliation so each archived-state active candidate is classified and mutated only with the complete current same-ID task/archive set; retain all records when that complete set is heterogeneous or unresolved. Add a real-filesystem regression with at least three same-ID records that proves no subset mutation occurs. | `serve/kanban/src/owlbear_kanban/corruption.py`, `serve/kanban/tests/test_corruption.py` | Repair Matrix AC1; AC2; `openspec/changes/redesign-workspace-health/design.md` section 5 |
+
+[[2026-07-17T08:32:50+02:00]]
+## Builder Notes
+- Change envelope: update archived-task reconciliation so a same-ID archive conflict is classified against the complete record set across `tasks/` and `archive/`; preserve heterogeneous sets without mutation.
+- Files changed: `serve/kanban/src/owlbear_kanban/corruption.py`, `serve/kanban/tests/test_corruption.py`.
+- Change Module Map deviation: none; stayed within corruption repair classification/reconciliation and its real-filesystem regression.
+- Implementation: `_reconcile_archived_tasks` indexes all same-ID paths before processing and passes the complete set to `_repair_duplicate_set`.
+- Durable test justification: added one regression because complete-set archive reconciliation is easy to regress and the existing two-record tests did not cover a third same-ID record.
+- Proof selected: focused corruption suite and full Kanban package suite.
+- Commands run: `uv run --project . pytest serve/kanban/tests/test_corruption.py -q` -> `82 passed`; `uv run --project . pytest serve/kanban/tests -q` -> `735 passed`.
+- Builder challenger: `builder-challenger` decision `pass`; no blockers or scope drift found.
+- Follow-up risks: none identified; verifier should confirm repeated repair remains convergent for the heterogeneous complete set.

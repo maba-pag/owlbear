@@ -859,6 +859,14 @@ def _reconcile_archived_tasks(kanban_dir: Path, config: BoardConfig) -> list[Rep
     outcomes: list[RepairOutcome] = []
     if not tasks_dir.exists():
         return outcomes
+    all_paths_by_id: dict[int, list[Path]] = {}
+    for directory in (tasks_dir, archive_dir):
+        if not directory.exists():
+            continue
+        for candidate in sorted(directory.glob("*.md")):
+            file_id = _extract_file_id(candidate)
+            if file_id is not None:
+                all_paths_by_id.setdefault(file_id, []).append(candidate)
     for path in sorted(tasks_dir.glob("*.md")):
         try:
             _, frontmatter, body = _read_frontmatter(path)
@@ -872,7 +880,8 @@ def _reconcile_archived_tasks(kanban_dir: Path, config: BoardConfig) -> list[Rep
             if records is None:
                 outcomes.append(RepairOutcome(task_id=frontmatter.get("id"), file_path=str(path), code="ARCHIVE_RECONCILIATION", action="unresolved", detail="archive destination conflict could not be parsed"))
                 continue
-            outcomes.extend(_repair_duplicate_set([path, destination], kanban_dir, tasks_dir, archive_dir))
+            duplicate_paths = all_paths_by_id.get(frontmatter.get("id"), [path, destination])
+            outcomes.extend(_repair_duplicate_set(duplicate_paths, kanban_dir, tasks_dir, archive_dir))
             continue
         try:
             _, current_frontmatter, current_body = _read_frontmatter(path)
