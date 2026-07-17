@@ -44,7 +44,7 @@ function parseThreshold(value: string): number | null {
 
 export function useMemoryPurgeFlow(options?: UseMemoryPurgeFlowOptions): UseMemoryPurgeFlowResult {
   const [phase, setPhase] = useState<MemoryPurgePhase>('idle')
-  const [threshold, setThreshold] = useState('')
+  const [threshold, setThreshold] = useState('30')
   const [preview, setPreview] = useState<MemoryPurgePreview | null>(null)
   const [receipt, setReceipt] = useState<MemoryPurgeReceipt | null>(null)
   const [error, setError] = useState<string | null>(null)
