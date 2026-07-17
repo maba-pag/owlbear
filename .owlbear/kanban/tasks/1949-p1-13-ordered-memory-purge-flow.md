@@ -4,7 +4,7 @@ title: 'P1-13: Ordered Memory purge flow'
 status: verify
 priority: medium
 created: 2026-07-17T03:04:26.420225+02:00
-updated: 2026-07-17T17:32:10.127005+02:00
+updated: 2026-07-17T20:15:51.035858+02:00
 tags:
   - phase-1
   - scope:cockpit-web
