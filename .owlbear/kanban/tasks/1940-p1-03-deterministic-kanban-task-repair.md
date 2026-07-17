@@ -1,10 +1,10 @@
 ---
 id: 1940
 title: 'P1-03: Deterministic Kanban task repair'
-status: verify
+status: build
 priority: medium
 created: 2026-07-17T02:32:03.458344+02:00
-updated: 2026-07-17T08:26:34.317603+02:00
+updated: 2026-07-17T08:28:21.597792+02:00
 tags:
   - phase-1
   - scope:kanban
@@ -138,3 +138,32 @@ Durable-test justification: added two focused tests because archive reconciliati
 Builder-challenger result: PASS. No concrete blockers; scope, no-overwrite semantics, and focused evidence were accepted.
 
 Follow-up risks: broader Kanban integration/API contracts remain outside this focused task proof.
+
+[[2026-07-17T08:28:21+02:00]]
+## Verify Notes
+Evidence reviewed:
+- Task outcome, AC1-AC3, Repair Matrix, Builder Notes, and planning authority in `openspec/changes/redesign-workspace-health/design.md` sections 5-6 and `specs/workspace-health/spec.md` requirements `Deterministic task duplicate repair` and `Synchronous convergent repair contract`.
+- Changed implementation: `serve/kanban/src/owlbear_kanban/corruption.py`; focused durable proof: `serve/kanban/tests/test_corruption.py`.
+
+Change Module Map:
+- No owner deviation: repair classification, duplicate operations, archive reconciliation, and post-repair scan remain in the Kanban corruption owner. However, archive reconciliation is not consistently operating over the complete ID set required by that module contract.
+
+Normal-path boundary exercised:
+- `uv run pytest serve/kanban/tests/test_corruption.py -q` passed: 81 tests.
+- `uv run pytest serve/kanban/tests/test_corruption.py -q -k 'DeterministicRepair'` passed: 6 tests.
+- `git diff --check` passed.
+- The focused tests use real task/archive files; no replacement occurs above the filesystem boundary.
+
+Finding:
+- AC1 / AC2 complete-set safety remains unsatisfied. `scan_and_fix()` discovers complete duplicate ID sets, but `_reconcile_archived_tasks()` later calls `_repair_duplicate_set([path, destination], ...)` with only an active record and same-name archive destination. For a three-or-more-record ID set, that pair can satisfy a deterministic rule while a third record makes the complete set heterogeneous or otherwise unresolved. The code can then delete or quarantine based on an incomplete subset, contrary to the complete-set-before-mutation requirement in the Repair Matrix and design section 5.
+- Current focused tests cover only two-record archive conflicts and do not prove preservation of a heterogeneous three-record archive conflict.
+
+Patches applied:
+- None. Passing the entire current ID group through archive reconciliation and adding a data-safety regression is core repair behavior, beyond verifier local patch limits.
+
+Final route: REJECT to build.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Rework archive reconciliation so each archived-state active candidate is classified and mutated only with the complete current same-ID task/archive set; retain all records when that complete set is heterogeneous or unresolved. Add a real-filesystem regression with at least three same-ID records that proves no subset mutation occurs. | `serve/kanban/src/owlbear_kanban/corruption.py`, `serve/kanban/tests/test_corruption.py` | Repair Matrix AC1; AC2; `openspec/changes/redesign-workspace-health/design.md` section 5 |
