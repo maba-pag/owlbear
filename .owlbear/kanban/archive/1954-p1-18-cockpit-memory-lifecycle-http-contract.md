@@ -1,10 +1,10 @@
 ---
 id: 1954
 title: 'P1-18: Cockpit memory lifecycle HTTP contract'
-status: collect
+status: archived
 priority: high
 created: 2026-07-17T04:53:58.085320+02:00
-updated: 2026-07-17T05:41:06.772187+02:00
+updated: 2026-07-17T05:41:56.385210+02:00
 tags:
   - phase-1
   - scope:cockpit-backend
@@ -29,7 +29,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -76,3 +76,11 @@ Proof guidance: exercise endpoints through the FastAPI application boundary with
 - Verifier-challenger: pass. It confirmed the projection, resolve forwarding, error envelopes, exceptional-state behavior, evidence, and scope.
 - Final route: PASS to collect.
 
+[[2026-07-17T05:41:56+02:00]]
+## Collect Notes
+- Classification: leaf. The task has concrete implementation ACs, no aggregate/EPIC tags or aggregate intent section, and `list_tasks(parent=1954)` returned no children.
+- Leaf verification evidence: `## Verify Notes` records PASS with AC-1 through AC-3 covered at the FastAPI boundary, 58 focused tests passed, Ruff passed, real-engine resolve smoke passed, and verifier-challenger passed.
+- Invariant map coverage: verifier confirmed the Cockpit route adapter remained the HTTP projection/forwarding owner, while `MemoryEngine.resolve` and existing exception handlers retained domain-transition and error-envelope authority; no Change Module Map deviation.
+- Tested commit and tied proof: implementation commit `40ca836f7`; verifier records `uv run --project . pytest tests/test_cockpit_memory_routes.py serve/cockpit/tests/test_memory_integration.py -q` with 58 passed, Ruff on the changed route/test files, and a real-engine FastAPI resolve smoke against that committed implementation.
+- Residual decisions: no pending decision or action requests, no unresolved Required Follow-up, and no block state.
+- Rationale: verifier PASS evidence is complete and all leaf acceptance criteria are closed, so archive as completed.
