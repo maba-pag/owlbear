@@ -1,10 +1,10 @@
 ---
 id: 1937
 title: 'P1-01: Kanban task and graph health evidence'
-status: verify
+status: build
 priority: high
 created: 2026-07-17T02:31:31.385612+02:00
-updated: 2026-07-17T07:04:34.142779+02:00
+updated: 2026-07-17T07:06:26.640372+02:00
 tags:
   - phase-1
   - scope:kanban
@@ -137,3 +137,20 @@ Use a focused real-filesystem Kanban behavior check plus a downstream-impact sca
 - Durable-test justification: retained focused regression coverage because this shared integrity boundary must preserve complete multi-finding duplicate sets, archived cross-directory classification, concrete cycle context, and non-mutating scans.
 - Builder-challenger: pass; confirmed scope, proof sufficiency, and no concrete DONE blockers.
 - Follow-up risk: downstream verifier should confirm the final task-owned commit and broader integration compatibility.
+
+[[2026-07-17T07:06:26+02:00]]
+## Verify Notes
+- Evidence reviewed: task AC, builder notes, canonical OpenSpec workspace-health spec/design, commits `dda9e7e92` and `018b4881f`, and final builder commit `5b56e7b99`.
+- Named authorities checked: `openspec/changes/redesign-workspace-health/specs/workspace-health/spec.md` requires every readable active/archive task be checked without mutation, with independently determinable field failures, unreadable-file evidence, complete duplicate sets, graph references, self-reference/cycles, and active/archive location drift. The design assigns per-path evidence and board analysis to Kanban.
+- Change Module Map: implementation remains inside `serve/kanban/src/owlbear_kanban/engine.py` and `serve/kanban/tests/test_engine_task_health.py`, matching the shaped owners. No architecture deviation found.
+- Normal-path boundary exercised: `KanbanEngine.task_health()` over temporary filesystem trees through `uv run pytest serve/kanban/tests/test_corruption.py serve/kanban/tests/test_engine_task_health.py -q`; result: 77 passed in 0.60s. Editor diagnostics reported no errors for touched files.
+- Findings: the focused task-health tests prove duplicate-set classification, a two-node dependency cycle, and byte/mtime preservation. They do not prove AC 1's readable file with two independent findings plus unreadable-file result, or AC 3's missing parent/dependency/archival targets, self-reference, and archived-state-in-active-storage finding. These are material required scenarios, not verifier patch scope. Historical inspection also shows the implementation/test artifacts were committed in `dda9e7e92` and `018b4881f`, while the builder's final `5b56e7b99` committed only the task record.
+- Patches applied: none.
+- Verifier-challenger: not called; a PASS claim is not being proposed.
+- Final route: REJECT to build.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Add focused real-filesystem `KanbanEngine.task_health()` proof covering one readable multi-defect task, one unreadable task, missing parent/dependency/archival targets, dependency self-reference, and archived-state record in active storage; assert owner, field, task ID, active/archive locations where applicable, and no filesystem mutation. | `serve/kanban/tests/test_engine_task_health.py` | AC 1 and AC 3; workspace-health spec `Complete task-file validation` and `Task graph integrity` scenarios. |
+| 2 | builder | Ensure the final scoped builder commit contains the task-owned engine and test artifacts together with the task record, or explicitly document their prior task-owned commits as the completed delivery history. | `serve/kanban/src/owlbear_kanban/engine.py`; `serve/kanban/tests/test_engine_task_health.py`; task record | `5b56e7b99` contains only the task record; task code is in `dda9e7e92` and `018b4881f`. |
