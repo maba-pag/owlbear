@@ -1,10 +1,10 @@
 ---
 id: 1955
 title: 'P1-19: Score-led memory overview and detail editing'
-status: build
+status: collect
 priority: medium
 created: 2026-07-17T04:54:05.097197+02:00
-updated: 2026-07-17T06:20:56.992643+02:00
+updated: 2026-07-17T06:52:10.883185+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -186,3 +186,53 @@ Follow-up risks: focused Vitest output is suppressed by the terminal wrapper, so
 [[2026-07-17T06:20:56+02:00]]
 ## Verify Notes
 Verification not started: task was dispatched/claimed while still in `build`, but verifier scope permits only tasks in `verify`. Released unchanged for builder completion and proper redispatch.
+
+
+[[2026-07-17T06:22:00+02:00]]
+## Builder Notes
+Change envelope: no new code changes; preserve the existing four-file implementation/test scope for P1-19.
+
+Current state: implementation and maintained focused assertions are present in `serve/cockpit/web/src/api/memories.ts`, `serve/cockpit/web/src/pages/MemoryTab.tsx`, `serve/cockpit/web/src/__tests__/MemoryTab.test.tsx`, and `serve/cockpit/web/src/__tests__/MemoryTab.routing.test.tsx`.
+
+Proof attempted: `npm test -- --run src/__tests__/MemoryTab.test.tsx src/__tests__/MemoryTab.routing.test.tsx` from the cockpit web package; Vitest emitted only its startup banner. A direct `npx vitest run --reporter=verbose --testTimeout=20000 ...` attempt returned no output. Existing task history records production build and `git diff --check` success, plus prior routing-suite proof.
+
+Builder-challenger result: FAIL on evidence only. No concrete implementation defect was found, but DONE is not supportable without a completed focused runtime result.
+
+Blocker: rerun both focused MemoryTab suites in a stable non-interactive package environment and capture the final pass/fail summary before advancing to verify.
+
+[[2026-07-17T06:46:20+02:00]]
+Focused proof completed after bypassing the package script's duplicate silent flags: `NODE_OPTIONS=--max-old-space-size=2048 npx vitest run --reporter=verbose --silent=false src/__tests__/MemoryTab.test.tsx src/__tests__/MemoryTab.routing.test.tsx` -> 2 test files passed, 148 tests passed, duration 66.25s.
+
+[[2026-07-17T06:48:41+02:00]]
+## Builder Notes
+
+Change envelope: P1-19 score-led memory overview, canonical state filtering/order, expanded metadata detail, and mutable-field edit presentation only.
+
+Files changed: existing scoped frontend API/page/test files listed by the task; no backend or module-map deviations.
+
+Proof selected: focused frontend behavior suites plus existing static build proof.
+
+Durable-test justification: no new durable tests added; existing focused suites provide coverage for the shaped ACs.
+
+Commands run:
+- `NODE_OPTIONS=--max-old-space-size=2048 npx vitest run --reporter=verbose --silent=false src/__tests__/MemoryTab.test.tsx src/__tests__/MemoryTab.routing.test.tsx` -> 2 test files passed, 148 tests passed, 66.25s.
+- Existing task evidence: `npm run build` passed; `git diff --check` passed.
+
+Builder-challenger result: PASS; verified 2 passed test files, 148 passed tests, successful frontend build, and clean diff check.
+
+Follow-up risk: package `npm test -- --silent=false` remains unusable because Vitest rejects duplicate silent values; direct `npx vitest` invocation is the verified workaround.
+
+[[2026-07-17T06:52:10+02:00]]
+## Verify Notes
+- Evidence reviewed: Outcome, Scope, Presentation Contract, AC-1 through AC-3, Builder Notes, API authority, the scoped frontend implementation, and the maintained `MemoryTab` behavior suites.
+- Named authority checked: `serve/cockpit/src/owlbear_cockpit/routes/memory.py` declares all seven canonical states plus `outstanding_count`, `score`, and `contested_by_task`; `serve/cockpit/web/src/api/memories.ts` mirrors that response shape.
+- Change Module Map: no deviation. Product changes stay in the mapped Memory API/type and `MemoryTab` owners; updated assertions stay in the pre-existing focused suites.
+- Normal-path boundary exercised: `MemoryTab` consumes the API response via the live component fetch path. The suites mock only lower-level transport and verify score-led ordering with state/created/ID tie-breakers, contested/disputed/stale filters, summary/detail score-scope-category visibility, Outstanding marks, lifecycle metadata and raw-counter exclusions, editable versus read-only fields, deleted edit suppression, and replacement from an edit response with `state: curated`.
+- Checks run:
+  - `NODE_OPTIONS=--max-old-space-size=2048 npx vitest run --reporter=verbose --silent=false src/__tests__/MemoryTab.test.tsx src/__tests__/MemoryTab.routing.test.tsx` from `serve/cockpit/web`: passed, 2 files and 148 tests (66.49s). PDS emitted non-failing warnings.
+  - `npm run build` from `serve/cockpit/web`: passed (`tsc -b` and Vite production build). Vite emitted its non-blocking pre-existing chunk-size advisory.
+  - `git diff --check -- serve/cockpit/web/src/api/memories.ts serve/cockpit/web/src/pages/MemoryTab.tsx serve/cockpit/web/src/__tests__/MemoryTab.test.tsx serve/cockpit/web/src/__tests__/MemoryTab.routing.test.tsx`: passed.
+- Findings: no implementation defect, scope drift, or unresolved AC found. The scoped diff currently shows the task API type and focused routing-test updates; prior in-task records establish the page/test assertions needed for the completed runtime boundary proof.
+- Patches applied: none.
+- Verifier-challenger result: PASS. It confirmed the four-file task scope, backend/frontend contract agreement, completed runtime proof, AC-1 through AC-3 coverage, and no concrete blocker.
+- Final route: PASS -> collect.
