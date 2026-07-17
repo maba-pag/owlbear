@@ -1,10 +1,10 @@
 ---
 id: 1952
 title: 'P1-16: Coherent exceptional memory lifecycle'
-status: collect
+status: archived
 priority: high
 created: 2026-07-17T04:53:45.570939+02:00
-updated: 2026-07-17T05:09:17.445652+02:00
+updated: 2026-07-17T05:21:28.208031+02:00
 tags:
   - phase-1
   - scope:memory
@@ -30,7 +30,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -78,3 +78,13 @@ Proof guidance: run focused memory engine checks plus a downstream-impact scan o
 - Patches applied: none.
 - Verifier-challenger result: pass; confirmed adequate public-boundary persistence evidence, no unresolved AC, and no scope or module-map drift.
 - Final route: PASS -> collect.
+
+[[2026-07-17T05:21:28+02:00]]
+## Collect Notes
+- Classification: leaf. Task has no child tasks, no aggregate/EPIC title or tags, and no aggregate intent section; parent assignment to #1958 does not make this task an aggregate.
+- Leaf verification evidence: `## Verify Notes` records PASS, builder commit `005f8167d`, focused public-boundary persistence checks (34 state-machine tests, 72 assessment/confirmation tests, and 106 combined tests), Ruff clean, diff hygiene clean, and verifier-challenger pass.
+- Invariant map coverage: AC-1 edit persistence and score synchronization, AC-2 contested/disputed provenance transitions, and AC-3 resolution/stale recovery semantics are all explicitly mapped in Verify Notes. Change Module Map reports no deviation.
+- Child coverage: `list_tasks(parent=1952)` returned no children; aggregate dependency-gate checks are not applicable. Task dependencies are empty.
+- Residual decisions: no pending request records, no block, and no unresolved Required Follow-up. Builder follow-up risk was explicitly discharged by verifier public-boundary checks.
+- Rationale: verified leaf closure is complete; archive mechanically as completed without re-reviewing implementation details.
+- Verdict: ARCHIVED.
