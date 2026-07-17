@@ -1,10 +1,10 @@
 ---
 id: 1955
 title: 'P1-19: Score-led memory overview and detail editing'
-status: collect
+status: archived
 priority: medium
 created: 2026-07-17T04:54:05.097197+02:00
-updated: 2026-07-17T06:52:10.883185+02:00
+updated: 2026-07-17T06:53:38.450285+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -29,7 +29,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -236,3 +236,12 @@ Follow-up risk: package `npm test -- --silent=false` remains unusable because Vi
 - Patches applied: none.
 - Verifier-challenger result: PASS. It confirmed the four-file task scope, backend/frontend contract agreement, completed runtime proof, AC-1 through AC-3 coverage, and no concrete blocker.
 - Final route: PASS -> collect.
+
+[[2026-07-17T06:53:38+02:00]]
+## Collect Notes
+- Classification: leaf. Task is a normal implementation child of #1958, has no child tasks, and carries no aggregate or EPIC intent.
+- Leaf verification evidence: latest `## Verify Notes` records PASS to collect after the focused MemoryTab suites passed 2 files and 148 tests, the production frontend build passed, and the four task-owned files passed `git diff --check`.
+- Invariant map coverage: verifier confirmed no Change Module Map deviation; API types/page behavior and existing focused suites remained within the shaped frontend scope, with backend response authority checked.
+- Child coverage: `list_tasks(parent=1955)` returned no children; aggregate dependency-gate review is not applicable to this leaf.
+- Residual decisions: no pending request, unresolved Decision Request, block, or unresolved Required Follow-up remains. Earlier follow-ups were superseded by the final completed proof and verifier PASS.
+- Archive rationale: verifier evidence is complete for AC-1 through AC-3 and no closure condition remains open; archive as completed.
