@@ -1,10 +1,10 @@
 ---
 id: 1946
 title: 'P1-10: Core memory tombstone purge'
-status: collect
+status: archived
 priority: medium
 created: 2026-07-17T03:04:09.242165+02:00
-updated: 2026-07-17T06:08:36.651805+02:00
+updated: 2026-07-17T06:16:09.206047+02:00
 tags:
   - phase-1
   - scope:memory
@@ -26,7 +26,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -90,3 +90,15 @@ Findings: no acceptance-criterion gap or local defect found. The temporary smoke
 Verifier-challenger result: `decision: pass`; no concrete concerns, scope drift, or unresolved acceptance criterion.
 
 Final route: PASS to collect.
+
+[[2026-07-17T06:16:09+02:00]]
+## Collect Notes
+Classification: leaf. The task has no child tasks, no aggregate or EPIC intent, and is a scoped implementation child of parent #1951.
+
+Leaf verification evidence: `## Verify Notes` records PASS, independent public `MemoryEngine` boundary proof covering AC-1 through AC-3, 96 focused pytest passes, clean Ruff lint and format checks, no diagnostics, and verifier-challenger `decision: pass`.
+
+Invariant map coverage: verifier confirmed the OpenSpec capability authority, `MemoryEngine` eligibility/state/index ownership, protected `storage.delete_entry` delegation, and no Change Module Map deviation.
+
+Child coverage: not applicable; `list_tasks(parent=1946)` returned no children. Dependency gate: no dependencies. Pending decision/request state: none. Residual Required Follow-up: none.
+
+Archive rationale: verified leaf closure is complete; archive as completed without re-reviewing implementation details.
