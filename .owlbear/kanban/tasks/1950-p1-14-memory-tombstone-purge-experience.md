@@ -1,10 +1,10 @@
 ---
 id: 1950
 title: 'P1-14: Memory tombstone purge experience'
-status: verify
+status: collect
 priority: low
 created: 2026-07-17T03:04:32.743980+02:00
-updated: 2026-07-17T20:36:59.990731+02:00
+updated: 2026-07-17T20:45:26.404303+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -66,3 +66,25 @@ Durable-test justification: no new durable tests added; existing purge hook and 
 Builder-challenger result: pass. No concrete blockers or scope drift reported.
 
 Follow-up risk: the shaped proof guidance requested real-browser screenshots; package-local rendered tests and build were available and passed, but no Playwright screenshot run was added in this builder stage.
+
+[[2026-07-17T20:45:26+02:00]]
+## Verify Notes
+
+Evidence reviewed:
+- Task AC-1 through AC-3, the shaped module map (`MemoryTab` plus headless task #1949), and #1949's archived headless-flow contract.
+- `serve/cockpit/web/src/pages/MemoryTab.tsx`: unchanged ownership boundary. `deletedCount` derives from the complete loaded entries; `WorkspaceHeader.actions` renders the disabled-at-zero purge action; `PInputNumber` uses `controls`, `min={0}`, and `step={1}`; `useMemoryPurgeFlow({ onSuccess: refetch })`, paused `usePollingFetch`, visibility refetch, and existing mutation refetches retain the required cadence.
+
+Change Module Map: no deviations. The only product file is the mapped rendered owner; headless validation, preview ordering, execution, and receipt state remain in #1949.
+
+Normal-path boundary exercised:
+- `npm --prefix /Users/markus/Projects/owlbear-dev/serve/cockpit/web run build` passed. Vite emitted only its existing chunk-size advisory.
+- Configured Cockpit Playwright run for `e2e/memory-state-filter.spec.ts` passed against the built application.
+- Live Chromium proof against the built `/memories` page replaced API responses below `MemoryTab`, not the page/workflow. At 1440x900 and 390x844 it loaded a complete dataset with one deleted entry, opened the actual header action, confirmed PInputNumber's runtime value was 30, observed preview counts, activated PDS Purge, confirmed dialog closure and persistent receipt, and verified the receipt remained in each viewport. Screenshots were inspected for hierarchy, fit, and clipping, then removed from scratch.
+
+Checks/finding:
+- Direct scoped Vitest was blocked by workspace-level Babel plugin resolution despite the Cockpit root; this is a runner invocation/environment issue, not a product failure. Builder's recorded package-local suite passed 3 files and 96 tests. The production build and actual browser workflow supplied fresh valid proof.
+- `git diff --check -- serve/cockpit/web/src/pages/MemoryTab.tsx` passed. No verifier patch was needed.
+
+Verifier-challenger result: pass. It found no AC gap, scope drift, authority mismatch, or proof defect.
+
+Final route: PASS to collect.
