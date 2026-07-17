@@ -1,10 +1,10 @@
 ---
 id: 1945
 title: 'P1-09: Deliver trustworthy workspace health'
-status: shape
+status: collect
 priority: high
 created: 2026-07-17T02:33:28.872345+02:00
-updated: 2026-07-17T08:43:31.758781+02:00
+updated: 2026-07-17T16:24:58.295770+02:00
 tags:
   - phase-1
   - scope:cockpit
@@ -20,6 +20,7 @@ depends_on:
   - 1942
   - 1943
   - 1944
+  - 1959
 ac:
   - In running Cockpit, initial Workspace Status is gray then shows independent 
     task/request/memory/ideas results from GET /health; a module check failure 
@@ -214,3 +215,45 @@ Collector inspects verified child evidence and observes the assembled normal pat
 | # | Target Agent | Action Required | File(s) | Evidence |
 |---|-------------|----------------|---------|----------|
 | 1 | shaper via `/shape` | Reconcile the aggregate graph: route and complete required children #1941 through #1944, or record an approved scope decision that explicitly drops them; return the parent to collect only with a complete dependency gate and SHA-linked assembled normal-path proof. | n/a | Child lookup and parent dependency gate show #1941-#1944 remain in shape, with #1942-#1944 dependency-blocked. |
+
+[[2026-07-17T16:24:58+02:00]]
+## Shape Notes
+
+### Repair Source And Mode
+- Source: task #1941 Builder rejection exposed an ordering contradiction in the approved cleanup-removal graph.
+- Mode: focused material graph repair approved by the user; no product outcome changed.
+
+### User Decision And Planning Revisions
+- Approved sequence: #1941 explicit lease/session maintenance with a temporary engine bridge; #1942 Cockpit consumer removal; #1959 final Kanban cleanup-contract deletion.
+- OpenSpec Design and Tasks now record the runnable three-step migration; strict validation passed.
+
+### Readiness And Authorities
+- End-state authority remains the `redesign-workspace-health` Proposal, workspace-health Spec, and Design decision 8: no generic Cleanup action or contract remains, while claim sweep and activity compaction remain explicit.
+- Live authority confirmed `KanbanEngine.cleanup` and `CleanupResult` are consumed by Cockpit view and mutation route before migration.
+- Normal proof boundaries are Kanban maintenance behavior, assembled FastAPI route inventory, Kanban public inventory, and aggregate Cockpit behavior.
+
+### Change Module Map
+| Module | Planned Change | Interface Impact | Owner |
+|---|---|---|---|
+| Kanban engine | Establish explicit claim/session maintenance, then delete generic cleanup | Changed then removed | #1941, #1959 |
+| Kanban models and README | Delete CleanupResult and generic cleanup inventory | Removed | #1959 |
+| Cockpit mutation routes and view | Remove cleanup consumer and preserve explicit maintenance routes | Removed | #1942 |
+
+### Product Invariant Map
+| Product Invariant | Owner | Proof Boundary |
+|---|---|---|
+| Explicit claim/session maintenance does not perform task-health repair | #1941 | Kanban engine API |
+| Obsolete Cockpit cleanup route and forwarding are absent | #1942 | Assembled FastAPI route inventory |
+| Generic Kanban cleanup contract is absent at completion | #1959 | Callable/exported/documented Kanban inventory |
+| Full workspace-health product promise is assembled | #1945 | Running Cockpit and aggregate child evidence |
+
+### Task Graph And Challenger
+- Added #1959 as a build leaf under #1945, dependent on #1942.
+- #1945 now depends on #1959 alongside its existing children and is parked in collect.
+- #1959 can run in parallel with frontend tasks #1943/#1944 after #1942.
+- Shaper challenger decision: pass; no blocking findings.
+
+### Board Audit Intent
+- #1941 routes to build with parent #1945 and dependency #1940.
+- #1959 is build, parent #1945, dependency #1942.
+- #1945 is collect and waits on #1937 through #1944 plus #1959.

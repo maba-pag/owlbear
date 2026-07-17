@@ -148,6 +148,8 @@ Remove the Cockpit `/api/tasks/cleanup` route, Cleanup UI, and the old task scan
 
 Stale activity-session closure remains coupled to claim maintenance rather than health repair. If the existing sweep result cannot report both released claims and reconciled sessions without breaking its callers, adapt the engine internally while preserving the explicit sweep operation's user meaning; do not reintroduce a generic cleanup action.
 
+Sequence the removal in three runnable steps. First, establish and prove the explicit claim/session maintenance operation while temporarily retaining `KanbanEngine.cleanup` only as a migration bridge for its existing Cockpit caller. Second, remove the Cockpit cleanup route and shallow forwarding after the replacement health and maintenance routes exist. Third, delete `KanbanEngine.cleanup`, `CleanupResult`, and their remaining Kanban exports and documentation. The completed change has no cleanup compatibility alias; the temporary bridge exists only to avoid a broken intermediate production commit.
+
 ### 9. Prove behavior at owning and assembled boundaries
 
 Load-bearing invariants and proof boundaries are:
@@ -170,7 +172,7 @@ Static typecheck/build and focused package tests supplement but do not replace t
 - **[Aggressive deletion removes a wanted exact copy]** Deterministic rules intentionally favor cleanup over preservation. → Require semantic equality, deterministic survivor selection, immediate revalidation, and rely on Git history as the accepted recovery mechanism.
 - **[Larger body is not necessarily better]** The user explicitly chose body line count as the same-header conflict heuristic. → Apply it only within one directory with identical normalized frontmatter; ties and all cross-directory differences remain unresolved.
 - **[Full scans become slow on very large boards]** Aggregate reads inspect four local stores. → Keep focused module endpoints, avoid duplicate follow-up scans after repair, measure before introducing caching or asynchronous jobs, and expose `checked_at`.
-- **[Route replacement breaks current frontend/tests]** The change intentionally has no compatibility requirement. → Migrate backend and frontend in one change and delete stale route tests rather than preserving aliases.
+- **[Route replacement breaks current frontend/tests]** The completed change intentionally has no cleanup compatibility requirement. → Keep the existing engine aggregate only until Cockpit consumers are removed, then delete it and stale route tests rather than preserving an end-state alias.
 - **[Existing monitor calls `/health`]** Repurposing the current liveness path could make an external probe run full scans. → This laptop-local project accepts the breaking route change; document and test `/health/live` as the replacement probe.
 - **[Partial repair completes with failures]** A blanket success message could mislead. → Distinguish orchestration completion from item success and retain failed/unresolved details in both response and receipt.
 - **[Module status terminology diverges from infrastructure conventions]** Workspace integrity is not service availability. → Keep `/health/live` conventional and document the workspace-health response as application-specific.
@@ -181,9 +183,10 @@ Static typecheck/build and focused package tests supplement but do not replace t
 2. Add deterministic Kanban repair and archive reconciliation with per-path revalidation and post-repair task health.
 3. Add memory duplicate diagnostics and Cockpit ideas health.
 4. Add Cockpit health aggregation and the new route family; replace static `/health` with `/health/live`.
-5. Move claim/session maintenance out of generic cleanup and remove obsolete task scan/cleanup/repair routes.
-6. Replace frontend task-scan polling with aggregate health state, module rows, gray transient states, task repair, and session receipts.
-7. Validate the assembled normal workflow and failure states in the integrated browser, then remove stale components and tests.
+5. Establish explicit claim/session maintenance while retaining the generic engine aggregate only for the existing Cockpit caller.
+6. Remove obsolete Cockpit task scan/cleanup/repair routes, then delete the unconsumed generic Kanban cleanup contract.
+7. Replace frontend task-scan polling with aggregate health state, module rows, gray transient states, task repair, and session receipts.
+8. Validate the assembled normal workflow and failure states in the integrated browser, then remove stale components and tests.
 
 Rollback is a normal Git revert. Deterministic repair can mutate user data, so implementation testing uses fixtures only; production repair is user-triggered and Git history remains the content rollback mechanism.
 
