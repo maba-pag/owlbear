@@ -1,10 +1,10 @@
 ---
 id: 1948
 title: 'P1-12: Cockpit memory purge HTTP contract'
-status: collect
+status: archived
 priority: medium
 created: 2026-07-17T03:04:20.271457+02:00
-updated: 2026-07-17T17:11:07.088903+02:00
+updated: 2026-07-17T17:12:01.701512+02:00
 tags:
   - phase-1
   - scope:cockpit-backend
@@ -25,7 +25,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -89,3 +89,13 @@ Verifier-challenger result: pass. It confirmed authority alignment, valid assemb
 
 Final route: PASS -> collect.
 
+[[2026-07-17T17:12:01+02:00]]
+## Collect Notes
+
+Classification: leaf. Task #1948 has no child tasks, no aggregate or EPIC marker, and its scope and AC describe one Cockpit HTTP implementation boundary. Parent #1951 remains responsible for aggregate closure.
+
+Leaf verification evidence: `## Verify Notes` records PASS with assembled FastAPI `TestClient` normal-path and strict-validation probes, 51 focused Cockpit memory-route tests passing, Ruff check passing, Ruff format check completing without findings, and verifier-challenger pass. The verified invariant map covers route assembly, strict non-negative integer validation, forbidden extra/filter fields, typed preview and execution envelopes, delegation to `MemoryEngine`, preview non-mutation, execution mutation, and rejection without engine invocation.
+
+Decision and follow-up state: no unresolved `## Decision Request`, pending request, `### Required Follow-up`, blocker, or verifier finding remains. Dependency #1947 is reflected as satisfied by `dep_status: ok` at collection. No aggregate SHA-linked proof is required for this leaf archive.
+
+Archive rationale: verifier PASS is complete and all leaf closure conditions are satisfied; archive as completed.
