@@ -1,10 +1,10 @@
 ---
 id: 1939
 title: 'P1-02: Kanban request storage health'
-status: verify
+status: collect
 priority: medium
 created: 2026-07-17T02:31:44.655319+02:00
-updated: 2026-07-17T08:06:28.172733+02:00
+updated: 2026-07-17T08:08:01.177832+02:00
 tags:
   - phase-1
   - scope:kanban
@@ -125,3 +125,37 @@ Commands run:
 Builder-challenger result: pass. It confirmed the change envelope is narrow and the tests cover the verifier's required acceptance criteria.
 
 Follow-up risks: no known risks; broader Kanban regression suite was previously recorded by the prior builder and was not rerun because this follow-up changes only focused durable tests.
+
+[[2026-07-17T08:08:01+02:00]]
+## Verify Notes
+
+Evidence reviewed:
+- Task outcome, scope, all three acceptance criteria, Proof Guidance, Builder Notes, and the `redesign-workspace-health` request-integrity requirement.
+- Implementation: `serve/kanban/src/owlbear_kanban/engine.py` (`KanbanEngine.request_health()`), `serve/kanban/src/owlbear_kanban/models.py` (`RequestHealthFinding` and `RequestHealthResult`), and direct proof in `serve/kanban/tests/test_engine_request_health.py`.
+
+Named authorities checked:
+- The workspace-health OpenSpec requires read-only validation of every structured pending/resolved request record, with visible read/schema failures, duplicate IDs, active/archive owner lookup, and resolution-location consistency.
+- `request_health()` scans pending and resolved Markdown files, records read/schema failures by path, groups all duplicate paths for an ID, recognizes active and archived owner records, and reports either direction of resolution-location drift. It does not write storage.
+
+Change Module Map:
+- Actual request-health code remains in the shaped Kanban engine/models boundary and proof uses the mapped public method with real request/task filesystem storage.
+- No module-map deviation. The unrelated task-health archive-destination detail in the combined engine diff predates this verification follow-up and is not part of task #1939's focused test addition.
+
+Normal-path boundary exercised:
+- `test_engine_request_health.py` creates real pending/resolved request records and calls public `KanbanEngine.request_health()` directly. It asserts malformed/schema observation, complete duplicate path grouping, unchanged bytes, active/archive owner acceptance versus missing owner IDs, and both location mismatch directions.
+
+Checks run:
+- `uv run --project . test-root serve/kanban/tests/test_engine_request_health.py` selected the pytest package boundary.
+- `uv run pytest serve/kanban/tests/test_engine_request_health.py -q` returned 3 passed.
+- `uv run ruff check serve/kanban/tests/test_engine_request_health.py serve/kanban/src/owlbear_kanban/engine.py serve/kanban/src/owlbear_kanban/models.py` and `git diff --check` returned all checks passed.
+
+Findings:
+- No acceptance-criteria or implementation gaps found.
+
+Patches applied:
+- None.
+
+Verifier-challenger result:
+- pass. It confirmed boundary coverage, proof sufficiency, and that the unrelated adjacent task-health diff is not a blocker.
+
+Final route: PASS to collect.
