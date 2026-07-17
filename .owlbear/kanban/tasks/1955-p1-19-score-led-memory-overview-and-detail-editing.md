@@ -4,7 +4,7 @@ title: 'P1-19: Score-led memory overview and detail editing'
 status: build
 priority: medium
 created: 2026-07-17T04:54:05.097197+02:00
-updated: 2026-07-17T06:20:16.936801+02:00
+updated: 2026-07-17T06:20:56.992643+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -182,3 +182,7 @@ Follow-up risks: focused Vitest output is suppressed by the terminal wrapper, so
 | # | Target Agent | Action Required | File(s) | Evidence |
 |---|-------------|----------------|---------|----------|
 | 1 | builder | Obtain and record a completed package-configured Vitest result for both focused suites, resolving the runner/wrapper issue or any actual test failure; preserve the current four-file scope unless the failure identifies a local defect. | `serve/cockpit/web/src/__tests__/MemoryTab.test.tsx`, `serve/cockpit/web/src/__tests__/MemoryTab.routing.test.tsx` | Focused Vitest never produced a final pass/fail status; verifier-challenger rejected PASS on this missing runtime proof. |
+
+[[2026-07-17T06:20:56+02:00]]
+## Verify Notes
+Verification not started: task was dispatched/claimed while still in `build`, but verifier scope permits only tasks in `verify`. Released unchanged for builder completion and proper redispatch.
