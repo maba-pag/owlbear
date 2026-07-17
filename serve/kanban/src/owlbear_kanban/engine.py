@@ -51,6 +51,7 @@ from owlbear_kanban.config_loader import load_config
 from owlbear_kanban.corruption import (
     ERR_CORRUPT_DUPLICATE_ID,
     CorruptionError,
+    collect_task_health_findings,
     detect_corruption,
 )
 from owlbear_kanban.dispatch import PRIORITY_RANK, STATUS_RANK
@@ -66,6 +67,8 @@ from owlbear_kanban.models import (
     MigrationRequiredError,
     SessionRecord,
     Task,
+    TaskHealthFinding,
+    TaskHealthResult,
     TaskSummary,
     ValidationError,
 )
@@ -196,6 +199,15 @@ def _normalize_proof_bundle(value: str) -> str:
         base = parts.pop(0)
 
     return "+".join([base, *sorted(parts)])
+
+
+def _canonical_health_value(value: object) -> object:
+    """Return an order-independent value for persisted health comparison."""
+    if isinstance(value, dict):
+        return tuple(sorted((key, _canonical_health_value(item)) for key, item in value.items()))
+    if isinstance(value, list):
+        return tuple(_canonical_health_value(item) for item in value)
+    return value
 
 
 def _validate_proof_bundle(proof_bundle: str | None) -> str | None:
@@ -553,6 +565,115 @@ class KanbanEngine:
         self._task_cache = {}
         self._archive_cache = {}
         self._id_to_filename = {}
+
+    def task_health(self) -> TaskHealthResult:
+        """Return non-mutating file and task-graph integrity evidence."""
+        paths = [
+            path
+            for directory in (self._tasks_dir, self._archive_dir)
+            if directory.exists()
+            for path in sorted(directory.glob("*.md"))
+            if not path.name.startswith(".tmp-")
+        ]
+        findings: list[TaskHealthFinding] = []
+        records: list[tuple[Path, dict, str]] = []
+        for path in paths:
+            findings.extend(collect_task_health_findings(path, self._config))
+            try:
+                content = path.read_text(encoding="utf-8")
+                lines = content.split("\n")
+                closing = next(i for i, line in enumerate(lines[1:], start=1) if line == "---")
+                frontmatter = YAML(typ="safe").load("\n".join(lines[1:closing])) or {}
+                if isinstance(frontmatter, dict) and isinstance(frontmatter.get("id"), int):
+                    body = "\n".join(lines[closing + 1 :]).replace("\r\n", "\n").rstrip("\n")
+                    records.append((path, frontmatter, body))
+            except (OSError, UnicodeDecodeError, StopIteration, YAMLError):
+                continue
+
+        by_id: dict[int, list[tuple[Path, dict, str]]] = defaultdict(list)
+        for path, record, body in records:
+            by_id[record["id"]].append((path, record, body))
+        for task_id, members in by_id.items():
+            if len(members) > 1:
+                paths_for_id = [str(path) for path, _, _ in members]
+                same_directory = len({path.parent for path, _, _ in members}) == 1
+                identical = len(
+                    {
+                        (_canonical_health_value(record), body)
+                        for _, record, body in members
+                    }
+                ) == 1
+                archived_cross_directory = (
+                    not same_directory
+                    and identical
+                    and all(record.get("status") == "archived" for _, record, _ in members)
+                )
+                findings.append(
+                    TaskHealthFinding(
+                        code="DUPLICATE_TASK_ID",
+                        detail="duplicate task ID across: " + ", ".join(paths_for_id),
+                        path=", ".join(paths_for_id),
+                        task_id=task_id,
+                        repairable=(same_directory and identical) or archived_cross_directory,
+                    )
+                )
+
+        known_ids = set(by_id)
+        dependency_graph: dict[int, set[int]] = defaultdict(set)
+        for path, record, _ in records:
+            task_id = record["id"]
+            parent = record.get("parent")
+            if isinstance(parent, int) and parent not in known_ids:
+                findings.append(TaskHealthFinding(code="MISSING_PARENT", detail=f"parent target {parent} is missing", path=str(path), task_id=task_id, field="parent"))
+            for dependency in record.get("depends_on", []) or []:
+                if not isinstance(dependency, int):
+                    continue
+                if dependency not in known_ids:
+                    findings.append(TaskHealthFinding(code="MISSING_DEPENDENCY", detail=f"dependency target {dependency} is missing", path=str(path), task_id=task_id, field="depends_on"))
+                else:
+                    dependency_graph[task_id].add(dependency)
+                if dependency == task_id:
+                    findings.append(TaskHealthFinding(code="DEPENDENCY_SELF_REFERENCE", detail=f"task {task_id} depends on itself", path=str(path), task_id=task_id, field="depends_on"))
+            for archival_ref in record.get("archival_refs", []) or []:
+                if isinstance(archival_ref, int) and archival_ref not in known_ids:
+                    findings.append(TaskHealthFinding(code="MISSING_ARCHIVAL_REFERENCE", detail=f"archival target {archival_ref} is missing", path=str(path), task_id=task_id, field="archival_refs"))
+            if record.get("status") == "archived" and path.parent == self._tasks_dir:
+                findings.append(TaskHealthFinding(code="ARCHIVED_TASK_IN_ACTIVE_STORAGE", detail="archived task is stored in active task storage", path=str(path), task_id=task_id, repairable=True))
+
+        visiting: set[int] = set()
+        visited: set[int] = set()
+        cycles: set[tuple[int, ...]] = set()
+
+        def visit(task_id: int, trail: list[int]) -> None:
+            if task_id in visiting:
+                cycle = tuple(sorted(trail[trail.index(task_id) :]))
+                cycles.add(cycle)
+                return
+            if task_id in visited:
+                return
+            visiting.add(task_id)
+            for dependency in dependency_graph.get(task_id, set()):
+                visit(dependency, [*trail, dependency])
+            visiting.remove(task_id)
+            visited.add(task_id)
+
+        for task_id in dependency_graph:
+            visit(task_id, [task_id])
+        for cycle in sorted(cycles):
+            cycle_text = " -> ".join(str(task_id) for task_id in cycle + (cycle[0],))
+            for task_id in cycle:
+                owner_path = next(path for path, record, _ in records if record["id"] == task_id)
+                findings.append(
+                    TaskHealthFinding(
+                        code="DEPENDENCY_CYCLE",
+                        detail=f"dependency cycle: {cycle_text}",
+                        path=str(owner_path),
+                        task_id=task_id,
+                        field="depends_on",
+                    )
+                )
+
+        return TaskHealthResult(findings=findings, repairable_count=sum(finding.repairable for finding in findings), checked_paths=[str(path) for path in paths])
 
     def valid_transitions(self, status: str) -> set[str]:
         """Return the set of all configured statuses except *status*.

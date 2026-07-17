@@ -1,10 +1,10 @@
 ---
 id: 1937
 title: 'P1-01: Kanban task and graph health evidence'
-status: build
+status: verify
 priority: high
 created: 2026-07-17T02:31:31.385612+02:00
-updated: 2026-07-17T02:33:38.572513+02:00
+updated: 2026-07-17T05:20:36.459092+02:00
 tags:
   - phase-1
   - scope:kanban
@@ -43,3 +43,14 @@ OpenSpec change: `redesign-workspace-health`, including the workspace-health spe
 
 ## Proof Guidance
 Use a focused real-filesystem Kanban behavior check plus a downstream-impact scan. Because this is shared integrity behavior, retain or add durable regression coverage only where it protects the multi-finding, complete-set, or graph-analysis boundary.
+
+[[2026-07-17T05:20:36+02:00]]
+## Builder Notes
+- Change envelope: read-only Kanban task-health evidence in `KanbanEngine.task_health()`; duplicate-set classification and dependency-cycle diagnostics only. No storage mutation, request diagnostics, claim maintenance, Cockpit behavior, or repair implementation changed.
+- Files changed: `serve/kanban/src/owlbear_kanban/engine.py`; `serve/kanban/tests/test_engine_task_health.py`.
+- Change Module Map: stayed within the shaped owners (`engine.py` public health method and Kanban tests); no deviation.
+- Implementation: duplicate findings retain the complete path set and classify repairability from canonical frontmatter plus normalized body, including identical archived cross-directory records; cycle findings identify owner path, `depends_on`, and the concrete cycle.
+- Proof selected: `uv run pytest serve/kanban/tests/test_corruption.py serve/kanban/tests/test_engine_task_health.py -q` -> 77 passed. Editor diagnostics report no errors for touched files; `git diff --check` is clean. Regression coverage snapshots bytes and mtimes to verify health scanning is non-mutating.
+- Durable-test justification: shared integrity behavior is easy to regress and difficult to notice manually; the test protects complete duplicate-set classification, cycle evidence, and filesystem immutability at the public engine boundary.
+- Builder-challenger: pass; no concrete blockers. It reviewed same-directory, heterogeneous 3+ records, cross-directory archived duplicates, missing references, self-reference, cycles, unreadable findings, and mutation proof.
+- Follow-up risk: no dedicated assertion for every archive-location drift variant beyond the existing archived-in-active-storage finding; outside this task's minimal scope.
