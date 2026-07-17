@@ -4,7 +4,7 @@ title: 'P1-01: Kanban task and graph health evidence'
 status: build
 priority: high
 created: 2026-07-17T02:31:31.385612+02:00
-updated: 2026-07-17T07:06:26.640372+02:00
+updated: 2026-07-17T07:13:24.941473+02:00
 tags:
   - phase-1
   - scope:kanban
@@ -154,3 +154,29 @@ Use a focused real-filesystem Kanban behavior check plus a downstream-impact sca
 |---|-------------|----------------|---------|----------|
 | 1 | builder | Add focused real-filesystem `KanbanEngine.task_health()` proof covering one readable multi-defect task, one unreadable task, missing parent/dependency/archival targets, dependency self-reference, and archived-state record in active storage; assert owner, field, task ID, active/archive locations where applicable, and no filesystem mutation. | `serve/kanban/tests/test_engine_task_health.py` | AC 1 and AC 3; workspace-health spec `Complete task-file validation` and `Task graph integrity` scenarios. |
 | 2 | builder | Ensure the final scoped builder commit contains the task-owned engine and test artifacts together with the task record, or explicitly document their prior task-owned commits as the completed delivery history. | `serve/kanban/src/owlbear_kanban/engine.py`; `serve/kanban/tests/test_engine_task_health.py`; task record | `5b56e7b99` contains only the task record; task code is in `dda9e7e92` and `018b4881f`. |
+
+[[2026-07-17T07:12:16+02:00]]
+## Builder Notes
+- Change envelope: read-only Kanban task-health evidence in `KanbanEngine.task_health()`; duplicate-set classification and dependency-cycle diagnostics only. No storage mutation, request diagnostics, claim maintenance, Cockpit behavior, or repair implementation changed.
+- Files changed: `serve/kanban/src/owlbear_kanban/engine.py`; `serve/kanban/tests/test_engine_task_health.py`.
+- Change Module Map: stayed within the shaped owners (`engine.py` public health method and Kanban tests); no deviation.
+- Proof selected: `uv run pytest serve/kanban/tests/test_corruption.py serve/kanban/tests/test_engine_task_health.py -q && git diff --check` -> 79 passed in 0.55s; diff check clean. Coverage exercises complete duplicate path sets and classification, readable plus unreadable persisted defects, missing references, self-reference, dependency cycles, archived location drift, and filesystem non-mutation.
+- Durable-test justification: retained focused regression coverage because this is shared integrity behavior and the multi-finding, complete-set, graph-analysis, and non-mutation boundaries are easy to regress and hard to verify manually.
+- Builder challenger: `builder-challenger` returned `decision: pass`; no concrete blockers.
+- Follow-up risks: verifier should confirm the task-health public contract against the OpenSpec authority and inspect the final task-owned diff.
+
+[[2026-07-17T07:13:24+02:00]]
+## Verify Notes
+- Evidence reviewed: task outcome/scope/AC, OpenSpec `redesign-workspace-health` design and workspace-health spec, Builder Notes, and the task-owned engine/test diff.
+- Named authorities checked: the design requires read-only per-path evidence plus complete duplicate and graph analysis; the spec's task-location scenario requires the finding to name the task ID and active/archive locations.
+- Change Module Map: implementation and regression coverage remain within the shaped `serve/kanban/src/owlbear_kanban/engine.py` owner and `serve/kanban/tests/test_engine_task_health.py`; no map deviation.
+- Normal-path boundary exercised: `KanbanEngine.task_health()` against real temporary active/archive files. Lower dependency replaced: temporary filesystem only.
+- Checks run: `uv run pytest serve/kanban/tests/test_corruption.py serve/kanban/tests/test_engine_task_health.py -q` -> 79 passed; `uv run ruff check serve/kanban/src/owlbear_kanban/engine.py serve/kanban/tests/test_engine_task_health.py` -> passed; `git diff --check` -> clean; editor diagnostics -> no errors.
+- Finding: `ARCHIVED_TASK_IN_ACTIVE_STORAGE` is emitted by `_archived_storage_finding()` with the active path and generic detail only. Although `task_id` is structured, the required active/archive locations are not both named in the finding. This fails AC 3 and the `Task location conflicts with state` scenario.
+- Patches applied: none; correcting the detail/model contract and regression assertion is builder-owned implementation work.
+- Final route: REJECT -> build.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Make the archived-state-in-active-storage health finding explicitly name the task ID plus active and archive locations, and add/update the focused public-engine assertion. | `serve/kanban/src/owlbear_kanban/engine.py`; `serve/kanban/tests/test_engine_task_health.py` | Verify Notes finding; workspace-health spec `Task location conflicts with state` scenario; task AC 3 |
