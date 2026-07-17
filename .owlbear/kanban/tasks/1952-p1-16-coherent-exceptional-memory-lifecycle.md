@@ -1,10 +1,10 @@
 ---
 id: 1952
 title: 'P1-16: Coherent exceptional memory lifecycle'
-status: verify
+status: collect
 priority: high
 created: 2026-07-17T04:53:45.570939+02:00
-updated: 2026-07-17T05:06:55.336009+02:00
+updated: 2026-07-17T05:09:17.445652+02:00
 tags:
   - phase-1
   - scope:memory
@@ -59,3 +59,22 @@ Proof guidance: run focused memory engine checks plus a downstream-impact scan o
 - Commands run: `uv run --project . pytest tests/test_assess_memories.py tests/test_confirmation_cycle.py tests/test_memory* -q` -> `357 passed`; `uv run --project . ruff check serve/memory/src/owlbear_memory/engine.py tests/test_memory_state_machine.py` -> all checks passed; `git diff --check` -> clean.
 - Builder-challenger result: pass; independently reran the cited focused pytest and Ruff checks.
 - Follow-up risks: verifier should inspect downstream lifecycle assumptions and confirm AC-1/AC-2 persisted field behavior at the public MemoryEngine boundary.
+
+[[2026-07-17T05:09:17+02:00]]
+## Verify Notes
+- Evidence reviewed: builder commit `005f8167d` changes only `serve/memory/src/owlbear_memory/engine.py` and `tests/test_memory_state_machine.py`; builder reported 357 focused memory tests and Ruff clean.
+- Named authorities checked: `openspec/changes/expose-memory-lifecycle-in-cockpit/specs/cockpit-memory-lifecycle/spec.md` requirements Detail-aligned editing, Accurate contested provenance, and Fresh stale recovery window; `tasks.md` items 1.1 and 1.2.
+- Change Module Map: no deviation. The implementation remains in the mapped `MemoryEngine` owner with state-machine and confirmation/assessment tests; no MCP, Cockpit, frontend, or documentation files changed.
+- Normal-path boundary: exercised the public `MemoryEngine` through actual filesystem storage and fresh-engine reads. No command, workflow, or persistence boundary was mocked.
+- AC-1: `edit` copies the full entry, persists all five mutable fields, updates timestamps, retains lifecycle/source metadata, and recomputes score from confidence with existing score counts.
+- AC-2: confirmation-cycle coverage verifies first-task contested provenance, same-task no-op, and different-task disputed transition clearing provenance.
+- AC-3: resolution coverage verifies exceptional-to-approved transition, timestamps, provenance clearing, stale-only non-use reset, and preserved score-relevant history.
+- Checks run:
+  - `uv run --project . pytest tests/test_memory_state_machine.py -v` -> 34 passed.
+  - `uv run --project . pytest tests/test_assess_memories.py tests/test_confirmation_cycle.py -q` -> 72 passed.
+  - `uv run --project . pytest tests/test_memory_state_machine.py tests/test_assess_memories.py tests/test_confirmation_cycle.py -q` -> 106 passed.
+  - `uv run --project . ruff check serve/memory/src/owlbear_memory/engine.py tests/test_memory_state_machine.py` -> all checks passed.
+  - `git diff --check` -> clean.
+- Patches applied: none.
+- Verifier-challenger result: pass; confirmed adequate public-boundary persistence evidence, no unresolved AC, and no scope or module-map drift.
+- Final route: PASS -> collect.
