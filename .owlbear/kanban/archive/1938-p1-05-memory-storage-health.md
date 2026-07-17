@@ -1,10 +1,10 @@
 ---
 id: 1938
 title: 'P1-05: Memory storage health'
-status: collect
+status: archived
 priority: medium
 created: 2026-07-17T02:31:34.851802+02:00
-updated: 2026-07-17T05:08:24.807288+02:00
+updated: 2026-07-17T05:21:32.050984+02:00
 tags:
   - phase-1
   - scope:memory
@@ -21,7 +21,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -82,3 +82,18 @@ Verifier-challenger:
 - `verifier-challenger` returned `decision: pass`, confirming the real-filesystem proof covers unreadable paths, complete duplicate UUID path sets, lifecycle-state health, retained canonical loading, and non-mutation.
 
 Final route: PASS to collect.
+
+[[2026-07-17T05:21:32+02:00]]
+## Collect Notes
+
+Classification: leaf. The task has no child tasks, aggregate/EPIC markers, aggregate intent section, or dependency gate; its `parent: 1945` is only hierarchy context.
+
+Leaf verification evidence: `## Verify Notes` records PASS with verifier-challenger `decision: pass`. Focused real-filesystem proof passed 331 memory tests, and targeted Ruff checks passed. The proof covers unreadable paths, complete duplicate UUID path sets, all canonical lifecycle states, retained canonical loading, and path/byte/mtime non-mutation.
+
+Invariant map coverage: verifier confirms the shaped model, engine, package-export, and focused-test module map was fully covered with no deviations; excluded Cockpit, repair, mutation, and UI behavior remained untouched.
+
+Child coverage: `list_tasks(parent=1938)` returned no children. Parent dependency gate: not applicable because this is a leaf and `depends_on` is empty.
+
+Residual decisions: no pending requests, unresolved Decision Request, block, or Required Follow-up remains. The builder's request for broader verification was completed by verify through the 331-test memory regression run and clean targeted lint.
+
+Archive rationale: verifier PASS evidence is complete and all leaf closure conditions are satisfied; archive as completed.
