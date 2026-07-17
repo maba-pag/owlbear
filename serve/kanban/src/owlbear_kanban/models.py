@@ -643,15 +643,6 @@ class RequestHealthResult(BaseModel):
     checked_paths: list[str] = Field(default_factory=list)
 
 
-class CleanupResult(BaseModel):
-    """Result of maintenance cleanup operations."""
-
-    released_claim_ids: list[int] = Field(default_factory=list)
-    archived_task_ids: list[int] = Field(default_factory=list)
-    duplicate_removed_ids: list[int] = Field(default_factory=list)
-    skipped_items: list[dict[str, str]] = Field(default_factory=list)
-
-
 # ---------------------------------------------------------------------------
 # Engine projections — Brief B
 # ---------------------------------------------------------------------------

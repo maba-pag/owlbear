@@ -46,7 +46,6 @@ engine.release_task(42)
 | `valid_transitions(status)` | Set of all statuses except the given one |
 | `refresh_config()` | Reload config from disk |
 | `repair_storage()` | Quarantine corrupt task files and create action-required tasks |
-| `cleanup()` | User-triggered maintenance: release expired claims, move drift-archived files to `archive/`, remove tasks/ duplicates of archived records, and return a `CleanupResult` with `released_claim_ids`, `archived_task_ids`, `duplicate_removed_ids`, and `skipped_items` |
 | `list_sessions(**kwargs)` | Derived `SessionRecord` objects from `activity.jsonl` |
 | `create_request(task_id, kind, title, summary, agent, *, options=None, body="")` | Write a decision/action request to `decisions/pending/{uuid}.md`, block the task, and return a `RequestRecord`; rolls back the file if blocking fails |
 | `get_request(request_id)` | Return a `RequestRecord` for the given UUID, searching `decisions/pending/` then `decisions/resolved/`; raises `NotFoundError` when absent, `ValidationError` on corrupt or invalid files |
