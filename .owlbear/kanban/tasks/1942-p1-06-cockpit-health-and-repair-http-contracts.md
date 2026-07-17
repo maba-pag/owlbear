@@ -1,10 +1,10 @@
 ---
 id: 1942
 title: 'P1-06: Assemble Cockpit workspace health contracts'
-status: verify
+status: build
 priority: high
 created: 2026-07-17T02:32:17.957866+02:00
-updated: 2026-07-17T17:53:01.454436+02:00
+updated: 2026-07-17T17:55:38.171529+02:00
 tags:
   - phase-1
   - scope:cockpit-backend
@@ -260,3 +260,30 @@ Durable-test justification: no new test added. Existing contract coverage was us
 Builder-challenger result: initial challenge blocked on insufficient fresh endpoint proof; after correcting the test harness to use production-style app.state.engine dependency resolution, the assembled HTTP smoke passed. Remaining follow-up risk is the local pytest launcher instability/anomaly.
 
 Follow-up risks: verifier should rerun `uv run pytest tests/test_cockpit_health_contract.py -q` in a stable test process and inspect the legacy Kanban repair result integration.
+
+[[2026-07-17T17:55:38+02:00]]
+## Verify Notes
+
+Evidence reviewed: task outcome, scope, acceptance criteria, Builder Notes, `serve/cockpit/src/owlbear_cockpit/main.py`, `serve/cockpit/src/owlbear_cockpit/models.py`, `serve/cockpit/src/owlbear_cockpit/routes/mutation.py`, and `tests/test_cockpit_health_contract.py`.
+
+Named authorities checked: the OpenSpec-shaped Cockpit boundary is reflected in the implementation. Cockpit assembles root health resources and removes the temporary cleanup consumer; final Kanban cleanup API removal stays owned by #1959. Change Module Map deviation: none observed.
+
+Normal-path boundary exercised: `uv run pytest tests/test_cockpit_health_contract.py -q` completed successfully (4 tests), covering aggregate health failure isolation, liveness and ideas non-mutation, successful terminal repair receipt, and public route inventory. The tests use FastAPI `TestClient` at the HTTP boundary; engines are replaced only below that boundary.
+
+Checks run:
+- `uv run pytest tests/test_cockpit_health_contract.py -q` succeeded.
+- `uv run pytest serve/kanban/tests/test_corruption.py -q` succeeded.
+- `uv run ruff check` on all six changed production files and the health-contract test succeeded.
+- Scoped `git diff --check` succeeded.
+- Production Cockpit consumer/route scan found only `/health/tasks/repair`; no legacy `/api/tasks/scan`, `/api/tasks/repair`, `/api/tasks/cleanup`, or cleanup consumer remains. Explicit sweep and activity compaction are retained by the route inventory test.
+
+Finding: AC2 requires an orchestration failure from POST `/health/tasks/repair` to return non-2xx without refreshed-health data. The implementation appears to route this through the existing unexpected-error handler, but the durable HTTP contract suite exercises only successful repair. Verifier-challenger returned `decision: fail` for this missing proof.
+
+Patches applied: none. The missing durable regression proof is builder-owned, not a local verifier patch.
+
+Final route: REJECT to build.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Add an assembled FastAPI failure-path test where `repair_storage()` raises; assert POST `/health/tasks/repair` is non-2xx and does not include terminal receipt or refreshed health fields. Rerun the focused health-contract suite. | `tests/test_cockpit_health_contract.py` | verifier-challenger decision: fail; AC2 failure-path requirement |
