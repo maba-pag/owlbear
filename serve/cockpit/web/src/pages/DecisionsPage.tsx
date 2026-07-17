@@ -118,7 +118,7 @@ function DecisionsPage() {
                   <h2 className="m-0 min-w-0 text-base font-semibold leading-tight text-primary">{item.title}</h2>
                   <span className="inline-flex items-center gap-static-xs whitespace-nowrap text-sm font-semibold text-primary">
                     <span>Open resolver</span>
-                    <PIcon name="arrow-right" size="small" color="inherit" aria-hidden="true" />
+                    <PIcon name="arrow-right" size="sm" color="inherit" aria-hidden="true" />
                   </span>
                 </div>
                 <p className="m-0 mt-static-sm text-sm leading-normal text-primary">{item.summary}</p>

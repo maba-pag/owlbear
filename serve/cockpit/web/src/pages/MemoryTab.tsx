@@ -793,7 +793,7 @@ function MemoryTab() {
                     </div>
                     <section data-testid="memory-metadata-section" className="rounded-lg border border-contrast-low bg-canvas p-static-sm">
                       <div className="mb-static-xs flex min-w-0 items-center justify-between gap-static-sm">
-                        <PHeading size="small" tag="h3">Metadata</PHeading>
+                        <PHeading size="sm" tag="h3">Metadata</PHeading>
                       </div>
                       <dl data-testid="memory-metadata-grid" className="grid gap-x-static-lg gap-y-static-xs text-sm text-primary sm:grid-cols-2 lg:grid-cols-3">
                         <div className="min-w-0"><dt className="font-semibold text-contrast-high">ID</dt><dd className="m-0 break-words text-primary">{entry.id}</dd></div>

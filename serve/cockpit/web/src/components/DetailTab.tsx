@@ -59,7 +59,7 @@ export interface DetailTabProps {
 
 export type { TaskDetail }
 
-function syncHeadingAttrs(tag: 'h3', size: 'medium' | 'small') {
+function syncHeadingAttrs(tag: 'h3', size: 'md' | 'sm') {
   return (element: HTMLElement | null): void => {
     if (!element) {
       return
@@ -269,7 +269,7 @@ export default function DetailTab({
 
       <section className="rounded-lg border border-contrast-low bg-canvas p-static-sm" data-region="task-acceptance-criteria">
         <div className="mb-static-xs flex min-w-0 items-center justify-between gap-static-sm">
-          <PHeading ref={syncHeadingAttrs('h3', 'small')} size="small" tag="h3">Acceptance Criteria</PHeading>
+          <PHeading ref={syncHeadingAttrs('h3', 'sm')} size="sm" tag="h3">Acceptance Criteria</PHeading>
         </div>
         <div ref={setAcceptanceCriteriaPortalTarget} className="grid gap-static-xs">
           {!isEditingTask ? (
@@ -290,7 +290,7 @@ export default function DetailTab({
 
       <section className="rounded-lg border border-contrast-low bg-canvas p-static-sm" data-region="actions">
         <div className="mb-static-xs flex min-w-0 items-center justify-between gap-static-sm">
-          <PHeading ref={syncHeadingAttrs('h3', 'small')} size="small" tag="h3">Actions</PHeading>
+          <PHeading ref={syncHeadingAttrs('h3', 'sm')} size="sm" tag="h3">Actions</PHeading>
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-static-xs">
           {hasTaskActions ? (
@@ -315,7 +315,7 @@ export default function DetailTab({
 
       <section className="rounded-lg border border-contrast-low bg-canvas p-static-sm" data-region="task-detail-metadata">
         <div className="mb-static-xs flex min-w-0 items-center justify-between gap-static-sm">
-          <PHeading ref={syncHeadingAttrs('h3', 'small')} size="small" tag="h3">Metadata</PHeading>
+          <PHeading ref={syncHeadingAttrs('h3', 'sm')} size="sm" tag="h3">Metadata</PHeading>
         </div>
         <dl className="grid gap-x-static-lg gap-y-static-xs text-sm text-primary sm:grid-cols-2 lg:grid-cols-3">
           <div><dt className="font-semibold text-contrast-high">ID</dt><dd data-testid="field-id">{t.id}</dd></div>

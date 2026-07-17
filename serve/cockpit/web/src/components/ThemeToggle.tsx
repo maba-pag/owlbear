@@ -178,7 +178,7 @@ export default function ThemeToggle({ compact = false }: ThemeToggleProps) {
           title={`${label.ariaLabel}; open theme menu`}
           onClick={handleTriggerClick}
         >
-          <PIcon name="theme" size="small" aria-hidden="true" />
+          <PIcon name="theme" size="sm" aria-hidden="true" />
         </button>
       ) : (
         <PButtonPure

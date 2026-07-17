@@ -3,7 +3,7 @@
  *
  * Covers:
  *   AC-1 — Shell renders <PBanner> (pbanner-stub selector via mock) with open/heading/
- *           description/state bound from bannerError; open=false when bannerError is null
+ *           message/state bound from bannerError; open=false when bannerError is null
  *   AC-5 — PBanner onDismiss sets bannerError to null (banner closes)
  *   AC-6 — Shell clears bannerError when KanbanBoard calls onMutationSuccess
  *   AC-7 — Shell clears bannerError in onTaskUpdated handler
@@ -40,7 +40,7 @@ vi.mock('react-markdown', () => ({
 }))
 
 // PBanner stub: renders a div stub when open=true so assertions can inspect
-// heading/description/state without relying on PDS shadow DOM internals.
+// heading/message/state without relying on PDS shadow DOM internals.
 // onDismiss is attached to click so tests can trigger dismissal synchronously.
 vi.mock('@porsche-design-system/components-react', async (importOriginal) => {
   const mod =
@@ -51,24 +51,25 @@ vi.mock('@porsche-design-system/components-react', async (importOriginal) => {
       ({
         open = false,
         heading = '',
-        description = '',
         state = 'info',
         onDismiss,
+        children,
       }: {
         open?: boolean
         heading?: string
-        description?: string
         state?: string
         onDismiss?: (e: CustomEvent<void>) => void
+        children?: React.ReactNode
       }) =>
         open ? (
           <div
             data-testid="pbanner-stub"
             data-heading={heading}
-            data-description={description}
             data-state={state}
             onClick={() => onDismiss?.(new CustomEvent('dismiss') as CustomEvent<void>)}
-          />
+          >
+            {children}
+          </div>
         ) : null,
     ),
   }
@@ -244,16 +245,16 @@ describe('TestFromAC_ShellPBanner', () => {
       ).toBe('Move failed')
     })
 
-    it('pbanner-stub data-description reflects bannerError description', async () => {
+    it('renders the mutation error detail as the banner message', async () => {
       const { container } = renderShell()
 
       await act(async () => {
         capturedOnMutationError?.('Edit failed', 'Validation error detail', 'warning')
       })
 
-      expect(
-        container.querySelector('[data-testid="pbanner-stub"]')?.getAttribute('data-description'),
-      ).toBe('Validation error detail')
+      expect(container.querySelector('[data-testid="pbanner-stub"]')).toHaveTextContent(
+        'Validation error detail',
+      )
     })
 
     it('pbanner-stub data-state is "error" when bannerError.state is error', async () => {

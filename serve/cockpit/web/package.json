@@ -18,8 +18,8 @@
     "test:e2e:all": "playwright test"
   },
   "dependencies": {
-    "@porsche-design-system/components-js": "^4.1.0",
-    "@porsche-design-system/components-react": "^4.1.0",
+    "@porsche-design-system/components-js": "^4.4.0",
+    "@porsche-design-system/components-react": "^4.4.0",
     "motion": "^12.40.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",

@@ -32,7 +32,7 @@ function isHealthBadgeItem(item: ScanPollingItem): item is HealthBadgeItem {
   return item.code !== null && item.detail !== null && item.file_path !== null
 }
 
-function syncHeadingTagAttr(tag: 'h1' | 'h2', size?: 'large' | 'medium' | 'small') {
+function syncHeadingTagAttr(tag: 'h1' | 'h2', size?: 'lg' | 'md' | 'sm') {
   return (element: HTMLElement | null) => {
     if (!element) {
       return
@@ -487,10 +487,11 @@ function Shell() {
     <PBanner
       open={bannerError !== null}
       heading={bannerError?.heading ?? ''}
-      description={bannerError?.description ?? ''}
       state={bannerError?.state ?? 'error'}
       onDismiss={() => setBannerError(null)}
-    />
+    >
+      {bannerError?.description ?? ''}
+    </PBanner>
   )
 
   const taskDetailContent = (
@@ -686,7 +687,7 @@ function Shell() {
                   <PIcon
                     name={NAV_ICONS[route.icon] || 'grid'}
                     color="inherit"
-                    size="small"
+                    size="sm"
                     aria-hidden="true"
                   />
                   {badgeCount > 0 ? (
@@ -751,7 +752,7 @@ function Shell() {
                 <span className="text-xs font-semibold uppercase leading-tight text-contrast-high">
                   {selectedTask ? `Task #${selectedTask.id}` : `Task #${selectedTaskId}`}
                 </span>
-                <PHeading ref={syncHeadingTagAttr('h2', 'medium')} size="medium" tag="h2">
+                <PHeading ref={syncHeadingTagAttr('h2', 'md')} size="md" tag="h2">
                   {selectedTaskHeading}
                 </PHeading>
               </div>

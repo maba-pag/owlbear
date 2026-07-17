@@ -334,7 +334,7 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
       >
         <header className="grid gap-static-xs border-b border-contrast-low pb-static-sm pr-[4.5rem]">
           <span className="text-xs font-semibold uppercase text-primary">Decision request</span>
-          <PHeading ref={setHeadingTagAttr} size="small" tag="h3">{requestTitle}</PHeading>
+          <PHeading ref={setHeadingTagAttr} size="sm" tag="h3">{requestTitle}</PHeading>
           <div data-testid="resolve-header-meta" className="flex min-w-0 flex-wrap items-center gap-static-xs text-xs font-semibold text-primary">
             <PButton
               type="button"
@@ -381,7 +381,7 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
 
             <section data-testid="resolve-decision-metadata" className="rounded-lg border border-contrast-low bg-canvas p-static-sm">
               <div className="mb-static-xs flex min-w-0 items-center justify-between gap-static-sm">
-                <PHeading size="small" tag="h3">Metadata</PHeading>
+                <PHeading size="sm" tag="h3">Metadata</PHeading>
               </div>
               <dl className="m-0 grid min-w-0 gap-x-static-lg gap-y-static-xs text-sm text-primary sm:grid-cols-2 lg:grid-cols-3">
                 {metadataItems.map((item) => (
