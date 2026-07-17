@@ -38,18 +38,24 @@ interface MemoryFilterState {
   text: string
 }
 
-const DEFAULT_STATES: MemoryState[] = ['pending', 'curated', 'approved']
+const DEFAULT_STATES: MemoryState[] = ['pending', 'curated', 'approved', 'contested', 'disputed', 'stale']
 const ALL_AGENTS_SCOPE = '*'
 const STATE_PRIORITY: Record<MemoryState, number> = {
   pending: 0,
   curated: 1,
   approved: 2,
-  deleted: 3,
+  contested: 3,
+  disputed: 4,
+  stale: 5,
+  deleted: 6,
 }
 const STATE_BORDERS: Record<MemoryState, string> = {
   pending: 'border-l-warning',
   curated: 'border-l-info',
   approved: 'border-l-success',
+  contested: 'border-l-warning',
+  disputed: 'border-l-warning',
+  stale: 'border-l-error',
   deleted: 'border-l-error',
 }
 
@@ -136,9 +142,9 @@ function compareAscending(left: number, right: number): number {
 
 function sortEntries(entries: MemoryEntry[]): MemoryEntry[] {
   return [...entries].sort((left, right) => {
-    const confidenceDelta = compareDescending(normalizeConfidence(left.confidence), normalizeConfidence(right.confidence))
-    if (confidenceDelta !== 0) {
-      return confidenceDelta
+    const scoreDelta = compareDescending(normalizeConfidence(left.score), normalizeConfidence(right.score))
+    if (scoreDelta !== 0) {
+      return scoreDelta
     }
 
     const stateDelta = STATE_PRIORITY[left.state] - STATE_PRIORITY[right.state]
@@ -676,6 +682,9 @@ function MemoryTab() {
           <PMultiSelectOption value="pending">pending</PMultiSelectOption>
           <PMultiSelectOption value="curated">curated</PMultiSelectOption>
           <PMultiSelectOption value="approved">approved</PMultiSelectOption>
+          <PMultiSelectOption value="contested">contested</PMultiSelectOption>
+          <PMultiSelectOption value="disputed">disputed</PMultiSelectOption>
+          <PMultiSelectOption value="stale">stale</PMultiSelectOption>
           <PMultiSelectOption value="deleted">deleted</PMultiSelectOption>
         </PMultiSelect>
 
@@ -778,8 +787,8 @@ function MemoryTab() {
                     </div>
                   </div>
                   <div data-testid="memory-entry-signal-group" className="flex min-w-0 flex-wrap items-center gap-static-xs text-xs lg:justify-end lg:border-l lg:border-contrast-low lg:pl-static-sm">
-                    <PTag compact data-testid="memory-entry-confidence" variant="secondary" aria-label={`Confidence: ${formatConfidence(entry.confidence)}`}>
-                      {formatConfidence(entry.confidence)}
+                    <PTag compact data-testid="memory-entry-score" variant="secondary" aria-label={`Score: ${formatConfidence(entry.score)}`}>
+                      {formatConfidence(entry.score)}
                     </PTag>
                   </div>
                 </div>
@@ -801,7 +810,10 @@ function MemoryTab() {
                         <div className="min-w-0"><dt className="font-semibold text-contrast-high">Scope agents</dt><dd className="m-0 break-words text-primary">{formatScopeAgents(entry.scope_agents)}</dd></div>
                         <div className="min-w-0"><dt className="font-semibold text-contrast-high">Categories</dt><dd className="m-0 break-words text-primary">{entry.categories.join(', ')}</dd></div>
                         <div className="min-w-0"><dt className="font-semibold text-contrast-high">Confidence</dt><dd className="m-0 break-words text-primary">{formatConfidence(entry.confidence)}</dd></div>
-                        <div className="min-w-0"><dt className="font-semibold text-contrast-high">State</dt><dd className="m-0 break-words text-primary">{entry.state}</dd></div>
+                        <div className="min-w-0"><dt className="font-semibold text-contrast-high">State</dt><dd data-testid="memory-entry-state" className="m-0 break-words text-primary">{entry.state}</dd></div>
+                        <div className="min-w-0"><dt className="font-semibold text-contrast-high">Outstanding marks</dt><dd className="m-0 break-words text-primary">★ {entry.outstanding_count}</dd></div>
+                        <div className="min-w-0"><dt className="font-semibold text-contrast-high">Score</dt><dd className="m-0 break-words text-primary">{formatConfidence(entry.score)}</dd></div>
+                        <div className="min-w-0"><dt className="font-semibold text-contrast-high">Contested task</dt><dd className="m-0 break-words text-primary">{entry.contested_by_task ?? '-'}</dd></div>
                         <div className="min-w-0"><dt className="font-semibold text-contrast-high">Created</dt><dd className="m-0 break-words text-primary">{entry.created_at}</dd></div>
                         <div className="min-w-0"><dt className="font-semibold text-contrast-high">Updated</dt><dd className="m-0 break-words text-primary">{entry.updated_at}</dd></div>
                         <div className="min-w-0"><dt className="font-semibold text-contrast-high">Approved</dt><dd className="m-0 break-words text-primary">{entry.approved_at ?? '-'}</dd></div>

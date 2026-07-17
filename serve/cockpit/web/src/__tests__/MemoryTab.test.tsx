@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 /**
  * Task #1672 — P3-02: Memory accordion detail and state-dependent actions
  *
@@ -68,7 +70,7 @@ import rehypeSanitize from 'rehype-sanitize'
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
-type MemoryState = 'pending' | 'curated' | 'approved' | 'deleted'
+type MemoryState = 'pending' | 'curated' | 'approved' | 'contested' | 'disputed' | 'stale' | 'deleted'
 
 interface MemoryEntryFixture {
   id: string
@@ -77,11 +79,14 @@ interface MemoryEntryFixture {
   categories: string[]
   confidence: number
   state: MemoryState
+  outstanding_count: number
+  score: number
   scope_agents: string[]
   source_agent: string
   created_at: string
   updated_at: string
   approved_at: string | null
+  contested_by_task: string | null
 }
 
 function makeEntry(overrides: Partial<MemoryEntryFixture> = {}): MemoryEntryFixture {
@@ -92,11 +97,14 @@ function makeEntry(overrides: Partial<MemoryEntryFixture> = {}): MemoryEntryFixt
     categories: ['behaviour'],
     confidence: 0.85,
     state: 'pending',
+    outstanding_count: 0,
+    score: 0.85,
     scope_agents: ['builder'],
     source_agent: 'test-agent',
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-02T00:00:00Z',
     approved_at: null,
+    contested_by_task: null,
     ...overrides,
   }
 }
@@ -310,6 +318,36 @@ describe('MemoryAccordion', () => {
     const detail = container.querySelector('[data-testid="memory-accordion-detail"]')
     expect(detail?.textContent).toContain('2026-01-01')
     expect(detail?.textContent).toContain('2026-01-03')
+  })
+
+  it('ac2 happy: accordion detail shows score, outstanding marks, contested task, and all metadata', async () => {
+    const container = await renderWithEntries([
+      makeEntry({
+        id: 'memory-42',
+        categories: ['process', 'behaviour'],
+        confidence: 0.91,
+        score: 0.87,
+        outstanding_count: 3,
+        scope_agents: ['builder', 'reviewer'],
+        source_agent: 'shaper',
+        contested_by_task: '1955',
+        approved_at: '2026-01-04T00:00:00Z',
+      }),
+    ])
+    await openAccordion(container)
+
+    const detail = container.querySelector('[data-testid="memory-accordion-detail"]')
+    expect(detail?.textContent).toContain('memory-42')
+    expect(detail?.textContent).toContain('process, behaviour')
+    expect(detail?.textContent).toContain('0.91')
+    expect(detail?.textContent).toContain('0.87')
+    expect(detail?.textContent).toContain('★ 3')
+    expect(detail?.textContent).toContain('builder, reviewer')
+    expect(detail?.textContent).toContain('shaper')
+    expect(detail?.textContent).toContain('1955')
+    expect(detail?.textContent).toContain('2026-01-04')
+    expect(detail?.textContent).not.toContain('negative_marks')
+    expect(detail?.textContent).not.toContain('negative_marks_count')
   })
 
   it('ac1 edge: closing the accordion hides the detail content', async () => {
@@ -835,6 +873,36 @@ describe('MemoryEditForm', () => {
       content: 'Updated content',
       expected_updated_at: '2026-03-15T12:00:00Z',
     })
+    expect(body).not.toHaveProperty('state')
+    expect(body).not.toHaveProperty('approved_at')
+    expect(body).not.toHaveProperty('contested_by_task')
+    expect(body).not.toHaveProperty('outstanding_count')
+    expect(body).not.toHaveProperty('score')
+  })
+
+  it('ac3 happy: approved edit response replaces the entry and shows curated state', async () => {
+    const entry = makeEntry({ id: 'entry-42', state: 'approved', title: 'Before edit' })
+    const editedEntry = {
+      ...entry,
+      title: 'After edit',
+      state: 'curated' as const,
+      confidence: 0.93,
+      score: 0.9,
+    }
+    const fetchMock = makeMutationFetch(200, { entry: editedEntry }, makeApiResponse([entry]))
+    vi.stubGlobal('fetch', fetchMock)
+    let container!: HTMLElement
+    await act(async () => { container = renderMemoryTab().container })
+    await flush()
+    await openAccordion(container)
+    await act(async () => { fireEvent.click(container.querySelector('[data-testid="memory-edit-btn"]')!) })
+    await flush()
+    await act(async () => { fireEvent.click(container.querySelector('[data-testid="memory-edit-save-btn"]')!) })
+    await flush()
+
+    expect(container.querySelector('[data-testid="memory-entry-title"]')?.textContent).toBe('After edit')
+    expect(container.querySelector('[data-testid="memory-entry-state"]')?.textContent).toContain('curated')
+    expect(container.querySelector('[data-testid="memory-approve-btn"]')).not.toBeNull()
   })
 
   it('ac3 regression: approve payload includes expected_updated_at matching entry updated_at', async () => {

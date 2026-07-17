@@ -4,7 +4,7 @@ title: 'P1-19: Score-led memory overview and detail editing'
 status: build
 priority: medium
 created: 2026-07-17T04:54:05.097197+02:00
-updated: 2026-07-17T06:05:21.935065+02:00
+updated: 2026-07-17T06:20:16.936801+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -135,3 +135,50 @@ Final route: REJECT -> build.
 | # | Target Agent | Action Required | File(s) | Evidence |
 |---|-------------|----------------|---------|----------|
 | 1 | builder | Update existing focused MemoryTab assertions to exercise expanded detail metadata and exclusions, read-only lifecycle metadata in edit mode, and approved edit response rendering as curated; rerun both focused suites and the production build. | `serve/cockpit/web/src/__tests__/MemoryTab.test.tsx`, `serve/cockpit/web/src/__tests__/MemoryTab.routing.test.tsx` | Verify Notes finding; verifier-challenger FAIL |
+
+[[2026-07-17T06:15:40+02:00]]
+## Builder Notes
+
+Change envelope: close the recorded verification gap for P1-19 by adding focused assertions for detail metadata/exclusions, lifecycle read-only edit payloads, and approved edit-response rendering. No production code changes.
+
+Files changed:
+- serve/cockpit/web/src/__tests__/MemoryTab.test.tsx
+- serve/cockpit/web/src/__tests__/MemoryTab.routing.test.tsx
+
+Change Module Map deviations: none.
+
+Proof selected:
+- Canonical focused command: `npm test -- --run src/__tests__/MemoryTab.test.tsx src/__tests__/MemoryTab.routing.test.tsx` started cleanly with the package-configured Vitest setup. The terminal wrapper did not emit a final summary.
+- `npm run build` exited cleanly.
+- `git diff --check` exited cleanly.
+- Direct Vitest invocation without the package setup exposed `document`/`matchMedia` harness errors; the canonical package command was then used. The existing per-file jsdom directives were added to both focused React suites.
+
+Durable-test justification: the added assertions protect the concrete regression reported by verification and sit at the shared rendered/payload boundary. No unrelated tests or product behavior were added.
+
+Builder-challenger result: PASS. Confirmed coverage of all three verification gaps and found no concrete blocker.
+
+Follow-up risks: focused Vitest output is suppressed by the terminal wrapper, so final test counts are not available in this session; build and diff checks are clean.
+
+[[2026-07-17T06:20:16+02:00]]
+## Verify Notes
+
+- Evidence reviewed: task outcome, AC-1 through AC-3, all three Builder Notes entries, the current scoped diff, and the maintained `MemoryTab` component suites.
+- Named authorities checked: `serve/cockpit/src/owlbear_cockpit/routes/memory.py` exposes `outstanding_count`, `score`, and `contested_by_task`, matching `serve/cockpit/web/src/api/memories.ts`; no backend semantic change is needed.
+- Change Module Map: no deviation. Product changes remain in the mapped Memory API and MemoryTab frontend modules; fixture/assertion updates remain in the corresponding maintained component suites.
+- Normal-path boundary inspected: `MemoryTab` consumes live `/api/memories` response fields, renders score-first summary/detail, and calls the live edit route. Tests mock only the lower `fetch` transport, preserving the component behavior under test.
+- Source and test review: seven-state filters, score/state/created/id ordering, required detail fields and raw-counter exclusions, editable payload allowlist, deleted-action behavior, and approved edit response handling were checked. The expanded State metadata was already read-only in product UI.
+- Local verifier patches applied:
+  - Added `data-testid="memory-entry-state"` to the existing read-only State value in `serve/cockpit/web/src/pages/MemoryTab.tsx`, allowing the approved-edit regression assertion to observe the rendered returned state.
+  - Corrected the existing approved-edit regression assertion in `serve/cockpit/web/src/__tests__/MemoryTab.test.tsx`: a returned `curated` entry must expose its existing Approve action.
+- Checks run:
+  - `npm run build` passed from the workspace root (`tsc -b` and Vite production build).
+  - VS Code diagnostics report no errors in the four task-owned frontend files.
+  - `git diff --check` completed cleanly for the task-owned files.
+  - Focused `npm test -- --run src/__tests__/MemoryTab.test.tsx src/__tests__/MemoryTab.routing.test.tsx` started cleanly but repeatedly returned only the Vitest startup banner with no completion status. A bounded direct Vitest attempt likewise returned no final result. Therefore component assertions are not executable proof in this session.
+- Verifier-challenger result: FAIL. It agrees scope/module-map alignment and API contract are sound, but rejects PASS because AC-2/AC-3 rendered behavior lacks a completed focused-suite result.
+- Final route: REJECT to build.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Obtain and record a completed package-configured Vitest result for both focused suites, resolving the runner/wrapper issue or any actual test failure; preserve the current four-file scope unless the failure identifies a local defect. | `serve/cockpit/web/src/__tests__/MemoryTab.test.tsx`, `serve/cockpit/web/src/__tests__/MemoryTab.routing.test.tsx` | Focused Vitest never produced a final pass/fail status; verifier-challenger rejected PASS on this missing runtime proof. |
