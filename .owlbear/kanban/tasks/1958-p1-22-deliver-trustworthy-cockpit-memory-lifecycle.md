@@ -4,7 +4,7 @@ title: 'P1-22: Deliver trustworthy Cockpit memory lifecycle'
 status: collect
 priority: high
 created: 2026-07-17T04:54:45.298830+02:00
-updated: 2026-07-17T04:55:03.609524+02:00
+updated: 2026-07-17T20:19:26.108111+02:00
 tags:
   - phase-1
   - scope:cockpit
@@ -18,6 +18,7 @@ depends_on:
   - 1955
   - 1956
   - 1957
+  - 1960
 ac:
   - 'AC-1: At one delivered commit, running Cockpit with approved, contested, disputed,
     stale, and deleted entries shows score-led ordering, seven-state filtering, the
@@ -122,3 +123,62 @@ Proof guidance: collector uses verified child evidence plus running-Cockpit brow
 - #1958 depends on all six leaves; each leaf has parent #1958.
 - Leaf dependencies match the approved graph: #1953 after #1952; #1954 after #1952 and #1953; #1955 after #1954; #1956 after #1954 and #1955; #1957 after #1952, #1953, and #1954.
 - No task is blocked or claimed; dependency status is consistent with the active graph.
+
+[[2026-07-17T18:19:03+02:00]]
+## Collect Notes
+
+- Classification: aggregate. Intent source is `## Outcome`, `## Planning Source`, `## Scope`, and the explicit aggregate AC-1 through AC-3 for OpenSpec change `expose-memory-lifecycle-in-cockpit`.
+- Invariant map: AC-1 requires one delivered commit proving the assembled running-Cockpit desktop/mobile lifecycle; AC-2 requires real MCP rejection plus Cockpit exceptional edit/resolve at that SHA or a descendant; AC-3 requires child verification and maintained documentation for requested inclusions and exclusions.
+- Child coverage: `list_tasks(parent=1958)` returned no active tasks because all six children are archived; direct dependency lookup confirmed #1952 through #1957 each retain `parent: 1958`, are archived with reason `completed`, and have no block. Child Verify Notes cover engine lifecycle, MCP authority, Cockpit HTTP projection/resolve, frontend overview/detail editing, exceptional recovery/navigation, and maintained documentation.
+- Dependency gate: parent `depends_on` is exactly #1952 through #1957 and reports `dep_status: ok`.
+- Child completion summary: #1952, #1953, #1954, #1955, #1956, and #1957 are archived completed. No pending decision or action request exists for the parent or any child.
+- Tested commit and aggregate normal-path proof: missing. Child notes cite component commits and focused package checks, but the aggregate record has no tested delivered commit SHA tied to running-Cockpit browser interactions/screenshots across desktop and mobile, and no command or artifact at that SHA or a descendant jointly proving real MCP exceptional curation rejection with Cockpit exceptional edit and resolve success.
+- Residual decisions: none pending.
+- Rationale: reject because aggregate AC-1 and AC-2 require SHA-linked assembled proof; archived child evidence alone cannot substitute for that explicit collector proof contract.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | shaper via `/shape` | Restore an executable aggregate closure path that names the delivered commit and requires running-Cockpit desktop/mobile browser evidence plus real MCP and Cockpit authority-split evidence at that SHA or a descendant. | n/a | Aggregate AC-1, AC-2, and Proof guidance lack SHA-tied assembled evidence in the task record. |
+
+[[2026-07-17T20:19:26+02:00]]
+## Shape Notes
+
+### Repair Source And Classification
+- Source: latest Collect Notes and Required Follow-up on aggregate #1958.
+- Classification: prescribed split. Collector supplied a complete non-material requirement: restore an executable aggregate closure path tied to a delivered commit SHA with running-Cockpit desktop/mobile proof and real MCP/Cockpit authority-split proof.
+- No product outcome, architecture, compatibility, security boundary, or acceptance meaning changed.
+
+### Facts Checked
+- Child tasks #1952 through #1957 are archived completed, retain parent #1958, and satisfy the implementation dependency gate.
+- Aggregate AC-1 and AC-2 already require SHA-linked assembled proof; the failure was missing evidence ownership, not missing implementation scope.
+- Collectors cannot manufacture the required browser and MCP evidence from archived child notes, so a build/verify leaf is the smallest executable closure path.
+- Supported proof routing includes `critical+challenge`, selected because this evidence crosses running browser, Cockpit HTTP/adapter, and real MCP authority boundaries.
+
+### Exact Task And Dependency Changes
+- Created #1960 `P1-23: Prove assembled Cockpit memory lifecycle` in build with priority high, parent #1958, and dependencies #1952 through #1957.
+- #1960 records one delivered commit SHA, desktop/mobile running-Cockpit interactions and screenshot references, real MCP rejection for contested/disputed/stale entries, real Cockpit exceptional edit/resolve success, and documentation/exclusion coverage.
+- #1960 is proof-only by explicit collector requirement; it makes no planned product changes. Concrete defects discovered during proof must be returned with evidence rather than silently expanding scope.
+- Added #1960 as a dependency of #1958.
+
+### Change Module Map
+| Boundary | Current Responsibility | Planned Proof | Owner |
+|---|---|---|---|
+| Running Cockpit Memory UI | Delivered score-led lifecycle management | Desktop/mobile assembled workflow at recorded SHA | #1960 |
+| Cockpit memory HTTP/adapter | Human exceptional edit and resolution | Real Cockpit boundary success for contested/disputed/stale states | #1960 |
+| MCP memory curation | Restricted exceptional-state authority | Real operation rejection for contested/disputed/stale states | #1960 |
+| Aggregate lifecycle delivery | Collect child implementation and assembled evidence | Archive only after #1960 verification | #1958 |
+
+### Product Invariant Map
+| Product Invariant | Owning Task | Normal-Path Boundary | Proof |
+|---|---|---|---|
+| Complete human memory workflow is usable without desktop/mobile overlap | #1960 | Running Cockpit | Browser interactions and screenshot references tied to SHA |
+| Final MCP authority rejects exceptional curation while Cockpit succeeds | #1960 | Real MCP plus real Cockpit adapter/HTTP | Commands and observed responses tied to same SHA or descendant |
+| Requested inclusions and exclusions remain documented and delivered | #1960 | Maintained docs plus verified child evidence | SHA-linked inventory check |
+| Aggregate product promise closes only with assembled proof | #1958 | Collector review | Verified #1960 evidence plus archived children |
+
+### Resulting Route And Board Audit
+- #1960 routes to build and is dependency-ready because #1952 through #1957 are completed.
+- #1958 returns to collect and now depends on #1952 through #1957 plus #1960.
+- No challenger was required for this complete prescribed split; `critical+challenge` requires the proof task's builder challenger before completion.
+- Collector should re-enter #1958 only after #1960 is verified and archived, then inspect its recorded SHA, commands, browser evidence, screenshot references, and authority-split results.
