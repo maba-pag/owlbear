@@ -1,10 +1,10 @@
 ---
 id: 1957
 title: 'P1-21: Document memory lifecycle authority and recovery'
-status: collect
+status: archived
 priority: low
 created: 2026-07-17T04:54:19.520889+02:00
-updated: 2026-07-17T05:53:17.076461+02:00
+updated: 2026-07-17T05:54:06.295843+02:00
 tags:
   - phase-1
   - scope:docs
@@ -26,7 +26,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -98,3 +98,20 @@ Verifier-challenger result:
 - PASS. The challenge confirmed every AC is covered, proof is sufficient for documentation-only scope, and the local correction has no scope drift.
 
 Final route: collect.
+
+[[2026-07-17T05:54:06+02:00]]
+## Collect Notes
+
+Classification: leaf. Task has no child tasks and contains a bounded documentation outcome rather than aggregate or EPIC intent.
+
+Leaf verification evidence:
+- `## Verify Notes` records PASS and verifier-challenger PASS.
+- AC-1 coverage was checked against the OpenSpec lifecycle specification and the memory engine transition, provenance, score recomputation, and stale recovery behavior.
+- AC-2 coverage was checked against the MCP tool registry and Cockpit memory resolution route.
+- Focused normal-path proof passed: 66 lifecycle tests, clean documentation diff check, and maintained README link inspection.
+
+Invariant map coverage: both acceptance criteria are explicitly covered in Verify Notes; no Change Module Map deviations were reported.
+
+Residual decisions and follow-up: no pending request, block, unresolved Decision Request, or Required Follow-up remains.
+
+Archive rationale: verified leaf closure is complete; archive as completed without re-reviewing implementation details.
