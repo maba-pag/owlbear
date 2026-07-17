@@ -1,10 +1,10 @@
 ---
 id: 1942
 title: 'P1-06: Assemble Cockpit workspace health contracts'
-status: verify
+status: build
 priority: high
 created: 2026-07-17T02:32:17.957866+02:00
-updated: 2026-07-17T17:32:43.230533+02:00
+updated: 2026-07-17T17:35:19.857449+02:00
 tags:
   - phase-1
   - scope:cockpit-backend
@@ -144,3 +144,41 @@ Commands run: uv run pytest serve/kanban/tests/test_corruption.py -q (82 passed)
 Builder-challenger result: pass. It confirmed health and repair behavior, route inventory, and scoped changes. It noted style-only ruff findings in corruption.py; no DONE blocker.
 
 Follow-up risks: full boundary suite was unavailable in the main shell due outputless exit 130, but the challenger’s focused boundary selector passed. Existing unrelated worktree changes were preserved.
+
+[[2026-07-17T17:35:19+02:00]]
+## Verify Notes
+
+### Evidence Reviewed
+- Planning authority: OpenSpec change `redesign-workspace-health` and task AC.
+- Builder commit: `5c925f139`.
+- Builder Notes and Change Module Map: Cockpit health assembly in `main.py` and `models.py`; obsolete Cockpit bridge consumer removal in `routes/mutation.py` and `view.py`; narrow Kanban terminal receipt additions in `models.py` and `corruption.py`.
+
+### Named Authorities Checked
+- `serve/cockpit/src/owlbear_cockpit/main.py` exposes the root liveness, aggregate, focused module health, ideas, and repair handlers. Liveness is storage-free; aggregate/focused handlers declare typed response models; ideas uses read-only bytes plus UTF-8 decoding; checker errors isolate to `check-failed`.
+- `serve/cockpit/src/owlbear_cockpit/routes/mutation.py` retains explicit sweep and activity compaction routes. The obsolete Cockpit task scan, cleanup, and repair routes are absent.
+- `serve/kanban/src/owlbear_kanban/corruption.py` completes repair with a post-scan; `DeterministicRepairResult` carries terminal status, timing, counts/outcomes, unresolved findings, and post-repair health.
+
+### Change Module Map
+- The committed files match the builder map. The Kanban additions are narrowly tied to exposing terminal repair evidence required by the Cockpit HTTP contract. No architecture deviation found.
+
+### Checks Run
+- `uv run pytest serve/kanban/tests/test_corruption.py -q`: 82 passed.
+- `uv run pytest tests/test_cockpit_boundary.py -q -k 'health_endpoint or main_module'`: interrupted externally with exit 130 and no test output.
+- Direct FastAPI/OpenAPI smoke reached the assembled app but did not yield a complete passing assertion; repeated terminal commands were externally interrupted with exit 130.
+
+### Finding
+REJECT: Existing `tests/test_cockpit_boundary.py` proves only generic `/health` reachability and JSON-object output. It does not exercise the AC-required HTTP behavior: no-scan liveness, typed focused responses with findings, empty/missing and invalid or I/O-failed ideas semantics without bytes or mtime mutation, one injected checker failure preserving sibling results, synchronous repair receipt after operation and post-scan, or repair failure returning non-2xx without refreshed health. The task's Proof Guidance explicitly requires durable integration coverage where current coverage is insufficient, and this coverage is insufficient.
+
+### Patches Applied
+- None.
+
+### Verifier-Challenger
+- Not called: PASS is not proposed.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Add focused durable assembled-FastAPI integration coverage for all unproved health and repair AC behavior, including permitted lower-checker injection for failure isolation and repair-operation failure. Rerun the focused Cockpit suite. | `tests/test_cockpit_boundary.py` or an existing Cockpit integration test owner; affected Cockpit source only if a test exposes a defect | Verify Notes finding; task Proof Guidance |
+
+### Final Route
+REJECT to build; implementation behavior appears locally aligned, but the required public-contract proof is absent.
