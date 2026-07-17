@@ -1,10 +1,10 @@
 ---
 id: 1941
 title: 'P1-04: Separate Kanban lease maintenance'
-status: verify
+status: collect
 priority: medium
 created: 2026-07-17T02:32:09.437681+02:00
-updated: 2026-07-17T17:11:14.915246+02:00
+updated: 2026-07-17T17:15:49.311137+02:00
 tags:
   - phase-1
   - scope:kanban
@@ -134,3 +134,33 @@ Read-only exact search and direct source inspection; no edits made and no focuse
 
 ### Follow-up Risks
 - `cleanup()` remains as the Cockpit migration bridge by explicit task scope; its later removal belongs to task `1942`/the planned follow-up.
+
+[[2026-07-17T17:15:49+02:00]]
+## Verify Notes
+
+### Evidence Reviewed
+- Task outcome, scope, all three AC lines, Builder Notes, and the approved Shape Notes were reviewed.
+- Named planning authority: `openspec/changes/redesign-workspace-health/design.md` Decision 8 and migration step 5; `tasks.md` 2.2. They require the first runnable migration step: explicit claim/session maintenance while retaining `KanbanEngine.cleanup()` only as the existing Cockpit bridge.
+
+### Change Module Map
+- Expected owner was `serve/kanban/src/owlbear_kanban/engine.py`; committed task `8c29e6bfe` changes that owner and the task record only.
+- No map deviation: `sweep()` now calls `_close_stale_active_sessions()` after expired-claim processing. The temporary Cockpit consumer still delegates to `cleanup()`; `compact_activity()` stays an independent operation.
+
+### Normal-Path Boundaries
+- Explicit sweep: real temporary-board test releases the expired claim and verifies the resulting stale session is visible as expired.
+- Repair isolation: the deterministic real-filesystem repair suite exercises `repair_task_storage()` and the separate corruption owner. Its source neither invokes `sweep()` nor accesses activity logging; task repair remains distinct from lease/session maintenance.
+- Consumer inventory: `serve/cockpit/src/owlbear_cockpit/view.py` and `routes/mutation.py` are the existing temporary `cleanup()` bridge; they also expose independent sweep and activity-compaction forwarding.
+
+### Checks Run
+- `uv run pytest serve/kanban/tests/test_engine_activity.py -k 'sweep_released_session_visible_in_all_filter or aged_open_claim_classified_as_stuck' -q` - 2 passed.
+- `uv run pytest serve/kanban/tests/test_corruption.py -q` - 82 passed.
+- `uv run ruff check serve/kanban/src/owlbear_kanban/engine.py` - all checks passed.
+
+### Findings And Patches
+- No defects found. No verifier patch applied.
+
+### Verifier-Challenger
+- `verifier-challenger`: pass; no blockers. It confirmed revised scope permits the temporary cleanup bridge and that focused proof covers the claimed maintenance and repair boundaries.
+
+### Final Route
+- PASS: AC satisfied with explicit sweep/session maintenance, repair separation, and independent compaction verified. Advance to collect.
