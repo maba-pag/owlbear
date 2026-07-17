@@ -433,35 +433,54 @@ class TestRecallFiltering:
 
 
 class TestEditDeleteNewStates:
-    """AC4: edit() raises TransitionError on contested/disputed/stale.
+    """AC4: edit() preserves contested/disputed/stale state.
 
     delete() soft-deletes (state→deleted) from contested/disputed/stale
     — same behavior as curated/approved (not hard-deleted like pending).
     """
 
-    def test_edit_contested_raises_transition_error(self, tmp_path: Path) -> None:
-        """edit() raises TransitionError when entry is in contested state."""
+    def test_edit_contested_preserves_state(self, tmp_path: Path) -> None:
+        """edit() preserves contested state."""
         _write_raw_md(tmp_path, _ID_CONTESTED, "contested")
         engine = MemoryEngine(memory_dir=tmp_path)
 
-        with pytest.raises(TransitionError):
-            engine.edit(_ID_CONTESTED, {"title": "Updated"}, expected_updated_at=_TS)
+        result = engine.edit(_ID_CONTESTED, {"title": "Updated"}, expected_updated_at=_TS)
 
-    def test_edit_disputed_raises_transition_error(self, tmp_path: Path) -> None:
-        """edit() raises TransitionError when entry is in disputed state."""
+        assert result.title == "Updated"
+        assert result.state == MemoryState.CONTESTED
+
+    def test_edit_disputed_preserves_state(self, tmp_path: Path) -> None:
+        """edit() preserves disputed state."""
         _write_raw_md(tmp_path, _ID_DISPUTED, "disputed")
         engine = MemoryEngine(memory_dir=tmp_path)
 
-        with pytest.raises(TransitionError):
-            engine.edit(_ID_DISPUTED, {"title": "Updated"}, expected_updated_at=_TS)
+        result = engine.edit(_ID_DISPUTED, {"title": "Updated"}, expected_updated_at=_TS)
 
-    def test_edit_stale_raises_transition_error(self, tmp_path: Path) -> None:
-        """edit() raises TransitionError when entry is in stale state."""
+        assert result.title == "Updated"
+        assert result.state == MemoryState.DISPUTED
+
+    def test_edit_stale_preserves_state(self, tmp_path: Path) -> None:
+        """edit() preserves stale state."""
         _write_raw_md(tmp_path, _ID_STALE, "stale")
         engine = MemoryEngine(memory_dir=tmp_path)
 
-        with pytest.raises(TransitionError):
-            engine.edit(_ID_STALE, {"title": "Updated"}, expected_updated_at=_TS)
+        result = engine.edit(_ID_STALE, {"title": "Updated"}, expected_updated_at=_TS)
+
+        assert result.title == "Updated"
+        assert result.state == MemoryState.STALE
+
+    def test_resolve_stale_clears_provenance_and_non_use_count(self, tmp_path: Path) -> None:
+        """resolve() approves stale entries with a fresh non-use window."""
+        entry = _make_existing_entry(_ID_STALE, "stale")
+        entry = entry.model_copy(update={"didnt_use_count": 5, "contested_by_task": "task-1"})
+        _write_existing_entry(tmp_path, entry)
+        engine = MemoryEngine(memory_dir=tmp_path)
+
+        result = engine.resolve(_ID_STALE, expected_updated_at=_TS)
+
+        assert result.state == MemoryState.APPROVED
+        assert result.contested_by_task is None
+        assert result.didnt_use_count == 0
 
     def test_delete_contested_is_soft_delete(self, tmp_path: Path) -> None:
         """delete() on contested transitions to deleted state (file preserved on disk)."""

@@ -13,7 +13,7 @@ from ruamel.yaml.error import YAMLError
 
 from owlbear_memory import storage
 from owlbear_memory.errors import ConcurrencyError, NotFoundError, TransitionError, ValidationError
-from owlbear_memory.models import MemoryCategory, MemoryEntry, MemoryState
+from owlbear_memory.models import MemoryCategory, MemoryEntry, MemoryHealth, MemoryState
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -115,6 +115,24 @@ class MemoryEngine:
             self.load()
         return list(self._entries)
 
+    def health(self) -> MemoryHealth:
+        """Inspect memory files without changing loader state or files on disk."""
+        paths_by_id: dict[str, list[str]] = {}
+        unreadable_paths: list[str] = []
+
+        for file_path in sorted(self._memory_dir.glob("*.md")):
+            entry = storage.read_entry(file_path)
+            relative_path = str(file_path.relative_to(self._memory_dir))
+            if entry is None:
+                unreadable_paths.append(relative_path)
+                continue
+            paths_by_id.setdefault(entry.id, []).append(relative_path)
+
+        duplicate_paths = {
+            entry_id: paths for entry_id, paths in paths_by_id.items() if len(paths) > 1
+        }
+        return MemoryHealth(unreadable_paths=unreadable_paths, duplicate_paths=duplicate_paths)
+
     def get_entry(self, entry_id: str) -> MemoryEntry:
         """Return one entry by ID or raise NotFoundError."""
         for entry in self.get_entries():
@@ -157,6 +175,8 @@ class MemoryEngine:
                 "state": MemoryState.APPROVED,
                 "approved_at": now,
                 "updated_at": now,
+                "contested_by_task": None,
+                "didnt_use_count": 0 if entry.state == MemoryState.STALE else entry.didnt_use_count,
             }
         )
         return self._write_updated_entry(updated)
@@ -181,10 +201,6 @@ class MemoryEngine:
         if entry.state == MemoryState.DELETED:
             msg = "edit() not allowed from state deleted"
             raise TransitionError(msg)
-        if entry.state in {MemoryState.CONTESTED, MemoryState.DISPUTED, MemoryState.STALE}:
-            msg = f"edit() not allowed from state {entry.state}; resolve first"
-            raise TransitionError(msg)
-
         target_state = entry.state
         approved_at = entry.approved_at
 
@@ -201,6 +217,12 @@ class MemoryEngine:
         data["state"] = target_state
         data["approved_at"] = approved_at
         data["updated_at"] = self._now_iso()
+        if "confidence" in fields:
+            data["score"] = compute_score(
+                fields["confidence"],
+                entry.outstanding_count,
+                entry.unremarkable_count,
+            )
 
         updated = MemoryEntry.model_validate(data)
         return self._write_updated_entry(updated)
@@ -263,7 +285,7 @@ class MemoryEngine:
             updated = entry.model_copy(
                 update={
                     "state": updated_state,
-                    "contested_by_task": task_id,
+                    "contested_by_task": None if updated_state == MemoryState.DISPUTED else task_id,
                     "updated_at": self._now_iso(),
                 }
             )

@@ -1,10 +1,10 @@
 ---
 id: 1952
 title: 'P1-16: Coherent exceptional memory lifecycle'
-status: build
+status: verify
 priority: high
 created: 2026-07-17T04:53:45.570939+02:00
-updated: 2026-07-17T04:54:49.636711+02:00
+updated: 2026-07-17T05:06:55.336009+02:00
 tags:
   - phase-1
   - scope:memory
@@ -48,3 +48,14 @@ The canonical memory engine supports human correction without lifecycle-state es
 Preserve deleted-entry rejection, approved edits downgrading to curated, same-task factual-report no-op behavior, confidence bounds, and optimistic concurrency.
 
 Proof guidance: run focused memory engine checks plus a downstream-impact scan of maintained state-machine and voting/scoring behavior; durable guards are warranted for shared persisted lifecycle semantics.
+
+[[2026-07-17T05:06:55+02:00]]
+## Builder Notes
+- Change envelope: `MemoryEngine.edit`, `record_factually_wrong`, and `resolve`; one focused regression test update in `tests/test_memory_state_machine.py`.
+- Files changed: `serve/memory/src/owlbear_memory/engine.py`, `tests/test_memory_state_machine.py`.
+- Change Module Map deviations: none; implementation stayed within the memory engine and its existing state-machine test boundary.
+- Proof selected: focused maintained memory lifecycle/assessment suite plus Ruff and diff hygiene.
+- Durable-test justification: updated three obsolete assertions that contradicted the new exceptional-edit contract and added one regression guard for stale resolve clearing provenance/resetting non-use count; these protect shared persisted lifecycle semantics.
+- Commands run: `uv run --project . pytest tests/test_assess_memories.py tests/test_confirmation_cycle.py tests/test_memory* -q` -> `357 passed`; `uv run --project . ruff check serve/memory/src/owlbear_memory/engine.py tests/test_memory_state_machine.py` -> all checks passed; `git diff --check` -> clean.
+- Builder-challenger result: pass; independently reran the cited focused pytest and Ruff checks.
+- Follow-up risks: verifier should inspect downstream lifecycle assumptions and confirm AC-1/AC-2 persisted field behavior at the public MemoryEngine boundary.
