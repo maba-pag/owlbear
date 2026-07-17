@@ -1,10 +1,10 @@
 ---
 id: 1941
 title: 'P1-04: Separate Kanban lease maintenance'
-status: collect
+status: archived
 priority: medium
 created: 2026-07-17T02:32:09.437681+02:00
-updated: 2026-07-17T17:15:49.311137+02:00
+updated: 2026-07-17T17:17:29.918880+02:00
 tags:
   - phase-1
   - scope:kanban
@@ -25,7 +25,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -164,3 +164,13 @@ Read-only exact search and direct source inspection; no edits made and no focuse
 
 ### Final Route
 - PASS: AC satisfied with explicit sweep/session maintenance, repair separation, and independent compaction verified. Advance to collect.
+
+[[2026-07-17T17:17:29+02:00]]
+## Collect Notes
+
+- Classification: leaf. Task has no children, is parented by aggregate #1945, and carries implementation-level outcome, scope, and AC rather than aggregate intent.
+- Verification evidence: `## Verify Notes` records PASS with 2 focused sweep/session tests passed, 82 corruption/repair tests passed, Ruff clean, no verifier patch, and verifier-challenger `pass`.
+- Invariant coverage: explicit sweep releases expired claims and reconciles stale sessions; repair remains isolated from claim/activity state; independent activity compaction and the temporary Cockpit cleanup bridge remain available.
+- Dependency closure: dependency #1940 is archived with reason `completed`; task dependency status is `ok`.
+- Residual state: no child tasks, pending decision requests, block, unresolved Required Follow-up, or residual decision state.
+- Rationale: leaf verification and closure evidence are complete; archive as completed.
