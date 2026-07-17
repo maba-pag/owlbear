@@ -4,7 +4,7 @@ title: 'P1-06: Assemble Cockpit workspace health contracts'
 status: collect
 priority: high
 created: 2026-07-17T02:32:17.957866+02:00
-updated: 2026-07-17T18:20:00.695469+02:00
+updated: 2026-07-17T20:17:43.718409+02:00
 tags:
   - phase-1
   - scope:cockpit-backend
@@ -31,11 +31,8 @@ ac:
   - The assembled route inventory omits old task scan/repair/cleanup endpoints 
     and retains explicit claim sweep and activity compaction outside Workspace 
     Status.
-blocked: true
-block_reason: 'COMMIT_FAILED: terminal transport returned no completion output for
-  the required scoped commit. Recovery: uv --project /Users/markus/Projects/owlbear-dev
-  run commit-owned -m "chore: verify Cockpit health contracts (#1942, verifier)" --
-  .owlbear/kanban/tasks/1942-p1-06-cockpit-health-and-repair-http-contracts.md'
+blocked: false
+block_reason:
 claimed_at:
 archival_reason:
 archival_refs: []
