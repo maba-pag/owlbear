@@ -14,9 +14,9 @@ depends_on:
   - 1934
 ac:
   - PDS React, loader, and self-hosted runtime assets all use version 4.4.0.
-  - Cockpit uses supported PDS size and Banner contracts without changing 
+  - Cockpit uses supported PDS size and Banner contracts without changing
     user-visible message behavior.
-  - The assembled Cockpit shell loads its local PDS runtime and renders 
+  - The assembled Cockpit shell loads its local PDS runtime and renders
     correctly in Chromium.
 blocked: false
 block_reason:

@@ -13,10 +13,10 @@ tags:
 parent:
 depends_on: []
 ac:
-  - A clean install resolves the selected stable dependency set without 
+  - A clean install resolves the selected stable dependency set without
     peer-dependency errors.
   - Cockpit typechecks and builds successfully on Node 24 with TypeScript 6.
-  - Existing lint configuration executes successfully with the aligned ESLint 
+  - Existing lint configuration executes successfully with the aligned ESLint
     packages.
 blocked: false
 block_reason:
