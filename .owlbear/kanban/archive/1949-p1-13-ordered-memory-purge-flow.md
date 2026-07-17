@@ -1,10 +1,10 @@
 ---
 id: 1949
 title: 'P1-13: Ordered Memory purge flow'
-status: collect
+status: archived
 priority: medium
 created: 2026-07-17T03:04:26.420225+02:00
-updated: 2026-07-17T20:22:55.448398+02:00
+updated: 2026-07-17T20:24:28.807538+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -27,7 +27,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -145,3 +145,20 @@ Follow-up risks: production frontend build evidence was unavailable in the main 
 - Patches applied: none.
 - Verifier-challenger result: pass; it found the proof proportionate and no unresolved AC or scope drift.
 - Final route: PASS -> collect.
+
+[[2026-07-17T20:24:28+02:00]]
+## Collect Notes
+
+Classification: leaf. Task #1949 has no child tasks, carries implementation-level scope and AC rather than aggregate intent, and is a child of parent #1951.
+
+Leaf verification evidence: the latest `## Verify Notes` records PASS to collect after focused public-hook proof. The verifier ran the Memory purge flow through the real API client with fetch replaced below it: 3 focused tests passed; the combined hook suites passed 30 tests; TypeScript completed without diagnostics; verifier-challenger returned pass with no unresolved AC or scope drift.
+
+Invariant map coverage: implementation and proof remained within the shaped Cockpit web API, hook, and focused regression-test boundary. AC-1 covered threshold invalidation and out-of-order preview gating; AC-2 covered exact accepted-threshold execution, receipt state, and once-only completion; AC-3 covered invalid-input no-request behavior and request errors without completion.
+
+Dependency gate: dependency #1948 is archived with reason `completed`, and task dependency status is `ok`.
+
+Prior follow-up closure: the earlier verifier rejection required stale-preview invalidation, duplicate-execution protection, and focused public-hook proof. The subsequent Builder Notes explicitly record all three repairs, and the latest Verify Notes accepts them with no findings.
+
+Residual decisions: none. No request records exist for this task, and no block remains.
+
+Archive rationale: verified leaf completion evidence is present, the superseded Required Follow-up is demonstrably closed by the later build and PASS, dependency closure is satisfied, and no residual decision state remains. Archived as completed.
