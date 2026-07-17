@@ -43,7 +43,7 @@ contested ──[resolve*]──► approved    [delete: soft → deleted]
 disputed  ──[resolve*]──► approved    [delete: soft → deleted]
 stale     ──[resolve*]──► approved    [delete: soft → deleted]
 
-* resolve() is a MemoryEngine method; no MCP tool is exposed yet.
+* resolve() is a MemoryEngine method; no MCP tool is exposed. Cockpit is the human editing and resolution surface for contested, disputed, and stale entries.
 ```
 
 - **pending** → invisible to `recall_memory`, not committed to git
