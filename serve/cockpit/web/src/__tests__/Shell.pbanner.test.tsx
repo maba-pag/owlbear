@@ -252,7 +252,7 @@ describe('TestFromAC_ShellPBanner', () => {
         capturedOnMutationError?.('Edit failed', 'Validation error detail', 'warning')
       })
 
-      expect(container.querySelector('[data-testid="pbanner-stub"]')).toHaveTextContent(
+      expect(container.querySelector('[data-testid="pbanner-stub"]')?.textContent).toBe(
         'Validation error detail',
       )
     })
