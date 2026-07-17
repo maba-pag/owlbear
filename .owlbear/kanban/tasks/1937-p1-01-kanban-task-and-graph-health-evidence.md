@@ -1,10 +1,10 @@
 ---
 id: 1937
 title: 'P1-01: Kanban task and graph health evidence'
-status: verify
+status: build
 priority: high
 created: 2026-07-17T02:31:31.385612+02:00
-updated: 2026-07-17T07:01:22.405605+02:00
+updated: 2026-07-17T07:02:46.372371+02:00
 tags:
   - phase-1
   - scope:kanban
@@ -109,3 +109,21 @@ Use a focused real-filesystem Kanban behavior check plus a downstream-impact sca
 - Proof selected: `uv run pytest serve/kanban/tests/test_corruption.py serve/kanban/tests/test_engine_task_health.py -q` -> 77 passed. Builder challenger ran focused Ruff checks and returned `decision: pass`. Regression coverage verifies complete duplicate sets, cycle context, repairability classification, and unchanged file bytes/mtimes.
 - Durable-test justification: shared integrity behavior is easy to regress and difficult to notice manually; the tests protect the multi-finding, complete-set, graph-analysis, and non-mutation boundaries.
 - Follow-up risks: none identified within the shaped scope.
+
+[[2026-07-17T07:02:46+02:00]]
+## Verify Notes
+- Evidence reviewed: builder commits `dda9e7e92` and `018b4881` touch the shaped engine/test owners only. The broad worktree is concurrent work and was excluded from task scope.
+- Named authority checked: the `redesign-workspace-health` workspace-health spec requires the public task-health read to return all readable-file defects, unreadable-file evidence, complete duplicate sets, missing parent/dependency/archival targets, self-reference, cycle participants, and archived-state location drift without mutations.
+- Change Module Map: implementation remains in `serve/kanban/src/owlbear_kanban/engine.py` and `serve/kanban/tests/test_engine_task_health.py`, matching the builder's stated mapped owners; no architecture deviation found.
+- Normal-path boundary exercised: `KanbanEngine.task_health()` runs against real temporary task trees in the dedicated test. It proves duplicate-set classification, cycle-owner details, archived cross-directory duplicate repairability, and byte/mtime immutability. `collect_task_health_findings` is only a lower-level parser beneath that public boundary.
+- Checks run: `uv run pytest serve/kanban/tests/test_corruption.py serve/kanban/tests/test_engine_task_health.py -q` passed (77 tests); the dedicated test file passed (2 tests); Ruff check and Ruff format check passed for the touched files; `git diff --check` passed; editor diagnostics reported no errors.
+- Finding: the only direct `task_health()` callers are the two current tests. Neither exercises AC 1's readable record with two independent persisted-field defects plus an unreadable record, nor AC 3's missing parent/dependency/archival targets, self-reference, and archived-record-in-active-storage finding. `test_corruption.py` exercises lower-level parsing and cannot prove public aggregation, graph analysis, or read-only result coverage.
+- Patches applied: none. Adding the missing durable real-filesystem public-boundary tests is builder work and exceeds verifier patch-pass limits.
+- Verifier-challenger: not invoked because this is a REJECT verdict; it is required only before PASS.
+- Final route: REJECT to build.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Add real-filesystem `KanbanEngine.task_health()` regression coverage for a readable task with two independent persisted-field defects and an unreadable task; assert findings and byte/mtime immutability. | `serve/kanban/tests/test_engine_task_health.py` | AC 1 has no direct public-boundary proof. |
+| 2 | builder | Add public-boundary coverage for missing parent/dependency/archival targets, dependency self-reference, and archived state in active storage, asserting owner, field or cycle context, location evidence, and no mutation. | `serve/kanban/tests/test_engine_task_health.py` | AC 3 has no direct public-boundary proof. |
