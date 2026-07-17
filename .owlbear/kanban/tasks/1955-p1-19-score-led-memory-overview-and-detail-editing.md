@@ -4,7 +4,7 @@ title: 'P1-19: Score-led memory overview and detail editing'
 status: build
 priority: medium
 created: 2026-07-17T04:54:05.097197+02:00
-updated: 2026-07-17T05:51:30.086796+02:00
+updated: 2026-07-17T06:05:21.935065+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -85,3 +85,53 @@ Follow-up risk: run the focused MemoryTab Vitest suite in verify with the packag
 | # | Target Agent | Action Required | File(s) | Evidence |
 |---|-------------|----------------|---------|----------|
 | 1 | builder | Update the existing focused MemoryTab fixtures and assertions to the canonical seven-state response shape; prove score-led ordering including all tie-breakers, contested/disputed/stale filters, summary/detail metadata inclusion and negative-counter exclusion, deleted edit suppression, and returned curated edit rendering. Resolve or explicitly modernize the filter-reset assertion under the same fixture contract, then rerun the focused suite. | `serve/cockpit/web/src/__tests__/MemoryTab.test.tsx`, `serve/cockpit/web/src/__tests__/MemoryTab.routing.test.tsx` | Focused Vitest run: 5 failures; current fixtures and assertions encode confidence-led behavior rather than AC-1 through AC-3. |
+
+[[2026-07-17T06:02:45+02:00]]
+## Builder Notes
+Change envelope: update the two existing focused MemoryTab test fixtures and assertions to the canonical seven-state memory response contract; replace confidence-led ordering/rendering expectations with score-led behavior; preserve existing component coverage and avoid product/backend changes.
+
+Files changed: `serve/cockpit/web/src/__tests__/MemoryTab.test.tsx`, `serve/cockpit/web/src/__tests__/MemoryTab.routing.test.tsx`.
+
+Change Module Map deviations: none. Changes remain inside the task-prescribed focused MemoryTab test boundary.
+
+Implementation: both fixtures now use the seven canonical states (`pending`, `curated`, `approved`, `contested`, `disputed`, `stale`, `deleted`) and include `outstanding_count`, `score`, and `contested_by_task`. Routing assertions now prove score-descending ordering, state/created/id tie-breakers, full state priority, score summary rendering, and the expanded default filter reset.
+
+Proof selected: `npm --prefix serve/cockpit/web test -- src/__tests__/MemoryTab.routing.test.tsx` passed with 1 file and 56 tests. `git diff --check -- serve/cockpit/web/src/__tests__/MemoryTab.test.tsx serve/cockpit/web/src/__tests__/MemoryTab.routing.test.tsx` passed. The component-focused suite and production build were attempted but returned no usable output/status from this shell session; no component failure was captured and this remains a verify follow-up risk.
+
+Durable-test justification: no new tests added. Existing maintained tests were updated because their fixtures and assertions encoded superseded confidence-led behavior and could not prove the shaped score/state contract.
+
+Builder-challenger result: PASS. Final challenge found no concrete scope or schema defect.
+
+Follow-up risk: verify should rerun `npm --prefix serve/cockpit/web test -- src/__tests__/MemoryTab.test.tsx src/__tests__/MemoryTab.routing.test.tsx` and `npm --prefix serve/cockpit/web run build` in a stable package environment before final closure.
+
+[[2026-07-17T06:05:21+02:00]]
+## Verify Notes
+
+Evidence reviewed:
+- Task AC-1 through AC-3 and the recorded Builder Notes.
+- Named API authority: `serve/cockpit/src/owlbear_cockpit/routes/memory.py` declares the seven-state response shape and `outstanding_count`, `score`, and `contested_by_task`; it matches `serve/cockpit/web/src/api/memories.ts`.
+- Change Module Map: actual changes remain within the mapped frontend API/page and two pre-existing focused MemoryTab test files; no interface or scope deviation found.
+- `MemoryTab.tsx` source confirms score-led sorting, exceptional-state filters, summary duplication, lifecycle detail fields, and the deleted-entry edit guard. It also omits `unremarkable_count` and `didnt_use_count`.
+
+Normal-path boundary exercised:
+- The maintained routing test exercises rendered score ordering, state/created/ID tie-breakers, all seven state priorities, and filter behavior. Direct verbose Vitest execution emitted expected PDS warnings; prior builder proof records this routing file as 56 passing tests.
+
+Checks run:
+- `npx vitest run src/__tests__/MemoryTab.routing.test.tsx --reporter=verbose --silent=false` from `serve/cockpit/web`.
+- `git diff --check -- serve/cockpit/web/src/api/memories.ts serve/cockpit/web/src/pages/MemoryTab.tsx serve/cockpit/web/src/__tests__/MemoryTab.test.tsx serve/cockpit/web/src/__tests__/MemoryTab.routing.test.tsx` passed.
+- `npm --prefix serve/cockpit/web test -- src/__tests__/MemoryTab.test.tsx src/__tests__/MemoryTab.routing.test.tsx` and `npm --prefix serve/cockpit/web run build` were attempted but returned no usable completion output in this environment.
+
+Findings:
+- AC-1 has adequate maintained rendered coverage.
+- AC-2 and the full AC-3 presentation boundary lack focused rendered assertions: content plus every new lifecycle metadata item, star/count label, absence of raw negative counters, read-only metadata while editing, and applying the approved edit response as curated state. Source inspection is not a substitute for the required normal-path proof.
+
+Patches applied: none; the implementation scope is sound and the missing work is maintained proof, not a local verification repair.
+
+Verifier-challenger result: FAIL. It confirmed the AC-2/AC-3 runtime-proof gap and found no scope drift.
+
+Final route: REJECT -> build.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Update existing focused MemoryTab assertions to exercise expanded detail metadata and exclusions, read-only lifecycle metadata in edit mode, and approved edit response rendering as curated; rerun both focused suites and the production build. | `serve/cockpit/web/src/__tests__/MemoryTab.test.tsx`, `serve/cockpit/web/src/__tests__/MemoryTab.routing.test.tsx` | Verify Notes finding; verifier-challenger FAIL |
