@@ -1,10 +1,10 @@
 ---
 id: 1937
 title: 'P1-01: Kanban task and graph health evidence'
-status: build
+status: verify
 priority: high
 created: 2026-07-17T02:31:31.385612+02:00
-updated: 2026-07-17T06:59:45.002593+02:00
+updated: 2026-07-17T07:01:22.405605+02:00
 tags:
   - phase-1
   - scope:kanban
@@ -100,3 +100,12 @@ Use a focused real-filesystem Kanban behavior check plus a downstream-impact sca
 | 1 | builder | Add real-filesystem `KanbanEngine.task_health()` regression coverage for a readable file with two independent persisted-field findings plus an unreadable file, asserting findings and filesystem immutability. | `serve/kanban/tests/test_engine_task_health.py` | AC 1 has no direct public-boundary exercise. |
 | 2 | builder | Add public-boundary fixtures and assertions for missing parent, dependency, and archival-reference targets; dependency self-reference; and an archived-state task stored only in active storage, including owner, field, path/location, task ID, and immutability evidence. | `serve/kanban/tests/test_engine_task_health.py` | AC 3 cases are absent from the only task-health test file. |
 | 3 | builder | Rerun the focused Kanban task-health suite and Ruff checks after adding the coverage. | `serve/kanban/src/owlbear_kanban/engine.py`; `serve/kanban/tests/test_engine_task_health.py` | Existing focused checks pass but do not prove the omitted AC scenarios. |
+
+[[2026-07-17T07:01:22+02:00]]
+## Builder Notes
+- Change envelope: read-only Kanban task-health evidence in `KanbanEngine.task_health()`; duplicate-set classification, location drift, missing references, self-reference, and dependency-cycle diagnostics only. No request diagnostics, storage mutation, claim maintenance, Cockpit behavior, or repair implementation changed.
+- Files changed: `serve/kanban/src/owlbear_kanban/engine.py`; `serve/kanban/tests/test_engine_task_health.py`.
+- Change Module Map: stayed within the shaped owners (`engine.py` public health method and Kanban tests); no deviation.
+- Proof selected: `uv run pytest serve/kanban/tests/test_corruption.py serve/kanban/tests/test_engine_task_health.py -q` -> 77 passed. Builder challenger ran focused Ruff checks and returned `decision: pass`. Regression coverage verifies complete duplicate sets, cycle context, repairability classification, and unchanged file bytes/mtimes.
+- Durable-test justification: shared integrity behavior is easy to regress and difficult to notice manually; the tests protect the multi-finding, complete-set, graph-analysis, and non-mutation boundaries.
+- Follow-up risks: none identified within the shaped scope.
