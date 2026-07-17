@@ -1,10 +1,10 @@
 ---
 id: 1945
 title: 'P1-09: Deliver trustworthy workspace health'
-status: collect
+status: shape
 priority: high
 created: 2026-07-17T02:33:28.872345+02:00
-updated: 2026-07-17T07:22:28.437915+02:00
+updated: 2026-07-17T08:43:31.758781+02:00
 tags:
   - phase-1
   - scope:cockpit
@@ -194,3 +194,23 @@ Collector inspects verified child evidence and observes the assembled normal pat
 - Findings: no product patch applied. This was an invalid verifier dispatch rather than a verification result.
 - Verifier-challenger: not invoked because no PASS verdict is proposed.
 - Final route: released unchanged in `collect` for collector processing after dependencies resolve.
+
+[[2026-07-17T08:39:58+02:00]]
+
+[[2026-07-17T08:43:31+02:00]]
+## Collect Notes
+
+- Verdict: REJECT
+- Classification: aggregate (`aggregate` tag, explicit aggregate Outcome/Scope, and eight child tasks).
+- Aggregate intent source: `## Outcome`, `## Scope`, and `## Shape Notes`, sourced from OpenSpec change `redesign-workspace-health`.
+- Invariant map coverage: not closable because the required assembled Workspace Status journey and single-commit aggregate proof depend on unfinished children.
+- Child coverage (`parent=1945`): #1937, #1938, #1939, and #1940 are archived with reason `completed`; #1941, #1942, #1943, and #1944 remain in `shape`.
+- Parent dependency gate: incomplete. Required dependencies #1941 through #1944 are unresolved; #1942 is blocked by #1941, #1943 by #1942, and #1944 by #1943. The claim response also reported these four unresolved dependencies.
+- Tested commit and normal-path proof: unavailable because the child/dependency gate is incomplete; no SHA-linked assembled proof can yet satisfy the aggregate AC.
+- Residual decisions: no pending request exists for #1945, and there is no recorded decision intentionally dropping the unfinished child scope.
+- Rationale: aggregate archival requires every required child to be complete and parent intent to be proven or explicitly dropped. Those conditions are not met.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | shaper via `/shape` | Reconcile the aggregate graph: route and complete required children #1941 through #1944, or record an approved scope decision that explicitly drops them; return the parent to collect only with a complete dependency gate and SHA-linked assembled normal-path proof. | n/a | Child lookup and parent dependency gate show #1941-#1944 remain in shape, with #1942-#1944 dependency-blocked. |
