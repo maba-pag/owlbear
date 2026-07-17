@@ -1,10 +1,10 @@
 ---
 id: 1941
 title: 'P1-04: Separate Kanban lease maintenance'
-status: build
+status: verify
 priority: medium
 created: 2026-07-17T02:32:09.437681+02:00
-updated: 2026-07-17T16:24:46.881845+02:00
+updated: 2026-07-17T17:11:14.915246+02:00
 tags:
   - phase-1
   - scope:kanban
@@ -106,3 +106,31 @@ Read-only exact search and direct source inspection; no edits made and no focuse
 - Shaper challenger decision: pass. No blocking findings.
 - Incorporated non-blocking guidance: #1941 proof must preserve stale-session assertions at the explicit sweep boundary before cleanup-specific tests are removed.
 - Resulting route: #1941 enters build; #1959 remains blocked in build until #1942 completes.
+
+[[2026-07-17T17:11:14+02:00]]
+## Builder Notes
+
+### Change Envelope
+- Owner: `serve/kanban/src/owlbear_kanban/engine.py`, `KanbanEngine.sweep()` maintenance boundary.
+- Behavior: explicit sweep releases expired claims and reconciles stale activity sessions; archive/duplicate repair remains in the temporary aggregate `cleanup()` bridge; activity compaction remains independently callable.
+- Cheapest falsifying proof: focused Kanban activity tests plus production consumer/API inventory.
+
+### Files Changed
+- `serve/kanban/src/owlbear_kanban/engine.py`
+
+### Change Module Map Deviations
+- None. Reused the existing `sweep()` and `_close_stale_active_sessions()` owners; no Cockpit route or health-repair changes were made.
+
+### Proof
+- `uv run pytest serve/kanban/tests/test_engine_activity.py -k 'sweep_released_session_visible_in_all_filter or aged_open_claim_classified_as_stuck' -q` -> `2 passed in 0.45s` (builder-challenger proof).
+- `uv run ruff check serve/kanban/src/owlbear_kanban/engine.py` -> `All checks passed!`.
+- Broader focused test invocation was blocked by workspace pytest configuration referencing a missing Cockpit path; one retry exited 130 with no output and was not treated as evidence.
+
+### Durable-Test Justification
+- No new durable tests. Existing activity tests cover the shared sweep/session boundary and passed.
+
+### Builder-Challenger Result
+- `builder-challenger`: pass.
+
+### Follow-up Risks
+- `cleanup()` remains as the Cockpit migration bridge by explicit task scope; its later removal belongs to task `1942`/the planned follow-up.

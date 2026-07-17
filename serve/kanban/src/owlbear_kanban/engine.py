@@ -65,6 +65,8 @@ from owlbear_kanban.models import (
     ConfigError,
     KanbanError,
     MigrationRequiredError,
+    RequestHealthFinding,
+    RequestHealthResult,
     SessionRecord,
     Task,
     TaskHealthFinding,
@@ -257,7 +259,10 @@ def _duplicate_health_findings(
 
 
 def _graph_health_findings(
-    records: list[tuple[Path, dict, str]], known_ids: set[int], tasks_dir: Path
+    records: list[tuple[Path, dict, str]],
+    known_ids: set[int],
+    tasks_dir: Path,
+    archive_dir: Path,
 ) -> tuple[list[TaskHealthFinding], dict[int, set[int]]]:
     findings: list[TaskHealthFinding] = []
     dependency_graph: dict[int, set[int]] = defaultdict(set)
@@ -267,7 +272,7 @@ def _graph_health_findings(
         findings.extend(_dependency_health_findings(path, record, task_id, known_ids, dependency_graph))
         findings.extend(_archival_health_findings(path, record, task_id, known_ids))
         if _is_archived_in_active_storage(path, record, tasks_dir):
-            findings.append(_archived_storage_finding(path, task_id))
+            findings.append(_archived_storage_finding(path, task_id, archive_dir))
     return findings, dependency_graph
 
 
@@ -340,10 +345,12 @@ def _is_archived_in_active_storage(path: Path, record: dict, tasks_dir: Path) ->
     return record.get("status") == "archived" and path.parent == tasks_dir
 
 
-def _archived_storage_finding(path: Path, task_id: int) -> TaskHealthFinding:
+def _archived_storage_finding(path: Path, task_id: int, archive_dir: Path) -> TaskHealthFinding:
     return TaskHealthFinding(
         code="ARCHIVED_TASK_IN_ACTIVE_STORAGE",
-        detail="archived task is stored in active task storage",
+        detail=(
+            f"archived task {task_id} is stored in active task storage at {path}; archive destination is {archive_dir}"
+        ),
         path=str(path),
         task_id=task_id,
         repairable=True,
@@ -763,7 +770,9 @@ class KanbanEngine:
                 records.append(record)
 
         duplicate_findings, known_ids = _duplicate_health_findings(records)
-        graph_findings, dependency_graph = _graph_health_findings(records, known_ids, self._tasks_dir)
+        graph_findings, dependency_graph = _graph_health_findings(
+            records, known_ids, self._tasks_dir, self._archive_dir
+        )
         findings.extend(duplicate_findings)
         findings.extend(graph_findings)
         findings.extend(_cycle_health_findings(records, dependency_graph))
@@ -772,6 +781,128 @@ class KanbanEngine:
             repairable_count=sum(finding.repairable for finding in findings),
             checked_paths=[str(path) for path in paths],
         )
+
+    def request_health(self) -> RequestHealthResult:
+        """Return non-mutating request-storage integrity evidence."""
+        decisions_dir = self._kanban_dir / "decisions"
+        paths = [
+            (subdir, path)
+            for subdir in ("pending", "resolved")
+            for path in sorted((decisions_dir / subdir).glob("*.md"))
+        ]
+        findings, records = self._read_request_health_records(paths)
+        findings.extend(self._duplicate_request_health_findings(records))
+        owner_ids = self._request_health_owner_ids()
+        findings.extend(self._request_health_reference_findings(records, owner_ids))
+
+        findings.sort(key=lambda finding: (finding.path or "", finding.code, finding.request_id or ""))
+        checked_paths = [str(path) for _, path in paths]
+        return RequestHealthResult(
+            findings=findings,
+            repairable_count=sum(finding.repairable for finding in findings),
+            checked_paths=checked_paths,
+        )
+
+    def _read_request_health_records(
+        self,
+        paths: list[tuple[str, Path]],
+    ) -> tuple[list[RequestHealthFinding], list[tuple[str, Path, DecisionRequest | ActionRequest]]]:
+        findings: list[RequestHealthFinding] = []
+        records: list[tuple[str, Path, DecisionRequest | ActionRequest]] = []
+        for subdir, path in paths:
+            try:
+                frontmatter, _body = self._parse_request_file(path)
+                request_model = Request.model_validate(frontmatter)
+            except OSError as exc:
+                findings.append(
+                    RequestHealthFinding(
+                        code="REQUEST_READ_ERROR",
+                        detail=f"request file could not be read: {exc}",
+                        path=str(path),
+                    )
+                )
+                continue
+            except (ValueError, TypeError, YAMLError, PydanticValidationError) as exc:
+                findings.append(
+                    RequestHealthFinding(
+                        code="REQUEST_SCHEMA_ERROR",
+                        detail=f"request file is invalid: {exc}",
+                        path=str(path),
+                    )
+                )
+                continue
+            records.append((subdir, path, request_model))
+        return findings, records
+
+    @staticmethod
+    def _duplicate_request_health_findings(
+        records: list[tuple[str, Path, DecisionRequest | ActionRequest]],
+    ) -> list[RequestHealthFinding]:
+        by_request_id: dict[str, list[tuple[str, Path, DecisionRequest | ActionRequest]]] = defaultdict(list)
+        for record in records:
+            by_request_id[record[2].request_id].append(record)
+        return [
+            RequestHealthFinding(
+                code="DUPLICATE_REQUEST_ID",
+                detail="duplicate request ID across: " + ", ".join(str(path) for _, path, _ in members),
+                path=", ".join(str(path) for _, path, _ in members),
+                request_id=request_id,
+            )
+            for request_id, members in by_request_id.items()
+            if len(members) > 1
+        ]
+
+    def _request_health_owner_ids(self) -> set[int]:
+        owner_ids: set[int] = set()
+        for directory in (self._tasks_dir, self._archive_dir):
+            if not directory.exists():
+                continue
+            for task_path in directory.glob("*.md"):
+                try:
+                    task = read_task(task_path, config=self._config)
+                except (OSError, ValueError, TypeError, YAMLError, PydanticValidationError):
+                    continue
+                owner_ids.add(task.id)
+        return owner_ids
+
+    @staticmethod
+    def _request_health_reference_findings(
+        records: list[tuple[str, Path, DecisionRequest | ActionRequest]],
+        owner_ids: set[int],
+    ) -> list[RequestHealthFinding]:
+        findings: list[RequestHealthFinding] = []
+        for subdir, path, request_model in records:
+            if request_model.task_id not in owner_ids:
+                findings.append(
+                    RequestHealthFinding(
+                        code="MISSING_REQUEST_OWNER",
+                        detail=(
+                            f"request owner task {request_model.task_id} is missing "
+                            f"for request {request_model.request_id}"
+                        ),
+                        path=str(path),
+                        request_id=request_model.request_id,
+                        task_id=request_model.task_id,
+                        field="task_id",
+                    )
+                )
+
+            expected_subdir = "resolved" if request_model.resolution.resolved_at is not None else "pending"
+            if subdir != expected_subdir:
+                findings.append(
+                    RequestHealthFinding(
+                        code="REQUEST_LOCATION_MISMATCH",
+                        detail=(
+                            f"request {request_model.request_id} is stored in {subdir} "
+                            f"but belongs in {expected_subdir}"
+                        ),
+                        path=str(path),
+                        request_id=request_model.request_id,
+                        task_id=request_model.task_id,
+                        field="resolution.resolved_at",
+                    )
+                )
+        return findings
 
     def valid_transitions(self, status: str) -> set[str]:
         """Return the set of all configured statuses except *status*.
@@ -2472,6 +2603,7 @@ class KanbanEngine:
                         continue
                     released.append(record.id)
 
+        self._close_stale_active_sessions()
         return released
 
     def cleanup(self) -> CleanupResult:  # noqa: C901, PLR0912, PLR0915
