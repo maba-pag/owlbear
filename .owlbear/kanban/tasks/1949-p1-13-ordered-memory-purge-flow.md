@@ -1,10 +1,10 @@
 ---
 id: 1949
 title: 'P1-13: Ordered Memory purge flow'
-status: verify
+status: collect
 priority: medium
 created: 2026-07-17T03:04:26.420225+02:00
-updated: 2026-07-17T20:15:51.035858+02:00
+updated: 2026-07-17T20:22:55.448398+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -127,3 +127,21 @@ Durable-test justification: the new test protects a concrete observed verifier r
 Builder-challenger result: pass. It independently reported the focused suite 3/3 and direct TypeScript check TSC_OK, with no concrete blocker.
 
 Follow-up risks: production frontend build evidence was unavailable in the main terminal because the invoked build path was interrupted or routed through unrelated repository checks; verifier should rerun package-local build if needed.
+
+[[2026-07-17T20:22:55+02:00]]
+## Verify Notes
+
+- Evidence reviewed: both Builder Notes passes; changed `serve/cockpit/web/src/api/memoryPurge.ts`, `serve/cockpit/web/src/hooks/useCleanupFlow.ts`, and the shaped regression test `serve/cockpit/web/src/__tests__/useMemoryPurgeFlow.test.ts`.
+- Named authorities checked: OpenSpec `purge-deleted-memories` Design decisions 3 and 5 and the `memory-tombstone-purge` specification. The client targets the prescribed preview and execution routes with `{ min_age_days }`; the flow defaults to 30, accepts only nonnegative whole numbers, invalidates stale state on threshold changes, and executes the accepted threshold.
+- Change Module Map: no deviation. The memory-specific API client and headless flow stay in the mapped Cockpit web API/hook boundary; no rendered DOM or geometry claim was made.
+- Normal-path boundary exercised: the public hook ran through the real API client with `fetch` replaced below that client boundary. The focused suite proved current-preview ordering, exact execution payload, receipt state, one completion callback, invalid-input no-request behavior, and request-error behavior.
+- Checks run:
+  - `cd serve/cockpit/web && npm test -- --run src/__tests__/useMemoryPurgeFlow.test.ts` -> 1 file, 3 tests passed.
+  - `cd serve/cockpit/web && npm test -- --run src/__tests__/useMemoryPurgeFlow.test.ts src/__tests__/useCleanupFlow.test.ts src/__tests__/memoryPurgeFlow.verify.test.ts` -> 3 files, 30 tests passed.
+  - `cd serve/cockpit/web && npx tsc --noEmit` -> passed with no diagnostics.
+  - Editor diagnostics for the API, hook, and shaped regression test -> none.
+  - `npm run build` was interrupted with exit 130 and is not claimed as evidence.
+- Findings: none. Pre-existing unrelated workspace changes, including an untracked verifier-only threshold-default test, were not modified.
+- Patches applied: none.
+- Verifier-challenger result: pass; it found the proof proportionate and no unresolved AC or scope drift.
+- Final route: PASS -> collect.
