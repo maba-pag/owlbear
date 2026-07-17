@@ -1,10 +1,10 @@
 ---
 id: 1937
 title: 'P1-01: Kanban task and graph health evidence'
-status: build
+status: collect
 priority: high
 created: 2026-07-17T02:31:31.385612+02:00
-updated: 2026-07-17T07:13:24.941473+02:00
+updated: 2026-07-17T07:18:49.836602+02:00
 tags:
   - phase-1
   - scope:kanban
@@ -180,3 +180,36 @@ Use a focused real-filesystem Kanban behavior check plus a downstream-impact sca
 | # | Target Agent | Action Required | File(s) | Evidence |
 |---|-------------|----------------|---------|----------|
 | 1 | builder | Make the archived-state-in-active-storage health finding explicitly name the task ID plus active and archive locations, and add/update the focused public-engine assertion. | `serve/kanban/src/owlbear_kanban/engine.py`; `serve/kanban/tests/test_engine_task_health.py` | Verify Notes finding; workspace-health spec `Task location conflicts with state` scenario; task AC 3 |
+
+[[2026-07-17T07:17:34+02:00]]
+## Builder Notes
+Change envelope: read-only Kanban task-health evidence; archived-state records found in active storage must identify task ID, active path, and archive destination. No storage mutation, repair behavior, or unrelated package changes.
+
+Files changed: serve/kanban/src/owlbear_kanban/engine.py; serve/kanban/tests/test_engine_task_health.py.
+
+Change Module Map deviations: none. The configured archive directory is now passed through the existing graph-health helper to the archived-location finding; no new abstraction or dependency.
+
+Proof selected: public-boundary focused regression suite plus Ruff and diff checks.
+
+Durable-test justification: extended the existing public task-health location-drift regression to assert both active and archive locations in finding detail; this protects the previously rejected acceptance criterion.
+
+Commands run:
+- uv run pytest serve/kanban/tests/test_corruption.py serve/kanban/tests/test_engine_task_health.py -q -> 79 passed
+- uv run ruff check serve/kanban/src/owlbear_kanban/engine.py serve/kanban/tests/test_engine_task_health.py -> All checks passed
+- uv run ruff format --check serve/kanban/src/owlbear_kanban/engine.py serve/kanban/tests/test_engine_task_health.py -> 2 files already formatted
+- git diff --check -> passed
+
+Builder-challenger result: PASS; no concrete blockers reported.
+
+Follow-up risks: none identified within the scoped acceptance criteria.
+
+[[2026-07-17T07:18:49+02:00]]
+## Verify Notes
+- Evidence reviewed: task outcome, scope, all three AC, Builder Notes, final diff, and the shaped module map. Current source confirms `KanbanEngine.task_health()` is the public read-only boundary and delegates persisted-field scanning to `collect_task_health_findings()` plus duplicate/graph/cycle analysis.
+- Named authorities checked: OpenSpec `redesign-workspace-health` task intent as recorded in the task; AC were checked against `serve/kanban/src/owlbear_kanban/engine.py`, `serve/kanban/src/owlbear_kanban/corruption.py`, and real-filesystem fixtures in `serve/kanban/tests/test_engine_task_health.py`.
+- Change Module Map: no deviation. The final change is confined to the mapped Kanban engine/corruption owners and Kanban regression test; no request, storage-mutation, claim-maintenance, or Cockpit change is present.
+- Normal-path boundary exercised: tests call `KanbanEngine(...).task_health()` against actual temporary task/archive files. They prove multi-finding readable plus unreadable evidence, complete duplicate paths/classification, missing references, self-reference, cycles, archived-in-active location detail, and bytes/mtime immutability. Replacements occur only below this public boundary.
+- Checks run: `uv run pytest serve/kanban/tests/test_corruption.py serve/kanban/tests/test_engine_task_health.py -q` passed (79 passed). `git diff --check` passed. Editor diagnostics for touched files report no errors. An additional isolated real-filesystem public-API smoke check for an archive-only same-ID duplicate passed, confirming a complete two-path repairable duplicate finding.
+- Findings: no implementation gap or scope drift. No verifier patch applied.
+- Verifier-challenger: pass; it found AC coverage sufficient, no boundary bypass, and no scope drift.
+- Final route: PASS to collect.
