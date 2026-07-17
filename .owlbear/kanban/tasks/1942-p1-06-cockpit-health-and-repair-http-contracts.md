@@ -1,10 +1,10 @@
 ---
 id: 1942
 title: 'P1-06: Assemble Cockpit workspace health contracts'
-status: build
+status: verify
 priority: high
 created: 2026-07-17T02:32:17.957866+02:00
-updated: 2026-07-17T17:46:23.742886+02:00
+updated: 2026-07-17T17:53:01.454436+02:00
 tags:
   - phase-1
   - scope:cockpit-backend
@@ -244,3 +244,19 @@ Follow-up risks: existing Starlette/httpx deprecation warning remains outside th
 | # | Target Agent | Action Required | File(s) | Evidence |
 |---|-------------|----------------|---------|----------|
 | 1 | builder | Wire the real Cockpit repair endpoint to the deterministic repair operation (or migrate the engine method) so a real `KanbanEngine` returns `DeterministicRepairResult` after the post-repair scan. Add/adjust a focused assembled HTTP test using a real engine; do not substitute the repair result at the workflow boundary. | `serve/cockpit/src/owlbear_cockpit/main.py`, `serve/kanban/src/owlbear_kanban/engine.py` or the owning repair interface, `tests/test_cockpit_health_contract.py` | Real-engine HTTP probe returned `500 COCKPIT_INTERNAL_ERROR`; `repair_task_storage()` is currently uncalled in production. |
+
+[[2026-07-17T17:53:01+02:00]]
+## Builder Notes
+Change envelope: assemble Cockpit workspace-health contracts in the existing FastAPI route owner; specifically repair receipt orchestration in serve/cockpit/src/owlbear_cockpit/main.py. No Kanban core changes, frontend changes, or new durable tests.
+
+Files changed: serve/cockpit/src/owlbear_cockpit/main.py. The task record is also updated by this transition.
+
+Change Module Map deviations: none. Existing health models and route assembly remain the owners; the repair route now adapts the legacy Kanban outcome list into DeterministicRepairResult and performs the post-repair task-health scan.
+
+Proof selected: assembled HTTP smoke through app.state.engine passed, asserting POST /health/tasks/repair returns 200, failed_count=1, and task_health_result.checked_paths=['tasks']; direct orchestration smoke also passed. Existing focused contract test passed 4/4 before the edit. Final `uv run ruff check serve/cockpit/src/owlbear_cockpit/main.py`, `git diff --check`, and editor diagnostics passed. Later pytest launcher retries exited 130/no output, so no fresh full pytest result after the final edit; the assembled production-style HTTP smoke is the fresh boundary proof.
+
+Durable-test justification: no new test added. Existing contract coverage was used; the narrow source change is covered by the assembled HTTP smoke and existing contract tests.
+
+Builder-challenger result: initial challenge blocked on insufficient fresh endpoint proof; after correcting the test harness to use production-style app.state.engine dependency resolution, the assembled HTTP smoke passed. Remaining follow-up risk is the local pytest launcher instability/anomaly.
+
+Follow-up risks: verifier should rerun `uv run pytest tests/test_cockpit_health_contract.py -q` in a stable test process and inspect the legacy Kanban repair result integration.
