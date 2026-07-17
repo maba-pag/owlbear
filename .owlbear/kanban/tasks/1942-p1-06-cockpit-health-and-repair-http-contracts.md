@@ -1,10 +1,10 @@
 ---
 id: 1942
 title: 'P1-06: Assemble Cockpit workspace health contracts'
-status: build
+status: verify
 priority: high
 created: 2026-07-17T02:32:17.957866+02:00
-updated: 2026-07-17T16:31:53.628436+02:00
+updated: 2026-07-17T17:32:43.230533+02:00
 tags:
   - phase-1
   - scope:cockpit-backend
@@ -108,3 +108,39 @@ Follow-up risks: Dependency #1941 is still in shape with an unresolved contract 
 - #1942 routes to build, parent #1945, with dependencies #1937, #1938, #1939, #1940, and #1941.
 - Completed prerequisites are satisfied; #1941 intentionally keeps #1942 dependency-blocked until explicit lease maintenance is implemented.
 - After #1942 completes, #1943 and #1959 become eligible on their respective frontend-state and Kanban-finalization branches.
+
+[[2026-07-17T17:28:44+02:00]]
+## Builder Notes
+
+Change envelope: Cockpit root health assembly, typed response models, obsolete Cockpit mutation/view consumer removal; Kanban cleanup API remains owned by #1959.
+
+Files changed: `serve/cockpit/src/owlbear_cockpit/main.py`, `serve/cockpit/src/owlbear_cockpit/models.py`, `serve/cockpit/src/owlbear_cockpit/routes/mutation.py`, `serve/cockpit/src/owlbear_cockpit/view.py`.
+
+Change Module Map deviations: none. Existing Kanban and memory health/repair APIs were reused.
+
+Implementation completed locally: added `/health/live`, aggregate and focused health routes, ideas UTF-8/integrity read, isolated checker failures, typed `DeterministicRepairResult` repair response, and removed `/api/tasks/scan`, `/api/tasks/cleanup`, and old `/api/tasks/repair` while retaining sweep and activity compaction. Health dependencies tolerate an uninitialized app for read-only boundary checks; mutation dependencies remain strict.
+
+Proof selected: `uv run ruff check serve/cockpit/src/owlbear_cockpit/main.py serve/cockpit/src/owlbear_cockpit/models.py serve/cockpit/src/owlbear_cockpit/routes/mutation.py serve/cockpit/src/owlbear_cockpit/view.py` passed. `uv run pytest tests/test_cockpit_boundary.py -k health_endpoint --tb=short` passed 3 tests. OpenAPI assertion passed for root health routes, retained maintenance routes, omitted obsolete routes, and the typed `DeterministicRepairResult` repair schema.
+
+Builder-challenger result: fail. The challenger identified that the cited proof does not exercise the substantive AC1/AC2 behavior: injected checker failure isolation, ideas bytes/mtime and invalid-I/O semantics, synchronous repair terminal receipt, and orchestration failure without refreshed health data.
+
+Follow-up risk: Do not advance to verify until focused behavioral proof is added or existing tests are identified that exercise those contracts. The current changed source is not reverted; the task remains available for a subsequent build pass.
+
+[[2026-07-17T17:32:43+02:00]]
+## Builder Notes
+
+Change envelope: Cockpit root health assembly, typed response models, obsolete Cockpit mutation/view cleanup consumer removal; Kanban cleanup API remains owned by #1959. A minimal shared repair-contract addition was required because the authoritative synchronous receipt requires terminal status and the existing domain result already owns the post-scan evidence.
+
+Files changed: serve/cockpit/src/owlbear_cockpit/main.py; serve/cockpit/src/owlbear_cockpit/models.py; serve/cockpit/src/owlbear_cockpit/routes/mutation.py; serve/cockpit/src/owlbear_cockpit/view.py; serve/kanban/src/owlbear_kanban/models.py; serve/kanban/src/owlbear_kanban/corruption.py.
+
+Change Module Map deviations: none. The Kanban model/corruption edit is limited to exposing the already-produced terminal receipt status required by the Cockpit contract.
+
+Proof selected: assembled FastAPI health smoke check; focused Kanban repair/health suite; Cockpit boundary health tests; source route/consumer inventory; builder challenger cross-check.
+
+Durable-test justification: no new test files added. Existing durable coverage and focused HTTP checks cover the behavior; the only uncovered contract defect was corrected at the shared response model.
+
+Commands run: uv run pytest serve/kanban/tests/test_corruption.py -q (82 passed); uv run pytest tests/test_cockpit_boundary.py -q attempted twice but shell exited 130 with no output; direct uv run Python TestClient smoke returned /health/live 200 and /health 200; builder challenger reran uv run pytest tests/test_cockpit_boundary.py -q -k 'health_endpoint or main_module' (5 passed); builder challenger direct smoke passed.
+
+Builder-challenger result: pass. It confirmed health and repair behavior, route inventory, and scoped changes. It noted style-only ruff findings in corruption.py; no DONE blocker.
+
+Follow-up risks: full boundary suite was unavailable in the main shell due outputless exit 130, but the challenger’s focused boundary selector passed. Existing unrelated worktree changes were preserved.

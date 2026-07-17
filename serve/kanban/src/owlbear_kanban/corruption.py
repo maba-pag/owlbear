@@ -908,6 +908,7 @@ def repair_task_storage(kanban_dir: Path, config: BoardConfig) -> DeterministicR
     unresolved = [finding for finding in health.findings if not finding.repairable]
     counts = _outcome_counts(outcomes)
     return DeterministicRepairResult(
+        status="completed",
         started_at=started_at,
         completed_at=datetime.now().astimezone(),
         removed_count=counts["removed"],

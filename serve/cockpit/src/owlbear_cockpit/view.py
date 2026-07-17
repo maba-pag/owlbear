@@ -8,7 +8,6 @@ from owlbear_kanban.models import (
     ActivityCompactionResult,
     ActivityEvent,
     BoardConfig,
-    CleanupResult,
     ListTasksResponse,
     NotFoundError,
     SessionRecord,
@@ -226,10 +225,6 @@ class CockpitView:
         """Release expired claims and return released task IDs."""
         return self.engine.sweep()
 
-    def cleanup(self) -> CleanupResult:
-        """Run maintenance cleanup and return released, archived, and skipped results."""
-        return self.engine.cleanup()
-
     def list_activity(  # noqa: PLR0913
         self,
         *,
@@ -253,14 +248,6 @@ class CockpitView:
     def list_sessions(self, *, filter: str = "active") -> list[SessionRecord]:  # noqa: A002
         """Return derived session records with the requested filter."""
         return self.engine.list_sessions(filter=filter)
-
-    def scan_corruption(self) -> list:
-        """Read-only corruption scan for tasks and archive directories."""
-        return self.engine.scan_corruption()
-
-    def repair_storage(self) -> list:
-        """Run two-phase storage repair and return repair outcomes."""
-        return self.engine.repair_storage()
 
     def compact_activity(self) -> ActivityCompactionResult:
         """Compact activity log via storage delegate."""
