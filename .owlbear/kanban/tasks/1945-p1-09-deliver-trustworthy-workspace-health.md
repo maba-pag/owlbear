@@ -4,7 +4,7 @@ title: 'P1-09: Deliver trustworthy workspace health'
 status: collect
 priority: high
 created: 2026-07-17T02:33:28.872345+02:00
-updated: 2026-07-17T02:34:30.250228+02:00
+updated: 2026-07-17T07:22:28.437915+02:00
 tags:
   - phase-1
   - scope:cockpit
@@ -179,3 +179,18 @@ Collector inspects verified child evidence and observes the assembled normal pat
 - Each leaf has parent #1945. Parent #1945 depends on the eight leaf IDs.
 - Leaf dependencies exactly match the approved graph. #1937 and #1938 are initially dispatchable; dependent leaves and the parent report dependency blocking as intended.
 - Every task has three persisted AC lines, explicit scope, proof guidance, priority, and phase/scope/category tags. Product Promise coverage matches the invariant map; no material post-approval scope was introduced.
+
+[[2026-07-17T07:22:28+02:00]]
+## Verify Notes
+- Task was claimed for verification dispatch.
+- Routing check: task 1945 is an aggregate in `collect`, while verifier authority is restricted to `verify` tasks.
+- Dependency check: child tasks 1939 through 1944 remain unresolved; aggregate AC cannot yet be verified at a tested commit.
+- Evidence reviewed: authoritative task record and declared dependencies.
+- Named authorities checked: task Outcome, Scope, Proof Guidance, Shape Notes, and AC.
+- Change Module Map deviations: not evaluated because no collect-stage aggregate proof is available and verifier cannot process this status.
+- Normal-path boundary: not exercised; task must remain available for collector once child work closes.
+- Replacements used below boundary: none.
+- Checks run: task status/dependency state; task-record worktree path inspection.
+- Findings: no product patch applied. This was an invalid verifier dispatch rather than a verification result.
+- Verifier-challenger: not invoked because no PASS verdict is proposed.
+- Final route: released unchanged in `collect` for collector processing after dependencies resolve.
