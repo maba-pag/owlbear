@@ -1,10 +1,10 @@
 ---
 id: 1954
 title: 'P1-18: Cockpit memory lifecycle HTTP contract'
-status: verify
+status: collect
 priority: high
 created: 2026-07-17T04:53:58.085320+02:00
-updated: 2026-07-17T05:39:05.773004+02:00
+updated: 2026-07-17T05:41:06.772187+02:00
 tags:
   - phase-1
   - scope:cockpit-backend
@@ -59,3 +59,20 @@ Proof guidance: exercise endpoints through the FastAPI application boundary with
 - Commands run: `uv run --project . pytest tests/test_cockpit_memory_routes.py -q` -> 51 passed; `uv run --project . pytest serve/cockpit/tests/test_memory_integration.py -q` -> 7 passed; `uv run --project . ruff check serve/cockpit/src/owlbear_cockpit/routes/memory.py tests/test_cockpit_memory_routes.py` -> All checks passed.
 - Builder-challenger: pass; no concrete blocker, scope drift, or proof deficiency reported.
 - Follow-up risks: Starlette emitted an existing httpx deprecation warning during TestClient runs; no task-scope failure.
+
+[[2026-07-17T05:41:06+02:00]]
+## Verify Notes
+- Evidence reviewed: Builder Notes, task AC-1 through AC-3, and `openspec/changes/expose-memory-lifecycle-in-cockpit/specs/cockpit-memory-lifecycle/spec.md`.
+- Named authorities checked: `MemoryEntryResponse` explicitly projects the required 14 fields and excludes `unremarkable_count` and `didnt_use_count`; `MemoryEngine.resolve` accepts only contested, disputed, and stale entries after OCC and clears `contested_by_task`; the Cockpit exception handlers map memory conflicts to HTTP 409 `MEM_CONFLICT` and invalid transitions to HTTP 422 `MEM_INVALID_TRANSITION`.
+- Change Module Map: no deviation. The modified route adapter owns HTTP projection and forwarding. The memory engine and main exception handlers remain the owning authorities; no interface expansion beyond the shaped resolve endpoint.
+- Normal-path boundary exercised: FastAPI TestClient with a real temporary `MemoryEngine` created an entry through curated and approved states, made it contested, verified its GET projection, resolved it over HTTP to approved with cleared provenance, then confirmed stale-token conflict and pending-entry invalid-transition responses without source mutation.
+- Replacements used below boundary: route tests replace only the memory engine through FastAPI dependency injection; real-engine smoke and integration tests cover the application boundary.
+- Checks run:
+  - `uv run --project . pytest tests/test_cockpit_memory_routes.py serve/cockpit/tests/test_memory_integration.py -q`: 58 passed (four pre-existing TestClient/httpx deprecation warnings).
+  - `uv run --project . ruff check serve/cockpit/src/owlbear_cockpit/routes/memory.py tests/test_cockpit_memory_routes.py`: all checks passed.
+  - Real-engine FastAPI resolve smoke: passed for contested resolve, OCC conflict, and invalid pending transition with no mutation.
+  - `git diff --check`: passed; committed implementation `40ca836f7` contains only the mapped route and focused test files.
+- Findings: no defects or unresolved acceptance criteria. No verifier patch applied.
+- Verifier-challenger: pass. It confirmed the projection, resolve forwarding, error envelopes, exceptional-state behavior, evidence, and scope.
+- Final route: PASS to collect.
+
