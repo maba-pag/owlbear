@@ -1,10 +1,10 @@
 ---
 id: 1942
 title: 'P1-06: Assemble Cockpit workspace health contracts'
-status: collect
+status: archived
 priority: high
 created: 2026-07-17T02:32:17.957866+02:00
-updated: 2026-07-17T20:17:43.718409+02:00
+updated: 2026-07-17T20:21:05.132845+02:00
 tags:
   - phase-1
   - scope:cockpit-backend
@@ -34,7 +34,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -315,3 +315,12 @@ Builder-challenger result: pass. Challenger confirmed the production-style repai
 - Recalled memory applied: checked proof artifacts against the refined task scope; the route-inventory and field-level contract assertions are present.
 - Verifier-challenger result: pass. It found no concrete AC gap, defect, or scope drift.
 - Final route: PASS to collect.
+
+[[2026-07-17T20:21:05+02:00]]
+## Collect Notes
+- Classification: leaf. Task has no children (`list_tasks(parent=1942)` returned none), no aggregate/EPIC title or tags, and no aggregate intent section.
+- Verification evidence: latest `## Verify Notes` records PASS to collect, focused assembled-FastAPI HTTP-boundary coverage, no findings or patches, and verifier-challenger pass.
+- Invariant map coverage: verifier reports no Change Module Map deviation and confirms route assembly, typed envelopes, repair orchestration, ideas integrity, failure isolation, and retained/removed route inventory against all three AC lines.
+- Dependency context: task depends on #1937, #1938, #1939, #1940, and #1941; leaf collection does not reopen their implementation proof. The task reached collect with verifier PASS.
+- Residual decisions: no pending requests, block, unresolved final Required Follow-up, or decision state. Earlier rejection follow-ups were superseded by later builder and verifier cycles.
+- Rationale: archive mechanically because leaf verification is complete and closure state is clean.
