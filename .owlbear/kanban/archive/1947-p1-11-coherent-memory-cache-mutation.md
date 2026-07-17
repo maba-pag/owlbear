@@ -1,10 +1,10 @@
 ---
 id: 1947
 title: 'P1-11: Coherent memory cache mutation'
-status: collect
+status: archived
 priority: medium
 created: 2026-07-17T03:04:14.374374+02:00
-updated: 2026-07-17T06:38:00.683802+02:00
+updated: 2026-07-17T06:38:58.683144+02:00
 tags:
   - phase-1
   - scope:memory
@@ -26,7 +26,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -93,3 +93,20 @@ Patches applied: none.
 Verifier-challenger result: pass; no concrete missing AC evidence, scope drift, or design deviation.
 
 Final route: PASS -> collect.
+
+[[2026-07-17T06:38:58+02:00]]
+## Collect Notes
+
+Classification: leaf. The task has no children and carries no aggregate or EPIC intent.
+
+Leaf verification evidence: `## Verify Notes` records PASS, maps AC-1 and AC-2 to controlled public-engine concurrency probes, maps AC-3 to the passing lifecycle suite, and records 198 focused downstream tests plus Ruff and whitespace checks. Verifier-challenger result: pass.
+
+Invariant map coverage: the verifier confirmed the shaped MemoryEngine owner, instance-level re-entrant lock contract, public mutation/reload paths, and no module-map or public-interface deviation.
+
+Child coverage: not applicable; `list_tasks(parent=1947)` returned no children.
+
+Dependency gate: satisfied before claim (`dep_status=ok`); dependency #1946 does not block closure.
+
+Residual decisions and follow-up: no pending or resolved task requests, no block, and no unresolved Required Follow-up. The builder's concurrency-test risk was explicitly resolved by verifier-controlled interleaving probes.
+
+Archive rationale: verified leaf evidence is complete and no closure state remains unresolved. Archived as completed.
