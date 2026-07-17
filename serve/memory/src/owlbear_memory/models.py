@@ -35,6 +35,18 @@ class MemoryState(enum.StrEnum):
     DELETED = "deleted"
 
 
+class MemoryHealth(BaseModel):
+    """Read-only diagnostics for markdown-backed memory storage."""
+
+    unreadable_paths: list[str] = Field(default_factory=list)
+    duplicate_paths: dict[str, list[str]] = Field(default_factory=dict)
+
+    @property
+    def healthy(self) -> bool:
+        """Return whether all records are readable and UUIDs are unique."""
+        return not self.unreadable_paths and not self.duplicate_paths
+
+
 class MemoryEntry(BaseModel):
     """A single markdown-backed memory entry."""
 
