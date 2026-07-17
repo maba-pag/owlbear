@@ -333,6 +333,9 @@ async def _update_entry(  # noqa: C901, PLR0913
     if current.state == MemoryState.DELETED:
         msg = "update_entry cannot modify deleted entries"
         raise ToolError(msg)
+    if current.state in {MemoryState.CONTESTED, MemoryState.DISPUTED, MemoryState.STALE}:
+        msg = f"update_entry cannot modify exceptional entry in state {current.state}"
+        raise ToolError(msg)
 
     next_scope_agents = current.scope_agents if scope_agents is None else scope_agents
     if current.state == MemoryState.PENDING and not next_scope_agents:

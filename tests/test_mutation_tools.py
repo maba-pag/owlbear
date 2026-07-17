@@ -695,6 +695,34 @@ class TestFromAC_CurateMemoryValidation:
         assert "provide" in error_text, f"Expected teaching message with 'provide', got: {exc_info.value}"
 
 
+@pytest.mark.parametrize("state", ["contested", "disputed", "stale"])
+@pytest.mark.asyncio
+async def test_curate_memory_rejects_exceptional_states_without_mutation(
+    tmp_path: Path,
+    state: str,
+) -> None:
+    """Exceptional entries remain unchanged when curation attempts a mutable update."""
+    engine = MemoryEngine(memory_dir=tmp_path)
+    entry = _make_entry(n=1, state="curated", scope_agents=["builder"])
+    seeded = _seed_entry(engine, entry)
+    if state == "contested":
+        seeded = engine.record_factually_wrong(seeded.id, "task-1", expected_updated_at=seeded.updated_at)
+    elif state == "disputed":
+        contested = engine.record_factually_wrong(seeded.id, "task-1", expected_updated_at=seeded.updated_at)
+        seeded = engine.record_factually_wrong(contested.id, "task-2", expected_updated_at=contested.updated_at)
+    else:
+        seeded = seeded.model_copy(update={"didnt_use_count": 51})
+        seeded = engine.try_stale_transition(seeded)
+    ctx = _make_ctx(engine)
+    original = engine.get_entry(seeded.id)
+
+    with pytest.raises(ToolError):
+        await curate_memory(ctx, entry_id=seeded.id, title="Should not change")
+
+    unchanged = engine.get_entry(seeded.id)
+    assert unchanged == original
+
+
 # ---------------------------------------------------------------------------
 # AC5 (td:2): curate_memory returns correct guidance hint per state transition
 # ---------------------------------------------------------------------------
