@@ -1,10 +1,10 @@
 ---
 id: 1942
 title: 'P1-06: Assemble Cockpit workspace health contracts'
-status: verify
+status: build
 priority: high
 created: 2026-07-17T02:32:17.957866+02:00
-updated: 2026-07-17T17:43:53.702088+02:00
+updated: 2026-07-17T17:46:23.742886+02:00
 tags:
   - phase-1
   - scope:cockpit-backend
@@ -221,3 +221,26 @@ Commands run:
 Builder-challenger result: pass.
 
 Follow-up risks: existing Starlette/httpx deprecation warning remains outside this task scope.
+
+[[2026-07-17T17:46:23+02:00]]
+## Verify Notes
+
+- Evidence reviewed: task AC, Builder Notes, OpenSpec `redesign-workspace-health` design and `workspace-health` delta spec, and builder commits `5c925f139` and `3b91f824e`.
+- Named authorities checked: the OpenSpec requires `POST /health/tasks/repair` to complete deterministic repair and a post-repair task-health scan before returning a typed receipt; it permits a non-2xx error only when that trustworthy post-scan cannot be completed.
+- Change Module Map: the changed Cockpit files match the mapped root assembly, response model, mutation route, and view boundary. No scope deviation found. However, the production repair interface remains disconnected from the mapped deterministic repair implementation.
+- Normal-path boundary: `GET /health/live`, aggregate health, module isolation, malformed-ideas handling, and retained/removed route inventory were exercised through the assembled FastAPI app. The focused health contract suite passed (`4 passed`), and the nearby Cockpit backend slice passed (`33 passed`).
+- Replacements used below the boundary: task contract tests substitute checker and repair-call results. That is valid for the lower checker failure, but not sufficient to prove the repair workflow contract.
+- Finding: `serve/cockpit/src/owlbear_cockpit/main.py` delegates `/health/tasks/repair` to `KanbanEngine.repair_storage()`. The real engine method in `serve/kanban/src/owlbear_kanban/engine.py` returns the legacy `list`, while `serve/kanban/src/owlbear_kanban/corruption.py::repair_task_storage()` creates the required `DeterministicRepairResult` with terminal outcomes, timing, unresolved findings, and post-repair task health but has no production caller. A real `KanbanEngine` through the assembled HTTP endpoint returned `500 COCKPIT_INTERNAL_ERROR`, not the required completed receipt.
+- Commands run:
+  - `uv run pytest tests/test_cockpit_health_contract.py -q` -> `4 passed`
+  - `uv run pytest tests/test_cockpit_health_contract.py tests/test_cockpit_routes.py tests/test_cockpit_launch.py -q` -> `33 passed`
+  - assembled HTTP probe with invalid UTF-8 ideas -> `200 unhealthy`; injected repair failure -> `500` without receipt
+  - assembled HTTP probe with a real `KanbanEngine` -> `POST /health/tasks/repair` returned `500 COCKPIT_INTERNAL_ERROR`
+- Patches applied: none.
+- Verifier-challenger: not called; PASS is not proposed.
+- Final route: REJECT -> build.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Wire the real Cockpit repair endpoint to the deterministic repair operation (or migrate the engine method) so a real `KanbanEngine` returns `DeterministicRepairResult` after the post-repair scan. Add/adjust a focused assembled HTTP test using a real engine; do not substitute the repair result at the workflow boundary. | `serve/cockpit/src/owlbear_cockpit/main.py`, `serve/kanban/src/owlbear_kanban/engine.py` or the owning repair interface, `tests/test_cockpit_health_contract.py` | Real-engine HTTP probe returned `500 COCKPIT_INTERNAL_ERROR`; `repair_task_storage()` is currently uncalled in production. |
