@@ -1,10 +1,10 @@
 ---
 id: 1942
 title: 'P1-06: Assemble Cockpit workspace health contracts'
-status: build
+status: verify
 priority: high
 created: 2026-07-17T02:32:17.957866+02:00
-updated: 2026-07-17T17:35:19.857449+02:00
+updated: 2026-07-17T17:43:53.702088+02:00
 tags:
   - phase-1
   - scope:cockpit-backend
@@ -182,3 +182,42 @@ REJECT: Existing `tests/test_cockpit_boundary.py` proves only generic `/health` 
 
 ### Final Route
 REJECT to build; implementation behavior appears locally aligned, but the required public-contract proof is absent.
+
+## Builder Notes
+Change envelope: add focused assembled Cockpit HTTP proof for the already-assembled health and repair contracts; no production code changes required.
+
+Files changed: `tests/test_cockpit_health_contract.py`.
+
+Change Module Map deviations: none. Existing owners `serve/cockpit/src/owlbear_cockpit/main.py` and `models.py` already provide the shaped contract.
+
+Proof selected: assembled FastAPI TestClient coverage for typed health responses, sibling checker failure isolation, liveness, ideas integrity without byte/mtime mutation, terminal repair receipt, and OpenAPI route inventory retaining sweep/compaction while omitting scan/cleanup.
+
+Durable-test justification: public HTTP contract is shared and easy to regress; existing boundary tests did not exercise these acceptance criteria, so focused integration coverage earns the Rent Test.
+
+Commands run:
+- `cd /Users/markus/Projects/owlbear-dev && uv run pytest tests/test_cockpit_health_contract.py -q` -> 4 passed, 4 existing Starlette/httpx deprecation warnings.
+- `cd /Users/markus/Projects/owlbear-dev && uv run ruff check tests/test_cockpit_health_contract.py` -> All checks passed.
+
+Builder-challenger result: pass.
+
+Follow-up risks: existing Starlette/httpx deprecation warning remains outside this task scope.
+
+[[2026-07-17T17:43:53+02:00]]
+## Builder Notes
+Change envelope: add focused assembled Cockpit HTTP proof for the already-assembled health and repair contracts; no production code changes required.
+
+Files changed: `tests/test_cockpit_health_contract.py`.
+
+Change Module Map deviations: none. Existing owners `serve/cockpit/src/owlbear_cockpit/main.py` and `models.py` already provide the shaped contract.
+
+Proof selected: assembled FastAPI TestClient coverage for typed health responses, sibling checker failure isolation, liveness, ideas integrity without byte/mtime mutation, terminal repair receipt, and OpenAPI route inventory retaining sweep/compaction while omitting scan/cleanup.
+
+Durable-test justification: public HTTP contract is shared and easy to regress; existing boundary tests did not exercise these acceptance criteria, so focused integration coverage earns the Rent Test.
+
+Commands run:
+- `cd /Users/markus/Projects/owlbear-dev && uv run pytest tests/test_cockpit_health_contract.py -q` -> 4 passed, 4 existing Starlette/httpx deprecation warnings.
+- `cd /Users/markus/Projects/owlbear-dev && uv run ruff check tests/test_cockpit_health_contract.py` -> All checks passed.
+
+Builder-challenger result: pass.
+
+Follow-up risks: existing Starlette/httpx deprecation warning remains outside this task scope.
