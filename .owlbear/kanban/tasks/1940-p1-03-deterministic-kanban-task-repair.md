@@ -1,10 +1,10 @@
 ---
 id: 1940
 title: 'P1-03: Deterministic Kanban task repair'
-status: verify
+status: collect
 priority: medium
 created: 2026-07-17T02:32:03.458344+02:00
-updated: 2026-07-17T08:32:50.081233+02:00
+updated: 2026-07-17T08:34:56.750958+02:00
 tags:
   - phase-1
   - scope:kanban
@@ -179,3 +179,15 @@ Final route: REJECT to build.
 - Commands run: `uv run --project . pytest serve/kanban/tests/test_corruption.py -q` -> `82 passed`; `uv run --project . pytest serve/kanban/tests -q` -> `735 passed`.
 - Builder challenger: `builder-challenger` decision `pass`; no blockers or scope drift found.
 - Follow-up risks: none identified; verifier should confirm repeated repair remains convergent for the heterogeneous complete set.
+
+[[2026-07-17T08:34:56+02:00]]
+## Verify Notes
+- Evidence reviewed: task AC1-AC3; Builder Notes; dependency #1937 read-only health authority; and `openspec/changes/redesign-workspace-health/design.md` sections 5-6.
+- Named authorities checked: the design requires full same-ID set classification, no-overwrite archive moves, per-path revalidation, terminal outcomes, and a post-repair health scan. Implementation in `serve/kanban/src/owlbear_kanban/corruption.py` conforms: `_reconcile_archived_tasks` indexes active and archive records by ID before destination conflicts invoke `_repair_duplicate_set`; conflict-free moves use exclusive hardlink creation then source unlink; `repair_task_storage` returns timestamps, classified outcome counts, and a post-operation scan.
+- Change Module Map: no deviation. Only the mapped corruption repair owner and its focused real-filesystem regression suite changed.
+- Normal-path boundary exercised: real filesystem repair tests cover archived-copy removal, unique-largest quarantine, unresolved preservation, destination-conflict preservation, complete three-record same-ID conflict classification, and conflict-free active-to-archive move. #1937 public `KanbanEngine.task_health()` evidence additionally covers complete duplicate-set classification without mutation.
+- Replacements used below the boundary: only temporary filesystem fixtures. The repair command, complete-set classification, and real mutations were not mocked or injected.
+- Checks run: `uv run --project . pytest serve/kanban/tests/test_corruption.py -q -k 'DeterministicRepair'` (7 passed); `uv run --project . pytest serve/kanban/tests -q` (735 passed); `uv run --project . pytest serve/kanban/tests/test_engine_task_health.py -q` (4 passed); `git diff --check` (passed).
+- Findings: none. No verifier patch applied.
+- Verifier-challenger: decision `pass`; it found the proof sufficient, with no unresolved AC or scope drift.
+- Final route: PASS; hands off to collect.
