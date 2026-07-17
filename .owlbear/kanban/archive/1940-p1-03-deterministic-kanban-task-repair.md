@@ -1,10 +1,10 @@
 ---
 id: 1940
 title: 'P1-03: Deterministic Kanban task repair'
-status: collect
+status: archived
 priority: medium
 created: 2026-07-17T02:32:03.458344+02:00
-updated: 2026-07-17T08:34:56.750958+02:00
+updated: 2026-07-17T08:35:52.507688+02:00
 tags:
   - phase-1
   - scope:kanban
@@ -32,7 +32,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -191,3 +191,14 @@ Final route: REJECT to build.
 - Findings: none. No verifier patch applied.
 - Verifier-challenger: decision `pass`; it found the proof sufficient, with no unresolved AC or scope drift.
 - Final route: PASS; hands off to collect.
+
+[[2026-07-17T08:35:52+02:00]]
+## Collect Notes
+- Classification: leaf. The task has no child tasks, no aggregate/EPIC intent, and defines a concrete Kanban repair implementation.
+- Intent source: `## Outcome`, `## Scope`, `## Repair Matrix`, and the three task AC.
+- Invariant map coverage: latest `## Verify Notes` confirms the repair owner and focused real-filesystem regression suite match the shaped Change Module Map, with no owner deviation.
+- Leaf verification evidence: latest verifier route is PASS with no findings; focused deterministic repair proof passed (7 tests), full Kanban package proof passed (735 tests), task-health proof passed (4 tests), and `git diff --check` passed. Verifier-challenger decision was `pass`.
+- Dependency check: dependency #1937 reports `dep_status=ok` and supplies the named read-only task-health authority.
+- Historical follow-up closure: earlier Required Follow-up tables belong to superseded verifier rejections; the latest Verify Notes confirm complete-set classification, no-overwrite archive movement, real-filesystem coverage, and no unresolved AC.
+- Residual decisions: no pending requests, no Decision Request section, and no block reason.
+- Rationale: verifier PASS evidence is complete and no unresolved follow-up or decision state remains; archive mechanically as completed.
