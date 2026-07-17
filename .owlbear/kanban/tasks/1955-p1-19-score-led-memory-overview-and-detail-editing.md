@@ -4,7 +4,7 @@ title: 'P1-19: Score-led memory overview and detail editing'
 status: build
 priority: medium
 created: 2026-07-17T04:54:05.097197+02:00
-updated: 2026-07-17T04:54:49.688056+02:00
+updated: 2026-07-17T05:51:30.086796+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -47,3 +47,41 @@ The operator can scan entries by current score, inspect the confirmed metadata, 
 Score, scope agents, and categories remain intentionally duplicated between summary and detail. Outstanding assessments are labeled `Outstanding marks` with a star icon and count, not `Starred`.
 
 Proof guidance: run focused package component checks; capture a screenshot only when visual framing or responsive non-overlap cannot be established from maintained assertions.
+
+[[2026-07-17T05:47:36+02:00]]
+## Builder Notes
+Change envelope: implement frontend memory API types, seven-state filters, score-led overview ordering, expanded lifecycle detail, and edit presentation for AC-1 through AC-3. Backend semantics, resolve mutation, navigation, score colors, pinning, and raw negative counters remained out of scope.
+
+Files changed: `serve/cockpit/web/src/api/memories.ts`, `serve/cockpit/web/src/pages/MemoryTab.tsx`.
+
+Change Module Map deviations: none. The backend route already exposed `score`, `outstanding_count`, and `contested_by_task`, so no backend edits were required.
+
+Implementation: expanded `MemoryState` to all seven canonical states and `MemoryEntry` to the backend response fields; changed ordering to score descending followed by state priority, creation time, and ID; added exceptional state filters and borders; replaced the summary confidence signal with two-decimal score; added Outstanding marks, score, and contested task to detail metadata while retaining scope/categories in summary and detail. Deleted entries remain without an edit action; existing mutable controls and read-only lifecycle metadata remain in edit mode.
+
+Proof selected: `npm --prefix serve/cockpit/web run build` completed successfully; `git diff --check` passed; scoped diff remained limited to the two expected frontend files. Focused Vitest was attempted but did not complete in this environment after startup, with no actionable component failure captured.
+
+Durable-test justification: no new tests added; existing focused component coverage is already present and the build provides the proportionate static proof for this contract alignment.
+
+Builder-challenger result: PASS. No concrete blocker against AC-1 through AC-3 reported.
+
+Follow-up risk: run the focused MemoryTab Vitest suite in verify with the package's normal test environment to confirm the new score/state fixtures end to end.
+
+[[2026-07-17T05:51:30+02:00]]
+## Verify Notes
+- Evidence reviewed: task Outcome, Scope, Presentation Contract, AC-1 through AC-3, Builder Notes, the scoped frontend diff, and the `MemoryTab` component tests.
+- Named authority checked: `serve/cockpit/src/owlbear_cockpit/routes/memory.py` defines the API response fields `outstanding_count`, `score`, and `contested_by_task`; `serve/cockpit/web/src/api/memories.ts` mirrors them and expands `MemoryState` to all seven canonical values.
+- Change Module Map: no implementation deviation found. The scoped code changes are limited to `serve/cockpit/web/src/api/memories.ts` and `serve/cockpit/web/src/pages/MemoryTab.tsx`; API types and page rendering/order/filter owners match the task scope.
+- Normal-path boundary reviewed: `MemoryTab` sorts by score descending, then canonical state priority, creation time, and ID; the state selector includes contested, disputed, and stale; summary renders two-decimal score; detail renders Outstanding marks, score, and contested task; deleted entries omit the edit action. Edit saves replace local entry state from the returned payload.
+- Checks run:
+  - `git diff --check -- serve/cockpit/web/src/api/memories.ts serve/cockpit/web/src/pages/MemoryTab.tsx` passed.
+  - `npm --prefix serve/cockpit/web run build` passed (TypeScript and Vite production build).
+  - `npm --prefix serve/cockpit/web test -- src/__tests__/MemoryTab.test.tsx src/__tests__/MemoryTab.routing.test.tsx` completed with 5 failures in `MemoryTab.routing.test.tsx`.
+- Finding: the maintained focused fixtures still define only pending/curated/approved/deleted and omit `score`, `outstanding_count`, and `contested_by_task`. Five assertions remain confidence-led (`higher-confidence` ordering, malformed confidence ordering, and summary confidence rendering). The suite therefore cannot validate AC-1 ordering/filtering or AC-2/AC-3 fields and returned-state rendering. The `clear-filters` failure is an existing fixture/PDS-option mismatch and must be reevaluated while updating the new state fixture contract.
+- Patches applied: none. Updating durable component fixtures/assertions is builder work, not a verifier-local repair.
+- Verifier-challenger precheck: identified the same absence of completed focused runtime proof and required API-shaped fixtures for all canonical states.
+- Final route: REJECT to build.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Update the existing focused MemoryTab fixtures and assertions to the canonical seven-state response shape; prove score-led ordering including all tie-breakers, contested/disputed/stale filters, summary/detail metadata inclusion and negative-counter exclusion, deleted edit suppression, and returned curated edit rendering. Resolve or explicitly modernize the filter-reset assertion under the same fixture contract, then rerun the focused suite. | `serve/cockpit/web/src/__tests__/MemoryTab.test.tsx`, `serve/cockpit/web/src/__tests__/MemoryTab.routing.test.tsx` | Focused Vitest run: 5 failures; current fixtures and assertions encode confidence-led behavior rather than AC-1 through AC-3. |
