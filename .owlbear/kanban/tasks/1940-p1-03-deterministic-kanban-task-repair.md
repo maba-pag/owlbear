@@ -4,7 +4,7 @@ title: 'P1-03: Deterministic Kanban task repair'
 status: build
 priority: medium
 created: 2026-07-17T02:32:03.458344+02:00
-updated: 2026-07-17T02:33:38.486366+02:00
+updated: 2026-07-17T08:19:29.922701+02:00
 tags:
   - phase-1
   - scope:kanban
@@ -60,3 +60,54 @@ OpenSpec change: `redesign-workspace-health`, especially the accepted complete d
 
 ## Proof Guidance
 Use a focused real-filesystem Kanban data-safety behavior check plus a downstream-impact scan. This is a data-loss-sensitive path; retain or add durable regression coverage for matrix classification, no-overwrite/revalidation, and convergence when existing coverage is insufficient.
+
+[[2026-07-17T08:18:02+02:00]]
+## Builder Notes
+Change envelope: deterministic Kanban task repair AC1-AC3; no unrelated refactors.
+
+Files changed:
+- serve/kanban/src/owlbear_kanban/corruption.py
+- serve/kanban/tests/test_corruption.py
+
+Implementation: deterministic outcome aggregation now counts every successful legacy `fixed` repair as `moved`, removing brittle dependence on detail text. Added focused regression coverage for archived duplicate removal, smaller duplicate quarantine, unresolved duplicate preservation, and fixed-outcome counting.
+
+Change Module Map deviations: none.
+
+Proof selected:
+- `uv run pytest serve/kanban/tests/test_corruption.py -q -k 'DeterministicRepair'` -> 4 passed
+- `uv run pytest serve/kanban/tests/test_corruption.py -q` -> 79 passed in 0.58s
+
+Durable-test justification: added four focused tests because the existing corruption suite did not exercise the deterministic repair result contract or duplicate-set matrix outcomes.
+
+Builder challenger: PASS. Verified AC1-AC3 coverage and no concrete blockers.
+
+Follow-up risks: broader Kanban integration/API contracts remain outside this focused task proof.
+
+[[2026-07-17T08:19:29+02:00]]
+## Verify Notes
+Evidence reviewed:
+- Task outcome, AC1-AC3, Repair Matrix, Builder Notes, and dependency authority #1937.
+- Planning authority: `openspec/changes/redesign-workspace-health/design.md` sections 4-6 and `specs/workspace-health/spec.md` requirements `Deterministic task duplicate repair` and `Synchronous convergent repair contract`.
+- Changed implementation: `serve/kanban/src/owlbear_kanban/corruption.py`; focused durable proof: `serve/kanban/tests/test_corruption.py`.
+
+Change Module Map:
+- No deviation: repair classification, duplicate operations, archive reconciliation, and post-repair scan remain in the Kanban corruption owner. The task-owned tests target the same real-filesystem boundary.
+
+Normal-path boundary exercised:
+- `uv run pytest serve/kanban/tests/test_corruption.py -q` -> 79 passed in 0.62s.
+- No replacements occur above the filesystem boundary in the focused deterministic-repair tests.
+
+Findings:
+- AC2 / no-overwrite conflict: `_reconcile_archived_tasks()` skips an existing archive destination (`if destination.exists(): continue`) instead of routing that conflict through the complete duplicate matrix before mutation. This contradicts the design authority.
+- AC2 / no-overwrite race: after the pre-check, `path.replace(destination)` has overwrite semantics on the target filesystem. A destination created concurrently can be overwritten; the authority requires no-overwrite moves and revalidation rather than claiming unsafe mutation.
+- The current regression suite does not cover either destination-conflict routing or a no-overwrite archive move race. Passing tests are insufficient evidence for this data-loss-sensitive AC.
+
+Patches applied:
+- None. Correcting archive conflict classification and replacing the move primitive changes the task's core storage-operation behavior, exceeding verifier local patch limits.
+
+Final route: REJECT to build.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Route archive destination conflicts through complete-set duplicate classification, implement a no-overwrite archive move with pre-mutation revalidation, and add focused real-filesystem regression coverage for both. | `serve/kanban/src/owlbear_kanban/corruption.py`, `serve/kanban/tests/test_corruption.py` | `openspec/changes/redesign-workspace-health/design.md` §5; AC2 |
