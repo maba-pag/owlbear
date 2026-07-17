@@ -50,6 +50,17 @@ export function useMemoryPurgeFlow(options?: UseMemoryPurgeFlowOptions): UseMemo
   const [error, setError] = useState<string | null>(null)
   const acceptedThreshold = useRef<number | null>(null)
   const previewRequest = useRef(0)
+  const purgeInFlight = useRef(false)
+
+  const changeThreshold = (value: string): void => {
+    ++previewRequest.current
+    acceptedThreshold.current = null
+    setThreshold(value)
+    setPreview(null)
+    setReceipt(null)
+    setError(null)
+    setPhase('idle')
+  }
 
   const requestPreview = async (): Promise<void> => {
     const parsed = parseThreshold(threshold)
@@ -78,7 +89,8 @@ export function useMemoryPurgeFlow(options?: UseMemoryPurgeFlowOptions): UseMemo
 
   const confirmPurge = async (): Promise<void> => {
     const parsed = acceptedThreshold.current
-    if (parsed === null || preview === null) return
+    if (parsed === null || preview === null || purgeInFlight.current) return
+    purgeInFlight.current = true
     setError(null)
     setPhase('running')
     try {
@@ -89,6 +101,8 @@ export function useMemoryPurgeFlow(options?: UseMemoryPurgeFlowOptions): UseMemo
     } catch (caught: unknown) {
       setError(caught instanceof Error ? caught.message : String(caught))
       setPhase('error')
+    } finally {
+      purgeInFlight.current = false
     }
   }
 
@@ -101,7 +115,7 @@ export function useMemoryPurgeFlow(options?: UseMemoryPurgeFlowOptions): UseMemo
     setPhase('idle')
   }
 
-  return { phase, threshold, preview, receipt, error, setThreshold, requestPreview, confirmPurge, cancelPurge }
+  return { phase, threshold, preview, receipt, error, setThreshold: changeThreshold, requestPreview, confirmPurge, cancelPurge }
 }
 
 export function useCleanupFlow(options?: UseCleanupFlowOptions): UseCleanupFlowResult {

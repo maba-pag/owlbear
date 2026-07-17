@@ -1,10 +1,10 @@
 ---
 id: 1949
 title: 'P1-13: Ordered Memory purge flow'
-status: build
+status: verify
 priority: medium
 created: 2026-07-17T03:04:26.420225+02:00
-updated: 2026-07-17T17:21:47.531599+02:00
+updated: 2026-07-17T17:32:10.127005+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -106,3 +106,24 @@ Verifier-challenger result: not requested because this is a REJECT, not a PASS.
 | 3 | builder | Add focused public-hook Vitest coverage using the real Memory-purge API boundary with fetch replaced below it: out-of-order previews, current-threshold gating, exact execution threshold and receipt, callback once, invalid input/no request, and preview/execution errors/no callback. | `serve/cockpit/web/src/__tests__/useMemoryPurgeFlow.test.ts` | Task proof guidance and AC-1 through AC-3. |
 
 Final route: REJECT -> build.
+
+[[2026-07-17T17:32:10+02:00]]
+## Builder Notes
+
+Change envelope: repair the headless Memory purge flow in the mapped web hook and add the shaped public-flow regression proof; preserve the existing cleanup flow and API boundary.
+
+Files changed:
+- serve/cockpit/web/src/hooks/useCleanupFlow.ts
+- serve/cockpit/web/src/__tests__/useMemoryPurgeFlow.test.ts
+
+Change Module Map deviations: none. Threshold setter now invalidates accepted preview/receipt state and stale preview requests; purge execution uses a ref lock to prevent duplicate requests and completion callbacks.
+
+Proof selected: focused existing cleanup-hook suite plus focused public Memory purge hook tests at the real hook/API boundary with fetch replaced below the API client. Existing suite passed 1 file and 26 tests. Builder challenger independently verified the new suite passed 3 tests and TypeScript completed successfully. The package test and direct Vitest commands in the main terminal exited 130 before output; root npm run build emitted unrelated backend health-check output and did not provide frontend build evidence. No frontend build claim is made.
+
+Behavior covered: threshold changes invalidate confirmation; out-of-order previews cannot replace the current threshold preview; exact current threshold is posted for execution; repeated confirmation submits once and invokes onSuccess once; invalid thresholds produce validation errors with no request; preview failure exposes error without completion.
+
+Durable-test justification: the new test protects a concrete observed verifier regression in a shared public hook contract and exercises state ordering, duplicate submission, validation, and failure boundaries.
+
+Builder-challenger result: pass. It independently reported the focused suite 3/3 and direct TypeScript check TSC_OK, with no concrete blocker.
+
+Follow-up risks: production frontend build evidence was unavailable in the main terminal because the invoked build path was interrupted or routed through unrelated repository checks; verifier should rerun package-local build if needed.
