@@ -1,10 +1,10 @@
 ---
 id: 1937
 title: 'P1-01: Kanban task and graph health evidence'
-status: build
+status: verify
 priority: high
 created: 2026-07-17T02:31:31.385612+02:00
-updated: 2026-07-17T07:02:46.372371+02:00
+updated: 2026-07-17T07:04:34.142779+02:00
 tags:
   - phase-1
   - scope:kanban
@@ -127,3 +127,13 @@ Use a focused real-filesystem Kanban behavior check plus a downstream-impact sca
 |---|-------------|----------------|---------|----------|
 | 1 | builder | Add real-filesystem `KanbanEngine.task_health()` regression coverage for a readable task with two independent persisted-field defects and an unreadable task; assert findings and byte/mtime immutability. | `serve/kanban/tests/test_engine_task_health.py` | AC 1 has no direct public-boundary proof. |
 | 2 | builder | Add public-boundary coverage for missing parent/dependency/archival targets, dependency self-reference, and archived state in active storage, asserting owner, field or cycle context, location evidence, and no mutation. | `serve/kanban/tests/test_engine_task_health.py` | AC 3 has no direct public-boundary proof. |
+
+[[2026-07-17T07:04:34+02:00]]
+## Builder Notes
+- Change envelope: read-only Kanban task-health evidence in `KanbanEngine.task_health()`; duplicate-ID complete-set classification and dependency-cycle diagnostics only. No storage mutation, request diagnostics, claim maintenance, Cockpit behavior, or repair implementation changed.
+- Files changed: `serve/kanban/src/owlbear_kanban/engine.py`; `serve/kanban/tests/test_engine_task_health.py`; task record updated by this lifecycle note.
+- Change Module Map: stayed within the shaped owners (`engine.py` public health method and Kanban tests); no deviation.
+- Proof selected: `uv run pytest serve/kanban/tests/test_corruption.py serve/kanban/tests/test_engine_task_health.py -q` -> 77 passed in 0.57s. `git diff --check -- serve/kanban/src/owlbear_kanban/engine.py serve/kanban/tests/test_engine_task_health.py` -> clean.
+- Durable-test justification: retained focused regression coverage because this shared integrity boundary must preserve complete multi-finding duplicate sets, archived cross-directory classification, concrete cycle context, and non-mutating scans.
+- Builder-challenger: pass; confirmed scope, proof sufficiency, and no concrete DONE blockers.
+- Follow-up risk: downstream verifier should confirm the final task-owned commit and broader integration compatibility.
