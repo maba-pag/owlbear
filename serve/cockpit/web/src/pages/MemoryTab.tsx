@@ -20,6 +20,7 @@ import {
   deleteMemory,
   editMemory,
   MemoryMutationError,
+  resolveMemory,
   type MemoriesResponse,
   type MemoryEditPayload,
   type MemoryEntry,
@@ -28,8 +29,10 @@ import {
 } from '../api/memories'
 import MarkdownPreview from '../components/MarkdownPreview'
 import { WorkspaceHeader, WorkspaceHeaderMetric, WorkspaceHeaderPill } from '../components/WorkspaceHeader'
+import { useMemoryPurgeFlow } from '../hooks/useCleanupFlow'
 import { MEMORY_PENDING_COUNT_EVENT } from '../hooks/usePendingMemoryCount'
 import { usePollingFetch } from '../hooks/usePollingFetch'
+import { openTaskDetail } from '../utils/openTaskDetail'
 
 interface MemoryFilterState {
   states: MemoryState[]
@@ -179,6 +182,14 @@ function formatScopeAgents(scopeAgents: string[]): string {
   return isAllAgentsScope(scopeAgents) ? 'All agents' : scopeAgents.join(', ')
 }
 
+function parseContestedTaskId(value: string | null): number | null {
+  if (value === null || !/^\d+$/.test(value)) {
+    return null
+  }
+  const taskId = Number(value)
+  return Number.isSafeInteger(taskId) && taskId >= 0 ? taskId : null
+}
+
 function toFilterableScopeAgents(scopeAgents: string[]): string[] {
   return scopeAgents.filter((agent) => agent !== ALL_AGENTS_SCOPE)
 }
@@ -272,6 +283,8 @@ function MemoryTab() {
       setParseErrors(0)
     },
   })
+
+  const purgeFlow = useMemoryPurgeFlow({ onSuccess: () => void refetch() })
 
   useEffect(() => {
     const onVisibilityChange = () => {
@@ -390,6 +403,7 @@ function MemoryTab() {
 
   const hasEntries = entries.length > 0
   const hasVisibleEntries = visibleEntries.length > 0
+  const deletedCount = entries.filter((entry) => entry.state === 'deleted').length
   const memoryCountMetric = visibleEntries.length === entries.length
     ? <WorkspaceHeaderMetric value={entries.length} label={entries.length === 1 ? 'entry' : 'entries'} />
     : <WorkspaceHeaderMetric value={`${visibleEntries.length} of ${entries.length}`} label="shown" />
@@ -511,6 +525,11 @@ function MemoryTab() {
     const apiError = mutationError?.apiError ?? null
     const parsedValidationMessages = mutationError?.validationMessages ?? []
 
+    if (apiError?.status === 409 && apiError.message.includes('MEM_CONFLICT')) {
+      setEntryError(entry.id, apiError.message)
+      return
+    }
+
     if (apiError?.status === 409) {
       setEntryError(entry.id, 'Entry was modified — refreshing')
       void refetch()
@@ -538,6 +557,19 @@ function MemoryTab() {
       if (payload.entry) {
         applyEntryReplace(payload.entry)
         emitPendingCountDelta(entry, payload.entry)
+      }
+      void refetch()
+    } catch (caught) {
+      await handleMutationFailure(entry, caught)
+    }
+  }
+
+  const handleResolve = async (entry: MemoryEntry): Promise<void> => {
+    clearEntryErrors(entry.id)
+    try {
+      const payload = await resolveMemory(entry.id, entry.updated_at)
+      if (payload.entry) {
+        applyEntryReplace(payload.entry)
       }
       void refetch()
     } catch (caught) {
@@ -662,7 +694,30 @@ function MemoryTab() {
             {parseErrors > 0 ? <WorkspaceHeaderPill tone="error">{parseErrors} unreadable</WorkspaceHeaderPill> : null}
           </>
         )}
+        actions={(
+          <PButton
+            type="button"
+            compact
+            variant="secondary"
+            data-testid="memory-purge-open-button"
+            disabled={deletedCount === 0}
+            onClick={() => void purgeFlow.requestPreview()}
+          >
+            Purge deleted ({deletedCount})
+          </PButton>
+        )}
       />
+
+      {purgeFlow.receipt ? (
+        <div className="mx-static-sm mt-static-md flex flex-wrap items-center justify-between gap-static-sm rounded-lg border border-success bg-success-low p-static-sm text-sm text-primary sm:mx-static-md" data-testid="memory-purge-receipt">
+          <span>
+            Purged {purgeFlow.receipt.purged}; skipped {purgeFlow.receipt.skipped}; failed {purgeFlow.receipt.failed}
+          </span>
+          <PButton type="button" compact variant="secondary" data-testid="memory-purge-receipt-dismiss" onClick={purgeFlow.cancelPurge}>
+            Dismiss
+          </PButton>
+        </div>
+      ) : null}
 
       <div className="flex min-h-0 flex-1 flex-col gap-static-md px-static-sm py-static-md sm:p-static-md">
       <div
@@ -813,7 +868,18 @@ function MemoryTab() {
                         <div className="min-w-0"><dt className="font-semibold text-contrast-high">State</dt><dd data-testid="memory-entry-state" className="m-0 break-words text-primary">{entry.state}</dd></div>
                         <div className="min-w-0"><dt className="font-semibold text-contrast-high">Outstanding marks</dt><dd className="m-0 break-words text-primary">★ {entry.outstanding_count}</dd></div>
                         <div className="min-w-0"><dt className="font-semibold text-contrast-high">Score</dt><dd className="m-0 break-words text-primary">{formatConfidence(entry.score)}</dd></div>
-                        <div className="min-w-0"><dt className="font-semibold text-contrast-high">Contested task</dt><dd className="m-0 break-words text-primary">{entry.contested_by_task ?? '-'}</dd></div>
+                        <div className="min-w-0"><dt className="font-semibold text-contrast-high">Contested task</dt><dd className="m-0 break-words text-primary">
+                          {entry.contested_by_task === null ? '—' : parseContestedTaskId(entry.contested_by_task) === null ? entry.contested_by_task : (
+                            <button
+                              type="button"
+                              className="text-primary underline"
+                              data-testid="memory-contested-task"
+                              onClick={() => openTaskDetail(parseContestedTaskId(entry.contested_by_task) as number)}
+                            >
+                              {entry.contested_by_task}
+                            </button>
+                          )}
+                        </dd></div>
                         <div className="min-w-0"><dt className="font-semibold text-contrast-high">Created</dt><dd className="m-0 break-words text-primary">{entry.created_at}</dd></div>
                         <div className="min-w-0"><dt className="font-semibold text-contrast-high">Updated</dt><dd className="m-0 break-words text-primary">{entry.updated_at}</dd></div>
                         <div className="min-w-0"><dt className="font-semibold text-contrast-high">Approved</dt><dd className="m-0 break-words text-primary">{entry.approved_at ?? '-'}</dd></div>
@@ -829,6 +895,11 @@ function MemoryTab() {
                     {promotionMessageByEntryId[entry.id] ? <p className="rounded-lg border border-success bg-success-low p-static-sm text-primary">{promotionMessageByEntryId[entry.id]}</p> : null}
 
                     <div data-testid="memory-detail-actions" className="flex flex-wrap items-center gap-static-xs">
+                      {entry.state === 'contested' || entry.state === 'disputed' || entry.state === 'stale' ? (
+                        <PButton type="button" data-testid="memory-resolve-btn" compact onClick={() => void handleResolve(entry)}>
+                          Resolve
+                        </PButton>
+                      ) : null}
                       {entry.state === 'curated' ? (
                         <PButton type="button" data-testid="memory-approve-btn" compact onClick={() => void handleApprove(entry)}>
                           Approve
@@ -1113,6 +1184,53 @@ function MemoryTab() {
               >
                 Confirm delete
               </PButton>
+            </div>
+          </div>
+        </PModal>
+      ) : null}
+      {purgeFlow.phase !== 'idle' && purgeFlow.phase !== 'done' ? (
+        <PModal
+          data-testid="memory-purge-dialog"
+          open
+          tabIndex={-1}
+          onDismiss={purgeFlow.cancelPurge}
+          disableBackdropClick
+          dismissButton={false}
+          aria-label="Purge deleted memories"
+        >
+          <div className="grid max-w-[520px] gap-static-md">
+            <div className="grid gap-static-xs">
+              <PHeading tag="h2" size="small">Purge deleted memories</PHeading>
+              <p className="m-0 text-sm text-contrast-high">This action ignores active filters and applies across the project.</p>
+            </div>
+            <PInputNumber
+              name="memory-purge-threshold"
+              label="Minimum age (days)"
+              controls
+              min={0}
+              step={1}
+              value={purgeFlow.threshold}
+              state={purgeFlow.error ? 'error' : undefined}
+              message={purgeFlow.error ?? undefined}
+              onChange={(event) => purgeFlow.setThreshold(readStringValue(event))}
+              onInput={(event) => purgeFlow.setThreshold(readStringValue(event))}
+            />
+            {purgeFlow.preview ? (
+              <dl className="grid grid-cols-3 gap-static-sm rounded-lg border border-contrast-low bg-surface p-static-sm text-sm" data-testid="memory-purge-preview">
+                <div><dt className="text-contrast-high">Total deleted</dt><dd className="m-0 font-semibold">{purgeFlow.preview.deleted_total}</dd></div>
+                <div><dt className="text-contrast-high">Eligible</dt><dd className="m-0 font-semibold">{purgeFlow.preview.eligible}</dd></div>
+                <div><dt className="text-contrast-high">Too recent</dt><dd className="m-0 font-semibold">{purgeFlow.preview.too_recent}</dd></div>
+              </dl>
+            ) : null}
+            <div className="flex flex-wrap justify-end gap-static-xs">
+              <PButton type="button" compact variant="secondary" onClick={purgeFlow.cancelPurge}>Cancel</PButton>
+              {purgeFlow.phase === 'confirming' ? (
+                <PButton type="button" compact onClick={() => void purgeFlow.confirmPurge()}>Purge</PButton>
+              ) : (
+                <PButton type="button" compact disabled={purgeFlow.phase === 'previewing' || purgeFlow.phase === 'running'} onClick={() => void purgeFlow.requestPreview()}>
+                  Preview
+                </PButton>
+              )}
             </div>
           </div>
         </PModal>

@@ -1,10 +1,10 @@
 ---
 id: 1950
 title: 'P1-14: Memory tombstone purge experience'
-status: build
+status: verify
 priority: low
 created: 2026-07-17T03:04:32.743980+02:00
-updated: 2026-07-17T03:04:43.911814+02:00
+updated: 2026-07-17T20:36:59.990731+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -49,3 +49,20 @@ Out of scope: backend/core behavior, headless request authority, and unrelated M
 Proof guidance: run package-local rendered behavior with network replaced below MemoryTab, plus one real-browser interaction and screenshots at representative desktop and mobile viewports for hierarchy, dialog fit, and receipt.
 
 Complexity waiver: component and browser evidence cover one compact destructive interaction with behavioral and visual claims; splitting responsive proof from presentation would create a proof-only task.
+
+[[2026-07-17T20:36:59+02:00]]
+## Builder Notes
+
+Change envelope: Memory header purge action/count, PDS confirmation dialog, preview metrics and project-wide warning, persistent purge receipt, and existing Memory refresh cadence. Backend/core and headless request authority remained out of scope.
+
+Files changed: `serve/cockpit/web/src/pages/MemoryTab.tsx` only.
+
+Change Module Map deviations: none. Reused `useMemoryPurgeFlow`, `WorkspaceHeader.actions`, `PInputNumber`, existing complete Memory dataset, visibility refetch, and mutation refetch paths.
+
+Proof selected: focused rendered/component behavior plus package build. `npm test -- --run src/__tests__/useMemoryPurgeFlow.test.ts src/__tests__/memoryPurgeFlow.verify.test.ts src/__tests__/MemoryTab.test.tsx` passed with 3 files and 96 tests. `npm run build` passed; Vite reported only the existing chunk-size warning.
+
+Durable-test justification: no new durable tests added; existing purge hook and MemoryTab coverage provided the proportional regression proof.
+
+Builder-challenger result: pass. No concrete blockers or scope drift reported.
+
+Follow-up risk: the shaped proof guidance requested real-browser screenshots; package-local rendered tests and build were available and passed, but no Playwright screenshot run was added in this builder stage.
