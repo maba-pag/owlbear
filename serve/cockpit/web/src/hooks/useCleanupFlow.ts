@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { cleanupTasks, type CleanupResult } from '../api/cleanup'
+import { previewMemoryPurge, purgeMemories, type MemoryPurgePreview, type MemoryPurgeReceipt } from '../api/memoryPurge'
 
 export type CleanupPhase = 'idle' | 'confirming' | 'running' | 'done' | 'error'
 
@@ -15,6 +16,92 @@ export interface UseCleanupFlowResult {
   confirmCleanup: () => Promise<void>
   cancelCleanup: () => void
   dismissResults: () => void
+}
+
+export type MemoryPurgePhase = 'idle' | 'previewing' | 'confirming' | 'running' | 'done' | 'error'
+
+export interface UseMemoryPurgeFlowOptions {
+  onSuccess?: () => void
+}
+
+export interface UseMemoryPurgeFlowResult {
+  phase: MemoryPurgePhase
+  threshold: string
+  preview: MemoryPurgePreview | null
+  receipt: MemoryPurgeReceipt | null
+  error: string | null
+  setThreshold: (value: string) => void
+  requestPreview: () => Promise<void>
+  confirmPurge: () => Promise<void>
+  cancelPurge: () => void
+}
+
+function parseThreshold(value: string): number | null {
+  if (!/^\d+$/.test(value.trim())) return null
+  const threshold = Number(value)
+  return Number.isSafeInteger(threshold) ? threshold : null
+}
+
+export function useMemoryPurgeFlow(options?: UseMemoryPurgeFlowOptions): UseMemoryPurgeFlowResult {
+  const [phase, setPhase] = useState<MemoryPurgePhase>('idle')
+  const [threshold, setThreshold] = useState('')
+  const [preview, setPreview] = useState<MemoryPurgePreview | null>(null)
+  const [receipt, setReceipt] = useState<MemoryPurgeReceipt | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const acceptedThreshold = useRef<number | null>(null)
+  const previewRequest = useRef(0)
+
+  const requestPreview = async (): Promise<void> => {
+    const parsed = parseThreshold(threshold)
+    if (parsed === null) {
+      setError('Threshold must be a nonnegative whole number')
+      setPreview(null)
+      setPhase('error')
+      return
+    }
+    const requestId = ++previewRequest.current
+    acceptedThreshold.current = parsed
+    setError(null)
+    setPreview(null)
+    setPhase('previewing')
+    try {
+      const response = await previewMemoryPurge(parsed)
+      if (requestId !== previewRequest.current || acceptedThreshold.current !== parsed) return
+      setPreview(response)
+      setPhase('confirming')
+    } catch (caught: unknown) {
+      if (requestId !== previewRequest.current) return
+      setError(caught instanceof Error ? caught.message : String(caught))
+      setPhase('error')
+    }
+  }
+
+  const confirmPurge = async (): Promise<void> => {
+    const parsed = acceptedThreshold.current
+    if (parsed === null || preview === null) return
+    setError(null)
+    setPhase('running')
+    try {
+      const response = await purgeMemories(parsed)
+      setReceipt(response)
+      setPhase('done')
+      options?.onSuccess?.()
+    } catch (caught: unknown) {
+      setError(caught instanceof Error ? caught.message : String(caught))
+      setPhase('error')
+    }
+  }
+
+  const cancelPurge = (): void => {
+    ++previewRequest.current
+    acceptedThreshold.current = null
+    setPreview(null)
+    setReceipt(null)
+    setError(null)
+    setPhase('idle')
+  }
+
+  return { phase, threshold, preview, receipt, error, setThreshold, requestPreview, confirmPurge, cancelPurge }
 }
 
 export function useCleanupFlow(options?: UseCleanupFlowOptions): UseCleanupFlowResult {
