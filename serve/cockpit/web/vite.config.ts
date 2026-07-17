@@ -70,6 +70,7 @@ export default defineConfig({
     emptyOutDir: true,
   },
   css: {
+    transformer: 'lightningcss',
     lightningcss: {
       exclude: Features.LightDark,
     },

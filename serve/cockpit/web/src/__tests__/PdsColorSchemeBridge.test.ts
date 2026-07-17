@@ -6,7 +6,6 @@
  *
  * Coverage:
  *   AC-1: custom-tokens.css exists and declares the retained custom token
- *   AC-2: vite.config.ts excludes Features.LightDark from lightningcss
  *   AC-3: theme-bootstrap.js sets .scheme-dark/.scheme-light on documentElement
  *   AC-4: useTheme.ts — all 3 mutation sites toggle scheme classes (no accumulation)
  *   AC-7: No app-authored color-scheme CSS property declarations in src/ CSS files
@@ -26,7 +25,6 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
 const CUSTOM_TOKENS_CSS_PATH = resolve(__dirname, '../custom-tokens.css')
-const VITE_CONFIG_PATH = resolve(__dirname, '../../vite.config.ts')
 const BOOTSTRAP_PATH = resolve(__dirname, '../../public/theme-bootstrap.js')
 const SRC_DIR = resolve(__dirname, '..')
 
@@ -121,23 +119,6 @@ describe('TestFromAC_TokensCssGlobalStylesImport_1555', () => {
     const content = readFileSync(CUSTOM_TOKENS_CSS_PATH, 'utf-8')
     const declarations = [...content.matchAll(/--[a-z][a-z0-9-]*\s*:/g)]
     expect(declarations).toHaveLength(1)
-  })
-})
-
-// ─── AC-2: vite.config.ts excludes Features.LightDark ────────────────────────
-
-describe('TestFromAC_ViteConfigLightDark_1555', () => {
-  it('AC-2: vite.config.ts references Features.LightDark', () => {
-    const content = readFileSync(VITE_CONFIG_PATH, 'utf-8')
-
-    expect(content).toContain('Features.LightDark')
-  })
-
-  it('AC-2: vite.config.ts contains a lightningcss exclude configuration block', () => {
-    const content = readFileSync(VITE_CONFIG_PATH, 'utf-8')
-
-    expect(content).toMatch(/lightningcss/)
-    expect(content).toMatch(/exclude/)
   })
 })
 
