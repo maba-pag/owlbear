@@ -1,10 +1,10 @@
 ---
 id: 1939
 title: 'P1-02: Kanban request storage health'
-status: collect
+status: archived
 priority: medium
 created: 2026-07-17T02:31:44.655319+02:00
-updated: 2026-07-17T08:08:01.177832+02:00
+updated: 2026-07-17T08:09:12.553455+02:00
 tags:
   - phase-1
   - scope:kanban
@@ -24,7 +24,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -159,3 +159,18 @@ Verifier-challenger result:
 - pass. It confirmed boundary coverage, proof sufficiency, and that the unrelated adjacent task-health diff is not a blocker.
 
 Final route: PASS to collect.
+
+[[2026-07-17T08:09:12+02:00]]
+## Collect Notes
+
+Classification: leaf. The task has concrete implementation AC, no child tasks (`list_tasks(parent=1939)` returned none), and no aggregate intent section or EPIC tag.
+
+Leaf verification evidence: the latest `## Verify Notes` records PASS to collect after direct real-filesystem proof through public `KanbanEngine.request_health()`. Focused proof returned 3 passed; Ruff and `git diff --check` passed. The verifier-challenger passed and found no acceptance-criteria or implementation gaps.
+
+Invariant map coverage: verifier evidence covers malformed/schema observability, complete duplicate path grouping, unchanged storage bytes, active/archive owner recognition versus absent owners, and both pending/resolved location mismatch directions. No Change Module Map deviation was reported.
+
+Dependency check: task dependency #1937 is satisfied (`dep_status=ok`). Parent #1945 does not make this task aggregate; this leaf has no children.
+
+Residual decisions: no pending request records for task #1939, no block, and no unresolved current Required Follow-up. The earlier verifier rejection was resolved by the later PASS evidence.
+
+Archive rationale: verified leaf closure is complete, so archive as completed.
