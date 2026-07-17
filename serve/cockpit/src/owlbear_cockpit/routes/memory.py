@@ -25,11 +25,14 @@ class MemoryEntryResponse(BaseModel):
     categories: list[MemoryCategory]
     confidence: float
     state: MemoryState
+    outstanding_count: int
+    score: float
     scope_agents: list[str]
     source_agent: str
     created_at: str
     updated_at: str
     approved_at: str | None
+    contested_by_task: str | None
 
 
 class MemoriesResponse(BaseModel):
@@ -47,6 +50,14 @@ class MemoryEntryEnvelope(BaseModel):
 
 class ApproveRequest(BaseModel):
     """Request body for approving a memory entry with OCC."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    expected_updated_at: str
+
+
+class ResolveRequest(BaseModel):
+    """Request body for resolving an exceptional memory entry with OCC."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -99,6 +110,17 @@ def approve_memory(
 ) -> MemoryEntryEnvelope:
     """Approve one curated entry using optimistic concurrency token."""
     entry = engine.approve(entry_id, req.expected_updated_at)
+    return MemoryEntryEnvelope(entry=_to_response(entry))
+
+
+@router.post("/memories/{entry_id}/resolve", response_model=MemoryEntryEnvelope)
+def resolve_memory(
+    entry_id: str,
+    req: ResolveRequest,
+    engine=Depends(get_memory_engine),  # noqa: ANN001, B008
+) -> MemoryEntryEnvelope:
+    """Resolve one contested, disputed, or stale entry using OCC."""
+    entry = engine.resolve(entry_id, req.expected_updated_at)
     return MemoryEntryEnvelope(entry=_to_response(entry))
 
 

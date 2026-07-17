@@ -1,10 +1,10 @@
 ---
 id: 1954
 title: 'P1-18: Cockpit memory lifecycle HTTP contract'
-status: build
+status: verify
 priority: high
 created: 2026-07-17T04:53:58.085320+02:00
-updated: 2026-07-17T04:54:49.616071+02:00
+updated: 2026-07-17T05:39:05.773004+02:00
 tags:
   - phase-1
   - scope:cockpit-backend
@@ -47,3 +47,15 @@ Cockpit receives the operator-relevant memory projection and a human resolve mut
 The list and mutation projection includes `id`, `title`, `content`, `categories`, `confidence`, `state`, `outstanding_count`, `score`, `scope_agents`, `source_agent`, `created_at`, `updated_at`, `approved_at`, and `contested_by_task`. It excludes `unremarkable_count` and `didnt_use_count`.
 
 Proof guidance: exercise endpoints through the FastAPI application boundary with persistence replaceable below the route; reuse existing exception-envelope checks.
+
+[[2026-07-17T05:39:05+02:00]]
+## Builder Notes
+- Change envelope: extend the existing Cockpit memory route adapter for the shaped operator projection and human exceptional-state resolve mutation; no MCP, frontend, or domain-engine changes.
+- Files changed: `serve/cockpit/src/owlbear_cockpit/routes/memory.py`, `tests/test_cockpit_memory_routes.py`.
+- Change Module Map deviations: none; the existing Cockpit memory route owns response shaping and mutation forwarding, while `MemoryEngine.resolve` and existing FastAPI exception handlers remain authoritative.
+- Implementation: added `outstanding_count`, `score`, and `contested_by_task` to the explicit 14-field response projection; retained omission of `unremarkable_count` and `didnt_use_count`; added `POST /api/memories/{entry_id}/resolve` with forbidden extras and OCC forwarding to `engine.resolve`.
+- Proof selected: focused route boundary tests plus real engine-to-Cockpit integration and Ruff.
+- Durable-test justification: added exact projection allowlist/omission coverage and resolve success, invalid-transition, and conflict envelope checks; these protect the new public HTTP contract and are cheaper than repeated manual verification.
+- Commands run: `uv run --project . pytest tests/test_cockpit_memory_routes.py -q` -> 51 passed; `uv run --project . pytest serve/cockpit/tests/test_memory_integration.py -q` -> 7 passed; `uv run --project . ruff check serve/cockpit/src/owlbear_cockpit/routes/memory.py tests/test_cockpit_memory_routes.py` -> All checks passed.
+- Builder-challenger: pass; no concrete blocker, scope drift, or proof deficiency reported.
+- Follow-up risks: Starlette emitted an existing httpx deprecation warning during TestClient runs; no task-scope failure.

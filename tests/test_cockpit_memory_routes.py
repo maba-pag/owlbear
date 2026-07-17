@@ -56,6 +56,25 @@ def _make_entry(
     )
 
 
+def _operator_projection_fields() -> set[str]:
+    return {
+        "id",
+        "title",
+        "content",
+        "categories",
+        "confidence",
+        "state",
+        "outstanding_count",
+        "score",
+        "scope_agents",
+        "source_agent",
+        "created_at",
+        "updated_at",
+        "approved_at",
+        "contested_by_task",
+    }
+
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -133,6 +152,15 @@ class TestGetMemories:
         }
         missing = required_fields - item.keys()
         assert not missing, f"Entry is missing fields: {missing}"
+
+    def test_list_entry_has_operator_projection_and_omits_private_counters(
+        self, client: TestClient, mock_engine: MagicMock
+    ) -> None:
+        mock_engine.get_entries.return_value = [_make_entry()]
+        item = client.get("/api/memories").json()["entries"][0]
+        assert set(item) == _operator_projection_fields()
+        assert "unremarkable_count" not in item
+        assert "didnt_use_count" not in item
 
     def test_list_entry_field_values_match_engine_output(self, client: TestClient, mock_engine: MagicMock) -> None:
         """Field values in the response entry match the MemoryEntry from the engine."""
@@ -240,6 +268,43 @@ class TestApproveMemory:
         assert "detail" not in body
         assert body["code"] == "MEM_NOT_FOUND"
         assert "message" in body
+
+
+class TestResolveMemory:
+    """AC-2/AC-3: resolve exceptional entries with OCC."""
+
+    def test_resolve_returns_approved_entry(self, client: TestClient, mock_engine: MagicMock) -> None:
+        updated_entry = _make_entry(_ENTRY_ID, MemoryState.APPROVED, approved_at=_NOW)
+        mock_engine.resolve.return_value = updated_entry
+        response = client.post(
+            f"/api/memories/{_ENTRY_ID}/resolve",
+            json={"expected_updated_at": _NOW},
+        )
+        assert response.status_code == 200
+        assert response.json()["entry"]["state"] == "approved"
+        mock_engine.resolve.assert_called_once_with(_ENTRY_ID, _NOW)
+
+    def test_resolve_invalid_transition_returns_mem_code(
+        self, client: TestClient, mock_engine: MagicMock
+    ) -> None:
+        mock_engine.resolve.side_effect = TransitionError("resolve() not allowed from state pending")
+        response = client.post(
+            f"/api/memories/{_ENTRY_ID}/resolve",
+            json={"expected_updated_at": _NOW},
+        )
+        assert response.status_code == 422
+        assert response.json()["code"] == "MEM_INVALID_TRANSITION"
+
+    def test_resolve_conflict_returns_mem_conflict_code(
+        self, client: TestClient, mock_engine: MagicMock
+    ) -> None:
+        mock_engine.resolve.side_effect = ConcurrencyError("occ mismatch")
+        response = client.post(
+            f"/api/memories/{_ENTRY_ID}/resolve",
+            json={"expected_updated_at": "2000-01-01T00:00:00+00:00"},
+        )
+        assert response.status_code == 409
+        assert response.json()["code"] == "MEM_CONFLICT"
 
     def test_approve_concurrency_error_returns_409_with_mem_conflict_code(
         self, client: TestClient, mock_engine: MagicMock
