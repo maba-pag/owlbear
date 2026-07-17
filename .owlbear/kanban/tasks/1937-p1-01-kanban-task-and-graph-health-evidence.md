@@ -1,10 +1,10 @@
 ---
 id: 1937
 title: 'P1-01: Kanban task and graph health evidence'
-status: build
+status: verify
 priority: high
 created: 2026-07-17T02:31:31.385612+02:00
-updated: 2026-07-17T05:22:11.222898+02:00
+updated: 2026-07-17T06:58:19.182229+02:00
 tags:
   - phase-1
   - scope:kanban
@@ -70,3 +70,14 @@ Use a focused real-filesystem Kanban behavior check plus a downstream-impact sca
 | # | Target Agent | Action Required | File(s) | Evidence |
 |---|-------------|----------------|---------|----------|
 | 1 | builder | Refactor `task_health()` into locally scoped helpers or otherwise satisfy the configured Ruff complexity, branch, statement, line-length, performance, and tuple-construction rules; add the test file's final newline; rerun focused pytest and Ruff check/format. | `serve/kanban/src/owlbear_kanban/engine.py`; `serve/kanban/tests/test_engine_task_health.py` | Ruff reported 12 violations during verification. |
+
+[[2026-07-17T06:58:19+02:00]]
+## Builder Notes
+- Change envelope: repaired only task-health diagnostics in `serve/kanban/src/owlbear_kanban/engine.py` and the associated durable regression file `serve/kanban/tests/test_engine_task_health.py`; no public API, storage mutation, request diagnostics, claim maintenance, or Cockpit behavior changed.
+- Files changed: `serve/kanban/src/owlbear_kanban/engine.py`; `serve/kanban/tests/test_engine_task_health.py`; task record updated by this lifecycle note.
+- Change Module Map: stayed within the shaped owners; no deviation.
+- Implementation: split graph-health parent, dependency, archival-reference, and archived-active-storage finding construction into focused helpers, preserving complete duplicate-set and cycle diagnostics.
+- Proof selected: `uv run ruff check serve/kanban/src/owlbear_kanban/engine.py serve/kanban/tests/test_engine_task_health.py` -> All checks passed; `uv run ruff format serve/kanban/src/owlbear_kanban/engine.py serve/kanban/tests/test_engine_task_health.py` -> 2 files reformatted; `uv run pytest serve/kanban/tests/test_corruption.py serve/kanban/tests/test_engine_task_health.py -q` -> 77 passed; `git diff --check` -> clean.
+- Durable-test justification: retained the existing durable tests because they protect the shared integrity boundary, including complete duplicate-set classification, cycle context, and filesystem immutability.
+- Builder-challenger: pass; no concrete blockers. It confirmed scope, AC coverage, lint, focused tests, and diff cleanliness.
+- Follow-up risk: no dedicated assertion for every archive-location drift variant beyond the existing archived-in-active-storage finding; outside this task's minimal scope.
