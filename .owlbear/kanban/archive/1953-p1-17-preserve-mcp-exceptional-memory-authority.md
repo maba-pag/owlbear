@@ -1,10 +1,10 @@
 ---
 id: 1953
 title: 'P1-17: Preserve MCP exceptional-memory authority'
-status: collect
+status: archived
 priority: medium
 created: 2026-07-17T04:53:51.213104+02:00
-updated: 2026-07-17T05:34:32.210600+02:00
+updated: 2026-07-17T05:35:19.112361+02:00
 tags:
   - phase-1
   - scope:mcp-memory
@@ -23,7 +23,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -98,3 +98,16 @@ Findings:
 Verifier-challenger result: pass. It found both AC directly covered, proof proportionate, and no scope drift or unresolved criteria.
 
 Final route: PASS to collect.
+
+[[2026-07-17T05:35:19+02:00]]
+## Collect Notes
+
+Classification: leaf. Task `#1953` has no child tasks and is a scoped implementation task under parent `#1958`, not an aggregate contract.
+
+Leaf verification evidence: `## Verify Notes` records PASS with focused real-boundary proof: 17 mutation-tool tests passed, 12 assess-memory tool tests passed, Ruff lint passed, Ruff format check passed, and `git diff --check` was clean. Verifier-challenger returned pass and no verifier patches were required.
+
+Invariant map coverage: verifier confirmed both acceptance criteria, the expected `tools.py` and `tests/test_mutation_tools.py` ownership, real `MemoryEngine` persistence coverage, unchanged public MCP inventory, and no resolve-memory operation.
+
+Dependency and closure state: dependency `#1952` is satisfied; no children exist; no pending decision or action requests exist; no unresolved Required Follow-up, block, or residual decision state remains.
+
+Archive rationale: verified leaf closure is complete, so archive as completed without re-reviewing implementation details.
