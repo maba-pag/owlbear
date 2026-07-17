@@ -1,10 +1,10 @@
 ---
 id: 1937
 title: 'P1-01: Kanban task and graph health evidence'
-status: collect
+status: archived
 priority: high
 created: 2026-07-17T02:31:31.385612+02:00
-updated: 2026-07-17T07:18:49.836602+02:00
+updated: 2026-07-17T07:19:55.613431+02:00
 tags:
   - phase-1
   - scope:kanban
@@ -29,7 +29,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -213,3 +213,11 @@ Follow-up risks: none identified within the scoped acceptance criteria.
 - Findings: no implementation gap or scope drift. No verifier patch applied.
 - Verifier-challenger: pass; it found AC coverage sufficient, no boundary bypass, and no scope drift.
 - Final route: PASS to collect.
+
+[[2026-07-17T07:19:55+02:00]]
+## Collect Notes
+- Classification: leaf. Task has explicit implementation Outcome/Scope, no aggregate/EPIC tags or aggregate intent, and `list_tasks(parent=1937)` returned no children. Parent `#1945` does not change this task's leaf classification.
+- Verification evidence: latest `## Verify Notes` records PASS to collect after exercising `KanbanEngine.task_health()` against real temporary task/archive files. Focused proof `uv run pytest serve/kanban/tests/test_corruption.py serve/kanban/tests/test_engine_task_health.py -q` passed with 79 tests; `git diff --check` passed; editor diagnostics were clean; verifier-challenger returned pass.
+- Invariant map coverage: verifier confirms all three AC through the public read-only boundary: multi-finding readable plus unreadable evidence, complete duplicate path sets/classification, missing references, self-reference, dependency cycles, archived-in-active location detail, and byte/mtime immutability. No shaped module-map deviation or out-of-scope request/storage mutation/claim/Cockpit changes remain.
+- Decision and follow-up state: no `## Decision Request` section, no pending requests, no block, and no unresolved Required Follow-up. Earlier verifier rejections are superseded by the final PASS after builder repairs.
+- Archive rationale: verifier closure is complete for this ordinary leaf; no aggregate child or dependency-gate review applies. Archived as completed.
