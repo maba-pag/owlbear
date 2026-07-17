@@ -1,10 +1,10 @@
 ---
 id: 1940
 title: 'P1-03: Deterministic Kanban task repair'
-status: build
+status: verify
 priority: medium
 created: 2026-07-17T02:32:03.458344+02:00
-updated: 2026-07-17T08:19:29.922701+02:00
+updated: 2026-07-17T08:26:34.317603+02:00
 tags:
   - phase-1
   - scope:kanban
@@ -111,3 +111,30 @@ Final route: REJECT to build.
 | # | Target Agent | Action Required | File(s) | Evidence |
 |---|-------------|----------------|---------|----------|
 | 1 | builder | Route archive destination conflicts through complete-set duplicate classification, implement a no-overwrite archive move with pre-mutation revalidation, and add focused real-filesystem regression coverage for both. | `serve/kanban/src/owlbear_kanban/corruption.py`, `serve/kanban/tests/test_corruption.py` | `openspec/changes/redesign-workspace-health/design.md` §5; AC2 |
+
+[[2026-07-17T08:26:34+02:00]]
+## Builder Notes
+Change envelope: deterministic Kanban task repair AC1-AC3, specifically archive reconciliation conflict handling and no-overwrite mutation; no unrelated refactors.
+
+Files changed:
+- serve/kanban/src/owlbear_kanban/corruption.py
+- serve/kanban/tests/test_corruption.py
+
+Implementation:
+- Existing archive destinations now enter the complete duplicate-set classifier instead of being silently skipped.
+- Conflict-free archived tasks use exclusive hardlink creation followed by source unlink, preventing replacement of a destination created concurrently.
+- Destination appearance during the move is reported as skipped; filesystem failures are reported as failed.
+- Added real-filesystem regression coverage for preserving an archive destination and moving a conflict-free archived task.
+
+Change Module Map deviations: none.
+
+Proof selected:
+- `uv run pytest serve/kanban/tests/test_corruption.py -q -k 'DeterministicRepair'` -> 6 passed
+- `uv run pytest serve/kanban/tests/test_corruption.py -q` -> 81 passed
+- `git diff --check` -> passed
+
+Durable-test justification: added two focused tests because archive reconciliation is data-loss-sensitive and existing coverage did not protect destination preservation or successful no-overwrite movement.
+
+Builder-challenger result: PASS. No concrete blockers; scope, no-overwrite semantics, and focused evidence were accepted.
+
+Follow-up risks: broader Kanban integration/API contracts remain outside this focused task proof.

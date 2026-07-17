@@ -6,6 +6,7 @@ from owlbear_kanban.corruption import (  # NEW module — ImportError in RED
     CorruptionError,
     attempt_repair,
     detect_corruption,
+    repair_task_storage,
     scan_and_fix,
 )
 from owlbear_kanban.storage import read_task  # NEW module — ImportError in RED
@@ -64,6 +65,25 @@ def _write(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
 
 
+def _duplicate_task(title: str, status: str = "shape", body: str = "body") -> str:
+    return f"""---
+id: 1001
+title: {title}
+status: {status}
+priority: medium
+created: \"2026-04-21T10:00:00+00:00\"
+updated: \"2026-04-21T10:00:00+00:00\"
+tags: []
+parent: null
+depends_on: []
+blocked: false
+block_reason: null
+claimed_at: null
+---
+{body}
+"""
+
+
 _VALID_TASK = """\
 ---
 id: 1001
@@ -86,6 +106,76 @@ archival_refs: []
 
 Some content.
 """
+
+
+class TestDeterministicRepair:
+    def test_repair_task_storage_removes_active_copy_of_archived_duplicate(self, tmp_path: Path) -> None:
+        kanban_dir = _make_board(tmp_path)
+        config = load_config(kanban_dir / "config.yml")
+        _write(kanban_dir / "tasks" / "1001-copy.md", _duplicate_task("Archived task", "archived"))
+        _write(kanban_dir / "archive" / "1001-archived-task.md", _duplicate_task("Archived task", "archived"))
+
+        result = repair_task_storage(kanban_dir, config)
+
+        assert not (kanban_dir / "tasks" / "1001-copy.md").exists()
+        assert (kanban_dir / "archive" / "1001-archived-task.md").exists()
+        assert result.removed_count == 1
+        assert result.task_health_result is not None
+
+    def test_repair_task_storage_quarantines_smaller_duplicate(self, tmp_path: Path) -> None:
+        kanban_dir = _make_board(tmp_path)
+        config = load_config(kanban_dir / "config.yml")
+        _write(kanban_dir / "tasks" / "1001-canonical.md", _duplicate_task("Task", body="long\nbody"))
+        _write(kanban_dir / "tasks" / "1001-copy.md", _duplicate_task("Task", body="short"))
+
+        result = repair_task_storage(kanban_dir, config)
+
+        assert (kanban_dir / "tasks" / "1001-canonical.md").exists()
+        assert result.quarantined_count == 1
+
+    def test_repair_task_storage_preserves_unresolved_duplicate(self, tmp_path: Path) -> None:
+        kanban_dir = _make_board(tmp_path)
+        config = load_config(kanban_dir / "config.yml")
+        _write(kanban_dir / "tasks" / "1001-one.md", _duplicate_task("Task", body="one"))
+        _write(kanban_dir / "tasks" / "1001-two.md", _duplicate_task("Task", body="two"))
+
+        result = repair_task_storage(kanban_dir, config)
+
+        assert (kanban_dir / "tasks" / "1001-one.md").exists()
+        assert (kanban_dir / "tasks" / "1001-two.md").exists()
+        assert result.unresolved_count == 2
+
+    def test_outcome_counts_all_fixed_repairs_as_moved(self) -> None:
+        from owlbear_kanban.corruption import _outcome_counts
+        from owlbear_kanban.models import RepairOutcome
+
+        outcome = RepairOutcome(task_id=1001, file_path="task.md", code="repair", action="fixed")
+
+        assert _outcome_counts([outcome])["moved"] == 1
+
+    def test_repair_task_storage_does_not_overwrite_archive_destination(self, tmp_path: Path) -> None:
+        kanban_dir = _make_board(tmp_path)
+        config = load_config(kanban_dir / "config.yml")
+        _write(kanban_dir / "tasks" / "1001-task.md", _duplicate_task("Task", "archived", body="active"))
+        _write(kanban_dir / "archive" / "1001-task.md", _duplicate_task("Task", "archived", body="archive"))
+
+        result = repair_task_storage(kanban_dir, config)
+
+        assert (kanban_dir / "tasks" / "1001-task.md").exists()
+        assert (kanban_dir / "archive" / "1001-task.md").read_text(encoding="utf-8").endswith("archive\n")
+        assert result.unresolved_count == 4
+
+    def test_repair_task_storage_moves_archived_task_without_overwrite(self, tmp_path: Path) -> None:
+        kanban_dir = _make_board(tmp_path)
+        config = load_config(kanban_dir / "config.yml")
+        source = kanban_dir / "tasks" / "1001-task.md"
+        _write(source, _duplicate_task("Task", "archived"))
+
+        result = repair_task_storage(kanban_dir, config)
+
+        assert not source.exists()
+        assert (kanban_dir / "archive" / source.name).exists()
+        assert result.moved_count == 1
 
 
 # ---------------------------------------------------------------------------
