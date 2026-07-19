@@ -509,9 +509,8 @@
 ## share/prompts/ideate.prompt.md
 
 ## share/prompts/kb-enrich.prompt.md
-- ## `Interaction Protocol`
-- ## `Parallel worker option (D7)`
-- ## `Worker phases`
+- ## `Execution Contract`
+- ## `Worker loop`
 
 ## share/prompts/kb-ingest.prompt.md
 - ## `Interaction Protocol`
@@ -560,7 +559,7 @@
 - ## `Routing Rules`
 
 ## share/prompts/test-curation.prompt.md
-- ## `Interaction Protocol`
+- ## `Execution Contract`
 
 ## share/skills/h-ac-quality/SKILL.md
 - # `AC Quality Schema`
@@ -1002,6 +1001,7 @@
 - ### `Stage A - Product And Scope`
 - ### `Stage B - Architecture And Interfaces`
 - ### `Stage C - Trade-offs And Completion`
+- ### `Material Repair Re-entry`
 - ## `Step 4 - Reconcile The OpenSpec Artifacts`
 - ## `Step 5 - Draft And Challenge The Graph`
 - ## `Step 6 - Obtain Graph Approval`
@@ -1017,6 +1017,7 @@
 - ### `Out of Scope`
 - ## `Step 0 — Setup`
 - ## `Step 1 — Read and Classify the Planning Source`
+- ### `Product Promise Coverage Map`
 - ### `Planning Readiness Gate`
 - ## `Step 1a — Single-Task Shortcut`
 - ## `Step 1b — Source And Contract Authority Guard`
