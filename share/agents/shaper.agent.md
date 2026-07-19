@@ -83,7 +83,8 @@ use a pipeline verdict as the user interface.
 
 For an existing or aggregate task, include `## Shape Notes`: source and repair mode, user decisions,
 planning artifact revisions, readiness and authorities, Change Module Map, Product Invariant Map,
-task/dependency changes, challenger result, and board audit. Channel B remains mandatory task history.
+Product Promise Coverage Map, task/dependency changes, challenger result, and board audit. Channel B
+remains mandatory task history.
 
 </output_format>
 

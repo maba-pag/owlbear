@@ -86,6 +86,23 @@ def test_spec_review_is_staged_and_architecture_weighted() -> None:
     assert "Take an opinionated evidence-based position" in workflow
 
 
+def test_material_repair_reenters_at_the_earliest_affected_stage() -> None:
+    shaping = _read("share/skills/w-spec-shaping/SKILL.md")
+    repair = _read("share/skills/w-task-repair/SKILL.md")
+
+    assert "### Material Repair Re-entry" in shaping
+    for changed_claim in (
+        "Product outcome, scope, exclusion, or Product Promise item",
+        "Architecture, interface, compatibility, security boundary, or migration",
+        "Normative observable behavior, visible failure behavior, or acceptance meaning",
+        "Material task ownership, boundary, ordering, or graph shape",
+    ):
+        assert changed_claim in shaping
+    assert "earliest affected review stage" in repair
+    assert "without repeating accepted premises" in repair
+    assert "still requires challenge and user approval" in shaping
+
+
 def test_accepted_changes_update_owning_openspec_artifacts() -> None:
     workflow = _read("share/skills/w-spec-shaping/SKILL.md")
 
@@ -125,6 +142,27 @@ def test_decomposition_drafts_without_mutation_then_commits_authorized_graph() -
     assert "Do not create or edit Kanban tasks in draft phase" in workflow
     assert "the user-approved graph from `w-spec-shaping`" in workflow
     assert "Do not run a second substantive shaper-challenger review after creation" in workflow
+
+
+def test_product_promise_coverage_map_blocks_unowned_scope() -> None:
+    shaping = _read("share/skills/w-spec-shaping/SKILL.md")
+    decomposition = _read("share/skills/w-task-decomposition/SKILL.md")
+    shaper = _read("share/agents/shaper.agent.md")
+    challenger = _read("share/agents/shaper-challenger.agent.md")
+
+    assert "Product Promise Coverage Map" in shaping
+    assert "### Product Promise Coverage Map" in decomposition
+    for column in (
+        "Product Promise item or accepted exclusion",
+        "Planning authority",
+        "Owning task or aggregate condition",
+        "Proving AC or outcome",
+    ):
+        assert column in decomposition
+    assert "blocks graph challenge and approval" in decomposition
+    assert "Reject uncovered Product Promise items" in decomposition
+    assert "Product Promise Coverage Map" in shaper
+    assert "inspect the Product Promise Coverage Map" in challenger
 
 
 def test_challenger_accepts_complete_provisional_graph() -> None:

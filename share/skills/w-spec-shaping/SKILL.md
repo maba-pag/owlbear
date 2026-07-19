@@ -98,6 +98,22 @@ product behavior, scope, architecture, compatibility, security, or the task grap
 decision at a time with status quo, problem, options, trade-offs, recommendation, and expected
 outcome through `askQuestions`.
 
+### Material Repair Re-entry
+
+When `w-task-repair` routes an existing task here, resume at the earliest stage affected by the
+material defect. Do not repeat an earlier review whose accepted premises remain unchanged.
+
+| Changed claim exposed by repair | Resume at | Continue through |
+|----------------------------------|-----------|------------------|
+| Product outcome, scope, exclusion, or Product Promise item | Stage A - Product And Scope | Stages B and C when the accepted change affects them |
+| Architecture, interface, compatibility, security boundary, or migration | Stage B - Architecture And Interfaces | Stage C |
+| Normative observable behavior, visible failure behavior, or acceptance meaning | Stage A - Product And Scope | Stage C, plus Stage B when ownership or interfaces change |
+| Completion evidence or consequential trade-off only | Stage C - Trade-offs And Completion | Artifact reconciliation |
+| Material task ownership, boundary, ordering, or graph shape with accepted product and architecture premises | Step 5 - Draft And Challenge The Graph | Graph approval |
+
+After the focused review, reconcile each accepted change in its owning planning artifact before
+drafting. A graph-only re-entry still requires challenge and user approval before board mutation.
+
 ## Step 4 - Reconcile The OpenSpec Artifacts
 
 When the user accepts a material change, update the artifact that owns the changed claim before
@@ -122,12 +138,13 @@ tasks. Use provisional task keys until commit. The draft must include:
 - outcomes, boundaries, acceptance criteria, and proof guidance;
 - dependencies, priorities, tags, and aggregate routing;
 - Change Module Map and Product Invariant Map ownership;
-- explicit coverage of the complete active Product Promise.
+- the Product Promise Coverage Map defined by `w-task-decomposition`.
 
 Call `shaper-challenger` on this complete pre-write graph. Supply the reconciled planning package,
-readiness evidence, contract authorities, maps, provisional tasks, dependencies, statuses, and full
-Product Promise. Resolve correctable findings in the draft. Surface any material challenger finding
-that requires a user choice instead of deciding it silently.
+readiness evidence, contract authorities, Change Module Map, Product Invariant Map, Product Promise
+Coverage Map, provisional tasks, dependencies, and statuses. Resolve correctable findings in the
+draft. Surface any material challenger finding that requires a user choice instead of deciding it
+silently.
 
 ## Step 6 - Obtain Graph Approval
 

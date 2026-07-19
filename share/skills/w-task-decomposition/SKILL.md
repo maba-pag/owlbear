@@ -73,6 +73,21 @@ the task graph. An omission is valid only when Proposal records the user's expli
 exclusion; do not reinterpret unowned omitted work as a later phase, deferral, or smaller first slice.
 Run a post-shaping Product Promise check against the concrete task layout before approval.
 
+### Product Promise Coverage Map
+
+Include this map in the provisional graph and final Shape Notes:
+
+| Product Promise item or accepted exclusion | Planning authority | Owning task or aggregate condition | Proving AC or outcome |
+|---------------------------------------------|--------------------|------------------------------------|-----------------------|
+
+- Give each active Product Promise item one owning task or a named aggregate completion condition
+    and identify the acceptance criterion or observable outcome that proves it.
+- Record an accepted exclusion with its proposal or explicit user-decision authority; exclusions do
+    not receive an implementation owner.
+- Split a Promise item across rows only when distinct tasks own independently testable outcomes.
+- Do not label an unowned active item as deferred, later, implicit, or covered by the parent.
+- An active item without an owner and proving AC or outcome blocks graph challenge and approval.
+
 ### Planning Readiness Gate
 
 Before decomposition, confirm the source provides four load-bearing elements:
@@ -330,6 +345,8 @@ Before creating any task, validate every planned task:
     when an existing check or transient observation proves the boundary.
 - **Reject orphaned invariants** — every invariant-map row names one owning task and that task has a
     normal-path AC.
+- **Reject uncovered Product Promise items** — every active coverage-map row names an owning task or
+    aggregate condition and a proving AC or outcome; every exclusion cites its accepted authority.
 - **Reject boundary-bypassing proof** — proof guidance must not replace the callable, command,
     workflow, or assembled context whose behavior the AC claims.
 - **Reject ownerless execution** — every required operation and proof must fit the responsible
