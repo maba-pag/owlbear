@@ -22,7 +22,6 @@ Classify the selected input:
 | Existing task number or explicit connected set in `shape` | `w-task-repair` |
 | Narrow free-text implementation request | Optional shorthand only when one unambiguous outcome clearly needs no OpenSpec change |
 
-Do not accept an approved Brief as a substitute for the repository's OpenSpec planning boundary.
 Broad, multi-domain, contract-heavy, or materially uncertain free text needs `/opsx:propose` before
 `/shape`; explain that route instead of creating speculative tasks.
 

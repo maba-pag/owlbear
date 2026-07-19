@@ -37,10 +37,6 @@ Treat the package as an unreviewed technical draft:
 
 Identify contradictions among artifacts before presenting the package as coherent.
 
-If the package records an approved ideation Brief path, read that Brief and use it as additional
-product-promise evidence. Do not search unrelated draft directories or assume an unrecorded Brief
-relationship. The staged user review remains mandatory either way.
-
 ## Step 2 - Ground The Draft
 
 Use `h-codebase-orientation` and `h-module-design` to verify the smallest sufficient current-source

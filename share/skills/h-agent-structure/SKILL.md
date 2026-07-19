@@ -219,7 +219,7 @@ VS Code has a limitation: at nesting depth ≥2 (3rd-level subagents), agents wi
 3. **Every dispatching agent** must have an `<agents>` body section listing all agents from its frontmatter `agents:` array — this is the only discovery mechanism at depth ≥2.
 4. ND3 agents are tagged with `(ND3)` in their `description` field for identification.
 
-**Current ND3 agents:** shaper-challenger, builder-challenger, verifier-challenger, ideation-critic.
+**Current ND3 agents:** shaper-challenger, builder-challenger, verifier-challenger.
 
 Caller inventory is intentionally not duplicated here. The source of truth for caller → subagent relationships is each caller's frontmatter `agents:` array plus its `<agents>` body table; see [share/WIRING.md](../../WIRING.md) for the inverse ecosystem map. When adding a new caller, update the caller's agent file. When adding a new ND3 agent, set `disable-model-invocation: false`, tag the description with `(ND3)`, and add it to this list.
 

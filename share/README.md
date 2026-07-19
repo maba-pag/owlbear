@@ -1,15 +1,15 @@
 # share/ — Agent Ecosystem
 
-OwlBear's agent ecosystem: 23 agents, 32 skills, 6 instructions, 13 prompts. This directory is the single source of truth for agent definitions and their supporting documents.
+OwlBear's agent ecosystem: 12 agents, 28 skills, 6 instructions, 11 prompts. This directory is the single source of truth for agent definitions and their supporting documents.
 
 ## Directory Layout
 
 | Directory | Contents | Count |
 |-----------|----------|-------|
-| `agents/` | Agent definitions (`.agent.md`) | 23 |
-| `skills/` | Reusable domain knowledge (`SKILL.md`) | 30 |
+| `agents/` | Agent definitions (`.agent.md`) | 12 |
+| `skills/` | Reusable domain knowledge (`SKILL.md`) | 28 |
 | `instructions/` | Auto-loaded instruction files (`.instructions.md`) | 6 |
-| `prompts/` | User-invocable one-shot commands (`.prompt.md`) | 13 |
+| `prompts/` | User-invocable one-shot commands (`.prompt.md`) | 11 |
 | `diagrams/` | Shared visual assets (Excalidraw, SVG) | — |
 
 ## Loading Model
@@ -56,35 +56,33 @@ These load into every agent's context on every turn:
 
 ## Agents
 
-23 agent definitions (`.agent.md` files).
+12 agent definitions (`.agent.md` files).
 
 | Tier | Count | Agents |
 |------|-------|--------|
-| T1 — Orchestrator | 3 | orchestrator, ideation-discoverer, ideation-mediator |
+| T1 — Orchestrator | 1 | orchestrator |
 | T2 — Pipeline | 4 | shaper, builder, verifier, collector |
 | T3 — Support | 2 | test-curator, memory-curator |
-| T4 — Tools/Panel | 12 | shaper-challenger, builder-challenger, verifier-challenger, ideation-architect, ideation-critic, ideation-data, ideation-enduser, ideation-firstprinciples, ideation-outsider, ideation-pragmatist, ideation-security, ideation-simplifier |
+| T4 — Tools/Panel | 3 | shaper-challenger, builder-challenger, verifier-challenger |
 | T5 — Knowledge | 2 | knowledge-enricher, knowledge-ingestor |
-
-Ideation has two user-facing entrypoints: `ideation-discoverer` (Phase 1 — problem framing) and `ideation-mediator` (Phase 2 — synthesis, decisions, Brief).
 
 ### Nesting Depth
 
 VS Code does not inject the agents catalog at nesting depth ≥2. Agents at depth ≥3 (ND3) must have `disable-model-invocation: false` to be resolvable, and dispatching agents rely on their `<agents>` body section — not the system-injected catalog — for subagent discovery.
 
-**ND3 agents** (marked with `(ND3)` in their description): shaper-challenger, builder-challenger, verifier-challenger, ideation-critic.
+**ND3 agents** (marked with `(ND3)` in their description): shaper-challenger, builder-challenger, verifier-challenger.
 
 See `h-agent-structure` § Nesting Depth & DMI for the full rule and ND3 agent table.
 
 ## Skills
 
-30 skill definitions (`share/skills/{name}/SKILL.md`).
+28 skill definitions (`share/skills/{name}/SKILL.md`).
 
 | Prefix | Count | Purpose |
 |--------|-------|---------|
-| `w-` | 11 | Workflow — step-by-step procedures |
-| `r-` | 4 | Rules — shared conventions |
-| `h-` | 17 | Handbook — domain knowledge |
+| `w-` | 9 | Workflow — step-by-step procedures |
+| `r-` | 3 | Rules — shared conventions |
+| `h-` | 16 | Handbook — domain knowledge |
 
 ## Instructions
 
@@ -110,7 +108,7 @@ Stubs catch agents editing files without the relevant skill loaded. They do not 
 
 ## Prompts
 
-13 prompt files (`.prompt.md`). Prompts are user-invocable one-shot commands triggered from the VS Code chat command palette. Many accept `${input:...}` variable substitution.
+11 prompt files (`.prompt.md`). Prompts are user-invocable one-shot commands triggered from the VS Code chat command palette. Many accept `${input:...}` variable substitution.
 
 **Naming convention:**
 
@@ -126,7 +124,6 @@ Stubs catch agents editing files without the relevant skill loaded. They do not 
 | Orchestration | `shape`, `orchestrate` |
 | Planning and design | `ideate`, `architecture-review` |
 | Audits | `arch-audit`, `frontend-audit`, `memory-audit`, `legacy-audit` |
-| Ideation | `ideation-discover`, `ideation-mediate` |
 | Knowledge | `kb-ingest`, `kb-enrich` |
 | Curation | `test-curation` |
 

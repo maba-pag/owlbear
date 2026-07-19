@@ -403,7 +403,7 @@
 - ### `Execution Board`
 - ### `Pipeline Challengers`
 - ### `Support`
-- ### `Ideation And Knowledge`
+- ### `Knowledge`
 - ## `File -> Agents`
 - ## `Subagent Dependencies`
 
@@ -418,65 +418,6 @@
 ## share/agents/collector.agent.md
 - ### `Channel A`
 - ### `Channel B`
-
-## share/agents/ideation-architect.agent.md
-- ### `Channel A`
-- ### `Channel B`
-- ### `Output Files`
-
-## share/agents/ideation-critic.agent.md
-- ### `Channel A`
-- ### `Channel B`
-- ### `Required Input Fields`
-- #### `Dual-Scope Invocation`
-- ### `Required Output Sections (all 4, in order)`
-
-## share/agents/ideation-data.agent.md
-- ### `Channel A`
-- ### `Channel B`
-- ### `Output Files`
-
-## share/agents/ideation-discoverer.agent.md
-- ### `Channel A`
-- ### `Channel B`
-- ### `Phase Boundary`
-
-## share/agents/ideation-enduser.agent.md
-- ### `Channel A`
-- ### `Channel B`
-- ### `Output Files`
-
-## share/agents/ideation-firstprinciples.agent.md
-- ### `Channel A`
-- ### `Channel B`
-- ### `Output File`
-
-## share/agents/ideation-mediator.agent.md
-- ### `Channel A`
-- ### `Channel B`
-- ### `Phase Boundary`
-
-## share/agents/ideation-outsider.agent.md
-- ### `Channel A`
-- ### `Channel B`
-- ### `Output File`
-
-## share/agents/ideation-pragmatist.agent.md
-- ### `Channel A`
-- ### `Channel B`
-- ### ``mode=converge` → `synthesis.md``
-- ### ``mode=denoise` → `synthesis-idea-panel.md``
-- ### ``mode=compare` → `synthesis.md``
-
-## share/agents/ideation-security.agent.md
-- ### `Channel A`
-- ### `Channel B`
-- ### `Output Files`
-
-## share/agents/ideation-simplifier.agent.md
-- ### `Channel A`
-- ### `Channel B`
-- ### `Output File`
 
 ## share/agents/knowledge-enricher.agent.md
 - ### `Channel A`
@@ -512,8 +453,6 @@
 - ### `Channel B`
 
 ## share/diagrams/cockpit.excalidraw
-
-## share/diagrams/ideation.excalidraw
 
 ## share/diagrams/kanban.excalidraw
 
@@ -568,18 +507,6 @@
 - ## `Guardrails`
 
 ## share/prompts/ideate.prompt.md
-
-## share/prompts/ideation-discover.prompt.md
-- ## `Interaction Protocol`
-- ## `When to use this`
-- ## `What happens`
-- ## `Tips`
-
-## share/prompts/ideation-mediate.prompt.md
-- ## `Interaction Protocol`
-- ## `When to use this`
-- ## `What happens`
-- ## `Tips`
 
 ## share/prompts/kb-enrich.prompt.md
 - ## `Interaction Protocol`
@@ -809,68 +736,6 @@
 - ## `State and Evidence Discipline`
 - ## `Known Gotchas`
 
-## share/skills/h-ideation/SKILL.md
-- # `Ideation Handbook`
-- ## `Phase Map`
-- ## `Moment Reference`
-- ## `Investment Tier`
-- ## `Expectation Fidelity`
-- ### `Expectation Signal`
-- ### `Artifact Authority`
-- ### `Tier-Scaled Fidelity Checks`
-- ### `Fidelity Rules`
-- ## `User-Facing Entry Points`
-- ### ``/ideation-discover` (agent: `ideation-discoverer`)`
-- ### ``/ideation-mediate` (agent: `ideation-mediator`)`
-- ## `Blackboard Artifacts`
-- ## `Shared Artifact Meanings`
-- ### ``context.md``
-- ### ``decisions.md``
-- ### ``research-notes.md``
-- ### ``synthesis-idea-panel.md``
-- ### ``synthesis.md``
-- ### ``brief.md``
-- ### ``stances/*-proposal.md``
-- ## `Shared Interaction Contract`
-- ### `Investigative Turns (Investigator Mode — M1-M3)`
-- ### `Synthesis Turns`
-- ### `Decision Turns (Facilitative Mode — M4-M6)`
-- ## `Decision Entry Template`
-- ## `Handoff Contract`
-- ## `Communication Patterns`
-- ### `Narration Principles`
-- ### `Transition Patterns`
-- ### `Boundary Heuristic`
-- ### `Depth-Control Verbal Cues`
-- ## `Cross-References`
-
-## share/skills/h-ideation-panel/SKILL.md
-- # `Ideation Panel Handbook`
-- ## `Universal Constraints`
-- ## `Panel Surface Map`
-- ## `Early Challenge Lane`
-- ### `Roster`
-- ### `Selection Logic`
-- ### `Invocation Pattern`
-- ### `Early-Challenge Rules`
-- ## `Late Domain Panel`
-- ### `Roster`
-- ### `Selection Logic`
-- ### `Parallel Batch (Default)`
-- ### `Sequential Deep-Dive (Conditional)`
-- ### `Propose Mode (M3.5 Path)`
-- ## `Critic Loop Protocol`
-- ### `Stance Reasoning Cycle`
-- ### `Exit Conditions`
-- ### `Critic Rules`
-- ## `Pragmatist Modes`
-- ### ``mode=denoise``
-- ### ``mode=converge``
-- ### ``mode=compare``
-- ## `Disagreement Resolution`
-- ## `Panel Output Phrasing`
-- ## `Panelist References`
-
 ## share/skills/h-knowledge-ops/SKILL.md
 - # `Knowledge Base Operations`
 - ## `Tool Reference`
@@ -1072,40 +937,6 @@
 - ## `Refined Idea Summary`
 - ## `Examples`
 - ## `Known Pitfalls`
-
-## share/skills/w-ideation-discovery/SKILL.md
-- # `Ideation Discovery`
-- ## `Working Rules`
-- ## `Conditional Denoise`
-- ## `Step 0 — Setup and Entry`
-- ## `Step 1 — M1: Understanding — "What's really going on?"`
-- ## `Step 1.5 — Investment Tier Check`
-- ## `Step 2 — M2: Outcomes — "What does winning look like?"`
-- ## `Step 3 — Research Bridge and Phase Handoff`
-- ## `Artifact Contract`
-- ### ``context.md``
-- ### ``decisions.md``
-- ### ``research-notes.md``
-- ### ``synthesis-idea-panel.md``
-- ## `Verification Checklist`
-
-## share/skills/w-ideation-mediation/SKILL.md
-- # `Ideation Mediation`
-- ## `Working Rules`
-- ## `Critic Validation (O15)`
-- ## `Disclosure Ladder`
-- ### `Default Summary`
-- ### `Concrete Specifics`
-- ### `Inline Verbatim Evidence`
-- ## `Step 0 — Phase 2 Start`
-- ## `Step 1 — M3: Landscape — "What exists, what's possible?"`
-- ## `Step 1.5 — M3.5: Conditional Proposal Round (Design It Twice)`
-- ## `Step 2 — Late Domain Panel Orchestration (Stance Path)`
-- ## `Step 3 — M4: Decision — "What are we doing and why?"`
-- ## `Step 4 — Critic Validation Pass`
-- ## `Step 5 — M5: The Brief — "Here's the plan"`
-- ## `Step 6 — M6: Proposal Handoff — "Ready for OpenSpec"`
-- ## `Verification Checklist`
 
 ## share/skills/w-knowledge-enrichment/SKILL.md
 - # `Knowledge Enrichment`

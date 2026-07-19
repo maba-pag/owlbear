@@ -73,10 +73,6 @@ the task graph. An omission is valid only when Proposal records the user's expli
 exclusion; do not reinterpret unowned omitted work as a later phase, deferral, or smaller first slice.
 Run a post-shaping Product Promise check against the concrete task layout before approval.
 
-If the parent task body contains a `## Brief` or `## Problem` section (Brief artifact, produced by ideation), use it to derive the full active scope, accepted exclusions, and approach constraints for decomposition. Include `Brief: see parent #{id}` reference in each child task body.
-
-When the parent contains an approved ideation Brief, shaper sequences or splits Brief requirements but does not delete them. If a Brief requirement cannot fit one atomic task, split it across tasks. If a Brief requirement appears invalid, conflicting, or impossible, surface that conflict in Shape Notes instead of dropping the requirement.
-
 ### Planning Readiness Gate
 
 Before decomposition, confirm the source provides four load-bearing elements:

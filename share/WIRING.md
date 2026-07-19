@@ -11,7 +11,6 @@ Agents marked `(ND3)` may be called at nesting depth >= 3 and require `disable-m
 | shaper-challenger | `false` | shaper |
 | builder-challenger | `false` | builder |
 | verifier-challenger | `false` | verifier |
-| ideation-critic | `false` | ideation-architect, ideation-data, ideation-enduser, ideation-security |
 
 Built-in agents (`Explore`, `General Purpose`) resolve at any depth.
 
@@ -66,13 +65,10 @@ Built-in agents (`Explore`, `General Purpose`) resolve at any depth.
 | test-curator | w-test-curation | `req` | h-memory-structure and h-mcp-memory when saving a qualifying insight; h-python-conventions, h-vitest-and-linting | `directed` / `companion` |
 | memory-curator | w-mem-curation | `req` | h-mcp-memory, h-memory-structure | `companion` / `directed` |
 
-### Ideation And Knowledge
+### Knowledge
 
 | Agent Group | Regularly | Connection |
 |-------------|-----------|------------|
-| ideation-discoverer | h-ideation, w-ideation-discovery, r-workspace-governance | `req`; h-codebase-orientation on demand for direct brownfield investigation |
-| ideation-mediator | h-ideation, w-ideation-mediation, r-workspace-governance | `req`; h-codebase-orientation on demand; hands approved Brief to user-triggered `/shape` |
-| ideation panel agents | h-ideation-panel | `req` |
 | knowledge-ingestor, knowledge-enricher | h-knowledge-ops | `req` |
 
 ## File -> Agents
@@ -89,16 +85,15 @@ Built-in agents (`Explore`, `General Purpose`) resolve at any depth.
 | w-test-curation | test-curator |
 | w-mem-curation | memory-curator |
 | h-ac-quality | shaper, shaper-challenger |
-| h-codebase-orientation | shaper workflows, builder, verifier, and ideation discovery/mediation on demand |
-| h-module-design | shaper workflows on demand, shaper-challenger, ideation-architect; builder/verifier on demand |
-| r-workspace-governance | shaper, builder, verifier, collector, ideation discoverer, ideation mediator |
+| h-codebase-orientation | shaper workflows, builder, and verifier |
+| h-module-design | shaper workflows on demand, shaper-challenger, and builder/verifier on demand |
+| r-workspace-governance | shaper, builder, verifier, and collector |
 | h-mcp-kanban | pipeline/support agents on demand |
 | h-mcp-memory | task-owning pipeline agents through r-pipeline-protocol when recall returns entries; save-capable agents through always-loaded Memory Governance; memory-curator through w-mem-curation |
 | h-memory-structure | save-capable agents through always-loaded Memory Governance; memory-curator through w-mem-curation |
 | h-pytest-and-linting | builder-challenger/test-curator on demand |
 | h-vitest-and-linting | builder-challenger/test-curator/frontend work on demand |
 | h-python-conventions | Python editing/curation on demand |
-| h-ideation, w-ideation-discovery, w-ideation-mediation, h-ideation-panel | ideation agents |
 | h-knowledge-ops | knowledge agents |
 
 ## Subagent Dependencies
@@ -108,4 +103,3 @@ Built-in agents (`Explore`, `General Purpose`) resolve at any depth.
 | shaper-challenger | shaper | Shape approval loses cross-check |
 | builder-challenger | builder | Build DONE loses cheap lint/proof/adversarial cross-check |
 | verifier-challenger | verifier | PASS loses cheap intent/code/proof/scope cross-check |
-| ideation-critic | ideation panel agents | Ideation challenge loop degraded |
