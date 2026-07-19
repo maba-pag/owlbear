@@ -892,8 +892,7 @@ class KanbanEngine:
                     RequestHealthFinding(
                         code="REQUEST_LOCATION_MISMATCH",
                         detail=(
-                            f"request {request_model.request_id} is stored in {subdir} "
-                            f"but belongs in {expected_subdir}"
+                            f"request {request_model.request_id} is stored in {subdir} but belongs in {expected_subdir}"
                         ),
                         path=str(path),
                         request_id=request_model.request_id,

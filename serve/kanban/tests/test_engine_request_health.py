@@ -82,7 +82,9 @@ def test_request_health_reports_malformed_duplicates_and_does_not_mutate_storage
     engine, kanban_dir = _make_engine(tmp_path)
     duplicate_id = str(uuid.uuid4())
     first = _write_request(kanban_dir, request_id=duplicate_id)
-    second = _write_request(kanban_dir, subdir="resolved", request_id=duplicate_id, resolved_at="2026-05-24T14:00:00+02:00")
+    second = _write_request(
+        kanban_dir, subdir="resolved", request_id=duplicate_id, resolved_at="2026-05-24T14:00:00+02:00"
+    )
     malformed = kanban_dir / "decisions" / "pending" / "malformed.md"
     malformed.write_text("not frontmatter", encoding="utf-8")
     before = {path: path.read_bytes() for path in (first, second, malformed)}

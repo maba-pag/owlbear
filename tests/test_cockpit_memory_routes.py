@@ -284,9 +284,7 @@ class TestResolveMemory:
         assert response.json()["entry"]["state"] == "approved"
         mock_engine.resolve.assert_called_once_with(_ENTRY_ID, _NOW)
 
-    def test_resolve_invalid_transition_returns_mem_code(
-        self, client: TestClient, mock_engine: MagicMock
-    ) -> None:
+    def test_resolve_invalid_transition_returns_mem_code(self, client: TestClient, mock_engine: MagicMock) -> None:
         mock_engine.resolve.side_effect = TransitionError("resolve() not allowed from state pending")
         response = client.post(
             f"/api/memories/{_ENTRY_ID}/resolve",
@@ -295,9 +293,7 @@ class TestResolveMemory:
         assert response.status_code == 422
         assert response.json()["code"] == "MEM_INVALID_TRANSITION"
 
-    def test_resolve_conflict_returns_mem_conflict_code(
-        self, client: TestClient, mock_engine: MagicMock
-    ) -> None:
+    def test_resolve_conflict_returns_mem_conflict_code(self, client: TestClient, mock_engine: MagicMock) -> None:
         mock_engine.resolve.side_effect = ConcurrencyError("occ mismatch")
         response = client.post(
             f"/api/memories/{_ENTRY_ID}/resolve",

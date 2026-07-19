@@ -42,9 +42,7 @@ def test_health_reports_corruption_duplicates_and_preserves_loading(tmp_path: Pa
     after = {path.name: (path.read_bytes(), path.stat().st_mtime_ns) for path in tmp_path.iterdir()}
     assert health.healthy is False
     assert health.unreadable_paths == [malformed_path.name]
-    assert health.duplicate_paths == {
-        _DUPLICATE_ID: [path.name for path in sorted(duplicate_paths)]
-    }
+    assert health.duplicate_paths == {_DUPLICATE_ID: [path.name for path in sorted(duplicate_paths)]}
     assert before == after
     assert engine.parse_errors == 0
 
