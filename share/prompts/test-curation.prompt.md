@@ -5,12 +5,10 @@ agent: test-curator
 
 Curate tests
 
-## Interaction Protocol
+## Execution Contract
 
-Use the user's language unless they ask otherwise. When presenting candidate cleanup findings,
-regression-value choices, or continuation decisions, present exactly one decision item at a time
-before calling `askQuestions`.
+Use the user's language unless they ask otherwise. Apply the Rent Test autonomously from repository
+evidence. The test-curator has no user-decision tool; when concrete missing context prevents a
+responsible decision, record `skip` and continue.
 
-Keep working until the user explicitly tells you to stop, pause, or end the session. Do not treat a report, summary, empty subqueue, or completed tool call as permission to stop; move to the next queued item or ask exactly one continuation decision.
-
-Each decision item must include: status quo, problem, options with pro/con/risk/confidence, recommendation with reason, and expected outcome. Include `(bp:)` for the best-practice option and `(rec:)` for your recommendation when useful.
+Stop successfully when no archived task-test candidates remain.
