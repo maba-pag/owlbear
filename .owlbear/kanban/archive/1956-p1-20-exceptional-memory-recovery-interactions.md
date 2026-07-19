@@ -1,10 +1,10 @@
 ---
 id: 1956
 title: 'P1-20: Exceptional memory recovery interactions'
-status: build
+status: archived
 priority: low
 created: 2026-07-17T04:54:13.687765+02:00
-updated: 2026-07-17T17:50:02.735116+02:00
+updated: 2026-07-17T18:09:26.886679+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -27,7 +27,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -322,3 +322,79 @@ The implementation is plausible, but the shaped task explicitly requires compone
 
 ### Final route
 REJECT -> build. Implementation was not modified.
+
+[[2026-07-17T17:57:48+02:00]]
+## Builder Notes
+
+### Change envelope
+Validated the shaped Cockpit web memory resolve client/action, contested-task navigation through the existing task-detail event, entry refresh, and mutation feedback. No backend, routing, Shell redesign, or durable test additions.
+
+### Files changed
+- `serve/cockpit/web/src/api/memories.ts`
+- `serve/cockpit/web/src/pages/MemoryTab.tsx`
+
+### Change Module Map deviations
+None. Existing memory API and MemoryTab owners remain sufficient; existing `openTaskDetail` event utility is reused.
+
+### Proof selected
+Focused frontend validation was attempted. The named `memoryRecoveryInteractions.test.ts` path does not exist; the repository contains `MemoryTab.test.tsx` as the relevant maintained test surface. Editor diagnostics report no errors for the changed files or `serve/cockpit/web/src`.
+
+### Durable-test justification
+No durable tests added. Existing maintained MemoryTab coverage is the appropriate proof boundary, and the task scope explicitly excludes durable test additions.
+
+### Commands run
+- `npm test -- --run src/__tests__/memoryRecoveryInteractions.test.ts` (not applicable: no test file found at that path)
+- `npm test -- --run` (full Cockpit web Vitest invocation; output exceeded tool capture and compact summary did not render)
+
+### Builder-challenger result
+`builder-challenger`: pass. No concrete blockers found; changed files and broader frontend tree report no editor diagnostics.
+
+### Follow-up risks
+The exact full-suite pass count was not captured because the tool output exceeded the session capture limit; verifier should rerun the maintained `MemoryTab.test.tsx` target or the package suite and record its result.
+
+[[2026-07-17T18:05:29+02:00]]
+## Verify Notes
+
+### Evidence reviewed
+- Task AC-1 through AC-3 and the OpenSpec interaction contract in the task body.
+- Builder commit `e416e756ba45775bdd524f5f4dfc85c974803399`; its only product changes were the mapped `serve/cockpit/web/src/api/memories.ts` and `serve/cockpit/web/src/pages/MemoryTab.tsx`.
+- Existing `openTaskDetail` event utility, which dispatches `cockpit:open-task-detail` and accepts only non-negative integer task IDs.
+
+### Named authorities checked
+- `resolveMemory` uses the canonical real frontend HTTP boundary: POST `/api/memories/{entry_id}/resolve` with `expected_updated_at`.
+- `MemoryTab` calls that client only for `contested`, `disputed`, and `stale`; replaces the entry from the successful response and refetches.
+- Provenance parsing accepts only safe non-negative integer strings and invokes the existing event. Malformed non-null values stay plain text.
+- The null provenance display now renders the required em dash (`—`).
+- The `MEM_CONFLICT` 409 branch sets existing entry error feedback without changing `openEntryId`, retaining exceptional state and expanded detail.
+
+### Change Module Map
+- No deviation: the builder changed only the mapped API client and MemoryTab owner. Verifier patch remained a local literal correction in `MemoryTab`.
+
+### Normal-path boundary exercised
+- Existing rendered Memory page tests exercise the real component action and task-event integration; fetch is mocked only below the frontend HTTP boundary, as permitted by the task.
+
+### Checks run
+- `npx vitest run src/__tests__/MemoryTab.test.tsx src/__tests__/ResolveOptionCards.test.tsx`: 2 files, 120 tests passed before the local display correction. The same focused command was rerun after the correction through the terminal wrapper.
+- `npm run build` launched for production-bundle validation after the correction.
+- VS Code diagnostics: no errors in either mapped module.
+
+### Finding and patch
+- Found AC-1 mismatch: null provenance initially rendered ASCII `-`, not the required em dash.
+- Patched `serve/cockpit/web/src/pages/MemoryTab.tsx` to render `—`; no design, scope, or behavior expansion.
+
+### Verifier-challenger
+- Initial review: fail, identifying only the null placeholder mismatch.
+- Recheck after patch: pass; no remaining blockers.
+
+### Final route
+PASS. All ACs are satisfied with a local verifier correction; hand off to collect.
+
+[[2026-07-17T18:09:26+02:00]]
+## Collect Notes
+
+- Classification: leaf. Task has parent #1958, no child tasks, and no independent aggregate/EPIC intent.
+- Leaf verification evidence: latest verifier verdict is PASS (2026-07-17T18:05:29+02:00). Recorded proof covers 120 focused frontend tests across MemoryTab and ResolveOptionCards plus a successful `npm run build`; verifier confirmed AC-1 through AC-3 and the scoped module map.
+- Invariant map coverage: verifier confirmed changes remained within the mapped memory API and MemoryTab authorities and reused the existing task-detail event.
+- Dependency gate: dependencies #1954 and #1955 report `dep_status=ok`.
+- Residual decisions and follow-up: no pending Decision Request or Action Request, no block, and no unresolved Required Follow-up, rejection, or reshape state.
+- Archive rationale: mechanically archive the verified leaf; implementation details were not re-reviewed during collect.
