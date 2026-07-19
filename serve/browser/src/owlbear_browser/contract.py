@@ -177,8 +177,7 @@ def _redact_url_query(value: str) -> str:
     if not parsed.scheme or not parsed.netloc or not parsed.query:
         return value
     query_items = [
-        (key, "[REDACTED]" if _SENSITIVE_QUERY_PARAMETER.search(key) else item)
-        for key, item in parse_qsl(parsed.query)
+        (key, "[REDACTED]" if _SENSITIVE_QUERY_PARAMETER.search(key) else item) for key, item in parse_qsl(parsed.query)
     ]
     query = urlencode(query_items, doseq=True)
     return urlunparse(parsed._replace(query=query))
