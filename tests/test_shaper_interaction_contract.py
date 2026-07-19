@@ -137,13 +137,11 @@ def test_challenger_accepts_complete_provisional_graph() -> None:
 
 def test_shaper_human_output_does_not_remove_channel_b_history() -> None:
     protocol = _read("share/skills/r-pipeline-protocol/SKILL.md")
-    instruction = _read("share/instructions/pipeline-agents.instructions.md")
 
     assert "Shaper is user-facing and is not dispatched by orchestrator" in protocol
     assert "does not expose a machine verdict as the user interface" in protocol
     assert "internal route recorded in task state" in protocol
-    assert "user-facing human summary; route recorded in task state" in instruction
-    assert "## Shape Notes" in instruction
+    assert "`## Shape Notes`" in protocol
 
 
 def test_standalone_spec_graph_has_a_shape_notes_target() -> None:

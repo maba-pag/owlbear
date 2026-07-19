@@ -22,7 +22,7 @@ def test_lint_uses_staged_files_when_no_paths_are_given() -> None:
 
 
 def test_lint_passes_explicit_paths_to_pre_commit() -> None:
-    paths = ["share/skills/h-mcp-memory/SKILL.md", "share/instructions/pipeline-agents.instructions.md"]
+    paths = ["share/skills/h-mcp-memory/SKILL.md", "share/skills/r-pipeline-protocol/SKILL.md"]
     with (
         patch.object(sys, "argv", ["lint", *paths]),
         patch("owlbear_tools.lint.subprocess.call", return_value=0) as call,

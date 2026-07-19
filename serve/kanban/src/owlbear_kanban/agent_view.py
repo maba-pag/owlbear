@@ -44,8 +44,9 @@ class AgentView:
     _MAX_BODY_BYTES = 500 * 1024
     _BODY_SIZE_WARNING = "\u26a0\ufe0f Task body is large (>100 KB); consider splitting."
     _BLOCK_AR_HINT = (
-        "\u26a0\ufe0f ACTION REQUIRED: Create a Decision Request via the create_request tool."
-        " Blocks without a DR are invisible to the pipeline."
+        "\u26a0\ufe0f ACTION REQUIRED: If progress needs a user decision or action, create a Decision Request or"
+        " Action Request via create_request. Otherwise record the recovery owner and exact recovery"
+        " step for this operational containment block."
     )
 
     def __init__(self, engine: KanbanEngine) -> None:

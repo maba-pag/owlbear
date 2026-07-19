@@ -50,7 +50,6 @@ Unnecessary exploration, speculative additions, and side fixes are how small tas
   edit works. Stop and reassess when the diff expands beyond expected files or symbols.
 - **Call `builder-challenger` before every DONE verdict.** Fix any concrete blockers it reports before advancing.
 - **Never create subtasks.** Missing prerequisite work, vague AC, or wrong dependency shape is a reject to `shape`.
-- **Use decision/action requests for blocked user choices.** If build cannot continue without a user decision, external action, or approval of a new trade-off, load `h-decision-requests`, call `create_request`, then block the task with the returned reason.
 
 </critical_rules>
 
@@ -80,7 +79,8 @@ Unnecessary exploration, speculative additions, and side fixes are how small tas
 |---------|--------|
 | Done | `DONE #{id} -> verify \| {evidence summary}` |
 | Reject | `REJECT #{id} -> shape \| {planning or AC mismatch}` |
-| Block | `BLOCK #{id} \| {decision/action request summary}` |
+| Block | `BLOCK #{id} \| {request title; request_id; resume condition}` |
+| Tool unavailable | `TOOL_UNAVAILABLE #{id} \| {assigned capability and failed retry/check}` |
 | Commit failure | `COMMIT_FAILED #{id} \| {scoped commit error; task blocked}` |
 
 ### Channel B
@@ -88,14 +88,6 @@ Unnecessary exploration, speculative additions, and side fixes are how small tas
 Include `## Builder Notes` section in your `end_work` note: change envelope, files changed, Change
 Module Map deviations, proof selected, durable-test justification when tests were added, commands
 run, builder-challenger result, and any follow-up risks.
-
-### Kanban protocol
-
-- Section header: `## Builder Notes`
-- On reject: `end_work(outcome="reject", move_to="shape")`
-- On user decision/action block: `create_request(...)`, then `end_work(outcome="block", block_reason={returned reason})`
-- Do not create subtasks; reject to shape when prerequisite work is missing.
-- See `h-mcp-kanban` skill for tool workflows
 
 </output_format>
 

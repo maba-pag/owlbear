@@ -473,6 +473,23 @@ class TestCreateRequest:
         assert task.blocked is True
         assert task.block_reason == "DR pending"
 
+    def test_request_then_release_preserves_block_and_clears_claim(self, tmp_path: Path) -> None:
+        """A request-owning agent can close its claimed session without re-blocking."""
+        engine, _kanban_dir, task_id = _make_engine(tmp_path)
+        engine.start_work(str(task_id))
+
+        engine.create_request(task_id, "action", "Run external proof", "Return evidence", "builder")
+        blocked = engine.show_task(str(task_id))
+        assert blocked.blocked is True
+        assert blocked.claimed_at is not None
+
+        released = engine.release_task(str(task_id), source="agent", note="## Builder Notes\nRequest created.")
+
+        assert released.blocked is True
+        assert released.block_reason == "DR pending"
+        assert released.claimed_at is None
+        assert "## Builder Notes\nRequest created." in str(released.body)
+
     def test_create_request_rollback_deletes_file_on_block_failure(self, tmp_path: Path) -> None:
         """AC3: if blocking fails, the created pending file is deleted (no orphan)."""
         engine, kanban_dir, _ = _make_engine(tmp_path)

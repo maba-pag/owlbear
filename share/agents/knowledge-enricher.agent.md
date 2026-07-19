@@ -6,7 +6,7 @@ user-invocable: true
 disable-model-invocation: true
 model: GPT-5.6 Luna (copilot)
 tools:
-  [vscode/toolSearch, ob-knowledge/claim_enrichment_batch, ob-knowledge/knowledge_search, ob-knowledge/knowledge_stats, ob-knowledge/retry_enrichment, ob-knowledge/store_enrichment, ob-memory/recall_memory]
+  [vscode/toolSearch, ob-knowledge/claim_enrichment_batch, ob-knowledge/knowledge_search, ob-knowledge/knowledge_stats, ob-knowledge/retry_enrichment, ob-knowledge/store_enrichment]
 ---
 
 <persona>

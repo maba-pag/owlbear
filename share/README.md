@@ -1,6 +1,6 @@
 # share/ — Agent Ecosystem
 
-OwlBear's agent ecosystem: 23 agents, 32 skills, 7 instructions, 13 prompts. This directory is the single source of truth for agent definitions and their supporting documents.
+OwlBear's agent ecosystem: 23 agents, 32 skills, 6 instructions, 13 prompts. This directory is the single source of truth for agent definitions and their supporting documents.
 
 ## Directory Layout
 
@@ -8,7 +8,7 @@ OwlBear's agent ecosystem: 23 agents, 32 skills, 7 instructions, 13 prompts. Thi
 |-----------|----------|-------|
 | `agents/` | Agent definitions (`.agent.md`) | 23 |
 | `skills/` | Reusable domain knowledge (`SKILL.md`) | 30 |
-| `instructions/` | Auto-loaded instruction files (`.instructions.md`) | 7 |
+| `instructions/` | Auto-loaded instruction files (`.instructions.md`) | 6 |
 | `prompts/` | User-invocable one-shot commands (`.prompt.md`) | 13 |
 | `diagrams/` | Shared visual assets (Excalidraw, SVG) | — |
 
@@ -19,7 +19,7 @@ Content reaches agents through four mechanisms, ordered by cost:
 | Mechanism | When it loads | Cost | Use for |
 |-----------|--------------|------|---------|
 | `copilot-instructions.md` | Every turn, every agent | Project-dependent | Current-project identity, topology, stack, commands, and resources |
-| Instructions (`.instructions.md`) | Every turn when `applyTo` glob matches a touched file | ~20–70 tokens/turn | Safety-net stubs, pipeline protocol |
+| Instructions (`.instructions.md`) | Every turn when `applyTo` glob matches a touched file | ~20–70 tokens/turn | Safety-net stubs and universal rules |
 | Skill frontmatter | Every turn, every agent (YAML header only) | ~20 tokens/skill/turn | Discovery — VS Code uses this to decide when to suggest the skill |
 | Skill body (`read_file`) | Once per session, on demand | One-time read (~300–500 tokens) | Procedures, protocol, domain knowledge |
 
@@ -88,13 +88,12 @@ See `h-agent-structure` § Nesting Depth & DMI for the full rule and ND3 agent t
 
 ## Instructions
 
-7 instruction files (`.instructions.md`). Two categories:
+6 instruction files (`.instructions.md`). Two categories:
 
 **Substantive documents** — contain full behavioral specifications:
 
 | File | Purpose |
 |------|---------|
-| `pipeline-agents.instructions.md` | Channel B communication protocol, section-header mapping, and per-agent kanban conventions |
 | `owlbear-system.instructions.md` | Decision heuristics, system awareness, memory governance, and operational fundamentals |
 
 **Instruction stubs** — safety nets loaded when `applyTo` glob matches a touched file; each stub points to the authoritative skill:

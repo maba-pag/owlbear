@@ -63,6 +63,7 @@
 - ## `Kanban`
 - ### `Status quo`
 - ### `Proposal`
+- ## `Memory`
 
 ## .owlbear/instructions/architecture.instructions.md
 - ## `Architecture Overview`
@@ -413,7 +414,6 @@
 ## share/agents/builder.agent.md
 - ### `Channel A`
 - ### `Channel B`
-- ### `Kanban protocol`
 
 ## share/agents/collector.agent.md
 - ### `Channel A`
@@ -538,12 +538,6 @@
 - ### `Pipeline`
 - ## `3. Memory Governance`
 - ## `4. Operational Fundamentals`
-
-## share/instructions/pipeline-agents.instructions.md
-- ## `Channel B`
-- ### `end_work Memory Assessment`
-- ## `Per-Agent Section Mapping`
-- ## `User-Action Detection Responsibilities`
 
 ## share/instructions/python.instructions.md
 
@@ -716,21 +710,11 @@
 - ## `Companion Skills`
 
 ## share/skills/h-decision-requests/SKILL.md
-- # `Decision/Action Requests Handbook`
-- ## `When To Create A Structured Request`
-- ## `MCP Tool Contracts`
-- ### ``create_request``
-- ### ``list_requests``
-- ### ``show_request``
-- ## `Data Model Fields`
-- ## `Validation Rules`
-- ## `Lifecycle`
-- ### `1) Create (pending)`
-- ### `2) Resolve (pending -> resolved)`
-- ### `3) Write-back to task body`
-- ### `4) Conditional unblock`
-- ## `Agent Usage Pattern`
-- ## `Important Limits`
+- # `Decision And Action Requests`
+- ## `Choose The Request Kind`
+- ## `Create A Request`
+- ## `Close The Active Work Session`
+- ## `Resolution And Resume`
 
 ## share/skills/h-excalidraw-diagram/SKILL.md
 - # `Excalidraw Diagram Reference`
@@ -946,6 +930,7 @@
 - ## `list_memories`
 - ## `read_memory`
 - ## `recall_memory`
+- ## `assess_memories`
 - ## `curate_memory`
 - ## `delete_memory`
 - ## `approve_memory`
@@ -961,7 +946,7 @@
 - ## `Tier-Content Fit`
 - ## `MCP Relationship`
 - ## `State Model`
-- ## `Deduplication Rules`
+- ## `Candidate Production`
 - ## `Content-Quality Bar`
 - ## `Anti-Patterns`
 
@@ -1045,7 +1030,7 @@
 - ## `2. Task Setup`
 - ### `Invocation Scope`
 - ### `Claiming`
-- ### `Resolved Decisions`
+- ### `Resolved Requests`
 - ### `Memory`
 - ### `Task Metadata`
 - ## `3. Working Standards`
@@ -1062,8 +1047,9 @@
 - ### `Before `end_work``
 - ### `After `end_work``
 - ### `Who Commits What`
-- ## `6. Escalation`
-- ### `Decision Tiers`
+- ## `6. Interruptions And Requests`
+- ### `Request Admission`
+- ### `Tool Outage And Containment`
 
 ## share/skills/r-workspace-governance/SKILL.md
 - # `Workspace Governance`
@@ -1257,3 +1243,9 @@
 - ## `Output`
 - ## `Known Pitfalls`
 - ## `Companion Skills`
+
+## test-results/serve-cockpit-web-e2e-memo-cfc43-isible-rows-and-shown-count/error-context.md
+- # `Instructions`
+- # `Test info`
+- # `Error details`
+- # `Test source`

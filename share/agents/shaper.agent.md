@@ -6,7 +6,7 @@ user-invocable: true
 disable-model-invocation: true
 model: GPT-5.6 Sol (copilot)
 tools:
-  [vscode/toolSearch, vscode/askQuestions, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, vscode.mermaid-markdown-features, edit/createDirectory, edit/createFile, edit/editFiles, search, web, 'markitdown/*', 'ob-kanban/*', ob-memory/assess_memories, ob-memory/recall_memory, ob-memory/save_memory, vscodeTasks/problems, vscodeGeneral/toolSearch]
+  [vscode/toolSearch, vscode/askQuestions, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, vscode.mermaid-markdown-features, edit/createDirectory, edit/createFile, edit/editFiles, search, web, 'markitdown/*', ob-kanban/create_request, ob-kanban/create_task, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/list_requests, ob-kanban/list_tasks, ob-kanban/move_task, ob-kanban/show_request, ob-kanban/show_task, ob-kanban/start_work, ob-memory/assess_memories, ob-memory/recall_memory, ob-memory/save_memory, vscodeTasks/problems, vscodeGeneral/toolSearch]
 agents: [shaper-challenger, Explore]
 hooks:
   PreToolUse:

@@ -34,7 +34,7 @@ Built-in agents (`Explore`, `General Purpose`) resolve at any depth.
 
 | Agent | Regularly | Connection | Seldom | Connection |
 |-------|-----------|------------|--------|------------|
-| shaper | r-pipeline-protocol, r-workspace-governance | `req` | w-spec-shaping or w-task-repair after mode selection; w-task-decomposition, w-research, h-ac-quality, h-codebase-orientation, h-module-design, h-mcp-kanban when triggered | `directed` / `companion` |
+| shaper | r-pipeline-protocol, r-workspace-governance | `req` | w-spec-shaping or w-task-repair after mode selection; w-task-decomposition, w-research, h-ac-quality, h-codebase-orientation, h-module-design, h-mcp-kanban when triggered; h-mcp-memory when recall returns entries | `directed` / `companion` |
 
 ### User Planning And Design
 
@@ -47,9 +47,9 @@ Built-in agents (`Explore`, `General Purpose`) resolve at any depth.
 
 | Agent | Regularly | Connection | Seldom | Connection |
 |-------|-----------|------------|--------|------------|
-| builder | r-pipeline-protocol, r-workspace-governance, h-codebase-orientation | `req` | h-module-design, h-mcp-kanban, python/frontend instructions | `companion` / `applyTo` |
-| verifier | r-pipeline-protocol, r-workspace-governance, h-codebase-orientation | `req` | h-module-design, h-mcp-kanban, python/frontend instructions | `companion` / `applyTo` |
-| collector | r-pipeline-protocol, r-workspace-governance | `req` | h-mcp-kanban | `companion` |
+| builder | r-pipeline-protocol, r-workspace-governance, h-codebase-orientation | `req` | h-module-design, h-mcp-kanban, h-mcp-memory when recall returns entries, python/frontend instructions | `companion` / `applyTo` |
+| verifier | r-pipeline-protocol, r-workspace-governance, h-codebase-orientation | `req` | h-module-design, h-mcp-kanban, h-mcp-memory when recall returns entries, python/frontend instructions | `companion` / `applyTo` |
+| collector | r-pipeline-protocol, r-workspace-governance | `req` | h-mcp-kanban; h-mcp-memory when recall returns entries | `companion` |
 
 ### Pipeline Challengers
 
@@ -63,7 +63,7 @@ Built-in agents (`Explore`, `General Purpose`) resolve at any depth.
 
 | Agent | Regularly | Connection | Seldom | Connection |
 |-------|-----------|------------|--------|------------|
-| test-curator | w-test-curation | `req` | h-python-conventions, h-vitest-and-linting | `companion` |
+| test-curator | w-test-curation | `req` | h-memory-structure and h-mcp-memory when saving a qualifying insight; h-python-conventions, h-vitest-and-linting | `directed` / `companion` |
 | memory-curator | w-mem-curation | `req` | h-mcp-memory, h-memory-structure | `companion` / `directed` |
 
 ### Ideation And Knowledge
@@ -79,7 +79,7 @@ Built-in agents (`Explore`, `General Purpose`) resolve at any depth.
 
 | File | Regular Consumers |
 |------|-------------------|
-| r-pipeline-protocol | orchestrator, shaper, builder, verifier, collector, shaper-challenger, builder-challenger, verifier-challenger, memory-curator |
+| r-pipeline-protocol | orchestrator, shaper, builder, verifier, collector, shaper-challenger, builder-challenger, verifier-challenger |
 | w-spec-shaping | shaper |
 | w-task-repair | shaper |
 | w-orchestration | orchestrator |
@@ -93,6 +93,8 @@ Built-in agents (`Explore`, `General Purpose`) resolve at any depth.
 | h-module-design | shaper workflows on demand, shaper-challenger, ideation-architect; builder/verifier on demand |
 | r-workspace-governance | shaper, builder, verifier, collector, ideation discoverer, ideation mediator |
 | h-mcp-kanban | pipeline/support agents on demand |
+| h-mcp-memory | task-owning pipeline agents through r-pipeline-protocol when recall returns entries; save-capable agents through always-loaded Memory Governance; memory-curator through w-mem-curation |
+| h-memory-structure | save-capable agents through always-loaded Memory Governance; memory-curator through w-mem-curation |
 | h-pytest-and-linting | builder-challenger/test-curator on demand |
 | h-vitest-and-linting | builder-challenger/test-curator/frontend work on demand |
 | h-python-conventions | Python editing/curation on demand |

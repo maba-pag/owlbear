@@ -15,7 +15,6 @@ The orchestrator maintains minimal session state:
 - **`rate_limited`** (boolean, default `False`): Set to `True` on any rate-limit error. Once set, all subsequent `pick_tasks` calls use `wave_size=1`. Never reset within a session.
 - **`cycle_count`** (integer, starts at 1): Incremented each cycle. Used to trigger the memory-curator every 10th cycle.
 - **No board state.** `pick_tasks` reads the board each cycle via MCP tool call.
-- **Channel A reading.** Read agent return values for outcome detection: `FAIL` (task failed), `TOOL_UNAVAILABLE` (tool degraded), or success. Do not parse signals for task routing — re-plan from board state each cycle.
 - **Brief context:** Available to pipeline agents via parent task lookup — the orchestrator does not use Brief context directly.
 
 ## Signal Contracts
@@ -43,7 +42,9 @@ The orchestrator maintains minimal session state:
 
 Empty `waves` means nothing dispatchable for this cycle.
 
-**Pipeline subagent output:** Channel A diagnostic line. Read for outcome detection: `FAIL` signals a task failure, `TOOL_UNAVAILABLE` signals tool degradation, any other return is success. Do not parse for routing.
+**Pipeline subagent output:** Use the Channel A vocabulary defined by `r-pipeline-protocol`. Channel A
+reports lifecycle completion; it never authorizes orchestration to route the task. Re-plan from the
+board after each wave.
 
 `shape` tasks are excluded from routine dispatch. They require the user-facing `/shape` prompt because shaper may ask product, architecture, scope, or action-request questions through `askQuestions`.
 
@@ -124,24 +125,21 @@ Orchestrator dispatches waves in returned order. No local re-bucketing or re-ass
 
 **Dispatch prompt contains ONLY the task ID.** Subagents claim and read their own AC via `start_work` in their own Step 0.
 
-**Error handling — unified model:**
+**Error handling:** Classify agent returns top-to-bottom. First match wins.
 
-Classify agent returns top-to-bottom. First match wins.
-
-**Structured vs crash classification:** A return that starts with a recognized verdict keyword (`APPROVED`, `REFINE`, `BLOCK`, `DONE`, `REJECT`, `PASS`, `RESHAPE`, `ARCHIVED`, `FAIL`) is a *structured return* — the agent completed its lifecycle and called `end_work`. Any other return (error, empty, unrecognized) is a *crash* — the agent did NOT call `end_work`.
-
-1. **TOOL_UNAVAILABLE** (return contains `TOOL_UNAVAILABLE`):
+1. **`TOOL_UNAVAILABLE`** (return starts with the token):
    - Re-dispatch the same agent on the same task immediately.
    - If the retry also returns `TOOL_UNAVAILABLE`: **halt orchestration** — "Tool availability degraded: {agent} cannot reach {tool_name}. Restart VS Code or check extension status."
    - If the retry succeeds: tools recovered. Continue normally.
-   - Note: TOOL_UNAVAILABLE returns are always structured (agent called `end_work`). The orchestrator does not block or edit the task — the agent already handled its own state.
-2. **Rate-limit** (message contains "rate-limited", "rate_limited", or "rate limits"):
+   - The agent already called `end_work(outcome="fail")`; do not release or block the task.
+2. **Structured lifecycle return** (starts with `DONE`, `PASS`, `ARCHIVED`, `REJECT`, `RESHAPE`,
+   `BLOCK`, or `COMMIT_FAILED`):
+   - The agent already managed task state. Do not call `end_work`, `edit_task`, or `move_task`.
+   - Proceed to the next task in the wave. Routing comes from the next `pick_tasks` call.
+3. **Raw rate-limit error** (unstructured message contains "rate-limited", "rate_limited", or "rate limits"):
    - Set `rate_limited = True`. Retry the dispatch once.
    - All subsequent `pick_tasks` calls use `wave_size=1` (one-way transition — no resume to parallel).
-3. **Structured return** (verdict keyword present — including `FAIL`):
-   - The agent called `end_work` and managed its own task state (status, block, release). **Do not override** — no `end_work(...)`, no `edit_task(...)`, no `move_task`. The task is in the correct state.
-   - Proceed to the next task in the wave.
-4. **Crash** (no structured return — agent error, timeout, or unrecognized output):
+4. **Crash** (empty, unrecognized, timeout, or other unstructured error):
    - Release any claim before retry: `end_work(id={task_id}, outcome="release", note="{agent} crashed once; releasing claim before retry: {reason}")`.
    - If release reports `ERR_NOT_CLAIMED`, the agent crashed before claiming; continue to the retry.
    - Re-dispatch the same agent on the same task once.
@@ -181,13 +179,14 @@ Session complete:
 
 - [ ] If an agent crashed once (no structured verdict), any claim was released before retry
 - [ ] If an agent crashed twice (no structured verdict), the task is blocked on the board with a reason note
-- [ ] If an agent returned a structured verdict (including FAIL), the orchestrator did NOT edit or block the task
+- [ ] If an agent returned a structured lifecycle signal, the orchestrator did NOT edit or block the task
 - [ ] If rate-limited at any point, all subsequent `pick_tasks` calls use `wave_size=1`
 - [ ] Loop not stopped early — only empty waves or user intervention
 
 ## Known Pitfalls
 
-- **Structured return ≠ needs orchestrator cleanup.** When an agent returns a structured verdict (`DONE`, `FAIL`, `BLOCK`, etc.), it called `end_work` and managed its own task state. Never call `end_work`, `edit_task`, or `move_task` on a task whose agent returned a structured signal — that overwrites the agent's intentional state transition.
+- **Structured return ≠ needs orchestrator cleanup.** Never mutate a task after a structured signal;
+   this includes `BLOCK` and `COMMIT_FAILED` containment states.
 - **Crash retry requires claim release.** A crashed agent may have claimed the task before failing. Release with `end_work(outcome="release")` before retrying, otherwise the retry can hit `ERR_ALREADY_CLAIMED`.
 - **No dispatch decisions from housekeeping output.** Curator output is informational only; `pick_tasks` reads fresh board state each cycle.
 - **Legacy wave assembly drift:** Do not reintroduce manual bucket planning in this skill. `pick_tasks` is the single wave-assembly authority.

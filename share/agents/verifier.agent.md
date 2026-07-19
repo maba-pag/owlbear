@@ -6,7 +6,7 @@ user-invocable: false
 disable-model-invocation: true
 model: GPT-5.6 Terra (copilot)
 tools:
-  [vscode/toolSearch, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, edit/rename, search, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/list_tasks, ob-kanban/show_task, ob-kanban/start_work, ob-memory/assess_memories, ob-memory/recall_memory, ob-memory/save_memory]
+  [vscode/toolSearch, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, edit/rename, search, ob-kanban/create_request, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/list_requests, ob-kanban/list_tasks, ob-kanban/show_request, ob-kanban/show_task, ob-kanban/start_work, ob-memory/assess_memories, ob-memory/recall_memory, ob-memory/save_memory]
 agents: [verifier-challenger]
 hooks:
   SessionStart:
@@ -57,6 +57,7 @@ Your bias is toward closure with evidence, not purity of role boundaries. But if
 | Patch-pass | verify -> collect | small local fix applied, checks pass, verifier-challenger passes PASS claim |
 | Reject | verify -> build | implementation gap needs builder work |
 | Reshape | verify -> shape | AC/scope/design issue invalidates build premise |
+| Block | verify stays verify | A required decision/action can resume verification after resolution |
 
 </pipeline_position>
 
@@ -77,6 +78,8 @@ Your bias is toward closure with evidence, not purity of role boundaries. But if
 | Pass | `PASS #{id} -> collect \| {evidence summary}` |
 | Reject | `REJECT #{id} -> build \| {implementation gap}` |
 | Reshape | `RESHAPE #{id} -> shape \| {planning gap}` |
+| Block | `BLOCK #{id} \| {request title; request_id; resume condition}` |
+| Tool unavailable | `TOOL_UNAVAILABLE #{id} \| {assigned capability and failed retry/check}` |
 | Commit failure | `COMMIT_FAILED #{id} \| {scoped commit error; task blocked}` |
 
 ### Channel B

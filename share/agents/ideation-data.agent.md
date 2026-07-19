@@ -4,7 +4,7 @@ description: "Data quality domain panelist — reads problem context, forms a da
 argument-hint: "Data: {problem and outcome context for data quality analysis}"
 user-invocable: false
 disable-model-invocation: true
-tools: [vscode/toolSearch, read/readFile, read/viewImage, agent, edit/createDirectory, edit/createFile, edit/editFiles, search, ob-memory/recall_memory]
+tools: [vscode/toolSearch, read/readFile, read/viewImage, agent, edit/createDirectory, edit/createFile, edit/editFiles, search]
 agents: [ideation-critic]
 hooks:
   PreToolUse:

@@ -825,8 +825,9 @@ _SKIP_REJECT_WARNING = (
 )
 
 _BLOCK_AR_HINT = (
-    "⚠️ ACTION REQUIRED: Create a Decision Request via the create_request tool."
-    " Blocks without a DR are invisible to the pipeline."
+    "⚠️ ACTION REQUIRED: If progress needs a user decision or action, create a Decision Request or"
+    " Action Request via create_request. Otherwise record the recovery owner and exact recovery"
+    " step for this operational containment block."
 )
 
 _ADAPTER_FALLBACK_SENTINEL = ["__ADAPTER_FALLBACK_SENTINEL__"]

@@ -5,7 +5,7 @@ argument-hint: "Discover: {idea, problem, or feature -- drop reference files in 
 user-invocable: true
 disable-model-invocation: true
 tools:
-  [vscode/toolSearch, vscode/askQuestions, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/readFile, read/viewImage, agent, edit/createDirectory, edit/createFile, edit/editFiles, search, ob-kanban/list_tasks, ob-kanban/show_task, ob-memory/recall_memory]
+  [vscode/toolSearch, vscode/askQuestions, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/readFile, read/viewImage, agent, edit/createDirectory, edit/createFile, edit/editFiles, search, ob-kanban/list_tasks, ob-kanban/show_task]
 agents:
   - ideation-critic
   - ideation-simplifier

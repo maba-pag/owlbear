@@ -231,6 +231,9 @@ Rules:
 
 - Every invariant has exactly one owner, even when several tasks contribute prerequisites.
 - The owning task's AC observes the invariant through its normal assembled boundary.
+- Every required operation and proof has an executor whose agent authority permits it. When the
+    executor must be the user or an explicitly invoked workflow, represent that dependency as
+    `type:user-action` with a planned Action Request before routine dispatch.
 - A mock or injected dependency may replace only a layer below the boundary being proved.
 - If decomposition leaves a final "wire everything together" task or no owner for a boundary, redraw
     the task shape before creation.
@@ -258,6 +261,8 @@ Split the planned task when any trigger applies:
 - More than one primary proof mode is needed.
 - More than one failure-domain family is present.
 - A proof artifact would be created only in `.owlbear/scratch/`, or the responsible agent cannot write the final tracked location. Create a separate builder-owned promotion/proof task with a concrete tracked deliverable, or choose a proof path the responsible agent can own.
+- A required operation or proof lies outside the responsible agent's authority and no user-action
+    request owns it.
 - A behavior-changing refactor changes existing semantics used by neighboring durable tests. Add a downstream-impact scan to the task body, or split the migration/update work into its own task.
 - An AC line combines behavior plus safety recovery, such as success-path emission and rollback-on-emit-failure. Split success behavior from failure recovery unless the recovery proof is one small smoke assertion.
 
@@ -331,6 +336,8 @@ Before creating any task, validate every planned task:
     normal-path AC.
 - **Reject boundary-bypassing proof** — proof guidance must not replace the callable, command,
     workflow, or assembled context whose behavior the AC claims.
+- **Reject ownerless execution** — every required operation and proof must fit the responsible
+    agent's authority or be represented by a user-action request with explicit returned evidence.
 - **Reject unjustified fragmentation** — a major feature with more than six tasks must explain in
     Shape Notes which distinct failure domains or proof modes require the additional split.
 

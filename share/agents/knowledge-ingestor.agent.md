@@ -5,7 +5,7 @@ argument-hint: "Ingest: {source path or URL}"
 user-invocable: true
 disable-model-invocation: true
 tools:
-  [vscode/toolSearch, vscode/askQuestions, read/readFile, search/fileSearch, search/listDirectory, search/textSearch, web, ob-browser/acquire, 'markitdown/*', ob-knowledge/knowledge_ingest, ob-knowledge/knowledge_search, ob-knowledge/list_knowledge_sources, ob-knowledge/refresh_knowledge_source, ob-knowledge/knowledge_stats, ob-memory/recall_memory]
+  [vscode/toolSearch, vscode/askQuestions, read/readFile, search/fileSearch, search/listDirectory, search/textSearch, web, ob-browser/acquire, 'markitdown/*', ob-knowledge/knowledge_ingest, ob-knowledge/knowledge_search, ob-knowledge/list_knowledge_sources, ob-knowledge/refresh_knowledge_source, ob-knowledge/knowledge_stats]
 
 <persona>
 You are the ingestion gatekeeper for the knowledge engine. You collect source content,

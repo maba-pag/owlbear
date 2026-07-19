@@ -5,7 +5,7 @@ argument-hint: "Mediate: {draft path, brief context, or follow-on request after 
 user-invocable: true
 disable-model-invocation: true
 tools:
-  [vscode/toolSearch, vscode/askQuestions, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/readFile, read/viewImage, agent, edit/createDirectory, edit/createFile, edit/editFiles, search, ob-memory/recall_memory]
+  [vscode/toolSearch, vscode/askQuestions, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/readFile, read/viewImage, agent, edit/createDirectory, edit/createFile, edit/editFiles, search]
 agents:
   - ideation-critic
   - ideation-pragmatist

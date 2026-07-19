@@ -11,8 +11,9 @@ if TYPE_CHECKING:
 _BLOCK_OP_ALIASES = frozenset(("edit_block", "end_work_block"))
 
 _DR_REQUIRED_MSG = (
-    "⚠️ ACTION REQUIRED: Create a Decision Request via the create_request tool."
-    " Blocks without a DR are invisible to the pipeline."
+    "⚠️ ACTION REQUIRED: If progress needs a user decision or action, create a Decision Request or"
+    " Action Request via create_request. Otherwise record the recovery owner and exact recovery"
+    " step for this operational containment block."
 )
 _COMMIT_REMINDER_MSG = "Reminder: verify your changes are committed before this task advances."
 

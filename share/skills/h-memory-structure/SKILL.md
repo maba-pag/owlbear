@@ -6,7 +6,7 @@ user-invocable: false
 
 # Memory Entry Structure
 
-> **Audience:** Agents writing post-task reflections and the memory-curator agent. **When:** Before calling `save_memory` (shape, dedup, quality checks) and during curation sessions. **Why:** Ensures entries meet the structural and quality bar for long-lived agent knowledge.
+> **Audience:** Agents writing post-task reflections and the memory-curator agent. **When:** Before calling `save_memory` (entry shape and quality checks) and during curation sessions. **Why:** Ensures entries meet the structural and quality bar for long-lived agent knowledge.
 
 Structural standards for project memory entries in MCP (`ob-memory`) storage. Covers entry shape, tier selection, deduplication, and quality enforcement.
 
@@ -63,7 +63,8 @@ MCP memory is canonical.
 | Curation pass | Read MCP pending entries and promote durable insights into MCP |
 | Pre-flight knowledge load | MCP only (`recall_memory(agent="{agent_name}")`) |
 
-Post-task reflection is defined in `r-pipeline-protocol` § Post-task Reflection. Follow it exactly.
+The always-loaded `owlbear-system.instructions.md` Memory Governance section triggers post-work
+reflection. Pipeline recall and assessment are defined separately in `r-pipeline-protocol`.
 
 See `share/diagrams/memory-layers.excalidraw` for a visual overview of the tier and state model.
 
@@ -82,19 +83,12 @@ Lifecycle transitions are controlled by MCP tools:
 
 Tool responses include hints describing which branch was applied (for example, pending promotion, approved downgrade, hard-delete vs soft-delete).
 
-## Deduplication Rules
+## Candidate Production
 
-These rules apply at **write time** to prevent recording near-duplicates. Curation-time dedup (grouping, merging, pruning) is handled by `w-mem-curation` Step 2 — do not replicate that logic here.
-
-**Before calling `save_memory`:**
-
-1. Call `list_memories(states=["pending","curated","approved"])` and inspect returned metadata.
-2. Use `read_memory(entry_id=...)` for full-content checks on likely overlaps.
-3. If an existing entry covers the same core insight, **do not record**. Append new evidence as a note to the task body instead.
-4. If an existing entry is partially overlapping, record only the delta (what the existing entry lacks).
-5. On conflict (new entry contradicts an existing approved entry), record the new entry with `categories=["domain-knowledge"]` and note the conflict in the `content` field: `"Contradicts {entry_id}: ..."`.
-
-**Which entry wins:** The most recently recorded entry with higher confidence wins at retrieval. The curator resolves conflicts during curation — do not delete approved entries yourself.
+`save_memory` creates a pending candidate. Ordinary writers do not need `list_memories` or
+`read_memory` authority and must not attempt store-wide deduplication before saving. Avoid a duplicate
+only when the same insight is already visible in the current context. The memory curator performs
+cross-store comparison, conflict handling, scoping, and pruning through `w-mem-curation`.
 
 ## Content-Quality Bar
 

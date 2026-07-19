@@ -343,7 +343,6 @@ Current authority files:
 
 | File | applyTo | Role |
 |------|---------|------|
-| `pipeline-agents.instructions.md` | `share/skills/r-pipeline-protocol/**` | Channel B protocol and per-agent section-header mapping (pipeline-scoped) |
 | `owlbear-system.instructions.md` | `**` | System instructions — decision heuristics, system awareness, memory governance, and operational fundamentals (universal) |
 
 | Rule | Value |
