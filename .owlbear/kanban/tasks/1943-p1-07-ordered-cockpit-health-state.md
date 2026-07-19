@@ -1,10 +1,10 @@
 ---
 id: 1943
 title: 'P1-07: Ordered Cockpit health state'
-status: shape
+status: build
 priority: medium
 created: 2026-07-17T02:32:24.186115+02:00
-updated: 2026-07-17T16:30:08.185229+02:00
+updated: 2026-07-19T22:00:30.886541+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -88,3 +88,46 @@ Released without implementation: task is in `shape`, while builder mode only pro
 - #1943 remains in shape, parent #1945, depending on #1942.
 - Required sequence is #1941 completion, then shape and build #1942, then re-enter `/shape 1943` and route it to build once the backend contract is authoritative.
 - #1944 remains downstream of #1943 and must not be advanced first.
+
+[[2026-07-19T22:00:30+02:00]]
+## Shape Notes
+
+### Repair Source And Classification
+- Source: the latest builder dependency rejection and the prior mechanical hold recorded on #1943.
+- Classification: mechanical reroute. The sole readiness gate has cleared; no product behavior, architecture, acceptance meaning, task graph, or planning artifact changed.
+
+### Facts Checked
+- #1941 is archived completed, so explicit claim/session maintenance is authoritative and remains separate from storage-health repair.
+- #1942 is archived completed with verifier PASS and collector closure. Its assembled FastAPI contract supplies typed aggregate and focused health reads, isolated module failures, synchronous `POST /health/tasks/repair` with post-repair task health, and explicit maintenance routes outside Workspace Status.
+- The board reports #1943 dependency status as `ok`. #1943 still owns only Cockpit web API/provider/hook state and does not need to guess backend response behavior.
+- Existing Outcome, Scope, AC, Proof Guidance, parent #1945, and dependency #1942 remain correct.
+
+### Readiness And Authorities
+- Planning authority remains OpenSpec change `redesign-workspace-health`.
+- HTTP authority is completed task #1942 and its assembled Cockpit backend contract.
+- Build should preserve the accepted status precedence, periodic refresh, stale-response guard, repair-state merge, no immediate follow-up health GET, and polling-independent repair receipt.
+
+### Change Module Map
+| Module | Responsibility | Planned Change | Owner |
+|---|---|---|---|
+| Cockpit backend health routes | Typed aggregate/focused health and synchronous repair receipt | Completed contract authority | #1942 |
+| Cockpit web API/provider/hooks | Ordered module state, refresh triggers, repair merge, and receipt state | Implement against #1942 | #1943 |
+| Workspace Status UI | Render provider state and retained repair feedback | Remains downstream | #1944 |
+
+### Product Invariant Map
+| Product Invariant | Owner | Proof Boundary |
+|---|---|---|
+| Connection failure remains distinct from storage findings | #1943 | Frontend provider at the fetch boundary |
+| Older responses cannot replace newer module or repair state | #1943 | Controlled delayed provider responses |
+| Repair merges returned task health without an immediate health GET | #1943 | Repair client/provider integration |
+| Polling cannot erase the held repair receipt | #1943 | Provider integration across later refreshes |
+
+### Task And Dependency Changes
+- Status advanced from `shape` to `build`.
+- No body fields, AC, parent, dependency, priority, tags, or OpenSpec artifacts changed.
+- Challenger was not required for this complete non-material repair; no provisional graph or material planning decision changed.
+
+### Board Audit
+- #1943 routes to builder in `build`, parent #1945, depending on completed #1942.
+- #1944 remains in `shape` downstream of #1943 and must not advance before this provider contract is verified.
+- #1959 remains independently in `build` after #1942 and does not block #1943.
