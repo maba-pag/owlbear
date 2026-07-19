@@ -1,16 +1,16 @@
 # share/ — Agent Ecosystem
 
-OwlBear's agent ecosystem: 12 agents, 28 skills, 6 instructions, 11 prompts. This directory is the single source of truth for agent definitions and their supporting documents.
+OwlBear's agent ecosystem definitions and supporting documents. This directory is their single source of truth.
 
 ## Directory Layout
 
-| Directory | Contents | Count |
-|-----------|----------|-------|
-| `agents/` | Agent definitions (`.agent.md`) | 12 |
-| `skills/` | Reusable domain knowledge (`SKILL.md`) | 28 |
-| `instructions/` | Auto-loaded instruction files (`.instructions.md`) | 6 |
-| `prompts/` | User-invocable one-shot commands (`.prompt.md`) | 11 |
-| `diagrams/` | Shared visual assets (Excalidraw, SVG) | — |
+| Directory | Contents |
+|-----------|----------|
+| `agents/` | Agent definitions (`.agent.md`) |
+| `skills/` | Reusable domain knowledge (`SKILL.md`) |
+| `instructions/` | Auto-loaded instruction files (`.instructions.md`) |
+| `prompts/` | User-invocable one-shot commands (`.prompt.md`) |
+| `diagrams/` | Shared visual assets (Excalidraw, SVG) |
 
 ## Loading Model
 
@@ -56,15 +56,15 @@ These load into every agent's context on every turn:
 
 ## Agents
 
-12 agent definitions (`.agent.md` files).
+Agent definitions use `.agent.md` files.
 
-| Tier | Count | Agents |
-|------|-------|--------|
-| T1 — Orchestrator | 1 | orchestrator |
-| T2 — Pipeline | 4 | shaper, builder, verifier, collector |
-| T3 — Support | 2 | test-curator, memory-curator |
-| T4 — Tools/Panel | 3 | shaper-challenger, builder-challenger, verifier-challenger |
-| T5 — Knowledge | 2 | knowledge-enricher, knowledge-ingestor |
+| Tier | Agents |
+|------|--------|
+| T1 — Orchestrator | orchestrator |
+| T2 — Pipeline | shaper, builder, verifier, collector |
+| T3 — Support | test-curator, memory-curator |
+| T4 — Tools/Panel | shaper-challenger, builder-challenger, verifier-challenger |
+| T5 — Knowledge | knowledge-enricher, knowledge-ingestor |
 
 ### Nesting Depth
 
@@ -76,17 +76,17 @@ See `h-agent-structure` § Nesting Depth & DMI for the full rule and ND3 agent t
 
 ## Skills
 
-28 skill definitions (`share/skills/{name}/SKILL.md`).
+Skill definitions live under `share/skills/{name}/SKILL.md`.
 
-| Prefix | Count | Purpose |
-|--------|-------|---------|
-| `w-` | 9 | Workflow — step-by-step procedures |
-| `r-` | 3 | Rules — shared conventions |
-| `h-` | 16 | Handbook — domain knowledge |
+| Prefix | Purpose |
+|--------|---------|
+| `w-` | Workflow — step-by-step procedures |
+| `r-` | Rules — shared conventions |
+| `h-` | Handbook — domain knowledge |
 
 ## Instructions
 
-6 instruction files (`.instructions.md`). Two categories:
+Instruction files use `.instructions.md`. Two categories:
 
 **Substantive documents** — contain full behavioral specifications:
 
@@ -108,7 +108,7 @@ Stubs catch agents editing files without the relevant skill loaded. They do not 
 
 ## Prompts
 
-11 prompt files (`.prompt.md`). Prompts are user-invocable one-shot commands triggered from the VS Code chat command palette. Many accept `${input:...}` variable substitution.
+Prompt files use `.prompt.md`. Prompts are user-invocable one-shot commands triggered from the VS Code chat command palette. Many accept `${input:...}` variable substitution.
 
 **Naming convention:**
 

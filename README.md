@@ -126,6 +126,7 @@ commands (`doc-index`, `py-index`, and `ts-index`) are also available.
 
 ```bash
 uv sync --all-extras
+uv run pre-commit install
 uv run pytest tests/ serve/ -m "not api" -q --tb=short
 uv run pytest tests/ serve/ -m "not api" -q --tb=short --cov --cov-report=term-missing
 uv run ruff check serve/ tests/
@@ -133,7 +134,8 @@ uv run ruff check serve/ tests/
 
 ## Pre-commit Hooks
 
-Two local hooks guard agent and skill file quality:
+Install the repository's Git hook once with `uv run pre-commit install`. After installation, Git
+invokes these local validators during commits:
 
 - **`validate-skills`** — runs on every commit, validates all `share/skills/*/SKILL.md` frontmatter.
 - **`validate-agents`** — runs when any `share/agents/*.agent.md` file is staged, checking for:

@@ -194,7 +194,7 @@ Compact transition table showing what triggers this agent and what it produces:
 | shaper-challenger | AC quality and scope review during shaping | `Challenge Shape: task_id=42, proposed_verdict=APPROVED, reasoning="..."` |
 ```
 
-The `<agents>` table must list every agent in the frontmatter `agents:` array and vice versa. This is the **only** source of subagent knowledge at nesting depth ≥2 (VS Code does not inject the agents catalog at that depth). A CI validation script enforces alignment — see `.owlbear/scripts/validate_agents.py`.
+The `<agents>` table must list every agent in the frontmatter `agents:` array and vice versa. This is the **only** source of subagent knowledge at nesting depth ≥2 (VS Code does not inject the agents catalog at that depth). The `validate-agents` pre-commit hook enforces alignment through `.owlbear/scripts/validate_agents.py`.
 
 ### Forbidden Content
 
