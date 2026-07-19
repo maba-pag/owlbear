@@ -158,13 +158,8 @@ def _module_health(checker: object) -> HealthModule:
             findings = [item.model_dump() for item in result.findings]
             checked_paths = result.checked_paths
         else:
-            findings = [
-                {"path": path, "detail": "unreadable"}
-                for path in result.unreadable_paths
-            ] + [
-                {"path": path, "detail": "duplicate"}
-                for paths in result.duplicate_paths.values()
-                for path in paths
+            findings = [{"path": path, "detail": "unreadable"} for path in result.unreadable_paths] + [
+                {"path": path, "detail": "duplicate"} for paths in result.duplicate_paths.values() for path in paths
             ]
             checked_paths = result.unreadable_paths + [
                 path for paths in result.duplicate_paths.values() for path in paths
@@ -242,8 +237,7 @@ def repair_task_health(engine: _Engine) -> DeterministicRepairResult:
         return DeterministicRepairResult.model_validate(outcomes, from_attributes=True)
 
     typed_outcomes = [
-        item if isinstance(item, RepairOutcome) else RepairOutcome.model_validate(item)
-        for item in outcomes
+        item if isinstance(item, RepairOutcome) else RepairOutcome.model_validate(item) for item in outcomes
     ]
     task_health_result: TaskHealthResult | None = None
     if hasattr(engine, "task_health"):

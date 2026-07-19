@@ -52,7 +52,9 @@ def _engine() -> SimpleNamespace:
 def test_health_contract_is_typed_and_isolates_checker_failures(monkeypatch, tmp_path: Path) -> None:
     engine = _engine()
     engine.request_health = lambda: (_ for _ in ()).throw(RuntimeError("broken requests"))
-    client = _client(monkeypatch, tmp_path, engine, SimpleNamespace(health=lambda: SimpleNamespace(findings=[], checked_paths=[])))
+    client = _client(
+        monkeypatch, tmp_path, engine, SimpleNamespace(health=lambda: SimpleNamespace(findings=[], checked_paths=[]))
+    )
 
     response = client.get("/health")
 
@@ -66,7 +68,9 @@ def test_health_contract_is_typed_and_isolates_checker_failures(monkeypatch, tmp
 def test_liveness_and_ideas_integrity_do_not_mutate_ideas(monkeypatch, tmp_path: Path) -> None:
     ideas_path = tmp_path / "ideas.md"
     ideas_path.write_bytes(b"ideas")
-    client = _client(monkeypatch, tmp_path, _engine(), SimpleNamespace(health=lambda: SimpleNamespace(findings=[], checked_paths=[])))
+    client = _client(
+        monkeypatch, tmp_path, _engine(), SimpleNamespace(health=lambda: SimpleNamespace(findings=[], checked_paths=[]))
+    )
 
     live = client.get("/health/live")
     before = ideas_path.stat()
@@ -79,7 +83,9 @@ def test_liveness_and_ideas_integrity_do_not_mutate_ideas(monkeypatch, tmp_path:
 
 
 def test_repair_returns_terminal_receipt(monkeypatch, tmp_path: Path) -> None:
-    client = _client(monkeypatch, tmp_path, _engine(), SimpleNamespace(health=lambda: SimpleNamespace(findings=[], checked_paths=[])))
+    client = _client(
+        monkeypatch, tmp_path, _engine(), SimpleNamespace(health=lambda: SimpleNamespace(findings=[], checked_paths=[]))
+    )
 
     response = client.post("/health/tasks/repair")
 
@@ -91,7 +97,9 @@ def test_repair_returns_terminal_receipt(monkeypatch, tmp_path: Path) -> None:
 def test_health_route_inventory_keeps_explicit_maintenance_only(monkeypatch, tmp_path: Path) -> None:
     from owlbear_cockpit import main
 
-    _client(monkeypatch, tmp_path, _engine(), SimpleNamespace(health=lambda: SimpleNamespace(findings=[], checked_paths=[])))
+    _client(
+        monkeypatch, tmp_path, _engine(), SimpleNamespace(health=lambda: SimpleNamespace(findings=[], checked_paths=[]))
+    )
     routes = set(main.app.openapi()["paths"])
 
     assert "/health/tasks/repair" in routes
