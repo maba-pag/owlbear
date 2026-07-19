@@ -51,6 +51,7 @@ from owlbear_kanban.config_loader import load_config
 from owlbear_kanban.corruption import (
     ERR_CORRUPT_DUPLICATE_ID,
     CorruptionError,
+    collect_task_health_findings,
     detect_corruption,
 )
 from owlbear_kanban.dispatch import PRIORITY_RANK, STATUS_RANK
@@ -59,13 +60,16 @@ from owlbear_kanban.models import (
     ActivityCompactionResult,
     ActivityEvent,
     BoardConfig,
-    CleanupResult,
     ConcurrencyError,
     ConfigError,
     KanbanError,
     MigrationRequiredError,
+    RequestHealthFinding,
+    RequestHealthResult,
     SessionRecord,
     Task,
+    TaskHealthFinding,
+    TaskHealthResult,
     TaskSummary,
     ValidationError,
 )
@@ -196,6 +200,199 @@ def _normalize_proof_bundle(value: str) -> str:
         base = parts.pop(0)
 
     return "+".join([base, *sorted(parts)])
+
+
+def _canonical_health_value(value: object) -> object:
+    """Return an order-independent value for persisted health comparison."""
+    if isinstance(value, dict):
+        return tuple(sorted((key, _canonical_health_value(item)) for key, item in value.items()))
+    if isinstance(value, list):
+        return tuple(_canonical_health_value(item) for item in value)
+    return value
+
+
+def _read_task_health_record(
+    path: Path, config: BoardConfig
+) -> tuple[list[TaskHealthFinding], tuple[Path, dict, str] | None]:
+    findings = collect_task_health_findings(path, config)
+    try:
+        content = path.read_text(encoding="utf-8")
+        lines = content.split("\n")
+        closing = next(i for i, line in enumerate(lines[1:], start=1) if line == "---")
+        frontmatter = YAML(typ="safe").load("\n".join(lines[1:closing])) or {}
+        if isinstance(frontmatter, dict) and isinstance(frontmatter.get("id"), int):
+            body = "\n".join(lines[closing + 1 :]).replace("\r\n", "\n").rstrip("\n")
+            return findings, (path, frontmatter, body)
+    except (OSError, UnicodeDecodeError, StopIteration, YAMLError):
+        pass
+    return findings, None
+
+
+def _duplicate_health_findings(
+    records: list[tuple[Path, dict, str]],
+) -> tuple[list[TaskHealthFinding], set[int]]:
+    by_id: dict[int, list[tuple[Path, dict, str]]] = defaultdict(list)
+    for path, record, body in records:
+        by_id[record["id"]].append((path, record, body))
+
+    findings: list[TaskHealthFinding] = []
+    for task_id, members in by_id.items():
+        if len(members) <= 1:
+            continue
+        paths_for_id = [str(path) for path, _, _ in members]
+        same_directory = len({path.parent for path, _, _ in members}) == 1
+        identical = len({(_canonical_health_value(record), body) for _, record, body in members}) == 1
+        archived_cross_directory = (
+            not same_directory and identical and all(record.get("status") == "archived" for _, record, _ in members)
+        )
+        findings.append(
+            TaskHealthFinding(
+                code="DUPLICATE_TASK_ID",
+                detail="duplicate task ID across: " + ", ".join(paths_for_id),
+                path=", ".join(paths_for_id),
+                task_id=task_id,
+                repairable=(same_directory and identical) or archived_cross_directory,
+            )
+        )
+    return findings, set(by_id)
+
+
+def _graph_health_findings(
+    records: list[tuple[Path, dict, str]],
+    known_ids: set[int],
+    tasks_dir: Path,
+    archive_dir: Path,
+) -> tuple[list[TaskHealthFinding], dict[int, set[int]]]:
+    findings: list[TaskHealthFinding] = []
+    dependency_graph: dict[int, set[int]] = defaultdict(set)
+    for path, record, _ in records:
+        task_id = record["id"]
+        findings.extend(_parent_health_findings(path, record, known_ids))
+        findings.extend(_dependency_health_findings(path, record, task_id, known_ids, dependency_graph))
+        findings.extend(_archival_health_findings(path, record, task_id, known_ids))
+        if _is_archived_in_active_storage(path, record, tasks_dir):
+            findings.append(_archived_storage_finding(path, task_id, archive_dir))
+    return findings, dependency_graph
+
+
+def _parent_health_findings(path: Path, record: dict, known_ids: set[int]) -> list[TaskHealthFinding]:
+    parent = record.get("parent")
+    if not isinstance(parent, int) or parent in known_ids:
+        return []
+    return [
+        TaskHealthFinding(
+            code="MISSING_PARENT",
+            detail=f"parent target {parent} is missing",
+            path=str(path),
+            task_id=record["id"],
+            field="parent",
+        )
+    ]
+
+
+def _dependency_health_findings(
+    path: Path,
+    record: dict,
+    task_id: int,
+    known_ids: set[int],
+    dependency_graph: dict[int, set[int]],
+) -> list[TaskHealthFinding]:
+    findings: list[TaskHealthFinding] = []
+    for dependency in record.get("depends_on", []) or []:
+        if not isinstance(dependency, int):
+            continue
+        if dependency not in known_ids:
+            findings.append(
+                TaskHealthFinding(
+                    code="MISSING_DEPENDENCY",
+                    detail=f"dependency target {dependency} is missing",
+                    path=str(path),
+                    task_id=task_id,
+                    field="depends_on",
+                )
+            )
+        else:
+            dependency_graph[task_id].add(dependency)
+        if dependency == task_id:
+            findings.append(
+                TaskHealthFinding(
+                    code="DEPENDENCY_SELF_REFERENCE",
+                    detail=f"task {task_id} depends on itself",
+                    path=str(path),
+                    task_id=task_id,
+                    field="depends_on",
+                )
+            )
+    return findings
+
+
+def _archival_health_findings(path: Path, record: dict, task_id: int, known_ids: set[int]) -> list[TaskHealthFinding]:
+    return [
+        TaskHealthFinding(
+            code="MISSING_ARCHIVAL_REFERENCE",
+            detail=f"archival target {archival_ref} is missing",
+            path=str(path),
+            task_id=task_id,
+            field="archival_refs",
+        )
+        for archival_ref in record.get("archival_refs", []) or []
+        if isinstance(archival_ref, int) and archival_ref not in known_ids
+    ]
+
+
+def _is_archived_in_active_storage(path: Path, record: dict, tasks_dir: Path) -> bool:
+    return record.get("status") == "archived" and path.parent == tasks_dir
+
+
+def _archived_storage_finding(path: Path, task_id: int, archive_dir: Path) -> TaskHealthFinding:
+    return TaskHealthFinding(
+        code="ARCHIVED_TASK_IN_ACTIVE_STORAGE",
+        detail=(
+            f"archived task {task_id} is stored in active task storage at {path}; archive destination is {archive_dir}"
+        ),
+        path=str(path),
+        task_id=task_id,
+        repairable=True,
+    )
+
+
+def _cycle_health_findings(
+    records: list[tuple[Path, dict, str]], dependency_graph: dict[int, set[int]]
+) -> list[TaskHealthFinding]:
+    visiting: set[int] = set()
+    visited: set[int] = set()
+    cycles: set[tuple[int, ...]] = set()
+
+    def visit(task_id: int, trail: list[int]) -> None:
+        if task_id in visiting:
+            cycles.add(tuple(sorted(trail[trail.index(task_id) :])))
+            return
+        if task_id in visited:
+            return
+        visiting.add(task_id)
+        for dependency in dependency_graph.get(task_id, set()):
+            visit(dependency, [*trail, dependency])
+        visiting.remove(task_id)
+        visited.add(task_id)
+
+    for task_id in dependency_graph:
+        visit(task_id, [task_id])
+
+    owners = {record["id"]: path for path, record, _ in records}
+    findings: list[TaskHealthFinding] = []
+    for cycle in sorted(cycles):
+        cycle_text = " -> ".join(str(task_id) for task_id in (*cycle, cycle[0]))
+        findings.extend(
+            TaskHealthFinding(
+                code="DEPENDENCY_CYCLE",
+                detail=f"dependency cycle: {cycle_text}",
+                path=str(owners[task_id]),
+                task_id=task_id,
+                field="depends_on",
+            )
+            for task_id in cycle
+        )
+    return findings
 
 
 def _validate_proof_bundle(proof_bundle: str | None) -> str | None:
@@ -553,6 +750,157 @@ class KanbanEngine:
         self._task_cache = {}
         self._archive_cache = {}
         self._id_to_filename = {}
+
+    def task_health(self) -> TaskHealthResult:
+        """Return non-mutating file and task-graph integrity evidence."""
+        paths = [
+            path
+            for directory in (self._tasks_dir, self._archive_dir)
+            if directory.exists()
+            for path in sorted(directory.glob("*.md"))
+            if not path.name.startswith(".tmp-")
+        ]
+        findings: list[TaskHealthFinding] = []
+        records: list[tuple[Path, dict, str]] = []
+        for path in paths:
+            path_findings, record = _read_task_health_record(path, self._config)
+            findings.extend(path_findings)
+            if record is not None:
+                records.append(record)
+
+        duplicate_findings, known_ids = _duplicate_health_findings(records)
+        graph_findings, dependency_graph = _graph_health_findings(
+            records, known_ids, self._tasks_dir, self._archive_dir
+        )
+        findings.extend(duplicate_findings)
+        findings.extend(graph_findings)
+        findings.extend(_cycle_health_findings(records, dependency_graph))
+        return TaskHealthResult(
+            findings=findings,
+            repairable_count=sum(finding.repairable for finding in findings),
+            checked_paths=[str(path) for path in paths],
+        )
+
+    def request_health(self) -> RequestHealthResult:
+        """Return non-mutating request-storage integrity evidence."""
+        decisions_dir = self._kanban_dir / "decisions"
+        paths = [
+            (subdir, path)
+            for subdir in ("pending", "resolved")
+            for path in sorted((decisions_dir / subdir).glob("*.md"))
+        ]
+        findings, records = self._read_request_health_records(paths)
+        findings.extend(self._duplicate_request_health_findings(records))
+        owner_ids = self._request_health_owner_ids()
+        findings.extend(self._request_health_reference_findings(records, owner_ids))
+
+        findings.sort(key=lambda finding: (finding.path or "", finding.code, finding.request_id or ""))
+        checked_paths = [str(path) for _, path in paths]
+        return RequestHealthResult(
+            findings=findings,
+            repairable_count=sum(finding.repairable for finding in findings),
+            checked_paths=checked_paths,
+        )
+
+    def _read_request_health_records(
+        self,
+        paths: list[tuple[str, Path]],
+    ) -> tuple[list[RequestHealthFinding], list[tuple[str, Path, DecisionRequest | ActionRequest]]]:
+        findings: list[RequestHealthFinding] = []
+        records: list[tuple[str, Path, DecisionRequest | ActionRequest]] = []
+        for subdir, path in paths:
+            try:
+                frontmatter, _body = self._parse_request_file(path)
+                request_model = Request.model_validate(frontmatter)
+            except OSError as exc:
+                findings.append(
+                    RequestHealthFinding(
+                        code="REQUEST_READ_ERROR",
+                        detail=f"request file could not be read: {exc}",
+                        path=str(path),
+                    )
+                )
+                continue
+            except (ValueError, TypeError, YAMLError, PydanticValidationError) as exc:
+                findings.append(
+                    RequestHealthFinding(
+                        code="REQUEST_SCHEMA_ERROR",
+                        detail=f"request file is invalid: {exc}",
+                        path=str(path),
+                    )
+                )
+                continue
+            records.append((subdir, path, request_model))
+        return findings, records
+
+    @staticmethod
+    def _duplicate_request_health_findings(
+        records: list[tuple[str, Path, DecisionRequest | ActionRequest]],
+    ) -> list[RequestHealthFinding]:
+        by_request_id: dict[str, list[tuple[str, Path, DecisionRequest | ActionRequest]]] = defaultdict(list)
+        for record in records:
+            by_request_id[record[2].request_id].append(record)
+        return [
+            RequestHealthFinding(
+                code="DUPLICATE_REQUEST_ID",
+                detail="duplicate request ID across: " + ", ".join(str(path) for _, path, _ in members),
+                path=", ".join(str(path) for _, path, _ in members),
+                request_id=request_id,
+            )
+            for request_id, members in by_request_id.items()
+            if len(members) > 1
+        ]
+
+    def _request_health_owner_ids(self) -> set[int]:
+        owner_ids: set[int] = set()
+        for directory in (self._tasks_dir, self._archive_dir):
+            if not directory.exists():
+                continue
+            for task_path in directory.glob("*.md"):
+                try:
+                    task = read_task(task_path, config=self._config)
+                except (OSError, ValueError, TypeError, YAMLError, PydanticValidationError):
+                    continue
+                owner_ids.add(task.id)
+        return owner_ids
+
+    @staticmethod
+    def _request_health_reference_findings(
+        records: list[tuple[str, Path, DecisionRequest | ActionRequest]],
+        owner_ids: set[int],
+    ) -> list[RequestHealthFinding]:
+        findings: list[RequestHealthFinding] = []
+        for subdir, path, request_model in records:
+            if request_model.task_id not in owner_ids:
+                findings.append(
+                    RequestHealthFinding(
+                        code="MISSING_REQUEST_OWNER",
+                        detail=(
+                            f"request owner task {request_model.task_id} is missing "
+                            f"for request {request_model.request_id}"
+                        ),
+                        path=str(path),
+                        request_id=request_model.request_id,
+                        task_id=request_model.task_id,
+                        field="task_id",
+                    )
+                )
+
+            expected_subdir = "resolved" if request_model.resolution.resolved_at is not None else "pending"
+            if subdir != expected_subdir:
+                findings.append(
+                    RequestHealthFinding(
+                        code="REQUEST_LOCATION_MISMATCH",
+                        detail=(
+                            f"request {request_model.request_id} is stored in {subdir} but belongs in {expected_subdir}"
+                        ),
+                        path=str(path),
+                        request_id=request_model.request_id,
+                        task_id=request_model.task_id,
+                        field="resolution.resolved_at",
+                    )
+                )
+        return findings
 
     def valid_transitions(self, status: str) -> set[str]:
         """Return the set of all configured statuses except *status*.
@@ -2253,188 +2601,8 @@ class KanbanEngine:
                         continue
                     released.append(record.id)
 
+        self._close_stale_active_sessions()
         return released
-
-    def cleanup(self) -> CleanupResult:  # noqa: C901, PLR0912, PLR0915
-        """Run maintenance cleanup and return aggregate results.
-
-        Cleanup includes four categories in one call:
-        - release expired claims (same semantics as :meth:`sweep`)
-        - move drift-archived task files from tasks/ to archive/
-        - report skipped task files with path+reason when they cannot be processed
-        """
-        released_claim_ids: list[int] = []
-        archived_task_ids: list[int] = []
-        skipped_items: list[dict[str, str]] = []
-        timeout = self._parse_claim_timeout()
-        now = datetime.now().astimezone()
-
-        for path in sorted(self._tasks_dir.glob("*.md")):
-            try:
-                record = read_task(path, config=self._config)
-            except (FileNotFoundError, ValueError, KeyError, CorruptionError) as exc:
-                skipped_items.append({"path": str(path), "reason": str(exc)})
-                continue
-
-            issue = detect_corruption(path, self._config)
-            if issue is not None:
-                skipped_items.append(
-                    {
-                        "path": str(path),
-                        "reason": getattr(issue, "user_message", str(issue)),
-                    }
-                )
-                continue
-
-            # Release expired claims via compare-and-swap, mirroring sweep() behavior.
-            if record.claimed_at:
-                try:
-                    claimed_dt = datetime.fromisoformat(record.claimed_at)
-                except ValueError:
-                    skipped_items.append(
-                        {
-                            "path": str(path),
-                            "reason": "invalid claimed_at timestamp",
-                        }
-                    )
-                    continue
-                if claimed_dt.tzinfo is None:
-                    claimed_dt = claimed_dt.replace(tzinfo=UTC)
-                if now >= claimed_dt + timeout:
-                    original = record.model_copy(deep=True)
-                    record.claimed_at = None
-                    record.updated = datetime.now().astimezone().isoformat()
-                    try:
-                        storage.write_task_if_unchanged(
-                            record,
-                            original.updated,
-                            self._kanban_dir,
-                        )
-                    except ConcurrencyError as exc:
-                        if exc.code == "ERR_STALE":
-                            skipped_items.append(
-                                {
-                                    "path": str(path),
-                                    "reason": "concurrent update while releasing claim",
-                                }
-                            )
-                            continue
-                        raise
-                    released_claim_ids.append(record.id)
-
-            # Move drift-archived files from tasks/ to archive/ when valid.
-            if record.status != "archived":
-                continue
-            if record.archival_reason is None:
-                skipped_items.append(
-                    {
-                        "path": str(path),
-                        "reason": "missing archival_reason for archived task",
-                    }
-                )
-                continue
-
-            # Re-read on-disk state just before moving to avoid archiving based
-            # on stale in-memory data when a concurrent writer mutates the file.
-            try:
-                current = read_task(path, config=self._config)
-            except (FileNotFoundError, ValueError, KeyError, CorruptionError):
-                skipped_items.append(
-                    {
-                        "path": str(path),
-                        "reason": "task changed during cleanup",
-                    }
-                )
-                continue
-            if current.status != "archived" or current.archival_reason is None:
-                skipped_items.append(
-                    {
-                        "path": str(path),
-                        "reason": "task no longer eligible for archiving",
-                    }
-                )
-                continue
-
-            dest = self._archive_dir / path.name
-            if dest.exists():
-                skipped_items.append(
-                    {
-                        "path": str(path),
-                        "reason": "archive destination already exists",
-                    }
-                )
-                continue
-
-            self._archive_dir.mkdir(parents=True, exist_ok=True)
-            try:
-                _move_file(path, dest, no_overwrite=True)
-            except FileExistsError:
-                skipped_items.append(
-                    {
-                        "path": str(path),
-                        "reason": "archive destination already exists",
-                    }
-                )
-                continue
-            except OSError as exc:
-                skipped_items.append({"path": str(path), "reason": str(exc)})
-                continue
-            self._task_cache.pop(path.name, None)
-            self._id_to_filename.pop(record.id, None)
-            archived_task_ids.append(record.id)
-
-        # Remove stale duplicate task files whose ID already exists in archive/.
-        # These occur when a file is re-introduced to tasks/ after archival
-        # (e.g. via git staging accidents). AC-C19 mode 7 hides them from
-        # list_tasks, but the physical file remains until this cleanup.
-        duplicate_removed_ids: list[int] = []
-        archive_ids_on_disk: set[int] = set()
-        if self._archive_dir.exists():
-            for archive_path in sorted(self._archive_dir.glob("*.md")):
-                aid = _task_id_from_filename(archive_path)
-                if aid is not None:
-                    archive_ids_on_disk.add(aid)
-        for path in sorted(self._tasks_dir.glob("*.md")):
-            tid = _task_id_from_filename(path)
-            if tid is not None and tid in archive_ids_on_disk:
-                # Only remove non-archived duplicates. Files with status=archived
-                # are handled by the drift-archive section above; if that section
-                # skipped them (e.g. archive collision), they need manual resolution.
-                try:
-                    dup_record = read_task(path, config=self._config)
-                except (FileNotFoundError, ValueError, KeyError, CorruptionError):
-                    continue
-                if dup_record.status == "archived":
-                    continue
-                try:
-                    path.unlink()
-                except OSError as exc:
-                    skipped_items.append({"path": str(path), "reason": f"duplicate removal failed: {exc}"})
-                    continue
-                self._task_cache.pop(path.name, None)
-                self._id_to_filename.pop(tid, None)
-                duplicate_removed_ids.append(tid)
-
-        try:
-            closed_session_ids = self._close_stale_active_sessions()
-        except OSError as exc:
-            closed_session_ids = []
-            skipped_items.append(
-                {
-                    "path": str(self._activity_log_path or self._kanban_dir),
-                    "reason": f"activity cleanup failed: {exc}",
-                }
-            )
-
-        if released_claim_ids or archived_task_ids or duplicate_removed_ids or closed_session_ids:
-            self._revision += 1
-
-        return CleanupResult(
-            released_claim_ids=released_claim_ids,
-            archived_task_ids=archived_task_ids,
-            duplicate_removed_ids=duplicate_removed_ids,
-            skipped_items=skipped_items,
-        )
 
     def repair_storage(self) -> list:
         """Quarantine corrupt task files and create action-required tasks (AC-C24, AC-C25, AC-C30).

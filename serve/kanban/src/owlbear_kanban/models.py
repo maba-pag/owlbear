@@ -16,6 +16,7 @@ microsecond precision drift on round-trips.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -582,17 +583,64 @@ class RepairOutcome(BaseModel):
     task_id: int | None
     file_path: str
     code: str
-    action: Literal["fixed", "quarantined", "failed"]
+    action: Literal["fixed", "removed", "moved", "quarantined", "skipped", "failed", "unresolved"]
     detail: str | None = None
 
 
-class CleanupResult(BaseModel):
-    """Result of maintenance cleanup operations."""
+class DeterministicRepairResult(BaseModel):
+    """Terminal evidence returned by a complete task-storage repair."""
 
-    released_claim_ids: list[int] = Field(default_factory=list)
-    archived_task_ids: list[int] = Field(default_factory=list)
-    duplicate_removed_ids: list[int] = Field(default_factory=list)
-    skipped_items: list[dict[str, str]] = Field(default_factory=list)
+    status: Literal["completed"] = "completed"
+    started_at: datetime
+    completed_at: datetime
+    removed_count: int = 0
+    moved_count: int = 0
+    quarantined_count: int = 0
+    skipped_count: int = 0
+    failed_count: int = 0
+    unresolved_count: int = 0
+    outcomes: list[RepairOutcome] = Field(default_factory=list)
+    unresolved_findings: list[TaskHealthFinding] = Field(default_factory=list)
+    task_health_result: "TaskHealthResult | None" = None
+
+
+class TaskHealthFinding(BaseModel):
+    """One non-mutating task-storage or graph-health finding."""
+
+    code: str
+    detail: str
+    path: str | None = None
+    task_id: int | None = None
+    field: str | None = None
+    repairable: bool = False
+
+
+class TaskHealthResult(BaseModel):
+    """Read-only evidence gathered from active and archived task storage."""
+
+    findings: list[TaskHealthFinding] = Field(default_factory=list)
+    repairable_count: int = 0
+    checked_paths: list[str] = Field(default_factory=list)
+
+
+class RequestHealthFinding(BaseModel):
+    """One non-mutating decision/action request-storage finding."""
+
+    code: str
+    detail: str
+    path: str | None = None
+    request_id: str | None = None
+    task_id: int | None = None
+    field: str | None = None
+    repairable: bool = False
+
+
+class RequestHealthResult(BaseModel):
+    """Read-only evidence gathered from pending and resolved request storage."""
+
+    findings: list[RequestHealthFinding] = Field(default_factory=list)
+    repairable_count: int = 0
+    checked_paths: list[str] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------

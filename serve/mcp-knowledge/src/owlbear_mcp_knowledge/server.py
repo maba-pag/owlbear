@@ -841,7 +841,6 @@ async def knowledge_stats(ctx: Context) -> StatsResult:
         "chunks_enriched": chunks_enriched,
         "chunks_claimable": int(claimable_row[0] if claimable_row is not None else 0),
         "chunks_enriched_ratio": chunks_enriched_ratio,
-        "consolidation_candidates_remaining": 0,
     }
 
 

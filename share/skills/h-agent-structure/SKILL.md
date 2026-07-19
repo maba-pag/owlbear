@@ -194,7 +194,7 @@ Compact transition table showing what triggers this agent and what it produces:
 | shaper-challenger | AC quality and scope review during shaping | `Challenge Shape: task_id=42, proposed_verdict=APPROVED, reasoning="..."` |
 ```
 
-The `<agents>` table must list every agent in the frontmatter `agents:` array and vice versa. This is the **only** source of subagent knowledge at nesting depth ≥2 (VS Code does not inject the agents catalog at that depth). A CI validation script enforces alignment — see `.owlbear/scripts/validate_agents.py`.
+The `<agents>` table must list every agent in the frontmatter `agents:` array and vice versa. This is the **only** source of subagent knowledge at nesting depth ≥2 (VS Code does not inject the agents catalog at that depth). The `validate-agents` pre-commit hook enforces alignment through `.owlbear/scripts/validate_agents.py`.
 
 ### Forbidden Content
 
@@ -219,7 +219,7 @@ VS Code has a limitation: at nesting depth ≥2 (3rd-level subagents), agents wi
 3. **Every dispatching agent** must have an `<agents>` body section listing all agents from its frontmatter `agents:` array — this is the only discovery mechanism at depth ≥2.
 4. ND3 agents are tagged with `(ND3)` in their `description` field for identification.
 
-**Current ND3 agents:** shaper-challenger, builder-challenger, verifier-challenger, ideation-critic.
+**Current ND3 agents:** shaper-challenger, builder-challenger, verifier-challenger.
 
 Caller inventory is intentionally not duplicated here. The source of truth for caller → subagent relationships is each caller's frontmatter `agents:` array plus its `<agents>` body table; see [share/WIRING.md](../../WIRING.md) for the inverse ecosystem map. When adding a new caller, update the caller's agent file. When adding a new ND3 agent, set `disable-model-invocation: false`, tag the description with `(ND3)`, and add it to this list.
 
@@ -343,7 +343,6 @@ Current authority files:
 
 | File | applyTo | Role |
 |------|---------|------|
-| `pipeline-agents.instructions.md` | `share/skills/r-pipeline-protocol/**` | Channel B protocol and per-agent section-header mapping (pipeline-scoped) |
 | `owlbear-system.instructions.md` | `**` | System instructions — decision heuristics, system awareness, memory governance, and operational fundamentals (universal) |
 
 | Rule | Value |

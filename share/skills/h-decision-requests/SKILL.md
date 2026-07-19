@@ -1,227 +1,90 @@
 ---
 name: h-decision-requests
-description: "Handbook: Decision request helper — create DR/AR records and follow lifecycle semantics"
+description: "Handbook: Create, close, and resume structured Decision and Action Requests"
 user-invocable: false
 ---
 
-# Decision/Action Requests Handbook
+# Decision And Action Requests
 
-Use structured request tools when an agent needs a user decision or user action to unblock work.
+Use this handbook after `r-pipeline-protocol` classifies an interruption as a request. A request is
+a resumable task dependency, not a general error report.
 
-Tool in scope for pipeline agents:
+## Choose The Request Kind
 
-- `create_request`
-- `list_requests`
-- `show_request`
+| Kind | Use when | Required response |
+|------|----------|-------------------|
+| Decision Request (DR) | The user must choose among materially different valid paths | One listed option or a free-text decision |
+| Action Request (AR) | The user or an explicitly invoked authorized workflow must perform an operation | A free-text outcome with the requested evidence |
 
-## When To Create A Structured Request
+Do not create a request for a transient tool failure, an ordinary implementation defect, or a task
+contract that no safe action can satisfy. Follow the interruption matrix in `r-pipeline-protocol`.
+When the user-facing shaper can resolve a question live before task dispatch, use `askQuestions`
+instead of creating a blocked task and request.
 
-Create a structured request only when work is blocked on a user choice or user action that cannot be derived from:
+## Create A Request
 
-- task AC
-- existing project standards
-- existing resolved request records
-
-If `r-pipeline-protocol` Decision Tiers route you to a DR/AR, use `create_request`.
-
-## MCP Tool Contracts
-
-### `create_request`
-
-Signature:
+Call:
 
 ```text
 create_request(
- task_id: str | int,
- kind: str,
- title: str,
- summary: str,
- agent: str,
- options: list[dict[str, object]] | None = None,
- body: str = "",
-) -> dict[str, object]
+  task_id,
+  kind="decision" | "action",
+  title,
+  summary,
+  agent,
+  options=None,
+  body="...",
+)
 ```
 
-Parameters:
+`create_request` atomically writes `decisions/pending/{request_id}.md` and blocks the task with
+`block_reason="DR pending"`. It returns the structured request, including `request_id`. It does not
+return a block reason.
 
-- required: `task_id`, `kind`, `title`, `summary`, `agent`
-- optional: `options`, `body`
+For a DR, provide 2–10 options. Each option has `option_id`, `label`, `confidence`, `recommended`,
+and `rationale`; at most one is recommended. For an AR, omit options.
 
-Behavior:
+The body must make the request executable:
 
-- validates payload through structured models (`kind` routes to decision/action rules)
-- creates a UUID4-backed request file in `decisions/pending/`
-- sets owning task to blocked with `block_reason="DR pending"`
-- returns full structured request payload, including `resolution` and `guidance`
+- exact decision or action required;
+- why the active role cannot proceed autonomously;
+- constraints, environment, or controlled data that apply;
+- evidence or artifacts that must be returned;
+- condition that makes the task ready to resume;
+- destructive effects and cleanup, when applicable.
 
-Usage example:
+Do not hand-write files under `.owlbear/kanban/decisions/`.
 
-```json
-{
- "task_id": 1861,
- "kind": "decision",
- "title": "Choose rollout order",
- "summary": "Pick whether to land backend or frontend first.",
- "agent": "builder",
- "options": [
-  {
-   "option_id": "backend-first",
-   "label": "Backend first",
-   "confidence": 0.7,
-   "recommended": true,
-   "rationale": "Reduces API churn before UI work."
-  },
-  {
-   "option_id": "frontend-first",
-   "label": "Frontend first",
-   "confidence": 0.45,
-   "recommended": false,
-   "rationale": "Can validate UX quickly but may require API rework."
-  }
- ],
- "body": "Extended context and trade-offs."
-}
-```
+## Close The Active Work Session
 
-### `list_requests`
+After successful request creation:
 
-Signature:
+1. If the task is claimed, append the current agent's Channel B note and release the claim with
+   `end_work(outcome="release", note=...)`.
+2. Do not call `end_work(outcome="block")`; the request already blocked the task.
+3. Commit the task record and `decisions/pending/{request_id}.md`, plus any other task-owned changes,
+   through the scoped commit procedure in `r-workspace-governance`.
+4. A dispatched task agent returns `BLOCK #{task_id} | {request title; request_id; resume condition}`.
+   Shaper reports the same state in its user-facing summary.
 
-```text
-list_requests(
- status: str = "pending",
- task_id: str | int | None = None,
-) -> list[dict[str, object]]
-```
+If `create_request` fails validation, correct the payload and retry. If the assigned Kanban request
+tool is unexpectedly unreachable, use the tool-outage route from `r-pipeline-protocol`; never create
+a substitute request file.
 
-Parameters:
+## Resolution And Resume
 
-- required: none
-- optional: `status`, `task_id`
+Resolution is user/Cockpit controlled. There is no agent-callable resolve tool. Resolution moves the
+record to `decisions/resolved/`, appends a human-readable `## DR:` or `## AR:` summary to the task,
+and unblocks the task when no sibling request remains pending.
 
-Behavior:
+On the resumed task:
 
-- `status` supports `pending`, `resolved`, or `all`
-- optional `task_id` filters by owning task
-- returns summaries only (`body` omitted)
+1. Call `list_requests(status="resolved", task_id=...)`.
+2. Call `show_request(request_id=...)` for each relevant request.
+3. Verify `resolution.resolved_at` and consume `selected_option_id` or `free_text` as structured
+   authority. Do not parse the task-body summary as the decision source.
+4. Confirm the response satisfies the request's resume condition. If it does not, create a new
+   focused request or reject an invalid task contract according to `r-pipeline-protocol`.
 
-Usage example:
-
-```json
-{
- "status": "pending",
- "task_id": 1861
-}
-```
-
-### `show_request`
-
-Signature:
-
-```text
-show_request(
- request_id: str,
-) -> dict[str, object]
-```
-
-Parameters:
-
-- required: `request_id` (UUID4)
-- optional: none
-
-Behavior:
-
-- resolves request from either `decisions/pending/` or `decisions/resolved/`
-- returns full structured payload, including `body` and `resolution`
-
-Usage example:
-
-```json
-{
- "request_id": "550e8400-e29b-41d4-a716-446655440000"
-}
-```
-
-## Data Model Fields
-
-Structured request records contain these top-level fields:
-
-- `request_id`: UUID4 string, canonical request identity
-- `task_id`: integer owning task id
-- `kind`: `decision` or `action`
-- `title`: short heading (max 120 chars)
-- `summary`: concise card-level summary
-- `agent`: creating agent identifier
-- `options`: array of option objects
-- `resolution`: resolution object
-
-Option object fields (`options[]`):
-
-- `option_id`: slug (`^[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$`, length 2-63)
-- `label`: max 120 chars
-- `confidence`: float in `[0.0, 1.0]`
-- `recommended`: boolean
-- `rationale`: max 500 chars
-
-Resolution fields:
-
-- `selected_option_id`: string or null
-- `free_text`: string or null
-- `resolved_at`: ISO datetime string or null
-
-## Validation Rules
-
-Model-level rules:
-
-- all request models use `extra="forbid"`
-- `request_id` must be UUID4
-- `created_at` must be ISO 8601 with timezone
-
-Kind-specific rules:
-
-- `kind="decision"`: `options` required, minimum 2 and maximum 10 entries
-- `kind="action"`: `options` must be empty (max length 0)
-- at most one option may have `recommended=true`
-
-Resolution constraints:
-
-- request cannot resolve with both `selected_option_id=null` and `free_text=null`
-- for action requests, `selected_option_id` must remain null
-- for decision requests, non-null `selected_option_id` must match an existing `option_id`
-
-## Lifecycle
-
-### 1) Create (pending)
-
-`create_request` writes a structured file to `decisions/pending/{request_id}.md` with frontmatter + markdown body and sets task blocked (`DR pending`).
-
-### 2) Resolve (pending -> resolved)
-
-Resolution is user/Cockpit driven (or sweep fallback), not MCP-tool driven.
-
-- engine sets `resolution.resolved_at`
-- engine writes `decisions/resolved/{request_id}.md` then removes `decisions/pending/{request_id}.md`
-- request becomes visible via `list_requests(status="resolved")`
-
-### 3) Write-back to task body
-
-On resolution, engine appends a summary to task body:
-
-- decision + selected option: `## DR: ...` with `Selected` and optional `Notes`
-- decision + free-text only: `## DR: ...` with `Answer`
-- action: `## AR: ...` with `Outcome`
-
-### 4) Conditional unblock
-
-Task unblocks only when no sibling structured pending requests remain for the same `task_id`.
-
-## Agent Usage Pattern
-
-1. Create request with `create_request` when blocked on a user choice/action.
-2. End current work per pipeline routing (reject or block, depending on tier).
-3. Later, consume the answer with `show_request` (structured `resolution`, no markdown scraping).
-
-## Important Limits
-
-- No MCP `resolve_request` tool is exposed. Resolution remains Cockpit/user mediated.
-- Do not parse free-form task body text for decisions when a structured request exists; use `show_request`.
+Resolved decisions constrain subsequent work. AR outcomes are evidence, not automatic proof that
+the task AC is satisfied; builder and verifier still judge the returned evidence at their boundary.

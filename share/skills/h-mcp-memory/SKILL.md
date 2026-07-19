@@ -17,10 +17,14 @@ For curation workflow, see `w-mem-curation`.
 
 | Role | Agents | Available Tools |
 |------|--------|----------------|
-| Pipeline agents | orchestrator, shaper, builder, verifier, collector, test-curator, memory-curator, shaper-challenger, builder-challenger, verifier-challenger | `assess_memories`, `save_memory`, `recall_memory` |
-| Ideation agents (11) | discoverer, outsider, critic, pragmatist, mediator, data, security, architect, enduser, firstprinciples, simplifier | `recall_memory` |
-| Knowledge workers (2) | knowledge-ingestor, knowledge-enricher | `recall_memory` |
-| Memory curator (1) | memory-curator | `assess_memories`, `list_memories`, `read_memory`, `recall_memory`, `curate_memory`, `delete_memory`, `save_memory` |
+| Task-owning pipeline agents | shaper (task-repair mode), builder, verifier, collector | `assess_memories`, `save_memory`, `recall_memory` |
+| Candidate producer | test-curator | `save_memory` |
+| Memory curator | memory-curator | `list_memories`, `read_memory`, `curate_memory`, `delete_memory` |
+
+These profiles are intentionally asymmetric. A candidate producer may save a pending lesson without
+recalling prior entries; the curator later deduplicates and scopes it. Recall-only and assessment-only
+profiles are not assigned to active agents. Challengers report insights to their task-owning parent,
+which owns task memory assessment and any resulting candidate.
 
 `approve_memory` is not exposed to any agent — user-initiated only via the memory review prompt.
 

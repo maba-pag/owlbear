@@ -5,7 +5,7 @@ argument-hint: "Curate tests"
 user-invocable: true
 disable-model-invocation: true
 tools:
-  [vscode/toolSearch, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createFile, edit/editFiles, edit/rename, search, ob-kanban/list_tasks, ob-kanban/show_task, ob-memory/assess_memories, ob-memory/recall_memory, ob-memory/save_memory]
+  [vscode/toolSearch, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createFile, edit/editFiles, edit/rename, search, ob-kanban/list_tasks, ob-kanban/show_task, ob-memory/save_memory]
 agents: []
 hooks:
   PreToolUse:
@@ -49,7 +49,7 @@ with task-tests reviewed, action taken, and protected behavior, plus overall sta
 
 <boundaries>
 
-- Only process task-scoped test files (`test_{module}_{task_id}.py`) whose task is **archived**. Non-archived task-tests are off-limits.
+- Only process task-scoped test files whose numeric task provenance comes from the required filename convention or an explicit legacy module-header marker and whose task is **archived**. `TestFromAC_*` names alone are not provenance. Non-archived task-tests are off-limits.
 - Never modify task-scoped files — mine assertions from them, write to module-level files, then `git rm` the task-scoped files.
 - Module-level files (`test_{module}.py`) are the only write targets.
 

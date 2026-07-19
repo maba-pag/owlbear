@@ -33,18 +33,22 @@ Scan **all** directories listed in `testpaths` (from `pyproject.toml` or equival
 
 ### Finding task-scoped tests
 
-1. **Python:** Find files matching `test_*_[0-9]*.py` recursively in all test directories.
+1. **Python:** Find files matching `test_*_[0-9]*.py` recursively in all test directories. New transient suites must use `test_{behavior}_{task_id}.py`; durable suites use behavior names without task IDs.
 2. **Vitest/Jest:** Find files matching `*[._-][0-9][0-9][0-9]*.test.{ts,tsx}` in the frontend test directories.
 3. **Playwright:** Find files matching `*[-_][0-9][0-9][0-9]*.spec.ts` in E2E directories.
+4. **Legacy Python:** Inspect only each file's module docstring and header comments before the first import for explicit task ownership, such as `RED-phase tests for #1517` or `Task 1517 proof`. Treat the referenced numeric ID as a candidate even when the filename has no ID. For example, this rule discovers `tests/test_engine_ac.py` as a candidate for task 1517.
 
-Adapt patterns to the project's naming convention. The key signal is a numeric task ID embedded in the filename.
+Adapt filename patterns to the project's naming convention, but preserve the requirement for an
+unambiguous numeric task ID. A `TestFromAC_*` class or function name is not task provenance: it may
+describe durable behavioral coverage and must never make a file a curation candidate by itself.
 
 ### Filtering
 
-1. Extract task IDs from filenames.
+1. Extract task IDs from filenames or explicit legacy module-header ownership markers, recording which signal identified each candidate.
 2. Check each task via `show_task`. Keep only files whose task is **archived**.
 3. **Protect** files for tasks in any active state (`shape`, `build`, `verify`, `collect`).
 4. **Protect** files that active-task tests import or reference.
+5. Treat discovery as a triage input, never a deletion decision; inspect candidate assertions under the Rent Test before mining or deletion.
 
 If no archived task-tests exist across any suite, report "nothing to curate" and stop.
 

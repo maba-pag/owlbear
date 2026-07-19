@@ -73,9 +73,20 @@ the task graph. An omission is valid only when Proposal records the user's expli
 exclusion; do not reinterpret unowned omitted work as a later phase, deferral, or smaller first slice.
 Run a post-shaping Product Promise check against the concrete task layout before approval.
 
-If the parent task body contains a `## Brief` or `## Problem` section (Brief artifact, produced by ideation), use it to derive the full active scope, accepted exclusions, and approach constraints for decomposition. Include `Brief: see parent #{id}` reference in each child task body.
+### Product Promise Coverage Map
 
-When the parent contains an approved ideation Brief, shaper sequences or splits Brief requirements but does not delete them. If a Brief requirement cannot fit one atomic task, split it across tasks. If a Brief requirement appears invalid, conflicting, or impossible, surface that conflict in Shape Notes instead of dropping the requirement.
+Include this map in the provisional graph and final Shape Notes:
+
+| Product Promise item or accepted exclusion | Planning authority | Owning task or aggregate condition | Proving AC or outcome |
+|---------------------------------------------|--------------------|------------------------------------|-----------------------|
+
+- Give each active Product Promise item one owning task or a named aggregate completion condition
+    and identify the acceptance criterion or observable outcome that proves it.
+- Record an accepted exclusion with its proposal or explicit user-decision authority; exclusions do
+    not receive an implementation owner.
+- Split a Promise item across rows only when distinct tasks own independently testable outcomes.
+- Do not label an unowned active item as deferred, later, implicit, or covered by the parent.
+- An active item without an owner and proving AC or outcome blocks graph challenge and approval.
 
 ### Planning Readiness Gate
 
@@ -231,6 +242,9 @@ Rules:
 
 - Every invariant has exactly one owner, even when several tasks contribute prerequisites.
 - The owning task's AC observes the invariant through its normal assembled boundary.
+- Every required operation and proof has an executor whose agent authority permits it. When the
+    executor must be the user or an explicitly invoked workflow, represent that dependency as
+    `type:user-action` with a planned Action Request before routine dispatch.
 - A mock or injected dependency may replace only a layer below the boundary being proved.
 - If decomposition leaves a final "wire everything together" task or no owner for a boundary, redraw
     the task shape before creation.
@@ -258,6 +272,8 @@ Split the planned task when any trigger applies:
 - More than one primary proof mode is needed.
 - More than one failure-domain family is present.
 - A proof artifact would be created only in `.owlbear/scratch/`, or the responsible agent cannot write the final tracked location. Create a separate builder-owned promotion/proof task with a concrete tracked deliverable, or choose a proof path the responsible agent can own.
+- A required operation or proof lies outside the responsible agent's authority and no user-action
+    request owns it.
 - A behavior-changing refactor changes existing semantics used by neighboring durable tests. Add a downstream-impact scan to the task body, or split the migration/update work into its own task.
 - An AC line combines behavior plus safety recovery, such as success-path emission and rollback-on-emit-failure. Split success behavior from failure recovery unless the recovery proof is one small smoke assertion.
 
@@ -329,8 +345,12 @@ Before creating any task, validate every planned task:
     when an existing check or transient observation proves the boundary.
 - **Reject orphaned invariants** — every invariant-map row names one owning task and that task has a
     normal-path AC.
+- **Reject uncovered Product Promise items** — every active coverage-map row names an owning task or
+    aggregate condition and a proving AC or outcome; every exclusion cites its accepted authority.
 - **Reject boundary-bypassing proof** — proof guidance must not replace the callable, command,
     workflow, or assembled context whose behavior the AC claims.
+- **Reject ownerless execution** — every required operation and proof must fit the responsible
+    agent's authority or be represented by a user-action request with explicit returned evidence.
 - **Reject unjustified fragmentation** — a major feature with more than six tasks must explain in
     Shape Notes which distinct failure domains or proof modes require the additional split.
 

@@ -23,6 +23,7 @@ Load these via `read_file` when the referenced capability is needed:
 | `h-mcp-kanban` | Using kanban tools — claiming, editing, moving, blocking tasks |
 | `h-ac-quality` | Drafting or judging acceptance criteria |
 | `h-decision-requests` | Creating DR/AR records |
+| `h-mcp-memory` | `recall_memory` returned entries; assessing every returned entry before task completion |
 | `r-workspace-governance` | Required reading for pipeline agents; committing changes or creating OwlBear-managed artifacts |
 
 ## 1. Lifecycle
@@ -76,17 +77,27 @@ If a dispatch prompt contradicts your agent `<critical_rules>`, follow the criti
 
 For tool syntax, load `h-mcp-kanban`.
 
-### Resolved Decisions
+### Resolved Requests
 
-After claiming, check the task body for `## Decision Request` summaries. Approved responses are binding constraints. Unresolved DR/AR files keep tasks blocked before dispatch.
+Pending Decision Requests (DRs) and Action Requests (ARs) keep tasks blocked and therefore cannot
+reach normal dispatch. After claiming a resumed task, inspect its resolved structured requests with
+`list_requests(status="resolved", task_id=...)` and `show_request`; their resolutions are binding.
+Task-body `## DR:` and `## AR:` sections are human-readable history, not the structured authority.
 
-Never write decision files directly. Use `create_request`.
+Never write request files directly. Load `h-decision-requests` before creating or consuming one.
 
 ### Memory
 
 If `recall_memory` is available in your tool allowlist, call it after claiming with your agent name. Apply relevant reviewed entries. If unavailable or empty, continue normally.
 
-If you used recalled memory, assess it before `end_work` per `h-mcp-memory`.
+Shaper spec mode without an existing claimed task skips recall and assessment because it has no
+task-bound assessment ID. The conditional `save_memory` reflection in `owlbear-system.instructions.md`
+still applies to qualifying lessons from material shaping work.
+
+When `recall_memory` returns one or more entries, load `h-mcp-memory` and call `assess_memories`
+before `end_work`. Include every returned entry in one assessment batch, including entries you did
+not apply or reference. Challengers do not recall or assess memory; they report reusable findings to
+their task-owning parent.
 
 ### Task Metadata
 
@@ -103,8 +114,9 @@ Tags are free-form but use these conventions when they improve routing or groupi
 | Scope | `scope:copilot`, `scope:core`, `scope:cli` | Identify the codebase part |
 | Rigor | `rigor:lean`, `rigor:standard`, `rigor:thorough` | Record the quality-versus-speed profile |
 
-`type:user-action` means physical user action is required before the pipeline can continue. Shaper
-creates an Action Request, blocks the task, and records the resolved decision on re-entry.
+`type:user-action` means completion requires user-controlled action or an explicitly invoked
+authorized workflow outside routine pipeline dispatch. The request ownership rules in
+`Interruptions And Requests` apply.
 
 ## 3. Working Standards
 
@@ -207,6 +219,19 @@ lines:
 
 The orchestrator does not route from Channel A. It re-plans from board state.
 
+Dispatched task agents use only these lifecycle signals:
+
+| Signal | Meaning | Required task state before return |
+|--------|---------|-----------------------------------|
+| `DONE`, `PASS`, `ARCHIVED` | Stage succeeded | Agent advanced or archived the task |
+| `REJECT`, `RESHAPE` | Another pipeline stage owns the correction | Agent moved the task to that stage |
+| `BLOCK` | A pending DR/AR prevents redispatch | Agent created the request and released its claim |
+| `TOOL_UNAVAILABLE` | A capability assigned to this role is unexpectedly unreachable | Agent recorded `end_work(outcome="fail")` |
+| `COMMIT_FAILED` | Scoped closure commit could not complete | Agent applied commit-failure containment |
+
+No generic `FAIL` Channel A signal exists. Challenger `decision: fail` results are advisory to their
+caller and are not pipeline lifecycle signals.
+
 Shaper is user-facing and is not dispatched by orchestrator. It returns the human summary required
 by `w-spec-shaping` or `w-task-repair`; it does not expose a machine verdict as the user interface.
 Board movement and `## Shape Notes` remain the durable routing and history record.
@@ -218,16 +243,16 @@ Append the full agent section through the `note` parameter of `end_work`; the no
 | Agent | Verdict tokens | Body section |
 |-------|---------------|--------------|
 | shaper | internal route recorded in task state | `## Shape Notes` |
-| builder | DONE / REJECT / BLOCK | `## Builder Notes` |
-| verifier | PASS / REJECT / RESHAPE | `## Verify Notes` |
-| collector | ARCHIVED / REJECT | `## Collect Notes` |
+| builder | DONE / REJECT / BLOCK / TOOL_UNAVAILABLE / COMMIT_FAILED | `## Builder Notes` |
+| verifier | PASS / REJECT / RESHAPE / BLOCK / TOOL_UNAVAILABLE / COMMIT_FAILED | `## Verify Notes` |
+| collector | ARCHIVED / REJECT / TOOL_UNAVAILABLE / COMMIT_FAILED | `## Collect Notes` |
 | memory-curator | DONE | `## Curation` |
 
 If a single section exceeds about 1500 tokens, write details to `.owlbear/scratch/{task-id}-{agent}.md` and reference it from the body.
 
 ### Required Follow-up
 
-Any `REJECT`, `RESHAPE`, or `BLOCK` verdict must include:
+Any `REJECT` or `RESHAPE` verdict must include:
 
 ```markdown
 ### Required Follow-up
@@ -237,6 +262,10 @@ Any `REJECT`, `RESHAPE`, or `BLOCK` verdict must include:
 ```
 
 Target roles must match the route: `shape` -> shaper via `/shape`, `build` -> builder.
+
+A `BLOCK` note instead records the request ID, requested decision or action, required returned
+evidence, and resume condition. A containment note records the recovery owner and exact recovery
+step; it must not pretend that a DR/AR exists.
 
 ## 5. Closing
 
@@ -274,26 +303,48 @@ Use path-scoped git checks. Never stage unrelated files.
 
 Never push.
 
-## 6. Escalation
+## 6. Interruptions And Requests
 
-Use the cheapest route that preserves correctness:
+Classify incomplete work before changing task state:
 
-| Cause | Action | Route |
-|-------|--------|-------|
-| Vague or wrong scope | Explain gap in Required Follow-up | `shape` |
-| Implementation defect | Explain concrete fix needed | `build` |
-| Missing prerequisite or dependency shape | Reject with Required Follow-up for shaper to split/resequence | `shape` |
-| User decision/action needed | `create_request`, then block with the returned reason | current status blocked |
-| Tool unavailable | Release/fail with `TOOL_UNAVAILABLE` and stop | no improvised workaround |
+| Condition | Action | Route |
+|-----------|--------|-------|
+| Scope, architecture, AC, or dependency premise is wrong | Record Required Follow-up | Reject to `shape` |
+| Implementation is incomplete or defective | Record Required Follow-up | Reject to `build` |
+| A user choice is required and cannot be derived from accepted authority | Create a DR | Current status blocked |
+| User-controlled action or an explicitly invoked authorized workflow is required | Create an AR | Current status blocked |
+| A capability assigned to the active role is unexpectedly unreachable after the required retry/check | Record the outage with `end_work(outcome="fail")` | Current status remains dispatchable |
+| The agent cannot close safely and redispatch must stop, but no user choice/action is requested | Record recovery steps and apply the named containment rule | Current status blocked |
 
-Block only when the board must not redispatch the task automatically. Routine rejections should move to `shape` or `build`.
+### Request Admission
 
-### Decision Tiers
+Create a request only when the missing decision or action can resume the same task. An intentionally
+absent authority is an AR case, not `TOOL_UNAVAILABLE`. A transient command, transport, or tool
+failure is not an AR. If no safe and feasible decision or action can satisfy the task, reject to
+`shape` because the task contract is invalid.
 
-| Tier | When | Action |
-|------|------|--------|
-| T1 — Autonomous | Local implementation, cleanup, proof choice | Proceed directly |
-| T2 — Advisory | Preference or trade-off where either path is acceptable | Advisory DR via `create_request` |
-| T3 — Mandatory | New capability, architecture/security/breaking change, user action | Blocking DR/AR via `create_request` |
+Request ownership follows discovery:
 
-If in doubt, create the DR. Guessing is more expensive than a small decision record.
+| Role | Responsibility |
+|------|----------------|
+| Shaper | Detect foreseeable external decisions/actions before dispatch; tag user-action work and create the request |
+| Builder | Create a request when implementation or required proof first exposes the need |
+| Verifier | Create a request when independent verification first exposes the need |
+| Collector | Never create requests; reject unresolved or missing aggregate request/evidence contracts to `shape` |
+| Challenger | Report the need to its caller; never mutate task or request state |
+| Orchestrator | Exclude blocked tasks mechanically; never create or reinterpret requests |
+
+`create_request` atomically creates the pending record and blocks the task. If the task is claimed,
+append the current agent note and release the claim with `end_work(outcome="release")`; do not call
+`end_work(outcome="block")` after request creation. Follow `h-decision-requests` for payload,
+commit, and resume details.
+
+### Tool Outage And Containment
+
+Use `TOOL_UNAVAILABLE` only for a capability intentionally assigned to the active role. Perform any
+required unchanged retry or read-only effect check first. Then call `end_work(outcome="fail",
+note=...)`, return `TOOL_UNAVAILABLE`, and stop without a workaround.
+
+Containment blocks are reserved for named operational failures such as repeated agent crashes or an
+unrecoverable scoped commit. They record recovery steps but do not create a DR/AR unless recovery
+actually requires a user decision or action. Routine rejection must never be converted into a block.

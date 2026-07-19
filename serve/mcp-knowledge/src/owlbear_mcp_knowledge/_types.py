@@ -83,7 +83,6 @@ class StatsResult(TypedDict):
     chunks_enriched: int
     chunks_claimable: int
     chunks_enriched_ratio: float
-    consolidation_candidates_remaining: int
 
 
 class EnrichmentChunk(TypedDict):

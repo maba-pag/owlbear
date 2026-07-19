@@ -75,11 +75,12 @@ or OpenSpec mutation. Explain:
 - the recommended architecture, scope, AC, or graph change;
 - meaningful alternatives and their consequences.
 
-Use `askQuestions` for the material decision. When the affected work has an OpenSpec planning
-source, load `w-spec-shaping`, update accepted changes in the owning artifact, challenge the revised
-draft graph, and obtain user approval before writes. For a standalone task, conduct the same focused
-review against its task authority and approval boundary; do not require an OpenSpec package merely
-because the task was rejected.
+Use `askQuestions` for the material decision. Load `w-spec-shaping` and use its Material Repair
+Re-entry table to resume at the earliest affected review stage without repeating accepted premises.
+When the affected work has an OpenSpec planning source, update accepted changes in the owning
+artifact, challenge the revised draft graph, and obtain user approval before writes. For a
+standalone task, conduct the same focused review against its task authority and approval boundary;
+do not require an OpenSpec package merely because the task was rejected.
 
 Strong source evidence is grounds for a recommendation, not authority to make a material decision
 silently.

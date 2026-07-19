@@ -110,12 +110,14 @@ Mutation and lifecycle responses include `guidance: list[str]`.
 
 | Operation | When populated |
 |-----------|---------------|
-| `edit_task(block_reason=...)` | After blocking (DR-required message) |
-| `end_work(outcome="block")` | After blocking (DR-required message) |
+| `edit_task(block_reason=...)` | After blocking (request-or-containment classification reminder) |
+| `end_work(outcome="block")` | After blocking (request-or-containment classification reminder) |
 | `end_work(outcome="success")` | Always (commit-pushed reminder) |
 | `move_task` to a status > 1 slot ahead | Forward-skip warning |
 
-**Agent obligation:** If `guidance` is non-empty, read it before proceeding — it may require an immediate follow-up action such as creating a Decision Request with `create_request`.
+**Agent obligation:** If `guidance` is non-empty, read it before proceeding. For a user
+decision/action, use `create_request`; for operational containment, record the recovery owner and
+exact recovery step instead.
 
 ### `block:user` Tag Exemption
 
@@ -192,7 +194,7 @@ from `r-workspace-governance`: block an advanced on-board task with `edit_task(b
 before returning. Clear the block with `edit_task(block_reason="")` only after the original scoped
 commit has succeeded and commit that unblock separately.
 
-For the section header to use per agent, see `pipeline-agents.instructions.md` — `## Per-Agent Section Mapping`.
+For agent section headers and lifecycle signals, see `r-pipeline-protocol` § `Communication`.
 
 ### edit_task (advanced)
 
@@ -205,7 +207,8 @@ Do not use `edit_task` to append agent notes — use `end_work(note="...")` inst
 | Situation | Recommended Tools |
 |-----------|------------------|
 | Normal lifecycle (claim, work, advance) | `start_work` → `end_work` |
-| Block mid-task | `end_work(outcome="block", block_reason="...")` |
+| Pending DR/AR | `create_request` → `end_work(outcome="release", note="...")` |
+| Operational containment without a request | `end_work(outcome="block", block_reason="...")` |
 | Reject (send back in pipeline) | `end_work(outcome="reject", move_to="shape")` |
 | Inspect without claiming | `show_task` only |
 | Scan the board | `list_tasks` with filters |

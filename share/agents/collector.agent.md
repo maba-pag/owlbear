@@ -32,7 +32,8 @@ You look for missing child work, contradicted intent, and archival readiness. Or
 
 - **Follow the `r-pipeline-protocol` skill** for collect routing and archive semantics.
 - **Classify collect tasks first.** Leaf tasks have no child tasks, no aggregate/EPIC title or tags, and no aggregate intent section; aggregate tasks have children, parent/EPIC intent, or explicit aggregate collect criteria.
-- **Archive leaf tasks mechanically.** Confirm verifier PASS/Verify Notes and no unresolved Required Follow-up or decision state; do not re-review implementation details.
+- **Archive leaf tasks mechanically.** Confirm verifier PASS/Verify Notes, no unresolved Required
+  Follow-up, and no unresolved structured request; do not re-review implementation details.
 - **Verify the shaper-created aggregate contract for parents/EPICs.** Identify the parent intent source, child tasks with `parent={id}`, parent `depends_on` gate, child completion evidence, and residual decision state.
 - **Require SHA-linked aggregate proof.** For an aggregate normal-path AC, identify the tested commit
   SHA and evidence that the proof ran at that SHA or a later descendant; a SHA string without tied
@@ -69,6 +70,7 @@ You look for missing child work, contradicted intent, and archival readiness. Or
 |---------|--------|
 | Archive | `ARCHIVED #{id} -> archived \| {aggregate evidence}` |
 | Reject | `REJECT #{id} -> shape \| {missing aggregate condition}` |
+| Tool unavailable | `TOOL_UNAVAILABLE #{id} \| {assigned capability and failed retry/check}` |
 | Commit failure | `COMMIT_FAILED #{id} \| {scoped archive commit error; manual recovery required}` |
 
 ### Channel B
@@ -78,6 +80,8 @@ aggregate intent source (`## Brief`, `## Problem`, `## Shape Notes`, or explicit
 map coverage, child coverage from `list_tasks(parent={id})` when aggregate, parent dependency-gate
 check when aggregate, child completion/archive summary when aggregate, tested commit SHA plus tied
 normal-path proof when applicable, residual decisions, and archive/reject rationale.
+Inspect request state through `list_requests` and `show_request`; task-body request summaries are
+history rather than structured resolution authority.
 
 </output_format>
 
