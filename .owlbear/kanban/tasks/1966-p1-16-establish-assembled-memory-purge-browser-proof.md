@@ -1,10 +1,10 @@
 ---
 id: 1966
 title: 'P1-16: Establish assembled Memory purge browser proof'
-status: build
+status: verify
 priority: medium
 created: 2026-07-20T02:44:11.341963+02:00
-updated: 2026-07-20T02:56:32.626503+02:00
+updated: 2026-07-20T08:59:30.777294+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -27,11 +27,8 @@ ac:
     without mutation, and an execution receipt with purged, skipped, and failed counts
     followed by refreshed entries and Purge deleted (N); verifier records the tested
     commit SHA and command result.'
-blocked: true
-block_reason: 'Production-stack browser proof is blocked: the fixture launcher’s `uv
-  run cockpit` child resolves to an unrelated frontend Vitest command and exits before
-  port 8421 opens, so the assembled Playwright test cannot reach the production FastAPI
-  app. Proof files are type-clean; rerun after correcting command resolution.'
+blocked: false
+block_reason:
 claimed_at:
 archival_reason:
 archival_refs: []
@@ -88,3 +85,11 @@ Commands run: direct Playwright discovery/build previously succeeded; `get_error
 Builder challenger: fail. First concrete issues found and fixed were fixture root resolution and assembled project baseURL. Final blocker is environment/command resolution before server startup.
 
 Follow-up risk: do not route to verify until `node e2e/support/start-memory-purge-stack.mjs` demonstrably keeps `uv run cockpit` listening on `127.0.0.1:8421` and the focused Playwright command reports a passing browser result.
+
+[[2026-07-20T08:59:30+02:00]]
+## Builder Recovery Notes
+- Root causes fixed: the launcher now resolves the repository Cockpit package explicitly; Playwright selects the production-stack server at its supported top-level boundary; fixture timestamps remain strings through YAML; threshold edits keep the purge dialog open in a configuring state.
+- Assembled proof: `npm run test:e2e:memory-purge -- e2e/memory-purge-assembled.spec.ts --reporter=line` passed 1 test through built Cockpit, production FastAPI, real Memory HTTP routes, and real MemoryEngine. It proves cancellation, positive-day and zero-day previews, restrictive deleted-state filtering with project-wide counts, preserved active/recent entries, and one controlled macOS immutable-file unlink failure with receipt `Purged 2; skipped 0; failed 1` and refreshed `Purge deleted (1)`.
+- Additional checks: focused purge hook tests passed; production frontend build passed; task-scoped lint passed idempotently; repository `uv run lint-all` passed before final proof-only edits.
+- Delivery commit: `b3a1ce2ec957128e5e8d7747e09ebfb9ea7c00e6`.
+- Builder challenger: pass; no blocking defects.
