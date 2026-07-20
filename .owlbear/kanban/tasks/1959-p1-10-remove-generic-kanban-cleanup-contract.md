@@ -1,10 +1,10 @@
 ---
 id: 1959
 title: 'P1-10: Remove generic Kanban cleanup contract'
-status: build
+status: collect
 priority: medium
 created: 2026-07-17T16:24:21.021571+02:00
-updated: 2026-07-17T20:29:06.927589+02:00
+updated: 2026-07-20T02:27:20.251180+02:00
 tags:
   - phase-1
   - scope:kanban
@@ -87,3 +87,66 @@ Final route: REJECT to build.
 | # | Target Agent | Action Required | File(s) | Evidence |
 |---|-------------|----------------|---------|----------|
 | 1 | builder | Remove or replace the stale generic-cleanup tests so no maintained test invokes or describes `KanbanEngine.cleanup`/`CleanupResult`; preserve existing explicit sweep, activity compaction, and storage-repair coverage. | `tests/test_engine_cleanup.py` | Verification inventory found 21 `engine.cleanup()` calls; task Scope includes directly stale Kanban cleanup tests. |
+
+[[2026-07-20T02:13:42+02:00]]
+## Builder Notes
+
+Change envelope: remove only the directly stale generic-cleanup contract test module; preserve explicit claim sweep, activity compaction, storage repair, and task repair coverage.
+
+Files changed: none durable. Two deletion attempts via apply_patch did not persist; the file was restored or remained present on subsequent checks.
+
+Change Module Map deviations: none.
+
+Proof selected: exhaustive absence scan and focused Kanban tests. The absence scan briefly returned no output immediately after an edit, but a subsequent direct file search found `tests/test_engine_cleanup.py` still present. `uv run --project . pytest serve/kanban/tests -q` exited 130 with no output on two attempts. A separate test invocation against root paths collected no tests and exited 5, so it is not valid proof.
+
+Durable-test justification: no tests added; the required action is removal of stale tests.
+
+Builder-challenger result: fail. It independently confirmed the stale test file and cleanup references remain and identified the proof gap.
+
+Follow-up risk: do not advance to verify until the file deletion persists and the focused Kanban suite can be executed or its environment failure is resolved.
+
+[[2026-07-20T02:21:11+02:00]]
+## Builder Notes
+
+Change envelope: remove only the directly stale generic-cleanup test module; preserve explicit claim sweep, activity compaction, storage repair, task repair, and all unrelated user worktree changes.
+
+Files changed: none in this checkout. `tests/test_engine_cleanup.py` is absent; git history records its removal in commit `782104aa1`.
+
+Change Module Map deviations: none. No Kanban source or test module required further edits because the rejected stale test is already absent in the current checkout.
+
+Proof selected: `uv run --project . pytest serve/kanban/tests/test_engine_atomicity.py serve/kanban/tests/test_corruption.py serve/kanban/tests/test_activity_store.py -q` — 151 passed. `git diff --check` — passed. Direct source inventory confirms no `cleanup()` or `CleanupResult` references under `serve/kanban` or `serve/kanban/tests`; public-interface absence was independently confirmed in prior task evidence.
+
+Full-suite limitation: `uv run --project . pytest serve/kanban/tests -q` exited 130 with no output in this environment, so it was not used as passing evidence.
+
+Durable-test justification: no tests added or retained; the stale generic-cleanup test has already been removed, while focused explicit maintenance tests remain green.
+
+Builder-challenger result: pass. It independently confirmed the stale test is absent, no removed-contract references remain in maintained Kanban trees, focused tests pass, and diff hygiene is clean.
+
+Follow-up risk: verifier should re-check the public inventory from the current checkout; unrelated pre-existing worktree changes remain intentionally untouched.
+
+[[2026-07-20T02:27:20+02:00]]
+## Verify Notes
+
+Evidence reviewed:
+- Task Outcome, Scope, AC, Builder Notes, and the OpenSpec `redesign-workspace-health` authority: design decision 8 and task 4.4.
+- Task implementation commit `3fcdf31db` removes `KanbanEngine.cleanup`, `CleanupResult`, its engine import, and the package README inventory entry. Follow-up commit `782104aa1` deletes the directly stale `tests/test_engine_cleanup.py` module.
+
+Named authorities and Change Module Map:
+- Design decision 8 requires no cleanup compatibility alias, preserves explicit claim/session maintenance and activity compaction, and assigns archive reconciliation and duplicate correction to task repair.
+- Task 4.4 requires no public cleanup operation or `CleanupResult`, while explicit sweep and activity compaction remain callable.
+- The mapped Kanban engine, models, README, and directly stale test owners were used. No module-map deviation was found.
+
+Normal-path boundary and checks run:
+- `uv run --project . pytest serve/kanban/tests/test_engine_atomicity.py serve/kanban/tests/test_corruption.py serve/kanban/tests/test_activity_store.py -q` passed: 151 tests covering expired-claim sweep, stale-session reconciliation, archive/duplicate repair, and activity compaction.
+- Public-interface smoke passed: `KanbanEngine.cleanup` and `owlbear_kanban.models.CleanupResult` are absent; `sweep`, `compact_activity`, and `repair_storage` are callable.
+- Repository-root inventory for `CleanupResult` and `.cleanup(` under `serve/kanban` and `serve/mcp-kanban` returned no matches; the stale root cleanup test is absent.
+- Whole maintained-source/test scan found only Cockpit frontend `CleanupResult` files, explicitly outside this task scope and not consumers of the removed Python engine contract.
+- Language diagnostics for touched engine and models: no errors. `git diff --check` passed.
+
+Findings and patches:
+- No verification defect found; no verifier patch applied.
+- Recalled memory entries were assessed. The artifact-to-scope and background-debt guidance was applied when distinguishing excluded Cockpit frontend remnants from this Kanban task.
+
+Verifier-challenger result: pass. It confirmed acceptance-criteria coverage, sufficient proof, no scope drift, and no unresolved issue.
+
+Final route: PASS to collect.
