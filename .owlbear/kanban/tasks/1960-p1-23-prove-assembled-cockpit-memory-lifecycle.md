@@ -1,10 +1,10 @@
 ---
 id: 1960
 title: 'P1-23: Prove assembled Cockpit memory lifecycle'
-status: verify
+status: build
 priority: high
 created: 2026-07-17T20:19:09.315342+02:00
-updated: 2026-07-20T09:23:57.316489+02:00
+updated: 2026-07-20T09:26:38.730816+02:00
 tags:
   - phase-1
   - scope:cockpit
@@ -318,3 +318,39 @@ Proof selected: SHA `55812d765b557c727b4cf546e307ee8446ae67e5`; command `npm run
 Durable-test justification: no new durable test added; this task's existing assembled E2E proof is the maintained regression boundary.
 
 Builder-challenger result: pass. Follow-up risk: this focused aggregate proof covers the assembled purge path; the broader score/state/detail workflow remains represented by its delivered child evidence.
+
+[[2026-07-20T09:26:38+02:00]]
+## Verify Notes
+
+### Evidence Reviewed
+- Task AC-1 through AC-3, Scope, Proof Guidance, Change Module Map, and Builder Notes.
+- Delivered builder commit `cc594b98fd0b148f40a459017e7d217073453df0` (`test: prove assembled Cockpit memory lifecycle (#1960, builder)`). Its only changed product-adjacent artifact is `serve/cockpit/web/e2e/memory-purge-assembled.spec.ts`.
+- The OpenSpec proposal, design, and lifecycle specification confirm the intended seven-state Cockpit workflow, human-only exceptional resolution, hidden raw negative counters, no score colors/pinning/confidence marker, and no MCP resolve operation.
+
+### Change Module Map
+- No source ownership deviation found: the cited E2E uses the production Cockpit HTTP and memory-storage boundary for purge.
+- The proof artifact does not exercise the mapped assembled browser/MCP/Cockpit lifecycle boundary: it has no representative approved, contested, disputed, or stale entry; no real `curate_memory` call; and no Cockpit edit or resolve request.
+
+### Checks Run
+- `cd serve/cockpit/web && npm run test:e2e:memory-purge`: PASS, 1 Playwright test in 10.0s. It started the production Cockpit server on port 8421, executed purge preview/cancel/purge, observed the expected immutable-file `PermissionError`, receipt `Purged 2; skipped 0; failed 1`, and one surviving deleted entry.
+- Source inspection of `memory-purge-assembled.spec.ts`: confirms it tests deleted tombstone purge only. It contains no mobile viewport, screenshot capture, seven-state lifecycle fixture, edit/resolve request, or MCP curation operation.
+- Worktree audit: task record is task-owned and modified only by lifecycle handling; no verifier product patch applied.
+
+### Finding
+The passing E2E is valid evidence for the assembled purge path, but it cannot establish the requested aggregate lifecycle. AC-1 lacks live desktop and mobile screenshots and observations for approved, contested, disputed, stale, and deleted entries, including score order, state filters, detail/edit context, contested-task navigation, exceptional resolution, and omitted deleted edit action. AC-2 lacks observed real MCP `curate_memory` rejection for contested/disputed/stale and observed real Cockpit edit/resolve success. Consequently AC-3 lacks SHA-linked assembled evidence tying the documented exclusions and verified child evidence to the requested workflow.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | At `cc594b98fd0b148f40a459017e7d217073453df0` or a delivered descendant, run a production Cockpit browser workflow seeded with approved, contested, disputed, stale, and deleted entries at desktop and mobile viewports; record screenshots and each AC-1 observation. | Existing aggregate proof harness or a narrowly justified proof artifact | Commands, viewport sizes, screenshot paths, and observed UI results in Builder Notes |
+| 2 | builder | Invoke the real MCP `curate_memory` operation against contested, disputed, and stale entries and record each rejection; use the real Cockpit HTTP/UI edit and resolve boundaries for the same exceptional states and record successful responses. | Existing MCP/Cockpit integration surfaces | Exact commands, response/error observations, and tested SHA in Builder Notes |
+| 3 | builder | Tie the completed assembled proof to the maintained OpenSpec exclusions and child evidence, confirming no score colors, pinning, confidence marker, raw unremarkable/non-use counters, or MCP resolve operation. | Builder Notes and canonical OpenSpec documents | SHA-linked exclusion audit |
+
+### Patches Applied
+None. The evidence gap is broader proof work, not a small local verifier patch.
+
+### Verifier-Challenger
+Not called: a PASS verdict is not proposed.
+
+### Final Route
+REJECT to build: the current artifact proves only production purge behavior; AC-1 through AC-3 remain unverified at their required browser, Cockpit, and MCP boundaries.
