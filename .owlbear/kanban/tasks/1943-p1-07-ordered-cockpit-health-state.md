@@ -1,10 +1,10 @@
 ---
 id: 1943
 title: 'P1-07: Ordered Cockpit health state'
-status: verify
+status: build
 priority: medium
 created: 2026-07-17T02:32:24.186115+02:00
-updated: 2026-07-20T03:14:35.310080+02:00
+updated: 2026-07-20T03:19:17.485158+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -24,8 +24,12 @@ ac:
   - Given a completed repair response, the provider merges its task-health 
     snapshot without issuing an immediate GET /health and later polling does not
     remove the held repair receipt.
-blocked: false
-block_reason:
+blocked: true
+block_reason: "COMMIT_FAILED: unable to confirm scoped task-record commit because
+  terminal commands returned no observable output. Recovery: run `uv --project /Users/markus/Projects/owlbear-dev
+  run commit-owned -m 'chore: reject incomplete cockpit health proof (#1943, verifier)'
+  -- .owlbear/kanban/tasks/1943-p1-07-ordered-cockpit-health-state.md`, then clear
+  the block and commit the task record."
 claimed_at:
 archival_reason:
 archival_refs: []
@@ -322,3 +326,19 @@ Follow-up risks: durable dedicated coverage for delayed health responses would i
 - Commands run: `npm test -- --run src/__tests__/useRepairFlow.test.ts` (1 file, 36 tests passed); `npm run build` (TypeScript and Vite passed; existing chunk-size warning only); runtime reference scan confirmed no stale repair endpoint in production callers.
 - Builder-challenger result: pass.
 - Follow-up risks: legacy tests outside this focused slice still reference the retired `repairStorage` API and should be migrated by the owning cleanup/verification work; they do not affect the production build or focused contract proof.
+
+[[2026-07-20T03:18:50+02:00]]
+## Verify Notes
+- Verdict: REJECT to build. The implementation is type-clean and the final #1943 commit stays within the shaped Cockpit provider/hooks, repair API, and Shell wiring boundary; no Change Module Map deviation found.
+- Named authority checked: the task AC and OpenSpec authority require controlled delayed fetch-boundary proof for initial transient state and precedence, stale health responses, repair snapshot merge without an immediate health GET, and receipt persistence across later polling.
+- Normal-path boundary traced: `useWorkspaceHealth` calls real `/health`; `repairWorkspace` calls real `/health/tasks/repair`; `useRepairFlow`, `RepairPanel`, and `Shell` forward the completed repair snapshot to `workspaceHealth.mergeRepair`. Polling does not change receipt state.
+- Evidence reviewed: builder commit `d9606b2ff`; existing `useRepairFlow.test.ts` was updated for the new repair response, but repository search found no direct `useWorkspaceHealth` regression test. The builder's earlier polling-hook test does not exercise the health-provider contract.
+- Checks: TypeScript diagnostics report no errors in `useWorkspaceHealth.ts`, `useRepairFlow.ts`, `repair.ts`, or `Shell.tsx`. Broad `npm test -- --run` surfaced unrelated stale repair API tests and established PDS/jsdom failures, so it is not task proof. Two attempts to run the focused repair test and build returned no terminal output, so no passing executable result is claimed.
+- Patches applied: none; adding the required controlled response tests would exceed verifier patch limits.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Add focused hook/provider integration coverage at the real fetch boundary. Cover initial checking/unknown and status precedence, delayed stale response rejection using `checked_at` and request generation, repair task-health merge with no immediate `/health` fetch, and receipt persistence after a subsequent poll. | `serve/cockpit/web/src/hooks/useWorkspaceHealth.ts`; new or existing focused frontend test | Targeted Vitest test passes with controlled delayed responses; production build passes. |
+
+- Final route: build.
