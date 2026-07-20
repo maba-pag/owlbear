@@ -1,10 +1,10 @@
 ---
 id: 1950
 title: 'P1-14: Memory tombstone purge experience'
-status: collect
+status: archived
 priority: low
 created: 2026-07-17T03:04:32.743980+02:00
-updated: 2026-07-17T20:45:26.404303+02:00
+updated: 2026-07-20T02:11:23.650983+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -29,7 +29,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -88,3 +88,16 @@ Checks/finding:
 Verifier-challenger result: pass. It found no AC gap, scope drift, authority mismatch, or proof defect.
 
 Final route: PASS to collect.
+
+[[2026-07-20T02:11:23+02:00]]
+## Collect Notes
+
+Classification: leaf. Task #1950 has no child tasks and carries a concrete implementation outcome rather than aggregate intent.
+
+Leaf verification evidence: `## Verify Notes` records verifier PASS across AC-1 through AC-3, unchanged module ownership, successful Cockpit production build, configured Playwright execution, and live Chromium proof at desktop and mobile viewports. The browser proof covered action hierarchy, PInputNumber defaults, preview counts, purge completion, dialog closure, and persistent receipt. Verifier-challenger passed and no verifier patch was required.
+
+Invariant map coverage: the rendered owner remained `MemoryTab`; headless purge authority stayed with archived dependency #1949. No Change Module Map deviation was recorded.
+
+Requests and residual decisions: no pending or resolved structured requests exist, no Required Follow-up remains, and no unresolved decision state is recorded.
+
+Archive rationale: verifier evidence is complete and the leaf has no remaining closure condition. Archived as completed.
