@@ -4,7 +4,7 @@ title: 'P1-07: Ordered Cockpit health state'
 status: build
 priority: medium
 created: 2026-07-17T02:32:24.186115+02:00
-updated: 2026-07-20T03:19:17.485158+02:00
+updated: 2026-07-20T08:51:48.167978+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -24,12 +24,8 @@ ac:
   - Given a completed repair response, the provider merges its task-health 
     snapshot without issuing an immediate GET /health and later polling does not
     remove the held repair receipt.
-blocked: true
-block_reason: "COMMIT_FAILED: unable to confirm scoped task-record commit because
-  terminal commands returned no observable output. Recovery: run `uv --project /Users/markus/Projects/owlbear-dev
-  run commit-owned -m 'chore: reject incomplete cockpit health proof (#1943, verifier)'
-  -- .owlbear/kanban/tasks/1943-p1-07-ordered-cockpit-health-state.md`, then clear
-  the block and commit the task record."
+blocked: false
+block_reason:
 claimed_at:
 archival_reason:
 archival_refs: []
