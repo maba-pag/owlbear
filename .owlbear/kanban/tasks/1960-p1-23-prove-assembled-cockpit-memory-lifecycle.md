@@ -4,7 +4,7 @@ title: 'P1-23: Prove assembled Cockpit memory lifecycle'
 status: build
 priority: high
 created: 2026-07-17T20:19:09.315342+02:00
-updated: 2026-07-20T09:34:34.506836+02:00
+updated: 2026-07-20T22:43:02.166269+02:00
 tags:
   - phase-1
   - scope:cockpit
@@ -36,7 +36,7 @@ ac:
 proof_bundle: critical+challenge
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-07-20T22:43:02.166269+02:00
 archival_reason:
 archival_refs: []
 ---
@@ -423,3 +423,96 @@ Builder-challenger result: not run because DONE was not proposed; required aggre
 | 1 | builder | Run a live Cockpit backend with representative lifecycle records at SHA `d5ef3bbeecf190360c3024f56cc44ab8fb51ebc7`; capture desktop and mobile screenshots and interaction observations for AC-1 | `.owlbear/scratch/` or existing proof artifact location | Browser screenshots and observed workflow results |
 | 2 | builder | Invoke the real MCP `curate_memory` operation for contested, disputed, and stale entries and invoke live Cockpit edit/resolve endpoints; record exact responses | `.owlbear/scratch/` or existing proof artifact location | MCP rejection responses and Cockpit success responses |
 | 3 | builder | Tie all assembled evidence and requested exclusions to this SHA or a recorded descendant, then run `builder-challenger` before proposing DONE | Task notes | SHA-linked proof bundle and challenger pass
+
+[[2026-07-20T09:37:45+02:00]]
+## Builder Notes
+Change envelope: proof-only aggregate validation for task #1960; no product or durable test files changed.
+
+Files changed: none. Existing task/worktree changes were preserved.
+
+Change Module Map deviations: none; current source and the dedicated assembled proof harness were used.
+
+Proof selected: package-local assembled Cockpit Playwright proof plus focused real memory curation rejection test.
+
+Commands run:
+- `npm run test:e2e:memory-purge` from repository root: routing failure (`Missing script: test:e2e:memory-purge`); root exposes only the generic wrapper.
+- `npm --prefix serve/cockpit/web run test:e2e:memory-purge`: PASS, 1 test. Production HTTP flow previewed, cancelled, and executed deleted-memory purge; observed receipt `Purged 2; skipped 0; failed 1`, then remaining deleted count and cutoff behavior. The expected immutable-file PermissionError was logged by the fixture.
+- `uv run --project . pytest -q tests/test_mutation_tools.py -k curate_memory_rejects_exceptional_states_without_mutation`: PASS, 3 passed. Real curation operation rejects contested, disputed, and stale without mutation.
+
+Observed proof gap: the assembled run produced no screenshots and only exercises the purge workflow, not AC-1's representative approved/contested/disputed/stale/deleted score-led ordering, seven-state filtering, detail/edit context, contested-task navigation, exceptional resolution, deleted edit suppression, or desktop/mobile viewport evidence. Therefore AC-1 is not proven. AC-2 is only partially covered by the two focused checks; Cockpit edit/resolve HTTP success for exceptional states was not exercised by this run. AC-3 SHA linkage is `2fc33b157692e3a22d9ce9350038f7bc2a3176a3`, but the requested complete aggregate evidence is missing.
+
+Builder result: return to shape with concrete evidence; no DONE claim and no builder-challenger call because the acceptance criteria are not satisfied and proof scope needs reshaping or a complete browser workflow.
+
+[[2026-07-20T22:42:33+02:00]]
+## Shape Notes
+
+### Repair Source And Classification
+- Source: latest Builder Notes after corrective #1967 completed and clean frontend build proof passed.
+- Current evidence: the real MCP exceptional-curation rejection test passes for contested, disputed, and stale entries; the completed #1966 production-stack harness proves real FastAPI, real MemoryEngine, fixture isolation, and Playwright launch, but remains purge-specific.
+- Classification: material task-boundary repair. Product behavior, architecture, public interfaces, acceptance meaning, and graph shape remain unchanged; #1960 now explicitly owns the lifecycle-specific extension of the maintained assembled harness needed to execute its existing AC.
+
+### User Decision
+- The user chose to reshape #1960 itself rather than add another proof-only child.
+- The user approved the revised task scope, proof guidance, unchanged AC, and route back to `build`.
+
+### Planning Artifact Revision
+- Revised advisory task 4.2 in `openspec/changes/expose-memory-lifecycle-in-cockpit/tasks.md` to assign lifecycle fixture/harness extension and assembled evidence to aggregate completion.
+- Proposal, normative capability spec, and Design remain unchanged because the product contract and normal assembled boundary did not change.
+- `openspec validate expose-memory-lifecycle-in-cockpit --strict` passed after revision.
+
+### Revised Scope
+- In scope: reuse or narrowly generalize #1966's maintained production-stack Playwright launcher, package command, and configuration; add lifecycle-owned approved, contested, disputed, stale, and deleted fixture records; add a maintained assembled lifecycle browser spec; exercise representative desktop and mobile viewports; capture generated screenshots and interaction observations; observe real Cockpit edit and resolve responses through production HTTP; run the existing real MCP exceptional-curation rejection test; and record the tested SHA, commands, responses, and generated screenshot paths.
+- Out of scope: product behavior or interface changes, alternate MemoryEngine or backend implementations, changes to completed purge behavior or its proof, compatibility work, broad E2E refactoring, and committed screenshot binaries.
+- If assembled proof exposes a product defect, return #1960 to `shape` with concrete evidence rather than repairing product code inside this proof task.
+
+### Revised Proof Guidance
+- Reuse the #1966 production-stack harness foundation instead of duplicating its launch and isolation mechanics. The rendered MemoryTab, production FastAPI application, Memory routes, and real MemoryEngine may not be mocked or replaced; fixture-owned lower stores may be controlled.
+- Provide both desktop and mobile Playwright execution. Map AC-1 detail/edit observations to the operator-relevant fields and editable/read-only boundaries named by the capability spec.
+- Exercise exceptional edit and resolve through the running Cockpit boundary and record observed responses. Reuse the maintained real-adapter MCP test for contested, disputed, and stale rejection; no new MCP harness is required.
+- Store screenshots as generated Playwright evidence under the configured test-results output, cite paths and tested SHA in Builder and Verify Notes, and do not commit screenshot binaries.
+- Run the focused lifecycle E2E command, real MCP rejection test, Cockpit memory integration checks, and frontend production build. Run builder-challenger before proposing DONE.
+- A durable lifecycle Playwright spec and narrow harness extension pass the Rent Test because this assembled gap recurred across repeated builder attempts and is difficult to observe manually.
+
+### Complexity Waiver
+- AC-1 and AC-2 are high-proof criteria but share one lifecycle fixture/server session and one aggregate authority story. The MCP restriction reuses an existing maintained test. Splitting harness construction from its sole proof consumer would create a proof-only handoff with no independent product outcome.
+
+### Change Module Map
+| Module | Responsibility | Planned Change | Owner |
+|---|---|---|---|
+| Existing #1966 Playwright config/package command | Production-stack browser project and launch selection | Reuse or narrowly extend for lifecycle desktop/mobile projects | #1960 |
+| Existing #1966 support launcher | Fixture-owned Cockpit/FastAPI/MemoryEngine startup and cleanup | Generalize or add a lifecycle sibling without changing purge semantics | #1960 |
+| Lifecycle assembled Playwright spec | Five-state workflow and generated screenshot evidence | Add maintained browser proof | #1960 |
+| MemoryTab, Cockpit Memory routes, MemoryEngine | Product lifecycle behavior | Read-only assembled authorities | Completed #1952, #1954, #1955, #1956, #1967 |
+| MCP curation adapter | Exceptional-state authority restriction | Read-only authority; use maintained real-adapter test | Completed #1953 |
+| Aggregate closure | Product Promise and exclusion audit | Wait for verified #1960 evidence | #1958 |
+
+### Product Invariant Map
+| Product Invariant | Owner | Proof Boundary |
+|---|---|---|
+| Score-led seven-state lifecycle works at desktop and mobile without incoherent overlap | #1960 | Rendered MemoryTab through production Cockpit stack |
+| Exceptional edit and resolve succeed through the human Cockpit authority | #1960 | Browser and live Cockpit HTTP boundary |
+| MCP curation rejects contested, disputed, and stale entries | #1960 | Existing real MCP adapter test with real MemoryEngine |
+| Deleted entries expose no edit action and accepted exclusions remain absent | #1960 | Rendered workflow and source/child evidence audit |
+| Complete lifecycle promise closes at a tested descendant SHA | #1958 | #1960 Verify Notes plus completed child evidence |
+
+### Product Promise Coverage Map
+| Product Promise | Planning Authority | Owner | Proving Boundary |
+|---|---|---|---|
+| Score-led overview and seven-state filtering | Capability spec | #1955 and #1960 | Component verification plus assembled desktop/mobile browser proof |
+| Operator details, aligned editing, and deleted read-only behavior | Capability spec | #1955 and #1960 | Component verification plus assembled observations/screenshots |
+| Contested-task navigation and exceptional resolution | Capability spec | #1956 and #1960 | UI verification plus live assembled interaction/HTTP evidence |
+| MCP restriction and no MCP resolve operation | Capability spec and Design | #1953 and #1960 | Adapter verification and maintained real MCP rejection proof |
+| Documentation and accepted exclusions | Proposal, Design, and docs task | #1957, #1960, and #1958 | Maintained docs, rendered/source evidence, and aggregate audit |
+
+### Task And Dependency Changes
+- #1960 title, Outcome, all three AC lines, priority, tags, proof bundle, parent #1958, and dependencies #1952 through #1957 plus completed #1967 remain unchanged.
+- #1960 status advances from `shape` to `build` with the revised Scope and Proof Guidance above.
+- No new task or dependency was created; #1958 remains in `collect` and dependency-blocked on #1960.
+
+### Challenger Result
+- Pass. Challenger confirmed one coherent proof task, boundary fidelity, builder authority, unchanged AC validity, OpenSpec coherence, and the complexity waiver.
+- Incorporated guidance: explicitly require a mobile viewport project/configuration, map detail/edit evidence to spec-enumerated fields, and treat screenshots as generated evidence rather than committed artifacts.
+
+### Board Audit Target
+- #1960 must be unclaimed in `build`, parent #1958, with completed dependencies and `dep_status: ok`.
+- #1958 must remain unclaimed in `collect`, parentless, and dependency-blocked until #1960 verifies.
