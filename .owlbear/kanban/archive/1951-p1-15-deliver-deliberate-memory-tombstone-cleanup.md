@@ -1,10 +1,10 @@
 ---
 id: 1951
 title: 'P1-15: Deliver deliberate memory tombstone cleanup'
-status: collect
+status: archived
 priority: high
 created: 2026-07-17T03:04:38.474076+02:00
-updated: 2026-07-20T02:44:45.189636+02:00
+updated: 2026-07-20T22:12:15.762820+02:00
 tags:
   - phase-1
   - scope:memory
@@ -33,7 +33,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -184,3 +184,18 @@ Final route: REJECT to shape.
 - #1966 must be unclaimed in `build`, parent #1951, depending on completed #1950.
 - #1951 must be unclaimed in `collect`, parentless, depending on #1946 through #1950 and #1966, and dependency-blocked until #1966 completes.
 - Collector must not close #1951 without #1966 Verify Notes tied to the tested commit SHA and strict OpenSpec validation.
+
+[[2026-07-20T22:12:15+02:00]]
+## Collect Notes
+
+- Classification: aggregate. The `aggregate` tag, Outcome/Scope, Planning Authority, and aggregate AC define parent-only closure with no direct implementation.
+- Intent source: OpenSpec `openspec/changes/purge-deleted-memories/`, including the Proposal Decision Register, `memory-tombstone-purge` capability spec, Design decisions, and the parent Shape Notes.
+- Invariant map coverage: #1946 covers cutoff eligibility, zero-day behavior, protected deletion, reconciliation, and counts; #1947 covers coherent cache/index mutation and preserved deletion semantics; #1948 covers strict FastAPI preview/execution contracts; #1949 covers ordered threshold validation, stale-preview invalidation, exact execution, and receipt state; #1950 covers rendered Memory action, project-wide count/confirmation, receipt, and refresh cadence; #1966 covers the assembled production browser path across MemoryTab, FastAPI routes, real MemoryEngine, and protected filesystem deletion.
+- Child coverage: the six declared dependencies #1946, #1947, #1948, #1949, #1950, and #1966 each project `parent: 1951` and are archived with reason `completed`. `list_tasks(parent=1951)` unexpectedly returned no rows, so coverage was cross-checked through the explicit dependency set and each child record.
+- Dependency gate: parent `dep_status` is `ok`; all declared dependencies are complete and none is blocked.
+- Completion evidence: each child has a final PASS Verify Notes record. Earlier rejected attempts in #1949 and #1966 are superseded by their later PASS records and completed archive state.
+- SHA-linked aggregate proof: #1966 records builder evidence commit `72249ca934d80d91ad859791fc17e4f48de1cc13` as an ancestor of tested HEAD `16de282f65f17441388db7c55bbaf8df109d68c7`. At that tested HEAD, `npm run test:e2e:memory-purge` passed one Playwright test in 10.9 seconds after building the frontend and launching production Cockpit FastAPI with fixture-owned Kanban and Memory stores.
+- Aggregate normal path: the assembled browser proof used restrictive approved-only filtering while retaining project-wide `Purge deleted (3)`, proved cancellation without mutation, one-day preview with eligible 2 / too recent 1, a controlled unlink-failure receipt `Purged 1; skipped 1; failed 1`, preservation of failed and recent tombstones, exact-cutoff removal, zero-day preview with eligible 2 / too recent 0, final receipt `Purged 2; skipped 0; failed 0`, refreshed `Purge deleted (0)`, and absence of all deleted fixture entries. This satisfies parent AC-1 and AC-2 through the required assembled boundary.
+- Preserved/excluded behavior: child verification confirms pending hard-delete, non-pending soft-delete, default deleted exclusion, and primary Memory metric hierarchy. No child introduced persisted threshold, timer polling, health signal, restore workflow, or MCP purge operation, satisfying AC-3.
+- Structured requests and residual decisions: no pending or resolved parent requests; no pending request exists for any child. No unresolved Required Follow-up remains after the final child PASS records.
+- Rationale: the earlier Collect Notes rejection identified missing full-stack SHA-linked proof. Child #1966 now supplies that proof, all required children are complete, and the aggregate promise is satisfied. Archive as completed.
