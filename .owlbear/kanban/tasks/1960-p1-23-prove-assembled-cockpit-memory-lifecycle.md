@@ -4,7 +4,7 @@ title: 'P1-23: Prove assembled Cockpit memory lifecycle'
 status: build
 priority: high
 created: 2026-07-17T20:19:09.315342+02:00
-updated: 2026-07-20T09:26:38.730816+02:00
+updated: 2026-07-20T09:34:34.506836+02:00
 tags:
   - phase-1
   - scope:cockpit
@@ -354,3 +354,72 @@ Not called: a PASS verdict is not proposed.
 
 ### Final Route
 REJECT to build: the current artifact proves only production purge behavior; AC-1 through AC-3 remain unverified at their required browser, Cockpit, and MCP boundaries.
+
+[[2026-07-20T09:30:30+02:00]]
+[[2026-07-20T09:30:00+02:00]]
+## Builder Notes
+Change envelope: proof-only aggregate validation; no product files, durable tests, or screenshots changed. Existing worktree modifications were preserved.
+
+Files changed: none. Change Module Map deviations: none.
+
+Proof selected and commands run:
+- `git rev-parse HEAD`: recorded delivered worktree SHA `d5ef3bbeecf190360c3024f56cc44ab8fb51ebc7`.
+- `npm --prefix serve/cockpit/web run test:e2e:memory-purge`: passed 1 configured Playwright test in 10.8s against the production HTTP Cockpit. The test exercised purge preview, cancellation, execution, deleted-state filtering, and the expected forced `PermissionError` failure path (`Purged 2; skipped 0; failed 1`).
+- `npm test -- --run e2e/memory-purge-assembled.spec.ts`: not applicable; Vitest reported no test files because the target is a Playwright E2E file.
+- `npm run test:e2e:memory-purge` from repository root: not applicable; the root package has no such script.
+
+Acceptance result: incomplete. The passing E2E is purge-only and does not prove AC-1's approved/contested/disputed/stale/deleted assembled lifecycle workflow, score-led ordering, seven-state filtering, detail/edit context, contested-task navigation, exceptional resolution, representative desktop and mobile screenshots, or no deleted edit action. AC-2 still lacks a real `curate_memory` invocation rejecting contested, disputed, and stale entries and live Cockpit edit/resolve boundary responses. AC-3 cannot tie those missing assembled artifacts to the tested SHA or exclusions.
+
+Durable-test justification: no tests added; the task is proof-only and the run exposed no product defect in the exercised purge path.
+
+Builder-challenger result: FAIL. `builder-challenger` independently confirmed the purge-only evidence is insufficient for the assembled lifecycle acceptance criteria and that the available MCP surface in this session does not expose the required `curate_memory` operation.
+
+Follow-up: keep the task in build for a descendant proof run with live representative lifecycle fixtures, desktop/mobile screenshots and interaction observations, real MCP exceptional-curation rejection responses, and live Cockpit edit/resolve responses. Do not advance to verify from this evidence alone.
+
+[[2026-07-20T09:33:10+02:00]]
+## Builder Notes
+
+Change envelope: proof-only aggregate validation at tested SHA `d5ef3bbeecf190360c3024f56cc44ab8fb51ebc7`; no product files or durable tests changed by this attempt. Existing unrelated worktree changes were preserved.
+
+Files changed: none. Change Module Map deviations: none; validation stayed within the assembled Cockpit browser, production FastAPI, and memory/MCP boundary surfaces.
+
+Proof selected and commands run:
+- `git rev-parse HEAD`: recorded tested SHA `d5ef3bbeecf190360c3024f56cc44ab8fb51ebc7`.
+- `npm run test:e2e -- --project=memory-purge-assembled`: failed at `http://127.0.0.1:8421/memories` with `ERR_CONNECTION_REFUSED` because the root forwarding command did not set `PURGE_E2E`; this was a harness invocation mismatch, not product evidence.
+- `npm run test:e2e:memory-purge`: root package has no such script; command correctly retried at package scope.
+- `npm --prefix serve/cockpit/web run test:e2e:memory-purge`: passed 1 Playwright test in 9.7s. The production Cockpit server started on `127.0.0.1:8421`; real HTTP/memory purge exercised preview, cancel, execute, filtering, and immutable-file failure. Observed receipt: `Purged 2; skipped 0; failed 1`; server recorded expected `PermissionError`; surviving deleted count refreshed to `Purge deleted (1)`.
+- `uv run pytest serve/cockpit/tests/test_memory_integration.py -q`: passed 7 tests.
+- `uv run pytest tests/test_assess_memories.py tests/test_memory* -q`: passed 331 tests.
+
+Acceptance result: incomplete and remains in build. The corrected production E2E proves only deleted tombstone purge. AC-1 still lacks live desktop and mobile screenshots and observations for approved, contested, disputed, stale, and deleted entries, score-led ordering, seven-state filtering, detail/edit context, contested-task navigation, exceptional resolution, and no deleted edit action. AC-2 still lacks real `curate_memory` rejection responses for contested, disputed, and stale entries and live Cockpit edit/resolve responses at the assembled boundary. AC-3 cannot be tied to assembled browser/MCP evidence or screenshot references.
+
+Durable-test justification: no tests added; this is an aggregate proof task and existing proof plus integration suites were reused.
+
+Builder-challenger result: not run because DONE is not proposed and the required aggregate evidence is absent.
+
+Concrete blocker: the repository exposes only the purge-specific production E2E for this aggregate task; no five-state desktop/mobile screenshot workflow or real MCP `curate_memory` invocation harness is available. The currently available MCP memory tools also do not expose `curate_memory`. Do not advance to verify without adding or providing the narrowly scoped proof harness and capturing its live responses/screenshots.
+
+[[2026-07-20T09:34:34+02:00]]
+## Builder Notes
+Change envelope: proof-only aggregate validation at delivered descendant SHA `d5ef3bbeecf190360c3024f56cc44ab8fb51ebc7`; no product files, durable tests, or screenshots changed by this builder. Existing worktree modifications were preserved.
+
+Files changed: none. Change Module Map deviations: none.
+
+Proof selected and commands run:
+- `git rev-parse HEAD`: recorded delivered descendant SHA `d5ef3bbeecf190360c3024f56cc44ab8fb51ebc7`.
+- `npm run build`: passed TypeScript and Vite production build; 870 modules transformed and MemoryTab bundle produced.
+- `uv run pytest serve/cockpit/tests/test_memory_integration.py -q`: passed 7 tests, including Cockpit edit/resolve HTTP integration coverage.
+- `uv run pytest tests/test_assess_memories.py tests/test_memory* -q`: passed 331 repository memory/MCP lifecycle tests.
+
+Acceptance result: incomplete. The corrective frontend contract is now delivered and the clean descendant builds successfully, removing the prior SHA-level blocker. AC-1 still lacks live Cockpit desktop and mobile interactions across approved, contested, disputed, stale, and deleted entries, including detail/edit/contested-task navigation/exceptional-resolution observations and screenshot references. AC-2 still lacks a real MCP `curate_memory` invocation with observed contested/disputed/stale rejection responses and lacks assembled live Cockpit boundary responses. AC-3 cannot tie the requested exclusions to assembled browser/MCP evidence. Existing browser scenarios are fixture-backed and therefore cannot be promoted to live assembled proof.
+
+Durable-test justification: no tests added; this aggregate proof task reused existing checks and no new product regression was established.
+
+Builder-challenger result: not run because DONE was not proposed; required aggregate evidence remains absent.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Run a live Cockpit backend with representative lifecycle records at SHA `d5ef3bbeecf190360c3024f56cc44ab8fb51ebc7`; capture desktop and mobile screenshots and interaction observations for AC-1 | `.owlbear/scratch/` or existing proof artifact location | Browser screenshots and observed workflow results |
+| 2 | builder | Invoke the real MCP `curate_memory` operation for contested, disputed, and stale entries and invoke live Cockpit edit/resolve endpoints; record exact responses | `.owlbear/scratch/` or existing proof artifact location | MCP rejection responses and Cockpit success responses |
+| 3 | builder | Tie all assembled evidence and requested exclusions to this SHA or a recorded descendant, then run `builder-challenger` before proposing DONE | Task notes | SHA-linked proof bundle and challenger pass
