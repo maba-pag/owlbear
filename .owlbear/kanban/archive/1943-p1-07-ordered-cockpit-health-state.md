@@ -1,10 +1,10 @@
 ---
 id: 1943
 title: 'P1-07: Ordered Cockpit health state'
-status: collect
+status: archived
 priority: medium
 created: 2026-07-17T02:32:24.186115+02:00
-updated: 2026-07-20T22:18:06.314615+02:00
+updated: 2026-07-20T22:20:25.495113+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -27,7 +27,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -459,3 +459,14 @@ Implementation is ready for verifier review.
 - Challenger: `verifier-challenger` returned fail for two concerns. The visible Workspace Status concern is out of scope by the task's explicit Scope section and is routed to #1944. The durable-evidence concern is resolved here by including the focused `useWorkspaceHealth` acceptance test in the task-owned closure commit.
 - Patches applied: none. Durable proof added: `serve/cockpit/web/src/__tests__/useWorkspaceHealth.test.tsx`.
 - Final route: PASS to collect after scoped commit.
+
+[[2026-07-20T22:20:25+02:00]]
+## Collect Notes
+- Classification: leaf. Task has no child tasks; it is a scoped Cockpit frontend implementation under parent #1945, not an aggregate contract.
+- Leaf verification evidence: final `## Verify Notes` records PASS to collect after reviewing all three AC, the accepted OpenSpec authority, mapped production wiring, and task commits. Focused proof passed for `useWorkspaceHealth.test.tsx` (3 tests), Shell/repair callback coverage (30 tests), and the production build.
+- Invariant map coverage: verifier confirmed checking/unknown transient state, health precedence, separate connection errors, periodic refresh, stale-response rejection, repair snapshot merge without an immediate health GET, and receipt retention across polling.
+- Dependency state: dependency #1942 is completed and verifier-closed; current dependency projection is `ok`. This leaf has no aggregate dependency-gate obligation.
+- Follow-up state: historical Required Follow-up sections were superseded by later build/verify cycles; final Builder Notes report no follow-up risks and final Verify Notes route PASS. Workspace Status rendering remains explicitly out of scope and is owned by #1944.
+- Structured requests: no pending or resolved request records exist for #1943.
+- Residual decisions: none.
+- Archive rationale: verifier closure is complete and no unresolved follow-up, request, or decision state remains; archive as completed.
