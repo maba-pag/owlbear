@@ -1,10 +1,10 @@
 ---
 id: 1943
 title: 'P1-07: Ordered Cockpit health state'
-status: build
+status: verify
 priority: medium
 created: 2026-07-17T02:32:24.186115+02:00
-updated: 2026-07-19T22:00:30.886541+02:00
+updated: 2026-07-20T02:18:18.603924+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -131,3 +131,14 @@ Released without implementation: task is in `shape`, while builder mode only pro
 - #1943 routes to builder in `build`, parent #1945, depending on completed #1942.
 - #1944 remains in `shape` downstream of #1943 and must not advance before this provider contract is verified.
 - #1959 remains independently in `build` after #1942 and does not block #1943.
+
+[[2026-07-20T02:18:18+02:00]]
+## Builder Notes
+- Change envelope: add the frontend workspace-health state owner and expose it through CockpitProvider; preserve existing task polling and downstream rendering.
+- Files changed: `serve/cockpit/web/src/hooks/useWorkspaceHealth.ts`, `serve/cockpit/web/src/hooks/CockpitProvider.tsx`.
+- Change Module Map deviations: none; implementation stays in the mapped provider/hooks boundary.
+- Proof selected: focused existing polling hook regression plus production TypeScript/Vite build.
+- Durable-test justification: no new durable tests added; existing focused coverage passed, while the new contract is handed to verify for dedicated acceptance-path coverage.
+- Commands run: `npm test -- --run src/__tests__/usePollingFetch.test.ts` (1 file, 13 tests passed); `npm run build` (tsc and Vite passed; existing chunk-size warning only).
+- Builder-challenger result: pass after tightening initial checking state and generation/checked_at ordering.
+- Follow-up risks: dedicated tests for delayed health responses, repair merge, and receipt retention remain appropriate for verify.
