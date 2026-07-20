@@ -13,6 +13,10 @@ test.describe('assembled Memory purge', () => {
     await expect(page.getByTestId('memory-tab')).toBeVisible()
     await expect(page.getByTestId('memory-purge-open-button')).toHaveText('Purge deleted (3)')
     await expect(page.getByText('Eligible deleted')).toHaveCount(0)
+    await page.locator('p-multi-select[name="state-filter"]').evaluate((element) => {
+      element.dispatchEvent(new CustomEvent('change', { detail: { value: ['approved'] }, bubbles: true }))
+    })
+    await expect(page.getByTestId('memory-purge-open-button')).toHaveText('Purge deleted (3)')
 
     await page.getByTestId('memory-purge-open-button').click()
     const purgeDialog = page.getByTestId('memory-purge-dialog')
@@ -43,9 +47,16 @@ test.describe('assembled Memory purge', () => {
 
     await expect(page.getByTestId('memory-purge-receipt')).toContainText('Purged 2; skipped 0; failed 1')
     await runFile('chflags', ['nouchg', failedEntryPath])
+    await page.locator('p-multi-select[name="state-filter"]').evaluate((element) => {
+      element.dispatchEvent(new CustomEvent('change', { detail: { value: [] }, bubbles: true }))
+    })
     await expect(page.getByTestId('memory-purge-open-button')).toHaveText('Purge deleted (1)')
     await expect(page.getByText('Active memory')).toBeVisible()
-    await expect(page.getByText('Eligible deleted')).toHaveCount(0)
+    await page.locator('p-multi-select[name="state-filter"]').evaluate((element) => {
+      element.dispatchEvent(new CustomEvent('change', { detail: { value: ['deleted'] }, bubbles: true }))
+    })
+    await expect(page.getByText('Eligible deleted')).toBeVisible()
+    await expect(page.getByText('Eligible deleted')).toHaveCount(1)
     await expect(page.getByText('Exact cutoff deleted')).toHaveCount(0)
   })
 })
