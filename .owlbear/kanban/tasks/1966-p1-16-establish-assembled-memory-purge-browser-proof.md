@@ -1,10 +1,10 @@
 ---
 id: 1966
 title: 'P1-16: Establish assembled Memory purge browser proof'
-status: verify
+status: build
 priority: medium
 created: 2026-07-20T02:44:11.341963+02:00
-updated: 2026-07-20T08:59:30.777294+02:00
+updated: 2026-07-20T09:07:55.015495+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -93,3 +93,39 @@ Follow-up risk: do not route to verify until `node e2e/support/start-memory-purg
 - Additional checks: focused purge hook tests passed; production frontend build passed; task-scoped lint passed idempotently; repository `uv run lint-all` passed before final proof-only edits.
 - Delivery commit: `b3a1ce2ec957128e5e8d7747e09ebfb9ea7c00e6`.
 - Builder challenger: pass; no blocking defects.
+
+[[2026-07-20T09:07:55+02:00]]
+## Verify Notes
+
+Verdict: REJECT to build.
+
+Evidence reviewed:
+- Planning authority: OpenSpec `purge-deleted-memories`, Design migration step 4, and task AC-1 through AC-3.
+- Tested builder commit: `b3a1ce2ec957128e5e8d7747e09ebfb9ea7c00e6`, an ancestor of current `ddf117b073d0a1ae90c6904b4f6b47d1bd70713b`.
+- The maintained command is `npm run test:e2e:memory-purge -- e2e/memory-purge-assembled.spec.ts --reporter=line`. The first local invocation returned an empty exit 130; the permitted retry built the production frontend but was interrupted with exit 130 before Playwright started, so no independent command pass was obtained.
+- `get_errors` found no errors in the Playwright config, launcher, or assembled spec. The delivery diff is whitespace-clean.
+
+Named authorities and normal-path boundary:
+- The launcher starts `uv run --project <root> --package owlbear-cockpit cockpit` with fixture-owned `KANBAN_DIR`, `MEMORY_DIR`, `COCKPIT_PORT=8421`, and `COCKPIT_NO_OPEN=1`; this preserves the required production FastAPI, HTTP route, and real MemoryEngine boundary.
+- `MemoryTab.tsx` calculates the button count from all entries and explicitly promises that purge ignores active filters. The assembled test relies on the default state filter; it does not set a restrictive filter before preview/execution.
+
+Change Module Map:
+- The intended proof files are present, but the actual delivery commit also changes `serve/cockpit/web/src/hooks/useCleanupFlow.ts`, its hook test, and ESLint configuration. The hook change retains the dialog in `configuring` after threshold edits. This was not declared in Builder Notes, so the claimed proof-only envelope has an unrecorded product-module deviation.
+
+Findings:
+1. AC-3 is unproven: the spec never activates a restrictive Memory filter before asserting the project-wide count/warning and execution result. Default exclusion of deleted entries only shows a default UI state, not filter-independence.
+2. AC-2 is unproven: after zero-day execution, the spec asserts that eligible and exact-cutoff entries are absent but does not assert that `Recent deleted` remains present. It therefore does not prove preservation of the too-recent tombstone.
+3. Builder Notes underreport the committed module set and characterize it as proof-only despite the `useCleanupFlow.ts` behavior change.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Update the assembled browser spec to set a restrictive state filter before the purge flow, then assert the project-wide deleted count/warning and purge result remain correct despite that filter. | `serve/cockpit/web/e2e/memory-purge-assembled.spec.ts` | Focused maintained Playwright command passes. |
+| 2 | builder | Assert `Recent deleted` remains after zero-day execution alongside the existing absent eligible/exact-cutoff assertions. | `serve/cockpit/web/e2e/memory-purge-assembled.spec.ts` | Focused maintained Playwright command passes. |
+| 3 | builder | Reconcile Builder Notes with the complete delivery diff, including `useCleanupFlow.ts`, its test, and ESLint configuration; explain the module-map deviation or split/revert out-of-scope work through the appropriate route. | task record and affected files | Updated task evidence matches `git diff --name-only b3a1ce2^ b3a1ce2`. |
+
+Patches applied: none; these are proof and scope corrections beyond the verifier local-patch boundary.
+
+Verifier-challenger: not called because this task is rejected, not proposed for PASS.
+
+Final route: build.
