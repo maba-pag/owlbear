@@ -1,10 +1,10 @@
 ---
 id: 1967
 title: 'P1-24: Deliver Cockpit memory lifecycle client contract'
-status: build
+status: verify
 priority: high
 created: 2026-07-20T02:52:46.061518+02:00
-updated: 2026-07-20T02:52:46.061518+02:00
+updated: 2026-07-20T03:05:28.949730+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -25,8 +25,10 @@ ac:
   - 'AC-3: At the delivered corrective commit or a clean descendant checkout, the
     committed MemoryTab and frontend API contract pass focused lifecycle/API checks
     and `npm run build` without relying on unrelated uncommitted workspace files.'
-blocked: false
-block_reason:
+blocked: true
+block_reason: 'COMMIT_FAILED: repository pre-commit ESLint hook fails on unrelated
+  untracked e2e/support/start-memory-purge-stack.mjs (process is not defined at lines
+  25, 32, 33, 36); scoped files were restored and no commit was created.'
 claimed_at:
 archival_reason:
 archival_refs: []
@@ -62,3 +64,14 @@ Preserve unrelated dirty files and author the corrective contract without treati
 - Complete seven-state visibility and operator details: restored by AC-1, then assembled by #1960.
 - Human-only exceptional resolution: frontend client restored by AC-2; backend and MCP authority remain owned by #1954 and #1953; assembled proof remains #1960.
 - Score-led overview and exceptional recovery UI remain owned by completed #1955 and #1956.
+
+[[2026-07-20T03:04:57+02:00]]
+## Builder Notes
+- Change envelope: only the frontend memory API contract in `serve/cockpit/web/src/api/memories.ts`; lifecycle states/fields and resolve mutation client required by committed MemoryTab.
+- Files changed: `serve/cockpit/web/src/api/memories.ts` only. Existing unrelated dirty proof files were preserved.
+- Change Module Map deviations: none; MemoryTab and backend remained read-only authorities.
+- Proof selected: frontend production build plus focused MemoryTab lifecycle/routing tests.
+- Durable-test justification: no new durable tests; existing focused coverage exercises the caller boundary and the contract build is the stronger proof.
+- Commands run: `npm run build` (passed; Vite built successfully, chunk-size warning only); `npm test -- --run src/__tests__/MemoryTab.test.tsx src/__tests__/MemoryTab.routing.test.tsx` (passed, 1 file and 92 tests).
+- Builder-challenger result: pass; no concrete blocker, confirmed AC alignment and scope.
+- Follow-up risk: aggregate browser/Cockpit/MCP assembly remains owned by #1960.

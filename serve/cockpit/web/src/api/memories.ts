@@ -1,7 +1,7 @@
 import { getResponseErrorMessage } from './errorMessage'
 import { ApiError } from './errors'
 
-export type MemoryState = 'pending' | 'curated' | 'approved' | 'deleted'
+export type MemoryState = 'pending' | 'curated' | 'approved' | 'contested' | 'disputed' | 'stale' | 'deleted'
 
 export interface MemoryEntry {
   id: string
@@ -10,11 +10,14 @@ export interface MemoryEntry {
   categories: string[]
   confidence: number
   state: MemoryState
+  outstanding_count: number
+  score: number
   scope_agents: string[]
   source_agent: string
   created_at: string
   updated_at: string
   approved_at: string | null
+  contested_by_task: string | null
 }
 
 export interface MemoryEditPayload {
@@ -138,6 +141,12 @@ async function postMemoryMutation<T>(url: string, body?: Record<string, unknown>
 
 export async function approveMemory(entryId: string, expectedUpdatedAt: string): Promise<MemoryMutationResponse> {
   return postMemoryMutation<MemoryMutationResponse>(`/api/memories/${entryId}/approve`, {
+    expected_updated_at: expectedUpdatedAt,
+  })
+}
+
+export async function resolveMemory(entryId: string, expectedUpdatedAt: string): Promise<MemoryMutationResponse> {
+  return postMemoryMutation<MemoryMutationResponse>(`/api/memories/${entryId}/resolve`, {
     expected_updated_at: expectedUpdatedAt,
   })
 }
