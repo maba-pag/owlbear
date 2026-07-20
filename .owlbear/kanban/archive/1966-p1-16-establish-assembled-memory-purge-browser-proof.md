@@ -1,10 +1,10 @@
 ---
 id: 1966
 title: 'P1-16: Establish assembled Memory purge browser proof'
-status: collect
+status: archived
 priority: medium
 created: 2026-07-20T02:44:11.341963+02:00
-updated: 2026-07-20T22:07:18.069060+02:00
+updated: 2026-07-20T22:08:40.360555+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -30,7 +30,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -179,3 +179,18 @@ Patches applied: none.
 Verifier-challenger: pass. It confirmed fixture isolation, AC-1 through AC-3 coverage through the assembled boundary, mapped scope, and no product/API change.
 
 Final route: collect.
+
+[[2026-07-20T22:08:40+02:00]]
+## Collect Notes
+
+- Classification: leaf. Task #1966 has no child tasks and is an implementation-proof task under parent #1951, not an aggregate contract.
+- Intent source: task Outcome, Scope, Planning Authority, and AC-1 through AC-3.
+- Invariant map coverage: latest Verify Notes confirm fixture isolation, production FastAPI and real MemoryEngine boundaries, restrictive-filter project-wide counts, cancellation without mutation, partial unlink failure, positive-day and zero-day behavior, and refreshed rendered state.
+- Leaf verification evidence: latest Verify Notes record PASS to collect with no patches or Required Follow-up. Verifier-challenger passed.
+- Dependency gate: dependency #1950 reports `dep_status=ok` on the claimed task.
+- Tested commit and normal-path proof: tested HEAD `16de282f65f17441388db7c55bbaf8df109d68c7`; `npm run test:e2e:memory-purge` passed one Playwright test in 10.9 seconds through the assembled production boundary. Builder evidence commit `72249ca934d80d91ad859791fc17e4f48de1cc13` is an ancestor of that tested HEAD.
+- Structured requests: no pending or resolved request records for #1966.
+- Residual decisions: none. The earlier verifier rejection is superseded by the later documented repair and PASS.
+- Rationale: verifier closure evidence is complete, no unresolved follow-up or request state remains, and the task is ready for mechanical archival as completed.
+
+Verdict: ARCHIVED.
