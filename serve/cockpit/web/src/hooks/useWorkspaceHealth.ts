@@ -28,6 +28,7 @@ export interface UseWorkspaceHealthResult {
   isFetching: boolean
   receipt: RepairReceipt | null
   refresh: () => void
+  refreshAfterMutation: () => void
   mergeRepair: (repair: RepairReceipt) => void
   dismissReceipt: () => void
 }
@@ -64,7 +65,7 @@ function aggregate(
 function isNewer(next: WorkspaceModuleHealth, current: WorkspaceModuleHealth | undefined, generation: number, appliedGeneration: number): boolean {
   if (generation < appliedGeneration) return false
   if (current?.checked_at && next.checked_at) return next.checked_at > current.checked_at
-  return generation >= appliedGeneration
+  return generation > appliedGeneration || !current?.checked_at
 }
 
 export function useWorkspaceHealth(intervalMs = 3000): UseWorkspaceHealthResult {
@@ -74,7 +75,9 @@ export function useWorkspaceHealth(intervalMs = 3000): UseWorkspaceHealthResult 
   const [isFetching, setIsFetching] = useState(false)
   const [receipt, setReceipt] = useState<RepairReceipt | null>(null)
   const generationRef = useRef(0)
-  const appliedGenerationRef = useRef(0)
+  const appliedGenerationRef = useRef<Record<WorkspaceModuleName, number>>(
+    Object.fromEntries(MODULES.map((name) => [name, 0])) as Record<WorkspaceModuleName, number>,
+  )
 
   const refresh = useCallback(async () => {
     const generation = ++generationRef.current
@@ -87,9 +90,11 @@ export function useWorkspaceHealth(intervalMs = 3000): UseWorkspaceHealthResult 
         const modules = { ...current.modules }
         for (const name of MODULES) {
           const result = next.modules[name]
-          if (result && isNewer(result, modules[name], generation, appliedGenerationRef.current)) modules[name] = result
+          if (result && isNewer(result, modules[name], generation, appliedGenerationRef.current[name])) {
+            modules[name] = result
+            appliedGenerationRef.current[name] = generation
+          }
         }
-        appliedGenerationRef.current = Math.max(appliedGenerationRef.current, generation)
         return { status: aggregate(modules, null, true), modules }
       })
       setReceived(true)
@@ -100,6 +105,10 @@ export function useWorkspaceHealth(intervalMs = 3000): UseWorkspaceHealthResult 
       setIsFetching(false)
     }
   }, [])
+
+  const refreshAfterMutation = useCallback(() => {
+    void refresh()
+  }, [refresh])
 
   useEffect(() => {
     void refresh()
@@ -113,10 +122,19 @@ export function useWorkspaceHealth(intervalMs = 3000): UseWorkspaceHealthResult 
     const generation = ++generationRef.current
     setHealth((current) => {
       const modules = { ...current.modules, tasks: repair.task_health_result as WorkspaceModuleHealth }
-      appliedGenerationRef.current = Math.max(appliedGenerationRef.current, generation)
+      appliedGenerationRef.current.tasks = generation
       return { status: aggregate(modules, connectionError, true), modules }
     })
   }, [connectionError])
 
-  return { health: { ...health, status: aggregate(health.modules, connectionError, received) }, connectionError, isFetching, receipt, refresh: () => void refresh(), mergeRepair, dismissReceipt: () => setReceipt(null) }
+  return {
+    health: { ...health, status: aggregate(health.modules, connectionError, received) },
+    connectionError,
+    isFetching,
+    receipt,
+    refresh: () => void refresh(),
+    refreshAfterMutation,
+    mergeRepair,
+    dismissReceipt: () => setReceipt(null),
+  }
 }

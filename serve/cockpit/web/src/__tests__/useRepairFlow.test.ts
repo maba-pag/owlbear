@@ -11,13 +11,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useRepairFlow } from '../hooks/useRepairFlow'
-import type { RepairOutcome } from '../api/repair'
+import type { RepairOutcome, WorkspaceRepairResponse } from '../api/repair'
 
 vi.mock('../api/repair', () => ({
-  repairStorage: vi.fn(),
+  repairWorkspace: vi.fn(),
 }))
 
-import { repairStorage } from '../api/repair'
+import { repairWorkspace } from '../api/repair'
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -48,11 +48,11 @@ const OUTCOME_FAILED: RepairOutcome = {
 const MIXED_OUTCOMES: RepairOutcome[] = [OUTCOME_FIXED, OUTCOME_QUARANTINED, OUTCOME_FAILED]
 
 function mockRepairSuccess(outcomes: RepairOutcome[] = []): void {
-  vi.mocked(repairStorage).mockResolvedValueOnce(outcomes)
+  vi.mocked(repairWorkspace).mockResolvedValueOnce({ outcomes, task_health_result: null })
 }
 
 function mockRepairError(message = 'Server error'): void {
-  vi.mocked(repairStorage).mockRejectedValueOnce(new Error(message))
+  vi.mocked(repairWorkspace).mockRejectedValueOnce(new Error(message))
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -124,22 +124,22 @@ describe('TestFromAC_useRepairFlow', () => {
     })
   })
 
-  // ─── AC3: confirmRepair() calls repairStorage and transitions to repairing ──
+  // ─── AC3: confirmRepair() calls repairWorkspace and transitions to repairing ──
 
-  describe('AC3: confirmRepair() calls repairStorage() and transitions to repairing state', () => {
-    it('calls repairStorage() when confirmRepair is invoked', async () => {
+  describe('AC3: confirmRepair() calls repairWorkspace() and transitions to repairing state', () => {
+    it('calls repairWorkspace() when confirmRepair is invoked', async () => {
       mockRepairSuccess([])
       const { result } = renderHook(() => useRepairFlow())
       act(() => { result.current.requestRepair(1) })
       await act(async () => { result.current.confirmRepair() })
-      expect(vi.mocked(repairStorage)).toHaveBeenCalledTimes(1)
+      expect(vi.mocked(repairWorkspace)).toHaveBeenCalledTimes(1)
     })
 
     it('phase is repairing immediately after confirmRepair before resolution', async () => {
       // Make repairStorage hang so we can observe the intermediate state
       let resolveRepair!: (v: RepairOutcome[]) => void
-      vi.mocked(repairStorage).mockReturnValueOnce(
-        new Promise<RepairOutcome[]>((resolve) => { resolveRepair = resolve }),
+      vi.mocked(repairWorkspace).mockReturnValueOnce(
+        new Promise<WorkspaceRepairResponse>((resolve) => { resolveRepair = () => resolve({ outcomes: [], task_health_result: null }) }),
       )
       const { result } = renderHook(() => useRepairFlow())
       act(() => { result.current.requestRepair(1) })
@@ -149,12 +149,12 @@ describe('TestFromAC_useRepairFlow', () => {
       await act(async () => { resolveRepair([]) })
     })
 
-    it('repairStorage is called with no arguments', async () => {
+    it('repairWorkspace is called with no arguments', async () => {
       mockRepairSuccess([])
       const { result } = renderHook(() => useRepairFlow())
       act(() => { result.current.requestRepair(1) })
       await act(async () => { result.current.confirmRepair() })
-      expect(vi.mocked(repairStorage)).toHaveBeenCalledWith()
+      expect(vi.mocked(repairWorkspace)).toHaveBeenCalledWith()
     })
   })
 
@@ -250,7 +250,7 @@ describe('TestFromAC_useRepairFlow', () => {
       const { result } = renderHook(() => useRepairFlow())
       act(() => { result.current.requestRepair(2) })
       act(() => { result.current.cancelRepair() })
-      expect(vi.mocked(repairStorage)).not.toHaveBeenCalled()
+      expect(vi.mocked(repairWorkspace)).not.toHaveBeenCalled()
     })
   })
 
@@ -290,7 +290,7 @@ describe('TestFromAC_useRepairFlow', () => {
     })
 
     it('non-Error rejection produces a non-empty error message', async () => {
-      vi.mocked(repairStorage).mockRejectedValueOnce('plain string rejection')
+      vi.mocked(repairWorkspace).mockRejectedValueOnce('plain string rejection')
       const { result } = renderHook(() => useRepairFlow())
       act(() => { result.current.requestRepair(1) })
       await act(async () => { result.current.confirmRepair() })

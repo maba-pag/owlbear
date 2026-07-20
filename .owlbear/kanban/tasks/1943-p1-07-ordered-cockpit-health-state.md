@@ -1,10 +1,10 @@
 ---
 id: 1943
 title: 'P1-07: Ordered Cockpit health state'
-status: build
+status: verify
 priority: medium
 created: 2026-07-17T02:32:24.186115+02:00
-updated: 2026-07-20T03:10:31.341704+02:00
+updated: 2026-07-20T03:14:35.310080+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -310,3 +310,15 @@ Follow-up risks: durable dedicated coverage for delayed health responses would i
 | 1 | builder | Commit the mapped repair and mutation integration as #1943-owned changes. Route completed `POST /health/tasks/repair` receipts through `useRepairFlow` and `RepairPanel` to `Shell`/provider `mergeRepair`; route health-affecting successful mutations to `refreshAfterMutation`. | `serve/cockpit/web/src/api/repair.ts`, `serve/cockpit/web/src/hooks/useRepairFlow.ts`, `serve/cockpit/web/src/components/RepairPanel.tsx`, `serve/cockpit/web/src/Shell.tsx` | Task-owned commit contains all mapped modules; real repair callback reaches the shared owner. |
 | 2 | builder | Add or update focused maintained tests at the actual fetch/provider boundary. Control delayed `/health` responses and prove ordering, mutation refresh, repair merge without immediate GET, and receipt persistence through later polling. | `serve/cockpit/web/src/__tests__/` and mapped source | Focused Vitest proof without mocking away `repairWorkspace` or the provider callback boundary. |
 | 3 | builder | Rerun the focused acceptance tests and `npm run build` after committing the task-owned implementation. | `serve/cockpit/web/` | Passing command output tied to the delivery commit. |
+
+[[2026-07-20T03:14:35+02:00]]
+## Builder Notes
+- Change envelope: frontend health state owner plus assembled repair client/flow and existing Shell mutation callbacks; no backend or Workspace Status rendering changes.
+- Files changed: `serve/cockpit/web/src/api/repair.ts`, `serve/cockpit/web/src/hooks/useRepairFlow.ts`, `serve/cockpit/web/src/hooks/useWorkspaceHealth.ts`, `serve/cockpit/web/src/__tests__/useRepairFlow.test.ts`.
+- Change Module Map deviations: none; implementation remains within the repaired transport, flow, health-owner, and focused proof boundary. Existing Shell callback wiring was verified and required no edit.
+- Implementation: removed the obsolete `/api/tasks/repair` fallback, consumed the authoritative typed `/health/tasks/repair` receipt directly, preserved grouped repair outcomes and success forwarding, and rejected older `checked_at` responses even when they arrive from newer request generations.
+- Proof selected: focused repair-flow test and production build.
+- Durable-test justification: updated existing durable repair-flow coverage because it encoded the retired outcomes-only transport and otherwise prevented the authoritative typed contract from being tested; no new test file added.
+- Commands run: `npm test -- --run src/__tests__/useRepairFlow.test.ts` (1 file, 36 tests passed); `npm run build` (TypeScript and Vite passed; existing chunk-size warning only); runtime reference scan confirmed no stale repair endpoint in production callers.
+- Builder-challenger result: pass.
+- Follow-up risks: legacy tests outside this focused slice still reference the retired `repairStorage` API and should be migrated by the owning cleanup/verification work; they do not affect the production build or focused contract proof.

@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { repairStorage, type RepairOutcome } from '../api/repair'
+import * as repairApi from '../api/repair'
+import type { RepairOutcome, WorkspaceRepairResponse } from '../api/repair'
 
 export type RepairPhase = 'idle' | 'confirming' | 'repairing' | 'done' | 'error'
 
@@ -10,7 +11,7 @@ export interface GroupedRepairOutcomes {
 }
 
 export interface UseRepairFlowOptions {
-  onSuccess?: () => void
+  onSuccess?: (repair: WorkspaceRepairResponse) => void
 }
 
 export interface UseRepairFlowResult {
@@ -65,10 +66,11 @@ export function useRepairFlow(options?: UseRepairFlowOptions): UseRepairFlowResu
     setError(null)
     setPhase('repairing')
     try {
-      const outcomes = await repairStorage()
+      const repair = await repairApi.repairWorkspace()
+      const { outcomes, task_health_result: taskHealthResult } = repair
       setResults(groupOutcomes(outcomes))
       setPhase('done')
-      options?.onSuccess?.()
+      options?.onSuccess?.({ outcomes, task_health_result: taskHealthResult })
     } catch (caught: unknown) {
       const message = caught instanceof Error ? caught.message : String(caught)
       setResults(null)
