@@ -4,7 +4,7 @@ title: 'P1-22: Deliver trustworthy Cockpit memory lifecycle'
 status: collect
 priority: high
 created: 2026-07-17T04:54:45.298830+02:00
-updated: 2026-07-17T20:19:26.108111+02:00
+updated: 2026-07-20T02:52:49.749830+02:00
 tags:
   - phase-1
   - scope:cockpit
@@ -19,6 +19,7 @@ depends_on:
   - 1956
   - 1957
   - 1960
+  - 1967
 ac:
   - 'AC-1: At one delivered commit, running Cockpit with approved, contested, disputed,
     stale, and deleted entries shows score-led ordering, seven-state filtering, the
