@@ -4,7 +4,7 @@ title: 'P1-07: Ordered Cockpit health state'
 status: build
 priority: medium
 created: 2026-07-17T02:32:24.186115+02:00
-updated: 2026-07-20T09:11:13.779692+02:00
+updated: 2026-07-20T09:19:17.301126+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -372,3 +372,33 @@ Follow-up risk: the full frontend suite has noisy Porsche Design System/jsdom di
 - Patches applied: none; the gap is missing implementation-owned proof, not a small local verifier patch.
 - Verifier-challenger: not called because this is a REJECT verdict, not a PASS claim.
 - Final route: REJECT -> build.
+
+[[2026-07-20T09:16:14+02:00]]
+## Builder Notes
+- Change envelope: focused durable proof for the existing ordered Cockpit workspace-health provider and repair/mutation entry points; no production behavior, backend contract, or Workspace Status rendering changes.
+- Files changed: `serve/cockpit/web/src/__tests__/useWorkspaceHealth.test.tsx`.
+- Change Module Map deviations: none; proof is at the owning `useWorkspaceHealth` boundary and covers the already-assembled provider entry points.
+- Proof selected: controlled deferred `/health` responses and fake timers at the hook boundary.
+- Durable-test justification: added one focused test file because delayed response ordering, connection separation, repair receipt retention, no-immediate-fetch behavior, and mutation refresh are concrete regressions that are otherwise difficult to observe.
+- Commands run: `cd serve/cockpit/web && ./node_modules/.bin/vitest run --silent=true --reporter=verbose src/__tests__/useWorkspaceHealth.test.tsx` (1 file, 3 tests passed); `cd serve/cockpit/web && npm run build` (TypeScript and Vite passed; existing chunk-size warning only). A repository-root `npm run build` invocation was misrouted to unrelated E2E and failed in the existing memory-purge fixture; package-scoped proof is the authoritative result.
+- Builder-challenger result: pass; no concrete blockers found.
+- Follow-up risks: full frontend suite retains known environment-specific Porsche/jsdom and unrelated E2E fixture noise; focused acceptance proof and package build are green.
+
+[[2026-07-20T09:19:17+02:00]]
+## Verify Notes
+- Evidence reviewed: task AC, accepted `redesign-workspace-health` authority, repaired Shape/Builder Notes, task-owned history, the current health hook/provider, and the visible Shell/repair workflow.
+- Named authorities checked: the health contract requires periodic and health-affecting mutation refreshes, stale module-result rejection, repair snapshot merge without an immediate aggregate health GET, and receipt retention through later polls.
+- Change Module Map: `useWorkspaceHealth.ts` and `CockpitProvider.tsx` remain within the mapped owner/context boundary. Current `Shell.tsx`, `useRepairFlow.ts`, and `api/repair.ts` also contain the expected integration, but the active task record has no task-owned commit proving that delivery; `src/__tests__/useWorkspaceHealth.test.tsx` is untracked.
+- Normal-path boundary exercised: direct hook test controls delayed `/health` responses and passes, but invokes `refreshAfterMutation` and `mergeRepair` directly. It does not exercise the successful Kanban mutation callback or the completed `POST /health/tasks/repair` workflow that creates and forwards the receipt.
+- Replacements used below that boundary: the hook test replaces the real mutation and repair workflows, so it cannot prove their integration while the existing repair-flow suite is not included as acceptance evidence.
+- Checks run: `npm test -- --run src/__tests__/useWorkspaceHealth.test.tsx` passed (3 tests); `npm run build` passed. Vite reported only its existing chunk-size warning.
+- Findings: AC1 and hook-level portions of AC2/AC3 are demonstrated, but the durable task boundary and real user-flow proof for mutation refresh and repair receipt merge remain incomplete. No verifier patch applied.
+- Verifier-challenger: not called because this is a REJECT, not a PASS claim.
+- Final route: REJECT to build.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Commit the mapped Shell, repair-flow, repair-client, and focused health proof as task-owned delivery; preserve unrelated worktree changes. | `serve/cockpit/web/src/Shell.tsx`, `serve/cockpit/web/src/hooks/useRepairFlow.ts`, `serve/cockpit/web/src/api/repair.ts`, `serve/cockpit/web/src/__tests__/useWorkspaceHealth.test.tsx` | Scoped task commit includes the real workflow and maintained test. |
+| 2 | builder | Exercise the real success boundaries: a health-affecting mutation reaches `refreshAfterMutation`; completed `POST /health/tasks/repair` forwards its returned task snapshot to `mergeRepair` without an immediate `/health` read; receipt survives a later poll. | `serve/cockpit/web/src/__tests__/` plus mapped source | Focused passing test controls delayed responses without replacing the mutation/repair workflow under test. |
+| 3 | builder | Rerun focused health/repair/Shell proof and `npm run build` after the scoped delivery commit. | `serve/cockpit/web/` | Passing command output tied to the delivery commit. |
