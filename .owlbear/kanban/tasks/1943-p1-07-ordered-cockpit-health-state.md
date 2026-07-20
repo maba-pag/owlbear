@@ -1,10 +1,10 @@
 ---
 id: 1943
 title: 'P1-07: Ordered Cockpit health state'
-status: shape
+status: build
 priority: medium
 created: 2026-07-17T02:32:24.186115+02:00
-updated: 2026-07-20T02:27:01.066686+02:00
+updated: 2026-07-20T02:30:02.927675+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -170,3 +170,67 @@ Released without implementation: task is in `shape`, while builder mode only pro
 - Builder-challenger result: fail. Concrete blocker: health-affecting mutations and completed repair responses do not drive the workspace-health owner, so refresh propagation, repair merge, stale-response ordering at the integration boundary, connection context, and receipt retention are not proven or fully implemented.
 - Required follow-up: reshape the task with explicit module map and contract for `useRepairFlow`, `RepairPanel`/Shell wiring, and mutation refresh callbacks; then add focused hook/provider integration proof with delayed responses and repair receipts.
 - No durable tests added. Existing build proof remains green; no commit was made because the implementation was rejected to shape.
+
+[[2026-07-20T02:30:02+02:00]]
+## Shape Notes
+
+### Repair Source And Classification
+- Source: latest Builder Notes and builder-challenger failure from 2026-07-20.
+- Classification: local task repair. The accepted frontend behavior already requires repair merge and health-affecting refresh triggers; this repair names the missing production path and proof boundary without changing product behavior, architecture, acceptance meaning, or graph shape.
+
+### Contradiction Resolved
+- `useWorkspaceHealth` already owns ordered aggregate health, `refresh`, `mergeRepair`, and retained receipt state, and `CockpitProvider` already exposes that owner.
+- The production repair path is disconnected: `api/repair.ts` still calls obsolete `POST /api/tasks/repair` and returns only `RepairOutcome[]`; `useRepairFlow` exposes only parameterless `onSuccess`; `RepairPanel` forwards that callback; Shell passes scan `refetch`. No caller can deliver the completed backend repair receipt to `workspaceHealth.mergeRepair`.
+- Completed dependency #1942 makes `POST /health/tasks/repair` and its typed post-repair task-health receipt authoritative. #1943 owns consuming that frontend contract.
+
+### Repaired Implementation Contract
+- `api/repair.ts` must call `POST /health/tasks/repair` and return a typed receipt containing outcomes and `task_health_result`, matching #1942 rather than preserving the obsolete outcomes-only API.
+- `useRepairFlow` must retain grouped outcomes for its existing UI state while passing the complete successful receipt through its success callback.
+- `RepairPanel` must type and forward the complete receipt. Shell/provider wiring must send repair success to `workspaceHealth.mergeRepair`; it must not issue an immediate aggregate health GET. Existing scan/task refreshes may continue only for their separate owners.
+- Successful non-repair mutations that can change tasks, requests, memory, or ideas health must call the provider-owned `workspaceHealth.refresh` through their existing Shell/provider success callbacks. This task does not redesign those mutation workflows or their UI.
+- `useWorkspaceHealth` remains the sole owner of generation and `checked_at` ordering, connection error separation, module aggregation, periodic refresh, merged task health, and polling-independent receipt lifetime.
+
+### Change Module Map
+| Module | Responsibility | Required Change |
+|---|---|---|
+| `src/api/repair.ts` | Frontend repair transport and response type | Consume `POST /health/tasks/repair` and expose the typed complete receipt |
+| `src/hooks/useWorkspaceHealth.ts` | Canonical workspace-health state | Preserve ordered merge, connection separation, periodic refresh, and receipt lifetime; tighten only where focused proof exposes a defect |
+| `src/hooks/CockpitProvider.tsx` | Shared health owner | Continue exposing one workspace-health instance to production callers |
+| `src/hooks/useRepairFlow.ts` | Repair state machine | Group outcomes for current UI and pass the complete receipt on successful completion |
+| `src/components/RepairPanel.tsx` | Repair interaction boundary | Forward the typed receipt without owning health state |
+| `src/Shell.tsx` | Existing mutation-success wiring | Route repair receipts to `mergeRepair` and health-affecting non-repair successes to `refresh` |
+| Focused hook/provider tests | Acceptance-boundary proof | Control delayed health responses, repair completion, later polling, and mutation callbacks |
+
+### Product Invariant Map
+| Product Invariant | Owner | Proof Boundary |
+|---|---|---|
+| Connection failure is red context and does not become a storage finding | `useWorkspaceHealth` | Hook/provider fetch boundary |
+| Unhealthy or check-failed outranks attention, which outranks healthy; initial unknown/checking remains gray | `useWorkspaceHealth` | Controlled aggregate responses |
+| Older request generations or older module `checked_at` values cannot replace newer state | `useWorkspaceHealth` | Intentionally reversed delayed responses |
+| Repair completion merges returned task health and issues no immediate aggregate health GET | Repair API through Shell/provider | Completed typed receipt at the integration boundary |
+| Periodic polling may update modules but cannot erase the held repair receipt | `useWorkspaceHealth` | Repair merge followed by timer-driven response |
+| Successful health-affecting non-repair mutations request a health refresh | Existing Shell/provider callback wiring | Callback integration proof |
+
+### Product Promise Coverage Map
+| Acceptance Promise | Implementation Path | Focused Proof |
+|---|---|---|
+| Gray transient state, precedence, and separate connection failure | `useWorkspaceHealth` aggregate and connection context | Initial/delayed/error response cases |
+| Periodic and mutation refresh with stale-response rejection | provider owner plus Shell callbacks | Fake timers and reversed deferred responses |
+| Receipt merge without immediate GET and retention across polling | repair API, flow, panel, Shell, provider | Completed repair receipt followed by later poll |
+
+### Proof Guidance
+- Add focused durable hook/provider integration coverage because delayed ordering, production callback reachability, no-immediate-GET behavior, and receipt retention are easy to regress and hard to observe manually.
+- Use controlled deferred fetch responses and fake timers. Assert request count around repair completion, reverse response completion order, and drive the real success-callback chain far enough to prove `mergeRepair` and mutation `refresh` are reachable.
+- Reuse existing repair-flow and panel tests where they already protect UI state; update stale outcomes-only transport assertions to the authoritative receipt contract rather than duplicating presentation coverage.
+- Run the focused Vitest files and the package production build.
+
+### Task And Dependency Changes
+- Status advanced from `shape` to `build`.
+- Outcome, Scope, all three AC lines, parent #1945, dependency #1942, priority, tags, and OpenSpec authority are unchanged.
+- No split or new dependency is required; the named modules form the existing end-to-end frontend path for one contract.
+- No user decision or planning-artifact revision was needed because this repair makes already-approved behavior reachable.
+- Challenger was not required for this complete non-material repair; the task graph did not change.
+
+### Board Audit
+- #1943 routes to builder in `build`, parent #1945, with completed dependency #1942.
+- #1944 remains downstream in `shape` until #1943 is implemented and verified.
