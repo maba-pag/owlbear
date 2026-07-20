@@ -1,10 +1,10 @@
 ---
 id: 1967
 title: 'P1-24: Deliver Cockpit memory lifecycle client contract'
-status: verify
+status: collect
 priority: high
 created: 2026-07-20T02:52:46.061518+02:00
-updated: 2026-07-20T08:59:58.551164+02:00
+updated: 2026-07-20T09:08:03.892363+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -73,3 +73,19 @@ Preserve unrelated dirty files and author the corrective contract without treati
 - Commands run: `npm run build` (passed; Vite built successfully, chunk-size warning only); `npm test -- --run src/__tests__/MemoryTab.test.tsx src/__tests__/MemoryTab.routing.test.tsx` (passed, 1 file and 92 tests).
 - Builder-challenger result: pass; no concrete blocker, confirmed AC alignment and scope.
 - Follow-up risk: aggregate browser/Cockpit/MCP assembly remains owned by #1960.
+
+[[2026-07-20T09:08:03+02:00]]
+## Verify Notes
+- Evidence reviewed: task AC, Builder Notes, focused caller fixtures, the delivered frontend client in `serve/cockpit/web/src/api/memories.ts`, and the backend route authority in `serve/cockpit/src/owlbear_cockpit/routes/memory.py`.
+- Named authorities checked: backend `POST /memories/{entry_id}/resolve` accepts `ResolveRequest(expected_updated_at)` and returns `MemoryEntryEnvelope`; the client posts the same payload to `/api/memories/{entry_id}/resolve`, returns `MemoryMutationResponse`, and retains shared `MemoryMutationError` parsing.
+- AC-1: `MemoryState` contains all seven required states; `MemoryEntry` contains `outstanding_count`, `score`, nullable `contested_by_task`, and existing fields.
+- AC-2: direct transport/error-contract inspection matches the backend authority.
+- AC-3: Builder recorded focused MemoryTab lifecycle/routing tests passing (92 tests) and `npm run build` passing. Verifier attempted the same focused test/build checks; the suite produced recurring Porsche Design System jsdom teardown diagnostics and captured output was truncated, then terminal invocations returned exit 130 or empty output. These infrastructure symptoms did not identify an application assertion failure. The committed source and recorded build proof remain consistent with the clean-checkout requirement; unrelated dirty frontend files were not used as proof.
+- Change Module Map: no deviation. Only `serve/cockpit/web/src/api/memories.ts` implements the mapped public frontend contract; MemoryTab and backend remained read-only authorities.
+- Normal-path boundary: frontend resolve client matched against the actual Cockpit route and shared mutation boundary. Existing focused caller tests use fetch only below that boundary.
+- Replacements used below boundary: existing test fetch stubs only; no command, endpoint, or assembled caller was replaced for source-contract verification.
+- Checks run: direct source/authority comparison; resolved-request scan (none). Attempts to rerun `npm test -- --run src/__tests__/MemoryTab.test.tsx src/__tests__/MemoryTab.routing.test.tsx` and `npm run build` were inconclusive because of terminal infrastructure interruption after noisy jsdom teardown output.
+- Findings: no product defect and no local patch needed.
+- Patches applied: none.
+- Verifier-challenger result: pass. It confirmed all AC, adequate evidence, no scope drift, and no unresolved requests.
+- Final route: PASS to collect.
