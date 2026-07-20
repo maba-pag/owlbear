@@ -4,7 +4,7 @@ title: 'P1-16: Establish assembled Memory purge browser proof'
 status: build
 priority: medium
 created: 2026-07-20T02:44:11.341963+02:00
-updated: 2026-07-20T02:44:11.341963+02:00
+updated: 2026-07-20T02:56:32.626503+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -27,8 +27,11 @@ ac:
     without mutation, and an execution receipt with purged, skipped, and failed counts
     followed by refreshed entries and Purge deleted (N); verifier records the tested
     commit SHA and command result.'
-blocked: false
-block_reason:
+blocked: true
+block_reason: 'Production-stack browser proof is blocked: the fixture launcher’s `uv
+  run cockpit` child resolves to an unrelated frontend Vitest command and exits before
+  port 8421 opens, so the assembled Playwright test cannot reach the production FastAPI
+  app. Proof files are type-clean; rerun after correcting command resolution.'
 claimed_at:
 archival_reason:
 archival_refs: []
@@ -69,3 +72,19 @@ Use a maintained package-local Playwright command. The rendered MemoryTab, produ
 - Ordered ephemeral threshold flow: #1949 behavior plus AC-2 and AC-3.
 - Visible action, warning, receipt, and refresh: #1950 behavior plus AC-3.
 - Preserved deletion semantics and exclusions: prior child Verify Notes plus AC-1 and AC-2.
+
+[[2026-07-20T02:56:32+02:00]]
+## Builder Notes
+Change envelope: package-local Cockpit Playwright configuration/support/spec only; no product/API changes.
+
+Files changed: `serve/cockpit/web/playwright.config.ts`, `serve/cockpit/web/package.json`, `serve/cockpit/web/e2e/support/start-memory-purge-stack.mjs`, `serve/cockpit/web/e2e/memory-purge-assembled.spec.ts`.
+
+Change Module Map deviations: none; production Cockpit entry point, MemoryEngine, HTTP routes, and MemoryTab remain read-only.
+
+Proof selected: assembled Playwright project with fixture-owned Kanban and Memory stores, deterministic tombstones, production FastAPI launch settings, cancellation, positive-day preview, and zero-day execution. No durable product tests added.
+
+Commands run: direct Playwright discovery/build previously succeeded; `get_errors` reported no errors in all touched proof files. Final assembled browser proof was not completed. Direct launcher diagnosis showed the child command resolving to an unrelated Vitest invocation and exiting before Cockpit startup; package command also encountered terminal/session exit-130 behavior.
+
+Builder challenger: fail. First concrete issues found and fixed were fixture root resolution and assembled project baseURL. Final blocker is environment/command resolution before server startup.
+
+Follow-up risk: do not route to verify until `node e2e/support/start-memory-purge-stack.mjs` demonstrably keeps `uv run cockpit` listening on `127.0.0.1:8421` and the focused Playwright command reports a passing browser result.

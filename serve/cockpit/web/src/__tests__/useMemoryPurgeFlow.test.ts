@@ -19,6 +19,7 @@ describe('useMemoryPurgeFlow', () => {
     const { result } = renderHook(() => useMemoryPurgeFlow({ onSuccess }))
 
     act(() => { result.current.setThreshold('10') })
+    expect(result.current.phase).toBe('configuring')
     const firstPreview = result.current.requestPreview()
     act(() => { result.current.setThreshold('20') })
     await act(async () => { await result.current.requestPreview() })

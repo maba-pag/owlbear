@@ -15,6 +15,7 @@
     "preview": "vite preview",
     "test": "cross-env NODE_OPTIONS=--max-old-space-size=2048 vitest run --silent=true",
     "test:e2e": "node scripts/run-e2e.mjs",
+    "test:e2e:memory-purge": "cross-env PURGE_E2E=1 playwright test --project=memory-purge-assembled",
     "test:e2e:all": "playwright test"
   },
   "dependencies": {

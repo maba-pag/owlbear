@@ -18,7 +18,7 @@ export interface UseCleanupFlowResult {
   dismissResults: () => void
 }
 
-export type MemoryPurgePhase = 'idle' | 'previewing' | 'confirming' | 'running' | 'done' | 'error'
+export type MemoryPurgePhase = 'idle' | 'configuring' | 'previewing' | 'confirming' | 'running' | 'done' | 'error'
 
 export interface UseMemoryPurgeFlowOptions {
   onSuccess?: () => void
@@ -59,7 +59,7 @@ export function useMemoryPurgeFlow(options?: UseMemoryPurgeFlowOptions): UseMemo
     setPreview(null)
     setReceipt(null)
     setError(null)
-    setPhase('idle')
+    setPhase('configuring')
   }
 
   const requestPreview = async (): Promise<void> => {

@@ -74,7 +74,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ["scripts/**/*.mjs"],
+    files: ["scripts/**/*.mjs", "e2e/support/**/*.mjs"],
     languageOptions: {
       globals: {
         process: "readonly",

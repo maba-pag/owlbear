@@ -13,10 +13,22 @@ export default defineConfig({
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
     },
+    {
+      name: 'memory-purge-assembled',
+      testMatch: /memory-purge-assembled\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'], baseURL: 'http://127.0.0.1:8421' },
+    },
   ],
-  webServer: {
-    command: 'npm run build && npm run preview',
-    url: 'http://localhost:4173',
-    reuseExistingServer: !process.env['CI'],
-  },
+  webServer: process.env['PURGE_E2E']
+    ? {
+        command: 'npm run build && node e2e/support/start-memory-purge-stack.mjs',
+        url: 'http://127.0.0.1:8421/health',
+        reuseExistingServer: false,
+        timeout: 120_000,
+      }
+    : {
+        command: 'npm run build && npm run preview',
+        url: 'http://localhost:4173',
+        reuseExistingServer: !process.env['CI'],
+      },
 })
