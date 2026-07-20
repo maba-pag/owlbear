@@ -1,10 +1,10 @@
 ---
 id: 1951
 title: 'P1-15: Deliver deliberate memory tombstone cleanup'
-status: collect
+status: shape
 priority: high
 created: 2026-07-17T03:04:38.474076+02:00
-updated: 2026-07-17T03:05:02.143384+02:00
+updated: 2026-07-20T02:20:04.565618+02:00
 tags:
   - phase-1
   - scope:memory
@@ -87,3 +87,27 @@ Proof guidance: inspect child Verify Notes and use assembled Cockpit evidence ti
 - Dependency chain: #1946, #1947, #1948, #1949, #1950; each task depends on its predecessor. Aggregate #1951 depends on #1946 through #1950.
 - Challenger initially rejected ambiguous rendered behavior ownership between #1949 and #1950. Draft was repaired so #1949 owns headless state and #1950 owns presentation; re-challenge passed with full Product Promise coverage and no orphaned invariant.
 - Board audit: #1946-#1950 are unblocked `build` children of #1951; #1951 is unblocked `collect` with all five dependencies. Priorities and tags match the approved graph.
+
+[[2026-07-20T02:20:04+02:00]]
+## Collect Notes
+
+Classification: aggregate.
+
+Intent source: `## Outcome`, `## Planning Authority`, and `## Shape Notes`, grounded in `openspec/changes/purge-deleted-memories/`. The Product Invariant Map assigns core eligibility/reconciliation to #1946, cache coherence and preserved deletion semantics to #1947, strict project-wide HTTP behavior to #1948, ordered headless state to #1949, rendered workflow and refresh cadence to #1950, and the assembled MemoryTab/FastAPI/MemoryEngine promise to #1951.
+
+Child coverage: the parent gate declares #1946 through #1950. All five task summaries project `parent: 1951`; each is archived with reason `completed`, and their dependency chain is intact (#1946, then #1947, #1948, #1949, #1950). `list_tasks(parent=1951)` unexpectedly returned no rows, so coverage was cross-checked against the parent `depends_on` gate and each child's projected parent. Child Verify Notes contain final PASS evidence for every child invariant. #1949 retains an earlier rejected Verify Notes occurrence followed by a later PASS occurrence; its archived completed state and final notes establish closure.
+
+Dependency gate: the authoritative parent read before claim reported `dep_status: ok` with `depends_on: [1946, 1947, 1948, 1949, 1950]`. All dependencies are completed archives.
+
+Normal-path aggregate proof: not established. #1950's fresh browser proof exercised the real rendered MemoryTab but replaced API responses below it. #1948's assembled FastAPI proof replaced `get_memory_engine`. #1946 exercised the public MemoryEngine separately. No durable full-stack purge proof was found in Cockpit E2E, repository tests, or package tests. The available proof therefore does not exercise the required assembled MemoryTab, FastAPI, and MemoryEngine path in one normal-path run. It is also not tied to a tested commit SHA or later descendant; a read-only HEAD lookup was interrupted twice with exit 130 and no output, and child Verify Notes record commands but no tested SHA.
+
+Residual decisions and requests: no pending or resolved structured request exists for #1951, and no pending structured request exists for #1946 through #1950.
+
+Rationale: reject to shape because aggregate AC-1 and AC-2 explicitly require SHA-linked assembled proof, and the aggregate proof boundary and commit linkage remain incomplete. Code-level child AC are not remapped or reopened.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|---|---|---|---|
+| 1 | Shaper | Restore an executable aggregate proof plan that exercises the assembled MemoryTab, FastAPI, and MemoryEngine path without replacing any of those three layers, covering positive and zero-day thresholds, restrictive active filters, project-wide preview/count messaging, visible purged/skipped/failed receipt, refreshed entries/count, preservation of newer tombstones and non-deleted entries, and the stated exclusions. Route implementation/proof work through child ownership rather than assigning code changes to this aggregate. | `openspec/changes/purge-deleted-memories/` and the appropriate Cockpit E2E/proof owner selected during reshaping | Record the exact tested commit SHA and a passing command or retained artifact run at that SHA or a later descendant; a SHA alone or separate layer proofs are insufficient. |
+
+Final route: REJECT to shape.
