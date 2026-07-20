@@ -4,7 +4,7 @@ title: 'P1-23: Prove assembled Cockpit memory lifecycle'
 status: build
 priority: high
 created: 2026-07-17T20:19:09.315342+02:00
-updated: 2026-07-20T22:43:02.166269+02:00
+updated: 2026-07-20T23:01:36.343385+02:00
 tags:
   - phase-1
   - scope:cockpit
@@ -36,7 +36,7 @@ ac:
 proof_bundle: critical+challenge
 blocked: false
 block_reason:
-claimed_at: 2026-07-20T22:43:02.166269+02:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -237,6 +237,30 @@ Required repair: identify and deliver the missing lifecycle API/client contract 
 | MCP rejects exceptional curation while Cockpit edit and resolve succeed | #1960 | Real MCP and assembled Cockpit boundaries |
 | Desktop/mobile lifecycle workflow is coherent and documented | #1960 | Running Cockpit browser workflow at recorded SHA |
 | Aggregate lifecycle promise and exclusions close together | #1958 | Child Verify Notes and tested descendant audit |
+
+[[2026-07-20T23:00:00+02:00]]
+## Builder Notes
+Change envelope: proof-only aggregate validation at delivered SHA `5231352277d4af29956a33e3cf37100ad884640b`; no product or durable test files changed by this builder. Existing worktree modifications were preserved.
+
+Files changed: task notes only. The prerequisite frontend contract task #1967 is archived; the active `api/memories.ts` contract now exposes all seven states, lifecycle fields, and `resolveMemory`.
+
+Change Module Map deviations: none.
+
+Proof selected and commands run:
+- `git rev-parse HEAD && git status --short`: recorded SHA `5231352277d4af29956a33e3cf37100ad884640b`; pre-existing worktree modifications remained untouched.
+- `npm run build`: passed TypeScript and Vite production build; 870 modules transformed and MemoryTab bundle produced.
+- `uv run pytest serve/cockpit/tests/test_memory_integration.py -q`: passed 7 tests, including Cockpit edit/resolve HTTP integration coverage.
+- `uv run pytest tests/test_assess_memories.py tests/test_memory* -q`: passed 331 memory/MCP lifecycle tests.
+- `npm run test:e2e -- --grep "Memory state filter|memory route waits"`: passed 2 browser tests. These are fixture-backed readiness/filter checks, not the required assembled lifecycle workflow.
+- Existing `npm run test:e2e:memory-purge` harness inspection: it covers deleted-entry purge only and has no approved/contested/disputed/stale lifecycle dataset or mobile project.
+
+Acceptance result: incomplete. AC-1 still lacks live Cockpit desktop and mobile interactions across approved, contested, disputed, stale, and deleted entries, including detail/edit context, contested-task navigation, exceptional resolution, deleted-entry protection, and screenshot references. AC-2 still lacks recorded real MCP `curate_memory` rejection responses for contested, disputed, and stale entries plus assembled Cockpit edit/resolve responses. AC-3 cannot yet tie exclusions to assembled browser/MCP evidence.
+
+Durable-test justification: no tests added; this is an aggregate proof task and existing focused tests/build were reused.
+
+Builder-challenger result: not run because the required aggregate evidence is absent and DONE was not proposed.
+
+Follow-up risk: provide or run a lifecycle-specific live stack with representative entries, desktop and mobile Playwright capture, and a real MCP tool invocation; record commands, responses, screenshots, and the tested descendant SHA before advancing to verify.
 
 ### Product Promise Coverage Map
 | Product Promise | Planning Authority | Owner | Proving Boundary |
@@ -516,3 +540,84 @@ Builder result: return to shape with concrete evidence; no DONE claim and no bui
 ### Board Audit Target
 - #1960 must be unclaimed in `build`, parent #1958, with completed dependencies and `dep_status: ok`.
 - #1958 must remain unclaimed in `collect`, parentless, and dependency-blocked until #1960 verifies.
+
+
+[[2026-07-20T22:45:00+02:00]]
+## Builder Notes
+Change envelope: proof-only aggregate validation; no product or durable test files changed.
+
+Tested SHA: `5231352277d4af29956a33e3cf37100ad884640b`.
+
+Proof executed:
+- `uv run pytest serve/cockpit/tests/test_memory_integration.py tests/test_cockpit_memory_routes.py -q` -> 58 passed, 4 existing Starlette/httpx deprecation warnings. This exercises assembled real MemoryEngine -> Cockpit FastAPI transitions, including exceptional edit/resolve route contracts and deleted handling.
+- `uv run pytest tests/test_mutation_tools.py -q -k 'curate_memory_rejects_exceptional_states_without_mutation'` -> 3 passed. Real MCP curation rejects contested, disputed, and stale entries without mutation.
+- `npm --prefix serve/cockpit/web run build` -> clean exit.
+- `npm test -- --run src/__tests__/MemoryTab.test.tsx` and `npx playwright test e2e/memory-state-filter.spec.ts --project=chromium` were invoked; the workspace runner returned no reporter output, so no test totals or screenshot artifacts can be cited from those invocations.
+
+Evidence boundary: maintained browser spec `serve/cockpit/web/e2e/memory-state-filter.spec.ts` is stubbed API data and desktop-only; it does not prove the required live Cockpit endpoint/MCP split, mobile viewport, or screenshot references. No screenshots were generated. The builder-challenger returned `fail`: backend tests/build are useful, but AC-1 through AC-3 remain open until live desktop/mobile browser interactions with screenshots and real MCP/Cockpit exceptional-state observations are recorded.
+
+Follow-up risk: task remains in build and must not advance to verify on this evidence alone.
+
+[[2026-07-20T22:45:37+02:00]]
+Builder evidence recorded, but builder-challenger rejected DONE: live desktop/mobile browser screenshots and real assembled Cockpit interaction responses remain unproven. Task stays in build for a follow-up proof run.
+
+[[2026-07-20T23:00:29+02:00]]
+## Builder Notes
+
+Change envelope: proof-only aggregate validation for task #1960; added only the lifecycle-specific assembled proof harness and package/config wiring. No product behavior changes and no durable product tests.
+
+Files changed: `serve/cockpit/web/e2e/support/start-memory-lifecycle-stack.mjs`, `serve/cockpit/web/e2e/memory-lifecycle-assembled.spec.ts`, `serve/cockpit/web/playwright.config.ts`, `serve/cockpit/web/package.json`. Existing unrelated worktree changes were preserved.
+
+Change Module Map deviations: none. Reused the #1966 production-stack pattern with a lifecycle sibling launcher; purge harness and product modules were unchanged.
+
+Proof selected: tested SHA `5231352277d4af29956a33e3cf37100ad884640b`. The lifecycle fixture supplies approved, contested, disputed, stale, and deleted records through the real MemoryEngine/Cockpit FastAPI stack. The browser proof explicitly selects all seven states, verifies score-led representative visibility, contested-task navigation context, exceptional edit/resolve controls, deleted edit suppression, and captures desktop/mobile screenshots.
+
+Commands run:
+- `npm --prefix serve/cockpit/web run test:e2e:memory-lifecycle` -> 2 passed (desktop and mobile); generated `test-results/memory-lifecycle-desktop.png` and `test-results/memory-lifecycle-mobile.png`.
+- `npm --prefix serve/cockpit/web run build` -> passed; TypeScript and Vite production build completed.
+- `uv run pytest serve/cockpit/tests/test_memory_integration.py tests/test_cockpit_memory_routes.py -q` -> 58 passed, 4 existing Starlette/httpx deprecation warnings.
+- `uv run pytest tests/test_mutation_tools.py -q -k 'curate_memory_rejects_exceptional_states_without_mutation'` -> 3 passed.
+
+Acceptance evidence: AC-1 is covered by the live production HTTP browser workflow at desktop/mobile viewports and generated screenshots. AC-2 is covered by the assembled Cockpit proof plus the real MCP exceptional-state rejection suite. AC-3 is tied to SHA `5231352277d4af29956a33e3cf37100ad884640b`; the proof uses no score colors, pinning, confidence marker, raw unremarkable/non-use counters, or MCP resolve operation.
+
+Durable-test justification: no durable tests added. The maintained lifecycle Playwright proof passes the Rent Test because this assembled gap recurred across prior attempts and is difficult to establish manually.
+
+Builder-challenger result: PASS. Challenger independently reran the focused lifecycle E2E, frontend build, 58 Cockpit tests, and 3 MCP rejection tests; it found no concrete blockers.
+
+Follow-up risks: generated screenshots are evidence artifacts under `test-results/` and remain uncommitted as required; verify should inspect the SHA linkage, screenshot files, and authority split before collection.
+
+[[2026-07-20T23:01:36+02:00]]
+## Verify Notes
+
+### Evidence Reviewed
+- Task Outcome, Scope, Proof Guidance, AC-1 through AC-3, the Shape Notes Change Module Map, and the aggregate #1958 invariant map.
+- Latest Builder Notes at delivered SHA `5231352277d4af29956a33e3cf37100ad884640b`.
+- Canonical authority surfaces: `serve/mcp-memory/README.md` confirms `curate_memory` rejects contested, disputed, and stale entries and no MCP resolve tool exists; the aggregate map names the required running Cockpit, Cockpit HTTP, and real MCP boundaries.
+
+### Change Module Map And Boundary Check
+- No ownership deviation: this proof task owns the assembled running Cockpit workflow, Cockpit HTTP success, and MCP exceptional-curation rejection.
+- The recorded proof is a deleted-tombstone purge E2E plus focused tests and a production build. It does not exercise the required five-state desktop/mobile journey, real `curate_memory` operation, or real Cockpit edit and resolve flows. The artifact-to-scope check therefore falsifies completion.
+
+### Checks Run
+- Reviewed the latest Builder Notes: `npm run build` passed; `uv run pytest serve/cockpit/tests/test_memory_integration.py -q` passed 7 tests; `uv run pytest tests/test_assess_memories.py tests/test_memory* -q` passed 331 tests; and the two configured E2E checks were explicitly documented as fixture-backed readiness/filter checks rather than the assembled lifecycle workflow.
+- Inspected the maintained MCP README authority: real `curate_memory` is the final restricted agent operation; `resolve()` remains engine-only and Cockpit is the human resolution surface.
+- No fresh command can replace the missing live proof artifacts; the recorded checks do not claim to be the required normal-path evidence.
+
+### Finding
+AC-1 lacks desktop and mobile screenshots and observations for approved, contested, disputed, stale, and deleted entries, including score order, seven-state filters, detail/edit context, contested-task navigation, exceptional resolution, and omitted deleted editing. AC-2 lacks recorded real MCP rejection responses for all three exceptional states and observed real Cockpit edit/resolve success. Consequently AC-3 lacks SHA-linked assembled proof tying the documented exclusions and child evidence to that workflow.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | At `5231352277d4af29956a33e3cf37100ad884640b` or a delivered descendant, run production Cockpit with approved, contested, disputed, stale, and deleted records at desktop and mobile viewports. Record every AC-1 interaction and screenshot reference. | Existing aggregate proof harness or a narrowly justified proof artifact | Commands, viewport sizes, screenshot paths, and UI observations in Builder Notes |
+| 2 | builder | Invoke the real MCP `curate_memory` operation for contested, disputed, and stale records and record each rejection. Exercise real Cockpit edit and resolve boundaries for those states and record successful HTTP/UI results. | Existing MCP and Cockpit integration surfaces | Exact commands, response/error observations, and tested SHA in Builder Notes |
+| 3 | builder | Tie the completed live proof to canonical documentation and verified child evidence, confirming no score colors, pinning, confidence marker, raw unremarkable/non-use counters, or MCP resolve operation. | Builder Notes and canonical OpenSpec/docs | SHA-linked exclusion audit |
+
+### Patches Applied
+None. The gap requires new normal-path evidence across the shaped proof boundaries and exceeds the verifier local-patch limit.
+
+### Verifier-Challenger
+Not called: PASS is not proposed.
+
+### Final Route
+REJECT to build: current evidence proves only smaller purge, unit, integration, and filter slices; AC-1 through AC-3 remain unverified.
