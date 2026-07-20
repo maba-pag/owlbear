@@ -1,10 +1,10 @@
 ---
 id: 1959
 title: 'P1-10: Remove generic Kanban cleanup contract'
-status: collect
+status: archived
 priority: medium
 created: 2026-07-17T16:24:21.021571+02:00
-updated: 2026-07-20T02:27:20.251180+02:00
+updated: 2026-07-20T02:28:28.759632+02:00
 tags:
   - phase-1
   - scope:kanban
@@ -24,7 +24,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -150,3 +150,18 @@ Findings and patches:
 Verifier-challenger result: pass. It confirmed acceptance-criteria coverage, sufficient proof, no scope drift, and no unresolved issue.
 
 Final route: PASS to collect.
+
+[[2026-07-20T02:28:28+02:00]]
+## Collect Notes
+
+Classification: leaf. Task #1959 has no child tasks, no aggregate/EPIC title or tags, and no aggregate intent section.
+
+Leaf verification evidence: the final `## Verify Notes` records PASS to collect after follow-up commit `782104aa1` removed the directly stale cleanup-contract test. Verification tied task intent and both AC to focused proof: 151 maintenance-owner tests passed; the public-interface smoke confirmed `KanbanEngine.cleanup` and `CleanupResult` absent while `sweep`, `compact_activity`, and `repair_storage` remained callable; repository inventory found no remaining Kanban or MCP-Kanban cleanup contract references. Verifier-challenger passed.
+
+Invariant map coverage: verifier confirmed the mapped Kanban engine, models, README, and directly stale test owners, with explicit sweep/session maintenance, activity compaction, and task repair responsibilities preserved and no module-map deviation.
+
+Child coverage: none; `list_tasks(parent=1959)` returned no children. Parent dependency gate: not applicable to this leaf; its dependency #1942 reports satisfied (`dep_status=ok`). Aggregate SHA-linked normal-path proof: not applicable to leaf collection.
+
+Residual decisions: no pending or resolved structured requests; no unresolved Required Follow-up remains. The earlier verifier rejection was resolved by the later PASS entry.
+
+Archive rationale: verifier PASS and closure evidence are complete, dependency state is satisfied, and no request or follow-up state remains. Archive as completed.
