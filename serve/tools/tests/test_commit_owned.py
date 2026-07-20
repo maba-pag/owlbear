@@ -116,6 +116,40 @@ def test_rejects_owned_path_that_was_already_staged(git_repo: Path) -> None:
     assert _git(git_repo, "diff", "--cached", "--name-only").stdout.splitlines() == ["owned.txt"]
 
 
+def test_recovery_commits_staged_snapshot_and_preserves_other_layers(git_repo: Path) -> None:
+    """Recovery commits only the owned index snapshot and keeps newer and unrelated changes."""
+    (git_repo / "owned.txt").write_text("staged owned\n", encoding="utf-8")
+    _git(git_repo, "add", "owned.txt")
+    (git_repo / "owned.txt").write_text("newer unstaged owned\n", encoding="utf-8")
+    (git_repo / "unrelated.txt").write_text("unrelated staged\n", encoding="utf-8")
+    _git(git_repo, "add", "unrelated.txt")
+
+    commit_owned_paths(
+        cwd=git_repo,
+        message="chore: recover task record (#1, verifier)",
+        paths=["owned.txt"],
+        staged=True,
+    )
+
+    assert _git(git_repo, "show", "HEAD:owned.txt").stdout == "staged owned\n"
+    assert (git_repo / "owned.txt").read_text(encoding="utf-8") == "newer unstaged owned\n"
+    assert _git(git_repo, "diff", "--cached", "--name-only").stdout.splitlines() == ["unrelated.txt"]
+    assert _git(git_repo, "diff", "--name-only").stdout.splitlines() == ["owned.txt"]
+
+
+def test_recovery_requires_every_owned_path_to_be_staged(git_repo: Path) -> None:
+    """Recovery mode rejects paths that have no staged ownership snapshot."""
+    (git_repo / "owned.txt").write_text("unstaged owned\n", encoding="utf-8")
+
+    with pytest.raises(CommitOwnedError, match="must already have staged changes"):
+        commit_owned_paths(
+            cwd=git_repo,
+            message="chore: recover task record (#1, verifier)",
+            paths=["owned.txt"],
+            staged=True,
+        )
+
+
 def test_unstages_owned_paths_after_commit_failure(git_repo: Path) -> None:
     """A failing commit keeps the worktree edit while restoring the index."""
     (git_repo / "owned.txt").write_text("owned\n", encoding="utf-8")
