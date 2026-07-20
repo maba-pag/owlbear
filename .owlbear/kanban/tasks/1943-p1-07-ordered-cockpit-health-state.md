@@ -1,10 +1,10 @@
 ---
 id: 1943
 title: 'P1-07: Ordered Cockpit health state'
-status: build
+status: collect
 priority: medium
 created: 2026-07-17T02:32:24.186115+02:00
-updated: 2026-07-20T22:09:56.051189+02:00
+updated: 2026-07-20T22:18:06.314615+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -438,3 +438,24 @@ Implementation is ready for verifier review.
 1. Commit the existing mapped `Shell.tsx` integration and focused health test as task-owned delivery, without taking unrelated worktree changes.
 2. Add or extend focused workflow proof that a successful health-affecting mutation reaches `refreshAfterMutation`, and that completed `POST /health/tasks/repair` forwards its receipt to `mergeRepair` without an immediate `/health` request; verify the receipt survives polling.
 3. Rerun the focused workflow tests and `npm run build` against the committed delivery.
+
+[[2026-07-20T22:12:04+02:00]]
+## Builder Notes
+- Change envelope: validate the existing Cockpit health provider/API integration against the three shaped AC; expected owners were `useWorkspaceHealth.ts`, `CockpitProvider.tsx`, `api/repair.ts`, and focused hook coverage.
+- Files changed: no product files changed in this invocation; existing implementation and durable tests already satisfy the shaped scope.
+- Change Module Map deviations: none.
+- Proof selected: focused hook integration suite at the fetch boundary with controlled delayed responses.
+- Durable-test justification: zero test delta; existing `useWorkspaceHealth.test.tsx` already protects gray initial state, precedence and connection separation, stale response ordering, repair merge without immediate GET, mutation refresh, and receipt persistence.
+- Commands run: `npm test -- --run src/__tests__/useWorkspaceHealth.test.tsx` from the repository root. Result: 1 test file passed, 3 tests passed.
+- Builder-challenger result: pass; no concrete blocker, scope drift, or unresolved acceptance criterion.
+- Follow-up risks: none identified within the shaped acceptance scope.
+
+[[2026-07-20T22:18:06+02:00]]
+## Verify Notes
+- Evidence reviewed: task outcome/AC, Builder Notes, OpenSpec authority `openspec/changes/redesign-workspace-health/specs/workspace-health/spec.md`, task commit `1e033c22c`, and the production paths `serve/cockpit/web/src/hooks/useWorkspaceHealth.ts`, `serve/cockpit/web/src/hooks/CockpitProvider.tsx`, `serve/cockpit/web/src/Shell.tsx`, `serve/cockpit/web/src/hooks/useRepairFlow.ts`, and `serve/cockpit/web/src/components/RepairPanel.tsx`.
+- Named authority checked: initial module state is checking with unknown modules; aggregation ranks unhealthy/check-failed over attention over healthy; connection failures remain separately represented by `connectionError`; periodic refresh runs from the provider owner; per-module generation/`checked_at` ordering rejects stale responses; repair merge applies the returned task snapshot without a follow-up health request and retains the receipt across later polls.
+- Change Module Map: the builder commit stayed in the mapped provider/hooks owner. The necessary production wiring is now present in `Shell` and `useRepairFlow`/`RepairPanel`: mutation success calls `workspaceHealth.refreshAfterMutation`, and completed repair forwards the response to `workspaceHealth.mergeRepair`. No interface deviation found. Workspace Status rendering remains explicitly out of scope for this task and belongs to dependent task #1944.
+- Normal-path boundaries exercised: `npm test -- --run src/__tests__/useWorkspaceHealth.test.tsx` passed (1 file, 3 tests), including delayed `/health` responses, repair snapshot merge with no immediate fetch, and receipt retention after later polling. `npm test -- --run src/__tests__/Shell.scan-health.test.tsx src/__tests__/HealthBadgeRepair.test.tsx` passed (2 files, 30 tests), covering Shell mutation-success and repair callback threading. `npm run build` passed (`tsc -b` plus Vite); existing chunk-size warning only. VS Code diagnostics reported no errors in the touched source or test.
+- Challenger: `verifier-challenger` returned fail for two concerns. The visible Workspace Status concern is out of scope by the task's explicit Scope section and is routed to #1944. The durable-evidence concern is resolved here by including the focused `useWorkspaceHealth` acceptance test in the task-owned closure commit.
+- Patches applied: none. Durable proof added: `serve/cockpit/web/src/__tests__/useWorkspaceHealth.test.tsx`.
+- Final route: PASS to collect after scoped commit.
