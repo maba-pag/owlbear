@@ -1,10 +1,10 @@
 ---
 id: 1966
 title: 'P1-16: Establish assembled Memory purge browser proof'
-status: verify
+status: collect
 priority: medium
 created: 2026-07-20T02:44:11.341963+02:00
-updated: 2026-07-20T21:59:22.550599+02:00
+updated: 2026-07-20T22:07:18.069060+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -153,3 +153,29 @@ Follow-up: rerun the focused package-local command to completion and record a pa
 - Evidence: `npm run test:e2e:memory-purge -- e2e/memory-purge-assembled.spec.ts --reporter=line --workers=1` passed 1 test through built frontend, production FastAPI, real Memory routes, and real MemoryEngine. Scoped lint and diagnostics passed.
 - Commit: `72249ca934d80d91ad859791fc17e4f48de1cc13`.
 - Builder challenger: pass; no concrete defects.
+
+[[2026-07-20T22:07:18+02:00]]
+## Verify Notes
+
+Verdict: PASS to collect.
+
+Evidence reviewed:
+- Planning authority: OpenSpec `purge-deleted-memories`, Design migration step 4, task AC-1 through AC-3, and the task Change Module Map.
+- Builder evidence commit `72249ca934d80d91ad859791fc17e4f48de1cc13` is an ancestor of tested HEAD `16de282f65f17441388db7c55bbaf8df109d68c7`; the four mapped proof files match that commit.
+- Normal-path proof: `npm run test:e2e:memory-purge` from `serve/cockpit/web` passed 1 Playwright test in 10.9 seconds. It built the frontend, launched the production Cockpit FastAPI command at `127.0.0.1:8421` with fixture-owned temporary Kanban and Memory stores and `COCKPIT_NO_OPEN=1`, then drove rendered `/memories`.
+- Scoped lint: `npx eslint e2e/memory-purge-assembled.spec.ts e2e/support/start-memory-purge-stack.mjs playwright.config.ts` had no errors. `playwright.config.ts` was ignored by the repository ESLint pattern and emitted only that warning.
+
+Named authorities and normal-path boundary:
+- `owlbear_cockpit.main` registers the production Memory router. `routes/memory.py` receives the real dependency and delegates preview and purge to `MemoryEngine`; `MemoryEngine.purge` reaches `storage.delete_entry` and `path.unlink`.
+- The browser case applies restrictive approved-only filtering and still observes project-wide `Purge deleted (3)`, cancels without mutation, proves one-day preview counts of eligible 2 and too recent 1, and observes the single controlled immutable-file unlink receipt `Purged 1; skipped 1; failed 1`.
+- It then verifies the failed eligible tombstone and recent tombstone remain, exact-cutoff removal, zero-day preview counts of eligible 2 and too recent 0, final receipt `Purged 2; skipped 0; failed 0`, and refreshed `Purge deleted (0)` with all deleted fixture entries absent.
+- The temporary fixture manifest was confirmed ignored and transient, so no workspace Memory or Kanban store mutation remains.
+
+Change Module Map:
+- No deviation found in the final task-owned files: Playwright config, package command, support launcher, and assembled spec are the mapped owners. Production entry point, Memory routes, engine, and MemoryTab remained read-only.
+
+Patches applied: none.
+
+Verifier-challenger: pass. It confirmed fixture isolation, AC-1 through AC-3 coverage through the assembled boundary, mapped scope, and no product/API change.
+
+Final route: collect.
