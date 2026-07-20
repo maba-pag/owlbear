@@ -4,7 +4,7 @@ title: 'P1-07: Ordered Cockpit health state'
 status: build
 priority: medium
 created: 2026-07-17T02:32:24.186115+02:00
-updated: 2026-07-20T09:19:17.301126+02:00
+updated: 2026-07-20T21:52:59.017159+02:00
 tags:
   - phase-1
   - scope:cockpit-web
