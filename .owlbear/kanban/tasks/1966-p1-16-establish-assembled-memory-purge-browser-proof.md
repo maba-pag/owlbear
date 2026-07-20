@@ -1,10 +1,10 @@
 ---
 id: 1966
 title: 'P1-16: Establish assembled Memory purge browser proof'
-status: build
+status: verify
 priority: medium
 created: 2026-07-20T02:44:11.341963+02:00
-updated: 2026-07-20T09:07:55.015495+02:00
+updated: 2026-07-20T21:59:22.550599+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -129,3 +129,27 @@ Patches applied: none; these are proof and scope corrections beyond the verifier
 Verifier-challenger: not called because this task is rejected, not proposed for PASS.
 
 Final route: build.
+
+[[2026-07-20T09:11:58+02:00]]
+## Builder Notes
+
+Change envelope: package-local Cockpit Playwright assembled proof only; no product/API changes.
+
+Files changed in this recovery: `serve/cockpit/web/e2e/memory-purge-assembled.spec.ts`.
+
+Change Module Map deviations: none in this recovery. The spec now applies a restrictive approved-only Memory state filter while asserting the project-wide `Purge deleted (3)` count, then explicitly selects the deleted-state filter to prove `Recent deleted` survives after execution. Existing earlier delivery scope drift remains documented in prior notes: the delivery commit also included `useCleanupFlow.ts`, its focused test, ESLint configuration, package metadata, launcher, and Playwright configuration.
+
+Proof selected: maintained `npm run test:e2e:memory-purge -- e2e/memory-purge-assembled.spec.ts --reporter=line` from `serve/cockpit/web`; `get_errors` reports no errors in the changed spec. The first post-edit full run reached production FastAPI, real Memory HTTP routes, and real MemoryEngine and exercised the controlled macOS unlink failure, but failed only because the new preservation assertion checked a deleted entry while the default UI filter hides deleted entries. The assertion was corrected. A rerun exited 130 during repository startup tooling before Playwright began, so no fresh passing browser result is available.
+
+Builder challenger: fail, specifically because the focused command has not completed successfully after the proof corrections. No code blocker was identified; startup interruption is the remaining blocker.
+
+Follow-up: rerun the focused package-local command to completion and record a passing result before advancing to verify.
+
+[[2026-07-20T21:59:22+02:00]]
+## Builder Recovery Notes
+- Classification: the exit-130 block was transient, but the verifier also identified a real proof gap. The spec now explicitly applies a restrictive approved-only filter while retaining project-wide purge counts.
+- Positive-threshold proof: one-day preview asserts Eligible 2 and Too recent 1; one controlled immutable-file unlink failure yields `Purged 1; skipped 1; failed 1`; the failed eligible tombstone and `Recent deleted` remain while exact-cutoff is removed.
+- Zero-day proof: the follow-up preview asserts Eligible 2 and Too recent 0; execution yields `Purged 2; skipped 0; failed 0` and removes both remaining tombstones.
+- Evidence: `npm run test:e2e:memory-purge -- e2e/memory-purge-assembled.spec.ts --reporter=line --workers=1` passed 1 test through built frontend, production FastAPI, real Memory routes, and real MemoryEngine. Scoped lint and diagnostics passed.
+- Commit: `72249ca934d80d91ad859791fc17e4f48de1cc13`.
+- Builder challenger: pass; no concrete defects.
