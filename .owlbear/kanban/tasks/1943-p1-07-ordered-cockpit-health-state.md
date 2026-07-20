@@ -1,10 +1,10 @@
 ---
 id: 1943
 title: 'P1-07: Ordered Cockpit health state'
-status: verify
+status: shape
 priority: medium
 created: 2026-07-17T02:32:24.186115+02:00
-updated: 2026-07-20T02:18:18.603924+02:00
+updated: 2026-07-20T02:27:01.066686+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -142,3 +142,31 @@ Released without implementation: task is in `shape`, while builder mode only pro
 - Commands run: `npm test -- --run src/__tests__/usePollingFetch.test.ts` (1 file, 13 tests passed); `npm run build` (tsc and Vite passed; existing chunk-size warning only).
 - Builder-challenger result: pass after tightening initial checking state and generation/checked_at ordering.
 - Follow-up risks: dedicated tests for delayed health responses, repair merge, and receipt retention remain appropriate for verify.
+
+[[2026-07-20T02:24:44+02:00]]
+## Verify Notes
+- Evidence reviewed: task AC, Builder Notes, task commit `1e033c22c`, and the submitted changes in `serve/cockpit/web/src/hooks/useWorkspaceHealth.ts` and `serve/cockpit/web/src/hooks/CockpitProvider.tsx`.
+- Named authorities checked: task Planning Authority names OpenSpec `redesign-workspace-health`, but that change is absent from this checkout; the task AC and current Cockpit source therefore governed the verification.
+- Change Module Map: the submitted owner/provider files match the stated map. The required mutation and repair workflow integration is missing from that map boundary and must be implemented by the builder, not patched during verification.
+- Normal-path boundary: provider creation and initial `/health` polling compile, but no repair or mutation flow calls `workspaceHealth.mergeRepair`, `workspaceHealth.dismissReceipt`, or `workspaceHealth.refresh`.
+- Replacements used below the boundary: none. The complete Cockpit Vitest run was attempted; it emitted existing third-party Porsche Design System jsdom errors, so it is not completion proof. `npm run build` completed successfully.
+- Finding: AC 2 is incomplete because health-affecting mutation flows do not refresh health. AC 3 is incomplete because completed repair responses do not merge `task_health_result` into provider state and the receipt has no presentation/dismissal consumer. Consequently, later polling cannot be shown to preserve a user-visible receipt.
+- Patches applied: none; wiring repairs require multiple workflow call sites and exceed verifier local-patch scope.
+- Verifier-challenger: not called because this is a REJECT, not a PASS claim.
+- Final route: REJECT to build.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Wire all health-affecting mutations to refresh the workspace-health owner, then prove delayed responses cannot overwrite newer module state. | `serve/cockpit/web/src/hooks/`, affected mutation callers | Focused hook/provider test with controlled delayed `/health` responses. |
+| 2 | builder | Wire completed repair responses to `mergeRepair`, render and dismiss the receipt through the intended consumer, and prove no immediate `/health` request occurs and polling retains the receipt. | repair flow, receipt consumer, `useWorkspaceHealth` | Focused workflow test at the real repair API boundary. |
+
+[[2026-07-20T02:27:01+02:00]]
+## Builder Notes
+- Change envelope: `serve/cockpit/web/src/hooks/useWorkspaceHealth.ts` only; intended to enforce ordered health responses while preserving module aggregation and session receipt state.
+- Files changed: `serve/cockpit/web/src/hooks/useWorkspaceHealth.ts`.
+- Change Module Map deviation: source inspection found the hook is not connected to the actual repair flow. `useRepairFlow` exposes only a parameterless `onSuccess`, and no caller invokes `workspaceHealth.mergeRepair`; implementing the repair receipt contract requires reshaping the flow/provider/caller boundary.
+- Proof selected: `npm run build` from the repository root; TypeScript and Vite production build passed. This is insufficient for the task acceptance criteria because the repair and mutation integration path is unreachable.
+- Builder-challenger result: fail. Concrete blocker: health-affecting mutations and completed repair responses do not drive the workspace-health owner, so refresh propagation, repair merge, stale-response ordering at the integration boundary, connection context, and receipt retention are not proven or fully implemented.
+- Required follow-up: reshape the task with explicit module map and contract for `useRepairFlow`, `RepairPanel`/Shell wiring, and mutation refresh callbacks; then add focused hook/provider integration proof with delayed responses and repair receipts.
+- No durable tests added. Existing build proof remains green; no commit was made because the implementation was rejected to shape.
