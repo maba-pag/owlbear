@@ -4,7 +4,7 @@ title: 'P1-24: Deliver Cockpit memory lifecycle client contract'
 status: verify
 priority: high
 created: 2026-07-20T02:52:46.061518+02:00
-updated: 2026-07-20T03:05:28.949730+02:00
+updated: 2026-07-20T08:59:58.551164+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -25,10 +25,8 @@ ac:
   - 'AC-3: At the delivered corrective commit or a clean descendant checkout, the
     committed MemoryTab and frontend API contract pass focused lifecycle/API checks
     and `npm run build` without relying on unrelated uncommitted workspace files.'
-blocked: true
-block_reason: 'COMMIT_FAILED: repository pre-commit ESLint hook fails on unrelated
-  untracked e2e/support/start-memory-purge-stack.mjs (process is not defined at lines
-  25, 32, 33, 36); scoped files were restored and no commit was created.'
+blocked: false
+block_reason:
 claimed_at:
 archival_reason:
 archival_refs: []
