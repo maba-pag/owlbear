@@ -1,10 +1,10 @@
 ---
 id: 1976
 title: Restore DetailTab lifecycle bounds under PDS 4.5
-status: collect
+status: archived
 priority: high
 created: 2026-07-21T18:33:01.110997+02:00
-updated: 2026-07-22T00:10:29.495369+02:00
+updated: 2026-07-22T00:12:00.259147+02:00
 tags:
   - baseline-repair
   - frontend
@@ -41,7 +41,7 @@ proof_bundle: existing+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Objective
@@ -137,3 +137,10 @@ The original stack-qualified window-error guard prevented reporting but did not 
 - Builder's maintained unsharded evidence remains valid at the implementation tree: 124/124 files, 1835 passed and 2 skipped, command returned zero.
 - Verifier-challenger decision: pass. It found no scope drift, proof gap, or Rent-Test defect and explicitly approved advancement to collect.
 - AC-5 remains pending by definition: collector must archive and commit, then the exact final archive SHA must pass every named admission command in a clean detached checkout and receive an independent challenge before the baseline is admitted.
+
+[[2026-07-22T00:12:00+02:00]]
+## Collect Notes
+- Classification: leaf. `list_tasks(parent=1976)` returned no children; the task has no aggregate intent or parent dependency gate.
+- Leaf closure evidence: verifier PASS is recorded for implementation commit `9170321fb93d84d012c251a16e5329b9bbd3a73d`, with fresh dependency, focused Vitest, build, scope, and real sanitization proof. Verifier-challenger also passed with no repair.
+- Structured request state is empty for both pending and resolved requests; there is no unresolved Required Follow-up or residual decision.
+- Archive rationale: ordinary verified leaf is complete for pipeline closure. AC-5 is revision-bound and will be evaluated against the immutable archive commit created immediately after this transition; baseline admission remains forbidden until that exact SHA passes every named clean-detached command and an independent challenge.
