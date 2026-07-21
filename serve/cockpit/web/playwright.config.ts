@@ -18,8 +18,20 @@ export default defineConfig({
       testMatch: /memory-purge-assembled\.spec\.ts/,
       use: { ...devices['Desktop Chrome'], baseURL: 'http://127.0.0.1:8421' },
     },
+    {
+      name: 'memory-lifecycle-assembled',
+      testMatch: /memory-lifecycle-assembled\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'], baseURL: 'http://127.0.0.1:8422' },
+    },
   ],
-  webServer: process.env['PURGE_E2E']
+  webServer: process.env['LIFECYCLE_E2E']
+    ? {
+        command: 'npm run build && node e2e/support/start-memory-lifecycle-stack.mjs',
+        url: 'http://127.0.0.1:8422/health',
+        reuseExistingServer: false,
+        timeout: 120_000,
+      }
+    : process.env['PURGE_E2E']
     ? {
         command: 'npm run build && node e2e/support/start-memory-purge-stack.mjs',
         url: 'http://127.0.0.1:8421/health',

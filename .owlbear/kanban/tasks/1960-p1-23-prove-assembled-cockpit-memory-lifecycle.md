@@ -1,10 +1,10 @@
 ---
 id: 1960
 title: 'P1-23: Prove assembled Cockpit memory lifecycle'
-status: build
+status: verify
 priority: high
 created: 2026-07-17T20:19:09.315342+02:00
-updated: 2026-07-20T23:01:36.343385+02:00
+updated: 2026-07-21T10:23:22.642070+02:00
 tags:
   - phase-1
   - scope:cockpit
@@ -621,3 +621,38 @@ Not called: PASS is not proposed.
 
 ### Final Route
 REJECT to build: current evidence proves only smaller purge, unit, integration, and filter slices; AC-1 through AC-3 remain unverified.
+
+[[2026-07-20T23:07:39+02:00]]
+## Builder Notes
+- Change envelope: proof-only aggregate validation; no product or durable test files changed.
+- Tested SHA: `3ef27b3f1f119e783ee80727fce5ac4f056bfc95` (`chore: reject incomplete lifecycle proof (#1960, verifier)`).
+- Focused proof run from `serve/cockpit/web`: `npm run test:e2e:memory-lifecycle` -> 2 passed (desktop and mobile, 11.6s).
+- Focused frontend regression: `npm run test -- --run src/__tests__/MemoryTab.routing.test.tsx` -> 1 file, 56 tests passed.
+- Focused backend regression from repository root: `uv run pytest tests/test_cockpit_memory_routes.py tests/test_assess_memories.py -q` -> 97 passed, 1 warning.
+- Source inspection confirms `curate_memory` delegates to the memory engine; `resolve` accepts contested/disputed/stale; `edit` rejects deleted entries.
+- Builder-challenger result: FAIL. The available evidence is fixture-backed E2E/unit/pytest coverage and source inspection, not the required live aggregate proof. Missing: real MCP `curate_memory` invocations with rejection responses for contested/disputed/stale; real Cockpit edit and resolve HTTP responses; desktop/mobile screenshot references tied to this SHA; explicit notes tying those observations and requested exclusions to AC-1/AC-2/AC-3.
+- No product defect was established; task remains in build for completion of the required live evidence.
+
+[[2026-07-21T10:23:22+02:00]]
+## Builder Notes
+
+Change envelope: proof-only aggregate validation for the assembled Cockpit memory lifecycle. Added the lifecycle-specific MCP/Cockpit/browser proof harness and package/config wiring; no product behavior was changed.
+
+Files changed: `serve/cockpit/web/package.json`, `serve/cockpit/web/playwright.config.ts`, `serve/cockpit/web/e2e/memory-lifecycle-assembled.spec.ts`, `serve/cockpit/web/e2e/support/start-memory-lifecycle-stack.mjs`, and `serve/cockpit/web/e2e/support/prove-memory-lifecycle-mcp.py`.
+
+Tested candidate base SHA: `919e5887b50b1450079a64b1a76cddb6d2371290`. The scoped builder commit following this transition is the delivered descendant for verifier replay.
+
+Proof executed:
+- `npm run test:e2e:memory-lifecycle`: 3 passed. The production-stack run selected all seven lifecycle states, proved exact descending score order, inspected approved detail/edit context, navigated contested provenance to task #1960, omitted deleted edit/resolve controls, sent real Cockpit edit and resolve POSTs for contested/disputed/stale records, and verified each resolve response reached `approved`.
+- The same command passed 3/3 in a disposable detached checkout at the candidate SHA patched with only the five task-owned harness paths and an isolated Python environment, proving no dependency on unrelated dirty worktree changes.
+- MCP receipt `serve/cockpit/web/test-results/memory-lifecycle-mcp.json` records real stdio `curate_memory` calls rejecting contested, disputed, and stale entries with state-specific errors and no mutation. Its operation inventory contains no MCP resolve operation.
+- Responsive artifacts: `test-results/memory-lifecycle-desktop.png`, `memory-lifecycle-desktop-detail.png`, `memory-lifecycle-mobile.png`, and `memory-lifecycle-mobile-actions.png`. The desktop detail is complete; the two 390x844 captures coherently cover contested identity/context and metadata/actions without horizontal overflow or incoherent overlap.
+- `uv run pytest serve/cockpit/tests/test_memory_integration.py tests/test_cockpit_memory_routes.py -q`: 58 passed with 4 existing Starlette/httpx deprecation warnings.
+- `uv run pytest tests/test_mutation_tools.py -q -k curate_memory_rejects_exceptional_states_without_mutation`: 3 passed.
+- Ruff check and format check passed for the Python proof helper; VS Code diagnostics were clean.
+
+AC result: AC-1 through AC-3 are covered by the assembled proof, receipt, responsive screenshots, and explicit exclusion assertions: score tags retain the neutral secondary variant; no pinning, confidence marker, raw unremarkable/non-use counters, or MCP resolve operation appears.
+
+Durable-test justification: the maintained assembled Playwright harness passes the Rent Test because this exact cross-boundary proof gap caused repeated failed attempts and is expensive to reproduce manually.
+
+Builder-challenger result: PASS. It found no concrete DONE defect, accepted the narrow five-file scope, and classified exact delivered-SHA replay as the verifier handoff after the scoped builder commit.
