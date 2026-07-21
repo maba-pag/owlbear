@@ -1,10 +1,10 @@
 ---
 id: 1960
 title: 'P1-23: Prove assembled Cockpit memory lifecycle'
-status: collect
+status: archived
 priority: high
 created: 2026-07-17T20:19:09.315342+02:00
-updated: 2026-07-21T10:32:16.834056+02:00
+updated: 2026-07-21T10:39:33.485294+02:00
 tags:
   - phase-1
   - scope:cockpit
@@ -37,7 +37,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -683,3 +683,14 @@ AC result: AC-1, AC-2, and AC-3 pass at exact commit `8fbcdb7002d1040242addbc9b3
 Verifier-challenger result: PASS. It found no missing AC, evidence substitution, screenshot incoherence, or scope defect and accepted the receipt operation inventory as proof that MCP exposes no resolve operation.
 
 Final route: PASS to collect.
+
+[[2026-07-21T10:39:33+02:00]]
+## Collect Notes
+
+Classification: leaf proof task. Task #1960 has no children; the `aggregate-proof` tag describes the evidence it contributes to parent #1958 rather than making this task the aggregate parent.
+
+Leaf verification evidence: the latest Verify Notes record verifier PASS and verifier-challenger PASS at exact delivered commit `8fbcdb7002d1040242addbc9b3135c1067e7a41f`. The verifier reran the assembled production Cockpit, real MCP stdio, responsive browser, focused backend, and exceptional-state rejection checks. Verifier closure is committed at descendant `a5453ade7268e1aa82376923cbcf3a837fb57b40`.
+
+Closure checks: dependency gate is `ok`; `list_tasks(parent=1960)` returned no children; no pending structured request exists; no residual decision state exists. Earlier Required Follow-up tables are historical rejections and are resolved by the latest builder proof and verifier PASS. No current Required Follow-up remains.
+
+Archive rationale: the verified leaf satisfies AC-1 through AC-3 and supplies the SHA-linked assembled normal-path proof required by parent #1958. Archive as completed.
