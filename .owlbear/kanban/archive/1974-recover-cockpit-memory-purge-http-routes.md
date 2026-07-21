@@ -1,10 +1,10 @@
 ---
 id: 1974
 title: Recover Cockpit memory purge HTTP routes
-status: collect
+status: archived
 priority: high
 created: 2026-07-21T16:06:13.126407+02:00
-updated: 2026-07-21T16:25:33.200304+02:00
+updated: 2026-07-21T16:26:24.258991+02:00
 tags:
   - scope:cockpit-backend
   - api
@@ -24,7 +24,7 @@ proof_bundle: behavioral+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -72,3 +72,12 @@ Proof at exact revision: the maintained Cockpit memory route suite passed 51 tes
 No durable test was added; maintained route coverage plus exact assembled-boundary proof cover the compact contract.
 
 Verifier-challenger: decision pass; no assembly, validation, response, scope, or unresolved-AC finding.
+
+[[2026-07-21T16:26:24+02:00]]
+## Collect Notes
+
+Classification: verified leaf with archived dependency #1973 satisfied, no children, requests, or unresolved follow-up.
+
+Closure evidence: builder commit `3fe3281ab127ffaf4dea3699c5b16f7602e18f91`; exact-SHA assembled FastAPI proof; 51 maintained route tests; clean Ruff gates; both challengers passed.
+
+Archive rationale: Cockpit purge route ownership is restored and independently verified; no aggregate review is required.
