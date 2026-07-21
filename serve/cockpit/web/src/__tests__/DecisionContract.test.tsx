@@ -28,6 +28,18 @@ vi.mock('../hooks/useBoard', () => ({
 vi.mock('../hooks/usePendingDRs', () => ({
   usePendingDRs: vi.fn(),
 }))
+vi.mock('../hooks/useWorkspaceHealth', () => ({
+  useWorkspaceHealth: vi.fn(() => ({
+    health: { status: 'healthy', modules: {} },
+    connectionError: null,
+    isFetching: false,
+    receipt: null,
+    refresh: vi.fn(),
+    refreshAfterMutation: vi.fn(),
+    mergeRepair: vi.fn(),
+    dismissReceipt: vi.fn(),
+  })),
+}))
 
 vi.mock('../components/DRStatusIndicator', () => ({
   default: vi.fn(() => null),
@@ -40,13 +52,12 @@ vi.mock('../components/ActivityTab', () => ({
 vi.mock('../hooks/useRepairFlow', () => ({
   useRepairFlow: vi.fn(() => ({
     phase: 'idle',
-    corruptionCount: null,
-    results: null,
+    repairableCount: null,
     error: null,
     requestRepair: vi.fn(),
     confirmRepair: vi.fn(),
     cancelRepair: vi.fn(),
-    dismissResults: vi.fn(),
+    dismissError: vi.fn(),
   })),
 }))
 
@@ -140,7 +151,7 @@ describe('TestFromAC_BodyContractAndErrorChain', () => {
       lastDecisionsMtime: null,
     } as ReturnType<typeof useBoard>)
 
-    // Stub fetch so useScanPolling requests pend until aborted (no selective responses needed).
+    // Stub fetch so background requests pend until aborted (no selective responses needed).
     vi.stubGlobal('fetch', vi.fn((_url: string, init?: RequestInit) =>
       new Promise<never>((_resolve, reject) => {
         init?.signal?.addEventListener('abort', () =>

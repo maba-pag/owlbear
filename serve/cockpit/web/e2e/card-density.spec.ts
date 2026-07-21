@@ -186,7 +186,12 @@ async function stubApis(page: Page): Promise<void> {
     route.fulfill({ json: { tasks: ALL_TASKS, mtime: 1_715_644_800 } }),
   )
   await page.route('/api/sessions', (route) => route.fulfill({ json: { sessions: [] } }))
-  await page.route('/api/tasks/scan', (route) => route.fulfill({ json: [] }))
+  await page.route('/health', (route) => route.fulfill({ json: {
+    status: 'healthy',
+    modules: Object.fromEntries(['tasks', 'requests', 'memory', 'ideas'].map((name) => [name, {
+      status: 'healthy', findings: [], repairable_count: 0, checked_paths: [name],
+    }])),
+  } }))
 }
 
 async function loadBoard(page: Page, pendingDRs?: typeof PENDING_DR_FOR_TASK_5): Promise<void> {

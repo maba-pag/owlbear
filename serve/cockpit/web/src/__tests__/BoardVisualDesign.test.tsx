@@ -294,10 +294,16 @@ describe('ShellLevelIntegration', () => {
       error: null,
       health: 'yellow',
       refetchTasks: vi.fn(),
-      items: [],
-      isLoading: false,
-      scanError: null,
-      refetch: vi.fn(),
+      workspaceHealth: {
+        health: { status: 'healthy', modules: {} },
+        connectionError: null,
+        isFetching: false,
+        receipt: null,
+        refresh: vi.fn(),
+        refreshAfterMutation: vi.fn(),
+        mergeRepair: vi.fn(),
+        dismissReceipt: vi.fn(),
+      },
     })
     mockUseTaskSelection.mockReturnValue({
       selectedTaskId: null,

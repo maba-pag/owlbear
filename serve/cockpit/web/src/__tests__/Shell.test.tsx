@@ -136,12 +136,12 @@ describe('TestFromAC_AppShell', () => {
       expect(statusBar?.querySelector('[data-testid="task-count"]')).toBeNull()
     })
 
-    it('keeps healthy workspace status compact in the global status bar', () => {
+    it('keeps checking workspace status compact in the global status bar', () => {
       const { container } = renderShell()
       const statusBar = container.querySelector('[data-region="status-bar"]')
-      const badge = statusBar?.querySelector('[data-testid="health-badge"]')
+      const badge = statusBar?.querySelector('[data-testid="workspace-status"]')
       expect(badge?.textContent?.trim()).toBe('')
-      expect(badge).toHaveAttribute('title', 'Workspace status: OK')
+      expect(badge).toHaveAttribute('title', 'Workspace status: Checking')
     })
 
     it('renders compact theme mode control in the global status bar', () => {

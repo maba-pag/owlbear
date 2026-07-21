@@ -40,7 +40,18 @@ vi.mock('../hooks/EventSourceProvider', () => ({
 
 vi.mock('../hooks/useBoard', () => ({ useBoard: vi.fn() }))
 vi.mock('../hooks/usePendingDRs', () => ({ usePendingDRs: vi.fn() }))
-vi.mock('../hooks/useScanPolling', () => ({ useScanPolling: vi.fn() }))
+vi.mock('../hooks/useWorkspaceHealth', () => ({
+  useWorkspaceHealth: vi.fn(() => ({
+    health: { status: 'healthy', modules: {} },
+    connectionError: null,
+    isFetching: false,
+    receipt: null,
+    refresh: vi.fn(),
+    refreshAfterMutation: vi.fn(),
+    mergeRepair: vi.fn(),
+    dismissReceipt: vi.fn(),
+  })),
+}))
 vi.mock('../hooks/usePendingMemoryCount', () => ({
   usePendingMemoryCount: vi.fn(() => ({ count: 0 })),
 }))
@@ -54,9 +65,7 @@ vi.mock('../KanbanBoard', () => ({
 }))
 vi.mock('../components/DetailTab', () => ({ default: vi.fn(() => null) }))
 vi.mock('../components/ActivityTab', () => ({ default: vi.fn(() => null) }))
-vi.mock('../components/HealthBadge', () => ({ default: vi.fn(() => null) }))
 vi.mock('../components/DecisionViewport', () => ({ default: vi.fn(() => null) }))
-vi.mock('../components/CleanupPanel', () => ({ default: vi.fn(() => null) }))
 vi.mock('../components/RepairPanel', () => ({ default: vi.fn(() => null) }))
 vi.mock('../components/ThemeToggle', () => ({ default: vi.fn(() => null) }))
 
@@ -117,7 +126,6 @@ vi.mock('../components/ResolveModal', () => ({
 
 import { useBoard } from '../hooks/useBoard'
 import { usePendingDRs } from '../hooks/usePendingDRs'
-import { useScanPolling } from '../hooks/useScanPolling'
 import Shell from '../Shell'
 import { CockpitProvider } from '../hooks/CockpitProvider'
 import type { Board } from '../hooks/useBoard'
@@ -190,15 +198,6 @@ function stubPendingDRs(partial?: Partial<ReturnType<typeof usePendingDRs>>) {
   return refetch
 }
 
-function stubScan() {
-  vi.mocked(useScanPolling).mockReturnValue({
-    items: [],
-    isLoading: false,
-    error: null,
-    refetch: vi.fn(),
-  } as ReturnType<typeof useScanPolling>)
-}
-
 function buildShellTree(route = '/') {
   return (
     <PorscheDesignSystemProvider>
@@ -237,7 +236,6 @@ describe('DecisionsTabRoutesDurable', () => {
     stubFetch()
     stubBoard()
     stubPendingDRs()
-    stubScan()
     capturedResolveModalProps.current = null
   })
 
@@ -300,7 +298,6 @@ describe('DecisionsTabNavBadgeDurable', () => {
     stubFetch()
     stubBoard()
     stubPendingDRs()
-    stubScan()
   })
 
   afterEach(() => {
@@ -357,7 +354,6 @@ describe('DecisionsTabEntryPathDurable', () => {
     stubFetch()
     stubBoard()
     stubPendingDRs({ count: 1, items: [DR_A], isLoading: false })
-    stubScan()
     capturedResolveModalProps.current = null
   })
 
@@ -440,7 +436,6 @@ describe('DecisionsTabPostResolveDurable', () => {
     stubFetch()
     stubBoard()
     stubPendingDRs({ count: 1, items: [DR_A], isLoading: false })
-    stubScan()
     capturedResolveModalProps.current = null
   })
 

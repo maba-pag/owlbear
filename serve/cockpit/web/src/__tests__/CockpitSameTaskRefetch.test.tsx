@@ -19,7 +19,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { type ReactNode } from 'react'
 import type { PendingDR } from '../hooks/usePendingDRs'
-import type { ScanItem } from '../hooks/useScanPolling'
 
 // ─── Hoisted mock factories ───────────────────────────────────────────────────
 // vi.hoisted() ensures these refs are available inside vi.mock() factory closures.
@@ -27,11 +26,11 @@ import type { ScanItem } from '../hooks/useScanPolling'
 const mockGetTask = vi.hoisted(() => vi.fn())
 const mockUseBoard = vi.hoisted(() => vi.fn())
 const mockUsePendingDRs = vi.hoisted(() => vi.fn())
-const mockUseScanPolling = vi.hoisted(() => vi.fn())
+const mockUseWorkspaceHealth = vi.hoisted(() => vi.fn())
 
 vi.mock('../hooks/useBoard', () => ({ useBoard: mockUseBoard }))
 vi.mock('../hooks/usePendingDRs', () => ({ usePendingDRs: mockUsePendingDRs }))
-vi.mock('../hooks/useScanPolling', () => ({ useScanPolling: mockUseScanPolling }))
+vi.mock('../hooks/useWorkspaceHealth', () => ({ useWorkspaceHealth: mockUseWorkspaceHealth }))
 vi.mock('../api/tasks', () => ({ getTask: mockGetTask }))
 
 // ─── Import under test ────────────────────────────────────────────────────────
@@ -76,13 +75,6 @@ const DEFAULT_DR_STATE = {
   refetch: vi.fn(),
 }
 
-const DEFAULT_SCAN_STATE = {
-  items: [] as ScanItem[],
-  isLoading: false,
-  error: null as Error | null,
-  refetch: vi.fn(),
-}
-
 // ─── Wrapper ──────────────────────────────────────────────────────────────────
 
 const wrapper = ({ children }: { children: ReactNode }) => (
@@ -96,7 +88,16 @@ describe('CockpitSameTaskRefetch', () => {
     vi.clearAllMocks()
     mockUseBoard.mockReturnValue({ ...DEFAULT_BOARD_STATE })
     mockUsePendingDRs.mockReturnValue({ ...DEFAULT_DR_STATE })
-    mockUseScanPolling.mockReturnValue({ ...DEFAULT_SCAN_STATE })
+    mockUseWorkspaceHealth.mockReturnValue({
+      health: { status: 'healthy', modules: {} },
+      connectionError: null,
+      isFetching: false,
+      receipt: null,
+      refresh: vi.fn(),
+      refreshAfterMutation: vi.fn(),
+      mergeRepair: vi.fn(),
+      dismissReceipt: vi.fn(),
+    })
   })
 
   // AC2: selectedTask must not flash null during same-task refetch

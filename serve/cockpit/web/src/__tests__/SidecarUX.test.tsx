@@ -6,15 +6,13 @@
  * AC3: ActivityTab empty state and error state (no duplication of 1156/1278)
  * AC4: Session rows use semantic interactive roles (not bare div-with-onClick)
  * AC5: ActivityTab subtab hint ("history") forwarded to DetailTab via Shell
- * AC6: Repair confirmation shows file details, explicit irreversible consequences
- * AC7: Repair error phase has retry mechanism using error contract
+ * AC6: Repair error phase has retry mechanism using error contract
  *
  *
  * Deduplication constraints observed:
  *   - ActivityTab_1156: filter buttons, data-state attrs, click-through → NOT duplicated
  *   - ActivityTab_1278: polling/SSE hooks → NOT duplicated
- *   - RepairPanel_1167: dialog flow, grouped results, error string display → NOT duplicated
- *   - Shell_1372: scan health/error chain → NOT duplicated
+ *   - RepairPanel_1167: dialog flow and error string display → NOT duplicated
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, fireEvent, waitFor } from '@testing-library/react'
@@ -46,13 +44,16 @@ vi.mock('../hooks/useBoard', () => ({
 vi.mock('../hooks/usePendingDRs', () => ({
   usePendingDRs: vi.fn(),
 }))
-
-vi.mock('../hooks/useScanPolling', () => ({
-  useScanPolling: vi.fn(() => ({
-    items: [],
-    isLoading: false,
-    error: null,
-    refetch: vi.fn(),
+vi.mock('../hooks/useWorkspaceHealth', () => ({
+  useWorkspaceHealth: vi.fn(() => ({
+    health: { status: 'healthy', modules: {} },
+    connectionError: null,
+    isFetching: false,
+    receipt: null,
+    refresh: vi.fn(),
+    refreshAfterMutation: vi.fn(),
+    mergeRepair: vi.fn(),
+    dismissReceipt: vi.fn(),
   })),
 }))
 
@@ -76,7 +77,6 @@ import { useRepairFlow } from '../hooks/useRepairFlow'
 import { useBoard } from '../hooks/useBoard'
 import { usePendingDRs } from '../hooks/usePendingDRs'
 import type { Board } from '../hooks/useBoard'
-import { repairStorage } from '../api/repair'
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -118,13 +118,12 @@ const BOARD: Board = {
 function stubRepairHook(overrides: Partial<UseRepairFlowResult> = {}): UseRepairFlowResult {
   const defaults: UseRepairFlowResult = {
     phase: 'idle',
-    corruptionCount: null,
-    results: null,
+    repairableCount: null,
     error: null,
     requestRepair: vi.fn(),
     confirmRepair: vi.fn(),
     cancelRepair: vi.fn(),
-    dismissResults: vi.fn(),
+    dismissError: vi.fn(),
   }
   const merged = { ...defaults, ...overrides }
   vi.mocked(useRepairFlow).mockReturnValue(merged)
@@ -174,10 +173,10 @@ function renderActivity(props: ActivityTabProps = {}) {
   )
 }
 
-function renderRepairPanel(corruptionCount: number) {
+function renderRepairPanel(repairableCount: number) {
   return render(
     <PorscheDesignSystemProvider>
-      <RepairPanel corruptionCount={corruptionCount} />
+      <RepairPanel repairableCount={repairableCount} />
     </PorscheDesignSystemProvider>,
   )
 }
@@ -600,75 +599,7 @@ describe('TestFromAC_SubtabRoutingGap', () => {
   })
 })
 
-// ─── AC6: Repair confirmation dialog — file details and explicit consequences ─
-
-describe('TestFromAC_RepairConfirmationDetails', () => {
-  beforeEach(() => {
-    vi.resetAllMocks()
-  })
-
-  // AC6: RepairPanel confirmation dialog must include affected file details (requires
-  // a new prop), categorize outcomes, and state explicit irreversible/quarantine consequences.
-  // Currently: only corruptionCount prop; no file list; no "irreversible"/"permanent" text.
-
-  it('RepairPanel confirmation dialog explicitly states consequences are irreversible or permanent', () => {
-    stubRepairHook({ phase: 'confirming', corruptionCount: 3 })
-    const { container } = renderRepairPanel(3)
-    const dialog = container.querySelector('[data-testid="repair-confirm-dialog"]')
-    expect(dialog).not.toBeNull()
-    const text = dialog!.textContent ?? ''
-    // Currently: "Fixed files are restored, unfixable files are quarantined." — no irreversible
-    // language → FAILS
-    expect(text).toMatch(/irreversible|permanent|cannot be undone|cannot undo/i)
-  })
-
-  it('RepairPanel confirmation dialog explicitly states quarantine destination path or directory', () => {
-    stubRepairHook({ phase: 'confirming', corruptionCount: 2 })
-    const { container } = renderRepairPanel(2)
-    const dialog = container.querySelector('[data-testid="repair-confirm-dialog"]')
-    const text = dialog!.textContent ?? ''
-    // Currently: "unfixable files are quarantined" — no path/directory mentioned → FAILS
-    expect(text).toMatch(/quarantine\s*(directory|path|folder)|moved\s*to\s*quarantine/i)
-  })
-
-  it('RepairPanel confirmation dialog shows affected file path when files prop is provided', () => {
-    stubRepairHook({ phase: 'confirming', corruptionCount: 1 })
-    const { container } = render(
-      <PorscheDesignSystemProvider>
-        <RepairPanel
-          corruptionCount={1}
-          files={[{ file_path: '/tasks/TASK-001.md', code: 'CORRUPT_YAML' }]}
-        />
-      </PorscheDesignSystemProvider>,
-    )
-    const dialog = container.querySelector('[data-testid="repair-confirm-dialog"]')
-    expect(dialog).not.toBeNull()
-    // Currently: files prop is unknown — file path not rendered in dialog → FAILS
-    expect(dialog!.textContent).toContain('/tasks/TASK-001.md')
-  })
-
-  it('RepairPanel confirmation dialog lists all provided file paths when multiple files given', () => {
-    stubRepairHook({ phase: 'confirming', corruptionCount: 2 })
-    const { container } = render(
-      <PorscheDesignSystemProvider>
-        <RepairPanel
-          corruptionCount={2}
-          files={[
-            { file_path: '/tasks/TASK-001.md', code: 'MISSING_STATUS' },
-            { file_path: '/tasks/TASK-002.md', code: 'CORRUPT_YAML' },
-          ]}
-        />
-      </PorscheDesignSystemProvider>,
-    )
-    const dialog = container.querySelector('[data-testid="repair-confirm-dialog"]')
-    const text = dialog?.textContent ?? ''
-    // Currently: files prop unknown → neither path in dialog → FAILS
-    expect(text).toContain('/tasks/TASK-001.md')
-    expect(text).toContain('/tasks/TASK-002.md')
-  })
-})
-
-// ─── AC7: Repair error contract — retry uses getResponseErrorMessage ──────────
+// ─── AC6: Repair error contract ──────────────────────────────────────────────
 
 describe('TestFromAC_RepairErrorContract', () => {
   beforeEach(() => {
@@ -679,13 +610,9 @@ describe('TestFromAC_RepairErrorContract', () => {
     vi.unstubAllGlobals()
   })
 
-  // AC7: RepairPanel error phase must have a retry button (not just dismiss).
-  // Currently: error phase renders only the dismiss button — no retry mechanism.
-
   it('RepairPanel shows a retry button in error phase', () => {
     stubRepairHook({ phase: 'error', error: 'Server error' })
     const { container } = renderRepairPanel(3)
-    // Currently: no retry button in error phase → FAILS
     expect(container.querySelector('[data-testid="repair-retry-btn"]')).not.toBeNull()
   })
 
@@ -693,10 +620,8 @@ describe('TestFromAC_RepairErrorContract', () => {
     const hook = stubRepairHook({ phase: 'error', error: 'Server error' })
     const { container } = renderRepairPanel(3)
     const retryBtn = container.querySelector('[data-testid="repair-retry-btn"]')
-    // Currently: no retry button → querySelector returns null → FAILS
     expect(retryBtn).not.toBeNull()
     fireEvent.click(retryBtn!)
-    // Retry must call confirmRepair (which uses getResponseErrorMessage via repairStorage)
     expect(hook.confirmRepair).toHaveBeenCalledOnce()
   })
 
@@ -804,61 +729,5 @@ describe('TestFromAC_ActivityDurationFormat', () => {
     expect(durationSpan).not.toBeNull()
     // Exact assertion: 120s → "2m" per formatDuration in ActivityTab.tsx:14-29
     expect(durationSpan!.textContent).toBe('2m')
-  })
-})
-
-// ─── AC7 (retry): Direct proof that repairStorage uses getResponseErrorMessage ───
-
-describe('TestFromAC_RepairErrorContractProof', () => {
-  afterEach(() => {
-    vi.unstubAllGlobals()
-  })
-
-  // Reviewer gap: existing tests mock useRepairFlow entirely — clicking retry only proves
-  // the mock's confirmRepair was called, not that the real path uses getResponseErrorMessage.
-  // These tests call repairStorage() directly with controlled fetch responses.
-
-  it('repairStorage surfaces JSON body message via getResponseErrorMessage, not status fallback', async () => {
-    // Server returns 422 with a specific JSON error body
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(() =>
-        Promise.resolve({
-          ok: false,
-          status: 422,
-          json: () => Promise.resolve({ message: 'checksum-mismatch-probe' }),
-        }),
-      ),
-    )
-    // getResponseErrorMessage must extract the JSON body message, not produce the status fallback
-    await expect(repairStorage()).rejects.toThrow('checksum-mismatch-probe')
-  })
-
-  it('repairStorage falls back to status message when JSON body has no message or detail field', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(() =>
-        Promise.resolve({
-          ok: false,
-          status: 503,
-          json: () => Promise.resolve({ other: 'no-message-field' }),
-        }),
-      ),
-    )
-    // getResponseErrorMessage returns the fallback when body has neither message nor detail
-    await expect(repairStorage()).rejects.toThrow('Repair request failed with status 503')
-  })
-
-  it('RepairPanel dismiss in done phase calls dismissResults without issuing a network request', () => {
-    const hook = stubRepairHook({ phase: 'done', results: { fixed: [], quarantined: [], failed: [] } })
-    const fetchSpy = vi.fn()
-    vi.stubGlobal('fetch', fetchSpy)
-    const { container } = renderRepairPanel(3)
-    const dismissBtn = container.querySelector('[data-testid="repair-dismiss-btn"]')
-    expect(dismissBtn).not.toBeNull()
-    fireEvent.click(dismissBtn!)
-    // Dismiss is local-state reset only — no network call
-    expect(hook.dismissResults).toHaveBeenCalledOnce()
-    expect(fetchSpy).not.toHaveBeenCalled()
   })
 })

@@ -1,9 +1,28 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { WorkspaceRepairResponse } from '../api/repair'
 import { useWorkspaceHealth, type WorkspaceHealthResponse } from '../hooks/useWorkspaceHealth'
 
 const response = (modules: WorkspaceHealthResponse['modules']): Response =>
   new Response(JSON.stringify({ status: 'healthy', modules }), { status: 200 })
+
+const repairReceipt = (
+  findings: Array<Record<string, unknown>> = [],
+  repairableCount = 0,
+): WorkspaceRepairResponse => ({
+  status: 'completed' as const,
+  started_at: '2026-07-20T03:59:59Z',
+  completed_at: '2026-07-20T04:00:00Z',
+  removed_count: 1,
+  moved_count: 0,
+  quarantined_count: 0,
+  skipped_count: 0,
+  failed_count: 0,
+  unresolved_count: 0,
+  outcomes: [],
+  unresolved_findings: [],
+  task_health_result: { findings, repairable_count: repairableCount, checked_paths: ['tasks'] },
+})
 
 describe('useWorkspaceHealth', () => {
   afterEach(() => {
@@ -59,18 +78,16 @@ describe('useWorkspaceHealth', () => {
     })))
     expect(result.current.health.modules.tasks?.status).toBe('attention')
 
-    act(() => result.current.mergeRepair({
-      outcomes: [],
-      task_health_result: { status: 'healthy', checked_at: '2026-07-20T04:00:00Z' },
-    }))
-    expect(result.current.receipt?.task_health_result?.checked_at).toBe('2026-07-20T04:00:00Z')
-    expect(result.current.health.modules.tasks?.checked_at).toBe('2026-07-20T04:00:00Z')
-
     act(() => result.current.refresh())
+    act(() => result.current.mergeRepair(repairReceipt()))
+    expect(result.current.receipt?.completed_at).toBe('2026-07-20T04:00:00Z')
+    expect(result.current.receipt?.removed_count).toBe(1)
+    expect(result.current.health.modules.tasks?.status).toBe('healthy')
+
     await act(async () => pending.shift()?.(response({
       tasks: { status: 'unhealthy', checked_at: '2026-07-20T03:30:00Z' },
     })))
-    expect(result.current.receipt?.task_health_result?.checked_at).toBe('2026-07-20T04:00:00Z')
+    expect(result.current.receipt?.completed_at).toBe('2026-07-20T04:00:00Z')
     expect(result.current.health.modules.tasks?.status).toBe('healthy')
   })
 
@@ -82,13 +99,27 @@ describe('useWorkspaceHealth', () => {
     await act(async () => await Promise.resolve())
     fetchMock.mockClear()
 
-    act(() => result.current.mergeRepair({
-      outcomes: [],
-      task_health_result: { status: 'healthy', checked_at: '2026-07-20T04:00:00Z' },
-    }))
+    act(() => result.current.mergeRepair(repairReceipt()))
     expect(fetchMock).not.toHaveBeenCalled()
 
     act(() => result.current.refreshAfterMutation())
     expect(fetchMock).toHaveBeenCalledWith('/health')
+  })
+
+  it('normalizes raw post-repair findings into task module severity', () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() => new Promise(() => {}))
+    const { result } = renderHook(() => useWorkspaceHealth(60_000))
+
+    act(() => result.current.mergeRepair(repairReceipt()))
+    expect(result.current.health.modules.tasks?.status).toBe('healthy')
+
+    act(() => result.current.mergeRepair(repairReceipt([{ repairable: true }], 1)))
+    expect(result.current.health.modules.tasks?.status).toBe('attention')
+
+    act(() => result.current.mergeRepair(repairReceipt([
+      { repairable: true },
+      { repairable: false },
+    ], 1)))
+    expect(result.current.health.modules.tasks?.status).toBe('unhealthy')
   })
 })

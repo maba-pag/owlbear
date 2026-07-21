@@ -16,14 +16,12 @@ import Shell from '../Shell'
 import { CockpitProvider } from '../hooks/CockpitProvider'
 import { useBoard } from '../hooks/useBoard'
 import { usePendingDRs } from '../hooks/usePendingDRs'
-import { useScanPolling } from '../hooks/useScanPolling'
 import type { Board, Task } from '../hooks/useBoard'
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
 vi.mock('../hooks/useBoard', () => ({ useBoard: vi.fn() }))
 vi.mock('../hooks/usePendingDRs', () => ({ usePendingDRs: vi.fn() }))
-vi.mock('../hooks/useScanPolling', () => ({ useScanPolling: vi.fn() }))
 
 vi.mock('../hooks/EventSourceProvider', () => ({
   useSSEEvent: vi.fn(() => ({ status: 'closed', mtime: null })),
@@ -83,12 +81,6 @@ function stubShellHooks() {
     refetch: vi.fn(),
   } as ReturnType<typeof usePendingDRs>)
 
-  vi.mocked(useScanPolling).mockReturnValue({
-    items: [],
-    isLoading: false,
-    error: null,
-    refetch: vi.fn(),
-  } as ReturnType<typeof useScanPolling>)
 }
 
 function renderShell(route = '/') {
@@ -132,7 +124,7 @@ describe('TestFromAC_ShellThemeTogglePlacement_1548', () => {
 
     expect(statusBar, 'status-bar region must exist').not.toBeNull()
     const bar = statusBar as HTMLElement
-    const workspaceStatus = within(bar).getByTestId('health-badge')
+    const workspaceStatus = within(bar).getByTestId('workspace-status')
     const themeToggle = within(bar).getByTestId('theme-toggle-stub')
 
     // DOCUMENT_POSITION_FOLLOWING (4) = themeToggle is a later sibling/descendant

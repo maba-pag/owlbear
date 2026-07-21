@@ -65,17 +65,26 @@ vi.mock('../hooks/EventSourceProvider', () => ({
 }))
 vi.mock('../hooks/useBoard', () => ({ useBoard: vi.fn() }))
 vi.mock('../hooks/usePendingDRs', () => ({ usePendingDRs: vi.fn() }))
-vi.mock('../hooks/useScanPolling', () => ({ useScanPolling: vi.fn() }))
+vi.mock('../hooks/useWorkspaceHealth', () => ({
+  useWorkspaceHealth: vi.fn(() => ({
+    health: { status: 'healthy', modules: {} },
+    connectionError: null,
+    isFetching: false,
+    receipt: null,
+    refresh: vi.fn(),
+    refreshAfterMutation: vi.fn(),
+    mergeRepair: vi.fn(),
+    dismissReceipt: vi.fn(),
+  })),
+}))
 
 vi.mock('../KanbanBoard', () => ({
   default: vi.fn(() => null),
 }))
 vi.mock('../components/ActivityTab', () => ({ default: vi.fn(() => null) }))
-vi.mock('../components/CleanupPanel', () => ({ default: vi.fn(() => null) }))
 vi.mock('../components/DecisionViewport', () => ({ default: vi.fn(() => null) }))
 vi.mock('../components/DetailTab', () => ({ default: vi.fn(() => null) }))
 vi.mock('../components/DRStatusIndicator', () => ({ default: vi.fn(() => null) }))
-vi.mock('../components/HealthBadge', () => ({ default: vi.fn(() => null) }))
 vi.mock('../components/RepairPanel', () => ({ default: vi.fn(() => null) }))
 vi.mock('../components/ResolveModal', () => ({ default: vi.fn(() => null) }))
 vi.mock('../components/ThemeToggle', () => ({ default: vi.fn(() => null) }))
@@ -84,7 +93,6 @@ vi.mock('../components/ThemeToggle', () => ({ default: vi.fn(() => null) }))
 
 import { useBoard } from '../hooks/useBoard'
 import { usePendingDRs } from '../hooks/usePendingDRs'
-import { useScanPolling } from '../hooks/useScanPolling'
 import Shell from '../Shell'
 import { CockpitProvider } from '../hooks/CockpitProvider'
 import type { Board, Task } from '../hooks/useBoard'
@@ -132,12 +140,6 @@ function stubShellHooks(): void {
     refetch: vi.fn(),
   } as ReturnType<typeof usePendingDRs>)
 
-  vi.mocked(useScanPolling).mockReturnValue({
-    items: [],
-    isLoading: false,
-    error: null,
-    refetch: vi.fn(),
-  } as ReturnType<typeof useScanPolling>)
 }
 
 function renderShell(route = '/') {

@@ -60,6 +60,16 @@ const SESSIONS = {
   ],
 }
 
+const WORKSPACE_HEALTH = {
+  status: 'healthy',
+  modules: {
+    tasks: { status: 'healthy', findings: [], repairable_count: 0, checked_paths: ['tasks'] },
+    requests: { status: 'healthy', findings: [], repairable_count: 0, checked_paths: ['requests'] },
+    memory: { status: 'healthy', findings: [], repairable_count: 0, checked_paths: ['memory'] },
+    ideas: { status: 'healthy', findings: [], repairable_count: 0, checked_paths: ['ideas'] },
+  },
+}
+
 async function stubApis(page: Page): Promise<void> {
   await page.route('/api/**', (route) => route.fulfill({ status: 200, json: {} }))
   await page.route('/api/events', (route) =>
@@ -74,7 +84,7 @@ async function stubApis(page: Page): Promise<void> {
     }),
   )
   await page.route(/\/api\/sessions(\?.*)?$/, (route) => route.fulfill({ json: SESSIONS }))
-  await page.route('/api/tasks/scan', (route) => route.fulfill({ json: [] }))
+  await page.route('/health', (route) => route.fulfill({ json: WORKSPACE_HEALTH }))
   await page.route('/api/tasks/1', (route) => route.fulfill({ json: TASK_DETAIL }))
   await page.route('/api/tasks', (route) =>
     route.fulfill({ json: { tasks: [TASK], mtime: 1_713_456_000 } }),
@@ -134,7 +144,7 @@ test.describe('focus-visible styling on live controls', () => {
   })
 
   test('workspace status button receives PDS focus via Tab', async ({ page }) => {
-    const workspaceStatus = page.locator('[data-testid="health-badge"]')
+    const workspaceStatus = page.locator('[data-testid="workspace-status"]')
     await workspaceStatus.waitFor({ state: 'visible' })
     await tabUntilFocused(page, workspaceStatus)
     await expect(workspaceStatus).toBeFocused()

@@ -55,7 +55,12 @@ async function stubApis(page: Page): Promise<void> {
   await page.route('/api/board', (route) => route.fulfill({ json: BOARD }))
   await page.route('/api/tasks', (route) => route.fulfill({ json: { tasks: [], mtime: 1_716_000_000 } }))
   await page.route('/api/sessions', (route) => route.fulfill({ json: { sessions: [] } }))
-  await page.route('/api/tasks/scan', (route) => route.fulfill({ json: [] }))
+  await page.route('/health', (route) => route.fulfill({ json: {
+    status: 'healthy',
+    modules: Object.fromEntries(['tasks', 'requests', 'memory', 'ideas'].map((name) => [name, {
+      status: 'healthy', findings: [], repairable_count: 0, checked_paths: [name],
+    }])),
+  } }))
   await page.route('/api/memories', (route) =>
     route.fulfill({ json: { entries: MEMORY_ENTRIES, parse_errors: 0 } }),
   )

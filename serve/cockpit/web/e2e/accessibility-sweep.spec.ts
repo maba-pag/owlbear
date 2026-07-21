@@ -1,8 +1,8 @@
 /**
  * WCAG 2.1 AA Playwright accessibility sweep for Cockpit surfaces.
  *
- * Covers the board, task detail modal, health popover, FilterPanel,
- * ArchivalModal, ConfirmDialog, CleanupPanel, and RepairPanel.
+ * Covers the board, task detail modal, Workspace Status, FilterPanel,
+ * ArchivalModal, ConfirmDialog, and RepairPanel.
  * Route mocks use Playwright LIFO ordering: catch-all first, specific routes last.
  */
 
@@ -82,14 +82,23 @@ const TASK_DETAIL = {
   created: '2026-05-10T00:00:00+00:00',
 }
 
-/** Scan items: ensure HealthBadge shows data-health="red" and RepairPanel appears. */
-const SCAN_ITEMS = [
-  {
-    code: 'E001',
-    detail: 'Task file is corrupted',
-    file_path: 'store/tasks/TASK-001.md',
+const WORKSPACE_HEALTH = {
+  status: 'unhealthy',
+  modules: {
+    tasks: {
+      status: 'unhealthy',
+      repairable_count: 1,
+      checked_paths: ['tasks'],
+      findings: [
+        { code: 'ERR_CORRUPT_INVALID_PRIORITY', detail: 'Priority can be restored', path: 'tasks/1-task.md', repairable: true },
+        { code: 'ERR_CORRUPT_DUPLICATE_ID', detail: 'Duplicate requires review', path: 'tasks/1-copy.md', repairable: false },
+      ],
+    },
+    requests: { status: 'healthy', findings: [], repairable_count: 0, checked_paths: ['requests'] },
+    memory: { status: 'healthy', findings: [], repairable_count: 0, checked_paths: ['memory'] },
+    ideas: { status: 'healthy', findings: [], repairable_count: 0, checked_paths: ['ideas'] },
   },
-]
+}
 
 // ─── Stub helpers ─────────────────────────────────────────────────────────────
 
@@ -119,9 +128,7 @@ async function stubApis(page: Page): Promise<void> {
     route.fulfill({ json: { tasks: TASKS, mtime: 1_716_000_000 } }),
   )
   await page.route('/api/sessions', (route) => route.fulfill({ json: { sessions: [] } }))
-  // /api/tasks/scan — provides scan items so HealthBadge renders red and RepairPanel
-  // shows the "Repair" button. Must be registered before /api/tasks/:id (LIFO).
-  await page.route('/api/tasks/scan', (route) => route.fulfill({ json: SCAN_ITEMS }))
+  await page.route('/health', (route) => route.fulfill({ json: WORKSPACE_HEALTH }))
 
   // Task detail — catch-all for /api/tasks/1, /api/tasks/2, etc.
   await page.route(/\/api\/tasks\/\d+$/, (route) => route.fulfill({ json: TASK_DETAIL }))
@@ -135,17 +142,17 @@ async function waitForCards(page: Page): Promise<void> {
     .waitFor({ state: 'visible', timeout: 8_000 })
 }
 
-/** Wait for HealthBadge to appear (requires scan poll to complete). */
-async function waitForHealthBadge(page: Page): Promise<void> {
+/** Wait for aggregate Workspace Status to appear. */
+async function waitForWorkspaceStatus(page: Page): Promise<void> {
   await page
-    .locator('[data-testid="health-badge"]')
+    .locator('[data-testid="workspace-status"]')
     .waitFor({ state: 'visible', timeout: 8_000 })
 }
 
 async function openWorkspaceStatus(page: Page): Promise<void> {
-  await waitForHealthBadge(page)
-  await page.locator('[data-testid="health-badge"]').click()
-  await page.locator('[data-testid="health-badge-popover"]').waitFor({ state: 'visible', timeout: 3_000 })
+  await waitForWorkspaceStatus(page)
+  await page.locator('[data-testid="workspace-status"]').click()
+  await page.locator('[data-testid="workspace-status-popover"]').waitFor({ state: 'visible', timeout: 3_000 })
 }
 
 async function openTaskDetailEditor(page: Page): Promise<void> {
@@ -210,16 +217,16 @@ test.describe('TestFromAC_WcagSweep', () => {
   // ── Surface 4: Workspace Status popover ───────────────────────────────────
   // The Workspace Status popover lists scan issues and exposes care actions.
   test('workspace status popover passes wcag2.1 aa axe scan (AC1)', async ({ page }) => {
-    await waitForHealthBadge(page)
+    await waitForWorkspaceStatus(page)
 
-    const badge = page.locator('[data-testid="health-badge"]')
+    const badge = page.locator('[data-testid="workspace-status"]')
     await expect(
       badge,
-      'health-badge must have data-health="red" — /api/tasks/scan must have returned scan items',
-    ).toHaveAttribute('data-health', 'red')
+      'Workspace Status must stay unhealthy while mixed task findings remain',
+    ).toHaveAttribute('data-health', 'unhealthy')
 
     await badge.click()
-    await page.locator('[data-testid="health-badge-popover"]').waitFor({ state: 'visible', timeout: 3_000 })
+    await page.locator('[data-testid="workspace-status-popover"]').waitFor({ state: 'visible', timeout: 3_000 })
 
     const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze()
     expect(results.violations, formatViolations(results.violations)).toEqual([])
@@ -296,41 +303,15 @@ test.describe('TestFromAC_WcagSweep', () => {
     expect(results.violations, formatViolations(results.violations)).toEqual([])
   })
 
-  // ── Surface 9: CleanupPanel confirm dialog ────────────────────────────────
-  // CleanupPanel's confirm dialog opens from Workspace Status.
-  test('cleanup panel confirm dialog passes wcag2.1 aa axe scan (AC1)', async ({ page }) => {
-    await openWorkspaceStatus(page)
-
-    const cleanupButton = page.locator('[data-testid="cleanup-button"]')
-    await cleanupButton.waitFor({ state: 'visible', timeout: 5_000 })
-    await cleanupButton.click()
-
-    // CleanupPanel confirm dialog must be visible.
-    await expect(
-      page.locator('[data-testid="cleanup-confirm-dialog"]'),
-      'cleanup-confirm-dialog must be visible after clicking cleanup-button',
-    ).toBeVisible({ timeout: 3_000 })
-
-    const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze()
-    expect(results.violations, formatViolations(results.violations)).toEqual([])
-  })
-
-  // ── Surface 10: RepairPanel confirm dialog ────────────────────────────────
-  // RepairPanel confirm dialog opens from Workspace Status after scan issues load.
-  //
-  // KNOWN RED: `<span data-testid="repair-confirm-btn" onClick>` in RepairPanel.tsx
-  // carries a click handler on a non-interactive <span> element. Axe flags this as
-  // an `interactive-supports-focus` violation under wcag2a:
-  //   SC 2.1.1 (keyboard): click target not keyboard reachable.
-  // Test fails until the span is replaced with a proper interactive element.
+  // ── Surface 9: RepairPanel confirm dialog ─────────────────────────────────
   test('repair panel confirm dialog passes wcag2.1 aa axe scan (AC1)', async ({ page }) => {
-    await waitForHealthBadge(page)
+    await waitForWorkspaceStatus(page)
 
-    const badge = page.locator('[data-testid="health-badge"]')
+    const badge = page.locator('[data-testid="workspace-status"]')
     await expect(
       badge,
-      'health-badge must have data-health="red" before clicking to expose repair-button',
-    ).toHaveAttribute('data-health', 'red')
+      'Workspace Status must stay unhealthy while repair remains available',
+    ).toHaveAttribute('data-health', 'unhealthy')
 
     await openWorkspaceStatus(page)
 
@@ -338,14 +319,11 @@ test.describe('TestFromAC_WcagSweep', () => {
     await repairButton.waitFor({ state: 'visible', timeout: 3_000 })
     await repairButton.click()
 
-    // RepairPanel confirm dialog must be visible — no conditional skip.
     await expect(
       page.locator('[data-testid="repair-confirm-dialog"]'),
       'repair-confirm-dialog must be visible after clicking repair-button',
     ).toBeVisible({ timeout: 3_000 })
 
-    // AC1: KNOWN FAILING — <span onClick> on repair-confirm-btn violates
-    // interactive-supports-focus (wcag2a / SC 2.1.1). Builder must remediate.
     const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze()
     expect(results.violations, formatViolations(results.violations)).toEqual([])
   })

@@ -9,7 +9,7 @@
  *   1. usePollingFetch throws status-only error — response body never read
  *   2. DetailTab.runMutation ignores response body for non-422/409/404 status codes
  *   3. ResolveModal hardcodes 'Failed to resolve decision request.' for all errors
- *   4. repairStorage throws status-only error — response body never read
+ *   4. repairWorkspace throws status-only error — response body never read
  *   5. Shell task-fetch: setSelectedTask(null) on error → blank detail pane, no indicator
  *   6. Shell: usePendingDRs().error is not destructured → DR polling errors silently dropped
  */
@@ -37,6 +37,18 @@ vi.mock('../hooks/useBoard', () => ({
 vi.mock('../hooks/usePendingDRs', () => ({
   usePendingDRs: vi.fn(),
 }))
+vi.mock('../hooks/useWorkspaceHealth', () => ({
+  useWorkspaceHealth: vi.fn(() => ({
+    health: { status: 'healthy', modules: {} },
+    connectionError: null,
+    isFetching: false,
+    receipt: null,
+    refresh: vi.fn(),
+    refreshAfterMutation: vi.fn(),
+    mergeRepair: vi.fn(),
+    dismissReceipt: vi.fn(),
+  })),
+}))
 
 vi.mock('../components/DRStatusIndicator', () => ({
   default: vi.fn(() => null),
@@ -49,13 +61,12 @@ vi.mock('../components/ActivityTab', () => ({
 vi.mock('../hooks/useRepairFlow', () => ({
   useRepairFlow: vi.fn(() => ({
     phase: 'idle',
-    corruptionCount: null,
-    results: null,
+    repairableCount: null,
     error: null,
     requestRepair: vi.fn(),
     confirmRepair: vi.fn(),
     cancelRepair: vi.fn(),
-    dismissResults: vi.fn(),
+    dismissError: vi.fn(),
   })),
 }))
 
@@ -86,7 +97,7 @@ vi.mock('../components/ConfirmDialog', () => ({
 import { useBoard } from '../hooks/useBoard'
 import { usePendingDRs } from '../hooks/usePendingDRs'
 import { usePollingFetch } from '../hooks/usePollingFetch'
-import { repairStorage } from '../api/repair'
+import { repairWorkspace } from '../api/repair'
 import Shell from '../Shell'
 import { CockpitProvider } from '../hooks/CockpitProvider'
 import DetailTab from '../components/DetailTab'
@@ -111,7 +122,6 @@ beforeEach(() => {
     reportValidity: vi.fn(() => true),
   }))
 })
-
 afterEach(() => {
   if (_attachInternalsDescriptor !== undefined) {
     Object.defineProperty(
@@ -287,7 +297,7 @@ describe('TestFromAC_ErrorEnvelopeParsing', () => {
         ),
       )
       const onError = vi.fn()
-      renderHook(() => usePollingFetch('/api/tasks/scan', { onError }))
+      renderHook(() => usePollingFetch('/api/health', { onError }))
       await act(async () => {})
       expect(onError).toHaveBeenCalled()
       const err: Error = onError.mock.calls[0][0]
@@ -308,7 +318,7 @@ describe('TestFromAC_ErrorEnvelopeParsing', () => {
         ),
       )
       const onError = vi.fn()
-      renderHook(() => usePollingFetch('/api/tasks/scan', { onError }))
+      renderHook(() => usePollingFetch('/api/health', { onError }))
       await act(async () => {})
       expect(onError).toHaveBeenCalled()
       const err: Error = onError.mock.calls[0][0]
@@ -316,24 +326,21 @@ describe('TestFromAC_ErrorEnvelopeParsing', () => {
     })
   })
 
-  // ── repairStorage: reads response body on non-ok response ────────────────────
+  // ── repairWorkspace: reads response body on non-ok response ─────────────────
 
-  describe('repairStorage error body extraction', () => {
-    // FAILS: current code throws Error('Repair request failed with status 500')
-    // without reading body. Thrown message doesn't include the body message field.
+  describe('repairWorkspace error body extraction', () => {
     it('{code,message} shape — thrown error message includes body message field', async () => {
       const errorBody = { code: 'STORAGE_ERROR', message: 'repair failed: disk quota exceeded' }
       vi.stubGlobal('fetch', makeJsonFetch(500, errorBody))
-      const err = await repairStorage().catch((e: unknown) => e as Error)
+      const err = await repairWorkspace().catch((e: unknown) => e as Error)
       expect(err).toBeInstanceOf(Error)
       expect(err.message).toContain('repair failed: disk quota exceeded')
     })
 
-    // FAILS: same root cause — status-only throw discards {detail} body.
     it('{detail} shape — thrown error message includes body detail field', async () => {
       const errorBody = { detail: 'quota limit reached for storage backend' }
       vi.stubGlobal('fetch', makeJsonFetch(422, errorBody))
-      const err = await repairStorage().catch((e: unknown) => e as Error)
+      const err = await repairWorkspace().catch((e: unknown) => e as Error)
       expect(err).toBeInstanceOf(Error)
       expect(err.message).toContain('quota limit reached for storage backend')
     })
@@ -394,36 +401,11 @@ describe('TestFromAC_ErrorEnvelopeParsing', () => {
     })
   })
 })
-
 // ─── AC2: Error rendering and retry/refetch paths across all flows ─────────────
 //
 // td:2 → error rendering AND retry path per flow.
 
 describe('TestFromAC_ErrorRenderingAndRetry', () => {
-  // ── Scan error: message rendered from body (not status-only text) ────────────
-
-  // FAILS: scan-error text is 'Scan failed: Polling request failed with status 500'
-  // because usePollingFetch doesn't read body → Shell renders status-only message.
-  it('Shell scan error: scan-error text includes body message (not generic status text)', async () => {
-    const errorBody = { code: 'SCAN_FAILED', message: 'health scan failed: disk read error' }
-    stubShellHooks()
-    vi.stubGlobal(
-      'fetch',
-      makeSelectiveFetch({
-        '/api/tasks/scan': { status: 500, body: errorBody },
-      }),
-    )
-    const { container } = renderShell()
-    await waitFor(
-      () => {
-        expect(container.querySelector('[data-testid="scan-error"]')).not.toBeNull()
-      },
-      { timeout: 2000 },
-    )
-    const scanError = container.querySelector('[data-testid="scan-error"]')
-    expect(scanError!.textContent).toContain('health scan failed: disk read error')
-  })
-
   // ── Task-fetch: error indicator replaces blank detail pane ───────────────────
 
   // FAILS: Shell sets selectedTask=null on fetch error → DetailTab renders null
@@ -623,47 +605,5 @@ describe('TestFromAC_NoSilentErrors', () => {
       },
       { timeout: 1000 },
     )
-  })
-})
-
-// ─── AC4: Coexistence with Shell_1372 + preserve health false-OK protection ────
-//
-// td:1 → single smoke test that combines the false-OK guard from #1373 with the
-// new body-message extraction from #1375. Tests can run alongside Shell_1372.test.tsx
-// without fixture interference (different describe scopes, no shared mutable state).
-
-describe('TestFromAC_FalseOKCoexistence', () => {
-  // Exercises the full fetch → usePollingFetch → useScanPolling → Shell chain.
-  //
-  // The false-OK protection (from #1373): scan-error IS rendered (not a green badge).
-  //   → This assertion passes against current code (assuming #1373 is implemented).
-  //
-  // The body-message extraction (from #1375): scan-error TEXT includes the body message.
-  //   → This assertion FAILS against current code (text is status-only).
-  //
-  it('Shell scan error: false-OK prevented AND scan-error text includes body message field', async () => {
-    const errorBody = { code: 'SCAN_FAILED', message: 'board scan failed: task index corrupted' }
-    stubShellHooks()
-    vi.stubGlobal(
-      'fetch',
-      makeSelectiveFetch({
-        '/api/tasks/scan': { status: 500, body: errorBody },
-      }),
-    )
-    const { container } = renderShell()
-
-    // False-OK protection: error indicator is visible, no green health badge.
-    await waitFor(
-      () => {
-        expect(container.querySelector('[data-testid="scan-error"]')).not.toBeNull()
-      },
-      { timeout: 2000 },
-    )
-    expect(container.querySelector('[data-health="green"]')).toBeNull()
-
-    // Body-message extraction: scan-error text includes message from response body.
-    // FAILS: current text is 'Scan failed: Polling request failed with status 500'.
-    const scanError = container.querySelector('[data-testid="scan-error"]')
-    expect(scanError!.textContent).toContain('board scan failed: task index corrupted')
   })
 })

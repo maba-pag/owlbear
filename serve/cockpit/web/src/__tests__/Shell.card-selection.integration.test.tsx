@@ -19,16 +19,21 @@ import { PorscheDesignSystemProvider } from '@porsche-design-system/components-r
 // KanbanBoard and DetailTab are intentionally NOT mocked in this file.
 
 vi.mock('../hooks/useBoard', () => ({ useBoard: vi.fn() }))
-
-vi.mock('../hooks/useScanPolling', () => ({ useScanPolling: vi.fn() }))
-
 vi.mock('../hooks/usePendingDRs', () => ({ usePendingDRs: vi.fn() }))
-
-vi.mock('../components/DRStatusIndicator', () => ({
-  default: vi.fn(() => null),
+vi.mock('../hooks/useWorkspaceHealth', () => ({
+  useWorkspaceHealth: vi.fn(() => ({
+    health: { status: 'healthy', modules: {} },
+    connectionError: null,
+    isFetching: false,
+    receipt: null,
+    refresh: vi.fn(),
+    refreshAfterMutation: vi.fn(),
+    mergeRepair: vi.fn(),
+    dismissReceipt: vi.fn(),
+  })),
 }))
 
-vi.mock('../components/HealthBadge', () => ({
+vi.mock('../components/DRStatusIndicator', () => ({
   default: vi.fn(() => null),
 }))
 
@@ -47,7 +52,6 @@ vi.mock('react-markdown', () => ({
 // ─── Imports (after mocks) ────────────────────────────────────────────────────
 
 import { useBoard } from '../hooks/useBoard'
-import { useScanPolling } from '../hooks/useScanPolling'
 import { usePendingDRs } from '../hooks/usePendingDRs'
 import Shell from '../Shell'
 import { CockpitProvider } from '../hooks/CockpitProvider'
@@ -119,12 +123,6 @@ function stubHooks() {
     refetchTasks: vi.fn(),
     lastDecisionsMtime: null,
   } as ReturnType<typeof useBoard>)
-  vi.mocked(useScanPolling).mockReturnValue({
-    items: [],
-    isLoading: false,
-    error: null,
-    refetch: vi.fn(),
-  } as ReturnType<typeof useScanPolling>)
   vi.mocked(usePendingDRs).mockReturnValue({
     count: 0,
     items: [],

@@ -34,7 +34,18 @@ vi.mock('../hooks/EventSourceProvider', () => ({
 
 vi.mock('../hooks/useBoard', () => ({ useBoard: vi.fn() }))
 vi.mock('../hooks/usePendingDRs', () => ({ usePendingDRs: vi.fn() }))
-vi.mock('../hooks/useScanPolling', () => ({ useScanPolling: vi.fn() }))
+vi.mock('../hooks/useWorkspaceHealth', () => ({
+  useWorkspaceHealth: vi.fn(() => ({
+    health: { status: 'healthy', modules: {} },
+    connectionError: null,
+    isFetching: false,
+    receipt: null,
+    refresh: vi.fn(),
+    refreshAfterMutation: vi.fn(),
+    mergeRepair: vi.fn(),
+    dismissReceipt: vi.fn(),
+  })),
+}))
 
 vi.mock('../api/errorMessage', () => ({
   getResponseErrorMessage: vi.fn().mockResolvedValue('Task fetch failed'),
@@ -85,17 +96,12 @@ vi.mock('../components/DRStatusIndicator', () => ({
 }))
 
 // ── Other components – passthrough stubs ──────────────────────────────────────
-vi.mock('../components/HealthBadge', () => ({
-  default: vi.fn(() => null),
-}))
 vi.mock('../components/DecisionViewport', () => ({ default: vi.fn(() => null) }))
-vi.mock('../components/CleanupPanel', () => ({ default: vi.fn(() => null) }))
 
 // ─── Imports (after mocks) ─────────────────────────────────────────────────────
 
 import { useBoard } from '../hooks/useBoard'
 import { usePendingDRs } from '../hooks/usePendingDRs'
-import { useScanPolling } from '../hooks/useScanPolling'
 import Shell from '../Shell'
 import { CockpitProvider } from '../hooks/CockpitProvider'
 import type { Board } from '../hooks/useBoard'
@@ -117,7 +123,6 @@ function stubHooks({
   refetchTasks = vi.fn(),
   pendingDRItems = [] as DrItem[],
   lastDecisionsMtime = null as string | null,
-  scanError = null as Error | null,
 } = {}) {
   vi.mocked(useBoard).mockReturnValue({
     board: BOARD,
@@ -138,13 +143,6 @@ function stubHooks({
     error: null,
     refetch: vi.fn(),
   } as ReturnType<typeof usePendingDRs>)
-
-  vi.mocked(useScanPolling).mockReturnValue({
-    items: [],
-    isLoading: false,
-    error: scanError,
-    refetch: vi.fn(),
-  } as ReturnType<typeof useScanPolling>)
 
   return { refetchTasks }
 }

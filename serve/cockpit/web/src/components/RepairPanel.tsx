@@ -1,38 +1,27 @@
-import type { RepairOutcome } from '../api/repair'
 import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { PButton, PModal, PSpinner, PText } from '@porsche-design-system/components-react'
 import { useRepairFlow } from '../hooks/useRepairFlow'
+import type { WorkspaceRepairResponse } from '../api/repair'
 import './RepairPanel.css'
 
 export interface RepairPanelProps {
-  corruptionCount: number
-  onSuccess?: () => void
-  files?: Array<Pick<RepairOutcome, 'file_path' | 'code'>>
+  repairableCount: number
+  onSuccess?: (repair: WorkspaceRepairResponse) => void
   portalConfirmDialog?: boolean
 }
 
-function renderOutcomeRows(outcomes: RepairOutcome[]) {
-  return outcomes.map((outcome, index) => (
-    <li key={`${outcome.file_path}-${outcome.code}-${index}`}>
-      <span>{outcome.file_path}</span>
-      {outcome.detail !== null ? <span>{outcome.detail}</span> : null}
-    </li>
-  ))
-}
-
-export default function RepairPanel({ corruptionCount, onSuccess, files = [], portalConfirmDialog = false }: RepairPanelProps) {
+export default function RepairPanel({ repairableCount, onSuccess, portalConfirmDialog = false }: RepairPanelProps) {
   const modalRef = useRef<HTMLElement | null>(null)
   const previousFocusRef = useRef<HTMLElement | null>(null)
   const {
     phase,
-    corruptionCount: requestedCount,
-    results,
+    repairableCount: requestedCount,
     error,
     requestRepair,
     confirmRepair,
     cancelRepair,
-    dismissResults,
+    dismissError,
   } = useRepairFlow({ onSuccess })
 
   useEffect(() => {
@@ -124,6 +113,7 @@ export default function RepairPanel({ corruptionCount, onSuccess, files = [], po
       <PModal
         ref={modalRef}
         data-testid="repair-confirm-dialog"
+        data-workspace-status-overlay=""
         aria-label="Confirm storage repair"
         aria={{ role: 'alertdialog', 'aria-label': 'Confirm storage repair' }}
         tabIndex={-1}
@@ -135,22 +125,14 @@ export default function RepairPanel({ corruptionCount, onSuccess, files = [], po
       >
         <div className="grid max-w-[640px] gap-static-md text-primary">
           <div className="grid gap-static-xs rounded-lg border border-contrast-low bg-canvas p-static-md">
-            <span className="text-xs font-semibold uppercase text-primary">Storage repair</span>
-            <h2 className="m-0 text-xl font-semibold leading-tight text-primary">Repair {requestedCount} corrupted files?</h2>
+            <span className="text-xs font-semibold uppercase text-primary">Task health repair</span>
+            <h2 className="m-0 text-xl font-semibold leading-tight text-primary">
+              Repair {requestedCount} task {requestedCount === 1 ? 'finding' : 'findings'}?
+            </h2>
             <PText className="m-0 text-sm leading-normal text-primary">
-              Fixed files are restored, quarantined files move to the quarantine folder .owlbear/kanban/quarantine, and failed files remain corrupted. This action can be irreversible.
+              OwlBear will apply every currently discoverable deterministic repair. Ambiguous findings remain unchanged and will be reported in the receipt.
             </PText>
           </div>
-          {files.length > 0 ? (
-            <ul className="m-0 grid max-h-[min(32vh,220px)] gap-static-xs overflow-y-auto p-0">
-              {files.map((file, index) => (
-                <li key={`${file.file_path}-${file.code}-${index}`} className="grid gap-1 rounded-lg border border-contrast-low bg-surface p-static-sm">
-                  <span className="break-all font-mono text-xs leading-normal text-primary">{file.file_path}</span>
-                  <span className="w-fit rounded-full border border-error bg-error px-static-xs py-1 text-xs font-semibold leading-none text-canvas">{file.code}</span>
-                </li>
-              ))}
-            </ul>
-          ) : null}
           <div className="flex flex-wrap items-center justify-end gap-static-xs">
             <PButton data-testid="repair-cancel-btn" variant="secondary" onClick={cancelRepair}>
               Cancel
@@ -187,32 +169,9 @@ export default function RepairPanel({ corruptionCount, onSuccess, files = [], po
     )
   }
 
-  if (phase === 'done') {
-    const grouped = results as NonNullable<typeof results>
-    return (
-      <div className="repair-overlay">
-        <section data-testid="repair-results-fixed">
-          <PText weight="semibold">Fixed</PText>
-          <ul>{renderOutcomeRows(grouped.fixed)}</ul>
-        </section>
-        <section data-testid="repair-results-quarantined">
-          <PText weight="semibold">Quarantined</PText>
-          <ul>{renderOutcomeRows(grouped.quarantined)}</ul>
-        </section>
-        <section data-testid="repair-results-failed">
-          <PText weight="semibold">Failed</PText>
-          <ul>{renderOutcomeRows(grouped.failed)}</ul>
-        </section>
-        <PButton data-testid="repair-dismiss-btn" variant="secondary" onClick={dismissResults}>
-          Dismiss
-        </PButton>
-      </div>
-    )
-  }
-
   if (phase === 'error') {
     return (
-      <div className="repair-overlay">
+      <div className="repair-overlay" role="alert">
         <PText data-testid="repair-error">{error}</PText>
         <PButton
           data-testid="repair-retry-btn"
@@ -222,14 +181,14 @@ export default function RepairPanel({ corruptionCount, onSuccess, files = [], po
         >
           Retry
         </PButton>
-        <PButton data-testid="repair-dismiss-btn" variant="secondary" onClick={dismissResults}>
+        <PButton data-testid="repair-dismiss-btn" variant="secondary" onClick={dismissError}>
           Dismiss
         </PButton>
       </div>
     )
   }
 
-  if (corruptionCount <= 0) {
+  if (repairableCount <= 0) {
     return null
   }
 
@@ -238,9 +197,9 @@ export default function RepairPanel({ corruptionCount, onSuccess, files = [], po
       type="button"
       data-testid="repair-button"
       compact
-      onClick={() => requestRepair(corruptionCount)}
+      onClick={() => requestRepair(repairableCount)}
     >
-      Repair
+      Repair tasks
     </PButton>
   )
 }

@@ -33,14 +33,23 @@ const BOARD = {
   } as Record<string, string[]>,
 }
 
-/** Scan item with all non-null fields — passes isHealthBadgeItem in Shell.tsx. */
-const SCAN_ITEMS = [
-  {
-    code: 'E001',
-    detail: 'Task file is corrupted',
-    file_path: 'store/tasks/TASK-001.md',
+const WORKSPACE_HEALTH = {
+  status: 'unhealthy',
+  modules: {
+    tasks: {
+      status: 'unhealthy',
+      repairable_count: 1,
+      checked_paths: ['tasks'],
+      findings: [
+        { code: 'ERR_CORRUPT_INVALID_PRIORITY', detail: 'Priority can be restored', path: 'tasks/1-task.md', repairable: true },
+        { code: 'ERR_CORRUPT_DUPLICATE_ID', detail: 'Duplicate requires review', path: 'tasks/1-copy.md', repairable: false },
+      ],
+    },
+    requests: { status: 'healthy', findings: [], repairable_count: 0, checked_paths: ['requests'] },
+    memory: { status: 'healthy', findings: [], repairable_count: 0, checked_paths: ['memory'] },
+    ideas: { status: 'healthy', findings: [], repairable_count: 0, checked_paths: ['ideas'] },
   },
-]
+}
 
 const TASKS = [
   {
@@ -102,9 +111,7 @@ async function stubApis(page: Page): Promise<void> {
     route.fulfill({ json: { tasks: TASKS, mtime: 1_716_000_000 } }),
   )
   await page.route('/api/sessions', (route) => route.fulfill({ json: { sessions: [] } }))
-  // /api/tasks/scan — returns scan items so HealthBadge and RepairPanel appear.
-  // Must be registered before the wildcard /api/tasks/\d+ route (LIFO).
-  await page.route('/api/tasks/scan', (route) => route.fulfill({ json: SCAN_ITEMS }))
+  await page.route('/health', (route) => route.fulfill({ json: WORKSPACE_HEALTH }))
 
   // Task detail — catches /api/tasks/1 etc. Registered last = highest LIFO priority.
   await page.route(/\/api\/tasks\/\d+$/, (route) => route.fulfill({ json: TASK_DETAIL }))
@@ -115,15 +122,15 @@ async function waitForBoard(page: Page): Promise<void> {
   await page.locator('[data-column]').first().waitFor({ state: 'visible', timeout: 8_000 })
 }
 
-/** Wait for HealthBadge to appear (requires scan poll to complete). */
-async function waitForHealthBadge(page: Page): Promise<void> {
-  await page.locator('[data-testid="health-badge"]').waitFor({ state: 'visible', timeout: 8_000 })
+/** Wait for aggregate Workspace Status to appear. */
+async function waitForWorkspaceStatus(page: Page): Promise<void> {
+  await page.locator('[data-testid="workspace-status"]').waitFor({ state: 'visible', timeout: 8_000 })
 }
 
 async function openWorkspaceStatus(page: Page): Promise<void> {
-  await waitForHealthBadge(page)
-  await page.locator('[data-testid="health-badge"]').click()
-  await page.locator('[data-testid="health-badge-popover"]').waitFor({ state: 'visible', timeout: 3_000 })
+  await waitForWorkspaceStatus(page)
+  await page.locator('[data-testid="workspace-status"]').click()
+  await page.locator('[data-testid="workspace-status-popover"]').waitFor({ state: 'visible', timeout: 3_000 })
 }
 
 /** Return the current bounding-box height of the shell grid root. */
@@ -146,7 +153,7 @@ async function expectWorkspaceStatusConfirmDialogPortaled(page: Page, testId: st
   await expect(dialog).toBeVisible()
   await expect(dialog).toHaveAttribute('role', 'dialog')
   await expect(dialog).toHaveAttribute('aria-modal', 'true')
-  await expect(page.locator(`[data-testid="health-badge-popover"] [data-testid="${testId}"]`)).toHaveCount(0)
+  await expect(page.locator(`[data-testid="workspace-status-popover"] [data-testid="${testId}"]`)).toHaveCount(0)
 
   const parentTag = await dialog.evaluate((element) => element.parentElement?.tagName.toLowerCase())
   expect(parentTag, 'workspace status confirmation PModal should be portaled to document.body').toBe('body')
@@ -165,7 +172,7 @@ async function expectWorkspaceStatusConfirmDialogPortaled(page: Page, testId: st
 
 // ─── AC-1 + AC-3: Shell and status-bar reflow prevention (all 6 AC-1 surfaces) ─
 //
-// RED (HealthBadge, CleanupPanel, RepairPanel): status/care overlays used to render
+// RED (WorkspaceStatus, RepairPanel): status/care overlays used to render
 // inline inside the status-bar flex row
 // (no position:fixed/absolute). Opening any of them expands the flex row height.
 //
@@ -183,48 +190,28 @@ test.describe('TestFromAC_OverlayReflow', () => {
     await waitForBoard(page)
   })
 
-  // AC-1 surface 1: HealthBadge popover
+  // AC-1 surface 1: Workspace Status popover
   // RED: popover is an inline div appended to the status-bar flex row.
   // Opening it expands the row height above its natural 56px minimum.
-  test('health_badge_popover_does_not_expand_status_bar', async ({ page }) => {
-    await waitForHealthBadge(page)
+  test('workspace_status_popover_does_not_expand_status_bar', async ({ page }) => {
+    await waitForWorkspaceStatus(page)
     const shellH = await shellHeight(page)
     const heightBefore = await statusBarHeight(page)
 
-    await page.click('[data-testid="health-badge"]')
-    await page.locator('[data-testid="health-badge-popover"]').waitFor({ state: 'visible' })
+    await page.click('[data-testid="workspace-status"]')
+    await page.locator('[data-testid="workspace-status-popover"]').waitFor({ state: 'visible' })
 
     // FAILS: inline popover div expands the status-bar flex height.
-    expect(await shellHeight(page), 'shell height must not grow when HealthBadge popover opens').toBe(shellH)
-    expect(await statusBarHeight(page), 'status-bar height must not grow when HealthBadge popover opens').toBe(
+    expect(await shellHeight(page), 'shell height must not grow when Workspace Status opens').toBe(shellH)
+    expect(await statusBarHeight(page), 'status-bar height must not grow when Workspace Status opens').toBe(
       heightBefore,
     )
   })
 
-  // AC-1 surface 2: CleanupPanel confirm dialog
-  // RED: CleanupPanel replaces its idle PButton with a larger dialog div in place
-  // (no portal). The dialog text + two PButtons expand the flex row height.
-  test('cleanup_confirm_dialog_does_not_expand_status_bar', async ({ page }) => {
-    const shellH = await shellHeight(page)
-    const heightBefore = await statusBarHeight(page)
-
-    await openWorkspaceStatus(page)
-    await page.click('[data-testid="cleanup-button"]')
-    await page.locator('[data-testid="cleanup-confirm-dialog"]').waitFor({ state: 'visible' })
-
-    // FAILS: cleanup confirm dialog content expands the flex row height.
-    expect(await shellHeight(page), 'shell height must not grow when CleanupPanel confirm dialog opens').toBe(shellH)
-    expect(
-      await statusBarHeight(page),
-      'status-bar height must not grow when CleanupPanel confirm dialog opens',
-    ).toBe(heightBefore)
-  })
-
   // AC-1 surface 3: RepairPanel confirm dialog
-  // RED: RepairPanel is nested inside HealthBadge's popover (itself an inline div).
-  // Opening HealthBadge and then triggering repair confirm both expand status-bar.
+  // RepairPanel is launched from the Workspace Status popover.
   test('repair_panel_confirm_does_not_expand_status_bar', async ({ page }) => {
-    await waitForHealthBadge(page)
+    await waitForWorkspaceStatus(page)
     const shellH = await shellHeight(page)
     const heightBefore = await statusBarHeight(page)
 
@@ -235,7 +222,7 @@ test.describe('TestFromAC_OverlayReflow', () => {
     await page.click('[data-testid="repair-button"]')
     await page.locator('[data-testid="repair-confirm-dialog"]').waitFor({ state: 'visible' })
 
-    // FAILS: both the health-badge popover and the nested repair confirm expand
+    // Both the Workspace Status popover and nested repair confirmation must stay out of shell flow.
     // the status-bar flex row height above the baseline.
     expect(await shellHeight(page), 'shell height must not grow when RepairPanel confirm dialog opens').toBe(shellH)
     expect(
@@ -281,7 +268,7 @@ test.describe('TestFromAudit_WorkspaceStatusPdsModalComposition', () => {
     await stubApis(page)
     await page.goto('/')
     await waitForBoard(page)
-    await waitForHealthBadge(page)
+    await waitForWorkspaceStatus(page)
   })
 
   test('repair_confirmation_is_a_top_level_pds_modal_from_workspace_status', async ({ page }) => {
@@ -290,10 +277,64 @@ test.describe('TestFromAudit_WorkspaceStatusPdsModalComposition', () => {
     await expectWorkspaceStatusConfirmDialogPortaled(page, 'repair-confirm-dialog')
   })
 
-  test('cleanup_confirmation_is_a_top_level_pds_modal_from_workspace_status', async ({ page }) => {
+  test('repair_confirmation_reaches_the_api_and_retains_its_receipt', async ({ page }) => {
+    let repairCalls = 0
+    await page.route('/health/tasks/repair', async (route) => {
+      repairCalls += 1
+      await route.fulfill({
+        json: {
+          status: 'completed',
+          started_at: '2026-05-16T12:00:00+00:00',
+          completed_at: '2026-05-16T12:00:01+00:00',
+          removed_count: 0,
+          moved_count: 1,
+          quarantined_count: 0,
+          skipped_count: 0,
+          failed_count: 0,
+          unresolved_count: 1,
+          outcomes: [],
+          unresolved_findings: [
+            { code: 'ERR_CORRUPT_DUPLICATE_ID', detail: 'Duplicate requires review', path: 'tasks/1-copy.md' },
+          ],
+          task_health_result: {
+            findings: [
+              { code: 'ERR_CORRUPT_DUPLICATE_ID', detail: 'Duplicate requires review', path: 'tasks/1-copy.md', repairable: false },
+            ],
+            repairable_count: 0,
+            checked_paths: ['tasks'],
+          },
+        },
+      })
+    })
+
     await openWorkspaceStatus(page)
-    await page.locator('[data-testid="cleanup-button"]').click()
-    await expectWorkspaceStatusConfirmDialogPortaled(page, 'cleanup-confirm-dialog')
+    await page.locator('[data-testid="repair-button"]').click()
+    await page.locator('[data-testid="repair-confirm-dialog"]').waitFor({ state: 'visible' })
+    const repairResponse = page.waitForResponse('/health/tasks/repair')
+    await page.locator('[data-testid="repair-confirm-button"]').click()
+    await repairResponse
+
+    expect(repairCalls).toBe(1)
+    const receipt = page.locator('[data-testid="repair-receipt"]')
+    await expect(receipt).toBeVisible()
+    await expect(receipt.locator('[data-testid="repair-count-moved_count"]')).toHaveText('1')
+    await expect(page.locator('[data-testid="workspace-status-popover"]')).toBeHidden()
+    await expect(receipt).toBeVisible()
+
+    for (const viewport of [DESKTOP_VIEWPORT, { width: 390, height: 844 }]) {
+      await page.setViewportSize(viewport)
+      const box = await receipt.boundingBox()
+      expect(box, `receipt must be measurable at ${viewport.width}px`).not.toBeNull()
+      expect(box!.x).toBeGreaterThanOrEqual(0)
+      expect(box!.y).toBeGreaterThanOrEqual(0)
+      expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width)
+      expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height)
+    }
+
+    await page.waitForResponse((response) => response.url().endsWith('/health'))
+    await expect(receipt).toBeVisible()
+    await receipt.locator('p-button').filter({ hasText: 'Dismiss' }).click()
+    await expect(receipt).toBeHidden()
   })
 })
 

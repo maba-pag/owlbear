@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getResponseErrorMessage } from '../api/errorMessage'
-import type { RepairOutcome } from '../api/repair'
+import type { TaskRepairHealthResult, WorkspaceRepairResponse } from '../api/repair'
 
 export type WorkspaceModuleName = 'tasks' | 'requests' | 'memory' | 'ideas'
 export type WorkspaceModuleStatus = 'checking' | 'unknown' | 'healthy' | 'attention' | 'unhealthy' | 'check-failed'
@@ -8,6 +8,8 @@ export type WorkspaceModuleStatus = 'checking' | 'unknown' | 'healthy' | 'attent
 export interface WorkspaceModuleHealth {
   status: WorkspaceModuleStatus
   findings?: Array<Record<string, unknown>>
+  repairable_count?: number
+  checked_paths?: string[]
   checked_at?: string
   [key: string]: unknown
 }
@@ -17,10 +19,7 @@ export interface WorkspaceHealthResponse {
   modules: Partial<Record<WorkspaceModuleName, WorkspaceModuleHealth>>
 }
 
-export interface RepairReceipt {
-  outcomes: RepairOutcome[]
-  task_health_result: WorkspaceModuleHealth | null
-}
+export type RepairReceipt = WorkspaceRepairResponse
 
 export interface UseWorkspaceHealthResult {
   health: WorkspaceHealthResponse
@@ -66,6 +65,16 @@ function isNewer(next: WorkspaceModuleHealth, current: WorkspaceModuleHealth | u
   if (generation < appliedGeneration) return false
   if (current?.checked_at && next.checked_at) return next.checked_at > current.checked_at
   return generation > appliedGeneration || !current?.checked_at
+}
+
+function normalizeTaskRepairHealth(result: TaskRepairHealthResult): WorkspaceModuleHealth {
+  const hasUnresolvedFinding = result.findings.some((finding) => finding.repairable !== true)
+  const status: WorkspaceModuleStatus = result.findings.length === 0
+    ? 'healthy'
+    : hasUnresolvedFinding
+      ? 'unhealthy'
+      : 'attention'
+  return { ...result, status }
 }
 
 export function useWorkspaceHealth(intervalMs = 3000): UseWorkspaceHealthResult {
@@ -118,10 +127,14 @@ export function useWorkspaceHealth(intervalMs = 3000): UseWorkspaceHealthResult 
 
   const mergeRepair = useCallback((repair: RepairReceipt) => {
     setReceipt(repair)
-    if (!repair.task_health_result) return
+    const taskHealthResult = repair.task_health_result
+    if (!taskHealthResult) return
     const generation = ++generationRef.current
     setHealth((current) => {
-      const modules = { ...current.modules, tasks: repair.task_health_result as WorkspaceModuleHealth }
+      const modules = {
+        ...current.modules,
+        tasks: normalizeTaskRepairHealth(taskHealthResult),
+      }
       appliedGenerationRef.current.tasks = generation
       return { status: aggregate(modules, connectionError, true), modules }
     })

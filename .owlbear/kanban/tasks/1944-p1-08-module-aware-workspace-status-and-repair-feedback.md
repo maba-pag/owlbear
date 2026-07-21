@@ -1,10 +1,10 @@
 ---
 id: 1944
 title: 'P1-08: Module-aware Workspace Status and repair feedback'
-status: build
+status: verify
 priority: medium
 created: 2026-07-17T02:32:30.849128+02:00
-updated: 2026-07-21T11:13:49.663119+02:00
+updated: 2026-07-21T13:42:55.779229+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -200,3 +200,32 @@ Durable-test justification: no tests added. The pre-existing seven-path frontend
 - Preserve parent #1945, dependencies #1943 and #1969, Outcome, Scope, Planning Authority, Change Module Map, Product Invariant Map, all three AC lines, priority, and tags.
 - Builder now owns only the Workspace Status/Shell UI boundary: consume the delivered response, render four module rows and retained receipt, remove generic Cleanup/task-only scan UI while preserving memory purge, audit task-owned baseline-curation paths, and run package-local plus assembled integrated-browser proof.
 - No board or planning-artifact mutation beyond this status transition and Shape Notes is required.
+
+[[2026-07-21T13:42:55+02:00]]
+## Builder Notes
+
+**Verdict:** DONE to verify.
+
+**Change envelope:** Replaced the task-only scan and generic Cleanup experience with a four-module Workspace Status, task repair confirmation, and a session-retained dismissible receipt. Memory purge remains a separate explicit flow. Provider ordering and receipt ownership continue to come from #1943.
+
+**Files changed:** Cockpit Shell, repair API/types, Workspace Status, RepairPanel, RepairReceipt, provider/health/repair hooks, and removal of legacy Cleanup/HealthBadge/task-scan runtime paths. Retained Vitest and Playwright fixtures were migrated to `/health`; obsolete scan/Cleanup/legacy-repair tests were removed and durable Workspace Status/receipt regressions added. The task record and the two-file dependency correction below are included. The pre-existing candidate delta was audited: scan/repair portions in `ErrorContract`, `Shell.callbacks`, `SidecarUX`, legacy repair tests, and related fixtures now belong to this contract; unrelated `TailwindStylelint.test.ts`, `MemoryTab.routing.test.tsx`, `memoryPurgeFlow.verify.test.ts`, memory/config/domain changes, #1968 artifacts, and all memory candidates remain unstaged.
+
+**Change Module Map deviation:** Assembled proof found archived dependency #1969 still returned file-only post-scan task health after repair, allowing a transient false-green state when graph findings remained. `serve/cockpit/src/owlbear_cockpit/main.py` now replaces that helper snapshot with canonical `engine.task_health()` and `tests/test_cockpit_health_contract.py` binds mixed repairable/unresolved graph evidence. This repairs #1969's existing complete-post-repair-health AC in its mapped Cockpit boundary; no new backend contract was added. Builder-challenger explicitly accepted this dependency correction with transparent deviation evidence.
+
+**Proof selected:** Component tests bind state and pointer ownership; assembled FastAPI tests bind the canonical repair response; Playwright and VS Code integrated-browser proof bind portals, real pointer sequencing, overlay lifetime, and desktop/mobile geometry.
+
+**Durable-test justification:** New tests protect three observed regressions that are easy to reintroduce and hard to prove in jsdom alone: a portaled confirmation unmounted on pointerdown before POST, file-only repair health falsely projected green despite unresolved graph evidence, and a fixed receipt overlapped its source popover/escaped the mobile viewport under PCanvas containment.
+
+**Commands and results:**
+- `npm test -- --maxWorkers=2`: 123 files passed; 1,879 passed, 2 skipped. Current provider contract also passed 49/49; post-format focused tests passed 42/42.
+- `uv run pytest -q tests/test_cockpit_*.py`: 290 passed, 4 known Starlette/httpx deprecation warnings. Focused health contract: 7/7.
+- `npm run build && npm run lint:css && npm run lint:html`: passed; existing Vite large-chunk advisory only.
+- `uv run lint serve/cockpit/src/owlbear_cockpit/main.py tests/test_cockpit_health_contract.py`: passed; unrelated TODO warnings only.
+- `npm run test:e2e:all -- --project=chromium --grep-invert "assembled Memory"`: 175/175 passed.
+- Focused repair overlay Chromium regression: 2/2 passed. `git diff --check`: clean. Exhaustive maintained-source/E2E searches found no legacy task-scan/Cleanup symbols or selectors.
+
+**Assembled browser evidence:** Real FastAPI/SPA fixture showed initial gray checking, then task unhealthy with 2 findings/1 repairable while requests/memory/ideas were healthy. Real repair POST returned 200 with moved=1, unresolved=1 and `MISSING_DEPENDENCY`; status stayed unhealthy immediately without a corrective GET. Success closed the source popover, receipt survived polling, measured 480x370 at x=784/y=72 in 1280x800 and 358x427.75 at x=16/y=72 in 390x844, then disappeared only on Dismiss.
+
+**Builder-challenger:** `decision: pass`; no concrete blockers or auto-fixes. It accepted the #1969 correction as an accompanying dependency repair.
+
+**Risks:** No functional blocker remains. Known non-task advisories are the Vite chunk-size warning and Starlette/httpx deprecation warnings.

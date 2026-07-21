@@ -134,8 +134,12 @@ async function stubApis(page: Page): Promise<void> {
     }),
   )
 
-  // Registered last → highest LIFO priority (overrides /api/tasks/* for the scan path)
-  await page.route('/api/tasks/scan', (route) => route.fulfill({ json: [] }))
+  await page.route('/health', (route) => route.fulfill({ json: {
+    status: 'healthy',
+    modules: Object.fromEntries(['tasks', 'requests', 'memory', 'ideas'].map((name) => [name, {
+      status: 'healthy', findings: [], repairable_count: 0, checked_paths: [name],
+    }])),
+  } }))
 }
 
 /**
@@ -440,7 +444,7 @@ test.describe('TestFromAC_StatusBarNavHierarchy', () => {
   }) => {
     // AC-4(c): EACH named control must independently have a distinguishing accessible name.
     //          Prior spec only checked "at least one labeled element" — a single labeled
-    //          control would satisfy it even if health, cleanup, or theme were unlabeled.
+    //          control would satisfy it even if health or theme were unlabeled.
     //
     // Theme toggle — aria-label="Theme mode: ..."
     const themeToggle = page.locator('[data-testid="theme-toggle"]')
@@ -448,12 +452,12 @@ test.describe('TestFromAC_StatusBarNavHierarchy', () => {
     await expect(themeToggle).toHaveAttribute('aria-label', /Theme mode/)
 
     // Workspace status owns health and care actions.
-    const healthBadge = page.locator('[data-testid="health-badge"]')
-    await expect(healthBadge).toBeVisible({ timeout: 8_000 })
-    await expect(healthBadge).toHaveAttribute('aria-label', /Workspace status/)
-    await healthBadge.click()
-    await expect(page.locator('[data-testid="health-badge-popover"]')).toBeVisible()
-    await expect(page.locator('[data-testid="cleanup-button"]')).toBeVisible()
+    const workspaceStatus = page.locator('[data-testid="workspace-status"]')
+    await expect(workspaceStatus).toBeVisible({ timeout: 8_000 })
+    await expect(workspaceStatus).toHaveAttribute('aria-label', /Workspace status/)
+    await workspaceStatus.click()
+    await expect(page.locator('[data-testid="workspace-status-popover"]')).toBeVisible()
+    await expect(page.locator('[data-testid="workspace-module-tasks"]')).toBeVisible()
   })
 
   test('nav rail is icon-only while retaining accessible names', async ({

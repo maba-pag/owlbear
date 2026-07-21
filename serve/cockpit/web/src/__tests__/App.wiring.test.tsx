@@ -5,8 +5,8 @@
  *
  * AC-8:  App.tsx provider order: PorscheDesignSystemProvider > data router >
  *        EventSourceProvider > CockpitProvider > ErrorBoundary > Shell
- * AC-9:  Shell.tsx has zero direct calls to useBoard, usePendingDRs, or
- *        useScanPolling; retains only layout and hook-based composition via
+ * AC-9:  Shell.tsx has zero direct calls to useBoard or usePendingDRs;
+ *        retains only layout and hook-based composition via
  *        useBoardState / useTaskSelection / useDRState
  *
  * Strategy for AC-8:
@@ -15,7 +15,7 @@
  *   After builder adds CockpitProvider to App (GREEN), rendering App calls the spy.
  *
  * Strategy for AC-9:
- *   useBoard/usePendingDRs/useScanPolling are spied with valid return values so Shell
+ *   useBoard/usePendingDRs are spied with valid return values so Shell
  *   can render. CockpitProvider consumer hooks are stubbed. Render Shell and assert the
  *   underlying spies were NOT called (Shell must delegate to useBoardState etc.).
  *   In RED (Shell still calls hooks directly) -> spy.toHaveBeenCalled() -> AssertionError.
@@ -34,7 +34,6 @@ const capturedCockpitCalls = vi.hoisted(() => [] as { children: unknown }[])
 
 // Stub functions for CockpitProvider consumer hook return values
 const mockRefetchTasks = vi.hoisted(() => vi.fn())
-const mockScanRefetch = vi.hoisted(() => vi.fn())
 const mockSelectTask = vi.hoisted(() => vi.fn())
 const mockClearTask = vi.hoisted(() => vi.fn())
 const mockUpdateTask = vi.hoisted(() => vi.fn())
@@ -44,7 +43,6 @@ const mockRefetchPendingDRs = vi.hoisted(() => vi.fn())
 // Underlying hook spies -- must NOT be called by Shell in GREEN (AC-9)
 const mockUseBoard = vi.hoisted(() => vi.fn())
 const mockUsePendingDRs = vi.hoisted(() => vi.fn())
-const mockUseScanPolling = vi.hoisted(() => vi.fn())
 
 // ---- Module mocks -----------------------------------------------------------
 
@@ -60,10 +58,16 @@ vi.mock('../hooks/CockpitProvider', () => ({
     error: null,
     health: 'yellow',
     refetchTasks: mockRefetchTasks,
-    items: [],
-    isLoading: false,
-    scanError: null,
-    refetch: mockScanRefetch,
+    workspaceHealth: {
+      health: { status: 'healthy', modules: {} },
+      connectionError: null,
+      isFetching: false,
+      receipt: null,
+      refresh: vi.fn(),
+      refreshAfterMutation: vi.fn(),
+      mergeRepair: vi.fn(),
+      dismissReceipt: vi.fn(),
+    },
     lastDecisionsMtime: null,
   })),
   useTaskSelection: vi.fn(() => ({
@@ -94,7 +98,6 @@ vi.mock('../hooks/EventSourceProvider', () => ({
 // Underlying hooks -- spied on; returned values allow Shell to render without crash
 vi.mock('../hooks/useBoard', () => ({ useBoard: mockUseBoard }))
 vi.mock('../hooks/usePendingDRs', () => ({ usePendingDRs: mockUsePendingDRs }))
-vi.mock('../hooks/useScanPolling', () => ({ useScanPolling: mockUseScanPolling }))
 
 vi.mock('../api/tasks', () => ({
   getTask: vi.fn(() => new Promise(() => {})),
@@ -155,12 +158,6 @@ describe('TestFromAC_CockpitProviderWiring', () => {
       error: null,
       refetch: mockRefetchPendingDRs,
     })
-    mockUseScanPolling.mockReturnValue({
-      items: [],
-      isLoading: false,
-      error: null,
-      refetch: mockScanRefetch,
-    })
   })
 
   afterEach(() => {
@@ -214,7 +211,7 @@ describe('TestFromAC_CockpitProviderWiring', () => {
 
   // ---- AC-9: Shell.tsx zero direct hook calls --------------------------------
 
-  describe('AC-9: Shell.tsx has zero direct calls to useBoard, usePendingDRs, or useScanPolling', () => {
+  describe('AC-9: Shell.tsx has zero direct calls to useBoard or usePendingDRs', () => {
     // CockpitProvider mock passes children through and returns stub values for
     // useBoardState/useTaskSelection/useDRState. In GREEN, Shell will consume
     // those stubs; the underlying hook spies should remain uncalled.
@@ -238,11 +235,6 @@ describe('TestFromAC_CockpitProviderWiring', () => {
     it('Shell does not call usePendingDRs() directly', () => {
       renderShellWithProvider()
       expect(mockUsePendingDRs).not.toHaveBeenCalled()
-    })
-
-    it('Shell does not call useScanPolling() directly', () => {
-      renderShellWithProvider()
-      expect(mockUseScanPolling).not.toHaveBeenCalled()
     })
   })
 })

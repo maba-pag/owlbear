@@ -13,24 +13,19 @@ import {
   useToastManager,
 } from '@porsche-design-system/components-react'
 import type { CanvasSidebarStartUpdateEventDetail, IconName } from '@porsche-design-system/components-react'
-import CleanupPanel from './components/CleanupPanel'
 import DetailTab from './components/DetailTab'
-import HealthBadge, { type ScanItem as HealthBadgeItem } from './components/HealthBadge'
 import RepairPanel from './components/RepairPanel'
+import RepairReceipt from './components/RepairReceipt'
 import ResolveModal from './components/ResolveModal'
 import ThemeToggle from './components/ThemeToggle'
+import WorkspaceStatus from './components/WorkspaceStatus'
 import { useBoardState, useDRState, useTaskSelection } from './hooks/CockpitProvider'
 import { usePendingMemoryCount } from './hooks/usePendingMemoryCount'
-import { type ScanItem as ScanPollingItem } from './hooks/useScanPolling'
 import type { KanbanBoardProps } from './KanbanBoard'
 import { routeConfig } from './routes'
 import { priorityToVariant, statusToVariant } from './utils/cardVariants'
 import { formatPriority, formatStatus } from './utils/format'
 import { OPEN_TASK_DETAIL_EVENT, readOpenTaskDetailEvent } from './utils/openTaskDetail'
-
-function isHealthBadgeItem(item: ScanPollingItem): item is HealthBadgeItem {
-  return item.code !== null && item.detail !== null && item.file_path !== null
-}
 
 function syncHeadingTagAttr(tag: 'h1' | 'h2', size?: 'lg' | 'md' | 'sm') {
   return (element: HTMLElement | null) => {
@@ -118,12 +113,8 @@ function Shell() {
     tasks,
     loading,
     error,
-    health,
     refetchTasks,
-    items: scanItems,
-    isLoading,
-    scanError,
-    refetch,
+    workspaceHealth,
   } = useBoardState()
   const {
     count: pendingDRCount,
@@ -139,9 +130,6 @@ function Shell() {
     : selectedTaskId !== null
       ? `#${selectedTaskId}`
       : 'No task selected'
-  const normalizedItems = scanItems.filter(isHealthBadgeItem)
-  const statusHealth = scanError ? 'red' : health
-  const [hasLoadedScan, setHasLoadedScan] = useState(() => !isLoading)
   const [isSidebarStartOpen, setIsSidebarStartOpen] = useState(() => {
     if (typeof window === 'undefined') {
       return true
@@ -241,6 +229,7 @@ function Shell() {
       },
       onMutationSuccess: (message?: string) => {
         setBannerError(null)
+        workspaceHealth.refreshAfterMutation()
         if (message) {
           toastManagerRef.current.addMessage({
             text: message,
@@ -251,7 +240,7 @@ function Shell() {
       selectedId: selectedTaskId,
       pendingDRIds: new Set(pendingDRItems.map((dr) => dr.task_id)),
     }),
-    [board, error, loading, pendingDRItems, refetchTasks, selectTaskFromBoard, selectedTaskId, tasks],
+    [board, error, loading, pendingDRItems, refetchTasks, selectTaskFromBoard, selectedTaskId, tasks, workspaceHealth],
   )
 
   // Compute active nav index from pathname
@@ -287,12 +276,6 @@ function Shell() {
     const WorkspaceRouteComponent = matchedRoute.component as ComponentType<Record<string, never>>
     return <WorkspaceRouteComponent />
   }, [kanbanProps, matchedRoute])
-
-  useEffect(() => {
-    if (!isLoading) {
-      setHasLoadedScan(true)
-    }
-  }, [isLoading])
 
   useEffect(() => {
     toastManagerRef.current = toastManager
@@ -595,41 +578,25 @@ function Shell() {
         >
           <div className="flex min-w-0 items-center gap-static-xs" aria-label="Workspace status">
             <span className="inline-flex">
-              <HealthBadge
-                items={normalizedItems}
-                status={statusHealth}
+              <WorkspaceStatus
+                health={workspaceHealth.health}
+                connectionError={workspaceHealth.connectionError}
+                onRefresh={workspaceHealth.refresh}
                 portalPopover
-                message={scanError ? `Workspace check failed: ${scanError.message}` : undefined}
-                actions={(
-                  <>
-                    {hasLoadedScan && !scanError ? (
-                      <RepairPanel
-                        corruptionCount={normalizedItems.length}
-                        files={normalizedItems}
-                        onSuccess={refetch}
-                        portalConfirmDialog
-                      />
-                    ) : null}
-                    <CleanupPanel compact={false} onSuccess={refetchTasks} portalConfirmDialog />
-                  </>
+                taskAction={(closeStatus) => (
+                  <RepairPanel
+                    repairableCount={workspaceHealth.health.modules.tasks?.repairable_count ?? 0}
+                    onSuccess={(repair) => {
+                      workspaceHealth.mergeRepair(repair)
+                      closeStatus()
+                    }}
+                    portalConfirmDialog
+                  />
                 )}
               />
             </span>
-            {scanError ? (
-              <span className="sr-only" data-testid="scan-error" data-health="error" role="status">
-                Workspace check needs attention: {scanError.message}
-              </span>
-            ) : null}
-            {scanError ? (
-              <PButton
-                type="button"
-                data-testid="scan-retry"
-                variant="secondary"
-                compact
-                onClick={refetch}
-              >
-                  Run check again
-              </PButton>
+            {workspaceHealth.receipt ? (
+              <RepairReceipt receipt={workspaceHealth.receipt} onDismiss={workspaceHealth.dismissReceipt} />
             ) : null}
           </div>
 

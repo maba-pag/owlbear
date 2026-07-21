@@ -16,8 +16,19 @@ import { PorscheDesignSystemProvider } from '@porsche-design-system/components-r
 // ─── Module mocks (hoisted, before all imports) ────────────────────────────
 
 vi.mock('../hooks/useBoard', () => ({ useBoard: vi.fn() }))
-vi.mock('../hooks/useScanPolling', () => ({ useScanPolling: vi.fn() }))
 vi.mock('../hooks/usePendingDRs', () => ({ usePendingDRs: vi.fn() }))
+vi.mock('../hooks/useWorkspaceHealth', () => ({
+  useWorkspaceHealth: vi.fn(() => ({
+    health: { status: 'healthy', modules: {} },
+    connectionError: null,
+    isFetching: false,
+    receipt: null,
+    refresh: vi.fn(),
+    refreshAfterMutation: vi.fn(),
+    mergeRepair: vi.fn(),
+    dismissReceipt: vi.fn(),
+  })),
+}))
 
 vi.mock('../hooks/EventSourceProvider', () => ({
   useSSEEvent: vi.fn(() => ({ status: 'closed', mtime: null })),
@@ -79,7 +90,6 @@ vi.mock('react-markdown', () => ({
 
 import { useBoard } from '../hooks/useBoard'
 import { usePendingDRs } from '../hooks/usePendingDRs'
-import { useScanPolling } from '../hooks/useScanPolling'
 import DecisionViewport from '../components/DecisionViewport'
 import Shell from '../Shell'
 import { CockpitProvider } from '../hooks/CockpitProvider'
@@ -132,15 +142,6 @@ function stubPendingDRs(
   } as ReturnType<typeof usePendingDRs>)
 }
 
-function stubScan(): void {
-  vi.mocked(useScanPolling).mockReturnValue({
-    items: [],
-    isLoading: false,
-    error: null,
-    refetch: vi.fn(),
-  } as ReturnType<typeof useScanPolling>)
-}
-
 function renderShell(route = '/') {
   return render(
     <PorscheDesignSystemProvider>
@@ -169,7 +170,6 @@ describe('DecisionViewportRemoval', () => {
     )
     stubBoard()
     stubPendingDRs()
-    stubScan()
   })
 
   afterEach(() => {

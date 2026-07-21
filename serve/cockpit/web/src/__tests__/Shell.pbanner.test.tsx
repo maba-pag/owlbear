@@ -22,12 +22,21 @@ vi.mock('../hooks/EventSourceProvider', () => ({
 }))
 
 vi.mock('../hooks/useBoard', () => ({ useBoard: vi.fn() }))
-vi.mock('../hooks/useScanPolling', () => ({ useScanPolling: vi.fn() }))
 vi.mock('../hooks/usePendingDRs', () => ({ usePendingDRs: vi.fn() }))
+vi.mock('../hooks/useWorkspaceHealth', () => ({
+  useWorkspaceHealth: vi.fn(() => ({
+    health: { status: 'healthy', modules: {} },
+    connectionError: null,
+    isFetching: false,
+    receipt: null,
+    refresh: vi.fn(),
+    refreshAfterMutation: vi.fn(),
+    mergeRepair: vi.fn(),
+    dismissReceipt: vi.fn(),
+  })),
+}))
 
 vi.mock('../components/DRStatusIndicator', () => ({ default: vi.fn(() => null) }))
-vi.mock('../components/HealthBadge', () => ({ default: vi.fn(() => null) }))
-vi.mock('../components/CleanupPanel', () => ({ default: vi.fn(() => null) }))
 vi.mock('../components/DecisionViewport', () => ({ default: vi.fn(() => null) }))
 vi.mock('../components/ResolveModal', () => ({ default: vi.fn(() => null) }))
 vi.mock('../components/ActivityTab', () => ({
@@ -110,7 +119,6 @@ vi.mock('../components/DetailTab', () => ({
 // ─── Imports (after mocks) ────────────────────────────────────────────────────
 
 import { useBoard } from '../hooks/useBoard'
-import { useScanPolling } from '../hooks/useScanPolling'
 import { usePendingDRs } from '../hooks/usePendingDRs'
 import Shell from '../Shell'
 import { CockpitProvider } from '../hooks/CockpitProvider'
@@ -166,12 +174,6 @@ function stubHooks() {
     refetchTasks: vi.fn(),
     lastDecisionsMtime: null,
   } as ReturnType<typeof useBoard>)
-  vi.mocked(useScanPolling).mockReturnValue({
-    items: [],
-    isLoading: false,
-    error: null,
-    refetch: vi.fn(),
-  } as ReturnType<typeof useScanPolling>)
   vi.mocked(usePendingDRs).mockReturnValue({
     count: 0,
     items: [],

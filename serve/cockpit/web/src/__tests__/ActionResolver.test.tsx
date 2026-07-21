@@ -50,7 +50,18 @@ vi.mock('../hooks/EventSourceProvider', () => ({
 }))
 vi.mock('../hooks/useBoard', () => ({ useBoard: vi.fn() }))
 vi.mock('../hooks/usePendingDRs', () => ({ usePendingDRs: vi.fn() }))
-vi.mock('../hooks/useScanPolling', () => ({ useScanPolling: vi.fn() }))
+vi.mock('../hooks/useWorkspaceHealth', () => ({
+  useWorkspaceHealth: vi.fn(() => ({
+    health: { status: 'healthy', modules: {} },
+    connectionError: null,
+    isFetching: false,
+    receipt: null,
+    refresh: vi.fn(),
+    refreshAfterMutation: vi.fn(),
+    mergeRepair: vi.fn(),
+    dismissReceipt: vi.fn(),
+  })),
+}))
 vi.mock('../hooks/usePendingMemoryCount', () => ({
   usePendingMemoryCount: vi.fn(() => ({ count: 0 })),
 }))
@@ -64,16 +75,13 @@ vi.mock('../KanbanBoard', () => ({
 }))
 vi.mock('../components/DetailTab', () => ({ default: vi.fn(() => null) }))
 vi.mock('../components/ActivityTab', () => ({ default: vi.fn(() => null) }))
-vi.mock('../components/HealthBadge', () => ({ default: vi.fn(() => null) }))
 vi.mock('../components/DecisionViewport', () => ({ default: vi.fn(() => null) }))
-vi.mock('../components/CleanupPanel', () => ({ default: vi.fn(() => null) }))
 vi.mock('../components/RepairPanel', () => ({ default: vi.fn(() => null) }))
 vi.mock('../components/ThemeToggle', () => ({ default: vi.fn(() => null) }))
 
 // ─── Imports (after mocks) ────────────────────────────────────────────────────
 import { useBoard } from '../hooks/useBoard'
 import { usePendingDRs } from '../hooks/usePendingDRs'
-import { useScanPolling } from '../hooks/useScanPolling'
 import Shell from '../Shell'
 import { CockpitProvider } from '../hooks/CockpitProvider'
 import ResolveModal from '../components/ResolveModal'
@@ -171,15 +179,6 @@ function stubPendingDRs(overrides?: Partial<ReturnType<typeof usePendingDRs>>) {
     ...overrides,
   } as ReturnType<typeof usePendingDRs>)
   return refetch
-}
-
-function stubScan() {
-  vi.mocked(useScanPolling).mockReturnValue({
-    items: [],
-    isLoading: false,
-    error: null,
-    refetch: vi.fn(),
-  } as ReturnType<typeof useScanPolling>)
 }
 
 function buildShellTree(route = '/decisions') {
@@ -381,7 +380,6 @@ describe('ActionResolver', () => {
         ),
       )
       stubBoard()
-      stubScan()
     })
 
     it('ac3 integration: resolved action card [dr-item-{id}] removed from list; resolve-action-body visible before submit', async () => {

@@ -185,7 +185,6 @@ describe('TestFromAC_MutationPartitionGuardrail', () => {
     // API layer
     resolve(__dirname, '..', 'api', 'tasks.ts'),
     resolve(__dirname, '..', 'api', 'decisions.ts'),
-    resolve(__dirname, '..', 'api', 'cleanup.ts'),
     resolve(__dirname, '..', 'api', 'repair.ts'),
     // Hook layer
     resolve(__dirname, '..', 'hooks', 'useTaskMutation.ts'),

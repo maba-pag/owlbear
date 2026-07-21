@@ -20,14 +20,14 @@ import { type ReactNode } from 'react'
 const mockGetTask = vi.hoisted(() => vi.fn())
 const mockUseBoard = vi.hoisted(() => vi.fn())
 const mockUsePendingDRs = vi.hoisted(() => vi.fn())
-const mockUseScanPolling = vi.hoisted(() => vi.fn())
+const mockUseWorkspaceHealth = vi.hoisted(() => vi.fn())
 
 // ─── Module mocks ─────────────────────────────────────────────────────────────
 
 vi.mock('../api/tasks', () => ({ getTask: mockGetTask }))
 vi.mock('../hooks/useBoard', () => ({ useBoard: mockUseBoard }))
 vi.mock('../hooks/usePendingDRs', () => ({ usePendingDRs: mockUsePendingDRs }))
-vi.mock('../hooks/useScanPolling', () => ({ useScanPolling: mockUseScanPolling }))
+vi.mock('../hooks/useWorkspaceHealth', () => ({ useWorkspaceHealth: mockUseWorkspaceHealth }))
 
 // ─── Imports (after mocks) ────────────────────────────────────────────────────
 
@@ -75,11 +75,15 @@ function setupDefaultMocks() {
     error: null,
     refetch: vi.fn(),
   })
-  mockUseScanPolling.mockReturnValue({
-    items: [],
-    isLoading: false,
-    error: null,
-    refetch: vi.fn(),
+  mockUseWorkspaceHealth.mockReturnValue({
+    health: { status: 'healthy', modules: {} },
+    connectionError: null,
+    isFetching: false,
+    receipt: null,
+    refresh: vi.fn(),
+    refreshAfterMutation: vi.fn(),
+    mergeRepair: vi.fn(),
+    dismissReceipt: vi.fn(),
   })
 }
 

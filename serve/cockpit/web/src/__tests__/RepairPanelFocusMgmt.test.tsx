@@ -9,12 +9,12 @@
  *   — focus-restore: when phase leaves 'confirming', focus returns to the prior element
  *
  * Implementation surface: serve/cockpit/web/src/components/RepairPanel.tsx:23,35-42,51,54,58
- * Pattern: same 4-assertion structure as DRFocusMgmt_1396.test.tsx (HealthBadge/DR parity).
+ * Pattern: same 4-assertion structure as DRFocusMgmt_1396.test.tsx.
  *
  * RED reasons:
  *   — Escape on document (test 3): RepairPanel.tsx has no document-level keydown listener.
  *     The onKeyDown at line 54 only fires when the dialog element itself receives the event.
- *     This test FAILS until a document listener matching the HealthBadge/DRStatusIndicator
+ *     This test FAILS until a document listener matching the WorkspaceStatus/DRStatusIndicator
  *     pattern is added.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -36,13 +36,12 @@ import RepairPanel from '../components/RepairPanel'
 function hookDefaults(): UseRepairFlowResult {
   return {
     phase: 'idle',
-    corruptionCount: null,
-    results: null,
+    repairableCount: null,
     error: null,
     requestRepair: vi.fn(),
     confirmRepair: vi.fn(),
     cancelRepair: vi.fn(),
-    dismissResults: vi.fn(),
+    dismissError: vi.fn(),
   }
 }
 
@@ -52,10 +51,10 @@ function mockHook(overrides: Partial<UseRepairFlowResult> = {}): UseRepairFlowRe
   return merged
 }
 
-function renderPanel(corruptionCount = 2) {
+function renderPanel(repairableCount = 2) {
   return render(
     <PorscheDesignSystemProvider>
-      <RepairPanel corruptionCount={corruptionCount} />
+      <RepairPanel repairableCount={repairableCount} />
     </PorscheDesignSystemProvider>,
   )
 }
@@ -83,7 +82,7 @@ describe('TestFromAC_RepairPanelFocus', () => {
       return origFocus.call(this)
     }
     try {
-      mockHook({ phase: 'confirming', corruptionCount: 2 })
+      mockHook({ phase: 'confirming', repairableCount: 2 })
       const { container } = renderPanel()
       const dialog = container.querySelector('[data-testid="repair-confirm-dialog"]')
       expect(dialog, 'confirm dialog must be rendered in confirming phase').not.toBeNull()
@@ -100,7 +99,7 @@ describe('TestFromAC_RepairPanelFocus', () => {
   it('pressing Escape on repair confirm dialog element calls cancelRepair (AC7)', () => {
     // WCAG 2.1 SC 1.4.13: the confirm dialog must be dismissible via Escape without
     // requiring pointer interaction. RepairPanel.tsx:54-60 implements onKeyDown Escape.
-    const hook = mockHook({ phase: 'confirming', corruptionCount: 2 })
+    const hook = mockHook({ phase: 'confirming', repairableCount: 2 })
     const { container } = renderPanel()
     const dialog = container.querySelector('[data-testid="repair-confirm-dialog"]') as HTMLElement
     expect(dialog, 'confirm dialog must be present in confirming phase').not.toBeNull()
@@ -117,10 +116,10 @@ describe('TestFromAC_RepairPanelFocus', () => {
     // Global Escape handler is required for dialogs that receive programmatic focus.
     // When focus moves inside the dialog, keyboard events go to the focused element, not
     // the dialog div — so a document-level listener is the safety net (same pattern as
-    // HealthBadge.tsx and DRStatusIndicator.tsx).
+    // WorkspaceStatus.tsx and DRStatusIndicator.tsx).
     //
     // FAILS: RepairPanel has no document-level keydown listener → cancelRepair not called.
-    const hook = mockHook({ phase: 'confirming', corruptionCount: 2 })
+    const hook = mockHook({ phase: 'confirming', repairableCount: 2 })
     renderPanel()
 
     fireEvent.keyDown(document, { key: 'Escape', code: 'Escape' })
@@ -150,7 +149,7 @@ describe('TestFromAC_RepairPanelFocus', () => {
 
       // Open: render in confirming phase — useEffect captures document.activeElement
       // (previouslyFocused) and calls dialogRef.current?.focus().
-      mockHook({ phase: 'confirming', corruptionCount: 2 })
+      mockHook({ phase: 'confirming', repairableCount: 2 })
       const { rerender } = renderPanel()
 
       // Reset spy — only capture focus calls that happen during the close transition.
@@ -161,7 +160,7 @@ describe('TestFromAC_RepairPanelFocus', () => {
       act(() => {
         rerender(
           <PorscheDesignSystemProvider>
-            <RepairPanel corruptionCount={2} />
+            <RepairPanel repairableCount={2} />
           </PorscheDesignSystemProvider>,
         )
       })

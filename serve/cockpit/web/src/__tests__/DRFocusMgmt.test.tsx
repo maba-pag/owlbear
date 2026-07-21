@@ -1,7 +1,7 @@
 /**
  * Implement Cockpit accessibility and PDS verification gate
  *
- * Scope: DRStatusIndicator popover focus management parity with HealthBadge.
+ * Scope: DRStatusIndicator popover focus management parity with WorkspaceStatus.
  *
  * AC2 explicitly lists DRStatusIndicator as requiring focus-on-open, Escape dismissal,
  * and focus-restore-on-close. The architect annotated AC2 as (td:0) on the basis that
@@ -15,7 +15,7 @@
  *   — All four assertions below fail against the current implementation.
  *
  * Implementation task: #1396.
- * Counterpart for the pattern: KeyboardA11y_1395.test.tsx (HealthBadge section).
+ * Counterpart for the pattern: WorkspaceStatus.test.tsx.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render } from '@testing-library/react'
@@ -53,7 +53,7 @@ function renderDR(items: PendingDR[] = [DR_FIXTURE]) {
 //   — No onKeyDown on the popover element, no document-level Escape listener.
 //   — No trigger ref, no focus-restore when the popover closes.
 //
-// Required fix: apply the same pattern as HealthBadge (focus-on-open via useEffect +
+// Required fix: apply the same pattern as WorkspaceStatus (focus-on-open via useEffect +
 // popoverRef.focus(); Escape via useEffect document listener; focus-restore via
 // triggerRef.focus() in close path).
 

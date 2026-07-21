@@ -11,7 +11,7 @@
  * AC5 is a regression guard — verifies Shell continues calling usePendingDRs with
  * default options (no intervalMs override).
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
@@ -25,9 +25,17 @@ vi.mock('../hooks/useBoard', () => ({
 vi.mock('../hooks/usePendingDRs', () => ({
   usePendingDRs: vi.fn(),
 }))
-
-vi.mock('../hooks/useScanPolling', () => ({
-  useScanPolling: vi.fn(),
+vi.mock('../hooks/useWorkspaceHealth', () => ({
+  useWorkspaceHealth: vi.fn(() => ({
+    health: { status: 'healthy', modules: {} },
+    connectionError: null,
+    isFetching: false,
+    receipt: null,
+    refresh: vi.fn(),
+    refreshAfterMutation: vi.fn(),
+    mergeRepair: vi.fn(),
+    dismissReceipt: vi.fn(),
+  })),
 }))
 
 vi.mock('../KanbanBoard', () => ({
@@ -35,10 +43,6 @@ vi.mock('../KanbanBoard', () => ({
 }))
 
 vi.mock('../components/DRStatusIndicator', () => ({
-  default: vi.fn(() => null),
-}))
-
-vi.mock('../components/HealthBadge', () => ({
   default: vi.fn(() => null),
 }))
 
@@ -56,7 +60,6 @@ vi.mock('../components/ResolveModal', () => ({
 
 import { useBoard } from '../hooks/useBoard'
 import { usePendingDRs } from '../hooks/usePendingDRs'
-import { useScanPolling } from '../hooks/useScanPolling'
 import Shell from '../Shell'
 import { CockpitProvider } from '../hooks/CockpitProvider'
 
@@ -66,15 +69,6 @@ const BASE_BOARD = {
   statuses: [{ name: 'backlog' }],
   priorities: ['important'],
   valid_transitions: { backlog: [] } as Record<string, string[]>,
-}
-
-function stubUseScanPolling(): void {
-  vi.mocked(useScanPolling).mockReturnValue({
-    items: [],
-    isLoading: false,
-    error: null,
-    refetch: vi.fn(),
-  })
 }
 
 function makeUseBoardReturn(lastDecisionsMtime: number | null = null) {
@@ -115,10 +109,6 @@ function AppWrapper({ children }: { children: React.ReactNode }) {
 // ─── Test suite ──────────────────────────────────────────────────────────────
 
 describe('TestFromAC_ShellDecisionsRefetch', () => {
-  beforeEach(() => {
-    stubUseScanPolling()
-  })
-
   afterEach(() => {
     vi.restoreAllMocks()
   })

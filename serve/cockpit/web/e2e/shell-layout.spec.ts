@@ -59,7 +59,12 @@ async function stubApis(page: Page): Promise<void> {
       body: '',
     }),
   )
-  await page.route('/api/tasks/scan', (route) => route.fulfill({ json: [] }))
+  await page.route('/health', (route) => route.fulfill({ json: {
+    status: 'healthy',
+    modules: Object.fromEntries(['tasks', 'requests', 'memory', 'ideas'].map((name) => [name, {
+      status: 'healthy', findings: [], repairable_count: 0, checked_paths: [name],
+    }])),
+  } }))
   await page.route('/api/tasks/1', (route) => route.fulfill({ json: TASK_DETAIL }))
   await page.route('/api/tasks', (route) =>
     route.fulfill({ json: { tasks: [TASK], mtime: 1_747_353_600 } }),
@@ -113,7 +118,7 @@ test.describe('PCanvas shell layout', () => {
   })
 
   test('workspace status uses a compact transparent target with a visible state light', async ({ page }) => {
-    const badge = page.locator('[data-testid="health-badge"]')
+    const badge = page.locator('[data-testid="workspace-status"]')
     const light = page.locator('[data-testid="traffic-light"]')
     await expect(badge).toBeVisible()
     await expect(light).toBeVisible()
@@ -133,7 +138,7 @@ test.describe('PCanvas shell layout', () => {
     expect(badgeBox!.height).toBeGreaterThanOrEqual(30)
     expect(badgeBox!.height).toBeLessThanOrEqual(36)
     expect(style).toEqual({ backgroundColor: 'rgba(0, 0, 0, 0)', borderTopWidth: '0px' })
-    await expect(light).toHaveAttribute('data-health', 'green')
+    await expect(light).toHaveAttribute('data-health', 'healthy')
   })
 
   test('start sidebar contains icon-only workspace navigation', async ({ page }) => {

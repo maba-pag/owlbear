@@ -242,7 +242,15 @@ def ideas_health(ideas_path: _IdeasPath) -> IdeasHealth:
 
 @app.post("/health/tasks/repair", response_model=DeterministicRepairResult)
 def repair_task_health(engine: _Engine) -> DeterministicRepairResult:
-    return repair_task_storage(engine.kanban_dir, engine.board_config())
+    result = repair_task_storage(engine.kanban_dir, engine.board_config())
+    task_health_result = engine.task_health()
+    unresolved_findings = [finding for finding in task_health_result.findings if not finding.repairable]
+    result.task_health_result = task_health_result
+    result.unresolved_findings = unresolved_findings
+    result.unresolved_count = sum(outcome.action == "unresolved" for outcome in result.outcomes) + len(
+        unresolved_findings
+    )
+    return result
 
 
 def run() -> None:

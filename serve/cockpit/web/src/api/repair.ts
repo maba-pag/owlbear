@@ -1,17 +1,32 @@
 import { getResponseErrorMessage } from './errorMessage'
-import type { WorkspaceModuleHealth } from '../hooks/useWorkspaceHealth'
 
 export interface RepairOutcome {
   task_id: number | null
   file_path: string
   code: string
-  action: 'fixed' | 'quarantined' | 'failed'
+  action: 'fixed' | 'removed' | 'moved' | 'quarantined' | 'skipped' | 'failed' | 'unresolved'
   detail: string | null
 }
 
+export interface TaskRepairHealthResult {
+  findings: Array<Record<string, unknown>>
+  repairable_count: number
+  checked_paths: string[]
+}
+
 export interface WorkspaceRepairResponse {
+  status: 'completed'
+  started_at: string
+  completed_at: string
+  removed_count: number
+  moved_count: number
+  quarantined_count: number
+  skipped_count: number
+  failed_count: number
+  unresolved_count: number
   outcomes: RepairOutcome[]
-  task_health_result: WorkspaceModuleHealth | null
+  unresolved_findings: Array<Record<string, unknown>>
+  task_health_result: TaskRepairHealthResult | null
 }
 
 export async function repairWorkspace(): Promise<WorkspaceRepairResponse> {

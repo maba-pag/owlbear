@@ -180,6 +180,44 @@ def test_repair_uses_real_deterministic_engine_contract(monkeypatch, tmp_path: P
     assert (engine.kanban_dir / "archive" / source.name).exists()
 
 
+def test_repair_receipt_uses_full_post_repair_graph_health(monkeypatch, tmp_path: Path) -> None:
+    engine, _source = _real_engine(tmp_path)
+    unresolved_source = engine.tasks_dir / "2-missing-dependency.md"
+    unresolved_source.write_text(
+        """---
+id: 2
+title: Missing dependency
+status: shape
+priority: medium
+created: '2026-07-17T00:00:00+00:00'
+updated: '2026-07-17T00:00:00+00:00'
+tags: []
+parent: null
+depends_on: [999]
+blocked: false
+block_reason: null
+claimed_at: null
+---
+
+body
+""",
+        encoding="utf-8",
+    )
+    client = _client(
+        monkeypatch, tmp_path, engine, SimpleNamespace(health=lambda: SimpleNamespace(findings=[], checked_paths=[]))
+    )
+
+    response = client.post("/health/tasks/repair")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["moved_count"] == 1
+    assert body["unresolved_count"] == 1
+    assert [finding["code"] for finding in body["unresolved_findings"]] == ["MISSING_DEPENDENCY"]
+    assert [finding["code"] for finding in body["task_health_result"]["findings"]] == ["MISSING_DEPENDENCY"]
+    assert client.get("/health").json()["modules"]["tasks"]["findings"] == body["task_health_result"]["findings"]
+
+
 def test_repair_failure_returns_no_receipt(monkeypatch, tmp_path: Path) -> None:
     from owlbear_cockpit import main
 

@@ -17,7 +17,7 @@ import ArchivalModal from '../components/ArchivalModal'
 import ActivityTab from '../components/ActivityTab'
 import DetailTab, { type TaskDetail } from '../components/DetailTab'
 import ResolveModal from '../components/ResolveModal'
-import HealthBadge from '../components/HealthBadge'
+import WorkspaceStatus from '../components/WorkspaceStatus'
 
 vi.mock('../hooks/EventSourceProvider', () => ({
   useSSEEvent: vi.fn(() => ({ status: 'closed', mtime: null })),
@@ -198,18 +198,26 @@ describe('PdsMigration_Text', () => {
     expect(container.querySelectorAll('select')).toHaveLength(0)
   })
 
-  it('HealthBadge empty state uses PText not raw <p>', () => {
+  it('WorkspaceStatus module copy does not regress to raw <p> elements', () => {
     const { container } = render(
       <PorscheDesignSystemProvider>
-        <HealthBadge items={[]} />
+        <WorkspaceStatus
+          health={{
+            status: 'healthy',
+            modules: {
+              tasks: { status: 'healthy', findings: [], repairable_count: 0 },
+              requests: { status: 'healthy', findings: [] },
+              memory: { status: 'healthy', findings: [] },
+              ideas: { status: 'healthy', findings: [] },
+            },
+          }}
+        />
       </PorscheDesignSystemProvider>,
     )
-    // Open the popover
-    const badge = container.querySelector('[data-testid="health-badge"]') as HTMLElement
+    const badge = container.querySelector('[data-testid="workspace-status"]') as HTMLElement
     if (badge) fireEvent.click(badge)
-    // Empty state should use p-text
-    const pText = container.querySelector('p-text')
-    expect(pText).not.toBeNull()
+    expect(container.querySelector('[data-testid="workspace-status-popover"]')).not.toBeNull()
+    expect(container.querySelectorAll('p')).toHaveLength(0)
   })
 })
 

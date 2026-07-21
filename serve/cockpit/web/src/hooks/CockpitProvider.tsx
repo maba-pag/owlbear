@@ -11,7 +11,6 @@ import { ApiError } from '../api/errors'
 import { getTask, type TaskDetail } from '../api/tasks'
 import { useBoard } from './useBoard'
 import { usePendingDRs } from './usePendingDRs'
-import { useScanPolling } from './useScanPolling'
 import { useWorkspaceHealth } from './useWorkspaceHealth'
 
 type BoardStateValue = {
@@ -21,10 +20,6 @@ type BoardStateValue = {
   error: ReturnType<typeof useBoard>['error']
   health: ReturnType<typeof useBoard>['health']
   refetchTasks: ReturnType<typeof useBoard>['refetchTasks']
-  items: ReturnType<typeof useScanPolling>['items']
-  isLoading: ReturnType<typeof useScanPolling>['isLoading']
-  scanError: ReturnType<typeof useScanPolling>['error']
-  refetch: ReturnType<typeof useScanPolling>['refetch']
   workspaceHealth: ReturnType<typeof useWorkspaceHealth>
 }
 
@@ -65,7 +60,6 @@ export function CockpitProvider({ children }: PropsWithChildren): ReactElement {
     error: pendingDRError,
     refetch: refetchPendingDRs,
   } = usePendingDRs()
-  const { items: scanItems, isLoading, error: scanError, refetch } = useScanPolling()
   const workspaceHealth = useWorkspaceHealth()
 
   const [selectedDRId, setSelectedDRId] = useState<string | null>(null)
@@ -161,10 +155,6 @@ export function CockpitProvider({ children }: PropsWithChildren): ReactElement {
       error,
       health,
       refetchTasks,
-      items: scanItems,
-      isLoading,
-      scanError,
-      refetch,
       workspaceHealth,
     },
     taskSelection: {

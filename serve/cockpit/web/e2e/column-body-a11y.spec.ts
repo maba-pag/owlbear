@@ -78,8 +78,12 @@ async function stubApis(page: Page): Promise<void> {
   await page.route('/api/sessions', (route) =>
     route.fulfill({ json: { sessions: [] } }),
   )
-  // /api/tasks/scan registered last (LIFO priority over /api/tasks/* catch-all).
-  await page.route('/api/tasks/scan', (route) => route.fulfill({ json: [] }))
+  await page.route('/health', (route) => route.fulfill({ json: {
+    status: 'healthy',
+    modules: Object.fromEntries(['tasks', 'requests', 'memory', 'ideas'].map((name) => [name, {
+      status: 'healthy', findings: [], repairable_count: 0, checked_paths: [name],
+    }])),
+  } }))
   await page.route('/api/tasks/*', (route) => route.fulfill({ json: TASK_DETAIL }))
 }
 

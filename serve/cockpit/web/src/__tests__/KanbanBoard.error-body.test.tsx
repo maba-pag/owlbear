@@ -233,7 +233,7 @@ describe('TestFromAC_KanbanBoardContextMenuErrorBodyParsing', () => {
 
 // ─── AC5: Health behavior from #1373 preserved (td:1 smoke test) ──────────────
 //
-// The health scan false-OK guard lives in Shell/useScanPolling — KanbanBoard has
+// The aggregate health false-OK guard lives in WorkspaceStatus — KanbanBoard has
 // no health state. This smoke test confirms that KanbanBoard move error handling
 // is independent of health state: the board renders correctly AND move-error
 // body parsing works (the body-parsing assertion is what makes this FAIL now).

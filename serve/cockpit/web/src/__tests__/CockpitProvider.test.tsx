@@ -5,11 +5,10 @@
  *
  * AC-1:  hooks/CockpitProvider.tsx exports CockpitProvider, useBoardState,
  *        useTaskSelection, useDRState
- * AC-2:  useBoard, usePendingDRs, useScanPolling remain as separate modules
+ * AC-2:  useBoard and usePendingDRs remain as separate modules
  *        with unchanged exports (regression guards)
  * AC-3:  useBoardState() return shape: board, tasks, loading, error (string|null),
- *        health (HealthState), refetchTasks, items (ScanItem[]), isLoading,
- *        error/scanError (Error|null), refetch
+ *        health (HealthState), refetchTasks, and workspaceHealth
  * AC-4:  useTaskSelection() return shape: selectedTaskId, selectedTask,
  *        selectedTaskError, select/clear/update actions; AbortController aborts
  *        on task switch and unmount
@@ -28,7 +27,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { type ReactNode } from 'react'
 import type { PendingDR } from '../hooks/usePendingDRs'
-import type { ScanItem } from '../hooks/useScanPolling'
 
 // ─── Hoisted mock factories ───────────────────────────────────────────────────
 // vi.hoisted() runs before vi.mock() factories, making these refs safe to use
@@ -36,7 +34,6 @@ import type { ScanItem } from '../hooks/useScanPolling'
 
 const mockRefetchTasks = vi.hoisted(() => vi.fn())
 const mockRefetchPendingDRs = vi.hoisted(() => vi.fn())
-const mockScanRefetch = vi.hoisted(() => vi.fn())
 const mockGetTask = vi.hoisted(() => vi.fn())
 
 const DEFAULT_BOARD_STATE = {
@@ -59,22 +56,15 @@ const DEFAULT_DR_STATE = {
   refetch: mockRefetchPendingDRs,
 }
 
-const DEFAULT_SCAN_STATE = {
-  items: [] as ScanItem[],
-  isLoading: false,
-  error: null as Error | null,
-  refetch: mockScanRefetch,
-}
-
 const mockUseBoard = vi.hoisted(() => vi.fn())
 const mockUsePendingDRs = vi.hoisted(() => vi.fn())
-const mockUseScanPolling = vi.hoisted(() => vi.fn())
+const mockUseWorkspaceHealth = vi.hoisted(() => vi.fn())
 
 // ─── Module mocks ─────────────────────────────────────────────────────────────
 
 vi.mock('../hooks/useBoard', () => ({ useBoard: mockUseBoard }))
 vi.mock('../hooks/usePendingDRs', () => ({ usePendingDRs: mockUsePendingDRs }))
-vi.mock('../hooks/useScanPolling', () => ({ useScanPolling: mockUseScanPolling }))
+vi.mock('../hooks/useWorkspaceHealth', () => ({ useWorkspaceHealth: mockUseWorkspaceHealth }))
 vi.mock('../api/tasks', () => ({ getTask: mockGetTask }))
 
 // ─── Import module under test ─────────────────────────────────────────────────
@@ -134,7 +124,16 @@ describe('TestFromAC_CockpitProvider', () => {
     vi.clearAllMocks()
     mockUseBoard.mockReturnValue({ ...DEFAULT_BOARD_STATE })
     mockUsePendingDRs.mockReturnValue({ ...DEFAULT_DR_STATE })
-    mockUseScanPolling.mockReturnValue({ ...DEFAULT_SCAN_STATE })
+    mockUseWorkspaceHealth.mockReturnValue({
+      health: { status: 'healthy', modules: {} },
+      connectionError: null,
+      isFetching: false,
+      receipt: null,
+      refresh: vi.fn(),
+      refreshAfterMutation: vi.fn(),
+      mergeRepair: vi.fn(),
+      dismissReceipt: vi.fn(),
+    })
   })
 
   // ─── AC-1: Named exports ───────────────────────────────────────────────────
@@ -173,11 +172,6 @@ describe('TestFromAC_CockpitProvider', () => {
       expect(typeof actual.usePendingDRs).toBe('function')
     })
 
-    it('useScanPolling is still a named export of hooks/useScanPolling', async () => {
-      const actual =
-        await vi.importActual<typeof import('../hooks/useScanPolling')>('../hooks/useScanPolling')
-      expect(typeof actual.useScanPolling).toBe('function')
-    })
   })
 
   // ─── AC-3: useBoardState() return shape ───────────────────────────────────
@@ -219,45 +213,10 @@ describe('TestFromAC_CockpitProvider', () => {
       expect(typeof result.current.refetchTasks).toBe('function')
     })
 
-    it('exposes scan items (ScanItem[])', () => {
-      const scanItems = [{ code: 'E001', detail: 'desc', file_path: '/foo.py' }]
-      mockUseScanPolling.mockReturnValue({ ...DEFAULT_SCAN_STATE, items: scanItems })
+    it('exposes ordered aggregate workspace health state', () => {
       const { result } = renderHook(() => useBoardState(), { wrapper })
-      expect(Array.isArray(result.current.items)).toBe(true)
-      expect(result.current.items).toEqual(scanItems)
-    })
-
-    it('exposes scan isLoading (boolean)', () => {
-      mockUseScanPolling.mockReturnValue({ ...DEFAULT_SCAN_STATE, isLoading: true })
-      const { result } = renderHook(() => useBoardState(), { wrapper })
-      expect(typeof result.current.isLoading).toBe('boolean')
-      expect(result.current.isLoading).toBe(true)
-    })
-
-    it('exposes scan refetch as a function', () => {
-      const { result } = renderHook(() => useBoardState(), { wrapper })
-      expect(typeof result.current.refetch).toBe('function')
-    })
-
-    // Boundary: scan error flows through as Error|null
-    // Note: AC-3 lists "error (Error|null)" for scan state alongside board's
-    // "error (string|null)". Builder must expose these under distinct names
-    // (expected: scanError or a nested scan.error).
-
-    it('exposes a scan error field that is Error or null', () => {
-      const scanErr = new Error('scan failed')
-      mockUseScanPolling.mockReturnValue({ ...DEFAULT_SCAN_STATE, error: scanErr })
-      const { result } = renderHook(() => useBoardState(), { wrapper })
-      // Builder may expose this as scanError or via a nested object;
-      // whichever field carries the scan Error must be an Error or null.
-      const scanErrorVal =
-        'scanError' in result.current
-          ? result.current.scanError
-          : 'scan' in result.current
-            ? (result.current.scan as { error?: unknown }).error
-            : undefined
-      expect(scanErrorVal instanceof Error || scanErrorVal === null).toBe(true)
-      expect(scanErrorVal).toBe(scanErr)
+      expect(result.current.workspaceHealth.health.status).toBe('healthy')
+      expect(typeof result.current.workspaceHealth.refresh).toBe('function')
     })
 
     // Edge: board value flows through from useBoard()
