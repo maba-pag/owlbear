@@ -1,10 +1,10 @@
 ---
 id: 1967
 title: 'P1-24: Deliver Cockpit memory lifecycle client contract'
-status: collect
+status: archived
 priority: high
 created: 2026-07-20T02:52:46.061518+02:00
-updated: 2026-07-20T09:08:03.892363+02:00
+updated: 2026-07-20T09:09:35.809695+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -28,7 +28,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -89,3 +89,13 @@ Preserve unrelated dirty files and author the corrective contract without treati
 - Patches applied: none.
 - Verifier-challenger result: pass. It confirmed all AC, adequate evidence, no scope drift, and no unresolved requests.
 - Final route: PASS to collect.
+
+[[2026-07-20T09:09:35+02:00]]
+## Collect Notes
+- Classification: leaf. The task has focused implementation scope and AC, no child tasks from `list_tasks(parent=1967)`, and no aggregate/EPIC contract.
+- Leaf verification evidence: `## Verify Notes` records PASS, AC-1 and AC-2 source/authority confirmation, Builder proof of 92 focused tests plus `npm run build`, no product defect, no patch, and verifier-challenger pass.
+- Invariant coverage: the task-owned frontend lifecycle type and resolve-client invariants are covered by verifier evidence; assembled browser/Cockpit/MCP proof remains explicitly owned by aggregate task #1960 and is not required for this leaf archive.
+- Dependency gate: dependency #1956 is archived with reason `completed`; task dependency state is non-blocking.
+- Request state: no pending or resolved structured requests for #1967. No unresolved Required Follow-up appears in Verify Notes.
+- Residual decisions: none. Parent #1958 and aggregate task #1960 retain their own closure obligations.
+- Rationale: verifier closure evidence is complete and no request, follow-up, child, or dependency state prevents mechanical leaf archival.

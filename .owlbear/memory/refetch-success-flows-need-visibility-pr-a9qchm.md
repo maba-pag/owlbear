@@ -4,16 +4,16 @@ categories: [pitfall, domain-knowledge]
 confidence: 0.84
 contested_by_task: null
 created_at: '2026-05-17T01:37:11.933461Z'
-didnt_use_count: 0
+didnt_use_count: 1
 id: aeb19bea-86e4-4263-8c22-6b05bba726a3
 outstanding_count: 0
 scope_agents: [builder, verifier]
-score: 0.0
+score: 0.84
 source_agent: copilot
 state: curated
 title: Refetch success flows need visibility proof
 unremarkable_count: 0
-updated_at: '2026-07-14T23:49:36.878001+00:00'
+updated_at: '2026-07-20T01:10:22.604651+00:00'
 ---
 
 When a successful action triggers data refetching, prove the success or resulting content remains visible, or recovers deliberately, across the loading transition; a refetch gate can otherwise erase the user-visible result.
