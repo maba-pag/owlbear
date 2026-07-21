@@ -93,3 +93,54 @@ def test_task_health_classifies_duplicate_sets_without_mutation(tmp_path: Path) 
     assert findings[5].repairable is True
     after = {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in board.rglob("*.md")}
     assert after == before
+
+
+def test_task_health_reports_readable_and_unreadable_persisted_defects(tmp_path: Path) -> None:
+    board = _board(tmp_path)
+    defective = _task(6).replace(
+        "parent: null\ndepends_on: []\nblocked: false\narchival_reason: null\narchival_refs: []",
+        "parent: 60\ndepends_on: [61, 6]\nblocked: false\narchival_reason: null\narchival_refs: [62]",
+    )
+    defective_path = board / "tasks" / "6-defective.md"
+    unreadable_path = board / "tasks" / "7-unreadable.md"
+    defective_path.write_text(defective, encoding="utf-8")
+    unreadable_path.write_text("not frontmatter", encoding="utf-8")
+    before = {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in board.rglob("*.md")}
+
+    result = KanbanEngine(board, activity_log=False).task_health()
+
+    findings = {finding.code: finding for finding in result.findings}
+    assert findings["ERR_CORRUPT_DELIMITERS"].path == str(unreadable_path)
+    assert findings["MISSING_PARENT"].task_id == 6
+    assert findings["MISSING_PARENT"].field == "parent"
+    assert findings["MISSING_DEPENDENCY"].task_id == 6
+    assert findings["MISSING_DEPENDENCY"].field == "depends_on"
+    assert findings["DEPENDENCY_SELF_REFERENCE"].task_id == 6
+    assert findings["MISSING_ARCHIVAL_REFERENCE"].task_id == 6
+    assert findings["MISSING_ARCHIVAL_REFERENCE"].field == "archival_refs"
+    after = {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in board.rglob("*.md")}
+    assert after == before
+
+
+def test_task_health_reports_reference_and_archived_location_drift(tmp_path: Path) -> None:
+    board = _board(tmp_path)
+    active_path = board / "tasks" / "8-archived.md"
+    active_path.write_text(_task(8).replace("status: shape", "status: archived"), encoding="utf-8")
+    (board / "tasks" / "9-references.md").write_text(
+        _task(9).replace(
+            "parent: null\ndepends_on: []\nblocked: false\narchival_reason: null\narchival_refs: []",
+            "parent: 90\ndepends_on: [91]\nblocked: false\narchival_reason: null\narchival_refs: [92]",
+        ),
+        encoding="utf-8",
+    )
+
+    result = KanbanEngine(board, activity_log=False).task_health()
+
+    findings = {finding.code: finding for finding in result.findings}
+    assert findings["ARCHIVED_TASK_IN_ACTIVE_STORAGE"].task_id == 8
+    assert findings["ARCHIVED_TASK_IN_ACTIVE_STORAGE"].path == str(active_path)
+    assert str(active_path) in findings["ARCHIVED_TASK_IN_ACTIVE_STORAGE"].detail
+    assert str(board / "archive") in findings["ARCHIVED_TASK_IN_ACTIVE_STORAGE"].detail
+    assert findings["MISSING_PARENT"].task_id == 9
+    assert findings["MISSING_DEPENDENCY"].task_id == 9
+    assert findings["MISSING_ARCHIVAL_REFERENCE"].task_id == 9
