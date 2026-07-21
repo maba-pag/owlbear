@@ -1,0 +1,60 @@
+---
+id: 1970
+title: Repair committed Cockpit frontend baseline
+status: verify
+priority: high
+created: 2026-07-21T14:10:09.400725+02:00
+updated: 2026-07-21T14:41:22.441086+02:00
+tags:
+  - baseline
+  - scope:cockpit-web
+  - test
+  - maintenance
+parent:
+depends_on: []
+ac:
+  - MemoryTab routing tests use the committed score field, score selector, 
+    complete lifecycle-state ordering, and current default state set, and the 
+    focused file passes without product changes.
+  - The obsolete Tailwind generated-output test is removed; production build, 
+    Stylelint, and HTMLHint remain the authoritative passing checks for the 
+    behavior it duplicated.
+  - 'At the resulting exact commit, the complete Cockpit Vitest suite and frontend
+    static/build checks pass, while unrelated dirty workspace paths remain uncommitted
+    and task #1968 remains untouched.'
+blocked: false
+block_reason:
+claimed_at:
+archival_reason:
+archival_refs: []
+---
+## Outcome
+Restore a commit-addressable green Cockpit frontend baseline by aligning stale MemoryTab routing assertions with the already-committed score/lifecycle UI contract and removing an obsolete generated-output Tailwind test.
+
+## Scope
+In scope: `MemoryTab.routing.test.tsx`, deletion of `TailwindStylelint.test.ts`, focused/full frontend proof, and exact-commit verification. Out of scope: MemoryTab product behavior, memory backend/domain changes, workspace-health behavior, admission artifacts, and task #1968.
+
+## Ownership Context
+These two paths are the remainder of the baseline-curation work first identified before the workspace-health tasks. Other repair/Cleanup test paths were legitimately absorbed by #1944. The current two-path diff is distinct from unrelated dirty memory, configuration, research, and domain work and must be committed alone.
+
+## Proof Guidance
+Run focused MemoryTab tests first, then the complete Cockpit Vitest suite, production build, Stylelint, and HTMLHint. Verify the resulting commit in a disposable exact-SHA checkout. Deletion of the generated-output test is justified by the durable-test rent test: build and Stylelint own those contracts directly, while the test writes a temporary source file, rebuilds the app, and asserts compiler output internals.
+
+[[2026-07-21T14:41:22+02:00]]
+## Builder Notes
+
+**Verdict:** DONE to verify.
+
+**Change envelope:** Curated the remaining two Cockpit baseline-test paths without changing product code. `MemoryTab.routing.test.tsx` now asserts the committed score field and selector, complete lifecycle-state ordering, and all non-deleted default states. The obsolete `TailwindStylelint.test.ts` generated-output suite was removed.
+
+**Files changed:** `serve/cockpit/web/src/__tests__/MemoryTab.routing.test.tsx`; deleted `serve/cockpit/web/src/__tests__/TailwindStylelint.test.ts`; this task record. No product, memory backend/domain, admission, or #1968 artifact is owned by this task.
+
+**Proof selected:** The focused MemoryTab suite binds observable route sorting, row signals, and filter reset behavior. Full Vitest proves package compatibility. Production build and CSS/HTML lint are the direct authorities for the Tailwind/Vite/Stylelint contract formerly inspected through generated output.
+
+**Durable-test justification:** The updated MemoryTab file remains valuable behavioral coverage. The deleted Tailwind test failed the Rent Test: it wrote a temporary source fixture, rebuilt the package, and asserted compiler-output internals including a stale color-variable emission assumption. The maintained build and Stylelint gates exercise that contract more directly and cheaply.
+
+**Commands and results:** Focused MemoryTab passed 56 of 56. Complete Cockpit Vitest passed 123 of 123 files with 1,879 tests passed and 2 skipped. Production build passed with only the existing Vite chunk-size advisory. Stylelint passed. HTMLHint scanned one file with no errors. Owned-path `git diff --check` passed, and no temporary `_tailwind-test-fixture.tsx` remained.
+
+**Memory assessment:** All ten recalled entries were assessed. The artifact-to-scope check was applied directly; active-workspace guidance was followed; the remaining entries were not used.
+
+**Builder challenger:** `decision: pass`; no blocker or auto-fixed file. It confirmed the two-path scope, MemoryTab observable contract, Tailwind test removal, and current-tree proof. Exact-commit repetition is explicitly verifier follow-up after this scoped commit.

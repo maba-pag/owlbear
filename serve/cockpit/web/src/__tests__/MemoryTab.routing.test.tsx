@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 /**
  * Task #1671 — P3-01: Memory list view with state/category/agent filters and text search
  *
@@ -22,12 +24,15 @@ interface MemoryEntryFixture {
   content: string
   categories: string[]
   confidence: number
-  state: 'pending' | 'curated' | 'approved' | 'deleted'
+  state: 'pending' | 'curated' | 'approved' | 'contested' | 'disputed' | 'stale' | 'deleted'
+  outstanding_count: number
+  score: number
   scope_agents: string[]
   source_agent: string
   created_at: string
   updated_at: string
   approved_at: string | null
+  contested_by_task: string | null
 }
 
 function makeEntry(overrides: Partial<MemoryEntryFixture> = {}): MemoryEntryFixture {
@@ -38,11 +43,14 @@ function makeEntry(overrides: Partial<MemoryEntryFixture> = {}): MemoryEntryFixt
     categories: ['behaviour'],
     confidence: 0.85,
     state: 'pending',
+    outstanding_count: 0,
+    score: 0.85,
     scope_agents: ['builder'],
     source_agent: 'test-agent',
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
     approved_at: null,
+    contested_by_task: null,
     ...overrides,
   }
 }
@@ -214,10 +222,10 @@ describe('MemoryTabSort', () => {
     vi.unstubAllGlobals()
   })
 
-  it('ac1 happy: higher-confidence entries appear first regardless of state', async () => {
+  it('ac1 happy: higher-score entries appear first regardless of state', async () => {
     const entries = [
-      makeEntry({ id: 'e1', title: 'Lower Confidence Pending', state: 'pending', confidence: 0.45 }),
-      makeEntry({ id: 'e2', title: 'Higher Confidence Approved', state: 'approved', confidence: 0.95 }),
+      makeEntry({ id: 'e1', title: 'Lower Score Pending', state: 'pending', score: 0.45 }),
+      makeEntry({ id: 'e2', title: 'Higher Score Approved', state: 'approved', score: 0.95 }),
     ]
     vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
     let container!: HTMLElement
@@ -229,13 +237,13 @@ describe('MemoryTabSort', () => {
     const titles = Array.from(container.querySelectorAll('[data-testid="memory-entry-title"]')).map(
       (el) => el.textContent,
     )
-    expect(titles.indexOf('Higher Confidence Approved')).toBeLessThan(titles.indexOf('Lower Confidence Pending'))
+    expect(titles.indexOf('Higher Score Approved')).toBeLessThan(titles.indexOf('Lower Score Pending'))
   })
 
-  it('ac1 happy: when confidence ties, pending entries appear before curated entries regardless of created_at', async () => {
+  it('ac1 happy: when scores tie, pending entries appear before curated entries regardless of created_at', async () => {
     const entries = [
-      makeEntry({ id: 'e1', title: 'Curated Entry', state: 'curated', created_at: '2026-01-01T00:00:00Z' }),
-      makeEntry({ id: 'e2', title: 'Pending Entry', state: 'pending', created_at: '2026-01-02T00:00:00Z' }),
+      makeEntry({ id: 'e1', title: 'Curated Entry', state: 'curated', score: 0.8, created_at: '2026-01-01T00:00:00Z' }),
+      makeEntry({ id: 'e2', title: 'Pending Entry', state: 'pending', score: 0.8, created_at: '2026-01-02T00:00:00Z' }),
     ]
     vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
     let container!: HTMLElement
@@ -250,10 +258,10 @@ describe('MemoryTabSort', () => {
     expect(titles.indexOf('Pending Entry')).toBeLessThan(titles.indexOf('Curated Entry'))
   })
 
-  it('ac1 happy: when confidence and state tie, entries sorted by created_at ascending', async () => {
+  it('ac1 happy: when score and state tie, entries sorted by created_at ascending', async () => {
     const entries = [
-      makeEntry({ id: 'e1', title: 'Later Pending', state: 'pending', created_at: '2026-01-02T00:00:00Z' }),
-      makeEntry({ id: 'e2', title: 'Earlier Pending', state: 'pending', created_at: '2026-01-01T00:00:00Z' }),
+      makeEntry({ id: 'e1', title: 'Later Pending', state: 'pending', score: 0.8, created_at: '2026-01-02T00:00:00Z' }),
+      makeEntry({ id: 'e2', title: 'Earlier Pending', state: 'pending', score: 0.8, created_at: '2026-01-01T00:00:00Z' }),
     ]
     vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
     let container!: HTMLElement
@@ -268,11 +276,11 @@ describe('MemoryTabSort', () => {
     expect(titles.indexOf('Earlier Pending')).toBeLessThan(titles.indexOf('Later Pending'))
   })
 
-  it('ac1 edge: malformed confidence sorts after finite confidence and id breaks complete ties', async () => {
+  it('ac1 edge: id breaks complete score ties', async () => {
     const entries = [
-      makeEntry({ id: 'z', title: 'Malformed Confidence Z', confidence: Number.NaN, state: 'pending' }),
-      makeEntry({ id: 'b', title: 'Finite Confidence', confidence: 0.1, state: 'pending' }),
-      makeEntry({ id: 'a', title: 'Malformed Confidence A', confidence: Number.NaN, state: 'pending' }),
+      makeEntry({ id: 'z', title: 'Score Tie Z', score: 0.8, state: 'pending' }),
+      makeEntry({ id: 'b', title: 'Lower Score', score: 0.1, state: 'pending' }),
+      makeEntry({ id: 'a', title: 'Score Tie A', score: 0.8, state: 'pending' }),
     ]
     vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
     let container!: HTMLElement
@@ -284,15 +292,18 @@ describe('MemoryTabSort', () => {
     const titles = Array.from(container.querySelectorAll('[data-testid="memory-entry-title"]')).map(
       (el) => el.textContent,
     )
-    expect(titles).toEqual(['Finite Confidence', 'Malformed Confidence A', 'Malformed Confidence Z'])
+    expect(titles).toEqual(['Score Tie A', 'Score Tie Z', 'Lower Score'])
   })
 
-  it('ac1 boundary: full state priority order is pending < curated < approved < deleted', async () => {
+  it('ac1 boundary: full state priority order is pending < curated < approved < contested < disputed < stale < deleted', async () => {
     const entries = [
-      makeEntry({ id: 'e4', title: 'Deleted', state: 'deleted', created_at: '2026-01-01T00:00:00Z' }),
-      makeEntry({ id: 'e3', title: 'Approved', state: 'approved', created_at: '2026-01-01T00:00:00Z' }),
-      makeEntry({ id: 'e2', title: 'Curated', state: 'curated', created_at: '2026-01-01T00:00:00Z' }),
-      makeEntry({ id: 'e1', title: 'Pending', state: 'pending', created_at: '2026-01-01T00:00:00Z' }),
+      makeEntry({ id: 'e7', title: 'Deleted', state: 'deleted', score: 0.8, created_at: '2026-01-01T00:00:00Z' }),
+      makeEntry({ id: 'e6', title: 'Stale', state: 'stale', score: 0.8, created_at: '2026-01-01T00:00:00Z' }),
+      makeEntry({ id: 'e5', title: 'Disputed', state: 'disputed', score: 0.8, created_at: '2026-01-01T00:00:00Z' }),
+      makeEntry({ id: 'e4', title: 'Contested', state: 'contested', score: 0.8, created_at: '2026-01-01T00:00:00Z' }),
+      makeEntry({ id: 'e3', title: 'Approved', state: 'approved', score: 0.8, created_at: '2026-01-01T00:00:00Z' }),
+      makeEntry({ id: 'e2', title: 'Curated', state: 'curated', score: 0.8, created_at: '2026-01-01T00:00:00Z' }),
+      makeEntry({ id: 'e1', title: 'Pending', state: 'pending', score: 0.8, created_at: '2026-01-01T00:00:00Z' }),
     ]
     vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
     let container!: HTMLElement
@@ -309,7 +320,7 @@ describe('MemoryTabSort', () => {
     const titles = Array.from(container.querySelectorAll('[data-testid="memory-entry-title"]')).map(
       (el) => el.textContent,
     )
-    expect(titles).toEqual(['Pending', 'Curated', 'Approved', 'Deleted'])
+    expect(titles).toEqual(['Pending', 'Curated', 'Approved', 'Contested', 'Disputed', 'Stale', 'Deleted'])
   })
 })
 
@@ -751,8 +762,8 @@ describe('MemoryTabRowRendering', () => {
     expect(categoryTags?.length).toBe(3)
   })
 
-  it('ac4 happy: entry row renders confidence as decimal string (e.g. "0.85")', async () => {
-    const entries = [makeEntry({ confidence: 0.85, state: 'pending' })]
+  it('ac4 happy: entry row renders score as decimal string (e.g. "0.85")', async () => {
+    const entries = [makeEntry({ score: 0.85, state: 'pending' })]
     vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
     let container!: HTMLElement
     await act(async () => {
@@ -760,12 +771,12 @@ describe('MemoryTabRowRendering', () => {
     })
     await flush()
 
-    const confidenceEl = container.querySelector('[data-testid="memory-entry-confidence"]')
-    expect(confidenceEl?.textContent).toContain('0.85')
+    const scoreEl = container.querySelector('[data-testid="memory-entry-score"]')
+    expect(scoreEl?.textContent).toContain('0.85')
   })
 
-  it('ac4 polish: row separates content categories from confidence and state signals', async () => {
-    const entries = [makeEntry({ categories: ['behaviour', 'pitfall'], confidence: 0.91, state: 'curated' })]
+  it('ac4 polish: row separates content categories from score and state signals', async () => {
+    const entries = [makeEntry({ categories: ['behaviour', 'pitfall'], score: 0.91, state: 'curated' })]
     vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
     let container!: HTMLElement
     await act(async () => {
@@ -777,16 +788,16 @@ describe('MemoryTabRowRendering', () => {
     const categoryGroup = row?.querySelector('[data-testid="memory-entry-category-group"]')
     const signalGroup = row?.querySelector('[data-testid="memory-entry-signal-group"]')
     const categories = Array.from(row?.querySelectorAll('[data-testid="memory-entry-category"]') ?? [])
-    const confidenceEl = row?.querySelector('[data-testid="memory-entry-confidence"]')
+    const scoreEl = row?.querySelector('[data-testid="memory-entry-score"]')
 
     expect(categoryGroup).not.toBeNull()
     expect(signalGroup).not.toBeNull()
     expect(categories).toHaveLength(2)
     expect(categories.every((category) => categoryGroup?.contains(category))).toBe(true)
-    expect(signalGroup?.contains(confidenceEl)).toBe(true)
-    expect(categoryGroup?.contains(confidenceEl)).toBe(false)
+    expect(signalGroup?.contains(scoreEl)).toBe(true)
+    expect(categoryGroup?.contains(scoreEl)).toBe(false)
     expect(signalGroup?.className).toContain('lg:border-l')
-    expect(confidenceEl?.textContent).toMatch(/\d/)
+    expect(scoreEl?.textContent).toMatch(/\d/)
   })
 
   it('ac4 polish: entry list is a vertical-only scroll surface with a cue shell', async () => {
@@ -1000,7 +1011,7 @@ describe('MemoryTabEmptyStates', () => {
     const agentFilter = container.querySelector('[name="agent-filter"]')
     const searchFilter = container.querySelector('[name="memory-search"]')
 
-    expect(readHostStringArray(stateFilter)).toEqual(['pending', 'curated', 'approved'])
+    expect(readHostStringArray(stateFilter)).toEqual(['pending', 'curated', 'approved', 'contested', 'disputed', 'stale'])
     expect(readHostStringArray(categoryFilterAfterReset)).toEqual([])
     expect(readHostValue(agentFilter)).toBe('')
     expect(readHostValue(searchFilter)).toBe('')
