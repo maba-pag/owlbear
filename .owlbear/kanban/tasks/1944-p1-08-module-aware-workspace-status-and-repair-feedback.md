@@ -1,10 +1,10 @@
 ---
 id: 1944
 title: 'P1-08: Module-aware Workspace Status and repair feedback'
-status: shape
+status: build
 priority: medium
 created: 2026-07-17T02:32:30.849128+02:00
-updated: 2026-07-17T16:29:05.716524+02:00
+updated: 2026-07-21T10:44:56.064602+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -107,3 +107,27 @@ Run package-local frontend checks and use the VS Code integrated browser for the
 - #1944 remains in shape, parent #1945, depending on #1943.
 - Required sequence remains #1942, then #1943, then #1944.
 - Re-enter `/shape 1944` only after #1943 has completed its own shape repair and advanced to build; until then, retaining #1944 in shape prevents implementation against an invented interface.
+
+[[2026-07-21T10:44:56+02:00]]
+## Shape Notes
+
+### Repair Source And Classification
+- Source: the 2026-07-17 Builder rejection and latest mechanical-hold Shape Notes on #1944.
+- Classification: mechanical reroute under `w-task-repair`. No product behavior, architecture, acceptance meaning, task ownership, parent link, or dependency change is required.
+
+### Facts Checked
+- The rejection required #1944 to remain in shape until #1943 supplied the authoritative ordered frontend health-state contract.
+- #1942 is archived `completed` and supplies the assembled Cockpit health/repair HTTP contract.
+- #1943 is archived `completed`; its final Verify and Collect Notes cover initial checking state, module precedence, refresh ordering, repair snapshot merge, and receipt retention.
+- #1944 depends only on #1943 and the board reports its dependency state as `ok`.
+- Parent #1945 still owns aggregate running-Cockpit closure and remains gated on #1944.
+- No pending or resolved structured request exists for #1944.
+
+### Contract And Artifact Audit
+- Existing Outcome, Scope, Planning Authority, Change Module Map, Product Invariant Map, proof guidance, parent, dependency, and AC remain coherent and unchanged.
+- The working tree contains a pre-existing seven-path candidate baseline-curation delta in Cockpit tests: `ErrorContract.test.tsx`, `Shell.callbacks.test.tsx`, `SidecarUX.test.tsx`, `useRepairFlow.test.ts`, and deletion of `TailwindStylelint.test.ts`, `repairStorage.edge-cases.test.ts`, and `repairStorage.test.ts`. Builder must compare those artifacts with the full #1944 UI scope and preserve unrelated dirty Cockpit work rather than treating the candidate test delta as the complete feature.
+
+### Resulting Route And Board Audit
+- Advance #1944 from shape to build.
+- Preserve parent #1945, dependency #1943, all three AC lines, priority, and tags.
+- Builder owns the Workspace Status/Shell UI boundary and must run package-local behavior proof plus assembled integrated-browser proof before DONE.
