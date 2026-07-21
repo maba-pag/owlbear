@@ -18,6 +18,7 @@ class HealthModule(BaseModel):
 
     status: str
     findings: list[dict] = Field(default_factory=list)
+    repairable_count: int = 0
     checked_paths: list[str] = Field(default_factory=list)
 
 

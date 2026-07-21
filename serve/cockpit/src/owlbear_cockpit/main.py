@@ -7,7 +7,6 @@ import os
 import sys
 import threading
 import webbrowser
-from datetime import datetime
 from pathlib import Path
 from typing import Annotated
 
@@ -33,6 +32,7 @@ from owlbear_cockpit.routes.memory import router as memory_router
 from owlbear_cockpit.routes.mutation import router as mutation_router
 from owlbear_cockpit.routes.read import router as read_router
 from owlbear_cockpit.routes.requests import router as requests_router
+from owlbear_kanban.corruption import repair_task_storage
 from owlbear_kanban.errors import (
     ConcurrencyError,
     ConfigError,
@@ -40,7 +40,7 @@ from owlbear_kanban.errors import (
     NotFoundError,
     ValidationError,
 )
-from owlbear_kanban.models import DeterministicRepairResult, RepairOutcome, TaskHealthResult
+from owlbear_kanban.models import DeterministicRepairResult
 
 _DEFAULT_PORT = 8420
 _MAX_PORT = 65535
@@ -157,6 +157,11 @@ def _module_health(checker: object) -> HealthModule:
         if hasattr(result, "findings"):
             findings = [item.model_dump() for item in result.findings]
             checked_paths = result.checked_paths
+            repairable_count = getattr(
+                result,
+                "repairable_count",
+                sum(bool(finding.get("repairable")) for finding in findings),
+            )
         else:
             findings = [{"path": path, "detail": "unreadable"} for path in result.unreadable_paths] + [
                 {"path": path, "detail": "duplicate"} for paths in result.duplicate_paths.values() for path in paths
@@ -164,9 +169,14 @@ def _module_health(checker: object) -> HealthModule:
             checked_paths = result.unreadable_paths + [
                 path for paths in result.duplicate_paths.values() for path in paths
             ]
+            repairable_count = 0
+        status = "healthy"
+        if findings:
+            status = "attention" if repairable_count == len(findings) else "unhealthy"
         return HealthModule(
-            status="healthy" if not findings else "unhealthy",
+            status=status,
             findings=findings,
+            repairable_count=repairable_count,
             checked_paths=checked_paths,
         )
     except Exception as exc:  # noqa: BLE001
@@ -190,10 +200,13 @@ def _workspace_health(engine: object | None, memory_engine: object | None, ideas
         "memory": _module_health(memory_engine.health if memory_engine else None),
         "ideas": _ideas_health(ideas_path),
     }
-    return WorkspaceHealth(
-        status="healthy" if all(module.status == "healthy" for module in modules.values()) else "unhealthy",
-        modules=modules,
-    )
+    statuses = {module.status for module in modules.values()}
+    status = "healthy"
+    if statuses & {"unhealthy", "check-failed"}:
+        status = "unhealthy"
+    elif "attention" in statuses:
+        status = "attention"
+    return WorkspaceHealth(status=status, modules=modules)
 
 
 @app.get("/health/live")
@@ -229,45 +242,7 @@ def ideas_health(ideas_path: _IdeasPath) -> IdeasHealth:
 
 @app.post("/health/tasks/repair", response_model=DeterministicRepairResult)
 def repair_task_health(engine: _Engine) -> DeterministicRepairResult:
-    started_at = datetime.now().astimezone()
-    outcomes = engine.repair_storage()
-    if isinstance(outcomes, DeterministicRepairResult):
-        return outcomes
-    if hasattr(outcomes, "status") and hasattr(outcomes, "removed_count"):
-        return DeterministicRepairResult.model_validate(outcomes, from_attributes=True)
-
-    typed_outcomes = [
-        item if isinstance(item, RepairOutcome) else RepairOutcome.model_validate(item) for item in outcomes
-    ]
-    task_health_result: TaskHealthResult | None = None
-    if hasattr(engine, "task_health"):
-        result = engine.task_health()
-        task_health_result = (
-            result
-            if isinstance(result, TaskHealthResult)
-            else TaskHealthResult.model_validate(result, from_attributes=True)
-        )
-    counts = {
-        "removed": sum(item.action == "removed" for item in typed_outcomes),
-        "moved": sum(item.action == "moved" for item in typed_outcomes),
-        "quarantined": sum(item.action == "quarantined" for item in typed_outcomes),
-        "skipped": sum(item.action == "skipped" for item in typed_outcomes),
-        "failed": sum(item.action == "failed" for item in typed_outcomes),
-        "unresolved": sum(item.action == "unresolved" for item in typed_outcomes),
-    }
-    return DeterministicRepairResult(
-        started_at=started_at,
-        completed_at=datetime.now().astimezone(),
-        removed_count=counts["removed"],
-        moved_count=counts["moved"],
-        quarantined_count=counts["quarantined"],
-        skipped_count=counts["skipped"],
-        failed_count=counts["failed"],
-        unresolved_count=counts["unresolved"],
-        outcomes=typed_outcomes,
-        unresolved_findings=task_health_result.findings if task_health_result else [],
-        task_health_result=task_health_result,
-    )
+    return repair_task_storage(engine.kanban_dir, engine.board_config())
 
 
 def run() -> None:
