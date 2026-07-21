@@ -1,10 +1,10 @@
 ---
 id: 1969
 title: 'P1-11: Restore assembled workspace-health repair contract'
-status: collect
+status: archived
 priority: high
 created: 2026-07-21T10:56:32.901575+02:00
-updated: 2026-07-21T11:06:46.436907+02:00
+updated: 2026-07-21T11:07:51.190892+02:00
 tags:
   - phase-1
   - scope:cockpit-backend
@@ -32,7 +32,7 @@ proof_bundle: critical
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -112,3 +112,14 @@ Change Module Map deviations: none. Lower-layer deterministic repair is the real
 Verifier-challenger: PASS. It found AC-1 through AC-3 covered at the assembled HTTP boundary, accepted the real-engine durable regression and missing-dist classification, and found no scope or proof defect.
 
 Final route: PASS to collect.
+
+[[2026-07-21T11:07:51+02:00]]
+## Collect Notes
+
+Classification: leaf corrective task. It has no children and one bounded Cockpit backend contract outcome under parent #1945.
+
+Leaf verification evidence: latest Verify Notes record PASS and verifier-challenger PASS at exact delivered commit `5f711cabec6870f413834c924bcca44ce809b562`. The detached-checkout proof passed 14 assembled health/route tests plus focused Ruff checks, exercised a real `KanbanEngine` deterministic repair through FastAPI, and confirmed no legacy repair fallback.
+
+Closure state: dependency #1942 is completed and `dep_status` is `ok`; no pending structured request, block, or unresolved Required Follow-up exists. The missing-dist launch-test prerequisite is explicitly classified as unrelated environment context and does not weaken the task-owned HTTP proof.
+
+Archive rationale: AC-1 through AC-3 and the corrective contract are verifier-closed. Archive as completed so dependent frontend task #1944 can resume against the delivered boundary.
