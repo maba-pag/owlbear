@@ -103,6 +103,7 @@ import { CockpitProvider } from '../hooks/CockpitProvider'
 import DetailTab from '../components/DetailTab'
 import type { Board } from '../hooks/useBoard'
 import type { TaskDetail } from '../components/DetailTab'
+import { openEditor } from './DetailTab.testSupport'
 
 // ─── Global PDS jsdom polyfill ────────────────────────────────────────────────
 // attachInternals is required by PDS custom elements. Save/restore per test
@@ -355,6 +356,7 @@ describe('TestFromAC_ErrorEnvelopeParsing', () => {
       const errorBody = { code: 'INTERNAL_ERROR', message: 'engine lock expired during edit' }
       vi.stubGlobal('fetch', makeJsonFetch(500, errorBody))
       const { container } = renderDetail()
+      openEditor(container)
       fireEvent.click(container.querySelector('[data-testid="save-button"]')!)
       await waitFor(
         () => {
@@ -371,6 +373,7 @@ describe('TestFromAC_ErrorEnvelopeParsing', () => {
       const errorBody = { detail: 'unexpected server fault in task engine' }
       vi.stubGlobal('fetch', makeJsonFetch(500, errorBody))
       const { container } = renderDetail()
+      openEditor(container)
       fireEvent.click(container.querySelector('[data-testid="save-button"]')!)
       await waitFor(
         () => {
@@ -389,6 +392,7 @@ describe('TestFromAC_ErrorEnvelopeParsing', () => {
       const errorBody = { code: 'VALIDATION_ERROR', message: 'priority field is required' }
       vi.stubGlobal('fetch', makeJsonFetch(422, errorBody))
       const { container } = renderDetail()
+      openEditor(container)
       fireEvent.click(container.querySelector('[data-testid="save-button"]')!)
       await waitFor(
         () => {
@@ -598,6 +602,7 @@ describe('TestFromAC_NoSilentErrors', () => {
     const errorBody = { code: 'INTERNAL_ERROR', message: 'unexpected failure in engine' }
     vi.stubGlobal('fetch', makeJsonFetch(500, errorBody))
     const { container } = renderDetail()
+    openEditor(container)
     fireEvent.click(container.querySelector('[data-testid="save-button"]')!)
     await waitFor(
       () => {

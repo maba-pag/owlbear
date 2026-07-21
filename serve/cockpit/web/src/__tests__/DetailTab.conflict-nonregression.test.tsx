@@ -18,6 +18,7 @@ import { beforeAll, describe, it, expect, vi, afterEach } from 'vitest'
 import { render, fireEvent, waitFor } from '@testing-library/react'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
 import DetailTab, { type TaskDetail } from '../components/DetailTab'
+import { openEditor } from './DetailTab.testSupport'
 
 // ─── PDS jsdom patch ──────────────────────────────────────────────────────────
 
@@ -97,6 +98,7 @@ describe('TestFromAC_ConflictResolutionNonRegression', () => {
         <DetailTab task={TASK_UNCLAIMED} />
       </PorscheDesignSystemProvider>,
     )
+    openEditor(container)
     // Gating non-regression: unclaim button must be absent for claimed=false
     expect(container.querySelector('[data-testid="unclaim-action"]')).toBeNull()
     // Conflict-resolution non-regression: save → 409 → conflict modal appears

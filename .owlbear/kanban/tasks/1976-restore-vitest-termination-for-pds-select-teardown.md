@@ -1,10 +1,10 @@
 ---
 id: 1976
 title: Restore DetailTab lifecycle bounds under PDS 4.5
-status: build
+status: verify
 priority: high
 created: 2026-07-21T18:33:01.110997+02:00
-updated: 2026-07-21T23:17:22.852272+02:00
+updated: 2026-07-22T00:00:49.940238+02:00
 tags:
   - baseline-repair
   - frontend
@@ -117,3 +117,14 @@ The original stack-qualified window-error guard prevented reporting but did not 
 - The corrected input preserves the same sanitization invariant while making `safe` an independently rendered paragraph through the unmocked markdown pipeline.
 - Fresh shaper-challenger verdict: pass. It confirmed the prior CommonMark contradiction is resolved with no scope, module-map, dependency, or user-decision change.
 - Route: resume `build`; retain the builder's display-mode validation-message repair and rerun focused proof.
+
+[[2026-07-22T00:00:49+02:00]]
+## Builder Notes
+- Corrected direct PDS authority to `^4.5.0`; the installed graph is one deduplicated 4.5.0 instance of both JS and React packages.
+- `TaskFieldsEditor` now mounts the PDS edit form only after `Edit details`, keeps display mode lightweight, and surfaces existing mutation validation feedback while the form is absent.
+- Curated the legacy DetailTab suite into durable concern owners, migrated maintained tests to the public edit transition, and moved sanitization proof to the real unmocked `MarkdownPreview` pipeline.
+- Focused proof: `npm test -- src/__tests__/DetailTab` returned 12/12 files and 80/80 tests in 16.86s without `SelectOption.onSlotChange` output.
+- Acceptance proof in a fresh execution context: maintained unsharded `npm test` returned 124/124 files, 1835 passed and 2 skipped; `npm run build` returned zero with no PDS asset mismatch; `npm ls` returned one deduplicated 4.5.0 graph.
+- Full-suite third-party PDS teardown stack noise remains outside the clean DetailTab prefix but does not fail or stall the maintained command; this matches AC-3's scoped diagnostic condition and AC-4's unsharded exit boundary.
+- Builder-challenger decision: pass; no findings requiring repair and no auto-fixed files.
+- Task-owned paths are limited to dependency authority, `TaskFieldsEditor`, the curated/migrated frontend tests, the two new DetailTab support/concern files, and this task record. Unrelated memory, MCP, research, and purge-test changes remain untouched.

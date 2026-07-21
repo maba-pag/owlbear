@@ -309,7 +309,9 @@ describe('TestFromAC_StateMatrix', () => {
      */
     const { container } = renderDetail(BLOCKED_TASK)
     // Existing blocked rendering is not regressed:
-    expect(container.querySelector('[data-field="block_reason"]')).not.toBeNull()
+    expect(container.querySelector('[data-region="task-relations-summary"]')?.textContent).toContain(
+      BLOCKED_TASK.block_reason,
+    )
     // New fields are also present:
     expect(container.querySelector('[data-testid="field-claimed"]')?.textContent).toBe('No')
     expect(container.querySelector('[data-testid="field-claimed-at"]')?.textContent).toBe('Not claimed')
@@ -322,8 +324,9 @@ describe('TestFromAC_StateMatrix', () => {
      */
     const { container } = renderDetail(DEP_CONSTRAINED_TASK)
     expect(container.querySelector('[data-testid="field-dep-status"]')?.textContent).toBe('blocked')
-    // Existing depends_on input is still present:
-    expect(container.querySelector('[data-field="depends_on"]')).not.toBeNull()
+    // Existing dependency summary is still present:
+    expect(container.querySelector('[data-testid="task-dependency-references"]')?.textContent).toContain('10')
+    expect(container.querySelector('[data-testid="task-dependency-references"]')?.textContent).toContain('20')
   })
 
   it('claimed blocked task: both claimed=true and blocked=true coexist in the model', () => {
@@ -338,6 +341,8 @@ describe('TestFromAC_StateMatrix', () => {
       CLAIMED_BLOCKED_TASK.claimed_at,
     )
     // Blocked state is also still surfaced:
-    expect(container.querySelector('[data-field="block_reason"]')).not.toBeNull()
+    expect(container.querySelector('[data-region="task-relations-summary"]')?.textContent).toContain(
+      CLAIMED_BLOCKED_TASK.block_reason,
+    )
   })
 })

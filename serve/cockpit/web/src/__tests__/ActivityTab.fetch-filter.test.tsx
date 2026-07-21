@@ -13,6 +13,7 @@ import { PorscheDesignSystemProvider } from '@porsche-design-system/components-r
 import ActivityTab from '../components/ActivityTab'
 import HistorySubtab from '../components/HistorySubtab'
 import DetailTab, { type TaskDetail } from '../components/DetailTab'
+import { openEditor } from './DetailTab.testSupport'
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -694,6 +695,7 @@ describe('TestFromAC_CoverageProof', () => {
         <DetailTab task={blocked} />
       </PorscheDesignSystemProvider>,
     )
+    openEditor(container)
     expect(container.querySelector('[data-field="block_reason"]')).not.toBeNull()
   })
 
@@ -726,6 +728,7 @@ describe('TestFromAC_CoverageProof', () => {
         <DetailTab task={blocked} />
       </PorscheDesignSystemProvider>,
     )
+    openEditor(container)
     const input = container.querySelector('[data-field="block_reason"]')
     // DetailTab uses controlled value={blockReason} state (initialized from task.block_reason).
     // PDS v4 PInputText exposes the current value as the .value JS property on the host element.

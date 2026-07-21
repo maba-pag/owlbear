@@ -16,6 +16,7 @@ import { beforeAll, describe, it, expect, vi, afterEach } from 'vitest'
 import { render, fireEvent, waitFor } from '@testing-library/react'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
 import DetailTab, { type TaskDetail } from '../components/DetailTab'
+import { openEditor } from './DetailTab.testSupport'
 
 // ─── PDS jsdom patch ──────────────────────────────────────────────────────────
 
@@ -72,11 +73,13 @@ const TASK_REFERENCES = [
 ]
 
 function renderDetail(task: TaskDetail = BASE_TASK) {
-  return render(
+  const result = render(
     <PorscheDesignSystemProvider>
       <DetailTab task={task} taskReferences={TASK_REFERENCES} />
     </PorscheDesignSystemProvider>,
   )
+  openEditor(result.container)
+  return result
 }
 
 /**

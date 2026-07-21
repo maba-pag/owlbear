@@ -31,6 +31,7 @@ import { beforeAll, describe, it, expect, vi, afterEach } from 'vitest'
 import { render, fireEvent, waitFor } from '@testing-library/react'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
 import DetailTab, { type TaskDetail } from '../components/DetailTab'
+import { openEditor } from './DetailTab.testSupport'
 
 // ─── PDS jsdom patch ──────────────────────────────────────────────────────────
 
@@ -81,11 +82,13 @@ const TASK_WITH_DEPS: TaskDetail = {
 // ─── Render helpers ───────────────────────────────────────────────────────────
 
 function renderDetail(task: TaskDetail = TASK) {
-  return render(
+  const result = render(
     <PorscheDesignSystemProvider>
       <DetailTab task={task} />
     </PorscheDesignSystemProvider>,
   )
+  openEditor(result.container)
+  return result
 }
 
 // ─── Input simulation ─────────────────────────────────────────────────────────

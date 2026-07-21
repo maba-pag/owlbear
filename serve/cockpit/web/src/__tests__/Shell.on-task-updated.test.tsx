@@ -202,7 +202,11 @@ describe('TestFromAC_ShellOnTaskUpdated (AC6)', () => {
 
     const callCountBefore = refetchTasksSpy.mock.calls.length
 
+    const editButton = container.querySelector('[data-testid="edit-details-button"]') as HTMLElement | null
+    expect(editButton).not.toBeNull()
+    fireEvent.click(editButton!)
     const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
+    expect(saveBtn).not.toBeNull()
     fireEvent.click(saveBtn!)
 
     // Allow async operations to settle — refetchTasks must NOT be called for body-only changes

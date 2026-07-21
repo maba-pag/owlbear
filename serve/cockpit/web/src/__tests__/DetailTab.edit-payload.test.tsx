@@ -55,8 +55,12 @@ const TASK: TaskDetail = {
   tags: ['bug'],
   blocked: false,
   block_reason: null,
+  claimed: true,
+  claimed_at: '2026-04-18T09:30:00+00:00',
+  dep_status: null,
   parent: null,
   depends_on: [],
+  proof_bundle: null,
 }
 
 const TASK_WITH_DEPS: TaskDetail = {
@@ -69,6 +73,13 @@ const TASK_BLOCKED: TaskDetail = {
   ...TASK,
   blocked: true,
   block_reason: 'Waiting for dependency #100',
+}
+
+const TASK_RESEARCH: TaskDetail = {
+  ...TASK,
+  status: 'research',
+  claimed: false,
+  claimed_at: null,
 }
 
 /** Board fixture matching the default pipeline status order. */
@@ -136,6 +147,18 @@ function clickConfirm(container: HTMLElement): void {
   fireEvent.click(confirmBtn!)
 }
 
+function openEditor(container: HTMLElement): void {
+  const editButton = container.querySelector('[data-testid="edit-details-button"]') as HTMLElement | null
+  expect(editButton).not.toBeNull()
+  fireEvent.click(editButton!)
+}
+
+function typeIntoField(container: HTMLElement, selector: string, value: string): void {
+  const field = container.querySelector(selector) as HTMLElement | null
+  expect(field).not.toBeNull()
+  fireEvent(field!, new CustomEvent('input', { detail: { value }, bubbles: true }))
+}
+
 async function clickMoveTarget(container: HTMLElement, targetStatus: string): Promise<void> {
   const moveTrigger = container.querySelector('[data-testid="task-detail-move-menu-trigger"]') as HTMLElement | null
   expect(moveTrigger).not.toBeNull()
@@ -174,6 +197,7 @@ describe('TestFromAC_DetailTabEditPayload', () => {
     )
     vi.stubGlobal('fetch', fetchMock)
     const { container } = renderDetail(TASK_WITH_DEPS)
+    openEditor(container)
 
     const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
     expect(saveBtn).not.toBeNull()
@@ -183,6 +207,7 @@ describe('TestFromAC_DetailTabEditPayload', () => {
       () => {
         const [, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
         const body = JSON.parse(options.body as string) as Record<string, unknown>
+        expect(body).toHaveProperty('updated', TASK_WITH_DEPS.updated)
         expect(body).toHaveProperty('depends_on')
         const deps = body['depends_on'] as unknown[]
         expect(Array.isArray(deps)).toBe(true)
@@ -205,6 +230,7 @@ describe('TestFromAC_DetailTabEditPayload', () => {
     )
     vi.stubGlobal('fetch', fetchMock)
     const { container } = renderDetail(TASK_WITH_DEPS)
+    openEditor(container)
 
     const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
     expect(saveBtn).not.toBeNull()
@@ -235,6 +261,7 @@ describe('TestFromAC_DetailTabEditPayload', () => {
     )
     vi.stubGlobal('fetch', fetchMock)
     const { container } = renderDetail(TASK)
+    openEditor(container)
 
     const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
     expect(saveBtn).not.toBeNull()
@@ -262,6 +289,7 @@ describe('TestFromAC_DetailTabEditPayload', () => {
     )
     vi.stubGlobal('fetch', fetchMock)
     const { container } = renderDetail(TASK_BLOCKED)
+    openEditor(container)
 
     const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
     expect(saveBtn).not.toBeNull()
@@ -276,6 +304,47 @@ describe('TestFromAC_DetailTabEditPayload', () => {
       },
       { timeout: 500 },
     )
+  })
+
+  it('saves live title, priority, body, tags, and cleared block reason values', async () => {
+    const updatedTask: TaskDetail = {
+      ...TASK_BLOCKED,
+      title: 'User-Typed Title',
+      priority: 'critical',
+      body: 'edited body content',
+      tags: ['scope:cockpit'],
+      block_reason: '',
+    }
+    const fetchMock = vi.fn(() =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve(updatedTask) }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const { container } = renderDetail(TASK_BLOCKED)
+    openEditor(container)
+
+    typeIntoField(container, 'p-input-text[data-field="title"]', updatedTask.title)
+    fireEvent(
+      container.querySelector('p-select[data-field="priority"]')!,
+      new CustomEvent('change', { detail: { value: updatedTask.priority }, bubbles: true }),
+    )
+    fireEvent.click(container.querySelector('[data-testid="body-edit-toggle"]')!)
+    typeIntoField(container, 'p-textarea[data-field="body"]', updatedTask.body ?? '')
+    fireEvent.click(container.querySelector('p-tag-dismissible[data-tag="bug"]')!)
+    typeIntoField(container, 'p-input-text[data-field="new-tag"]', 'scope:cockpit')
+    fireEvent.click(container.querySelector('[data-testid="add-tag-button"]')!)
+    typeIntoField(container, 'p-input-text[data-field="block_reason"]', '')
+    fireEvent.click(container.querySelector('[data-testid="save-button"]')!)
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce(), { timeout: 500 })
+    const [, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    const body = JSON.parse(options.body as string) as Record<string, unknown>
+    expect(body).toMatchObject({
+      title: updatedTask.title,
+      priority: updatedTask.priority,
+      body: updatedTask.body,
+      tags: updatedTask.tags,
+      block_reason: '',
+    })
   })
 })
 
@@ -311,6 +380,9 @@ describe('TestFromAC_DetailTabActions', () => {
     await waitFor(
       () => expect(container.querySelector('[data-testid="confirm-dialog"]')).not.toBeNull(),
       { timeout: 500 },
+    )
+    expect(container.querySelector('[data-testid="confirm-dialog"]')?.textContent).toContain(
+      TASK_BLOCKED.block_reason,
     )
 
     clickConfirm(container)
@@ -423,6 +495,24 @@ describe('TestFromAC_DetailTabActions', () => {
     )
   })
 
+  it('offers the configured forward move for a research task', async () => {
+    const { container } = renderDetailWithBoard(TASK_RESEARCH, BOARD)
+
+    const moveTrigger = container.querySelector('[data-testid="task-detail-move-menu-trigger"]') as HTMLElement | null
+    expect(moveTrigger).not.toBeNull()
+    fireEvent.click(moveTrigger!)
+
+    expect(container.querySelector('[data-testid="task-detail-move-target"][data-status="backlog"]')).not.toBeNull()
+  })
+
+  it('opens the archival flow for an active unclaimed task', () => {
+    const { container } = renderDetailWithBoard(TASK_RESEARCH, BOARD)
+
+    fireEvent.click(container.querySelector('[data-testid="task-detail-archive-action"]')!)
+
+    expect(container.querySelector('[data-testid="archival-modal"]')).not.toBeNull()
+  })
+
   it('409 from action confirmation shows a conflict indicator', async () => {
     /**
      * AC5: actions handle 409 (refetch + show conflict).
@@ -524,6 +614,7 @@ describe('TestFromAC_DetailTabTaskUpdated', () => {
         <DetailTab task={TASK} onTaskUpdated={onTaskUpdated} />
       </PorscheDesignSystemProvider>,
     )
+    openEditor(container)
 
     const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
     expect(saveBtn).not.toBeNull()
@@ -538,5 +629,29 @@ describe('TestFromAC_DetailTabTaskUpdated', () => {
       },
       { timeout: 500 },
     )
+  })
+
+  it('calls onTaskCleared when save returns 404', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve({
+          ok: false,
+          status: 404,
+          json: () => Promise.resolve({ detail: 'not found' }),
+        }),
+      ),
+    )
+    const onTaskCleared = vi.fn()
+    const { container } = render(
+      <PorscheDesignSystemProvider>
+        <DetailTab task={TASK} onTaskCleared={onTaskCleared} />
+      </PorscheDesignSystemProvider>,
+    )
+    openEditor(container)
+
+    fireEvent.click(container.querySelector('[data-testid="save-button"]')!)
+
+    await waitFor(() => expect(onTaskCleared).toHaveBeenCalledOnce(), { timeout: 500 })
   })
 })

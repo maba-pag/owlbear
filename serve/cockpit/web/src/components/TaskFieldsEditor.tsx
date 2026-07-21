@@ -753,11 +753,17 @@ export default function TaskFieldsEditor({
         />
       ) : null}
 
-      <div
-        className={isEditing ? 'grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-static-sm' : 'hidden'}
-        data-region="task-detail-edit-form"
-        hidden={!isEditing}
-      >
+      {!isEditing && validationMessage ? (
+        <div data-testid="validation-message" className="rounded-md border border-warning bg-warning-low px-static-xs py-1 text-xs text-primary">
+          {validationMessage}
+        </div>
+      ) : null}
+
+      {isEditing ? (
+        <div
+          className="grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-static-sm"
+          data-region="task-detail-edit-form"
+        >
       {actionPortalTarget ? createPortal(editActions, actionPortalTarget) : editActions}
 
       <div className="grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-static-sm lg:grid-cols-[minmax(0,1fr)_14rem]">
@@ -993,7 +999,8 @@ export default function TaskFieldsEditor({
         />
       )}
 
-      </div>
+        </div>
+      ) : null}
     </div>
   )
 }

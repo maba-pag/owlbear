@@ -42,6 +42,7 @@ import { render, fireEvent, waitFor } from '@testing-library/react'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
 import DetailTab, { type TaskDetail } from '../components/DetailTab'
 import type { Board } from '../hooks/useBoard'
+import { openEditor } from './DetailTab.testSupport'
 
 // ─── PDS jsdom patch ──────────────────────────────────────────────────────────
 
@@ -297,6 +298,7 @@ describe('TestFromAC_ConflictLocalEditsPreserved', () => {
     vi.stubGlobal('fetch', mockConflictThenRefetch(SERVER_TASK))
     const onTaskUpdatedSpy = vi.fn()
     const { container } = render(<StatefulWrapper initialTask={BASE_TASK} onTaskUpdated={onTaskUpdatedSpy} />)
+    openEditor(container)
 
     editTitle(container, 'My Local Edit Title')
     editPriority(container, 'someday')
@@ -326,6 +328,7 @@ describe('TestFromAC_ConflictLocalEditsPreserved', () => {
     vi.stubGlobal('fetch', mockConflictThenRefetch(BLOCKED_SERVER_TASK))
     const onTaskUpdatedSpy = vi.fn()
     const { container } = render(<StatefulWrapper initialTask={BLOCKED_TASK} onTaskUpdated={onTaskUpdatedSpy} />)
+    openEditor(container)
 
     editBlockReason(container, 'My local block reason')
     await triggerConflictModal(container)
@@ -369,6 +372,7 @@ describe('TestFromAC_ConflictLocalEditsPreserved', () => {
     const onTaskUpdatedSpy = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
     const { container } = render(<StatefulWrapper initialTask={BASE_TASK} onTaskUpdated={onTaskUpdatedSpy} />)
+    openEditor(container)
 
     editBody(container, 'My Local Edit Body')
     await triggerConflictModal(container)
@@ -450,6 +454,7 @@ describe('TestFromAC_ConflictLocalEditsPreserved', () => {
 
     const onTaskUpdatedSpy = vi.fn()
     const { container } = render(<StatefulWrapper initialTask={BASE_TASK} onTaskUpdated={onTaskUpdatedSpy} />)
+    openEditor(container)
 
     editTitle(container, 'My Local Edit Title')
     clickSave(container)
@@ -502,6 +507,7 @@ describe('TestFromAC_ConflictModalComparison', () => {
      */
     vi.stubGlobal('fetch', mockConflictThenRefetch(SERVER_TASK))
     const { container } = render(<StatefulWrapper initialTask={BASE_TASK} />)
+    openEditor(container)
 
     editTitle(container, 'My Local Edit Title')
     editPriority(container, 'someday')
@@ -542,6 +548,7 @@ describe('TestFromAC_ForceSaveAcknowledgmentGate', () => {
      */
     vi.stubGlobal('fetch', mockConflictThenRefetch(SERVER_TASK))
     const { container } = render(<StatefulWrapper initialTask={BASE_TASK} />)
+    openEditor(container)
 
     editTitle(container, 'My Local Edit Title')
     await triggerConflictModal(container)
@@ -557,6 +564,7 @@ describe('TestFromAC_ForceSaveAcknowledgmentGate', () => {
      */
     vi.stubGlobal('fetch', mockConflictThenRefetch(SERVER_TASK))
     const { container } = render(<StatefulWrapper initialTask={BASE_TASK} />)
+    openEditor(container)
 
     editTitle(container, 'My Local Edit Title')
     await triggerConflictModal(container)
@@ -580,6 +588,7 @@ describe('TestFromAC_ForceSaveAcknowledgmentGate', () => {
     const fetchMock = mockConflictThenForceSaveSuccess(SERVER_TASK)
     vi.stubGlobal('fetch', fetchMock)
     const { container } = render(<StatefulWrapper initialTask={BASE_TASK} />)
+    openEditor(container)
 
     editTitle(container, 'My Local Edit Title')
     editPriority(container, 'someday')
@@ -623,6 +632,7 @@ describe('TestFromAC_ForceSaveAcknowledgmentGate', () => {
     const fetchMock = mockConflictThenForceSaveSuccess(BLOCKED_SERVER_TASK)
     vi.stubGlobal('fetch', fetchMock)
     const { container } = render(<StatefulWrapper initialTask={BLOCKED_TASK} />)
+    openEditor(container)
 
     editBlockReason(container, 'My local block reason')
     await triggerConflictModal(container)
@@ -666,6 +676,7 @@ describe('TestFromAC_ConflictCancelPreservesEdits', () => {
      */
     vi.stubGlobal('fetch', mockConflictThenRefetch(SERVER_TASK))
     const { container } = render(<StatefulWrapper initialTask={BASE_TASK} />)
+    openEditor(container)
 
     editTitle(container, 'My Local Edit Title')
     editPriority(container, 'someday')
@@ -721,6 +732,7 @@ describe('TestFromAC_ConflictErrorContract', () => {
     )
 
     const { container } = render(<StatefulShellConflictWrapper initialTask={BASE_TASK} />)
+    openEditor(container)
 
     clickSave(container)
 
@@ -763,6 +775,7 @@ describe('TestFromAC_ConflictErrorContract', () => {
     )
 
     const { container } = render(<StatefulWrapper initialTask={BASE_TASK} />)
+    openEditor(container)
 
     editTitle(container, 'My Local Edit Title')
     await triggerConflictModal(container)
@@ -816,6 +829,7 @@ describe('TestFromAC_ConflictErrorContract', () => {
     )
 
     const { container } = render(<StatefulWrapper initialTask={BASE_TASK} />)
+    openEditor(container)
 
     editTitle(container, 'My Local Edit Title')
     await triggerConflictModal(container)
@@ -886,6 +900,7 @@ describe('TestFromAC_ConflictBannerTaskSwitch', () => {
 
     vi.stubGlobal('fetch', mockConflictThenRefetch(SERVER_TASK))
     const { container } = render(<TaskSwitchWrapper />)
+    openEditor(container)
 
     editTitle(container, 'My Local Edit')
     await triggerConflictModal(container)

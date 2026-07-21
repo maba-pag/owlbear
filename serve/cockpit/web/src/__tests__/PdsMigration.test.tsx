@@ -231,6 +231,7 @@ describe('PdsMigration_FormControls', () => {
 
   it('DetailTab uses PInputText for title, PSelect for priority', () => {
     const { container } = renderDetailTab()
+    openDetailEditor(container)
     expect(container.querySelector('p-input-text[data-field="title"]')).not.toBeNull()
     expect(container.querySelector('p-select[data-field="priority"]')).not.toBeNull()
     expect(container.querySelector('input[data-field="title"]')).toBeNull()

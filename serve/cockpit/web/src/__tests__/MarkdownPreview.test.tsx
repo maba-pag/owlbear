@@ -35,4 +35,25 @@ describe('MarkdownPreview', () => {
     expect(preview.className).toContain('[&_pre]:bg-surface')
     expect(preview.className).toContain('[&_pre_code]:bg-transparent')
   })
+
+  it('removes executable markup and unsafe links through the real markdown pipeline', () => {
+    const markdown = [
+      '<script>alert(1)</script>',
+      '',
+      '<img src="x" onerror="alert(2)">',
+      '',
+      '[unsafe](javascript:alert(3))',
+      '',
+      'safe',
+    ].join('\n')
+    const { getByTestId } = render(
+      <MarkdownPreview data-testid="markdown-preview">{markdown}</MarkdownPreview>,
+    )
+    const preview = getByTestId('markdown-preview')
+
+    expect(preview.textContent).toContain('safe')
+    expect(preview.querySelector('script')).toBeNull()
+    expect(preview.querySelector('[onerror]')).toBeNull()
+    expect(preview.querySelector('a[href^="javascript:"]')).toBeNull()
+  })
 })

@@ -19,6 +19,7 @@ import { render, fireEvent, waitFor } from '@testing-library/react'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
 import DetailTab, { type DetailTabProps, type TaskDetail } from '../components/DetailTab'
 import type { Board } from '../hooks/useBoard'
+import { openEditor } from './DetailTab.testSupport'
 
 // ─── Mock react-markdown ──────────────────────────────────────────────────────
 
@@ -195,6 +196,7 @@ describe('TestFromAC_DetailTabMutationCallbacks', () => {
       stubEditFetch({ status: 422 })
       const spy = vi.fn()
       const { container } = renderDetail(TASK, { onMutationError: spy })
+      openEditor(container)
 
       fireEvent.click(container.querySelector('[data-testid="save-button"]')!)
 
@@ -211,6 +213,7 @@ describe('TestFromAC_DetailTabMutationCallbacks', () => {
       stubEditFetch({ status: 500 })
       const spy = vi.fn()
       const { container } = renderDetail(TASK, { onMutationError: spy })
+      openEditor(container)
 
       fireEvent.click(container.querySelector('[data-testid="save-button"]')!)
 
@@ -223,6 +226,7 @@ describe('TestFromAC_DetailTabMutationCallbacks', () => {
       stubEditFetch({ status: 500, network: true })
       const spy = vi.fn()
       const { container } = renderDetail(TASK, { onMutationError: spy })
+      openEditor(container)
 
       fireEvent.click(container.querySelector('[data-testid="save-button"]')!)
 
@@ -294,6 +298,7 @@ describe('TestFromAC_DetailTabMutationCallbacks', () => {
       stub409ThenFetch({ status: 200, body: CONFLICT_TASK })
       const spy409 = vi.fn()
       const { container: c1, unmount: u1 } = renderDetail(TASK, { onMutationError: spy409 })
+      openEditor(c1)
       fireEvent.click(c1.querySelector('[data-testid="save-button"]')!)
       await waitFor(() => {
         expect(c1.querySelector('[data-testid="conflict-modal"]')).not.toBeNull()
@@ -305,6 +310,7 @@ describe('TestFromAC_DetailTabMutationCallbacks', () => {
       stubEditFetch({ status: 500 })
       const spy500 = vi.fn()
       const { container: c2 } = renderDetail(TASK, { onMutationError: spy500 })
+      openEditor(c2)
       fireEvent.click(c2.querySelector('[data-testid="save-button"]')!)
       await waitFor(() => {
         expect(spy500).toHaveBeenCalledWith('Edit failed', expect.any(String), 'error')
@@ -324,6 +330,7 @@ describe('TestFromAC_DetailTabMutationCallbacks', () => {
         onMutationError: mutationErrorSpy,
         onTaskCleared: taskClearedSpy,
       })
+      openEditor(container)
 
       fireEvent.click(container.querySelector('[data-testid="save-button"]')!)
 

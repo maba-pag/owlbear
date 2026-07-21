@@ -55,6 +55,7 @@ const TASK: TaskDetail = {
   claimed: false,
   claimed_at: null,
   dep_status: null,
+  proof_bundle: null,
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -86,8 +87,12 @@ describe('TestFromAC_BodyPreviewToggle', () => {
 
     // Step 2: simulate user typing a different value into the PDS textarea via CustomEvent,
     // matching the readControlValue(event.detail.value) path in TaskFieldsEditor
-    const textarea = container.querySelector('p-textarea[data-field="body"]') as HTMLElement | null
+    const textarea = container.querySelector('p-textarea[data-field="body"]') as
+      | (HTMLElement & { hideLabel?: boolean; label?: string })
+      | null
     expect(textarea).not.toBeNull()
+    expect(textarea?.label ?? textarea?.getAttribute('label')).toBe('Body')
+    expect(textarea?.hideLabel ?? textarea?.hasAttribute('hide-label')).toBe(true)
     fireEvent(
       textarea!,
       new CustomEvent('input', { detail: { value: 'unsaved local body' }, bubbles: true }),

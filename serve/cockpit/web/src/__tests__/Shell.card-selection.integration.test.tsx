@@ -301,10 +301,10 @@ describe('TestFromAC_TaskDetailReinit_Integration', () => {
     fireEvent.click(leave!)
 
     await waitFor(() => {
-      const newTitleInput = container.querySelector<HTMLInputElement>('[data-field="title"]')
-      expect(newTitleInput).not.toBeNull()
-      expect(newTitleInput!.value).toBe('Task Ninety-Nine')
+      expect(container.querySelector('[data-testid="edit-details-button"]')).not.toBeNull()
     })
+    fireEvent.click(container.querySelector('[data-testid="edit-details-button"]')!)
+    expect(container.querySelector<HTMLInputElement>('[data-field="title"]')?.value).toBe('Task Ninety-Nine')
   })
 
   // AC2 integration boundary: switching tasks clears the stale title before new task loads
@@ -321,8 +321,10 @@ describe('TestFromAC_TaskDetailReinit_Integration', () => {
     // Select task 42 and wait for form to render.
     fireEvent.click(container.querySelector('[data-testid="task-card"][data-id="42"]')!)
     await waitFor(() => {
-      expect(container.querySelector('[data-field="title"]')).not.toBeNull()
+      expect(container.querySelector('[data-testid="edit-details-button"]')).not.toBeNull()
     })
+    fireEvent.click(container.querySelector('[data-testid="edit-details-button"]')!)
+    expect(container.querySelector('[data-field="title"]')).not.toBeNull()
 
     // Switch to task 99 (fetch will pend) — the stale title must not be visible.
     fireEvent.click(container.querySelector('[data-testid="task-card"][data-id="99"]')!)
