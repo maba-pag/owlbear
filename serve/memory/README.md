@@ -209,11 +209,11 @@ Exported from the `owlbear_memory` package top-level. Used internally by `Memory
 | `approved` | `delete` | `deleted` | Soft-delete |
 | `contested` | `resolve` | `approved` | Sets `approved_at` |
 | `disputed` | `resolve` | `approved` | Sets `approved_at` |
-| `stale` | `resolve` | `approved` | Sets `approved_at` |
+| `stale` | `resolve` | `approved` | Sets `approved_at`; resets only `didnt_use_count` to `0`; preserves other counters |
 | `contested` | `delete` | `deleted` | Soft-delete |
 | `disputed` | `delete` | `deleted` | Soft-delete |
 | `stale` | `delete` | `deleted` | Soft-delete |
-| `contested`/`disputed`/`stale` | `edit` | — | Raises `TransitionError`; use `resolve()` first |
+| `contested`/`disputed`/`stale` | `edit` | (unchanged) | Field update only; preserves the exceptional state |
 | any | `approve`/`edit`/`delete` when `deleted` | — | Raises `TransitionError` |
 | `approved`/`curated`/`contested` | `try_stale_transition` (auto) | `stale` | Fires when `check_slot_efficiency` returns True; no OCC |
 | `stale`/`disputed`/`deleted`/`pending` | `try_stale_transition` | (unchanged) | Predicate False or ineligible state — no-op, no error |

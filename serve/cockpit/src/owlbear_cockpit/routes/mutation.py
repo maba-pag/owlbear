@@ -1,4 +1,4 @@
-"""Cockpit mutation API routes — move, edit, release, sweep, scan, repair, compact-activity."""
+"""Cockpit mutation API routes — move, edit, release, sweep, compact-activity."""
 
 from __future__ import annotations
 
@@ -14,12 +14,7 @@ from owlbear_kanban.errors import (
     NotFoundError,
     ValidationError,
 )
-from owlbear_kanban.models import (
-    ActivityCompactionResult,
-    CleanupResult,
-    RepairOutcome,
-    SingleTaskResponse,
-)
+from owlbear_kanban.models import ActivityCompactionResult, SingleTaskResponse
 
 router = APIRouter()
 
@@ -327,24 +322,6 @@ def release_task(task_id: int, req: ReleaseRequest, view: _View) -> SingleTaskRe
 def sweep_tasks(view: _View) -> list[int]:
     """Release expired claims and return released task IDs."""
     return view.sweep()
-
-
-@router.post("/tasks/cleanup", response_model=CleanupResult)
-def cleanup_tasks(view: _View) -> CleanupResult:
-    """Run maintenance cleanup and return released, archived, and skipped items."""
-    return view.cleanup()
-
-
-@router.post("/tasks/scan", response_model=list[dict[str, Any]])
-def scan_corruption(view: _View) -> list[dict[str, Any]]:
-    """Run read-only corruption scan for tasks and archive directories."""
-    return [_serialize_scan_item(item) for item in view.scan_corruption()]
-
-
-@router.post("/tasks/repair", response_model=list[RepairOutcome])
-def repair_storage(view: _View) -> list[RepairOutcome]:
-    """Run storage repair and return one outcome per affected file."""
-    return view.repair_storage()
 
 
 @router.post("/tasks/compact-activity", response_model=ActivityCompactionResult)

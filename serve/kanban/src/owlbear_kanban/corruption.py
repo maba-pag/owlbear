@@ -151,7 +151,8 @@ def _generated_task_name(path: Path, record: _DuplicateRecord) -> bool:
 
 def _classify_duplicate_set(records: list[_DuplicateRecord], tasks_dir: Path) -> DuplicateClass:
     """Classify a complete ID set, applying predicates to every member."""
-    if len(records) < 2:
+    minimum_duplicate_count = 2
+    if len(records) < minimum_duplicate_count:
         raise ValueError
 
     same_frontmatter = len({record.normalized_frontmatter for record in records}) == 1
@@ -190,10 +191,17 @@ def _read_duplicate_records(paths: list[Path]) -> list[_DuplicateRecord] | None:
     return records
 
 
-def _duplicate_outcome(record: _DuplicateRecord, duplicate_class: DuplicateClass, action: str, detail: str) -> RepairOutcome:
+def _duplicate_outcome(
+    record: _DuplicateRecord, duplicate_class: DuplicateClass, action: str, detail: str
+) -> RepairOutcome:
     code = (
         ERR_CORRUPT_DUPLICATE_LOCATION.__name__
-        if duplicate_class in {DuplicateClass.ARCHIVED_IDENTICAL, DuplicateClass.NON_ARCHIVED_CROSS_DIRECTORY_IDENTICAL, DuplicateClass.CROSS_DIRECTORY_DIFFERENT}
+        if duplicate_class
+        in {
+            DuplicateClass.ARCHIVED_IDENTICAL,
+            DuplicateClass.NON_ARCHIVED_CROSS_DIRECTORY_IDENTICAL,
+            DuplicateClass.CROSS_DIRECTORY_DIFFERENT,
+        }
         else ERR_CORRUPT_DUPLICATE_ID.__name__
     )
     return RepairOutcome(
@@ -205,21 +213,37 @@ def _duplicate_outcome(record: _DuplicateRecord, duplicate_class: DuplicateClass
     )
 
 
-def _revalidate_duplicate_set(paths: list[Path], expected: list[_DuplicateRecord], tasks_dir: Path) -> list[_DuplicateRecord] | None:
+def _revalidate_duplicate_set(
+    paths: list[Path], expected: list[_DuplicateRecord], tasks_dir: Path
+) -> list[_DuplicateRecord] | None:
     current = _read_duplicate_records(paths)
     if current is None or len(current) != len(expected):
         return None
-    if any(path != record.path or not _semantically_equal(record, expected[index]) for index, (path, record) in enumerate(zip(paths, current))):
+    if any(
+        path != record.path or not _semantically_equal(record, expected[index])
+        for index, (path, record) in enumerate(zip(paths, current, strict=True))
+    ):
         return None
     if _classify_duplicate_set(current, tasks_dir) != _classify_duplicate_set(expected, tasks_dir):
         return None
     return current
 
 
-def _repair_duplicate_set(paths: list[Path], kanban_dir: Path, tasks_dir: Path, archive_dir: Path) -> list[RepairOutcome]:
+def _repair_duplicate_set(
+    paths: list[Path], kanban_dir: Path, tasks_dir: Path, archive_dir: Path
+) -> list[RepairOutcome]:
     records = _read_duplicate_records(paths)
     if records is None:
-        return [RepairOutcome(task_id=_extract_file_id(path), file_path=str(path), code=ERR_CORRUPT_DUPLICATE_ID.__name__, action="unresolved", detail="duplicate set could not be parsed") for path in paths]
+        return [
+            RepairOutcome(
+                task_id=_extract_file_id(path),
+                file_path=str(path),
+                code=ERR_CORRUPT_DUPLICATE_ID.__name__,
+                action="unresolved",
+                detail="duplicate set could not be parsed",
+            )
+            for path in paths
+        ]
 
     duplicate_class = _classify_duplicate_set(records, tasks_dir)
     if duplicate_class in {
@@ -228,17 +252,28 @@ def _repair_duplicate_set(paths: list[Path], kanban_dir: Path, tasks_dir: Path, 
         DuplicateClass.NON_ARCHIVED_CROSS_DIRECTORY_IDENTICAL,
         DuplicateClass.CROSS_DIRECTORY_DIFFERENT,
     }:
-        return [_duplicate_outcome(record, duplicate_class, "unresolved", "complete duplicate set is not deterministically repairable") for record in records]
+        return [
+            _duplicate_outcome(
+                record, duplicate_class, "unresolved", "complete duplicate set is not deterministically repairable"
+            )
+            for record in records
+        ]
     if duplicate_class == DuplicateClass.HETEROGENEOUS:
-        return [_duplicate_outcome(record, duplicate_class, "unresolved", "heterogeneous duplicate set") for record in records]
+        return [
+            _duplicate_outcome(record, duplicate_class, "unresolved", "heterogeneous duplicate set")
+            for record in records
+        ]
 
     current = _revalidate_duplicate_set(paths, records, tasks_dir)
     if current is None:
-        return [_duplicate_outcome(record, duplicate_class, "skipped", "duplicate candidate changed before repair") for record in records]
+        return [
+            _duplicate_outcome(record, duplicate_class, "skipped", "duplicate candidate changed before repair")
+            for record in records
+        ]
 
     if duplicate_class == DuplicateClass.SAME_DIRECTORY_IDENTICAL:
         generated = [record for record in current if _generated_task_name(record.path, record)]
-        survivor = (generated[0] if generated else min(current, key=lambda record: str(record.path)))
+        survivor = generated[0] if generated else min(current, key=lambda record: str(record.path))
         removals = [record for record in current if record.path != survivor.path]
         action = "removed"
     elif duplicate_class == DuplicateClass.ARCHIVED_IDENTICAL:
@@ -507,34 +542,89 @@ def collect_task_health_findings(path: Path, config: BoardConfig) -> list[TaskHe
     lines = content.split("\n")
     closing_idx = next((i for i, line in enumerate(lines[1:], start=1) if line == "---"), None)
     if closing_idx is None:
-        return [TaskHealthFinding(code="ERR_CORRUPT_DELIMITERS", detail="no closing --- delimiter found", path=str(path))]
+        return [
+            TaskHealthFinding(code="ERR_CORRUPT_DELIMITERS", detail="no closing --- delimiter found", path=str(path))
+        ]
     try:
         frontmatter = YAML(typ="safe").load("\n".join(lines[1:closing_idx])) or {}
     except Exception as exc:  # noqa: BLE001
         return [TaskHealthFinding(code="ERR_CORRUPT_YAML_PARSE", detail=f"YAML parse error: {exc}", path=str(path))]
     if not isinstance(frontmatter, dict):
-        return [TaskHealthFinding(code="ERR_CORRUPT_YAML_PARSE", detail="frontmatter is not a YAML mapping", path=str(path))]
+        return [
+            TaskHealthFinding(code="ERR_CORRUPT_YAML_PARSE", detail="frontmatter is not a YAML mapping", path=str(path))
+        ]
 
-    findings: list[TaskHealthFinding] = []
     task_id = frontmatter.get("id") if isinstance(frontmatter.get("id"), int) else None
-    for field in _REQUIRED_FIELDS:
-        if field not in frontmatter:
-            findings.append(TaskHealthFinding(code="ERR_CORRUPT_MISSING_FIELD", detail=f"required field '{field}' absent", path=str(path), task_id=task_id, field=field))
+    findings = [
+        TaskHealthFinding(
+            code="ERR_CORRUPT_MISSING_FIELD",
+            detail=f"required field '{field}' absent",
+            path=str(path),
+            task_id=task_id,
+            field=field,
+        )
+        for field in _REQUIRED_FIELDS
+        if field not in frontmatter
+    ]
     if "id" in frontmatter and not isinstance(frontmatter["id"], int):
-        findings.append(TaskHealthFinding(code="ERR_CORRUPT_TYPE_MISMATCH", detail="field 'id' is not an integer", path=str(path), field="id"))
+        findings.append(
+            TaskHealthFinding(
+                code="ERR_CORRUPT_TYPE_MISMATCH", detail="field 'id' is not an integer", path=str(path), field="id"
+            )
+        )
     if "blocked" in frontmatter and not isinstance(frontmatter["blocked"], bool):
-        findings.append(TaskHealthFinding(code="ERR_CORRUPT_TYPE_MISMATCH", detail="field 'blocked' is not a boolean", path=str(path), task_id=task_id, field="blocked"))
+        findings.append(
+            TaskHealthFinding(
+                code="ERR_CORRUPT_TYPE_MISMATCH",
+                detail="field 'blocked' is not a boolean",
+                path=str(path),
+                task_id=task_id,
+                field="blocked",
+            )
+        )
     file_id = _extract_file_id(path)
     if file_id is not None and isinstance(frontmatter.get("id"), int) and frontmatter["id"] != file_id:
-        findings.append(TaskHealthFinding(code="ERR_CORRUPT_ID_FILENAME_MISMATCH", detail=f"filename id {file_id} != frontmatter id {frontmatter['id']}", path=str(path), task_id=task_id, field="id"))
+        findings.append(
+            TaskHealthFinding(
+                code="ERR_CORRUPT_ID_FILENAME_MISMATCH",
+                detail=f"filename id {file_id} != frontmatter id {frontmatter['id']}",
+                path=str(path),
+                task_id=task_id,
+                field="id",
+            )
+        )
     status = frontmatter.get("status")
     if status is not None and status not in set(_configured_statuses(config)) | {"archived"}:
-        findings.append(TaskHealthFinding(code="ERR_CORRUPT_INVALID_STATUS", detail=f"status '{status}' not in configured statuses", path=str(path), task_id=task_id, field="status"))
+        findings.append(
+            TaskHealthFinding(
+                code="ERR_CORRUPT_INVALID_STATUS",
+                detail=f"status '{status}' not in configured statuses",
+                path=str(path),
+                task_id=task_id,
+                field="status",
+            )
+        )
     priority = frontmatter.get("priority")
     if priority is not None and priority not in _configured_priorities(config):
-        findings.append(TaskHealthFinding(code="ERR_CORRUPT_INVALID_PRIORITY", detail=f"priority '{priority}' not in configured priorities", path=str(path), task_id=task_id, field="priority"))
+        findings.append(
+            TaskHealthFinding(
+                code="ERR_CORRUPT_INVALID_PRIORITY",
+                detail=f"priority '{priority}' not in configured priorities",
+                path=str(path),
+                task_id=task_id,
+                field="priority",
+            )
+        )
     if not _is_archive_path(path, config) and frontmatter.get("claimed_by") not in (None, ""):
-        findings.append(TaskHealthFinding(code="ERR_CORRUPT_MISSING_FIELD", detail="forbidden field claimed_by present", path=str(path), task_id=task_id, field="claimed_by"))
+        findings.append(
+            TaskHealthFinding(
+                code="ERR_CORRUPT_MISSING_FIELD",
+                detail="forbidden field claimed_by present",
+                path=str(path),
+                task_id=task_id,
+                field="claimed_by",
+            )
+        )
     return findings
 
 
@@ -770,7 +860,7 @@ def _write_repaired(
         )
 
 
-def scan_and_fix(kanban_dir: Path, config: BoardConfig) -> list[RepairOutcome]:  # noqa: C901, PLR0912
+def scan_and_fix(kanban_dir: Path, config: BoardConfig) -> list[RepairOutcome]:
     """Phase 1 of two-phase repair: file operations only, no AR task creation.
 
     Scans ``tasks/`` and ``archive/`` for corruption. For each corrupt file,
@@ -853,12 +943,68 @@ def _task_health_after_repair(kanban_dir: Path, config: BoardConfig) -> TaskHeal
     )
 
 
+def _archive_reconciliation_outcome(path: Path, task_id: int | None, action: str, detail: str) -> RepairOutcome:
+    return RepairOutcome(
+        task_id=task_id,
+        file_path=str(path),
+        code="ARCHIVE_RECONCILIATION",
+        action=action,
+        detail=detail,
+    )
+
+
+def _reconcile_archived_task(
+    path: Path,
+    kanban_dir: Path,
+    tasks_dir: Path,
+    archive_dir: Path,
+    all_paths_by_id: dict[int, list[Path]],
+) -> list[RepairOutcome]:
+    try:
+        _, frontmatter, body = _read_frontmatter(path)
+    except CorruptionError:
+        return []
+    if frontmatter.get("status") != "archived":
+        return []
+
+    task_id = frontmatter.get("id")
+    destination = archive_dir / path.name
+    if destination.exists():
+        records = _read_duplicate_records([path, destination])
+        if records is None:
+            outcomes = [
+                _archive_reconciliation_outcome(
+                    path, task_id, "unresolved", "archive destination conflict could not be parsed"
+                )
+            ]
+        else:
+            duplicate_paths = all_paths_by_id.get(task_id, [path, destination])
+            outcomes = _repair_duplicate_set(duplicate_paths, kanban_dir, tasks_dir, archive_dir)
+    else:
+        try:
+            _, current_frontmatter, current_body = _read_frontmatter(path)
+            if current_frontmatter != frontmatter or _normalize_body(current_body) != _normalize_body(body):
+                outcomes = [_archive_reconciliation_outcome(path, task_id, "skipped", "candidate changed before move")]
+            else:
+                archive_dir.mkdir(parents=True, exist_ok=True)
+                destination.hardlink_to(path)
+                path.unlink()
+                outcomes = [_archive_reconciliation_outcome(path, task_id, "moved", f"moved to {destination}")]
+        except FileExistsError:
+            outcomes = [
+                _archive_reconciliation_outcome(path, task_id, "skipped", "archive destination appeared before move")
+            ]
+        except OSError as exc:
+            outcomes = [_archive_reconciliation_outcome(path, task_id, "failed", f"archive move failed: {exc}")]
+    return outcomes
+
+
 def _reconcile_archived_tasks(kanban_dir: Path, config: BoardConfig) -> list[RepairOutcome]:
     tasks_dir = kanban_dir / config.paths.tasks_dir
     archive_dir = kanban_dir / config.paths.archive_dir
-    outcomes: list[RepairOutcome] = []
     if not tasks_dir.exists():
-        return outcomes
+        return []
+
     all_paths_by_id: dict[int, list[Path]] = {}
     for directory in (tasks_dir, archive_dir):
         if not directory.exists():
@@ -867,35 +1013,10 @@ def _reconcile_archived_tasks(kanban_dir: Path, config: BoardConfig) -> list[Rep
             file_id = _extract_file_id(candidate)
             if file_id is not None:
                 all_paths_by_id.setdefault(file_id, []).append(candidate)
+
+    outcomes: list[RepairOutcome] = []
     for path in sorted(tasks_dir.glob("*.md")):
-        try:
-            _, frontmatter, body = _read_frontmatter(path)
-        except CorruptionError:
-            continue
-        if frontmatter.get("status") != "archived":
-            continue
-        destination = archive_dir / path.name
-        if destination.exists():
-            records = _read_duplicate_records([path, destination])
-            if records is None:
-                outcomes.append(RepairOutcome(task_id=frontmatter.get("id"), file_path=str(path), code="ARCHIVE_RECONCILIATION", action="unresolved", detail="archive destination conflict could not be parsed"))
-                continue
-            duplicate_paths = all_paths_by_id.get(frontmatter.get("id"), [path, destination])
-            outcomes.extend(_repair_duplicate_set(duplicate_paths, kanban_dir, tasks_dir, archive_dir))
-            continue
-        try:
-            _, current_frontmatter, current_body = _read_frontmatter(path)
-            if current_frontmatter != frontmatter or _normalize_body(current_body) != _normalize_body(body):
-                outcomes.append(RepairOutcome(task_id=frontmatter.get("id"), file_path=str(path), code="ARCHIVE_RECONCILIATION", action="skipped", detail="candidate changed before move"))
-                continue
-            archive_dir.mkdir(parents=True, exist_ok=True)
-            destination.hardlink_to(path)
-            path.unlink()
-            outcomes.append(RepairOutcome(task_id=frontmatter.get("id"), file_path=str(path), code="ARCHIVE_RECONCILIATION", action="moved", detail=f"moved to {destination}"))
-        except FileExistsError:
-            outcomes.append(RepairOutcome(task_id=frontmatter.get("id"), file_path=str(path), code="ARCHIVE_RECONCILIATION", action="skipped", detail="archive destination appeared before move"))
-        except OSError as exc:
-            outcomes.append(RepairOutcome(task_id=frontmatter.get("id"), file_path=str(path), code="ARCHIVE_RECONCILIATION", action="failed", detail=f"archive move failed: {exc}"))
+        outcomes.extend(_reconcile_archived_task(path, kanban_dir, tasks_dir, archive_dir, all_paths_by_id))
     return outcomes
 
 

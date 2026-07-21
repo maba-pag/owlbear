@@ -9,13 +9,14 @@ from owlbear_memory.errors import (
     TransitionError,
     ValidationError,
 )
-from owlbear_memory.models import MemoryCategory, MemoryEntry, MemoryState
+from owlbear_memory.models import MemoryCategory, MemoryEntry, MemoryHealth, MemoryState
 
 __all__ = [
     "ConcurrencyError",
     "MemoryCategory",
     "MemoryEngine",
     "MemoryEntry",
+    "MemoryHealth",
     "MemoryState",
     "MtimeScanCache",
     "NotFoundError",

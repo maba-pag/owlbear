@@ -8,9 +8,10 @@ import sys
 import threading
 import webbrowser
 from pathlib import Path
+from typing import Annotated
 
 import uvicorn
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from owlbear_memory.errors import (
@@ -23,13 +24,15 @@ from owlbear_memory.errors import (
     TransitionError as MemoryTransitionError,
 )
 
-from owlbear_cockpit.deps import get_engine  # noqa: F401 — re-exported for test DI
+from owlbear_cockpit.deps import get_engine, get_ideas_path, get_memory_engine
+from owlbear_cockpit.models import HealthModule, IdeasHealth, WorkspaceHealth
 from owlbear_cockpit.routes.events import router as events_router
 from owlbear_cockpit.routes.ideas import router as ideas_router
 from owlbear_cockpit.routes.memory import router as memory_router
 from owlbear_cockpit.routes.mutation import router as mutation_router
 from owlbear_cockpit.routes.read import router as read_router
 from owlbear_cockpit.routes.requests import router as requests_router
+from owlbear_kanban.corruption import repair_task_storage
 from owlbear_kanban.errors import (
     ConcurrencyError,
     ConfigError,
@@ -37,6 +40,7 @@ from owlbear_kanban.errors import (
     NotFoundError,
     ValidationError,
 )
+from owlbear_kanban.models import DeterministicRepairResult
 
 _DEFAULT_PORT = 8420
 _MAX_PORT = 65535
@@ -48,6 +52,36 @@ app.include_router(requests_router, prefix="/api")
 app.include_router(events_router, prefix="/api")
 app.include_router(ideas_router, prefix="/api")
 app.include_router(memory_router, prefix="/api")
+
+_Engine = Annotated[object, Depends(get_engine)]
+_MemoryEngine = Annotated[object, Depends(get_memory_engine)]
+_IdeasPath = Annotated[Path, Depends(get_ideas_path)]
+
+
+def _get_health_engine() -> object | None:
+    try:
+        return get_engine()
+    except AttributeError:
+        return None
+
+
+def _get_health_memory_engine() -> object | None:
+    try:
+        return get_memory_engine()
+    except AttributeError:
+        return None
+
+
+def _get_health_ideas_path() -> Path:
+    try:
+        return get_ideas_path()
+    except AttributeError:
+        return Path("ideas.md")
+
+
+_HealthEngine = Annotated[object | None, Depends(_get_health_engine)]
+_HealthMemoryEngine = Annotated[object | None, Depends(_get_health_memory_engine)]
+_HealthIdeasPath = Annotated[Path, Depends(_get_health_ideas_path)]
 
 
 def _error_envelope(code: str, message: str) -> dict[str, str]:
@@ -114,10 +148,109 @@ def handle_unexpected_error(_request: Request, _exc: Exception) -> JSONResponse:
     )
 
 
-@app.get("/health")
-def health() -> dict[str, str]:
-    """Return service health status."""
+def _module_health(checker: object) -> HealthModule:
+    """Run one checker without preventing sibling module results."""
+    try:
+        if checker is None:
+            return HealthModule(status="check-failed", findings=[{"detail": "engine unavailable"}])
+        result = checker()
+        if hasattr(result, "findings"):
+            findings = [item.model_dump() for item in result.findings]
+            checked_paths = result.checked_paths
+            repairable_count = getattr(
+                result,
+                "repairable_count",
+                sum(bool(finding.get("repairable")) for finding in findings),
+            )
+        else:
+            findings = [{"path": path, "detail": "unreadable"} for path in result.unreadable_paths] + [
+                {"path": path, "detail": "duplicate"} for paths in result.duplicate_paths.values() for path in paths
+            ]
+            checked_paths = result.unreadable_paths + [
+                path for paths in result.duplicate_paths.values() for path in paths
+            ]
+            repairable_count = 0
+        status = "healthy"
+        if findings:
+            status = "attention" if repairable_count == len(findings) else "unhealthy"
+        return HealthModule(
+            status=status,
+            findings=findings,
+            repairable_count=repairable_count,
+            checked_paths=checked_paths,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return HealthModule(status="check-failed", findings=[{"detail": str(exc)}])
+
+
+def _ideas_health(ideas_path: Path) -> IdeasHealth:
+    try:
+        ideas_path.read_bytes().decode("utf-8")
+    except FileNotFoundError:
+        return IdeasHealth(status="healthy", path=str(ideas_path))
+    except (OSError, UnicodeDecodeError) as exc:
+        return IdeasHealth(status="unhealthy", path=str(ideas_path), detail=str(exc))
+    return IdeasHealth(status="healthy", path=str(ideas_path))
+
+
+def _workspace_health(engine: object | None, memory_engine: object | None, ideas_path: Path) -> WorkspaceHealth:
+    modules = {
+        "tasks": _module_health(engine.task_health if engine else None),
+        "requests": _module_health(engine.request_health if engine else None),
+        "memory": _module_health(memory_engine.health if memory_engine else None),
+        "ideas": _ideas_health(ideas_path),
+    }
+    statuses = {module.status for module in modules.values()}
+    status = "healthy"
+    if statuses & {"unhealthy", "check-failed"}:
+        status = "unhealthy"
+    elif "attention" in statuses:
+        status = "attention"
+    return WorkspaceHealth(status=status, modules=modules)
+
+
+@app.get("/health/live")
+def health_live() -> dict[str, str]:
+    """Return liveness without touching workspace storage."""
     return {"status": "ok"}
+
+
+@app.get("/health", response_model=WorkspaceHealth)
+def health(engine: _HealthEngine, memory_engine: _HealthMemoryEngine, ideas_path: _HealthIdeasPath) -> WorkspaceHealth:
+    return _workspace_health(engine, memory_engine, ideas_path)
+
+
+@app.get("/health/tasks", response_model=HealthModule)
+def task_health(engine: _HealthEngine) -> HealthModule:
+    return _module_health(engine.task_health if engine else None)
+
+
+@app.get("/health/requests", response_model=HealthModule)
+def request_health(engine: _HealthEngine) -> HealthModule:
+    return _module_health(engine.request_health if engine else None)
+
+
+@app.get("/health/memory", response_model=HealthModule)
+def memory_health(memory_engine: _HealthMemoryEngine) -> HealthModule:
+    return _module_health(memory_engine.health if memory_engine else None)
+
+
+@app.get("/health/ideas", response_model=IdeasHealth)
+def ideas_health(ideas_path: _IdeasPath) -> IdeasHealth:
+    return _ideas_health(ideas_path)
+
+
+@app.post("/health/tasks/repair", response_model=DeterministicRepairResult)
+def repair_task_health(engine: _Engine) -> DeterministicRepairResult:
+    result = repair_task_storage(engine.kanban_dir, engine.board_config())
+    task_health_result = engine.task_health()
+    unresolved_findings = [finding for finding in task_health_result.findings if not finding.repairable]
+    result.task_health_result = task_health_result
+    result.unresolved_findings = unresolved_findings
+    result.unresolved_count = sum(outcome.action == "unresolved" for outcome in result.outcomes) + len(
+        unresolved_findings
+    )
+    return result
 
 
 def run() -> None:
