@@ -1,10 +1,10 @@
 ---
 id: 1973
 title: Recover coherent MemoryEngine purge changes
-status: verify
+status: collect
 priority: high
 created: 2026-07-21T16:06:04.774848+02:00
-updated: 2026-07-21T16:16:29.991123+02:00
+updated: 2026-07-21T16:18:54.810891+02:00
 tags:
   - scope:memory
   - data-safety
@@ -60,3 +60,18 @@ Proof: 198 maintained lifecycle/state/assessment/migration tests passed; Ruff li
 Durable-test decision: no new test committed. The maintained lifecycle suite plus deterministic task proof cover this recovered behavior without adding timing-sensitive test rent.
 
 Builder-challenger: decision pass after independently rerunning all proof; no blocker, scope drift, or auto-fix.
+
+[[2026-07-21T16:18:54+02:00]]
+## Verify Notes
+
+Verdict: PASS.
+
+Exact revision: `e0d86e33f2eb02866eab0449df27ecba357c592b` in the clean prepared worktree.
+
+Authority: archived #1946 core purge and #1947 coherent cache mutation; `storage.delete_entry` remains the protected deletion owner.
+
+Proof at exact revision: 198 maintained memory lifecycle/state/assessment/migration tests passed; Ruff lint and format passed. A fresh temporary public-engine probe verified immutable exact-cutoff preview, absent/failure reconciliation (`purged=2`, `skipped=1`, `failed=1`), failed-entry retry retention, and an event-controlled purge/read interleaving. The expected injected OSError was logged and did not abort purge. The probe was removed and the worktree returned clean.
+
+No durable test was added: deterministic public-boundary proof plus maintained suites cover the risk without timing-sensitive test rent.
+
+Verifier-challenger: decision pass; no scope, lock-coverage, purge-safety, proof, or unresolved-AC finding.
