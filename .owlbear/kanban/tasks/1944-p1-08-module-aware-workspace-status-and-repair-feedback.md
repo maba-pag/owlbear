@@ -1,10 +1,10 @@
 ---
 id: 1944
 title: 'P1-08: Module-aware Workspace Status and repair feedback'
-status: verify
+status: collect
 priority: medium
 created: 2026-07-17T02:32:30.849128+02:00
-updated: 2026-07-21T13:42:55.779229+02:00
+updated: 2026-07-21T13:59:44.528568+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -229,3 +229,24 @@ Durable-test justification: no tests added. The pre-existing seven-path frontend
 **Builder-challenger:** `decision: pass`; no concrete blockers or auto-fixes. It accepted the #1969 correction as an accompanying dependency repair.
 
 **Risks:** No functional blocker remains. Known non-task advisories are the Vite chunk-size warning and Starlette/httpx deprecation warnings.
+
+[[2026-07-21T13:59:44+02:00]]
+## Verify Notes
+
+**Verdict:** PASS to collect.
+
+**Exact revision verified:** `76ae2e6d79e6a52f8b7a3123d239a21a638d05da` in a detached disposable worktree.
+
+**Intent and AC review:** The committed Workspace Status renders the overall indicator and ordered tasks, requests, memory, and ideas rows across checking, healthy, attention, unhealthy, and check-failed states. Task repair availability is derived independently from severity, so mixed unresolved and repairable findings remain red while Repair stays available. Successful or partial repair retains a dismissible receipt after confirmation and source-popover closure; it includes completion time and removed, moved, quarantined, skipped, failed, and unresolved counts, limits item detail to failed or unresolved entries, and survives polling. Memory purge remains separate. Maintained source and browser searches found no generic Cleanup or task-only scan runtime path.
+
+**Independent exact-revision proof:** Four task-focused Vitest files passed with 60 tests. Production build, Stylelint, and HTMLHint passed with only the existing Vite chunk-size advisory. The full Cockpit backend scope passed 290 tests with four known Starlette/httpx deprecation warnings. Scoped Ruff passed. The standard Chromium sweep passed 175 of 175 tests, including real repair confirmation reaching the API, receipt retention, PDS portal ownership, focus, accessibility, and desktop/mobile overlay geometry.
+
+**Scope review:** The Cockpit backend correction is narrow and justified: post-repair task state now uses canonical `engine.task_health()` so unresolved graph findings cannot be projected as transient green. Its assembled contract regression passed in the exact-revision backend suite. No wider backend contract or compatibility alias was added.
+
+**Full-suite limitation:** The exact revision's complete Vitest run had 121 passing files and 2 failing files, with 1,880 tests passed, 2 skipped, and 6 failed. Five failures are stale memory confidence/state assertions in `MemoryTab.routing.test.tsx`; one is an obsolete generated-output assertion in `TailwindStylelint.test.ts`. Commit-boundary proof shows #1944 changed neither test nor their owning MemoryTab or Vite paths. Builder's working-tree full-suite result included unrelated pre-existing dirty test curation that was deliberately excluded from the #1944 commit. These failures do not falsify #1944, but they remain a hard blocker to the user's separate requirement for a fully green, commit-addressable admission baseline. This revision must not be represented as that baseline, and #1968 remains untouched.
+
+**Requests and follow-up:** No pending or resolved structured request exists for #1944. No task-local defect or Required Follow-up remains.
+
+**Verifier challenger:** `decision: pass`; it confirmed task-scoped proof covers all AC and that the six unrelated failures must remain an explicit admission-baseline blocker.
+
+**Files changed by verifier:** None beyond this task record.
