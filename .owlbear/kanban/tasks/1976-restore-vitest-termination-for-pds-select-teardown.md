@@ -1,10 +1,10 @@
 ---
 id: 1976
 title: Restore DetailTab lifecycle bounds under PDS 4.5
-status: build
+status: shape
 priority: high
 created: 2026-07-21T18:33:01.110997+02:00
-updated: 2026-07-21T23:10:31.261126+02:00
+updated: 2026-07-21T23:15:29.240240+02:00
 tags:
   - baseline-repair
   - frontend
@@ -96,3 +96,14 @@ The original stack-qualified window-error guard prevented reporting but did not 
 - Added AC-6 so the legacy mocked script-injection assertion must be replaced at the unmocked `MarkdownPreview` sanitization boundary.
 - Fresh shaper-challenger verdict: pass. It confirmed AC-1 through AC-6 are boundary-valid, independently verifiable, and build-ready; no PDS mocks, suppression, installed patches, or Vitest sharding are admitted.
 - Route: `build`; full unsharded `npm test`, build, and final clean-detached admission baseline remain mandatory.
+
+[[2026-07-21T23:15:29+02:00]]
+## Builder Notes
+- Focused curation proof reached 25 passing tests and exposed two failures.
+- Implementation finding: lazy edit-form mounting hides `serverValidationMessage` after a display-mode task action returns 422; build will render that existing message in display mode when resumed.
+- Shape contradiction: AC-6 concatenates raw HTML and trailing `safe` text without a markdown block boundary. CommonMark parses the complete string as one raw HTML block, so the real `MarkdownPreview` output is empty and cannot include `safe` without changing product parsing semantics.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | shaper | Separate the AC-6 malicious HTML, unsafe link, and safe text with markdown block boundaries while preserving the same sanitized-output assertions, then return the task to build. | task AC-6 | Unmocked `MarkdownPreview.test.tsx` produced empty text for the concatenated literal; the other 25 focused assertions passed. |
