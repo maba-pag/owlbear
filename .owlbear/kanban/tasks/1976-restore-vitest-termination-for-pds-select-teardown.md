@@ -1,10 +1,10 @@
 ---
 id: 1976
 title: Restore DetailTab lifecycle bounds under PDS 4.5
-status: shape
+status: build
 priority: high
 created: 2026-07-21T18:33:01.110997+02:00
-updated: 2026-07-21T23:15:29.240240+02:00
+updated: 2026-07-21T23:17:22.852272+02:00
 tags:
   - baseline-repair
   - frontend
@@ -32,10 +32,11 @@ ac:
     admission commands exit zero: Cockpit build; Python non-API and non-E2E suite;
     Ruff check; Ruff format check; Stylelint; HTMLHint; ESLint; maintained unsharded
     `npm test`; maintained `npm run test:e2e` fast Playwright gate."
-  - 'AC-6: Given `MarkdownPreview` renders `<script>alert(1)</script><img src="x"
-    onerror="alert(2)">[unsafe](javascript:alert(3))safe` through the real markdown
-    pipeline without a markdown mock, the output includes `safe` and contains no `script`
-    element, no `onerror` attribute, and no anchor `href` beginning with `javascript:`.'
+  - 'AC-6: Given `MarkdownPreview` renders `<script>alert(1)</script>\n\n<img src="x"
+    onerror="alert(2)">\n\n[unsafe](javascript:alert(3))\n\nsafe` as separate markdown
+    blocks through the real pipeline without a markdown mock, the output includes
+    `safe` and contains no `script` element, no `onerror` attribute, and no anchor
+    `href` beginning with `javascript:`.'
 proof_bundle: existing+challenge
 blocked: false
 block_reason:
@@ -107,3 +108,12 @@ The original stack-qualified window-error guard prevented reporting but did not 
 | # | Target Agent | Action Required | File(s) | Evidence |
 |---|-------------|----------------|---------|----------|
 | 1 | shaper | Separate the AC-6 malicious HTML, unsafe link, and safe text with markdown block boundaries while preserving the same sanitized-output assertions, then return the task to build. | task AC-6 | Unmocked `MarkdownPreview.test.tsx` produced empty text for the concatenated literal; the other 25 focused assertions passed. |
+
+[[2026-07-21T23:17:22+02:00]]
+## Shape Notes
+- Applied the builder's complete local repair: AC-6 now separates malicious HTML, the unsafe markdown link, and safe text with `
+
+` block boundaries.
+- The corrected input preserves the same sanitization invariant while making `safe` an independently rendered paragraph through the unmocked markdown pipeline.
+- Fresh shaper-challenger verdict: pass. It confirmed the prior CommonMark contradiction is resolved with no scope, module-map, dependency, or user-decision change.
+- Route: resume `build`; retain the builder's display-mode validation-message repair and rerun focused proof.
