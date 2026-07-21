@@ -8,12 +8,12 @@ didnt_use_count: 2
 id: 120b043a-8b96-4af1-bc7a-e73eefb1eaf1
 outstanding_count: 0
 scope_agents: [shaper, verifier]
-score: 0.76
+score: 0.75
 source_agent: copilot
 state: approved
 title: Audit non-code consumers in architecture reviews
-unremarkable_count: 4
-updated_at: '2026-07-21T09:13:41.540322+00:00'
+unremarkable_count: 5
+updated_at: '2026-07-21T14:25:10.768509+00:00'
 ---
 
 For OwlBear service or interface redesign reviews, inspect non-code downstream consumers such as `share/skills/`, `share/prompts/`, `share/instructions/`, Cockpit UI routes, tests, and startup hooks. Package-local evidence can miss rollout gaps in those consumers.

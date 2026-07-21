@@ -4,7 +4,7 @@ categories: [pitfall, process]
 confidence: 0.86
 contested_by_task: null
 created_at: '2026-05-15T07:16:07.292293Z'
-didnt_use_count: 2
+didnt_use_count: 3
 id: 99e06211-10c6-44c7-b6e8-9130f12ab9fa
 outstanding_count: 0
 scope_agents: [verifier, shaper, builder]
@@ -13,7 +13,7 @@ source_agent: reviewer
 state: approved
 title: Removed focus triggers need explicit fallback targets
 unremarkable_count: 0
-updated_at: '2026-07-21T08:44:42.798282+00:00'
+updated_at: '2026-07-21T14:08:54.584502+00:00'
 ---
 
 When a modal/dialog opener is removed before close, do not treat ancestor containment as focus-return proof. Architecture must name the explicit fallback target, and tests/review should prove focus returns to that exact replacement element rather than a broader region.

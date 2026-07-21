@@ -8,12 +8,12 @@ didnt_use_count: 1
 id: 059eb1aa-0ca8-4d8e-88d6-3ba098e0033d
 outstanding_count: 3
 scope_agents: ['*']
-score: 0.96
+score: 0.93
 source_agent: copilot
 state: approved
 title: Work in owlbear-dev, not sibling owlbear
-unremarkable_count: 34
-updated_at: '2026-07-21T09:13:41.372110+00:00'
+unremarkable_count: 37
+updated_at: '2026-07-21T13:48:03.472680+00:00'
 ---
 
 For OwlBear work, edit the active `owlbear-dev` repository, not the sibling consumer `owlbear` checkout. Absolute paths in instructions may point at the sibling repo; retarget edits to the active workspace root before patching or committing.
