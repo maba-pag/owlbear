@@ -48,7 +48,9 @@ without behavior change).
   Return `COMMIT_FAILED`, never a success verdict. The filesystem block prevents orchestrator
   redispatch even though the block itself is not yet committed. An archived task is already
   off-board; return `COMMIT_FAILED` with the same recovery command and do not claim success.
-- Recover a `COMMIT_FAILED` task by completing the original explicit-path commit first. For an
+- Recover a `COMMIT_FAILED` task by completing the original explicit-path commit first. If the
+  owned path is already staged, use `commit-owned --staged` to commit exactly its staged snapshot
+  while preserving unrelated staged paths and any newer unstaged layer. For an
   on-board task, then clear the block with `edit_task(id={task-id}, block_reason="")` and make a
   task-record-only recovery commit. These two recovery commits are the explicit exception to the
   one-commit rule because the first restores durable ownership and the second restores dispatch.
