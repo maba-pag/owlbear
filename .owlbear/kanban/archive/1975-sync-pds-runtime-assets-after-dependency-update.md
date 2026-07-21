@@ -1,10 +1,10 @@
 ---
 id: 1975
 title: Sync PDS runtime assets after dependency update
-status: collect
+status: archived
 priority: high
 created: 2026-07-21T17:51:32.013732+02:00
-updated: 2026-07-21T18:00:45.503155+02:00
+updated: 2026-07-21T18:01:40.123459+02:00
 tags:
   - baseline-repair
   - frontend
@@ -22,7 +22,7 @@ proof_bundle: existing+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Objective
@@ -48,3 +48,8 @@ Proof guidance: run the production Cockpit build and the focused PDS/Vite contra
 - Exact production build passed and an explicit output guard confirmed the version-mismatch diagnostic was absent.
 - Maintained contracts passed: Python PDS build compatibility 11/11 and Vite PDS version handling 9/9.
 - Verifier challenger decision: pass; no scope drift or unresolved acceptance criterion.
+
+[[2026-07-21T18:01:40+02:00]]
+## Collect Notes
+- Mechanically archived the verified leaf after confirming exact-SHA verification evidence, both acceptance criteria, and verifier-challenger PASS were present.
+- Aggregate impact: the lock-resolved PDS 4.5.0 runtime assets are committed, so #1968 can resume exact-baseline admission checks.
