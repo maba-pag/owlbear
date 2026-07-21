@@ -1,10 +1,10 @@
 ---
 id: 1972
 title: Recover lint-clean Kanban integrity changes
-status: collect
+status: archived
 priority: high
 created: 2026-07-21T16:05:51.989615+02:00
-updated: 2026-07-21T16:11:16.920360+02:00
+updated: 2026-07-21T16:11:56.736637+02:00
 tags:
   - scope:kanban
   - integrity
@@ -25,7 +25,7 @@ proof_bundle: existing+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -73,3 +73,12 @@ Proof at the exact revision: focused corruption plus task-health suites passed 8
 AC mapping: real-filesystem tests cover read-only persisted/reference/location evidence and complete-set/no-overwrite repair convergence; Ruff covers maintained-artifact quality.
 
 Verifier-challenger: decision pass; no scope, rent, evidence, or unresolved-AC finding.
+
+[[2026-07-21T16:11:56+02:00]]
+## Collect Notes
+
+Classification: verified leaf with no children, dependencies, requests, or unresolved follow-up.
+
+Closure evidence: builder commit `9949f9b1b86c5573bd62720a27137784a34e4333`; exact-SHA verifier proof passed 86 focused tests plus Ruff lint and format; both challengers passed.
+
+Archive rationale: the recovered Kanban integrity behavior is durably owned and independently verified; no aggregate review is required.
