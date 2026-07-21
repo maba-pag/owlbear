@@ -6,14 +6,14 @@ contested_by_task: null
 created_at: '2026-05-17T01:35:27.003968Z'
 didnt_use_count: 0
 id: 03b0e3f6-f46e-43a7-80cc-91c38387e137
-outstanding_count: 1
+outstanding_count: 2
 scope_agents: [shaper, planner]
-score: 0.9
+score: 0.99
 source_agent: copilot
 state: approved
 title: Validate brownfield briefs against live code
-unremarkable_count: 0
-updated_at: '2026-07-13T13:51:56.432144+00:00'
+unremarkable_count: 1
+updated_at: '2026-07-21T09:13:41.484800+00:00'
 ---
 
 For OwlBear brownfield or refactor briefs, read the live implementation, data files, and consumers before synthesis. Treat prior briefs, panel claims, and speculative feature lists as hypotheses until they are verified against existing code.
