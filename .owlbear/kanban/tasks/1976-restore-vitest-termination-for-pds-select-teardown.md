@@ -1,10 +1,10 @@
 ---
 id: 1976
 title: Restore DetailTab lifecycle bounds under PDS 4.5
-status: verify
+status: collect
 priority: high
 created: 2026-07-21T18:33:01.110997+02:00
-updated: 2026-07-22T00:00:49.940238+02:00
+updated: 2026-07-22T00:10:29.495369+02:00
 tags:
   - baseline-repair
   - frontend
@@ -128,3 +128,12 @@ The original stack-qualified window-error guard prevented reporting but did not 
 - Full-suite third-party PDS teardown stack noise remains outside the clean DetailTab prefix but does not fail or stall the maintained command; this matches AC-3's scoped diagnostic condition and AC-4's unsharded exit boundary.
 - Builder-challenger decision: pass; no findings requiring repair and no auto-fixed files.
 - Task-owned paths are limited to dependency authority, `TaskFieldsEditor`, the curated/migrated frontend tests, the two new DetailTab support/concern files, and this task record. Unrelated memory, MCP, research, and purge-test changes remain untouched.
+
+[[2026-07-22T00:10:29+02:00]]
+## Verify Notes
+- Verified implementation commit `9170321fb93d84d012c251a16e5329b9bbd3a73d` directly; `git show --check` passed and all 21 committed paths match the accepted dependency/runtime/test-curation/task-record scope.
+- Fresh verifier proof: PDS dependency graph is one deduplicated 4.5.0 pair; DetailTab plus real MarkdownPreview owners pass 13/13 files and 82/82 tests with no `SelectOption.onSlotChange` diagnostic; production build passes with no PDS asset mismatch; forbidden artifact basenames are absent.
+- Source review confirms display mode omits the PDS edit form and priority select, `Edit details` mounts populated controls, display-mode mutation validation remains visible, and AC-6 traverses real `react-markdown` plus `rehype-sanitize` without a markdown mock.
+- Builder's maintained unsharded evidence remains valid at the implementation tree: 124/124 files, 1835 passed and 2 skipped, command returned zero.
+- Verifier-challenger decision: pass. It found no scope drift, proof gap, or Rent-Test defect and explicitly approved advancement to collect.
+- AC-5 remains pending by definition: collector must archive and commit, then the exact final archive SHA must pass every named admission command in a clean detached checkout and receive an independent challenge before the baseline is admitted.
