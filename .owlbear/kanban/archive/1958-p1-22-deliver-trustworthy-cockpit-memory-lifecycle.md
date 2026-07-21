@@ -1,10 +1,10 @@
 ---
 id: 1958
 title: 'P1-22: Deliver trustworthy Cockpit memory lifecycle'
-status: collect
+status: archived
 priority: high
 created: 2026-07-17T04:54:45.298830+02:00
-updated: 2026-07-20T02:52:49.749830+02:00
+updated: 2026-07-21T10:42:16.423200+02:00
 tags:
   - phase-1
   - scope:cockpit
@@ -34,7 +34,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -183,3 +183,23 @@ Proof guidance: collector uses verified child evidence plus running-Cockpit brow
 - #1958 returns to collect and now depends on #1952 through #1957 plus #1960.
 - No challenger was required for this complete prescribed split; `critical+challenge` requires the proof task's builder challenger before completion.
 - Collector should re-enter #1958 only after #1960 is verified and archived, then inspect its recorded SHA, commands, browser evidence, screenshot references, and authority-split results.
+
+[[2026-07-21T10:42:16+02:00]]
+## Collect Notes
+
+Classification: aggregate parent. Intent authority is `## Outcome`, `## Planning Source`, `## Scope`, `## Shape Notes`, and aggregate AC-1 through AC-3 for `expose-memory-lifecycle-in-cockpit`.
+
+Invariant map:
+- AC-1 requires one delivered commit proving the assembled desktop/mobile Cockpit lifecycle across approved, contested, disputed, stale, and deleted entries.
+- AC-2 requires real MCP exceptional-curation rejection and real Cockpit exceptional edit/resolve success at that commit or a descendant.
+- AC-3 requires verified child and maintained documentation coverage for the requested fields and explicit exclusions.
+
+Child and dependency coverage: `list_tasks(parent=1958)` returned no active tasks. Direct lookup confirmed all eight declared children, #1952 through #1957, #1960, and #1967, retain `parent: 1958` and are archived with reason `completed`. Parent `depends_on` lists exactly those eight children and reports `dep_status: ok`.
+
+Child evidence summary: #1952 verifies exceptional engine editing, provenance, resolution, score recomputation, and stale recovery; #1953 verifies final MCP rejection and absence of a resolve operation; #1954 verifies the Cockpit projection, edit, resolve, and error contract; #1955 verifies score-led overview and detail/edit behavior; #1956 verifies task navigation and exceptional recovery interactions; #1957 verifies maintained engine/MCP documentation; #1967 verifies the complete frontend lifecycle client contract; #1960 verifies the assembled cross-boundary workflow.
+
+SHA-linked normal-path proof: archived child #1960 records verifier and verifier-challenger PASS at exact delivered commit `8fbcdb7002d1040242addbc9b3135c1067e7a41f`. Its detached-checkout run passed the production Cockpit plus real MCP stdio plus desktop/mobile Playwright workflow, captured four responsive screenshots, captured real Cockpit edit/resolve responses for contested, disputed, and stale, and produced a receipt showing state-specific real MCP `curate_memory` rejection with no mutation and no resolve operation. Focused backend checks passed 58 tests and focused MCP rejection checks passed 3 tests. Git lineage confirms the current closure commit descends from the tested SHA, and the five proof-harness paths are present in that tested commit.
+
+Residual state: no pending or resolved structured request exists for the parent. All child archive records report no unresolved Required Follow-up or decision state. The earlier parent Collect Notes rejection is superseded because #1960 now supplies precisely the missing SHA-linked aggregate proof.
+
+Archive rationale: the aggregate outcome and AC-1 through AC-3 are satisfied; archive as completed.
