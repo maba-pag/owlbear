@@ -1,10 +1,10 @@
 ---
 id: 1944
 title: 'P1-08: Module-aware Workspace Status and repair feedback'
-status: shape
+status: build
 priority: medium
 created: 2026-07-17T02:32:30.849128+02:00
-updated: 2026-07-21T10:57:11.948558+02:00
+updated: 2026-07-21T11:13:49.663119+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -180,3 +180,23 @@ Durable-test justification: no tests added. The pre-existing seven-path frontend
 ### Challenge And Audit
 - Shaper-challenger: PASS. It confirmed the repair is non-material, the three AC lines are boundary-valid, real-engine proof fixes the fixture-only false archive, and invariant ownership is complete.
 - Board audit target: #1969 in build with parent #1945 and dependency #1942; #1944 in shape with dependencies #1943 and #1969.
+
+[[2026-07-21T11:13:49+02:00]]
+## Shape Notes
+
+### Repair Source And Classification
+- Source: latest Builder rejection on #1944 and its prescribed corrective dependency #1969.
+- Classification: mechanical reroute under `w-task-repair`. No product behavior, architecture, acceptance meaning, proof boundary, task ownership, parent link, or dependency change is required.
+
+### Facts Checked
+- The rejection required #1944 to remain in shape until #1969 restored and verifier-closed the real Cockpit HTTP contract.
+- #1969 is archived `completed`. Its exact-SHA Verify Notes at `5f711cabec6870f413834c924bcca44ce809b562` prove repairable-only versus mixed task severity, preserved `repairable_count`, direct deterministic repair, complete terminal receipt fields, and the negative failure envelope through assembled FastAPI routes.
+- #1943 is archived `completed` and remains the ordered frontend state owner.
+- #1944 has no child tasks, no pending or resolved structured request, and dependency state `ok`.
+- The pre-existing seven-path candidate baseline-curation delta remains an artifact-to-scope audit obligation for Builder; it is not treated as the complete feature.
+
+### Resulting Route And Board Audit
+- Advance #1944 from shape to build.
+- Preserve parent #1945, dependencies #1943 and #1969, Outcome, Scope, Planning Authority, Change Module Map, Product Invariant Map, all three AC lines, priority, and tags.
+- Builder now owns only the Workspace Status/Shell UI boundary: consume the delivered response, render four module rows and retained receipt, remove generic Cleanup/task-only scan UI while preserving memory purge, audit task-owned baseline-curation paths, and run package-local plus assembled integrated-browser proof.
+- No board or planning-artifact mutation beyond this status transition and Shape Notes is required.
