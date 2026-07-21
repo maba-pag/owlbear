@@ -1,10 +1,10 @@
 ---
 id: 1944
 title: 'P1-08: Module-aware Workspace Status and repair feedback'
-status: build
+status: shape
 priority: medium
 created: 2026-07-17T02:32:30.849128+02:00
-updated: 2026-07-21T10:44:56.064602+02:00
+updated: 2026-07-21T10:51:12.641165+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -131,3 +131,29 @@ Run package-local frontend checks and use the VS Code integrated browser for the
 - Advance #1944 from shape to build.
 - Preserve parent #1945, dependency #1943, all three AC lines, priority, and tags.
 - Builder owns the Workspace Status/Shell UI boundary and must run package-local behavior proof plus assembled integrated-browser proof before DONE.
+
+[[2026-07-21T10:51:12+02:00]]
+## Builder Notes
+
+Verdict: REJECT to shape. No product or test file was changed by this builder invocation; pre-existing dirty work was preserved.
+
+Change envelope: #1944 owns only the Cockpit Workspace Status/Shell UI, module indicators, task repair interaction, retained receipt, generic Cleanup removal, and frontend/browser proof. Backend health assembly and deterministic repair contracts are supplied by archived dependency #1942 and are explicitly out of scope.
+
+Blocking source evidence:
+- Committed `HealthModule` and `_module_health()` omit `repairable_count`; `_module_health()` returns `unhealthy` for any finding rather than `attention` for repairable-only task findings. A real Workspace Status therefore cannot implement the accepted repair-availability and severity contract from the supplied response.
+- Committed `POST /health/tasks/repair` calls legacy `KanbanEngine.repair_storage()`. That method quarantines files and creates action-request tasks, while the accepted authority requires `repair_task_storage()` to perform deterministic repair and return terminal counts, unresolved findings, and post-repair health.
+- Existing dirty changes in `serve/cockpit/src/owlbear_cockpit/main.py` and `tests/test_cockpit_health_contract.py` already begin correcting the production repair call, confirming the missing upstream owner, but they are outside #1944 and are not committed at the delivered HEAD.
+- The current frontend `WorkspaceRepairResponse` also omits receipt timing/count fields; that frontend projection is #1944-owned, but implementing it cannot make the real backend boundary valid.
+
+Proof selected: direct comparison of the named OpenSpec authority, public Pydantic/FastAPI response boundary, frontend provider types, and real `KanbanEngine.repair_storage()` implementation. This is the cheapest check and falsifies exact-SHA assembled browser completion before UI edits.
+
+Change Module Map deviation: none applied. Widening #1944 into Cockpit backend or Kanban domain code would violate its shaped boundary.
+
+Durable-test justification: no tests added. The pre-existing seven-path frontend baseline-curation delta remains untouched and must be re-audited after the upstream contract is delivered.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|-----------------|---------|----------|
+| 1 | shape | Add one corrective build leaf under parent #1945 that restores the accepted assembled health contract: task module repairability/severity fields and production deterministic repair invocation with a complete receipt. | `serve/cockpit/src/owlbear_cockpit/models.py`, `serve/cockpit/src/owlbear_cockpit/main.py`, `tests/test_cockpit_health_contract.py`; existing Kanban deterministic repair owner | Current committed response drops repairability and production repair invokes the legacy engine method. |
+| 2 | shape | Make #1944 depend on that corrective leaf while preserving #1944 Outcome, Scope, AC, and frontend ownership. Add the corrective leaf to parent #1945's aggregate dependency gate. | #1944, #1945, new corrective task | Exact-SHA assembled UI proof requires the real supplied HTTP boundary. |
+| 3 | shape | Re-dispatch #1944 only after the corrective leaf is verifier-closed; then consume the complete response, render the retained receipt, remove generic Cleanup/task-scan UI, and prove the assembled workflow. | #1944 | Current frontend-only implementation would false-green on fixtures. |
