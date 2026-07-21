@@ -1,10 +1,10 @@
 ---
 id: 1960
 title: 'P1-23: Prove assembled Cockpit memory lifecycle'
-status: verify
+status: collect
 priority: high
 created: 2026-07-17T20:19:09.315342+02:00
-updated: 2026-07-21T10:23:22.642070+02:00
+updated: 2026-07-21T10:32:16.834056+02:00
 tags:
   - phase-1
   - scope:cockpit
@@ -656,3 +656,30 @@ AC result: AC-1 through AC-3 are covered by the assembled proof, receipt, respon
 Durable-test justification: the maintained assembled Playwright harness passes the Rent Test because this exact cross-boundary proof gap caused repeated failed attempts and is expensive to reproduce manually.
 
 Builder-challenger result: PASS. It found no concrete DONE defect, accepted the narrow five-file scope, and classified exact delivered-SHA replay as the verifier handoff after the scoped builder commit.
+
+[[2026-07-21T10:32:16+02:00]]
+## Verify Notes
+
+Verified exact delivered commit `8fbcdb7002d1040242addbc9b3135c1067e7a41f` from a detached disposable checkout. No verifier patch was applied.
+
+Evidence reviewed and executed:
+- `npm run test:e2e:memory-lifecycle`: 3 passed at the exact SHA using an isolated Python environment. The run exercised real MCP stdio, production Cockpit FastAPI, and Playwright desktop/mobile workflows.
+- The browser selected all seven lifecycle states, asserted exact score-descending titles and values, confirmed neutral score tags, inspected approved detail/edit context, navigated contested provenance to task #1960 in Shell task detail, hid raw negative counters, omitted deleted edit/resolve, and observed no horizontal overflow.
+- Real Cockpit POST responses were captured for edit and resolve on contested, disputed, and stale fixtures. Each edit preserved its exceptional state and each resolve returned the entry in approved state.
+- Generated receipt `test-results/memory-lifecycle-mcp.json` names exact SHA `8fbcdb7002d1040242addbc9b3135c1067e7a41f`, transport `mcp-stdio`, operation inventory containing only `curate_memory`, and state-specific error responses for contested, disputed, and stale. The helper compares fixture bytes before and after the calls.
+- Exact-SHA responsive artifacts were inspected: `memory-lifecycle-desktop.png`, `memory-lifecycle-desktop-detail.png`, `memory-lifecycle-mobile.png`, and `memory-lifecycle-mobile-actions.png`. Desktop detail fully shows content, metadata, provenance, and actions; the paired 390x844 captures coherently show contested identity/context and metadata/actions without overlap.
+- `uv run pytest serve/cockpit/tests/test_memory_integration.py tests/test_cockpit_memory_routes.py -q`: 58 passed with 4 existing Starlette/httpx deprecation warnings.
+- `uv run pytest tests/test_mutation_tools.py -q -k curate_memory_rejects_exceptional_states_without_mutation`: 3 passed.
+- Ruff check and format check passed for `prove-memory-lifecycle-mcp.py`; VS Code diagnostics were clean.
+
+Authority and module-map review:
+- Parent #1958 explicitly requires this running-Cockpit plus real-MCP proof at a delivered SHA.
+- Children #1952 through #1957 and #1967 are archived completed. Documentation child #1957 records verified engine, MCP, Cockpit, and maintained documentation authority.
+- The OpenSpec proposal/spec matches the proof: seven states, neutral score-first overview, confidence only as detail metadata, hidden raw negative counters, exceptional edits preserving state, human-only Cockpit resolution, and no MCP resolve tool.
+- The five proof-harness files stay within the proof-only Change Module Map and do not depend on unrelated dirty worktree changes.
+
+AC result: AC-1, AC-2, and AC-3 pass at exact commit `8fbcdb7002d1040242addbc9b3135c1067e7a41f`.
+
+Verifier-challenger result: PASS. It found no missing AC, evidence substitution, screenshot incoherence, or scope defect and accepted the receipt operation inventory as proof that MCP exposes no resolve operation.
+
+Final route: PASS to collect.
