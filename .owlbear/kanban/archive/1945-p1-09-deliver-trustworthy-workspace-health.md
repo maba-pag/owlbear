@@ -1,10 +1,10 @@
 ---
 id: 1945
 title: 'P1-09: Deliver trustworthy workspace health'
-status: collect
+status: archived
 priority: high
 created: 2026-07-17T02:33:28.872345+02:00
-updated: 2026-07-21T10:57:11.970962+02:00
+updated: 2026-07-21T14:08:25.503564+02:00
 tags:
   - phase-1
   - scope:cockpit
@@ -39,7 +39,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -265,3 +265,22 @@ Collector inspects verified child evidence and observes the assembled normal pat
 Aggregate repair: added corrective child #1969 to the #1945 dependency gate after #1944 proved the archived #1942 HTTP contract incomplete at delivered HEAD. #1969 restores the accepted repairability/severity projection and deterministic synchronous repair boundary; #1944 remains the frontend owner and now depends on #1969. Parent Outcome, Scope, aggregate AC, existing children, and collect status remain unchanged.
 
 Shaper-challenger passed the non-material graph repair. Final intended order is #1969, then #1944, then aggregate collection on #1945.
+
+[[2026-07-21T14:08:25+02:00]]
+## Collect Notes
+
+**Verdict:** ARCHIVED as the completed workspace-health aggregate.
+
+**Exact revision tested:** `0b68925f6b9c6e23e19b85d80521ce14c0539575`, a descendant containing the #1944 implementation, verifier closure, and leaf archival. All ten dependencies were archived with reason `completed`; #1945 had no pending structured request or Required Follow-up.
+
+**Running Cockpit aggregate proof:** A disposable exact-revision checkout built the production SPA, started the real FastAPI Cockpit server with temporary Kanban and memory stores, and drove Chromium against it. The initial aggregate request was held briefly so the rendered Workspace Status was observed as overall checking with all four module rows unknown. Releasing the real request produced tasks unhealthy with two findings and one repairable condition while requests, memory, and ideas remained healthy. The task repair action stayed available.
+
+One real `POST /health/tasks/repair` moved the conflict-free archived drift record, preserved a task with missing dependency, and returned HTTP 200 with moved 1, failed 0, unresolved 1, and `MISSING_DEPENDENCY` in both unresolved findings and canonical post-repair task health. Cockpit remained unhealthy immediately, issued no repair-triggered aggregate GET, closed the source popover, retained the complete six-count receipt through the next periodic GET, and removed it only on Dismiss. The receipt stayed within 1280x800 and 390x844 viewports. The fixture's expired claim timestamp and activity log were byte-for-byte preserved.
+
+**Maintenance and module evidence:** The real OpenAPI document retained explicit `/api/tasks/sweep` and `/api/tasks/compact-activity`, retained `/health/tasks/repair`, and omitted legacy `/api/tasks/scan` and `/api/tasks/cleanup`. Real ideas checks reported healthy for absent and empty files and unhealthy for unreadable UTF-8. Matched memory tests accepted every lifecycle state and detected only corruption or duplicate UUIDs. The isolated checker-failure contract returned the failed module without suppressing healthy sibling results.
+
+**Matched checks at the same revision:** Production frontend build passed with only the existing Vite chunk-size advisory. Five focused Workspace Status/provider/repair suites passed 64 tests; Stylelint and HTMLHint passed. Matched Cockpit, memory, and Kanban health/repair files passed 96 tests with four known Starlette/httpx deprecation warnings. The one-off production browser proof passed and was removed with its disposable worktree after evidence capture.
+
+**Admission-baseline boundary:** The earlier complete exact-revision Vitest run still has six unrelated failures in `MemoryTab.routing.test.tsx` and the obsolete `TailwindStylelint.test.ts`. Those paths and owners were not changed by workspace-health delivery. They do not falsify #1945's matched aggregate AC, but they remain a hard blocker to the user's separate requirement for a fully green, commit-addressable admission baseline. Neither `0b68925f` nor this archival commit is that baseline, and #1968 remains untouched.
+
+**Files changed by collector:** None beyond this aggregate task record.
