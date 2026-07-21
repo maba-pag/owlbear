@@ -1,10 +1,10 @@
 ---
 id: 1970
 title: Repair committed Cockpit frontend baseline
-status: verify
+status: collect
 priority: high
 created: 2026-07-21T14:10:09.400725+02:00
-updated: 2026-07-21T14:41:22.441086+02:00
+updated: 2026-07-21T15:31:28.204712+02:00
 tags:
   - baseline
   - scope:cockpit-web
@@ -58,3 +58,22 @@ Run focused MemoryTab tests first, then the complete Cockpit Vitest suite, produ
 **Memory assessment:** All ten recalled entries were assessed. The artifact-to-scope check was applied directly; active-workspace guidance was followed; the remaining entries were not used.
 
 **Builder challenger:** `decision: pass`; no blocker or auto-fixed file. It confirmed the two-path scope, MemoryTab observable contract, Tailwind test removal, and current-tree proof. Exact-commit repetition is explicitly verifier follow-up after this scoped commit.
+
+[[2026-07-21T15:31:28+02:00]]
+## Verify Notes
+
+**Verdict:** PASS to collect.
+
+**Exact revision:** `ce3f10e61bd11b8a7a218b764079ebc99edda5fe` in a disposable detached checkout.
+
+**Scope review:** The commit contains only the #1970 task record, the MemoryTab routing assertion update, and deletion of the obsolete Tailwind generated-output test. No product code, #1968 artifact, or unrelated workspace path is present.
+
+**Exact-commit proof:** Production build passed and emitted multiple JavaScript chunks, with only the existing Vite chunk-size advisory. The complete built-first Vitest run passed 122 of 122 files: 1,878 tests passed and 2 skipped in 232.22 seconds. Stylelint passed. HTMLHint scanned one file with no errors. No temporary `_tailwind-test-fixture.tsx` remained. The detached checkout had no tracked delta; its only untracked path was the deliberate `node_modules` dependency symlink.
+
+**Failure classification:** A pre-build Vitest attempt had one failure in the route chunk assertion because `dist/assets` did not yet exist. That test explicitly requires a prior production build. Running the shaped build gate first made the assertion pass, and the unchanged complete suite then exited green.
+
+**AC judgment:** The retained MemoryTab tests exercise the committed score, selector, lifecycle ordering, and current non-deleted default-state behavior. Build and static lint are the maintained direct authorities replacing the deleted compiler-output inspection test. All three ACs pass at the exact revision.
+
+**Memory assessment:** All ten recalled verifier entries were assessed. Artifact-to-scope and background-debt separation guidance were applied; the remaining entries were not used.
+
+**Verifier challenger:** `decision: pass`; it confirmed exact-revision proof sufficiency, owned-path scope, durable-test rent justification, and no unresolved AC.
