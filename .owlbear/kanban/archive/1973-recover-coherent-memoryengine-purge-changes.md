@@ -1,10 +1,10 @@
 ---
 id: 1973
 title: Recover coherent MemoryEngine purge changes
-status: collect
+status: archived
 priority: high
 created: 2026-07-21T16:06:04.774848+02:00
-updated: 2026-07-21T16:18:54.810891+02:00
+updated: 2026-07-21T16:19:26.371960+02:00
 tags:
   - scope:memory
   - data-safety
@@ -27,7 +27,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -75,3 +75,12 @@ Proof at exact revision: 198 maintained memory lifecycle/state/assessment/migrat
 No durable test was added: deterministic public-boundary proof plus maintained suites cover the risk without timing-sensitive test rent.
 
 Verifier-challenger: decision pass; no scope, lock-coverage, purge-safety, proof, or unresolved-AC finding.
+
+[[2026-07-21T16:19:26+02:00]]
+## Collect Notes
+
+Classification: verified leaf with no children, requests, or unresolved follow-up; dependency state is empty.
+
+Closure evidence: builder commit `e0d86e33f2eb02866eab0449df27ecba357c592b`; exact-SHA public-engine purge/concurrency proof; 198 maintained tests; clean Ruff gates; both challengers passed.
+
+Archive rationale: core purge and cache-coherence ownership is restored and independently verified; no aggregate review is required.
