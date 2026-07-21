@@ -1,10 +1,10 @@
 ---
 id: 1971
 title: Remove retired Cockpit health structural tests
-status: verify
+status: collect
 priority: high
 created: 2026-07-21T15:43:00.863642+02:00
-updated: 2026-07-21T15:45:09.573009+02:00
+updated: 2026-07-21T15:47:36.459214+02:00
 tags:
   - baseline
   - scope:cockpit-web
@@ -52,3 +52,22 @@ At exact revision `0510ad334048b544c9438fbf7519aaf706f84da4`, the build/browser-
 **Memory assessment:** All ten recalled entries were assessed. Artifact-to-scope and do-not-restore-removed-contract guidance were applied; the remaining entries were not used.
 
 **Builder challenger:** `decision: pass`; focused pytest, Ruff lint/format, search, diff scope, and durable-test removal all passed with no auto-fix.
+
+[[2026-07-21T15:47:36+02:00]]
+## Verify Notes
+
+**Verdict:** PASS to collect.
+
+**Exact revision:** `7bbb25fba72f98fc984d8e3f71a1e859da041293` in the disposable baseline checkout.
+
+**Scope review:** The commit contains only the #1971 task record, the narrow retained-polling test update, and deletion of the obsolete HealthBadge structural suite. No product, Kanban source, memory source, admission, or #1968 path is present.
+
+**Exact-commit proof:** After normal clean-checkout setup and Cockpit production build, the focused polling suite passed 13 of 13. The complete non-API/non-E2E Python suite passed 3,746 of 3,746 with only ten third-party deprecation warnings. Scoped Ruff lint passed, scoped Ruff format passed, and the checkout had no tracked proof delta. Active test search found no remaining requirement for HealthBadge or useScanPolling; the sole name match is an arbitrary generic write-guard fixture path.
+
+**AC judgment:** The stale suite and scan assertion preserved removed implementation shapes and contradicted the approved Workspace Status replacement. Their removal does not weaken the 13 retained shared-polling guards and does not restore a compatibility alias.
+
+**Separate baseline context:** Repository-wide Ruff still reports committed style debt in two source files outside #1971. Those paths have substantial unrelated uncommitted behavioral edits in the main worktree, whose current versions pass Ruff. This remains an admission-baseline blocker but is not a defect in this task.
+
+**Memory assessment:** All ten recalled verifier entries were assessed. Artifact-to-scope, background-debt separation, and removed-contract guidance were applied.
+
+**Verifier challenger:** `decision: pass`; no unresolved task AC or scope defect. It explicitly kept the repository-wide Ruff issue outside #1971.
