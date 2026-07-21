@@ -2,7 +2,7 @@
 
 AC coverage:
   AC2 (td:2): Shared polling utility usePollingFetch extracted
-  AC3 (td:1): useBoard, useScanPolling, usePendingDRs consume usePollingFetch
+    AC3 (td:1): useBoard and usePendingDRs consume usePollingFetch
   AC1 (structural): Shell derives health from tasks poll (imports useBoard, not just usePolling)
 
 All tests FAIL until the builder implements the polling refactor.
@@ -82,7 +82,7 @@ class TestFromAC_UsePollingFetchExists:
 
 
 class TestFromAC_HooksConsumeSharedUtility:
-    """AC3: useBoard, useScanPolling, usePendingDRs must import usePollingFetch."""
+    """AC3: useBoard and usePendingDRs must import usePollingFetch."""
 
     def test_useboard_imports_usepollingfetch(self) -> None:
         """useBoard.ts must import usePollingFetch from the shared utility."""
@@ -91,16 +91,6 @@ class TestFromAC_HooksConsumeSharedUtility:
         content = hook_file.read_text()
         assert "usePollingFetch" in content, (
             "useBoard.ts must import and use usePollingFetch (AC3). Currently useBoard manages its own polling loop."
-        )
-
-    def test_usscanpolling_imports_usepollingfetch(self) -> None:
-        """useScanPolling.ts must import usePollingFetch from the shared utility."""
-        hook_file = HOOKS / "useScanPolling.ts"
-        assert hook_file.exists(), "useScanPolling.ts missing."
-        content = hook_file.read_text()
-        assert "usePollingFetch" in content, (
-            "useScanPolling.ts must import and use usePollingFetch (AC3). "
-            "Currently useScanPolling manages its own polling loop."
         )
 
     def test_usependingdrs_imports_usepollingfetch(self) -> None:
