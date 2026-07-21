@@ -47,6 +47,22 @@ class MemoryHealth(BaseModel):
         return not self.unreadable_paths and not self.duplicate_paths
 
 
+class PurgePreview(BaseModel):
+    """Counts from classifying deleted memories for purge."""
+
+    deleted_total: int
+    eligible: int
+    too_recent: int
+
+
+class PurgeResult(BaseModel):
+    """Counts from a completed best-effort tombstone purge."""
+
+    purged: int
+    skipped: int
+    failed: int
+
+
 class MemoryEntry(BaseModel):
     """A single markdown-backed memory entry."""
 
