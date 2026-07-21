@@ -1,10 +1,10 @@
 ---
 id: 1974
 title: Recover Cockpit memory purge HTTP routes
-status: verify
+status: collect
 priority: high
 created: 2026-07-21T16:06:13.126407+02:00
-updated: 2026-07-21T16:22:49.727391+02:00
+updated: 2026-07-21T16:25:33.200304+02:00
 tags:
   - scope:cockpit-backend
   - api
@@ -57,3 +57,18 @@ Proof: maintained Cockpit memory route suite passed 51 tests with one third-part
 Durable-test decision: no test added. Existing route regression coverage plus assembled task proof cover this compact contract; the untracked shallow frontend threshold test is unrelated and excluded.
 
 Builder-challenger: decision pass; no blocker, scope drift, route-contract gap, or auto-fix.
+
+[[2026-07-21T16:25:33+02:00]]
+## Verify Notes
+
+Verdict: PASS.
+
+Exact revision: `3fe3281ab127ffaf4dea3699c5b16f7602e18f91` in the clean prepared worktree.
+
+Authority: archived #1948 HTTP contract and archived dependency #1973.
+
+Proof at exact revision: the maintained Cockpit memory route suite passed 51 tests with one third-party Starlette deprecation warning; Ruff lint and format passed. A fresh assembled FastAPI probe replaced only `get_memory_engine` below HTTP, verified typed preview/execution envelopes and exact delegation, then verified both routes reject -1, 1.5, empty, nonnumeric, and extra `state` payloads with 422 and no engine call. The probe was removed and the worktree returned clean.
+
+No durable test was added; maintained route coverage plus exact assembled-boundary proof cover the compact contract.
+
+Verifier-challenger: decision pass; no assembly, validation, response, scope, or unresolved-AC finding.
