@@ -1,0 +1,552 @@
+---
+schema_version: 1
+kind: admission
+receipt_id: admission-9387dea789fb
+change_id: replace-delivery-pipeline
+delivery_digest: 9387dea789fb3334cd50e6f784d06847880bd006402b33d5ab2c45888c2202a8
+issued_at: 2026-07-21T23:01:01Z
+status: valid
+
+tested_baseline:
+  repository: owlbear-dev
+  revision: e27786f3b9e76c3f44f08c807f9035018f0c6cb4
+  checkout: detached
+  clean_before: true
+  clean_after: true
+  unstaged_diff_after: empty
+  staged_diff_after: empty
+  environment:
+    os: macOS
+    node: 24.16.0
+    npm: 11.17.0
+    host_python: 3.14.6
+    uv: 0.11.30
+
+bootstrap_carrier:
+  repository: ../owlbear
+  source_revision: e6ff4b28dc815cf6d0bd314305a46f6b64670a39
+  sync_revision: 32d41b6500d88ce46c5a82770458e1befe0310f8
+  sync_revision_is_baseline_ancestor: true
+  clean: true
+  source_subject: "sync(share): dev@32d41b650"
+  policy: >-
+    MCP processes run carrier code from the clean sibling while cwd, change authority, Kanban,
+    memory, knowledge, and product paths remain in owlbear-dev. The carrier is retired after
+    DN-013 records post-cutover proof and bootstrap closure.
+
+deterministic_validation:
+  decision: pass
+  errors: []
+  warnings: []
+  canonicalization:
+    algorithm: delivery-v1
+    canonical_bytes: 124194
+    accepted_decisions: 20
+    delivery_sections: 10
+    nodes: 14
+    proofs: 14
+  diagnostics:
+    - code: DV-001
+      severity: info
+      result: pass
+      target: replace-delivery-pipeline
+      evidence: The four authority files parse under schema version 1 and share one change ID.
+      detail: Strict YAML and UTF-8 Markdown inputs produced one canonical delivery-v1 envelope.
+      remediation: Re-run validation after any authority-file edit.
+    - code: DV-002
+      severity: info
+      result: pass
+      target: graph-identities
+      evidence: Authored IDs are unique and every reference resolves to a declared entity.
+      detail: The intentional PROOF-010 numeric gap creates no dangling reference.
+      remediation: Reject duplicate, missing, or path-escaping identities before admission.
+    - code: DV-003
+      severity: info
+      result: pass
+      target: obligation-coverage
+      evidence: >-
+        REQ-001 through REQ-024, NEG-001 through NEG-010, and KEEP-001 through KEEP-009 have accountable node
+        ownership or support.
+      detail: Active Product Promise, negative, and preserved obligations have no uncovered row.
+      remediation: Add an authoritative owner and proof before admitting any new obligation.
+    - code: DV-004
+      severity: info
+      result: pass
+      target: interfaces
+      evidence: >-
+        IF-001 through IF-014 declare producer, consumers, contract, authority, failure semantics, migration
+        disposition, and proof.
+      detail: Producer and consumer references agree with node produces and consumes inventories.
+      remediation: Reject an incomplete or contradictory interface edge.
+    - code: DV-005
+      severity: info
+      result: pass
+      target: migrations
+      evidence: >-
+        MIG-001 through MIG-003 declare ordered steps, consumer inventory, compatibility, deletion owner, and
+        absence proof.
+      detail: The atomic cutover retains no runtime compatibility path.
+      remediation: Block cutover when a consumer or destructive step lacks disposition.
+    - code: DV-006
+      severity: info
+      result: pass
+      target: risks
+      evidence: RISK-001 through RISK-012 each have scenarios, a disposition, one owner, and one proof.
+      detail: >-
+        Destructive, concurrency, lifecycle, security, compatibility, scale, authority, independence, proof, and
+        usability risks are represented.
+      remediation: Add a build-owned disposition and proof for any new material risk.
+    - code: DV-007
+      severity: info
+      result: pass
+      target: proofs
+      evidence: >-
+        Fourteen proof contracts name a build-capable owner, assembled boundary, method, allowed lower replacements,
+        and durable outputs.
+      detail: Acceptance and audit are not first owners of tracked harnesses, fixtures, clients, or wiring.
+      remediation: Move missing proof infrastructure to a build-capable predecessor.
+    - code: DV-008
+      severity: info
+      result: pass
+      target: delivery-dag
+      evidence: The fourteen-node graph is connected and acyclic with a valid DN-001 through DN-013 completion order.
+      detail: Every consumed interface is produced by a direct or transitive dependency ancestor.
+      remediation: Reject cycles, disconnected nodes, or producer ordering contradictions.
+    - code: DV-009
+      severity: info
+      result: pass
+      target: proof-boundaries
+      evidence: >-
+        Allowed replacements remain below each command, API, workflow, engine, MCP, Cockpit, setup, acceptance, or
+        audit boundary being proved.
+      detail: No injected completed workflow substitutes for the assembled behavior claimed.
+      remediation: Reject proof plans that replace their claimed public boundary.
+    - code: DV-010
+      severity: info
+      result: pass
+      target: decisions
+      evidence: DEC-001 through DEC-020 are accepted and no material decision request remains unresolved.
+      detail: Task 1968 has no pending or resolved structured request that changes this revision.
+      remediation: Re-enter design and re-admit after any material decision change.
+    - code: DV-011
+      severity: info
+      result: pass
+      target: node-bounds
+      evidence: >-
+        Each node owns one coherent delivery result inside declared modules, interfaces, risks, and proof authority.
+      detail: Implementation packet details remain intentionally deferred to bounded node shaping.
+      remediation: Route delivery expansion to global design re-entry rather than local shaping.
+    - code: DV-012
+      severity: info
+      result: pass
+      target: bootstrap-readiness
+      evidence: >-
+        Dependencies 1975 and 1976 are archived completed and the exact baseline passed independent receipt challenge.
+      detail: Admission certifies starting feasibility and delivery completeness, not implementation correctness.
+      remediation: Stop projection if dependency, baseline SHA, or receipt evidence becomes stale.
+
+repository_challenge:
+  agent: shaper-challenger
+  decision: pass
+  reviewed_digest: 9387dea789fb3334cd50e6f784d06847880bd006402b33d5ab2c45888c2202a8
+  refresh_after_baseline: true
+  blocking_findings: []
+  source_review: >-
+    Review covered the owlbear-kanban engine, MCP control plane, shared agent ecosystem, Cockpit
+    backend and frontend, setup and seed, retiring OpenSpec surfaces, tests, and workspace hooks.
+    Every MOD-001 through MOD-009 path resolves to a current repository surface.
+  counts:
+    requirements: 24
+    interfaces: 14
+    migrations: 3
+    risks: 12
+    proofs: 14
+    workflows: 7
+    nodes: 14
+    total: 88
+  dispositions:
+    - target: REQ-001
+      disposition: pass
+      evidence: DN-005 owns the resumable design session through IF-006 and PROOF-004.
+    - target: REQ-002
+      disposition: pass
+      evidence: DN-002 gates job creation through IF-001 and PROOF-002 admission failure cases.
+    - target: REQ-003
+      disposition: pass
+      evidence: DN-002 owns complete obligation assignment before Kanban execution.
+    - target: REQ-004
+      disposition: pass
+      evidence: DN-006 enforces admitted node bounds through IF-007 and PROOF-005.
+    - target: REQ-005
+      disposition: pass
+      evidence: DN-007 owns warm build review through IF-008 and PROOF-006.
+    - target: REQ-006
+      disposition: pass
+      evidence: DN-008 owns read-only exact-revision acceptance through IF-005 and PROOF-007.
+    - target: REQ-007
+      disposition: pass
+      evidence: DN-014 owns whole-change exact-revision audit through PROOF-008.
+    - target: REQ-008
+      disposition: pass
+      evidence: DN-003 owns typed findings, minimum invalidation, and corrective runtime paths.
+    - target: REQ-009
+      disposition: pass
+      evidence: DN-003 separates agent transformations from orthogonal runtime dispositions.
+    - target: REQ-010
+      disposition: pass
+      evidence: DN-011 owns scalable Cockpit views through IF-012 and PROOF-012.
+    - target: REQ-011
+      disposition: pass
+      evidence: DN-012 owns atomic old-pipeline removal and PROOF-009 absence scans.
+    - target: REQ-012
+      disposition: pass
+      evidence: DN-012 owns the hash-verified snapshot and disposition inventory.
+    - target: REQ-013
+      disposition: pass
+      evidence: DN-004 owns the global writer lease and PROOF-014 overlap checks.
+    - target: REQ-014
+      disposition: pass
+      evidence: DN-004 owns disposable exact-commit proof isolation through IF-005.
+    - target: REQ-015
+      disposition: pass
+      evidence: DN-003 owns scoped requests and dependent-slice invalidation.
+    - target: REQ-016
+      disposition: pass
+      evidence: DN-003 owns crash-safe multi-file transactions proven by PROOF-003.
+    - target: REQ-017
+      disposition: pass
+      evidence: DN-012 owns native consumer installation proven by PROOF-009.
+    - target: REQ-018
+      disposition: pass
+      evidence: DN-013 owns historical and generic replay through PROOF-013.
+    - target: REQ-019
+      disposition: pass
+      evidence: DN-001 owns strict authority, canonical identity, and path safety through PROOF-001.
+    - target: REQ-020
+      disposition: pass
+      evidence: DN-009 owns intent-level MCP and removal of generic task mutation.
+    - target: REQ-021
+      disposition: pass
+      evidence: DN-010 owns typed FastAPI and SSE contracts through PROOF-015.
+    - target: REQ-022
+      disposition: pass
+      evidence: DN-004 owns graph-aware orchestration and structured attempt finalization.
+    - target: REQ-023
+      disposition: pass
+      evidence: DN-003 owns bounded indexed graph and receipt runtime behavior.
+    - target: REQ-024
+      disposition: pass
+      evidence: DN-006 owns targeted authority projection and bounded shaping context.
+    - target: IF-001
+      disposition: pass
+      evidence: DN-001 produces strict joined ChangeRevision loading under MOD-001 and PROOF-001.
+    - target: IF-002
+      disposition: pass
+      evidence: DN-002 produces versioned admission findings and immutable receipts through PROOF-002.
+    - target: IF-003
+      disposition: pass
+      evidence: DN-003 produces atomic graph-aware job and receipt runtime through PROOF-003.
+    - target: IF-004
+      disposition: pass
+      evidence: DN-004 produces dependency-aware dispatch and writer coordination through PROOF-014.
+    - target: IF-005
+      disposition: pass
+      evidence: DN-004 produces contained disposable proof checkouts through PROOF-014.
+    - target: IF-006
+      disposition: pass
+      evidence: DN-005 produces resumable design and admission behavior through PROOF-004.
+    - target: IF-007
+      disposition: pass
+      evidence: DN-006 produces bounded node plans and packet DAG completion through PROOF-005.
+    - target: IF-008
+      disposition: pass
+      evidence: DN-007 produces scoped reviewed build completion through PROOF-006.
+    - target: IF-009
+      disposition: pass
+      evidence: DN-008 produces read-only acceptance and corrective routing through PROOF-007.
+    - target: IF-010
+      disposition: pass
+      evidence: DN-009 produces strict MCP tools with stable domain failures through PROOF-011.
+    - target: IF-011
+      disposition: pass
+      evidence: DN-010 produces typed HTTP and SSE resources through PROOF-015.
+    - target: IF-012
+      disposition: pass
+      evidence: DN-011 produces accessible responsive Cockpit behavior through PROOF-012.
+    - target: IF-013
+      disposition: pass
+      evidence: DN-012 produces hash-verified legacy snapshot and native installation through PROOF-009.
+    - target: IF-014
+      disposition: pass
+      evidence: DN-014 produces read-only final verdict and mechanical closure through PROOF-008.
+    - target: MIG-001
+      disposition: pass
+      evidence: DN-012 owns ordered snapshot, hash verification, retention, and absence proof.
+    - target: MIG-002
+      disposition: pass
+      evidence: DN-003 owns atomic task-runtime replacement and DN-012 owns final deletion.
+    - target: MIG-003
+      disposition: pass
+      evidence: DN-012 owns entry-surface replacement with no surviving aliases or quick lane.
+    - target: RISK-001
+      disposition: pass
+      evidence: DN-012 owns never-overwrite snapshot safety proven by PROOF-009.
+    - target: RISK-002
+      disposition: pass
+      evidence: DN-004 owns writer serialization while PROOF-003 covers transaction recovery.
+    - target: RISK-003
+      disposition: pass
+      evidence: DN-003 owns digest-bound invalidation and current-receipt predicates.
+    - target: RISK-004
+      disposition: pass
+      evidence: DN-001 owns strict IDs, path containment, and no-follow safety.
+    - target: RISK-005
+      disposition: pass
+      evidence: DN-012 owns one cutover manifest and full old-surface absence scans.
+    - target: RISK-006
+      disposition: pass
+      evidence: DN-003 owns indexed validity and cached dependency closure at scale.
+    - target: RISK-007
+      disposition: pass
+      evidence: DN-006 owns namespace-limited shaping and material-expansion re-admission.
+    - target: RISK-008
+      disposition: pass
+      evidence: DN-008 owns author separation with DN-014 support and tracked-edit rejection.
+    - target: RISK-009
+      disposition: pass
+      evidence: DN-008 owns assembled-boundary enforcement with DN-014 support.
+    - target: RISK-010
+      disposition: pass
+      evidence: DN-011 owns Kanban-primary accessible responsive operation.
+    - target: RISK-011
+      disposition: pass
+      evidence: DN-006 owns bounded node context with DN-007 outcome-cohesive packets.
+    - target: RISK-012
+      disposition: pass
+      evidence: DN-011 owns incremental graph rendering and mobile scale behavior.
+    - target: PROOF-001
+      disposition: pass
+      evidence: DN-001 exercises the public loader and receipt store with only temporary filesystem replacement.
+    - target: PROOF-002
+      disposition: pass
+      evidence: DN-002 exercises public validation and admission before jobs exist.
+    - target: PROOF-003
+      disposition: pass
+      evidence: DN-003 exercises public runtime operations with only clock, identity, and filesystem replacements.
+    - target: PROOF-004
+      disposition: pass
+      evidence: DN-005 exercises real ideate and design contracts with research below the boundary replaced.
+    - target: PROOF-005
+      disposition: pass
+      evidence: DN-006 exercises the real shaper and finish_shape transaction.
+    - target: PROOF-006
+      disposition: pass
+      evidence: DN-007 exercises the real builder through reviewed finish_build completion.
+    - target: PROOF-007
+      disposition: pass
+      evidence: DN-008 exercises the real acceptor in an engine-created checkout.
+    - target: PROOF-008
+      disposition: pass
+      evidence: DN-014 exercises the real auditor over admitted workflow boundaries.
+    - target: PROOF-009
+      disposition: pass
+      evidence: DN-012 exercises public setup and cutover against legacy and consumer fixtures.
+    - target: PROOF-011
+      disposition: pass
+      evidence: DN-009 exercises public MCP tools over the real engine.
+    - target: PROOF-012
+      disposition: pass
+      evidence: DN-011 exercises the built SPA and real FastAPI backend without mocked HTTP.
+    - target: PROOF-013
+      disposition: pass
+      evidence: DN-013 exercises native validation and the complete design-to-audit workflow.
+    - target: PROOF-014
+      disposition: pass
+      evidence: DN-004 exercises the real orchestrator over public engine-selected waves.
+    - target: PROOF-015
+      disposition: pass
+      evidence: DN-010 exercises public FastAPI HTTP and SSE over the real engine.
+    - target: WF-001
+      disposition: pass
+      evidence: PROOF-004 covers design through approved receipt and node-shape creation.
+    - target: WF-002
+      disposition: pass
+      evidence: PROOF-005 covers bounded node shaping through packet and accept jobs.
+    - target: WF-003
+      disposition: pass
+      evidence: PROOF-006 covers one committed packet with warm review and receipt.
+    - target: WF-004
+      disposition: pass
+      evidence: PROOF-007 covers acceptance or typed minimum corrective work.
+    - target: WF-005
+      disposition: pass
+      evidence: PROOF-008 covers final audit, closure, or typed corrective work.
+    - target: WF-006
+      disposition: pass
+      evidence: PROOF-009 covers hash-snapshotted legacy and native-only consumer setup.
+    - target: WF-007
+      disposition: pass
+      evidence: PROOF-013 covers defective-plan rejection, corrected admission, and immutable correction history.
+    - target: DN-001
+      disposition: pass
+      evidence: Root authority node owns REQ-019, produces IF-001, and proves path safety.
+    - target: DN-002
+      disposition: pass
+      evidence: Admission node depends on DN-001, produces IF-002, and owns REQ-002 and REQ-003.
+    - target: DN-003
+      disposition: pass
+      evidence: >-
+        Runtime node follows authority and admission, produces IF-003, and owns transaction and invalidation
+        semantics.
+    - target: DN-004
+      disposition: pass
+      evidence: Dispatch node follows runtime, produces IF-004 and IF-005, and owns writer and proof isolation.
+    - target: DN-005
+      disposition: pass
+      evidence: Design node follows admission and MCP, produces IF-006, and owns resumable user interaction.
+    - target: DN-006
+      disposition: pass
+      evidence: Shaping node follows runtime, dispatch, design, and MCP and produces IF-007.
+    - target: DN-007
+      disposition: pass
+      evidence: Build node follows dispatch, shaping, and MCP and produces IF-008.
+    - target: DN-008
+      disposition: pass
+      evidence: Acceptance node follows proof checkout, shaping, build, and MCP and produces IF-009.
+    - target: DN-009
+      disposition: pass
+      evidence: MCP node follows dispatch, produces IF-010, and removes generic lifecycle mutation.
+    - target: DN-010
+      disposition: pass
+      evidence: Backend node follows runtime, dispatch, acceptance, and audit and produces IF-011.
+    - target: DN-011
+      disposition: pass
+      evidence: Frontend node follows IF-011 and produces the IF-012 user experience.
+    - target: DN-012
+      disposition: pass
+      evidence: Cutover node follows all replacement surfaces and produces IF-013 with destructive safeguards.
+    - target: DN-013
+      disposition: pass
+      evidence: System-proof node follows assembled replacement and cutover surfaces and owns REQ-018.
+    - target: DN-014
+      disposition: pass
+      evidence: Audit node follows dispatch, acceptance, and MCP and produces IF-014 independently.
+
+baseline_validation:
+  decision: pass
+  independent_challenge:
+    agent: verifier-challenger
+    decision: pass
+    candidate_revision: e27786f3b9e76c3f44f08c807f9035018f0c6cb4
+    findings: []
+    residual: >-
+      Vitest emitted known non-failing third-party PDS teardown diagnostics but reached its complete
+      summary and exited zero. This does not establish implementation correctness for the admitted change.
+  gates:
+    - id: G1
+      cwd: serve/cockpit/web
+      command: npm run build
+      exit_code: 0
+      duration_seconds: 4.005
+      result: 868 modules transformed; Vite build completed in 1.32 seconds.
+    - id: G2
+      cwd: .
+      command: uv run pytest tests serve -m "not api and not e2e"
+      exit_code: 0
+      duration_seconds: 25.970
+      result: 3748 passed with 10 warnings in 25.15 seconds.
+    - id: G3
+      cwd: .
+      command: uv run ruff check .
+      exit_code: 0
+      duration_seconds: 0.169
+      result: All checks passed.
+    - id: G4
+      cwd: .
+      command: uv run ruff format --check .
+      exit_code: 0
+      duration_seconds: 0.059
+      result: 309 files already formatted.
+    - id: G5
+      cwd: serve/cockpit/web
+      command: npm run lint:css
+      exit_code: 0
+      duration_seconds: 0.639
+      result: Stylelint completed without diagnostics.
+    - id: G6
+      cwd: serve/cockpit/web
+      command: npm run lint:html
+      exit_code: 0
+      duration_seconds: 0.394
+      result: One file scanned with no errors.
+    - id: G7
+      cwd: serve/cockpit/web
+      command: npm exec -- eslint src --max-warnings 0
+      exit_code: 0
+      duration_seconds: 2.119
+      result: ESLint completed without diagnostics.
+      supplemental_attestation:
+        exit_code: 0
+        duration_seconds: 2.294
+        start_revision: e27786f3b9e76c3f44f08c807f9035018f0c6cb4
+        end_revision: e27786f3b9e76c3f44f08c807f9035018f0c6cb4
+        clean_before: true
+        clean_after: true
+    - id: G8
+      cwd: serve/cockpit/web
+      command: npm test
+      exit_code: 0
+      duration_seconds: 90.043
+      result: 123 files passed; 1834 tests passed and 2 skipped in 89.41 seconds.
+    - id: G9
+      cwd: serve/cockpit/web
+      command: CI=1 PURGE_E2E=<unset> LIFECYCLE_E2E=<unset> npm run test:e2e
+      exit_code: 0
+      duration_seconds: 8.226
+      result: 9 Playwright tests passed in 7.7 seconds.
+
+user_approval:
+  approved: true
+  recorded_at: 2026-07-21T23:01:01Z
+  approved_digest: 9387dea789fb3334cd50e6f784d06847880bd006402b33d5ab2c45888c2202a8
+  statement: >-
+    The user asked whether a subagent had reviewed the presented exact graph and authorized approval
+    if it had. A prior shaper-challenger pass and a fresh exact-digest shaper-challenger pass satisfy
+    that condition.
+  scope:
+    - Product intent and active Product Promise in intent.md.
+    - Accepted exclusions and DEC-001 through DEC-020.
+    - Architecture, interfaces, migrations, risks, proof boundaries, and delivery-node boundaries.
+    - The four recorded bootstrap limits.
+  renewal: Any authority edit that changes the delivery digest requires fresh challenge and user approval.
+
+bootstrap_projection:
+  carrier: current-pipeline-from-stable-sibling
+  initial_jobs: one blocked shape task per delivery node
+  authority_mode: reference-only
+  identity_fields: [change_id, delivery_digest, delivery_node_id, packet_id]
+  initial_packet_id: aggregate
+  dependency_mode: admitted-delivery-dag
+  dispatch_lock: bootstrap-projection-audit
+  enable_condition: >-
+    The complete fourteen-task projection must pass read-back identity, receipt, parent, dependency,
+    status, block, and duplicate-key checks before its audit blocks are removed.
+  stale_policy: Any authority edit stops dispatch until a new receipt and projection are approved.
+  non_atomic_limit: >-
+    Receipt creation and legacy Kanban task creation are not atomic. A partial projection must be
+    repaired or removed before work starts and cannot weaken the admitted graph.
+
+limits:
+  - Implementation packet boundaries remain intentionally unshaped until delivery-node shape jobs run.
+  - Admission certifies delivery completeness and feasibility, not implementation correctness.
+  - >-
+    The current pipeline runs from the recorded stable sibling as a one-time carrier; projected tasks
+    are non-authoritative and no compatibility path survives cutover.
+  - >-
+    Bootstrap task creation is not atomic with receipt creation, so dispatch remains disabled until
+    the complete digest-bound projection passes idempotency and dependency audit.
+
+immutability:
+  mutation: forbidden
+  correction: append a supersession receipt and issue a newly approved admission receipt
+  authority: Git history plus the delivery digest
