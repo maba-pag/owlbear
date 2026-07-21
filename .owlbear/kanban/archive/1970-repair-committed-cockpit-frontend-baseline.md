@@ -1,10 +1,10 @@
 ---
 id: 1970
 title: Repair committed Cockpit frontend baseline
-status: collect
+status: archived
 priority: high
 created: 2026-07-21T14:10:09.400725+02:00
-updated: 2026-07-21T15:31:28.204712+02:00
+updated: 2026-07-21T15:32:25.950705+02:00
 tags:
   - baseline
   - scope:cockpit-web
@@ -25,7 +25,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -77,3 +77,14 @@ Run focused MemoryTab tests first, then the complete Cockpit Vitest suite, produ
 **Memory assessment:** All ten recalled verifier entries were assessed. Artifact-to-scope and background-debt separation guidance were applied; the remaining entries were not used.
 
 **Verifier challenger:** `decision: pass`; it confirmed exact-revision proof sufficiency, owned-path scope, durable-test rent justification, and no unresolved AC.
+
+[[2026-07-21T15:32:25+02:00]]
+## Collect Notes
+
+**Verdict:** ARCHIVED as completed.
+
+This is an ordinary verified leaf with no parent, dependencies, pending requests, or resolved-request obligations. The verifier PASS is committed at `117648b4`, and its exact-revision evidence covers all three ACs at builder revision `ce3f10e61bd11b8a7a218b764079ebc99edda5fe`: production build passed, complete Vitest passed 122 of 122 files with 1,878 tests passed and 2 skipped, Stylelint passed, and HTMLHint reported no errors.
+
+The task-owned commit contains only the task record, MemoryTab routing test alignment, and obsolete Tailwind generated-output test deletion. No product code or #1968 artifact was included. No additional aggregate proof is required.
+
+All seven recalled collector memories were assessed; background-debt separation, active-workspace, and build-proof guidance were applied.
