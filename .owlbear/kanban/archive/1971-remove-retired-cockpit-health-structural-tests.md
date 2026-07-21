@@ -1,10 +1,10 @@
 ---
 id: 1971
 title: Remove retired Cockpit health structural tests
-status: collect
+status: archived
 priority: high
 created: 2026-07-21T15:43:00.863642+02:00
-updated: 2026-07-21T15:47:36.459214+02:00
+updated: 2026-07-21T15:48:21.738619+02:00
 tags:
   - baseline
   - scope:cockpit-web
@@ -24,7 +24,7 @@ proof_bundle: existing
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -71,3 +71,14 @@ At exact revision `0510ad334048b544c9438fbf7519aaf706f84da4`, the build/browser-
 **Memory assessment:** All ten recalled verifier entries were assessed. Artifact-to-scope, background-debt separation, and removed-contract guidance were applied.
 
 **Verifier challenger:** `decision: pass`; no unresolved task AC or scope defect. It explicitly kept the repository-wide Ruff issue outside #1971.
+
+[[2026-07-21T15:48:21+02:00]]
+## Collect Notes
+
+**Verdict:** ARCHIVED as completed.
+
+This ordinary verified leaf has no parent, dependencies, pending requests, or resolved-request obligations. The committed verifier PASS at `9f6a26db` covers all three ACs at exact builder revision `7bbb25fba72f98fc984d8e3f71a1e859da041293`: focused polling passed 13 of 13, the complete Python suite passed 3,746 of 3,746 after normal build/browser setup, scoped Ruff passed, and the exact checkout remained clean.
+
+The task-owned change contains only its task record, narrow polling-test curation, and deletion of the obsolete HealthBadge structural suite. No product or #1968 artifact was included. Repository-wide Ruff debt in unrelated dirty source paths remains separate admission-baseline work.
+
+All seven recalled collector memories were assessed; background-debt separation, active-workspace, and build-proof guidance were applied.
