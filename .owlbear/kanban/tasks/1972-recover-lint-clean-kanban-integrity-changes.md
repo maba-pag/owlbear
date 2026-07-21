@@ -1,10 +1,10 @@
 ---
 id: 1972
 title: Recover lint-clean Kanban integrity changes
-status: verify
+status: collect
 priority: high
 created: 2026-07-21T16:05:51.989615+02:00
-updated: 2026-07-21T16:09:05.213122+02:00
+updated: 2026-07-21T16:11:16.920360+02:00
 tags:
   - scope:kanban
   - integrity
@@ -58,3 +58,18 @@ Proof: `uv run pytest serve/kanban/tests/test_corruption.py serve/kanban/tests/t
 Durable-test rent: the added public task-health cases protect persisted-file integrity, broken-reference evidence, and non-mutation, risks not cheaply observable after release.
 
 Builder-challenger: decision pass; no blocker, scope drift, or auto-fix.
+
+[[2026-07-21T16:11:16+02:00]]
+## Verify Notes
+
+Verdict: PASS.
+
+Exact revision: `9949f9b1b86c5573bd62720a27137784a34e4333`, confirmed as HEAD in the clean prepared worktree after the switch command emitted the known empty exit-130 signal.
+
+Authority: compared the recovered slice with archived #1937 task-health and #1940 deterministic-repair contracts; no public-contract or ownership deviation found.
+
+Proof at the exact revision: focused corruption plus task-health suites passed 86 tests; Ruff check passed on both owned files; Ruff format reported both files formatted.
+
+AC mapping: real-filesystem tests cover read-only persisted/reference/location evidence and complete-set/no-overwrite repair convergence; Ruff covers maintained-artifact quality.
+
+Verifier-challenger: decision pass; no scope, rent, evidence, or unresolved-AC finding.
