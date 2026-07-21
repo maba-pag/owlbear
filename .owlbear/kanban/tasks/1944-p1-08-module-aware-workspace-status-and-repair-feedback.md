@@ -4,7 +4,7 @@ title: 'P1-08: Module-aware Workspace Status and repair feedback'
 status: shape
 priority: medium
 created: 2026-07-17T02:32:30.849128+02:00
-updated: 2026-07-21T10:51:12.641165+02:00
+updated: 2026-07-21T10:57:11.948558+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -13,6 +13,7 @@ tags:
 parent: 1945
 depends_on:
   - 1943
+  - 1969
 ac:
   - Given checking, healthy, attention, unhealthy, and check-failed module 
     states, Workspace Status renders an overall light plus 
@@ -157,3 +158,25 @@ Durable-test justification: no tests added. The pre-existing seven-path frontend
 | 1 | shape | Add one corrective build leaf under parent #1945 that restores the accepted assembled health contract: task module repairability/severity fields and production deterministic repair invocation with a complete receipt. | `serve/cockpit/src/owlbear_cockpit/models.py`, `serve/cockpit/src/owlbear_cockpit/main.py`, `tests/test_cockpit_health_contract.py`; existing Kanban deterministic repair owner | Current committed response drops repairability and production repair invokes the legacy engine method. |
 | 2 | shape | Make #1944 depend on that corrective leaf while preserving #1944 Outcome, Scope, AC, and frontend ownership. Add the corrective leaf to parent #1945's aggregate dependency gate. | #1944, #1945, new corrective task | Exact-SHA assembled UI proof requires the real supplied HTTP boundary. |
 | 3 | shape | Re-dispatch #1944 only after the corrective leaf is verifier-closed; then consume the complete response, render the retained receipt, remove generic Cleanup/task-scan UI, and prove the assembled workflow. | #1944 | Current frontend-only implementation would false-green on fixtures. |
+
+[[2026-07-21T10:57:11+02:00]]
+## Shape Notes
+
+### Repair Source And Classification
+- Source: latest Builder rejection on #1944, which proved the archived #1942 delivery is incomplete at the real HTTP boundary.
+- Classification: prescribed non-material graph repair under `w-task-repair`. Accepted product behavior, architecture, frontend ownership, and ordering are unchanged; the repair restores an already-approved prerequisite rather than inventing a new outcome.
+
+### Corrective Graph
+- Created #1969, `P1-11: Restore assembled workspace-health repair contract`, as a high-priority build leaf under parent #1945, depending on archived authority task #1942.
+- #1969 owns `HealthModule` repairability projection, repairable-only versus mixed status mapping, production deterministic repair delegation, and real-engine FastAPI proof.
+- Added #1969 as a dependency of #1944. Existing dependency #1943, parent #1945, Outcome, Scope, tags, priority, and all three AC lines remain unchanged.
+- #1944 remains in shape until #1969 is verifier-closed, then mechanically resumes in build.
+
+### Authority And Maps
+- Accepted OpenSpec `redesign-workspace-health` authority determines the corrective behavior: repairable-only task findings are attention; mixed unresolved findings remain unhealthy while repair remains available; synchronous deterministic repair returns terminal timing/count/outcome/unresolved/post-health evidence.
+- Change Module Map: #1969 owns Cockpit backend model/assembly and assembled HTTP proof; existing `owlbear_kanban.corruption.repair_task_storage` remains the read-only domain owner; #1944 retains Workspace Status/Shell UI ownership.
+- Product Invariant Map: #1969 owns the real repairability/severity and deterministic receipt boundary; #1944 owns module rows, retained receipt, and Cleanup removal; #1945 owns aggregate running-Cockpit closure.
+
+### Challenge And Audit
+- Shaper-challenger: PASS. It confirmed the repair is non-material, the three AC lines are boundary-valid, real-engine proof fixes the fixture-only false archive, and invariant ownership is complete.
+- Board audit target: #1969 in build with parent #1945 and dependency #1942; #1944 in shape with dependencies #1943 and #1969.

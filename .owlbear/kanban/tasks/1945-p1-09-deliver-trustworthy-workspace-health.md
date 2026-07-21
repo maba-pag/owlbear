@@ -4,7 +4,7 @@ title: 'P1-09: Deliver trustworthy workspace health'
 status: collect
 priority: high
 created: 2026-07-17T02:33:28.872345+02:00
-updated: 2026-07-17T16:24:58.295770+02:00
+updated: 2026-07-21T10:57:11.970962+02:00
 tags:
   - phase-1
   - scope:cockpit
@@ -21,6 +21,7 @@ depends_on:
   - 1943
   - 1944
   - 1959
+  - 1969
 ac:
   - In running Cockpit, initial Workspace Status is gray then shows independent 
     task/request/memory/ideas results from GET /health; a module check failure 
@@ -257,3 +258,10 @@ Collector inspects verified child evidence and observes the assembled normal pat
 - #1941 routes to build with parent #1945 and dependency #1940.
 - #1959 is build, parent #1945, dependency #1942.
 - #1945 is collect and waits on #1937 through #1944 plus #1959.
+
+[[2026-07-21T10:57:11+02:00]]
+## Shape Notes
+
+Aggregate repair: added corrective child #1969 to the #1945 dependency gate after #1944 proved the archived #1942 HTTP contract incomplete at delivered HEAD. #1969 restores the accepted repairability/severity projection and deterministic synchronous repair boundary; #1944 remains the frontend owner and now depends on #1969. Parent Outcome, Scope, aggregate AC, existing children, and collect status remain unchanged.
+
+Shaper-challenger passed the non-material graph repair. Final intended order is #1969, then #1944, then aggregate collection on #1945.
