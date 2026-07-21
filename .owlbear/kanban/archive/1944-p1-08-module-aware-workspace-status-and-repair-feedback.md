@@ -1,10 +1,10 @@
 ---
 id: 1944
 title: 'P1-08: Module-aware Workspace Status and repair feedback'
-status: collect
+status: archived
 priority: medium
 created: 2026-07-17T02:32:30.849128+02:00
-updated: 2026-07-21T13:59:44.528568+02:00
+updated: 2026-07-21T14:00:50.777922+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -31,7 +31,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -250,3 +250,12 @@ Durable-test justification: no tests added. The pre-existing seven-path frontend
 **Verifier challenger:** `decision: pass`; it confirmed task-scoped proof covers all AC and that the six unrelated failures must remain an explicit admission-baseline blocker.
 
 **Files changed by verifier:** None beyond this task record.
+
+[[2026-07-21T14:00:50+02:00]]
+## Collect Notes
+
+**Verdict:** ARCHIVED as a completed leaf.
+
+Collection was mechanical: #1944 has a recorded verifier PASS tied to exact revision `76ae2e6d79e6a52f8b7a3123d239a21a638d05da`, no Required Follow-up, no pending structured request, and archived dependencies. No product file or proof artifact changed during collection.
+
+The verifier's six unrelated exact-revision Vitest failures remain preserved as an explicit limitation for aggregate parent #1945 and the later green admission-baseline gate. Archiving this leaf does not certify `76ae2e6d` as that baseline.
