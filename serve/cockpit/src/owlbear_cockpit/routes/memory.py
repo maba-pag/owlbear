@@ -5,8 +5,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Annotated
 
 from fastapi import APIRouter, Depends
-from owlbear_memory.models import MemoryCategory, MemoryEntry, MemoryState
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from owlbear_memory.models import (
+    MemoryCategory,
+    MemoryEntry,
+    MemoryState,
+    PurgePreview,
+    PurgeResult,
+)
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, StringConstraints
 
 from owlbear_cockpit.deps import get_memory_engine
 
@@ -91,6 +97,14 @@ class DeleteResponse(BaseModel):
     success: bool
 
 
+class PurgeRequest(BaseModel):
+    """Request body for previewing or executing a memory purge."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    min_age_days: StrictInt = Field(ge=0)
+
+
 def _to_response(entry: MemoryEntry) -> MemoryEntryResponse:
     return MemoryEntryResponse.model_validate(entry.model_dump())
 
@@ -100,6 +114,24 @@ def list_memories(engine=Depends(get_memory_engine)) -> MemoriesResponse:  # noq
     """Return memory entries and parse error count."""
     entries = [_to_response(entry) for entry in engine.get_entries()]
     return MemoriesResponse(entries=entries, parse_errors=engine.parse_errors)
+
+
+@router.post("/memories/purge/preview", response_model=PurgePreview)
+def preview_memory_purge(
+    req: PurgeRequest,
+    engine=Depends(get_memory_engine),  # noqa: ANN001, B008
+) -> PurgePreview:
+    """Classify eligible deleted memories without mutating the store."""
+    return engine.preview_purge(req.min_age_days)
+
+
+@router.post("/memories/purge", response_model=PurgeResult)
+def purge_memories(
+    req: PurgeRequest,
+    engine=Depends(get_memory_engine),  # noqa: ANN001, B008
+) -> PurgeResult:
+    """Purge eligible deleted memories and return best-effort results."""
+    return engine.purge(req.min_age_days)
 
 
 @router.post("/memories/{entry_id}/approve", response_model=MemoryEntryEnvelope)
