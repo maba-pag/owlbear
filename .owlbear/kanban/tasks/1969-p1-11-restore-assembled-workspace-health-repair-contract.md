@@ -1,10 +1,10 @@
 ---
 id: 1969
 title: 'P1-11: Restore assembled workspace-health repair contract'
-status: verify
+status: collect
 priority: high
 created: 2026-07-21T10:56:32.901575+02:00
-updated: 2026-07-21T11:03:30.793423+02:00
+updated: 2026-07-21T11:06:46.436907+02:00
 tags:
   - phase-1
   - scope:cockpit-backend
@@ -86,3 +86,29 @@ Durable-test justification: the real-engine assembled regression protects a publ
 Builder-challenger: PASS with fresh focused pytest and Ruff reruns; no blocker, scope drift, or auto-fix.
 
 Follow-up risks: none within the corrective contract. #1944 remains the frontend consumer and is intentionally blocked until verifier closure.
+
+[[2026-07-21T11:06:46+02:00]]
+## Verify Notes
+
+Verified delivered commit `5f711cabec6870f413834c924bcca44ce809b562` from a detached disposable checkout. No verifier patch was applied.
+
+Evidence and authority:
+- Compared the implementation and fixtures with OpenSpec `redesign-workspace-health`: repairable-only task findings are attention; mixed repairable and unresolved findings remain unhealthy while repairability survives; synchronous deterministic repair returns terminal timing/count/outcome/unresolved/post-health evidence.
+- Exact commit scope is the task record plus `models.py`, `main.py`, and `test_cockpit_health_contract.py`. No Kanban repair algorithm, frontend, compatibility, Cleanup, or unrelated corruption change is included.
+- Exact source inspection confirms `HealthModule.repairable_count`, repairability/status projection, aggregate attention propagation, direct `repair_task_storage(engine.kanban_dir, engine.board_config())`, and no legacy `repair_storage` fallback.
+
+Normal-path proof:
+- At the exact SHA, `uv run pytest tests/test_cockpit_health_contract.py tests/test_cockpit_routes.py -q` passed 14 tests with 4 existing Starlette/httpx deprecation warnings.
+- AC-1 is exercised through assembled FastAPI aggregate and focused GET boundaries for two repairable findings and for those findings plus one unresolved finding.
+- AC-2 uses a real `KanbanEngine` archive-drift board through the assembled POST endpoint, makes legacy `repair_storage` fail if called, asserts timestamps, all six terminal counts, moved outcome, empty unresolved findings, clean post-repair health, and the real filesystem move.
+- AC-3 forces deterministic repair failure and asserts HTTP 500 without `status`, `completed_at`, or `task_health_result`.
+- Exact-SHA Ruff check passed; format check reports all three owned files formatted. VS Code diagnostics are clean. Pending and resolved request scans are empty.
+
+Neighbor check classification:
+- An initial exact-checkout run including `tests/test_cockpit_launch.py` produced 13 launch failures and 22 passes because the disposable checkout lacks gitignored `serve/cockpit/dist/`. Every launch failure exited at the unchanged missing-dist precondition before server startup. The task-owned HTTP contract and route suites do not require that build artifact; the same broader slice passed 35 tests in the working tree where `dist/` exists.
+
+Change Module Map deviations: none. Lower-layer deterministic repair is the real existing domain owner and was not replaced.
+
+Verifier-challenger: PASS. It found AC-1 through AC-3 covered at the assembled HTTP boundary, accepted the real-engine durable regression and missing-dist classification, and found no scope or proof defect.
+
+Final route: PASS to collect.
