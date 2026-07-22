@@ -4,7 +4,7 @@ title: 'P2-03: Validate delivery coverage and contracts'
 status: build
 priority: medium
 created: 2026-07-22T13:45:55.105472+02:00
-updated: 2026-07-22T14:10:35.110741+02:00
+updated: 2026-07-22T15:32:27.557008+02:00
 tags:
   - phase-1
   - scope:core
@@ -64,3 +64,41 @@ Proof guidance: exercise the public evaluator over real `ChangeRevision`-derived
 [[2026-07-22T14:10:35+02:00]]
 ## Shape Notes
 - Dependency rewired from deprecated #1993 to clean evidence-contract replacement #1999. Coverage and contract validation scope is unchanged; route remains build after #1999.
+
+[[2026-07-22T15:14:24+02:00]]
+Released immediately: claimed neighboring task by mistake while routing user request for #1994.
+
+[[2026-07-22T15:26:36+02:00]]
+builder crashed once; releasing claim before retry: parallel dispatch returned no output
+
+[[2026-07-22T15:30:52+02:00]]
+## Builder Notes
+- Change envelope: implement the public admission evaluator checks for DV-003 through DV-007 only; no persistence, topology, evidence-gate, receipt, job, or historical-fixture work.
+- Files changed: `serve/kanban/src/owlbear_kanban/admission.py`.
+- Change Module Map deviations: none; validation remains in the existing admission evaluator boundary.
+- Proof selected: focused behavioral admission suite plus Ruff on the touched module.
+- Durable-test justification: no new durable tests added; the existing canonical admitted-revision test proves the populated contract path, and the focused suite is sufficient for this evaluator slice.
+- Commands run: `uv run pytest serve/kanban/tests/test_admission.py` (3 passed); `uv run ruff check serve/kanban/src/owlbear_kanban/admission.py` (passed); `git diff --check -- serve/kanban/src/owlbear_kanban/admission.py` (passed).
+- Builder-challenger result: pass. Confirmed canonical admission remains admitted with no findings and DV-004 through DV-007 are scoped to the shaped delivery-contract surfaces.
+- Follow-up risks: malformed-case table coverage is not yet durable; verify should assess whether broader acceptance coverage is required.
+
+[[2026-07-22T15:32:27+02:00]]
+## Verify Notes
+- Evidence reviewed: Builder Notes; the current `admission.py` diff; canonical admitted receipt `.owlbear/changes/replace-delivery-pipeline/receipts/admission-9387dea789fb.yaml`; and A1-A7 in `.owlbear/research/planning-workflow-root-cause-and-redesign.md`.
+- Named authorities checked: receipt DV-003 requires accountable node ownership or support; DV-004 requires producer, consumers, contract, authority, failure semantics, migration disposition, and proof; DV-005/DV-006 require their listed contracts; DV-007 requires build-capable owner, assembled boundary, method, permitted replacements, durable outputs, and predecessor availability.
+- Change Module Map: no ownership deviation. `serve/kanban/src/owlbear_kanban/admission.py` remains the public evaluator boundary, and the patch is limited to that module.
+- Normal-path boundary exercised: `evaluate_admission` over the real `replace-delivery-pipeline` `ChangeRevision` via `uv run pytest serve/kanban/tests/test_admission.py` (3 passed). The canonical populated revision still admits without findings.
+- Replacements used below boundary: none; the test loads the real revision and invokes the public evaluator.
+- Checks run: `uv run pytest serve/kanban/tests/test_admission.py` (3 passed); `uv run ruff check serve/kanban/src/owlbear_kanban/admission.py` (passed); `git diff --check -- serve/kanban/src/owlbear_kanban/admission.py` (passed).
+- Findings: reject. AC-1 requires DV-003 for missing or multiply assigned ownership/proof. `_evaluate_graph` only finds an obligation absent from the combined `owns` and `supports` set, so it cannot reject multiple accountable assignments or validate the required owner/proof relationship. AC-2 requires DV-004 for a missing migration disposition, but `_evaluate_delivery_contracts` never evaluates `interface.migration`. AC-4 requires DV-007 when an owning predecessor is absent; the evaluator checks only that the owner node names the proof and required proof fields are populated, not that the owner precedes acceptance or audit in delivery dependencies. Existing tests exercise only the populated canonical case and cannot falsify these omissions.
+- Patches applied: none. The missing conditions and negative cases are implementation work, beyond verifier local-patch authority.
+- Verifier-challenger: not called because this is a REJECT verdict; challenger is required only before PASS.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Extend DV-003 to reject multiple accountable owner/support assignments and validate the authority-required ownership/proof relationship; add focused malformed real-`ChangeRevision` evaluator cases. | `serve/kanban/src/owlbear_kanban/admission.py`, `serve/kanban/tests/test_admission.py` | AC-1; receipt DV-003; A1 |
+| 2 | builder | Make DV-004 reject interface records without a migration disposition, and add a focused evaluator case. | `serve/kanban/src/owlbear_kanban/admission.py`, `serve/kanban/tests/test_admission.py` | AC-2; receipt DV-004; A2 |
+| 3 | builder | Make DV-007 prove that its build-capable owner is an owning predecessor before acceptance/audit, and add a focused evaluator case. | `serve/kanban/src/owlbear_kanban/admission.py`, `serve/kanban/tests/test_admission.py` | AC-4; receipt DV-007; A5-A6 |
+
+- Final route: REJECT to build.
