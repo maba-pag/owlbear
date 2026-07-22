@@ -191,6 +191,15 @@ def _evaluate_structured_evidence(revision: ChangeRevision, evidence: AdmissionE
                     "Record disposition and evidence for this delivery entity.",
                 )
             )
+        elif not isinstance(disposition.get("evidence"), str) or not disposition["evidence"].strip():
+            findings.append(
+                _finding(
+                    "EV-002",
+                    target,
+                    "challenge disposition has no evidence",
+                    "Record source-grounded evidence for this disposition.",
+                )
+            )
         elif disposition["disposition"] != "pass":
             findings.append(
                 _finding(
@@ -203,15 +212,6 @@ def _evaluate_structured_evidence(revision: ChangeRevision, evidence: AdmissionE
                         if disposition["disposition"] == "warning"
                         else AdmissionSeverity.ERROR
                     ),
-                )
-            )
-        elif not isinstance(disposition.get("evidence"), str) or not disposition["evidence"].strip():
-            findings.append(
-                _finding(
-                    "EV-002",
-                    target,
-                    "challenge disposition has no evidence",
-                    "Record source-grounded evidence for this disposition.",
                 )
             )
     if not isinstance(evidence.baseline.get("commands"), (tuple, list)) or not evidence.baseline.get("commands"):

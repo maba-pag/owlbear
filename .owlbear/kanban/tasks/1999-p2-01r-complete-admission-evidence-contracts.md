@@ -1,10 +1,10 @@
 ---
 id: 1999
 title: 'P2-01R: Complete admission evidence contracts'
-status: verify
+status: collect
 priority: medium
 created: 2026-07-22T14:10:10.625865+02:00
-updated: 2026-07-22T15:08:37.976991+02:00
+updated: 2026-07-22T15:11:05.375378+02:00
 tags:
   - phase-1
   - scope:core
@@ -75,3 +75,15 @@ Proof guidance: exercise public `evaluate_admission` over a real loaded `ChangeR
 - Proof selected: `uv run --project . ruff check serve/kanban/src/owlbear_kanban/admission.py serve/kanban/src/owlbear_kanban/__init__.py serve/kanban/tests/test_admission.py` passed; `uv run --project . pytest serve/kanban/tests/test_admission.py serve/kanban/tests/test_change_revision.py -q` passed with 22 tests.
 - Builder-challenger result: pass; no concrete blockers reported.
 - Follow-up risks: broader aggregate validate/admit atomicity and graph completeness remain owned by #1998, #1995, and #1996 per task scope.
+
+[[2026-07-22T15:11:05+02:00]]
+## Verify Notes
+- Evidence reviewed: Builder Notes, AC-1 through AC-3, and replacement Shape Notes on aggregate #1978. No resolved DR/AR records existed for this task.
+- Named authorities checked: the loaded `replace-delivery-pipeline` `ChangeRevision` and digest-bound `evaluate_admission` public API. `EV-001` through `EV-005` remain distinct from graph `DV-*` findings.
+- Change Module Map: no deviation. Product behavior remains in `serve/kanban/src/owlbear_kanban/admission.py`, with the existing public export and focused public-boundary tests. Graph completeness and atomic validate/admit mutation remain outside this packet.
+- Finding and local patch: AC-2 requires nonblank evidence for every typed challenge disposition. Warning and error dispositions previously bypassed that condition. Moved the existing evidence validation before non-pass severity handling; this is a local evaluator repair with no interface or design expansion.
+- Normal-path boundary exercised: a real loaded `ChangeRevision` ran through public `evaluate_admission` with typed full challenge evidence. The probe confirmed warning EV-002 remains admitted and outside `errors`; error EV-002 rejects; blank warning evidence rejects; failed baseline and false approval emit EV-003 and EV-004; repeated JSON serialization is byte-identical.
+- Checks run: focused admission and ChangeRevision pytest suite passed (22 tests); Ruff passed on the mapped evaluator, export, and focused test files; editor diagnostics reported no errors; `git diff --check` passed.
+- Replacements used below boundary: none; the evaluator was exercised through its public API over the real loaded revision.
+- Verifier-challenger result: pass. It confirmed immutable schema-v1 output, typed nonblank challenge evidence, EV-002 warning/error semantics, EV-001 through EV-005 coverage, sufficient public-boundary proof, and no scope drift.
+- Final route: PASS to collect.
