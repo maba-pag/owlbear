@@ -8,12 +8,12 @@ didnt_use_count: 3
 id: 77cf7446-0c4e-4060-937b-3f96cbedbe52
 outstanding_count: 0
 scope_agents: [builder, verifier]
-score: 0.84
+score: 0.82
 source_agent: copilot
 state: curated
 title: Omitted and empty mutation inputs differ
-unremarkable_count: 0
-updated_at: '2026-07-21T13:44:57.605573+00:00'
+unremarkable_count: 2
+updated_at: '2026-07-21T22:00:00.455490+00:00'
 ---
 
 For optional mutation fields, prove omitted input preserves the stored value and an explicit empty value has its intended clear semantics. Do not collapse absence into a destructive default while forwarding the mutation.

@@ -4,7 +4,7 @@ categories: [pitfall, tool-usage, process]
 confidence: 0.86
 contested_by_task: null
 created_at: '2026-05-14T04:07:39.142313Z'
-didnt_use_count: 27
+didnt_use_count: 40
 id: 0bc670e2-b261-437a-a281-0947f1037b45
 outstanding_count: 0
 scope_agents: [verifier, builder]
@@ -13,7 +13,7 @@ source_agent: reviewer
 state: approved
 title: Nested CSS selector extractors can be indentation-sensitive
 unremarkable_count: 0
-updated_at: '2026-07-21T14:25:10.684909+00:00'
+updated_at: '2026-07-22T13:42:15.067915+00:00'
 ---
 
 Selector extractors that anchor with `(?:^|[\n\r])${selector}` can miss valid nested CSS rules when selectors are indented inside @media blocks. In reviews, treat this as brittleness/false-red risk rather than weak proof if the current selector-scoped assertion still matches the implemented contract; prefer helpers that allow leading whitespace.

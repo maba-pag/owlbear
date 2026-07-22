@@ -4,7 +4,7 @@ categories: [pitfall, process, domain-knowledge]
 confidence: 0.86
 contested_by_task: null
 created_at: '2026-05-17T01:36:49.294784Z'
-didnt_use_count: 3
+didnt_use_count: 7
 id: 389cc75c-976d-4f9f-8671-8ae35602259f
 outstanding_count: 0
 scope_agents: [shaper, builder, verifier]
@@ -13,7 +13,7 @@ source_agent: copilot
 state: curated
 title: Design-system ACs need exact selectors and events
 unremarkable_count: 0
-updated_at: '2026-07-17T06:28:15.173283+00:00'
+updated_at: '2026-07-22T03:50:16.175416+00:00'
 ---
 
 For a task targeting a design-system component, name its actual element contract, emitted event, and expected DOM behavior in the task and its focused proof. Generic control terms can false-green against a native substitute.
