@@ -1,10 +1,10 @@
 ---
 id: 1978
 title: 'Bootstrap DN-002: Admit complete delivery revisions'
-status: shape
+status: collect
 priority: high
 created: 2026-07-22T01:05:33.577098+02:00
-updated: 2026-07-22T01:11:19.201656+02:00
+updated: 2026-07-22T05:49:55.647043+02:00
 tags:
   - bootstrap-projection
   - change:replace-delivery-pipeline
@@ -15,6 +15,8 @@ tags:
 parent: 1968
 depends_on:
   - 1977
+  - 1993
+  - 1994
 ac:
   - 'AC-1: Shaper, while this task is in `shape`, reads `DN-002` at the recorded digest
     and creates one outcome-cohesive packet DAG whose task records reference the same
@@ -56,3 +58,15 @@ This task is a non-authoritative bootstrap projection. Resolve current obligatio
 The current shaper turns this aggregate into the bounded build-packet DAG needed to satisfy the referenced node. Any newly discovered delivery outcome, interface, migration, material risk, or proof boundary returns to global design and re-admission.
 
 Proof guidance: exercise the public validate/admit boundary before jobs exist, including failure-with-zero-job-mutation and atomic success; replacements remain below admission as declared by `PROOF-002`.
+
+
+
+## Shape Notes
+- Reviewed the exact admitted `DN-002` contract at delivery digest `9387dea789fb3334cd50e6f784d06847880bd006402b33d5ab2c45888c2202a8` against current `owlbear_kanban` authority/receipt code and the A1-A10 planning evidence.
+- Approved packet DAG: `DN-002-PK-001` (#1993) owns pure layered admission evaluation; `DN-002-PK-002` (#1994) depends on #1993 and owns the assembled atomic receipt-plus-initial-shape-job operation.
+- `shaper-challenger` independently returned PASS for authority fidelity, invariant ownership, proof boundary, atomicity, cohesion, and the DN-002/DN-003 ownership split. Its wording refinements explicitly cover uncovered and multiply-owned obligations and reuse the existing ReceiptStore conflict boundary.
+- User authorized proceeding with the independently verified decomposition without being asked to certify graph mechanics.
+- Scope remains inside `MOD-001`, `MOD-008`, `IF-002`, and `PROOF-002`. General job runtime, recovery, invalidation, MCP, HTTP, UI, and agent command execution remain assigned to later delivery nodes.
+
+[[2026-07-22T05:49:55+02:00]]
+Shaping completed at the admitted digest. Created build-ready packet DAG #1993 -> #1994, recorded independent challenger PASS and user authorization, and added both packet dependencies to the aggregate.
