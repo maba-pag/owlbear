@@ -1,10 +1,10 @@
 ---
 id: 1991
 title: 'P1-01: Load canonical native change revisions'
-status: collect
+status: archived
 priority: medium
 created: 2026-07-22T01:58:43.460559+02:00
-updated: 2026-07-22T02:36:39.541139+02:00
+updated: 2026-07-22T02:37:52.640199+02:00
 tags:
   - phase-1
   - scope:core
@@ -36,7 +36,7 @@ proof_bundle: existing+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Bootstrap Projection Identity
@@ -113,3 +113,12 @@ Proof guidance: exercise the public loader and digest boundary with a temporary 
 
 ### Route
 PASS. Advance #1991 to collect for mechanical archival.
+
+[[2026-07-22T02:37:52+02:00]]
+## Collect Notes
+
+- Classification: leaf. #1991 has no child tasks, aggregate intent, or unresolved dependencies.
+- Verification evidence: `## Verify Notes` records PASS against AC-1 through AC-3, admitted `DN-001`/`IF-001`/`RISK-004`/`PROOF-001`, the exact builder commit `85ca0918447b4cb5a3437ef11a4f6328a7f98ee5`, verifier closure commit `6e3c55bf0b4566e118624d570a219e68b20c4214`, 47 focused checks, 920 mapped regressions, exact admitted digest reproduction, clean lint/diagnostics, and final verifier-challenger authorization.
+- Invariant coverage: the leaf outcome, four-file loader interface, semantic digest, path safety, diagnostic redaction, and no-partial-revision behavior are covered in Verify Notes. Receipt storage and health remain explicitly assigned to dependency #1992.
+- Requests and follow-up: no pending or resolved structured requests and no unresolved Required Follow-up.
+- Archive rationale: verified leaf closure is complete; archive as completed so dependent packet #1992 may become ready.
