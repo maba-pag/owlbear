@@ -1,10 +1,10 @@
 ---
 id: 2000
 title: 'P3-01: Define native job and evidence contracts'
-status: verify
+status: collect
 priority: high
 created: 2026-07-22T21:58:09.010514+02:00
-updated: 2026-07-23T00:41:26.068788+02:00
+updated: 2026-07-23T00:43:52.469260+02:00
 tags:
   - phase-3
   - scope:core
@@ -143,3 +143,15 @@ Proof guidance: exercise public parsers, serializers, and authority projection w
 - Commands run: `uv run --project . pytest serve/kanban/tests/test_jobs.py -q` -> `18 passed`; `uv run --project . pytest serve/kanban/tests/test_jobs.py serve/kanban/tests/test_change_receipts.py -q` -> `50 passed`; `uv run --project . ruff check serve/kanban/src/owlbear_kanban/jobs.py serve/kanban/tests/test_jobs.py` and `ruff format --check` -> clean.
 - Builder-challenger result: PASS. It independently confirmed task alignment, scoped public-boundary coverage, and reran the 50-test suite and static checks.
 - Follow-up risks: no additional risk identified; receipt kind matrix remains unchanged because the verifier correction confirmed audit is change-wide.
+
+[[2026-07-23T00:43:52+02:00]]
+## Verify Notes
+- Evidence reviewed: all ACs; three Builder Notes entries; the scoped implementation commit `a6f6b72c8d2a854f266b3f7e29d2e799d2b823bb`; existing public-boundary tests in `serve/kanban/tests/test_jobs.py` and `serve/kanban/tests/test_change_receipts.py`.
+- Named authorities checked: `.owlbear/changes/replace-delivery-pipeline/design.md` sections 4.2 and 4.3 define the delivery and node-plan digest relationship and receipt validity; `graph.yaml` REQ-009 confirms job kinds are transformations while claim/block/evidence state remains orthogonal. The task's authority-projection rule is satisfied: `JobRecord` serializes operational references only, while `project_job` sources title, outcome, acceptance, modules, interfaces, and proof from `ChangeRevision`.
+- Change Module Map: changed owners are `jobs.py`, `receipt.py`, and package exports, plus their existing focused tests. No deviation found; no legacy carrier, storage, lifecycle, dispatch, MCP, or Cockpit surface was changed.
+- Normal-path boundary exercised: exported `parse_job_mapping`, `project_job`, and `parse_receipt_mapping` are called directly. The job test loads the actual admitted `ChangeRevision`; no replacement occurs above the public parser/projection boundary. Parser tests cover schema-v1 mappings and deterministic round trips for shape, build, accept, audit, and supersession.
+- Checks run: `uv run --project . pytest serve/kanban/tests/test_jobs.py serve/kanban/tests/test_change_receipts.py -q` passed 50 tests; Ruff lint passed for the two native modules and focused tests; Ruff format check passed for the same four files.
+- Findings: none. The kind-specific receipt matrix matches authority: shape, build, and accept require `node_plan_digest`; audit and supersession remain change-wide. No verifier patch applied.
+- Memory: assessed recalled entries. Nineteen assessments succeeded; one recalled deep-freezing entry reported not found by memory storage during assessment, with no impact on this task's verification.
+- Verifier-challenger result: pass. It confirmed AC coverage, direct public-boundary proof, authority-derived projections, immutable operational records, and scoped changes.
+- Final route: PASS; task advanced to collect.
