@@ -4,7 +4,7 @@ title: 'P2-03: Validate delivery coverage and contracts'
 status: build
 priority: medium
 created: 2026-07-22T13:45:55.105472+02:00
-updated: 2026-07-22T13:45:55.105472+02:00
+updated: 2026-07-22T14:10:35.110741+02:00
 tags:
   - phase-1
   - scope:core
@@ -18,7 +18,7 @@ tags:
   - packet:DN-002-PK-003
 parent: 1978
 depends_on:
-  - 1993
+  - 1999
 ac:
   - 'AC-1: Missing or multiply assigned ownership or proof for a requirement, negative
     requirement, or preserved behavior returns `DV-003` for that target; one accountable
@@ -60,3 +60,7 @@ Resolve normative behavior from admission sections 5 and 9 of `design.md`, A1 th
 Complexity waiver: four AC share one deterministic contract-completeness algorithm and one public-evaluator table-test mode; splitting by entity type would duplicate traversal and finding semantics.
 
 Proof guidance: exercise the public evaluator over real `ChangeRevision`-derived cases. Run the focused admission suite and Ruff on touched files; no persistence proof belongs here.
+
+[[2026-07-22T14:10:35+02:00]]
+## Shape Notes
+- Dependency rewired from deprecated #1993 to clean evidence-contract replacement #1999. Coverage and contract validation scope is unchanged; route remains build after #1999.

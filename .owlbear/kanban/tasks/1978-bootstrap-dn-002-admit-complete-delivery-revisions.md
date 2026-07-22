@@ -4,7 +4,7 @@ title: 'Bootstrap DN-002: Admit complete delivery revisions'
 status: collect
 priority: high
 created: 2026-07-22T01:05:33.577098+02:00
-updated: 2026-07-22T13:47:11.814466+02:00
+updated: 2026-07-22T14:10:35.135030+02:00
 tags:
   - bootstrap-projection
   - change:replace-delivery-pipeline
@@ -15,12 +15,12 @@ tags:
 parent: 1968
 depends_on:
   - 1977
-  - 1993
   - 1994
   - 1995
   - 1996
   - 1997
   - 1998
+  - 1999
 ac:
   - 'AC-1: Shaper, while this task is in `shape`, reads `DN-002` at the recorded digest
     and creates one outcome-cohesive packet DAG whose task records reference the same
@@ -84,3 +84,9 @@ Shaping completed at the admitted digest. Created build-ready packet DAG #1993 -
 - Diagnostic governance: evidence uses `EV-001` through `EV-005`; admitted `DV-*` category meanings are not overloaded; free-text proof substitution remains an independent challenger judgment.
 - The first repair challenge failed on code collision and unverifiable DV-009 automation. Both were corrected; the second `shaper-challenger` returned PASS with no material user decision required.
 - Parent remains in collect and now depends on #1993 through #1998 plus completed DN-001 predecessor #1977.
+
+[[2026-07-22T14:10:35+02:00]]
+## Shape Notes
+- Immediate builder rejection exposed a repair-mechanics defect: #1993's title and AC had changed, but its original Outcome and Scope remained, so later Shape Notes could not make the task internally consistent.
+- Created clean replacement #1999, deprecated #1993 with replacement reference, rewired #1994/#1995 and this aggregate, replaced #1994's stale body in full, and clarified #1998's assembled inputs.
+- `shaper-challenger` verified authority fidelity, EV/DV separation, boundary ownership, AC quality, and replacement routing. No admitted authority or architecture changed.

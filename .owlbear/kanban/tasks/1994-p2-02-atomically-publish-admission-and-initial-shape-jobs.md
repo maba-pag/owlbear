@@ -4,7 +4,7 @@ title: 'P2-02: Define initial shape-job generations'
 status: build
 priority: medium
 created: 2026-07-22T05:49:48.187184+02:00
-updated: 2026-07-22T13:47:11.797985+02:00
+updated: 2026-07-22T14:10:35.099332+02:00
 tags:
   - phase-1
   - scope:core
@@ -18,7 +18,7 @@ tags:
   - schema
 parent: 1978
 depends_on:
-  - 1993
+  - 1999
 ac:
   - 'AC-1: Given a revision, admission receipt identity, and allocated numeric IDs,
     the public planner returns one immutable kind=`shape` job per authored delivery
@@ -44,21 +44,25 @@ archival_refs: []
 - `packet_id`: `DN-002-PK-002`
 
 ## Outcome
-The public validate/admit operation commits one immutable schema-version-1 admission receipt plus exactly one initial shape job per delivery node as one observable generation, or returns stable findings with no newly visible admission or jobs.
+A public side-effect-free planner creates one immutable initial shape-job generation from a loaded revision, receipt identity, and allocated numeric job IDs for later publication by #1998.
 
 ## Scope
-In scope: validate/admit composition over the real evaluator; minimal native shape-job identity/state required at admission; staged receipt/job publication; conflict-safe all-or-none commit, replay, concurrency, scoped cleanup, durable readback, public exports, and focused transaction/failure tests.
+In scope: the minimal native shape-job record; generation identity; deterministic authored-node ordering; receipt prerequisite binding; priority and timestamps; immutable serialization/readback; duplicate, missing, wrong-kind, wrong-digest, wrong-receipt, and unknown-target diagnostics; public exports and focused tests.
 
-Out of scope: shape execution; claims, attempts, completion, requests, activity, invalidation, supersession, generalized transaction recovery or health; build/accept/audit job creation; MCP, HTTP, and UI contracts.
+Out of scope: live receipt or job publication; validate/admit composition; concurrency, replay, rollback, cleanup, durability, and complete-generation visibility owned by #1998; shape execution; claims, attempts, transitions, requests, activity, invalidation, supersession, generalized recovery/health, MCP, HTTP, and UI.
 
 ## Authority
-Resolve normative behavior from `DN-002`, `REQ-002`, `REQ-003`, `IF-002`, `RISK-003`, `RISK-007`, and `PROOF-002` in `.owlbear/changes/replace-delivery-pipeline/graph.yaml`, plus the job-record and transaction constraints in sections 7, 9, and 13 of `design.md`. This bootstrap task cannot add, weaken, or supersede those obligations.
+Resolve job fields and authority projection rules from sections 6 and 7 of `design.md`. Job files contain operational identity/state only; titles, outcomes, acceptance, modules, interfaces, risks, and proofs remain projected from change authority.
 
-Proof guidance: exercise the assembled public validate/admit operation before any native jobs exist. Use temporary repository/job stores and failure injection only below admission; do not mock the evaluator. Run the focused admission, ChangeRevision, and receipt suites plus Ruff on touched files. Durable tests are required by the atomic no-work-before-admission boundary.
+## Boundary Ownership
+This packet proves the planner and serialized generation only. It does not satisfy the atomic-success part of `PROOF-002`; #1998 owns storage and all-or-none publication.
 
-[[2026-07-22T13:47:11+02:00]]
+## Repair Provenance
+This body replaces the stale pre-repair Outcome and Scope that assigned atomic publication to #1994. The six-packet repair moved that responsibility to #1998; no later note is needed to reinterpret this contract.
+
+Proof guidance: exercise the public planner and generation readback without filesystem writes. Run focused job-generation and admission model tests plus Ruff on touched files.
+
+[[2026-07-22T14:10:35+02:00]]
 ## Shape Notes
-- Connected repair supersedes this task's original atomic-publication Outcome and Scope. This packet now owns only the immutable initial shape-job generation schema, planner, serialization, and malformed-generation diagnostics.
-- It performs no live job or receipt publication. The assembled receipt-plus-jobs transaction, concurrency, replay, failure injection, and zero-mutation proof moved to #1998.
-- This split preserves the admitted job fields in design section 7 while keeping claims, attempts, transitions, requests, invalidation, supersession, generalized recovery/health, MCP, HTTP, and UI outside DN-002.
-- Dependency remains #1993; route remains build. The independently corrected six-packet graph passed `shaper-challenger`.
+- Replaced the stale body in full. The operative task now assigns only side-effect-free initial shape-job generation planning and serialization to #1994; #1998 owns storage and atomic publication.
+- Dependency rewired from deprecated #1993 to clean replacement #1999. Route remains build after #1999.

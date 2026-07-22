@@ -1,10 +1,10 @@
 ---
 id: 1993
 title: 'P2-01: Validate layered admission evidence'
-status: build
+status: archived
 priority: medium
 created: 2026-07-22T05:49:37.434986+02:00
-updated: 2026-07-22T13:47:11.783842+02:00
+updated: 2026-07-22T14:11:05.606820+02:00
 tags:
   - phase-1
   - scope:core
@@ -36,8 +36,9 @@ proof_bundle: behavioral+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
-archival_refs: []
+archival_reason: deprecated
+archival_refs:
+  - 1999
 ---
 ## Bootstrap Projection Identity
 - `change_id`: `replace-delivery-pipeline`
@@ -203,3 +204,26 @@ Rejected to shape. `graph.yaml` and `design.md` state that admission creates an 
 - Diagnostic authority: `DV-003` through `DV-012` remain reserved for the admitted receipt meanings. Replace the current conflicting `DV-010`, `DV-011`, `DV-012`, and invented `DV-013` evidence emissions with `EV-001` evidence digest, `EV-002` challenge, `EV-003` baseline, `EV-004` approval, and `EV-005` limits.
 - Proof-substitution judgment remains a structured per-proof challenge disposition; it is not inferred from free-text proof fields.
 - `shaper-challenger` first found the code collision and unverifiable DV-009 automation, then returned PASS after correction. Route: build with no packet dependency.
+
+[[2026-07-22T14:01:10+02:00]]
+## Builder Notes
+- Change envelope: inspected the existing public admission boundary and compared it with the task AC and named authorities before editing.
+- Files changed: none. Existing source remains untouched; unrelated dirty worktree changes were preserved.
+- Change Module Map deviations: none; `serve/kanban/src/owlbear_kanban/admission.py`, its package export, and focused tests remain the mapped owner.
+- Proof selected: `uv run --project serve/kanban pytest serve/kanban/tests/test_admission.py serve/kanban/tests/test_change_revision.py -q` -> 22 passed; direct authority reads of admission sections 9.1-9.5 and `PROOF-002`.
+- Durable-test justification: no tests added because the contract contradiction must be resolved before additional proof can be meaningful.
+- Findings requiring shape resolution: (1) AC-1 through AC-3 require `EV-001` through `EV-005`, schema-versioned assessment serialization, warning preservation, and explicit limits, but the current owner uses `DV-*`, exposes only error findings, and has no schema version or limits on `AdmissionAssessment`; (2) `design.md` section 9.5 and `PROOF-002` define the public boundary as `validate/admit` and require atomic receipt plus initial shape-job creation on success, while this task's Scope and Outcome explicitly make evaluation side-effect-free and exclude receipt/job writes; (3) the required A1-A10 matrix and historical defective/corrected fixtures are not concretely enumerated in the current AC, so implementation cannot choose canonical finding semantics without guessing.
+- Focused proof confirms the existing 22 tests pass but does not prove the unresolved AC/authority contract.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|-----------------|---------|----------|
+| 1 | shaper | Reconcile `evaluate_admission` versus `validate/admit`, and explicitly decide whether receipt/shape-job atomic writes belong to this task or a separate child task. | `.owlbear/changes/replace-delivery-pipeline/design.md`, task 1993 AC/scope | `PROOF-002` requires atomic success writes; task scope excludes them. |
+| 2 | shaper | Canonicalize diagnostic codes and assessment schema, including warning findings, limits, serialization, and the exact EV/DV vocabulary. | task 1993, `serve/kanban/src/owlbear_kanban/admission.py` | AC names EV codes; source currently emits DV codes. |
+| 3 | shaper | Enumerate the A1-A10 invariant matrix and historical fixture families as buildable AC/proof, or narrow the task to the currently supported evaluator contract. | task 1993 AC and proof bundle | Authority section 9.1 and `PROOF-002` require broader validation than current AC specifies. |
+
+[[2026-07-22T14:11:02+02:00]]
+## Shape Notes
+- Immediate builder rejection confirmed this record remained internally contradictory after the prior MCP repair: title and AC were narrowed, but the original Outcome and Scope still assigned A1-A10, historical fixtures, and aggregate admission concerns here.
+- Replaced by #1999 rather than rewriting this record again, preserving the complete builder/verifier rejection history and partial implementation provenance.
+- Existing source commits remain the implementation baseline for #1999. Parent and consumer dependencies now reference #1999. Archive this record as deprecated with replacement #1999.
