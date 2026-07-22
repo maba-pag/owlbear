@@ -1,10 +1,10 @@
 ---
 id: 1998
 title: 'P2-06: Atomically admit revision and shape jobs'
-status: collect
+status: archived
 priority: low
 created: 2026-07-22T13:46:36.783681+02:00
-updated: 2026-07-22T21:34:05.620623+02:00
+updated: 2026-07-22T21:35:15.967440+02:00
 tags:
   - phase-1
   - scope:core
@@ -42,7 +42,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Bootstrap Projection Identity
@@ -111,3 +111,13 @@ Proof guidance: exercise the real public validate/admit operation over temporary
 - Patches applied: none.
 - Verifier-challenger result: pass. It confirmed the declared scope and public-boundary proof are sufficient.
 - Final route: collect.
+
+[[2026-07-22T21:35:15+02:00]]
+## Collect Notes
+- Classification: leaf. Task has concrete build AC and `type:build`; `list_tasks(parent=1998)` returned no children.
+- Leaf verification evidence: `## Verify Notes` records verifier PASS routing to collect, no findings or patches, focused suite result of 47 passed, clean Ruff, and verifier-challenger pass.
+- Invariant map coverage: verifier reports no Change Module Map deviation; the admission transaction owner and package export match shaped ownership.
+- Tested commit and normal-path proof: Builder commit `92827ba54`; verifier tied it to a real public `validate_and_admit` run over tracked R1-R4 fixtures, corrected admission yielding one receipt and 14 jobs, exact replay, injected publication failure rollback, defective-fixture zero mutation, and two-process concurrency yielding one receipt and one generation.
+- Dependency and completion state: task dependencies #1994 and #1997 report `dep_status=ok`; aggregate child and parent gate checks are not applicable to this leaf.
+- Residual decisions: no pending or resolved structured requests; no `Required Follow-up` section; task is unblocked.
+- Archive rationale: verifier closure evidence is complete and no decision, request, dependency, or follow-up state remains. Archive as completed.
