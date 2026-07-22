@@ -1,10 +1,10 @@
 ---
 id: 2000
 title: 'P3-01: Define native job and evidence contracts'
-status: verify
+status: build
 priority: high
 created: 2026-07-22T21:58:09.010514+02:00
-updated: 2026-07-23T00:29:23.514730+02:00
+updated: 2026-07-23T00:32:28.777204+02:00
 tags:
   - phase-3
   - scope:core
@@ -72,3 +72,20 @@ Proof guidance: exercise public parsers, serializers, and authority projection w
 - Commands run: `uv run --project . pytest serve/kanban/tests/test_jobs.py serve/kanban/tests/test_change_receipts.py -q` -> `31 passed`; public parser import and missing-target diagnostic smoke -> `receipt parser smoke: ok`.
 - Builder-challenger result: PASS. Challenger confirmed localized scope, typed public contracts, and preserved receipt-store behavior.
 - Follow-up risks: receipt kind payloads remain intentionally represented as immutable JSON payloads at this packet boundary; deeper validity, digest, predecessor, code-revision, and lifecycle enforcement belongs to later shaped runtime packets.
+
+[[2026-07-23T00:32:28+02:00]]
+## Verify Notes
+- Evidence reviewed: builder commit `4faba44e7` changed only `serve/kanban/src/owlbear_kanban/jobs.py`, `serve/kanban/src/owlbear_kanban/receipt.py`, and their public exports; its claimed module map has no ownership deviation. Existing focused suite passed: `uv run --project . pytest serve/kanban/tests/test_jobs.py serve/kanban/tests/test_change_receipts.py -q` produced `31 passed in 1.16s`.
+- Named authorities checked: admitted design sections 3.5, 4, and 7.1; `REQ-009`, `IF-003`, `NEG-001`, `NEG-002`, and `NEG-010`. Job records retain only operational references and `project_job` sources title, outcome, acceptance, modules, interfaces, and proof from `ChangeRevision`, matching the authority-projection boundary.
+- Change Module Map: no deviation. Changed modules remain `jobs.py`, `receipt.py`, and the package export boundary. No legacy carrier, storage, lifecycle, dispatch, MCP, or Cockpit path was changed.
+- Normal-path boundary exercised: a public-API table probe parsed schema-version-1 shape/build/accept/audit jobs and shape/build/accept/audit/supersession receipts, then deterministically serialized the successful receipts. The existing tests did not exercise the new public parser or projection APIs, so they cannot prove the task AC by themselves.
+- Finding: AC-3 is not satisfied. `parse_receipt_mapping` accepts a non-admission shape receipt lacking `node_plan_digest`, although the AC and design require enforcement of the delivery/node-plan digest contract. Reproduction command printed `BUG: shape receipt without node_plan_digest was accepted` after asserting `result.receipt is not None` for a shape receipt with target, predecessor, evidence, code revision, and no node-plan digest.
+- Patches applied: none. This is an incomplete public receipt contract, not a verifier-local defect.
+- Verifier-challenger: not called because the proposed route is rejection; challenger review is required only before PASS.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Implement kind-specific receipt payload validation for the required delivery/node-plan digest contract, including a stable missing-digest diagnostic, and add focused public parser coverage for all AC-3 receipt kinds. Preserve the existing receipt-store boundary. | `serve/kanban/src/owlbear_kanban/receipt.py`, focused existing receipt tests | The public parser accepts a shape receipt with no `node_plan_digest`; design section 3.5 and AC-3 require receipt-kind contracts. |
+
+- Final route: REJECT to build.
