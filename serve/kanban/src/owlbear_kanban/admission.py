@@ -203,24 +203,24 @@ def _evaluate_structured_evidence(revision: ChangeRevision, evidence: AdmissionE
                 "Record clean baseline commands and results.",
             )
         )
-    if evidence.baseline.get("digest") not in {None, evidence.digest}:
+    if evidence.baseline.get("digest") != evidence.digest:
         findings.append(
             _finding(
                 "DV-012",
                 revision.change_id,
-                "baseline evidence is bound to a different digest",
+                "baseline evidence is missing or bound to a different digest",
                 "Recompute the baseline for this delivery digest.",
-                str(evidence.baseline.get("digest")),
+                str(evidence.baseline.get("digest", "missing")),
             )
         )
-    if evidence.approval.get("digest") not in {None, evidence.digest}:
+    if evidence.approval.get("digest") != evidence.digest:
         findings.append(
             _finding(
                 "DV-011",
                 revision.change_id,
-                "approval is bound to a different digest",
+                "approval is missing or bound to a different digest",
                 "Record approval for this delivery digest.",
-                str(evidence.approval.get("digest")),
+                str(evidence.approval.get("digest", "missing")),
             )
         )
     return findings

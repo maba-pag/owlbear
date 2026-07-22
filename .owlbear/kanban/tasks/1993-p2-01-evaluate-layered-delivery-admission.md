@@ -1,10 +1,10 @@
 ---
 id: 1993
 title: 'P2-01: Evaluate layered delivery admission'
-status: build
+status: verify
 priority: medium
 created: 2026-07-22T05:49:37.434986+02:00
-updated: 2026-07-22T06:13:43.881487+02:00
+updated: 2026-07-22T06:15:14.550595+02:00
 tags:
   - phase-1
   - scope:core
@@ -148,3 +148,14 @@ Proof guidance: exercise the public evaluation boundary with the real `ChangeRev
 | 2 | builder | Add durable public-boundary table/property proof and historical defective/corrected fixtures for all four required defect families, including deterministic findings, serialization, and unchanged persistence paths. | `serve/kanban/tests/test_admission.py` plus focused fixtures | AC-1 through AC-5; `PROOF-002` |
 
 - Final route: REJECT to build.
+
+[[2026-07-22T06:15:14+02:00]]
+## Builder Notes
+- Change envelope: public deterministic admission evaluation over `ChangeRevision`; task-local change limited to strict digest binding for baseline and approval evidence plus regression coverage.
+- Files changed: `serve/kanban/src/owlbear_kanban/admission.py`, `serve/kanban/tests/test_admission.py`.
+- Change Module Map deviations: none; existing admission owner and public exports remain authoritative.
+- Proof selected: focused public-API admission tests and Ruff on touched files.
+- Durable-test justification: added one durable regression test because omitted baseline/approval digests must remain admission-blocking and are easy to regress.
+- Commands run: `uv run pytest serve/kanban/tests/test_admission.py -q` -> 3 passed; `uv run ruff check serve/kanban/src/owlbear_kanban/admission.py serve/kanban/tests/test_admission.py` -> passed.
+- Builder-challenger result: pass; no concrete blocker found.
+- Follow-up risks: broader AC matrix remains for verifier review; this build slice specifically proves digest binding.
