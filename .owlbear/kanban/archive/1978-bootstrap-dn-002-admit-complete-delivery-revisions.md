@@ -1,10 +1,10 @@
 ---
 id: 1978
 title: 'Bootstrap DN-002: Admit complete delivery revisions'
-status: collect
+status: archived
 priority: high
 created: 2026-07-22T01:05:33.577098+02:00
-updated: 2026-07-22T14:10:35.135030+02:00
+updated: 2026-07-22T21:38:18.348016+02:00
 tags:
   - bootstrap-projection
   - change:replace-delivery-pipeline
@@ -36,7 +36,7 @@ proof_bundle: existing+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Bootstrap Projection Identity
@@ -90,3 +90,14 @@ Shaping completed at the admitted digest. Created build-ready packet DAG #1993 -
 - Immediate builder rejection exposed a repair-mechanics defect: #1993's title and AC had changed, but its original Outcome and Scope remained, so later Shape Notes could not make the task internally consistent.
 - Created clean replacement #1999, deprecated #1993 with replacement reference, rewired #1994/#1995 and this aggregate, replaced #1994's stale body in full, and clarified #1998's assembled inputs.
 - `shaper-challenger` verified authority fidelity, EV/DV separation, boundary ownership, AC quality, and replacement routing. No admitted authority or architecture changed.
+
+[[2026-07-22T21:38:18+02:00]]
+## Collect Notes
+- Classification: aggregate. Task `#1978` is the `DN-002` bootstrap projection under `#1968`, with explicit aggregate authority, packet decomposition, and collect-only closure criteria.
+- Intent source: `## Authority Reference` and `## Shape Notes`, resolved against `DN-002` and `PROOF-002` in `.owlbear/changes/replace-delivery-pipeline/graph.yaml` at delivery digest `9387dea789fb3334cd50e6f784d06847880bd006402b33d5ab2c45888c2202a8`. The promised result is deterministic complete-delivery admission with baseline/challenge inputs, stable diagnostics, and atomic creation of one admission receipt plus initial node shape jobs.
+- Invariant map coverage: `#1999` covers immutable evidence assessment and `EV-001` through `EV-005`; `#1995` covers obligation, interface, migration, risk, and proof completeness (`DV-003` through `DV-007`); `#1996` covers graph topology, decision coherence, authority bounds, deterministic mutations, and valid DAG silence (`DV-008`, `DV-010`, `DV-011`); `#1997` supplies the durable R1-R4 historical defective/corrected packages through the public loader/evaluator boundary; `#1994` covers immutable initial shape-job planning and readback; `#1998` assembles the public atomic validate/admit operation, failure-with-zero-mutation, replay, and concurrency behavior. This covers the `MOD-001`, `MOD-008`, `IF-001`, `IF-002`, `RISK-003`, `RISK-007`, and `PROOF-002` boundary without taking later job-runtime ownership.
+- Child coverage: `list_tasks(status=archived, parent=1978)` returned `#1993` through `#1999`. `#1993` is archived `deprecated` with replacement reference `#1999`; `#1994`, `#1995`, `#1996`, `#1997`, `#1998`, and `#1999` are archived `completed`. Every completed child has final verifier PASS evidence and no unresolved Required Follow-up.
+- Parent dependency gate: `depends_on` is `#1977`, `#1994`, `#1995`, `#1996`, `#1997`, `#1998`, and `#1999`; all seven are archived `completed`. No dependency is active, missing, deprecated without replacement, or blocking.
+- SHA-linked aggregate proof: tested revision `92827ba5410e65fba12aec7e48ce6cc45f7db229`. Final `#1998` Verify Notes identify that builder commit and record proof against its current committed scope through real public `validate_and_admit` over identity-preserving R1-R4 fixture copies: all defective revisions rejected without receipt/job mutation, corrected revisions created one receipt plus 14 jobs, exact replay returned matching identities, injected publication failure left empty inventories, and two OS processes converged on one receipt/generation. The tied focused regression command passed 47 tests and Ruff passed. `git merge-base --is-ancestor` confirmed that revision is an ancestor of current archive baseline `2ad2d70a3466564104c8cc57c7610e55e50cb1ef`.
+- Residual decisions: `list_requests` returned no pending or resolved structured requests for `#1978`; the final child Verify Notes contain no unresolved follow-up, and the admitted receipt records no material decision state changing this revision.
+- Archive rationale: the admitted `DN-002` outcome and `PROOF-002` boundary are covered by completed replacement-aware children, the parent dependency gate is closed, and the aggregate normal-path proof is tied to a tested commit revision. Archive as `completed`.
