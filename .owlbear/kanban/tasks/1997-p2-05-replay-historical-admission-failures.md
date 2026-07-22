@@ -1,10 +1,10 @@
 ---
 id: 1997
 title: 'P2-05: Replay historical admission failures'
-status: verify
+status: collect
 priority: medium
 created: 2026-07-22T13:46:19.736647+02:00
-updated: 2026-07-22T21:11:54.456161+02:00
+updated: 2026-07-22T21:15:00.386349+02:00
 tags:
   - phase-1
   - scope:core
@@ -135,3 +135,15 @@ Use one table-driven durable test at `serve/kanban/tests/test_historical_admissi
 - Commands run: `uv run pytest serve/kanban/tests/test_historical_admission_fixtures.py` (8 passed); `uv run pytest serve/kanban/tests/test_admission.py serve/kanban/tests/test_historical_admission_fixtures.py` (24 passed).
 - Builder-challenger result: `pass`; no concrete blockers.
 - Follow-up risks: verifier should confirm canonical fixture semantics against the incident/design authorities and inspect the staged task-owned paths before closure.
+
+[[2026-07-22T21:15:00+02:00]]
+## Verify Notes
+- Evidence reviewed: AC-1 through AC-4, Builder Notes, all eight fixture packages, the focused regression, research section 4.2, and design section 17.2.
+- Named authorities checked: the research requires R1 retained-page lifetime/composition proof, R2 transport/callback/deletion/destructive safety, R3 assembled memory-purge proof, and R4 generated/frontend lifecycle plus clean-build ownership. Design section 17.2 requires defective forms to fail with stable diagnostics and corrected forms to admit.
+- Change Module Map: no deviation. The task commit is limited to 32 four-file packages under `serve/kanban/tests/fixtures/historical-admission/`, the focused regression, and this task record; no production admission source changed.
+- Normal-path boundary exercised: the focused table-driven test directly calls public `load_change` and `evaluate_admission` for each package. Replacements are confined below the evaluator boundary in digest-bound evidence; no receipt content or post-load revision mutation is used.
+- Local verifier patch: tightened `test_historical_admission_fixtures.py` so corrected packages assert zero findings, and defective packages assert `admitted=False` plus the complete returned finding set. This repairs the AC-1/AC-2 proof gap without changing product behavior.
+- Checks run: focused fixture suite passed (8 passed); maintained admission regression plus fixture suite passed (24 passed); Ruff passed for the touched test; `git diff --check` passed.
+- Findings: evaluator source maps the intended omissions to generic DV-004 interface, DV-005 migration, DV-006 risk, and DV-007 proof diagnostics. AC-1 through AC-4 are satisfied.
+- Verifier-challenger: pass; no scope drift, unresolved AC, or proof deficiency identified.
+- Final route: PASS to collect.

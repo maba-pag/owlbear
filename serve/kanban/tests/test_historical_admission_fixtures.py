@@ -65,5 +65,7 @@ def test_historical_four_file_fixture_admission_is_stable(fixture_root, fixture_
     expected_pairs = FIXTURES[fixture_name][variant]
     if variant == "corrected":
         assert first.admitted
+        assert not first.findings
     else:
-        assert {(item.code, item.target) for item in first.errors} == expected_pairs
+        assert not first.admitted
+        assert set(first_pairs) == expected_pairs
