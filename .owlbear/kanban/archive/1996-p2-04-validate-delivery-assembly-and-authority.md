@@ -1,10 +1,10 @@
 ---
 id: 1996
 title: 'P2-04: Validate delivery assembly and authority'
-status: collect
+status: archived
 priority: medium
 created: 2026-07-22T13:46:10.586702+02:00
-updated: 2026-07-22T16:17:48.018176+02:00
+updated: 2026-07-22T16:19:43.153447+02:00
 tags:
   - phase-1
   - scope:core
@@ -39,7 +39,7 @@ proof_bundle: behavioral+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Bootstrap Projection Identity
@@ -122,3 +122,13 @@ Proof guidance: start from a loaded `ChangeRevision`, mutate only semantic graph
 - Findings: AC-1 through AC-4 are satisfied; valid DAG silence and deterministic sorting are covered. No local defects found and no patches applied.
 - Verifier-challenger: pass; it found the public boundary, proof sufficiency, and task scope aligned.
 - Final route: PASS to collect.
+
+[[2026-07-22T16:19:43+02:00]]
+## Collect Notes
+- Classification: leaf. Task #1996 has no child tasks; its implementation-specific Outcome, Scope, and AC define a delivery packet rather than aggregate parent or EPIC intent.
+- Leaf verification evidence: the final `## Verify Notes` records PASS to collect against builder commit `5434c71d7`; the public `evaluate_admission` boundary was exercised with a real loaded `ChangeRevision`, 16 focused admission tests passed, Ruff passed, and verifier-challenger returned pass.
+- Invariant map coverage: verifier confirmed AC-1 through AC-4, named DV-008/DV-010/DV-011 authorities, valid DAG silence, deterministic sorting, and no Change Module Map deviation.
+- Follow-up closure: the earlier verifier Required Follow-up for durable table/property proof was resolved by the second Builder Notes pass in `serve/kanban/tests/test_admission.py`; the final verifier found no local defects and no unresolved AC.
+- Dependency and child state: `list_tasks(parent=1996)` returned no children; dependency #1995 reports ready (`dep_status=ok`). Parent #1978 remains outside this leaf archive decision.
+- Structured requests: no pending or resolved request records exist for #1996. No residual decision or action state remains.
+- Archive rationale: verified leaf closure is complete; archive as `completed` without re-reviewing implementation details.
