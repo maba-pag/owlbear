@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import contextlib
+import errno
 import math
 import os
 import re
-import tempfile
-from collections.abc import Mapping
+import secrets
+import stat
+from collections.abc import Iterator, Mapping
 from datetime import date, datetime, time
 from enum import StrEnum
 from io import StringIO
@@ -19,12 +21,15 @@ from pydantic import BaseModel, ConfigDict, StringConstraints, field_serializer,
 from pydantic import ValidationError as PydanticValidationError
 from ruamel.yaml.error import YAMLError
 
-from owlbear_kanban._naming import validate_path_containment
 from owlbear_kanban.change import ChangeId, ChangeRevision, Digest, load_change
 from owlbear_kanban.yaml_rt import make_yaml
 
 _RECEIPT_ID_PATTERN = r"^[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*$"
 _RECEIPT_ID_RE = re.compile(_RECEIPT_ID_PATTERN)
+_DIRECTORY_OPEN_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+_FILE_OPEN_FLAGS = os.O_RDONLY | os.O_NOFOLLOW
+_TEMP_OPEN_FLAGS = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+_TEMP_CREATE_ATTEMPTS = 10
 
 ReceiptId = Annotated[str, StringConstraints(strict=True, pattern=_RECEIPT_ID_PATTERN)]
 ReceiptKind = Literal["admission", "shape", "build", "accept", "audit", "supersession"]
@@ -193,28 +198,170 @@ def _schema_detail(exc: PydanticValidationError) -> str:
     return f"receipt schema rejected {location or '<root>'}: {error['type']}"
 
 
-def _atomic_create(path: Path, content: str, receipt_id: str) -> None:
-    fd, temp_name = tempfile.mkstemp(dir=path.parent, prefix=".tmp-", suffix=".yaml")
-    temp_path = Path(temp_name)
+def _receipt_location(receipt_id: str) -> tuple[str, str]:
+    if (
+        "\x00" in receipt_id
+        or not _RECEIPT_ID_RE.fullmatch(receipt_id)
+        or PurePosixPath(receipt_id).is_absolute()
+        or PureWindowsPath(receipt_id).is_absolute()
+    ):
+        _fail(ReceiptDiagnosticCode.PATH_UNSAFE, "receipt ID is not a safe canonical identifier")
+    filename = f"{receipt_id}.yaml"
+    return filename, f"receipts/{filename}"
+
+
+def _open_receipts_directory(
+    source_dir: Path,
+    source_identity: tuple[int, int],
+    *,
+    create: bool,
+) -> int | None:
     try:
-        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
-            os.fchmod(handle.fileno(), 0o644)
+        source_fd = os.open(source_dir, _DIRECTORY_OPEN_FLAGS)
+    except OSError:
+        _fail(ReceiptDiagnosticCode.PATH_UNSAFE, "change directory could not be opened safely")
+    try:
+        source_stat = os.fstat(source_fd)
+        if (source_stat.st_dev, source_stat.st_ino) != source_identity:
+            _fail(ReceiptDiagnosticCode.PATH_UNSAFE, "change directory identity has changed")
+        if create:
+            with contextlib.suppress(FileExistsError):
+                os.mkdir("receipts", mode=0o755, dir_fd=source_fd)
+        try:
+            return os.open("receipts", _DIRECTORY_OPEN_FLAGS, dir_fd=source_fd)
+        except FileNotFoundError:
+            if not create:
+                return None
+            raise
+        except OSError:
+            _fail(
+                ReceiptDiagnosticCode.PATH_UNSAFE,
+                "receipts directory could not be opened safely",
+                path="receipts",
+            )
+    except OSError:
+        _fail(
+            ReceiptDiagnosticCode.PATH_UNSAFE,
+            "receipts directory could not be created safely",
+            path="receipts",
+        )
+    finally:
+        os.close(source_fd)
+
+
+@contextlib.contextmanager
+def _receipts_directory(
+    source_dir: Path,
+    source_identity: tuple[int, int],
+    *,
+    create: bool,
+) -> Iterator[int | None]:
+    directory_fd = _open_receipts_directory(source_dir, source_identity, create=create)
+    try:
+        yield directory_fd
+    finally:
+        if directory_fd is not None:
+            os.close(directory_fd)
+
+
+def _create_temp_file(directory_fd: int) -> tuple[int, str]:
+    for _attempt in range(_TEMP_CREATE_ATTEMPTS):
+        name = f".tmp-{secrets.token_hex(16)}.yaml"
+        try:
+            return os.open(name, _TEMP_OPEN_FLAGS, 0o600, dir_fd=directory_fd), name
+        except FileExistsError:
+            continue
+    msg = "could not allocate a unique receipt temporary file"
+    raise FileExistsError(msg)
+
+
+def _file_identity(file_stat: os.stat_result) -> tuple[int, int]:
+    return file_stat.st_dev, file_stat.st_ino
+
+
+def _entry_identity(directory_fd: int, name: str) -> tuple[int, int]:
+    return _file_identity(os.stat(name, dir_fd=directory_fd, follow_symlinks=False))
+
+
+def _validate_published_file(directory_fd: int, filename: str, expected_identity: tuple[int, int]) -> None:
+    published_fd = os.open(filename, _FILE_OPEN_FLAGS, dir_fd=directory_fd)
+    try:
+        if _file_identity(os.fstat(published_fd)) != expected_identity:
+            raise OSError(errno.ESTALE, "published receipt identity changed")
+        os.fsync(published_fd)
+        os.fsync(directory_fd)
+        if _entry_identity(directory_fd, filename) != expected_identity:
+            raise OSError(errno.ESTALE, "published receipt identity changed")
+    finally:
+        os.close(published_fd)
+
+
+def _atomic_create(directory_fd: int, filename: str, content: str, receipt_id: str) -> None:
+    file_fd, temp_name = _create_temp_file(directory_fd)
+    try:
+        expected_identity = _file_identity(os.fstat(file_fd))
+        os.fchmod(file_fd, 0o644)
+        with os.fdopen(os.dup(file_fd), "w", encoding="utf-8", newline="\n") as handle:
             handle.write(content)
             handle.flush()
             os.fsync(handle.fileno())
+        if _entry_identity(directory_fd, temp_name) != expected_identity:
+            raise OSError(errno.ESTALE, "receipt temporary file identity changed")
         try:
-            os.link(temp_path, path)
+            os.link(
+                temp_name,
+                filename,
+                src_dir_fd=directory_fd,
+                dst_dir_fd=directory_fd,
+                follow_symlinks=False,
+            )
         except FileExistsError:
             raise ReceiptConflictError(receipt_id) from None
-        if hasattr(os, "O_DIRECTORY"):
-            directory_fd = os.open(path.parent, os.O_RDONLY)
-            try:
-                os.fsync(directory_fd)
-            finally:
-                os.close(directory_fd)
+        try:
+            _validate_published_file(directory_fd, filename, expected_identity)
+        except OSError:
+            with contextlib.suppress(OSError):
+                os.unlink(filename, dir_fd=directory_fd)
+            raise
     finally:
         with contextlib.suppress(OSError):
-            temp_path.unlink()
+            os.unlink(temp_name, dir_fd=directory_fd)
+        os.close(file_fd)
+
+
+def _read_receipt_text(directory_fd: int, filename: str, receipt_id: str, path: str) -> str:
+    try:
+        file_fd = os.open(filename, _FILE_OPEN_FLAGS, dir_fd=directory_fd)
+    except FileNotFoundError:
+        _fail(ReceiptDiagnosticCode.FILE_MISSING, "receipt file is missing", path=path, target=receipt_id)
+    except OSError as exc:
+        code = (
+            ReceiptDiagnosticCode.PATH_UNSAFE
+            if exc.errno in {errno.ELOOP, errno.ENOTDIR}
+            else ReceiptDiagnosticCode.FILE_MISSING
+        )
+        _fail(code, "receipt file could not be opened safely", path=path, target=receipt_id)
+    try:
+        if not stat.S_ISREG(os.fstat(file_fd).st_mode):
+            _fail(
+                ReceiptDiagnosticCode.PATH_UNSAFE,
+                "receipt path must identify a regular file",
+                path=path,
+                target=receipt_id,
+            )
+        try:
+            with os.fdopen(file_fd, "r", encoding="utf-8") as handle:
+                return handle.read()
+        except UnicodeDecodeError:
+            _fail(
+                ReceiptDiagnosticCode.ENCODING,
+                "receipt file is not strict UTF-8",
+                path=path,
+                target=receipt_id,
+            )
+    finally:
+        with contextlib.suppress(OSError):
+            os.close(file_fd)
 
 
 class ReceiptStore:
@@ -222,79 +369,6 @@ class ReceiptStore:
 
     def __init__(self, revision: ChangeRevision) -> None:
         self._revision = revision
-        self._receipts_dir = revision.source_dir / "receipts"
-
-    def _validate_receipts_dir(self, *, create: bool) -> None:
-        if self._receipts_dir.is_symlink():
-            _fail(
-                ReceiptDiagnosticCode.PATH_UNSAFE,
-                "receipts directory must not be a symlink",
-                path="receipts",
-            )
-        try:
-            validate_path_containment(self._revision.source_dir, self._receipts_dir)
-        except (OSError, ValueError):
-            _fail(
-                ReceiptDiagnosticCode.PATH_UNSAFE,
-                "receipts directory escapes the change directory",
-                path="receipts",
-            )
-        if create:
-            try:
-                self._receipts_dir.mkdir(mode=0o755, exist_ok=True)
-            except OSError:
-                _fail(
-                    ReceiptDiagnosticCode.PATH_UNSAFE,
-                    "receipts directory could not be created",
-                    path="receipts",
-                )
-        if self._receipts_dir.exists() and not self._receipts_dir.is_dir():
-            _fail(
-                ReceiptDiagnosticCode.PATH_UNSAFE,
-                "receipts path must be a directory",
-                path="receipts",
-            )
-        if self._receipts_dir.is_symlink():
-            _fail(
-                ReceiptDiagnosticCode.PATH_UNSAFE,
-                "receipts directory must not be a symlink",
-                path="receipts",
-            )
-
-    def _receipt_path(self, receipt_id: str, *, require_file: bool) -> Path:
-        if (
-            "\x00" in receipt_id
-            or not _RECEIPT_ID_RE.fullmatch(receipt_id)
-            or PurePosixPath(receipt_id).is_absolute()
-            or PureWindowsPath(receipt_id).is_absolute()
-        ):
-            _fail(ReceiptDiagnosticCode.PATH_UNSAFE, "receipt ID is not a safe canonical identifier")
-        path = self._receipts_dir / f"{receipt_id}.yaml"
-        relative_path = f"receipts/{path.name}"
-        if path.is_symlink():
-            _fail(
-                ReceiptDiagnosticCode.PATH_UNSAFE,
-                "receipt files must not be symlinks",
-                path=relative_path,
-                target=receipt_id,
-            )
-        try:
-            validate_path_containment(self._revision.source_dir, path)
-        except (OSError, ValueError):
-            _fail(
-                ReceiptDiagnosticCode.PATH_UNSAFE,
-                "receipt file escapes the change directory",
-                path=relative_path,
-                target=receipt_id,
-            )
-        if require_file and not path.is_file():
-            _fail(
-                ReceiptDiagnosticCode.FILE_MISSING,
-                "receipt file is missing",
-                path=relative_path,
-                target=receipt_id,
-            )
-        return path
 
     def _validate_record(
         self,
@@ -327,14 +401,56 @@ class ReceiptStore:
     def create(self, receipt_id: str, value: Mapping[str, object]) -> ReceiptResult:
         """Create one immutable receipt without overwriting an existing receipt."""
         try:
-            path = self._receipt_path(receipt_id, require_file=False)
-            relative_path = f"receipts/{path.name}"
+            filename, relative_path = _receipt_location(receipt_id)
             record = self._validate_record(receipt_id, value, path=relative_path)
-            self._validate_receipts_dir(create=True)
-            path = self._receipt_path(receipt_id, require_file=False)
             stream = StringIO()
             make_yaml(explicit_start=True).dump(record.to_mapping(), stream)
-            _atomic_create(path, stream.getvalue(), receipt_id)
+            with _receipts_directory(
+                self._revision.source_dir,
+                self._revision.source_identity,
+                create=True,
+            ) as directory_fd:
+                if directory_fd is None:
+                    _fail(
+                        ReceiptDiagnosticCode.PATH_UNSAFE,
+                        "receipts directory could not be created safely",
+                        path="receipts",
+                    )
+                try:
+                    _atomic_create(directory_fd, filename, stream.getvalue(), receipt_id)
+                except ReceiptConflictError:
+                    raise
+                except OSError:
+                    _fail(
+                        ReceiptDiagnosticCode.PATH_UNSAFE,
+                        "receipt file could not be created safely",
+                        path=relative_path,
+                        target=receipt_id,
+                    )
+        except _ReceiptFailure as exc:
+            return ReceiptResult(diagnostics=(exc.diagnostic,))
+        return ReceiptResult(receipt=record)
+
+    def _read_from_directory(self, directory_fd: int, receipt_id: str, filename: str, path: str) -> ReceiptResult:
+        try:
+            text = _read_receipt_text(directory_fd, filename, receipt_id, path)
+            try:
+                value = make_yaml().load(text)
+            except YAMLError:
+                _fail(
+                    ReceiptDiagnosticCode.YAML_PARSE,
+                    "receipt YAML could not be parsed",
+                    path=path,
+                    target=receipt_id,
+                )
+            if not isinstance(value, Mapping):
+                _fail(
+                    ReceiptDiagnosticCode.SCHEMA_INVALID,
+                    "receipt document must be a mapping",
+                    path=path,
+                    target=receipt_id,
+                )
+            record = self._validate_record(receipt_id, value, path=path)
         except _ReceiptFailure as exc:
             return ReceiptResult(diagnostics=(exc.diagnostic,))
         return ReceiptResult(receipt=record)
@@ -342,51 +458,59 @@ class ReceiptStore:
     def read(self, receipt_id: str) -> ReceiptResult:
         """Read and validate one immutable receipt."""
         try:
-            self._validate_receipts_dir(create=False)
-            path = self._receipt_path(receipt_id, require_file=True)
-            try:
-                text = path.read_text(encoding="utf-8")
-            except UnicodeDecodeError:
-                _fail(
-                    ReceiptDiagnosticCode.ENCODING,
-                    "receipt file is not strict UTF-8",
-                    path=f"receipts/{path.name}",
-                    target=receipt_id,
-                )
-            except OSError:
-                _fail(
-                    ReceiptDiagnosticCode.FILE_MISSING,
-                    "receipt file could not be read",
-                    path=f"receipts/{path.name}",
-                    target=receipt_id,
-                )
-            try:
-                value = make_yaml().load(text)
-            except YAMLError:
-                _fail(
-                    ReceiptDiagnosticCode.YAML_PARSE,
-                    "receipt YAML could not be parsed",
-                    path=f"receipts/{path.name}",
-                    target=receipt_id,
-                )
-            if not isinstance(value, Mapping):
-                _fail(
-                    ReceiptDiagnosticCode.SCHEMA_INVALID,
-                    "receipt document must be a mapping",
-                    path=f"receipts/{path.name}",
-                    target=receipt_id,
-                )
-            record = self._validate_record(receipt_id, value, path=f"receipts/{path.name}")
+            filename, relative_path = _receipt_location(receipt_id)
+            with _receipts_directory(
+                self._revision.source_dir,
+                self._revision.source_identity,
+                create=False,
+            ) as directory_fd:
+                if directory_fd is None:
+                    _fail(
+                        ReceiptDiagnosticCode.FILE_MISSING,
+                        "receipt file is missing",
+                        path=relative_path,
+                        target=receipt_id,
+                    )
+                return self._read_from_directory(directory_fd, receipt_id, filename, relative_path)
         except _ReceiptFailure as exc:
             return ReceiptResult(diagnostics=(exc.diagnostic,))
-        return ReceiptResult(receipt=record)
+
+    def _scan(self) -> tuple[tuple[tuple[str, ReceiptResult], ...], ReceiptDiagnostic | None]:
+        try:
+            with _receipts_directory(
+                self._revision.source_dir,
+                self._revision.source_identity,
+                create=False,
+            ) as directory_fd:
+                if directory_fd is None:
+                    return (), None
+                entries: list[tuple[str, ReceiptResult]] = []
+                names = os.listdir(directory_fd)  # noqa: PTH208 - Path.iterdir cannot use the pinned descriptor.
+                for filename in sorted(name for name in names if name.endswith(".yaml")):
+                    receipt_id = PurePosixPath(filename).stem
+                    relative_path = f"receipts/{filename}"
+                    try:
+                        expected_filename, _expected_path = _receipt_location(receipt_id)
+                        if filename != expected_filename:
+                            _fail(
+                                ReceiptDiagnosticCode.PATH_UNSAFE,
+                                "receipt filename is not canonical",
+                                path=relative_path,
+                            )
+                        result = self._read_from_directory(directory_fd, receipt_id, filename, relative_path)
+                    except _ReceiptFailure as exc:
+                        result = ReceiptResult(diagnostics=(exc.diagnostic,))
+                    entries.append((relative_path, result))
+                return tuple(entries), None
+        except _ReceiptFailure as exc:
+            return (), exc.diagnostic
 
 
-def _health_finding(diagnostic: ReceiptDiagnostic) -> ChangeHealthFinding:
+def _health_finding(diagnostic: ReceiptDiagnostic, *, checked_path: str) -> ChangeHealthFinding:
     return ChangeHealthFinding(
         code=diagnostic.code.value,
         detail=diagnostic.detail,
-        path=diagnostic.path,
+        path=diagnostic.path or checked_path,
         target=diagnostic.target,
     )
 
@@ -413,35 +537,16 @@ def _receipt_health(revision: ChangeRevision) -> tuple[list[ChangeHealthFinding]
     findings: list[ChangeHealthFinding] = []
     checked_paths: list[str] = []
     store = ReceiptStore(revision)
-    receipts_dir = revision.source_dir / "receipts"
     expected_path, expected_finding = _expected_admission_path(revision)
-    receipt_storage_usable = True
+    entries, storage_diagnostic = store._scan()  # noqa: SLF001 - same-module health collaborator
+    receipt_storage_usable = storage_diagnostic is None
     if expected_finding is not None:
         findings.append(expected_finding)
-    if receipts_dir.is_symlink():
-        receipt_storage_usable = False
-        findings.append(
-            ChangeHealthFinding(
-                code=ReceiptDiagnosticCode.PATH_UNSAFE.value,
-                detail="receipts directory must not be a symlink",
-                path="receipts",
-            )
-        )
-    elif receipts_dir.exists() and not receipts_dir.is_dir():
-        receipt_storage_usable = False
-        findings.append(
-            ChangeHealthFinding(
-                code=ReceiptDiagnosticCode.PATH_UNSAFE.value,
-                detail="receipts path must be a directory",
-                path="receipts",
-            )
-        )
-    elif receipts_dir.is_dir():
-        for path in sorted(receipts_dir.glob("*.yaml")):
-            relative_path = f"receipts/{path.name}"
-            checked_paths.append(relative_path)
-            result = store.read(path.stem)
-            findings.extend(_health_finding(item) for item in result.diagnostics)
+    if storage_diagnostic is not None:
+        findings.append(_health_finding(storage_diagnostic, checked_path="receipts"))
+    for relative_path, result in entries:
+        checked_paths.append(relative_path)
+        findings.extend(_health_finding(item, checked_path=relative_path) for item in result.diagnostics)
 
     if receipt_storage_usable and expected_path is not None and expected_path not in checked_paths:
         checked_paths.append(expected_path)

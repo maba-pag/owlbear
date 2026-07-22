@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from collections.abc import Callable
 from pathlib import Path
 
@@ -7,6 +8,7 @@ import pytest
 import yaml
 
 import owlbear_kanban
+import owlbear_kanban.receipt as receipt_module
 from owlbear_kanban import (
     ChangeRevision,
     ReceiptConflictError,
@@ -154,6 +156,199 @@ def test_receipt_store_rejects_malformed_and_symlinked_receipt_files(tmp_path: P
     assert target.read_text(encoding="utf-8") == "outside\n"
 
 
+def test_receipt_store_confines_publish_when_directory_is_replaced(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _changes_dir, revision = _load_revision(tmp_path)
+    store = ReceiptStore(revision)
+    receipt_id = "build-race-001"
+    filename = f"{receipt_id}.yaml"
+    receipts_dir = revision.source_dir / "receipts"
+    pinned_dir = revision.source_dir / "receipts-pinned"
+    outside_dir = tmp_path / "outside"
+    outside_dir.mkdir()
+    real_link = os.link
+    raced = False
+
+    def replace_then_link(
+        source: str,
+        destination: str,
+        *,
+        src_dir_fd: int | None = None,
+        dst_dir_fd: int | None = None,
+        follow_symlinks: bool = True,
+    ) -> None:
+        nonlocal raced
+        raced = True
+        receipts_dir.rename(pinned_dir)
+        receipts_dir.symlink_to(outside_dir, target_is_directory=True)
+        (outside_dir / source).write_text("attacker\n", encoding="utf-8")
+        real_link(
+            source,
+            destination,
+            src_dir_fd=src_dir_fd,
+            dst_dir_fd=dst_dir_fd,
+            follow_symlinks=follow_symlinks,
+        )
+
+    monkeypatch.setattr(receipt_module.os, "link", replace_then_link)
+
+    result = store.create(receipt_id, _receipt(revision, receipt_id, "build"))
+
+    assert raced
+    assert result.receipt is not None
+    assert (pinned_dir / filename).is_file()
+    assert not (outside_dir / filename).exists()
+    assert list(pinned_dir.glob(".tmp-*")) == []
+
+
+def test_receipt_store_rejects_temporary_file_substitution(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _changes_dir, revision = _load_revision(tmp_path)
+    store = ReceiptStore(revision)
+    receipt_id = "build-temp-race-001"
+    receipt_path = revision.source_dir / "receipts" / f"{receipt_id}.yaml"
+    real_link = os.link
+    raced = False
+
+    def replace_then_link(
+        source: str,
+        destination: str,
+        *,
+        src_dir_fd: int | None = None,
+        dst_dir_fd: int | None = None,
+        follow_symlinks: bool = True,
+    ) -> None:
+        nonlocal raced
+        assert src_dir_fd is not None
+        raced = True
+        os.unlink(source, dir_fd=src_dir_fd)
+        attacker_fd = os.open(source, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644, dir_fd=src_dir_fd)
+        try:
+            os.write(attacker_fd, b"attacker\n")
+        finally:
+            os.close(attacker_fd)
+        real_link(
+            source,
+            destination,
+            src_dir_fd=src_dir_fd,
+            dst_dir_fd=dst_dir_fd,
+            follow_symlinks=follow_symlinks,
+        )
+
+    monkeypatch.setattr(receipt_module.os, "link", replace_then_link)
+
+    result = store.create(receipt_id, _receipt(revision, receipt_id, "build"))
+
+    assert raced
+    assert [item.code for item in result.diagnostics] == [ReceiptDiagnosticCode.PATH_UNSAFE]
+    assert not receipt_path.exists()
+    assert list(receipt_path.parent.glob(".tmp-*")) == []
+
+
+def test_receipt_store_rejects_final_substitution_before_completion(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _changes_dir, revision = _load_revision(tmp_path)
+    store = ReceiptStore(revision)
+    receipt_id = "build-final-race-001"
+    receipt_path = revision.source_dir / "receipts" / f"{receipt_id}.yaml"
+    real_fsync = os.fsync
+    raced = False
+
+    def replace_after_validation(file_fd: int) -> None:
+        nonlocal raced
+        if not raced and receipt_path.exists():
+            raced = True
+            receipt_path.unlink()
+            receipt_path.write_text("attacker\n", encoding="utf-8")
+        real_fsync(file_fd)
+
+    monkeypatch.setattr(receipt_module.os, "fsync", replace_after_validation)
+
+    result = store.create(receipt_id, _receipt(revision, receipt_id, "build"))
+
+    assert raced
+    assert [item.code for item in result.diagnostics] == [ReceiptDiagnosticCode.PATH_UNSAFE]
+    assert not receipt_path.exists()
+    assert list(receipt_path.parent.glob(".tmp-*")) == []
+
+
+def test_receipt_store_rejects_file_substitution_at_open(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _changes_dir, revision = _load_revision(tmp_path)
+    store = ReceiptStore(revision)
+    receipt_id = "audit-race-001"
+    filename = f"{receipt_id}.yaml"
+    assert store.create(receipt_id, _receipt(revision, receipt_id, "audit")).receipt is not None
+    receipt_path = revision.source_dir / "receipts" / filename
+    outside_path = tmp_path / "outside.yaml"
+    outside_path.write_bytes(receipt_path.read_bytes())
+    outside_before = outside_path.read_bytes()
+    real_open = os.open
+    raced = False
+
+    def replace_then_open(path: str | Path, flags: int, mode: int = 0o777, *, dir_fd: int | None = None) -> int:
+        nonlocal raced
+        if path == filename and dir_fd is not None:
+            raced = True
+            receipt_path.unlink()
+            receipt_path.symlink_to(outside_path)
+        return real_open(path, flags, mode, dir_fd=dir_fd)
+
+    monkeypatch.setattr(receipt_module.os, "open", replace_then_open)
+
+    result = store.read(receipt_id)
+
+    assert raced
+    assert [item.code for item in result.diagnostics] == [ReceiptDiagnosticCode.PATH_UNSAFE]
+    assert outside_path.read_bytes() == outside_before
+
+
+def test_receipt_store_rejects_change_directory_replacement(tmp_path: Path) -> None:
+    _changes_dir, revision = _load_revision(tmp_path)
+    store = ReceiptStore(revision)
+    original_dir = revision.source_dir.with_name("receipt-change-original")
+    replacement_dir = revision.source_dir
+    revision.source_dir.rename(original_dir)
+    replacement_receipts = replacement_dir / "receipts"
+    replacement_receipts.mkdir(parents=True)
+    receipt_id = "build-replaced-001"
+
+    create_result = store.create(receipt_id, _receipt(revision, receipt_id, "build"))
+    read_result = store.read(receipt_id)
+
+    assert [item.code for item in create_result.diagnostics] == [ReceiptDiagnosticCode.PATH_UNSAFE]
+    assert [item.code for item in read_result.diagnostics] == [ReceiptDiagnosticCode.PATH_UNSAFE]
+    assert list(replacement_receipts.iterdir()) == []
+    assert not (original_dir / "receipts").exists()
+
+
+def test_change_health_rejects_change_directory_replacement(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    changes_dir = tmp_path / "changes"
+    _write_package(changes_dir, "health-replaced")
+    real_load_change = receipt_module.load_change
+
+    def load_then_replace(candidate_dir: Path, change_id: str) -> owlbear_kanban.ChangeLoadResult:
+        result = real_load_change(candidate_dir, change_id)
+        assert result.revision is not None
+        source_dir = result.revision.source_dir
+        source_dir.rename(source_dir.with_name("health-replaced-original"))
+        source_dir.mkdir()
+        return result
+
+    monkeypatch.setattr(receipt_module, "load_change", load_then_replace)
+
+    result = change_health(changes_dir, "health-replaced")
+
+    assert [(item.code, item.detail, item.path) for item in result.findings] == [
+        (
+            ReceiptDiagnosticCode.PATH_UNSAFE.value,
+            "change directory identity has changed",
+            "receipts",
+        )
+    ]
+    assert not (changes_dir / "health-replaced" / "receipts").exists()
+
+
 def _admitted_package(tmp_path: Path) -> tuple[Path, Path, ChangeRevision]:
     change_id = "health-change"
     changes_dir = tmp_path / "changes"
@@ -258,3 +453,21 @@ def test_change_health_reports_authority_defects_without_mutation(
     assert [(item.code, item.path) for item in result.findings] == [(expected_code, expected_path)]
     assert result.checked_paths == ("intent.md", "design.md", "decisions.yaml", "graph.yaml")
     assert _snapshot(paths) == before
+
+
+def test_change_health_locates_unsafe_receipt_filename(tmp_path: Path) -> None:
+    changes_dir = tmp_path / "changes"
+    change_dir = _write_package(changes_dir, "unsafe-receipt-health")
+    receipts_dir = change_dir / "receipts"
+    receipts_dir.mkdir()
+    receipt_path = receipts_dir / "bad..id.yaml"
+    receipt_path.write_text("not: a receipt\n", encoding="utf-8")
+    before = _snapshot([receipt_path])
+
+    result = change_health(changes_dir, "unsafe-receipt-health")
+
+    assert [(item.code, item.path, item.target) for item in result.findings] == [
+        (ReceiptDiagnosticCode.PATH_UNSAFE.value, "receipts/bad..id.yaml", None)
+    ]
+    assert result.checked_paths[-1] == "receipts/bad..id.yaml"
+    assert _snapshot([receipt_path]) == before

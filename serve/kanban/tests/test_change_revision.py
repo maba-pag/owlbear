@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -9,6 +10,7 @@ import yaml
 from pydantic import ValidationError as PydanticValidationError
 
 import owlbear_kanban
+import owlbear_kanban.change as change_module
 from owlbear_kanban import ChangeDiagnosticCode, load_change
 
 if TYPE_CHECKING:
@@ -249,6 +251,40 @@ def test_load_change_returns_one_immutable_indexed_revision(tmp_path: Path) -> N
         node_plan["packets"] = []
     payload = result.revision.model_dump(mode="json")
     assert payload["graph"]["execution"] == {"node_plans": {"DN-001": {"packets": ["DN-001-PK-001"]}}}
+
+
+def test_load_change_pins_authority_directory_during_reads(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    changes_dir = tmp_path / ".owlbear" / "changes"
+    change_dir = _write_package(changes_dir, "pinned-change", markdown=("Original intent\n", "Original design\n"))
+    pinned_dir = changes_dir / "pinned-change-original"
+    outside_dir = tmp_path / "outside-change"
+    _write_package(outside_dir.parent, outside_dir.name, markdown=("Outside intent\n", "Outside design\n"))
+    real_open = os.open
+    raced = False
+
+    def replace_after_open(
+        path: str | bytes | os.PathLike[str] | os.PathLike[bytes],
+        flags: int,
+        mode: int = 0o777,
+        *,
+        dir_fd: int | None = None,
+    ) -> int:
+        nonlocal raced
+        file_fd = real_open(path, flags, mode, dir_fd=dir_fd)
+        if not raced and dir_fd is None and Path(path) == change_dir and flags & os.O_DIRECTORY:
+            raced = True
+            change_dir.rename(pinned_dir)
+            change_dir.symlink_to(outside_dir, target_is_directory=True)
+        return file_fd
+
+    monkeypatch.setattr(change_module.os, "open", replace_after_open)
+
+    result = load_change(changes_dir, "pinned-change")
+
+    assert raced
+    assert result.revision is not None
+    assert result.revision.intent == "Original intent\n"
+    assert result.revision.design == "Original design\n"
 
 
 def test_delivery_digest_normalizes_markdown_mapping_and_decision_order(tmp_path: Path) -> None:

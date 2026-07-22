@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
+import os
 import re
+import stat
 from collections.abc import Iterator, Mapping
 from datetime import date, datetime, time
 from enum import StrEnum
@@ -35,6 +38,8 @@ _STABLE_ID_PATTERN = r"^(?:REQ|NEG|KEEP|DEC|WF|MOD|IF|MIG|RISK|PROOF|DN)-[0-9]{3
 _DIGEST_PATTERN = r"^[0-9a-f]{64}$"
 _CHANGE_ID_RE = re.compile(_CHANGE_ID_PATTERN)
 _STABLE_ID_RE = re.compile(_STABLE_ID_PATTERN)
+_DIRECTORY_OPEN_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+_FILE_OPEN_FLAGS = os.O_RDONLY | os.O_NOFOLLOW
 
 ChangeId = Annotated[str, StringConstraints(strict=True, pattern=_CHANGE_ID_PATTERN)]
 StableId = Annotated[str, StringConstraints(strict=True, pattern=_STABLE_ID_PATTERN)]
@@ -313,11 +318,17 @@ class ChangeRevision(_BoundaryModel):
     delivery_digest: Digest
 
     _identity_index: Mapping[str, StableEntity] = PrivateAttr()
+    _source_identity: tuple[int, int] = PrivateAttr(default=(-1, -1))
 
     def model_post_init(self, _context: object) -> None:
         index = {decision.id: decision for decision in self.decisions.decisions}
         index.update({entity.id: entity for entity in self.graph.iter_entities()})
         object.__setattr__(self, "_identity_index", MappingProxyType(index))
+
+    @property
+    def source_identity(self) -> tuple[int, int]:
+        """Return the filesystem identity bound when this revision was loaded."""
+        return self._source_identity
 
     @property
     def accepted_decisions(self) -> tuple[Decision, ...]:
@@ -391,24 +402,40 @@ def _validate_change_path(changes_dir: Path, change_id: str) -> Path:
     return change_dir
 
 
-def _authority_path(change_dir: Path, name: str) -> Path:
-    path = change_dir / name
-    if path.is_symlink():
-        _fail(ChangeDiagnosticCode.PATH_UNSAFE, "authority files must not be symlinks", path=path, target=name)
+@contextlib.contextmanager
+def _change_directory(path: Path) -> Iterator[tuple[int, tuple[int, int]]]:
     try:
-        validate_path_containment(change_dir, path)
-    except (OSError, ValueError):
-        _fail(ChangeDiagnosticCode.PATH_UNSAFE, "authority file escapes the change directory", path=path, target=name)
-    if not path.is_file():
-        _fail(ChangeDiagnosticCode.FILE_MISSING, "required authority file is missing", path=path, target=name)
-    return path
-
-
-def _read_text(path: Path, *, markdown: bool) -> str:
-    try:
-        raw = path.read_bytes()
+        directory_fd = os.open(path, _DIRECTORY_OPEN_FLAGS)
+    except FileNotFoundError:
+        _fail(ChangeDiagnosticCode.FILE_MISSING, "change directory is missing", path=path)
     except OSError:
-        _fail(ChangeDiagnosticCode.FILE_MISSING, "authority file could not be read", path=path, target=path.name)
+        _fail(ChangeDiagnosticCode.PATH_UNSAFE, "change directory could not be opened safely", path=path)
+    source_stat = os.fstat(directory_fd)
+    try:
+        yield directory_fd, (source_stat.st_dev, source_stat.st_ino)
+    finally:
+        os.close(directory_fd)
+
+
+def _read_text(directory_fd: int, name: str, *, markdown: bool) -> str:
+    path = Path(name)
+    try:
+        file_fd = os.open(name, _FILE_OPEN_FLAGS, dir_fd=directory_fd)
+    except FileNotFoundError:
+        _fail(ChangeDiagnosticCode.FILE_MISSING, "required authority file is missing", path=path, target=name)
+    except OSError:
+        _fail(ChangeDiagnosticCode.PATH_UNSAFE, "authority file could not be opened safely", path=path, target=name)
+    try:
+        if not stat.S_ISREG(os.fstat(file_fd).st_mode):
+            _fail(ChangeDiagnosticCode.PATH_UNSAFE, "authority path must be a regular file", path=path, target=name)
+        with os.fdopen(file_fd, "rb") as handle:
+            file_fd = -1
+            raw = handle.read()
+    except OSError:
+        _fail(ChangeDiagnosticCode.FILE_MISSING, "authority file could not be read", path=path, target=name)
+    finally:
+        if file_fd >= 0:
+            os.close(file_fd)
     if markdown and raw.startswith(b"\xef\xbb\xbf"):
         _fail(ChangeDiagnosticCode.ENCODING, "Markdown authority must not contain a byte-order mark", path=path)
     try:
@@ -425,12 +452,12 @@ def _to_plain(value: object) -> object:
     return value
 
 
-def _read_yaml(path: Path) -> object:
-    text = _read_text(path, markdown=False)
+def _read_yaml(directory_fd: int, name: str) -> object:
+    text = _read_text(directory_fd, name, markdown=False)
     try:
         return _to_plain(make_yaml().load(text))
     except YAMLError:
-        _fail(ChangeDiagnosticCode.YAML_PARSE, "authority YAML could not be parsed", path=path, target=path.name)
+        _fail(ChangeDiagnosticCode.YAML_PARSE, "authority YAML could not be parsed", path=Path(name), target=name)
 
 
 def _schema_detail(document: str, exc: PydanticValidationError) -> str:
@@ -539,30 +566,27 @@ def load_change(changes_dir: Path, change_id: str) -> ChangeLoadResult:
     """Load one contained four-file native change package."""
     try:
         change_dir = _validate_change_path(changes_dir, change_id)
-        intent_path = _authority_path(change_dir, "intent.md")
-        design_path = _authority_path(change_dir, "design.md")
-        decisions_path = _authority_path(change_dir, "decisions.yaml")
-        graph_path = _authority_path(change_dir, "graph.yaml")
-        intent = _read_text(intent_path, markdown=True)
-        design = _read_text(design_path, markdown=True)
-        try:
-            decisions = DecisionsDocument.model_validate(_read_yaml(decisions_path))
-        except PydanticValidationError as exc:
-            _fail(
-                ChangeDiagnosticCode.SCHEMA_INVALID,
-                _schema_detail("decisions.yaml", exc),
-                path=decisions_path,
-                target="decisions.yaml",
-            )
-        try:
-            graph = DeliveryGraph.model_validate(_read_yaml(graph_path))
-        except PydanticValidationError as exc:
-            _fail(
-                ChangeDiagnosticCode.SCHEMA_INVALID,
-                _schema_detail("graph.yaml", exc),
-                path=graph_path,
-                target="graph.yaml",
-            )
+        with _change_directory(change_dir) as (directory_fd, source_identity):
+            intent = _read_text(directory_fd, "intent.md", markdown=True)
+            design = _read_text(directory_fd, "design.md", markdown=True)
+            try:
+                decisions = DecisionsDocument.model_validate(_read_yaml(directory_fd, "decisions.yaml"))
+            except PydanticValidationError as exc:
+                _fail(
+                    ChangeDiagnosticCode.SCHEMA_INVALID,
+                    _schema_detail("decisions.yaml", exc),
+                    path=Path("decisions.yaml"),
+                    target="decisions.yaml",
+                )
+            try:
+                graph = DeliveryGraph.model_validate(_read_yaml(directory_fd, "graph.yaml"))
+            except PydanticValidationError as exc:
+                _fail(
+                    ChangeDiagnosticCode.SCHEMA_INVALID,
+                    _schema_detail("graph.yaml", exc),
+                    path=Path("graph.yaml"),
+                    target="graph.yaml",
+                )
         if decisions.change_id != change_id or graph.change_id != change_id:
             _fail(
                 ChangeDiagnosticCode.SCHEMA_INVALID,
@@ -572,7 +596,7 @@ def load_change(changes_dir: Path, change_id: str) -> ChangeLoadResult:
         _validate_identities(decisions, graph)
         digest = compute_delivery_digest(intent, design, decisions, graph)
         revision = ChangeRevision(
-            source_dir=change_dir.resolve(),
+            source_dir=change_dir.absolute(),
             change_id=change_id,
             intent=intent,
             design=design,
@@ -580,6 +604,7 @@ def load_change(changes_dir: Path, change_id: str) -> ChangeLoadResult:
             graph=graph,
             delivery_digest=digest,
         )
+        object.__setattr__(revision, "_source_identity", source_identity)
     except _LoadFailure as exc:
         return ChangeLoadResult(diagnostics=(exc.diagnostic,))
     return ChangeLoadResult(revision=revision)

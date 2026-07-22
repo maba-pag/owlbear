@@ -1,10 +1,10 @@
 ---
 id: 1992
 title: 'P1-02: Persist immutable change receipts and diagnose authority health'
-status: verify
+status: collect
 priority: low
 created: 2026-07-22T01:58:50.836111+02:00
-updated: 2026-07-22T02:54:23.778453+02:00
+updated: 2026-07-22T03:23:05.673215+02:00
 tags:
   - phase-1
   - scope:core
@@ -93,3 +93,34 @@ Proof guidance: exercise the public receipt store and change-health boundary wit
 
 ### Residual Boundary
 - Receipt validity chains and admission/job transactions remain assigned to later admitted delivery nodes.
+
+[[2026-07-22T03:23:05+02:00]]
+## Verify Notes
+
+### Verdict
+PASS against builder commit `0c82b1f9b6545fd81a3d5aa1c58c3f41719d7319` plus the scoped verifier repair described below. Final independent `verifier-challenger` decision: `pass`.
+
+### Acceptance Criteria
+- AC-1 PASS: all six schema-v1 kinds round-trip through the public store; concurrent and replay creates yield one complete create plus stable `ERR_RECEIPT_CONFLICT`, preserve original bytes, and leave no temp residue.
+- AC-2 PASS: unsafe IDs, directory/file symlinks, envelope mismatch, unsupported schema/kind, malformed YAML, source-directory replacement, receipt-directory replacement, temp regular-file substitution, final-entry substitution before completion, and receipt substitution at open produce structured diagnostics without redirected writes or residue.
+- AC-3 PASS: complete admitted authority is zero-finding; partial/malformed authority and digest mismatch produce deterministic bounded findings/checked paths; repeated health preserves bytes and nanosecond mtimes.
+
+### Verifier Repairs
+- Bound authority loading to one `O_DIRECTORY|O_NOFOLLOW` change-directory descriptor and opened all four regular authority files descriptor-relative with `O_NOFOLLOW`.
+- Bound each loaded revision to its source device/inode; create/read/health reject later canonical-directory replacement before touching receipts.
+- Replaced path-based receipt I/O with pinned descriptor-relative mkdir/open/list/temp/link/unlink operations.
+- Retained and identity-checked the exclusive temp inode through hard-link publication; opened and identity-checked the final inode through file/directory fsync completion; mismatches remove the untrusted final and return `ERR_RECEIPT_PATH_UNSAFE`.
+- Added bounded path projection for filesystem-discovered invalid receipt filenames while keeping unsafe raw targets redacted.
+- Added durable public-boundary regressions for every observed source/receipt/temp/final substitution defect.
+
+### Evidence
+- Focused loader/store suites: 42 passed (`test_change_revision.py` plus `test_change_receipts.py`; receipt suite has 23 tests).
+- Exact final mapped Kanban regression: 944 passed.
+- Applicable repository lint passed on all five affected implementation/proof paths; four unrelated TODO notices only.
+- Editor diagnostics and `git diff --check` are clean.
+- No implementation or verifier-added test function exceeds 50 lines.
+- Real admitted package health is deterministic, checks four authority files plus `receipts/admission-9387dea789fb.yaml`, returns zero findings, and preserves bytes/mtimes.
+- Final verifier challenger independently inspected the exact trust chain and authorized PASS.
+
+### Security Boundary
+The public store provides exclusive no-overwrite creation and does not follow or successfully publish attacker-substituted input during create/read/health. Mutation by an unrelated same-user writer after API completion is later filesystem tampering, detected by health rather than misrepresented as preventable by atomic create.
