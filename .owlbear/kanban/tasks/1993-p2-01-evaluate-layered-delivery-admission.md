@@ -4,7 +4,7 @@ title: 'P2-01: Evaluate layered delivery admission'
 status: build
 priority: medium
 created: 2026-07-22T05:49:37.434986+02:00
-updated: 2026-07-22T06:10:41.134486+02:00
+updated: 2026-07-22T06:13:43.881487+02:00
 tags:
   - phase-1
   - scope:core
@@ -118,3 +118,33 @@ Proof guidance: exercise the public evaluation boundary with the real `ChangeRev
 |---|-------------|----------------|---------|----------|
 | 1 | builder | Require baseline and approval evidence to carry the evaluated delivery digest; add public-API tests for missing, stale, and mismatched evidence digests. | `serve/kanban/src/owlbear_kanban/admission.py`, `serve/kanban/tests/test_admission.py` | The verifier probe admitted digest-free baseline and approval evidence. |
 | 2 | builder | Implement and test the complete A1-A10-equivalent deterministic admission matrix plus defective/corrected historical fixtures required by AC-2, AC-3, and AC-5. | `serve/kanban/src/owlbear_kanban/admission.py`, `serve/kanban/tests/test_admission.py`, task-owned fixture paths as needed | Design section 9.1 and `PROOF-002`; current focused suite has two tests. |
+
+[[2026-07-22T06:12:45+02:00]]
+## Builder Notes
+- Change envelope: enforce exact delivery-digest binding for baseline and approval evidence in the existing public admission evaluator; add the focused regression for omitted bindings.
+- Files changed: `serve/kanban/src/owlbear_kanban/admission.py`, `serve/kanban/tests/test_admission.py`.
+- Change Module Map deviations: none; stayed within the mapped kanban admission boundary and focused tests.
+- Proof selected: public evaluator against the real `replace-delivery-pipeline` revision, including an admitted structured-evidence path and a missing baseline/approval digest path.
+- Durable-test justification: the digest-binding gate is a shared admission boundary and the verifier observed that digest-free evidence incorrectly admitted; the regression is cheaper than repeated manual checks.
+- Commands run: `uv run --project serve/kanban pytest serve/kanban/tests/test_admission.py -q` -> 3 passed; `uv run --project serve/kanban ruff check serve/kanban/src/owlbear_kanban/admission.py serve/kanban/tests/test_admission.py` -> all checks passed.
+- Builder-challenger result: pass; no concrete blockers.
+- Follow-up risks: the verifier's broader A1-A10/property and historical fixture gaps remain outside this local repair and should be assessed as separate shaped work if still required.
+
+[[2026-07-22T06:13:43+02:00]]
+## Verify Notes
+- Evidence reviewed: task AC-1 through AC-5; three Builder Notes entries; public evaluator implementation and focused admission tests.
+- Named authorities checked: `DN-002`, `REQ-002`, `REQ-003`, `IF-002`, `RISK-003`, `RISK-007`, and `PROOF-002` in `.owlbear/changes/replace-delivery-pipeline/graph.yaml`; design sections 5 and 9.
+- Change Module Map: no module-map deviation. The changed package exports, `admission.py`, and `test_admission.py` remain in the mapped Kanban admission boundary.
+- Normal-path boundary exercised: `evaluate_admission` was exercised through the public package API using the real loaded `ChangeRevision` for `replace-delivery-pipeline`; no replacement occurred above admission.
+- Checks run: `uv run --project serve/kanban pytest serve/kanban/tests/test_admission.py -q` passed (3 tests); `uv run --project serve/kanban ruff check serve/kanban/src/owlbear_kanban/admission.py serve/kanban/src/owlbear_kanban/__init__.py serve/kanban/tests/test_admission.py` passed.
+- Findings: AC-1 is incomplete because the assessment exposes only error severity and does not preserve warnings or limits; its serialization stability is unproved. AC-2 and AC-3 are incomplete: implementation lacks the A1-A10-equivalent validation matrix for unique ownership, interface/migration/risk/proof completeness, authority conflicts, disconnected nodes, node-bound violations, and boundary-substituting proof. AC-3 also has no proof that authority, receipt, and job paths remain unchanged. AC-4 is only partly met: structured challenge entries are gated, but baseline completeness, stale evidence semantics, and complete evidence contracts are not fully validated. AC-5 is unmet: no durable historical defective/corrected fixtures exist, and only three smoke tests cover the evaluator. These omissions conflict with `PROOF-002` and design section 9.1.
+- Patches applied: none; resolving the missing validator and durable proof matrix exceeds verifier-local patch scope.
+- Verifier-challenger: not called because this is a REJECT verdict, not a PASS claim.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Implement the complete structured admission contract: versioned immutable diagnostics that preserve warnings and limits; complete A1-A10-equivalent validations; no-persistence failure invariants; and exact digest-bound challenge, baseline, approval, and limits gates. | `serve/kanban/src/owlbear_kanban/admission.py` and adjacent mapped owner modules only when required | AC-1 through AC-4; design 5.3 and 9.1 to 9.4; `PROOF-002` |
+| 2 | builder | Add durable public-boundary table/property proof and historical defective/corrected fixtures for all four required defect families, including deterministic findings, serialization, and unchanged persistence paths. | `serve/kanban/tests/test_admission.py` plus focused fixtures | AC-1 through AC-5; `PROOF-002` |
+
+- Final route: REJECT to build.
