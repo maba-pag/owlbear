@@ -1,5 +1,7 @@
 """Deterministic, side-effect-free admission evaluation for change revisions."""
 
+# ruff: noqa: PERF401
+
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -79,7 +81,7 @@ def _finding(  # noqa: PLR0913
     )
 
 
-def _evaluate_graph(revision: ChangeRevision) -> list[AdmissionFinding]:  # noqa: C901
+def _evaluate_graph(revision: ChangeRevision) -> list[AdmissionFinding]:  # noqa: C901, PLR0912, PLR0915
     findings: list[AdmissionFinding] = []
     entities = {entity.id for entity in revision.graph.iter_entities()}
     prefixes = ("REQ-", "NEG-", "KEEP-", "WF-", "MOD-", "IF-", "MIG-", "RISK-", "PROOF-", "DN-")
@@ -166,6 +168,68 @@ def _evaluate_graph(revision: ChangeRevision) -> list[AdmissionFinding]:  # noqa
 
     for node_id in node_ids:
         visit(node_id)
+
+    if node_ids:
+        connected = {next(iter(node_ids))}
+        changed = True
+        while changed:
+            changed = False
+            for node in revision.graph.nodes:
+                neighbors = set(node.dependencies) & node_ids
+                if node.id in connected or neighbors & connected:
+                    before = len(connected)
+                    connected.add(node.id)
+                    connected.update(neighbors)
+                    changed |= len(connected) != before
+        for node_id in sorted(node_ids - connected):
+            findings.append(
+                _finding(
+                    "DV-008",
+                    node_id,
+                    "delivery graph contains a disconnected node",
+                    "Connect the node to the delivery graph.",
+                )
+            )
+
+    def is_ancestor(ancestor_id: StableId, node_id: StableId) -> bool:
+        pending = [node_id]
+        seen: set[StableId] = set()
+        while pending:
+            current = pending.pop()
+            if current in seen:
+                continue
+            seen.add(current)
+            if current == ancestor_id:
+                return True
+            pending.extend(by_id.get(current, ()).dependencies if current in by_id else ())
+        return False
+
+    for workflow in revision.graph.workflows:
+        if not any(
+            workflow.id in node.owns or workflow.id in node.supports for node in revision.graph.nodes
+        ) and not any(workflow.id in requirement.workflows for requirement in revision.graph.requirements):
+            findings.append(
+                _finding(
+                    "DV-008",
+                    workflow.id,
+                    "workflow is unreachable from a delivery node",
+                    "Assign the workflow to a delivery node.",
+                )
+            )
+    for interface in revision.graph.interfaces:
+        producer = by_id.get(interface.producer)
+        if producer is None:
+            continue
+        for consumer_id in interface.consumers:
+            if consumer_id in by_id and not is_ancestor(producer.id, consumer_id):
+                findings.append(
+                    _finding(
+                        "DV-008",
+                        interface.id,
+                        "interface producer is outside consumer dependency ancestry",
+                        "Order the producer before the consumer.",
+                    )
+                )
     return findings
 
 
@@ -267,6 +331,77 @@ def _evaluate_delivery_contracts(revision: ChangeRevision) -> list[AdmissionFind
                     proof.id,
                     "proof contract has no build-capable owning predecessor or is incomplete",
                     "Populate proof fields and assign it to the predecessor delivery node.",
+                )
+            )
+    return findings
+
+
+def _evaluate_authority(revision: ChangeRevision) -> list[AdmissionFinding]:
+    findings: list[AdmissionFinding] = []
+    for decision in revision.decisions.decisions:
+        if decision.status == "pending" or (decision.status == "accepted" and not decision.selected):
+            findings.append(
+                _finding(
+                    "DV-010",
+                    decision.id,
+                    "material decision is pending or accepted without a selected option",
+                    "Resolve the decision and select an option before admission.",
+                )
+            )
+    admission = revision.graph.admission
+    if admission is None or admission.delivery_digest != revision.delivery_digest:
+        findings.append(
+            _finding(
+                "DV-010",
+                revision.change_id,
+                "graph admission metadata is missing or bound to a different revision digest",
+                "Bind admitted graph metadata to the current delivery digest.",
+            )
+        )
+
+    categories = {
+        "owns": {
+            item.id
+            for item in (
+                *revision.graph.requirements,
+                *revision.graph.negative_requirements,
+                *revision.graph.preserved_behaviors,
+            )
+        },
+        "supports": {
+            item.id
+            for item in (
+                *revision.graph.requirements,
+                *revision.graph.negative_requirements,
+                *revision.graph.preserved_behaviors,
+            )
+        },
+        "modules": {item.id for item in revision.graph.modules},
+        "produces": {item.id for item in revision.graph.interfaces},
+        "consumes": {item.id for item in revision.graph.interfaces},
+        "risks": {item.id for item in revision.graph.risks},
+    }
+    for node in revision.graph.nodes:
+        for field, allowed in categories.items():
+            for reference in getattr(node, field):
+                if reference not in allowed:
+                    findings.append(
+                        _finding(
+                            "DV-011",
+                            node.id,
+                            f"node {field} reference {reference} is outside its declared authority category",
+                            f"Reference only declared {field} entities from the delivery graph.",
+                            reference,
+                        )
+                    )
+        if node.proof not in {item.id for item in revision.graph.proofs}:
+            findings.append(
+                _finding(
+                    "DV-011",
+                    node.id,
+                    f"node proof reference {node.proof} is outside its declared proof category",
+                    "Reference a declared proof entity.",
+                    node.proof,
                 )
             )
     return findings
@@ -377,6 +512,7 @@ def evaluate_admission(revision: ChangeRevision, evidence: AdmissionEvidence) ->
     digest = compute_delivery_digest(revision.intent, revision.design, revision.decisions, revision.graph)
     findings = _evaluate_graph(revision)
     findings.extend(_evaluate_delivery_contracts(revision))
+    findings.extend(_evaluate_authority(revision))
     if evidence.digest != digest:
         findings.append(
             _finding(
