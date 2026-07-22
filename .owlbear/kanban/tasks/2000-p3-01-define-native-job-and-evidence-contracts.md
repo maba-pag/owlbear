@@ -1,10 +1,10 @@
 ---
 id: 2000
 title: 'P3-01: Define native job and evidence contracts'
-status: verify
+status: build
 priority: high
 created: 2026-07-22T21:58:09.010514+02:00
-updated: 2026-07-23T00:35:20.550577+02:00
+updated: 2026-07-23T00:37:38.503317+02:00
 tags:
   - phase-3
   - scope:core
@@ -101,3 +101,28 @@ Proof guidance: exercise public parsers, serializers, and authority projection w
 - Commands run: `uv run --project . pytest serve/kanban/tests/test_change_receipts.py -q` -> `32 passed`; `uv run --project . ruff check serve/kanban/src/owlbear_kanban/receipt.py serve/kanban/tests/test_change_receipts.py` -> clean; `uv run --project . ruff format --check serve/kanban/src/owlbear_kanban/receipt.py serve/kanban/tests/test_change_receipts.py` -> clean; `uv run --project . pytest serve/kanban/tests/test_jobs.py serve/kanban/tests/test_change_receipts.py -q` -> `40 passed`.
 - Builder-challenger result: PASS. It confirmed the scoped receipt-kind matrix and focused proof.
 - Follow-up risks: validation intentionally checks payload-link presence rather than cross-record validity, which remains a later lifecycle/engine concern.
+
+[[2026-07-23T00:37:38+02:00]]
+## Verify Notes
+- Evidence reviewed: task AC-1 through AC-3; Builder Notes; committed task changes at `469524efa`; and the admitted authority in `.owlbear/changes/replace-delivery-pipeline/design.md` sections 3.5, 4, and 7.1 plus graph `DN-003` / `IF-003`.
+- Named authorities checked: design section 7.1 requires a job to retain only operational identity/references and project title, outcome, acceptance, modules, interfaces, and proof from authority. The implementation keeps the intended owner boundary in `serve/kanban/src/owlbear_kanban/jobs.py`, `receipt.py`, and package exports; there is no Change Module Map deviation.
+- Normal-path boundary exercised: `parse_job_mapping` and `parse_receipt_mapping` were invoked through the public `owlbear_kanban` package exports. No replacement was used above the public parser boundary.
+- Checks run:
+  - `uv run --project . pytest serve/kanban/tests/test_jobs.py serve/kanban/tests/test_change_receipts.py -q` passed: 40 passed.
+  - Public job parser smoke with `target_node_id=""` returned `job True` and `diagnostics []`.
+  - Public audit receipt parser smoke without `node_plan_digest` returned `receipt True` and `diagnostics []`.
+- Findings:
+  - AC-1 fails: `JobRecord.target_node_id` has no identity validation, so a malformed empty target is accepted instead of producing a stable diagnostic.
+  - AC-3 fails: the parser requires `node_plan_digest` only for shape/build/accept. The task requires kind-specific enforcement across the schema-version-1 receipt kinds, and the audit smoke accepted an omitted digest. Reconcile the exact per-kind target/digest/predecessor/evidence/code-revision matrix against the admitted receipt contract and enforce it with stable diagnostics.
+  - Existing `test_jobs.py` exercises `ShapeJob` generation only, not the new public parser/projection API. It cannot prove AC-1 or AC-2. Add focused table-driven public-boundary coverage for all job kinds, malformed target identity/unknown fields, authority projection, and serialization excluding normative fields.
+- Patches applied: none; the defects and missing proof require builder implementation and durable focused tests, outside verifier patch-pass limits.
+- Memory assessment: all recalled entries were assessed; one recalled entry (`a7266466-8fb6-4af0-b7c1-7d350ebe0baf`) was no longer found by the assessment service.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Validate `JobRecord.target_node_id` as a delivery-node identity and return a stable parser diagnostic for malformed values. | `serve/kanban/src/owlbear_kanban/jobs.py`, focused tests | Public parser smoke accepted an empty target with no diagnostic. |
+| 2 | builder | Define and enforce the authority-consistent schema-version-1 receipt requirement matrix for target, delivery/node-plan digests, predecessor links, evidence, and code revision across every receipt kind. | `serve/kanban/src/owlbear_kanban/receipt.py`, focused tests | Public audit parser smoke accepted a missing node-plan digest. |
+| 3 | builder | Add focused public parser/projection tests covering AC-1 and AC-2, including serialization absence of normative fields. | `serve/kanban/tests/test_jobs.py` | Existing tests only cover legacy shape-generation behavior. |
+
+- Final route: REJECT to build.
