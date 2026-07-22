@@ -121,6 +121,13 @@ Wave constraints enforced during greedy assembly:
 
 Orchestrator dispatches waves in returned order. No local re-bucketing or re-assembly.
 
+Treat each `pick_tasks` response as a consumable dispatch plan. A normal dispatch must match one
+exact `(task_id, agent)` pair in the latest response, and that pair is consumed when dispatched.
+Never derive or dispatch a new pair from task state, a lifecycle return, a task lookup, or agent
+prose. In particular, if a dispatched task advances to another stage, its next agent cannot run
+until the current plan is exhausted and a fresh `pick_tasks` response returns that new pair. The
+only same-plan redispatches are the explicit `TOOL_UNAVAILABLE`, rate-limit, and crash retries below.
+
 ### Dispatch Mechanics
 
 **Dispatch prompt contains ONLY the task ID.** Subagents claim and read their own AC via `start_work` in their own Step 0.
@@ -135,7 +142,8 @@ Orchestrator dispatches waves in returned order. No local re-bucketing or re-ass
 2. **Structured lifecycle return** (starts with `DONE`, `PASS`, `ARCHIVED`, `REJECT`, `RESHAPE`,
    `BLOCK`, or `COMMIT_FAILED`):
    - The agent already managed task state. Do not call `end_work`, `edit_task`, or `move_task`.
-   - Proceed to the next task in the wave. Routing comes from the next `pick_tasks` call.
+   - Mark the dispatched pair consumed and proceed only to the next unconsumed pair from the current
+     plan. Routing for any changed task state comes from the next `pick_tasks` call.
 3. **Raw rate-limit error** (unstructured message contains "rate-limited", "rate_limited", or "rate limits"):
    - Set `rate_limited = True`. Retry the dispatch once.
    - All subsequent `pick_tasks` calls use `wave_size=1` (one-way transition — no resume to parallel).
@@ -180,6 +188,8 @@ Session complete:
 - [ ] If an agent crashed once (no structured verdict), any claim was released before retry
 - [ ] If an agent crashed twice (no structured verdict), the task is blocked on the board with a reason note
 - [ ] If an agent returned a structured lifecycle signal, the orchestrator did NOT edit or block the task
+- [ ] Every normal dispatch matched one unconsumed pair in the latest `pick_tasks` response
+- [ ] No task's next-stage agent ran before a fresh `pick_tasks` response returned that pair
 - [ ] If rate-limited at any point, all subsequent `pick_tasks` calls use `wave_size=1`
 - [ ] Loop not stopped early — only empty waves or user intervention
 
@@ -187,6 +197,8 @@ Session complete:
 
 - **Structured return ≠ needs orchestrator cleanup.** Never mutate a task after a structured signal;
    this includes `BLOCK` and `COMMIT_FAILED` containment states.
+- **Lifecycle return ≠ dispatch plan.** A task advancing from build to verify does not authorize an
+   immediate verifier call. Finish the current plan, then require `pick_tasks` to return the verifier pair.
 - **Crash retry requires claim release.** A crashed agent may have claimed the task before failing. Release with `end_work(outcome="release")` before retrying, otherwise the retry can hit `ERR_ALREADY_CLAIMED`.
 - **No dispatch decisions from housekeeping output.** Curator output is informational only; `pick_tasks` reads fresh board state each cycle.
 - **Legacy wave assembly drift:** Do not reintroduce manual bucket planning in this skill. `pick_tasks` is the single wave-assembly authority.

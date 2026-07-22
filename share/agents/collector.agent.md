@@ -4,7 +4,7 @@ description: "Collect gate — leaf archival and EPIC/parent intent verification
 argument-hint: "Collect: {task_id}"
 user-invocable: false
 disable-model-invocation: true
-model: GPT-5.6 Sol (copilot)
+model: GPT-5.6 Terra (copilot)
 tools:
   [vscode/toolSearch, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, search, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/list_requests, ob-kanban/list_tasks, ob-kanban/show_request, ob-kanban/show_task, ob-kanban/start_work, ob-memory/assess_memories, ob-memory/recall_memory, ob-memory/save_memory]
 agents: [Explore]

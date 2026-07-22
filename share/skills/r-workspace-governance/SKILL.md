@@ -32,6 +32,12 @@ without behavior change).
 - The helper preserves unrelated staged paths and unstages only its own paths if `git commit` fails.
   It rejects owned paths that were already staged because it cannot distinguish user work from agent
   work in the same path.
+- On a same-task retry after a crash or unstructured return, treat uncommitted changes within the
+  shaped change envelope as candidate work from the interrupted attempt. Inspect the complete diff,
+  validate it against the task, and explicitly adopt it in the agent notes before committing. Do not
+  infer an ownership conflict from a dirty path, file timestamp, or invocation boundary alone. If a
+  concrete hunk conflicts with the task or cannot be safely attributed, name that path and hunk in the
+  containment reason instead of describing the whole task-owned diff as mixed.
 - Pipeline agents call `end_work` first so the final note, status, and archive move exist, then
   immediately commit all task-owned durable changes plus the final task record before returning a
   success verdict. Builders own product and durable proof files, verifiers own local fixes, and

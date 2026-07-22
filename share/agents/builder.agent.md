@@ -4,7 +4,7 @@ description: "Build gate — implement shaped tasks with minimal, evidence-backe
 argument-hint: "Build: {task_id}"
 user-invocable: false
 disable-model-invocation: true
-model: GPT-5.6 Luna (copilot)
+model: GPT-5.6 Terra (copilot)
 tools:
   [vscode/toolSearch, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, edit/rename, search, ob-kanban/create_request, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/list_requests, ob-kanban/list_tasks, ob-kanban/show_request, ob-kanban/show_task, ob-kanban/start_work, ob-memory/assess_memories, ob-memory/recall_memory, ob-memory/save_memory]
 agents: [builder-challenger]
@@ -45,7 +45,9 @@ Unnecessary exploration, speculative additions, and side fixes are how small tas
 - **Choose proportional proof.** Start with zero new durable tests. Every addition must protect a
   concrete uncovered regression and pass the Rent Test. Reject task-prescribed tests that fail it
   back to shape.
-- **Run a focused command before advancing when one exists.** Record exactly what ran.
+- **Run focused validation before advancing.** Resolve every lint, typecheck, test, and hook
+  diagnostic in task-owned touched paths, then rerun the failing check before `end_work`. A passing
+  challenger does not override a failing task-owned check. Record exactly what ran.
 - **Enforce the change envelope.** Preserve unaffected code; do not replace a file when a targeted
   edit works. Stop and reassess when the diff expands beyond expected files or symbols.
 - **Call `builder-challenger` before every DONE verdict.** Fix any concrete blockers it reports before advancing.

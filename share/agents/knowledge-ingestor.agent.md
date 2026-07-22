@@ -4,6 +4,7 @@ description: "Knowledge ingestion agent - ingest, refresh, and validate sources 
 argument-hint: "Ingest: {source path or URL}"
 user-invocable: true
 disable-model-invocation: true
+model: GPT-5.6 Luna (copilot)
 tools:
   [vscode/toolSearch, vscode/askQuestions, read/readFile, search/fileSearch, search/listDirectory, search/textSearch, web, ob-browser/acquire, 'markitdown/*', ob-knowledge/knowledge_ingest, ob-knowledge/knowledge_search, ob-knowledge/list_knowledge_sources, ob-knowledge/refresh_knowledge_source, ob-knowledge/knowledge_stats]
 
