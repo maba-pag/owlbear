@@ -1,10 +1,10 @@
 ---
 id: 2001
 title: 'P3-02: Persist native work records with OCC'
-status: build
+status: shape
 priority: high
 created: 2026-07-22T21:58:20.087459+02:00
-updated: 2026-07-22T21:58:20.087459+02:00
+updated: 2026-07-23T00:51:49.600768+02:00
 tags:
   - phase-3
   - scope:core
@@ -61,3 +61,14 @@ Reuse the hardened descriptor-relative and no-overwrite patterns in native `rece
 Resolve behavior from `IF-003`, `REQ-016`, `KEEP-007`, `RISK-002`, design sections 2, 7.1, and 13, and the contracts delivered by packet `DN-003-PK-001`.
 
 Proof guidance: use a temporary work root and public store APIs for exact replay, stale-token, two-process, containment, no-overwrite, and durable readback checks.
+
+[[2026-07-23T00:51:49+02:00]]
+## Builder Notes
+- Change envelope: a native `serve/kanban` work-store owner for active/archive jobs with OCC and immutable evidence; no legacy carrier, lifecycle, dispatch, MCP, or Cockpit changes.
+- Files changed: none.
+- Change Module Map deviations: no Shape Notes/module map was supplied. Source inspection identified `jobs.py` and `receipt.py` as the local contract owners.
+- Rejection reason: the shaped scope and AC require receipt create/read/list behavior in an explicit work root, but design sections 2, 3, and 7.1 place immutable receipts in `.owlbear/changes/<change-id>/receipts/` (the authority plane), and the delivered `ReceiptStore` is intentionally bound to `ChangeRevision` rather than a work root. A work-root receipt store would create a second canonical receipt authority, contradicting IF-003 and design section 13's no-independent-store-mutation rule. Shape must choose one canonical receipt location and identify whether this packet extends `ReceiptStore` (including its required list API) or limits this packet to jobs/attempts/findings in the work root.
+- Proof selected: authority-versus-source contract inspection; no implementation was safe to validate.
+- Commands run: exact authority searches; `uv run --project . test-root serve/kanban/src/owlbear_kanban/jobs.py` (resolved `uv run pytest`).
+- Builder-challenger result: not invoked; a DONE verdict was not proposed.
+- Follow-up risk: acceptance criteria currently require stable conflict behavior but do not name the public result/error contract for work-root records; shape should specify it alongside the receipt-location decision.
