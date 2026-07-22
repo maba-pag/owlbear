@@ -1,10 +1,10 @@
 ---
 id: 1993
 title: 'P2-01: Evaluate layered delivery admission'
-status: verify
+status: build
 priority: medium
 created: 2026-07-22T05:49:37.434986+02:00
-updated: 2026-07-22T06:04:24.090520+02:00
+updated: 2026-07-22T06:05:54.968501+02:00
 tags:
   - phase-1
   - scope:core
@@ -75,3 +75,16 @@ Proof guidance: exercise the public evaluation boundary with the real `ChangeRev
 - Commands run: `uv run --project serve/kanban pytest serve/kanban/tests/test_admission.py serve/kanban/tests/test_change_revision.py -q` -> 20 passed; `uv run --project serve/kanban ruff check serve/kanban/src/owlbear_kanban/admission.py serve/kanban/src/owlbear_kanban/__init__.py serve/kanban/tests/test_admission.py` -> all checks passed; public smoke evaluation -> admitted, 0 findings.
 - Builder-challenger result: pass; no concrete blockers.
 - Follow-up risks: the evaluator currently models structured evidence presence and digest binding; richer per-entity challenge disposition semantics should remain covered by the shaped admission matrix as it is expanded.
+
+[[2026-07-22T06:05:54+02:00]]
+## Verify Notes
+- Evidence reviewed: Builder Notes, commit `4df94fc69`, public evaluator implementation, and `serve/kanban/tests/test_admission.py`.
+- Named authorities checked: DN-002 and PROOF-002 in `.owlbear/changes/replace-delivery-pipeline/graph.yaml`; admission sections 5 and 9 in `.owlbear/changes/replace-delivery-pipeline/design.md`; AC-1 through AC-5.
+- Change Module Map: no ownership deviation. Changed source and test files stay within `MOD-001` and `MOD-008`. The delivery result itself is incomplete.
+- Normal-path boundary exercised: loaded the real `ChangeRevision` through `load_change` and called public `evaluate_admission`. With non-empty free-form `challenge={"pass": True}` and `baseline={"pass": True}`, a matching digest, approval, and limits, result was `admitted=True; findings=0`.
+- Replacements used below boundary: none.
+- Checks run: `uv run --project serve/kanban pytest serve/kanban/tests/test_admission.py serve/kanban/tests/test_change_revision.py -q` completed with 20 passing tests. `uv run --project serve/kanban ruff check serve/kanban/src/owlbear_kanban/admission.py serve/kanban/src/owlbear_kanban/__init__.py serve/kanban/tests/test_admission.py` completed clean.
+- Finding: `AdmissionEvidence.challenge` and `baseline` are unconstrained mappings, and `evaluate_admission` only rejects empty mappings. This contradicts design section 9.2, which requires one structured disposition per requirement, interface, migration, material risk, proof, workflow, and node, and rejects free-form pass. It also leaves AC-2 through AC-5 and PROOF-002's A1-A10 cases, zero-job-mutation behavior, atomic success behavior, and durable historical defective/corrected fixtures unimplemented and unproven. The single happy-path test does not cover the shaped invariant matrix.
+- Patches applied: none; resolving this requires material evaluator and test implementation beyond verifier patch limits.
+- Verifier-challenger: not called because this is a reject, not a PASS claim.
+- Final route: reject to build for completion of the structured evidence contract, deterministic diagnostics, admitted operation guarantees, and required focused fixtures/proof.
