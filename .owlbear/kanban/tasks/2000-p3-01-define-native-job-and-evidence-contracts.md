@@ -4,7 +4,7 @@ title: 'P3-01: Define native job and evidence contracts'
 status: verify
 priority: high
 created: 2026-07-22T21:58:09.010514+02:00
-updated: 2026-07-22T23:44:29.787380+02:00
+updated: 2026-07-23T00:29:23.514730+02:00
 tags:
   - phase-3
   - scope:core
@@ -33,10 +33,8 @@ ac:
     digest, predecessor, evidence, and code-revision contract and returns deterministic
     serialization or stable diagnostics."
 proof_bundle: behavioral+challenge
-blocked: true
-block_reason: 'COMMIT_FAILED: commit-owned refused mixed pre-existing edits in task-owned
-  source paths; recover with an explicit scoped commit after separating the pre-existing
-  changes from builder changes.'
+blocked: false
+block_reason:
 claimed_at:
 archival_reason:
 archival_refs: []
