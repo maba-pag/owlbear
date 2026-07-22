@@ -1,10 +1,10 @@
 ---
 id: 1996
 title: 'P2-04: Validate delivery assembly and authority'
-status: build
+status: verify
 priority: medium
 created: 2026-07-22T13:46:10.586702+02:00
-updated: 2026-07-22T16:10:28.687965+02:00
+updated: 2026-07-22T16:14:33.195969+02:00
 tags:
   - phase-1
   - scope:core
@@ -98,3 +98,13 @@ Proof guidance: start from a loaded `ChangeRevision`, mutate only semantic graph
 - Commit-hook repair expanded the local lint-only patch to replace five task-added PERF401 loop patterns with equivalent `findings.extend(...)` comprehensions in `serve/kanban/src/owlbear_kanban/admission.py`. No diagnostic logic, finding content, or ordering policy changed.
 - Revalidated after this repair: focused admission suite passed (7 tests), full Ruff on the touched module passed, and `git diff --check` passed.
 
+[[2026-07-22T16:14:33+02:00]]
+## Builder Notes
+- Change envelope: `serve/kanban/tests/test_admission.py`; durable public `evaluate_admission` proof only; no production changes.
+- Files changed: `serve/kanban/tests/test_admission.py`.
+- Change Module Map deviations: none; proof remains at the mapped public admission boundary.
+- Proof selected: focused table-style mutation coverage for DV-008 topology, DV-010 authority coherence, DV-011 category bounds, deterministic finding order, and canonical valid-DAG silence.
+- Durable-test justification: required by the verifier rejection and PROOF-002/AC-4; these tests protect easy-to-regress shared admission semantics at the public evaluator boundary.
+- Commands run: `uv run --project . pytest serve/kanban/tests/test_admission.py -q` -> 16 passed; `uv run --project . ruff check serve/kanban/tests/test_admission.py` -> all checks passed; `git diff --check` -> passed.
+- Builder-challenger result: pass; no concrete blocker reported.
+- Follow-up risks: randomized DAG generation is represented by the canonical admitted DAG property check; no production behavior changed.

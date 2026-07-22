@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from owlbear_kanban import AdmissionEvidence, evaluate_admission, load_change
 
 
@@ -15,6 +17,150 @@ def _admission_evidence(revision):
         baseline={"commands": ("pytest",), "digest": revision.delivery_digest},
         approval={"approved": True, "digest": revision.delivery_digest},
         limits=("bootstrap",),
+    )
+
+
+def _with_nodes(revision, nodes):
+    graph = revision.graph.model_copy(update={"nodes": nodes})
+    return revision.model_copy(update={"graph": graph})
+
+
+@pytest.mark.parametrize(
+    ("mutation", "code"),
+    [
+        (
+            lambda revision: _with_nodes(
+                revision,
+                tuple(
+                    node.model_copy(update={"dependencies": (*node.dependencies, "DN-002")})
+                    if node.id == "DN-001"
+                    else node
+                    for node in revision.graph.nodes
+                ),
+            ),
+            "DV-008",
+        ),
+        (
+            lambda revision: _with_nodes(
+                revision,
+                tuple(
+                    node.model_copy(update={"dependencies": ()}) if node.id == "DN-010" else node
+                    for node in revision.graph.nodes
+                ),
+            ),
+            "DV-008",
+        ),
+        (
+            lambda revision: _with_nodes(
+                revision,
+                tuple(
+                    node.model_copy(update={"produces": ("REQ-001",)}) if node.id == "DN-010" else node
+                    for node in revision.graph.nodes
+                ),
+            ),
+            "DV-011",
+        ),
+        (
+            lambda revision: revision.model_copy(
+                update={
+                    "graph": revision.graph.model_copy(
+                        update={
+                            "interfaces": tuple(
+                                interface.model_copy(update={"producer": "DN-010"})
+                                if interface.id == "IF-001"
+                                else interface
+                                for interface in revision.graph.interfaces
+                            )
+                        }
+                    )
+                }
+            ),
+            "DV-008",
+        ),
+    ],
+)
+def test_graph_mutations_return_expected_public_finding(mutation, code) -> None:
+    result = load_change(Path(".owlbear/changes"), "replace-delivery-pipeline")
+    assert result.revision is not None
+
+    revision = mutation(result.revision)
+    assessment = evaluate_admission(revision, _admission_evidence(revision))
+
+    assert any(item.code == code for item in assessment.errors)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        lambda revision: revision.model_copy(
+            update={
+                "decisions": revision.decisions.model_copy(
+                    update={
+                        "decisions": tuple(
+                            decision.model_copy(update={"status": "pending"}) if decision.id == "DEC-001" else decision
+                            for decision in revision.decisions.decisions
+                        )
+                    }
+                )
+            }
+        ),
+        lambda revision: revision.model_copy(
+            update={
+                "graph": revision.graph.model_copy(
+                    update={"admission": revision.graph.admission.model_copy(update={"delivery_digest": "0" * 64})}
+                )
+            }
+        ),
+        lambda revision: revision.model_copy(
+            update={
+                "decisions": revision.decisions.model_copy(
+                    update={
+                        "decisions": tuple(
+                            decision.model_copy(update={"selected": None}) if decision.id == "DEC-001" else decision
+                            for decision in revision.decisions.decisions
+                        )
+                    }
+                )
+            }
+        ),
+    ],
+)
+def test_authority_mutations_return_dv010(mutation) -> None:
+    result = load_change(Path(".owlbear/changes"), "replace-delivery-pipeline")
+    assert result.revision is not None
+
+    revision = mutation(result.revision)
+    assessment = evaluate_admission(revision, _admission_evidence(revision))
+
+    assert any(item.code == "DV-010" for item in assessment.errors)
+
+
+def test_admitted_dag_is_silent_and_findings_are_deterministic() -> None:
+    result = load_change(Path(".owlbear/changes"), "replace-delivery-pipeline")
+    assert result.revision is not None
+
+    assessment = evaluate_admission(result.revision, _admission_evidence(result.revision))
+    repeated = evaluate_admission(result.revision, _admission_evidence(result.revision))
+
+    assert not {item.code for item in assessment.errors} & {"DV-008", "DV-010", "DV-011"}
+    assert assessment.findings == repeated.findings
+
+
+def test_invalid_graph_findings_are_sorted() -> None:
+    result = load_change(Path(".owlbear/changes"), "replace-delivery-pipeline")
+    assert result.revision is not None
+    revision = _with_nodes(
+        result.revision,
+        tuple(
+            node.model_copy(update={"dependencies": ()}) if node.id == "DN-010" else node
+            for node in result.revision.graph.nodes
+        ),
+    )
+
+    assessment = evaluate_admission(revision, _admission_evidence(revision))
+
+    assert tuple((item.code, item.target) for item in assessment.findings) == tuple(
+        sorted((item.code, item.target) for item in assessment.findings)
     )
 
 
