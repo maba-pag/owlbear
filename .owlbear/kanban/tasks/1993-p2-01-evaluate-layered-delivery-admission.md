@@ -1,10 +1,10 @@
 ---
 id: 1993
 title: 'P2-01: Evaluate layered delivery admission'
-status: verify
+status: build
 priority: medium
 created: 2026-07-22T05:49:37.434986+02:00
-updated: 2026-07-22T06:15:14.550595+02:00
+updated: 2026-07-22T06:16:18.350179+02:00
 tags:
   - phase-1
   - scope:core
@@ -159,3 +159,21 @@ Proof guidance: exercise the public evaluation boundary with the real `ChangeRev
 - Commands run: `uv run pytest serve/kanban/tests/test_admission.py -q` -> 3 passed; `uv run ruff check serve/kanban/src/owlbear_kanban/admission.py serve/kanban/tests/test_admission.py` -> passed.
 - Builder-challenger result: pass; no concrete blocker found.
 - Follow-up risks: broader AC matrix remains for verifier review; this build slice specifically proves digest binding.
+
+[[2026-07-22T06:16:18+02:00]]
+## Verify Notes
+- Evidence reviewed: task outcome/scope, AC-1 through AC-5, builder notes, `design.md` sections 5 and 9, and `graph.yaml` authorities `DN-002`, `REQ-002`, `REQ-003`, `IF-002`, `RISK-003`, `RISK-007`, and `PROOF-002`.
+- Change Module Map: the changed admission owner, public package export, and focused test file match the builder map. No module-map deviation; the implementation is incomplete within the mapped owner.
+- Normal-path boundary exercised: `evaluate_admission` was exercised through its public API by `serve/kanban/tests/test_admission.py`. Lower layers were not substituted at that boundary.
+- Replacements used below boundary: none in the focused tests; the real `replace-delivery-pipeline` ChangeRevision was loaded.
+- Checks run: `uv run pytest serve/kanban/tests/test_admission.py -q` completed with 3 passed. `uv run ruff check serve/kanban/src/owlbear_kanban/admission.py serve/kanban/src/owlbear_kanban/__init__.py serve/kanban/tests/test_admission.py` completed successfully. An exact source search found no A1-A10 table/property coverage, no historical defective/corrected fixtures, and no exercised warning findings.
+- Finding: the implementation returns error-only findings and covers only dangling references, missing ownership, cycles, structured challenge presence/disposition, baseline, approval, digest, and limits. It does not satisfy AC-2 or AC-3's required graph/invariant matrix and property cases, AC-1's warning preservation/serialization check, or AC-5's four historical defect/correction fixtures. `PROOF-002` also requires the public validate/admit operation to atomically create the receipt and initial shape jobs on success, while the current evaluator is intentionally side-effect free and task scope excludes these writes; the task must resolve and implement that shaped contradiction rather than receiving a verifier patch.
+- Patches applied: none; the gaps require implementation and contract work beyond the verifier patch limit.
+- Final route: REJECT to build.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Implement the complete A1-A10-equivalent graph and evidence invariant matrix with stable findings, warning/limit preservation, deterministic serialization, and public-boundary property coverage. | `serve/kanban/src/owlbear_kanban/admission.py`, `serve/kanban/tests/test_admission.py` | AC-1 through AC-4; `graph.yaml` `PROOF-002` |
+| 2 | builder | Add the four required historical defective-plan fixtures and corrected counterparts, then prove failure remains write-free and corrections are error-free. | `serve/kanban/tests/test_admission.py` and focused fixture paths | AC-5; `PROOF-002` |
+| 3 | builder | Reconcile the task scope's write exclusion with `DN-002` and `PROOF-002` success requirements. If atomic receipt and initial shape-job creation remain part of this task, implement and prove it at the public validate/admit boundary; otherwise return the contract to shape for an explicit scope split. | `serve/kanban/src/owlbear_kanban/admission.py` or shape artifacts | `graph.yaml` `DN-002`, `IF-002`, `PROOF-002` |
