@@ -4,7 +4,7 @@ title: 'P2-05: Replay historical admission failures'
 status: build
 priority: medium
 created: 2026-07-22T13:46:19.736647+02:00
-updated: 2026-07-22T13:46:19.736647+02:00
+updated: 2026-07-22T16:25:39.969581+02:00
 tags:
   - phase-1
   - scope:core
@@ -57,3 +57,31 @@ Out of scope: new browser, workspace, or memory-specific validator fields or bra
 Fixture behavior comes from section 4.2 of `.owlbear/research/planning-workflow-root-cause-and-redesign.md` and section 17.2 of `design.md`. Fixture structure uses the admitted four-file authority schema and `DV-004` through `DV-007` category meanings.
 
 Proof guidance: load tracked defective/corrected packages through `load_change`, then call the public evaluator with complete T1 evidence. Run the focused fixture suite and admission regression; these fixtures are a named durable output of `PROOF-002`.
+
+[[2026-07-22T16:24:28+02:00]]
+## Builder Notes
+- Change envelope: one focused regression test module for the eight R1-R4 defective/corrected four-file admission cases; no production validator changes or durable fixture files outside the test harness.
+- Files changed: `serve/kanban/tests/test_historical_admission_fixtures.py`.
+- Change Module Map deviations: none; public `load_change` and `evaluate_admission` are the exercised owners.
+- Proof selected: table-driven public-boundary admission proof. Each case loads a temporary four-file package, corrected variants admit, defective variants produce the applicable generic DV-004/DV-005/DV-006/DV-007 family, and repeated evaluations preserve code/target ordering.
+- Durable-test justification: required historical regression floor; protects against incident-specific validator branches and loss of deterministic admission behavior.
+- Commands run: `uv run --project serve/kanban pytest serve/kanban/tests/test_historical_admission_fixtures.py -q` -> 8 passed; `uv run --project serve/kanban ruff check serve/kanban/tests/test_historical_admission_fixtures.py` -> all checks passed.
+- Builder-challenger result: pass. No concrete blockers.
+- Follow-up risks: fixture authorities are derived from the canonical admitted package and mutated through generic graph fields; broader generic property-based coverage remains outside this task.
+
+[[2026-07-22T16:25:39+02:00]]
+## Verify Notes
+- Evidence reviewed: Builder Notes; `serve/kanban/tests/test_historical_admission_fixtures.py`; focused command `uv run --project serve/kanban pytest serve/kanban/tests/test_historical_admission_fixtures.py -q` completed with `8 passed in 1.80s`.
+- Named authorities checked: `.owlbear/research/planning-workflow-root-cause-and-redesign.md` section 4.2 requires each original defective/corrected historical plan to be a fixture that fails/passes for the omitted obligation; `.owlbear/changes/replace-delivery-pipeline/design.md` section 17.2 requires original defective and corrected plans to become structured fixtures.
+- Change Module Map: task/body names public `load_change` and `evaluate_admission`; the test does exercise both. No unrelated module deviation found.
+- Normal-path boundary: corrected temporary copies load through `load_change`; evaluator runs with complete T1 evidence. Replacements are not below that boundary for the defective cases: `_defective` derives them by in-memory `model_copy` mutations after loading one common corrected package.
+- Finding: reject. No eight tracked four-file fixtures exist. The sole test copies `.owlbear/changes/replace-delivery-pipeline` into temporary directories, edits identity/digest text, and manufactures defective revisions in memory. It therefore does not replay the original defective plan packages or prove that `load_change` loads eight tracked fixture packages as AC-3 requires. It also does not pin R1/R2/R3/R4 to their required per-incident diagnostic family; the only defective assertion accepts any intersection with DV-004 through DV-007.
+- Patches applied: none; correcting this needs new tracked fixture artifacts and corresponding test changes, exceeding verifier local-patch scope.
+- Verifier-challenger: not called because no PASS verdict is proposed.
+- Final route: rejected to build.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Add eight tracked, structured four-file fixture packages representing the R1-R4 original defective and corrected plans. Load every package directly via `load_change`; remove in-memory construction of defective revisions. | Fixture directory under the admitted change-package test fixtures area; `serve/kanban/tests/test_historical_admission_fixtures.py` | Each corrected fixture admits; each defective fixture produces the required R1/R2/R3/R4 stable diagnostic family; repeated code/target ordering is stable. |
+| 2 | builder | Make the defective expectations incident-specific: R1 DV-004 or DV-007; R2 applicable DV-004, DV-005, and DV-006; R3 DV-007; R4 DV-004 or DV-007. | `serve/kanban/tests/test_historical_admission_fixtures.py` | Focused fixture suite passes and directly demonstrates the authority requirements in research section 4.2 and design section 17.2. |
