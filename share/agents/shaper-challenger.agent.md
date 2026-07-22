@@ -4,7 +4,7 @@ description: "Shaper challenger — Cross-check for scope, AC, and architecture 
 argument-hint: "Challenge Shape: task_id={task_id}, proposed_verdict=APPROVED, ac_lines=[...], reasoning={reasoning}"
 user-invocable: false
 disable-model-invocation: false
-model: Claude Opus 4.8 (copilot)
+model: Claude Sonnet 5 (copilot)
 tools: [vscode/toolSearch, read/problems, read/readFile, read/viewImage, search]
 agents: []
 hooks:

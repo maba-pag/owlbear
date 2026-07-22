@@ -4,6 +4,7 @@ description: "Test suite curation — task-test cleanup and durable regression p
 argument-hint: "Curate tests"
 user-invocable: true
 disable-model-invocation: true
+model: GPT-5.6 Terra (copilot)
 tools:
   [vscode/toolSearch, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createFile, edit/editFiles, edit/rename, search, ob-kanban/list_tasks, ob-kanban/show_task, ob-memory/save_memory]
 agents: []
