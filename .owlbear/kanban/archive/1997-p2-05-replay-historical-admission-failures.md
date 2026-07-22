@@ -1,10 +1,10 @@
 ---
 id: 1997
 title: 'P2-05: Replay historical admission failures'
-status: collect
+status: archived
 priority: medium
 created: 2026-07-22T13:46:19.736647+02:00
-updated: 2026-07-22T21:15:00.386349+02:00
+updated: 2026-07-22T21:17:01.256609+02:00
 tags:
   - phase-1
   - scope:core
@@ -40,7 +40,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Bootstrap Projection Identity
@@ -147,3 +147,12 @@ Use one table-driven durable test at `serve/kanban/tests/test_historical_admissi
 - Findings: evaluator source maps the intended omissions to generic DV-004 interface, DV-005 migration, DV-006 risk, and DV-007 proof diagnostics. AC-1 through AC-4 are satisfied.
 - Verifier-challenger: pass; no scope drift, unresolved AC, or proof deficiency identified.
 - Final route: PASS to collect.
+
+[[2026-07-22T21:17:01+02:00]]
+## Collect Notes
+- Classification: leaf. `list_tasks(parent=1997)` returned no children; the task is a normal implementation packet under parent #1978 and has no aggregate/EPIC title, tags, or aggregate collect criteria.
+- Leaf verification evidence: final `## Verify Notes` records PASS to collect after the verifier repaired the earlier zero-findings assertion gap. The direct `load_change` and `evaluate_admission` fixture suite plus maintained admission regression passed with 24 tests; Ruff passed; `git diff --check` passed; verifier-challenger returned pass.
+- Invariant map coverage: verifier records no Change Module Map deviation, with changes limited to the eight four-file historical-admission packages and their focused regression; no production admission source changed.
+- Dependency gate: dependency #1996 reports satisfied (`dep_status=ok`). Aggregate child/dependency coverage and SHA-linked aggregate proof are not applicable to this leaf.
+- Residual decisions and follow-up: no pending or resolved structured requests exist for #1997, no unresolved Required Follow-up remains, and the verifier's initial proof finding is explicitly closed by its local patch and rerun.
+- Rationale: verifier PASS evidence is complete and closure state is clean, so archive as completed.
