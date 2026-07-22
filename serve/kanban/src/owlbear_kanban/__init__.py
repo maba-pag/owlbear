@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from owlbear_kanban.admission import (
     AdmissionAssessment,
+    AdmissionDisposition,
     AdmissionEvidence,
     AdmissionFinding,
     AdmissionSeverity,
@@ -47,6 +48,7 @@ from owlbear_kanban.storage_io import atomic_write
 
 __all__ = [
     "AdmissionAssessment",
+    "AdmissionDisposition",
     "AdmissionEvidence",
     "AdmissionFinding",
     "AdmissionSeverity",

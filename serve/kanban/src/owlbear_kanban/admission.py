@@ -17,6 +17,12 @@ class AdmissionSeverity(StrEnum):
     WARNING = "warning"
 
 
+class AdmissionDisposition(StrEnum):
+    PASS = "pass"  # noqa: S105
+    WARNING = "warning"
+    ERROR = "error"
+
+
 class AdmissionFinding(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
 
@@ -41,8 +47,10 @@ class AdmissionEvidence(BaseModel):
 class AdmissionAssessment(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
 
+    schema_version: int = 1
     revision_digest: str
     findings: tuple[AdmissionFinding, ...]
+    limits: tuple[str, ...] = ()
 
     @property
     def errors(self) -> tuple[AdmissionFinding, ...]:
@@ -53,10 +61,17 @@ class AdmissionAssessment(BaseModel):
         return not self.errors
 
 
-def _finding(code: str, target: str, detail: str, remediation: str, evidence: str = "") -> AdmissionFinding:
+def _finding(  # noqa: PLR0913
+    code: str,
+    target: str,
+    detail: str,
+    remediation: str,
+    evidence: str = "",
+    severity: AdmissionSeverity = AdmissionSeverity.ERROR,
+) -> AdmissionFinding:
     return AdmissionFinding(
         code=code,
-        severity=AdmissionSeverity.ERROR,
+        severity=severity,
         target=target,
         evidence=evidence or target,
         detail=detail,
@@ -149,7 +164,7 @@ def _evaluate_structured_evidence(revision: ChangeRevision, evidence: AdmissionE
     actual = set(evidence.challenge)
     findings.extend(
         _finding(
-            "DV-010",
+            "EV-002",
             target,
             "challenge disposition targets an undeclared delivery entity",
             "Remove the dangling challenge target.",
@@ -158,7 +173,7 @@ def _evaluate_structured_evidence(revision: ChangeRevision, evidence: AdmissionE
     )
     findings.extend(
         _finding(
-            "DV-010",
+            "EV-002",
             target,
             "structured challenge disposition is missing",
             "Record one disposition and evidence for this delivery entity.",
@@ -167,10 +182,10 @@ def _evaluate_structured_evidence(revision: ChangeRevision, evidence: AdmissionE
     )
     for target in sorted(expected & actual):
         disposition = evidence.challenge[target]
-        if not isinstance(disposition, Mapping) or disposition.get("disposition") not in {"pass", "fail", "defer"}:
+        if not isinstance(disposition, Mapping) or disposition.get("disposition") not in {"pass", "warning", "error"}:
             findings.append(
                 _finding(
-                    "DV-010",
+                    "EV-002",
                     target,
                     "challenge evidence must contain a structured disposition",
                     "Record disposition and evidence for this delivery entity.",
@@ -179,16 +194,21 @@ def _evaluate_structured_evidence(revision: ChangeRevision, evidence: AdmissionE
         elif disposition["disposition"] != "pass":
             findings.append(
                 _finding(
-                    "DV-010",
+                    "EV-002",
                     target,
                     f"challenge disposition is {disposition['disposition']}",
                     "Resolve the challenge finding before admission.",
+                    severity=(
+                        AdmissionSeverity.WARNING
+                        if disposition["disposition"] == "warning"
+                        else AdmissionSeverity.ERROR
+                    ),
                 )
             )
         elif not isinstance(disposition.get("evidence"), str) or not disposition["evidence"].strip():
             findings.append(
                 _finding(
-                    "DV-010",
+                    "EV-002",
                     target,
                     "challenge disposition has no evidence",
                     "Record source-grounded evidence for this disposition.",
@@ -197,16 +217,27 @@ def _evaluate_structured_evidence(revision: ChangeRevision, evidence: AdmissionE
     if not isinstance(evidence.baseline.get("commands"), (tuple, list)) or not evidence.baseline.get("commands"):
         findings.append(
             _finding(
-                "DV-012",
+                "EV-003",
                 revision.change_id,
                 "baseline evidence must list executed commands",
                 "Record clean baseline commands and results.",
             )
         )
+    elif any(
+        isinstance(command, Mapping) and command.get("exit_code", 0) != 0 for command in evidence.baseline["commands"]
+    ):
+        findings.append(
+            _finding(
+                "EV-003",
+                revision.change_id,
+                "baseline command failed",
+                "Record a baseline with successful commands.",
+            )
+        )
     if evidence.baseline.get("digest") != evidence.digest:
         findings.append(
             _finding(
-                "DV-012",
+                "EV-003",
                 revision.change_id,
                 "baseline evidence is missing or bound to a different digest",
                 "Recompute the baseline for this delivery digest.",
@@ -216,7 +247,7 @@ def _evaluate_structured_evidence(revision: ChangeRevision, evidence: AdmissionE
     if evidence.approval.get("digest") != evidence.digest:
         findings.append(
             _finding(
-                "DV-011",
+                "EV-004",
                 revision.change_id,
                 "approval is missing or bound to a different digest",
                 "Record approval for this delivery digest.",
@@ -233,7 +264,7 @@ def evaluate_admission(revision: ChangeRevision, evidence: AdmissionEvidence) ->
     if evidence.digest != digest:
         findings.append(
             _finding(
-                "DV-001",
+                "EV-001",
                 revision.change_id,
                 "evidence digest does not match the loaded revision",
                 "Recompute evidence for the current delivery digest.",
@@ -243,7 +274,7 @@ def evaluate_admission(revision: ChangeRevision, evidence: AdmissionEvidence) ->
     if not evidence.challenge:
         findings.append(
             _finding(
-                "DV-010",
+                "EV-002",
                 revision.change_id,
                 "independent challenge evidence is missing",
                 "Provide complete structured challenge evidence.",
@@ -252,7 +283,7 @@ def evaluate_admission(revision: ChangeRevision, evidence: AdmissionEvidence) ->
     if not evidence.baseline:
         findings.append(
             _finding(
-                "DV-012",
+                "EV-003",
                 revision.change_id,
                 "clean baseline evidence is missing",
                 "Record the clean baseline and focused commands.",
@@ -261,7 +292,7 @@ def evaluate_admission(revision: ChangeRevision, evidence: AdmissionEvidence) ->
     if evidence.approval.get("approved") is not True:
         findings.append(
             _finding(
-                "DV-011",
+                "EV-004",
                 revision.change_id,
                 "explicit user approval is missing",
                 "Record explicit approval for this delivery digest.",
@@ -269,11 +300,18 @@ def evaluate_admission(revision: ChangeRevision, evidence: AdmissionEvidence) ->
         )
     if not evidence.limits:
         findings.append(
-            _finding("DV-013", revision.change_id, "known limits are missing", "Record the limits of this admission.")
+            _finding("EV-005", revision.change_id, "known limits are missing", "Record the limits of this admission.")
         )
     findings.extend(_evaluate_structured_evidence(revision, evidence))
     findings.sort(key=lambda item: (item.code, item.target, item.detail))
-    return AdmissionAssessment(revision_digest=digest, findings=tuple(findings))
+    return AdmissionAssessment(revision_digest=digest, findings=tuple(findings), limits=evidence.limits)
 
 
-__all__ = ["AdmissionAssessment", "AdmissionEvidence", "AdmissionFinding", "AdmissionSeverity", "evaluate_admission"]
+__all__ = [
+    "AdmissionAssessment",
+    "AdmissionDisposition",
+    "AdmissionEvidence",
+    "AdmissionFinding",
+    "AdmissionSeverity",
+    "evaluate_admission",
+]

@@ -1,10 +1,10 @@
 ---
 id: 1999
 title: 'P2-01R: Complete admission evidence contracts'
-status: build
+status: verify
 priority: medium
 created: 2026-07-22T14:10:10.625865+02:00
-updated: 2026-07-22T14:10:10.625865+02:00
+updated: 2026-07-22T15:08:37.976991+02:00
 tags:
   - phase-1
   - scope:core
@@ -64,3 +64,14 @@ Commits recorded under deprecated task #1993 introduced the public evaluator and
 This packet proves the public side-effect-free evaluator only. It is a prerequisite to #1998 and does not independently satisfy `PROOF-002`; #1998 owns zero mutation on rejection and atomic receipt-plus-job publication.
 
 Proof guidance: exercise public `evaluate_admission` over a real loaded `ChangeRevision` with typed table cases and deterministic serialization checks. Run focused admission and ChangeRevision tests plus Ruff on touched files; no filesystem mutation or aggregate validate/admit proof belongs here.
+
+[[2026-07-22T15:08:37+02:00]]
+## Builder Notes
+- Change envelope: admission evaluator evidence contract only; expected symbols were `admission.py` models/evaluator, package exports, and focused admission assertions.
+- Files changed: `serve/kanban/src/owlbear_kanban/admission.py`, `serve/kanban/src/owlbear_kanban/__init__.py`, `serve/kanban/tests/test_admission.py`.
+- Change Module Map deviations: none; implementation remained in the existing admission owner and its public export/test boundary.
+- Implemented schema-version-1 immutable assessment metadata and limits, `EV-001` through `EV-005` evidence diagnostics, typed pass/warning/error challenge dispositions, non-blocking warning findings, and failed baseline command rejection. Preserved graph `DV-*` diagnostics.
+- Durable-test justification: updated existing focused public-boundary tests because their `DV-*` assertions contradicted the shaped EV contract; no unrelated durable tests added.
+- Proof selected: `uv run --project . ruff check serve/kanban/src/owlbear_kanban/admission.py serve/kanban/src/owlbear_kanban/__init__.py serve/kanban/tests/test_admission.py` passed; `uv run --project . pytest serve/kanban/tests/test_admission.py serve/kanban/tests/test_change_revision.py -q` passed with 22 tests.
+- Builder-challenger result: pass; no concrete blockers reported.
+- Follow-up risks: broader aggregate validate/admit atomicity and graph completeness remain owned by #1998, #1995, and #1996 per task scope.
