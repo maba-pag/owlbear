@@ -32,6 +32,14 @@ from owlbear_kanban.errors import (
     NotFoundError,
     ValidationError,
 )
+from owlbear_kanban.jobs import (
+    JobDiagnostic,
+    JobDiagnosticCode,
+    JobGeneration,
+    ShapeJob,
+    plan_shape_jobs,
+    read_job_generation,
+)
 from owlbear_kanban.models import BoardConfig, Task, TaskSummary
 from owlbear_kanban.receipt import (
     ChangeHealthFinding,
@@ -64,6 +72,9 @@ __all__ = [
     "CorruptionError",
     "DecisionsDocument",
     "DeliveryGraph",
+    "JobDiagnostic",
+    "JobDiagnosticCode",
+    "JobGeneration",
     "KanbanEngine",
     "NotFoundError",
     "ReceiptConflictError",
@@ -72,6 +83,7 @@ __all__ = [
     "ReceiptRecord",
     "ReceiptResult",
     "ReceiptStore",
+    "ShapeJob",
     "Task",
     "TaskSummary",
     "ValidationError",
@@ -81,4 +93,6 @@ __all__ = [
     "compute_delivery_digest",
     "evaluate_admission",
     "load_change",
+    "plan_shape_jobs",
+    "read_job_generation",
 ]

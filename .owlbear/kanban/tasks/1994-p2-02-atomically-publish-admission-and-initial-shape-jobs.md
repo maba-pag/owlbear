@@ -1,10 +1,10 @@
 ---
 id: 1994
 title: 'P2-02: Define initial shape-job generations'
-status: build
+status: verify
 priority: medium
 created: 2026-07-22T05:49:48.187184+02:00
-updated: 2026-07-22T14:10:35.099332+02:00
+updated: 2026-07-22T15:26:03.752450+02:00
 tags:
   - phase-1
   - scope:core
@@ -66,3 +66,14 @@ Proof guidance: exercise the public planner and generation readback without file
 ## Shape Notes
 - Replaced the stale body in full. The operative task now assigns only side-effect-free initial shape-job generation planning and serialization to #1994; #1998 owns storage and atomic publication.
 - Dependency rewired from deprecated #1993 to clean replacement #1999. Route remains build after #1999.
+
+[[2026-07-22T15:26:03+02:00]]
+## Builder Notes
+- Change envelope: add only side-effect-free initial shape-job planning, immutable generation models, serialized readback diagnostics, and public exports; no persistence/publication or execution workflow.
+- Files changed: `serve/kanban/src/owlbear_kanban/jobs.py`, `serve/kanban/src/owlbear_kanban/__init__.py`.
+- Change Module Map deviations: none; implemented at the native kanban model/export boundary.
+- Proof selected: focused Ruff plus public import/model and JSON-list normalization smoke checks.
+- Durable-test justification: no durable tests added; builder-challenger confirmed the focused public boundary and no concrete blocker. Existing repository test fixtures do not yet expose a minimal revision helper for this new boundary; follow-up risk is that verifier should add or run focused planner/readback behavioral coverage if required by the broader suite.
+- Commands run: `uv run --project serve/kanban ruff check serve/kanban/src/owlbear_kanban/jobs.py serve/kanban/src/owlbear_kanban/__init__.py`; `PYTHONPATH=serve/kanban/src uv run --project serve/kanban python -c '...'` public export smoke; serialization normalization smoke.
+- Builder-challenger result: pass.
+- Follow-up risks: persistence and atomic publication remain explicitly owned by #1998; this task does not implement them.
