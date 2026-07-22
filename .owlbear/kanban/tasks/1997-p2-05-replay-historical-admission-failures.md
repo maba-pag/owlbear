@@ -1,10 +1,10 @@
 ---
 id: 1997
 title: 'P2-05: Replay historical admission failures'
-status: build
+status: verify
 priority: medium
 created: 2026-07-22T13:46:19.736647+02:00
-updated: 2026-07-22T21:09:40.202084+02:00
+updated: 2026-07-22T21:11:54.456161+02:00
 tags:
   - phase-1
   - scope:core
@@ -124,3 +124,14 @@ Use one table-driven durable test at `serve/kanban/tests/test_historical_admissi
 - Patches applied: none; this is a durable proof gap, not a verifier-local patch.
 - Verifier-challenger: not invoked because the task is rejected, not proposed for PASS.
 - Final route: REJECT to build.
+
+[[2026-07-22T21:11:54+02:00]]
+## Builder Notes
+- Change envelope: add the eight native four-file historical admission packages and one focused regression test; no production evaluator changes.
+- Files changed: `serve/kanban/tests/fixtures/historical-admission/**` (32 files) and `serve/kanban/tests/test_historical_admission_fixtures.py`.
+- Change Module Map deviations: none; implementation remains in the shaped fixture/test boundary.
+- Proof selected: deterministic public-boundary admission evaluation through `load_change` and `evaluate_admission`, including digest identity, stable findings, schema-version-1 serialization, defective expected pairs, and corrected admission.
+- Durable-test justification: the focused regression is required by the shaped historical admission contract and protects fixture-loader/evaluator regressions that are otherwise difficult to detect manually.
+- Commands run: `uv run pytest serve/kanban/tests/test_historical_admission_fixtures.py` (8 passed); `uv run pytest serve/kanban/tests/test_admission.py serve/kanban/tests/test_historical_admission_fixtures.py` (24 passed).
+- Builder-challenger result: `pass`; no concrete blockers.
+- Follow-up risks: verifier should confirm canonical fixture semantics against the incident/design authorities and inspect the staged task-owned paths before closure.

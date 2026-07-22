@@ -1,0 +1,1096 @@
+---
+schema_version: 1
+change_id: r4-memory-lifecycle-corrected
+state: admitted
+authority:
+  intent: intent.md
+  design: design.md
+  decisions: decisions.yaml
+  research:
+    - ../../research/planning-workflow-root-cause-and-redesign.md
+admission:
+  state: admitted
+  delivery_digest: b1a84c39c46c0600a1fa7a9a718a7c273d4e885e1f7bd837bd536cdd26bbf4b0
+  receipt: receipts/admission-9387dea789fb.yaml
+  limits:
+    - Implementation packet boundaries remain intentionally unshaped until delivery-node shape jobs run.
+    - Admission certifies delivery completeness and feasibility, not implementation correctness.
+    - >-
+      This bootstrap change uses the current pipeline from a recorded stable sibling checkout as a one-time
+      execution carrier; its projected tasks are non-authoritative and no compatibility path survives cutover.
+    - >-
+      Bootstrap task creation is not atomic with admission receipt creation, so dispatch remains disabled until the
+      complete digest-bound projection passes an idempotency and dependency audit.
+
+requirements:
+  - id: REQ-001
+    title: Resumable durable design
+    statement: >-
+      A user can create or resume one native design session that continuously preserves
+      product intent, material decisions, repository evidence, technical design, and the
+      complete delivery graph without a chat-only or cross-command handoff.
+    workflows: [WF-001]
+  - id: REQ-002
+    title: Layered delivery admission
+    statement: >-
+      No implementation job exists until one semantic delivery revision passes deterministic
+      validation, repository-grounded independent challenge, proportionate clean baselines,
+      and explicit user approval with known limits recorded.
+    workflows: [WF-001]
+  - id: REQ-003
+    title: Complete delivery graph
+    statement: >-
+      The admitted graph assigns every active outcome, preserved behavior, design obligation,
+      changed interface, migration, material risk, and normal-workflow proof to one accountable
+      delivery node before Kanban execution.
+    workflows: [WF-001, WF-002]
+  - id: REQ-004
+    title: Bounded node shaping
+    statement: >-
+      Each admitted delivery node receives one purpose-specific shape job that creates its
+      complete outcome-cohesive packet DAG while refusing any unadmitted delivery expansion.
+    workflows: [WF-002]
+  - id: REQ-005
+    title: Outcome-cohesive implementation with warm review
+    statement: >-
+      A builder implements one packet, its proportionate tests, documentation, migration,
+      generated artifacts, and proof in one shared-worktree session and resolves mandatory
+      read-only reviewer findings before issuing a build receipt.
+    workflows: [WF-003]
+  - id: REQ-006
+    title: Independent delivery-node acceptance
+    statement: >-
+      A tracked-file-read-only acceptor proves each node against its authoritative contract,
+      descendant receipts, assembled boundary, and exact code commit in a disposable checkout.
+    workflows: [WF-004]
+  - id: REQ-007
+    title: Independent whole-change audit
+    statement: >-
+      A tracked-file-read-only auditor proves the complete Product Promise, normal workflows,
+      accepted decisions, migration, removal, and receipt validity at one exact code commit
+      before the change closes.
+    workflows: [WF-005]
+  - id: REQ-008
+    title: Typed corrective work and precise invalidation
+    statement: >-
+      Rejection emits structured findings, invalidates the minimum affected receipt closure,
+      appends outcome-cohesive corrective jobs, and preserves every prior attempt as immutable
+      history.
+    workflows: [WF-004, WF-005]
+  - id: REQ-009
+    title: Honest Kanban work statuses
+    statement: >-
+      Kanban exposes shape, build, accept, and audit as agent transformations while dependency
+      readiness, claims, blocks, staleness, cancellation, supersession, and attempt failure are
+      orthogonal runtime properties or dispositions.
+    workflows: [WF-002, WF-003, WF-004, WF-005]
+  - id: REQ-010
+    title: Graph-aware Cockpit
+    statement: >-
+      Cockpit exposes change authority, delivery graph, node plans, jobs, requests, attempts,
+      findings, receipts, invalidation, exact proof commits, and legacy inventory through
+      accessible responsive views that scale to hundreds of nodes and jobs.
+    workflows: [WF-001, WF-002, WF-003, WF-004, WF-005]
+  - id: REQ-011
+    title: Atomic old-pipeline removal
+    statement: >-
+      OpenSpec and the task-authoritative shape-build-verify-collect pipeline have no active
+      setup, generated command, schema, source, API, agent, prompt, skill, test, documentation,
+      or UI path after cutover.
+    workflows: [WF-006]
+  - id: REQ-012
+    title: Immutable legacy snapshot
+    statement: >-
+      Cutover preserves hash-verified OpenSpec and Kanban history plus an explicit disposition
+      for every active item without translating legacy runtime state into native authority.
+    workflows: [WF-006]
+  - id: REQ-013
+    title: Serialized shared-worktree writes
+    statement: >-
+      The orchestrator permits at most one tracked-file-mutating shape or build job at a time;
+      accept and audit jobs do not overlap writers.
+    workflows: [WF-003, WF-004, WF-005]
+  - id: REQ-014
+    title: Exact-commit proof isolation
+    statement: >-
+      Accept and audit jobs run in crash-safe disposable read-only checkouts of the commit they
+      certify, use the normal toolchain, record relevant replacements and environment facts,
+      and clean their proof directories.
+    workflows: [WF-004, WF-005]
+  - id: REQ-015
+    title: Change and job-scoped decisions and actions
+    statement: >-
+      Structured decision and action requests attach to a change revision and optional graph
+      target/job, preserve options with tradeoffs and confidence, and invalidate only the
+      dependent slice when resolved.
+    workflows: [WF-001, WF-002, WF-003, WF-004, WF-005]
+  - id: REQ-016
+    title: Atomic graph and work transactions
+    statement: >-
+      Multi-file graph, job, request, receipt, activity, and invalidation operations are
+      crash-safe, containment-checked, concurrency-safe, recoverable, and inspectable through
+      health diagnostics.
+    workflows: [WF-002, WF-003, WF-004, WF-005, WF-006]
+  - id: REQ-017
+    title: Consumer installation and operation
+    statement: >-
+      Setup creates the native empty authority/work stores, installs only the new prompts,
+      agents, skills, MCP configuration, and Cockpit bundle, and requires no OpenSpec or
+      compatibility runtime.
+    workflows: [WF-006]
+  - id: REQ-018
+    title: Failure-derived and generic workflow proof
+    statement: >-
+      Durable tests reject all four historical defective plans before work creation, admit
+      corrected equivalents, cover generic graph/invalidation/transaction properties, and
+      execute the complete native workflow through MCP and Cockpit.
+    workflows: [WF-007]
+  - id: REQ-019
+    title: Native authority and semantic identity
+    statement: >-
+      The engine strictly loads the four-file native authority, resolves stable identities,
+      computes canonical semantic digests, stores immutable receipts, and rejects malformed,
+      unsafe, partial, or path-escaping packages.
+    workflows: [WF-001, WF-006]
+  - id: REQ-020
+    title: Intent-level MCP control plane
+    statement: >-
+      MCP exposes strict change, admission, job, purpose-specific completion, request,
+      evidence, health, and history operations without generic task mutation or legacy
+      lifecycle tools.
+    workflows: [WF-001, WF-002, WF-003, WF-004, WF-005]
+  - id: REQ-021
+    title: Graph-aware Cockpit backend
+    statement: >-
+      FastAPI exposes typed change, graph, job, request, attempt, finding, receipt, health,
+      legacy inventory, conflict, and SSE resources over the real graph-aware engine.
+    workflows: [WF-001, WF-002, WF-003, WF-004, WF-005]
+  - id: REQ-022
+    title: Graph-aware orchestration
+    statement: >-
+      The orchestrator dispatches only engine-selected purpose-specific jobs, enforces
+      writer/read-only compatibility, finalizes structured attempts without interpreting
+      prose, recovers expired or crashed claims, and replans from current graph state.
+    workflows: [WF-002, WF-003, WF-004, WF-005]
+  - id: REQ-023
+    title: Scalable graph and receipt runtime
+    statement: >-
+      Graph loading, receipt validity, dependency release, invalidation, health, and job
+      projection remain bounded and indexed for changes containing hundreds of nodes,
+      jobs, attempts, findings, and receipts.
+    workflows: [WF-002, WF-003, WF-004, WF-005]
+  - id: REQ-024
+    title: Bounded agent execution context
+    statement: >-
+      Shape and build jobs receive targeted authority projections and outcome-cohesive work
+      sized for one agent session rather than loading or re-deriving the complete change
+      history for every packet.
+    workflows: [WF-002, WF-003]
+
+negative_requirements:
+  - id: NEG-001
+    statement: >-
+      Kanban job files must not duplicate normative intent, design, node, packet, acceptance, or proof contracts.
+  - id: NEG-002
+    statement: Passive scheduling facts must not become Kanban statuses.
+  - id: NEG-003
+    statement: >-
+      Acceptors and auditors must not modify tracked product, test, documentation, graph, or job-authority files.
+  - id: NEG-004
+    statement: The new engine must not read, execute, or silently translate legacy task or OpenSpec runtime formats.
+  - id: NEG-005
+    statement: >-
+      Code, tests, documentation, migration, research, and proof must not become mandatory artifact-specific status
+      columns.
+  - id: NEG-006
+    statement: Two tracked-file-mutating jobs must not execute concurrently in the shared worktree.
+  - id: NEG-007
+    statement: The native authority must not become a generic pluggable specification framework or duplicate Git.
+  - id: NEG-008
+    statement: >-
+      A shape job must not add a delivery outcome, interface, migration, risk, or proof boundary outside its admitted
+      node.
+  - id: NEG-009
+    statement: A reviewer, acceptor, or auditor must not approve tracked changes it authored.
+  - id: NEG-010
+    statement: A stale or superseded receipt must not satisfy any job, node, or change dependency.
+
+preserved_behaviors:
+  - id: KEEP-001
+    statement: >-
+      Ask one material product or architecture decision at a time and research discoverable facts instead of asking
+      the user.
+  - id: KEEP-002
+    statement: >-
+      Preserve the full Product Promise, accepted exclusions, preserved remainder, and technically-done-but-wrong
+      outcomes.
+  - id: KEEP-003
+    statement: >-
+      Ground repository, generated, and external contract claims in named canonical authorities with evidence state.
+  - id: KEEP-004
+    statement: Prefer outcome-cohesive work, strong module locality, boundary-valid acceptance, and proportional proof.
+  - id: KEEP-005
+    statement: >-
+      Maintain fresh adversarial challenge and independent acceptance at boundaries where self-review is insufficient.
+  - id: KEEP-006
+    statement: >-
+      Keep Kanban, Cockpit, claims, dependencies, blocking, activity history, and user-resolved requests as the
+      operational control experience.
+  - id: KEEP-007
+    statement: >-
+      Preserve scoped commit ownership, dirty-worktree safety, path containment, atomic writes, health scans, and
+      crash recovery.
+  - id: KEEP-008
+    statement: >-
+      Preserve memory recall, assessment, and qualified institutional learning without making memory an execution
+      authority.
+  - id: KEEP-009
+    statement: >-
+      Preserve adaptive architecture review that explains current ownership, proposed interfaces, tradeoffs,
+      weaknesses, and completion at depth proportional to novelty and risk.
+
+workflows:
+  - id: WF-001
+    title: Design and admit a native change
+    entry: User invokes /ideate or /design for a rough or clear request.
+    result: >-
+      One user-approved delivery digest has a valid admission receipt and shape jobs exist for its delivery nodes.
+    proof: PROOF-004
+  - id: WF-002
+    title: Shape an admitted delivery node
+    entry: A dependency-ready shape job is dispatched with the complete admitted graph and target node.
+    result: >-
+      The node has one valid shape receipt, one complete packet DAG, build jobs, and a dependency-gated accept job.
+    proof: PROOF-005
+  - id: WF-003
+    title: Build and review an implementation packet
+    entry: A dependency-ready build job is dispatched while the global writer lease is available.
+    result: One committed packet implementation has focused proof, passed inline review, and a valid build receipt.
+    proof: PROOF-006
+  - id: WF-004
+    title: Accept or reject a delivery node
+    entry: All required packet receipts for a node are valid and no writer is active.
+    result: >-
+      The exact commit has either a valid accept receipt or typed findings with minimum corrective jobs and
+      invalidation.
+    proof: PROOF-007
+  - id: WF-005
+    title: Audit and close the complete change
+    entry: Every required delivery node has a valid accept receipt and no request or writer blocks audit.
+    result: The exact commit has either a final audit receipt and mechanically closed change or typed corrective work.
+    proof: PROOF-008
+  - id: WF-006
+    title: Install and atomically cut over the control plane
+    entry: The replacement implementation and proof suite are complete and pipeline dispatch is stopped.
+    result: >-
+      Legacy stores are hash-snapshotted with dispositions and a fresh consumer runs only the native control plane.
+    proof: PROOF-009
+  - id: WF-007
+    title: Replay planning failures and native recovery
+    entry: Historical and generic graph fixtures are executed against the native engine.
+    result: >-
+      Defective plans fail before jobs exist, corrected plans admit, and corrective cycles preserve exact receipt
+      history.
+    proof: PROOF-013
+
+modules:
+  - id: MOD-001
+    paths:
+      - serve/kanban/src/owlbear_kanban/
+    current_responsibility: Task files, statuses, claims, requests, activity, health, dispatch, and archive.
+    planned_change: >-
+      Replace task authority with native change, delivery graph, purpose-specific jobs, receipts, invalidation,
+      transactions, proof checkout, and graph-aware dispatch behind a reorganized engine facade.
+  - id: MOD-002
+    paths:
+      - serve/mcp-kanban/src/owlbear_mcp_kanban/
+    current_responsibility: Generic task CRUD, lifecycle, request, health, and dispatch MCP tools.
+    planned_change: >-
+      Expose intent-level change, job, completion, request, evidence, health, and history tools; remove generic task
+      mutation.
+  - id: MOD-003
+    paths:
+      - share/agents/
+      - share/skills/
+      - share/prompts/
+      - share/instructions/
+      - share/WIRING.md
+    current_responsibility: OpenSpec-facing ideation/shaping and shape-build-verify-collect agent workflow.
+    planned_change: >-
+      Install designer, node shaper, outcome builder, inline reviewer, acceptor, auditor, and graph-aware orchestrator
+      contracts; retire incompatible roles and workflows.
+  - id: MOD-004
+    paths:
+      - serve/cockpit/src/owlbear_cockpit/
+    current_responsibility: FastAPI task board, request, activity, health, ideas, and memory APIs over KanbanEngine.
+    planned_change: >-
+      Add change, graph, job, request, finding, receipt, legacy inventory, and SSE contracts over the graph-aware
+      engine; remove arbitrary task movement/editing.
+  - id: MOD-005
+    paths:
+      - serve/cockpit/web/src/
+    current_responsibility: >-
+      Task-column Kanban, task editor, decisions, activity, ideas, memories, and workspace health UI.
+    planned_change: >-
+      Keep the Kanban operational center while adding Changes and graph views, immutable-purpose job cards, request
+      context, receipt/finding history, exact proof revisions, and legacy inventory.
+  - id: MOD-006
+    paths:
+      - setup/
+      - seed/
+      - README.md
+      - README-consumer.md
+      - share/README.md
+      - .github/copilot-instructions.md
+    current_responsibility: Consumer setup, OpenSpec installation, seed assets, and public documentation.
+    planned_change: >-
+      Scaffold the native stores and ecosystem, remove OpenSpec installation/generated commands, and document only
+      the new workflow.
+  - id: MOD-007
+    paths:
+      - openspec/
+      - .github/skills/openspec-*/
+      - .github/prompts/opsx-*.prompt.md
+    current_responsibility: Active OpenSpec changes, stock schema, generated commands, and alternate lifecycle.
+    planned_change: Remove from active product paths after immutable legacy snapshot and disposition inventory.
+  - id: MOD-008
+    paths:
+      - tests/
+      - serve/kanban/tests/
+      - serve/mcp-kanban/tests/
+      - serve/cockpit/web/e2e/
+      - serve/cockpit/web/src/**/*.test.*
+    current_responsibility: >-
+      Current task pipeline, APIs, agents, setup, backend, frontend, and integration regression coverage.
+    planned_change: >-
+      Replace obsolete workflow contracts and add incident fixtures, generic graph properties, native end-to-end
+      workflow, cutover, and browser proof.
+  - id: MOD-009
+    paths:
+      - .owlbear/hooks/
+      - seed/.owlbear/hooks/
+      - .owlbear/kanban/
+      - seed/.owlbear/kanban/
+    current_responsibility: >-
+      Agent write guards, session context, task/request stores, activity, and local board configuration.
+    planned_change: >-
+      Enforce new role write scopes, authority/job stores, proof-checkout containment, and purpose-specific runtime
+      state.
+
+interfaces:
+  - id: IF-001
+    name: Native ChangeRevision loader
+    producer: DN-001
+    consumers: [DN-002, DN-003, DN-005, DN-006, DN-008, DN-009, DN-010, DN-012, DN-014]
+    contract: Strict joined model over intent.md, design.md, decisions.yaml, graph.yaml with canonical delivery digest.
+    authority: MOD-001
+    failure_semantics: Structured parse/reference diagnostics; no partial revision returned.
+    migration: MIG-001
+    proof: PROOF-001
+  - id: IF-002
+    name: Admission diagnostics and receipt
+    producer: DN-002
+    consumers: [DN-003, DN-005, DN-006, DN-009, DN-010, DN-012, DN-013]
+    contract: Versioned findings and immutable admission receipt tied to one delivery digest.
+    authority: MOD-001
+    failure_semantics: Error findings forbid job creation; warnings and limits remain explicit.
+    migration: null
+    proof: PROOF-002
+  - id: IF-003
+    name: Graph-aware job and receipt runtime
+    producer: DN-003
+    consumers: [DN-004, DN-006, DN-007, DN-008, DN-009, DN-010, DN-012, DN-013, DN-014]
+    contract: >-
+      Purpose-specific jobs reference graph targets/digests; immutable attempts, findings, receipts, and supersession
+      determine validity.
+    authority: MOD-001
+    failure_semantics: Atomic transaction abort or recoverable manifest; no partial valid receipt.
+    migration: MIG-002
+    proof: PROOF-003
+  - id: IF-004
+    name: Dispatch and writer coordination
+    producer: DN-004
+    consumers: [DN-006, DN-007, DN-008, DN-009, DN-012, DN-014]
+    contract: >-
+      Dependency-aware waves, one global tracked-file writer, no accept/audit overlap, expiring claims, and exact
+      assigned agent profile.
+    runtime_producer: owlbear_kanban.dispatch
+    runtime_consumers: [orchestrator, delivery-node-shaper, builder, acceptor, auditor]
+    authority: MOD-001
+    failure_semantics: Conflicting or stale lease rejects dispatch without mutation.
+    migration: null
+    proof: PROOF-014
+  - id: IF-005
+    name: Disposable exact-commit proof checkout
+    producer: DN-004
+    consumers: [DN-008, DN-013, DN-014]
+    contract: >-
+      Contained read-only checkout under .owlbear/scratch/proof for one commit with normal toolchain and crash-safe
+      cleanup.
+    authority: MOD-001
+    failure_semantics: Setup or cleanup failure becomes a health finding and no accept/audit receipt is valid.
+    migration: null
+    proof: PROOF-014
+  - id: IF-006
+    name: Resumable design and admission session
+    producer: DN-005
+    consumers: [DN-006, DN-012]
+    contract: >-
+      /ideate and /design share one durable change session, one-question decisions, specialist evidence, complete
+      graph review, and explicit admission.
+    authority: MOD-003
+    failure_semantics: Unresolved material decision or failed admission leaves the change draft and creates no jobs.
+    migration: MIG-003
+    proof: PROOF-004
+  - id: IF-007
+    name: Delivery-node shape completion
+    producer: DN-006
+    consumers: [DN-007, DN-008, DN-010, DN-012]
+    contract: >-
+      One node-plan digest, complete packet DAG, shape receipt, build jobs, and accept job inside admitted node bounds.
+    authority: MOD-003
+    failure_semantics: Illegal delivery expansion routes to design re-entry; no partial packet jobs persist.
+    migration: null
+    proof: PROOF-005
+  - id: IF-008
+    name: Build completion with inline review
+    producer: DN-007
+    consumers: [DN-008, DN-010, DN-012]
+    contract: >-
+      Scoped commit, changed paths, proof, reviewer findings/resolution, exact packet digest, and immutable build
+      receipt.
+    authority: MOD-003
+    failure_semantics: >-
+      Review failure stays in the warm builder attempt; material contradiction emits a typed design finding.
+    migration: null
+    proof: PROOF-006
+  - id: IF-009
+    name: Delivery-node acceptance
+    producer: DN-008
+    consumers: [DN-010, DN-012, DN-013, DN-014]
+    contract: >-
+      Read-only exact-commit verdict, evidence replacements, findings, receipt, and corrective route for one delivery
+      node.
+    authority: MOD-003
+    failure_semantics: Failure creates typed findings and corrective jobs; reviewer never patches tracked files.
+    migration: null
+    proof: PROOF-007
+  - id: IF-010
+    name: Native MCP control-plane API
+    producer: DN-009
+    consumers: [DN-005, DN-006, DN-007, DN-008, DN-010, DN-012, DN-013, DN-014]
+    contract: >-
+      Change, validation, admission, job, purpose-specific completion, request, evidence, health, and history tools
+      with strict schemas.
+    authority: MOD-002
+    failure_semantics: Stable domain error codes map engine failures without leaking partial mutation.
+    migration: MIG-003
+    proof: PROOF-011
+  - id: IF-011
+    name: Cockpit change and job HTTP/SSE API
+    producer: DN-010
+    consumers: [DN-011, DN-012, DN-013]
+    contract: >-
+      Typed change, graph, job, request, attempt, finding, receipt, health, legacy inventory, and invalidation
+      resources with conflict tokens and SSE events.
+    authority: MOD-004
+    failure_semantics: Domain errors map to stable HTTP responses; stale conflicts return current authority identity.
+    migration: MIG-003
+    proof: PROOF-015
+  - id: IF-012
+    name: Cockpit graph-aware user experience
+    producer: DN-011
+    consumers: [DN-012, DN-013]
+    contract: >-
+      Accessible responsive Changes, Kanban, Requests, Activity, Evidence, and Legacy views over native API contracts.
+    authority: MOD-005
+    failure_semantics: Fetch/conflict/error states preserve current data and expose actionable retry or resolution.
+    migration: MIG-003
+    proof: PROOF-012
+  - id: IF-013
+    name: Legacy snapshot and native installation
+    producer: DN-012
+    consumers: [DN-013]
+    contract: >-
+      Hash-verified immutable legacy manifest, explicit active-item dispositions, empty native stores, no active
+      old runtime, and reproducible consumer setup.
+    authority: MOD-006
+    failure_semantics: Any missing disposition/hash or remaining active legacy reference blocks cutover.
+    migration: MIG-001
+    proof: PROOF-009
+  - id: IF-014
+    name: Whole-change audit and closure
+    producer: DN-014
+    consumers: [DN-010, DN-012, DN-013]
+    contract: >-
+      Read-only exact-commit final verdict over accepted nodes, Product Promise, decisions, migrations, normal
+      workflows, receipts, and closure state.
+    authority: MOD-003
+    failure_semantics: >-
+      Failure creates typed findings and corrective jobs; pass issues the final audit receipt and mechanically
+      closes the change.
+    migration: null
+    proof: PROOF-008
+
+migrations:
+  - id: MIG-001
+    title: Snapshot legacy authority and runtime
+    owner: DN-012
+    from: Active openspec/ packages and .owlbear/kanban task/archive/decision stores.
+    to: Versioned immutable legacy snapshot plus active-work disposition inventory outside active engine paths.
+    ordered_steps:
+      - Stop dispatch and require no active claims.
+      - Inventory every active and archived change, task, request, and evidence record.
+      - Record reintroduce-native, completed-history, dropped, or superseded disposition for every active item.
+      - Copy or move legacy stores into the versioned snapshot and record content hashes.
+      - Verify snapshot counts and hashes before deleting active readers.
+    consumer_inventory:
+      - owlbear-kanban legacy task and request readers
+      - mcp-kanban generic task tools
+      - Cockpit task and decision routes
+      - agents, skills, prompts, tests, setup, and docs referencing OpenSpec or legacy task files
+    compatibility: No runtime compatibility; history is readable as an inventory only.
+    deletion_owner: DN-012
+    absence_proof: PROOF-009
+  - id: MIG-002
+    title: Replace task runtime with graph-aware jobs
+    owner: DN-003
+    from: >-
+      Mutable Markdown tasks with copied body/AC, parent hierarchy, arbitrary moves, verify/collect states, and
+      task-scoped requests.
+    to: >-
+      Structured purpose-specific jobs referencing authoritative graph targets, immutable receipts, and graph-scoped
+      invalidation.
+    ordered_steps:
+      - Install native models, stores, transactions, and health behind the engine facade.
+      - Switch dispatch and lifecycle callers to job APIs.
+      - Switch MCP and Cockpit contracts.
+      - Remove generic task mutation, old statuses, parent aggregates, and compatibility models.
+    consumer_inventory:
+      - orchestrator
+      - shaper, builder, verifier, collector, and challengers
+      - MCP server and Cockpit backend/frontend
+      - setup, hooks, scripts, tests, and documentation
+    compatibility: Atomic replacement only.
+    deletion_owner: DN-012
+    absence_proof: PROOF-009
+  - id: MIG-003
+    title: Replace user and agent entry surfaces
+    owner: DN-012
+    from: >-
+      /ideate chat handoff, /opsx commands, /shape OpenSpec input, generic task MCP tools, and current Cockpit task
+      editor.
+    to: Resumable native /design, delivery-node shape jobs, purpose-specific job tools, and graph-aware Cockpit.
+    ordered_steps:
+      - Install new agents, skills, prompts, hooks, and MCP contracts.
+      - Install new Cockpit backend and frontend.
+      - Update setup and seed.
+      - Remove OpenSpec generated and shared surfaces.
+      - Remove retired agents/workflows and old UI/API routes.
+    consumer_inventory:
+      - VS Code prompt and agent users
+      - orchestrator and pipeline agents
+      - MCP clients
+      - Cockpit users
+      - consumer setup
+    compatibility: No aliases or quick lane remain.
+    deletion_owner: DN-012
+    absence_proof: PROOF-009
+
+risks:
+  - id: RISK-001
+    class: destructive
+    title: Legacy snapshot loses or overwrites history
+    scenarios:
+      - Destination already exists.
+      - Source changes during snapshot.
+      - Partial copy or crash occurs.
+      - Inventory count or hash differs.
+    disposition: >-
+      Classify the complete set before mutation, never overwrite, stop dispatch, use atomic manifests, verify every
+      hash, and retain source until proof passes.
+    owner: DN-012
+    proof: PROOF-009
+  - id: RISK-002
+    class: concurrency
+    title: Concurrent writers corrupt shared worktree or control-plane state
+    scenarios:
+      - Two build or shape jobs become dispatchable.
+      - Writer crashes without release.
+      - Cockpit mutation races an agent transaction.
+      - Transaction crashes between graph, job, receipt, and activity writes.
+    disposition: >-
+      Global expiring writer lease, agent compatibility in wave assembly, OCC tokens, transaction manifests,
+      deterministic recovery, and no direct store mutation.
+    owner: DN-004
+    proof: PROOF-003
+  - id: RISK-003
+    class: lifecycle
+    title: Stale authority or evidence closes work
+    scenarios:
+      - Intent or design changes after admission.
+      - Node plan changes after build.
+      - Code changes after acceptance.
+      - Superseded receipt remains referenced.
+    disposition: >-
+      Canonical digests, dependency-closure invalidation, supersession receipts, path/boundary stale checks, and
+      transition predicates that require current valid receipts.
+    owner: DN-003
+    proof: PROOF-003
+  - id: RISK-004
+    class: security
+    title: Proof checkout or graph paths escape controlled directories
+    scenarios:
+      - Malicious change or job ID contains traversal.
+      - Symlink redirects receipt, snapshot, or checkout writes.
+      - Proof setup exposes secrets in evidence.
+    disposition: >-
+      Strict ID syntax, resolved-path containment, no-follow/symlink policy, bounded evidence, diagnostic redaction,
+      and cleanup health scans.
+    owner: DN-001
+    proof: PROOF-001
+  - id: RISK-005
+    class: compatibility
+    title: Atomic API and agent cutover leaves mixed old/new callers
+    scenarios:
+      - Generated OpenSpec command remains installed.
+      - Cockpit frontend calls old task endpoints.
+      - Retired agent remains dispatchable.
+      - Consumer seed installs old config.
+    disposition: >-
+      One cutover manifest, absence scans, full build/test over all domains, fixture consumer install, and no
+      compatibility aliases.
+    owner: DN-012
+    proof: PROOF-009
+  - id: RISK-006
+    class: scale
+    title: Hundreds of graph records overwhelm the control-plane runtime
+    scenarios:
+      - Dispatch scans every receipt repeatedly.
+      - Invalidation traverses the complete history for every query.
+      - Corrective cycles make dependency and validity queries grow without bound.
+    disposition: >-
+      Indexed current-validity projections, cached dependency closure with explicit invalidation, paginated history,
+      bounded health scans, and scale fixtures.
+    owner: DN-003
+    proof: PROOF-003
+  - id: RISK-007
+    class: authority
+    title: Local node shaping hides global delivery expansion
+    scenarios:
+      - New interface is described as an implementation detail.
+      - Missing integration work becomes a local packet.
+      - Proof boundary changes without re-admission.
+    disposition: >-
+      Namespace-limited graph transaction, reference subset validation, independent shape review, typed
+      material-discovery finding, and global re-admission.
+    owner: DN-006
+    proof: PROOF-005
+  - id: RISK-008
+    class: independence
+    title: Reviewer or acceptor approves its own changes
+    scenarios:
+      - Inline reviewer edits code.
+      - Acceptor creates tracked harness.
+      - Auditor patches documentation before passing.
+    disposition: >-
+      Tool-deny hooks, engine role checks, receipt author separation, tracked-diff check before/after read-only jobs,
+      and corrective-job-only failure routes.
+    owner: DN-008
+    supporting_nodes: [DN-014]
+    proof: PROOF-007
+  - id: RISK-009
+    class: proof
+    title: Ephemeral diagnostic setup bypasses the claimed production boundary
+    scenarios:
+      - Injected completed workflow replaces application assembly.
+      - Scratch fixture invents an ungrounded contract.
+      - Mock replaces the endpoint, command, or UI under test.
+    disposition: >-
+      Proof contracts name assembled boundary and allowed lower replacements; receipts enumerate setup/replacements;
+      accept/audit reject boundary substitution.
+    owner: DN-008
+    supporting_nodes: [DN-014]
+    proof: PROOF-007
+  - id: RISK-010
+    class: usability
+    title: New control plane becomes harder to understand or operate
+    scenarios:
+      - Graph is the only navigation mode.
+      - Status is indicated only by color.
+      - Corrective histories obscure current work.
+      - Design decisions cannot be resolved efficiently on mobile.
+    disposition: >-
+      Kanban remains primary, list/outline alternatives, accessible text/icon signals, current-chain default,
+      responsive request flow, and Playwright desktop/mobile proof.
+    owner: DN-011
+    proof: PROOF-012
+  - id: RISK-011
+    class: scale
+    title: Agent startup and context cost grows with the complete change
+    scenarios:
+      - Every packet reloads the complete graph and receipt history.
+      - Node shaping creates file-level or artifact-level microjobs.
+      - Repeated corrective cycles require full rediscovery.
+    disposition: >-
+      Targeted authority projections, one shaping session per delivery node, outcome-cohesive packet budgets, warm
+      inline review, and concise predecessor receipts.
+    owner: DN-006
+    supporting_nodes: [DN-007]
+    proof: PROOF-005
+  - id: RISK-012
+    class: scale
+    title: Large changes overwhelm Cockpit rendering and navigation
+    scenarios:
+      - Cockpit renders every graph detail eagerly.
+      - Corrective histories obscure the latest valid chain.
+      - Mobile users cannot navigate a large graph.
+    disposition: >-
+      Incremental loading or virtualization, list and outline alternatives, latest-valid-chain defaults,
+      filtering/grouping, and desktop/mobile scale fixtures.
+    owner: DN-011
+    proof: PROOF-012
+
+proofs:
+  - id: PROOF-001
+    title: Native authority, hashing, and path-safety proof
+    boundary: Public owlbear-kanban ChangeRevision loader and receipt store over a temporary workspace.
+    owner: DN-001
+    method:
+      - Parse valid and invalid four-file packages.
+      - Assert canonical digest stability and semantic changes.
+      - Exercise traversal, symlink, malformed YAML, duplicate ID, and partial-file cases.
+    allowed_replacements: [temporary workspace filesystem]
+    durable_outputs: [unit and contract tests]
+  - id: PROOF-002
+    title: Admission invariant proof
+    boundary: Public validate/admit change operation before any jobs exist.
+    owner: DN-002
+    method:
+      - Execute A1-A10-equivalent table-driven and property cases.
+      - Assert stable finding codes and zero job mutation on failure.
+      - Assert receipt and initial shape jobs are atomic on success.
+    allowed_replacements: [temporary repository and command runner below admission]
+    durable_outputs: [admission tests and historical fixtures]
+  - id: PROOF-003
+    title: Job runtime, transaction, dispatch, and invalidation proof
+    boundary: Public engine job, claim, completion, invalidation, and health operations.
+    owner: DN-003
+    method:
+      - Exercise purpose-specific transitions, dependency release, claims, crashes, OCC races, supersession,
+        request resolution, and recovery.
+      - Assert no partial valid receipt or dangling job after injected write failures.
+    allowed_replacements: [clock, process identity, temporary filesystem]
+    durable_outputs: [engine state-machine, concurrency, and crash tests]
+  - id: PROOF-004
+    title: Resumable design and admission interaction proof
+    boundary: >-
+      Real /ideate and /design prompt/agent contracts operating on a native fixture change through public tools.
+    owner: DN-005
+    method:
+      - Resume after interruption without losing decisions.
+      - Verify one-question options include tradeoffs, recommendation, and confidence.
+      - Reject unresolved authority and admit a complete fixture.
+    allowed_replacements: [external research response below designer workflow]
+    durable_outputs: [agent scenario tests]
+  - id: PROOF-005
+    title: Node shaping boundary proof
+    boundary: Real shaper contract plus engine finish_shape transaction for one admitted delivery node.
+    owner: DN-006
+    method:
+      - Create a valid packet DAG and resulting jobs.
+      - Reject new interface, migration, risk, or proof boundary as material expansion.
+      - Assert no partial packet jobs on challenge or transaction failure.
+    allowed_replacements: [repository search results below the shaper]
+    durable_outputs: [shape scenario and transaction tests]
+  - id: PROOF-006
+    title: Builder inline-review proof
+    boundary: >-
+      Real builder job from claim through scoped commit, system-generated reviewer context, finding repair, and
+      finish_build receipt.
+    owner: DN-007
+    method:
+      - Verify reviewer cannot write or omit mandatory authority/diff context.
+      - Exercise pass, local repair loop, material contradiction, commit failure, and stale packet digest.
+    allowed_replacements: [sample product module and deterministic command runner]
+    durable_outputs: [builder/reviewer scenario tests]
+  - id: PROOF-007
+    title: Independent node acceptance proof
+    boundary: >-
+      Real acceptor over engine-created disposable checkout, node contract, packet receipts, and assembled proof.
+    owner: DN-008
+    method:
+      - Pass a complete node at exact SHA.
+      - Reject local defect, missing harness, boundary bypass, stale receipt, and tracked acceptor edit.
+      - Assert corrective jobs and cleanup are exact and minimal.
+    allowed_replacements: [dependencies explicitly below each fixture proof boundary]
+    durable_outputs: [acceptance and proof-checkout tests]
+  - id: PROOF-008
+    title: Whole-change audit proof
+    boundary: Real auditor over all accepted nodes and admitted workflows in one exact-commit checkout.
+    owner: DN-014
+    method:
+      - Pass full promise and decisions.
+      - Reject cross-node integration, migration absence, stale acceptance, unresolved request, and tracked edit.
+    allowed_replacements: [dependencies explicitly below each admitted workflow boundary]
+    durable_outputs: [audit scenario tests]
+  - id: PROOF-009
+    title: Atomic cutover and consumer setup proof
+    boundary: >-
+      Public setup plus cutover command/script against a populated legacy fixture and a fresh consumer fixture.
+    owner: DN-012
+    method:
+      - Verify no overwrite, complete inventory/dispositions, hash equality, crash recovery, clean native stores,
+        no OpenSpec dependency or old references, and successful consumer launch.
+    allowed_replacements: [temporary repositories, package installation command recorder]
+    durable_outputs: [setup, snapshot, absence, and distribution tests]
+  - id: PROOF-011
+    title: MCP control-plane contract proof
+    boundary: Public MCP tools over the real graph-aware engine.
+    owner: DN-009
+    method:
+      - Exercise change, validation, admission, job, request, evidence, health, history, and completion tool contracts.
+      - Assert generic task mutation and old lifecycle tools are absent.
+    allowed_replacements: [temporary engine store]
+    durable_outputs: [MCP integration tests]
+  - id: PROOF-012
+    title: Cockpit desktop/mobile workflow proof
+    boundary: Built Cockpit SPA and real FastAPI backend over a seeded native change/job store.
+    owner: DN-011
+    method:
+      - Navigate Changes, graph/list, Kanban, requests, attempts/findings/receipts, and legacy inventory.
+      - Resolve a decision, inspect stale/corrective chain, and verify keyboard/mobile behavior.
+      - Capture desktop/mobile screenshots and assert nonblank, nonoverlapping, bounded layout.
+    allowed_replacements: [fixture change/job store; no mocked HTTP API]
+    durable_outputs: [Vitest component tests, Playwright E2E, screenshots]
+  - id: PROOF-013
+    title: Complete native delivery audit
+    boundary: >-
+      Public native validation over durable incident/generic fixtures plus a fresh consumer workspace running the
+      complete /design to shape/build/accept/audit flow through real MCP, engine, shared writer policy, proof
+      checkout, and Cockpit.
+    owner: DN-013
+    method:
+      - Reject original browser lifecycle, workspace repair/removal, memory purge, and memory lifecycle defects
+        with stable codes, then admit their corrected forms.
+      - Run generic valid/invalid DAG, stale, supersession, and corrective-cycle cases.
+      - Execute a representative cross-module change and one corrective cycle.
+      - Assert exact receipts, no late unowned expansion, final audit, clean setup, and no active legacy surface.
+    allowed_replacements:
+      - fixture repositories below named proof boundaries
+      - true external services below admitted seams
+    durable_outputs: [incident and property-based fixture suite, end-to-end release scenario, audit receipt]
+  - id: PROOF-014
+    title: Orchestration, writer serialization, and proof-checkout proof
+    boundary: >-
+      Real orchestrator contract over public engine-selected waves, writer leases, claims, structured completion,
+      and disposable proof-checkout operations.
+    owner: DN-004
+    method:
+      - Dispatch assigned shape, build, accept, and audit agents from engine-selected waves without interpreting
+        agent prose.
+      - Assert tracked-file writers never overlap and accept or audit never overlaps a writer.
+      - Exercise crash, expired claim, rate-limit, stale lease, proof-checkout setup, containment, exact-commit
+        materialization, and orphan cleanup paths.
+      - Assert every structured attempt is finalized once and replanning reads current graph/job state.
+    allowed_replacements: [clock, subagent runner, temporary repository]
+    durable_outputs: [orchestrator scenario, writer-compatibility, and proof-checkout tests]
+  - id: PROOF-015
+    title: Cockpit backend contract proof
+    boundary: Public FastAPI HTTP and SSE routes over the real graph-aware engine.
+    owner: DN-010
+    method:
+      - Exercise change, graph, job, request, attempt, finding, receipt, health, legacy, conflict, and event contracts.
+      - Assert arbitrary task mutation and old lifecycle routes are absent.
+    allowed_replacements: [temporary engine store]
+    durable_outputs: [FastAPI integration tests]
+
+nodes:
+  - id: DN-001
+    title: Establish native change authority and semantic identity
+    outcome: >-
+      Strict four-file ChangeRevision loading, stable IDs/digests, immutable receipt storage, path safety, and
+      health diagnostics replace OpenSpec artifact resolution.
+    owns: [REQ-019, NEG-007]
+    supports: [REQ-001, REQ-016, NEG-004, KEEP-003, KEEP-007]
+    modules: [MOD-001]
+    produces: [IF-001]
+    consumes: []
+    dependencies: []
+    risks: [RISK-004]
+    proof: PROOF-001
+  - id: DN-002
+    title: Admit complete delivery revisions
+    outcome: >-
+      Layered deterministic admission validates complete delivery obligations, runs baseline/challenge inputs,
+      emits stable diagnostics, and atomically creates an admission receipt plus node shape jobs.
+    owns: [REQ-002, REQ-003]
+    supports: [REQ-018, NEG-010, KEEP-003, KEEP-004, KEEP-005]
+    modules: [MOD-001, MOD-008]
+    produces: [IF-002]
+    consumes: [IF-001]
+    dependencies: [DN-001]
+    risks: [RISK-003, RISK-007]
+    proof: PROOF-002
+  - id: DN-003
+    title: Replace task runtime with graph-linked jobs and receipts
+    outcome: >-
+      Purpose-specific job, attempt, finding, receipt, request, supersession, invalidation, transaction, recovery,
+      and health models provide one graph-aware runtime with no copied specification truth.
+    owns: [REQ-008, REQ-009, REQ-015, REQ-016, REQ-023, NEG-001, NEG-002, NEG-010, KEEP-006, KEEP-007]
+    supports: []
+    modules: [MOD-001, MOD-009]
+    produces: [IF-003]
+    consumes: [IF-001, IF-002]
+    dependencies: [DN-001, DN-002]
+    risks: [RISK-002, RISK-003, RISK-006]
+    proof: PROOF-003
+  - id: DN-004
+    title: Dispatch graph work and isolate exact-commit proof
+    outcome: >-
+      Graph-aware dispatch and orchestrator contracts release only engine-selected shape/build/accept/audit jobs,
+      serialize shared-worktree writers, recover attempts, replan from current state, and provide crash-safe
+      disposable proof checkouts.
+    owns: [REQ-013, REQ-014, REQ-022, NEG-006]
+    supports: [KEEP-006, KEEP-007]
+    modules: [MOD-001, MOD-003, MOD-009]
+    produces: [IF-004, IF-005]
+    consumes: [IF-003]
+    dependencies: [DN-003]
+    risks: [RISK-002, RISK-004]
+    proof: PROOF-014
+  - id: DN-005
+    title: Deliver the resumable native design and admission experience
+    outcome: >-
+      /ideate and /design operate one durable user-facing session that preserves intent/decisions, delegates
+      evidence and challenge, presents the complete graph, and admits only approved revisions.
+    owns: [REQ-001, KEEP-001, KEEP-002, KEEP-003, KEEP-008, KEEP-009]
+    supports: [REQ-002, REQ-015, KEEP-005]
+    modules: [MOD-003]
+    produces: [IF-006]
+    consumes: [IF-001, IF-002, IF-010]
+    dependencies: [DN-002, DN-009]
+    risks: [RISK-007]
+    proof: PROOF-004
+  - id: DN-006
+    title: Shape delivery nodes into bounded packet DAGs
+    outcome: >-
+      One shaper job per admitted node creates a complete outcome-cohesive packet plan and build/accept jobs while
+      mechanically rejecting global delivery expansion.
+    owns: [REQ-004, REQ-024, NEG-005, NEG-008, KEEP-004]
+    supports: [KEEP-003, KEEP-005]
+    modules: [MOD-001, MOD-003]
+    produces: [IF-007]
+    consumes: [IF-001, IF-002, IF-003, IF-004, IF-006, IF-010]
+    dependencies: [DN-003, DN-004, DN-005, DN-009]
+    risks: [RISK-007, RISK-011]
+    proof: PROOF-005
+  - id: DN-007
+    title: Build outcome-cohesive packets with inline adversarial review
+    outcome: >-
+      The builder consumes exact packet authority, implements all required outputs under one writer lease, commits
+      scoped work, resolves mandatory read-only review, and emits a valid build receipt.
+    owns: [REQ-005]
+    supports: [REQ-013, NEG-005, NEG-006, NEG-009, KEEP-004, KEEP-005, KEEP-007, KEEP-008]
+    modules: [MOD-003, MOD-009]
+    produces: [IF-008]
+    consumes: [IF-003, IF-004, IF-007, IF-010]
+    dependencies: [DN-004, DN-006, DN-009]
+    risks: [RISK-002, RISK-008, RISK-011]
+    proof: PROOF-006
+  - id: DN-008
+    title: Independently accept delivery nodes
+    outcome: >-
+      A read-only acceptor uses exact-commit proof checkouts, evaluates each delivery node against its contract and
+      descendant receipts, and routes typed findings into minimum corrective work without self-patching.
+    owns: [REQ-006, NEG-003, NEG-009, KEEP-005]
+    supports: [REQ-008, REQ-014, KEEP-004, KEEP-007, KEEP-008]
+    modules: [MOD-001, MOD-003, MOD-009]
+    produces: [IF-009]
+    consumes: [IF-001, IF-003, IF-004, IF-005, IF-007, IF-008, IF-010]
+    dependencies: [DN-004, DN-006, DN-007, DN-009]
+    risks: [RISK-008, RISK-009]
+    proof: PROOF-007
+  - id: DN-009
+    title: Expose the native control plane through MCP
+    outcome: >-
+      Strict MCP tools expose change admission, graph reads, job dispatch/completion, requests, evidence, and health
+      while generic task mutation and old lifecycle tools disappear.
+    owns: [REQ-020]
+    supports: [REQ-009, REQ-015, REQ-016, REQ-017, NEG-001, KEEP-006, KEEP-007]
+    modules: [MOD-002, MOD-008]
+    produces: [IF-010]
+    consumes: [IF-001, IF-002, IF-003, IF-004]
+    dependencies: [DN-004]
+    risks: [RISK-005]
+    proof: PROOF-011
+  - id: DN-010
+    title: Provide graph-aware Cockpit backend contracts and events
+    outcome: >-
+      FastAPI exposes typed change, graph, job, request, attempt, finding, receipt, health, legacy, and SSE
+      resources over the real engine with no arbitrary task transitions.
+    owns: [REQ-021]
+    supports: [REQ-010, REQ-015, REQ-016, KEEP-006, KEEP-007]
+    modules: [MOD-004, MOD-008]
+    produces: [IF-011]
+    consumes: [IF-001, IF-002, IF-003, IF-007, IF-008, IF-009, IF-010, IF-014]
+    dependencies: [DN-003, DN-004, DN-008, DN-014]
+    risks: [RISK-005]
+    proof: PROOF-015
+  - id: DN-011
+    title: Build the graph-aware Cockpit Changes and Kanban experience
+    outcome: >-
+      Cockpit keeps Kanban central and adds accessible scalable change, graph/list, request, evidence, invalidation,
+      exact-proof, and legacy inventory experiences across desktop and mobile.
+    owns: [REQ-010]
+    supports: [REQ-016, KEEP-006]
+    modules: [MOD-005, MOD-008]
+    produces: [IF-012]
+    consumes: [IF-011]
+    dependencies: [DN-010]
+    risks: [RISK-010, RISK-012]
+    proof: PROOF-012
+  - id: DN-012
+    title: Atomically cut over setup, stores, ecosystem, and documentation
+    outcome: >-
+      A hash-verified legacy snapshot and active-item disposition inventory preserve history while setup, seed,
+      hooks, docs, generated assets, agents, APIs, and stores switch entirely to the native control plane.
+    owns: [REQ-011, REQ-012, REQ-017, NEG-004]
+    supports: [NEG-007, KEEP-007]
+    modules: [MOD-003, MOD-006, MOD-007, MOD-008, MOD-009]
+    produces: [IF-013]
+    consumes: [IF-001, IF-002, IF-003, IF-004, IF-006, IF-007, IF-008, IF-009, IF-010, IF-011, IF-012, IF-014]
+    dependencies: [DN-005, DN-006, DN-007, DN-008, DN-009, DN-010, DN-011, DN-014]
+    risks: [RISK-001, RISK-005]
+    proof: PROOF-009
+  - id: DN-013
+    title: Prove the complete native delivery system and cutover
+    outcome: >-
+      Durable historical/generic fixtures and a fresh-consumer end-to-end scenario prove admission, node shaping,
+      build review, acceptance, correction, audit, Cockpit, setup, snapshot integrity, and absence of legacy
+      execution.
+    owns: [REQ-018]
+    supports: [NEG-010, KEEP-004, KEEP-005, KEEP-006, KEEP-007]
+    modules: [MOD-008]
+    produces: []
+    consumes: [IF-002, IF-003, IF-005, IF-009, IF-010, IF-011, IF-012, IF-013, IF-014]
+    dependencies: [DN-002, DN-003, DN-008, DN-009, DN-010, DN-011, DN-012, DN-014]
+    risks: [RISK-003, RISK-005, RISK-006, RISK-009, RISK-010, RISK-011, RISK-012]
+    proof: PROOF-013
+  - id: DN-014
+    title: Independently audit and close complete changes
+    outcome: >-
+      A distinct read-only auditor uses an exact-commit proof checkout to evaluate all accepted nodes, Product
+      Promise, decisions, migrations, normal workflows, and receipt validity before final closure or typed
+      corrective work.
+    owns: [REQ-007]
+    supports: [REQ-008, REQ-014, NEG-003, NEG-009, KEEP-004, KEEP-005, KEEP-007, KEEP-008]
+    modules: [MOD-001, MOD-003, MOD-009]
+    produces: [IF-014]
+    consumes: [IF-001, IF-003, IF-004, IF-005, IF-009, IF-010]
+    dependencies: [DN-004, DN-008, DN-009]
+    risks: [RISK-008, RISK-009]
+    proof: PROOF-008
+
+execution:
+  node_plans: {}

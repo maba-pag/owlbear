@@ -1,0 +1,878 @@
+---
+schema_version: 1
+change_id: r1-browser-corrected
+decisions:
+  - id: DEC-001
+    title: Use an atomic big-bang cutover
+    status: accepted
+    decided_at: 2026-07-21
+    authority: user
+    selected: atomic-cutover
+    rationale: >-
+      Incremental slices risk leaving temporary compatibility paths, minimal contracts,
+      and partially migrated behavior that become permanent. The pipeline may remain
+      unavailable until the complete replacement proves its own end-to-end contract.
+    options:
+      - id: incremental-slices
+        label: Incrementally replace one pipeline boundary at a time
+        confidence: 0.42
+        recommended: false
+        pros:
+          - Smaller individual changes
+          - Easier local rollback
+        cons:
+          - Requires temporary adapters and dual authority
+          - Lets unfinished architecture become production behavior
+        risks:
+          - Compatibility code survives indefinitely
+          - Later slices never implement the full intended improvement
+      - id: atomic-cutover
+        label: Design and replace the complete pipeline in one coordinated cutover
+        confidence: 0.94
+        recommended: true
+        pros:
+          - One coherent authority and lifecycle from first release
+          - Old paths can be deleted rather than bridged
+        cons:
+          - Larger implementation and verification effort
+          - Pipeline is unavailable until the replacement passes
+        risks:
+          - A broad defect can block the whole cutover
+
+  - id: DEC-002
+    title: Remove OpenSpec
+    status: accepted
+    decided_at: 2026-07-21
+    authority: user
+    selected: native-change-package
+    rationale: >-
+      After removing /opsx:propose, OpenSpec contributes mostly filesystem convention,
+      structural validation, and unused update/archive commands. OwlBear owns the quality
+      semantics and can implement the required native contract without the external npm,
+      generated-command, vocabulary, and duplicate-authority costs.
+    options:
+      - id: custom-openspec
+        label: Retain OpenSpec with an OwlBear schema
+        confidence: 0.28
+        recommended: false
+        pros:
+          - Reuses artifact DAG and CLI conventions
+        cons:
+          - Retains dependency and vocabulary mismatch
+          - OwlBear still owns substantive validation and execution
+        risks:
+          - Structural readiness is again mistaken for delivery readiness
+      - id: native-change-package
+        label: Replace OpenSpec with a native OwlBear authority package
+        confidence: 0.95
+        recommended: true
+        pros:
+          - One exact authority model
+          - No generated alternate workflow
+        cons:
+          - OwlBear owns loading, validation, revision, and archival
+        risks:
+          - Native scope grows into a generic specification framework
+      - id: kanban-only
+        label: Store all planning authority in Kanban
+        confidence: 0.18
+        recommended: false
+        pros:
+          - Fewest artifact systems
+        cons:
+          - Overloads operational state with product and architecture authority
+        risks:
+          - Change-level history and coherence are lost
+
+  - id: DEC-003
+    title: Make the admitted change graph authoritative
+    status: accepted
+    decided_at: 2026-07-21
+    authority: user
+    selected: change-graph-authority
+    rationale: >-
+      Product outcomes, interfaces, migrations, risks, dependencies, and proof ownership
+      require one durable graph-level authority. Kanban remains the implementation control
+      surface rather than becoming a second specification.
+    options:
+      - id: task-authority
+        label: Keep Kanban tasks authoritative
+        confidence: 0.24
+        recommended: false
+        pros:
+          - Preserves the current task model
+        cons:
+          - Copies product truth into fragments
+        risks:
+          - Node coverage passes while interface edges remain absent
+      - id: change-graph-authority
+        label: Make the admitted change graph authoritative
+        confidence: 0.95
+        recommended: true
+        pros:
+          - One source for delivery completeness and closure
+          - Exact revision invalidation
+        cons:
+          - Requires graph-aware engine, agents, and UI
+        risks:
+          - A poorly bounded schema becomes overcomplicated
+      - id: one-change-job
+        label: Execute each change as one monolithic job
+        confidence: 0.37
+        recommended: false
+        pros:
+          - Maximum context coherence
+        cons:
+          - No parallelism or failure isolation
+        risks:
+          - Context overflow and expensive retries
+
+  - id: DEC-004
+    title: Separate declarative authority from operational state
+    status: accepted
+    decided_at: 2026-07-21
+    authority: user
+    selected: declarative-graph-operational-jobs
+    rationale: >-
+      The change package owns semantic revisions, admission, and accepted outcomes. Kanban
+      owns claims, blocks, attempts, findings, evidence, and receipts. Joined identity is
+      change_id, semantic revision, and graph target ID; mutable runtime state is never
+      mirrored into the authority package.
+    options:
+      - id: mirrored-runtime
+        label: Persist node runtime in both graph and Kanban
+        confidence: 0.17
+        recommended: false
+        pros:
+          - One graph file appears to show complete progress
+        cons:
+          - Creates two writable copies of execution truth
+        risks:
+          - Drift and reconciliation races
+      - id: declarative-graph-operational-jobs
+        label: Keep declarative graph and operational Kanban jobs separate
+        confidence: 0.96
+        recommended: true
+        pros:
+          - One authority per concern
+          - Stale work is detectable by revision identity
+        cons:
+          - Views must join graph and runtime records
+        risks:
+          - Broken references if IDs and health checks are weak
+      - id: kanban-all-state
+        label: Keep all lifecycle and closure state only in Kanban
+        confidence: 0.21
+        recommended: false
+        pros:
+          - Smaller authority package
+        cons:
+          - Admission and closure become reconstructed from task history
+        risks:
+          - The change graph degrades into documentation
+
+  - id: DEC-005
+    title: Use a typed work graph instead of a fixed stage pipeline
+    status: accepted
+    decided_at: 2026-07-21
+    authority: user
+    selected: typed-work-graph
+    rationale: >-
+      Research, architecture, implementation, tests, documentation, migration, and proof
+      are kinds of necessary work, not universal lifecycle columns. A graph expresses only
+      the work the change needs, while Kanban statuses identify the agent transformation
+      currently requested.
+    options:
+      - id: expanded-fixed-pipeline
+        label: Add universal research, architecture, test, docs, and audit stages
+        confidence: 0.41
+        recommended: false
+        pros:
+          - Highly visible universal process
+        cons:
+          - Forces irrelevant stages and serial handoffs
+        risks:
+          - Stage completion replaces product coherence as the optimization target
+      - id: typed-work-graph
+        label: Model necessary work as typed graph nodes with semantic gates
+        confidence: 0.96
+        recommended: true
+        pros:
+          - Dependencies and parallelism follow the actual change
+          - Specialties remain explicit without universal ceremony
+        cons:
+          - Requires a graph engine and policy resolver
+        risks:
+          - Uncontrolled node-type proliferation
+      - id: autonomous-change-team
+        label: Let a persistent coordinator delegate dynamically without a fixed graph
+        confidence: 0.33
+        recommended: false
+        pros:
+          - Maximum adaptation
+        cons:
+          - Weak reproducibility and recovery
+        risks:
+          - Authority disappears into agent conversation
+
+  - id: DEC-006
+    title: Seal delivery nodes before shaping implementation packets
+    status: accepted
+    decided_at: 2026-07-21
+    authority: user
+    selected: two-level-graph
+    rationale: >-
+      Admission must be complete at the product, interface, migration, risk, dependency,
+      and proof level without pretending that hundreds of low-level implementation packets
+      can be designed accurately in one context. Each delivery node receives exactly one
+      bounded shaping job that creates its complete packet DAG.
+    options:
+      - id: full-packet-graph-upfront
+        label: Admit every implementation packet before any build work
+        confidence: 0.39
+        recommended: false
+        pros:
+          - Maximum initial predictability
+        cons:
+          - Speculative microtasks and excessive design context
+        risks:
+          - Recreates polished but incomplete decomposition
+      - id: two-level-graph
+        label: Seal delivery graph, then shape each node into packets
+        confidence: 0.97
+        recommended: true
+        pros:
+          - Global completeness with bounded execution shaping
+          - Independent nodes can shape and build according to dependencies
+        cons:
+          - Requires strict distinction between refinement and delivery expansion
+        risks:
+          - Local shaping hides a new global obligation as a packet
+      - id: recursive-expansion
+        label: Allow arbitrary recursive graph expansion
+        confidence: 0.45
+        recommended: false
+        pros:
+          - Maximum adaptability
+        cons:
+          - No stable completeness point
+        risks:
+          - Late graph expansion becomes routine
+
+  - id: DEC-007
+    title: Use purpose-specific Kanban jobs
+    status: accepted
+    decided_at: 2026-07-21
+    authority: user
+    selected: shape-build-accept-audit
+    rationale: >-
+      Every visible status must identify work an assigned agent can perform. Shape, build,
+      accept, and audit are distinct transformations with distinct contracts. Readiness,
+      dependency blocking, claims, staleness, cancellation, and failed attempts are
+      runtime properties rather than statuses.
+    options:
+      - id: mutable-parent
+        label: Move delivery-node parents and child tasks through mixed states
+        confidence: 0.48
+        recommended: false
+        pros:
+          - Familiar hierarchy
+        cons:
+          - Parent cards become passive and change purpose
+        risks:
+          - Status no longer means executable agent work
+      - id: shape-build-accept-audit
+        label: Use immutable-purpose shape, build, accept, and audit jobs
+        confidence: 0.97
+        recommended: true
+        pros:
+          - Honest status-to-agent mapping
+          - Exact attempt and evidence ownership
+        cons:
+          - More job records and graph-aware views
+        risks:
+          - Job proliferation if packets are too small
+      - id: overload-accept
+        label: Reuse one accept status for nodes and whole changes
+        confidence: 0.67
+        recommended: false
+        pros:
+          - Smaller role set
+        cons:
+          - Node proof and product audit are materially different
+        risks:
+          - Whole-change coherence becomes an overloaded special case
+
+  - id: DEC-008
+    title: Review packets in the builder session and accept nodes independently
+    status: accepted
+    decided_at: 2026-07-21
+    authority: user
+    selected: inline-review-independent-acceptance
+    rationale: >-
+      Per-packet reviewer sessions multiply initialization and lose the builder's warm
+      context. A mandatory read-only reviewer receives system-generated graph and diff
+      context inside the builder run; the builder repairs findings before receipt. A fresh
+      independent acceptor owns the meaningful delivery-node quality gate.
+    options:
+      - id: reviewer-per-packet
+        label: Dispatch a separate reviewer job for each packet
+        confidence: 0.61
+        recommended: false
+        pros:
+          - Maximum packet-level independence
+        cons:
+          - Doubles startup and context-loading cost
+        risks:
+          - Review overhead dominates large graphs
+      - id: inline-review-independent-acceptance
+        label: Inline read-only packet review with independent node acceptance
+        confidence: 0.92
+        recommended: true
+        pros:
+          - Fast repair loop in a warm implementation context
+          - Independence remains at the complete delivery boundary
+        cons:
+          - Packet review is nested rather than a Kanban status
+        risks:
+          - Builder omits relevant context from review
+      - id: node-only-review
+        label: Perform no packet review before node acceptance
+        confidence: 0.36
+        recommended: false
+        pros:
+          - Fewest sessions
+        cons:
+          - Local defects accumulate until assembly
+        risks:
+          - Expensive node-level rework
+
+  - id: DEC-009
+    title: Represent rejection with corrective jobs and superseding receipts
+    status: accepted
+    decided_at: 2026-07-21
+    authority: user
+    selected: append-corrective-jobs
+    rationale: >-
+      Findings target graph identities and invalidate only affected receipts. The engine
+      creates the minimum new shape or build jobs; re-acceptance and re-audit depend on
+      corrective receipts. Prior attempts remain immutable and cards never change purpose.
+    options:
+      - id: move-backward
+        label: Move failed acceptance cards backward to build or shape
+        confidence: 0.16
+        recommended: false
+        pros:
+          - Familiar and compact board
+        cons:
+          - One card changes agent contract and evidence meaning
+        risks:
+          - Stale evidence appears current
+      - id: reopen-original
+        label: Reopen completed jobs in place
+        confidence: 0.62
+        recommended: false
+        pros:
+          - Stable job IDs
+        cons:
+          - Completed records become mutable
+        risks:
+          - Accepted attempt provenance becomes ambiguous
+      - id: append-corrective-jobs
+        label: Append corrective jobs and superseding receipts
+        confidence: 0.96
+        recommended: true
+        pros:
+          - Exact immutable history and minimal invalidation
+          - Late planning expansion is measurable
+        cons:
+          - More records
+        risks:
+          - Repeated failures create noisy job chains
+
+  - id: DEC-010
+    title: Use one resumable design session before Kanban
+    status: accepted
+    decided_at: 2026-07-21
+    authority: user
+    selected: resumable-design-session
+    rationale: >-
+      One user-facing session owns the evolving native change and delegates research,
+      architecture, interface, proof, and consistency checks to fresh read-only specialists.
+      /ideate is an entry mode into the same change; admission is the session's explicit
+      terminal gate rather than a cross-command handoff.
+    options:
+      - id: separate-commands
+        label: Use separate ideate, research, design, and admit commands
+        confidence: 0.49
+        recommended: false
+        pros:
+          - Explicit stage responsibilities
+        cons:
+          - Repeated initialization and lossy handoffs
+        risks:
+          - Independently polished but incoherent artifacts
+      - id: resumable-design-session
+        label: Use one resumable design session with internal specialists
+        confidence: 0.95
+        recommended: true
+        pros:
+          - One coherent durable owner
+          - No chat-only handoff
+        cons:
+          - Sophisticated coordinator and checkpoints required
+        risks:
+          - The designer rationalizes its own design
+      - id: persistent-design-panel
+        label: Use a standing multi-agent design room
+        confidence: 0.29
+        recommended: false
+        pros:
+          - Specialist diversity
+        cons:
+          - High cost and authority arbitration
+        risks:
+          - Critic theater and transient discussion volume
+
+  - id: DEC-011
+    title: Use a four-file native authority package
+    status: accepted
+    decided_at: 2026-07-21
+    authority: user
+    selected: four-file-package
+    rationale: >-
+      Intent and design need readable reasoning; decisions and graph relations need strict
+      structure. A loader joins intent.md, design.md, decisions.yaml, and graph.yaml into
+      one validated semantic revision. Focused research remains optional and cited.
+    options:
+      - id: monolithic-markdown
+        label: Store all prose in one change.md plus graph.yaml
+        confidence: 0.58
+        recommended: false
+        pros:
+          - Few files
+        cons:
+          - Large unrelated diffs and weak claim ownership
+        risks:
+          - Becomes an unstructured transcript
+      - id: four-file-package
+        label: Use intent.md, design.md, decisions.yaml, and graph.yaml
+        confidence: 0.95
+        recommended: true
+        pros:
+          - Clear authority boundaries and machine validation
+          - Localized revision and human-readable rationale
+        cons:
+          - Cross-file coherence must be enforced
+        risks:
+          - Stable IDs drift without a joined validator
+      - id: all-structured
+        label: Store the complete change in YAML or JSON
+        confidence: 0.46
+        recommended: false
+        pros:
+          - Maximum machine validation
+        cons:
+          - Poor long-form reasoning and review
+        risks:
+          - Field completion replaces understanding
+
+  - id: DEC-012
+    title: Require layered delivery completeness at admission
+    status: accepted
+    decided_at: 2026-07-21
+    authority: user
+    selected: layered-admission
+    rationale: >-
+      Admission certifies durable approved intent, resolved material decisions,
+      repository-grounded design, complete delivery edges, migration and risk
+      dispositions, build-owned proof, deterministic consistency, independent semantic
+      challenge, and proportionate clean baselines for one exact revision. It does not
+      certify implementation or promise zero defects.
+    options:
+      - id: structural-only
+        label: Validate only fields, references, and graph cycles
+        confidence: 0.11
+        recommended: false
+        pros:
+          - Fast and deterministic
+        cons:
+          - Repeats OpenSpec's false-readiness failure
+        risks:
+          - Structurally valid but incoherent plans enter Kanban
+      - id: layered-admission
+        label: Certify layered delivery completeness
+        confidence: 0.97
+        recommended: true
+        pros:
+          - Directly addresses observed failures
+          - Receipt states evidence and limits honestly
+        cons:
+          - Requires semantic challenge and baseline execution
+        risks:
+          - Users or agents overread admission as implementation proof
+      - id: prototype-every-interface
+        label: Require executable prototypes before admission
+        confidence: 0.41
+        recommended: false
+        pros:
+          - Strong feasibility evidence
+        cons:
+          - Starts shadow implementation before admission
+        risks:
+          - Duplicate code and sunk-cost bias
+
+  - id: DEC-013
+    title: Keep acceptors and auditors read-only over tracked files
+    status: accepted
+    decided_at: 2026-07-21
+    authority: user
+    selected: diagnostic-setup-only
+    rationale: >-
+      Acceptors and auditors may inspect, execute, start services, create temporary stores
+      or fixtures under scratch, and capture logs or screenshots. They may not modify
+      tracked product, test, documentation, or graph files. Missing durable mechanisms
+      produce corrective jobs rather than self-approved patches.
+    options:
+      - id: exact-preplanned-only
+        label: Permit only exact admitted proof commands
+        confidence: 0.89
+        recommended: false
+        pros:
+          - Strongest proof discipline
+        cons:
+          - Harmless diagnostic variation requires rework
+        risks:
+          - Investigation is too constrained to falsify subtle failures
+      - id: diagnostic-setup-only
+        label: Permit read-only diagnostics and ephemeral setup
+        confidence: 0.97
+        recommended: true
+        pros:
+          - Practical independent falsification
+          - Reviewers cannot become builders
+        cons:
+          - Requires explicit replacement and scratch rules
+        risks:
+          - Ephemeral setup substitutes for the production boundary
+      - id: patch-and-approve
+        label: Allow small tracked patches and self-approval
+        confidence: 0.12
+        recommended: false
+        pros:
+          - Quick local closure
+        cons:
+          - Destroys reviewer independence
+        risks:
+          - Scope and evidence change without fresh review
+
+  - id: DEC-014
+    title: Serialize shared-worktree writers
+    status: accepted
+    decided_at: 2026-07-21
+    authority: user
+    selected: shared-worktree-single-writer
+    rationale: >-
+      OwlBear will retain the shared worktree. The orchestrator grants one global tracked-file
+      writer lease, so only one builder or other tracked-file-mutating job runs per wave.
+      Accept and audit run only against a clean committed worktree and cannot overlap a writer.
+    options:
+      - id: shared-worktree-single-writer
+        label: Use the shared worktree with one writer per wave
+        confidence: 0.82
+        recommended: true
+        pros:
+          - Simple Git model and direct integration
+          - No branch or worktree lifecycle
+        cons:
+          - Tracked-file build work is serialized
+        risks:
+          - Unrelated user changes contaminate exact-SHA proof
+      - id: change-branch-job-worktrees
+        label: Use a change branch and ephemeral job worktrees
+        confidence: 0.92
+        recommended: false
+        pros:
+          - Safe parallel writes and exact provenance
+        cons:
+          - Complex branch, merge, conflict, and cleanup control plane
+        risks:
+          - Integration policy becomes a second product
+      - id: serialized-change-worktree
+        label: Use one isolated worktree and serialize the whole change
+        confidence: 0.68
+        recommended: false
+        pros:
+          - Change isolation with simple revision
+        cons:
+          - No packet parallelism and extra worktree lifecycle
+        risks:
+          - Slow substantial changes
+
+  - id: DEC-015
+    title: Build outcome-cohesive packets with adaptive profiles
+    status: accepted
+    decided_at: 2026-07-21
+    authority: user
+    selected: outcome-cohesive-packets
+    rationale: >-
+      A build packet owns one implementable outcome and includes its production change,
+      proportionate tests, documentation, generated artifacts, migration, and proof.
+      Domain, risk, tool, and output metadata select skills and reviewer policy; separate
+      packets exist only for genuine dependencies, authorities, failure domains, tool
+      incompatibility, or context limits.
+    options:
+      - id: artifact-statuses
+        label: Create separate code, test, docs, migration, and proof jobs
+        confidence: 0.23
+        recommended: false
+        pros:
+          - Explicit specialist ownership
+        cons:
+          - Fragmented outcome and excessive handoffs
+        risks:
+          - Integration is deferred to the end
+      - id: outcome-cohesive-packets
+        label: Combine all required outputs for one outcome in a build packet
+        confidence: 0.96
+        recommended: true
+        pros:
+          - Strong locality and fewer agent sessions
+          - No cleanup phase for tests or docs
+        cons:
+          - Some builder profiles span several domains
+        risks:
+          - Packets become too large for one context
+      - id: implementation-plus-satellites
+        label: Use a core code job with optional specialist satellites
+        confidence: 0.69
+        recommended: false
+        pros:
+          - Flexible specialization
+        cons:
+          - Satellite ownership becomes inconsistent
+        risks:
+          - Proof and documentation are repeatedly deferred
+
+  - id: DEC-016
+    title: Deepen the Kanban package into the graph-aware engine
+    status: accepted
+    decided_at: 2026-07-21
+    authority: user
+    selected: deepen-kanban
+    rationale: >-
+      owlbear-kanban is already the transport-free control-plane core used by MCP and
+      Cockpit. It will own change loading, admission, jobs, leases, requests, receipts,
+      dispatch, health, and archive behind cohesive internal modules and one facade.
+    options:
+      - id: deepen-kanban
+        label: Redesign owlbear-kanban as the graph-aware control-plane engine
+        confidence: 0.93
+        recommended: true
+        pros:
+          - Kanban remains OwlBear's center
+          - Atomic graph and job transitions stay in one engine
+        cons:
+          - Requires internal package reorganization
+        risks:
+          - Current engine module becomes larger if not replaced by cohesive owners
+      - id: delivery-above-kanban
+        label: Add an owlbear-delivery package above Kanban
+        confidence: 0.54
+        recommended: false
+        pros:
+          - Explicit package-level planning/execution boundary
+        cons:
+          - Every invalidation and receipt crosses package ownership
+        risks:
+          - Split transactions and authority drift
+      - id: replace-kanban-package
+        label: Build a new control-plane package from scratch
+        confidence: 0.34
+        recommended: false
+        pros:
+          - Maximum implementation freedom
+        cons:
+          - Discards proven storage, request, health, and event behavior
+        risks:
+          - Unnecessary infrastructure rewrite
+
+  - id: DEC-017
+    title: Snapshot legacy history without runtime migration
+    status: accepted
+    decided_at: 2026-07-21
+    authority: user
+    selected: immutable-legacy-snapshot
+    rationale: >-
+      Cutover preserves OpenSpec packages and old Kanban tasks, archives, decisions, and
+      evidence as immutable history and generates an active-work disposition inventory.
+      No old runtime state is executable in the new engine; valuable unfinished work is
+      deliberately redesigned as a native change.
+    options:
+      - id: immutable-legacy-snapshot
+        label: Snapshot history and migrate no runtime state
+        confidence: 0.95
+        recommended: true
+        pros:
+          - Clean new authority with complete historical evidence
+          - No silent reinterpretation of defective plans
+        cons:
+          - Unfinished work must be replanned
+        risks:
+          - Active work is forgotten without explicit disposition
+      - id: semantic-active-migration
+        label: Translate active tasks and changes into native graphs
+        confidence: 0.29
+        recommended: false
+        pros:
+          - Existing work appears to continue
+        cons:
+          - Migration requires product and architecture judgment
+        risks:
+          - Legacy planning defects become admitted truth
+      - id: read-only-compatibility
+        label: Keep the old board available in the product
+        confidence: 0.16
+        recommended: false
+        pros:
+          - Convenient browsing
+        cons:
+          - Permanent dual models and UI paths
+        risks:
+          - Legacy execution returns through convenience
+
+  - id: DEC-018
+    title: Prove acceptance and audit in disposable exact-commit checkouts
+    status: accepted
+    decided_at: 2026-07-21
+    authority: user
+    selected: disposable-proof-checkout
+    rationale: >-
+      Builders retain the serialized shared worktree, but acceptors and auditors must
+      certify an exact commit independently of unrelated user changes. The engine creates
+      a temporary read-only checkout under .owlbear/scratch/proof for the tested commit,
+      uses the normal toolchain and environment, records the SHA and replacements, and
+      removes the checkout after proof.
+    options:
+      - id: globally-clean-shared-worktree
+        label: Require the shared worktree to be globally clean
+        confidence: 0.31
+        recommended: false
+        pros:
+          - No additional checkout mechanism
+        cons:
+          - Unrelated user work blocks acceptance and audit
+        risks:
+          - Users stash or discard work to satisfy the pipeline
+      - id: disposable-proof-checkout
+        label: Use a disposable read-only checkout of the tested commit
+        confidence: 0.97
+        recommended: true
+        pros:
+          - Reproducible exact-SHA proof
+          - Unrelated shared-worktree changes do not contaminate evidence
+        cons:
+          - Checkout setup and crash-safe cleanup are required
+        risks:
+          - Proof environment differs from normal use if toolchain and caches are not controlled
+      - id: declared-path-hash
+        label: Run in place and hash only declared changed paths
+        confidence: 0.19
+        recommended: false
+        pros:
+          - No checkout overhead
+        cons:
+          - Undeclared imports, configuration, and generated files can affect behavior
+        risks:
+          - Receipts claim isolation that was not actually exercised
+
+  - id: DEC-019
+    title: Separate node acceptance from final change audit
+    status: accepted
+    decided_at: 2026-07-21
+    authority: user
+    selected: split-acceptance-and-audit
+    rationale: >-
+      Delivery-node acceptance and whole-change audit have different graph scope,
+      evidence, context, and completion contracts. They use shared read-only proof
+      infrastructure but remain separate delivery nodes, agents, and Kanban job kinds.
+      Archive is the universal terminal disposition: a successful shape, build, accept,
+      or audit job issues its receipt and archives; the final audit receipt additionally
+      closes the change.
+    options:
+      - id: combined-assurance-node
+        label: Implement node acceptance and final audit in one delivery node
+        confidence: 0.58
+        recommended: false
+        pros:
+          - Shared proof and finding policy stays local
+          - One fewer shaping and acceptance cycle
+        cons:
+          - Bundles materially different evidence scopes and agent contexts
+        risks:
+          - Whole-change audit is treated as a variant and receives weaker proof
+      - id: split-acceptance-and-audit
+        label: Use separate delivery nodes and agent contracts
+        confidence: 0.94
+        recommended: true
+        pros:
+          - Each assurance boundary is independently shapeable and acceptable
+          - Final product coherence cannot hide inside node-level verification
+        cons:
+          - Adds one delivery node and associated shape/accept work
+        risks:
+          - Read-only and finding policies are duplicated instead of shared
+      - id: generalized-assurance-agent
+        label: Use one generalized agent for both target types
+        confidence: 0.33
+        recommended: false
+        pros:
+          - Smallest role set
+        cons:
+          - Overloads node and change reasoning in one contract
+        risks:
+          - Recreates collector ambiguity
+
+  - id: DEC-020
+    title: Bootstrap through a stable sibling runtime
+    status: accepted
+    decided_at: 2026-07-21
+    authority: user
+    selected: stable-sibling-carrier
+    rationale: >-
+      The replacement cannot execute its own native jobs before the new engine exists. The current
+      pipeline remains proven and can run from the synced ../owlbear main checkout while all change
+      authority, Kanban state, and product edits remain in owlbear-dev. This gives the bootstrap one
+      stable execution carrier without creating a runtime compatibility path in the replacement.
+    options:
+      - id: stable-sibling-carrier
+        label: Run the current carrier from synced main while implementing in owlbear-dev
+        confidence: 0.95
+        recommended: true
+        pros:
+          - Carrier code does not change underneath the replacement work
+          - Existing Kanban, scoped commits, verification, and recovery remain available
+        cons:
+          - Bootstrap evidence uses legacy task history until native receipts can be exercised
+        risks:
+          - Executable and workspace storage point at different checkouts unless cwd and revisions are recorded
+      - id: in-place-current-carrier
+        label: Keep running the current carrier from owlbear-dev
+        confidence: 0.46
+        recommended: false
+        pros:
+          - No MCP path switch or sibling synchronization
+        cons:
+          - Carrier imports can change while their replacement is being built
+        risks:
+          - A server restart loads a partially replaced control plane
+      - id: bootstrap-native-kernel
+        label: Build a minimal native kernel before projecting the remaining graph
+        confidence: 0.61
+        recommended: false
+        pros:
+          - Remaining work can dogfood native jobs earlier
+        cons:
+          - Creates a hybrid receipt and invalidation period
+        risks:
+          - Temporary self-hosting contracts become permanent architecture
