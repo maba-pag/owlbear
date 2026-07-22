@@ -1,10 +1,10 @@
 ---
 id: 1992
 title: 'P1-02: Persist immutable change receipts and diagnose authority health'
-status: collect
+status: archived
 priority: low
 created: 2026-07-22T01:58:50.836111+02:00
-updated: 2026-07-22T03:23:05.673215+02:00
+updated: 2026-07-22T03:23:47.635501+02:00
 tags:
   - phase-1
   - scope:core
@@ -40,7 +40,7 @@ proof_bundle: existing+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Bootstrap Projection Identity
@@ -124,3 +124,14 @@ PASS against builder commit `0c82b1f9b6545fd81a3d5aa1c58c3f41719d7319` plus the 
 
 ### Security Boundary
 The public store provides exclusive no-overwrite creation and does not follow or successfully publish attacker-substituted input during create/read/health. Mutation by an unrelated same-user writer after API completion is later filesystem tampering, detected by health rather than misrepresented as preventable by atomic create.
+
+[[2026-07-22T03:23:47+02:00]]
+## Collect Notes
+
+- Collected exact builder commit `0c82b1f9b6545fd81a3d5aa1c58c3f41719d7319` and verifier commit `bc3c433d0c35237dae6021183df3d1271a72b169`.
+- Builder ownership is limited to the #1992 task record, public receipt exports, receipt-store implementation, and receipt proof.
+- Verifier ownership is limited to the #1992 task record, authority descriptor hardening, receipt descriptor/inode hardening, and durable loader/receipt race proofs.
+- Verified all product/proof paths are clean after the verifier commit.
+- Confirmed dependency #1991 is archived completed and #1992 dependency status is `ok`.
+- Accepted verifier PASS evidence: 42 focused tests, 944 mapped regressions, clean lint/editor/diff checks, zero-finding non-mutating real admission health, and final independent challenger authorization.
+- Archival disposition: completed.
