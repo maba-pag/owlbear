@@ -21,6 +21,8 @@ class JobDiagnosticCode(StrEnum):
     DIGEST_MISMATCH = "ERR_JOB_DIGEST_MISMATCH"
     RECEIPT_MISMATCH = "ERR_JOB_RECEIPT_MISMATCH"
     UNKNOWN_TARGET = "ERR_JOB_TARGET_UNKNOWN"
+    UNKNOWN_FIELD = "ERR_JOB_FIELD_UNKNOWN"
+    SCHEMA_INVALID = "ERR_JOB_SCHEMA_INVALID"
 
 
 class JobDiagnostic(BaseModel):
@@ -43,6 +45,109 @@ class ShapeJob(BaseModel):
     delivery_digest: Digest
     target_node_id: str
     receipt_id: str
+
+
+JobKind = Literal["shape", "build", "accept", "audit", "supersession"]
+
+
+class JobRecord(BaseModel):
+    """Immutable operational job identity and references."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    schema_version: Literal[1]
+    job_id: int = Field(gt=0)
+    kind: JobKind
+    priority: int
+    created_at: str
+    updated_at: str
+    change_id: str
+    delivery_digest: Digest
+    target_node_id: str
+    node_plan_digest: Digest | None = None
+    predecessor_job_ids: tuple[int, ...] = ()
+    claim_id: str | None = None
+    block_id: str | None = None
+    pending_request_ids: tuple[str, ...] = ()
+    evidence_ids: tuple[str, ...] = ()
+    attempt_id: str | None = None
+    finding_id: str | None = None
+    receipt_id: str | None = None
+    superseded_by_receipt_id: str | None = None
+    disposition: str = "pending"
+
+
+class JobProjection(BaseModel):
+    """Authoritative delivery context assembled for an operational job."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    title: str
+    outcome: str
+    acceptance: tuple[str, ...]
+    modules: tuple[str, ...]
+    interfaces: tuple[str, ...]
+    proof: str
+
+
+class JobParseResult(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    job: JobRecord | None = None
+    diagnostics: tuple[JobDiagnostic, ...] = ()
+
+    @model_validator(mode="after")
+    def _require_one_outcome(self) -> JobParseResult:
+        if (self.job is None) == (not self.diagnostics):
+            detail = "job result must contain either one job or diagnostics"
+            raise ValueError(detail)
+        return self
+
+
+def parse_job_mapping(value: Mapping[str, object]) -> JobParseResult:
+    """Parse a schema-version-1 native job mapping with stable diagnostics."""
+    try:
+        job = JobRecord.model_validate(dict(value))
+    except ValueError as exc:
+        message = str(exc)
+        code = JobDiagnosticCode.SCHEMA_INVALID
+        if "kind" in message:
+            code = JobDiagnosticCode.WRONG_KIND
+        elif "target_node_id" in message:
+            code = JobDiagnosticCode.UNKNOWN_TARGET
+        elif "Extra inputs" in message:
+            code = JobDiagnosticCode.UNKNOWN_FIELD
+        return JobParseResult(diagnostics=(JobDiagnostic(code=code, detail=message),))
+    return JobParseResult(job=job)
+
+
+def project_job(
+    job: JobRecord,
+    revision: ChangeRevision,
+    node_plan: Mapping[str, object] | None = None,
+) -> JobProjection:
+    """Resolve normative job context from the authoritative revision and plan."""
+    if job.change_id != revision.change_id or job.delivery_digest != revision.delivery_digest:
+        raise ValueError(JobDiagnosticCode.DIGEST_MISMATCH.value)
+    node = next((item for item in revision.graph.nodes if item.id == job.target_node_id), None)
+    if node is None:
+        raise ValueError(JobDiagnosticCode.UNKNOWN_TARGET.value)
+    requirements = {item.id: item.statement for item in revision.graph.requirements}
+    plan = node_plan or {}
+    acceptance_value = plan.get("acceptance", tuple(requirements[item] for item in node.owns if item in requirements))
+    acceptance = tuple(acceptance_value) if isinstance(acceptance_value, (list, tuple)) else (str(acceptance_value),)
+    return JobProjection(
+        title=node.title,
+        outcome=node.outcome,
+        acceptance=acceptance,
+        modules=node.modules,
+        interfaces=tuple(
+            interface.name
+            for interface in revision.graph.interfaces
+            if interface.id in node.produces or interface.id in node.consumes
+        ),
+        proof=node.proof,
+    )
 
 
 class JobGeneration(BaseModel):
@@ -163,4 +268,16 @@ def read_job_generation(
     return (generation if not diagnostics else None), tuple(diagnostics)
 
 
-__all__ = ["JobDiagnostic", "JobDiagnosticCode", "JobGeneration", "ShapeJob", "plan_shape_jobs", "read_job_generation"]
+__all__ = [
+    "JobDiagnostic",
+    "JobDiagnosticCode",
+    "JobGeneration",
+    "JobParseResult",
+    "JobProjection",
+    "JobRecord",
+    "ShapeJob",
+    "parse_job_mapping",
+    "plan_shape_jobs",
+    "project_job",
+    "read_job_generation",
+]

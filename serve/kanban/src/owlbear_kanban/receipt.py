@@ -123,6 +123,62 @@ class ReceiptRecord(_ReceiptModel):
         return {**envelope, **payload}
 
 
+class ReceiptParseDiagnosticCode(StrEnum):
+    UNKNOWN_FIELD = "ERR_RECEIPT_FIELD_UNKNOWN"
+    UNKNOWN_KIND = "ERR_RECEIPT_KIND_INVALID"
+    SCHEMA_INVALID = "ERR_RECEIPT_SCHEMA_INVALID"
+    TARGET_MISSING = "ERR_RECEIPT_TARGET_MISSING"
+    PREDECESSOR_MISSING = "ERR_RECEIPT_PREDECESSOR_MISSING"
+    EVIDENCE_MISSING = "ERR_RECEIPT_EVIDENCE_MISSING"
+    CODE_REVISION_MISSING = "ERR_RECEIPT_CODE_REVISION_MISSING"
+
+
+class ReceiptParseDiagnostic(_ReceiptModel):
+    code: ReceiptParseDiagnosticCode
+    detail: str
+    target: str | None = None
+
+
+class ReceiptParseResult(_ReceiptModel):
+    receipt: ReceiptRecord | None = None
+    diagnostics: tuple[ReceiptParseDiagnostic, ...] = ()
+
+    @model_validator(mode="after")
+    def _require_one_outcome(self) -> ReceiptParseResult:
+        if (self.receipt is None) == (not self.diagnostics):
+            detail = "receipt parse result must contain one outcome"
+            raise ValueError(detail)
+        return self
+
+
+def parse_receipt_mapping(value: Mapping[str, object]) -> ReceiptParseResult:
+    """Parse a version-one receipt and validate purpose-specific evidence links."""
+    try:
+        record = ReceiptRecord.from_mapping(value)
+    except (PydanticValidationError, TypeError, ValueError) as exc:
+        message = str(exc)
+        code = ReceiptParseDiagnosticCode.SCHEMA_INVALID
+        if "kind" in message:
+            code = ReceiptParseDiagnosticCode.UNKNOWN_KIND
+        elif "Extra inputs" in message:
+            code = ReceiptParseDiagnosticCode.UNKNOWN_FIELD
+        return ReceiptParseResult(diagnostics=(ReceiptParseDiagnostic(code=code, detail=message),))
+    if record.kind == "admission":
+        return ReceiptParseResult(receipt=record)
+    required = {
+        "target_node_id": ReceiptParseDiagnosticCode.TARGET_MISSING,
+        "predecessor_receipt_ids": ReceiptParseDiagnosticCode.PREDECESSOR_MISSING,
+        "evidence": ReceiptParseDiagnosticCode.EVIDENCE_MISSING,
+        "code_revision": ReceiptParseDiagnosticCode.CODE_REVISION_MISSING,
+    }
+    diagnostics = tuple(
+        ReceiptParseDiagnostic(code=code, detail=f"receipt payload is missing {field}")
+        for field, code in sorted(required.items())
+        if field not in record.payload
+    )
+    return ReceiptParseResult(diagnostics=diagnostics) if diagnostics else ReceiptParseResult(receipt=record)
+
+
 class ReceiptDiagnosticCode(StrEnum):
     """Stable receipt-store diagnostic codes."""
 
@@ -587,8 +643,12 @@ __all__ = [
     "ReceiptDiagnostic",
     "ReceiptDiagnosticCode",
     "ReceiptKind",
+    "ReceiptParseDiagnostic",
+    "ReceiptParseDiagnosticCode",
+    "ReceiptParseResult",
     "ReceiptRecord",
     "ReceiptResult",
     "ReceiptStore",
     "change_health",
+    "parse_receipt_mapping",
 ]
