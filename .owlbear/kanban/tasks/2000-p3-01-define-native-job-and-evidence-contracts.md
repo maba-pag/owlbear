@@ -4,7 +4,7 @@ title: 'P3-01: Define native job and evidence contracts'
 status: build
 priority: high
 created: 2026-07-22T21:58:09.010514+02:00
-updated: 2026-07-23T00:37:38.503317+02:00
+updated: 2026-07-23T00:38:00.546584+02:00
 tags:
   - phase-3
   - scope:core
@@ -126,3 +126,9 @@ Proof guidance: exercise public parsers, serializers, and authority projection w
 | 3 | builder | Add focused public parser/projection tests covering AC-1 and AC-2, including serialization absence of normative fields. | `serve/kanban/tests/test_jobs.py` | Existing tests only cover legacy shape-generation behavior. |
 
 - Final route: REJECT to build.
+
+
+## Verify Correction
+- The audit parser smoke recorded in the preceding Verify Notes is not a defect: admitted design section 3.5 defines `audit` as change-wide, and section 4.2 defines node-plan digests only for delivery-node plans. Therefore the prior receipt-specific finding and Required Follow-up row 2 are superseded and require no work.
+- The REJECT remains required for the independent AC-1 defect (empty `target_node_id` accepted without a stable diagnostic) and the missing focused public parser/projection coverage needed to prove AC-1 and AC-2. The builder should retain the authority-consistent receipt matrix already implemented unless focused authority comparison finds a separate concrete violation.
+
