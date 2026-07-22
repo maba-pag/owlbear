@@ -14,6 +14,13 @@ from owlbear_kanban.admission import (
     AdmissionSeverity,
     evaluate_admission,
 )
+from owlbear_kanban.admission_transaction import (
+    AdmissionConflictError,
+    AdmissionPublicationError,
+    AdmissionTransaction,
+    AdmissionValidationError,
+    validate_and_admit,
+)
 from owlbear_kanban.agent_view import AgentView
 from owlbear_kanban.change import (
     ChangeDiagnostic,
@@ -56,10 +63,14 @@ from owlbear_kanban.storage_io import atomic_write
 
 __all__ = [
     "AdmissionAssessment",
+    "AdmissionConflictError",
     "AdmissionDisposition",
     "AdmissionEvidence",
     "AdmissionFinding",
+    "AdmissionPublicationError",
     "AdmissionSeverity",
+    "AdmissionTransaction",
+    "AdmissionValidationError",
     "AgentView",
     "BoardConfig",
     "ChangeDiagnostic",
@@ -95,4 +106,5 @@ __all__ = [
     "load_change",
     "plan_shape_jobs",
     "read_job_generation",
+    "validate_and_admit",
 ]
