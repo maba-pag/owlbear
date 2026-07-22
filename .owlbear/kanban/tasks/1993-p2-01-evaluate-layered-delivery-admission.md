@@ -1,10 +1,10 @@
 ---
 id: 1993
 title: 'P2-01: Evaluate layered delivery admission'
-status: verify
+status: build
 priority: medium
 created: 2026-07-22T05:49:37.434986+02:00
-updated: 2026-07-22T06:08:38.830494+02:00
+updated: 2026-07-22T06:10:41.134486+02:00
 tags:
   - phase-1
   - scope:core
@@ -99,3 +99,22 @@ Proof guidance: exercise the public evaluation boundary with the real `ChangeRev
 - Commands run: `uv run --project serve/kanban pytest serve/kanban/tests/test_admission.py -q` -> 2 passed; `uv run --project serve/kanban ruff check serve/kanban/src/owlbear_kanban/admission.py serve/kanban/tests/test_admission.py` -> all checks passed.
 - Builder-challenger result: pass; no concrete blockers.
 - Follow-up risks: broader A1-A10 graph consistency and historical defective/corrected fixture coverage remain candidates for verifier follow-up if the shaped matrix requires more than this local contract repair.
+
+[[2026-07-22T06:10:41+02:00]]
+## Verify Notes
+- Evidence reviewed: Builder Notes, public exports in `serve/kanban/src/owlbear_kanban/__init__.py`, evaluator implementation in `serve/kanban/src/owlbear_kanban/admission.py`, and focused tests in `serve/kanban/tests/test_admission.py`.
+- Named authorities checked: `DN-002`, `REQ-002`, `REQ-003`, `IF-002`, `RISK-003`, `RISK-007`, and `PROOF-002` in `.owlbear/changes/replace-delivery-pipeline/graph.yaml`; admission sections 5 and 9 in `.owlbear/changes/replace-delivery-pipeline/design.md`.
+- Change Module Map: no ownership deviation. The changed admission module, public package export, and focused test remain within the mapped kanban authority boundary.
+- Normal-path boundary exercised: the public `load_change` and `evaluate_admission` API evaluated the real `replace-delivery-pipeline` `ChangeRevision`; replacements remained below admission.
+- Checks run: `uv run pytest serve/kanban/tests/test_admission.py -q` returned `2 passed`; Ruff on the three touched files returned `All checks passed!`.
+- Finding: a public evaluator probe supplied complete structured challenge evidence and the real revision digest, but omitted `baseline.digest` and `approval.digest`. It returned `{'admitted': True, 'codes': []}`. This contradicts AC-1 and AC-4 and design section 9.4, which requires approval recorded against the delivery digest; baseline and approval evidence must be digest-bound.
+- Finding: AC-2, AC-3, and AC-5 remain unproven and materially unimplemented. The evaluator does not supply the A1-A10-equivalent deterministic matrix for incomplete interface/migration/risk/proof ownership, disconnected/unreachable assembly, boundary-substituting proof, authority conflicts, or node-bound violations. The focused suite has only the admitted smoke case and free-form challenge rejection, not the four historical defective/corrected fixture families.
+- Patches applied: none. Digest binding could be locally repaired, but the missing required invariant matrix and fixtures constitute builder-owned implementation scope.
+- Verifier-challenger: not invoked because this route is a rejection, not a PASS claim.
+- Final route: reject to build.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Require baseline and approval evidence to carry the evaluated delivery digest; add public-API tests for missing, stale, and mismatched evidence digests. | `serve/kanban/src/owlbear_kanban/admission.py`, `serve/kanban/tests/test_admission.py` | The verifier probe admitted digest-free baseline and approval evidence. |
+| 2 | builder | Implement and test the complete A1-A10-equivalent deterministic admission matrix plus defective/corrected historical fixtures required by AC-2, AC-3, and AC-5. | `serve/kanban/src/owlbear_kanban/admission.py`, `serve/kanban/tests/test_admission.py`, task-owned fixture paths as needed | Design section 9.1 and `PROOF-002`; current focused suite has two tests. |
