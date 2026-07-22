@@ -1,10 +1,10 @@
 ---
 id: 1992
 title: 'P1-02: Persist immutable change receipts and diagnose authority health'
-status: build
+status: verify
 priority: low
 created: 2026-07-22T01:58:50.836111+02:00
-updated: 2026-07-22T01:58:50.836111+02:00
+updated: 2026-07-22T02:54:23.778453+02:00
 tags:
   - phase-1
   - scope:core
@@ -61,3 +61,35 @@ Out of scope: assembling admission receipts; predecessor, supersession, code-rev
 Resolve normative behavior from `DN-001`, `RISK-004`, and `PROOF-001` in `.owlbear/changes/replace-delivery-pipeline/graph.yaml`. This bootstrap task cannot add, weaken, or supersede those obligations.
 
 Proof guidance: exercise the public receipt store and change-health boundary with a temporary filesystem replacement only; run focused package pytest and the existing atomic-write and health suites. Durable tests are justified by immutable evidence and path-security/data-loss risk.
+
+[[2026-07-22T02:54:23+02:00]]
+## Builder Notes
+
+### Change Envelope
+- Added a public immutable schema-version-1 receipt store for `admission`, `shape`, `build`, `accept`, `audit`, and `supersession` envelopes under one loaded `ChangeRevision`.
+- Added contained exclusive create/read behavior, stable conflict and structured diagnostics, and deterministic read-only authority/receipt health.
+- Kept admission assembly, receipt-chain/code/proof validity, invalidation, jobs, repair, MCP, HTTP, and UI out of scope.
+
+### Files Changed
+- `serve/kanban/src/owlbear_kanban/receipt.py`: frozen common envelope and JSON-mode kind payload, diagnostics/results, no-overwrite atomic publish, store reads, and change health.
+- `serve/kanban/src/owlbear_kanban/__init__.py`: additive public exports.
+- `serve/kanban/tests/test_change_receipts.py`: durable public-boundary receipt, path-safety, conflict, and non-mutating health proof.
+
+### Module Map And Test Justification
+- `change.py` remains the four-file loader owner. A cohesive flat `receipt.py` follows the package's current layout while incrementally implementing the admitted receipt-store and health owners; creating the future `models/` and `stores/` hierarchy in this packet would be premature.
+- No dependency added. Existing `validate_path_containment`, `make_yaml`, and public `load_change` are reused.
+- Durable tests pass the Rent Test because immutable evidence creation, no-overwrite replay, symlink/traversal defense, and read-only health protect shared security and data-loss boundaries that are difficult to verify manually.
+
+### Evidence
+- Real bootstrap admission receipt round-tripped with all root payload fields, nested immutability, and JSON-mode timestamp normalization.
+- Temporary public store create/read/replay raised `ERR_RECEIPT_CONFLICT`, preserved the original 24,554 bytes, and left no temp residue.
+- Public health on the committed admitted package returned zero findings and checked the four authority files plus its admission receipt.
+- Digest drift returned one deterministic `ERR_RECEIPT_REVISION_MISMATCH`; repeated health preserved bytes and nanosecond mtimes.
+- Focused receipt/health suite: 16 passed.
+- Mapped kanban regression: 936 passed.
+- Repository lint passed all applicable hooks on the three changed source/test paths; four unrelated TODO notices were informational. Editor diagnostics and `git diff --check` were clean.
+- AST size check found no function over 50 lines.
+- Final `builder-challenger`: `decision: pass`; exact snapshot authorized to advance to verify.
+
+### Residual Boundary
+- Receipt validity chains and admission/job transactions remain assigned to later admitted delivery nodes.

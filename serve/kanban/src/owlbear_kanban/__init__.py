@@ -25,6 +25,17 @@ from owlbear_kanban.errors import (
     ValidationError,
 )
 from owlbear_kanban.models import BoardConfig, Task, TaskSummary
+from owlbear_kanban.receipt import (
+    ChangeHealthFinding,
+    ChangeHealthResult,
+    ReceiptConflictError,
+    ReceiptDiagnostic,
+    ReceiptDiagnosticCode,
+    ReceiptRecord,
+    ReceiptResult,
+    ReceiptStore,
+    change_health,
+)
 from owlbear_kanban.storage_io import atomic_write
 
 __all__ = [
@@ -32,6 +43,8 @@ __all__ = [
     "BoardConfig",
     "ChangeDiagnostic",
     "ChangeDiagnosticCode",
+    "ChangeHealthFinding",
+    "ChangeHealthResult",
     "ChangeLoadResult",
     "ChangeRevision",
     "ConcurrencyError",
@@ -40,11 +53,18 @@ __all__ = [
     "DeliveryGraph",
     "KanbanEngine",
     "NotFoundError",
+    "ReceiptConflictError",
+    "ReceiptDiagnostic",
+    "ReceiptDiagnosticCode",
+    "ReceiptRecord",
+    "ReceiptResult",
+    "ReceiptStore",
     "Task",
     "TaskSummary",
     "ValidationError",
     "WorkSession",
     "atomic_write",
+    "change_health",
     "compute_delivery_digest",
     "load_change",
 ]
