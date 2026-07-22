@@ -1,10 +1,10 @@
 ---
 id: 1998
 title: 'P2-06: Atomically admit revision and shape jobs'
-status: verify
+status: collect
 priority: low
 created: 2026-07-22T13:46:36.783681+02:00
-updated: 2026-07-22T21:30:05.486112+02:00
+updated: 2026-07-22T21:34:05.620623+02:00
 tags:
   - phase-1
   - scope:core
@@ -91,3 +91,23 @@ Proof guidance: exercise the real public validate/admit operation over temporary
 - Implementation: stable validation/publication errors; POSIX `flock` for cross-process admission serialization; directory `fsync` after final links; rollback removes only files created by the active attempt; package-root exports updated.
 - Builder-challenger result: pass. Confirmed exports, stable failure wrapping, rollback, replay/conflict behavior, and cross-process serialization.
 - Follow-up risks: dedicated durable tests for injected publication failure and true multi-process concurrency remain absent; current focused regressions and challenger review cover the implementation boundary.
+
+[[2026-07-22T21:34:05+02:00]]
+## Verify Notes
+- Evidence reviewed: Builder commit `92827ba54`; Builder Notes; focused code path in `admission_transaction.py`; current committed scope is the admission transaction owner plus package exports.
+- Named authorities checked: corrected historical fixture `design.md` sections 9 and 13; `graph.yaml` DN-002, IF-002, and PROOF-002. The implementation exposes public `validate_and_admit`, binds receipts/generations to the revision digest, evaluates before publishing, and stages receipt plus generation under cross-process coordination.
+- Change Module Map: no deviation. The two changed runtime modules match public validate/admit composition and package-root export ownership. No public interface beyond the planned package export was introduced.
+- Normal-path boundary exercised: real public `validate_and_admit` ran over identity-preserving temporary copies of tracked R1-R4 historical fixtures. No command, evaluator, receipt store, job planner, or public admission operation was replaced.
+- Replacements below boundary: temporary workspace filesystem only, as allowed by PROOF-002. The injected failure callback is the task-specified lower publication-boundary failure injection.
+- Checks run:
+  - `uv run --project . pytest serve/kanban/tests/test_admission.py serve/kanban/tests/test_jobs.py serve/kanban/tests/test_change_receipts.py -q` passed: 47 passed.
+  - `uv run --project . ruff check serve/kanban/src/owlbear_kanban/admission_transaction.py serve/kanban/src/owlbear_kanban/__init__.py` passed.
+  - Public unsafe receipt identity returned `ERR_ADMISSION_VALIDATION`; a defective R1 fixture returned unadmitted with no receipt or job store created.
+  - Corrected public admission created one receipt and 14 shape jobs; exact replay returned the matching existing receipt/generation.
+  - Injected publication failure returned `ERR_ADMISSION_PUBLICATION` with empty receipt and job inventories.
+  - R1-R4 defective fixture matrix rejected all four without mutation; all four corrected fixtures created complete generations.
+  - Two OS processes admitted the same corrected fixture concurrently; both returned the same receipt/generation, and disk contained exactly one receipt and one generation file.
+- Findings: no local defects or scope drift. Maintained focused tests do not directly call public admission, but the executed real-boundary fixture proof supplies the required transaction evidence.
+- Patches applied: none.
+- Verifier-challenger result: pass. It confirmed the declared scope and public-boundary proof are sufficient.
+- Final route: collect.
