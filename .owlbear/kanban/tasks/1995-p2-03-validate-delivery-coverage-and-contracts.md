@@ -1,10 +1,10 @@
 ---
 id: 1995
 title: 'P2-03: Validate delivery coverage and contracts'
-status: verify
+status: build
 priority: medium
 created: 2026-07-22T13:45:55.105472+02:00
-updated: 2026-07-22T15:39:04.511453+02:00
+updated: 2026-07-22T15:46:34.251427+02:00
 tags:
   - phase-1
   - scope:core
@@ -113,3 +113,24 @@ builder crashed once; releasing claim before retry: parallel dispatch returned n
 - Commands run: `uv run pytest serve/kanban/tests/test_admission.py` (6 passed); `uv run ruff check serve/kanban/src/owlbear_kanban/admission.py serve/kanban/tests/test_admission.py` (passed); `git diff --check -- serve/kanban/src/owlbear_kanban/admission.py serve/kanban/tests/test_admission.py` (passed).
 - Builder-challenger result: pass. Confirmed scope, test rent, implementation coverage, and proof.
 - Follow-up risks: broader admission categories remain outside this task's shaped scope.
+
+[[2026-07-22T15:42:23+02:00]]
+verifier crashed once; releasing claim before retry: parallel dispatch returned no output
+
+[[2026-07-22T15:46:34+02:00]]
+## Verify Notes
+- Evidence reviewed: task AC-1 through AC-4; both Builder Notes; task commit `1ce2f5ec8`; and the named authorities `.owlbear/changes/replace-delivery-pipeline/design.md` sections 5.1, 5.3, and 9.1 plus research A1 through A7.
+- Named authority check: the design requires a changed interface to have a producer and consumer inventory, and deterministic admission rejects incomplete interface producer/consumer fields.
+- Change Module Map: implementation and tests remain in the mapped public admission evaluator boundary (`serve/kanban/src/owlbear_kanban/admission.py`, `serve/kanban/tests/test_admission.py`); no architectural deviation.
+- Normal-path boundary exercised: `evaluate_admission` evaluated real `ChangeRevision` data loaded from `.owlbear/changes/replace-delivery-pipeline`; no command, evaluator, or revision was mocked.
+- Focused checks: `uv run pytest serve/kanban/tests/test_admission.py` passed (6 tests); `uv run ruff check serve/kanban/src/owlbear_kanban/admission.py serve/kanban/tests/test_admission.py` passed; `git diff --check -- serve/kanban/src/owlbear_kanban/admission.py serve/kanban/tests/test_admission.py` passed.
+- Finding: mutating a real interface's `consumers` to an empty tuple produces no `DV-004` finding from the public evaluator. This contradicts AC-2 and design section 9.1's incomplete producer/consumer requirement. The direct probe reported `empty-consumers False` with only the expected digest mismatch (`EV-001`).
+- Patches applied: none; this is an implementation gap, not a verifier-local correction.
+- Verifier-challenger: not called because the proposed route is REJECT, not PASS.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Make an empty interface consumer inventory emit `DV-004` from the public admission evaluator; add focused real-`ChangeRevision` regression coverage and rerun the focused admission suite plus Ruff. | `serve/kanban/src/owlbear_kanban/admission.py`; `serve/kanban/tests/test_admission.py` | AC-2; `.owlbear/changes/replace-delivery-pipeline/design.md` section 9.1; verifier public-evaluator probe |
+
+Final route: REJECT to build.
