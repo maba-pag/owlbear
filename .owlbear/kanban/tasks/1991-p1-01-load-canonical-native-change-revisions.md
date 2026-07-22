@@ -1,10 +1,10 @@
 ---
 id: 1991
 title: 'P1-01: Load canonical native change revisions'
-status: verify
+status: collect
 priority: medium
 created: 2026-07-22T01:58:43.460559+02:00
-updated: 2026-07-22T02:16:40.858508+02:00
+updated: 2026-07-22T02:36:39.541139+02:00
 tags:
   - phase-1
   - scope:core
@@ -87,3 +87,29 @@ Proof guidance: exercise the public loader and digest boundary with a temporary 
 
 ### Residual Boundary
 - Receipt persistence and read-only change health remain intentionally owned by dependency-gated packet #1992.
+
+[[2026-07-22T02:36:39+02:00]]
+## Verify Notes
+
+### Boundary And Authority
+- Verified builder commit `85ca0918447b4cb5a3437ef11a4f6328a7f98ee5` against task AC-1 through AC-3 and admitted `DN-001`, `IF-001`, `RISK-004`, `PROOF-001`, plus design sections 3 and 4.
+- The changed production modules match the shaped map: native authority remains in `owlbear_kanban.change`, package-root exports are additive, and existing naming/YAML owners are reused. No interface or scope deviation found.
+- Exercised the normal public `load_change` and digest boundary with only temporary filesystem replacement below it.
+
+### Findings And Patches
+- Patched `DecisionOption.confidence` to reject non-finite YAML numbers before canonical JSON hashing; the public loader now returns `ERR_CHANGE_SCHEMA_INVALID` and no revision instead of raising `ValueError`.
+- Patched diagnostic projection to expose bounded path basenames rather than absolute paths.
+- Removed unrestricted unsafe change IDs from diagnostic targets. Serialized probes confirmed temporary/workspace roots and absolute caller inputs are absent.
+- Files patched by verifier: `serve/kanban/src/owlbear_kanban/change.py`. No durable test, helper, abstraction, or unrelated cleanup added.
+
+### Evidence
+- Focused public loader/export suite: 47 passed.
+- Mapped kanban regression: 920 passed.
+- Real admitted package: zero diagnostics, 20 accepted decisions, `IF-001` and `DN-001` resolve, JSON projection succeeds, and digest equals `9387dea789fb3334cd50e6f784d06847880bd006402b33d5ab2c45888c2202a8`.
+- Adversarial probes covered non-finite confidence, symlinked changes root, missing-file path redaction, and unsafe-ID target redaction.
+- Repository lint passed all applicable hooks on the four reviewed source/test paths; four unrelated TODO notices were informational. Editor diagnostics and `git diff --check` were clean.
+- Initial challenger rejected absolute diagnostic paths. Rechallenge rejected raw unsafe-ID targets. Both findings were repaired and revalidated.
+- Final `verifier-challenger`: `decision: pass`; all prior findings closed and PASS to collect explicitly authorized.
+
+### Route
+PASS. Advance #1991 to collect for mechanical archival.

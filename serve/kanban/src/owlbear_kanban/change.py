@@ -75,7 +75,7 @@ class _BoundaryModel(BaseModel):
 class DecisionOption(_BoundaryModel):
     id: str
     label: str
-    confidence: float
+    confidence: Annotated[float, Field(allow_inf_nan=False)]
     recommended: bool
     pros: FrozenSequence[str]
     cons: FrozenSequence[str]
@@ -359,7 +359,7 @@ def _fail(
         ChangeDiagnostic(
             code=code,
             detail=detail,
-            path=str(path) if path is not None else None,
+            path=path.name if path is not None else None,
             target=target,
         )
     )
@@ -372,7 +372,7 @@ def _validate_change_path(changes_dir: Path, change_id: str) -> Path:
         or PurePosixPath(change_id).is_absolute()
         or PureWindowsPath(change_id).is_absolute()
     ):
-        _fail(ChangeDiagnosticCode.PATH_UNSAFE, "change ID is not a safe canonical identifier", target=change_id)
+        _fail(ChangeDiagnosticCode.PATH_UNSAFE, "change ID is not a safe canonical identifier")
 
     if changes_dir.is_symlink():
         _fail(ChangeDiagnosticCode.PATH_UNSAFE, "changes directory must not be a symlink", path=changes_dir)
