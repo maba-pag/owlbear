@@ -4,7 +4,7 @@ title: 'Bootstrap DN-002: Admit complete delivery revisions'
 status: collect
 priority: high
 created: 2026-07-22T01:05:33.577098+02:00
-updated: 2026-07-22T05:49:55.647043+02:00
+updated: 2026-07-22T13:47:11.814466+02:00
 tags:
   - bootstrap-projection
   - change:replace-delivery-pipeline
@@ -17,6 +17,10 @@ depends_on:
   - 1977
   - 1993
   - 1994
+  - 1995
+  - 1996
+  - 1997
+  - 1998
 ac:
   - 'AC-1: Shaper, while this task is in `shape`, reads `DN-002` at the recorded digest
     and creates one outcome-cohesive packet DAG whose task records reference the same
@@ -70,3 +74,13 @@ Proof guidance: exercise the public validate/admit boundary before jobs exist, i
 
 [[2026-07-22T05:49:55+02:00]]
 Shaping completed at the admitted digest. Created build-ready packet DAG #1993 -> #1994, recorded independent challenger PASS and user authorization, and added both packet dependencies to the aggregate.
+
+[[2026-07-22T13:47:11+02:00]]
+## Shape Notes
+- Orchestration audit found one rejected packet (#1993) after three builder/verifier retry cycles; #1994 never dispatched because its dependency remained open.
+- Root cause was the original shape: #1993 exceeded the task budget by combining evidence schemas, graph algorithms, generic properties, warnings/serialization, historical integration fixtures, and no-write proof; #1994 combined job schema, storage, atomicity, concurrency, replay, cleanup, and readback. The AC named neither the R1-R4 fixture contracts nor a collision-free diagnostic catalog.
+- Repair classification: non-material connected scope/dependency split. No admitted authority or digest changed.
+- Repaired DAG: #1993 evidence gates; #1994 job generations; #1995 `DV-003` through `DV-007` coverage/contracts; #1996 `DV-008`, `DV-010`, and `DV-011` assembly/authority; #1997 eight R1-R4 fixtures; #1998 assembled atomic admission. Dependencies permit #1994 and #1995 to run after #1993, then #1996, #1997, and final #1998.
+- Diagnostic governance: evidence uses `EV-001` through `EV-005`; admitted `DV-*` category meanings are not overloaded; free-text proof substitution remains an independent challenger judgment.
+- The first repair challenge failed on code collision and unverifiable DV-009 automation. Both were corrected; the second `shaper-challenger` returned PASS with no material user decision required.
+- Parent remains in collect and now depends on #1993 through #1998 plus completed DN-001 predecessor #1977.

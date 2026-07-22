@@ -1,45 +1,38 @@
 ---
 id: 1993
-title: 'P2-01: Evaluate layered delivery admission'
+title: 'P2-01: Validate layered admission evidence'
 status: build
 priority: medium
 created: 2026-07-22T05:49:37.434986+02:00
-updated: 2026-07-22T06:16:18.350179+02:00
+updated: 2026-07-22T13:47:11.783842+02:00
 tags:
   - phase-1
   - scope:core
   - admission
-  - validation
   - type:build
   - rigor:thorough
   - change:replace-delivery-pipeline
   - node:DN-002
   - packet:DN-002-PK-001
+  - evidence
+  - diagnostics
 parent: 1978
 depends_on: []
 ac:
-  - 'AC-1: Given the admitted historical fixture plus complete challenge dispositions,
-    passing baselines, explicit approval, and known limits bound to its digest, the
-    public evaluator returns no error findings, preserves warnings and limits, and
-    repeated evaluation produces identical ordered findings and serialized output;
-    verify through focused public-API tests.'
-  - 'AC-2: Given A1-A10 table cases for uncovered or multiply-owned obligations, incomplete
-    interfaces, migrations, risks, or proofs, and conflicting authority, each case
-    returns its assigned stable error code with severity, target, evidence, detail,
-    and remediation; verify through the public evaluator.'
-  - 'AC-3: Given duplicate or dangling identities, cycles or disconnected nodes, invalid
-    dependency assembly, boundary-substituting proof, stale digests, or node-bound
-    violations, property cases reject deterministically and leave authority, receipt,
-    and job paths absent or byte-for-byte unchanged.'
-  - 'AC-4: Given missing, incomplete, failed, stale, or digest-mismatched challenge,
-    baseline, approval, or limit evidence, stable findings block admission; challenge
-    evidence must cover every requirement, interface, migration, risk, proof, workflow,
-    and node, and a free-form pass cannot satisfy the gate.'
-  - 'AC-5: Given durable fixtures for the four known historical defective-plan families
-    and corrected equivalents, each defect rejects before persistence and each correction
-    reaches an error-free assessment; verify with `uv run pytest serve/kanban/tests/test_admission.py
-    -q` and Ruff on touched files.'
-proof_bundle: existing+challenge
+  - 'AC-1: Given one loaded revision and complete digest-bound evidence, the public
+    evaluator returns a schema-version-1 immutable assessment containing the revision
+    digest, sorted findings, explicit limits, and deterministic JSON serialization;
+    an `EV-002` warning remains visible without entering `errors` or changing `admitted`
+    to false.'
+  - 'AC-2: Given a challenge with a missing or extra target, error disposition, or
+    blank source evidence for a requirement, workflow, interface, migration, risk,
+    proof, or node, the evaluator returns `EV-002` with severity, target, evidence,
+    detail, and remediation; warning dispositions remain non-blocking.'
+  - 'AC-3: Evidence/revision mismatch returns `EV-001`; a missing command result,
+    nonzero exit, or baseline digest mismatch returns `EV-003`; false or mismatched
+    approval returns `EV-004`; empty limits return `EV-005`; complete passing evidence
+    produces none of `EV-001` through `EV-005`.'
+proof_bundle: behavioral+challenge
 blocked: false
 block_reason:
 claimed_at:
@@ -177,3 +170,36 @@ Proof guidance: exercise the public evaluation boundary with the real `ChangeRev
 | 1 | builder | Implement the complete A1-A10-equivalent graph and evidence invariant matrix with stable findings, warning/limit preservation, deterministic serialization, and public-boundary property coverage. | `serve/kanban/src/owlbear_kanban/admission.py`, `serve/kanban/tests/test_admission.py` | AC-1 through AC-4; `graph.yaml` `PROOF-002` |
 | 2 | builder | Add the four required historical defective-plan fixtures and corrected counterparts, then prove failure remains write-free and corrections are error-free. | `serve/kanban/tests/test_admission.py` and focused fixture paths | AC-5; `PROOF-002` |
 | 3 | builder | Reconcile the task scope's write exclusion with `DN-002` and `PROOF-002` success requirements. If atomic receipt and initial shape-job creation remain part of this task, implement and prove it at the public validate/admit boundary; otherwise return the contract to shape for an explicit scope split. | `serve/kanban/src/owlbear_kanban/admission.py` or shape artifacts | `graph.yaml` `DN-002`, `IF-002`, `PROOF-002` |
+
+[[2026-07-22T06:18:05+02:00]]
+## Builder Notes
+- Change envelope: public deterministic admission evaluation over one loaded ChangeRevision with complete graph/evidence validation, stable findings, and durable historical fixtures.
+- Files changed: none; the existing implementation was inspected but not modified.
+- Change Module Map deviations: none.
+- Proof selected: `uv run pytest serve/kanban/tests/test_admission.py -q` -> 3 passed; `uv run ruff check serve/kanban/src/owlbear_kanban/admission.py serve/kanban/tests/test_admission.py` -> all checks passed.
+- Durable-test justification: no tests added because the current implementation does not yet satisfy the shaped invariant matrix; adding narrow tests would not close the acceptance gap.
+- Builder-challenger result: FAIL. The challenger identified that admission.py covers only a narrow subset of graph/evidence checks and the three tests do not cover the required A1-A10 matrix, warning/limit preservation, deterministic serialization, or four historical defective/corrected fixture families.
+- Follow-up risk: task needs a scoped implementation pass against DN-002/REQ-002/REQ-003/IF-002/RISK-003/RISK-007/PROOF-002 and design.md sections 5 and 9 before it can advance to verify.
+
+[[2026-07-22T06:18:40+02:00]]
+## Builder Notes
+- Change envelope: evaluated the existing public admission boundary and the shaped AC/authority contract before editing.
+- Files changed: none.
+- Change Module Map deviations: none.
+- Proof selected: focused admission suite plus direct authority inspection.
+- Durable-test justification: no tests added because the task is blocked by a contract contradiction, not an observed local defect.
+- Commands run: `uv run pytest serve/kanban/tests/test_admission.py -q` -> 3 passed.
+- Builder-challenger result: not called because this is a reject, not a DONE claim.
+- Follow-up risks: the task cannot be implemented coherently until shape resolves the contradiction between Scope/Outcome, which explicitly require a side-effect-free evaluator and exclude receipt/job writes, and `PROOF-002`/design.md, which require successful admission to atomically create the admission receipt and one shape job per delivery node. The remaining A1-A10 matrix and historical fixtures should be reshaped only after that boundary is settled.
+
+## Decision
+Rejected to shape. `graph.yaml` and `design.md` state that admission creates an admission receipt and shape jobs atomically, while task Scope/Outcome explicitly exclude all receipt/job writes and describe `evaluate_admission` as side-effect-free. Implementing either interpretation would violate a named authority or the task contract. Please split the pure evaluator from the committing validate/admit operation, or amend the authoritative contract and ACs before returning this task to build.
+
+[[2026-07-22T13:47:11+02:00]]
+## Shape Notes
+- Rejection source: verifier cycles in commits `677dcd319`, `a34ec125e`, and `39742ef51` repeatedly found that the original five AC bundled typed evidence, graph invariants, property proof, warnings/serialization, historical fixtures, and mutation concerns. Builders repaired only the latest concrete probe and explicitly deferred the unnamed matrix.
+- Repair classification: connected non-material task split. The admitted DN-002 behavior, interfaces, modules, architecture, and PROOF-002 boundary are unchanged.
+- Operative repaired contract: this packet now owns only immutable typed challenge, baseline, approval, warning, limit, and assessment behavior. Existing `admission.py` work is retained and hardened; graph completeness belongs to #1995 and #1996, historical fixtures to #1997, and publication to #1998.
+- Diagnostic authority: `DV-003` through `DV-012` remain reserved for the admitted receipt meanings. Replace the current conflicting `DV-010`, `DV-011`, `DV-012`, and invented `DV-013` evidence emissions with `EV-001` evidence digest, `EV-002` challenge, `EV-003` baseline, `EV-004` approval, and `EV-005` limits.
+- Proof-substitution judgment remains a structured per-proof challenge disposition; it is not inferred from free-text proof fields.
+- `shaper-challenger` first found the code collision and unverifiable DV-009 automation, then returned PASS after correction. Route: build with no packet dependency.
