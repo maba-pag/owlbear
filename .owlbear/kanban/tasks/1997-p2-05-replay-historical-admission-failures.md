@@ -4,7 +4,7 @@ title: 'P2-05: Replay historical admission failures'
 status: build
 priority: medium
 created: 2026-07-22T13:46:19.736647+02:00
-updated: 2026-07-22T20:56:37.561926+02:00
+updated: 2026-07-22T21:09:40.202084+02:00
 tags:
   - phase-1
   - scope:core
@@ -94,3 +94,33 @@ Use one table-driven durable test at `serve/kanban/tests/test_historical_admissi
 - Shaper-challenger: initial draft failed because R1 omitted its assembled composition-proof regression. The corrected draft adds `DV-007` for R1; remaining readiness, receipt/digest, cohesion, and proof-boundary checks passed.
 - Board audit: parent remains #1978; dependency #1996 is archived completed; #1997 remains in `build` with dependency status `ok`; #1998 remains blocked only behind #1997. Prior untracked fixture files are experiments rather than authority and were not modified by this repair.
 - Resulting route: dispatch #1997 to builder; successful completion unblocks #1998 for the following wave.
+
+[[2026-07-22T21:07:17+02:00]]
+## Builder Notes
+- Change envelope: historical-admission fixture packages and their focused regression only; no production evaluator changes.
+- Files changed: eight native fixture graph.yaml files under serve/kanban/tests/fixtures/historical-admission/ and serve/kanban/tests/test_historical_admission_fixtures.py.
+- Change Module Map deviations: none.
+- Proof selected: exact R1-R4 (code,target) findings, corrected admission, four-file package shape, canonical digest binding, deterministic findings/JSON, and schema_version=1.
+- Durable-test justification: retained and strengthened the task-scoped regression because the task explicitly requires long-lived historical admission coverage and these fixture pairs protect easy-to-regress diagnostic targets.
+- Commands run: uv run --project . pytest serve/kanban/tests/test_historical_admission_fixtures.py -q; uv run --project . pytest serve/kanban/tests/test_historical_admission_fixtures.py serve/kanban/tests/test_admission.py -q.
+- Result: 24 passed.
+- Builder-challenger: pass; no blockers, no scope drift, no missing AC proof.
+- Follow-up risks: none identified within the shaped scope.
+
+[[2026-07-22T21:09:40+02:00]]
+## Verify Notes
+- Evidence reviewed: task AC-1 through AC-4, Builder Notes, the task-owned fixture packages, and `serve/kanban/tests/test_historical_admission_fixtures.py`.
+- Named authorities checked: `.owlbear/research/planning-workflow-root-cause-and-redesign.md` section 4.2 requires the four incident regressions to fail for their omissions and pass once assigned; `.owlbear/changes/replace-delivery-pipeline/design.md` section 17.2 requires stable defective diagnostics and corrected admission. The eight fixtures represent R1-R4 with the intended direct `load_change` plus `evaluate_admission` boundary.
+- Change Module Map: no deviation. Task-owned changes are limited to eight four-file packages below `serve/kanban/tests/fixtures/historical-admission/` and `serve/kanban/tests/test_historical_admission_fixtures.py`; no production admission files changed.
+- Normal-path boundary exercised: direct public `load_change` and `evaluate_admission` across all eight packages produced the exact required defective `(code, target)` sets; corrected packages produced `admitted=True` and `[]` findings. No receipt content or post-load revision mutation was used.
+- Checks run: `uv run --project . pytest serve/kanban/tests/test_historical_admission_fixtures.py serve/kanban/tests/test_admission.py -q` passed (24 passed); `uv run --project . ruff check serve/kanban/tests/test_historical_admission_fixtures.py` passed.
+- Finding: AC-1 and AC-2 require the durable test to establish zero corrected findings, but the test only asserts `first.admitted` for corrected variants. A regression that leaves corrected findings while retaining admission would still pass this maintained fixture suite.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Add an explicit empty-findings assertion for each corrected package in the table-driven historical fixture regression; rerun the named fixture, maintained admission, and Ruff checks; commit the complete task-owned fixture and test delivery. | `serve/kanban/tests/test_historical_admission_fixtures.py`, task-owned fixtures | Corrected variants must prove both `admitted=True` and zero findings as required by AC-1 and AC-2. |
+
+- Patches applied: none; this is a durable proof gap, not a verifier-local patch.
+- Verifier-challenger: not invoked because the task is rejected, not proposed for PASS.
+- Final route: REJECT to build.
