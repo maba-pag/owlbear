@@ -179,6 +179,7 @@ def _evaluate_delivery_contracts(revision: ChangeRevision) -> list[AdmissionFind
         consumers = [nodes.get(consumer) for consumer in interface.consumers]
         if (
             producer is None
+            or not interface.consumers
             or interface.id not in producer.produces
             or any(node is None or interface.id not in node.consumes for node in consumers)
             or not all(

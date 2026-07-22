@@ -113,6 +113,20 @@ def test_interface_without_migration_disposition_returns_dv004() -> None:
     assert any(item.code == "DV-004" and item.target == interface.id for item in assessment.errors)
 
 
+def test_interface_without_consumers_returns_dv004() -> None:
+    result = load_change(Path(".owlbear/changes"), "replace-delivery-pipeline")
+    assert result.revision is not None
+    graph = result.revision.graph
+    interface = graph.interfaces[0]
+    replacement = interface.model_copy(update={"consumers": ()})
+    interfaces = tuple(replacement if item.id == interface.id else item for item in graph.interfaces)
+    revision = result.revision.model_copy(update={"graph": graph.model_copy(update={"interfaces": interfaces})})
+
+    assessment = evaluate_admission(revision, _admission_evidence(revision))
+
+    assert any(item.code == "DV-004" and item.target == interface.id for item in assessment.errors)
+
+
 def test_proof_owner_outside_acceptance_predecessors_returns_dv007() -> None:
     result = load_change(Path(".owlbear/changes"), "replace-delivery-pipeline")
     assert result.revision is not None

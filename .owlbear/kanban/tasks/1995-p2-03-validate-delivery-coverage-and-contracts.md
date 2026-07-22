@@ -1,10 +1,10 @@
 ---
 id: 1995
 title: 'P2-03: Validate delivery coverage and contracts'
-status: build
+status: collect
 priority: medium
 created: 2026-07-22T13:45:55.105472+02:00
-updated: 2026-07-22T15:46:34.251427+02:00
+updated: 2026-07-22T15:56:12.226693+02:00
 tags:
   - phase-1
   - scope:core
@@ -134,3 +134,28 @@ verifier crashed once; releasing claim before retry: parallel dispatch returned 
 | 1 | builder | Make an empty interface consumer inventory emit `DV-004` from the public admission evaluator; add focused real-`ChangeRevision` regression coverage and rerun the focused admission suite plus Ruff. | `serve/kanban/src/owlbear_kanban/admission.py`; `serve/kanban/tests/test_admission.py` | AC-2; `.owlbear/changes/replace-delivery-pipeline/design.md` section 9.1; verifier public-evaluator probe |
 
 Final route: REJECT to build.
+
+[[2026-07-22T15:53:17+02:00]]
+## Builder Notes
+- Change envelope: DV-003 through DV-007 delivery coverage and contract validation only.
+- Files changed: `serve/kanban/src/owlbear_kanban/admission.py`, `serve/kanban/tests/test_admission.py`.
+- Change Module Map deviations: none; implementation stayed within the mapped admission validator and focused tests.
+- Proof selected: public `evaluate_admission` over real `ChangeRevision` cases.
+- Durable-test justification: focused regression coverage is required by shaped scope and protects duplicate accountable ownership, unknown interface migration disposition, proof ownership outside acceptance predecessors, and empty interface consumers.
+- Commands run: `uv run pytest serve/kanban/tests/test_admission.py` (7 passed); `uv run ruff check serve/kanban/src/owlbear_kanban/admission.py serve/kanban/tests/test_admission.py` (all checks passed); `git diff --check -- serve/kanban/src/owlbear_kanban/admission.py serve/kanban/tests/test_admission.py` (passed).
+- Builder-challenger result: pass; no concrete blockers.
+- Follow-up risks: none identified within the scoped DV-003 through DV-007 contract surface.
+
+[[2026-07-22T15:56:12+02:00]]
+## Verify Notes
+- Evidence reviewed: AC-1 through AC-4; Builder Notes; task commit `1ce2f5ec8`; current evaluator and focused test diff; the admitted receipt; `.owlbear/changes/replace-delivery-pipeline/design.md` sections 5.1, 5.3, and 9.1; and research A1 through A7.
+- Named authorities checked: the admitted receipt defines DV-003 accountable ownership/support, DV-004 producer/consumer inventory plus contract fields and migration disposition, DV-005 migration completeness, DV-006 risk disposition, and DV-007 build-capable predecessor proof ownership. `migration: null` is the schema's explicit no-migration disposition and appears in multiple admitted interface records; invalid migration references remain DV-004.
+- Change Module Map: no deviation. The implementation and regression tests remain in `serve/kanban/src/owlbear_kanban/admission.py` and `serve/kanban/tests/test_admission.py`, the mapped public evaluator boundary.
+- Normal-path boundary exercised: `evaluate_admission` was run over real `ChangeRevision` data from `load_change(Path(".owlbear/changes"), "replace-delivery-pipeline")`; no command, evaluator, or revision was replaced.
+- Replacements used below that boundary: none.
+- Checks run: `uv run pytest serve/kanban/tests/test_admission.py` (7 passed); `uv run ruff check serve/kanban/src/owlbear_kanban/admission.py serve/kanban/tests/test_admission.py` (passed); and `git diff --check` for those paths (passed).
+- Direct public-evaluator probes: removing a migration's ordered steps emitted DV-005; removing a risk's scenarios emitted DV-006; setting a valid interface migration disposition to null emitted no DV-004, as required by the schema/authority.
+- Findings: none. AC-1 is covered by duplicate-ownership evaluation and regression coverage. AC-2 is covered by interface producer/consumer, contract, migration, and proof validation with invalid-migration and empty-consumer regressions. AC-3 is implemented for the full migration/risk field sets and directly probed. AC-4 checks proof fields, build-capable owner, and ownership predecessor reachability with regression coverage.
+- Patches applied: none.
+- Verifier-challenger: pass. It confirmed public-boundary coverage, sufficient evidence, matched two-file scope, and no unresolved AC.
+- Final route: PASS to collect.
