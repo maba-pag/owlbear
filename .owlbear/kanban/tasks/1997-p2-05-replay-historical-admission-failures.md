@@ -4,7 +4,7 @@ title: 'P2-05: Replay historical admission failures'
 status: build
 priority: medium
 created: 2026-07-22T13:46:19.736647+02:00
-updated: 2026-07-22T16:33:35.957348+02:00
+updated: 2026-07-22T20:56:37.561926+02:00
 tags:
   - phase-1
   - scope:core
@@ -20,18 +20,22 @@ parent: 1978
 depends_on:
   - 1996
 ac:
-  - 'AC-1: The R1 defective fixture returns `DV-004` or `DV-007` for missing retained-page
-    lifecycle or composition ownership; the R2 defective fixture returns the applicable
-    `DV-004`, `DV-005`, and `DV-006` findings for missing transport/callback, deletion,
-    and destructive-safety obligations; corrected pairs have no error findings.'
-  - 'AC-2: The R3 defective fixture returns `DV-007` for absent assembled frontend/API/engine
-    proof ownership; the R4 defective fixture returns `DV-004` or `DV-007` for absent
-    generated/frontend contract and clean-build predecessor; corrected pairs have
-    no error findings.'
-  - 'AC-3: The public evaluator loads eight tracked four-file fixtures through `load_change`;
-    repeated evaluation returns identical code/target ordering, and fixture entities
-    use general graph fields rather than browser, workspace, or memory-specific validator
-    branches.'
+  - 'AC-1: Given the tracked R1 and R2 defective packages loaded through `load_change`,
+    `evaluate_admission` returns code/target sets R1 `{(DV-004, IF-001), (DV-007,
+    PROOF-001)}` and R2 `{(DV-004, IF-001), (DV-005, MIG-001), (DV-006, RISK-001)}`;
+    their corrected packages return `admitted=true` with zero findings.'
+  - 'AC-2: Given the tracked R3 and R4 defective packages loaded through `load_change`,
+    `evaluate_admission` returns code/target sets R3 `{(DV-007, PROOF-001)}` and R4
+    `{(DV-004, IF-001), (DV-007, PROOF-001)}`; their corrected packages return `admitted=true`
+    with zero findings.'
+  - 'AC-3: Given the eight package directories under `serve/kanban/tests/fixtures/historical-admission/`,
+    each package loads its own `intent.md`, `design.md`, `decisions.yaml`, and `graph.yaml`,
+    and its computed semantic digest equals `revision.delivery_digest` plus `graph.admission.delivery_digest`;
+    the test performs no post-load revision mutation and requires no receipt file.'
+  - 'AC-4: Given two evaluations of the same loaded package and digest-bound T1 evidence,
+    ordered `(code, target)` findings and schema-version-1 JSON serialization are
+    identical; the focused fixture suite and maintained admission regression pass
+    without production admission changes.'
 proof_bundle: critical+challenge
 blocked: false
 block_reason:
@@ -46,79 +50,47 @@ archival_refs: []
 - `packet_id`: `DN-002-PK-005`
 
 ## Outcome
-Eight durable four-file change fixtures preserve the four historical defective/corrected plan pairs and prove the general admission evaluator rejects the original omissions without incident-specific code.
+Eight tracked four-file native change packages preserve four incident-grounded defective/corrected graph pairs. The public loader and evaluator reject each historical omission with stable generic findings before work creation and admit its corrected counterpart.
 
 ## Scope
-In scope: R1 browser retained-page lifecycle/composition; R2 workspace transport/callback, final deletion, and destructive safety; R3 memory purge assembled frontend/API/engine proof; R4 memory lifecycle generated/frontend contract and clean-build predecessor; loader/evaluator integration and stable finding expectations.
+In scope: minimal native graph pairs for R1 browser retained-page ownership and composition proof, R2 workspace transport/callback plus deletion and destructive safety, R3 assembled memory-purge proof, and R4 generated/frontend lifecycle contract plus clean-build proof; semantic fixture identity; canonical digest rebinding; direct `load_change` and `evaluate_admission` proof.
 
-Out of scope: new browser, workspace, or memory-specific validator fields or branches; generic invariant design; receipt/job mutation; atomic publication.
+Out of scope: production evaluator changes; browser-, workspace-, or memory-specific validator branches; copies of the full `replace-delivery-pipeline` graph; receipt-store writes; job publication; atomic admission.
+
+Existing untracked files under `serve/kanban/tests/fixtures/historical-admission/` and `serve/kanban/tests/test_historical_admission_fixtures.py` are prior experiments, not fixture authority. Reuse or replace them only when they satisfy this contract.
 
 ## Authority
-Fixture behavior comes from section 4.2 of `.owlbear/research/planning-workflow-root-cause-and-redesign.md` and section 17.2 of `design.md`. Fixture structure uses the admitted four-file authority schema and `DV-004` through `DV-007` category meanings.
+Use the incident record in `.owlbear/research/planning-workflow-root-cause-and-redesign.md` sections 3.2 and 4.2, the historical regression requirement in `.owlbear/changes/replace-delivery-pipeline/design.md` section 17.2, the native four-file schemas in `owlbear_kanban.change`, and diagnostic semantics in `owlbear_kanban.admission`.
 
-Proof guidance: load tracked defective/corrected packages through `load_change`, then call the public evaluator with complete T1 evidence. Run the focused fixture suite and admission regression; these fixtures are a named durable output of `PROOF-002`.
+The pair names and graph entities may be minimal, but each corrected package must be an admissible native graph rather than a renamed copy of the current delivery-pipeline graph. Use stable target IDs `IF-001`, `MIG-001`, `RISK-001`, and `PROOF-001` where the incident contract below names them.
 
-[[2026-07-22T16:24:28+02:00]]
-## Builder Notes
-- Change envelope: one focused regression test module for the eight R1-R4 defective/corrected four-file admission cases; no production validator changes or durable fixture files outside the test harness.
-- Files changed: `serve/kanban/tests/test_historical_admission_fixtures.py`.
-- Change Module Map deviations: none; public `load_change` and `evaluate_admission` are the exercised owners.
-- Proof selected: table-driven public-boundary admission proof. Each case loads a temporary four-file package, corrected variants admit, defective variants produce the applicable generic DV-004/DV-005/DV-006/DV-007 family, and repeated evaluations preserve code/target ordering.
-- Durable-test justification: required historical regression floor; protects against incident-specific validator branches and loss of deterministic admission behavior.
-- Commands run: `uv run --project serve/kanban pytest serve/kanban/tests/test_historical_admission_fixtures.py -q` -> 8 passed; `uv run --project serve/kanban ruff check serve/kanban/tests/test_historical_admission_fixtures.py` -> all checks passed.
-- Builder-challenger result: pass. No concrete blockers.
-- Follow-up risks: fixture authorities are derived from the canonical admitted package and mutated through generic graph fields; broader generic property-based coverage remains outside this task.
+## Fixture Contract
+| Pair | Corrected obligation | Defective mutation | Required error code and target set |
+|---|---|---|---|
+| `r1-browser` | `IF-001` owns retained-page producer/consumer lifecycle, and build-owned `PROOF-001` proves acquisition composition. | Keep both entities loadable; blank the interface contract and proof boundary. | `{(DV-004, IF-001), (DV-007, PROOF-001)}` |
+| `r2-workspace` | `IF-001` owns transport/callback flow, `MIG-001` owns final deletion plus absence proof, and `RISK-001` owns destructive-safety scenarios and proof. | Keep the entities loadable; blank the interface contract, set migration ordered steps empty, and set risk scenarios empty. | `{(DV-004, IF-001), (DV-005, MIG-001), (DV-006, RISK-001)}` |
+| `r3-memory-purge` | Build-owned predecessor `PROOF-001` exercises the assembled MemoryTab, FastAPI, and MemoryEngine path. | Keep the proof loadable and blank its boundary. | `{(DV-007, PROOF-001)}` |
+| `r4-memory-lifecycle` | `IF-001` owns the generated/frontend seven-state resolve contract, and predecessor `PROOF-001` owns clean-build proof. | Keep both entities loadable; blank the interface contract and proof boundary. | `{(DV-004, IF-001), (DV-007, PROOF-001)}` |
 
-[[2026-07-22T16:25:39+02:00]]
-## Verify Notes
-- Evidence reviewed: Builder Notes; `serve/kanban/tests/test_historical_admission_fixtures.py`; focused command `uv run --project serve/kanban pytest serve/kanban/tests/test_historical_admission_fixtures.py -q` completed with `8 passed in 1.80s`.
-- Named authorities checked: `.owlbear/research/planning-workflow-root-cause-and-redesign.md` section 4.2 requires each original defective/corrected historical plan to be a fixture that fails/passes for the omitted obligation; `.owlbear/changes/replace-delivery-pipeline/design.md` section 17.2 requires original defective and corrected plans to become structured fixtures.
-- Change Module Map: task/body names public `load_change` and `evaluate_admission`; the test does exercise both. No unrelated module deviation found.
-- Normal-path boundary: corrected temporary copies load through `load_change`; evaluator runs with complete T1 evidence. Replacements are not below that boundary for the defective cases: `_defective` derives them by in-memory `model_copy` mutations after loading one common corrected package.
-- Finding: reject. No eight tracked four-file fixtures exist. The sole test copies `.owlbear/changes/replace-delivery-pipeline` into temporary directories, edits identity/digest text, and manufactures defective revisions in memory. It therefore does not replay the original defective plan packages or prove that `load_change` loads eight tracked fixture packages as AC-3 requires. It also does not pin R1/R2/R3/R4 to their required per-incident diagnostic family; the only defective assertion accepts any intersection with DV-004 through DV-007.
-- Patches applied: none; correcting this needs new tracked fixture artifacts and corresponding test changes, exceeding verifier local-patch scope.
-- Verifier-challenger: not called because no PASS verdict is proposed.
-- Final route: rejected to build.
+Defective entities remain present so evaluation reaches `DV-004` through `DV-007`; deleting referenced entities and producing loader/reference errors does not satisfy the fixture contract.
 
-### Required Follow-up
-| # | Target Agent | Action Required | File(s) | Evidence |
-|---|-------------|----------------|---------|----------|
-| 1 | builder | Add eight tracked, structured four-file fixture packages representing the R1-R4 original defective and corrected plans. Load every package directly via `load_change`; remove in-memory construction of defective revisions. | Fixture directory under the admitted change-package test fixtures area; `serve/kanban/tests/test_historical_admission_fixtures.py` | Each corrected fixture admits; each defective fixture produces the required R1/R2/R3/R4 stable diagnostic family; repeated code/target ordering is stable. |
-| 2 | builder | Make the defective expectations incident-specific: R1 DV-004 or DV-007; R2 applicable DV-004, DV-005, and DV-006; R3 DV-007; R4 DV-004 or DV-007. | `serve/kanban/tests/test_historical_admission_fixtures.py` | Focused fixture suite passes and directly demonstrates the authority requirements in research section 4.2 and design section 17.2. |
+## Identity And Digest Rules
+- Give each package one unique `change_id` shared by its four files.
+- After the defective or corrected graph content is final, compute the semantic digest with `compute_delivery_digest` and bind `graph.admission.delivery_digest` to that value.
+- `admission` metadata is outside the semantic digest envelope, so digest binding is one pass rather than a fixed point.
+- A fixture receipt path is metadata for this boundary. Do not add receipt files because `load_change` and `evaluate_admission` do not read receipt content.
+- Load the eight tracked package directories directly. Do not construct or mutate revisions in test memory after loading.
 
-[[2026-07-22T16:30:22+02:00]]
-## Builder Notes
-- Change envelope: eight tracked four-file historical admission fixture packages plus the focused regression test; no production validator changes.
-- Files changed: `serve/kanban/tests/test_historical_admission_fixtures.py`; eight packages under `serve/kanban/tests/fixtures/historical-admission/`.
-- Change Module Map deviations: none; public `load_change` and `evaluate_admission` remain the exercised owners.
-- Proof selected: direct tracked-fixture public-boundary admission proof. Corrected R1-R4 fixtures admit; defective fixtures produce stable incident-specific findings: R1 `DV-007`, R2 `DV-005` and `DV-006`, R3 `DV-007`, R4 `DV-007`. Repeated evaluation preserves code/target ordering.
-- Durable-test justification: required historical regression floor and AC-3 tracked fixture provenance; protects against replacing incident-derived fixtures with in-memory mutations or introducing incident-specific validator branches.
-- Commands run: `uv run --project serve/kanban pytest serve/kanban/tests/test_historical_admission_fixtures.py -q` -> `8 passed in 1.12s`; `uv run --project serve/kanban ruff check serve/kanban/tests/test_historical_admission_fixtures.py` -> all checks passed.
-- Builder-challenger result: pass. No concrete blockers.
-- Follow-up risks: R1/R4 generic omission currently manifests as `DV-007`, and R2 as `DV-005`/`DV-006`; these are the stable findings emitted by the current public evaluator and are within the accepted incident families.
+## Proof Guidance
+Use one table-driven durable test at `serve/kanban/tests/test_historical_admission_fixtures.py`. For each package, assert successful four-file loading, digest equality, incident-specific code/target results, corrected admission with zero findings, and deterministic repeated finding order/serialization. Run the focused fixture test, the maintained admission regression, and Ruff on the test module. Production admission source is outside the change envelope.
 
-[[2026-07-22T16:32:22+02:00]]
-## Builder Notes
-- Implementation attempted: tracked eight four-file fixtures and direct public-boundary test updates were prepared.
-- Focused proof initially passed with temporary generated fixtures, but commit pre-commit YAML validation exposed that a serializer rewrite had changed canonical indentation. Fixtures were restored from the canonical package.
-- Current blocker: after restoring canonical formatting and rebinding fixture digests, defective graph mutations no longer produce the expected DV findings; focused suite is `4 failed, 4 passed`. No changes were committed.
-- Builder-challenger previously passed the earlier generated fixture state, but that state was not commit-valid. No DONE verdict is proposed.
-- Required follow-up: construct defective graph mutations with exact canonical YAML edits that preserve the admission digest contract and verify the resulting loaded revision still contains the intended omitted obligations before retrying commit.
-
-[[2026-07-22T16:33:35+02:00]]
-## Verify Notes
-- Evidence reviewed: task AC-1 through AC-3, the latest Builder Notes, and the task-owned public-boundary fixture test.
-- Named authorities checked: public `load_change` in `serve/kanban/src/owlbear_kanban/change.py` and `evaluate_admission` in `serve/kanban/src/owlbear_kanban/admission.py`; the test invokes both directly with tracked four-file packages.
-- Change Module Map: no deviation found. The attempted implementation is limited to the mapped test fixture owner; no production admission code was changed.
-- Normal-path boundary exercised: `uv run --project serve/kanban pytest serve/kanban/tests/test_historical_admission_fixtures.py -q` loaded each tracked fixture through `load_change` and evaluated it through the public evaluator. Result: 4 failed, 4 passed.
-- Finding: each defective package (`r1-browser`, `r2-workspace`, `r3-memory-purge`, `r4-memory-lifecycle`) is admitted with no error findings. The expected `DV-007` / `DV-005` / `DV-006` error sets are empty, so AC-1 and AC-2 are not satisfied. The corrected variants pass, but cannot establish the required historical failure replay.
-- Replacements used below boundary: none; test evidence constructs complete `AdmissionEvidence` while keeping the loading and evaluation boundary real.
-- Patches applied: none. Constructing defect mutations that survive loading and still omit the intended general graph obligations is builder work, beyond the verifier local-patch limit.
-- Verifier-challenger: not called; this is a REJECT verdict, not a PASS claim.
-
-### Required Follow-up
-| # | Target Agent | Action Required | File(s) | Evidence |
-|---|-------------|----------------|---------|----------|
-| 1 | builder | Repair the defective YAML graph mutations so `load_change` retains the intended omitted general obligations and the public evaluator emits the AC-required DV findings; rerun the focused fixture test. | `serve/kanban/tests/fixtures/historical-admission/`, `serve/kanban/tests/test_historical_admission_fixtures.py` | Focused pytest: 4 failed, 4 passed; defective expected-code sets were all empty. |
-
-- Final route: REJECT to build.
+[[2026-07-22T20:56:37+02:00]]
+## Shape Notes
+- Repair source: the second verifier rejection and subsequent builder containment showed four defective packages emitted no findings after the prior full-graph copies were normalized.
+- Classification: local task repair. Product behavior, admission architecture, parent, dependency, and packet boundary are unchanged; only fixture authority, exact expected diagnostics, digest handling, and proof wording were made executable.
+- Facts checked: research incident sections 3.2 and 4.2; design section 17.2; native stable-ID and four-file schemas; `compute_delivery_digest`; `load_change`; and evaluator branches `DV-004` through `DV-007`. Receipt content is not read by this boundary, and admission metadata is outside the semantic digest envelope.
+- Contract replacement: R1 now owns `{(DV-004, IF-001), (DV-007, PROOF-001)}`; R2 owns `{(DV-004, IF-001), (DV-005, MIG-001), (DV-006, RISK-001)}`; R3 owns `{(DV-007, PROOF-001)}`; R4 owns `{(DV-004, IF-001), (DV-007, PROOF-001)}`. Defective entities remain present-but-incomplete so evaluation, not loading, rejects them.
+- AC repair: four boundary-scoped AC lines require direct loading of eight tracked packages, exact code/target sets, zero findings for corrected variants, canonical digest binding, no post-load mutation, deterministic order/serialization, and no production admission change.
+- Shaper-challenger: initial draft failed because R1 omitted its assembled composition-proof regression. The corrected draft adds `DV-007` for R1; remaining readiness, receipt/digest, cohesion, and proof-boundary checks passed.
+- Board audit: parent remains #1978; dependency #1996 is archived completed; #1997 remains in `build` with dependency status `ok`; #1998 remains blocked only behind #1997. Prior untracked fixture files are experiments rather than authority and were not modified by this repair.
+- Resulting route: dispatch #1997 to builder; successful completion unblocks #1998 for the following wave.
