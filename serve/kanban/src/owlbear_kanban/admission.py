@@ -142,6 +142,90 @@ def _evaluate_graph(revision: ChangeRevision) -> list[AdmissionFinding]:  # noqa
     return findings
 
 
+def _evaluate_structured_evidence(revision: ChangeRevision, evidence: AdmissionEvidence) -> list[AdmissionFinding]:
+    findings: list[AdmissionFinding] = []
+    challenged_sections = ("requirements", "workflows", "interfaces", "migrations", "risks", "proofs", "nodes")
+    expected = {entity.id for section in challenged_sections for entity in getattr(revision.graph, section)}
+    actual = set(evidence.challenge)
+    findings.extend(
+        _finding(
+            "DV-010",
+            target,
+            "challenge disposition targets an undeclared delivery entity",
+            "Remove the dangling challenge target.",
+        )
+        for target in sorted(actual - expected)
+    )
+    findings.extend(
+        _finding(
+            "DV-010",
+            target,
+            "structured challenge disposition is missing",
+            "Record one disposition and evidence for this delivery entity.",
+        )
+        for target in sorted(expected - actual)
+    )
+    for target in sorted(expected & actual):
+        disposition = evidence.challenge[target]
+        if not isinstance(disposition, Mapping) or disposition.get("disposition") not in {"pass", "fail", "defer"}:
+            findings.append(
+                _finding(
+                    "DV-010",
+                    target,
+                    "challenge evidence must contain a structured disposition",
+                    "Record disposition and evidence for this delivery entity.",
+                )
+            )
+        elif disposition["disposition"] != "pass":
+            findings.append(
+                _finding(
+                    "DV-010",
+                    target,
+                    f"challenge disposition is {disposition['disposition']}",
+                    "Resolve the challenge finding before admission.",
+                )
+            )
+        elif not isinstance(disposition.get("evidence"), str) or not disposition["evidence"].strip():
+            findings.append(
+                _finding(
+                    "DV-010",
+                    target,
+                    "challenge disposition has no evidence",
+                    "Record source-grounded evidence for this disposition.",
+                )
+            )
+    if not isinstance(evidence.baseline.get("commands"), (tuple, list)) or not evidence.baseline.get("commands"):
+        findings.append(
+            _finding(
+                "DV-012",
+                revision.change_id,
+                "baseline evidence must list executed commands",
+                "Record clean baseline commands and results.",
+            )
+        )
+    if evidence.baseline.get("digest") not in {None, evidence.digest}:
+        findings.append(
+            _finding(
+                "DV-012",
+                revision.change_id,
+                "baseline evidence is bound to a different digest",
+                "Recompute the baseline for this delivery digest.",
+                str(evidence.baseline.get("digest")),
+            )
+        )
+    if evidence.approval.get("digest") not in {None, evidence.digest}:
+        findings.append(
+            _finding(
+                "DV-011",
+                revision.change_id,
+                "approval is bound to a different digest",
+                "Record approval for this delivery digest.",
+                str(evidence.approval.get("digest")),
+            )
+        )
+    return findings
+
+
 def evaluate_admission(revision: ChangeRevision, evidence: AdmissionEvidence) -> AdmissionAssessment:
     """Evaluate one revision and digest-bound evidence without performing writes."""
     digest = compute_delivery_digest(revision.intent, revision.design, revision.decisions, revision.graph)
@@ -187,6 +271,7 @@ def evaluate_admission(revision: ChangeRevision, evidence: AdmissionEvidence) ->
         findings.append(
             _finding("DV-013", revision.change_id, "known limits are missing", "Record the limits of this admission.")
         )
+    findings.extend(_evaluate_structured_evidence(revision, evidence))
     findings.sort(key=lambda item: (item.code, item.target, item.detail))
     return AdmissionAssessment(revision_digest=digest, findings=tuple(findings))
 

@@ -1,10 +1,10 @@
 ---
 id: 1993
 title: 'P2-01: Evaluate layered delivery admission'
-status: build
+status: verify
 priority: medium
 created: 2026-07-22T05:49:37.434986+02:00
-updated: 2026-07-22T06:05:54.968501+02:00
+updated: 2026-07-22T06:08:38.830494+02:00
 tags:
   - phase-1
   - scope:core
@@ -88,3 +88,14 @@ Proof guidance: exercise the public evaluation boundary with the real `ChangeRev
 - Patches applied: none; resolving this requires material evaluator and test implementation beyond verifier patch limits.
 - Verifier-challenger: not called because this is a reject, not a PASS claim.
 - Final route: reject to build for completion of the structured evidence contract, deterministic diagnostics, admitted operation guarantees, and required focused fixtures/proof.
+
+[[2026-07-22T06:08:38+02:00]]
+## Builder Notes
+- Change envelope: complete the existing public admission evaluator over `ChangeRevision`; enforce canonical structured per-entity challenge dispositions, deterministic blocking diagnostics, and digest-bound baseline/approval evidence without adding writes or adjacent APIs.
+- Files changed: `serve/kanban/src/owlbear_kanban/admission.py`, `serve/kanban/tests/test_admission.py`.
+- Change Module Map deviations: none; stayed within the mapped kanban admission boundary and focused tests.
+- Proof selected: public `evaluate_admission` against the real `replace-delivery-pipeline` revision; admitted structured evidence path plus free-form `pass` rejection.
+- Durable-test justification: added one focused regression for the observed verifier defect where `challenge={"pass": True}` incorrectly admitted; this is a shared, security-sensitive admission gate and is cheaper to maintain than repeated manual verification.
+- Commands run: `uv run --project serve/kanban pytest serve/kanban/tests/test_admission.py -q` -> 2 passed; `uv run --project serve/kanban ruff check serve/kanban/src/owlbear_kanban/admission.py serve/kanban/tests/test_admission.py` -> all checks passed.
+- Builder-challenger result: pass; no concrete blockers.
+- Follow-up risks: broader A1-A10 graph consistency and historical defective/corrected fixture coverage remain candidates for verifier follow-up if the shaped matrix requires more than this local contract repair.
