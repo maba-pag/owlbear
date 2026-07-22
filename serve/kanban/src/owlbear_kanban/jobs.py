@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from owlbear_kanban.change import ChangeRevision, Digest
 
@@ -48,6 +48,7 @@ class ShapeJob(BaseModel):
 
 
 JobKind = Literal["shape", "build", "accept", "audit", "supersession"]
+DeliveryNodeId = Annotated[str, StringConstraints(strict=True, pattern=r"^DN-[0-9]{3}$")]
 
 
 class JobRecord(BaseModel):
@@ -63,7 +64,7 @@ class JobRecord(BaseModel):
     updated_at: str
     change_id: str
     delivery_digest: Digest
-    target_node_id: str
+    target_node_id: DeliveryNodeId
     node_plan_digest: Digest | None = None
     predecessor_job_ids: tuple[int, ...] = ()
     claim_id: str | None = None
@@ -106,8 +107,12 @@ class JobParseResult(BaseModel):
 
 def parse_job_mapping(value: Mapping[str, object]) -> JobParseResult:
     """Parse a schema-version-1 native job mapping with stable diagnostics."""
+    normalized = dict(value)
+    for field in ("predecessor_job_ids", "pending_request_ids", "evidence_ids"):
+        if isinstance(normalized.get(field), list):
+            normalized[field] = tuple(normalized[field])
     try:
-        job = JobRecord.model_validate(dict(value))
+        job = JobRecord.model_validate(normalized)
     except ValueError as exc:
         message = str(exc)
         code = JobDiagnosticCode.SCHEMA_INVALID

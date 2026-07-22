@@ -1,10 +1,10 @@
 ---
 id: 2000
 title: 'P3-01: Define native job and evidence contracts'
-status: build
+status: verify
 priority: high
 created: 2026-07-22T21:58:09.010514+02:00
-updated: 2026-07-23T00:38:00.546584+02:00
+updated: 2026-07-23T00:41:26.068788+02:00
 tags:
   - phase-3
   - scope:core
@@ -132,3 +132,14 @@ Proof guidance: exercise public parsers, serializers, and authority projection w
 - The audit parser smoke recorded in the preceding Verify Notes is not a defect: admitted design section 3.5 defines `audit` as change-wide, and section 4.2 defines node-plan digests only for delivery-node plans. Therefore the prior receipt-specific finding and Required Follow-up row 2 are superseded and require no work.
 - The REJECT remains required for the independent AC-1 defect (empty `target_node_id` accepted without a stable diagnostic) and the missing focused public parser/projection coverage needed to prove AC-1 and AC-2. The builder should retain the authority-consistent receipt matrix already implemented unless focused authority comparison finds a separate concrete violation.
 
+[[2026-07-23T00:41:26+02:00]]
+## Builder Notes
+- Change envelope: repair the native public job parser and its focused public-boundary proof only. Validate delivery-node target identity and accept serialized operational reference arrays while retaining immutable records. No receipt-store, lifecycle, dispatch, legacy carrier, MCP, Cockpit, or bootstrap change.
+- Files changed: `serve/kanban/src/owlbear_kanban/jobs.py`; `serve/kanban/tests/test_jobs.py`.
+- Change Module Map deviations: none. The existing `jobs.py` owner and its focused test module directly contain the reported parser defect and AC-1/AC-2 proof boundary.
+- Implementation: constrained `JobRecord.target_node_id` to the authority-defined `DN-###` identity format, preserving `ERR_JOB_TARGET_UNKNOWN` diagnostics; normalized serialized list reference fields to immutable tuples at the public parser boundary.
+- Proof selected: table-driven public parsing for shape, build, accept, audit, and supersession; stable invalid-kind, malformed-target, and unknown-field diagnostics; authority projection and serialization exclusion of normative fields.
+- Durable-test justification: added focused durable coverage because malformed public contract mappings and absent authority-projection boundary checks are concrete, repeatable regressions not covered by the legacy shape-generation tests.
+- Commands run: `uv run --project . pytest serve/kanban/tests/test_jobs.py -q` -> `18 passed`; `uv run --project . pytest serve/kanban/tests/test_jobs.py serve/kanban/tests/test_change_receipts.py -q` -> `50 passed`; `uv run --project . ruff check serve/kanban/src/owlbear_kanban/jobs.py serve/kanban/tests/test_jobs.py` and `ruff format --check` -> clean.
+- Builder-challenger result: PASS. It independently confirmed task alignment, scoped public-boundary coverage, and reran the 50-test suite and static checks.
+- Follow-up risks: no additional risk identified; receipt kind matrix remains unchanged because the verifier correction confirmed audit is change-wide.
