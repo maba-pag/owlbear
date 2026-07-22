@@ -1,10 +1,10 @@
 ---
 id: 1995
 title: 'P2-03: Validate delivery coverage and contracts'
-status: collect
+status: archived
 priority: medium
 created: 2026-07-22T13:45:55.105472+02:00
-updated: 2026-07-22T15:56:12.226693+02:00
+updated: 2026-07-22T15:58:17.154766+02:00
 tags:
   - phase-1
   - scope:core
@@ -37,7 +37,7 @@ proof_bundle: behavioral+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Bootstrap Projection Identity
@@ -159,3 +159,13 @@ Final route: REJECT to build.
 - Patches applied: none.
 - Verifier-challenger: pass. It confirmed public-boundary coverage, sufficient evidence, matched two-file scope, and no unresolved AC.
 - Final route: PASS to collect.
+
+[[2026-07-22T15:58:17+02:00]]
+## Collect Notes
+- Classification: leaf. `list_tasks(parent=1995)` returned no children; the task is a build-scoped child of #1978 rather than an aggregate parent.
+- Verification evidence: the latest `## Verify Notes` records PASS to collect, 7 focused admission tests passed, Ruff passed, diff check passed, real `ChangeRevision` public-evaluator proof, no findings, and verifier-challenger pass.
+- Invariant map coverage: verifier confirmed AC-1 through AC-4 and no Change Module Map deviation across the mapped admission evaluator and focused test boundary.
+- Dependency gate: #1999 is satisfied (`dep_status: ok`).
+- Follow-up state: two earlier Required Follow-up sections are superseded by subsequent builder repair and the latest verifier PASS, which explicitly confirms duplicate ownership, interface inventory/migration, migration/risk completeness, and proof predecessor coverage.
+- Structured requests: no pending or resolved requests for #1995; no residual decision state.
+- Archive rationale: verified leaf closure is complete; archive as completed.
