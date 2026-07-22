@@ -1,10 +1,10 @@
 ---
 id: 1994
 title: 'P2-02: Define initial shape-job generations'
-status: build
+status: collect
 priority: medium
 created: 2026-07-22T05:49:48.187184+02:00
-updated: 2026-07-22T15:33:43.540848+02:00
+updated: 2026-07-22T15:44:14.556558+02:00
 tags:
   - phase-1
   - scope:core
@@ -93,3 +93,27 @@ Proof guidance: exercise the public planner and generation readback without file
 | 1 | builder | Add focused durable tests for the public `plan_shape_jobs` and `read_job_generation` boundary. Cover authored order/operational fields/immutability/authority-prose omission plus each AC-2 diagnostic. Run the test module from `serve/kanban` and Ruff on the touched implementation and test file. | `serve/kanban/tests/` (new or existing job-generation test), `serve/kanban/src/owlbear_kanban/jobs.py` only if a test exposes a defect | Test output that collects and passes the new cases; do not substitute an inline smoke script. |
 
 - Final route: REJECT to build for focused regression-proof implementation.
+
+[[2026-07-22T15:37:49+02:00]]
+## Builder Notes
+- Change envelope: add focused durable regression coverage for the existing side-effect-free initial shape-job planner and serialized generation readback; no product implementation, persistence, publication, or execution changes.
+- Files changed: `serve/kanban/tests/test_jobs.py` only.
+- Change Module Map deviations: none; tests exercise the native public job-generation boundary.
+- Proof selected: focused pytest plus Ruff on the new test module.
+- Durable-test justification: the shaped Scope explicitly requires focused tests, and the public planner/readback behavior had no durable coverage. The tests protect easy-to-regress ordering, immutable operational identity, authority-projection omission, and structured malformed-generation diagnostics.
+- Commands run: `uv run --project serve/kanban pytest serve/kanban/tests/test_jobs.py` -> 8 passed; `uv run --project serve/kanban ruff check serve/kanban/tests/test_jobs.py` -> all checks passed.
+- Builder-challenger result: pass; confirmed scope, Rent Test, and evidence with no concrete blocker.
+- Follow-up risks: atomic persistence and publication remain explicitly owned by #1998; this task does not implement them.
+
+[[2026-07-22T15:44:14+02:00]]
+## Verify Notes
+- Evidence reviewed: AC-1 through AC-3, Builder Notes, and authority `.owlbear/changes/replace-delivery-pipeline/design.md` section 7.1 plus `graph.yaml` DN-002 and PROOF-002.
+- Named authorities checked: section 7.1 limits job records to operational identity/state; DN-002 owns admission and initial shape jobs; PROOF-002 assigns atomic receipt-plus-job publication outside this packet. The implementation stays within the repaired planner/readback-only boundary.
+- Change Module Map: no deviation. Product code is limited to `serve/kanban/src/owlbear_kanban/jobs.py` and its package export in `serve/kanban/src/owlbear_kanban/__init__.py`; the durable proof is `serve/kanban/tests/test_jobs.py`.
+- Normal-path boundary exercised without filesystem writes: public `load_change`, `plan_shape_jobs`, and `read_job_generation` read the admitted revision successfully, producing and restoring 14 immutable shape jobs in authored order with no diagnostics.
+- Replacements used below boundary: none. The public loader, planner, and reader were exercised against the real admitted change revision.
+- Checks run: `uv run --project serve/kanban pytest serve/kanban/tests/test_jobs.py` passed (8 tests); Ruff on both implementation modules and `test_jobs.py` passed; public successful readback probe passed; whitespace diff check passed.
+- AC coverage: tests cover operational bindings, authored order, immutability, authority-prose omission, and each required diagnostic: duplicate numeric ID, duplicate/missing/unknown target, wrong kind, digest mismatch, and receipt mismatch.
+- Patches applied: none.
+- Verifier-challenger: pass. It confirmed task scope, evidence sufficiency, all diagnostic categories, and that PROOF-002 atomic publication is owned by #1998.
+- Final route: PASS to collect.
