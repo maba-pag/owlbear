@@ -1,10 +1,10 @@
 ---
 id: 2000
 title: 'P3-01: Define native job and evidence contracts'
-status: build
+status: verify
 priority: high
 created: 2026-07-22T21:58:09.010514+02:00
-updated: 2026-07-23T00:32:28.777204+02:00
+updated: 2026-07-23T00:35:20.550577+02:00
 tags:
   - phase-3
   - scope:core
@@ -89,3 +89,15 @@ Proof guidance: exercise public parsers, serializers, and authority projection w
 | 1 | builder | Implement kind-specific receipt payload validation for the required delivery/node-plan digest contract, including a stable missing-digest diagnostic, and add focused public parser coverage for all AC-3 receipt kinds. Preserve the existing receipt-store boundary. | `serve/kanban/src/owlbear_kanban/receipt.py`, focused existing receipt tests | The public parser accepts a shape receipt with no `node_plan_digest`; design section 3.5 and AC-3 require receipt-kind contracts. |
 
 - Final route: REJECT to build.
+
+[[2026-07-23T00:35:20+02:00]]
+## Builder Notes
+- Change envelope: repair the public native receipt parser contract and its focused parser tests only. Require `node_plan_digest` for node-scoped `shape`, `build`, and `accept` receipts; leave `audit` and `supersession` change-wide. No receipt-store, lifecycle, dispatch, legacy carrier, MCP, or Cockpit change.
+- Files changed: `serve/kanban/src/owlbear_kanban/receipt.py`; `serve/kanban/tests/test_change_receipts.py`.
+- Change Module Map deviations: none. The verifier-prescribed `receipt.py` owner and its existing focused test module directly contain the defect and proof boundary.
+- Implementation: added stable `ERR_RECEIPT_NODE_PLAN_DIGEST_MISSING`; `parse_receipt_mapping` now requires `node_plan_digest` only for `shape`, `build`, and `accept`, in addition to the pre-existing non-admission references.
+- Proof selected: public parser round-trip and deterministic serialization across admission, shape, build, accept, audit, and supersession; missing-digest diagnostics for each node-scoped kind.
+- Durable-test justification: added focused durable coverage because this is an observed defect in a public versioned parser contract and a regression would otherwise be hard to detect through receipt-store tests.
+- Commands run: `uv run --project . pytest serve/kanban/tests/test_change_receipts.py -q` -> `32 passed`; `uv run --project . ruff check serve/kanban/src/owlbear_kanban/receipt.py serve/kanban/tests/test_change_receipts.py` -> clean; `uv run --project . ruff format --check serve/kanban/src/owlbear_kanban/receipt.py serve/kanban/tests/test_change_receipts.py` -> clean; `uv run --project . pytest serve/kanban/tests/test_jobs.py serve/kanban/tests/test_change_receipts.py -q` -> `40 passed`.
+- Builder-challenger result: PASS. It confirmed the scoped receipt-kind matrix and focused proof.
+- Follow-up risks: validation intentionally checks payload-link presence rather than cross-record validity, which remains a later lifecycle/engine concern.

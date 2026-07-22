@@ -128,6 +128,7 @@ class ReceiptParseDiagnosticCode(StrEnum):
     UNKNOWN_KIND = "ERR_RECEIPT_KIND_INVALID"
     SCHEMA_INVALID = "ERR_RECEIPT_SCHEMA_INVALID"
     TARGET_MISSING = "ERR_RECEIPT_TARGET_MISSING"
+    NODE_PLAN_DIGEST_MISSING = "ERR_RECEIPT_NODE_PLAN_DIGEST_MISSING"
     PREDECESSOR_MISSING = "ERR_RECEIPT_PREDECESSOR_MISSING"
     EVIDENCE_MISSING = "ERR_RECEIPT_EVIDENCE_MISSING"
     CODE_REVISION_MISSING = "ERR_RECEIPT_CODE_REVISION_MISSING"
@@ -171,6 +172,8 @@ def parse_receipt_mapping(value: Mapping[str, object]) -> ReceiptParseResult:
         "evidence": ReceiptParseDiagnosticCode.EVIDENCE_MISSING,
         "code_revision": ReceiptParseDiagnosticCode.CODE_REVISION_MISSING,
     }
+    if record.kind in {"shape", "build", "accept"}:
+        required["node_plan_digest"] = ReceiptParseDiagnosticCode.NODE_PLAN_DIGEST_MISSING
     diagnostics = tuple(
         ReceiptParseDiagnostic(code=code, detail=f"receipt payload is missing {field}")
         for field, code in sorted(required.items())

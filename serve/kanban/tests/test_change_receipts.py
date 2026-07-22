@@ -13,9 +13,11 @@ from owlbear_kanban import (
     ChangeRevision,
     ReceiptConflictError,
     ReceiptDiagnosticCode,
+    ReceiptParseDiagnosticCode,
     ReceiptStore,
     change_health,
     load_change,
+    parse_receipt_mapping,
 )
 
 from .test_change_revision import _documents, _write_package
@@ -45,6 +47,22 @@ def _receipt(revision: ChangeRevision, receipt_id: str, kind: str) -> dict[str, 
     }
 
 
+def _parser_receipt(kind: str) -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "kind": kind,
+        "receipt_id": f"{kind}-001",
+        "change_id": "receipt-change",
+        "delivery_digest": "a" * 64,
+        "issued_at": "2026-07-22T00:00:00Z",
+        "target_node_id": "DN-001",
+        "node_plan_digest": "b" * 64,
+        "predecessor_receipt_ids": ["predecessor-001"],
+        "evidence": {"passed": True},
+        "code_revision": "c" * 40,
+    }
+
+
 def test_package_exports_receipt_and_health_boundary() -> None:
     expected = {
         "ChangeHealthFinding",
@@ -60,6 +78,28 @@ def test_package_exports_receipt_and_health_boundary() -> None:
 
     assert expected <= set(owlbear_kanban.__all__)
     assert all(hasattr(owlbear_kanban, name) for name in expected)
+
+
+@pytest.mark.parametrize("kind", _RECEIPT_KINDS)
+def test_public_receipt_parser_round_trips_all_receipt_kinds(kind: str) -> None:
+    value = _parser_receipt(kind)
+
+    result = parse_receipt_mapping(value)
+
+    assert result.diagnostics == ()
+    assert result.receipt is not None
+    assert result.receipt.to_mapping() == value
+
+
+@pytest.mark.parametrize("kind", ["shape", "build", "accept"])
+def test_public_receipt_parser_requires_node_plan_digest_for_node_scoped_receipts(kind: str) -> None:
+    value = _parser_receipt(kind)
+    del value["node_plan_digest"]
+
+    result = parse_receipt_mapping(value)
+
+    assert result.receipt is None
+    assert [item.code for item in result.diagnostics] == [ReceiptParseDiagnosticCode.NODE_PLAN_DIGEST_MISSING]
 
 
 def test_receipt_store_round_trips_all_kinds_and_preserves_existing_bytes(tmp_path: Path) -> None:
