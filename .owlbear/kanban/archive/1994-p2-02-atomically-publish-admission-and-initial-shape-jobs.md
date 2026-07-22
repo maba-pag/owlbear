@@ -1,10 +1,10 @@
 ---
 id: 1994
 title: 'P2-02: Define initial shape-job generations'
-status: collect
+status: archived
 priority: medium
 created: 2026-07-22T05:49:48.187184+02:00
-updated: 2026-07-22T15:44:14.556558+02:00
+updated: 2026-07-22T15:49:09.593895+02:00
 tags:
   - phase-1
   - scope:core
@@ -34,7 +34,7 @@ proof_bundle: behavioral+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Bootstrap Projection Identity
@@ -117,3 +117,14 @@ Proof guidance: exercise the public planner and generation readback without file
 - Patches applied: none.
 - Verifier-challenger: pass. It confirmed task scope, evidence sufficiency, all diagnostic categories, and that PROOF-002 atomic publication is owned by #1998.
 - Final route: PASS to collect.
+
+[[2026-07-22T15:49:09+02:00]]
+## Collect Notes
+- Classification: leaf. Task #1994 has no child tasks and carries a packet implementation contract rather than parent or EPIC aggregate intent.
+- Leaf verification evidence: the final `## Verify Notes` records PASS to collect after `uv run --project serve/kanban pytest serve/kanban/tests/test_jobs.py` passed 8 tests, Ruff passed on the implementation and test modules, the public successful readback probe passed, and verifier-challenger returned pass.
+- Invariant coverage: final verification maps AC-1 through AC-3 to authored-order immutable shape-job generation, operational-field serialization/readback, authority-prose omission, and every required malformed-generation diagnostic.
+- Dependency gate: dependency #1999 is archived with reason `completed`; task dependency state is `ok`.
+- Follow-up closure: the earlier Required Follow-up for durable planner/readback tests was discharged by the later builder cycle adding `serve/kanban/tests/test_jobs.py`, followed by the final verifier PASS.
+- Structured requests: no pending or resolved request records exist for #1994.
+- Residual decisions: none. Atomic persistence and publication remain explicitly assigned to #1998 and are outside this leaf contract.
+- Archive rationale: verifier completion evidence is present, the prior follow-up is resolved, the dependency gate is satisfied, and no request or decision state remains.
