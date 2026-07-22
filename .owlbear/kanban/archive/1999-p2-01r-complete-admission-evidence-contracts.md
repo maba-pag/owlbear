@@ -1,10 +1,10 @@
 ---
 id: 1999
 title: 'P2-01R: Complete admission evidence contracts'
-status: collect
+status: archived
 priority: medium
 created: 2026-07-22T14:10:10.625865+02:00
-updated: 2026-07-22T15:11:05.375378+02:00
+updated: 2026-07-22T15:13:09.664057+02:00
 tags:
   - phase-1
   - scope:core
@@ -37,7 +37,7 @@ proof_bundle: behavioral+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Bootstrap Projection Identity
@@ -87,3 +87,12 @@ Proof guidance: exercise public `evaluate_admission` over a real loaded `ChangeR
 - Replacements used below boundary: none; the evaluator was exercised through its public API over the real loaded revision.
 - Verifier-challenger result: pass. It confirmed immutable schema-v1 output, typed nonblank challenge evidence, EV-002 warning/error semantics, EV-001 through EV-005 coverage, sufficient public-boundary proof, and no scope drift.
 - Final route: PASS to collect.
+
+[[2026-07-22T15:13:09+02:00]]
+## Collect Notes
+- Classification: leaf. `list_tasks(parent=1999)` returned no children, and the title, tags, Outcome, and Scope describe one implementation packet rather than aggregate or EPIC intent. Parent `#1978` does not change this task's leaf classification.
+- Leaf verification evidence: the 2026-07-22 `## Verify Notes` record a final PASS to collect, a passing verifier-challenger, 22 passing focused admission and ChangeRevision tests, passing Ruff on the mapped files, no editor diagnostics, and a clean diff check. No collector re-review of implementation details was performed.
+- Required Follow-up: none. The verifier's named follow-up risks are explicit out-of-scope ownership references to `#1998`, `#1995`, and `#1996`, not an unresolved `### Required Follow-up`.
+- Structured request state: no pending requests and no resolved requests for `#1999`; residual decisions: none.
+- Aggregate intent, invariant map, child coverage, dependency gate, child archive summary, and SHA-linked aggregate proof: not applicable to this leaf closure.
+- Archive rationale: verifier completion evidence exists and no unresolved follow-up, request, or decision state remains; archive mechanically as completed.
