@@ -1,10 +1,10 @@
 ---
 id: 1977
 title: 'Bootstrap DN-001: Establish native change authority and semantic identity'
-status: collect
+status: archived
 priority: medium
 created: 2026-07-22T01:05:17.126803+02:00
-updated: 2026-07-22T01:59:42.890914+02:00
+updated: 2026-07-22T03:25:42.475461+02:00
 tags:
   - bootstrap-projection
   - change:replace-delivery-pipeline
@@ -31,7 +31,7 @@ proof_bundle: existing+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Bootstrap Projection Identity
@@ -105,3 +105,27 @@ Proof guidance: shape from the admitted node and run the cheapest public ChangeR
 - Both tasks are parented to #1977, reference the admitted change, digest, node, and packet identity, and use `existing+challenge` proof.
 - #1977 depends on #1991 and #1992 and is routed to dependency-gated `collect`.
 - Existing primitive proof: 17 focused tests passed for atomic-write and task-health behavior.
+
+[[2026-07-22T03:25:42+02:00]]
+## Aggregate Collect Notes
+
+### Closure Verdict
+- PASS at tested HEAD `9400fddfe1f7060f9d53115066cb6ba78df04060`.
+- Independent aggregate `verifier-challenger` decision: `pass`; no findings or required action.
+
+### Descendant Evidence
+- #1991 is archived completed and covers strict joined `ChangeRevision` authority, stable identity/reference resolution, canonical `delivery-v1`, structured/redacted failures, and no partial revision. Builder `85ca0918447b4cb5a3437ef11a4f6328a7f98ee5`; verifier `6e3c55bf0b4566e118624d570a219e68b20c4214`.
+- #1992 is archived completed and covers six-kind immutable receipt storage, exclusive no-overwrite publication, descriptor/no-follow path safety, source/temp/final substitution rejection, bounded diagnostics, and deterministic non-mutating health. Builder `0c82b1f9b6545fd81a3d5aa1c58c3f41719d7319`; verifier `bc3c433d0c35237dae6021183df3d1271a72b169`; collector `9400fddfe1f7060f9d53115066cb6ba78df04060`.
+- Product/proof paths are unchanged from verifier commit `bc3c433d0c35237dae6021183df3d1271a72b169` through tested HEAD; HEAD adds only the #1992 archive move.
+
+### DN-001 / PROOF-001 Correlation
+- `IF-001`: the public loader joins `intent.md`, `design.md`, `decisions.yaml`, and `graph.yaml`, returns one immutable indexed revision with canonical digest, and returns structured diagnostics with no partial authority.
+- `RISK-004`: strict IDs, contained descriptor-relative no-follow authority/receipt access, inode-bound exclusive publication, diagnostic redaction, and read-only health are covered by durable adversarial tests.
+- `PROOF-001`: current-HEAD joint public loader/receipt suites pass 42 tests; prior exact implementation snapshot passes 944 mapped regressions and clean lint/editor/diff checks.
+- Real admitted package reproduces digest `9387dea789fb3334cd50e6f784d06847880bd006402b33d5ab2c45888c2202a8`, resolves `IF-001` and `DN-001`, and returns zero health findings while preserving bytes and nanosecond mtimes.
+
+### Scope Boundary
+Admission completeness, atomic admission/job creation, receipt validity chains, jobs/invalidation, MCP, HTTP, and UI remain assigned to DN-002 and later nodes and are not claimed by this closure.
+
+### Archival Disposition
+Both required packets are archived completed and their Verify Notes jointly satisfy the admitted node and proof boundary. Archive #1977 as completed.
