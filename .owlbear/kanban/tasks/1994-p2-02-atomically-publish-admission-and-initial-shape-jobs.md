@@ -1,10 +1,10 @@
 ---
 id: 1994
 title: 'P2-02: Define initial shape-job generations'
-status: verify
+status: build
 priority: medium
 created: 2026-07-22T05:49:48.187184+02:00
-updated: 2026-07-22T15:26:03.752450+02:00
+updated: 2026-07-22T15:33:43.540848+02:00
 tags:
   - phase-1
   - scope:core
@@ -77,3 +77,19 @@ Proof guidance: exercise the public planner and generation readback without file
 - Commands run: `uv run --project serve/kanban ruff check serve/kanban/src/owlbear_kanban/jobs.py serve/kanban/src/owlbear_kanban/__init__.py`; `PYTHONPATH=serve/kanban/src uv run --project serve/kanban python -c '...'` public export smoke; serialization normalization smoke.
 - Builder-challenger result: pass.
 - Follow-up risks: persistence and atomic publication remain explicitly owned by #1998; this task does not implement them.
+
+[[2026-07-22T15:33:43+02:00]]
+## Verify Notes
+- Evidence reviewed: task AC and Builder Notes; builder commit `3a5fcbf44a3764e0f847a2c02f4a2bd9543774d0`; admitted authority `.owlbear/changes/replace-delivery-pipeline/{design.md,graph.yaml}` for DN-002, IF-002, and PROOF-002.
+- Named authorities checked: design section 7.1 limits job records to operational identity/state; graph DN-002 assigns admission and initial shape jobs; PROOF-002 owns atomic receipt-plus-job success. The implementation stays in the repaired packet boundary: planner/readback only, with no persistence or atomic publication claimed.
+- Change Module Map: no deviation. The change is limited to `serve/kanban/src/owlbear_kanban/jobs.py` and the package export boundary in `__init__.py`.
+- Normal-path boundary exercised without filesystem writes: public `load_change`, `plan_shape_jobs`, and `read_job_generation` ran against the admitted `replace-delivery-pipeline` revision. It produced 14 authored-node jobs in order, confirmed immutable records and authority-prose omission, and observed all six required rejection categories: duplicate ID, missing target, wrong kind, digest mismatch, receipt mismatch, and unknown target.
+- Checks run: public behavioral probe passed; Ruff on both touched modules passed; `uv run --project serve/kanban pytest serve/kanban/tests/test_admission.py` passed (3 tests); commit diff whitespace check passed.
+- Finding: no durable test covers the new public planner or serialized readback APIs. `rg` found no `plan_shape_jobs`, `read_job_generation`, `JobGeneration`, or `ShapeJob` coverage in either test tree. The shaped Scope explicitly includes focused tests, and the builder's initial command used `tests/test_admission.py` from the package project and collected zero tests. This is not safely repairable under verifier patch limits because it needs a new regression test module/fixtures.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Add focused durable tests for the public `plan_shape_jobs` and `read_job_generation` boundary. Cover authored order/operational fields/immutability/authority-prose omission plus each AC-2 diagnostic. Run the test module from `serve/kanban` and Ruff on the touched implementation and test file. | `serve/kanban/tests/` (new or existing job-generation test), `serve/kanban/src/owlbear_kanban/jobs.py` only if a test exposes a defect | Test output that collects and passes the new cases; do not substitute an inline smoke script. |
+
+- Final route: REJECT to build for focused regression-proof implementation.
