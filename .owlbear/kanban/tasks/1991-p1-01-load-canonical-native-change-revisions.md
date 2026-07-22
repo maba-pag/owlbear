@@ -1,10 +1,10 @@
 ---
 id: 1991
 title: 'P1-01: Load canonical native change revisions'
-status: build
+status: verify
 priority: medium
 created: 2026-07-22T01:58:43.460559+02:00
-updated: 2026-07-22T01:58:43.460559+02:00
+updated: 2026-07-22T02:16:40.858508+02:00
 tags:
   - phase-1
   - scope:core
@@ -57,3 +57,33 @@ Out of scope: delivery completeness and admission rules; Kanban jobs; receipt pe
 Resolve normative behavior from `DN-001`, `IF-001`, `RISK-004`, and `PROOF-001` in `.owlbear/changes/replace-delivery-pipeline/graph.yaml`. This bootstrap task cannot add, weaken, or supersede those obligations.
 
 Proof guidance: exercise the public loader and digest boundary with a temporary filesystem replacement only; run focused package pytest plus package-export and downstream-import scans. Durable tests are justified by the shared identity and path-security boundary.
+
+[[2026-07-22T02:16:40+02:00]]
+## Builder Notes
+
+### Change Envelope
+- Added the public native `ChangeRevision` model, contained four-file loader, stable identity/reference index, `delivery-v1` digest, and structured load diagnostics inside `owlbear_kanban`.
+- Added package-root exports and public-boundary proof for canonicalization, semantic changes, immutability, JSON projection, traversal, symlinks, encoding, schema, duplicate IDs, and unresolved references.
+- Excluded admission completeness, job creation, receipt persistence/validity, MCP, HTTP, and UI behavior as shaped.
+
+### Files Changed
+- `serve/kanban/src/owlbear_kanban/change.py` (new): strict frozen authority models, loader, identity resolution, canonical digest, diagnostics, and deep-frozen execution projection.
+- `serve/kanban/src/owlbear_kanban/__init__.py`: additive public exports.
+- `serve/kanban/tests/test_change_revision.py` (new): durable public-boundary and security/identity regression cases.
+- `tests/test_init_exports.py`: replaced an obsolete historical exact-cardinality assertion with cumulative established-export preservation; the retired `pick_dispatchable` exclusion remains.
+
+### Module Map And Test Justification
+- No production-module deviation from the shaped map. Existing `_naming.validate_path_containment` and `yaml_rt.make_yaml` are reused without modification; no dependency was added.
+- The root export-test repair is a justified downstream proof update, not compatibility work: its prior assertion forbade any future public API growth.
+- Durable tests pass the Rent Test because semantic identity, immutable authority, and path traversal are shared security/data-integrity boundaries whose regressions are hard to detect manually. Tests exercise the public loader/digest rather than private helpers.
+
+### Evidence
+- Real admitted package: zero diagnostics; `IF-001` and `DN-001` resolve; JSON projection succeeds; digest equals `9387dea789fb3334cd50e6f784d06847880bd006402b33d5ab2c45888c2202a8`.
+- Focused loader suite: 18 passed.
+- Mapped kanban regression: 920 passed (`serve/kanban/tests`, root `test_engine_*`, `test_kanban_*`, and touched export contract).
+- `uv run lint` on the four source/test paths passed all applicable hooks; four unrelated pre-existing TODO warnings were informational.
+- Editor diagnostics and `git diff --check`: clean.
+- `builder-challenger`: `decision: pass`; reran 920 tests and real-package digest smoke, applied no fixes, and authorized advancement to verify.
+
+### Residual Boundary
+- Receipt persistence and read-only change health remain intentionally owned by dependency-gated packet #1992.

@@ -49,9 +49,8 @@ class TestFromAC_KanbanInitExports:
         """AC1: CorruptionError must appear in owlbear_kanban.__all__."""
         assert "CorruptionError" in owlbear_kanban.__all__
 
-    def test_dunder_all_new_additions_are_exactly_six_symbols(self) -> None:
-        """AC1 + #1867: the only additions to __all__ beyond the original 5 are exactly 6 symbols
-        (5 from task #1213 + atomic_write from task #1867)."""
+    def test_dunder_all_preserves_established_exports(self) -> None:
+        """AC1 + #1867: later API growth preserves the eleven established exports."""
         existing = {
             "BoardConfig",
             "KanbanEngine",
@@ -67,8 +66,7 @@ class TestFromAC_KanbanInitExports:
             "CorruptionError",
             "atomic_write",
         }
-        actual_new = set(owlbear_kanban.__all__) - existing
-        assert actual_new == expected_new
+        assert existing | expected_new <= set(owlbear_kanban.__all__)
         assert "pick_dispatchable" not in owlbear_kanban.__all__
 
     # --- AC2: AgentView importable from package root ---
