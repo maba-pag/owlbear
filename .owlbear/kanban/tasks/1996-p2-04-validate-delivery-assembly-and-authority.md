@@ -1,10 +1,10 @@
 ---
 id: 1996
 title: 'P2-04: Validate delivery assembly and authority'
-status: verify
+status: collect
 priority: medium
 created: 2026-07-22T13:46:10.586702+02:00
-updated: 2026-07-22T16:14:33.195969+02:00
+updated: 2026-07-22T16:17:48.018176+02:00
 tags:
   - phase-1
   - scope:core
@@ -108,3 +108,17 @@ Proof guidance: start from a loaded `ChangeRevision`, mutate only semantic graph
 - Commands run: `uv run --project . pytest serve/kanban/tests/test_admission.py -q` -> 16 passed; `uv run --project . ruff check serve/kanban/tests/test_admission.py` -> all checks passed; `git diff --check` -> passed.
 - Builder-challenger result: pass; no concrete blocker reported.
 - Follow-up risks: randomized DAG generation is represented by the canonical admitted DAG property check; no production behavior changed.
+
+[[2026-07-22T16:17:48+02:00]]
+## Verify Notes
+- Evidence reviewed: Builder commit `5434c71d7` changes only the mapped public evaluator and focused admission proof; no verifier patch was needed.
+- Named authorities checked: `.owlbear/changes/replace-delivery-pipeline/receipts/admission-9387dea789fb.yaml` defines `DV-008` as delivery topology and producer ancestry, `DV-010` as decision/admission coherence, and `DV-011` as node authority bounds. Implementation in `serve/kanban/src/owlbear_kanban/admission.py` matches those meanings.
+- Change Module Map: changed evaluator and `serve/kanban/tests/test_admission.py` match the builder's mapped owner and public proof boundary; no deviations.
+- Normal-path boundary: `evaluate_admission` was exercised with a real loaded `ChangeRevision` from `.owlbear/changes/replace-delivery-pipeline`; fixtures mutate semantic relationships below that public boundary.
+- Replacements: no mock or injected replacement substituted the public evaluator, change loader, or admission workflow.
+- Checks run:
+  - `cd serve/kanban && uv run pytest tests/test_admission.py && uv run ruff check src/owlbear_kanban/admission.py tests/test_admission.py` failed to load the root-relative fixture because it ran from the package directory; this was a command-location issue, not an implementation result.
+  - `cd /Users/markus/Projects/owlbear-dev && uv run pytest serve/kanban/tests/test_admission.py && uv run ruff check serve/kanban/src/owlbear_kanban/admission.py serve/kanban/tests/test_admission.py` passed: 16 tests passed; Ruff reported all checks passed.
+- Findings: AC-1 through AC-4 are satisfied; valid DAG silence and deterministic sorting are covered. No local defects found and no patches applied.
+- Verifier-challenger: pass; it found the public boundary, proof sufficiency, and task scope aligned.
+- Final route: PASS to collect.
