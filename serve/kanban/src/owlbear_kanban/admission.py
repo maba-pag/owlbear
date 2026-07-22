@@ -105,7 +105,8 @@ def _evaluate_graph(revision: ChangeRevision) -> list[AdmissionFinding]:  # noqa
                             ]
                         )
 
-    owned: set[str] = set()
+    owners: dict[str, list[StableId]] = {}
+    supported: set[str] = set()
     obligation_ids = {
         item.id
         for item in (
@@ -116,19 +117,30 @@ def _evaluate_graph(revision: ChangeRevision) -> list[AdmissionFinding]:  # noqa
     }
     for node in revision.graph.nodes:
         for obligation in node.owns:
-            owned.add(obligation)
-            owned.update(node.supports)
-    for obligation in obligation_ids - owned:
-        findings.extend(
-            [
+            owners.setdefault(obligation, []).append(node.id)
+        for obligation in node.supports:
+            supported.add(obligation)
+    proof_ids = {proof.id for proof in revision.graph.proofs}
+    for obligation in obligation_ids:
+        obligation_owners = owners.get(obligation, [])
+        valid_owner = (
+            len(obligation_owners) == 1
+            and next(node for node in revision.graph.nodes if node.id == obligation_owners[0]).proof in proof_ids
+        )
+        if len(obligation_owners) > 1 or (not valid_owner and not supported):
+            detail = (
+                "obligation has multiple delivery-node owners or support paths"
+                if len(obligation_owners) > 1
+                else "obligation has no delivery-node owner or support"
+            )
+            findings.append(
                 _finding(
                     "DV-003",
                     obligation,
-                    "obligation has no delivery-node owner or support",
-                    "Assign the obligation to a delivery node.",
+                    detail,
+                    "Assign exactly one delivery node and its proof path to the obligation.",
                 )
-            ]
-        )
+            )
 
     node_ids = {node.id for node in revision.graph.nodes}
     visiting: set[StableId] = set()
@@ -154,6 +166,108 @@ def _evaluate_graph(revision: ChangeRevision) -> list[AdmissionFinding]:  # noqa
 
     for node_id in node_ids:
         visit(node_id)
+    return findings
+
+
+def _evaluate_delivery_contracts(revision: ChangeRevision) -> list[AdmissionFinding]:
+    findings: list[AdmissionFinding] = []
+    nodes = {node.id: node for node in revision.graph.nodes}
+    entities = {entity.id for entity in revision.graph.iter_entities()}
+
+    for interface in revision.graph.interfaces:
+        producer = nodes.get(interface.producer)
+        consumers = [nodes.get(consumer) for consumer in interface.consumers]
+        if (
+            producer is None
+            or interface.id not in producer.produces
+            or any(node is None or interface.id not in node.consumes for node in consumers)
+            or not all(
+                (
+                    interface.contract,
+                    interface.authority in entities,
+                    interface.failure_semantics,
+                    interface.migration is None or interface.migration in entities,
+                    interface.proof in entities,
+                )
+            )
+        ):
+            findings.append(
+                _finding(
+                    "DV-004",
+                    interface.id,
+                    "interface producer, consumer, authority, failure, or proof contract is incomplete",
+                    "Align node produces/consumes references and populate every interface contract field.",
+                )
+            )
+
+    findings.extend(
+        _finding(
+            "DV-005",
+            migration.id,
+            "migration contract is incomplete",
+            "Provide ordered steps, consumer inventory, compatibility, deletion owner, and absence proof.",
+        )
+        for migration in revision.graph.migrations
+        if not all(
+            (
+                migration.owner in entities,
+                migration.source,
+                migration.destination,
+                migration.ordered_steps,
+                migration.consumer_inventory,
+                migration.compatibility,
+                migration.deletion_owner in entities,
+                migration.absence_proof in entities,
+            )
+        )
+    )
+    findings.extend(
+        _finding(
+            "DV-006",
+            risk.id,
+            "risk disposition is incomplete",
+            "Provide scenarios, disposition, owner, and proof for the risk.",
+        )
+        for risk in revision.graph.risks
+        if not all((risk.scenarios, risk.disposition, risk.owner in entities, risk.proof in entities))
+    )
+
+    referenced_proofs = {
+        entity.proof
+        for section in ("workflows", "interfaces", "risks", "nodes")
+        for entity in getattr(revision.graph, section)
+    }
+    dependencies = {node.id: set(node.dependencies) for node in revision.graph.nodes}
+
+    def is_predecessor(owner_id: StableId, node_id: StableId) -> bool:
+        pending = [node_id]
+        seen: set[StableId] = set()
+        while pending:
+            current = pending.pop()
+            if current in seen:
+                continue
+            seen.add(current)
+            if current == owner_id:
+                return True
+            pending.extend(dependencies.get(current, ()))
+        return False
+
+    for proof in revision.graph.proofs:
+        owner = nodes.get(proof.owner)
+        if proof.id in referenced_proofs and (
+            owner is None
+            or owner.proof != proof.id
+            or not all(is_predecessor(owner.id, node.id) for node in revision.graph.nodes if node.proof == proof.id)
+            or not all((proof.boundary, proof.method, proof.allowed_replacements, proof.durable_outputs))
+        ):
+            findings.append(
+                _finding(
+                    "DV-007",
+                    proof.id,
+                    "proof contract has no build-capable owning predecessor or is incomplete",
+                    "Populate proof fields and assign it to the predecessor delivery node.",
+                )
+            )
     return findings
 
 
@@ -261,6 +375,7 @@ def evaluate_admission(revision: ChangeRevision, evidence: AdmissionEvidence) ->
     """Evaluate one revision and digest-bound evidence without performing writes."""
     digest = compute_delivery_digest(revision.intent, revision.design, revision.decisions, revision.graph)
     findings = _evaluate_graph(revision)
+    findings.extend(_evaluate_delivery_contracts(revision))
     if evidence.digest != digest:
         findings.append(
             _finding(

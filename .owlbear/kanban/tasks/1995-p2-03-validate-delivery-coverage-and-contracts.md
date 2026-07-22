@@ -1,10 +1,10 @@
 ---
 id: 1995
 title: 'P2-03: Validate delivery coverage and contracts'
-status: build
+status: verify
 priority: medium
 created: 2026-07-22T13:45:55.105472+02:00
-updated: 2026-07-22T15:32:27.557008+02:00
+updated: 2026-07-22T15:39:04.511453+02:00
 tags:
   - phase-1
   - scope:core
@@ -102,3 +102,14 @@ builder crashed once; releasing claim before retry: parallel dispatch returned n
 | 3 | builder | Make DV-007 prove that its build-capable owner is an owning predecessor before acceptance/audit, and add a focused evaluator case. | `serve/kanban/src/owlbear_kanban/admission.py`, `serve/kanban/tests/test_admission.py` | AC-4; receipt DV-007; A5-A6 |
 
 - Final route: REJECT to build.
+
+[[2026-07-22T15:39:04+02:00]]
+## Builder Notes
+- Change envelope: implement only DV-003 through DV-007 delivery coverage and contract validation gaps identified by verification.
+- Files changed: `serve/kanban/src/owlbear_kanban/admission.py`, `serve/kanban/tests/test_admission.py`.
+- Change Module Map deviations: none; validation remains in the public admission evaluator boundary.
+- Proof selected: public `evaluate_admission` over real `ChangeRevision` cases, plus focused Ruff and diff hygiene.
+- Durable-test justification: added three focused regression cases because the rejected behaviors were previously untested and easy to regress: duplicate accountable ownership, unknown interface migration disposition, and non-predecessor proof ownership.
+- Commands run: `uv run pytest serve/kanban/tests/test_admission.py` (6 passed); `uv run ruff check serve/kanban/src/owlbear_kanban/admission.py serve/kanban/tests/test_admission.py` (passed); `git diff --check -- serve/kanban/src/owlbear_kanban/admission.py serve/kanban/tests/test_admission.py` (passed).
+- Builder-challenger result: pass. Confirmed scope, test rent, implementation coverage, and proof.
+- Follow-up risks: broader admission categories remain outside this task's shaped scope.
