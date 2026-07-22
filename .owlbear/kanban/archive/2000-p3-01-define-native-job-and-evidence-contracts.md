@@ -1,10 +1,10 @@
 ---
 id: 2000
 title: 'P3-01: Define native job and evidence contracts'
-status: collect
+status: archived
 priority: high
 created: 2026-07-22T21:58:09.010514+02:00
-updated: 2026-07-23T00:43:52.469260+02:00
+updated: 2026-07-23T00:44:42.731160+02:00
 tags:
   - phase-3
   - scope:core
@@ -36,7 +36,7 @@ proof_bundle: behavioral+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Bootstrap Projection Identity
@@ -155,3 +155,11 @@ Proof guidance: exercise public parsers, serializers, and authority projection w
 - Memory: assessed recalled entries. Nineteen assessments succeeded; one recalled deep-freezing entry reported not found by memory storage during assessment, with no impact on this task's verification.
 - Verifier-challenger result: pass. It confirmed AC coverage, direct public-boundary proof, authority-derived projections, immutable operational records, and scoped changes.
 - Final route: PASS; task advanced to collect.
+
+[[2026-07-23T00:44:42+02:00]]
+## Collect Notes
+- Classification: leaf. Task #2000 has no child tasks (`list_tasks(parent=2000)` returned none), carries no aggregate or EPIC intent, and has no dependency gate.
+- Intent and invariant coverage: task Outcome/Scope and AC-1 through AC-3 define the native public job, receipt, serializer, and authority-projection contracts. The latest Verify Notes confirms direct public-boundary coverage of the parser, serializer, and `project_job` invariants without re-reviewing implementation.
+- Verification evidence: latest verifier PASS records focused public-boundary tests at commit `a6f6b72c8d2a854f266b3f7e29d2e799d2b823bb`: `uv run --project . pytest serve/kanban/tests/test_jobs.py serve/kanban/tests/test_change_receipts.py -q` passed 50 tests; scoped Ruff lint and format checks passed. Verifier-challenger returned pass.
+- Structured request state: `list_requests` returned no pending or resolved requests for #2000. No Required Follow-up or residual decision state remains.
+- Archive rationale: mechanical leaf closure criteria are satisfied; archived as completed.
