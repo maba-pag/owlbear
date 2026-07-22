@@ -1,10 +1,10 @@
 ---
 id: 1993
 title: 'P2-01: Evaluate layered delivery admission'
-status: build
+status: verify
 priority: medium
 created: 2026-07-22T05:49:37.434986+02:00
-updated: 2026-07-22T05:49:37.434986+02:00
+updated: 2026-07-22T06:04:24.090520+02:00
 tags:
   - phase-1
   - scope:core
@@ -64,3 +64,14 @@ Out of scope: receipt or job writes; subprocess or agent spawning; a general com
 Resolve normative behavior from `DN-002`, `REQ-002`, `REQ-003`, `IF-002`, `RISK-003`, `RISK-007`, and `PROOF-002` in `.owlbear/changes/replace-delivery-pipeline/graph.yaml`, plus admission sections 5 and 9 of `design.md`. This bootstrap task cannot add, weaken, or supersede those obligations.
 
 Proof guidance: exercise the public evaluation boundary with the real `ChangeRevision`; temporary repositories and command-runner results may replace only mechanisms below admission. Run focused package pytest and Ruff on touched files. Durable tests are required for the admitted invariant matrix and historical planning defects.
+
+[[2026-07-22T06:04:24+02:00]]
+## Builder Notes
+- Change envelope: add the public deterministic admission-evaluation boundary over `ChangeRevision`; validate graph references/coverage, digest binding, challenge/baseline/approval/limits gates, immutable findings, stable ordering, and package exports.
+- Files changed: `serve/kanban/src/owlbear_kanban/admission.py`, `serve/kanban/src/owlbear_kanban/__init__.py`, `serve/kanban/tests/test_admission.py`.
+- Change Module Map deviations: none; implementation stays within the kanban authority/model boundary and its focused tests.
+- Proof selected: real admitted `replace-delivery-pipeline` fixture through the public evaluator, plus existing change-revision tests and Ruff.
+- Durable-test justification: added one end-to-end regression because the admitted fixture boundary previously had no durable evaluator coverage and a false-positive ownership rule was exposed by the real smoke check.
+- Commands run: `uv run --project serve/kanban pytest serve/kanban/tests/test_admission.py serve/kanban/tests/test_change_revision.py -q` -> 20 passed; `uv run --project serve/kanban ruff check serve/kanban/src/owlbear_kanban/admission.py serve/kanban/src/owlbear_kanban/__init__.py serve/kanban/tests/test_admission.py` -> all checks passed; public smoke evaluation -> admitted, 0 findings.
+- Builder-challenger result: pass; no concrete blockers.
+- Follow-up risks: the evaluator currently models structured evidence presence and digest binding; richer per-entity challenge disposition semantics should remain covered by the shaped admission matrix as it is expanded.

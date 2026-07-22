@@ -6,6 +6,13 @@ classes.
 
 from __future__ import annotations
 
+from owlbear_kanban.admission import (
+    AdmissionAssessment,
+    AdmissionEvidence,
+    AdmissionFinding,
+    AdmissionSeverity,
+    evaluate_admission,
+)
 from owlbear_kanban.agent_view import AgentView
 from owlbear_kanban.change import (
     ChangeDiagnostic,
@@ -39,6 +46,10 @@ from owlbear_kanban.receipt import (
 from owlbear_kanban.storage_io import atomic_write
 
 __all__ = [
+    "AdmissionAssessment",
+    "AdmissionEvidence",
+    "AdmissionFinding",
+    "AdmissionSeverity",
     "AgentView",
     "BoardConfig",
     "ChangeDiagnostic",
@@ -66,5 +77,6 @@ __all__ = [
     "atomic_write",
     "change_health",
     "compute_delivery_digest",
+    "evaluate_admission",
     "load_change",
 ]
