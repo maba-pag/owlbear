@@ -1,10 +1,10 @@
 ---
 id: 2013
 title: 'P3-14: Serialize mixed job and attempt transactions'
-status: build
+status: shape
 priority: high
 created: 2026-07-23T14:40:53.788290+02:00
-updated: 2026-07-23T14:40:53.788290+02:00
+updated: 2026-07-23T15:37:50.898551+02:00
 tags:
   - phase-3
   - scope:core
@@ -53,3 +53,14 @@ Resolve behavior from `REQ-016`, `IF-003`, `KEEP-007`, `RISK-002`, `PROOF-003`, 
 
 ## Proof Guidance
 Exercise a mixed job/event plan over explicit temporary roots. Inject one mixed interruption and run a two-process same-expected-job race; lower primitive failure matrices remain in their owning tasks.
+
+[[2026-07-23T15:37:50+02:00]]
+## Builder Notes
+- Change envelope: compose task #2011's immutable attempt store with task #2012's recoverable OCC replacement primitive, then prove mixed-plan interruption, process races, and byte-equivalent replay.
+- Files changed: none.
+- Change Module Map deviations: no source inspection or implementation occurred because the required #2012 foundation is not build-ready.
+- Proof selected: none; its required owner is unavailable.
+- Durable-test justification: no tests added.
+- Commands run: none.
+- Builder-challenger result: not invoked; a DONE verdict was not proposed.
+- Follow-up risk: task #2012 is in `shape`, but this task's scope requires its replacement/reopen primitive. Reshape or complete #2012 before redispatching #2013.
