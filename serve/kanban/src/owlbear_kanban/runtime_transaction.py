@@ -8,13 +8,13 @@ import hashlib
 import os
 import secrets
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import yaml
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
-    from pathlib import Path
 
 
 class TransactionConflictError(RuntimeError):
@@ -27,6 +27,12 @@ class TransactionPathError(ValueError):
     """A transaction participant escapes its explicit root."""
 
     code = "ERR_TRANSACTION_PATH_UNSAFE"
+
+
+class TransactionManifestError(ValueError):
+    """A pending transaction manifest is malformed or has been altered."""
+
+    code = "ERR_TRANSACTION_MANIFEST_INVALID"
 
 
 @dataclass(frozen=True)
@@ -84,6 +90,34 @@ class RuntimeTransaction:
             if self._manifest_path.exists():
                 self._publish(None)
                 self._cleanup()
+
+    @classmethod
+    def recover_all(cls, manifest_root: Path, *, roots: tuple[Path, ...] | None = None) -> None:
+        """Complete every valid pending transaction rooted at ``manifest_root``."""
+        resolved_root = manifest_root.resolve()
+        allowed_roots = tuple(root.resolve() for root in (roots or (resolved_root,)))
+        directory = resolved_root / ".runtime-transactions"
+        if not directory.is_dir():
+            return
+        for manifest_path in sorted(directory.glob("*.yaml")):
+            transaction = cls._from_manifest(resolved_root, manifest_path, allowed_roots)
+            transaction.recover()
+
+    @classmethod
+    def _from_manifest(
+        cls,
+        manifest_root: Path,
+        manifest_path: Path,
+        allowed_roots: tuple[Path, ...],
+    ) -> RuntimeTransaction:
+        manifest = _load_yaml(manifest_path)
+        entries = manifest.get("participants")
+        if manifest.get("schema_version") != 1 or not isinstance(entries, list):
+            raise TransactionManifestError
+        participants = tuple(_participant_from_manifest(entry, allowed_roots) for entry in entries)
+        if not participants:
+            raise TransactionManifestError
+        return cls(manifest_root, manifest_path.stem, participants)
 
     def _prepare_manifest(self) -> None:
         self._directory.mkdir(parents=True, exist_ok=True)
@@ -170,6 +204,26 @@ def _load_yaml(path: Path) -> dict[str, object]:
     return value if isinstance(value, dict) else {}
 
 
+def _participant_from_manifest(entry: object, allowed_roots: tuple[Path, ...]) -> TransactionParticipant:
+    if not isinstance(entry, dict):
+        raise TransactionManifestError
+    root, path, digest, content = (entry.get(key) for key in ("root", "path", "sha256", "content"))
+    if not all(isinstance(value, str) for value in (root, path, digest, content)):
+        raise TransactionManifestError
+    participant_root = Path(root).resolve()
+    if participant_root not in allowed_roots:
+        raise TransactionPathError
+    try:
+        participant_content = bytes.fromhex(content)
+    except ValueError as exc:
+        raise TransactionManifestError from exc
+    if hashlib.sha256(participant_content).hexdigest() != digest:
+        raise TransactionManifestError
+    participant = TransactionParticipant(participant_root, Path(path), participant_content)
+    participant.destination()
+    return participant
+
+
 def _fsync_directory(directory: Path) -> None:
     descriptor = os.open(directory, os.O_RDONLY | os.O_DIRECTORY)
     try:
@@ -178,4 +232,10 @@ def _fsync_directory(directory: Path) -> None:
         os.close(descriptor)
 
 
-__all__ = ["RuntimeTransaction", "TransactionConflictError", "TransactionParticipant", "TransactionPathError"]
+__all__ = [
+    "RuntimeTransaction",
+    "TransactionConflictError",
+    "TransactionManifestError",
+    "TransactionParticipant",
+    "TransactionPathError",
+]

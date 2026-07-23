@@ -1,10 +1,10 @@
 ---
 id: 2002
 title: 'P3-03: Commit and recover runtime transactions'
-status: build
+status: verify
 priority: high
 created: 2026-07-22T21:58:33.866396+02:00
-updated: 2026-07-23T11:54:49.211193+02:00
+updated: 2026-07-23T12:00:19.200756+02:00
 tags:
   - phase-3
   - scope:core
@@ -113,3 +113,14 @@ Proof guidance: exercise public admission plus the reusable transaction boundary
 | 1 | builder | Add the smallest generic pending-transaction recovery entry point that scans `.runtime-transactions`, validates/reconstructs bounded manifest participants, deterministically completes or aborts them, and invoke it before runtime stores can be read. Add focused public proof that a fresh runtime/revision open after interrupted admission exposes no strict subset and removes the manifest. | `serve/kanban/src/owlbear_kanban/runtime_transaction.py`; canonical runtime/revision open owner; `serve/kanban/tests/test_admission_transaction.py` or focused runtime recovery test | Probe: receipt readable while generation absent and manifest pending; AC-2/IF-003 require runtime-reopen recovery with no partial valid participant set. |
 
 - Final route: REJECT -> build.
+
+[[2026-07-23T12:00:19+02:00]]
+## Builder Notes
+- Change envelope: the reusable native transaction coordinator and canonical change-runtime open boundary only; admission receipt and initial shape-job publication remain the sole domain integration. Legacy engine/storage and downstream lifecycle/request/invalidation semantics remain untouched.
+- Files changed: `serve/kanban/src/owlbear_kanban/runtime_transaction.py`; `serve/kanban/src/owlbear_kanban/change.py`; `serve/kanban/tests/test_admission_transaction.py`.
+- Change Module Map deviations: none. The recovery scan stays in the mapped transaction kernel and runs from `load_change()` before callers can construct stores for the returned revision.
+- Implementation: `RuntimeTransaction.recover_all()` deterministically scans pending manifests, validates schema, trusted participant roots, content digests, and contained paths, then uses existing locked recovery. `load_change()` translates unsafe, invalid, and immutable-conflict manifests to stable loader diagnostics. The focused admission test now proves a fresh runtime open after first-participant interruption exposes a complete receipt/job participant set and removes the manifest.
+- Proof selected: the durable fresh-open regression is justified because shared crash-recovery integrity is hard to observe manually and a partial immutable receipt is a meaningful data-integrity regression.
+- Commands run: `uv run pytest serve/kanban/tests/test_admission_transaction.py` passed (1); `uv run pytest serve/kanban/tests/test_admission.py serve/kanban/tests/test_admission_transaction.py serve/kanban/tests/test_change_receipts.py serve/kanban/tests/test_jobs.py` passed (71); `uv run ruff check` on the three touched paths plus `git diff --check` passed.
+- Builder-challenger result: pass; it independently ran the focused admission/change suite (71 passed) and confirmed the task scope, fresh-open proof, and code-quality checks.
+- Follow-up risks: future multi-root lifecycle participants must pass their explicit trusted roots when invoking the generic recovery API; this admission integration has one revision root.

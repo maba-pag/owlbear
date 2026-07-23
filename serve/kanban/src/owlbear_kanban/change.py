@@ -31,6 +31,12 @@ from pydantic import (
 from ruamel.yaml.error import YAMLError
 
 from owlbear_kanban._naming import validate_path_containment
+from owlbear_kanban.runtime_transaction import (
+    RuntimeTransaction,
+    TransactionConflictError,
+    TransactionManifestError,
+    TransactionPathError,
+)
 from owlbear_kanban.yaml_rt import make_yaml
 
 _CHANGE_ID_PATTERN = r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
@@ -605,6 +611,14 @@ def load_change(changes_dir: Path, change_id: str) -> ChangeLoadResult:
             delivery_digest=digest,
         )
         object.__setattr__(revision, "_source_identity", source_identity)
+        try:
+            RuntimeTransaction.recover_all(revision.source_dir)
+        except TransactionPathError:
+            _fail(ChangeDiagnosticCode.PATH_UNSAFE, "pending transaction contains an unsafe participant path")
+        except TransactionManifestError:
+            _fail(ChangeDiagnosticCode.SCHEMA_INVALID, "pending transaction manifest is invalid")
+        except TransactionConflictError:
+            _fail(ChangeDiagnosticCode.SCHEMA_INVALID, "pending transaction conflicts with immutable bytes")
     except _LoadFailure as exc:
         return ChangeLoadResult(diagnostics=(exc.diagnostic,))
     return ChangeLoadResult(revision=revision)

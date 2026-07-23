@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from owlbear_kanban import AdmissionEvidence, AdmissionPublicationError, load_change, validate_and_admit
+from owlbear_kanban import AdmissionEvidence, AdmissionPublicationError, ReceiptStore, load_change, validate_and_admit
 
 
 def _revision_and_evidence(tmp_path: Path):
@@ -28,7 +28,7 @@ def _revision_and_evidence(tmp_path: Path):
     )
 
 
-def test_admission_replay_recovers_interrupted_participant_publication(tmp_path: Path) -> None:
+def test_runtime_open_recovers_interrupted_admission_participant_publication(tmp_path: Path) -> None:
     revision, evidence = _revision_and_evidence(tmp_path)
 
     def interrupt(stage: str) -> None:
@@ -43,12 +43,11 @@ def test_admission_replay_recovers_interrupted_participant_publication(tmp_path:
     assert isinstance(exc_info.value.cause, RuntimeError)
     assert list((revision.source_dir / ".runtime-transactions").glob("*.yaml"))
 
-    receipt, generation, assessment = validate_and_admit(revision, evidence, receipt_id="admission-001")
+    reopened = load_change(revision.source_dir.parent, revision.change_id)
+    assert reopened.revision is not None
+    recovered_receipt = ReceiptStore(reopened.revision).read("admission-001")
 
-    assert assessment.admitted
-    assert receipt is not None
-    assert receipt.receipt_id == "admission-001"
-    assert generation is not None
-    assert generation.receipt_id == "admission-001"
+    assert recovered_receipt.receipt is not None
+    assert recovered_receipt.receipt.receipt_id == "admission-001"
     assert generation_path.exists()
     assert not list((revision.source_dir / ".runtime-transactions").glob("*.yaml"))
