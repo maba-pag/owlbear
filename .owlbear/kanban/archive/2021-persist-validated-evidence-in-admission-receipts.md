@@ -1,10 +1,10 @@
 ---
 id: 2021
 title: Persist validated evidence in admission receipts
-status: collect
+status: archived
 priority: high
 created: 2026-07-23T17:45:08.767424+02:00
-updated: 2026-07-23T18:33:56.176821+02:00
+updated: 2026-07-23T18:35:27.398952+02:00
 tags:
   - phase-2
   - scope:core
@@ -34,7 +34,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -87,3 +87,13 @@ Follow-up risks: the live `.owlbear/changes/replace-delivery-pipeline` graph rem
 - Prior same-AC rejection check: no earlier Verify Notes or resolved requests for task 2021.
 - Verifier-challenger result: pass; it found AC-1 through AC-3 covered with no unresolved scope drift.
 - Final route: PASS to collect.
+
+[[2026-07-23T18:35:27+02:00]]
+## Collect Notes
+- Classification: leaf. No child tasks were returned by `list_tasks(parent=2021)`; the task has no aggregate title, tag, or aggregate intent.
+- Latest verification evidence: newest `## Verify Notes` records PASS to collect for AC-1 through AC-3, with focused public-boundary proof: `uv run pytest serve/kanban/tests/test_admission_transaction.py -q` (3 passed), Ruff check, and Ruff format check.
+- Intent and invariant coverage: task Outcome/Scope require immutable receipt persistence and replay/recovery identity for `challenge`, `baseline`, `approval`, and `limits`; the verifier records persisted evidence, exact replay, different-evidence conflict without mutation, and interruption recovery.
+- Parent/dependency gate: not applicable to leaf collection. The declared dependency `#1978` has already allowed this task to reach collect (`dep_status: null`).
+- Structured requests: `list_requests` found no pending or resolved requests for #2021.
+- Residual decisions: none. The live-change limitation is explicitly out of scope and delegated to DN-013/DN-014, not an unresolved follow-up for this task.
+- Archive rationale: latest verifier PASS is complete and no later request or follow-up blocks closure.
