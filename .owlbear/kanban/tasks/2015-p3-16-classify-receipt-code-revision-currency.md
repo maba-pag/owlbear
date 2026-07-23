@@ -1,10 +1,10 @@
 ---
 id: 2015
 title: 'P3-16A: Define and freeze receipt impact closures'
-status: verify
+status: build
 priority: high
 created: 2026-07-23T14:41:09.745275+02:00
-updated: 2026-07-23T18:26:05.178208+02:00
+updated: 2026-07-23T18:31:37.402685+02:00
 tags:
   - phase-3
   - scope:core
@@ -112,3 +112,25 @@ Exercise the public closure parser, receipt parser/currentness required-field pa
 - Commands run: `uv run pytest serve/kanban/tests/test_change_receipts.py` passed 48 tests. `uv run ruff format --check` reported 3 files already formatted. `uv run ruff check` twice returned an empty terminal transport exit 130; editor diagnostics were clean, and the independent builder challenger reran focused pytest plus formatting successfully.
 - Builder-challenger: pass; no blockers. It independently confirmed 48 focused tests passed and all 3 files were formatted.
 - Follow-up risks: task #2020 consumes the exported path validator for repository-history currentness; issuance source assembly remains task #2004 scope.
+
+[[2026-07-23T18:31:37+02:00]]
+## Verify Notes
+
+- Evidence reviewed: the operative contract amendment, AC-1 through AC-4, Builder Notes, and commit `59d38ce64`.
+- Named authorities checked: the amended task contract defines authority targets as stable IDs; `serve/kanban/src/owlbear_kanban/change.py` defines the canonical `StableId` pattern. The receipt source and focused fixtures were compared against that authority.
+- Change Module Map: no ownership deviation. The committed change is limited to `serve/kanban/src/owlbear_kanban/receipt.py`, `serve/kanban/src/owlbear_kanban/__init__.py`, and `serve/kanban/tests/test_change_receipts.py`.
+- Normal-path boundary exercised: `uv run pytest serve/kanban/tests/test_change_receipts.py` passed 48 tests. The public parser, currentness path, serialization/replay, and receipt store were exercised; test doubles remain below the receipt boundary.
+- Additional checks: `uv run ruff format --check` reported all three task-owned files formatted; `uv run ruff check` passed.
+- Finding: `parse_impact_closure` checks only that `authority_targets` are non-empty strings unless an optional declared-target set is supplied. `ReceiptRecord.from_mapping` supplies no such set. Consequently a malformed target such as `not-a-stable-id` is accepted and serializes, contrary to AC-1 and the amended contract. `ReceiptStore.create` correctly validates before filesystem publication, but receives the same insufficiently validated record.
+- Patch applied: none. The required correction needs a durable regression assertion and implementation update, which exceeds verifier local patch-pass scope.
+- Prior same-AC rejection check: no earlier Verify Notes rejection exists for this refined impact-closure contract; this is the first verifier rejection in this failure domain.
+- Verifier-challenger: fail. It independently identified the missing stable-ID validation.
+- Memory recall was completed; the refined-artifact review guidance directly informed this verification. One recalled entry was no longer assessable by ID, while all other returned entries were assessed.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Validate every `authority_targets` member against the canonical `StableId` syntax during `parse_impact_closure`, preserving declared-target membership validation. | `serve/kanban/src/owlbear_kanban/receipt.py` | AC-1; `change.py` canonical stable-ID pattern; verifier finding. |
+| 2 | builder | Add focused public parser and receipt-store issuance regressions showing malformed stable IDs return `ERR_RECEIPT_IMPACT_CLOSURE_INVALID` and create no receipt file. | `serve/kanban/tests/test_change_receipts.py` | AC-1 and AC-2; verifier finding. |
+
+- Final route: REJECT to build.
