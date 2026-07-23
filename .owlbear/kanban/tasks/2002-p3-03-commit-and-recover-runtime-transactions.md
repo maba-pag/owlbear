@@ -4,7 +4,7 @@ title: 'P3-03: Commit and recover runtime transactions'
 status: shape
 priority: high
 created: 2026-07-22T21:58:33.866396+02:00
-updated: 2026-07-23T12:19:36.914276+02:00
+updated: 2026-07-23T12:21:33.965732+02:00
 tags:
   - phase-3
   - scope:core
@@ -217,3 +217,8 @@ Proof guidance: exercise public admission plus the reusable transaction boundary
 ## Collect Notes
 - Classification: not processed; task status is `shape`, outside collector authority.
 - Released without collection decision. Redispatch after it reaches `collect`.
+
+[[2026-07-23T12:21:33+02:00]]
+## Collect Notes
+- Classification: not processable in collector mode; task status is `shape`.
+- Rationale: collector boundary permits only `collect` tasks. No closure or archive review was performed.
