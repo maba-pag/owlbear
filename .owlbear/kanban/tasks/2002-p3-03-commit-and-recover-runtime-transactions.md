@@ -1,10 +1,10 @@
 ---
 id: 2002
 title: 'P3-03: Commit and recover runtime transactions'
-status: verify
+status: build
 priority: high
 created: 2026-07-22T21:58:33.866396+02:00
-updated: 2026-07-23T11:52:17.738669+02:00
+updated: 2026-07-23T11:54:49.211193+02:00
 tags:
   - phase-3
   - scope:core
@@ -96,3 +96,20 @@ Proof guidance: exercise public admission plus the reusable transaction boundary
 - Commands run: `uv run ruff check` on the two source modules and recovery test; `uv run pytest serve/kanban/tests/test_admission.py serve/kanban/tests/test_admission_transaction.py` (17 passed); `uv run pytest serve/kanban/tests/test_change_receipts.py serve/kanban/tests/test_jobs.py serve/kanban/tests/test_admission.py serve/kanban/tests/test_admission_transaction.py` (71 passed); `git diff --check` (passed).
 - Builder-challenger result: pass; no blockers.
 - Follow-up risks: subsequent lifecycle owners must supply their own participant plans and runtime-open hook when they consume the generic kernel for activity-shaped mutations.
+
+[[2026-07-23T11:54:49+02:00]]
+## Verify Notes
+- Evidence reviewed: builder commit `1ab1b292e` changes only the mapped native transaction coordinator, admission handoff, and focused admission-transaction test. This matches the repaired Change Module Map; no unexpected module or interface drift was found.
+- Named authorities checked: task AC-1 through AC-3; `REQ-016`, `IF-003`, `KEEP-007`, `RISK-002`, and `PROOF-003` in `.owlbear/changes/replace-delivery-pipeline/graph.yaml`; current source in `runtime_transaction.py`, `admission_transaction.py`, and `ReceiptStore`.
+- Normal-path/replay proof: `uv run pytest serve/kanban/tests/test_admission.py serve/kanban/tests/test_admission_transaction.py` passed (17); `uv run ruff check serve/kanban/src/owlbear_kanban/runtime_transaction.py serve/kanban/src/owlbear_kanban/admission_transaction.py` passed. These prove public admission replay after an injected first participant publication interruption, not runtime-open recovery.
+- Failing AC-2 boundary: a public `validate_and_admit(... failure=after-first-publication)` probe left `receipt_readable=True`, `generation_exists=False`, and `manifest_count=1`. `ReceiptStore.read` accepts the first participant while the second is absent. `RuntimeTransaction.recover()` only operates on a caller-supplied known transaction, and no canonical runtime/revision open path scans and resolves pending manifests before stores are readable.
+- Finding: `IF-003` requires an atomic abort or recoverable manifest with no partial valid receipt; AC-2 specifically requires recovery on runtime reopen and no reopened strict subset. The committed replay-only path does not satisfy that requirement. This is not a verifier-local patch because it needs a generic recovery entry point at runtime open plus focused proof.
+- Patches applied: none.
+- verifier-challenger result: `decision: pass` for REJECT. It confirmed the missing runtime-open scan/recovery owner and recommended a generic manifest scan/reconstruction before runtime stores become readable.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Add the smallest generic pending-transaction recovery entry point that scans `.runtime-transactions`, validates/reconstructs bounded manifest participants, deterministically completes or aborts them, and invoke it before runtime stores can be read. Add focused public proof that a fresh runtime/revision open after interrupted admission exposes no strict subset and removes the manifest. | `serve/kanban/src/owlbear_kanban/runtime_transaction.py`; canonical runtime/revision open owner; `serve/kanban/tests/test_admission_transaction.py` or focused runtime recovery test | Probe: receipt readable while generation absent and manifest pending; AC-2/IF-003 require runtime-reopen recovery with no partial valid participant set. |
+
+- Final route: REJECT -> build.
