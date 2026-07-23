@@ -1,10 +1,10 @@
 ---
 id: 2013
 title: 'P3-14: Serialize mixed job and attempt transactions'
-status: collect
+status: archived
 priority: high
 created: 2026-07-23T14:40:53.788290+02:00
-updated: 2026-07-23T23:45:48.921782+02:00
+updated: 2026-07-23T23:47:25.664674+02:00
 tags:
   - phase-3
   - scope:core
@@ -48,7 +48,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -163,3 +163,15 @@ Task #2013 owns participant planning and mixed transaction evidence. Task #2012 
 - Memory recall: assessed all 20 recalled entries; refined-artifact, public-callable, scoped-proof, replay, and durable-suite guidance were applied where relevant.
 - Verifier-challenger result: pass; no concrete defects or unresolved acceptance criteria.
 - Final route: PASS to collect.
+
+[[2026-07-23T23:47:25+02:00]]
+## Collect Notes
+- Classification: leaf. No child tasks; title/tags/body contain no aggregate or EPIC intent.
+- Intent source: `## Outcome`, `## Scope`, and AC-1 through AC-5 in this task.
+- Latest verification evidence: PASS to collect. Verifier reviewed builder commit `c68ebc6a93a4017ac4b9d6df4796b7a7662b41b0`; all five ACs map to the assembled mixed job/attempt transaction boundary.
+- Invariant coverage: replacement planning and stale OCC handling; attempt participant creation; interrupted mixed commit recovery and cleanup; forked same-token conflict serialization; byte-equivalent replay/idempotence.
+- Child coverage: not applicable; `list_tasks(parent=2013)` returned no tasks.
+- Parent dependency-gate check: not applicable for leaf closure; active dependencies #2011 and #2012 report `dep_status: ok`.
+- Tested commit and normal-path proof: `c68ebc6a93a4017ac4b9d6df4796b7a7662b41b0`; the focused pytest command covering jobs, attempts, and runtime transactions returned 55 passed, with ruff check, formatting check, and diff check also passing at that committed state.
+- Residual decisions: none. Structured pending and resolved request queries returned no records.
+- Archive rationale: latest verifier PASS is complete and no unresolved follow-up, request, block, child, or dependency condition prevents mechanical leaf archival.
