@@ -1,10 +1,10 @@
 ---
 id: 2002
 title: 'P3-03: Commit and recover runtime transactions'
-status: collect
+status: archived
 priority: high
 created: 2026-07-22T21:58:33.866396+02:00
-updated: 2026-07-23T12:40:29.345243+02:00
+updated: 2026-07-23T12:45:07.070356+02:00
 tags:
   - phase-3
   - scope:core
@@ -39,7 +39,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Bootstrap Projection Identity
@@ -234,3 +234,12 @@ Proof guidance: exercise public admission plus the reusable transaction boundary
 - Stale rejection: the collector cited the earlier verifier rejection against builder commit `1ab1b292e` and ignored the later PASS. That earlier Required Follow-up was resolved by subsequent builder commits and the latest verifier evidence.
 - System repair: repeated section reads now return newest-first; collector is required to archive leaves from the latest Verify Notes without code re-review; verifier reshapes after a second same-AC/failure-family rejection; shaping now requires finite Scenario Closure Maps and splits multiple independent high-risk axes.
 - Route: restored directly to `collect`. Collector should perform mechanical leaf archival from the latest verifier PASS; no additional build or verify cycle is authorized.
+
+[[2026-07-23T12:45:07+02:00]]
+## Collect Notes
+- Classification: leaf. No child tasks or aggregate intent.
+- Current lifecycle evidence: the latest Verify Notes occurrence records PASS to collect against builder commit `6ea017d11`; earlier verifier rejection notes are resolved history.
+- Verification evidence: 77 focused tests passed across admission, transaction, receipt, job, and runtime-open recovery; Ruff/format checks passed; public admission replay and real `load_change()` recovery exercised; verifier-challenger passed.
+- Requests and dependencies: no pending or resolved structured requests; dependency #2001 is completed.
+- Collector boundary: no code re-review or proof rerun performed. The stale earlier Collect rejection was mechanically corrected before this closure.
+- Archive rationale: current verifier PASS, resolved follow-ups, clean request state, and completed dependency satisfy leaf archival.
