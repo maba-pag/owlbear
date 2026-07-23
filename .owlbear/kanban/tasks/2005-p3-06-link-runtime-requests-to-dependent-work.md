@@ -4,7 +4,7 @@ title: 'P3-06: Link runtime requests to dependent work'
 status: build
 priority: medium
 created: 2026-07-22T21:59:06.804749+02:00
-updated: 2026-07-22T21:59:06.804749+02:00
+updated: 2026-07-23T11:29:26.796193+02:00
 tags:
   - phase-3
   - scope:core
@@ -63,3 +63,10 @@ Build a native request owner over the transaction and job-lifecycle boundaries f
 Resolve behavior from `REQ-015`, `REQ-016`, `KEEP-006`, `IF-003`, `PROOF-003`, and design section 11. Material authority changes return a typed design re-entry disposition rather than editing authority inside the runtime.
 
 Proof guidance: exercise public native request operations over temporary change/work roots, including linked versus unrelated jobs, exact replay, concurrent resolution, local resume, and material re-entry.
+
+[[2026-07-23T11:29:26+02:00]]
+## Shape Notes
+- Repair classification: connected dependency-closure audit; no operative contract change required.
+- Dependency closure: #2005 introduces its own native request contracts/storage and consumes the transaction kernel and job/claim foundation from #2002/#2003. AC-2 and AC-3 already require atomic request identity/resolution with linked job references, no partial links, and scoped invalidation intent. No sibling or descendant producer is required.
+- Ownership boundary: request activity remains request/job-link mutation in this task; broad invalidation closure and corrective jobs remain #2006. Material authority resolution still returns design re-entry without mutating authority.
+- Board audit: remains `build`, parent #1979, dependencies #2002 and #2003, and is correctly dependency-blocked.
