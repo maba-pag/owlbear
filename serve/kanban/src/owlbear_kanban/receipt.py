@@ -11,13 +11,14 @@ import os
 import re
 import secrets
 import stat
+import subprocess
 from collections.abc import Iterable, Iterator, Mapping
 from datetime import date, datetime, time
 from enum import StrEnum
 from io import StringIO
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from types import MappingProxyType
-from typing import Annotated, Literal, Never
+from typing import Annotated, Literal, Never, Protocol
 
 from pydantic import BaseModel, ConfigDict, StringConstraints, TypeAdapter, field_serializer, model_validator
 from pydantic import ValidationError as PydanticValidationError
@@ -231,6 +232,10 @@ class ReceiptValidityCode(StrEnum):
     FIELD_MISSING = "ERR_RECEIPT_FIELD_MISSING"
     IMPACT_CLOSURE_MISSING = "ERR_RECEIPT_IMPACT_CLOSURE_MISSING"
     IMPACT_CLOSURE_INVALID = "ERR_RECEIPT_IMPACT_CLOSURE_INVALID"
+    CODE_REVISION_MISSING = "ERR_RECEIPT_CODE_REVISION_MISSING"
+    CODE_REVISION_NOT_DESCENDANT = "ERR_RECEIPT_CODE_REVISION_NOT_DESCENDANT"
+    CODE_PATH_STALE = "ERR_RECEIPT_CODE_PATH_STALE"
+    CODE_HISTORY_UNAVAILABLE = "ERR_RECEIPT_CODE_HISTORY_UNAVAILABLE"
 
 
 class ReceiptValidity(_ReceiptModel):
@@ -239,11 +244,152 @@ class ReceiptValidity(_ReceiptModel):
     code: ReceiptValidityCode
     detail: str
     target: str | None = None
+    path: str | None = None
+    selector: str | None = None
 
     @property
     def current(self) -> bool:
         """Whether local authority and proof checks are current."""
         return self.code is ReceiptValidityCode.CURRENT
+
+
+class RepositoryHistory(Protocol):
+    """Deterministic repository-history operations used by receipt currency checks."""
+
+    def revisions_exist(self, tested_revision: str, candidate_revision: str) -> bool:
+        """Return whether both revision identifiers resolve to commits."""
+
+    def is_descendant(self, tested_revision: str, candidate_revision: str) -> bool:
+        """Return whether the candidate descends from the tested revision."""
+
+    def name_status(self, tested_revision: str, candidate_revision: str) -> bytes:
+        """Return NUL-delimited Git name-status output for the revision range."""
+
+
+class RepositoryHistoryError(RuntimeError):
+    """Report a repository-history query that cannot establish currency."""
+
+
+class GitRepositoryHistory:
+    """Repository-history adapter backed by deterministic Git commands."""
+
+    def __init__(self, repository: Path) -> None:
+        self._repository = repository
+
+    def revisions_exist(self, tested_revision: str, candidate_revision: str) -> bool:
+        return all(
+            self._run("rev-parse", "--verify", "--quiet", f"{revision}^{{commit}}", allow_missing=True) is not None
+            for revision in (tested_revision, candidate_revision)
+        )
+
+    def is_descendant(self, tested_revision: str, candidate_revision: str) -> bool:
+        return (
+            self._run("merge-base", "--is-ancestor", tested_revision, candidate_revision, allow_missing=True)
+            is not None
+        )
+
+    def name_status(self, tested_revision: str, candidate_revision: str) -> bytes:
+        result = self._run(
+            "diff",
+            "--name-status",
+            "-z",
+            "-M",
+            "-C",
+            "--find-copies-harder",
+            tested_revision,
+            candidate_revision,
+        )
+        assert result is not None
+        return result
+
+    def _run(self, *arguments: str, allow_missing: bool = False) -> bytes | None:
+        try:
+            command = ["git", "-C", str(self._repository), *arguments]
+            result = subprocess.run(  # noqa: S603 -- fixed command-vector invocation
+                command,
+                check=False,
+                capture_output=True,
+            )
+        except OSError as exc:
+            raise RepositoryHistoryError from exc
+        if result.returncode == 0:
+            return result.stdout
+        if allow_missing and result.returncode == 1:
+            return None
+        raise RepositoryHistoryError
+
+
+def evaluate_code_revision_currency(
+    history: RepositoryHistory,
+    tested_revision: str,
+    candidate_revision: str,
+    impact_closure: ImpactClosure,
+) -> ReceiptValidity:
+    """Classify whether a candidate revision preserves a receipt's frozen path closure."""
+    try:
+        if not history.revisions_exist(tested_revision, candidate_revision):
+            return ReceiptValidity(
+                code=ReceiptValidityCode.CODE_REVISION_MISSING,
+                detail="tested or candidate code revision does not exist",
+            )
+        if tested_revision == candidate_revision:
+            return ReceiptValidity(code=ReceiptValidityCode.CURRENT, detail="candidate matches tested code revision")
+        if not history.is_descendant(tested_revision, candidate_revision):
+            return ReceiptValidity(
+                code=ReceiptValidityCode.CODE_REVISION_NOT_DESCENDANT,
+                detail="candidate code revision does not descend from the tested revision",
+            )
+        for path in _name_status_paths(history.name_status(tested_revision, candidate_revision)):
+            selector = _intersecting_selector(path, impact_closure.paths)
+            if selector is not None:
+                return ReceiptValidity(
+                    code=ReceiptValidityCode.CODE_PATH_STALE,
+                    detail="changed code path intersects the receipt impact closure",
+                    path=path,
+                    selector=selector,
+                )
+    except (RepositoryHistoryError, UnicodeDecodeError, ValueError):
+        return ReceiptValidity(
+            code=ReceiptValidityCode.CODE_HISTORY_UNAVAILABLE,
+            detail="repository history could not prove code-revision currency",
+        )
+    return ReceiptValidity(
+        code=ReceiptValidityCode.CURRENT,
+        detail="no changed code path intersects the receipt impact closure",
+    )
+
+
+def _name_status_paths(value: bytes) -> tuple[str, ...]:
+    fields = value.split(b"\0")
+    if not fields or fields.pop() != b"":
+        msg = "Git name-status output is not NUL terminated"
+        raise ValueError(msg)
+    paths: list[str] = []
+    while fields:
+        status = fields.pop(0).decode("ascii")
+        if status.startswith(("R", "C")):
+            if len(status) == 1 or not status[1:].isdigit():
+                msg = "Git name-status output is malformed"
+                raise ValueError(msg)
+            path_count = 2
+        elif status in {"A", "M", "D", "T", "U", "X", "B"}:
+            path_count = 1
+        else:
+            msg = "Git name-status output is malformed"
+            raise ValueError(msg)
+        if len(fields) < path_count:
+            msg = "Git name-status output is malformed"
+            raise ValueError(msg)
+        raw_paths, fields = fields[:path_count], fields[path_count:]
+        paths.extend(parse_repository_path(raw_path.decode("utf-8", errors="strict")) for raw_path in raw_paths)
+    return tuple(paths)
+
+
+def _intersecting_selector(path: str, selectors: tuple[str, ...]) -> str | None:
+    for selector in selectors:
+        if selector in ("/", path) or (selector.endswith("/") and path.startswith(selector)):
+            return selector
+    return None
 
 
 class ReceiptParseDiagnostic(_ReceiptModel):

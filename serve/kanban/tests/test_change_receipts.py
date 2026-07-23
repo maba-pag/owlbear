@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import hashlib
 import json
+import subprocess
 from collections.abc import Callable
 from pathlib import Path
 
@@ -13,6 +14,7 @@ import owlbear_kanban
 import owlbear_kanban.receipt as receipt_module
 from owlbear_kanban import (
     ChangeRevision,
+    GitRepositoryHistory,
     ImpactClosureError,
     ReceiptConflictError,
     ReceiptDiagnosticCode,
@@ -21,6 +23,7 @@ from owlbear_kanban import (
     ReceiptValidityCode,
     change_health,
     evaluate_receipt_currentness,
+    evaluate_code_revision_currency,
     load_change,
     parse_receipt_mapping,
     parse_impact_closure,
@@ -128,6 +131,130 @@ def test_impact_closure_parser_canonicalizes_paths_and_validates_authority_targe
     assert closure.paths == ("README.md", "docs/")
     assert closure.authority_targets == ("REQ-001", "REQ-002")
     assert parse_repository_path("/") == "/"
+
+
+def _git(repository: Path, *arguments: str) -> str:
+    return subprocess.run(
+        ["git", "-C", str(repository), *arguments], check=True, capture_output=True, text=True
+    ).stdout.strip()
+
+
+def _commit(repository: Path, path: str, content: str, message: str) -> str:
+    file_path = repository / path
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    file_path.write_text(content)
+    _git(repository, "add", "-A")
+    _git(repository, "commit", "-m", message)
+    return _git(repository, "rev-parse", "HEAD")
+
+
+def test_code_revision_currency_classifies_real_git_history_and_history_failures(tmp_path: Path) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    _git(repository, "init")
+    _git(repository, "config", "user.name", "Receipt Test")
+    _git(repository, "config", "user.email", "receipt@example.test")
+    tested = _commit(repository, "src/app.py", "base\n", "base")
+    history = GitRepositoryHistory(repository)
+    src_closure = parse_impact_closure({"paths": ["src/"], "authority_targets": []})
+    docs_candidate = _commit(repository, "docs/readme.md", "unrelated\n", "docs")
+
+    assert evaluate_code_revision_currency(history, tested, tested, src_closure).code is ReceiptValidityCode.CURRENT
+    assert (
+        evaluate_code_revision_currency(history, tested, docs_candidate, src_closure).code
+        is ReceiptValidityCode.CURRENT
+    )
+
+    stale_candidate = _commit(repository, "src/app.py", "changed\n", "source")
+    stale = evaluate_code_revision_currency(history, tested, stale_candidate, src_closure)
+    assert stale.code is ReceiptValidityCode.CODE_PATH_STALE
+    assert (stale.path, stale.selector) == ("src/app.py", "src/")
+
+    assert (
+        evaluate_code_revision_currency(history, "f" * 40, stale_candidate, src_closure).code
+        is ReceiptValidityCode.CODE_REVISION_MISSING
+    )
+    assert (
+        evaluate_code_revision_currency(history, tested, "e" * 40, src_closure).code
+        is ReceiptValidityCode.CODE_REVISION_MISSING
+    )
+
+    _git(repository, "checkout", "-b", "side", tested)
+    non_descendant = _commit(repository, "docs/side.md", "side\n", "side")
+    assert (
+        evaluate_code_revision_currency(history, stale_candidate, non_descendant, src_closure).code
+        is ReceiptValidityCode.CODE_REVISION_NOT_DESCENDANT
+    )
+    _git(repository, "checkout", "-")
+
+    (repository / "lib").mkdir()
+    _git(repository, "mv", "src/app.py", "lib/app.py")
+    renamed = _commit(repository, "lib/app.py", "changed\n", "rename")
+    renamed_result = evaluate_code_revision_currency(
+        history,
+        stale_candidate,
+        renamed,
+        parse_impact_closure({"paths": ["src/app.py"], "authority_targets": []}),
+    )
+    assert (renamed_result.code, renamed_result.path) == (ReceiptValidityCode.CODE_PATH_STALE, "src/app.py")
+
+    (repository / "src").mkdir(exist_ok=True)
+    (repository / "src" / "app.py").write_text("changed\n")
+    copied = _commit(repository, "src/app.py", "changed\n", "copy")
+    copied_result = evaluate_code_revision_currency(
+        history,
+        renamed,
+        copied,
+        parse_impact_closure({"paths": ["lib/app.py"], "authority_targets": []}),
+    )
+    assert (copied_result.code, copied_result.path) == (ReceiptValidityCode.CODE_PATH_STALE, "lib/app.py")
+
+    class BrokenHistory:
+        def revisions_exist(self, _tested: str, _candidate: str) -> bool:
+            return True
+
+        def is_descendant(self, _tested: str, _candidate: str) -> bool:
+            return True
+
+        def name_status(self, _tested: str, _candidate: str) -> bytes:
+            return b"R100\0src/old.py\0\xff\0"
+
+    unavailable = evaluate_code_revision_currency(BrokenHistory(), tested, stale_candidate, src_closure)
+    assert unavailable.code is ReceiptValidityCode.CODE_HISTORY_UNAVAILABLE
+
+    class QueryFailureHistory(BrokenHistory):
+        def revisions_exist(self, _tested: str, _candidate: str) -> bool:
+            raise receipt_module.RepositoryHistoryError
+
+    class StaticHistory(BrokenHistory):
+        def __init__(self, name_status: bytes) -> None:
+            self._name_status = name_status
+
+        def name_status(self, _tested: str, _candidate: str) -> bytes:
+            return self._name_status
+
+    assert (
+        evaluate_code_revision_currency(QueryFailureHistory(), tested, stale_candidate, src_closure).code
+        is ReceiptValidityCode.CODE_HISTORY_UNAVAILABLE
+    )
+    assert (
+        evaluate_code_revision_currency(
+            StaticHistory(b"M\0"),
+            tested,
+            stale_candidate,
+            src_closure,
+        ).code
+        is ReceiptValidityCode.CODE_HISTORY_UNAVAILABLE
+    )
+    assert (
+        evaluate_code_revision_currency(
+            StaticHistory(b"M\0../unsafe\0"),
+            tested,
+            stale_candidate,
+            src_closure,
+        ).code
+        is ReceiptValidityCode.CODE_HISTORY_UNAVAILABLE
+    )
 
 
 @pytest.mark.parametrize("target", ["not-a-stable-id", "REQ-01", "req-001"])

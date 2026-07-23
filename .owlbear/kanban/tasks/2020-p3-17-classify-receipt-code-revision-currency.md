@@ -1,10 +1,10 @@
 ---
 id: 2020
 title: 'P3-16B: Classify receipt code-revision currency'
-status: build
+status: verify
 priority: high
 created: 2026-07-23T17:39:16.311514+02:00
-updated: 2026-07-23T18:10:35.497026+02:00
+updated: 2026-07-23T22:09:11.371414+02:00
 tags:
   - phase-3
   - scope:core
@@ -64,3 +64,15 @@ Exercise the public evaluator over a bounded temporary Git history containing ex
 ## Packet Identity Correction
 - Stable packet identity: `DN-003-PK-004-K`.
 - This unused suffix distinguishes code-revision currency from #2016 predecessor/supersession packet `DN-003-PK-004-G`. The existing Markdown filename is a stable Kanban storage path and is not packet identity.
+
+[[2026-07-23T22:09:11+02:00]]
+## Builder Notes
+- Change envelope: extend the receipt validity boundary with deterministic Git-backed code-revision currency only; preserve local-currentness and later composition ownership.
+- Files changed: `serve/kanban/src/owlbear_kanban/receipt.py`, `serve/kanban/src/owlbear_kanban/__init__.py`, and `serve/kanban/tests/test_change_receipts.py`.
+- Change Module Map: no shaped map was supplied. Source confirmed the existing receipt module owns `ReceiptValidity` and local currentness; added `RepositoryHistory`, `GitRepositoryHistory`, and `evaluate_code_revision_currency` there. No deviation.
+- Proof selected: durable behavioral test passes the Rent Test because receipt currency is a shared, fail-closed evidence-validity boundary with non-obvious Git status parsing.
+- Commands run: `uv run pytest serve/kanban/tests/test_change_receipts.py -q` (56 passed); `uv run ruff check` on all touched files (passed); `uv run ruff format --check` on all touched files (passed); `git diff --check` on task-owned files (passed).
+- AC evidence: AC-1 exact existing revisions return `CURRENT` before name-status; AC-2 real descendant, rename, and copy histories evaluate both source and destination paths; AC-3 real missing and side-branch revisions produce the specified results; AC-4 file/tree intersections return stale result with path and selector; AC-5 malformed arity, invalid UTF-8, unsafe path, and query failure return history unavailable.
+- Current failure-key resolutions: none.
+- Builder-challenger: pass; independently ran the focused receipt suite (56 passed) and found no concrete blocker.
+- Follow-up risks: complete currentness composition remains owned by task #2016.
