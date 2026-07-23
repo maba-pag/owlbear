@@ -4,7 +4,7 @@ title: 'P3-08: Expose indexed runtime health and history'
 status: build
 priority: low
 created: 2026-07-22T22:07:25.462842+02:00
-updated: 2026-07-22T22:07:25.462842+02:00
+updated: 2026-07-23T11:29:56.443534+02:00
 tags:
   - phase-3
   - scope:core
@@ -64,3 +64,10 @@ Build over the native runtime facade, stores, receipt validity, requests, and in
 Resolve behavior from `REQ-009`, `REQ-023`, `KEEP-006`, `KEEP-007`, `IF-003`, `RISK-006`, `PROOF-003`, and design sections 7.3, 8.5, 9.7, and 13.
 
 Proof guidance: exercise public projection and health operations over scale and corruption fixtures; instrument lower store reads only to prove index-bounded behavior.
+
+[[2026-07-23T11:29:56+02:00]]
+## Shape Notes
+- Repair classification: connected dependency-closure audit; no operative contract change required.
+- Dependency closure: #2007 consumes the assembled job, attempt/activity, finding, receipt, request, validity, and invalidation runtime through #2006's transitive closure. It introduces only read projections, indexes, pagination, and health diagnostics.
+- Integrated boundary: AC-1 exposes orthogonal runtime state, AC-2 proves bounded indexed history, and AC-3 reports unresolved transaction manifests and cross-store corruption without mutation. This remains the assembled read/health portion of `PROOF-003`.
+- Board audit: remains `build`, parent #1979, dependency #2006, and is correctly dependency-blocked.
