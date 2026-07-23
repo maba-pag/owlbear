@@ -1,10 +1,10 @@
 ---
 id: 2014
 title: 'P3-15: Evaluate receipt authority and proof currency'
-status: verify
+status: build
 priority: high
 created: 2026-07-23T14:41:02.860272+02:00
-updated: 2026-07-23T15:50:56.400078+02:00
+updated: 2026-07-23T16:29:14.919832+02:00
 tags:
   - phase-3
   - scope:core
@@ -71,3 +71,17 @@ Use a finite evaluator table over receipt kind, schema, target, digest, and proo
 - The empty exit-130 result was a terminal transport false negative. The three implementation/test paths have no uncommitted layer. Later history changed only `__init__.py` by adding the independently owned #2010/#2011 attempt exports.
 - Recovery proof against current `HEAD`: `uv run pytest serve/kanban/tests/test_change_receipts.py` (37 passed); Ruff check passed; Ruff format check passed.
 - Cleared `COMMIT_FAILED` without changing status `verify`; verification may resume from commit `4431cac7c`.
+
+[[2026-07-23T16:29:14+02:00]]
+## Verify Notes
+
+- Evidence reviewed: Builder Notes; task AC-1 through AC-3; commit `4431cac7c`; current `HEAD`; focused receipt evaluator and its public test boundary.
+- Named authorities checked: `.owlbear/changes/replace-delivery-pipeline/design.md` sections 4.2 and 4.3; `graph.yaml` REQ-009, REQ-015, REQ-016, NEG-002, NEG-010, and IF-003. The evaluator correctly stays in the local-currentness slice: it uses current delivery and node-plan digest authority and target `Proof`; predecessor validity, supersession, and code-revision currency remain excluded by task scope.
+- Change Module Map: no deviation. The changed receipt owner, package export, and focused receipt test module are the direct mapped boundary. Later commits have not changed `receipt.py` or `test_change_receipts.py` since `4431cac7c`.
+- Normal-path boundary exercised: parsed current target receipt through public `evaluate_receipt_currentness`; the focused suite also exercises stale delivery digest, stale node-plan digest, absent target, unsatisfied proof, and admission without node-plan/evidence.
+- Checks run: `uv run pytest serve/kanban/tests/test_change_receipts.py` (37 passed); `uv run ruff check` on the three changed files (passed); `uv run ruff format --check` on the three changed files (passed); VS Code diagnostics reported no errors.
+- Prior same-AC rejection check: no earlier `## Verify Notes` or verifier rejection exists for this task.
+- Finding: AC-2 is unproven and unreachable at the intended evaluator boundary. `ReceiptRecord.schema_version` is `Literal[1]`, so the normal public parser rejects an unsupported schema with `SCHEMA_INVALID`; `evaluate_receipt_currentness` cannot receive such a record, although it advertises `SCHEMA_UNSUPPORTED`. The focused tests validate parser/store rejection only, not evaluator behavior.
+- Patch applied: none. Resolving this requires builder-owned contract alignment: either admit the intended unsupported-schema evaluator input or revise the evaluator/AC boundary to make parsing the supported authority, with focused proof for the selected contract.
+- Verifier-challenger: fail, confirming the AC-2 evaluator-boundary gap.
+- Final route: REJECT to build.
