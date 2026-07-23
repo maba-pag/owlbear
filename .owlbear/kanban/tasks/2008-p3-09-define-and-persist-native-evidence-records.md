@@ -1,10 +1,10 @@
 ---
 id: 2008
-title: 'P3-09: Define and persist native evidence records'
-status: shape
+title: 'P3-09: Persist native findings and list receipts'
+status: build
 priority: high
 created: 2026-07-23T02:23:31.452855+02:00
-updated: 2026-07-23T02:34:43.637751+02:00
+updated: 2026-07-23T03:14:32.474753+02:00
 tags:
   - phase-3
   - scope:core
@@ -21,15 +21,15 @@ parent: 2001
 depends_on:
   - 2000
 ac:
-  - 'AC-1: Given schema-version-1 attempt-event and finding mappings, public parsers
-    return frozen records preserving the fields defined in Scope. Unknown fields,
-    malformed identities, non-positive sequences, unsupported event, target, or class
-    literals, and missing required references return stable diagnostics.'
-  - 'AC-2: Given public attempt/finding create, read, and list calls against an explicit
-    work root, replay returns the existing record; a differing occupied identity raises
-    `EvidenceConflictError` with `code == "ERR_EVIDENCE_CONFLICT"`. Traversal or symlink
-    substitution returns a stable path diagnostic, lists sort by canonical identity
-    and sequence, and failed writes leave no temporary or partial record.'
+  - 'AC-1: Given schema-version-1 finding mappings, public parsers return frozen records
+    preserving the fields defined in Scope. Unknown fields, malformed references,
+    unsupported target or class literals, and missing required references return stable
+    diagnostics.'
+  - 'AC-2: Given public finding create, read, and list calls against an explicit work
+    root, byte-equivalent replay returns the existing record; a differing occupied
+    identity raises `FindingConflictError` with `code == "ERR_FINDING_CONFLICT"`.
+    Traversal or symlink substitution returns a stable path diagnostic, listing sorts
+    by finding ID, and failed writes leave no temporary or partial record.'
   - 'AC-3: Given `ReceiptStore` built from a loaded `ChangeRevision`, public list
     reads only `.owlbear/changes/<change-id>/receipts/`, returns entries sorted by
     receipt ID, and represents malformed or unsafe entries with `ReceiptDiagnostic`
@@ -49,24 +49,24 @@ archival_refs: []
 - `packet_id`: `DN-003-PK-009`
 
 ## Outcome
-Versioned immutable attempt-event and finding contracts plus contained work-evidence storage preserve operational history; canonical change-plane receipts gain public deterministic listing without work-root duplication.
+Versioned immutable finding contracts and contained finding storage preserve corrective evidence; canonical change-plane receipts gain public deterministic listing without work-root duplication.
 
 ## Scope
-In scope: public frozen models, parsers, serializers, and stable diagnostics for attempt events and findings. An attempt event preserves attempt, job, change, digest, and target references; actor/process identity; positive monotonic sequence; event kind and timestamp; optional detail and evidence references. A finding preserves finding, source-attempt, source-job, change, and digest references; one design-enumerated target kind and ID; one design-enumerated finding class; detail; and timestamp.
+In scope: public frozen `Finding` models, parsers, serializers, and stable diagnostics. A finding preserves finding, source-attempt, source-job, change, and digest references; one design-enumerated target kind and ID; one design-enumerated finding class; detail; and timestamp.
 
-Also in scope: explicit work-root attempt/finding create, read, and list operations; immutable replay; conflict, path-containment, no-overwrite, and deterministic-order behavior; and public `ReceiptStore.list` on the existing `ChangeRevision`-bound canonical store.
+Also in scope: public finding create, read, and list operations against an explicit work root; byte-equivalent replay; conflict, path-containment, no-overwrite, failed-write cleanup, and deterministic finding-ID ordering; and public `ReceiptStore.list` on the existing `ChangeRevision`-bound canonical store.
 
-Out of scope: job storage or OCC; claim and lifecycle predicates; finding routing or invalidation; receipt relocation or create/read redesign; multi-record transactions and recovery; MCP; and Cockpit.
+Out of scope: all attempt contracts and attempt storage, claim and lifecycle predicates, job storage or OCC, finding routing or invalidation, receipt relocation or create/read redesign, multi-record transactions and recovery, MCP, and Cockpit. Task 2003 owns attempts and lifecycle.
 
 ## Current Foundation And Ownership
-Deepen the native job/receipt contract boundary delivered by packet `DN-003-PK-001`. Add one cohesive evidence owner under `owlbear_kanban`; extend the existing `ReceiptStore` rather than creating a second receipt store. Reuse descriptor-relative, no-follow, no-overwrite, fsync, and stable-diagnostic patterns from `receipt.py` and `storage_io.py` when current source supports them.
+Deepen the native job and receipt contract boundary delivered by packet `DN-003-PK-001`. Add one cohesive finding owner under `owlbear_kanban`; extend the existing `ReceiptStore` rather than creating a second receipt store. Reuse descriptor-relative, no-follow, no-overwrite, fsync, and stable-diagnostic patterns from `receipt.py` and `storage_io.py` when current source supports them.
 
-Public immutable evidence creation returns the existing record on byte-equivalent replay. A differing record at an occupied attempt-event or finding identity raises exported `EvidenceConflictError` with `code == "ERR_EVIDENCE_CONFLICT"`.
+Public finding creation returns the existing record on byte-equivalent replay. A differing record at an occupied finding identity raises exported `FindingConflictError` with `code == "ERR_FINDING_CONFLICT"`.
 
 ## Authority
-Resolve behavior from `REQ-008`, `REQ-009`, `REQ-016`, `IF-003`, `KEEP-007`, design sections 2, 3.5, 7.2, 10, and 13, and packet `DN-003-PK-001`. Finding target kinds are requirements, interfaces, migrations, risks, workflows, delivery nodes, packets, proofs, receipts, and code revisions. Finding classes are `implementation-defect`, `unforeseeable-discovery`, `planning-omission`, and `scope-change`.
+Resolve behavior from `REQ-008`, `REQ-016`, `IF-003`, `KEEP-007`, design sections 2, 3.5, 10, and 13, and packet `DN-003-PK-001` under `.owlbear/changes/replace-delivery-pipeline/`. Finding target kinds are requirements, interfaces, migrations, risks, workflows, delivery nodes, packets, proofs, receipts, and code revisions. Finding classes are `implementation-defect`, `unforeseeable-discovery`, `planning-omission`, and `scope-change`.
 
-Proof guidance: exercise public parser round trips and public store APIs over temporary explicit change and work roots for replay, malformed-entry listing, containment, no-overwrite, deterministic order, and durable readback; run the focused check plus a downstream-impact scan.
+Proof guidance: exercise public finding parser and store APIs plus public receipt listing over temporary explicit change and work roots for replay, malformed-entry listing, containment, no-overwrite, deterministic order, durable readback, and work-root receipt absence; run the focused check plus a downstream-impact scan.
 
 [[2026-07-23T02:34:43+02:00]]
 ## Builder Notes
@@ -79,3 +79,49 @@ Proof guidance: exercise public parser round trips and public store APIs over te
 - Builder-challenger result: not run; a DONE verdict was not proposed.
 - Follow-up required: shape must attach or restore the admitted design authority and enumerate allowed `event_kind` values (and any corresponding parser diagnostic codes), then return the task to build.
 
+[[2026-07-23T02:48:09+02:00]]
+Builder invocation stopped: task status is `shape`, not `build`. No implementation or task-content changes made; releasing claim for shaping.
+
+[[2026-07-23T03:14:32+02:00]]
+## Shape Notes
+- Source and repair mode: user-approved connected material boundary repair for tasks 2001, 2003, and 2008 after this task's builder rejection.
+- Rejection resolution: the builder's source premise was false. Admitted authority exists under `.owlbear/changes/replace-delivery-pipeline/`, including `intent.md`, `design.md`, `decisions.yaml`, `graph.yaml`, and `receipts/admission-9387dea789fb.yaml`. Design sections 2.2 and 2.3 classify attempts as operational work history and findings/receipts as durable evidence.
+- User decision: all attempt contracts and attempt storage moved to task 2003. This task owns only immutable finding contracts/storage plus public deterministic `ReceiptStore.list` on the canonical `ChangeRevision`-bound receipt store.
+- Planning artifacts: none revised. The task projection now matches existing admitted authority.
+- Interrupted-layer adoption: retained the unstaged builder-stop note and claim layer from interrupted invocations; neither task record was staged and no hunk conflicted with this repair.
+
+### Readiness And Authorities
+- Authorities: `REQ-008`, `REQ-016`, `IF-003`, `KEEP-007`, design sections 2, 3.5, 10, and 13, packet `DN-003-PK-001`, and the admitted receipt.
+- Readiness: completed task 2000 supplies native finding references and the canonical receipt contracts; task 2008 has no unresolved dependency or request.
+
+### Change Module Map
+| Owner | Responsibility | Interface impact |
+|---|---|---|
+| New finding owner under `owlbear_kanban` | Frozen Finding contract and contained create/read/list | New public finding parser/store |
+| `receipt.py` | Canonical revision-bound receipt create/read/diagnostics | Add public deterministic list only |
+| `storage_io.py` | Descriptor-relative containment and durable-write precedent | Reused internally |
+| Task 2003 | Attempt contracts, attempt storage, and lifecycle | Explicitly outside this task |
+
+### Product Invariant Map
+| Invariant | Boundary |
+|---|---|
+| Findings are immutable, contained, parseable, and deterministically ordered | Public finding parser/store |
+| Receipt bytes remain only in the loaded change revision | `ReceiptStore.list` plus work-root absence |
+| Attempt history remains operational and lifecycle-owned | Task 2003 |
+| Existing receipt create/read/conflict behavior is unchanged | Receipt regression proof |
+
+### Product Promise Coverage Map
+| Promise | Coverage |
+|---|---|
+| Typed corrective findings | This task under `REQ-008` |
+| Inspectable canonical receipt history | `ReceiptStore.list` under `REQ-016` and `KEEP-007` |
+| Immutable attempt history | Task 2003, not this task |
+
+### Task And Dependency Changes
+- Renamed the task to `P3-09: Persist native findings and list receipts` and replaced stale Outcome, Scope, ownership, Authority, proof guidance, and AC.
+- Replaced generic evidence conflict semantics with task-local `FindingConflictError` and `ERR_FINDING_CONFLICT`; no current task, source, or authority references the superseded generic error.
+- Kept parent 2001, dependency 2000, proof bundle, task count, and all unrelated edges unchanged.
+
+### Challenge And Board Audit
+- `shaper-challenger` decision: pass; authority, readiness, invariant ownership, boundary proof, error ownership, aggregate closure, and fidelity all met.
+- Release audit: task 2008 advances to `build`, parent 2001, depends on completed task 2000, and is dependency-ready. Completed sibling 2009 remains archived under parent 2001.
