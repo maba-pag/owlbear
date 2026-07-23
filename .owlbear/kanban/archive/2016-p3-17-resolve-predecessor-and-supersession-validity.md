@@ -1,10 +1,10 @@
 ---
 id: 2016
 title: 'P3-17: Resolve predecessor and explicit supersession validity'
-status: collect
+status: archived
 priority: high
 created: 2026-07-23T14:41:23.761134+02:00
-updated: 2026-07-23T22:23:15.007640+02:00
+updated: 2026-07-23T22:23:57.090766+02:00
 tags:
   - phase-3
   - scope:core
@@ -36,7 +36,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -103,3 +103,15 @@ Exercise the public evaluator over a finite receipt graph containing a current c
 - Prior same-failure-key rejection check: no earlier `## Verify Notes` or verifier rejection exists for this task.
 - Verifier challenger: pass. It confirmed authority alignment, public-boundary coverage, proportional scope, and no unresolved AC or follow-up.
 - Final route: PASS to collect.
+
+[[2026-07-23T22:23:57+02:00]]
+## Collect Notes
+- Classification: leaf. The task has no child tasks; its title, tags, and body do not declare aggregate or EPIC intent.
+- Intent source: `## Outcome` and the Operative Contract Amendment require complete receipt currentness across local, code-revision, predecessor, and explicit supersession validity without receipt mutation.
+- Latest verification evidence: the newest `## Verify Notes` records PASS from verifier. It maps AC-1 through AC-3 to the public `ReceiptStore.evaluate_currentness()` receipt-graph proof: `uv run pytest serve/kanban/tests/test_change_receipts.py -q` passed with 57 tests; focused Ruff and mapped-path diff checks passed.
+- Invariant coverage: authored predecessor order and per-call memoization; only explicit `invalidated_receipt_ids` cause supersession; stable error code and blocking identity; repeatable projections with immutable receipt bytes.
+- Dependency gate: #2014 and #2020 are archived `completed`; the task reports `dep_status: ok`.
+- Child coverage: none; `list_tasks(parent=2016)` returned no child tasks.
+- Tested commit and normal-path proof: builder commit `c6311e6f7`; verifier tied the real temporary-store public-boundary receipt-graph command above to that change.
+- Residual decisions: none. Pending and resolved structured-request queries both returned no records.
+- Archive rationale: leaf verification is complete, dependencies are closed, and no unresolved follow-up or request blocks closure.
