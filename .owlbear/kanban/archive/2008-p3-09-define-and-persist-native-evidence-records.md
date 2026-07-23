@@ -1,10 +1,10 @@
 ---
 id: 2008
 title: 'P3-09: Persist native findings and list receipts'
-status: collect
+status: archived
 priority: high
 created: 2026-07-23T02:23:31.452855+02:00
-updated: 2026-07-23T10:44:26.945922+02:00
+updated: 2026-07-23T10:45:08.018662+02:00
 tags:
   - phase-3
   - scope:core
@@ -39,7 +39,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Bootstrap Projection Identity
@@ -153,3 +153,15 @@ Builder invocation stopped: task status is `shape`, not `build`. No implementati
 - `verifier-challenger`: pass; no blocker, scope drift, or unresolved acceptance criterion.
 - Memory assessment: nine recalled entries assessed successfully; recalled entry `ecaa14f0-6497-4407-889a-3854c36152f3` was not present when assessed, so that assessment was reported unsuccessful by the memory service.
 - Final route: PASS to `collect`.
+
+[[2026-07-23T10:45:08+02:00]]
+## Collect Notes
+- Classification: leaf. No child tasks (`list_tasks(parent=2008)` returned none); title, tags, and body have no aggregate intent.
+- Leaf verification evidence: `## Verify Notes` records verifier PASS after public-boundary checks for parser, `FindingStore`, and `ReceiptStore.list`; the focused pytest run passed 36 tests, engine AC checks passed 44 tests, and Ruff format/lint plus `git diff --check` passed.
+- Intent source: task `## Outcome` and `## Scope`; AC-1 through AC-3 are covered in the verifier's evidence without a collector re-review.
+- Invariant map coverage: immutable finding parsing/storage, replay-conflict behavior, containment and cleanup, deterministic finding listing, and revision-bound canonical receipt listing were all recorded as covered.
+- Parent/dependency checks: leaf parent is `#2001`; dependency `#2000` reports `dep_status: ok`.
+- Child coverage: not applicable; task has no children.
+- Tested commit and proof: builder commit `1a5f84059`; verifier ties it to `uv run pytest serve/kanban/tests/test_findings.py serve/kanban/tests/test_change_receipts.py` (36 passed). This SHA-linked aggregate-proof requirement is not applicable to a leaf.
+- Residual decisions: no pending or resolved structured requests for task `#2008`; task is unblocked.
+- Archive rationale: verified leaf has PASS evidence and no unresolved follow-up, request, or dependency state.
