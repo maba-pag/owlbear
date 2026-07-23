@@ -1,10 +1,10 @@
 ---
 id: 2015
 title: 'P3-16A: Define and freeze receipt impact closures'
-status: build
+status: verify
 priority: high
 created: 2026-07-23T14:41:09.745275+02:00
-updated: 2026-07-23T21:47:01.111917+02:00
+updated: 2026-07-23T21:48:54.333464+02:00
 tags:
   - phase-3
   - scope:core
@@ -239,3 +239,22 @@ Use the public parser, `evaluate_receipt_currentness`, and `ReceiptStore.create`
 | 1 | builder | Extend an existing successful `ReceiptStore.create` then `read` roundtrip with unsorted duplicate paths and authority targets; assert returned paths and targets are immutable tuples, deduplicated, and tuple-sorted. | `serve/kanban/tests/test_change_receipts.py` | AC-6; public store boundary |
 
 - Final route: REJECT to build.
+
+[[2026-07-23T21:48:54+02:00]]
+## Builder Notes
+
+- Change envelope: receipt impact-closure parsing and immutability in `serve/kanban/src/owlbear_kanban/receipt.py`, proven through `serve/kanban/tests/test_change_receipts.py`.
+- Files changed: none. The mapped implementation and durable coverage were already present; scoped files were clean when claimed, so no source edit was required.
+- Change Module Map deviations: none. `receipt.py` remains the parser, local-currentness, and immutable-store owner.
+- Proof selected: `uv run --project . pytest serve/kanban/tests/test_change_receipts.py` passed 55 tests.
+- Durable-test justification: no test delta. Existing focused tests directly cover the closure contract; adding duplicates would not protect a distinct regression.
+- AC-to-evidence map:
+  - AC-1/2: `parse_impact_closure` uses `StableId` validation, `parse_repository_path`, and sorted frozen tuples; parser tests cover canonical, malformed, and undeclared selectors.
+  - AC-3: `parse_receipt_mapping` maps closure failures to `ERR_RECEIPT_IMPACT_CLOSURE_INVALID`; focused parser test passes.
+  - AC-4: `evaluate_receipt_currentness` resolves closure targets against `ChangeRevision`; focused currentness rejection test passes.
+  - AC-5: `ReceiptStore._validate_record` rejects undeclared closure targets before atomic publication; focused store test proves no receipt or temporary file remains.
+  - AC-6: round-trip store test proves tuple-sorted closure paths and authority targets persist in returned records.
+  - AC-7: round-trip store test proves a duplicate create raises `ERR_RECEIPT_CONFLICT`, preserves original bytes, and leaves no temporary file.
+- Current failure-key resolutions: none; no Verify Notes required follow-up or resolved requests existed.
+- Builder-challenger result: pass; no blockers, code delta not required.
+- Follow-up risks: receipt-graph currency and repository revision checks remain explicitly outside this task's shaped scope.
