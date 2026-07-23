@@ -1,10 +1,10 @@
 ---
 id: 2012
 title: 'P3-13: Recover OCC replacement transaction participants'
-status: build
+status: shape
 priority: high
 created: 2026-07-23T14:40:46.644783+02:00
-updated: 2026-07-23T15:13:06.665828+02:00
+updated: 2026-07-23T15:20:46.993567+02:00
 tags:
   - phase-3
   - scope:core
@@ -80,3 +80,15 @@ Use the transaction boundary directly. Cover expected, already-replaced, conflic
 - Patches applied: none; correcting this requires builder-owned synchronization or a compare-and-swap design plus a focused intervening-writer proof.
 - Verifier challenger: fail; confirmed the replacement publication race and advised a transaction-layer correction.
 - Final route: reject to build.
+
+[[2026-07-23T15:20:46+02:00]]
+## Builder Notes
+- Change envelope: repair verifier-found cross-writer OCC safety for replacement participants in `RuntimeTransaction`, with only the transaction kernel and focused boundary proof eligible to change.
+- Files changed: none. A targeted replacement-destination lock probe and its subprocess proof were applied, focused-validated, then removed when source inspection disproved the synchronization premise.
+- Change Module Map deviations: none. The mapped kernel cannot independently serialize arbitrary participant writers.
+- Rejection reason: `RuntimeTransaction._publish_replacement()` validates bytes then replaces the destination. The existing `JobStore` writer protocol serializes its writes with its private participant-root `.jobs.lock`; the kernel's manifest-root lock and a new generic replacement lock do not synchronize that writer. Therefore neither design proves REQ-016/RISK-002 cross-writer OCC, and adding an unrelated lock would only serialize replacement transactions, not prevent an intervening JobStore write from being overwritten.
+- Required reshape: define one authoritative cross-writer compare-and-swap or locking contract and its owner. The implementation must make `JobStore` and replacement publication use that same authority, then add a focused intervening-writer proof. Do not weaken the requirement to replacement-transaction-only contention unless the named authorities explicitly allow it.
+- Proof selected: `uv run pytest serve/kanban/tests/test_runtime_transaction.py` (11 passed), `uv run ruff check serve/kanban/src/owlbear_kanban/runtime_transaction.py serve/kanban/tests/test_runtime_transaction.py` (clean), and `git diff --check` (passed after probe removal). The temporary probe's focused run passed 12 tests before it was rejected as architecturally insufficient.
+- Builder challenger: not called because no DONE verdict is proposed.
+- Memory assessment: all applicable recalled entries were assessed. Two recall-payload entry identifiers were unavailable to the memory service during assessment; this did not affect task evidence.
+- Follow-up risk: current committed replacement publication retains the verifier-identified TOCTOU gap until the shared OCC authority is shaped and implemented.
