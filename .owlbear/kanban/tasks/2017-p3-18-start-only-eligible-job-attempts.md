@@ -1,10 +1,10 @@
 ---
 id: 2017
 title: 'P3-18: Start only eligible job attempts'
-status: build
+status: shape
 priority: high
 created: 2026-07-23T14:41:39.975443+02:00
-updated: 2026-07-23T14:41:39.975443+02:00
+updated: 2026-07-23T23:49:54.016080+02:00
 tags:
   - phase-3
   - scope:core
@@ -55,3 +55,16 @@ Resolve behavior from `REQ-008`, `REQ-009`, `REQ-016`, `IF-003`, `KEEP-007`, `PR
 
 ## Proof Guidance
 Exercise public `start_job` with the finite readiness classes eligible, active claim, stale authority, invalid predecessor, pending request, terminal disposition, same-identity replay, and different identity. Lower transaction and validity failure matrices remain in their owners.
+
+[[2026-07-23T23:49:54+02:00]]
+## Builder Notes
+- Change envelope: add the transport-free native runtime facade and its public `start_job` contract, composing `JobStore`, `AttemptStore`, `RuntimeTransaction`, and complete receipt currentness. The contract must define constructor inputs, request/result models, stable reason codes, loaded-authority source, terminal dispositions, and claim/process identity semantics.
+- Files changed: none; task metadata only.
+- Change Module Map deviations: source confirms no existing runtime facade or state/request projection owner. The shaped map names the facade outcome but does not name its module or contract boundary.
+- Proof selected: source inspection plus exact searches for `start_job`, native runtime facade, active-claim/terminal-disposition contract, and tests. This disproved the availability of a local owner and a public callable to exercise.
+- Durable-test justification: no test added because no stable public contract exists to protect.
+- Commands run: `git status --short && git diff -- .owlbear/kanban/tasks/2017-p3-18-start-only-eligible-job-attempts.md` (only expected claim metadata on this task; unrelated worktree changes preserved).
+- AC-to-evidence map: AC-1 cannot be implemented without an authoritative `start_job` request/result and authority-loading contract. AC-2 cannot select stable reasons without a terminal-disposition vocabulary and readiness projection. AC-3 cannot define same-identity replay without the caller identity and outcome shape.
+- Current failure-key resolutions: none; no Verify Notes or Required Follow-up section.
+- Builder-challenger result: not invoked; no DONE verdict is proposed.
+- Follow-up risk: shape must define the facade module, public callable signature/models, loaded-authority and candidate-revision inputs, request/terminal state ownership, exact stable rejection codes, and same-identity outcome semantics. Implementing these choices here would invent an unadmitted cross-module interface.
