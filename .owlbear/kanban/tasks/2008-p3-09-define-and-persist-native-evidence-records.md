@@ -1,10 +1,10 @@
 ---
 id: 2008
 title: 'P3-09: Persist native findings and list receipts'
-status: build
+status: verify
 priority: high
 created: 2026-07-23T02:23:31.452855+02:00
-updated: 2026-07-23T03:14:32.474753+02:00
+updated: 2026-07-23T10:41:52.297814+02:00
 tags:
   - phase-3
   - scope:core
@@ -125,3 +125,13 @@ Builder invocation stopped: task status is `shape`, not `build`. No implementati
 ### Challenge And Board Audit
 - `shaper-challenger` decision: pass; authority, readiness, invariant ownership, boundary proof, error ownership, aggregate closure, and fidelity all met.
 - Release audit: task 2008 advances to `build`, parent 2001, depends on completed task 2000, and is dependency-ready. Completed sibling 2009 remains archived under parent 2001.
+
+[[2026-07-23T10:41:52+02:00]]
+## Builder Notes
+- Change envelope: add the public immutable `Finding` parser/store under `owlbear_kanban` and public deterministic `ReceiptStore.list`; preserve existing receipt create/read/conflict behavior, revision-root receipt storage, and all attempt/job/lifecycle ownership.
+- Files changed: `serve/kanban/src/owlbear_kanban/finding.py`; `serve/kanban/src/owlbear_kanban/receipt.py`; `serve/kanban/src/owlbear_kanban/__init__.py`; `serve/kanban/tests/test_findings.py`.
+- Change Module Map deviations: none. `finding.py` is the mapped new owner; `receipt.py` reuses its pinned-descriptor scanning boundary; no task 2003 ownership changed.
+- Proof selected: durable public API regression coverage because immutable containment, replay/conflict, symlink resistance, failed-write cleanup, and canonical receipt inspection are shared evidence contracts.
+- Commands run: `uv run pytest serve/kanban/tests/test_findings.py` (4 passed); `uv run ruff format --check` and `uv run ruff check` on all task-owned files (passed); `uv run pytest serve/kanban/tests/test_change_receipts.py serve/kanban/tests/test_findings.py` (36 passed); downstream receipt-list caller scan; `git diff --check`.
+- Builder-challenger result: pass; no concrete DONE blocker in scope, API correctness, or test relevance.
+- Follow-up risks: finding routing, invalidation, and attempt lifecycle remain intentionally owned by later tasks.

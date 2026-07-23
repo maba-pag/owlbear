@@ -534,6 +534,13 @@ class ReceiptStore:
         except _ReceiptFailure as exc:
             return ReceiptResult(diagnostics=(exc.diagnostic,))
 
+    def list(self) -> tuple[ReceiptResult, ...]:
+        """List canonical receipts in ascending receipt-ID order."""
+        entries, diagnostic = self._scan()
+        if diagnostic is not None:
+            return (ReceiptResult(diagnostics=(diagnostic,)),)
+        return tuple(result for _path, result in entries)
+
     def _scan(self) -> tuple[tuple[tuple[str, ReceiptResult], ...], ReceiptDiagnostic | None]:
         try:
             with _receipts_directory(

@@ -39,6 +39,15 @@ from owlbear_kanban.errors import (
     NotFoundError,
     ValidationError,
 )
+from owlbear_kanban.finding import (
+    Finding,
+    FindingConflictError,
+    FindingDiagnostic,
+    FindingDiagnosticCode,
+    FindingResult,
+    FindingStore,
+    parse_finding_mapping,
+)
 from owlbear_kanban.jobs import (
     JobConcurrencyError,
     JobConflictError,
@@ -96,6 +105,12 @@ __all__ = [
     "CorruptionError",
     "DecisionsDocument",
     "DeliveryGraph",
+    "Finding",
+    "FindingConflictError",
+    "FindingDiagnostic",
+    "FindingDiagnosticCode",
+    "FindingResult",
+    "FindingStore",
     "JobConcurrencyError",
     "JobConflictError",
     "JobDiagnostic",
@@ -127,6 +142,7 @@ __all__ = [
     "compute_delivery_digest",
     "evaluate_admission",
     "load_change",
+    "parse_finding_mapping",
     "parse_job_mapping",
     "parse_receipt_mapping",
     "plan_shape_jobs",
