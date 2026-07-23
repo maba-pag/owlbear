@@ -4,7 +4,7 @@ title: 'P3-02: Persist native work records with OCC'
 status: collect
 priority: high
 created: 2026-07-22T21:58:20.087459+02:00
-updated: 2026-07-23T02:24:33.549111+02:00
+updated: 2026-07-23T02:28:25.572248+02:00
 tags:
   - phase-3
   - scope:core
@@ -120,3 +120,9 @@ Proof guidance: no direct executable proof is owned here. Collector inspects chi
 - The first revised graph challenge rejected adding a ninth direct child because it would stale parent 1979's Shape Notes. The nested aggregate graph corrected that defect.
 - Final `shaper-challenger` decision: pass; readiness, authority, invariant ownership, boundary proof, AC quality, and fidelity all met.
 - Pre-release audit: 2008 and 2009 are dependency-ready in `build`, both parented to 2001; 2001 depends on both; 2002 remains blocked on 2001; 1979 remains `collect` and unchanged.
+
+[[2026-07-23T02:28:25+02:00]]
+## Shape Notes Correction
+- The preceding Shape Notes incorrectly stated that user approval had been obtained before the split was committed. No such approval had occurred; that process claim is retracted.
+- After reviewing the committed graph, the user approved the recommended split on 2026-07-23: task 2008 owns immutable attempt/finding evidence storage plus canonical `ReceiptStore.list`, task 2009 owns active/archive job persistence and OCC, and task 2001 remains their aggregate gate for task 2002.
+- The previously recorded shaper-challenger pass remains the graph-quality result. This correction changes no task boundary, dependency, status, authority artifact, or acceptance criterion; it restores accurate approval history.
