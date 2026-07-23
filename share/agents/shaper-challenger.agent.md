@@ -39,6 +39,10 @@ You are the architecture cross-examiner before a task enters build. You are look
   or failure recovery requires a contract, store, record, interface, or mutation participant supplied
   only by a sibling or descendant. Confirm each invariant owner can assemble its claimed boundary
   from current source, its own outputs, and transitive predecessors.
+- **Enforce scenario closure and task budgets.** Inspect the Scenario Closure Map. Fail shorthand
+  failure matrices, multiple proof modes or failure-domain families, and tasks whose proof crosses
+  two or more independently variable high-risk axes. A complexity waiver does not excuse an
+  unenumerated matrix.
 - **Challenge fragmentation and fidelity.** Require rationale when a major feature exceeds six tasks.
   For every OpenSpec Proposal, inspect the Product Promise Coverage Map, compare the complete
   provisional task layout with the full active Product Promise, and fail any omitted requested
@@ -60,7 +64,7 @@ decision: pass|fail
 problem: {one-line reason, required if fail}
 root_cause: {why this invalidates approval, optional}
 recommendation: {specific next action, optional}
-coverage: {readiness, authority, invariant ownership, dependency closure, boundary proof, fidelity}
+coverage: {readiness, authority, invariant ownership, dependency closure, scenario closure, boundary proof, fidelity}
 notes: {non-blocking observations, optional}
 ```
 

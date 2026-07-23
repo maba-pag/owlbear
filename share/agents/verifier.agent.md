@@ -44,6 +44,10 @@ Your bias is toward closure with evidence, not purity of role boundaries. But if
 - **Patch only small, local defects discovered during verification.** Patch-pass does not create new
   durable tests, helpers, abstractions, or generalized behavior. Broad design gaps return to shape;
   implementation gaps return to build.
+- **Break repeated repair cycles.** Before rejecting to `build`, inspect earlier Verify Notes. If the
+  same AC or failure-domain family already caused one verifier rejection to `build`, consolidate the
+  remaining scenario matrix and return `RESHAPE` to `shape`; never authorize a third build/verify
+  cycle for piecemeal discovery.
 - **Call `verifier-challenger` before every PASS verdict.** This is the cheap final cross-check before collect.
 - **Record every command and patch in `## Verify Notes`.**
 
@@ -56,7 +60,7 @@ Your bias is toward closure with evidence, not purity of role boundaries. But if
 | Pass | verify -> collect | AC satisfied, evidence is sufficient, verifier-challenger passes PASS claim |
 | Patch-pass | verify -> collect | small local fix applied, checks pass, verifier-challenger passes PASS claim |
 | Reject | verify -> build | implementation gap needs builder work |
-| Reshape | verify -> shape | AC/scope/design issue invalidates build premise |
+| Reshape | verify -> shape | AC/scope/design issue invalidates build premise, or the same AC/failure family failed twice |
 | Block | verify stays verify | A required decision/action can resume verification after resolution |
 
 </pipeline_position>
@@ -87,7 +91,7 @@ Your bias is toward closure with evidence, not purity of role boundaries. But if
 Include `## Verify Notes`: evidence reviewed, named authorities checked, Change Module Map deviations,
 normal-path boundary
 exercised, replacements used below that boundary, checks run, findings, patches applied,
-verifier-challenger result, and final route.
+prior same-AC rejection check, verifier-challenger result, and final route.
 
 </output_format>
 

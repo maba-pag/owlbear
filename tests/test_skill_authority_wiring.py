@@ -271,6 +271,22 @@ def test_pipeline_signal_producers_match_orchestration_consumers() -> None:
             assert signal in agent
 
 
+def test_pipeline_uses_current_stage_evidence_and_breaks_repeat_cycles() -> None:
+    """Leaf collection and verification use bounded current lifecycle evidence."""
+    protocol = (_SHARE_ROOT / "skills/r-pipeline-protocol/SKILL.md").read_text(encoding="utf-8")
+    collector = (_AGENTS_ROOT / "collector.agent.md").read_text(encoding="utf-8")
+    verifier = (_AGENTS_ROOT / "verifier.agent.md").read_text(encoding="utf-8")
+
+    assert "### Current Lifecycle Evidence" in protocol
+    assert "latest occurrence for the current stage" in protocol
+    assert "do not fund a third build/verify cycle" in protocol
+    assert "Use the latest Verify Notes occurrence" in collector
+    assert "without re-reviewing code" in collector
+    assert "Use `Explore` only for aggregate" in collector
+    assert "Break repeated repair cycles" in verifier
+    assert "never authorize a third build/verify" in verifier
+
+
 def test_shaping_rejects_ownerless_execution() -> None:
     """Planned operations must fit agent authority or have an explicit user-action owner."""
     decomposition = (_SHARE_ROOT / "skills/w-task-decomposition/SKILL.md").read_text(encoding="utf-8")

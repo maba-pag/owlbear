@@ -1,10 +1,10 @@
 ---
 id: 2002
 title: 'P3-03: Commit and recover runtime transactions'
-status: shape
+status: collect
 priority: high
 created: 2026-07-22T21:58:33.866396+02:00
-updated: 2026-07-23T12:21:33.965732+02:00
+updated: 2026-07-23T12:40:29.345243+02:00
 tags:
   - phase-3
   - scope:core
@@ -222,3 +222,15 @@ Proof guidance: exercise public admission plus the reusable transaction boundary
 ## Collect Notes
 - Classification: not processable in collector mode; task status is `shape`.
 - Rationale: collector boundary permits only `collect` tasks. No closure or archive review was performed.
+
+[[2026-07-23T12:22:40+02:00]]
+
+[[2026-07-23T12:23:25+02:00]]
+
+[[2026-07-23T12:40:29+02:00]]
+## Shape Notes
+- Repair classification: mechanical reroute after collector used stale lifecycle evidence. No task contract, code, or proof changed.
+- Current evidence: the latest `## Verify Notes` records PASS to collect at builder commit `6ea017d11`, with 77 focused tests, task-owned Ruff/format checks, public admission replay, real `load_change()` runtime-open recovery, three interruption points, malformed-manifest diagnostic translation, immutable conflict/path safety, and two-process coordination. Verifier-challenger passed.
+- Stale rejection: the collector cited the earlier verifier rejection against builder commit `1ab1b292e` and ignored the later PASS. That earlier Required Follow-up was resolved by subsequent builder commits and the latest verifier evidence.
+- System repair: repeated section reads now return newest-first; collector is required to archive leaves from the latest Verify Notes without code re-review; verifier reshapes after a second same-AC/failure-family rejection; shaping now requires finite Scenario Closure Maps and splits multiple independent high-risk axes.
+- Route: restored directly to `collect`. Collector should perform mechanical leaf archival from the latest verifier PASS; no additional build or verify cycle is authorized.

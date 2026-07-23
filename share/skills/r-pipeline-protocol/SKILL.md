@@ -250,6 +250,20 @@ Append the full agent section through the `note` parameter of `end_work`; the no
 
 If a single section exceeds about 1500 tokens, write details to `.owlbear/scratch/{task-id}-{agent}.md` and reference it from the body.
 
+### Current Lifecycle Evidence
+
+Full task bodies preserve repeated agent sections in chronological order. Section-filtered Kanban
+reads return repeated sections newest-first. The latest occurrence for the current stage is the
+controlling lifecycle evidence; earlier rejections and Required Follow-up tables are history when a
+later same-stage note explicitly records their resolution and a successful route. Agents must not
+select an earlier occurrence merely because it appears first in a full body or contains a more
+detailed failure narrative.
+
+Before a verifier rejects a task to `build`, inspect prior `## Verify Notes`. If the same AC or
+failure-domain family already caused one verifier rejection to `build`, a second miss means the
+shaped scenario/proof boundary is incomplete. Consolidate the remaining matrix and route `RESHAPE`
+to `shape`; do not fund a third build/verify cycle for piecemeal discovery.
+
 ### Required Follow-up
 
 Any `REJECT` or `RESHAPE` verdict must include:

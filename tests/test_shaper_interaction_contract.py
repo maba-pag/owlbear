@@ -184,6 +184,27 @@ def test_dependency_closure_blocks_forward_references() -> None:
     assert "dependency closure" in challenger.split("coverage:", 1)[1]
 
 
+def test_scenario_closure_blocks_hidden_high_risk_cross_products() -> None:
+    shaping = _read("share/skills/w-spec-shaping/SKILL.md")
+    flat_shaping = " ".join(shaping.split())
+    decomposition = _read("share/skills/w-task-decomposition/SKILL.md")
+    challenger = _read("share/agents/shaper-challenger.agent.md")
+
+    assert "### Scenario Closure Map" in decomposition
+    for column in (
+        "Risk Boundary",
+        "Input Or State Classes",
+        "Failure / Recovery / Race Classes",
+        "Owning AC",
+    ):
+        assert column in decomposition
+    assert "Reject unclosed scenario matrices" in decomposition
+    assert "cross-product of two or more" in decomposition
+    assert "Scenario Closure Map evidence" in flat_shaping
+    assert "Enforce scenario closure and task budgets" in challenger
+    assert "scenario closure" in challenger.split("coverage:", 1)[1]
+
+
 def test_challenger_accepts_complete_provisional_graph() -> None:
     challenger = _read("share/agents/shaper-challenger.agent.md")
 

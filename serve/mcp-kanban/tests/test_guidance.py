@@ -812,7 +812,7 @@ Second audit entry.
 
 _BODY_SIZE_WARNING = "⚠️ Task body is large (>100 KB); consider splitting."
 
-_SECTION_OCCURRENCE_MSG = "Section 'Audit' matched 2 occurrences."
+_SECTION_OCCURRENCE_MSG = "Section 'Audit' matched 2 occurrences; newest occurrence is first."
 
 _PICK_DISPATCH_HINT = "Dispatch hints: 3 task(s) across 1 wave(s)."
 
@@ -876,11 +876,11 @@ class TestFromAC_GuidancePassthrough:
 
     @pytest.mark.asyncio
     async def test_show_task_section_occurrence_count_guidance(self, app_ctx_with_section_task: AppContext) -> None:
-        """AC12: When requested section appears more than once, guidance includes the count.
+        """Repeated sections are returned newest-first with explicit count guidance.
 
         AgentView.show_task must detect the duplicate '## Audit' sections and include
-        an occurrence-count string in the guidance list. The adapter must return it
-        unchanged.
+        an occurrence-count string in the guidance list. Current lifecycle evidence
+        must precede stale history. The adapter must return both unchanged.
 
         FAIL path (RED): AgentView.show_task() raises TypeError (unexpected 'section'
         kwarg) or NotImplementedError — the call propagates before the assertion.
@@ -890,6 +890,8 @@ class TestFromAC_GuidancePassthrough:
         assert result.guidance == [_SECTION_OCCURRENCE_MSG], (
             f"Expected exact occurrence-count guidance {[_SECTION_OCCURRENCE_MSG]!r}; got {result.guidance!r}"
         )
+        assert result.body is not None
+        assert result.body.index("Second audit entry.") < result.body.index("First audit entry.")
 
     @pytest.mark.asyncio
     async def test_show_task_guidance_passes_through_unmodified(self, app_ctx: AppContext) -> None:

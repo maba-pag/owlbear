@@ -275,6 +275,30 @@ Rules:
 - Derived or transitive inputs still appear in the map; do not rely on the absence of a graph cycle
     as proof that the dependency direction is correct.
 
+### Scenario Closure Map
+
+For persistence, transactions, concurrency, recovery, migration, security, external integration, or
+other high-risk behavior, enumerate the finite scenario classes before deciding that a task is
+small. Write the final map in `## Shape Notes`.
+
+| Task | Risk Boundary | Input Or State Classes | Failure / Recovery / Race Classes | Owning AC |
+|------|---------------|------------------------|-----------------------------------|-----------|
+| {task key} | {public operation or artifact} | {equivalence classes} | {finite scenario classes} | {AC} |
+
+Rules:
+
+- Name independently variable axes such as participant shape, interruption phase, recovery entry
+    point, malformed input, process race, stale token, unsafe path, and immutable conflict.
+- Do not hide a matrix behind phrases such as "injected failure", "concurrent processes", "stable
+    diagnostic", or "all interruption points". Enumerate the behaviorally distinct classes.
+- A task exceeds the complexity budget when its proof requires the cross-product of two or more
+    independently variable high-risk axes. Split the reusable primitive, consumer integration, and
+    distinct safety domains so each task has one primary matrix.
+- A complexity waiver cannot replace scenario closure or authorize an unresolved cross-product.
+    It may retain a fully enumerated matrix only when splitting would bypass the public boundary.
+- The map defines behavioral classes, not a required test count. One proof may cover several rows
+    when it exercises the same public boundary without hiding a distinct outcome.
+
 ### Task Complexity Budget
 
 Draft tasks to fit this budget before creating them:
@@ -284,6 +308,8 @@ Draft tasks to fit this budget before creating them:
 - **High-proof budget:** at most 2 AC lines that likely require multi-case proof, browser/runtime proof, concurrency proof, rollback proof, migration proof, or broad downstream-impact proof.
 - **Proof-mode budget:** one primary proof mode per task. Split when a task needs more than one of: unit/static proof, integration proof, E2E/browser proof, data-safety/rollback proof, migration/downstream regression proof.
 - **Failure-domain budget:** one failure-domain family per task. Split algorithm changes, config semantics, persistence, event/activity logging, rollback/atomicity, UI layout, accessibility, and documentation into separate tasks unless one is a trivial consequence of the other.
+- **Scenario budget:** one primary high-risk matrix per task. Do not combine independently variable
+    failure/recovery, malformed-input, concurrency, containment, and conflict matrices in one packet.
 
 Use an explicit `Complexity waiver:` note only when splitting would make the work less verifiable. The waiver must name the budget exceeded and why the task is still expected to finish inside one pipeline pass.
 
@@ -295,6 +321,10 @@ Split the planned task when any trigger applies:
 - More than 2 likely high-proof AC lines.
 - More than one primary proof mode is needed.
 - More than one failure-domain family is present.
+- Proof requires the cross-product of two or more independently variable high-risk axes, such as
+    participant shapes across interruption phases plus recovery entries or process races.
+- A reusable transaction, persistence, migration, or integration primitive and its first product
+    consumer each require independent failure or recovery proof.
 - A proof artifact would be created only in `.owlbear/scratch/`, or the responsible agent cannot write the final tracked location. Create a separate builder-owned promotion/proof task with a concrete tracked deliverable, or choose a proof path the responsible agent can own.
 - A required operation or proof lies outside the responsible agent's authority and no user-action
     request owns it.
@@ -373,6 +403,9 @@ Before creating any task, validate every planned task:
     supplied by current source, the task itself, or a transitive predecessor; no task requires a
     sibling or descendant producer, and each invariant owner can assemble its proof boundary from
     that closure.
+- **Reject unclosed scenario matrices** — high-risk tasks enumerate their behaviorally distinct
+    state, failure, recovery, malformed-input, race, containment, and conflict classes; split any
+    task whose proof crosses two or more independently variable high-risk axes.
 - **Reject uncovered Product Promise items** — every active coverage-map row names an owning task or
     aggregate condition and a proving AC or outcome; every exclusion cites its accepted authority.
 - **Reject boundary-bypassing proof** — proof guidance must not replace the callable, command,
@@ -390,7 +423,8 @@ In draft phase, stop here and return the complete provisional graph to the calli
 stable provisional keys, such as `T1`, `T2`, and `EPIC`, wherever concrete task IDs do not yet exist.
 Include all fields needed for challenge and user review: title, outcome, scope, AC, proof guidance,
 priority, tags, dependencies, parent/aggregate routing, Change Module Map ownership, Product
-Invariant Map ownership, Dependency Closure Map evidence, and Product Promise coverage.
+Invariant Map ownership, Dependency Closure Map evidence, Scenario Closure Map evidence, and Product
+Promise coverage.
 
 Do not create or edit Kanban tasks in draft phase.
 
@@ -484,6 +518,11 @@ Append decomposition details inside shaper's `## Shape Notes` section:
 |------|--------------------------------------------|--------------------------------------|----------------------|
 | {task ID} | {input or participant} | {task ID or source} | {task ID or none} |
 
+### Scenario Closure Map
+| Task | Risk Boundary | Input Or State Classes | Failure / Recovery / Race Classes | Owning AC |
+|------|---------------|------------------------|-----------------------------------|-----------|
+| {task ID} | {boundary} | {classes} | {classes} | {AC} |
+
 ### Decomposition: {name}
 - Tasks created: {N}
 - Dependency layers: {M}
@@ -511,6 +550,8 @@ Append decomposition details inside shaper's `## Shape Notes` section:
     itself, or transitive predecessors
 - [ ] Each invariant owner can assemble its normal-path proof boundary from its dependency closure
 - [ ] No task depends semantically on a sibling or descendant producer
+- [ ] High-risk tasks enumerate behaviorally distinct scenario classes without shorthand matrices
+- [ ] No task proof crosses two or more independently variable high-risk axes
 - [ ] Task layout covers the full active Product Promise; every omitted requested outcome has an
     explicit user-approved exclusion in the planning authority
 - [ ] Mocks or injected dependencies replace only layers below the boundary being proved
