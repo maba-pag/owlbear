@@ -1,10 +1,10 @@
 ---
 id: 2015
 title: 'P3-16A: Define and freeze receipt impact closures'
-status: build
+status: verify
 priority: high
 created: 2026-07-23T14:41:09.745275+02:00
-updated: 2026-07-23T19:40:47.082526+02:00
+updated: 2026-07-23T21:44:46.182100+02:00
 tags:
   - phase-3
   - scope:core
@@ -198,3 +198,23 @@ Use the public parser, `evaluate_receipt_currentness`, and `ReceiptStore.create`
 - Proof contract: builder must directly map AC-1 through AC-7 and `AC-1/stable-id-validation` to evidence; aggregate receipt-suite counts alone are insufficient. The focused matrix includes `not-a-stable-id`, canonical undeclared `REQ-999`, one declared fixture ID, no-file publication, roundtrip, and conflict-byte preservation.
 - Challenger: initial repaired contract passed; AC-3 was split for one-boundary-per-line proof; a source check corrected stale idempotent-replay wording to existing conflict semantics; the final stored seven-AC contract passed shaper-challenger with no blocker.
 - Board audit and route: task #2015 remains parented by #2003, depends only on archived #2014, and advances from shape to build. Successful completion will unblock #2020.
+
+[[2026-07-23T21:44:46+02:00]]
+## Builder Notes
+
+- Change envelope: repaired the returned `AC-1/stable-id-validation` failure inside the typed impact-closure boundary in `receipt.py`, with direct receipt-boundary regressions in the existing focused test module. No Git-history currency, receipt issuance assembly, or other workflow behavior changed.
+- Files changed: `serve/kanban/src/owlbear_kanban/receipt.py`; `serve/kanban/tests/test_change_receipts.py`.
+- Change Module Map deviations: none. `change.py` remains the canonical `StableId` syntax authority; task-owned logic stays in the mapped receipt owner and its focused test boundary.
+- Proof selected: maintained durable receipt tests were expanded because malformed stable-ID syntax and revision-aware closure membership are shared runtime contracts that are easy to regress and must prevent receipt publication.
+- Commands run: `cd serve/kanban && uv run pytest tests/test_change_receipts.py -q` (55 passed); `uv run ruff check src/owlbear_kanban/receipt.py tests/test_change_receipts.py` (passed); `uv run ruff format --check src/owlbear_kanban/receipt.py tests/test_change_receipts.py` (2 files already formatted); `git diff --check` (passed); editor diagnostics (none).
+- AC-to-evidence map:
+  - AC-1: `parse_impact_closure` validates every target with the canonical `StableId` adapter; direct malformed-target and canonicalized sorted closure tests pass.
+  - AC-2: direct parser test rejects canonical `REQ-999` when absent from the supplied declaration set.
+  - AC-3: direct `parse_receipt_mapping` regression maps malformed target input to `ERR_RECEIPT_IMPACT_CLOSURE_INVALID` with no receipt.
+  - AC-4: direct currentness regression returns `ERR_RECEIPT_IMPACT_CLOSURE_INVALID` and `REQ-999` for an undeclared canonical target; existing current receipt fixture uses declared `REQ-001` and passes local evaluation.
+  - AC-5: direct store regression returns `ERR_RECEIPT_IMPACT_CLOSURE_INVALID` for `REQ-999`, creates no receipt file, and leaves no temporary file.
+  - AC-6: existing all-kind store roundtrip now directly asserts returned closure paths and authority targets are immutable tuple values; the focused suite passes.
+  - AC-7: existing conflict regression asserts `ERR_RECEIPT_CONFLICT`, exact original bytes, and no temporary receipt files; the focused suite passes.
+- Current failure-key resolution: `AC-1/stable-id-validation` is closed by canonical syntax enforcement in `parse_impact_closure` and declaration lookup through `ChangeRevision.resolve` in `evaluate_receipt_currentness` and `ReceiptStore` before publication.
+- Builder-challenger result: pass. It reviewed the changed files, reran the focused receipt suite (55 passed), and confirmed Ruff checks with no blockers.
+- Follow-up risks: none in this task. Packet-to-closure assembly remains with task #2004 and Git-history currentness remains with task #2020.

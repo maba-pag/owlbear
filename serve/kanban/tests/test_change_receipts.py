@@ -130,6 +130,24 @@ def test_impact_closure_parser_canonicalizes_paths_and_validates_authority_targe
     assert parse_repository_path("/") == "/"
 
 
+@pytest.mark.parametrize("target", ["not-a-stable-id", "REQ-01", "req-001"])
+def test_impact_closure_parser_rejects_malformed_authority_targets(target: str) -> None:
+    with pytest.raises(ImpactClosureError) as exc_info:
+        parse_impact_closure({"paths": ["src/"], "authority_targets": [target]})
+
+    assert exc_info.value.code == "ERR_RECEIPT_IMPACT_CLOSURE_INVALID"
+
+
+def test_impact_closure_parser_rejects_undeclared_canonical_authority_target() -> None:
+    with pytest.raises(ImpactClosureError) as exc_info:
+        parse_impact_closure(
+            {"paths": ["src/"], "authority_targets": ["REQ-999"]},
+            declared_authority_targets={"REQ-001"},
+        )
+
+    assert exc_info.value.code == "ERR_RECEIPT_IMPACT_CLOSURE_INVALID"
+
+
 @pytest.mark.parametrize("selector", ["/src", ".", "src/../secret", "src//file", "src\\file", "src\x00file"])
 def test_impact_closure_parser_rejects_noncanonical_selectors(selector: str) -> None:
     with pytest.raises(ImpactClosureError) as exc_info:
@@ -158,6 +176,16 @@ def test_receipt_parser_requires_a_valid_impact_closure(
 
     assert result.receipt is None
     assert [item.code for item in result.diagnostics] == [expected]
+
+
+def test_receipt_parser_rejects_malformed_impact_closure_authority_target() -> None:
+    value = _parser_receipt("build")
+    value["impact_closure"] = {"paths": ["src/"], "authority_targets": ["not-a-stable-id"]}
+
+    result = parse_receipt_mapping(value)
+
+    assert result.receipt is None
+    assert [item.code for item in result.diagnostics] == [ReceiptParseDiagnosticCode.IMPACT_CLOSURE_INVALID]
 
 
 @pytest.mark.parametrize("kind", _RECEIPT_KINDS)
@@ -226,6 +254,18 @@ def test_receipt_currentness_rejects_unsupported_schema(tmp_path: Path) -> None:
     assert evaluate_receipt_currentness(revision, parsed.receipt).code is ReceiptValidityCode.SCHEMA_UNSUPPORTED
 
 
+def test_receipt_currentness_rejects_undeclared_impact_closure_authority_target(tmp_path: Path) -> None:
+    _changes_dir, revision = _load_revision(tmp_path)
+    value = _current_receipt(revision)
+    value["impact_closure"] = {"paths": ["src/"], "authority_targets": ["REQ-999"]}
+    parsed = parse_receipt_mapping(value)
+
+    assert parsed.receipt is not None
+    result = evaluate_receipt_currentness(revision, parsed.receipt)
+    assert result.code is ReceiptValidityCode.IMPACT_CLOSURE_INVALID
+    assert result.target == "REQ-999"
+
+
 def test_receipt_store_round_trips_all_kinds_and_preserves_existing_bytes(tmp_path: Path) -> None:
     _changes_dir, revision = _load_revision(tmp_path)
     store = ReceiptStore(revision)
@@ -242,6 +282,10 @@ def test_receipt_store_round_trips_all_kinds_and_preserves_existing_bytes(tmp_pa
         assert read_back.receipt is not None
         assert read_back.receipt.to_mapping() == value
         assert read_back.receipt.payload["evidence"] == {"kind": kind, "passed": True}
+        if kind != "admission":
+            assert read_back.receipt.impact_closure is not None
+            assert read_back.receipt.impact_closure.paths == ("src/",)
+            assert read_back.receipt.impact_closure.authority_targets == ("REQ-001",)
 
     first_id = "admission-001"
     first_path = revision.source_dir / "receipts" / f"{first_id}.yaml"
@@ -252,6 +296,21 @@ def test_receipt_store_round_trips_all_kinds_and_preserves_existing_bytes(tmp_pa
     assert exc_info.value.code == "ERR_RECEIPT_CONFLICT"
     assert first_path.read_bytes() == original
     assert list(first_path.parent.glob(".tmp-*")) == []
+
+
+def test_receipt_store_rejects_undeclared_impact_closure_authority_target_without_publication(tmp_path: Path) -> None:
+    _changes_dir, revision = _load_revision(tmp_path)
+    receipt_id = "build-undeclared-001"
+    value = _receipt(revision, receipt_id, "build")
+    value["impact_closure"] = {"paths": ["src/"], "authority_targets": ["REQ-999"]}
+
+    result = ReceiptStore(revision).create(receipt_id, value)
+
+    assert result.receipt is None
+    assert [item.code for item in result.diagnostics] == [ReceiptDiagnosticCode.IMPACT_CLOSURE_INVALID]
+    receipts_dir = revision.source_dir / "receipts"
+    assert not (receipts_dir / f"{receipt_id}.yaml").exists()
+    assert list(receipts_dir.glob(".tmp-*")) == [] if receipts_dir.exists() else True
 
 
 @pytest.mark.parametrize("receipt_id", ["/absolute", "../escape", "nested/path", "bad\\path", "bad\x00id"])

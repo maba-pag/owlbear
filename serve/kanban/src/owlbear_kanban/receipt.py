@@ -19,11 +19,11 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 from types import MappingProxyType
 from typing import Annotated, Literal, Never
 
-from pydantic import BaseModel, ConfigDict, StringConstraints, field_serializer, model_validator
+from pydantic import BaseModel, ConfigDict, StringConstraints, TypeAdapter, field_serializer, model_validator
 from pydantic import ValidationError as PydanticValidationError
 from ruamel.yaml.error import YAMLError
 
-from owlbear_kanban.change import ChangeId, ChangeRevision, Digest, Proof, load_change
+from owlbear_kanban.change import ChangeId, ChangeRevision, Digest, Proof, StableId, load_change
 from owlbear_kanban.yaml_rt import make_yaml
 
 _RECEIPT_ID_PATTERN = r"^[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*$"
@@ -32,6 +32,7 @@ _DIRECTORY_OPEN_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
 _FILE_OPEN_FLAGS = os.O_RDONLY | os.O_NOFOLLOW
 _TEMP_OPEN_FLAGS = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
 _TEMP_CREATE_ATTEMPTS = 10
+_STABLE_ID_ADAPTER = TypeAdapter(StableId)
 
 ReceiptId = Annotated[str, StringConstraints(strict=True, pattern=_RECEIPT_ID_PATTERN)]
 ReceiptKind = Literal["admission", "shape", "build", "accept", "audit", "supersession"]
@@ -140,17 +141,27 @@ def parse_impact_closure(
     authority_targets = value["authority_targets"]
     if not isinstance(paths, list | tuple) or not paths:
         raise ImpactClosureError(ImpactClosureError.PATHS_EMPTY)
-    if not isinstance(authority_targets, list | tuple) or not all(
-        isinstance(target, str) and target for target in authority_targets
-    ):
+    if not isinstance(authority_targets, list | tuple):
         raise ImpactClosureError(ImpactClosureError.TARGETS_INVALID)
+    try:
+        canonical_targets = tuple(sorted({_STABLE_ID_ADAPTER.validate_python(target) for target in authority_targets}))
+    except PydanticValidationError as exc:
+        raise ImpactClosureError(ImpactClosureError.TARGETS_INVALID) from exc
     canonical_paths = tuple(sorted({parse_repository_path(path) for path in paths}))
-    canonical_targets = tuple(sorted(set(authority_targets)))
     if declared_authority_targets is not None:
         declared = set(declared_authority_targets)
         if not set(canonical_targets) <= declared:
             raise ImpactClosureError(ImpactClosureError.TARGET_UNDECLARED)
     return ImpactClosure(paths=canonical_paths, authority_targets=canonical_targets)
+
+
+def _undeclared_authority_target(revision: ChangeRevision, closure: ImpactClosure) -> str | None:
+    for target in closure.authority_targets:
+        try:
+            revision.resolve(target)
+        except KeyError:
+            return target
+    return None
 
 
 class ReceiptRecord(_ReceiptModel):
@@ -331,6 +342,15 @@ def evaluate_receipt_currentness(revision: ChangeRevision, receipt: ReceiptRecor
         result = ReceiptValidity(
             code=ReceiptValidityCode.IMPACT_CLOSURE_MISSING,
             detail="receipt is missing impact_closure",
+        )
+    elif (
+        receipt.kind != "admission"
+        and (undeclared_target := _undeclared_authority_target(revision, receipt.impact_closure)) is not None
+    ):
+        result = ReceiptValidity(
+            code=ReceiptValidityCode.IMPACT_CLOSURE_INVALID,
+            detail="receipt impact closure references an undeclared authority target",
+            target=undeclared_target,
         )
     elif receipt.kind == "admission":
         result = ReceiptValidity(code=ReceiptValidityCode.CURRENT, detail="admission receipt is locally current")
@@ -665,6 +685,16 @@ class ReceiptStore:
                 "receipt identity does not match the loaded change revision",
                 path=f"receipts/{receipt_id}.yaml",
                 target=receipt_id,
+            )
+        if (
+            record.impact_closure is not None
+            and (undeclared_target := _undeclared_authority_target(self._revision, record.impact_closure)) is not None
+        ):
+            _fail(
+                ReceiptDiagnosticCode.IMPACT_CLOSURE_INVALID,
+                "receipt impact closure references an undeclared authority target",
+                path=path,
+                target=undeclared_target,
             )
         return record
 
