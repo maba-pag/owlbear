@@ -1,10 +1,10 @@
 ---
 id: 2002
 title: 'P3-03: Commit and recover runtime transactions'
-status: build
+status: shape
 priority: high
 created: 2026-07-22T21:58:33.866396+02:00
-updated: 2026-07-22T21:58:33.866396+02:00
+updated: 2026-07-23T10:49:47.481999+02:00
 tags:
   - phase-3
   - scope:core
@@ -62,3 +62,17 @@ Generalize the narrow DN-002 `AdmissionTransaction` publication behavior over th
 Resolve behavior from `REQ-016`, `IF-003` failure semantics, `KEEP-007`, `RISK-002`, `PROOF-003`, and design sections 9.5, 12, and 13.
 
 Proof guidance: exercise the public admission and transaction boundary over temporary roots with two processes and phase-by-phase failure injection. Verify recovery after reopening, not merely cleanup in the same process.
+
+[[2026-07-23T10:49:47+02:00]]
+## Builder Notes
+- Change envelope: native transaction coordinator, explicit change/work roots, staged publication and recovery only. Legacy engine/storage and sibling lifecycle/request/invalidation work remain excluded.
+- Files changed: none. An exploratory admission API edit was fully restored after source and dependency review.
+- Change Module Map deviations: source contradicts the shaped map. `JobStore` is available from archived #2009, but native request storage is owned by later packet #2005, activity is still legacy-engine-owned, and #2002 is a prerequisite of both #2003 and #2005.
+- Proof selected: source/dependency discrimination plus `uv run ruff check serve/kanban/src/owlbear_kanban/admission_transaction.py` and `git diff --check`; both passed after restoration. No durable test is justified because no task-owned implementation can meet the stated cross-record contract.
+- Builder-challenger result: not called; DONE is prohibited by the source/AC contradiction.
+- Follow-up risks: implementing only receipt-plus-job publication would leave AC-2's required graph/job/request/activity atomicity and recovery claim untrue.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | shaper | Split the current receipt-plus-job admission transaction from the later multi-record coordinator, or reorder dependencies so request/activity owners exist before a single transaction claims them. Define the native activity owner and recovery-open boundary. | Task #2002 scope/AC/dependencies; #2003, #2005; `serve/kanban/src/owlbear_kanban/admission_transaction.py`, `request_models.py`, `activity_store.py` | #2002 precedes #2003 and #2005; #2005 owns runtime requests; activity implementation remains legacy-engine oriented; current source cannot supply all AC-2 participants. |
