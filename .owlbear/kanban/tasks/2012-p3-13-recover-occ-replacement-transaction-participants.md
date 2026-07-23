@@ -1,10 +1,10 @@
 ---
 id: 2012
 title: 'P3-13: Recover OCC replacement transaction participants'
-status: shape
+status: build
 priority: high
 created: 2026-07-23T14:40:46.644783+02:00
-updated: 2026-07-23T23:04:08.263257+02:00
+updated: 2026-07-23T23:13:51.523241+02:00
 tags:
   - phase-3
   - scope:core
@@ -25,20 +25,22 @@ ac:
     it acquires one descriptor-backed `.storage.lock` for each canonical root in path
     order; a symlink root, symlink lock file, or failure while acquiring `root_b`
     raises before yielding and releases the lock and descriptor acquired for `root_a`.'
-  - "AC-2: Given `JobStore.update` and `RuntimeTransaction.commit` start from the
-    same stored job bytes on one work root, a two-phase subprocess proof holds one
-    writer inside `storage_io.locked_roots`, observes the rival blocked, then releases
-    the holder; the holder publishes, the rival returns `ERR_TRANSACTION_CONFLICT`
-    or `ERR_JOB_OCC_STALE` according to its public boundary, and the holder's bytes
-    remain stored."
-  - 'AC-3: Given a replacement participant whose destination equals its expected bytes,
+  - 'AC-2: Given an instrumented shared-lock context pauses `JobStore.update` after
+    lock acquisition, `RuntimeTransaction.commit` for the same expected job bytes
+    remains blocked until the update publishes; after release, commit returns `ERR_TRANSACTION_CONFLICT`
+    and the JobStore bytes remain stored.'
+  - 'AC-3: Given an instrumented shared-lock context pauses `RuntimeTransaction.commit`
+    after lock acquisition, `JobStore.update` with the prior OCC token remains blocked
+    until the transaction publishes; after release, update returns `ERR_JOB_OCC_STALE`
+    and the transaction replacement bytes remain stored.'
+  - 'AC-4: Given a replacement participant whose destination equals its expected bytes,
     `RuntimeTransaction.commit` publishes the replacement; when the destination already
     equals the replacement, replay returns the committed outcome; any other bytes
     return `ERR_TRANSACTION_CONFLICT` without mutation.'
-  - 'AC-4: Given interruption before publication, after replacement publication, or
+  - 'AC-5: Given interruption before publication, after replacement publication, or
     before manifest cleanup, `RuntimeTransaction.recover_all` completes the replacement
     and removes the manifest; a second recovery leaves the replacement bytes unchanged.'
-  - 'AC-5: Given a malformed replacement manifest, altered content digest, or participant
+  - 'AC-6: Given a malformed replacement manifest, altered content digest, or participant
     root outside `recover_all(..., roots=...)`, `RuntimeTransaction.recover_all` raises
     `ERR_TRANSACTION_MANIFEST_INVALID` or `ERR_TRANSACTION_PATH_UNSAFE` and leaves
     the destination and outside paths unchanged.'
@@ -144,3 +146,16 @@ Existing `atomic_write` consumers outside `JobStore` and `RuntimeTransaction` ar
 - Failure key `AC-1/cross-writer-occ`: task-local contract is resolved, but final route is intentionally withheld because parent #2003 still records `jobs.py` as consumed without ownership change and omits the shared-lock scenario axis.
 - Challenger: first challenge required an executable shared-lock boundary and controlled writer ordering; both were added. Second challenge found stale parent maps. Live board check disproved concurrent sibling work: #2017 through #2019 are unclaimed and dependency-blocked through #2013, whose dependency on #2012 already supplies correct execution order.
 - Lifecycle: release without status movement. Restart shaping as the explicit connected set #2003 and #2012, claimed in ID order, update only #2003 maps plus final #2012 route, then challenge the connected result.
+
+[[2026-07-23T23:13:51+02:00]]
+## Shape Notes
+- Rejection source: verifier found an unprotected compare/replace window in `RuntimeTransaction._publish_replacement`; the subsequent builder proved that a transaction-only lock would not synchronize `JobStore`'s private `.jobs.lock` and correctly returned the task to shape.
+- Repair classification: local connected task repair under accepted architecture. Design section 13 already assigns atomic writes, locks, containment, and fsync to `storage_io.py`; no new product or architecture decision was required.
+- Source facts: current `storage_io.py` exposes only `atomic_write`; `JobStore.materialize/update/archive` use private `.jobs.lock`; `RuntimeTransaction.commit/recover` use `.runtime-transactions.lock`; stable `ERR_JOB_OCC_STALE`, `ERR_TRANSACTION_CONFLICT`, manifest, and path diagnostics already exist.
+- Contract repair: appended an operative shared-lock amendment. `storage_io.locked_roots(roots)` owns descriptor-backed no-follow root and `.storage.lock` opens, canonical deduplication and path-order acquisition, and partial-acquisition cleanup. `JobStore` consumes it without losing record/OCC authority; `RuntimeTransaction` holds it for manifest and participant roots across prepare, compare, publish, recovery, fsync, and cleanup.
+- Binding proof matrix: AC-1 directly proves lock helper identity/order/security/cleanup. AC-2 pauses JobStore-first acquisition and requires the waiting transaction to return `ERR_TRANSACTION_CONFLICT` with JobStore bytes preserved. AC-3 pauses transaction-first acquisition and requires the waiting JobStore update to return `ERR_JOB_OCC_STALE` with transaction bytes preserved. AC-4 through AC-6 preserve replacement/replay/conflict, three interruption phases, repeated recovery, malformed/digest, and unsafe-root behavior.
+- Failure key `AC-1/cross-writer-occ`: resolved. The historical key now maps to current AC-1 through AC-3 and requires both writer orderings at the real `JobStore.update` and `RuntimeTransaction.commit` boundaries; lower instrumentation pauses only the shared lock context.
+- Scope: #2013 retains mixed job/attempt complete-pair, rival-event exclusion, and replay semantics. #2017 through #2019 retain lifecycle facade behavior and are dependency-blocked through #2013.
+- Connected parent repair: #2003's Change Module, Dependency Closure, and Scenario Closure maps now reflect shared lock ownership and both writer orderings; no dependency edges changed. Parent correction committed as `d35dc80bffbadac2436e990e23d3ed75d33355bc`.
+- Challenger chain: first challenge added the executable lock boundary and controlled ordering; second exposed stale parent maps; connected challenge split both writer orderings into binding AC. Final connected shaper-challenger decision: pass.
+- Route: advance #2012 from shape to build. Dependency #2002 is archived completed; parent remains collect and blocked on unfinished children.
