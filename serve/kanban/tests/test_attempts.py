@@ -1,9 +1,16 @@
 from __future__ import annotations
 
+from pathlib import Path
+from unittest.mock import patch
+
 import pytest
 
 from owlbear_kanban import (
+    AttemptConflictError,
+    AttemptDiagnosticCode,
+    AttemptEvent,
     AttemptEventDiagnosticCode,
+    AttemptStore,
     parse_attempt_event_mapping,
     serialize_attempt_event_mapping,
 )
@@ -25,6 +32,15 @@ def _event_mapping(kind: str) -> dict[str, object]:
         "detail": "completed focused proof",
         "evidence_ids": ["evidence-001"],
     }
+
+
+def _event(attempt_id: str = "attempt-001", sequence: int = 1) -> AttemptEvent:
+    value = _event_mapping("started") | {
+        "attempt_id": attempt_id,
+        "sequence": sequence,
+        "evidence_ids": ("evidence-001",),
+    }
+    return AttemptEvent.model_validate(value)
 
 
 @pytest.mark.parametrize("kind", ["started", "released", "failed", "crashed", "succeeded"])
@@ -75,3 +91,56 @@ def test_public_attempt_event_parser_reports_missing_required_reference() -> Non
     assert [diagnostic.code for diagnostic in result.diagnostics] == [
         AttemptEventDiagnosticCode.REQUIRED_REFERENCE_MISSING
     ]
+
+
+def test_attempt_store_replays_immutable_events_and_lists_by_identity(tmp_path: Path) -> None:
+    store = AttemptStore(tmp_path)
+    later = _event("attempt-002", 2)
+    first = _event("attempt-001", 1)
+    second = _event("attempt-001", 2)
+
+    assert store.create(later).event == later
+    assert store.create(second).event == second
+    assert store.create(first).event == first
+    assert store.create(first).event == first
+    assert store.read("attempt-001", 2).event == second
+    assert store.list() == (first, second, later)
+
+
+def test_attempt_store_rejects_conflicts_and_unsafe_paths(tmp_path: Path) -> None:
+    store = AttemptStore(tmp_path)
+    original = _event()
+    conflicting = original.model_copy(update={"kind": "failed"})
+
+    assert store.create(original).event == original
+    with pytest.raises(AttemptConflictError) as error:
+        store.create(conflicting)
+    assert error.value.code == "ERR_ATTEMPT_CONFLICT"
+    assert store.read("attempt-001", 1).event == original
+    assert store.read("../outside", 1).diagnostics[0].code == AttemptDiagnosticCode.PATH_UNSAFE
+
+
+def test_attempt_store_rejects_symlink_substitution(tmp_path: Path) -> None:
+    store = AttemptStore(tmp_path)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (tmp_path / "attempts").symlink_to(outside, target_is_directory=True)
+
+    result = store.create(_event())
+
+    assert result.event is None
+    assert result.diagnostics[0].code == AttemptDiagnosticCode.PATH_UNSAFE
+    assert list(outside.iterdir()) == []
+
+
+def test_attempt_store_removes_partial_event_after_write_failure(tmp_path: Path) -> None:
+    store = AttemptStore(tmp_path)
+    event = _event()
+
+    with patch("owlbear_kanban.attempts.os.fsync", side_effect=OSError("disk failure")):
+        result = store.create(event)
+
+    assert result.event is None
+    assert result.diagnostics[0].code == AttemptDiagnosticCode.WRITE_FAILED
+    assert not (tmp_path / "attempts" / event.attempt_id / f"{event.sequence}.json").exists()
+    assert all(not path.name.startswith(".tmp-") for path in (tmp_path / "attempts" / event.attempt_id).iterdir())

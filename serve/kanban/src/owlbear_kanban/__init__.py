@@ -23,10 +23,15 @@ from owlbear_kanban.admission_transaction import (
 )
 from owlbear_kanban.agent_view import AgentView
 from owlbear_kanban.attempts import (
+    AttemptConflictError,
+    AttemptDiagnostic,
+    AttemptDiagnosticCode,
     AttemptEvent,
     AttemptEventDiagnostic,
     AttemptEventDiagnosticCode,
     AttemptEventParseResult,
+    AttemptResult,
+    AttemptStore,
     parse_attempt_event_mapping,
     serialize_attempt_event_mapping,
 )
@@ -105,10 +110,15 @@ __all__ = [
     "AdmissionTransaction",
     "AdmissionValidationError",
     "AgentView",
+    "AttemptConflictError",
+    "AttemptDiagnostic",
+    "AttemptDiagnosticCode",
     "AttemptEvent",
     "AttemptEventDiagnostic",
     "AttemptEventDiagnosticCode",
     "AttemptEventParseResult",
+    "AttemptResult",
+    "AttemptStore",
     "BoardConfig",
     "ChangeDiagnostic",
     "ChangeDiagnosticCode",
