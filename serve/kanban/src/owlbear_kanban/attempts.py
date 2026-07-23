@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic import ValidationError as PydanticValidationError
 
 from owlbear_kanban.change import Digest
+from owlbear_kanban.runtime_transaction import TransactionParticipant
 
 _DIRECTORY_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
 _FILE_FLAGS = os.O_RDONLY | os.O_NOFOLLOW
@@ -339,6 +340,11 @@ class AttemptStore:
                 code = AttemptDiagnosticCode.PATH_UNSAFE
             return AttemptResult(diagnostics=(_diagnostic(code, "attempt event could not be created safely", path),))
         return AttemptResult(event=event)
+
+    def create_participant(self, event: AttemptEvent) -> TransactionParticipant:
+        """Plan a non-mutating immutable event transaction participant."""
+        _attempt_id, _filename, path = _event_location(event.attempt_id, event.sequence)
+        return TransactionParticipant(self._work_root, Path(path), _event_content(event))
 
     def read(self, attempt_id: str, sequence: int) -> AttemptResult:
         """Read one immutable event by attempt ID and sequence."""

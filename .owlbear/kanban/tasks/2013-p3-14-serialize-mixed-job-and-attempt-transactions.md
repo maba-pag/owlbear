@@ -1,10 +1,10 @@
 ---
 id: 2013
 title: 'P3-14: Serialize mixed job and attempt transactions'
-status: build
+status: verify
 priority: high
 created: 2026-07-23T14:40:53.788290+02:00
-updated: 2026-07-23T23:35:31.542860+02:00
+updated: 2026-07-23T23:42:12.115289+02:00
 tags:
   - phase-3
   - scope:core
@@ -121,3 +121,23 @@ Task #2013 owns participant planning and mixed transaction evidence. Task #2012 
 - Parent repair: #2003 maps and scenario axes now include participant planning; parent correction committed as `872e95991a834f457ab701766c5c0e8c203147e5`.
 - Challenger: pass. It confirmed existing canonical helpers make both factories buildable, dependency direction creates no cycle, AC use real public boundaries and exact stable codes, and no strict-subset overclaim remains.
 - Route: advance #2013 from shape to build; dependencies #2011 and #2012 are archived completed.
+
+[[2026-07-23T23:42:12+02:00]]
+## Builder Notes
+- Change envelope: add store-owned public planning for one OCC job replacement and one immutable attempt creation; compose them through the existing `RuntimeTransaction` commit/recovery boundary. No runtime engine or lifecycle-policy change.
+- Files changed: `serve/kanban/src/owlbear_kanban/jobs.py`, `serve/kanban/src/owlbear_kanban/attempts.py`, and `serve/kanban/tests/test_runtime_transaction.py`.
+- Change Module Map deviations: none. `runtime_transaction.py` required no generic correction.
+- Proof selected: durable public-boundary regression tests. They protect atomic cross-store publication, replay, recovery, and process serialization, which are hard to detect manually and materially risky to regress.
+- Commands run:
+  - `uv run pytest -o addopts='--import-mode=importlib -m "not e2e" -p no:logfire -p no:pytest_logfire' serve/kanban/tests/test_jobs.py serve/kanban/tests/test_attempts.py serve/kanban/tests/test_runtime_transaction.py` -> 55 passed.
+  - `uv run ruff check serve/kanban/src/owlbear_kanban/jobs.py serve/kanban/src/owlbear_kanban/attempts.py serve/kanban/tests/test_runtime_transaction.py` -> passed.
+  - `uv run ruff format --check serve/kanban/src/owlbear_kanban/jobs.py serve/kanban/src/owlbear_kanban/attempts.py serve/kanban/tests/test_runtime_transaction.py` -> passed.
+- AC-to-evidence map:
+  - AC-1: `JobStore.replacement_participant` reuses canonical job serialization and OCC authority; the mixed recovery test proves no planning mutation and `ERR_JOB_OCC_STALE` behavior.
+  - AC-2: `AttemptStore.create_participant` reuses safe location validation and canonical event content; the mixed recovery test proves planning does not create the event and commit makes it readable.
+  - AC-3: the mixed recovery test interrupts after first publication, invokes `recover_all`, and asserts both records, no manifest, and no temporary files.
+  - AC-4: the coordinated forked process-race test proves one success, `ERR_TRANSACTION_CONFLICT` for the rival, matching winner records, and no rival event.
+  - AC-5: the mixed recovery test commits a byte-equivalent replay and asserts one matching event plus no manifest.
+- Current failure-key resolutions: none returned from verify.
+- Builder-challenger result: pass; no concrete blockers.
+- Follow-up risks: process-race proof uses `fork`, available on the supported macOS/Linux environment.

@@ -2,14 +2,17 @@ from __future__ import annotations
 
 import contextlib
 from io import StringIO
+import multiprocessing
 from pathlib import Path
 import subprocess
 import sys
 from threading import Event, Thread
+from typing import Any
 
 import pytest
 import yaml
 
+from owlbear_kanban.attempts import AttemptEvent, AttemptStore
 import owlbear_kanban.jobs as jobs_module
 import owlbear_kanban.runtime_transaction as transaction_module
 from owlbear_kanban.jobs import JobConcurrencyError, JobGeneration, JobStore, ShapeJob
@@ -54,6 +57,48 @@ def _job_store_with_record(tmp_path: Path) -> tuple[JobStore, Path, object, byte
     stream = StringIO()
     make_yaml(explicit_start=True).dump(replacement.model_dump(mode="json"), stream)
     return store, destination, stored, stream.getvalue().encode()
+
+
+def _attempt_event(attempt_id: str) -> AttemptEvent:
+    return AttemptEvent(
+        schema_version=1,
+        attempt_id=attempt_id,
+        job_id=1,
+        change_id="change-001",
+        delivery_digest="a" * 64,
+        target_node_id="DN-001",
+        actor_id="builder",
+        process_id=attempt_id,
+        sequence=1,
+        timestamp="2026-07-23T00:00:00Z",
+        kind="started",
+    )
+
+
+def _commit_mixed_process(
+    transaction_details: tuple[Path, Path, str, str],
+    barrier: Any,
+    outcomes: Any,
+) -> None:
+    work_root, manifest_root, disposition, attempt_id = transaction_details
+    job_store = JobStore(work_root)
+    stored = job_store.read(1)
+    event = _attempt_event(attempt_id)
+    transaction = RuntimeTransaction(
+        manifest_root,
+        attempt_id,
+        (
+            job_store.replacement_participant(stored.job.model_copy(update={"disposition": disposition}), stored.token),
+            AttemptStore(work_root).create_participant(event),
+        ),
+    )
+    barrier.wait()
+    try:
+        transaction.commit()
+    except TransactionConflictError:
+        outcomes.put((disposition, attempt_id, TransactionConflictError.code))
+    else:
+        outcomes.put((disposition, attempt_id, "success"))
 
 
 def test_locked_roots_rejects_symlink_roots_and_lock_files(tmp_path: Path) -> None:
@@ -355,3 +400,83 @@ def test_concurrent_processes_publish_one_immutable_participant_set(tmp_path: Pa
     assert [process.returncode for process in processes] == [0, 0]
     assert (work_root / "jobs/shape.yaml").read_bytes() == b"shape"
     assert not list((manifest_root / ".runtime-transactions").glob("*.yaml"))
+
+
+def test_mixed_store_participants_recover_and_replay_without_planning_mutation(tmp_path: Path) -> None:
+    job_store, destination, stored, _replacement_bytes = _job_store_with_record(tmp_path)
+    attempt_store = AttemptStore(destination.parents[1])
+    replacement = stored.job.model_copy(update={"disposition": "transaction"})
+    event = _attempt_event("attempt-recover")
+
+    job_participant = job_store.replacement_participant(replacement, stored.token)
+    attempt_participant = attempt_store.create_participant(event)
+
+    assert destination.read_bytes() == job_participant.expected_content
+    assert attempt_store.read(event.attempt_id, event.sequence).event is None
+    with pytest.raises(JobConcurrencyError):
+        job_store.replacement_participant(replacement, "stale")
+
+    transaction = RuntimeTransaction(
+        tmp_path / "change",
+        "mixed-recover",
+        (job_participant, attempt_participant),
+    )
+
+    def interrupt(stage: str) -> None:
+        if stage == "after-first-publication":
+            message = "interrupted"
+            raise RuntimeError(message)
+
+    with pytest.raises(RuntimeError, match="interrupted"):
+        transaction.commit(failure=interrupt)
+
+    RuntimeTransaction.recover_all(tmp_path / "change", roots=(tmp_path / "change", destination.parents[1]))
+
+    assert job_store.read(1).job == replacement
+    assert attempt_store.read(event.attempt_id, event.sequence).event == event
+    assert not list((tmp_path / "change/.runtime-transactions").glob("*.yaml"))
+    assert not list(destination.parents[1].rglob(".tmp-*"))
+
+    replay = RuntimeTransaction(
+        tmp_path / "change",
+        "mixed-replay",
+        (
+            job_store.replacement_participant(replacement, job_store.read(1).token),
+            attempt_store.create_participant(event),
+        ),
+    )
+    replay.commit()
+
+    assert job_store.read(1).job == replacement
+    assert attempt_store.list() == (event,)
+    assert not list((tmp_path / "change/.runtime-transactions").glob("*.yaml"))
+
+
+def test_mixed_store_participants_serialize_competing_processes(tmp_path: Path) -> None:
+    job_store, destination, _stored, _expected_bytes = _job_store_with_record(tmp_path)
+    work_root = destination.parents[1]
+    context = multiprocessing.get_context("fork")
+    barrier = context.Barrier(2)
+    outcomes = context.Queue()
+    processes = [
+        context.Process(
+            target=_commit_mixed_process,
+            args=((work_root, tmp_path / "change", f"winner-{index}", f"attempt-race-{index}"), barrier, outcomes),
+        )
+        for index in range(2)
+    ]
+
+    for process in processes:
+        process.start()
+    for process in processes:
+        process.join(timeout=5)
+
+    assert [process.exitcode for process in processes] == [0, 0]
+    results = sorted(outcomes.get(timeout=2) for _ in processes)
+    winner = next(result for result in results if result[2] == "success")
+    loser = next(result for result in results if result[2] == TransactionConflictError.code)
+
+    assert job_store.read(1).job.disposition == winner[0]
+    assert AttemptStore(work_root).read(winner[1], 1).event == _attempt_event(winner[1])
+    assert AttemptStore(work_root).read(loser[1], 1).event is None
+    assert not list((tmp_path / "change/.runtime-transactions").glob("*.yaml"))
