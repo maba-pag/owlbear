@@ -1,10 +1,10 @@
 ---
 id: 2010
 title: 'P3-11: Define immutable attempt event contracts'
-status: verify
+status: build
 priority: high
 created: 2026-07-23T14:40:14.905119+02:00
-updated: 2026-07-23T15:17:53.950840+02:00
+updated: 2026-07-23T15:22:26.462764+02:00
 tags:
   - phase-3
   - scope:core
@@ -63,3 +63,17 @@ Exercise the public parser and serializer directly with a finite accepted/invali
 - Commands run: `uv run --project /Users/markus/Projects/owlbear-dev pytest serve/kanban/tests/test_attempts.py` (13 passed); `uv run --project /Users/markus/Projects/owlbear-dev ruff check serve/kanban/src/owlbear_kanban/attempts.py serve/kanban/src/owlbear_kanban/__init__.py serve/kanban/tests/test_attempts.py` (all checks passed); scoped `git diff --check` (clean).
 - Builder challenger: pass; independently reran the same focused proof and found no completion blocker.
 - Follow-up risks: identity semantics beyond required non-empty/reference validation belong to dependent lifecycle and persistence tasks.
+
+[[2026-07-23T15:22:26+02:00]]
+## Verify Notes
+- Evidence reviewed: task AC-1 through AC-3; builder notes; the committed task implementation in `serve/kanban/src/owlbear_kanban/attempts.py`; public exports in `serve/kanban/src/owlbear_kanban/__init__.py`; and the focused mapping-table tests in `serve/kanban/tests/test_attempts.py`.
+- Named authorities checked: `REQ-008`, `REQ-009`, `IF-003`, design sections 2.2, 2.3, and 7.2, plus accepted `DEC-007` and `DEC-009` in `.owlbear/changes/replace-delivery-pipeline/`. The immutable operational-event model aligns with the work/evidence-plane and purpose-specific-job authorities.
+- Change Module Map: no ownership deviation. The contract remains isolated to the intended sibling module and package export surface.
+- Normal-path boundary exercised: direct public `parse_attempt_event_mapping` accepted all five kinds; no store, lifecycle, or injected substitute was used.
+- Checks run: `uv run --project /Users/markus/Projects/owlbear-dev pytest serve/kanban/tests/test_attempts.py` passed (13 passed); `uv run --project /Users/markus/Projects/owlbear-dev ruff check serve/kanban/src/owlbear_kanban/attempts.py serve/kanban/src/owlbear_kanban/__init__.py serve/kanban/tests/test_attempts.py` passed (all checks passed); `git diff --check` clean.
+- Finding: REJECT. AC-3 requires a public serialization boundary followed by public parsing. The package exposes only `parse_attempt_event_mapping`; the round-trip test invokes `AttemptEvent.model_dump(mode="json")` directly. That Pydantic method is not a task-owned public serializer, so the required public serialize-then-parse contract is absent and unproven.
+- Required follow-up: add and export the minimal public attempt-event serializer, and update the focused round-trip test to call it before `parse_attempt_event_mapping`. Preserve the existing narrow module ownership and immutable model.
+- Patches applied: none; this missing public contract requires builder-owned implementation and proof.
+- Prior same-AC rejection check: task history contains only the builder implementation commit; no prior Verify Notes or same-AC rejection exists.
+- Verifier-challenger: not called because a PASS verdict is not proposed.
+- Final route: REJECT to build.
