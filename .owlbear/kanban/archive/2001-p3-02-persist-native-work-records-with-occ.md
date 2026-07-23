@@ -1,10 +1,10 @@
 ---
 id: 2001
 title: 'P3-02: Persist native work records with OCC'
-status: collect
+status: archived
 priority: high
 created: 2026-07-22T21:58:20.087459+02:00
-updated: 2026-07-23T03:15:39.248559+02:00
+updated: 2026-07-23T10:46:08.938763+02:00
 tags:
   - phase-3
   - scope:core
@@ -37,7 +37,7 @@ proof_bundle: existing+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Bootstrap Projection Identity
@@ -186,3 +186,14 @@ Proof guidance: no direct executable proof is owned here. Collector inspects chi
 ### Challenge And Board Audit
 - `shaper-challenger` decision: pass; full connected graph, authority, readiness, invariant ownership, boundary proof, aggregate closure, and fidelity all met.
 - Release audit: task 2001 returns to `collect`, parent 1979, dependencies 2008 and completed 2009, and remains dependency-blocked only by active task 2008. Task 2002 remains blocked on 2001; parent 1979 and unrelated edges remain unchanged.
+
+[[2026-07-23T10:46:08+02:00]]
+## Collect Notes
+- Classification: aggregate (`type:aggregate`); parent intent is recorded in this task's `## Outcome`, `## Scope`, and Authority sections.
+- Aggregate contract: immutable findings and revision-bound canonical receipt listing belong to child 2008; OCC-protected active/archive job records belong to child 2009. The aggregate excludes attempts, lifecycle, and cross-record transaction/recovery behavior.
+- Child coverage: `list_tasks(parent=2001)` returned no active children because both children are archived; direct Kanban summaries for 2008 and 2009 confirm `parent=2001`, archival reason `completed`, and no blocks. Child 2008's latest Verify Notes prove explicit temporary work-root finding storage plus revision-bound canonical `ReceiptStore.list`; child 2009's latest Verify Notes prove explicit temporary work-root active/archive job storage and OCC.
+- Invariant and scope map: child 2008 retains findings in the work root and receipt bytes in the loaded change revision. Child 2009 retains active/archive jobs only in the work root. Their Scope sections explicitly exclude cross-record transactions/recovery, attempt contracts/storage, and lifecycle predicates.
+- Dependency gate: this task depended on 2008 and 2009; both are completed. Downstream task 2002 still has `depends_on=[2001]` and is currently blocked only by this aggregate's active status, so archiving releases its intended gate.
+- SHA-linked normal-path proof: 2008 verifier evidence ties commit `1a5f84059` to `uv run pytest serve/kanban/tests/test_findings.py serve/kanban/tests/test_change_receipts.py` (36 passed) and boundary proof through `FindingStore` and `ReceiptStore.list`. 2009 verifier evidence ties commit `f6550b0ed` to `uv run pytest serve/kanban/tests/test_jobs.py` (22 passed) and public `JobStore` materialization/OCC/archive proof. Both commits are ancestors of current `HEAD` `07dc1f1bf62bf353cbcdccffc4d92f75bee1f490`.
+- Structured request state: no pending or resolved requests for task 2001.
+- Rationale: all aggregate acceptance criteria are covered by completed child evidence, intended scope boundaries, dependency topology, and SHA-linked proof. Archive as completed.
