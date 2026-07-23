@@ -4,7 +4,7 @@ title: 'P3-04: Record claims and immutable attempts'
 status: collect
 priority: high
 created: 2026-07-22T21:58:44.211108+02:00
-updated: 2026-07-23T23:12:58.633807+02:00
+updated: 2026-07-23T23:34:54.942572+02:00
 tags:
   - phase-3
   - scope:core
@@ -284,3 +284,38 @@ The connected repair owns planning records #2003 and #2012. Product-file collisi
 - Scenario correction: parent map now names canonical duplicate/multi-root lock acquisition, symlink root/lock rejection, partial-acquisition cleanup, controlled JobStore-first conflict, and controlled transaction-first stale OCC. #2013's complete-pair/rival-event/replay axis remains separate.
 - Challenger chain: task-local shared-lock boundary and controlled ordering were added after the first challenge; parent maps were corrected after the second; binding AC-2 and AC-3 were split to require both writer orderings after the connected challenge. Final connected shaper-challenger decision: pass.
 - Route: parent stays in `collect`, released and still dependency-blocked on unfinished children. #2012 separately advances to `build` after this parent record is committed.
+
+[[2026-07-23T23:29:53+02:00]]
+## Operative Mixed Participant Map Correction
+
+This correction extends the current packet maps for task #2013 without changing graph edges or lifecycle ownership.
+
+### Change Module Map Delta
+
+| Module | Planned change | Owning tasks |
+|---|---|---|
+| `serve/kanban/src/owlbear_kanban/jobs.py` | Preserve job schema, serialization, OCC token, and shared lock; add non-mutating replacement participant planning from a current token | #2013 for participant planning; #2012 retains lock migration; #2017-#2019 consume through #2013 |
+| `serve/kanban/src/owlbear_kanban/attempts.py` | Preserve attempt schema and immutable store; add non-mutating canonical create-participant planning | #2010-#2011 for schema/storage; #2013 for participant planning |
+| `serve/kanban/src/owlbear_kanban/runtime_transaction.py` | Compose planned replacement/create participants through existing commit, shared locks, recovery, conflict, and cleanup | #2012 primitive; #2013 mixed composition/proof |
+
+### Dependency Closure Map Delta
+
+No edge changes. #2013 depends on archived-completed #2011 and #2012. #2017 depends on #2013 and #2016, with #2018 and #2019 downstream, so lifecycle work remains gated on the mixed participant contract.
+
+### Scenario Closure Map Delta
+
+| Task | Added finite scenario axis |
+|---|---|
+| #2013 | current versus stale job-token planning; non-mutating attempt planning; interruption after job publication followed by complete recovery; two-process same-token rival pairs; byte-equivalent replay with one immutable event |
+
+The participant factories expose canonical store-owned bytes and paths without moving job, attempt, transaction, or lifecycle policy ownership across modules.
+
+[[2026-07-23T23:34:54+02:00]]
+## Shape Notes
+- Connected repair set: #2003 and #2013. Classification: local interface/AC repair under the accepted packet architecture; no dependency or product decision changed.
+- Source finding: archived #2011 and #2012 provide immutable attempt storage and shared-lock replacement transactions, but canonical job/attempt participant bytes and paths remained private, so the prior #2013 AC did not identify a buildable mixed-plan boundary.
+- Parent map correction: #2013 adds non-mutating `JobStore.replacement_participant` and `AttemptStore.create_participant` planning while job/attempt schema and storage ownership remain with #2010/#2011 and replacement/shared-lock primitives remain with #2012. `RuntimeTransaction` stays the generic mixed commit/recover owner.
+- Dependency audit: no edge changes. #2013 depends on archived-completed #2011/#2012; #2017 remains gated on #2013 and #2016; #2018/#2019 remain downstream.
+- Scenario map correction: current/stale job planning, non-mutating attempt planning, after-first-publication recovery, same-token rival pairs, and byte-equivalent replay are now finite #2013 axes.
+- Challenger: final connected shaper-challenger decision pass; it confirmed canonical helper availability, no import cycle, real assembled boundaries, exact result codes, and no strict-subset overclaim.
+- Route: #2003 remains collect, released and dependency-blocked on unfinished children. #2013 advances separately to build after this parent record is committed.
