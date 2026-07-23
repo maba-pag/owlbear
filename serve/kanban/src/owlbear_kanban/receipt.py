@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import contextlib
 import errno
+import hashlib
+import json
 import math
 import os
 import re
@@ -21,7 +23,7 @@ from pydantic import BaseModel, ConfigDict, StringConstraints, field_serializer,
 from pydantic import ValidationError as PydanticValidationError
 from ruamel.yaml.error import YAMLError
 
-from owlbear_kanban.change import ChangeId, ChangeRevision, Digest, load_change
+from owlbear_kanban.change import ChangeId, ChangeRevision, Digest, Proof, load_change
 from owlbear_kanban.yaml_rt import make_yaml
 
 _RECEIPT_ID_PATTERN = r"^[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*$"
@@ -134,6 +136,31 @@ class ReceiptParseDiagnosticCode(StrEnum):
     CODE_REVISION_MISSING = "ERR_RECEIPT_CODE_REVISION_MISSING"
 
 
+class ReceiptValidityCode(StrEnum):
+    """Stable local receipt-currentness results."""
+
+    CURRENT = "CURRENT"
+    SCHEMA_UNSUPPORTED = "ERR_RECEIPT_SCHEMA_UNSUPPORTED"
+    TARGET_MISSING = "ERR_RECEIPT_TARGET_MISSING"
+    DELIVERY_DIGEST_STALE = "ERR_RECEIPT_DELIVERY_DIGEST_STALE"
+    NODE_PLAN_DIGEST_STALE = "ERR_RECEIPT_NODE_PLAN_DIGEST_STALE"
+    PROOF_UNSATISFIED = "ERR_RECEIPT_PROOF_UNSATISFIED"
+    FIELD_MISSING = "ERR_RECEIPT_FIELD_MISSING"
+
+
+class ReceiptValidity(_ReceiptModel):
+    """The deterministic local-currentness result for one receipt."""
+
+    code: ReceiptValidityCode
+    detail: str
+    target: str | None = None
+
+    @property
+    def current(self) -> bool:
+        """Whether local authority and proof checks are current."""
+        return self.code is ReceiptValidityCode.CURRENT
+
+
 class ReceiptParseDiagnostic(_ReceiptModel):
     code: ReceiptParseDiagnosticCode
     detail: str
@@ -180,6 +207,82 @@ def parse_receipt_mapping(value: Mapping[str, object]) -> ReceiptParseResult:
         if field not in record.payload
     )
     return ReceiptParseResult(diagnostics=diagnostics) if diagnostics else ReceiptParseResult(receipt=record)
+
+
+def _node_plan_digest(revision: ChangeRevision, target: str) -> Digest:
+    node = revision.resolve(target)
+    if not hasattr(node, "proof"):
+        msg = f"receipt target is not a delivery node: {target}"
+        raise KeyError(msg)
+    payload = {
+        "delivery_digest": revision.delivery_digest,
+        "node": node.model_dump(mode="json"),
+        "node_plan": revision.graph.execution.node_plans.get(target),
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
+    return hashlib.sha256(encoded.encode()).hexdigest()
+
+
+def _target_proof(revision: ChangeRevision, target: str) -> Proof | None:
+    try:
+        node = revision.resolve(target)
+    except KeyError:
+        return None
+    if not hasattr(node, "proof"):
+        return None
+    proof = revision.resolve(node.proof)
+    return proof if isinstance(proof, Proof) else None
+
+
+def evaluate_receipt_currentness(revision: ChangeRevision, receipt: ReceiptRecord) -> ReceiptValidity:
+    """Evaluate local receipt authority and proof currentness without graph traversal."""
+    if receipt.schema_version != 1:
+        result = ReceiptValidity(
+            code=ReceiptValidityCode.SCHEMA_UNSUPPORTED,
+            detail="receipt schema version is unsupported",
+        )
+    elif receipt.delivery_digest != revision.delivery_digest:
+        result = ReceiptValidity(
+            code=ReceiptValidityCode.DELIVERY_DIGEST_STALE,
+            detail="receipt delivery digest differs from the loaded revision",
+        )
+    elif receipt.kind == "admission":
+        result = ReceiptValidity(code=ReceiptValidityCode.CURRENT, detail="admission receipt is locally current")
+    else:
+        result = _evaluate_target_receipt(revision, receipt)
+    return result
+
+
+def _evaluate_target_receipt(revision: ChangeRevision, receipt: ReceiptRecord) -> ReceiptValidity:
+    target = receipt.payload.get("target_node_id")
+    if not isinstance(target, str) or _target_proof(revision, target) is None:
+        return ReceiptValidity(
+            code=ReceiptValidityCode.TARGET_MISSING,
+            detail="receipt target delivery node does not exist",
+            target=target if isinstance(target, str) else None,
+        )
+    node_plan_digest = receipt.payload.get("node_plan_digest")
+    if not isinstance(node_plan_digest, str):
+        return ReceiptValidity(
+            code=ReceiptValidityCode.FIELD_MISSING,
+            detail="receipt payload is missing node_plan_digest",
+            target=target,
+        )
+    if node_plan_digest != _node_plan_digest(revision, target):
+        return ReceiptValidity(
+            code=ReceiptValidityCode.NODE_PLAN_DIGEST_STALE,
+            detail="receipt node plan digest differs from the loaded revision",
+            target=target,
+        )
+    evidence = receipt.payload.get("evidence")
+    proof = _target_proof(revision, target)
+    if not isinstance(evidence, Mapping) or not proof or not set(proof.method) <= set(evidence.get("methods", ())):
+        return ReceiptValidity(
+            code=ReceiptValidityCode.PROOF_UNSATISFIED,
+            detail="receipt evidence does not satisfy the target proof contract",
+            target=target,
+        )
+    return ReceiptValidity(code=ReceiptValidityCode.CURRENT, detail="receipt is locally current", target=target)
 
 
 class ReceiptDiagnosticCode(StrEnum):

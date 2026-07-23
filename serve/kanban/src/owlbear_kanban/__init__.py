@@ -78,7 +78,10 @@ from owlbear_kanban.receipt import (
     ReceiptRecord,
     ReceiptResult,
     ReceiptStore,
+    ReceiptValidity,
+    ReceiptValidityCode,
     change_health,
+    evaluate_receipt_currentness,
     parse_receipt_mapping,
 )
 from owlbear_kanban.storage_io import atomic_write
@@ -131,6 +134,8 @@ __all__ = [
     "ReceiptRecord",
     "ReceiptResult",
     "ReceiptStore",
+    "ReceiptValidity",
+    "ReceiptValidityCode",
     "ShapeJob",
     "StoredJob",
     "Task",
@@ -141,6 +146,7 @@ __all__ = [
     "change_health",
     "compute_delivery_digest",
     "evaluate_admission",
+    "evaluate_receipt_currentness",
     "load_change",
     "parse_finding_mapping",
     "parse_job_mapping",

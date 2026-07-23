@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+import hashlib
+import json
 from collections.abc import Callable
 from pathlib import Path
 
@@ -15,7 +17,9 @@ from owlbear_kanban import (
     ReceiptDiagnosticCode,
     ReceiptParseDiagnosticCode,
     ReceiptStore,
+    ReceiptValidityCode,
     change_health,
+    evaluate_receipt_currentness,
     load_change,
     parse_receipt_mapping,
 )
@@ -63,6 +67,30 @@ def _parser_receipt(kind: str) -> dict[str, object]:
     }
 
 
+def _node_plan_digest(revision: ChangeRevision, target: str) -> str:
+    node = revision.resolve(target)
+    payload = {
+        "delivery_digest": revision.delivery_digest,
+        "node": node.model_dump(mode="json"),
+        "node_plan": revision.graph.execution.node_plans.get(target),
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
+    return hashlib.sha256(encoded.encode()).hexdigest()
+
+
+def _current_receipt(revision: ChangeRevision) -> dict[str, object]:
+    node = revision.graph.nodes[0]
+    proof = revision.resolve(node.proof)
+    return {
+        **_parser_receipt("build"),
+        "change_id": revision.change_id,
+        "delivery_digest": revision.delivery_digest,
+        "target_node_id": node.id,
+        "node_plan_digest": _node_plan_digest(revision, node.id),
+        "evidence": {"methods": list(proof.method)},
+    }
+
+
 def test_package_exports_receipt_and_health_boundary() -> None:
     expected = {
         "ChangeHealthFinding",
@@ -100,6 +128,39 @@ def test_public_receipt_parser_requires_node_plan_digest_for_node_scoped_receipt
 
     assert result.receipt is None
     assert [item.code for item in result.diagnostics] == [ReceiptParseDiagnosticCode.NODE_PLAN_DIGEST_MISSING]
+
+
+@pytest.mark.parametrize(
+    ("mutation", "expected"),
+    [
+        (lambda value: value.update(delivery_digest="d" * 64), ReceiptValidityCode.DELIVERY_DIGEST_STALE),
+        (lambda value: value.update(node_plan_digest="e" * 64), ReceiptValidityCode.NODE_PLAN_DIGEST_STALE),
+        (lambda value: value.update(target_node_id="DN-999"), ReceiptValidityCode.TARGET_MISSING),
+        (lambda value: value.update(evidence={"methods": []}), ReceiptValidityCode.PROOF_UNSATISFIED),
+    ],
+)
+def test_receipt_currentness_evaluates_local_authority_and_proof(
+    tmp_path: Path,
+    mutation: Callable[[dict[str, object]], None],
+    expected: ReceiptValidityCode,
+) -> None:
+    _changes_dir, revision = _load_revision(tmp_path)
+    value = _current_receipt(revision)
+    mutation(value)
+    parsed = parse_receipt_mapping(value)
+
+    assert parsed.receipt is not None
+    assert evaluate_receipt_currentness(revision, parsed.receipt).code is expected
+
+
+def test_receipt_currentness_accepts_admission_without_node_plan_or_evidence(tmp_path: Path) -> None:
+    _changes_dir, revision = _load_revision(tmp_path)
+    parsed = parse_receipt_mapping(_receipt(revision, "admission-current", "admission"))
+
+    assert parsed.receipt is not None
+    result = evaluate_receipt_currentness(revision, parsed.receipt)
+    assert result.code is ReceiptValidityCode.CURRENT
+    assert result.current
 
 
 def test_receipt_store_round_trips_all_kinds_and_preserves_existing_bytes(tmp_path: Path) -> None:
