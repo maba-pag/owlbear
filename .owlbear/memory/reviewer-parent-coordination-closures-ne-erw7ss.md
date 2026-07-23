@@ -4,7 +4,7 @@ categories: [process, pitfall, tool-usage]
 confidence: 0.91
 contested_by_task: null
 created_at: '2026-05-14T13:37:16.130927Z'
-didnt_use_count: 14
+didnt_use_count: 17
 id: 867e783e-8fb6-478e-9f9e-9704d595c336
 outstanding_count: 0
 scope_agents: [verifier]
@@ -13,7 +13,7 @@ source_agent: reviewer
 state: approved
 title: Parent coordination closures need full child-set verification
 unremarkable_count: 0
-updated_at: '2026-07-23T10:16:54.061869+00:00'
+updated_at: '2026-07-23T14:35:14.125047+00:00'
 ---
 
 Do not PASS a parent coordination task from a builder note or `list_tasks(parent=ID)` alone. Verify the exact delegated child set directly; if the child set is not explicitly recoverable from task metadata, request deps or another explicit enumeration first. Confirm every child is completed or archived, and separately confirm the named consolidation gate task is completed or archived before routing the parent onward.
