@@ -5,10 +5,13 @@ import subprocess
 import sys
 
 import pytest
+import yaml
 
 from owlbear_kanban.runtime_transaction import (
+    ReplacementTransactionParticipant,
     RuntimeTransaction,
     TransactionConflictError,
+    TransactionManifestError,
     TransactionParticipant,
     TransactionPathError,
 )
@@ -65,6 +68,97 @@ def test_transaction_rejects_conflicts_and_escaped_destinations_without_mutation
 
     assert destination.read_bytes() == b"committed"
     assert not (tmp_path / "outside.yaml").exists()
+
+
+@pytest.mark.parametrize("stage", ["before-publication", "after-first-publication", "before-manifest-cleanup"])
+def test_replacement_participant_recovers_and_replays(tmp_path: Path, stage: str) -> None:
+    manifest_root = tmp_path / "change"
+    work_root = tmp_path / "work"
+    destination = work_root / "jobs/shape.yaml"
+    destination.parent.mkdir(parents=True)
+    destination.write_bytes(b"expected")
+    transaction = RuntimeTransaction(
+        manifest_root,
+        "replacement",
+        (ReplacementTransactionParticipant(work_root, Path("jobs/shape.yaml"), b"expected", b"replacement"),),
+    )
+
+    def interrupt(current_stage: str) -> None:
+        if current_stage == stage:
+            message = "interrupted"
+            raise RuntimeError(message)
+
+    with pytest.raises(RuntimeError, match="interrupted"):
+        transaction.commit(failure=interrupt)
+
+    RuntimeTransaction.recover_all(manifest_root, roots=(manifest_root, work_root))
+    RuntimeTransaction.recover_all(manifest_root, roots=(manifest_root, work_root))
+
+    assert destination.read_bytes() == b"replacement"
+    assert not list((manifest_root / ".runtime-transactions").glob("*.yaml"))
+
+
+def test_replacement_participant_rejects_conflicts_and_invalid_recovery_manifests(tmp_path: Path) -> None:
+    manifest_root = tmp_path / "change"
+    work_root = tmp_path / "work"
+    destination = work_root / "jobs/shape.yaml"
+    destination.parent.mkdir(parents=True)
+    destination.write_bytes(b"different")
+    transaction = RuntimeTransaction(
+        manifest_root,
+        "replacement",
+        (ReplacementTransactionParticipant(work_root, Path("jobs/shape.yaml"), b"expected", b"replacement"),),
+    )
+
+    with pytest.raises(TransactionConflictError):
+        transaction.commit()
+    assert destination.read_bytes() == b"different"
+
+    manifest_directory = manifest_root / ".runtime-transactions"
+    manifest_directory.mkdir(parents=True, exist_ok=True)
+    (manifest_directory / "malformed.yaml").write_text("schema_version: 2\nparticipants: [bad]\n", encoding="utf-8")
+
+    with pytest.raises(TransactionManifestError):
+        RuntimeTransaction.recover_all(manifest_root, roots=(manifest_root, work_root))
+    assert destination.read_bytes() == b"different"
+
+
+@pytest.mark.parametrize("alteration", ["digest", "unsafe-root"])
+def test_replacement_recovery_rejects_altered_or_unsafe_manifests(tmp_path: Path, alteration: str) -> None:
+    manifest_root = tmp_path / "change"
+    work_root = tmp_path / "work"
+    destination = work_root / "jobs/shape.yaml"
+    destination.parent.mkdir(parents=True)
+    destination.write_bytes(b"expected")
+    transaction = RuntimeTransaction(
+        manifest_root,
+        "replacement",
+        (ReplacementTransactionParticipant(work_root, Path("jobs/shape.yaml"), b"expected", b"replacement"),),
+    )
+
+    def interrupt(current_stage: str) -> None:
+        if current_stage == "before-publication":
+            message = "interrupted"
+            raise RuntimeError(message)
+
+    with pytest.raises(RuntimeError, match="interrupted"):
+        transaction.commit(failure=interrupt)
+
+    manifest_path = manifest_root / ".runtime-transactions/replacement.yaml"
+    manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+    participant = manifest["participants"][0]
+    if alteration == "digest":
+        participant["replacement_sha256"] = "0" * 64
+    else:
+        participant["root"] = str(tmp_path / "outside")
+    manifest_path.write_text(yaml.safe_dump(manifest), encoding="utf-8")
+
+    expected_error = TransactionManifestError if alteration == "digest" else TransactionPathError
+    with pytest.raises(expected_error):
+        RuntimeTransaction.recover_all(manifest_root, roots=(manifest_root, work_root))
+
+    assert destination.read_bytes() == b"expected"
+    assert not (tmp_path / "outside/jobs/shape.yaml").exists()
 
 
 def test_concurrent_processes_publish_one_immutable_participant_set(tmp_path: Path) -> None:

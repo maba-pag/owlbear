@@ -1,10 +1,10 @@
 ---
 id: 2012
 title: 'P3-13: Recover OCC replacement transaction participants'
-status: build
+status: verify
 priority: high
 created: 2026-07-23T14:40:46.644783+02:00
-updated: 2026-07-23T14:40:46.644783+02:00
+updated: 2026-07-23T15:09:56.365567+02:00
 tags:
   - phase-3
   - scope:core
@@ -54,3 +54,13 @@ Resolve behavior from `REQ-016`, `IF-003`, `KEEP-007`, `RISK-002`, `PROOF-003`, 
 
 ## Proof Guidance
 Use the transaction boundary directly. Cover expected, already-replaced, conflicting, malformed, unsafe, and all three interruption phases; do not add mixed process races to this task.
+
+[[2026-07-23T15:09:56+02:00]]
+## Builder Notes
+- Change envelope: extend `RuntimeTransaction` with contained OCC replacement participants, preserving immutable participant behavior and diagnostics. The expected modules were the transaction kernel and its focused boundary tests; no Change Module Map deviation.
+- Files changed: `serve/kanban/src/owlbear_kanban/runtime_transaction.py`; `serve/kanban/tests/test_runtime_transaction.py`.
+- Implementation: added a schema-v2 replacement manifest entry carrying expected and replacement bytes plus SHA-256 digests; replacement publish accepts expected bytes, treats replacement bytes as an idempotent replay, and rejects all other states with `ERR_TRANSACTION_CONFLICT`. Recovery validates schema, digests, and containment before mutation.
+- Proof selected: durable transaction-boundary regression coverage because crash recovery and OCC replacement are shared, data-integrity-sensitive behavior. Tests cover expected/replayed/conflicting destinations, all three interruption phases with repeat recovery, malformed manifests, altered digest, and unsafe root.
+- Commands run: `uv run pytest serve/kanban/tests/test_runtime_transaction.py && uv run ruff check serve/kanban/src/owlbear_kanban/runtime_transaction.py serve/kanban/tests/test_runtime_transaction.py` (11 passed; Ruff clean). `git diff --check` passed. Editor diagnostics found no errors in touched files.
+- Builder challenger: pass; no concrete blockers. It independently confirmed the focused test and lint results.
+- Follow-up risks: no mixed job/event process races were added; those remain explicitly out of scope. One recalled memory identifier could not be resolved by the memory service during required assessment; the retry/replay memory was assessed outstanding.
