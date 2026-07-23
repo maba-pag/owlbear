@@ -51,3 +51,16 @@ def test_runtime_open_recovers_interrupted_admission_participant_publication(tmp
     assert recovered_receipt.receipt.receipt_id == "admission-001"
     assert generation_path.exists()
     assert not list((revision.source_dir / ".runtime-transactions").glob("*.yaml"))
+
+
+def test_runtime_open_reports_malformed_pending_transaction_manifest(tmp_path: Path) -> None:
+    revision, _ = _revision_and_evidence(tmp_path)
+    transaction_directory = revision.source_dir / ".runtime-transactions"
+    transaction_directory.mkdir()
+    (transaction_directory / "pending.yaml").write_text("participants: [", encoding="utf-8")
+
+    reopened = load_change(revision.source_dir.parent, revision.change_id)
+
+    assert reopened.revision is None
+    assert reopened.diagnostics[0].code.value == "ERR_CHANGE_SCHEMA_INVALID"
+    assert reopened.diagnostics[0].detail == "pending transaction manifest is invalid"

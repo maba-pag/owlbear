@@ -1,10 +1,10 @@
 ---
 id: 2002
 title: 'P3-03: Commit and recover runtime transactions'
-status: build
+status: verify
 priority: high
 created: 2026-07-22T21:58:33.866396+02:00
-updated: 2026-07-23T12:08:25.078270+02:00
+updated: 2026-07-23T12:14:30.719144+02:00
 tags:
   - phase-3
   - scope:core
@@ -175,3 +175,15 @@ Proof guidance: exercise public admission plus the reusable transaction boundary
 | 2 | builder | Add proportionate public-boundary proof for the refined AC participant shapes and failure/security cases: lifecycle-shaped job/activity plan, before-publication and before-cleanup recovery, unsafe root, immutable conflict, stale OCC, and concurrent-process coordination. | `serve/kanban/tests/` | Existing transaction proof covers only admission after-first-publication; AC-2 and AC-3 explicitly require the omitted cases. |
 
 - Final route: REJECT to build.
+
+[[2026-07-23T12:14:30+02:00]]
+## Builder Notes
+- Change envelope: generic bounded participant transaction recovery and admission runtime-open integration only. Legacy engine/storage and downstream lifecycle, request, completion, and invalidation semantics remain untouched.
+- Files changed: `serve/kanban/src/owlbear_kanban/runtime_transaction.py`, `serve/kanban/tests/test_admission_transaction.py`, and `serve/kanban/tests/test_runtime_transaction.py`.
+- Change Module Map deviations: none. The generic kernel remains the transaction owner; `load_change()` continues to map its errors at the existing runtime-open boundary.
+- Implementation: malformed pending YAML now raises `TransactionManifestError` for the stable public schema-invalid diagnostic. Added the shaped `before-manifest-cleanup` injection stage.
+- Durable-test justification: retained public malformed-manifest coverage and added generic recovery coverage because partial immutable publication is shared, durable data-integrity behavior that is difficult to validate manually. Tests prove lifecycle-shaped job/activity participants recover after all three shaped interruption stages, reject conflict and escaped paths without mutation, and serialize two independent processes.
+- Commands run: `uv run pytest serve/kanban/tests/test_runtime_transaction.py` (5 passed); `uv run pytest serve/kanban/tests/test_runtime_transaction.py serve/kanban/tests/test_admission_transaction.py` (7 passed); `uv run pytest serve/kanban/tests/test_admission.py serve/kanban/tests/test_admission_transaction.py serve/kanban/tests/test_change_receipts.py serve/kanban/tests/test_jobs.py serve/kanban/tests/test_runtime_transaction.py` (77 passed); task-owned `ruff check` and `ruff format --check` passed; `git diff --check` passed.
+- Builder-challenger result: pass; no blockers.
+- Recalled memory assessment: completed; refined artifact-to-scope guidance was directly applied.
+- Follow-up risks: none within this task's kernel and admission integration scope.

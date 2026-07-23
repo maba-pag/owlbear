@@ -82,6 +82,8 @@ class RuntimeTransaction:
             if failure:
                 failure("before-publication")
             self._publish(failure)
+            if failure:
+                failure("before-manifest-cleanup")
             self._cleanup()
 
     def recover(self) -> None:
@@ -200,7 +202,10 @@ def _atomic_write_yaml(path: Path, value: dict[str, object]) -> None:
 
 
 def _load_yaml(path: Path) -> dict[str, object]:
-    value = yaml.safe_load(path.read_text(encoding="utf-8"))
+    try:
+        value = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except yaml.YAMLError as exc:
+        raise TransactionManifestError from exc
     return value if isinstance(value, dict) else {}
 
 
