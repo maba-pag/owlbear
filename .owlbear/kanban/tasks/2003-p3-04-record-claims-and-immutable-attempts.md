@@ -1,10 +1,10 @@
 ---
 id: 2003
 title: 'P3-04: Record claims and immutable attempts'
-status: build
+status: shape
 priority: high
 created: 2026-07-22T21:58:44.211108+02:00
-updated: 2026-07-23T03:13:22.949799+02:00
+updated: 2026-07-23T10:51:30.162411+02:00
 tags:
   - phase-3
   - scope:core
@@ -116,3 +116,13 @@ Proof guidance: exercise public attempt parser and store APIs plus lifecycle ope
 ### Challenge And Board Audit
 - `shaper-challenger` decision: pass; authority, readiness, invariant ownership, boundary proof, fidelity, literals, and adjacent 2004 ownership all met.
 - Release audit: task 2003 is `build`, parent 1979, depends on active task 2002, and is dependency-blocked as intended; task 2004 still depends on 2003.
+
+[[2026-07-23T10:51:30+02:00]]
+## Builder Notes
+- Change envelope: task 2003 requires the native transaction coordinator and stores delivered by task 2002; expected attempt/lifecycle owner cannot be implemented before that foundation exists.
+- Files changed: none.
+- Change Module Map deviations: none; the mapped task 2003 owner depends on task 2002's delivered foundation.
+- Proof selected: task dependency/readiness check before any code edit.
+- Commands run: none; no product change was permitted.
+- Builder-challenger result: initial pre-implementation challenge correctly returned `fail` because no implementation or evidence existed; it is not a completion claim.
+- Follow-up risks: task 2003 was dispatched while dependency 2002 remains unresolved (`dep_status: blocked`). Re-dispatch only after task 2002 reaches a non-blocking completion state.
