@@ -1,10 +1,10 @@
 ---
 id: 2015
 title: 'P3-16A: Define and freeze receipt impact closures'
-status: verify
+status: shape
 priority: high
 created: 2026-07-23T14:41:09.745275+02:00
-updated: 2026-07-23T18:37:17.943634+02:00
+updated: 2026-07-23T18:39:10.713411+02:00
 tags:
   - phase-3
   - scope:core
@@ -145,3 +145,18 @@ Exercise the public closure parser, receipt parser/currentness required-field pa
 - Commands run: `cd serve/kanban && uv run pytest tests/test_change_receipts.py -q` (48 passed); `cd serve/kanban && uv run ruff check src/owlbear_kanban/receipt.py tests/test_change_receipts.py` (all checks passed).
 - Builder-challenger result: pass; challenger independently ran the focused suite (48 passed) and reported no concrete blockers.
 - Follow-up risks: kind-specific issuance assembly remains owned by adjacent shaped work; this task only validates and freezes a supplied closure at the receipt boundary.
+
+[[2026-07-23T18:39:10+02:00]]
+## Verify Notes
+
+- Evidence reviewed: AC-1 through AC-4; operative receipt contract amendment; design section 4.3.1; prior Verify Notes; Builder Notes; scoped commit `59d38ce64`; and current receipt source/tests.
+- Named authorities checked: design section 4.3.1 requires `authority_targets` to be stable IDs. The task amendment assigns `receipt.py` the stable-ID validation boundary; task #2004 alone owns kind-specific finish/issuance assembly.
+- Change Module Map: no module deviation. The committed implementation remains in `receipt.py`, package exports, and the focused receipt test suite. The required kind-specific issuance assembly is correctly outside this task's implementation ownership.
+- Normal-path boundary exercised: `uv run pytest serve/kanban/tests/test_change_receipts.py -q` passed 48 tests. The public parser, local currentness, serialization/replay, and store paths ran with test doubles only below the receipt boundary.
+- Additional checks: `uv run ruff check serve/kanban/src/owlbear_kanban/receipt.py serve/kanban/src/owlbear_kanban/__init__.py serve/kanban/tests/test_change_receipts.py` passed; `uv run ruff format --check` reported all three files formatted.
+- Finding: `parse_impact_closure` accepts arbitrary non-empty strings in `authority_targets`; absent an optional caller-injected declaration set, `ReceiptRecord.from_mapping` and `ReceiptStore.create` do not enforce the stable-ID syntax required by AC-1. The existing focused tests therefore miss both an invalid stable-ID rejection and the record/store path that must preserve the `ERR_RECEIPT_IMPACT_CLOSURE_INVALID` result without publication.
+- Scenario matrix for reshape: define the receipt-layer stable-ID authority and its canonical pattern; verify valid targets are sorted/frozen; reject invalid target syntax during direct parser, receipt parser/currentness, and store-create paths; preserve no-file publication on invalid closure. Keep packet-to-closure assembly for shape/build, accept union, and audit root closure in #2004's public finish boundary.
+- Patch applied: none. The correction needs a durable behavioral regression proof and a contract decision about whether the receipt layer validates stable-ID syntax alone or resolves membership from supplied change authority, so it exceeds verifier local patch-pass scope.
+- Prior same-AC rejection check: earlier Verify Notes already rejected this same stable-ID validation gap. Under the repeated-repair rule, this second verification cannot return the task to build; it requires reshape.
+- Verifier-challenger: not called because PASS is not proposed.
+- Final route: RESHAPE to shape.
