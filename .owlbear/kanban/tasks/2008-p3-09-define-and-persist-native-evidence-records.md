@@ -1,10 +1,10 @@
 ---
 id: 2008
 title: 'P3-09: Persist native findings and list receipts'
-status: verify
+status: collect
 priority: high
 created: 2026-07-23T02:23:31.452855+02:00
-updated: 2026-07-23T10:41:52.297814+02:00
+updated: 2026-07-23T10:44:26.945922+02:00
 tags:
   - phase-3
   - scope:core
@@ -135,3 +135,21 @@ Builder invocation stopped: task status is `shape`, not `build`. No implementati
 - Commands run: `uv run pytest serve/kanban/tests/test_findings.py` (4 passed); `uv run ruff format --check` and `uv run ruff check` on all task-owned files (passed); `uv run pytest serve/kanban/tests/test_change_receipts.py serve/kanban/tests/test_findings.py` (36 passed); downstream receipt-list caller scan; `git diff --check`.
 - Builder-challenger result: pass; no concrete DONE blocker in scope, API correctness, or test relevance.
 - Follow-up risks: finding routing, invalidation, and attempt lifecycle remain intentionally owned by later tasks.
+
+[[2026-07-23T10:44:26+02:00]]
+## Verify Notes
+- Evidence reviewed: builder commit `1a5f84059` and its scoped implementation in `serve/kanban/src/owlbear_kanban/finding.py`, `receipt.py`, `__init__.py`, and `serve/kanban/tests/test_findings.py`.
+- Named authorities checked: `.owlbear/changes/replace-delivery-pipeline/design.md` sections 2.3, 3.5, 10, and 13 require immutable structured findings and canonical immutable receipt evidence. The implementation preserves those boundaries.
+- Change Module Map: conforms exactly. `finding.py` is the new finding owner; `receipt.py` extends the canonical revision-bound store with `list`; `storage_io`-style descriptor/no-follow containment is reused. No deviation into task 2003 attempts, jobs, lifecycle, MCP, or Cockpit.
+- Normal-path boundary exercised: public `parse_finding_mapping`, `FindingStore`, and `ReceiptStore.list` operate against temporary explicit roots. Replacements are only below the public boundary: filesystem failure injection verifies cleanup.
+- AC review: AC-1 parser returns frozen models and stable unknown/invalid diagnostics. AC-2 public storage proves durable readback, replay, `ERR_FINDING_CONFLICT`, traversal/symlink containment, sorted listing, and no partial/temporary residue after a write failure. AC-3 public canonical receipt listing returns sorted valid records and malformed diagnostics without creating work-root receipts; receipt regression coverage preserves create/read/conflict behavior.
+- Checks run:
+  - `uv run pytest serve/kanban/tests/test_findings.py serve/kanban/tests/test_change_receipts.py` — 36 passed.
+  - `uv run ruff format --check serve/kanban/src/owlbear_kanban/finding.py serve/kanban/src/owlbear_kanban/receipt.py serve/kanban/src/owlbear_kanban/__init__.py serve/kanban/tests/test_findings.py` — passed.
+  - `uv run ruff check serve/kanban/src/owlbear_kanban/finding.py serve/kanban/src/owlbear_kanban/receipt.py serve/kanban/src/owlbear_kanban/__init__.py serve/kanban/tests/test_findings.py` — passed.
+  - `uv run pytest tests/test_engine_ac.py tests/test_engine_ac_proof_bundle.py` — 44 passed.
+  - `git diff --check` — passed.
+- Findings: none. Patches applied: none.
+- `verifier-challenger`: pass; no blocker, scope drift, or unresolved acceptance criterion.
+- Memory assessment: nine recalled entries assessed successfully; recalled entry `ecaa14f0-6497-4407-889a-3854c36152f3` was not present when assessed, so that assessment was reported unsuccessful by the memory service.
+- Final route: PASS to `collect`.
