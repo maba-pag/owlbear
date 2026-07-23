@@ -236,6 +236,10 @@ class ReceiptValidityCode(StrEnum):
     CODE_REVISION_NOT_DESCENDANT = "ERR_RECEIPT_CODE_REVISION_NOT_DESCENDANT"
     CODE_PATH_STALE = "ERR_RECEIPT_CODE_PATH_STALE"
     CODE_HISTORY_UNAVAILABLE = "ERR_RECEIPT_CODE_HISTORY_UNAVAILABLE"
+    PREDECESSOR_MISSING = "ERR_RECEIPT_PREDECESSOR_MISSING"
+    PREDECESSOR_INVALID = "ERR_RECEIPT_PREDECESSOR_INVALID"
+    PREDECESSOR_CYCLE = "ERR_RECEIPT_PREDECESSOR_CYCLE"
+    SUPERSEDED = "ERR_RECEIPT_SUPERSEDED"
 
 
 class ReceiptValidity(_ReceiptModel):
@@ -928,6 +932,36 @@ class ReceiptStore:
             return (ReceiptResult(diagnostics=(diagnostic,)),)
         return tuple(result for _path, result in entries)
 
+    def evaluate_currentness(
+        self,
+        receipt_id: str,
+        history: RepositoryHistory,
+        candidate_revision: str,
+    ) -> ReceiptValidity:
+        """Evaluate local, code, predecessor, and supersession receipt currentness."""
+        entries, diagnostic = self._scan()
+        if diagnostic is not None:
+            return ReceiptValidity(
+                code=ReceiptValidityCode.PREDECESSOR_INVALID,
+                detail="receipt storage could not be scanned",
+                target=receipt_id,
+            )
+        records = {result.receipt.receipt_id: result.receipt for _path, result in entries if result.receipt is not None}
+        superseded = {
+            target
+            for receipt in records.values()
+            if receipt.kind == "supersession"
+            for target in (receipt.payload.get("invalidated_receipt_ids") or ())
+            if isinstance(target, str)
+        }
+        return _CompleteCurrentnessEvaluator(
+            self._revision,
+            records,
+            superseded,
+            history,
+            candidate_revision,
+        ).evaluate(receipt_id)
+
     def _scan(self) -> tuple[tuple[tuple[str, ReceiptResult], ...], ReceiptDiagnostic | None]:
         try:
             with _receipts_directory(
@@ -957,6 +991,102 @@ class ReceiptStore:
                 return tuple(entries), None
         except _ReceiptFailure as exc:
             return (), exc.diagnostic
+
+
+class _CompleteCurrentnessEvaluator:
+    def __init__(
+        self,
+        revision: ChangeRevision,
+        records: Mapping[str, ReceiptRecord],
+        superseded: set[str],
+        history: RepositoryHistory,
+        candidate_revision: str,
+    ) -> None:
+        self._revision = revision
+        self._records = records
+        self._superseded = superseded
+        self._history = history
+        self._candidate_revision = candidate_revision
+        self._memo: dict[str, ReceiptValidity] = {}
+        self._active: set[str] = set()
+
+    def evaluate(self, receipt_id: str) -> ReceiptValidity:
+        if receipt_id in self._memo:
+            return self._memo[receipt_id]
+        if receipt_id in self._active:
+            return ReceiptValidity(
+                code=ReceiptValidityCode.PREDECESSOR_CYCLE,
+                detail="receipt predecessor graph contains a cycle",
+                target=receipt_id,
+            )
+        if receipt_id in self._superseded:
+            result = ReceiptValidity(
+                code=ReceiptValidityCode.SUPERSEDED,
+                detail="a supersession receipt explicitly invalidates this receipt",
+                target=receipt_id,
+            )
+            self._memo[receipt_id] = result
+            return result
+        receipt = self._records.get(receipt_id)
+        if receipt is None:
+            return ReceiptValidity(
+                code=ReceiptValidityCode.PREDECESSOR_MISSING,
+                detail="referenced predecessor receipt is missing",
+                target=receipt_id,
+            )
+        self._active.add(receipt_id)
+        try:
+            result = self._evaluate_record(receipt)
+        finally:
+            self._active.remove(receipt_id)
+        self._memo[receipt_id] = result
+        return result
+
+    def _evaluate_record(self, receipt: ReceiptRecord) -> ReceiptValidity:
+        local = evaluate_receipt_currentness(self._revision, receipt)
+        if not local.current:
+            return local
+        code = self._evaluate_code_revision(receipt)
+        return self._evaluate_predecessors(receipt) if code.current else code
+
+    def _evaluate_code_revision(self, receipt: ReceiptRecord) -> ReceiptValidity:
+        tested_revision = receipt.payload.get("code_revision")
+        if not isinstance(tested_revision, str) or receipt.impact_closure is None:
+            return ReceiptValidity(
+                code=ReceiptValidityCode.CODE_REVISION_MISSING,
+                detail="receipt payload is missing code_revision",
+                target=receipt.receipt_id,
+            )
+        return evaluate_code_revision_currency(
+            self._history,
+            tested_revision,
+            self._candidate_revision,
+            receipt.impact_closure,
+        )
+
+    def _evaluate_predecessors(self, receipt: ReceiptRecord) -> ReceiptValidity:
+        predecessors = receipt.payload.get("predecessor_receipt_ids")
+        if not isinstance(predecessors, tuple) or not all(isinstance(item, str) for item in predecessors):
+            return ReceiptValidity(
+                code=ReceiptValidityCode.FIELD_MISSING,
+                detail="receipt payload is missing predecessor_receipt_ids",
+                target=receipt.receipt_id,
+            )
+        for predecessor_id in predecessors:
+            predecessor = self.evaluate(predecessor_id)
+            if not predecessor.current:
+                code = predecessor.code
+                if code not in {
+                    ReceiptValidityCode.PREDECESSOR_MISSING,
+                    ReceiptValidityCode.PREDECESSOR_CYCLE,
+                }:
+                    code = ReceiptValidityCode.PREDECESSOR_INVALID
+                return ReceiptValidity(
+                    code=code,
+                    detail="referenced predecessor receipt is not current",
+                    target=predecessor.target if code is ReceiptValidityCode.PREDECESSOR_CYCLE else predecessor_id,
+                )
+        return ReceiptValidity(code=ReceiptValidityCode.CURRENT, detail="receipt is completely current")
 
 
 def _health_finding(diagnostic: ReceiptDiagnostic, *, checked_path: str) -> ChangeHealthFinding:

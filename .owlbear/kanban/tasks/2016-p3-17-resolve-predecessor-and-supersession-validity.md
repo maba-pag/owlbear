@@ -1,10 +1,10 @@
 ---
 id: 2016
 title: 'P3-17: Resolve predecessor and explicit supersession validity'
-status: build
+status: verify
 priority: high
 created: 2026-07-23T14:41:23.761134+02:00
-updated: 2026-07-23T18:16:46.749640+02:00
+updated: 2026-07-23T22:20:36.718602+02:00
 tags:
   - phase-3
   - scope:core
@@ -77,3 +77,16 @@ Exercise the public evaluator over a finite receipt graph containing a current c
 - Supersession is causal only through `invalidated_receipt_ids`; receipt ID order and `issued_at` are not ordering authority.
 - AC now enumerates missing, non-current, cyclic predecessor, and explicit supersession results with blocking receipt identity.
 - Final concrete challenge passed. Task remains `build`, dependency-blocked behind #2020.
+
+[[2026-07-23T22:20:36+02:00]]
+## Builder Notes
+- Change envelope: add complete immutable receipt currentness only in `ReceiptStore`, composing existing local and repository-history evaluators; preserve receipt bytes and do not add invalidation writes or lifecycle policy.
+- Files changed: `serve/kanban/src/owlbear_kanban/receipt.py`; `serve/kanban/tests/test_change_receipts.py`.
+- Change Module Map: no deviation. `ReceiptStore` is the mapped receipt owner; the existing local and code evaluators remain their lower-layer owners.
+- Implementation: `ReceiptStore.evaluate_currentness()` builds an explicit supersession-reference index, evaluates predecessors in authored order with per-call memoization and cycle detection, and returns the required stable codes with blocking receipt identities.
+- Durable-test justification: the finite receipt graph test protects shared runtime semantics that are easy to regress and not previously covered: missing, invalid, cyclic, superseded, and shared predecessor paths plus immutable-byte proof.
+- Commands run: `uv run pytest serve/kanban/tests/test_change_receipts.py -q` (57 passed); `uv run ruff check serve/kanban/src/owlbear_kanban/receipt.py serve/kanban/tests/test_change_receipts.py` (passed).
+- AC evidence: AC-1 current chain and shared predecessor return `CURRENT`; AC-2 missing, invalid, cycle, and explicit supersession return their specified code and blocking receipt identity; AC-3 repeated projection equality and receipt-byte snapshots prove deterministic immutable evaluation.
+- Current failure keys: none on entry. Focused proof found stale predecessor identity initially returned a lower-layer node ID; repaired to return the blocking predecessor receipt ID, then the focused suite passed.
+- Builder challenger: pass. It reran the focused complete-currentness/immutability selection (2 passed) and found no blockers.
+- Follow-up risks: none identified within scope.
