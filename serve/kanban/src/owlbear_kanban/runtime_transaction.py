@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import contextlib
-import fcntl
 import hashlib
 import os
 import secrets
@@ -13,8 +12,10 @@ from typing import TYPE_CHECKING
 
 import yaml
 
+from owlbear_kanban.storage_io import locked_roots
+
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Callable
 
 
 class TransactionConflictError(RuntimeError):
@@ -94,7 +95,7 @@ class RuntimeTransaction:
 
     def commit(self, *, failure: Callable[[str], None] | None = None) -> None:
         """Stage, record, and publish all participants exactly once."""
-        with _transaction_lock(self._manifest_root):
+        with locked_roots(self._locked_roots()):
             self._prepare_manifest()
             if failure:
                 failure("before-publication")
@@ -105,10 +106,13 @@ class RuntimeTransaction:
 
     def recover(self) -> None:
         """Deterministically complete a previously staged transaction."""
-        with _transaction_lock(self._manifest_root):
+        with locked_roots(self._locked_roots()):
             if self._manifest_path.exists():
                 self._publish(None)
                 self._cleanup()
+
+    def _locked_roots(self) -> tuple[Path, ...]:
+        return (self._manifest_root, *(participant.root for participant in self._participants))
 
     @classmethod
     def recover_all(cls, manifest_root: Path, *, roots: tuple[Path, ...] | None = None) -> None:
@@ -201,18 +205,6 @@ class RuntimeTransaction:
     def _cleanup(self) -> None:
         self._manifest_path.unlink(missing_ok=True)
         _fsync_directory(self._directory)
-
-
-@contextlib.contextmanager
-def _transaction_lock(root: Path) -> Iterator[None]:
-    root.mkdir(parents=True, exist_ok=True)
-    lock_path = root / ".runtime-transactions.lock"
-    with lock_path.open("a+") as handle:
-        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
-        try:
-            yield
-        finally:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
 def _atomic_write_yaml(path: Path, value: dict[str, object]) -> None:

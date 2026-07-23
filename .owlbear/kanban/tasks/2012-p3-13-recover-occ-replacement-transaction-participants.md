@@ -1,10 +1,10 @@
 ---
 id: 2012
 title: 'P3-13: Recover OCC replacement transaction participants'
-status: build
+status: verify
 priority: high
 created: 2026-07-23T14:40:46.644783+02:00
-updated: 2026-07-23T23:13:51.523241+02:00
+updated: 2026-07-23T23:19:02.424196+02:00
 tags:
   - phase-3
   - scope:core
@@ -159,3 +159,15 @@ Existing `atomic_write` consumers outside `JobStore` and `RuntimeTransaction` ar
 - Connected parent repair: #2003's Change Module, Dependency Closure, and Scenario Closure maps now reflect shared lock ownership and both writer orderings; no dependency edges changed. Parent correction committed as `d35dc80bffbadac2436e990e23d3ed75d33355bc`.
 - Challenger chain: first challenge added the executable lock boundary and controlled ordering; second exposed stale parent maps; connected challenge split both writer orderings into binding AC. Final connected shaper-challenger decision: pass.
 - Route: advance #2012 from shape to build. Dependency #2002 is archived completed; parent remains collect and blocked on unfinished children.
+
+[[2026-07-23T23:19:02+02:00]]
+## Builder Notes
+- Change envelope: repaired the verifier-found cross-writer replacement TOCTOU using the shaped shared root-lock authority. Expected owners: `storage_io.py`, `jobs.py`, `runtime_transaction.py`, and focused transaction boundary tests.
+- Files changed: `serve/kanban/src/owlbear_kanban/storage_io.py`; `serve/kanban/src/owlbear_kanban/jobs.py`; `serve/kanban/src/owlbear_kanban/runtime_transaction.py`; `serve/kanban/tests/test_runtime_transaction.py`.
+- Change Module Map: no deviation. `locked_roots` canonicalizes and deduplicates roots, uses descriptor-backed `.storage.lock` files in path order, rejects direct symlink roots/lock files, and cleans acquired descriptors on error. JobStore and transaction commit/recovery now consume it across compare, publication, fsync, and cleanup.
+- Durable-test justification: the new tests protect a previously observed, shared data-integrity concurrency defect that is hard to observe manually. They exercise public JobStore and RuntimeTransaction boundaries under controlled shared-lock interleavings.
+- Commands run: `uv run pytest serve/kanban/tests/test_jobs.py serve/kanban/tests/test_runtime_transaction.py` (36 passed); `uv run ruff check serve/kanban/src/owlbear_kanban/storage_io.py serve/kanban/src/owlbear_kanban/jobs.py serve/kanban/src/owlbear_kanban/runtime_transaction.py serve/kanban/tests/test_runtime_transaction.py` (passed); `uv run ruff format --check ...` (passed); `git diff --check -- ...` (passed).
+- AC-to-evidence: AC-1 is implemented by `locked_roots` and exercised against symlink root/lock paths; AC-2 pauses `JobStore.update` after shared-lock acquisition and observes a blocked commit followed by `ERR_TRANSACTION_CONFLICT`; AC-3 pauses commit and observes blocked update followed by `ERR_JOB_OCC_STALE`; AC-4 through AC-6 are covered by the retained replacement, replay, recovery, malformed, digest, and unsafe-root tests.
+- Current failure-key resolution: verifier TOCTOU finding is resolved because JobStore writes and replacement compare/publish now hold the same participant-root lock.
+- Builder challenger: pass; independently reran the two focused suites (36 passed) and found no blockers.
+- Follow-up risks: none within scope; mixed job/event process races remain explicitly out of scope.

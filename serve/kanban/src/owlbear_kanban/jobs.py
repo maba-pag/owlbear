@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import contextlib
-import fcntl
 import hashlib
 import os
 import stat
@@ -14,6 +13,7 @@ from typing import TYPE_CHECKING, Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from owlbear_kanban.change import ChangeRevision, Digest
+from owlbear_kanban.storage_io import locked_roots
 from owlbear_kanban.yaml_rt import make_yaml
 
 if TYPE_CHECKING:
@@ -118,7 +118,6 @@ class JobConcurrencyError(RuntimeError):
 _DIRECTORY_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
 _FILE_FLAGS = os.O_RDONLY | os.O_NOFOLLOW
 _CREATE_FLAGS = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
-_LOCK_FLAGS = os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW
 
 
 def _job_filename(job_id: int) -> str:
@@ -183,13 +182,8 @@ class JobStore:
 
     @contextlib.contextmanager
     def _locked_root(self) -> Iterator[int]:
-        with self._root() as root_fd:
-            lock_fd = os.open(".jobs.lock", _LOCK_FLAGS, 0o600, dir_fd=root_fd)
-            try:
-                fcntl.flock(lock_fd, fcntl.LOCK_EX)
-                yield root_fd
-            finally:
-                os.close(lock_fd)
+        with locked_roots((self._work_root,)), self._root() as root_fd:
+            yield root_fd
 
     @staticmethod
     def _read(directory_fd: int, job_id: int) -> tuple[StoredJob, str]:
