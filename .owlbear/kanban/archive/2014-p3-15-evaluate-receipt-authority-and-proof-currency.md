@@ -1,10 +1,10 @@
 ---
 id: 2014
 title: 'P3-15: Evaluate receipt authority and proof currency'
-status: collect
+status: archived
 priority: high
 created: 2026-07-23T14:41:02.860272+02:00
-updated: 2026-07-23T16:35:20.167155+02:00
+updated: 2026-07-23T16:36:27.190213+02:00
 tags:
   - phase-3
   - scope:core
@@ -34,7 +34,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -109,3 +109,13 @@ Use a finite evaluator table over receipt kind, schema, target, digest, and proo
 - Prior same-AC rejection check: the only earlier verifier rejection concerned unreachable unsupported-schema evaluation. Builder commit `4c5dea7c` resolved it, and the current suite exercises the parser-to-evaluator case. No repeated rejection family remains.
 - Verifier-challenger: pass after the malformed-evidence patch; no remaining task defect.
 - Final route: PASS to collect.
+
+[[2026-07-23T16:36:27+02:00]]
+## Collect Notes
+- Classification: leaf. Task has no child tasks; its `type:build` receipt-authority scope contains no aggregate intent.
+- Latest leaf verification evidence: newest `## Verify Notes` records PASS after the local malformed-evidence correction. `uv run pytest serve/kanban/tests/test_change_receipts.py` passed 39 tests; Ruff check, Ruff format check, and `git diff --check` passed. Verifier-challenger passed.
+- Intent and invariant coverage: task Outcome and Scope define deterministic local receipt currentness. The verifier records coverage for supported schemas, targets, delivery and node-plan digest equality, target Proof satisfaction, admission exception, receipt-kind fields, and stable invalid reasons across AC-1 through AC-3.
+- Child coverage: none; `list_tasks(parent=2014)` returned no tasks.
+- Dependency gate: dependency #2002 is archived completed; task dependency state is ok.
+- Residual decisions: `list_requests` found no pending or resolved structured requests for #2014.
+- Archive rationale: latest verifier PASS is controlling evidence, with no later unresolved follow-up or request state. Archive as completed.
