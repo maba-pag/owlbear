@@ -120,6 +120,32 @@ authorized workflow outside routine pipeline dispatch. The request ownership rul
 
 ## 3. Working Standards
 
+### Early Routing And Bounded Repair
+
+Before the first implementation or verification edit, classify the current problem from the task,
+the latest lifecycle evidence, named authorities, and the owning source:
+
+| Condition | Action |
+|-----------|--------|
+| Every load-bearing AC input, authority, interface, and mutation owner exists | Work the task |
+| The contract is clear and current source has a local implementation defect | Repair it in the current turn |
+| Satisfying the AC requires inventing or choosing a registry, protocol, result, owner, dependency, or acceptance meaning | Reject to `shape` |
+
+Use one narrow source check and, when useful, one cheap executable probe to disconfirm the
+classification. Do not continue broad orientation after the missing premise is demonstrated. A
+failed check may receive one grounded repair and rerun for the same failure. If that rerun fails for
+the same cause, stop repeating the approach and reclassify or route the work. This is not a one-edit
+limit: continue in the same turn when each result exposes a distinct, contract-clear local defect.
+
+When work returns from a later stage, read the latest stage note and its `### Required Follow-up`
+before other implementation exploration. Close each current follow-up explicitly in the change and
+evidence; unrelated passing checks do not resolve it.
+
+Before proposing stage success, map every AC to the command or observation that proves it. One
+focused check may prove several AC, but a passing suite name or aggregate count is insufficient when
+it does not exercise the disputed behavior. Also map every current follow-up failure key to its
+resolution evidence.
+
 ### Minimum Change Contract
 
 Before the first edit, define a change envelope: the expected files or symbols, the behavior that
@@ -260,7 +286,7 @@ select an earlier occurrence merely because it appears first in a full body or c
 detailed failure narrative.
 
 Before a verifier rejects a task to `build`, inspect prior `## Verify Notes`. If the same AC or
-failure-domain family already caused one verifier rejection to `build`, a second miss means the
+failure key already caused one verifier rejection to `build`, a second miss means the
 shaped scenario/proof boundary is incomplete. Consolidate the remaining matrix and route `RESHAPE`
 to `shape`; do not fund a third build/verify cycle for piecemeal discovery.
 
@@ -270,12 +296,15 @@ Any `REJECT` or `RESHAPE` verdict must include:
 
 ```markdown
 ### Required Follow-up
-| # | Target Agent | Action Required | File(s) | Evidence |
-|---|-------------|----------------|---------|----------|
-| 1 | {role} | {imperative action} | {paths or n/a} | {finding reference} |
+| # | Failure Key | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|--------------|-----------------|---------|----------|
+| 1 | {AC-or-task}/{short-domain} | {role} | {imperative action} | {paths or n/a} | {finding reference} |
 ```
 
 Target roles must match the route: `shape` -> shaper via `/shape`, `build` -> builder.
+Use the same failure key for the same behavioral defect across cycles; wording changes do not create
+a new failure. A later stage may treat a follow-up as resolved only when its note names that key and
+the evidence that closes it.
 
 A `BLOCK` note instead records the request ID, requested decision or action, required returned
 evidence, and resume condition. A containment note records the recovery owner and exact recovery
