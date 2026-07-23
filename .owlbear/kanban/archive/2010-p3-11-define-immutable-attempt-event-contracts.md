@@ -1,10 +1,10 @@
 ---
 id: 2010
 title: 'P3-11: Define immutable attempt event contracts'
-status: collect
+status: archived
 priority: high
 created: 2026-07-23T14:40:14.905119+02:00
-updated: 2026-07-23T15:26:19.965588+02:00
+updated: 2026-07-23T15:27:55.566263+02:00
 tags:
   - phase-3
   - scope:core
@@ -34,7 +34,7 @@ proof_bundle: behavioral+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -100,3 +100,15 @@ Exercise the public parser and serializer directly with a finite accepted/invali
 - Prior same-AC rejection check: one earlier AC-3 rejection required the missing public serializer. Builder resolved it in commit `b3f3e9b07`; the focused proof now calls the exported serializer before parsing. No repeated unresolved failure family remains.
 - Verifier-challenger: pass. It confirmed AC coverage, public-boundary proof sufficiency, authority alignment, and no scope drift.
 - Final route: PASS to collect.
+
+[[2026-07-23T15:27:55+02:00]]
+## Collect Notes
+- Classification: leaf. Task #2010 has no child tasks and carries no aggregate or EPIC intent.
+- Latest leaf verification evidence: newest `## Verify Notes` records PASS for AC-1 through AC-3 at commit `b3f3e9b07`, with 13 focused attempt-contract tests passing, Ruff and diff checks clean, and verifier-challenger pass. The earlier AC-3 rejection is historical and explicitly resolved by the exported public serializer and its public serialize-then-parse proof.
+- Intent source: `## Outcome` and `## Scope` define the immutable schema-version-1 attempt-event public contract.
+- Invariant map coverage: verifier confirms all five supported kind literals, frozen parsing, stable invalid diagnostics, and public serialization round-trip; no module-map deviation.
+- Child coverage: none; this is a leaf task.
+- Dependency gate: #2002 is archived completed and the task dependency status is ok.
+- Tested commit and normal-path proof: `b3f3e9b07`; `uv run --project /Users/markus/Projects/owlbear-dev pytest serve/kanban/tests/test_attempts.py` passed with 13 tests, including public serialization followed by parsing.
+- Residual decisions and requests: no pending or resolved structured requests; no later unresolved follow-up.
+- Archive rationale: complete latest verifier PASS evidence and no remaining closure condition.
