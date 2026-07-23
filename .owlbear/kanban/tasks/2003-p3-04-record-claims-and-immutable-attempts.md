@@ -1,10 +1,10 @@
 ---
 id: 2003
 title: 'P3-04: Record claims and immutable attempts'
-status: shape
+status: build
 priority: high
 created: 2026-07-22T21:58:44.211108+02:00
-updated: 2026-07-23T10:51:30.162411+02:00
+updated: 2026-07-23T11:28:27.359596+02:00
 tags:
   - phase-3
   - scope:core
@@ -126,3 +126,10 @@ Proof guidance: exercise public attempt parser and store APIs plus lifecycle ope
 - Commands run: none; no product change was permitted.
 - Builder-challenger result: initial pre-implementation challenge correctly returned `fail` because no implementation or evidence existed; it is not a completion claim.
 - Follow-up risks: task 2003 was dispatched while dependency 2002 remains unresolved (`dep_status: blocked`). Re-dispatch only after task 2002 reaches a non-blocking completion state.
+
+[[2026-07-23T11:28:27+02:00]]
+## Shape Notes
+- Repair classification: mechanical reroute inside the user-authorized connected repair. The builder changed no files and returned this task only because it was dispatched while dependency #2002 was unresolved.
+- Contract audit: the existing operative body already owns the native append-only attempt/activity stream and atomically couples job claim changes with `started`, `released`, `failed`, and `crashed` events. Task #2004 remains the owner of the `succeeded` event during successful completion.
+- Dependency closure: #2003 consumes archived #2001 stores through the transaction kernel now owned by build task #2002. It requires no request, completion, invalidation, or health producer.
+- Route: restored to `build` with parent #1979 and dependency #2002 unchanged. It remains dependency-blocked and must not be dispatched until #2002 reaches non-blocking completion.
