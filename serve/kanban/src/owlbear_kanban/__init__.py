@@ -82,6 +82,8 @@ from owlbear_kanban.models import BoardConfig, Task, TaskSummary
 from owlbear_kanban.receipt import (
     ChangeHealthFinding,
     ChangeHealthResult,
+    ImpactClosure,
+    ImpactClosureError,
     ReceiptConflictError,
     ReceiptDiagnostic,
     ReceiptDiagnosticCode,
@@ -95,7 +97,9 @@ from owlbear_kanban.receipt import (
     ReceiptValidityCode,
     change_health,
     evaluate_receipt_currentness,
+    parse_impact_closure,
     parse_receipt_mapping,
+    parse_repository_path,
 )
 from owlbear_kanban.storage_io import atomic_write
 
@@ -136,6 +140,8 @@ __all__ = [
     "FindingDiagnosticCode",
     "FindingResult",
     "FindingStore",
+    "ImpactClosure",
+    "ImpactClosureError",
     "JobConcurrencyError",
     "JobConflictError",
     "JobDiagnostic",
@@ -172,8 +178,10 @@ __all__ = [
     "load_change",
     "parse_attempt_event_mapping",
     "parse_finding_mapping",
+    "parse_impact_closure",
     "parse_job_mapping",
     "parse_receipt_mapping",
+    "parse_repository_path",
     "plan_shape_jobs",
     "project_job",
     "read_job_generation",

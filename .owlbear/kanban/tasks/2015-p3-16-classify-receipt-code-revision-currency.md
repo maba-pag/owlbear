@@ -1,10 +1,10 @@
 ---
 id: 2015
 title: 'P3-16A: Define and freeze receipt impact closures'
-status: build
+status: verify
 priority: high
 created: 2026-07-23T14:41:09.745275+02:00
-updated: 2026-07-23T18:16:46.738798+02:00
+updated: 2026-07-23T18:26:05.178208+02:00
 tags:
   - phase-3
   - scope:core
@@ -102,3 +102,13 @@ Exercise the public closure parser, receipt parser/currentness required-field pa
 - Challenge history: first draft failed on aggregate/consumer fidelity and shorthand matrices; corrected graph passed; final stored-board challenge passed after assigning #2020 unique packet ID `DN-003-PK-004-K`.
 - Validation: native structural admission checks passed with only intentional missing binding; focused suite yielded 71 passed and five expected failures requiring admitted fixture state. Markdownlint and diff checks passed.
 - Route: build. Native package remains draft pending eventual DN-013/DN-014 re-proof/re-admission.
+
+[[2026-07-23T18:26:05+02:00]]
+## Builder Notes
+- Change envelope: typed receipt impact closure parsing, immutable receipt serialization, shared canonical repository-path validation, and stable missing/invalid diagnostics in `receipt.py`; public exports and the existing receipt-boundary tests only. Git history and receipt issuance workflows remain out of scope.
+- Files changed: `serve/kanban/src/owlbear_kanban/receipt.py`, `serve/kanban/src/owlbear_kanban/__init__.py`, and `serve/kanban/tests/test_change_receipts.py`.
+- Change Module Map deviations: none. The shaped receipt owner and its focused public test module directly own this behavior.
+- Proof selected: durable public-boundary tests protect shared parser, immutable serialization, canonical selector validation, and receipt store behavior. New assertions pass the Rent Test because malformed closure handling and canonical frozen replay are shared runtime contracts.
+- Commands run: `uv run pytest serve/kanban/tests/test_change_receipts.py` passed 48 tests. `uv run ruff format --check` reported 3 files already formatted. `uv run ruff check` twice returned an empty terminal transport exit 130; editor diagnostics were clean, and the independent builder challenger reran focused pytest plus formatting successfully.
+- Builder-challenger: pass; no blockers. It independently confirmed 48 focused tests passed and all 3 files were formatted.
+- Follow-up risks: task #2020 consumes the exported path validator for repository-history currentness; issuance source assembly remains task #2004 scope.

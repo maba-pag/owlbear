@@ -11,7 +11,7 @@ import os
 import re
 import secrets
 import stat
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterable, Iterator, Mapping
 from datetime import date, datetime, time
 from enum import StrEnum
 from io import StringIO
@@ -44,6 +44,7 @@ _COMMON_RECEIPT_FIELDS = (
     "change_id",
     "delivery_digest",
     "issued_at",
+    "impact_closure",
 )
 
 
@@ -89,6 +90,69 @@ class _ReceiptModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
 
+class ImpactClosureError(ValueError):
+    """Report an invalid receipt impact closure with a stable code."""
+
+    code = "ERR_RECEIPT_IMPACT_CLOSURE_INVALID"
+    MISSING = "ERR_RECEIPT_IMPACT_CLOSURE_MISSING"
+    PATH_EMPTY = "impact closure path selector must be a non-empty string"
+    PATH_NOT_POSIX = "impact closure path selector is not repository-relative POSIX"
+    PATH_NOT_CANONICAL = "impact closure path selector is not canonical"
+    NOT_MAPPING = "impact closure must be a mapping"
+    UNKNOWN_FIELDS = "impact closure must contain only paths and authority_targets"
+    PATHS_EMPTY = "impact closure paths must be a non-empty sequence"
+    TARGETS_INVALID = "impact closure authority_targets must be a sequence of stable IDs"
+    TARGET_UNDECLARED = "impact closure references an undeclared authority target"
+
+
+def parse_repository_path(value: object) -> str:
+    """Validate and return one canonical repository-relative path selector."""
+    if not isinstance(value, str) or not value:
+        raise ImpactClosureError(ImpactClosureError.PATH_EMPTY)
+    if value == "/":
+        return value
+    if value.startswith("/") or "\\" in value or "\x00" in value:
+        raise ImpactClosureError(ImpactClosureError.PATH_NOT_POSIX)
+    path = value.removesuffix("/")
+    if not path or any(segment in {"", ".", ".."} for segment in path.split("/")):
+        raise ImpactClosureError(ImpactClosureError.PATH_NOT_CANONICAL)
+    return value
+
+
+class ImpactClosure(_ReceiptModel):
+    """Frozen repository paths and authority targets consumed by receipt proof."""
+
+    paths: tuple[str, ...]
+    authority_targets: tuple[str, ...]
+
+
+def parse_impact_closure(
+    value: object,
+    *,
+    declared_authority_targets: Iterable[str] | None = None,
+) -> ImpactClosure:
+    """Validate and freeze one canonical receipt impact closure."""
+    if not isinstance(value, Mapping):
+        raise ImpactClosureError(ImpactClosureError.NOT_MAPPING)
+    if set(value) != {"paths", "authority_targets"}:
+        raise ImpactClosureError(ImpactClosureError.UNKNOWN_FIELDS)
+    paths = value["paths"]
+    authority_targets = value["authority_targets"]
+    if not isinstance(paths, list | tuple) or not paths:
+        raise ImpactClosureError(ImpactClosureError.PATHS_EMPTY)
+    if not isinstance(authority_targets, list | tuple) or not all(
+        isinstance(target, str) and target for target in authority_targets
+    ):
+        raise ImpactClosureError(ImpactClosureError.TARGETS_INVALID)
+    canonical_paths = tuple(sorted({parse_repository_path(path) for path in paths}))
+    canonical_targets = tuple(sorted(set(authority_targets)))
+    if declared_authority_targets is not None:
+        declared = set(declared_authority_targets)
+        if not set(canonical_targets) <= declared:
+            raise ImpactClosureError(ImpactClosureError.TARGET_UNDECLARED)
+    return ImpactClosure(paths=canonical_paths, authority_targets=canonical_targets)
+
+
 class ReceiptRecord(_ReceiptModel):
     """Common receipt identity plus its kind-specific root payload."""
 
@@ -98,6 +162,7 @@ class ReceiptRecord(_ReceiptModel):
     change_id: ChangeId
     delivery_digest: Digest
     issued_at: str
+    impact_closure: ImpactClosure | None = None
     payload: Mapping[str, JsonValue]
 
     def model_post_init(self, _context: object) -> None:
@@ -116,11 +181,16 @@ class ReceiptRecord(_ReceiptModel):
             raise TypeError(msg)
         document = normalized
         envelope = {name: document.pop(name, None) for name in _COMMON_RECEIPT_FIELDS}
+        if envelope["kind"] != "admission":
+            closure = envelope["impact_closure"]
+            if closure is None:
+                raise ImpactClosureError(ImpactClosureError.MISSING)
+            envelope["impact_closure"] = parse_impact_closure(closure)
         return cls.model_validate({**envelope, "payload": document})
 
     def to_mapping(self) -> dict[str, JsonValue]:
         """Return the native root receipt mapping."""
-        envelope = self.model_dump(mode="json", exclude={"payload"})
+        envelope = self.model_dump(mode="json", exclude={"payload"}, exclude_none=True)
         payload = self.model_dump(mode="json", include={"payload"})["payload"]
         return {**envelope, **payload}
 
@@ -134,6 +204,8 @@ class ReceiptParseDiagnosticCode(StrEnum):
     PREDECESSOR_MISSING = "ERR_RECEIPT_PREDECESSOR_MISSING"
     EVIDENCE_MISSING = "ERR_RECEIPT_EVIDENCE_MISSING"
     CODE_REVISION_MISSING = "ERR_RECEIPT_CODE_REVISION_MISSING"
+    IMPACT_CLOSURE_MISSING = "ERR_RECEIPT_IMPACT_CLOSURE_MISSING"
+    IMPACT_CLOSURE_INVALID = "ERR_RECEIPT_IMPACT_CLOSURE_INVALID"
 
 
 class ReceiptValidityCode(StrEnum):
@@ -146,6 +218,8 @@ class ReceiptValidityCode(StrEnum):
     NODE_PLAN_DIGEST_STALE = "ERR_RECEIPT_NODE_PLAN_DIGEST_STALE"
     PROOF_UNSATISFIED = "ERR_RECEIPT_PROOF_UNSATISFIED"
     FIELD_MISSING = "ERR_RECEIPT_FIELD_MISSING"
+    IMPACT_CLOSURE_MISSING = "ERR_RECEIPT_IMPACT_CLOSURE_MISSING"
+    IMPACT_CLOSURE_INVALID = "ERR_RECEIPT_IMPACT_CLOSURE_INVALID"
 
 
 class ReceiptValidity(_ReceiptModel):
@@ -183,6 +257,13 @@ def parse_receipt_mapping(value: Mapping[str, object]) -> ReceiptParseResult:
     """Parse a receipt and validate purpose-specific evidence links."""
     try:
         record = ReceiptRecord.from_mapping(value)
+    except ImpactClosureError as exc:
+        code = (
+            ReceiptParseDiagnosticCode.IMPACT_CLOSURE_MISSING
+            if str(exc) == ImpactClosureError.MISSING
+            else ReceiptParseDiagnosticCode.IMPACT_CLOSURE_INVALID
+        )
+        return ReceiptParseResult(diagnostics=(ReceiptParseDiagnostic(code=code, detail=str(exc)),))
     except (PydanticValidationError, TypeError, ValueError) as exc:
         message = str(exc)
         code = ReceiptParseDiagnosticCode.SCHEMA_INVALID
@@ -246,6 +327,11 @@ def evaluate_receipt_currentness(revision: ChangeRevision, receipt: ReceiptRecor
             code=ReceiptValidityCode.DELIVERY_DIGEST_STALE,
             detail="receipt delivery digest differs from the loaded revision",
         )
+    elif receipt.kind != "admission" and receipt.impact_closure is None:
+        result = ReceiptValidity(
+            code=ReceiptValidityCode.IMPACT_CLOSURE_MISSING,
+            detail="receipt is missing impact_closure",
+        )
     elif receipt.kind == "admission":
         result = ReceiptValidity(code=ReceiptValidityCode.CURRENT, detail="admission receipt is locally current")
     else:
@@ -301,6 +387,8 @@ class ReceiptDiagnosticCode(StrEnum):
     SCHEMA_INVALID = "ERR_RECEIPT_SCHEMA_INVALID"
     ID_MISMATCH = "ERR_RECEIPT_ID_MISMATCH"
     REVISION_MISMATCH = "ERR_RECEIPT_REVISION_MISMATCH"
+    IMPACT_CLOSURE_MISSING = "ERR_RECEIPT_IMPACT_CLOSURE_MISSING"
+    IMPACT_CLOSURE_INVALID = "ERR_RECEIPT_IMPACT_CLOSURE_INVALID"
 
 
 class ReceiptDiagnostic(_ReceiptModel):
@@ -547,6 +635,13 @@ class ReceiptStore:
     ) -> ReceiptRecord:
         try:
             record = ReceiptRecord.from_mapping(value)
+        except ImpactClosureError as exc:
+            code = (
+                ReceiptDiagnosticCode.IMPACT_CLOSURE_MISSING
+                if str(exc) == ImpactClosureError.MISSING
+                else ReceiptDiagnosticCode.IMPACT_CLOSURE_INVALID
+            )
+            _fail(code, str(exc), path=path, target=receipt_id)
         except (PydanticValidationError, TypeError, ValueError) as exc:
             detail = _schema_detail(exc) if isinstance(exc, PydanticValidationError) else "receipt schema is invalid"
             _fail(ReceiptDiagnosticCode.SCHEMA_INVALID, detail, path=path, target=receipt_id)

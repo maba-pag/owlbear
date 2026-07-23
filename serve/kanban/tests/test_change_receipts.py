@@ -13,6 +13,7 @@ import owlbear_kanban
 import owlbear_kanban.receipt as receipt_module
 from owlbear_kanban import (
     ChangeRevision,
+    ImpactClosureError,
     ReceiptConflictError,
     ReceiptDiagnosticCode,
     ReceiptParseDiagnosticCode,
@@ -22,6 +23,8 @@ from owlbear_kanban import (
     evaluate_receipt_currentness,
     load_change,
     parse_receipt_mapping,
+    parse_impact_closure,
+    parse_repository_path,
 )
 
 from .test_change_revision import _documents, _write_package
@@ -38,7 +41,7 @@ def _load_revision(tmp_path: Path, change_id: str = "receipt-change") -> tuple[P
 
 
 def _receipt(revision: ChangeRevision, receipt_id: str, kind: str) -> dict[str, object]:
-    return {
+    value: dict[str, object] = {
         "schema_version": 1,
         "kind": kind,
         "receipt_id": receipt_id,
@@ -49,10 +52,13 @@ def _receipt(revision: ChangeRevision, receipt_id: str, kind: str) -> dict[str, 
         "tested_baseline": {"revision": "a" * 40, "commands": ["focused proof"]},
         "evidence": {"kind": kind, "passed": True},
     }
+    if kind != "admission":
+        value["impact_closure"] = {"paths": ["src/"], "authority_targets": ["REQ-001"]}
+    return value
 
 
 def _parser_receipt(kind: str) -> dict[str, object]:
-    return {
+    value: dict[str, object] = {
         "schema_version": 1,
         "kind": kind,
         "receipt_id": f"{kind}-001",
@@ -65,6 +71,9 @@ def _parser_receipt(kind: str) -> dict[str, object]:
         "evidence": {"passed": True},
         "code_revision": "c" * 40,
     }
+    if kind != "admission":
+        value["impact_closure"] = {"paths": ["src/"], "authority_targets": ["REQ-001"]}
+    return value
 
 
 def _node_plan_digest(revision: ChangeRevision, target: str) -> str:
@@ -95,6 +104,8 @@ def test_package_exports_receipt_and_health_boundary() -> None:
     expected = {
         "ChangeHealthFinding",
         "ChangeHealthResult",
+        "ImpactClosure",
+        "ImpactClosureError",
         "ReceiptConflictError",
         "ReceiptDiagnostic",
         "ReceiptDiagnosticCode",
@@ -106,6 +117,47 @@ def test_package_exports_receipt_and_health_boundary() -> None:
 
     assert expected <= set(owlbear_kanban.__all__)
     assert all(hasattr(owlbear_kanban, name) for name in expected)
+
+
+def test_impact_closure_parser_canonicalizes_paths_and_validates_authority_targets() -> None:
+    closure = parse_impact_closure(
+        {"paths": ["docs/", "README.md", "docs/"], "authority_targets": ["REQ-002", "REQ-001", "REQ-001"]},
+        declared_authority_targets={"REQ-001", "REQ-002"},
+    )
+
+    assert closure.paths == ("README.md", "docs/")
+    assert closure.authority_targets == ("REQ-001", "REQ-002")
+    assert parse_repository_path("/") == "/"
+
+
+@pytest.mark.parametrize("selector", ["/src", ".", "src/../secret", "src//file", "src\\file", "src\x00file"])
+def test_impact_closure_parser_rejects_noncanonical_selectors(selector: str) -> None:
+    with pytest.raises(ImpactClosureError) as exc_info:
+        parse_impact_closure({"paths": [selector], "authority_targets": []})
+
+    assert exc_info.value.code == "ERR_RECEIPT_IMPACT_CLOSURE_INVALID"
+
+
+@pytest.mark.parametrize(
+    ("kind", "impact_closure", "expected"),
+    [
+        ("build", None, ReceiptParseDiagnosticCode.IMPACT_CLOSURE_MISSING),
+        ("build", {"paths": [], "authority_targets": []}, ReceiptParseDiagnosticCode.IMPACT_CLOSURE_INVALID),
+    ],
+)
+def test_receipt_parser_requires_a_valid_impact_closure(
+    kind: str, impact_closure: object, expected: ReceiptParseDiagnosticCode
+) -> None:
+    value = _parser_receipt(kind)
+    if impact_closure is None:
+        del value["impact_closure"]
+    else:
+        value["impact_closure"] = impact_closure
+
+    result = parse_receipt_mapping(value)
+
+    assert result.receipt is None
+    assert [item.code for item in result.diagnostics] == [expected]
 
 
 @pytest.mark.parametrize("kind", _RECEIPT_KINDS)
