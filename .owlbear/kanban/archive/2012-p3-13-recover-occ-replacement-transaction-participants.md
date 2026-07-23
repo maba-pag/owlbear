@@ -1,10 +1,10 @@
 ---
 id: 2012
 title: 'P3-13: Recover OCC replacement transaction participants'
-status: collect
+status: archived
 priority: high
 created: 2026-07-23T14:40:46.644783+02:00
-updated: 2026-07-23T23:22:17.473058+02:00
+updated: 2026-07-23T23:24:01.469321+02:00
 tags:
   - phase-3
   - scope:core
@@ -48,7 +48,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -184,3 +184,12 @@ Existing `atomic_write` consumers outside `JobStore` and `RuntimeTransaction` ar
 - Memory assessment: 5 recalled entries assessed; relevant scope/proof guidance was applied.
 - Verifier challenger: pass. It confirmed AC coverage, shared-lock ownership, resolved TOCTOU risk, and no scope drift.
 - Final route: pass to collect.
+
+[[2026-07-23T23:24:01+02:00]]
+## Collect Notes
+- Classification: leaf. No child tasks (`list_tasks(parent=2012)` returned none); task is a concrete child of aggregate parent #2003.
+- Latest leaf verification evidence: newest `## Verify Notes` occurrence records PASS to collect at commit `8fb18b7bbb89cbe86096a0dd632e8657db458ec2`; public JobStore/RuntimeTransaction boundary proof includes replacement/replay, controlled cross-writer interleavings, interruption recovery, manifest validation, and unsafe-root containment. Focused tests passed (14 transaction tests; 36 jobs plus transaction tests), with ruff, format, and diff checks clean; verifier challenger passed.
+- Invariant/AC coverage: verifier mapped AC-1 through AC-6 to lock-root, cross-writer OCC, replacement/replay/conflict, interruption/recovery, and malformed/digest/unsafe-root evidence. Collector did not re-review implementation.
+- Dependency gate: #2002 is archived completed; task dependency status was `ok`.
+- Residual decisions: no pending or resolved structured requests; task is unblocked. No unresolved verifier follow-up appears after the newest PASS.
+- Rationale: archive as completed leaf verification with no remaining closure condition.
