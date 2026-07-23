@@ -1,10 +1,10 @@
 ---
 id: 2015
 title: 'P3-16A: Define and freeze receipt impact closures'
-status: verify
+status: collect
 priority: high
 created: 2026-07-23T14:41:09.745275+02:00
-updated: 2026-07-23T21:55:04.561819+02:00
+updated: 2026-07-23T21:57:12.420109+02:00
 tags:
   - phase-3
   - scope:core
@@ -291,3 +291,17 @@ Use the public parser, `evaluate_receipt_currentness`, and `ReceiptStore.create`
 - Current failure-key resolution: `AC-6` is closed by the multi-value store roundtrip, which distinguishes persisted normalization from the former single-value immutability-only fixture.
 - Builder-challenger result: pass; it reviewed the scoped test-only diff and confirmed focused pytest, Ruff, formatting, and whitespace checks without blockers.
 - Follow-up risks: none in this task.
+
+[[2026-07-23T21:57:12+02:00]]
+## Verify Notes
+
+- Evidence reviewed: current AC-1 through AC-7; Operative Stable-ID Repair Amendment; mapped `receipt.py` and package export; focused receipt proof; Builder Notes and commits `a733c2443` and `876e7447e`.
+- Named authorities checked: `change.StableId` is the canonical syntax authority. The accepted repair assigns syntax validation to `parse_impact_closure`, then declaration membership to revision-aware `evaluate_receipt_currentness` and `ReceiptStore`.
+- Change Module Map: no deviation. Changes remain within the shaped receipt owner, package export, and focused receipt tests; no new public contract or unrelated behavior was introduced.
+- Normal-path boundary exercised: `cd serve/kanban && uv run pytest tests/test_change_receipts.py -q` passed 55 tests. This uses the public parser, currentness evaluator, and receipt-store create/read boundary, with test fixtures only below that boundary.
+- Additional checks: `uv run ruff check src/owlbear_kanban/receipt.py src/owlbear_kanban/__init__.py tests/test_change_receipts.py` passed. `uv run ruff format --check src/owlbear_kanban/receipt.py src/owlbear_kanban/__init__.py tests/test_change_receipts.py` reported all three files formatted.
+- Findings and AC-to-evidence map: AC-1 parser canonicalization plus malformed Stable ID and path tests; AC-2 declared-target rejection; AC-3 public malformed-closure parser diagnostic; AC-4 revision-aware undeclared-target currentness result; AC-5 store rejection without receipt or temporary file; AC-6 create/read roundtrip with unordered duplicate paths and authority targets, asserting canonical serialized mappings and frozen tuples; AC-7 duplicate create conflict with preserved bytes and no temporary files. All ACs are satisfied.
+- Prior same-failure-key check: the earlier `AC-1/stable-id-validation` rejection was resolved by `a733c2443`; the later `AC-6/persistence-canonicalization` proof gap was resolved by `876e7447e`. No current follow-up remains.
+- Patch applied: none.
+- Verifier-challenger result: pass; no implementation, proof, or scope problem identified.
+- Final route: PASS to collect.
