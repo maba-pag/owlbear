@@ -265,15 +265,39 @@ Rules:
 
 - Include each contract, store, record type, interface, and mutation participant required by the
     task's AC, normal-path proof, or failure recovery.
-- A producer must be current source, the consuming task itself, or a transitive predecessor. A
-    sibling or descendant producer makes the graph unrealizable and blocks approval.
+- For each input, record its typed source or explicit predecessor output, including field shape,
+    stable result/error literals, and the operation that supplies it. A prose mention, unstructured
+    placeholder, test fixture, or inferred convention is not an available input.
+- A producer must be verified current source, an explicit output owned by the consuming task, or a
+    transitive predecessor with that output in its AC. A sibling, descendant, or predecessor that
+    merely names the topic makes the graph unrealizable and blocks approval.
 - Shared infrastructure may be a predecessor, but the task that introduces an operation's records
     owns that operation's atomic mutation and recovery proof unless admitted authority assigns a
     different owner.
+- For each multi-record or cross-writer operation, name every mutation participant plus the shared
+    serialization, lock, OCC, or transaction authority. Separate private locks do not prove a
+    shared race boundary. Missing coordination ownership blocks approval.
 - Cross-check each Product Invariant Map owner against this map. Naming an invariant owner is
     insufficient when that owner's dependency closure cannot supply the assembled proof boundary.
 - Derived or transitive inputs still appear in the map; do not rely on the absence of a graph cycle
     as proof that the dependency direction is correct.
+
+### Implementation Availability Gate
+
+After the Dependency Closure Map is complete and before graph challenge, attempt to disconfirm each
+task's readiness through one cheapest source check:
+
+1. Resolve each AC input, output field, enum/error literal, and proof-boundary value to its canonical
+   declaration or to a predecessor AC that creates that declaration.
+2. Resolve each write, replacement, append, index update, and recovery action to its mutation owner
+   and shared concurrency boundary.
+3. Confirm the task's focused proof can construct its inputs without inventing a schema, protocol,
+   ordering rule, repository query, or fixture-only contract.
+4. Reject the task graph when any value or participant remains untyped, prose-only, owned by a
+   sibling/descendant, or dependent on separate locks that do not serialize the claimed race.
+
+Record the source check and result in the Dependency Closure Map. Scenario closure, coherent AC
+wording, and an acyclic graph do not waive this gate.
 
 ### Scenario Closure Map
 
