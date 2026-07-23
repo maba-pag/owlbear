@@ -137,6 +137,7 @@ def test_public_receipt_parser_requires_node_plan_digest_for_node_scoped_receipt
         (lambda value: value.update(node_plan_digest="e" * 64), ReceiptValidityCode.NODE_PLAN_DIGEST_STALE),
         (lambda value: value.update(target_node_id="DN-999"), ReceiptValidityCode.TARGET_MISSING),
         (lambda value: value.update(evidence={"methods": []}), ReceiptValidityCode.PROOF_UNSATISFIED),
+        (lambda value: value.update(evidence={"methods": None}), ReceiptValidityCode.PROOF_UNSATISFIED),
     ],
 )
 def test_receipt_currentness_evaluates_local_authority_and_proof(

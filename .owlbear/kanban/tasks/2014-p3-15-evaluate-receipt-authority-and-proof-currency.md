@@ -1,10 +1,10 @@
 ---
 id: 2014
 title: 'P3-15: Evaluate receipt authority and proof currency'
-status: verify
+status: collect
 priority: high
 created: 2026-07-23T14:41:02.860272+02:00
-updated: 2026-07-23T16:31:40.541226+02:00
+updated: 2026-07-23T16:35:20.167155+02:00
 tags:
   - phase-3
   - scope:core
@@ -96,3 +96,16 @@ Use a finite evaluator table over receipt kind, schema, target, digest, and proo
 - Commands run: `uv run pytest serve/kanban/tests/test_change_receipts.py` (38 passed); `uv run ruff check serve/kanban/src/owlbear_kanban/receipt.py serve/kanban/tests/test_change_receipts.py` (passed); `uv run ruff format --check serve/kanban/src/owlbear_kanban/receipt.py serve/kanban/tests/test_change_receipts.py` (passed); `git diff --check` on changed files (passed); VS Code diagnostics reported no errors.
 - Builder challenger: pass; no concrete blockers.
 - Follow-up risks: none within local-currentness scope. Git code-revision currency, predecessor recursion, and supersession remain explicitly outside this task.
+
+[[2026-07-23T16:35:20+02:00]]
+## Verify Notes
+
+- Evidence reviewed: AC-1 through AC-3; Builder Notes and commit `4c5dea7c`; the prior verifier rejection; the current receipt evaluator and its focused public test module.
+- Named authorities checked: `.owlbear/changes/replace-delivery-pipeline/design.md` sections 4.2 and 4.3 and `graph.yaml` entries REQ-009, REQ-015, REQ-016, NEG-002, NEG-010, and IF-003. The evaluator correctly remains in this task's local-currentness slice: schema, target, loaded delivery/node-plan digest, and target Proof only. Predecessor, supersession, code-revision, lifecycle, and transaction behavior remain outside scope.
+- Change Module Map: no deviation. The receipt owner, public export, and focused receipt tests are the direct mapped boundary. The verifier patch stayed within the evaluator and its existing regression table.
+- Normal-path boundary exercised: parsed public receipt mappings flow into `evaluate_receipt_currentness`; the suite proves current target receipts, stale delivery and node-plan digests, absent targets, unsatisfied proof, unsupported schema, and admission without node-plan or evidence.
+- Checks run: `uv run pytest serve/kanban/tests/test_change_receipts.py` passed 39 tests; Ruff check and Ruff format check passed for `receipt.py` and `test_change_receipts.py`; `git diff --check` passed for the verifier patch.
+- Finding and local patch: verifier-challenger found `evidence.methods: null` could raise `TypeError` despite AC-2's stable invalid-result contract. Updated `_evaluate_target_receipt` to accept only tuples of strings and return `ERR_RECEIPT_PROOF_UNSATISFIED` otherwise; added the focused public-boundary regression. This is a local evaluator correction, not a scope expansion.
+- Prior same-AC rejection check: the only earlier verifier rejection concerned unreachable unsupported-schema evaluation. Builder commit `4c5dea7c` resolved it, and the current suite exercises the parser-to-evaluator case. No repeated rejection family remains.
+- Verifier-challenger: pass after the malformed-evidence patch; no remaining task defect.
+- Final route: PASS to collect.

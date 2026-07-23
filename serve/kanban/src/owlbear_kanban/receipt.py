@@ -276,7 +276,13 @@ def _evaluate_target_receipt(revision: ChangeRevision, receipt: ReceiptRecord) -
         )
     evidence = receipt.payload.get("evidence")
     proof = _target_proof(revision, target)
-    if not isinstance(evidence, Mapping) or not proof or not set(proof.method) <= set(evidence.get("methods", ())):
+    methods = evidence.get("methods") if isinstance(evidence, Mapping) else None
+    if (
+        not proof
+        or not isinstance(methods, tuple)
+        or not all(isinstance(method, str) for method in methods)
+        or not set(proof.method) <= set(methods)
+    ):
         return ReceiptValidity(
             code=ReceiptValidityCode.PROOF_UNSATISFIED,
             detail="receipt evidence does not satisfy the target proof contract",
