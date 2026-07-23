@@ -1,10 +1,10 @@
 ---
 id: 2003
 title: 'P3-04: Record claims and immutable attempts'
-status: build
+status: collect
 priority: high
 created: 2026-07-22T21:58:44.211108+02:00
-updated: 2026-07-23T12:46:47.171856+02:00
+updated: 2026-07-23T14:55:16.959947+02:00
 tags:
   - phase-3
   - scope:core
@@ -12,41 +12,40 @@ tags:
   - claims
   - attempts
   - lifecycle
-  - type:build
   - rigor:thorough
   - change:replace-delivery-pipeline
   - node:DN-003
   - packet:DN-003-PK-004
+  - type:shape
 parent: 1979
 depends_on:
   - 2002
+  - 2010
+  - 2011
+  - 2012
+  - 2013
+  - 2014
+  - 2015
+  - 2016
+  - 2017
+  - 2018
+  - 2019
 ac:
-  - 'AC-1: Given schema-version-1 attempt-event mappings, public parsers return frozen
-    records preserving the fields defined in Scope. Unknown fields, malformed references,
-    non-positive sequences, unsupported event kinds, and missing required references
-    return stable diagnostics; supported event kinds are `started`, `released`, `failed`,
-    `crashed`, and `succeeded`.'
-  - 'AC-2: Given public attempt create, read, and list calls against an explicit work
-    root, byte-equivalent replay returns the existing record; a differing occupied
-    identity raises `AttemptConflictError` with `code == "ERR_ATTEMPT_CONFLICT"`.
-    Traversal or symlink substitution returns a stable path diagnostic, listing sorts
-    by attempt ID then sequence, and failed writes leave no temporary or partial record.'
-  - 'AC-3: Given an open current job with prerequisite receipts whose computed validity
-    is current and no pending request, `start_job` atomically records one claim and
-    one `started` event. A second active claimant, stale authority, unmet prerequisite,
-    terminal disposition, or pending request returns a stable reason with no additional
-    event.'
-  - 'AC-4: Given the owning attempt, release or failed finalization appends the corresponding
-    `released` or `failed` event and clears only that claim. Given an expired claim
-    at a supplied clock, recovery appends one `crashed` event and releases only that
-    job. Replay is idempotent, graph and receipts remain unchanged, and a later start
-    creates a new attempt while prior events remain inspectable in order.'
-proof_bundle: behavioral+challenge
-blocked: true
-block_reason: 'PIPELINE_COST_PAUSE: task predates Scenario Closure gating and combines
-  contract parsing, persistence, claim concurrency, and crash recovery. Recovery owner:
-  shaper. Resume only after a connected scenario-matrix audit either proves one bounded
-  high-risk matrix or splits the task, then clear this block.'
+  - 'AC-1: Given the stored packet graph, tasks #2010-#2019 are build leaves parented
+    by #2003 with the approved dependency edges, admitted change/digest/node identity,
+    bounded Scope, and named proof bundle; graph audit reports no missing edge or
+    dependency cycle.'
+  - 'AC-2: Collector archives #2003 only after every child is archived completed with
+    Verify Notes and tested-revision evidence whose union covers attempt schema/storage,
+    replacement and mixed-transaction recovery, complete receipt currentness, lifecycle
+    ownership, expiry, retry, containment, concurrency, and replay.'
+  - 'AC-3: Given the completed packet, ownership audit finds #2003 exports the attempt
+    and receipt-currentness boundaries through its leaves, while downstream #2004
+    alone owns assembled successful finish policy, `succeeded` event publication,
+    receipt creation, and job archival; no product responsibility is duplicated.'
+proof_bundle: existing+challenge
+blocked: false
+block_reason:
 claimed_at:
 archival_reason:
 archival_refs: []
@@ -58,24 +57,23 @@ archival_refs: []
 - `packet_id`: `DN-003-PK-004`
 
 ## Outcome
-Per-job claims and immutable attempt history form one orthogonal runtime boundary: start, release, fail, and crash lifecycle operations append attempt events, and an open job can be retried without changing its purpose. Later successful completion uses the same attempt contract.
+The DN-003-PK-004 packet delivers immutable attempt history, recoverable mixed job/event transactions, reusable receipt-currentness evaluation, and guarded start, release, failure, crash, and retry lifecycle behavior through bounded child tasks.
 
 ## Scope
-In scope: public frozen `AttemptEvent` models, parsers, serializers, and stable diagnostics. An attempt event preserves attempt, job, change, digest, and target references; actor and process identity; a positive monotonic sequence; event kind and timestamp; and optional detail and evidence references. Supported event kinds are `started`, `released`, `failed`, `crashed`, and `succeeded`. This task emits the first four; task 2004 later records successful completion through the same contract.
+In scope: aggregate closure for child tasks #2010-#2019; dependency, authority, ownership, scenario-closure, and proof audit across their contracts; and the downstream ownership boundary with task #2004.
 
-Also in scope: public attempt create, read, and list operations against an explicit work root; byte-equivalent replay; conflict, path-containment, no-overwrite, failed-write cleanup, and deterministic attempt-ID then sequence ordering; public start, release, failed-finalization, and expired-claim recovery operations; process and agent identity; claim timestamps; and current-authority, prerequisite, pending-request, and terminal-disposition guards.
-
-Out of scope: successful purpose-specific completion and receipt creation, owned by task 2004; findings, finding storage, and receipt listing, owned by task 2008; wave selection, global writer compatibility or lease, invalidation, corrective jobs, agent dispatch, MCP, and Cockpit.
+Out of scope: direct product implementation; successful purpose-specific completion and receipt creation, owned by task #2004; findings and receipt listing, owned by task #2008; wave selection, writer leases, invalidation, corrective jobs, dispatch, MCP, and Cockpit.
 
 ## Current Foundation And Ownership
-Use the native transaction coordinator and stores delivered through task 2002 behind the transport-free runtime facade. Keep attempt contracts, storage, and lifecycle semantics in one cohesive owner that uses native job references and contained storage primitives. Do not reuse legacy `start_work` or `end_work` status-moving semantics.
+Task #2003 is a nested packet aggregate and owns no product implementation directly. Tasks #2010 and #2011 own the attempt contract and immutable history. Tasks #2012 and #2013 own recoverable OCC replacement and mixed job/event serialization. Tasks #2014-#2016 own the reusable receipt-currentness evaluator. Tasks #2017-#2019 own guarded start, owner release/failure, and expired-claim recovery.
 
-Public attempt creation returns the existing record on byte-equivalent replay. A differing record at an occupied attempt-event identity raises exported `AttemptConflictError` with `code == "ERR_ATTEMPT_CONFLICT"`.
+Task #2004 consumes the exported attempt and receipt-currentness boundaries while owning assembled successful finish operations, the `succeeded` event, receipt publication, and job archival.
 
 ## Authority
-Resolve behavior from `REQ-008`, `REQ-009`, `REQ-016`, `IF-003`, `KEEP-007`, `PROOF-003`, design sections 2.2, 2.3, 7.2, 13, and 14, and accepted decisions `DEC-007` and `DEC-009` under `.owlbear/changes/replace-delivery-pipeline/`. Global dispatch and writer policy remain DN-004.
+Resolve behavior from `REQ-008`, `REQ-009`, `REQ-015`, `REQ-016`, `NEG-002`, `NEG-010`, `IF-003`, `KEEP-007`, `RISK-002`, `RISK-003`, `PROOF-003`, design sections 2.2, 2.3, 4.2, 4.3, 6, 7.2, 8.6, 9.5, 12, 13, and 14, and accepted decisions `DEC-007` and `DEC-009` under `.owlbear/changes/replace-delivery-pipeline/`.
 
-Proof guidance: exercise public attempt parser and store APIs plus lifecycle operations over an explicit temporary work root with replaceable clock and process identity. Cover parser round trips, conflict, containment, no-overwrite, deterministic order, concurrent claim, release, failure, crash, expiry, retry, and idempotent recovery.
+## Proof Guidance
+This aggregate is collected only after every child is archived completed with Verify Notes and tested-revision evidence. Audit the stored child graph, then inspect the union of child proofs for immutable event contracts and storage, OCC replacement recovery, mixed-process serialization, all receipt-currentness classes, lifecycle ownership, boundary-time expiry, retry, path containment, and idempotent replay. Lower layers may use explicit temporary roots, clocks, process identities, and bounded Git histories, but must exercise each named public or module boundary.
 
 [[2026-07-23T03:13:22+02:00]]
 ## Shape Notes
@@ -146,3 +144,72 @@ Proof guidance: exercise public attempt parser and store APIs plus lifecycle ope
 - Commands run: none; implementation is intentionally deferred.
 - Builder-challenger result: not invoked because no DONE verdict is being proposed.
 - Follow-up risk: task 2002 is currently in `shape`, so 2003 must be redispatched only after 2002 reaches a non-blocking completed status.
+
+[[2026-07-23T14:55:16+02:00]]
+## Shape Notes
+- Repair mode: graph-only material repair re-entry for DN-003-PK-004 after repeated build/verify rejection exposed four independently variable high-risk axes in the former monolithic task. No product code or OpenSpec artifact changed.
+- Planning authority: admitted change `replace-delivery-pipeline` at delivery digest `9387dea789fb3334cd50e6f784d06847880bd006402b33d5ab2c45888c2202a8`; `REQ-008`, `REQ-009`, `REQ-015`, `REQ-016`, `NEG-002`, `NEG-010`, `IF-003`, `KEEP-007`, `RISK-002`, `RISK-003`, `PROOF-003`; design sections 2.2, 2.3, 4.2, 4.3, 6, 7.2, 8.6, 9.5, 12, 13, and 14; accepted `DEC-007` and `DEC-009`.
+- User decisions: preserve persisted `JobRecord.claim_id` and `attempt_id`; deepen `RuntimeTransaction` with recoverable OCC replacement participants; split schema, storage, transaction, receipt-currentness, and lifecycle proof domains; retain #1979 as top aggregate and #2004-#2007 as siblings; approve the ten-leaf graph and wording-only #2004 ownership clarification.
+- Artifact reconciliation: no planning artifact revision was required because the selected architecture refines the admitted internal `IF-003` transaction/lifecycle design without changing product intent, normative behavior, migration, or exposed delivery interface.
+- Readiness: exact hidden archive reads verified #2000, #2001, #2002, #2008, and #2009 as `archived` with `archival_reason: completed`. #2002 supplies the reusable immutable-participant transaction kernel and explicitly leaves later lifecycle participant plans and reopen hooks to downstream owners.
+
+### Change Module Map
+| Module | Planned change | Owning tasks |
+|---|---|---|
+| `serve/kanban/src/owlbear_kanban/attempt.py` | Add immutable attempt contract and contained event history | #2010, #2011 |
+| `serve/kanban/src/owlbear_kanban/runtime_transaction.py` | Add recoverable OCC replacement and mixed create/replace serialization | #2012, #2013 |
+| `serve/kanban/src/owlbear_kanban/receipt.py` | Add local, Git-revision, predecessor, and supersession currentness evaluation | #2014, #2015, #2016 |
+| `serve/kanban/src/owlbear_kanban/native_runtime.py` | Add guarded start, owner release/failure, and expiry recovery facade | #2017, #2018, #2019 |
+| `serve/kanban/src/owlbear_kanban/jobs.py` | Existing OCC job/claim authority consumed without ownership change | #2012, #2017-#2019 |
+| Task #2004 finish boundary | Consume exported evaluator; own assembled success, receipts, and archival | #2004 |
+
+### Product Invariant Map
+| Invariant | Owner | Boundary and proof |
+|---|---|---|
+| Attempt events are immutable, contained, deterministic history | #2011 | Public `AttemptStore`; destination/path/failure matrix |
+| One job replacement and one event recover as a complete pair | #2013 | Mixed transaction; interruption, process race, replay |
+| Receipt currentness includes authority, proof, code, predecessor, and supersession | #2016 | Complete evaluator over #2014/#2015 prerequisites; finite graph matrix |
+| Only eligible work gains one active claim and `started` event | #2017 | Public `start_job`; readiness/replay table |
+| Only the owner can release or fail an active attempt | #2018 | Public owner-finalization operations |
+| Strictly expired claims become one crash event and retryable work | #2019 | Public recovery across boundary times and reopen |
+| Successful purpose-specific completion publishes `succeeded`, receipt, and archive | #2004 | Public finish/validity consumer boundary |
+
+### Dependency Closure Map
+- #2010 <- completed #2002; #2011 <- #2010.
+- #2012 <- completed #2002; #2013 <- #2011 and #2012.
+- #2014 <- completed #2002; #2015 <- #2014; #2016 <- #2014 and #2015.
+- #2017 <- #2013 and #2016; #2018 <- #2017; #2019 <- #2017 and #2018.
+- #2003 depends on completed #2002 plus every leaf #2010-#2019. #2004 remains downstream of #2003. No leaf depends on its aggregate and no dependency cycle exists.
+
+### Scenario Closure Map
+| Task | Finite scenario axis |
+|---|---|
+| #2010 | accepted kind mappings vs malformed identity/reference/sequence/kind/fields |
+| #2011 | absent, byte-equal, byte-different, unsafe, and failed-write destinations |
+| #2012 | expected, already-replaced, conflict, malformed/unsafe, and three interruption phases |
+| #2013 | complete-pair recovery, same-expected-bytes process race, and replay |
+| #2014 | kind, schema, target, digest, and proof-satisfaction classes |
+| #2015 | exact, untouched descendant, touched descendant, non-descendant, and missing revision |
+| #2016 | current chain, missing/invalid predecessor, cycle, supersession, and shared predecessor |
+| #2017 | eligible, active, stale, invalid predecessor, pending request, terminal, and replay identities |
+| #2018 | owner release/fail, non-owner, no-active-claim, and replay |
+| #2019 | before, exactly at, and after expiry; reopen and repeated recovery |
+
+### Product Promise Coverage Map
+| Promise | Owner and proving outcome |
+|---|---|
+| Immutable operational attempt history | #2010/#2011 contracts and public store AC |
+| Recoverable claim/event mutation | #2012/#2013 replacement and mixed-transaction AC |
+| Complete reusable receipt currentness | #2014-#2016 evaluator AC |
+| Guarded claim lifecycle and honest non-success dispositions | #2017/#2018 lifecycle AC |
+| Crash recovery leaves work retryable without erasing history | #2019 recovery AC |
+| Successful receipt-producing completion | Existing downstream #2004 Outcome and AC |
+
+### Final Graph And Audit
+- Created build leaves #2010-#2019 with packet identities `DN-003-PK-004-A` through `DN-003-PK-004-J`, explicit priorities, bounded Scope, three ACs each, and named proof bundles.
+- Fragmentation rationale: ten leaves exceed the preferred 3-6 range because they isolate ten distinct failure domains and proof modes. Merging any adjacent pair would recreate independent schema/path/concurrency/crash/Git/graph/lifecycle matrix multiplication that caused the cost pause.
+- Converted #2003 into a nested `collect` aggregate with parent #1979, dependencies #2002 and #2010-#2019, aggregate AC, `type:shape`, and `existing+challenge` proof.
+- Clarified #2004 to consume the #2014-#2016 evaluator through #2003 while retaining its Outcome, AC-1 through AC-3, `build` status, parent #1979, dependency #2003, and assembled finish ownership.
+- #1979 remains unchanged and #2004-#2007 remain direct siblings under it. MCP child and sibling queries matched the approved graph; `git diff --check` passed. `.vscode/mcp.json` is unrelated and excluded.
+- Challenger: provisional graph passed authority, hierarchy, dependency closure, scenario closure, AC quality, module locality, receipt-validity coverage, Product Promise coverage, and acyclicity. Post-write challenge passed after exact current working-tree and hidden archive evidence corrected two search-access false negatives; final result `decision: pass` across readiness, authority, invariant ownership, dependency closure, scenario closure, boundary proof, and fidelity.
+- Memory preflight closeout: all 19 recalled shaper entries were assessed for task #2003 before release.

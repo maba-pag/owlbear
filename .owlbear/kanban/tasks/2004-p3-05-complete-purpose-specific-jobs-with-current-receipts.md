@@ -4,7 +4,7 @@ title: 'P3-05: Complete purpose-specific jobs with current receipts'
 status: build
 priority: medium
 created: 2026-07-22T21:58:55.620202+02:00
-updated: 2026-07-23T11:29:01.113725+02:00
+updated: 2026-07-23T14:54:49.789874+02:00
 tags:
   - phase-3
   - scope:core
@@ -53,19 +53,19 @@ archival_refs: []
 Shape, build, accept, and audit completion validates current authority and predecessor closure, atomically records kind-specific evidence plus the owning attempt's `succeeded` activity event, and archives the immutable-purpose job without backward movement.
 
 ## Scope
-In scope: node-plan digest computation; receipt-validity engine; public finish-shape, finish-build, finish-accept, and finish-audit transaction policies; successful attempt finalization; predecessor release; authority, node-plan, supersession, code-revision, and touched-boundary staleness.
+In scope: node-plan digest computation; assembled receipt-validity consumption; public finish-shape, finish-build, finish-accept, and finish-audit transaction policies; successful attempt finalization; predecessor release; authority, node-plan, supersession, code-revision, and touched-boundary staleness.
 
 Finish-shape atomically records one caller-supplied packet DAG contained by the target node, its digest and shape receipt, build jobs, one dependency-gated accept job, the owning attempt's `succeeded` event, and the archived shape-job disposition.
 
 Out of scope: node-plan semantic review and agent contracts, corrective routing, dispatch and writer leases, proof-checkout creation, MCP, and UI.
 
 ## Current Foundation And Ownership
-Use the contracts and stores from archived #2000/#2001, the transaction kernel from #2002, and the attempt/activity owner from #2003. This task owns successful purpose-specific completion and the `succeeded` event; #2003 retains start, release, failure, and crash semantics. DN-006 through DN-008 and DN-014 later provide the agents and semantic evidence that call these generic engine operations.
+Use the contracts and stores from archived #2000/#2001, the transaction kernel from #2002, and the attempt/activity and receipt-currentness boundaries exported by #2003. #2003 owns and exports the reusable receipt-currentness evaluator produced by tasks #2014-#2016. #2004 owns assembled `finish_shape`/`finish_build`/`finish_accept`/`finish_audit` policy, invokes that evaluator, records `succeeded`, archives the job, and proves the evaluator through its public finish/validity boundary. DN-006 through DN-008 and DN-014 later provide the agents and semantic evidence that call these generic engine operations.
 
 ## Authority
 Resolve behavior from `REQ-009`, `REQ-016`, `NEG-002`, `NEG-010`, `IF-003`, `RISK-003`, `PROOF-003`, and design sections 4.2, 4.3, 6, 7, and 13.
 
-Proof guidance: exercise the public finish and receipt-validity boundaries with temporary Git revisions below the engine. For shape, build, accept, and audit, verify one transaction publishes the kind-specific receipt, archived job disposition, and one `succeeded` activity event. Include stale authority, node-plan, predecessor, supersession, touched-boundary, replay, and transaction-failure cases.
+Proof guidance: exercise the public finish and receipt-validity boundaries with temporary Git revisions below the engine. For shape, build, accept, and audit, verify one transaction invokes the exported evaluator and publishes the kind-specific receipt, archived job disposition, and one `succeeded` activity event. Include stale authority, node-plan, predecessor, supersession, touched-boundary, replay, and transaction-failure cases.
 
 [[2026-07-23T11:29:01+02:00]]
 ## Shape Notes
@@ -73,3 +73,8 @@ Proof guidance: exercise the public finish and receipt-validity boundaries with 
 - Repair: replaced the complete operative body and AC so `finish_shape`, `finish_build`, `finish_accept`, and `finish_audit` atomically publish the kind-specific receipt, archived job disposition, and one `succeeded` event for the owning attempt. Replay and transaction failure cannot leave a duplicate or partial success record.
 - Dependency closure: #2004 consumes the transaction kernel through #2002 and attempt/activity contract through #2003. Node-plan, receipt-validity, and successful completion behavior are owned here; no request or invalidation producer is required.
 - Board audit: remains `build`, parent #1979, depends on #2003, and is correctly dependency-blocked.
+
+[[2026-07-23T14:54:49+02:00]]
+## Ownership Clarification
+- The earlier Shape Notes sentence assigning receipt-validity behavior to #2004 is superseded by the current operative contract. #2003 owns and exports the reusable receipt-currentness evaluator produced by #2014-#2016. #2004 consumes and proves that evaluator through its public finish/validity boundary while alone owning assembled `finish_shape`/`finish_build`/`finish_accept`/`finish_audit` policy, `succeeded` publication, receipt creation, and job archival.
+- Outcome, AC-1 through AC-3, status `build`, parent #1979, and dependency #2003 remain unchanged.
