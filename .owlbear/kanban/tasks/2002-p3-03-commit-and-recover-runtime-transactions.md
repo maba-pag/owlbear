@@ -4,7 +4,7 @@ title: 'P3-03: Commit and recover runtime transactions'
 status: shape
 priority: high
 created: 2026-07-22T21:58:33.866396+02:00
-updated: 2026-07-23T12:18:53.907559+02:00
+updated: 2026-07-23T12:19:36.914276+02:00
 tags:
   - phase-3
   - scope:core
@@ -212,3 +212,8 @@ Proof guidance: exercise public admission plus the reusable transaction boundary
 - Tested SHA and normal-path proof: builder commit `1ab1b292e`; `uv run pytest serve/kanban/tests/test_admission.py serve/kanban/tests/test_admission_transaction.py` passed (17) and focused Ruff passed, but that proof does not cover runtime-open recovery.
 - Residual decisions: `list_requests` returned no pending or resolved structured requests for #2002.
 - Rationale: reject to shape because AC-2 requires an owning design for generic manifest scanning/recovery before readable runtime stores, plus focused proof. This is not archival-ready.
+
+[[2026-07-23T12:19:36+02:00]]
+## Collect Notes
+- Classification: not processed; task status is `shape`, outside collector authority.
+- Released without collection decision. Redispatch after it reaches `collect`.
