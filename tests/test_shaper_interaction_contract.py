@@ -165,6 +165,25 @@ def test_product_promise_coverage_map_blocks_unowned_scope() -> None:
     assert "inspect the Product Promise Coverage Map" in challenger
 
 
+def test_dependency_closure_blocks_forward_references() -> None:
+    shaping = _read("share/skills/w-spec-shaping/SKILL.md")
+    decomposition = _read("share/skills/w-task-decomposition/SKILL.md")
+    challenger = _read("share/agents/shaper-challenger.agent.md")
+
+    assert "### Dependency Closure Map" in decomposition
+    for column in (
+        "Load-Bearing Input Or Mutation Participant",
+        "Producer Or Current-Source Authority",
+        "Required Predecessor",
+    ):
+        assert column in decomposition
+    assert "Reject unrealizable dependency closure" in decomposition
+    assert "sibling or descendant producer" in decomposition
+    assert "Dependency Closure Map evidence" in shaping
+    assert "Prove dependency closure" in challenger
+    assert "dependency closure" in challenger.split("coverage:", 1)[1]
+
+
 def test_challenger_accepts_complete_provisional_graph() -> None:
     challenger = _read("share/agents/shaper-challenger.agent.md")
 

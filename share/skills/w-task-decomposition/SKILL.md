@@ -251,6 +251,30 @@ Rules:
 - Prefer roughly 3–6 outcome-cohesive tasks for a major feature. This is a fragmentation warning,
     not a hard cap; exceed it when distinct failure domains and proof modes genuinely require it.
 
+### Dependency Closure Map
+
+Before approving task boundaries, prove that each task can satisfy its AC from current source, its
+own outputs, and its transitive predecessors. Write the final map in `## Shape Notes` beside the
+Product Invariant Map.
+
+| Task | Load-Bearing Input Or Mutation Participant | Producer Or Current-Source Authority | Required Predecessor |
+|------|--------------------------------------------|--------------------------------------|----------------------|
+| {task key} | {contract, store, record, interface, or operation} | {task key or verified source} | {task key or none} |
+
+Rules:
+
+- Include each contract, store, record type, interface, and mutation participant required by the
+    task's AC, normal-path proof, or failure recovery.
+- A producer must be current source, the consuming task itself, or a transitive predecessor. A
+    sibling or descendant producer makes the graph unrealizable and blocks approval.
+- Shared infrastructure may be a predecessor, but the task that introduces an operation's records
+    owns that operation's atomic mutation and recovery proof unless admitted authority assigns a
+    different owner.
+- Cross-check each Product Invariant Map owner against this map. Naming an invariant owner is
+    insufficient when that owner's dependency closure cannot supply the assembled proof boundary.
+- Derived or transitive inputs still appear in the map; do not rely on the absence of a graph cycle
+    as proof that the dependency direction is correct.
+
 ### Task Complexity Budget
 
 Draft tasks to fit this budget before creating them:
@@ -345,6 +369,10 @@ Before creating any task, validate every planned task:
     when an existing check or transient observation proves the boundary.
 - **Reject orphaned invariants** — every invariant-map row names one owning task and that task has a
     normal-path AC.
+- **Reject unrealizable dependency closure** — every load-bearing input and mutation participant is
+    supplied by current source, the task itself, or a transitive predecessor; no task requires a
+    sibling or descendant producer, and each invariant owner can assemble its proof boundary from
+    that closure.
 - **Reject uncovered Product Promise items** — every active coverage-map row names an owning task or
     aggregate condition and a proving AC or outcome; every exclusion cites its accepted authority.
 - **Reject boundary-bypassing proof** — proof guidance must not replace the callable, command,
@@ -362,7 +390,7 @@ In draft phase, stop here and return the complete provisional graph to the calli
 stable provisional keys, such as `T1`, `T2`, and `EPIC`, wherever concrete task IDs do not yet exist.
 Include all fields needed for challenge and user review: title, outcome, scope, AC, proof guidance,
 priority, tags, dependencies, parent/aggregate routing, Change Module Map ownership, Product
-Invariant Map ownership, and Product Promise coverage.
+Invariant Map ownership, Dependency Closure Map evidence, and Product Promise coverage.
 
 Do not create or edit Kanban tasks in draft phase.
 
@@ -451,6 +479,11 @@ Append decomposition details inside shaper's `## Shape Notes` section:
 |-------------------|-------------|----------------------|-----------------------------|
 | {invariant} | {task ID} | {boundary} | {proof and allowed replacement} |
 
+### Dependency Closure Map
+| Task | Load-Bearing Input Or Mutation Participant | Producer Or Current-Source Authority | Required Predecessor |
+|------|--------------------------------------------|--------------------------------------|----------------------|
+| {task ID} | {input or participant} | {task ID or source} | {task ID or none} |
+
 ### Decomposition: {name}
 - Tasks created: {N}
 - Dependency layers: {M}
@@ -474,6 +507,10 @@ Append decomposition details inside shaper's `## Shape Notes` section:
 - [ ] Proposed module boundaries pass the depth, locality, and Deletion Test diagnostics
 - [ ] External/generated contract claims record authority, evidence state, and confidence
 - [ ] Every product invariant has exactly one owning task and one normal-path proof
+- [ ] Every task's load-bearing inputs and mutation participants come from current source, the task
+    itself, or transitive predecessors
+- [ ] Each invariant owner can assemble its normal-path proof boundary from its dependency closure
+- [ ] No task depends semantically on a sibling or descendant producer
 - [ ] Task layout covers the full active Product Promise; every omitted requested outcome has an
     explicit user-approved exclusion in the planning authority
 - [ ] Mocks or injected dependencies replace only layers below the boundary being proved

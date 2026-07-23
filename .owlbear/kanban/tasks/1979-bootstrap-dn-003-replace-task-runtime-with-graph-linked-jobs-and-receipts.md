@@ -4,7 +4,7 @@ title: 'Bootstrap DN-003: Replace task runtime with graph-linked jobs and receip
 status: collect
 priority: high
 created: 2026-07-22T01:05:46.251445+02:00
-updated: 2026-07-22T22:08:58.352298+02:00
+updated: 2026-07-23T11:26:51.911482+02:00
 tags:
   - bootstrap-projection
   - change:replace-delivery-pipeline
@@ -78,3 +78,13 @@ Proof guidance: exercise public job, claim, completion, invalidation, transactio
 - Complexity waiver: eight children exceed the usual 3-6 guideline because contracts, single-record containment/OCC, multi-record crash recovery, attempt lifecycle, kind-specific completion/validity, request resolution, invalidation closure, and indexed scale/health each require a distinct primary proof and failure domain.
 - Challenge and approval: `shaper-challenger` returned `decision: pass` with no blocking finding. Non-blocking refinements were incorporated by distinguishing supplementary store proof from integrated facade proof, crediting #2007 in REQ-009 coverage, and naming activity participation in #2002/#2003. The user explicitly selected `Approve and create` for this exact eight-packet graph.
 - Board audit before closure: #2000 is the only dependency-ready build task; #2001-#2007 are blocked by the intended DAG. All children share parent #1979, change/digest/node identity, bounded scope, objective AC, and proof bundles. Recalled shaping memories were assessed in one complete batch before release.
+
+[[2026-07-23T11:26:51+02:00]]
+## Shape Notes
+- Repair mode: user-authorized connected material reshape for #1979 and #2002-#2007 after #2002 proved the original transaction packet depended on request/activity producers placed downstream. Current source, admitted DN-003 authority, and archived #2000/#2001/#2008/#2009 were checked.
+- Architecture decision: #2002 supplies the reusable transaction kernel and admission publication. #2003 owns attempt/activity transactions; #2004 owns finish/receipt/activity transactions; #2005 owns request/job-link transactions; #2006 owns invalidation/supersession transactions; #2007 owns assembled projections and health. This is legal packet refinement inside existing `IF-003` failure semantics, so delivery authority and digest remain unchanged.
+- Invariant correction: `REQ-016` atomicity is covered jointly by #2002 (kernel/admission), #2003 (job/activity), #2004 (completion/receipt/activity), #2005 (request/job links), and #2006 (invalidation/corrective work). #2007 inspects manifests and resulting store integrity. The original row assigning the complete mutation to #2002 is historical and no longer operative.
+- Dependency Closure Map: #2002 consumes current admission/receipt behavior plus archived #2001 job storage; #2003 consumes #2002; #2004 and #2005 consume #2003 and its transitive closure; #2006 consumes #2004 and #2005; #2007 consumes #2006. No remaining packet requires a sibling or descendant producer.
+- Instruction repair: `w-task-decomposition` now requires and validates a Dependency Closure Map; `w-spec-shaping` passes it to challenge; `shaper-challenger` fails forward references; `test_shaper_interaction_contract.py` preserves the contract.
+- Challenge and proof: shaper-challenger returned pass, with concrete participant-shape proof required for #2002. Focused contract suite passed 17 tests; skill/agent validators, Markdown lint, and diff check passed.
+- Board route: aggregate remains in `collect` behind #2002-#2007. The connected leaf contracts are repaired and audited separately before release.
