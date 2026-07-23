@@ -24,8 +24,8 @@ name: Sync dev to main
         description: "serve/knowledge/ + serve/mcp-knowledge/"
         type: boolean
         default: true
-      sync_mcp_memory:
-        description: "serve/mcp-memory/"
+      sync_memory:
+        description: "serve/memory/ + serve/mcp-memory/"
         type: boolean
         default: true
       sync_cockpit:
@@ -69,7 +69,7 @@ jobs:
       SYNC_KNOWLEDGE: ${{ inputs.sync_knowledge }}
       SYNC_COCKPIT: ${{ inputs.sync_cockpit }}
       SYNC_TOOLS: ${{ inputs.sync_tools }}
-      SYNC_MCP_MEMORY: ${{ inputs.sync_mcp_memory }}
+      SYNC_MEMORY: ${{ inputs.sync_memory }}
       SYNC_SETUP: ${{ inputs.sync_setup }}
       SYNC_INFRA: ${{ inputs.sync_infra }}
       INPUT_DRY_RUN: ${{ inputs.dry_run }}
@@ -88,11 +88,11 @@ jobs:
           if [[ "$SYNC_KNOWLEDGE" == "true" ]]; then serve_scopes="${serve_scopes:+$serve_scopes,}knowledge"; fi
           if [[ "$SYNC_COCKPIT" == "true" ]]; then serve_scopes="${serve_scopes:+$serve_scopes,}cockpit"; fi
           if [[ "$SYNC_TOOLS" == "true" ]]; then serve_scopes="${serve_scopes:+$serve_scopes,}tools"; fi
-          if [[ "$SYNC_MCP_MEMORY" == "true" ]]; then serve_scopes="${serve_scopes:+$serve_scopes,}mcp-memory"; fi
+          if [[ "$SYNC_MEMORY" == "true" ]]; then serve_scopes="${serve_scopes:+$serve_scopes,}memory"; fi
 
           if [[ -n "$serve_scopes" ]]; then
             # If all serve sub-scopes are selected, collapse to "serve"
-            if [[ "$serve_scopes" == "browser,kanban,knowledge,cockpit,tools,mcp-memory" ]]; then
+            if [[ "$serve_scopes" == "browser,kanban,knowledge,cockpit,tools,memory" ]]; then
               scopes="${scopes:+$scopes,}serve"
             else
               scopes="${scopes:+$scopes,}$serve_scopes"
@@ -114,7 +114,7 @@ jobs:
           any_serve="false"
           all_serve="false"
           if [[ -n "$serve_scopes" ]]; then any_serve="true"; fi
-          if [[ "$serve_scopes" == "browser,kanban,knowledge,cockpit,tools,mcp-memory" ]]; then all_serve="true"; fi
+          if [[ "$serve_scopes" == "browser,kanban,knowledge,cockpit,tools,memory" ]]; then all_serve="true"; fi
 
           {
             echo "SCOPES=$scopes"
@@ -148,7 +148,7 @@ jobs:
           if [[ "$SYNC_KNOWLEDGE" == "true" ]]; then paths="$paths serve/knowledge serve/mcp-knowledge"; fi
           if [[ "$SYNC_COCKPIT" == "true" ]]; then paths="$paths serve/cockpit"; fi
           if [[ "$SYNC_TOOLS" == "true" ]]; then paths="$paths serve/tools"; fi
-          if [[ "$SYNC_MCP_MEMORY" == "true" ]]; then paths="$paths serve/mcp-memory"; fi
+          if [[ "$SYNC_MEMORY" == "true" ]]; then paths="$paths serve/memory serve/mcp-memory"; fi
           if [[ "$SYNC_SETUP" == "true" ]]; then paths="$paths setup seed"; fi
           if [[ "$SYNC_INFRA" == "true" ]]; then
             paths="$paths .github .vscode .editorconfig .gitattributes .gitignore"
@@ -206,8 +206,8 @@ jobs:
           if [[ "$SYNC_TOOLS" == "true" ]]; then
             paths="$paths serve/tools"
           fi
-          if [[ "$SYNC_MCP_MEMORY" == "true" ]]; then
-            paths="$paths serve/mcp-memory"
+          if [[ "$SYNC_MEMORY" == "true" ]]; then
+            paths="$paths serve/memory serve/mcp-memory"
           fi
           if [[ "$SYNC_SETUP" == "true" ]]; then
             paths="$paths setup seed"
@@ -324,10 +324,10 @@ jobs:
                 git checkout dev -- serve/tools
               fi
 
-              if [[ "$SYNC_MCP_MEMORY" == "true" ]]; then
-                echo "--- serve/mcp-memory"
-                git rm -rf serve/mcp-memory --quiet 2>/dev/null || true
-                git checkout dev -- serve/mcp-memory
+              if [[ "$SYNC_MEMORY" == "true" ]]; then
+                echo "--- serve/memory + serve/mcp-memory"
+                git rm -rf serve/memory serve/mcp-memory --quiet 2>/dev/null || true
+                git checkout dev -- serve/memory serve/mcp-memory
               fi
             fi
 
@@ -433,7 +433,8 @@ jobs:
             ["serve/mcp-knowledge/"]="$SYNC_KNOWLEDGE"
             ["serve/cockpit/"]="$SYNC_COCKPIT"
             ["serve/tools/"]="$SYNC_TOOLS"
-            ["serve/mcp-memory/"]="$SYNC_MCP_MEMORY"
+            ["serve/memory/"]="$SYNC_MEMORY"
+            ["serve/mcp-memory/"]="$SYNC_MEMORY"
             ["setup/"]="$SYNC_SETUP"
             ["seed/"]="$SYNC_SETUP"
             [".github/"]="$SYNC_INFRA"

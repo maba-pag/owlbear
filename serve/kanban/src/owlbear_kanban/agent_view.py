@@ -211,8 +211,9 @@ class AgentView:
         """Fetch a single task by ID with optional section extraction.
 
         When ``section`` is provided only the body content under matching
-        headings is returned (case-insensitive).  Multiple heading matches are
-        concatenated.  If the heading is absent, ``body`` is set to ``None`` and
+        headings is returned (case-insensitive). Multiple heading matches are
+        concatenated newest-first so current lifecycle evidence precedes history.
+        If the heading is absent, ``body`` is set to ``None`` and
         ``missing_sections`` is populated.
 
         Args:
@@ -261,9 +262,11 @@ class AgentView:
                 payload["body"] = None
                 missing_sections = [section_name]
             else:
-                payload["body"] = "\n".join(match.content for match in matches)
+                payload["body"] = "\n".join(match.content for match in reversed(matches))
                 if len(matches) > 1:
-                    guidance.append(f"Section '{section_name}' matched {len(matches)} occurrences.")
+                    guidance.append(
+                        f"Section '{section_name}' matched {len(matches)} occurrences; newest occurrence is first."
+                    )
 
         payload["guidance"] = guidance
         payload["missing_sections"] = missing_sections

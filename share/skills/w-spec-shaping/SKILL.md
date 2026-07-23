@@ -137,14 +137,15 @@ tasks. Use provisional task keys until commit. The draft must include:
 
 - outcomes, boundaries, acceptance criteria, and proof guidance;
 - dependencies, priorities, tags, and aggregate routing;
-- Change Module Map, Product Invariant Map ownership, and Dependency Closure Map evidence;
+- Change Module Map, Product Invariant Map ownership, Dependency Closure Map evidence, and Scenario
+ Closure Map evidence;
 - the Product Promise Coverage Map defined by `w-task-decomposition`.
 
 Call `shaper-challenger` on this complete pre-write graph. Supply the reconciled planning package,
 readiness evidence, contract authorities, Change Module Map, Product Invariant Map, Dependency
-Closure Map, Product Promise Coverage Map, provisional tasks, dependencies, and statuses. Resolve
-correctable findings in the draft. Surface any material challenger finding that requires a user
-choice instead of deciding it silently.
+Closure Map, Scenario Closure Map, Product Promise Coverage Map, provisional tasks, dependencies,
+and statuses. Resolve correctable findings in the draft. Surface any material challenger finding
+that requires a user choice instead of deciding it silently.
 
 ## Step 6 - Obtain Graph Approval
 
