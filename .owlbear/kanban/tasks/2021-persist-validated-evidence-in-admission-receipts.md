@@ -1,10 +1,10 @@
 ---
 id: 2021
 title: Persist validated evidence in admission receipts
-status: build
+status: verify
 priority: high
 created: 2026-07-23T17:45:08.767424+02:00
-updated: 2026-07-23T17:49:22.216908+02:00
+updated: 2026-07-23T18:26:34.341348+02:00
 tags:
   - phase-2
   - scope:core
@@ -53,3 +53,23 @@ Resolve behavior from `REQ-002`, `IF-002`, `PROOF-002`, design sections 9.4 and 
 
 ## Proof Guidance
 Exercise public `validate_and_admit` in a temporary change root with non-empty challenge, baseline, approval, and limits. Assert persisted evidence equality, exact replay, different-evidence conflict, and interrupted receipt/job publication recovery. Actual whole-change re-proof and re-admission remain DN-013/DN-014 work.
+
+[[2026-07-23T18:26:34+02:00]]
+## Builder Notes
+
+Change envelope: deepen `AdmissionTransaction.validate_and_admit` so an admitted receipt stores the validated `AdmissionEvidence`, making receipt equality and replay identity cover `challenge`, `baseline`, `approval`, and `limits`; prove persisted evidence, valid changed-evidence conflict without mutation, and interrupted-publication recovery. No admission evaluation-policy or live-change revisions were changed.
+
+Files changed: `serve/kanban/src/owlbear_kanban/admission_transaction.py`; `serve/kanban/tests/test_admission_transaction.py`.
+
+Change Module Map deviations: none. The existing test fixture temporarily constructs required graph admission metadata because the copied draft change has no admission metadata; this is fixture-local and necessary to drive the existing public API through its admitted publication path.
+
+Proof selected: durable transaction coverage passes the Rent Test because immutable receipt identity and recovery are shared, data-integrity boundaries that are difficult to verify manually. No new test module or helper was added.
+
+Commands run:
+- `uv run pytest serve/kanban/tests/test_admission_transaction.py -q` -> 3 passed in 1.05s.
+- `uv run ruff check serve/kanban/src/owlbear_kanban/admission_transaction.py serve/kanban/tests/test_admission_transaction.py && uv run ruff format --check serve/kanban/src/owlbear_kanban/admission_transaction.py serve/kanban/tests/test_admission_transaction.py` -> passed; 2 files already formatted.
+- VS Code diagnostics for both changed files -> no errors.
+
+Builder-challenger: pass. It independently reran the focused tests (3 passed in 1.03s) and scoped Ruff checks; no concrete blockers.
+
+Follow-up risks: the live `.owlbear/changes/replace-delivery-pipeline` graph remains draft/unadmitted and fails evaluation with `DV-010`; this task deliberately uses in-memory fixture metadata and does not publish or re-admit that live revision.

@@ -78,6 +78,7 @@ class AdmissionTransaction:
                 issued_at=timestamp,
                 payload={
                     "assessment": assessment.model_dump(mode="json"),
+                    "evidence": evidence.model_dump(mode="json"),
                     "generation": generation.model_dump(mode="json"),
                 },
             )
