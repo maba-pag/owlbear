@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import pytest
 
-from owlbear_kanban import AttemptEventDiagnosticCode, parse_attempt_event_mapping
+from owlbear_kanban import (
+    AttemptEventDiagnosticCode,
+    parse_attempt_event_mapping,
+    serialize_attempt_event_mapping,
+)
 
 
 def _event_mapping(kind: str) -> dict[str, object]:
@@ -31,8 +35,8 @@ def test_public_attempt_event_parser_round_trips_frozen_records(kind: str) -> No
 
     assert result.diagnostics == ()
     assert result.event is not None
-    assert result.event.model_dump(mode="json") == value
-    assert parse_attempt_event_mapping(result.event.model_dump(mode="json")).event == result.event
+    assert serialize_attempt_event_mapping(result.event) == value
+    assert parse_attempt_event_mapping(serialize_attempt_event_mapping(result.event)).event == result.event
     with pytest.raises((TypeError, ValueError)):
         result.event.sequence = 2
 

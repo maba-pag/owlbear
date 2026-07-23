@@ -1,10 +1,10 @@
 ---
 id: 2010
 title: 'P3-11: Define immutable attempt event contracts'
-status: build
+status: verify
 priority: high
 created: 2026-07-23T14:40:14.905119+02:00
-updated: 2026-07-23T15:22:26.462764+02:00
+updated: 2026-07-23T15:24:29.529377+02:00
 tags:
   - phase-3
   - scope:core
@@ -77,3 +77,13 @@ Exercise the public parser and serializer directly with a finite accepted/invali
 - Prior same-AC rejection check: task history contains only the builder implementation commit; no prior Verify Notes or same-AC rejection exists.
 - Verifier-challenger: not called because a PASS verdict is not proposed.
 - Final route: REJECT to build.
+
+[[2026-07-23T15:24:29+02:00]]
+## Builder Notes
+- Change envelope: add only the missing public attempt-event serializer and its package export; update the existing public round-trip proof. Storage, transactions, and lifecycle operations remain excluded.
+- Files changed: `serve/kanban/src/owlbear_kanban/attempts.py`, `serve/kanban/src/owlbear_kanban/__init__.py`, and `serve/kanban/tests/test_attempts.py`.
+- Change Module Map: no deviation. `attempts.py` remains the immutable event-contract owner; the package root exposes the public boundary.
+- Proof selected: the existing finite mapping-table test now calls `serialize_attempt_event_mapping` followed by `parse_attempt_event_mapping` across all five supported kinds. The focused durable test remains justified because this shared public serialization contract is easy to regress and is a dependency for later lifecycle and persistence work.
+- Commands run: `uv run --project /Users/markus/Projects/owlbear-dev pytest serve/kanban/tests/test_attempts.py` (13 passed); `uv run --project /Users/markus/Projects/owlbear-dev ruff check serve/kanban/src/owlbear_kanban/attempts.py serve/kanban/src/owlbear_kanban/__init__.py serve/kanban/tests/test_attempts.py` (all checks passed); `uv run --project /Users/markus/Projects/owlbear-dev ruff format --check serve/kanban/src/owlbear_kanban/attempts.py serve/kanban/src/owlbear_kanban/__init__.py serve/kanban/tests/test_attempts.py` (3 files already formatted); scoped `git diff --check` (clean).
+- Builder challenger: pass; no concrete blockers. It independently ran the focused test, lint, format, and diff checks and found the change narrow and the durable test justified.
+- Follow-up risks: none within this contract scope.

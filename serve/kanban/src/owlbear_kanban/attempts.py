@@ -99,3 +99,8 @@ def parse_attempt_event_mapping(value: Mapping[str, object]) -> AttemptEventPars
             diagnostics=(AttemptEventDiagnostic(code=_diagnostic_from_validation(exc), detail=str(exc)),)
         )
     return AttemptEventParseResult(event=event)
+
+
+def serialize_attempt_event_mapping(event: AttemptEvent) -> dict[str, object]:
+    """Serialize an attempt event as a schema-version-one JSON-compatible mapping."""
+    return event.model_dump(mode="json")

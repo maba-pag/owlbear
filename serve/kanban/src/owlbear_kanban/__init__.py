@@ -28,6 +28,7 @@ from owlbear_kanban.attempts import (
     AttemptEventDiagnosticCode,
     AttemptEventParseResult,
     parse_attempt_event_mapping,
+    serialize_attempt_event_mapping,
 )
 from owlbear_kanban.change import (
     ChangeDiagnostic,
@@ -166,5 +167,6 @@ __all__ = [
     "plan_shape_jobs",
     "project_job",
     "read_job_generation",
+    "serialize_attempt_event_mapping",
     "validate_and_admit",
 ]
