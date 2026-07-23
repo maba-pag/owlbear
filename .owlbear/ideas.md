@@ -63,4 +63,4 @@ And for `agent_view.py`:
 
 ## Memory
 
-Rating seems not to be exposed in cockpit, maybe other fields. Leading value there seems to still be confidence.
+- allow searching for memory IDs in cockpit
