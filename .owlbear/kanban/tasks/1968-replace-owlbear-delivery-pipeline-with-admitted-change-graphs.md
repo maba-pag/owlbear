@@ -4,7 +4,7 @@ title: Replace OwlBear delivery pipeline with admitted change graphs
 status: collect
 priority: high
 created: 2026-07-21T01:46:53.257501+02:00
-updated: 2026-07-22T01:13:04.314562+02:00
+updated: 2026-07-23T18:16:46.704872+02:00
 tags:
   - pipeline-redesign
   - architecture
@@ -29,6 +29,7 @@ depends_on:
   - 1988
   - 1989
   - 1990
+  - 2021
 ac:
   - The bootstrap native change package records the approved intent, 
     architecture decisions, complete delivery-node graph, admission 
@@ -124,3 +125,15 @@ This is the bootstrap intake for an atomic cutover. The durable native change pa
 - Projected task prose is non-authoritative and cannot supersede the graph.
 - The current pipeline is a one-time stable sibling carrier; no compatibility path survives cutover.
 - DN-013 and DN-014 must re-prove the native assembled system and whole change at committed revisions before closure.
+
+## Draft Authority Amendment
+- User-approved DEC-021 and the revised receipt-currency design changed semantic delivery authority; `graph.yaml` is intentionally `draft` with `admission: null`, and the prior `9387dea789fb...` receipt is historical rather than current authority.
+- Task #2021 repairs DN-002 admission receipt fidelity by persisting validated challenge, baseline, approval, and limits. It does not publish the live revision.
+- Root aggregate #1968 depends on #2021 so cutover closure cannot outrun admission evidence fidelity. DN-013/DN-014 retain whole-change re-proof and re-admission ownership after the assembled replacement is complete.
+
+[[2026-07-23T18:16:46+02:00]]
+## Shape Notes
+- Material repair: user accepted DEC-021 typed descendant impact closure and ratified DN-002 follow-up #2021.
+- Authority state: `replace-delivery-pipeline` is intentionally `draft` with `admission: null`; the prior digest/receipt is historical. DN-013/DN-014 retain whole-change re-proof and re-admission ownership.
+- Graph change: root #1968 now depends on #2021 so closure cannot outrun admission evidence fidelity.
+- Challenge: final concrete board/authority audit passed. Root remains `collect` and dependency-blocked.

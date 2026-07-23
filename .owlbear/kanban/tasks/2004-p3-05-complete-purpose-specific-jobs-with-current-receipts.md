@@ -4,7 +4,7 @@ title: 'P3-05: Complete purpose-specific jobs with current receipts'
 status: build
 priority: medium
 created: 2026-07-22T21:58:55.620202+02:00
-updated: 2026-07-23T14:54:49.789874+02:00
+updated: 2026-07-23T18:16:46.730167+02:00
 tags:
   - phase-3
   - scope:core
@@ -22,20 +22,22 @@ depends_on:
   - 2003
 ac:
   - 'AC-1: Given a current shape attempt and a caller-supplied packet DAG contained
-    by its delivery node, `finish_shape` atomically writes only that node-plan namespace,
-    its digest and shape receipt, the packet build jobs, one dependency-gated accept
-    job, one `succeeded` activity event for the owning attempt, and the archived shape-job
-    disposition; out-of-bound references or transaction failure publish none of them.'
-  - 'AC-2: Given a current build, accept, or audit attempt with kind-specific evidence,
-    its finish operation accepts only current delivery and node-plan digests, predecessor
-    receipts whose computed validity is current, and the required target, code, and
-    proof fields, then atomically creates one immutable receipt, appends one `succeeded`
-    activity event, and archives the same-kind job; replay writes no second receipt
-    or success event.'
-  - 'AC-3: Given stale authority or node plan, an invalidated or superseded predecessor,
-    or a later code revision touching the receipt boundary, receipt validity reports
-    the stable failing reason and dependent jobs remain unreleased; a permitted descendant
-    with no touched-boundary change remains current.'
+    by its delivery node with canonical packet impact closures, `finish_shape` atomically
+    writes that node-plan namespace, its digest and shape receipt, packet build jobs,
+    one dependency-gated accept job, one `succeeded` event for the owning attempt,
+    and the archived shape-job disposition; out-of-bound reference, missing or malformed
+    closure, or transaction failure publishes none of them.'
+  - 'AC-2: Given a current build, accept, or audit attempt with kind-specific evidence
+    and the canonical typed impact closure for that receipt kind, its finish operation
+    requires current delivery and node-plan digests, predecessor result `CURRENT`,
+    and required target, code, and proof fields, then atomically creates one immutable
+    receipt, appends one `succeeded` event, and archives the same-kind job; replay
+    writes no second receipt or event.'
+  - 'AC-3: Given a stale delivery or node-plan digest, predecessor result other than
+    `CURRENT`, explicit supersession `invalidated_receipt_ids` reference, or code-currency
+    result other than `CURRENT`, receipt evaluation returns that stable reason and
+    leaves dependent jobs unreleased; code-currency result `CURRENT` permits normal
+    finish.'
 proof_bundle: critical+challenge
 blocked: false
 block_reason:
@@ -78,3 +80,16 @@ Proof guidance: exercise the public finish and receipt-validity boundaries with 
 ## Ownership Clarification
 - The earlier Shape Notes sentence assigning receipt-validity behavior to #2004 is superseded by the current operative contract. #2003 owns and exports the reusable receipt-currentness evaluator produced by #2014-#2016. #2004 consumes and proves that evaluator through its public finish/validity boundary while alone owning assembled `finish_shape`/`finish_build`/`finish_accept`/`finish_audit` policy, `succeeded` publication, receipt creation, and job archival.
 - Outcome, AC-1 through AC-3, status `build`, parent #1979, and dependency #2003 remain unchanged.
+
+## Operative Receipt Contract Amendment
+This section supersedes earlier receipt-currentness ownership and `touched-boundary` wording.
+
+Task #2003 exports the reusable evaluator produced by #2014, #2015, #2020, and #2016. Task #2004 remains the sole owner of assembled `finish_shape`, `finish_build`, `finish_accept`, and `finish_audit` policy, successful receipt issuance, one `succeeded` event, and job archival. Finish operations consume canonical typed impact closures required by the admitted packet contract and validated by #2015; they do not infer closure from changed paths or diffs.
+
+Proof uses the public finish boundary and the exported result codes. Receipt ID order, `issued_at`, and prose boundary descriptions are not currentness authority.
+
+[[2026-07-23T18:16:46+02:00]]
+## Shape Notes
+- Receipt consumer contract now names #2014, #2015, #2020, and #2016 and consumes canonical typed impact closures.
+- AC-1 through AC-3 use stable currentness results and explicit `invalidated_receipt_ids`; receipt ID order, `issued_at`, changed-path inference, and prose `touched-boundary` wording are not authority.
+- Task remains `build`, dependency-blocked behind #2003. Final concrete challenge passed.

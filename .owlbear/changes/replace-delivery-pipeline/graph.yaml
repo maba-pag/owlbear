@@ -1,26 +1,14 @@
 ---
 schema_version: 1
 change_id: replace-delivery-pipeline
-state: admitted
+state: draft
 authority:
   intent: intent.md
   design: design.md
   decisions: decisions.yaml
   research:
     - ../../research/planning-workflow-root-cause-and-redesign.md
-admission:
-  state: admitted
-  delivery_digest: 9387dea789fb3334cd50e6f784d06847880bd006402b33d5ab2c45888c2202a8
-  receipt: receipts/admission-9387dea789fb.yaml
-  limits:
-    - Implementation packet boundaries remain intentionally unshaped until delivery-node shape jobs run.
-    - Admission certifies delivery completeness and feasibility, not implementation correctness.
-    - >-
-      This bootstrap change uses the current pipeline from a recorded stable sibling checkout as a one-time
-      execution carrier; its projected tasks are non-authoritative and no compatibility path survives cutover.
-    - >-
-      Bootstrap task creation is not atomic with admission receipt creation, so dispatch remains disabled until the
-      complete digest-bound projection passes an idempotency and dependency audit.
+admission: null
 
 requirements:
   - id: REQ-001
@@ -402,7 +390,8 @@ interfaces:
     consumers: [DN-004, DN-006, DN-007, DN-008, DN-009, DN-010, DN-012, DN-013, DN-014]
     contract: >-
       Purpose-specific jobs reference graph targets/digests; immutable attempts, findings, receipts, and supersession
-      determine validity.
+      determine validity. Non-admission receipts freeze typed path and authority-target impact closures; engine-owned
+      repository history permits only proven non-intersecting descendant revisions.
     authority: MOD-001
     failure_semantics: Atomic transaction abort or recoverable manifest; no partial valid receipt.
     migration: MIG-002
@@ -633,8 +622,9 @@ risks:
       - Code changes after acceptance.
       - Superseded receipt remains referenced.
     disposition: >-
-      Canonical digests, dependency-closure invalidation, supersession receipts, path/boundary stale checks, and
-      transition predicates that require current valid receipts.
+      Canonical digests, frozen typed impact closures, conservative repository-history classification, explicit
+      supersession references, dependency-closure invalidation, and transition predicates that require current
+      receipts.
     owner: DN-003
     proof: PROOF-003
   - id: RISK-004
@@ -779,8 +769,10 @@ proofs:
     method:
       - Exercise purpose-specific transitions, dependency release, claims, crashes, OCC races, supersession,
         request resolution, and recovery.
+      - Exercise exact, non-intersecting descendant, intersecting path, missing, non-descendant, rename, copy,
+        malformed-history, unsafe-path, predecessor-cycle, and explicit-supersession receipt classes.
       - Assert no partial valid receipt or dangling job after injected write failures.
-    allowed_replacements: [clock, process identity, temporary filesystem]
+    allowed_replacements: [clock, process identity, temporary filesystem, temporary Git repository]
     durable_outputs: [engine state-machine, concurrency, and crash tests]
   - id: PROOF-004
     title: Resumable design and admission interaction proof

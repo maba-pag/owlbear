@@ -4,7 +4,7 @@ title: 'P3-04: Record claims and immutable attempts'
 status: collect
 priority: high
 created: 2026-07-22T21:58:44.211108+02:00
-updated: 2026-07-23T14:55:16.959947+02:00
+updated: 2026-07-23T18:16:46.717539+02:00
 tags:
   - phase-3
   - scope:core
@@ -30,19 +30,21 @@ depends_on:
   - 2017
   - 2018
   - 2019
+  - 2020
 ac:
-  - 'AC-1: Given the stored packet graph, tasks #2010-#2019 are build leaves parented
-    by #2003 with the approved dependency edges, admitted change/digest/node identity,
+  - 'AC-1: Given the stored packet graph, tasks #2010 through #2020 are build leaves
+    parented by #2003 with approved dependency edges, admitted change/node identity,
     bounded Scope, and named proof bundle; graph audit reports no missing edge or
     dependency cycle.'
-  - 'AC-2: Collector archives #2003 only after every child is archived completed with
-    Verify Notes and tested-revision evidence whose union covers attempt schema/storage,
-    replacement and mixed-transaction recovery, complete receipt currentness, lifecycle
-    ownership, expiry, retry, containment, concurrency, and replay.'
-  - 'AC-3: Given the completed packet, ownership audit finds #2003 exports the attempt
+  - 'AC-2: Collector archives #2003 after tasks #2010 through #2020 are archived completed
+    with Verify Notes and tested-revision evidence whose union covers attempt schema/storage,
+    replacement and mixed-transaction recovery, impact closure, code currency, complete
+    receipt currentness, lifecycle ownership, expiry, retry, containment, concurrency,
+    and replay.'
+  - 'AC-3: Given the completed packet, ownership audit finds #2003 exports attempt
     and receipt-currentness boundaries through its leaves, while downstream #2004
-    alone owns assembled successful finish policy, `succeeded` event publication,
-    receipt creation, and job archival; no product responsibility is duplicated.'
+    alone owns assembled successful finish policy, `succeeded` publication, receipt
+    creation, and job archival; product responsibility is not duplicated.'
 proof_bundle: existing+challenge
 blocked: false
 block_reason:
@@ -213,3 +215,32 @@ This aggregate is collected only after every child is archived completed with Ve
 - #1979 remains unchanged and #2004-#2007 remain direct siblings under it. MCP child and sibling queries matched the approved graph; `git diff --check` passed. `.vscode/mcp.json` is unrelated and excluded.
 - Challenger: provisional graph passed authority, hierarchy, dependency closure, scenario closure, AC quality, module locality, receipt-validity coverage, Product Promise coverage, and acyclicity. Post-write challenge passed after exact current working-tree and hidden archive evidence corrected two search-access false negatives; final result `decision: pass` across readiness, authority, invariant ownership, dependency closure, scenario closure, boundary proof, and fidelity.
 - Memory preflight closeout: all 19 recalled shaper entries were assessed for task #2003 before release.
+
+## Operative Eleven-Leaf Graph Amendment
+This section supersedes earlier ten-leaf inventories, receipt ownership maps, dependency maps, scenario maps, and fragmentation rationale.
+
+### Ownership And Dependency Closure
+Tasks #2010 and #2011 own attempt schema and immutable history. Tasks #2012 and #2013 own replacement and mixed job/event transactions. Tasks #2014, #2015, #2020, and #2016 own local currentness, frozen impact closures, Git code currency, and recursive/explicit-supersession currentness. Tasks #2017 through #2019 own start, release/failure, and expired-claim recovery. Task #2004 consumes the exported attempt/currentness boundaries and alone owns assembled successful finish, `succeeded`, receipt issuance, and job archival.
+
+The receipt dependency chain is #2014 followed by #2015, then #2020, then #2016; #2016 also consumes #2014. Lifecycle task #2017 consumes #2013 and #2016. Parent #2003 depends on #2002 and leaf tasks #2010 through #2020. The receipt chain has no DN-004 dependency: DN-003 owns repository-history classification, while DN-004 later owns disposable proof-checkout lifecycle.
+
+### Change Module Map Amendment
+`receipt.py` ownership is #2014 local authority/proof currentness, #2015 typed impact closure and shared path validation, #2020 repository-history code currency, and #2016 predecessor/supersession closure. `jobs.py`, `runtime_transaction.py`, and `attempts.py` ownership remains with their prior leaves.
+
+### Scenario Closure Amendment
+- #2015: canonical/unsafe selectors, declared/undeclared targets, missing/malformed closure, shape/build copy, accept union, audit root, and immutable roundtrip.
+- #2020: exact/missing/non-descendant commits, disjoint/intersecting descendants, rename/copy source and destination, malformed status/arity, decode/query failure, and unsafe history path.
+- #2016: current chain, missing/non-current predecessor, cycle, explicit supersession reference, and shared predecessor.
+
+### Invariant And Promise Coverage Amendment
+Typed closure ownership is #2015; precise descendant currency is #2020; complete reusable receipt currentness is #2016; successful finish remains #2004. Together they satisfy `NEG-010`, `RISK-003`, `IF-003`, and `PROOF-003` without using `REQ-015` as receipt authority.
+
+### Fragmentation Rationale
+Eleven leaves exceed the preferred range because selector/issuance schema, repository-history classification, and recursive receipt-graph currentness have independent inputs and failure matrices. Merging those tasks would cross the single-proof and single-failure-domain budgets.
+
+[[2026-07-23T18:16:46+02:00]]
+## Shape Notes
+- Material receipt repair approved by the user and passed final shaper-challenger review.
+- Graph: eleven leaves; added #2020 (`DN-003-PK-004-K`) after #2015, and #2016 now consumes #2020. Parent dependency and ownership/scenario maps were updated.
+- Availability: #2014/#2015/#2020/#2016 respectively own local currentness, typed impact closure, Git currency, and predecessor/explicit-supersession closure. #2004 alone owns assembled finish and receipt issuance.
+- Remaining separate gaps: #2012/#2013 shared OCC authority and #2017-#2019 lifecycle result/expiry contracts are not certified ready by this repair. Aggregate remains `collect`.

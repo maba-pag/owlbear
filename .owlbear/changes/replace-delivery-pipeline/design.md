@@ -157,11 +157,58 @@ A receipt is valid when:
 - its target exists;
 - every referenced predecessor receipt is valid;
 - its delivery and node-plan digests equal current values;
-- no later supersession invalidates it;
-- its code revision is the tested commit or a permitted descendant with no touched-boundary change;
+- no supersession receipt names it in `invalidated_receipt_ids`;
+- its code revision satisfies the typed impact-closure contract below;
 - its evidence satisfies the target proof contract.
 
 The engine computes validity; agents do not infer it from prose.
+
+#### 4.3.1 Receipt impact closure
+
+Each non-admission receipt freezes one typed `impact_closure` at issuance. The closure contains:
+
+- `paths`: a non-empty sorted set of canonical repository-relative POSIX selectors, where a trailing `/` denotes a
+  tree and its absence denotes one file;
+- `authority_targets`: a sorted set of stable IDs whose semantic authority the proof consumed.
+
+The reserved selector `/` denotes the complete repository tree. Other selectors reject a leading slash, `.`, `..`,
+empty segments, backslashes, NUL, and repository escape. A tree selector matches the named tree and its descendants;
+a file selector matches only that path. Shape and build receipts copy the closure from their canonical packet
+contract. An accept receipt uses the canonical union of its node-plan packet closures. An audit receipt uses `/` plus
+the active change-authority targets. Receipt issuance fails when the required closure is missing, malformed, or
+cannot be derived without ambiguity. Changed paths and receipt diffs are evidence, not authority for widening or
+narrowing the frozen closure.
+
+#### 4.3.2 Code-revision currency
+
+The engine owns a repository-history protocol with two deterministic operations: resolve whether the tested commit
+and candidate commit exist and whether the latter descends from the former; then return the NUL-delimited Git
+name-status changes between them with rename and copy detection enabled. Paths are decoded and normalized through
+the same repository-relative POSIX validator as impact-closure selectors. Both source and destination paths of a
+rename or copy participate in intersection.
+
+Code-revision evaluation returns these stable results:
+
+- `CURRENT` when candidate and tested commits are identical;
+- `CURRENT` when candidate is a descendant and no changed path intersects the frozen closure;
+- `ERR_RECEIPT_CODE_REVISION_MISSING` when either commit cannot be resolved;
+- `ERR_RECEIPT_CODE_REVISION_NOT_DESCENDANT` when candidate is not a descendant;
+- `ERR_RECEIPT_CODE_PATH_STALE` when a changed path intersects the closure;
+- `ERR_RECEIPT_CODE_HISTORY_UNAVAILABLE` when history output is malformed, undecodable, path-unsafe, or otherwise
+  cannot prove non-intersection.
+
+Unknown and ambiguous history is stale. The repository protocol classifies revisions only; DN-004 separately owns
+creation and cleanup of disposable proof checkouts. Authority-target currency remains owned by delivery-digest,
+node-plan-digest, predecessor, and explicit invalidation evaluation; Git history does not synthesize authority changes.
+
+#### 4.3.3 Predecessor and supersession closure
+
+Complete currentness evaluates predecessor receipt IDs in authored order with memoization. Missing predecessors,
+invalid predecessors, and cycles return `ERR_RECEIPT_PREDECESSOR_MISSING`, `ERR_RECEIPT_PREDECESSOR_INVALID`, and
+`ERR_RECEIPT_PREDECESSOR_CYCLE`, respectively, with the blocking receipt ID. A supersession receipt contains a
+non-empty sorted `invalidated_receipt_ids` set and its corrective finding/job identities. Any such reference returns
+`ERR_RECEIPT_SUPERSEDED` for the named receipt regardless of receipt ID order or `issued_at`; timestamps are evidence,
+not causal ordering. Repeated evaluation of a shared predecessor returns the same immutable projection.
 
 ## 5. Delivery Graph
 
@@ -232,10 +279,13 @@ Each packet records:
 - modules and interfaces read/modified/produced/consumed;
 - dependencies on packet or accepted-node receipts;
 - acceptance scenarios;
-- proof boundary and commands/observations;
+- typed impact closure plus proof boundary and commands/observations;
 - required outputs such as code, tests, docs, generated artifacts, migration, or evidence;
 - domain/risk/tool profile used to load builder skills;
 - expected context/change-envelope budget.
+
+The node shaper must validate and canonicalize each packet impact closure before publishing its node plan. Packet
+dependencies do not imply path ownership: a packet names the paths and authority targets its own proof consumes.
 
 ## 7. Kanban Job Model
 
@@ -452,7 +502,9 @@ During `/design`, live user choices use `askQuestions` and are written directly 
 - Inline reviewers are read-only and do not commit.
 - Acceptance/audit receipts record the tested commit, commands, environment-relevant facts, replacements, outputs, and result.
 - Control-plane-only receipt commits may follow the tested code commit; the receipt records the tested code SHA explicitly.
-- A later descendant remains valid only when the invalidation engine proves no changed path or authority target intersects the receipt boundary. Otherwise proof is stale.
+- A later descendant remains current only when the receipt evaluator proves that repository-history paths do not
+  intersect the receipt's frozen impact closure. Delivery and node-plan digests plus explicit invalidation separately
+  classify authority-target changes. Missing, ambiguous, malformed, unsafe, or non-descendant history is stale.
 
 ## 13. `owlbear-kanban` Internal Design
 

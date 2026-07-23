@@ -876,3 +876,53 @@ decisions:
           - Creates a hybrid receipt and invalidation period
         risks:
           - Temporary self-hosting contracts become permanent architecture
+
+  - id: DEC-021
+    title: Preserve receipt currency across irrelevant descendant commits
+    status: accepted
+    decided_at: 2026-07-23
+    authority: user
+    selected: typed-descendant-impact-closure
+    rationale: >-
+      Exact-commit proof establishes the receipt initially, while a frozen typed impact closure
+      lets the engine reuse that evidence at descendant commits only when repository history proves
+      that no relevant path changed. Delivery and node-plan digests plus explicit invalidation retain
+      authority-target currentness. Exact-commit-only currency would make each sequential packet
+      commit stale earlier packet receipts and force broad repeated proof.
+    options:
+      - id: typed-descendant-impact-closure
+        label: Permit descendants through a typed impact closure
+        confidence: 0.93
+        recommended: true
+        pros:
+          - Unrelated commits do not invalidate prior proof
+          - Missing or ambiguous history fails closed with stable reasons
+          - Initial proof remains an exact disposable-checkout proof
+        cons:
+          - Packet plans and receipts must carry canonical path and authority-target closures
+          - The engine must own deterministic Git ancestry and changed-path classification
+        risks:
+          - An incomplete frozen closure could preserve evidence after a relevant change
+      - id: exact-tested-commit-only
+        label: Keep receipts current only at the tested commit
+        confidence: 0.61
+        recommended: false
+        pros:
+          - Smallest revision comparison contract
+          - No changed-path classification is required
+        cons:
+          - Sequential packet commits invalidate earlier build evidence
+          - Node acceptance and whole-change audit require broad repeated proof
+        risks:
+          - Routine unrelated commits create proof churn and stalled dependency chains
+      - id: redesign-receipt-lifecycle
+        label: Pause DN-003 and redesign receipt lifecycle as a whole
+        confidence: 0.47
+        recommended: false
+        pros:
+          - Receipt, invalidation, transaction, and claim semantics can be reconsidered together
+        cons:
+          - Stops the current delivery node for a broader design cycle
+          - Reopens accepted premises that are not implicated by this defect
+        risks:
+          - Redesign expands beyond the underdefined currency contract
