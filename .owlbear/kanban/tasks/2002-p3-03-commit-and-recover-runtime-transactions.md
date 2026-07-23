@@ -1,10 +1,10 @@
 ---
 id: 2002
 title: 'P3-03: Commit and recover runtime transactions'
-status: verify
+status: collect
 priority: high
 created: 2026-07-22T21:58:33.866396+02:00
-updated: 2026-07-23T12:14:30.719144+02:00
+updated: 2026-07-23T12:17:58.941953+02:00
 tags:
   - phase-3
   - scope:core
@@ -187,3 +187,16 @@ Proof guidance: exercise public admission plus the reusable transaction boundary
 - Builder-challenger result: pass; no blockers.
 - Recalled memory assessment: completed; refined artifact-to-scope guidance was directly applied.
 - Follow-up risks: none within this task's kernel and admission integration scope.
+
+[[2026-07-23T12:17:58+02:00]]
+## Verify Notes
+- Evidence reviewed: task AC-1 through AC-3; Builder Notes; committed task diff through `6ea017d11`; and the current source in `runtime_transaction.py`, `admission_transaction.py`, and `change.py`.
+- Named authorities checked: the transaction kernel publishes a bounded explicit participant plan; `AdmissionTransaction` supplies only the canonical receipt and initial job generation; `load_change()` invokes `RuntimeTransaction.recover_all()` before exposing a revision. This matches the refined Scope, Authority, and Change Module Map.
+- Change Module Map: no deviation. The accumulated task delta contains the mapped transaction/admission/runtime-open modules, their focused tests, and this task record only. No legacy engine or downstream lifecycle/request/invalidation owner changed.
+- Normal-path boundary exercised: public `validate_and_admit()` ran twice against a copied real change fixture. Both calls returned identical receipt/job identities; the second created no records; exactly one requested receipt and one job were added relative to the fixture baseline.
+- Recovery boundary exercised: public `load_change()` recovers an admission interruption after first participant publication before returning a revision. The focused generic kernel test covers lifecycle-shaped job/activity participants at `before-publication`, `after-first-publication`, and `before-manifest-cleanup`; recovery never leaves a strict subset.
+- Safety checks exercised: focused tests prove immutable conflict and unsafe-path rejection without mutation, content/root validation during recovery, and two-process serialization. The runtime-open test reports malformed manifests with the stable schema-invalid diagnostic.
+- Checks run: `uv run pytest serve/kanban/tests/test_admission.py serve/kanban/tests/test_admission_transaction.py serve/kanban/tests/test_change_receipts.py serve/kanban/tests/test_jobs.py serve/kanban/tests/test_runtime_transaction.py` (77 passed); task-owned Ruff check and format check passed; `git diff --check HEAD^ HEAD` and `git show --check HEAD` passed; public admission replay smoke passed.
+- Findings: initial replay smoke incorrectly assumed the fixture had no bootstrap receipt; fixture-aware rerun confirmed the intended one receipt/job delta. No implementation defect found; no verifier patch applied.
+- Verifier-challenger: pass. It confirmed task intent, recovery through the real `load_change()` boundary, three interruption points, idempotent admission replay, and scoped module ownership.
+- Final route: PASS to collect.
