@@ -1,10 +1,10 @@
 ---
 id: 2002
 title: 'P3-03: Commit and recover runtime transactions'
-status: verify
+status: build
 priority: high
 created: 2026-07-22T21:58:33.866396+02:00
-updated: 2026-07-23T12:00:19.200756+02:00
+updated: 2026-07-23T12:03:05.815668+02:00
 tags:
   - phase-3
   - scope:core
@@ -124,3 +124,23 @@ Proof guidance: exercise public admission plus the reusable transaction boundary
 - Commands run: `uv run pytest serve/kanban/tests/test_admission_transaction.py` passed (1); `uv run pytest serve/kanban/tests/test_admission.py serve/kanban/tests/test_admission_transaction.py serve/kanban/tests/test_change_receipts.py serve/kanban/tests/test_jobs.py` passed (71); `uv run ruff check` on the three touched paths plus `git diff --check` passed.
 - Builder-challenger result: pass; it independently ran the focused admission/change suite (71 passed) and confirmed the task scope, fresh-open proof, and code-quality checks.
 - Follow-up risks: future multi-root lifecycle participants must pass their explicit trusted roots when invoking the generic recovery API; this admission integration has one revision root.
+
+[[2026-07-23T12:03:05+02:00]]
+## Verify Notes
+
+- Evidence reviewed: task AC-1 through AC-3, Shape Notes and Builder Notes, builder commit `4120df568`, and its changed files: `serve/kanban/src/owlbear_kanban/runtime_transaction.py`, `serve/kanban/src/owlbear_kanban/change.py`, and `serve/kanban/tests/test_admission_transaction.py`.
+- Named authorities checked: `REQ-016`, `IF-003`, `KEEP-007`, `RISK-002`, `PROOF-003`, and design sections 9.5, 12, and 13 require bounded atomic publication, deterministic crash recovery, and containment. The current implementation is inside the Change Module Map: transaction kernel plus `load_change()` recovery boundary; no map deviation found.
+- Normal-path boundary exercised: public `validate_and_admit()` interrupted after its first participant, followed by public `load_change()`. This recovered a complete receipt/job participant set and removed the manifest. No replacement was used above that boundary.
+- Checks run: `uv run pytest serve/kanban/tests/test_admission.py serve/kanban/tests/test_admission_transaction.py serve/kanban/tests/test_change_receipts.py serve/kanban/tests/test_jobs.py` passed (71); `uv run ruff check` on the transaction, runtime-open, admission, and focused test paths passed; `git diff --check 4120df568^ 4120df568` passed.
+- Finding: AC-3 is not satisfied. `RuntimeTransaction._load_yaml()` allows malformed pending-manifest YAML to propagate `yaml.parser.ParserError`; `load_change()` only translates `TransactionPathError`, `TransactionManifestError`, and `TransactionConflictError`, so runtime open raises rather than returning its stable manifest diagnostic. Reproduced in an isolated temporary directory with a pending manifest containing `participants: [`.
+- Proof gap: existing durable coverage exercises only the after-first-publication admission interruption. It does not cover malformed manifests, unsafe participant roots, immutable conflicts, before-publication/cleanup recovery, concurrent-process coordination, or the lifecycle-shaped job/activity participant plan required by AC-2 and AC-3.
+- Patches applied: none; correcting manifest parsing and adding the required boundary proof exceed verifier local-patch scope.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Convert malformed pending-manifest YAML into `TransactionManifestError` and ensure `load_change()` returns the stable schema diagnostic rather than raising. | `serve/kanban/src/owlbear_kanban/runtime_transaction.py`, `serve/kanban/src/owlbear_kanban/change.py`, focused tests | Isolated `RuntimeTransaction.recover_all()` reproduction raised `ParserError`; AC-3 requires a stable diagnostic. |
+| 2 | builder | Add proportionate public-boundary proof for AC-2/AC-3 failure stages and hostile/concurrent cases, including the generic lifecycle-shaped participant plan. | `serve/kanban/tests/` | Existing focused suite passed 71 tests but covers only after-first-publication admission recovery. |
+
+- Verifier-challenger: not called because this task is rejected, not proposed for PASS.
+- Final route: REJECT to build.
