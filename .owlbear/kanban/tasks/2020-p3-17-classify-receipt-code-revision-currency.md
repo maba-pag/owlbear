@@ -1,10 +1,10 @@
 ---
 id: 2020
 title: 'P3-16B: Classify receipt code-revision currency'
-status: verify
+status: collect
 priority: high
 created: 2026-07-23T17:39:16.311514+02:00
-updated: 2026-07-23T22:09:11.371414+02:00
+updated: 2026-07-23T22:11:56.460912+02:00
 tags:
   - phase-3
   - scope:core
@@ -76,3 +76,16 @@ Exercise the public evaluator over a bounded temporary Git history containing ex
 - Current failure-key resolutions: none.
 - Builder-challenger: pass; independently ran the focused receipt suite (56 passed) and found no concrete blocker.
 - Follow-up risks: complete currentness composition remains owned by task #2016.
+
+[[2026-07-23T22:11:56+02:00]]
+## Verify Notes
+- Evidence reviewed: builder commit `f250642d1` changed only `serve/kanban/src/owlbear_kanban/receipt.py`, `serve/kanban/src/owlbear_kanban/__init__.py`, and `serve/kanban/tests/test_change_receipts.py`; `git show --check f250642d1` passed. No verifier patch applied.
+- Named authorities checked: admitted `.owlbear/changes/replace-delivery-pipeline/design.md` section 4.3.2, accepted `DEC-021`, and `graph.yaml` `IF-003`, `RISK-003`, and `PROOF-003`. They require deterministic descendant-only Git currency, NUL-delimited rename/copy-aware status, shared path validation, source/destination participation, and fail-closed ambiguous history; the implementation matches.
+- Change Module Map: none was supplied. The three changed modules align with the task's owned receipt evaluator, its existing public package exports, and focused receipt proof. No interface or ownership deviation found.
+- Normal-path boundary: `uv run pytest serve/kanban/tests/test_change_receipts.py -q` passed (56 tests). The public `evaluate_code_revision_currency` executes against a bounded temporary Git repository for exact, disjoint descendant, intersecting file/tree, missing, side-branch, rename, and copy cases. Lower-layer repository histories inject malformed status/arity, UTF-8 decode failure, unsafe paths, and query failure; neither the evaluator nor shared path validator is replaced.
+- Additional checks: `uv run ruff check` on the three task-owned paths passed; `uv run ruff format --check` on the same paths passed; `git diff --check` passed.
+- Findings: none. No prior Verify Notes or same-failure-key rejection exists; no current follow-up requires resolution.
+- AC-to-evidence: AC-1 exact commit returns `CURRENT` before `name_status`; AC-2 real descendant, rename, and copy cases use both paths; AC-3 real missing and non-descendant cases return the specified codes; AC-4 intersecting file/tree returns stale with path and selector; AC-5 malformed, undecodable, unsafe, and unavailable-history cases return `ERR_RECEIPT_CODE_HISTORY_UNAVAILABLE` and never `CURRENT`.
+- Verifier-challenger: pass; it found all ACs directly evidenced, source aligned with design section 4.3.2 and `DEC-021`, and no scope drift.
+- Final route: PASS to collect.
+
