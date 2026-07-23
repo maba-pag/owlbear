@@ -1,10 +1,10 @@
 ---
 id: 2015
 title: 'P3-16A: Define and freeze receipt impact closures'
-status: build
+status: verify
 priority: high
 created: 2026-07-23T14:41:09.745275+02:00
-updated: 2026-07-23T21:51:26.502840+02:00
+updated: 2026-07-23T21:55:04.561819+02:00
 tags:
   - phase-3
   - scope:core
@@ -278,3 +278,16 @@ Use the public parser, `evaluate_receipt_currentness`, and `ReceiptStore.create`
 | 1 | AC-6/persistence-canonicalization | builder | Extend the public `ReceiptStore.create` then `read` proof with multiple unsorted duplicate paths and authority targets; assert the returned closure has deduplicated tuple-sorted `paths` and `authority_targets`. | `serve/kanban/tests/test_change_receipts.py` | Verifier-challenger finding; AC-6 requires immutable tuple-sorted round-trip values. |
 
 - Final route: REJECT to build.
+
+[[2026-07-23T21:55:04+02:00]]
+## Builder Notes
+
+- Change envelope: closed the latest `AC-6` follow-up at the existing public `ReceiptStore.create` then `read` roundtrip boundary. The supplied receipt closure now contains unsorted duplicate paths and authority targets; the test verifies its persisted canonical form and frozen return values.
+- Files changed: `serve/kanban/tests/test_change_receipts.py`.
+- Change Module Map deviations: none. The repair remains in the mapped focused receipt proof; no runtime module change was required because `parse_impact_closure` already owns canonicalization.
+- Proof selected: expanded the existing durable all-kind store roundtrip. This passes the Rent Test because durable receipt persistence must not silently regress sorted/deduplicated immutable impact closures.
+- Commands run: `uv run pytest serve/kanban/tests/test_change_receipts.py -q` (55 passed); `uv run ruff check serve/kanban/tests/test_change_receipts.py` (passed); `uv run ruff format --check serve/kanban/tests/test_change_receipts.py` (1 file already formatted); `git diff --check -- serve/kanban/tests/test_change_receipts.py` (passed); editor diagnostics (none).
+- AC-to-evidence map: AC-1 through AC-5 and AC-7 retain the prior committed direct receipt proof. AC-6 is now directly exercised by the expanded public `ReceiptStore.create` then `read` test: unsorted duplicate `paths` and `authority_targets` return tuple-sorted/deduplicated closure values and canonical serialized mappings.
+- Current failure-key resolution: `AC-6` is closed by the multi-value store roundtrip, which distinguishes persisted normalization from the former single-value immutability-only fixture.
+- Builder-challenger result: pass; it reviewed the scoped test-only diff and confirmed focused pytest, Ruff, formatting, and whitespace checks without blockers.
+- Follow-up risks: none in this task.

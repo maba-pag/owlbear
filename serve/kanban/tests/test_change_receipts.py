@@ -273,6 +273,24 @@ def test_receipt_store_round_trips_all_kinds_and_preserves_existing_bytes(tmp_pa
     for index, kind in enumerate(_RECEIPT_KINDS, start=1):
         receipt_id = f"{kind}-{index:03d}"
         value = _receipt(revision, receipt_id, kind)
+        if kind != "admission":
+            value["impact_closure"] = {
+                "paths": ["src/", "docs/", "src/"],
+                "authority_targets": ["REQ-002", "REQ-001", "REQ-002"],
+            }
+        expected_mapping = {
+            **value,
+            "impact_closure": (
+                {
+                    "paths": ["docs/", "src/"],
+                    "authority_targets": ["REQ-001", "REQ-002"],
+                }
+                if kind != "admission"
+                else None
+            ),
+        }
+        if kind == "admission":
+            del expected_mapping["impact_closure"]
 
         created = store.create(receipt_id, value)
         read_back = store.read(receipt_id)
@@ -280,12 +298,12 @@ def test_receipt_store_round_trips_all_kinds_and_preserves_existing_bytes(tmp_pa
         assert created.diagnostics == ()
         assert created.receipt is not None
         assert read_back.receipt is not None
-        assert read_back.receipt.to_mapping() == value
+        assert read_back.receipt.to_mapping() == expected_mapping
         assert read_back.receipt.payload["evidence"] == {"kind": kind, "passed": True}
         if kind != "admission":
             assert read_back.receipt.impact_closure is not None
-            assert read_back.receipt.impact_closure.paths == ("src/",)
-            assert read_back.receipt.impact_closure.authority_targets == ("REQ-001",)
+            assert read_back.receipt.impact_closure.paths == ("docs/", "src/")
+            assert read_back.receipt.impact_closure.authority_targets == ("REQ-001", "REQ-002")
 
     first_id = "admission-001"
     first_path = revision.source_dir / "receipts" / f"{first_id}.yaml"
