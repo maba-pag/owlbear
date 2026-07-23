@@ -1,10 +1,10 @@
 ---
 id: 2009
 title: 'P3-10: Persist native jobs with OCC'
-status: collect
+status: archived
 priority: high
 created: 2026-07-23T02:23:45.208534+02:00
-updated: 2026-07-23T02:45:35.831963+02:00
+updated: 2026-07-23T02:46:21.647980+02:00
 tags:
   - phase-3
   - scope:core
@@ -37,7 +37,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Bootstrap Projection Identity
@@ -85,3 +85,13 @@ Proof guidance: exercise public job-store APIs over a temporary explicit work ro
 - Patches applied: none.
 - Verifier-challenger: pass; it confirmed AC coverage, proof sufficiency, and no scope drift.
 - Final route: PASS to collect.
+
+[[2026-07-23T02:46:21+02:00]]
+## Collect Notes
+- Classification: leaf. No child tasks returned by `list_tasks(parent=2009)`; its parent relationship does not make this task an aggregate.
+- Leaf verification evidence: `## Verify Notes` records PASS after `uv run pytest serve/kanban/tests/test_jobs.py` (22 passed), focused Ruff checks, formatting check, and a clean `git show --check HEAD`; verifier-challenger passed.
+- Intent source and invariant coverage: task Outcome/Scope and AC-1/AC-2 are covered upstream by public `JobStore` materialization/replay/conflict preflight, deterministic active/archive readback, containment, OCC updates/archive moves, stale-token rejection, and two-process race proof. Collector did not re-review code-level AC.
+- Child coverage and parent dependency gate: not applicable to this leaf; no child tasks exist.
+- Tested commit and tied normal-path proof: `f6550b0ed`; Verify Notes tie the named pytest command and public filesystem-boundary coverage to that implementation commit.
+- Residual decisions: `list_requests(task_id=2009, status=pending)` and `list_requests(task_id=2009, status=resolved)` both returned no records. No unresolved required follow-up appears in task history.
+- Archive rationale: verifier evidence and request state are complete; archive as completed.
