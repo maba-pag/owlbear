@@ -1,10 +1,10 @@
 ---
 id: 2010
 title: 'P3-11: Define immutable attempt event contracts'
-status: build
+status: verify
 priority: high
 created: 2026-07-23T14:40:14.905119+02:00
-updated: 2026-07-23T14:40:14.905119+02:00
+updated: 2026-07-23T15:17:53.950840+02:00
 tags:
   - phase-3
   - scope:core
@@ -53,3 +53,13 @@ Resolve behavior from `REQ-008`, `REQ-009`, `IF-003`, design sections 2.2, 2.3, 
 
 ## Proof Guidance
 Exercise the public parser and serializer directly with a finite accepted/invalid mapping table. Do not substitute store or lifecycle integration for this boundary.
+
+[[2026-07-23T15:17:53+02:00]]
+## Builder Notes
+- Change envelope: introduce only the immutable attempt-event contract and its public parse/serialize boundary; exclude storage, transactions, and lifecycle operations.
+- Files changed: `serve/kanban/src/owlbear_kanban/attempts.py`, `serve/kanban/src/owlbear_kanban/__init__.py`, and `serve/kanban/tests/test_attempts.py`.
+- Change Module Map: no deviation. `attempts.py` is the sibling immutable contract owner; package exports expose the public boundary.
+- Proof selected: finite public mapping table covers all five supported kind literals, frozen round trips, and each requested invalid diagnostic class. The focused durable test is justified because this shared public serialization boundary is easy to regress and later storage/lifecycle work depends on it.
+- Commands run: `uv run --project /Users/markus/Projects/owlbear-dev pytest serve/kanban/tests/test_attempts.py` (13 passed); `uv run --project /Users/markus/Projects/owlbear-dev ruff check serve/kanban/src/owlbear_kanban/attempts.py serve/kanban/src/owlbear_kanban/__init__.py serve/kanban/tests/test_attempts.py` (all checks passed); scoped `git diff --check` (clean).
+- Builder challenger: pass; independently reran the same focused proof and found no completion blocker.
+- Follow-up risks: identity semantics beyond required non-empty/reference validation belong to dependent lifecycle and persistence tasks.

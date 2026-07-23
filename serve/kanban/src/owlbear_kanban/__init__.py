@@ -22,6 +22,13 @@ from owlbear_kanban.admission_transaction import (
     validate_and_admit,
 )
 from owlbear_kanban.agent_view import AgentView
+from owlbear_kanban.attempts import (
+    AttemptEvent,
+    AttemptEventDiagnostic,
+    AttemptEventDiagnosticCode,
+    AttemptEventParseResult,
+    parse_attempt_event_mapping,
+)
 from owlbear_kanban.change import (
     ChangeDiagnostic,
     ChangeDiagnosticCode,
@@ -97,6 +104,10 @@ __all__ = [
     "AdmissionTransaction",
     "AdmissionValidationError",
     "AgentView",
+    "AttemptEvent",
+    "AttemptEventDiagnostic",
+    "AttemptEventDiagnosticCode",
+    "AttemptEventParseResult",
     "BoardConfig",
     "ChangeDiagnostic",
     "ChangeDiagnosticCode",
@@ -148,6 +159,7 @@ __all__ = [
     "evaluate_admission",
     "evaluate_receipt_currentness",
     "load_change",
+    "parse_attempt_event_mapping",
     "parse_finding_mapping",
     "parse_job_mapping",
     "parse_receipt_mapping",
