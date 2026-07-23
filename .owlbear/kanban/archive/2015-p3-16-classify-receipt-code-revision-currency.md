@@ -1,10 +1,10 @@
 ---
 id: 2015
 title: 'P3-16A: Define and freeze receipt impact closures'
-status: collect
+status: archived
 priority: high
 created: 2026-07-23T14:41:09.745275+02:00
-updated: 2026-07-23T21:57:12.420109+02:00
+updated: 2026-07-23T21:58:41.480756+02:00
 tags:
   - phase-3
   - scope:core
@@ -46,7 +46,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -305,3 +305,13 @@ Use the public parser, `evaluate_receipt_currentness`, and `ReceiptStore.create`
 - Patch applied: none.
 - Verifier-challenger result: pass; no implementation, proof, or scope problem identified.
 - Final route: PASS to collect.
+
+[[2026-07-23T21:58:41+02:00]]
+## Collect Notes
+
+- Classification: leaf. Task has no child tasks, no aggregate/EPIC title or tags, and no aggregate intent section.
+- Latest leaf verification evidence: newest `## Verify Notes` records all AC-1 through AC-7 satisfied. Normal-path proof `cd serve/kanban && uv run pytest tests/test_change_receipts.py -q` passed 55 tests; targeted Ruff lint and format checks passed. Verifier recorded commits `a733c2443` and `876e7447e` and no current required follow-up.
+- Intent and invariant coverage: the task Outcome requires frozen, canonical receipt impact closures; the verifier's AC map covers parser validation, declared-target membership, mapping rejection, revision-aware currentness, store rejection, create/read immutability, and idempotent conflict preservation.
+- Child coverage: `list_tasks(parent=2015)` returned no children. Parent dependency gate is not applicable to this leaf; task dependency #2014 reports `ok`.
+- Residual decisions: no pending or resolved structured requests for #2015; task is unblocked.
+- Archive rationale: verified leaf is ready for mechanical archival from current PASS evidence.
