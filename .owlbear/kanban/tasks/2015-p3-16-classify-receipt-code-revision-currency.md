@@ -1,10 +1,10 @@
 ---
 id: 2015
 title: 'P3-16A: Define and freeze receipt impact closures'
-status: build
+status: verify
 priority: high
 created: 2026-07-23T14:41:09.745275+02:00
-updated: 2026-07-23T18:31:37.402685+02:00
+updated: 2026-07-23T18:37:17.943634+02:00
 tags:
   - phase-3
   - scope:core
@@ -134,3 +134,14 @@ Exercise the public closure parser, receipt parser/currentness required-field pa
 | 2 | builder | Add focused public parser and receipt-store issuance regressions showing malformed stable IDs return `ERR_RECEIPT_IMPACT_CLOSURE_INVALID` and create no receipt file. | `serve/kanban/tests/test_change_receipts.py` | AC-1 and AC-2; verifier finding. |
 
 - Final route: REJECT to build.
+
+[[2026-07-23T18:37:17+02:00]]
+## Builder Notes
+
+- Change envelope: receipt impact-closure parsing, immutable receipt validation, serialization, and store persistence within the existing receipt subsystem.
+- Files changed in the scoped implementation commit `59d38ce64`: `serve/kanban/src/owlbear_kanban/receipt.py`, `serve/kanban/src/owlbear_kanban/__init__.py`, and `serve/kanban/tests/test_change_receipts.py`.
+- Change Module Map deviations: none. The implementation remained in the mapped receipt owner; Git-history currency is deferred to task #2020 as shaped.
+- Proof selected: the maintained focused receipt suite exercises canonical parsing, missing and malformed closure diagnostics, local currentness, serialized read-back, and immutable store conflict behavior. No new durable tests were added in this invocation because the task's committed focused proof already covers the shared boundary.
+- Commands run: `cd serve/kanban && uv run pytest tests/test_change_receipts.py -q` (48 passed); `cd serve/kanban && uv run ruff check src/owlbear_kanban/receipt.py tests/test_change_receipts.py` (all checks passed).
+- Builder-challenger result: pass; challenger independently ran the focused suite (48 passed) and reported no concrete blockers.
+- Follow-up risks: kind-specific issuance assembly remains owned by adjacent shaped work; this task only validates and freezes a supplied closure at the receipt boundary.
