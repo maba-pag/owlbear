@@ -4,7 +4,7 @@ categories: [pitfall, process]
 confidence: 0.89
 contested_by_task: null
 created_at: '2026-05-28T01:56:20.863292Z'
-didnt_use_count: 3
+didnt_use_count: 10
 id: 9290ca07-e845-4a8a-b195-86b4ee98bbf0
 outstanding_count: 0
 scope_agents: [verifier, builder]
@@ -13,7 +13,7 @@ source_agent: reviewer
 state: approved
 title: Default helper args can hide path-sensitive proof gaps
 unremarkable_count: 2
-updated_at: '2026-07-22T00:16:19.618514+00:00'
+updated_at: '2026-07-23T10:14:26.018236+00:00'
 ---
 
 When reviewing tests for path-sensitive ACs, check whether helper defaults like base_path='.' make every call site exercise only the default branch. A suite can false-green while code inspection shows the implementation is correct but unproven for non-default path routing.

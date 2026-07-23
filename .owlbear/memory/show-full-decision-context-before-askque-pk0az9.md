@@ -4,7 +4,7 @@ categories: [preference, process]
 confidence: 0.98
 contested_by_task: null
 created_at: '2026-05-17T01:33:34.605237Z'
-didnt_use_count: 49
+didnt_use_count: 78
 id: ecaa14f0-6497-4407-889c-3854c36152f3
 outstanding_count: 1
 scope_agents: ['*']
@@ -13,7 +13,7 @@ source_agent: copilot
 state: approved
 title: Use decision context template before askQuestions
 unremarkable_count: 3
-updated_at: '2026-07-22T13:48:40.039684+00:00'
+updated_at: '2026-07-23T10:44:01.504569+00:00'
 ---
 
 Before calling `askQuestions` for a substantive decision or action request, present the decision inline using the user's standard frame: Status quo, Problem, Options labeled `(bp:)` for best practice, an `(rec:)` for your recommendation, each with Pro/Con/Risk/Confidence, and Expected outcome. Ask about exactly one decision item at a time, and do not rely on tool output or file notifications as the user-visible context.
