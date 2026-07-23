@@ -1,10 +1,10 @@
 ---
 id: 2001
 title: 'P3-02: Persist native work records with OCC'
-status: collect
+status: shape
 priority: high
 created: 2026-07-22T21:58:20.087459+02:00
-updated: 2026-07-23T02:28:25.572248+02:00
+updated: 2026-07-23T02:47:33.802662+02:00
 tags:
   - phase-3
   - scope:core
@@ -126,3 +126,15 @@ Proof guidance: no direct executable proof is owned here. Collector inspects chi
 - The preceding Shape Notes incorrectly stated that user approval had been obtained before the split was committed. No such approval had occurred; that process claim is retracted.
 - After reviewing the committed graph, the user approved the recommended split on 2026-07-23: task 2008 owns immutable attempt/finding evidence storage plus canonical `ReceiptStore.list`, task 2009 owns active/archive job persistence and OCC, and task 2001 remains their aggregate gate for task 2002.
 - The previously recorded shaper-challenger pass remains the graph-quality result. This correction changes no task boundary, dependency, status, authority artifact, or acceptance criterion; it restores accurate approval history.
+
+[[2026-07-23T02:47:33+02:00]]
+## Collect Notes
+- Classification: aggregate (`type:aggregate` tag; parent intent in `## Outcome` and `## Scope`).
+- Aggregate intent source: task `## Outcome`, `## Scope`, and Authority: contained immutable evidence plus OCC-protected active/archive job persistence for later runtime transactions and lifecycle operations.
+- Child coverage: `list_tasks(parent=2001)` reports child 2008 in `shape` and child 2009 archived with `completed`; 2008 retains the required parent link but has no `## Verify Notes`.
+- Dependency gate: task 2002 still depends on 2001 and its dependency projection is `blocked`.
+- Child completion summary: 2009's Verify Notes records commit `f6550b0ed` and public temporary-root `JobStore` proof (`uv run pytest serve/kanban/tests/test_jobs.py`, 22 passed), with no transaction/recovery or lifecycle scope. 2008 is incomplete, so aggregate normal-path evidence is not complete.
+- Invariant map: 2008 Scope contains immutable attempt/finding evidence plus revision-bound canonical receipt listing; 2009 Scope contains active/archive job OCC only. The scopes keep transactions/recovery and lifecycle predicates out of both children, but AC-1 and AC-2 cannot be satisfied until 2008 completes.
+- Structured requests: no pending or resolved requests for 2001.
+- Residual decisions: none.
+- Reject rationale: child 2008 must return through build and verify, then archive as completed with Verify Notes and SHA-linked public-boundary proof before this aggregate can close.
