@@ -1,10 +1,10 @@
 ---
 id: 2011
 title: 'P3-12: Persist immutable attempt event history'
-status: verify
+status: collect
 priority: high
 created: 2026-07-23T14:40:36.839480+02:00
-updated: 2026-07-23T15:33:51.097882+02:00
+updated: 2026-07-23T15:35:39.136241+02:00
 tags:
   - phase-3
   - scope:core
@@ -63,3 +63,15 @@ Exercise public create, read, and list operations against explicit temporary roo
 - Commands run: `uv run pytest serve/kanban/tests/test_attempts.py` (17 passed); `uv run ruff check serve/kanban/src/owlbear_kanban/attempts.py serve/kanban/src/owlbear_kanban/__init__.py serve/kanban/tests/test_attempts.py` (passed); `uv run ruff format --check serve/kanban/src/owlbear_kanban/attempts.py serve/kanban/src/owlbear_kanban/__init__.py serve/kanban/tests/test_attempts.py` (3 files already formatted); `git diff --check` (passed).
 - Builder-challenger: pass; independently reran the same focused test, lint, and formatting checks with no concrete acceptance-criteria gap.
 - Follow-up risks: full runtime transaction coordination and lifecycle guards remain deliberately owned by dependent tasks.
+
+[[2026-07-23T15:35:39+02:00]]
+## Verify Notes
+- Evidence reviewed: builder implementation at `serve/kanban/src/owlbear_kanban/attempts.py`, public exports in `serve/kanban/src/owlbear_kanban/__init__.py`, and `serve/kanban/tests/test_attempts.py`; builder commit `51eec96a2` is the reviewed product commit.
+- Named authorities checked: task AC-1 through AC-3 and the stated explicit-root public-store boundary. The body labels `REQ-008`, `REQ-009`, `REQ-016`, `IF-003`, `KEEP-007`, and `PROOF-003` resolve only to historical-admission fixtures in current source, not a live requirement document; task AC remain the controlling available authority.
+- Change Module Map: no deviation. The owned `attempts.py` contract module implements the store, `__init__.py` exports its public surface, and the focused test module covers it. No adjacent interface impact found.
+- Normal-path boundary exercised: direct `AttemptStore` public create/read/list calls against a temporary explicit root, including byte-equivalent replay and `(attempt_id, sequence)` ordering. Replacements are only below the claimed boundary: an `os.fsync` fault injection proves cleanup.
+- Checks run: `uv run pytest serve/kanban/tests/test_attempts.py` (17 passed); `uv run ruff check` on the three task files (passed); `uv run ruff format --check` on those files (3 files already formatted); `git diff --check` (passed).
+- Findings and patches: none. The worktree contains unrelated task, memory, and VS Code changes; they were not modified.
+- Prior same-AC rejection check: no prior `## Verify Notes` exists.
+- Verifier-challenger: pass. It confirmed exported conflict semantics, byte-equivalent immutable replay, deterministic ordering, descriptor-relative `O_NOFOLLOW` path containment, and write-failure cleanup with no scope drift.
+- Final route: PASS to collect.
