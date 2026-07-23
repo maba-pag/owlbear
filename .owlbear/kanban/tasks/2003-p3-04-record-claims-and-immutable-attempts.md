@@ -4,7 +4,7 @@ title: 'P3-04: Record claims and immutable attempts'
 status: build
 priority: high
 created: 2026-07-22T21:58:44.211108+02:00
-updated: 2026-07-23T12:20:29.533583+02:00
+updated: 2026-07-23T12:46:47.171856+02:00
 tags:
   - phase-3
   - scope:core
@@ -42,8 +42,11 @@ ac:
     job. Replay is idempotent, graph and receipts remain unchanged, and a later start
     creates a new attempt while prior events remain inspectable in order.'
 proof_bundle: behavioral+challenge
-blocked: false
-block_reason:
+blocked: true
+block_reason: 'PIPELINE_COST_PAUSE: task predates Scenario Closure gating and combines
+  contract parsing, persistence, claim concurrency, and crash recovery. Recovery owner:
+  shaper. Resume only after a connected scenario-matrix audit either proves one bounded
+  high-risk matrix or splits the task, then clear this block.'
 claimed_at:
 archival_reason:
 archival_refs: []
