@@ -1,10 +1,10 @@
 ---
 id: 2002
 title: 'P3-03: Commit and recover runtime transactions'
-status: verify
+status: build
 priority: high
 created: 2026-07-22T21:58:33.866396+02:00
-updated: 2026-07-23T12:06:19.201897+02:00
+updated: 2026-07-23T12:08:25.078270+02:00
 tags:
   - phase-3
   - scope:core
@@ -154,3 +154,24 @@ Proof guidance: exercise public admission plus the reusable transaction boundary
 - Commands run: `uv run pytest serve/kanban/tests/test_admission_transaction.py` (1 passed); `uv run pytest serve/kanban/tests/test_admission.py serve/kanban/tests/test_admission_transaction.py serve/kanban/tests/test_change_receipts.py serve/kanban/tests/test_jobs.py` (71 passed); `uv run ruff check` and `uv run ruff format --check` on the four mapped files (passed); `git diff --check` (passed).
 - Builder-challenger result: pass; no blockers. It confirmed that the public reopen test covers the stated after-first-publication recovery risk.
 - Follow-up risks: none within this task's recovery scope; later lifecycle owners remain responsible for supplying their own participant plans when they use the generic kernel.
+
+[[2026-07-23T12:08:25+02:00]]
+## Verify Notes
+
+- Evidence reviewed: task AC-1 through AC-3, Shape Notes, Builder Notes, commits `4120df568` and `0e79c3349`, and the mapped transaction kernel, runtime-open boundary, admission handoff, and focused proof artifact.
+- Named authorities checked: `REQ-016`, `IF-003`, `KEEP-007`, `RISK-002`, and `PROOF-003` in `.owlbear/changes/replace-delivery-pipeline/graph.yaml` require bounded atomic publication, deterministic recoverability, containment, and stable failure semantics.
+- Change Module Map: the existing implementation remains within the map (`runtime_transaction.py`, `change.py`, admission integration); no architecture deviation was found. The prior commit only updates the task record, while the implementation is in commit `4120df568`.
+- Normal-path boundary exercised: `uv run pytest serve/kanban/tests/test_admission_transaction.py serve/kanban/tests/test_admission.py serve/kanban/tests/test_change_receipts.py serve/kanban/tests/test_jobs.py` passed: 71 tests. The public `validate_and_admit()` then `load_change()` recovery proof covers an admission-shaped participant set after first publication; no replacement was used above that boundary.
+- Finding: AC-3 fails at the public runtime-open boundary. From a valid copied change package with `.runtime-transactions/pending.yaml` containing malformed YAML (`participants: [`), `load_change()` raises raw `yaml.parser.ParserError`. `_load_yaml()` in `runtime_transaction.py` does not translate YAML parser errors into `TransactionManifestError`, which is the only malformed-manifest exception that `load_change()` maps to its stable schema diagnostic.
+- Proof gap: the only transaction test covers the admission-shaped after-first-publication interruption. No durable proof covers the lifecycle-shaped job/activity participant plan, before-publication and before-cleanup failure stages, unsafe roots, immutable conflicts, stale OCC, or process coordination required by AC-2 and AC-3.
+- Patches applied: none. The missing error translation and boundary proofs require builder-owned source and test changes, beyond a verifier-local patch.
+- Recalled memory assessment completed: refined-task artifact-to-scope checking directly exposed the missing participant-shape proof.
+- Verifier-challenger: not called because this is a REJECT, not a proposed PASS.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Catch malformed manifest YAML in the transaction manifest loader and raise `TransactionManifestError` so public `load_change()` returns the stable schema-invalid diagnostic rather than raising. | `serve/kanban/src/owlbear_kanban/runtime_transaction.py`; `serve/kanban/src/owlbear_kanban/change.py`; focused transaction tests | Valid copied change package with `participants: [` raises `yaml.parser.ParserError`; AC-3 requires a stable diagnostic. |
+| 2 | builder | Add proportionate public-boundary proof for the refined AC participant shapes and failure/security cases: lifecycle-shaped job/activity plan, before-publication and before-cleanup recovery, unsafe root, immutable conflict, stale OCC, and concurrent-process coordination. | `serve/kanban/tests/` | Existing transaction proof covers only admission after-first-publication; AC-2 and AC-3 explicitly require the omitted cases. |
+
+- Final route: REJECT to build.
