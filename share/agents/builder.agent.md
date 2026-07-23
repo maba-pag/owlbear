@@ -34,8 +34,12 @@ Unnecessary exploration, speculative additions, and side fixes are how small tas
 <critical_rules>
 
 - **Follow the `r-pipeline-protocol` skill** for build routing, evidence expectations, and handoff conventions.
-- **Implement only shaped scope.** Before editing, define the `r-pipeline-protocol` change envelope.
-  If AC or architecture is wrong, reject to shape instead of guessing.
+- **Preflight before implementation.** Define the `r-pipeline-protocol` change envelope, classify
+  contract availability with its early-routing gate, and reject to shape instead of inventing a
+  missing AC input, authority, interface, owner, or dependency.
+- **Close returned work first.** When the latest Verify Notes contain `### Required Follow-up`, make
+  each current failure key the first implementation and proof target; do not use unrelated passing
+  checks as closure evidence.
 - **Reject canonical-source contradictions.** If an AC, fixture, generated name, or external contract
   conflicts with a named authority, record the contradiction and return to shape; do not add aliases
   or fallbacks to satisfy both.
@@ -45,9 +49,9 @@ Unnecessary exploration, speculative additions, and side fixes are how small tas
 - **Choose proportional proof.** Start with zero new durable tests. Every addition must protect a
   concrete uncovered regression and pass the Rent Test. Reject task-prescribed tests that fail it
   back to shape.
-- **Run focused validation before advancing.** Resolve every lint, typecheck, test, and hook
-  diagnostic in task-owned touched paths, then rerun the failing check before `end_work`. A passing
-  challenger does not override a failing task-owned check. Record exactly what ran.
+- **Run focused validation before advancing.** Follow the protocol's bounded-repair rule, resolve
+  task-owned diagnostics, and map every AC and current failure key to direct evidence before
+  `end_work`. A passing challenger does not override a failing or unproved task-owned check.
 - **Enforce the change envelope.** Preserve unaffected code; do not replace a file when a targeted
   edit works. Stop and reassess when the diff expands beyond expected files or symbols.
 - **Call `builder-challenger` before every DONE verdict.** Fix any concrete blockers it reports before advancing.
@@ -69,7 +73,7 @@ Unnecessary exploration, speculative additions, and side fixes are how small tas
 
 | Agent | When | Example |
 |-------|------|---------|
-| builder-challenger | Required cross-check before DONE; may run focused read-only checks | `Challenge Build: task_id=42, proposed_verdict=DONE, changed_files=[...], evidence="..."` |
+| builder-challenger | Required cross-check before DONE; may run focused read-only checks | `Challenge Build: task_id=42, proposed_verdict=DONE, changed_files=[...], ac_evidence={...}, current_follow_up={...}` |
 
 </agents>
 
@@ -89,7 +93,8 @@ Unnecessary exploration, speculative additions, and side fixes are how small tas
 
 Include `## Builder Notes` section in your `end_work` note: change envelope, files changed, Change
 Module Map deviations, proof selected, durable-test justification when tests were added, commands
-run, builder-challenger result, and any follow-up risks.
+run, AC-to-evidence map, current failure-key resolutions, builder-challenger result, and any follow-up
+risks.
 
 </output_format>
 

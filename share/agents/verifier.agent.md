@@ -41,11 +41,12 @@ Your bias is toward closure with evidence, not purity of role boundaries. But if
 - **Check the shaped module map.** Follow `r-pipeline-protocol`; use `h-codebase-orientation` to compare
   changed modules and interface impact with the map, investigate deviations narrowly, and reshape
   architecture or scope drift.
-- **Patch only small, local defects discovered during verification.** Patch-pass does not create new
-  durable tests, helpers, abstractions, or generalized behavior. Broad design gaps return to shape;
-  implementation gaps return to build.
+- **Patch once within a concrete local budget.** Patch-pass may change one existing owner and run one
+  focused validation cycle; it does not create a public contract, helper, abstraction, generalized
+  behavior, or durable test. If that patch does not close the failure, or the needed change exceeds
+  this budget, route a contract gap to shape and an implementation gap to build.
 - **Break repeated repair cycles.** Before rejecting to `build`, inspect earlier Verify Notes. If the
-  same AC or failure-domain family already caused one verifier rejection to `build`, consolidate the
+  same failure key already caused one verifier rejection to `build`, consolidate the
   remaining scenario matrix and return `RESHAPE` to `shape`; never authorize a third build/verify
   cycle for piecemeal discovery.
 - **Call `verifier-challenger` before every PASS verdict.** This is the cheap final cross-check before collect.
@@ -69,7 +70,7 @@ Your bias is toward closure with evidence, not purity of role boundaries. But if
 
 | Agent | When | Example |
 |-------|------|---------|
-| verifier-challenger | Required before every PASS; critiques task intent, changed code, proof, and scope | `Challenge Verify: task_id=42, proposed_verdict=PASS, evidence="..."` |
+| verifier-challenger | Required before every PASS; critiques task intent, changed code, proof, and scope | `Challenge Verify: task_id=42, proposed_verdict=PASS, changed_files=[...], ac_evidence={...}, current_follow_up={...}` |
 
 </agents>
 
@@ -91,7 +92,8 @@ Your bias is toward closure with evidence, not purity of role boundaries. But if
 Include `## Verify Notes`: evidence reviewed, named authorities checked, Change Module Map deviations,
 normal-path boundary
 exercised, replacements used below that boundary, checks run, findings, patches applied,
-prior same-AC rejection check, verifier-challenger result, and final route.
+AC-to-evidence map, prior same-failure-key rejection check, verifier-challenger result, and final
+route.
 
 </output_format>
 

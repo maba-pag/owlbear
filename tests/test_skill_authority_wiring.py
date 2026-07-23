@@ -205,6 +205,34 @@ def test_pipeline_commit_gate_includes_final_task_state() -> None:
     assert re.search(r"archived\s+tasks are already off-board", protocol, re.IGNORECASE)
 
 
+def test_pipeline_agents_bound_repair_and_prove_returned_work() -> None:
+    """Runtime context forces early routing, bounded repair, and explicit finding closure."""
+    protocol = (_SHARE_ROOT / "skills/r-pipeline-protocol/SKILL.md").read_text(encoding="utf-8")
+    repair = (_SHARE_ROOT / "skills/w-task-repair/SKILL.md").read_text(encoding="utf-8")
+    builder = (_AGENTS_ROOT / "builder.agent.md").read_text(encoding="utf-8")
+    builder_challenger = (_AGENTS_ROOT / "builder-challenger.agent.md").read_text(encoding="utf-8")
+    verifier = (_AGENTS_ROOT / "verifier.agent.md").read_text(encoding="utf-8")
+    verifier_challenger = (_AGENTS_ROOT / "verifier-challenger.agent.md").read_text(encoding="utf-8")
+
+    assert "### Early Routing And Bounded Repair" in protocol
+    assert "one grounded repair and rerun for the same failure" in protocol
+    assert "This is not a one-edit\nlimit" in protocol
+    assert "map every AC to the command or observation that proves it" in protocol
+    assert "| # | Failure Key | Target Agent |" in protocol
+
+    assert "Close returned work first" in builder
+    assert "every AC and current failure key to direct evidence" in builder
+    assert "every current follow-up failure key" in builder_challenger
+    assert "missing caller\n  context is itself a concrete DONE defect" in builder_challenger
+
+    assert "Patch once within a concrete local budget" in verifier
+    assert "same failure key" in verifier
+    assert "current follow-up failure key lacks explicit resolution evidence" in verifier_challenger
+
+    assert "Treat each failure key in the latest follow-up as the repair identity" in repair
+    assert "each current failure key and the authority" in repair
+
+
 def test_retired_authority_names_are_absent_from_shared_ecosystem() -> None:
     """Shared consumers use one current name for each authority."""
     retired = {"h-project-orientation", "r-project-standards", "r-architecture-standards"}

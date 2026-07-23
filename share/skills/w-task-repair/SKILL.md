@@ -31,6 +31,11 @@ every existing task before the first write. Read each latest `### Required Follo
 section that produced it. Read earlier Shape, Builder, Verify, and Collect Notes only as needed to
 understand the current route and avoid reviving superseded instructions.
 
+Treat each failure key in the latest follow-up as the repair identity. Preserve the key while
+diagnosing and repairing it; wording changes do not make the defect new. A task cannot leave shape
+until Shape Notes name how each current key was resolved or why the corrected route no longer
+requires it.
+
 Treat downstream findings as evidence, not infallible authority. Check a narrow source or board fact
 when it can cheaply disconfirm the requested repair.
 
@@ -92,6 +97,7 @@ Append `## Shape Notes` through the task lifecycle operation. Include:
 - rejection source and repair classification;
 - facts checked and any contradiction resolved;
 - exact task, dependency, AC, or status changes;
+- each current failure key and the authority, contract, or route change that resolves it;
 - user decision and planning-artifact revisions when material escalation occurred;
 - resulting route and board audit.
 
