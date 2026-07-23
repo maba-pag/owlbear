@@ -4,7 +4,7 @@ title: 'P3-04: Record claims and immutable attempts'
 status: collect
 priority: high
 created: 2026-07-22T21:58:44.211108+02:00
-updated: 2026-07-23T18:16:46.717539+02:00
+updated: 2026-07-23T23:12:58.633807+02:00
 tags:
   - phase-3
   - scope:core
@@ -244,3 +244,43 @@ Eleven leaves exceed the preferred range because selector/issuance schema, repos
 - Graph: eleven leaves; added #2020 (`DN-003-PK-004-K`) after #2015, and #2016 now consumes #2020. Parent dependency and ownership/scenario maps were updated.
 - Availability: #2014/#2015/#2020/#2016 respectively own local currentness, typed impact closure, Git currency, and predecessor/explicit-supersession closure. #2004 alone owns assembled finish and receipt issuance.
 - Remaining separate gaps: #2012/#2013 shared OCC authority and #2017-#2019 lifecycle result/expiry contracts are not certified ready by this repair. Aggregate remains `collect`.
+
+[[2026-07-23T23:05:31+02:00]]
+## Operative Connected OCC Map Correction
+
+This correction supersedes earlier parent-map rows that say task #2012 consumes `jobs.py` without an ownership change. Record/schema/OCC-token authority remains in `jobs.py`; only the storage lock mechanism changes.
+
+### Change Module Map Delta
+
+| Module | Planned change | Owning tasks |
+|---|---|---|
+| `serve/kanban/src/owlbear_kanban/storage_io.py` | Add `locked_roots(roots)` with descriptor-backed no-follow opens, canonical deduplication/order, shared `.storage.lock` identity, and partial-acquisition cleanup | #2012 |
+| `serve/kanban/src/owlbear_kanban/jobs.py` | Preserve job record serialization and `ERR_JOB_OCC_STALE`; replace private `.jobs.lock` acquisition with the shared storage-root lock | #2012 for lock migration; #2017-#2019 consume through #2013 |
+| `serve/kanban/src/owlbear_kanban/runtime_transaction.py` | Hold the same manifest/participant-root locks across prepare, replacement compare/publish, recovery, and cleanup | #2012; #2013 consumes for mixed plans |
+| `serve/kanban/src/owlbear_kanban/native_runtime.py` | Guarded start, owner release/failure, and expiry recovery facade; no lock primitive ownership | #2017, #2018, #2019 |
+
+### Dependency Closure Map Delta
+
+No edge changes are required. Task #2013 depends on #2012; task #2017 depends on #2013 and #2016; tasks #2018 and #2019 remain downstream of #2017. Therefore #2017 through #2019 cannot dispatch before #2012's shared-lock migration and #2013's mixed-plan composition are archived completed. At correction time #2017 through #2019 are unclaimed and dependency-blocked.
+
+### Scenario Closure Map Delta
+
+| Task | Added finite scenario axis |
+|---|---|
+| #2012 | canonical duplicate/multi-root acquisition; symlink root and lock rejection; partial-acquisition cleanup; controlled JobStore-first and transaction-first replacement contention with stable loser codes and preserved winner bytes |
+| #2013 | mixed job/attempt complete-pair recovery, rival pair exclusion, and replay while consuming #2012's shared root lock |
+| #2017-#2019 | lifecycle scenarios remain unchanged and consume the archived mixed transaction boundary; no direct lock-helper proof |
+
+### Collision Audit
+
+The connected repair owns planning records #2003 and #2012. Product-file collision is prevented by existing dependency edges rather than new sibling dependencies: #2013 and #2017 through #2019 remain blocked until their prerequisites archive. Unrelated `atomic_write` consumers do not write the JobStore-owned destination in #2012's proof and are outside this packet correction.
+
+[[2026-07-23T23:12:58+02:00]]
+## Shape Notes
+- Connected repair set: #2003 and #2012. Parent mutation was required after challenge found that #2012's shared-lock repair contradicted the older parent maps.
+- Classification: local connected planning repair under accepted architecture, not a material product decision. Design section 13 already assigns locks, containment, and fsync to `storage_io.py`; `REQ-016` requires concurrency-safe recoverable transactions.
+- Parent changes: appended the Operative Connected OCC Map Correction. `storage_io.py` now owns `locked_roots`; #2012 owns the private-to-shared lock migration in `jobs.py` and shared-lock consumption in `runtime_transaction.py`; job record/OCC-token authority remains in `jobs.py`; #2013 retains mixed job/attempt pair semantics; #2017 through #2019 retain lifecycle facade ownership.
+- Dependency audit: no edge changes. #2013 depends on #2012, #2017 depends on #2013 and #2016, and #2018/#2019 remain downstream. Live board evidence showed #2017 through #2019 unclaimed and dependency-blocked, so no in-flight file collision exists.
+- Scenario correction: parent map now names canonical duplicate/multi-root lock acquisition, symlink root/lock rejection, partial-acquisition cleanup, controlled JobStore-first conflict, and controlled transaction-first stale OCC. #2013's complete-pair/rival-event/replay axis remains separate.
+- Challenger chain: task-local shared-lock boundary and controlled ordering were added after the first challenge; parent maps were corrected after the second; binding AC-2 and AC-3 were split to require both writer orderings after the connected challenge. Final connected shaper-challenger decision: pass.
+- Route: parent stays in `collect`, released and still dependency-blocked on unfinished children. #2012 separately advances to `build` after this parent record is committed.
