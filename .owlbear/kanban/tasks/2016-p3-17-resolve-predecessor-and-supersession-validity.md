@@ -1,10 +1,10 @@
 ---
 id: 2016
 title: 'P3-17: Resolve predecessor and explicit supersession validity'
-status: verify
+status: collect
 priority: high
 created: 2026-07-23T14:41:23.761134+02:00
-updated: 2026-07-23T22:20:36.718602+02:00
+updated: 2026-07-23T22:23:15.007640+02:00
 tags:
   - phase-3
   - scope:core
@@ -90,3 +90,16 @@ Exercise the public evaluator over a finite receipt graph containing a current c
 - Current failure keys: none on entry. Focused proof found stale predecessor identity initially returned a lower-layer node ID; repaired to return the blocking predecessor receipt ID, then the focused suite passed.
 - Builder challenger: pass. It reran the focused complete-currentness/immutability selection (2 passed) and found no blockers.
 - Follow-up risks: none identified within scope.
+
+[[2026-07-23T22:23:15+02:00]]
+## Verify Notes
+- Evidence reviewed: Builder Notes; `ReceiptStore.evaluate_currentness()` in `serve/kanban/src/owlbear_kanban/receipt.py`; the finite receipt graph in `serve/kanban/tests/test_change_receipts.py`; and the committed builder change `c6311e6f7`.
+- Named authorities checked: `REQ-009`, `NEG-002`, `NEG-010`, `IF-003`, `RISK-003`, and `PROOF-003` in `.owlbear/changes/replace-delivery-pipeline/graph.yaml`; design section 4.3.3 in `.owlbear/changes/replace-delivery-pipeline/design.md`. The implementation evaluates authored predecessor order with per-call memoization, derives supersession only from explicit `invalidated_receipt_ids`, does not use receipt ID or `issued_at` as ordering authority, and returns required stable codes with blocking receipt identity.
+- Change Module Map: no deviation. The mapped `ReceiptStore` owns complete projection; existing local and code-currentness evaluators remain lower-layer owners. No public contract or unrelated module was changed.
+- Normal-path boundary exercised: the public `ReceiptStore.evaluate_currentness()` was run over a real temporary receipt store. The test replaces only the lower `RepositoryHistory` adapter, an allowed proof replacement below the receipt-currentness boundary.
+- Checks run: `uv run pytest serve/kanban/tests/test_change_receipts.py -q` (57 passed); `uv run ruff check serve/kanban/src/owlbear_kanban/receipt.py serve/kanban/tests/test_change_receipts.py` (passed); `git diff --check` for the mapped source/test paths (clean).
+- Findings: none. The graph test proves AC-1 with current and shared-predecessor chains; AC-2 with missing, stale, cyclic, and explicitly superseded receipts and their blocking IDs; AC-3 with repeated projection equality and unchanged receipt bytes.
+- Patches applied: none.
+- Prior same-failure-key rejection check: no earlier `## Verify Notes` or verifier rejection exists for this task.
+- Verifier challenger: pass. It confirmed authority alignment, public-boundary coverage, proportional scope, and no unresolved AC or follow-up.
+- Final route: PASS to collect.
