@@ -1,10 +1,10 @@
 ---
 id: 2015
 title: 'P3-16A: Define and freeze receipt impact closures'
-status: verify
+status: build
 priority: high
 created: 2026-07-23T14:41:09.745275+02:00
-updated: 2026-07-23T21:44:46.182100+02:00
+updated: 2026-07-23T21:47:01.111917+02:00
 tags:
   - phase-3
   - scope:core
@@ -218,3 +218,24 @@ Use the public parser, `evaluate_receipt_currentness`, and `ReceiptStore.create`
 - Current failure-key resolution: `AC-1/stable-id-validation` is closed by canonical syntax enforcement in `parse_impact_closure` and declaration lookup through `ChangeRevision.resolve` in `evaluate_receipt_currentness` and `ReceiptStore` before publication.
 - Builder-challenger result: pass. It reviewed the changed files, reran the focused receipt suite (55 passed), and confirmed Ruff checks with no blockers.
 - Follow-up risks: none in this task. Packet-to-closure assembly remains with task #2004 and Git-history currentness remains with task #2020.
+
+[[2026-07-23T21:47:01+02:00]]
+## Verify Notes
+
+- Evidence reviewed: the operative Stable-ID Repair Amendment; AC-1 through AC-7; the earlier stable-ID failure key and reshape; Builder Notes; commit `a733c2443`; the receipt source and focused test suite.
+- Named authorities checked: `serve/kanban/src/owlbear_kanban/change.py` defines canonical `StableId` syntax as `(REQ|NEG|KEEP|DEC|WF|MOD|IF|MIG|RISK|PROOF|DN)-NNN`; `receipt.py` now validates that syntax in `parse_impact_closure` and uses `ChangeRevision.resolve` for revision-aware membership.
+- Change Module Map: no deviation. The commit is restricted to the mapped receipt owner and focused receipt tests; `change.py` remains syntax authority, while issuance assembly and Git-history currentness remain outside scope.
+- Normal-path boundary exercised: `cd serve/kanban && uv run pytest tests/test_change_receipts.py -q` passed 55 tests. The public parser, receipt parsing, revision currentness, store creation/read, and conflict behavior execute at the actual receipt boundary; replacements stay below it.
+- Checks run: focused pytest passed 55 tests; `uv run ruff check src/owlbear_kanban/receipt.py tests/test_change_receipts.py` passed; `uv run ruff format --check src/owlbear_kanban/receipt.py tests/test_change_receipts.py` reported both files formatted; `git diff --check HEAD~1..HEAD` passed.
+- AC-to-evidence: AC-1 parser syntax test; AC-2 declared-set membership test; AC-3 parser diagnostic test; AC-4 currentness membership test; AC-5 pre-publication store rejection test; AC-7 conflict byte-preservation/no-temp test. AC-6 has partial evidence only: persisted tuple immutability is asserted, but the store path is not shown to preserve sorted/deduplicated closures.
+- Finding: AC-6 requires successful `ReceiptStore.create` followed by `read` to return canonical tuple-sorted impact-closure paths and authority targets. Existing store roundtrip uses a single path and target, so it proves tuple immutability but cannot prove sorting or deduplication after serialization.
+- Patch applied: none. Adding the missing durable regression exceeds the verifier local patch-pass budget.
+- Prior same-failure-key rejection check: the prior `AC-1/stable-id-validation` failure was reshaped and is closed by the current implementation. This is a new AC-6 proof gap, so rejection to build is permitted.
+- Verifier-challenger: fail. It independently identified the missing multi-value store roundtrip evidence.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|---|---|---|---|
+| 1 | builder | Extend an existing successful `ReceiptStore.create` then `read` roundtrip with unsorted duplicate paths and authority targets; assert returned paths and targets are immutable tuples, deduplicated, and tuple-sorted. | `serve/kanban/tests/test_change_receipts.py` | AC-6; public store boundary |
+
+- Final route: REJECT to build.
