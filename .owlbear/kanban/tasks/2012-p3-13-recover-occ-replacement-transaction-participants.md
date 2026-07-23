@@ -1,10 +1,10 @@
 ---
 id: 2012
 title: 'P3-13: Recover OCC replacement transaction participants'
-status: verify
+status: collect
 priority: high
 created: 2026-07-23T14:40:46.644783+02:00
-updated: 2026-07-23T23:19:02.424196+02:00
+updated: 2026-07-23T23:22:17.473058+02:00
 tags:
   - phase-3
   - scope:core
@@ -171,3 +171,16 @@ Existing `atomic_write` consumers outside `JobStore` and `RuntimeTransaction` ar
 - Current failure-key resolution: verifier TOCTOU finding is resolved because JobStore writes and replacement compare/publish now hold the same participant-root lock.
 - Builder challenger: pass; independently reran the two focused suites (36 passed) and found no blockers.
 - Follow-up risks: none within scope; mixed job/event process races remain explicitly out of scope.
+
+[[2026-07-23T23:22:17+02:00]]
+## Verify Notes
+- Evidence reviewed: Builder Notes, prior verifier rejection and operative repair sections, and AC-1 through AC-6. The corrected change module map owns `storage_io.py`, `jobs.py`, `runtime_transaction.py`, and the focused transaction boundary tests; actual commit `8fb18b7bbb89cbe86096a0dd632e8657db458ec2` matches it with no deviation.
+- Named authorities checked: the Operative Cross-Writer OCC Repair Amendment, Challenger Correction: Executable Lock Boundary, and Shape Notes supersede the earlier narrower envelope. `locked_roots` now provides the required common root lock while `JobStore` retains job/OCC ownership and `RuntimeTransaction` retains manifest/recovery ownership.
+- Normal-path boundary exercised: public `JobStore.update()` and `RuntimeTransaction.commit()` are run under both controlled shared-lock interleavings; transaction commit/recover_all cover replacement/replay, all interruption phases, manifest validation, and containment. Test instrumentation only pauses the shared lower-level lock context.
+- Checks run: `uv run pytest serve/kanban/tests/test_runtime_transaction.py` (14 passed); `uv run pytest serve/kanban/tests/test_jobs.py serve/kanban/tests/test_runtime_transaction.py` (36 passed); `uv run ruff check` on the four mapped files (passed); `uv run ruff format --check` on the same files (4 already formatted); `git diff --check HEAD` on the same files (passed).
+- AC-to-evidence: AC-1 uses the symlink-root/lock-file test plus `locked_roots` source inspection for canonical deduplication, order, descriptor locking, and partial cleanup. AC-2 and AC-3 use the two public JobStore/RuntimeTransaction lock-order tests. AC-4 uses replacement/replay and conflict coverage. AC-5 uses parameterized interruption stages with repeat recovery. AC-6 uses malformed, digest-altered, and unsafe-root recovery cases.
+- Prior same-failure-key rejection check: the earlier `AC-1/cross-writer-occ` TOCTOU rejection is resolved. Both writers hold the same participant-root lock across comparison and publication; the two reverse-order boundary tests prove the expected conflict/stale outcomes and final bytes.
+- Patches applied: none.
+- Memory assessment: 5 recalled entries assessed; relevant scope/proof guidance was applied.
+- Verifier challenger: pass. It confirmed AC coverage, shared-lock ownership, resolved TOCTOU risk, and no scope drift.
+- Final route: pass to collect.
