@@ -1,10 +1,10 @@
 ---
 id: 2020
 title: 'P3-16B: Classify receipt code-revision currency'
-status: collect
+status: archived
 priority: high
 created: 2026-07-23T17:39:16.311514+02:00
-updated: 2026-07-23T22:11:56.460912+02:00
+updated: 2026-07-23T22:12:48.896576+02:00
 tags:
   - phase-3
   - scope:core
@@ -39,7 +39,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -89,3 +89,15 @@ Exercise the public evaluator over a bounded temporary Git history containing ex
 - Verifier-challenger: pass; it found all ACs directly evidenced, source aligned with design section 4.3.2 and `DEC-021`, and no scope drift.
 - Final route: PASS to collect.
 
+[[2026-07-23T22:12:48+02:00]]
+## Collect Notes
+- Classification: leaf.
+- Latest leaf verification evidence: the newest `## Verify Notes` records PASS, verifier-challenger pass, and focused normal-path proof `uv run pytest serve/kanban/tests/test_change_receipts.py -q` with 56 tests passed at builder commit `f250642d1`; checks also recorded ruff check, ruff format check, and diff check passing.
+- Aggregate intent source: not applicable; this is an ordinary leaf task.
+- Invariant map coverage: AC-1 through AC-5 are each mapped in the latest Verify Notes to exact revision fast path; descendant rename/copy-aware disjoint history; missing and non-descendant codes; file/tree stale intersection; and fail-closed malformed, undecodable, unsafe, or unavailable history.
+- Child coverage: `list_tasks(parent=2020)` returned no child tasks.
+- Parent dependency-gate check: not applicable for a leaf.
+- Child completion/archive summary: not applicable.
+- Tested commit and normal-path proof: `f250642d1`; task-local receipt suite passed with 56 tests, explicitly exercising the public evaluator against bounded Git histories.
+- Residual decisions: `list_requests` returned no pending or resolved structured requests for this task; latest Verify Notes has no required follow-up.
+- Archive rationale: verifier PASS is current and all leaf closure conditions are satisfied.
