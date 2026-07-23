@@ -1,10 +1,10 @@
 ---
 id: 2008
 title: 'P3-09: Define and persist native evidence records'
-status: build
+status: shape
 priority: high
 created: 2026-07-23T02:23:31.452855+02:00
-updated: 2026-07-23T02:23:31.452855+02:00
+updated: 2026-07-23T02:34:43.637751+02:00
 tags:
   - phase-3
   - scope:core
@@ -67,3 +67,15 @@ Public immutable evidence creation returns the existing record on byte-equivalen
 Resolve behavior from `REQ-008`, `REQ-009`, `REQ-016`, `IF-003`, `KEEP-007`, design sections 2, 3.5, 7.2, 10, and 13, and packet `DN-003-PK-001`. Finding target kinds are requirements, interfaces, migrations, risks, workflows, delivery nodes, packets, proofs, receipts, and code revisions. Finding classes are `implementation-defect`, `unforeseeable-discovery`, `planning-omission`, and `scope-change`.
 
 Proof guidance: exercise public parser round trips and public store APIs over temporary explicit change and work roots for replay, malformed-entry listing, containment, no-overwrite, deterministic order, and durable readback; run the focused check plus a downstream-impact scan.
+
+[[2026-07-23T02:34:43+02:00]]
+## Builder Notes
+- Change envelope: add a cohesive native evidence owner for immutable work-root attempt events/findings and a public `ReceiptStore.list` only; preserve canonical receipt storage under the loaded `ChangeRevision` and exclude job OCC, lifecycle predicates, MCP, and Cockpit.
+- Files changed: none.
+- Change Module Map deviations: none; source supports `receipt.py` as the canonical receipt owner and a new `owlbear_kanban` evidence owner for work-root storage.
+- Rejection: the shaped authority requires an unsupported attempt-event literal to produce a stable diagnostic, but does not define the design-enumerated supported `event_kind` set. The named design sections/REQs are absent from the workspace: exact repository search found no admitted change artifact, only unrelated historical fixtures. Creating a literal set would invent a public versioned contract.
+- Proof selected: no implementation proof because the acceptance contract is under-specified before any edit.
+- Commands run: `rg -l -i 'attempt-event|implementation-defect|work-root|work root' . --glob '!**/.git/**'`; focused source reads of `receipt.py`, `jobs.py`, `test_change_receipts.py`, `change.py`, and the completed packet 2000 notes; `git status --short && git log --oneline -8`.
+- Builder-challenger result: not run; a DONE verdict was not proposed.
+- Follow-up required: shape must attach or restore the admitted design authority and enumerate allowed `event_kind` values (and any corresponding parser diagnostic codes), then return the task to build.
+
