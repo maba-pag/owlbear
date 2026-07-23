@@ -1,10 +1,10 @@
 ---
 id: 2010
 title: 'P3-11: Define immutable attempt event contracts'
-status: verify
+status: collect
 priority: high
 created: 2026-07-23T14:40:14.905119+02:00
-updated: 2026-07-23T15:24:29.529377+02:00
+updated: 2026-07-23T15:26:19.965588+02:00
 tags:
   - phase-3
   - scope:core
@@ -87,3 +87,16 @@ Exercise the public parser and serializer directly with a finite accepted/invali
 - Commands run: `uv run --project /Users/markus/Projects/owlbear-dev pytest serve/kanban/tests/test_attempts.py` (13 passed); `uv run --project /Users/markus/Projects/owlbear-dev ruff check serve/kanban/src/owlbear_kanban/attempts.py serve/kanban/src/owlbear_kanban/__init__.py serve/kanban/tests/test_attempts.py` (all checks passed); `uv run --project /Users/markus/Projects/owlbear-dev ruff format --check serve/kanban/src/owlbear_kanban/attempts.py serve/kanban/src/owlbear_kanban/__init__.py serve/kanban/tests/test_attempts.py` (3 files already formatted); scoped `git diff --check` (clean).
 - Builder challenger: pass; no concrete blockers. It independently ran the focused test, lint, format, and diff checks and found the change narrow and the durable test justified.
 - Follow-up risks: none within this contract scope.
+
+[[2026-07-23T15:26:19+02:00]]
+## Verify Notes
+- Evidence reviewed: AC-1 through AC-3; both Builder Notes; committed implementation at `b3f3e9b07`; public exports; and the focused mapping-table proof.
+- Named authorities checked: `REQ-008`, `REQ-009`, and `IF-003` in `.owlbear/changes/replace-delivery-pipeline/graph.yaml`; design sections 2.2, 2.3, 7.2, 13, and 14; and accepted `DEC-007` and `DEC-009`. The immutable operational-event contract agrees with the work/evidence planes and purpose-specific job model.
+- Change Module Map: no deviation. The contract remains isolated to `attempts.py`, its package export surface, and the focused test; storage and lifecycle remain untouched.
+- Normal-path boundary exercised: public `serialize_attempt_event_mapping` followed by public `parse_attempt_event_mapping` across exactly `started`, `released`, `failed`, `crashed`, and `succeeded`; no store, lifecycle, or injected substitute was used.
+- Checks run: `uv run --project /Users/markus/Projects/owlbear-dev pytest serve/kanban/tests/test_attempts.py` passed (13 passed); Ruff check passed; Ruff format check reported 3 files already formatted; `git diff --check` was clean; VS Code diagnostics found no errors in the three touched files.
+- Findings: none. The parser preserves the required immutable record fields and returns stable diagnostics for unknown fields, malformed identities/references, non-positive sequences, unsupported kinds, and a missing required reference. Public serialization now round-trips through the public parser.
+- Patches applied: none.
+- Prior same-AC rejection check: one earlier AC-3 rejection required the missing public serializer. Builder resolved it in commit `b3f3e9b07`; the focused proof now calls the exported serializer before parsing. No repeated unresolved failure family remains.
+- Verifier-challenger: pass. It confirmed AC coverage, public-boundary proof sufficiency, authority alignment, and no scope drift.
+- Final route: PASS to collect.
