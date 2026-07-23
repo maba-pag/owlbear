@@ -1,10 +1,10 @@
 ---
 id: 2009
 title: 'P3-10: Persist native jobs with OCC'
-status: verify
+status: collect
 priority: high
 created: 2026-07-23T02:23:45.208534+02:00
-updated: 2026-07-23T02:43:21.380014+02:00
+updated: 2026-07-23T02:45:35.831963+02:00
 tags:
   - phase-3
   - scope:core
@@ -73,3 +73,15 @@ Proof guidance: exercise public job-store APIs over a temporary explicit work ro
 - Commands run: `uv run pytest serve/kanban/tests/test_jobs.py` (22 passed); `uv run ruff check serve/kanban/src/owlbear_kanban/jobs.py serve/kanban/src/owlbear_kanban/__init__.py serve/kanban/tests/test_jobs.py` (passed); `uv run ruff format --check` over the same files (passed).
 - Builder-challenger result: pass. It identified an initial partial-materialization conflict risk; repaired by preflighting every generation record under the lock before any write, with a regression test proving a later conflict leaves no earlier record created.
 - Follow-up risks: lifecycle/transaction coordination is intentionally outside this packet; the store provides the contained primitive for later owners.
+
+[[2026-07-23T02:45:35+02:00]]
+## Verify Notes
+- Evidence reviewed: Builder commit `f6550b0ed` changes only the shaped `JobStore` owner, its public package exports, direct durable tests, and the task record. No local verifier patch was needed.
+- Named authorities checked: the historical admission graph authoritative for this bootstrap task ties DN-003 / IF-003 to REQ-016 atomic/concurrency-safe work transactions, KEEP-007 containment/atomic-write preservation, and RISK-002 concurrent-writer corruption. The task correctly limits this packet to a contained job-store primitive rather than claiming full PROOF-003.
+- Change Module Map: no deviation. `jobs.py` owns behavior; `__init__.py` exports the public types; `test_jobs.py` exercises its public filesystem boundary.
+- Normal-path boundary: real temporary explicit work roots exercise materialization/replay/conflict preflight, deterministic active/archive persistence and readback, OCC update/archive moves, stale-token rejection, two forked processes sharing one token, and symlink substitution. Replacements occur only beneath the public store boundary.
+- Checks run: `uv run pytest serve/kanban/tests/test_jobs.py` (22 passed); `uv run ruff check serve/kanban/src/owlbear_kanban/jobs.py serve/kanban/src/owlbear_kanban/__init__.py serve/kanban/tests/test_jobs.py` (passed); `uv run ruff format --check serve/kanban/src/owlbear_kanban/jobs.py serve/kanban/src/owlbear_kanban/__init__.py serve/kanban/tests/test_jobs.py` (passed); `git show --check HEAD` (clean).
+- Findings: none. Public `JobStore` implements descriptor-relative no-follow paths, no-overwrite materialization with complete preflight, immutable content-derived OCC tokens, serialized atomic updates/archive moves, and fsync-backed durable records.
+- Patches applied: none.
+- Verifier-challenger: pass; it confirmed AC coverage, proof sufficiency, and no scope drift.
+- Final route: PASS to collect.
