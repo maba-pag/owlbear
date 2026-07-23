@@ -1,10 +1,10 @@
 ---
 id: 2002
 title: 'P3-03: Commit and recover runtime transactions'
-status: build
+status: verify
 priority: high
 created: 2026-07-22T21:58:33.866396+02:00
-updated: 2026-07-23T12:03:05.815668+02:00
+updated: 2026-07-23T12:06:19.201897+02:00
 tags:
   - phase-3
   - scope:core
@@ -144,3 +144,13 @@ Proof guidance: exercise public admission plus the reusable transaction boundary
 
 - Verifier-challenger: not called because this task is rejected, not proposed for PASS.
 - Final route: REJECT to build.
+
+[[2026-07-23T12:06:19+02:00]]
+## Builder Notes
+- Change envelope: reusable bounded-participant transaction recovery plus public admission receipt and initial shape-job recovery at runtime open. Legacy engine/storage and downstream lifecycle/request/invalidation semantics remain untouched.
+- Files changed: no new source edits in this invocation. Adopted and validated the task-owned committed implementation: `serve/kanban/src/owlbear_kanban/change.py`, `serve/kanban/src/owlbear_kanban/runtime_transaction.py`, `serve/kanban/src/owlbear_kanban/admission_transaction.py`, and `serve/kanban/tests/test_admission_transaction.py`.
+- Change Module Map deviations: none. `load_change` is the runtime-open boundary and invokes generic pending-manifest recovery before returning a readable revision.
+- Proof selected: the existing durable public recovery test injects failure after the first admission participant publication, reopens through `load_change`, and proves receipt plus job visibility and manifest cleanup. It earns its maintenance cost because incomplete durable publication is shared data-integrity behavior that is difficult to inspect manually.
+- Commands run: `uv run pytest serve/kanban/tests/test_admission_transaction.py` (1 passed); `uv run pytest serve/kanban/tests/test_admission.py serve/kanban/tests/test_admission_transaction.py serve/kanban/tests/test_change_receipts.py serve/kanban/tests/test_jobs.py` (71 passed); `uv run ruff check` and `uv run ruff format --check` on the four mapped files (passed); `git diff --check` (passed).
+- Builder-challenger result: pass; no blockers. It confirmed that the public reopen test covers the stated after-first-publication recovery risk.
+- Follow-up risks: none within this task's recovery scope; later lifecycle owners remain responsible for supplying their own participant plans when they use the generic kernel.
