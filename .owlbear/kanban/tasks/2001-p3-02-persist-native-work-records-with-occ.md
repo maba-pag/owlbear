@@ -1,10 +1,10 @@
 ---
 id: 2001
 title: 'P3-02: Persist native work records with OCC'
-status: shape
+status: collect
 priority: high
 created: 2026-07-22T21:58:20.087459+02:00
-updated: 2026-07-23T02:47:33.802662+02:00
+updated: 2026-07-23T03:15:39.248559+02:00
 tags:
   - phase-3
   - scope:core
@@ -25,13 +25,14 @@ ac:
     are archived as completed and their latest Verify Notes prove the public store
     boundaries over explicit temporary roots; verify child statuses, evidence, and
     parent links through Kanban queries.'
-  - 'AC-2: Collector confirms task 2008 keeps canonical receipt bytes only in the
-    loaded change revision and task 2009 keeps active/archive records only in the
-    work root; verify child public-boundary proof and changed-module records against
-    design sections 2, 3.5, 7.1, 7.2, and 13.'
+  - 'AC-2: Collector confirms task 2008 keeps findings only in the work root and canonical
+    receipt bytes only in the loaded change revision, while task 2009 keeps active/archive
+    job records only in the work root; verify child public-boundary proof and changed-module
+    records against design sections 2, 3.5, 7.1, 10, and 13.'
   - 'AC-3: Collector confirms task 2002 still depends on this aggregate and neither
-    child implements cross-record transaction recovery or lifecycle predicates; verify
-    dependency fields and child Scope sections before archive.'
+    child implements cross-record transaction recovery, attempt contracts or storage,
+    or lifecycle predicates; verify dependency fields and child Scope sections before
+    archive.'
 proof_bundle: existing+challenge
 blocked: false
 block_reason:
@@ -46,20 +47,20 @@ archival_refs: []
 - `packet_id`: `DN-003-PK-002`
 
 ## Outcome
-Canonical immutable evidence storage and OCC-protected active/archive job storage together provide the contained single-record persistence foundation required by later runtime transactions and lifecycle operations.
+Canonical immutable finding storage and receipt listing plus OCC-protected active/archive job storage provide the contained single-record persistence foundation required by later runtime transactions and lifecycle operations.
 
 ## Scope
-This is an aggregate task with no direct implementation work. Child task 2008 owns attempt-event and finding contracts, immutable work-evidence storage, and canonical `ReceiptStore.list`. Child task 2009 owns job materialization, active/archive storage, and OCC.
+This is an aggregate task with no direct implementation work. Child task 2008 owns immutable finding contracts, contained finding storage, and canonical `ReceiptStore.list`. Completed child task 2009 owns job materialization, active/archive storage, and OCC.
 
-Out of scope: cross-record transactions and recovery, owned by task 2002; claim and attempt lifecycle behavior, owned by task 2003; purpose-specific completion and receipt validity, owned by task 2004; requests, invalidation, dispatch, proof checkout, MCP, Cockpit, and live workspace data creation.
+Out of scope: all attempt contracts, attempt storage, and claim/lifecycle behavior, owned by task 2003; cross-record transactions and recovery, owned by task 2002; purpose-specific completion and receipt validity, owned by task 2004; requests, invalidation, dispatch, proof checkout, MCP, Cockpit, and live workspace data creation.
 
 ## Current Foundation And Ownership
-Task 2000 supplies native job-reference and receipt contracts but no native attempt-event or finding record contracts. Tasks 2008 and 2009 deepen that foundation through separate immutable-evidence and mutable-OCC store boundaries. This aggregate preserves task 1979's approved ownership of contained work stores and remains the dependency gate for task 2002.
+Task 2000 supplies native job-reference, finding-reference, and receipt contracts. Tasks 2008 and 2009 deepen that foundation through separate immutable-finding and mutable-OCC store boundaries. This aggregate preserves task 1979's approved ownership of contained work stores and remains the dependency gate for task 2002. Attempt history is not part of this aggregate.
 
 ## Authority
-Resolve aggregate completion from `REQ-008`, `REQ-009`, `REQ-016`, `IF-003`, `KEEP-007`, `RISK-002`, design sections 2, 3.5, 7.1, 7.2, 10, and 13, and the child task contracts.
+Resolve aggregate completion from `REQ-008`, `REQ-016`, `IF-003`, `KEEP-007`, `RISK-002`, design sections 2, 3.5, 7.1, 10, and 13, and the child task contracts under `.owlbear/changes/replace-delivery-pipeline/`.
 
-Proof guidance: no direct executable proof is owned here. Collector inspects child completion, public-boundary evidence, module ownership, parent/dependency links, and the absence of transaction or lifecycle scope in either child.
+Proof guidance: no direct executable proof is owned here. Collector inspects child completion, public-boundary evidence, module ownership, parent and dependency links, canonical receipt placement, and the absence of transaction, attempt, or lifecycle scope in either child.
 
 [[2026-07-23T00:51:49+02:00]]
 ## Builder Notes
@@ -138,3 +139,50 @@ Proof guidance: no direct executable proof is owned here. Collector inspects chi
 - Structured requests: no pending or resolved requests for 2001.
 - Residual decisions: none.
 - Reject rationale: child 2008 must return through build and verify, then archive as completed with Verify Notes and SHA-linked public-boundary proof before this aggregate can close.
+
+[[2026-07-23T03:15:39+02:00]]
+## Shape Notes
+- Source and repair mode: user-approved connected material boundary repair for tasks 2001, 2003, and 2008 after task 2008's builder rejection and this aggregate's collector return.
+- Rejection resolution: the builder's premise that admitted authority was absent was false. `.owlbear/changes/replace-delivery-pipeline/` contains the admitted intent, design, decisions, graph, and receipt. The authority separates operational attempts from durable findings/receipts.
+- User decision: all attempt contracts and attempt storage moved from child 2008 to lifecycle task 2003. This aggregate now gates only child 2008's immutable findings and canonical receipt listing plus completed child 2009's OCC job storage.
+- Planning artifacts: none revised. This task projection now matches existing admitted authority.
+- Interrupted-layer adoption: adopted the unstaged aggregate claim layer from the interrupted invocation; no task-record hunk was staged or conflicted with the repair. All prior Builder, Shape, correction, and Collect history remains preserved.
+
+### Readiness And Authorities
+- Authorities: `REQ-008`, `REQ-016`, `IF-003`, `KEEP-007`, `RISK-002`, design sections 2, 3.5, 7.1, 10, and 13, child contracts, and the admission receipt.
+- Readiness: task 2009 is archived completed with verified `JobStore` proof; task 2008 is returned to build and remains the only incomplete aggregate dependency.
+
+### Change Module Map
+| Owner | Responsibility | Aggregate role |
+|---|---|---|
+| Task 2008 finding owner | Frozen findings and contained finding storage | Incomplete child gate |
+| `receipt.py` through task 2008 | Canonical revision-bound receipt listing | Incomplete child gate |
+| Task 2009 job-store owner | Active/archive job materialization and OCC | Completed child gate |
+| Task 2003 attempt/lifecycle owner | Attempt contracts, storage, and lifecycle | Outside aggregate |
+| Task 2001 | No product files | Child-completion gate for task 2002 |
+
+### Product Invariant Map
+| Invariant | Boundary |
+|---|---|
+| Findings remain immutable work-root evidence | Task 2008 public finding store |
+| Receipt bytes remain only in the loaded change revision | Task 2008 `ReceiptStore.list` proof |
+| Active/archive jobs remain OCC-protected in the work root | Completed task 2009 proof |
+| Attempts and lifecycle do not enter either aggregate child | Task 2003 ownership plus child scope audit |
+| Transactions wait for both persistence children | Task 2002 dependency on this aggregate |
+
+### Product Promise Coverage Map
+| Promise | Coverage |
+|---|---|
+| Typed corrective findings and receipt inspectability | Task 2008 |
+| Contained operational job persistence | Completed task 2009 |
+| Immutable attempt history and lifecycle | Task 2003, outside aggregate |
+| Transactional assembly | Task 2002 after aggregate closure |
+
+### Task And Dependency Changes
+- Replaced stale aggregate Outcome, Scope, ownership, Authority, proof guidance, and AC to remove all attempt ownership.
+- Kept dependencies 2008 and 2009, parent 1979, proof bundle, task count, and all unrelated edges unchanged.
+- Task 2002 still depends on this aggregate; task 2003 still depends on 2002; task 2004 still depends on 2003.
+
+### Challenge And Board Audit
+- `shaper-challenger` decision: pass; full connected graph, authority, readiness, invariant ownership, boundary proof, aggregate closure, and fidelity all met.
+- Release audit: task 2001 returns to `collect`, parent 1979, dependencies 2008 and completed 2009, and remains dependency-blocked only by active task 2008. Task 2002 remains blocked on 2001; parent 1979 and unrelated edges remain unchanged.
