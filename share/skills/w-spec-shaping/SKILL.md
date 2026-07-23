@@ -187,6 +187,8 @@ Before any Kanban task creation or substantial rewrite, all must be true:
 - the staged implementation review is complete;
 - material decisions are resolved and written to their owning artifacts;
 - the reconciled OpenSpec change validates;
+- the `w-task-decomposition` Implementation Availability Gate passes for each load-bearing AC input,
+  result literal, mutation participant, and shared concurrency boundary;
 - the complete draft graph has passed shaper-challenger;
 - the user approved that graph.
 
