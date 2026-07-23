@@ -1,10 +1,10 @@
 ---
 id: 2013
 title: 'P3-14: Serialize mixed job and attempt transactions'
-status: shape
+status: build
 priority: high
 created: 2026-07-23T14:40:53.788290+02:00
-updated: 2026-07-23T23:28:20.147724+02:00
+updated: 2026-07-23T23:35:31.542860+02:00
 tags:
   - phase-3
   - scope:core
@@ -22,14 +22,28 @@ depends_on:
   - 2011
   - 2012
 ac:
-  - 'AC-1: Given a mixed plan containing one replacement `JobRecord` and one immutable
-    attempt event, interruption followed by runtime reopen yields the complete pair
-    or the pre-transaction state, never a strict subset.'
-  - 'AC-2: Given two processes using the same expected job bytes with different attempt
-    events, exactly one process commits its matching job/event pair; the rival receives
-    the stable OCC or conflict outcome and publishes no rival event.'
-  - 'AC-3: Given byte-equivalent replay of a committed mixed plan, the operation returns
-    the existing pair and creates no duplicate event.'
+  - 'AC-1: Given a stored job and its current token, `JobStore.replacement_participant(replacement,
+    expected_token)` returns a `ReplacementTransactionParticipant` for `jobs/{job_id}.yaml`
+    without changing stored bytes; a stale token raises `ERR_JOB_OCC_STALE` and returns
+    no participant.'
+  - 'AC-2: Given an `AttemptEvent` with a safe attempt ID and positive sequence, `AttemptStore.create_participant(event)`
+    returns a `TransactionParticipant` for `attempts/{attempt_id}/{sequence}.json`
+    without creating the event; committing that participant makes `AttemptStore.read`
+    return the input event.'
+  - 'AC-3: Given a `RuntimeTransaction` containing one planned job replacement followed
+    by one planned attempt event, interruption after the first publication followed
+    by `RuntimeTransaction.recover_all` makes `JobStore.read` return the replacement
+    and `AttemptStore.read` return the event, removes the manifest, and leaves no
+    temporary participant file.'
+  - "AC-4: Given two processes with participant tuples planned from the same job token
+    but different replacement records and attempt IDs, one `RuntimeTransaction.commit`
+    succeeds and the rival returns `ERR_TRANSACTION_CONFLICT`; store reads return
+    the successful process's matching job/event pair and the rival attempt ID remains
+    missing."
+  - 'AC-5: Given a committed mixed participant tuple, committing a byte-equivalent
+    tuple again leaves `JobStore.read` and `AttemptStore.read` equal to the committed
+    pair, `AttemptStore.list` contains one matching event, and no transaction manifest
+    remains.'
 proof_bundle: critical+challenge
 blocked: false
 block_reason:
@@ -72,3 +86,38 @@ Exercise a mixed job/event plan over explicit temporary roots. Inject one mixed 
 - New source fact: `RuntimeTransaction` accepts byte participants, but canonical job replacement bytes/path and immutable attempt bytes/path remain private (`jobs._serialized_job`, `attempts._event_content`, and their private path helpers). The current AC terms `runtime reopen`, `stable outcome`, and `the operation` do not name a public mixed-plan construction or observation boundary.
 - Repair needed: define store-owned public participant planning for `JobStore` and `AttemptStore`, keep generic publication/recovery in `RuntimeTransaction`, replace AC with exact commit/recover/read/race/replay observations, and update parent #2003's module/scenario maps.
 - Lifecycle: released unchanged in shape. Restart as connected set #2003 and #2013, claimed in ID order, before the first mutation.
+
+[[2026-07-23T23:29:53+02:00]]
+## Operative Mixed Participant Planning Amendment
+
+This amendment supersedes earlier terms that refer only to a `mixed plan`, `runtime reopen`, `stable outcome`, or `the operation` without naming callable boundaries.
+
+### Public Planning Boundaries
+
+- `JobStore.replacement_participant(replacement, expected_token)` reads the current canonical job bytes for `replacement.job_id`, verifies `expected_token` through existing `JobStore` OCC authority, and returns a `ReplacementTransactionParticipant` rooted at the store work root and `jobs/{job_id}.yaml`. A stale token raises existing `ERR_JOB_OCC_STALE`; planning does not mutate the job.
+- `AttemptStore.create_participant(event)` validates the event identity through the store's existing safe location rule and returns a `TransactionParticipant` rooted at the store work root and `attempts/{attempt_id}/{sequence}.json` with the same canonical bytes consumed by `AttemptStore.create`. Planning does not create the event.
+- `RuntimeTransaction` remains the generic mixed commit and `recover_all` boundary. Task #2013 does not add lifecycle policy or a native-runtime facade.
+
+### Change Module Map
+
+- `serve/kanban/src/owlbear_kanban/jobs.py`: owns job replacement participant planning, canonical stored/replacement bytes, job path, and existing stale-token result.
+- `serve/kanban/src/owlbear_kanban/attempts.py`: owns immutable attempt participant planning, canonical bytes, and safe event path.
+- `serve/kanban/src/owlbear_kanban/runtime_transaction.py`: existing mixed participant commit, shared-lock serialization, manifest recovery, conflict, and cleanup authority; change only if a small generic correction is exposed by the mixed proof.
+- `serve/kanban/tests/test_runtime_transaction.py`: public-boundary proof using real `JobStore`, `AttemptStore`, participant factories, `RuntimeTransaction.commit`, `recover_all`, and store reads.
+- `serve/kanban/tests/test_jobs.py` and `test_attempts.py`: existing store behavior remains regression proof; add durable cases only for concrete factory behavior not exercised by the mixed boundary.
+
+### Scope Boundary
+
+Task #2013 owns participant planning and mixed transaction evidence. Task #2012 retains shared locks and replacement recovery primitives. Tasks #2017 through #2019 consume the resulting mixed boundary for start/finalization/retry policy.
+
+[[2026-07-23T23:35:31+02:00]]
+## Shape Notes
+- Rejection source: the earlier builder stopped because #2012 was in shape. That dependency is now archived completed, but live-source validation exposed a second local gap: canonical job and attempt participant construction was private and the old AC did not name an assembled callable boundary.
+- Repair classification: connected local task repair with parent #2003; no product, architecture, or graph decision changed.
+- Public planning contract: `JobStore.replacement_participant(replacement, expected_token)` creates a non-mutating replacement participant from canonical current/replacement bytes and raises existing `ERR_JOB_OCC_STALE` for a stale token. `AttemptStore.create_participant(event)` creates a non-mutating immutable participant using the store's canonical safe path and bytes. `RuntimeTransaction` remains the generic commit/recover boundary.
+- AC repair: AC-1 proves current/stale job planning and no mutation; AC-2 proves attempt planning plus commit/read; AC-3 proves after-first-publication recovery to both store records with cleanup; AC-4 proves a two-process same-token rival pair yields one success, one `ERR_TRANSACTION_CONFLICT`, and no rival event; AC-5 proves byte-equivalent replay leaves one matching event and no manifest.
+- Change Module Map: `jobs.py` owns job participant planning, `attempts.py` owns attempt participant planning, `runtime_transaction.py` retains generic mixed publication/recovery, and `test_runtime_transaction.py` proves the real assembled boundary. Existing store suites remain regression boundaries.
+- Scope: #2012 retains lock/replacement primitives. #2017 through #2019 retain lifecycle policy and consume this result through existing dependencies.
+- Parent repair: #2003 maps and scenario axes now include participant planning; parent correction committed as `872e95991a834f457ab701766c5c0e8c203147e5`.
+- Challenger: pass. It confirmed existing canonical helpers make both factories buildable, dependency direction creates no cycle, AC use real public boundaries and exact stable codes, and no strict-subset overclaim remains.
+- Route: advance #2013 from shape to build; dependencies #2011 and #2012 are archived completed.
