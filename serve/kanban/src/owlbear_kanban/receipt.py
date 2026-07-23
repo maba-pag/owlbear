@@ -92,7 +92,7 @@ class _ReceiptModel(BaseModel):
 class ReceiptRecord(_ReceiptModel):
     """Common receipt identity plus its kind-specific root payload."""
 
-    schema_version: Literal[1]
+    schema_version: int
     kind: ReceiptKind
     receipt_id: ReceiptId
     change_id: ChangeId
@@ -180,7 +180,7 @@ class ReceiptParseResult(_ReceiptModel):
 
 
 def parse_receipt_mapping(value: Mapping[str, object]) -> ReceiptParseResult:
-    """Parse a version-one receipt and validate purpose-specific evidence links."""
+    """Parse a receipt and validate purpose-specific evidence links."""
     try:
         record = ReceiptRecord.from_mapping(value)
     except (PydanticValidationError, TypeError, ValueError) as exc:
@@ -544,6 +544,13 @@ class ReceiptStore:
         except (PydanticValidationError, TypeError, ValueError) as exc:
             detail = _schema_detail(exc) if isinstance(exc, PydanticValidationError) else "receipt schema is invalid"
             _fail(ReceiptDiagnosticCode.SCHEMA_INVALID, detail, path=path, target=receipt_id)
+        if record.schema_version != 1:
+            _fail(
+                ReceiptDiagnosticCode.SCHEMA_INVALID,
+                "receipt schema version is unsupported",
+                path=path,
+                target=receipt_id,
+            )
         if record.receipt_id != receipt_id:
             _fail(
                 ReceiptDiagnosticCode.ID_MISMATCH,

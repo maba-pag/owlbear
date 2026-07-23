@@ -163,6 +163,16 @@ def test_receipt_currentness_accepts_admission_without_node_plan_or_evidence(tmp
     assert result.current
 
 
+def test_receipt_currentness_rejects_unsupported_schema(tmp_path: Path) -> None:
+    _changes_dir, revision = _load_revision(tmp_path)
+    value = _current_receipt(revision)
+    value["schema_version"] = 2
+    parsed = parse_receipt_mapping(value)
+
+    assert parsed.receipt is not None
+    assert evaluate_receipt_currentness(revision, parsed.receipt).code is ReceiptValidityCode.SCHEMA_UNSUPPORTED
+
+
 def test_receipt_store_round_trips_all_kinds_and_preserves_existing_bytes(tmp_path: Path) -> None:
     _changes_dir, revision = _load_revision(tmp_path)
     store = ReceiptStore(revision)

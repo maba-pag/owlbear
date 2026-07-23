@@ -1,10 +1,10 @@
 ---
 id: 2014
 title: 'P3-15: Evaluate receipt authority and proof currency'
-status: build
+status: verify
 priority: high
 created: 2026-07-23T14:41:02.860272+02:00
-updated: 2026-07-23T16:29:14.919832+02:00
+updated: 2026-07-23T16:31:40.541226+02:00
 tags:
   - phase-3
   - scope:core
@@ -85,3 +85,14 @@ Use a finite evaluator table over receipt kind, schema, target, digest, and proo
 - Patch applied: none. Resolving this requires builder-owned contract alignment: either admit the intended unsupported-schema evaluator input or revise the evaluator/AC boundary to make parsing the supported authority, with focused proof for the selected contract.
 - Verifier-challenger: fail, confirming the AC-2 evaluator-boundary gap.
 - Final route: REJECT to build.
+
+[[2026-07-23T16:31:40+02:00]]
+## Builder Notes
+
+- Change envelope: receipt parsing/evaluator and strict store validation for unsupported schema versions. The behavior changes only at the local evaluator boundary: unsupported integer schemas now reach `evaluate_receipt_currentness` and return `ERR_RECEIPT_SCHEMA_UNSUPPORTED`; immutable store admission remains `ERR_RECEIPT_SCHEMA_INVALID`.
+- Files changed: `serve/kanban/src/owlbear_kanban/receipt.py`; `serve/kanban/tests/test_change_receipts.py`.
+- Change Module Map deviations: none. The existing receipt owner and its focused public-boundary test module remain the direct owners.
+- Proof selected: added one durable regression test because the evaluator return code is a shared runtime contract and the previously unreachable branch could regress without observable parser-to-evaluator coverage. The existing store-envelope rejection test protects the strict persistence boundary.
+- Commands run: `uv run pytest serve/kanban/tests/test_change_receipts.py` (38 passed); `uv run ruff check serve/kanban/src/owlbear_kanban/receipt.py serve/kanban/tests/test_change_receipts.py` (passed); `uv run ruff format --check serve/kanban/src/owlbear_kanban/receipt.py serve/kanban/tests/test_change_receipts.py` (passed); `git diff --check` on changed files (passed); VS Code diagnostics reported no errors.
+- Builder challenger: pass; no concrete blockers.
+- Follow-up risks: none within local-currentness scope. Git code-revision currency, predecessor recursion, and supersession remain explicitly outside this task.
