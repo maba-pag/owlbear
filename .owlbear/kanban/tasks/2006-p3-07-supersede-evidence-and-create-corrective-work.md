@@ -4,7 +4,7 @@ title: 'P3-07: Supersede evidence and create corrective work'
 status: build
 priority: medium
 created: 2026-07-22T21:59:17.003316+02:00
-updated: 2026-07-22T21:59:17.003316+02:00
+updated: 2026-07-23T11:29:39.269732+02:00
 tags:
   - phase-3
   - scope:core
@@ -65,3 +65,10 @@ Build over purpose-specific receipt validity and native request disposition from
 Resolve behavior from `REQ-008`, `NEG-010`, `IF-003`, `RISK-003`, `PROOF-003`, and design section 10. Preserve `implementation-defect`, `unforeseeable-discovery`, `planning-omission`, and `scope-change` as distinct late-work classes.
 
 Proof guidance: use a table-driven corrective-route matrix plus generic receipt/job DAG closure and transaction failure injection through the public invalidation operation.
+
+[[2026-07-23T11:29:39+02:00]]
+## Shape Notes
+- Repair classification: connected dependency-closure audit; no operative contract change required.
+- Dependency closure: #2006 consumes purpose-specific receipt validity/completion from #2004 and native request disposition from #2005. It introduces its own supersession and corrective identities, computes affected closure, and uses the transitive #2002 transaction kernel for atomic publication. No sibling or descendant producer is required.
+- Atomicity boundary: AC-2 and AC-3 already couple supersession evidence, stale-job disposition, and corrective jobs while preserving prior attempts/findings/receipts/jobs and rejecting partial publication.
+- Board audit: remains `build`, parent #1979, dependencies #2004 and #2005, and is correctly dependency-blocked.
