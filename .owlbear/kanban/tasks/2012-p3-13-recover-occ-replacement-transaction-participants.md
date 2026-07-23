@@ -4,7 +4,7 @@ title: 'P3-13: Recover OCC replacement transaction participants'
 status: shape
 priority: high
 created: 2026-07-23T14:40:46.644783+02:00
-updated: 2026-07-23T15:20:46.993567+02:00
+updated: 2026-07-23T23:04:08.263257+02:00
 tags:
   - phase-3
   - scope:core
@@ -21,16 +21,27 @@ parent: 2003
 depends_on:
   - 2002
 ac:
-  - 'AC-1: Given a replacement participant whose destination matches its expected
-    bytes, commit publishes the replacement; when the destination already matches
-    the replacement, replay returns the committed outcome; any other bytes return
-    the stable conflict diagnostic without mutation.'
-  - 'AC-2: Given interruption before publication, after replacement publication, or
-    before manifest cleanup, `recover_all` completes the replacement and removes the
-    manifest; repeated recovery is inert.'
-  - 'AC-3: Given a malformed replacement manifest, altered content digest, or unsafe
-    participant path, recovery raises the existing manifest or path diagnostic and
-    leaves the destination and outside paths unchanged.'
+  - 'AC-1: Given `storage_io.locked_roots` the root sequence `(root_b, root_a, root_a)`,
+    it acquires one descriptor-backed `.storage.lock` for each canonical root in path
+    order; a symlink root, symlink lock file, or failure while acquiring `root_b`
+    raises before yielding and releases the lock and descriptor acquired for `root_a`.'
+  - "AC-2: Given `JobStore.update` and `RuntimeTransaction.commit` start from the
+    same stored job bytes on one work root, a two-phase subprocess proof holds one
+    writer inside `storage_io.locked_roots`, observes the rival blocked, then releases
+    the holder; the holder publishes, the rival returns `ERR_TRANSACTION_CONFLICT`
+    or `ERR_JOB_OCC_STALE` according to its public boundary, and the holder's bytes
+    remain stored."
+  - 'AC-3: Given a replacement participant whose destination equals its expected bytes,
+    `RuntimeTransaction.commit` publishes the replacement; when the destination already
+    equals the replacement, replay returns the committed outcome; any other bytes
+    return `ERR_TRANSACTION_CONFLICT` without mutation.'
+  - 'AC-4: Given interruption before publication, after replacement publication, or
+    before manifest cleanup, `RuntimeTransaction.recover_all` completes the replacement
+    and removes the manifest; a second recovery leaves the replacement bytes unchanged.'
+  - 'AC-5: Given a malformed replacement manifest, altered content digest, or participant
+    root outside `recover_all(..., roots=...)`, `RuntimeTransaction.recover_all` raises
+    `ERR_TRANSACTION_MANIFEST_INVALID` or `ERR_TRANSACTION_PATH_UNSAFE` and leaves
+    the destination and outside paths unchanged.'
 proof_bundle: critical+challenge
 blocked: false
 block_reason:
@@ -92,3 +103,44 @@ Use the transaction boundary directly. Cover expected, already-replaced, conflic
 - Builder challenger: not called because no DONE verdict is proposed.
 - Memory assessment: all applicable recalled entries were assessed. Two recall-payload entry identifiers were unavailable to the memory service during assessment; this did not affect task evidence.
 - Follow-up risk: current committed replacement publication retains the verifier-identified TOCTOU gap until the shared OCC authority is shaped and implemented.
+
+[[2026-07-23T22:55:31+02:00]]
+## Operative Cross-Writer OCC Repair Amendment
+
+This amendment supersedes narrower task text that limits ownership to `runtime_transaction.py` or treats replacement-only contention as sufficient proof.
+
+### Shared Lock Authority
+
+`serve/kanban/src/owlbear_kanban/storage_io.py` owns one root-lock context for storage mutation. It resolves and deduplicates supplied roots, acquires their advisory lock files in deterministic path order, and holds them until compare, publication, fsync, and cleanup complete. A one-root caller and a multi-root caller use the same lock identity for that root.
+
+`JobStore.materialize`, `JobStore.update`, and `JobStore.archive` consume this shared root-lock authority for the job work root instead of the private `.jobs.lock` protocol. `RuntimeTransaction.commit` and recovery consume the same authority for the manifest root and participant roots. Replacement expected-byte comparison and publication occur while those locks are held, so an intervening `JobStore` writer cannot be overwritten.
+
+### Change Module Map
+
+- `serve/kanban/src/owlbear_kanban/storage_io.py`: owns resolved-root lock identity, deterministic multi-root acquisition, release, and partial-acquisition cleanup.
+- `serve/kanban/src/owlbear_kanban/jobs.py`: consumes the shared lock without changing `JobStore` record/OCC ownership or stable `ERR_JOB_OCC_STALE` behavior.
+- `serve/kanban/src/owlbear_kanban/runtime_transaction.py`: holds shared manifest/participant-root locks across prepare, replacement compare/publish, recovery, and cleanup; preserves `ERR_TRANSACTION_CONFLICT`, manifest validation, containment, and immutable participants.
+- `serve/kanban/tests/test_runtime_transaction.py`: proves replacement/recovery behavior and an actual subprocess race through public `RuntimeTransaction` and `JobStore` boundaries.
+- `serve/kanban/tests/test_jobs.py`: existing `JobStore` behavior remains the focused regression boundary; add durable coverage only if the shared-lock migration exposes a concrete unprotected behavior not exercised by the transaction race.
+
+### Scope Boundary
+
+This task owns the shared lock primitive and the `JobStore` versus replacement-transaction race required to close `AC-1/cross-writer-occ`. It does not own mixed job/attempt pair atomicity, rival attempt-event publication, or strict-subset visibility; task #2013 consumes this foundation for those outcomes.
+
+[[2026-07-23T22:59:38+02:00]]
+### Challenger Correction: Executable Lock Boundary
+
+The shared callable is `storage_io.locked_roots(roots)`. It accepts existing root `Path` values, rejects symlink roots and symlink lock files through descriptor-backed no-follow opens, deduplicates roots by canonical identity, acquires one `.storage.lock` per root in canonical path order, and releases each previously acquired descriptor and lock when a later acquisition fails. Callers hold the returned context across their existing compare and mutation work; the helper does not move job serialization or transaction publication into `storage_io.py`.
+
+The cross-writer proof uses a controlled two-phase subprocess harness rather than scheduler timing: one writer is held after acquiring the shared root lock, the rival is started and observed blocked, then the first writer is released and the rival's public result and final bytes are asserted.
+
+Existing `atomic_write` consumers outside `JobStore` and `RuntimeTransaction` are not migrated by this task because they do not write the JobStore-owned destination exercised by `AC-2`. Task #2013 must consume the shared root lock when it assembles mixed job/attempt participants; pair atomicity and attempt-event visibility remain #2013 outcomes.
+
+[[2026-07-23T23:04:08+02:00]]
+## Shape Notes
+- Repair classification: local OCC contract repair expanded into a connected parent-map repair after challenge; no product decision is pending.
+- Source facts: accepted design section 13 assigns locks to `storage_io.py`; current `storage_io.py` lacks the lock helper; `JobStore` uses private `.jobs.lock`; `RuntimeTransaction` uses `.runtime-transactions.lock`, so replacement compare and publication are not serialized with `JobStore.update`.
+- Task repair stored: exact `storage_io.locked_roots(roots)` contract, descriptor/no-follow safety, canonical deduplication/order, partial-acquisition cleanup, controlled two-phase JobStore versus RuntimeTransaction subprocess proof, and AC-1 through AC-5.
+- Failure key `AC-1/cross-writer-occ`: task-local contract is resolved, but final route is intentionally withheld because parent #2003 still records `jobs.py` as consumed without ownership change and omits the shared-lock scenario axis.
+- Challenger: first challenge required an executable shared-lock boundary and controlled writer ordering; both were added. Second challenge found stale parent maps. Live board check disproved concurrent sibling work: #2017 through #2019 are unclaimed and dependency-blocked through #2013, whose dependency on #2012 already supplies correct execution order.
+- Lifecycle: release without status movement. Restart shaping as the explicit connected set #2003 and #2012, claimed in ID order, update only #2003 maps plus final #2012 route, then challenge the connected result.
