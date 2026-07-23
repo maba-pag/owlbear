@@ -1,10 +1,10 @@
 ---
 id: 2015
 title: 'P3-16A: Define and freeze receipt impact closures'
-status: shape
+status: build
 priority: high
 created: 2026-07-23T14:41:09.745275+02:00
-updated: 2026-07-23T18:39:10.713411+02:00
+updated: 2026-07-23T19:40:47.082526+02:00
 tags:
   - phase-3
   - scope:core
@@ -21,21 +21,27 @@ parent: 2003
 depends_on:
   - 2014
 ac:
-  - 'AC-1: Given `paths` containing `/` or canonical repository-relative file/tree
-    selectors and `authority_targets` containing declared stable IDs, `parse_impact_closure`
-    returns a frozen deterministically sorted closure; leading slash other than `/`,
-    `.`, `..`, empty segment, backslash, NUL, repository escape, undeclared target,
-    or empty `paths` returns `ERR_RECEIPT_IMPACT_CLOSURE_INVALID`.'
-  - 'AC-2: Given a non-admission receipt mapping or issuance input without `impact_closure`,
-    parsing, local currentness, or issuance returns `ERR_RECEIPT_IMPACT_CLOSURE_MISSING`;
-    malformed closure returns `ERR_RECEIPT_IMPACT_CLOSURE_INVALID`, and issuance writes
-    no receipt.'
-  - 'AC-3: Given a shape/build canonical packet closure, an accept canonical node-plan
-    packet union, or an audit `/` closure with active authority IDs, issuance validates
-    and freezes the supplied closure; changed paths and diffs cannot substitute for
-    it.'
-  - 'AC-4: Given receipt serialization followed by parsing, `impact_closure` remains
-    immutable; byte-equivalent replay returns the existing closure without mutation.'
+  - 'AC-1: Given `authority_targets` entries matching the canonical `change.StableId`
+    pattern and canonical repository selectors, `parse_impact_closure` returns one
+    frozen tuple-sorted closure; `not-a-stable-id` or a malformed path returns `ERR_RECEIPT_IMPACT_CLOSURE_INVALID`.'
+  - 'AC-2: Given `declared_authority_targets`, `parse_impact_closure` accepts a canonical
+    target present in that set and returns `ERR_RECEIPT_IMPACT_CLOSURE_INVALID` for
+    a canonical target absent from it.'
+  - 'AC-3: Given a non-admission receipt mapping whose `authority_targets` contains
+    `not-a-stable-id`, `parse_receipt_mapping` returns `ERR_RECEIPT_IMPACT_CLOSURE_INVALID`
+    and no receipt.'
+  - 'AC-4: Given a parsed receipt whose closure contains canonical `REQ-999` absent
+    from the loaded `ChangeRevision`, `evaluate_receipt_currentness` returns `ERR_RECEIPT_IMPACT_CLOSURE_INVALID`;
+    a target declared by that revision permits normal local-currentness evaluation.'
+  - "AC-5: Given receipt creation whose closure contains canonical `REQ-999` absent
+    from the store's loaded `ChangeRevision`, `ReceiptStore.create` returns `ERR_RECEIPT_IMPACT_CLOSURE_INVALID`
+    and leaves no receipt file."
+  - 'AC-6: Given successful `ReceiptStore.create` followed by `ReceiptStore.read`,
+    canonical `impact_closure` paths and authority targets remain immutable and tuple-sorted
+    in the returned receipt.'
+  - 'AC-7: Given a second `ReceiptStore.create` for an existing receipt ID with byte-equivalent
+    input, creation raises `ERR_RECEIPT_CONFLICT`, preserves the existing receipt
+    bytes, and leaves no temporary receipt file.'
 proof_bundle: critical+challenge
 blocked: false
 block_reason:
@@ -160,3 +166,35 @@ Exercise the public closure parser, receipt parser/currentness required-field pa
 - Prior same-AC rejection check: earlier Verify Notes already rejected this same stable-ID validation gap. Under the repeated-repair rule, this second verification cannot return the task to build; it requires reshape.
 - Verifier-challenger: not called because PASS is not proposed.
 - Final route: RESHAPE to shape.
+
+## Operative Stable-ID Repair Amendment
+
+This section supersedes the earlier stable-ID wording and kind-specific issuance obligation for the next build attempt.
+
+### Outcome
+The receipt layer freezes canonical impact closures only when each authority target has canonical `StableId` syntax and, at a revision-aware boundary, resolves to an identity declared by the loaded change revision.
+
+### Contract And Ownership
+`serve/kanban/src/owlbear_kanban/change.py` is the canonical syntax authority: `StableId` accepts `REQ|NEG|KEEP|DEC|WF|MOD|IF|MIG|RISK|PROOF|DN` followed by a three-digit suffix. `parse_impact_closure` always enforces that syntax. When `declared_authority_targets` is supplied, it additionally rejects a syntactically canonical target absent from that set.
+
+`parse_receipt_mapping` has no loaded change context and therefore enforces closure shape, path rules, and stable-ID syntax only. `evaluate_receipt_currentness` and `ReceiptStore`, which receive a `ChangeRevision`, additionally resolve each authority target against that revision and return `ERR_RECEIPT_IMPACT_CLOSURE_INVALID` for an undeclared target. `ReceiptStore.create` validates before opening or publishing the destination receipt.
+
+Task #2015 owns this parser, currentness, store-validation, immutable roundtrip, package export, and focused receipt proof inside `receipt.py`, `__init__.py`, and `test_change_receipts.py`. Task #2004 retains shape/build/accept/audit closure assembly and finish-operation issuance. Task #2020 consumes the canonical path validator only.
+
+### Failure-Key Closure
+`AC-1/stable-id-validation` is resolved by separating canonical syntax from declaration membership at interfaces that possess the required authority. A passing aggregate receipt-suite count is not closure evidence: builder proof must directly exercise malformed syntax, optional declared-set membership, revision-aware undeclared membership, and no-file publication.
+
+### Proof Guidance
+Use the public parser, `evaluate_receipt_currentness`, and `ReceiptStore.create`. Exercise one canonical target, `not-a-stable-id`, a canonical but undeclared target such as `REQ-999`, and a target declared by the loaded fixture revision. Verify the invalid store-create case leaves no receipt path. Preserve existing path-selector and immutable serialize/parse coverage; no Git history or finish-operation fixture belongs in this task.
+
+[[2026-07-23T19:40:47+02:00]]
+## Shape Notes
+- Source and repair mode: focused local task repair from the latest verifier RESHAPE; no material product, architecture, compatibility, security, or graph decision was required.
+- Failure key `AC-1/stable-id-validation`: resolved at planning level. `change.StableId` is the canonical syntax authority; `parse_impact_closure` and `parse_receipt_mapping` enforce syntax without requiring a revision, while `evaluate_receipt_currentness` and `ReceiptStore` enforce declaration membership through their loaded `ChangeRevision`.
+- Facts checked: `ChangeRevision.resolve` owns declared-identity lookup; `ReceiptStore._validate_record` executes before `_atomic_create`; existing duplicate creation raises `ERR_RECEIPT_CONFLICT` and preserves bytes. No request authority applies.
+- Contract repair: appended the Operative Stable-ID Repair Amendment and replaced AC-1 through AC-4 with seven independently verifiable boundaries covering canonical syntax, optional declared-set membership, parser diagnostics, revision-aware currentness, pre-publication store rejection, read-back immutability, and conflict preservation.
+- Change Module Map: `serve/kanban/src/owlbear_kanban/change.py` supplies `StableId` and `ChangeRevision.resolve`; task-owned implementation remains `receipt.py`, package exports in `__init__.py`, and focused proof in `test_change_receipts.py`.
+- Scope boundaries: #2004 retains shape/build/accept/audit closure assembly and finish issuance; #2020 consumes only the canonical path validator and owns Git-history currency. Dependencies, parent, tags, priority, and packet identity are unchanged.
+- Proof contract: builder must directly map AC-1 through AC-7 and `AC-1/stable-id-validation` to evidence; aggregate receipt-suite counts alone are insufficient. The focused matrix includes `not-a-stable-id`, canonical undeclared `REQ-999`, one declared fixture ID, no-file publication, roundtrip, and conflict-byte preservation.
+- Challenger: initial repaired contract passed; AC-3 was split for one-boundary-per-line proof; a source check corrected stale idempotent-replay wording to existing conflict semantics; the final stored seven-AC contract passed shaper-challenger with no blocker.
+- Board audit and route: task #2015 remains parented by #2003, depends only on archived #2014, and advances from shape to build. Successful completion will unblock #2020.
