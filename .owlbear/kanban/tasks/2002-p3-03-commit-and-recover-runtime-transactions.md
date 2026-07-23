@@ -1,10 +1,10 @@
 ---
 id: 2002
 title: 'P3-03: Commit and recover runtime transactions'
-status: collect
+status: shape
 priority: high
 created: 2026-07-22T21:58:33.866396+02:00
-updated: 2026-07-23T12:17:58.941953+02:00
+updated: 2026-07-23T12:18:53.907559+02:00
 tags:
   - phase-3
   - scope:core
@@ -200,3 +200,15 @@ Proof guidance: exercise public admission plus the reusable transaction boundary
 - Findings: initial replay smoke incorrectly assumed the fixture had no bootstrap receipt; fixture-aware rerun confirmed the intended one receipt/job delta. No implementation defect found; no verifier patch applied.
 - Verifier-challenger: pass. It confirmed task intent, recovery through the real `load_change()` boundary, three interruption points, idempotent admission replay, and scoped module ownership.
 - Final route: PASS to collect.
+
+[[2026-07-23T12:18:53+02:00]]
+## Collect Notes
+- Classification: leaf. `list_tasks(parent=2002)` returned no child tasks; title, tags, and body do not declare aggregate or EPIC intent.
+- Intent source: task `## Outcome` and AC-1 through AC-3 require a reusable transaction kernel whose runtime reopen path never exposes a strict subset of participants.
+- Leaf verification evidence: `## Verify Notes` records verifier rejection of AC-2. The focused admission tests passed (17), but the public interruption probe found `receipt_readable=True`, `generation_exists=False`, and `manifest_count=1`; the canonical runtime/revision open path does not scan and recover manifests before stores become readable. Verifier-challenger returned `decision: pass` for the rejection.
+- Invariant map coverage: AC-1 and AC-3 have focused evidence; AC-2's runtime-open recovery/no-partial-visibility invariant is unsatisfied.
+- Dependency gate: task dependency `#2001` reports `dep_status=ok`.
+- Child coverage: not applicable; this leaf has no children.
+- Tested SHA and normal-path proof: builder commit `1ab1b292e`; `uv run pytest serve/kanban/tests/test_admission.py serve/kanban/tests/test_admission_transaction.py` passed (17) and focused Ruff passed, but that proof does not cover runtime-open recovery.
+- Residual decisions: `list_requests` returned no pending or resolved structured requests for #2002.
+- Rationale: reject to shape because AC-2 requires an owning design for generic manifest scanning/recovery before readable runtime stores, plus focused proof. This is not archival-ready.
