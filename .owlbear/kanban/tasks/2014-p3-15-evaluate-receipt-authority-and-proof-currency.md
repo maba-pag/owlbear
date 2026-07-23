@@ -4,7 +4,7 @@ title: 'P3-15: Evaluate receipt authority and proof currency'
 status: verify
 priority: high
 created: 2026-07-23T14:41:02.860272+02:00
-updated: 2026-07-23T15:09:52.713349+02:00
+updated: 2026-07-23T15:50:56.400078+02:00
 tags:
   - phase-3
   - scope:core
@@ -64,3 +64,10 @@ Use a finite evaluator table over receipt kind, schema, target, digest, and proo
 - Commands run: `uv run pytest serve/kanban/tests/test_change_receipts.py` (37 passed); `uv run ruff check` on all three changed files (passed); `uv run ruff format --check` on all three changed files (passed).
 - Builder challenger: pass; no concrete blockers.
 - Follow-up risks: downstream tasks own Git code-revision currency, predecessor/supersession validity, and receipt-producing transaction/lifecycle operations.
+
+[[2026-07-23T15:50:56+02:00]]
+## Commit Recovery
+- The original scoped builder commit succeeded as `4431cac7c` and is an ancestor of current `HEAD`; its exact paths are `receipt.py`, package `__init__.py`, `test_change_receipts.py`, and this task record.
+- The empty exit-130 result was a terminal transport false negative. The three implementation/test paths have no uncommitted layer. Later history changed only `__init__.py` by adding the independently owned #2010/#2011 attempt exports.
+- Recovery proof against current `HEAD`: `uv run pytest serve/kanban/tests/test_change_receipts.py` (37 passed); Ruff check passed; Ruff format check passed.
+- Cleared `COMMIT_FAILED` without changing status `verify`; verification may resume from commit `4431cac7c`.
