@@ -1,10 +1,10 @@
 ---
 id: 2002
 title: 'P3-03: Commit and recover runtime transactions'
-status: build
+status: verify
 priority: high
 created: 2026-07-22T21:58:33.866396+02:00
-updated: 2026-07-23T11:28:00.000832+02:00
+updated: 2026-07-23T11:52:17.738669+02:00
 tags:
   - phase-3
   - scope:core
@@ -86,3 +86,13 @@ Proof guidance: exercise public admission plus the reusable transaction boundary
 - Dependency closure: current admission and receipt behavior plus archived #2001 stores supply the complete foundation. No AC input comes from a sibling or descendant.
 - Authority: the change remains at delivery digest `9387dea789fb3334cd50e6f784d06847880bd006402b33d5ab2c45888c2202a8`; this is internal packet refinement under `REQ-016`, `IF-003`, and design section 13, not a new delivery interface.
 - Challenge and audit: shaper-challenger passed the connected graph after requiring the concrete participant-shape proof. Stored task audit confirms status route to `build`, parent #1979, dependency #2001, and `dep_status: ok`.
+
+[[2026-07-23T11:52:17+02:00]]
+## Builder Notes
+- Change envelope: reusable native transaction coordination and admission receipt/initial shape-generation publication only; legacy engine/storage and downstream lifecycle/request/invalidation semantics remain untouched.
+- Files changed: `serve/kanban/src/owlbear_kanban/runtime_transaction.py`; `serve/kanban/src/owlbear_kanban/admission_transaction.py`; `serve/kanban/tests/test_admission_transaction.py`.
+- Change Module Map deviations: none. The kernel coordinates the existing revision-root receipt and generation artifacts; it does not introduce a second receipt authority or alter `JobStore` ownership.
+- Proof selected: durable public-admission replay test, justified because a crash between immutable participant publications is hard to observe manually and recovery is shared, data-integrity behavior. It injects interruption after the first publication, verifies replay completes the complete participant set, and verifies manifest cleanup.
+- Commands run: `uv run ruff check` on the two source modules and recovery test; `uv run pytest serve/kanban/tests/test_admission.py serve/kanban/tests/test_admission_transaction.py` (17 passed); `uv run pytest serve/kanban/tests/test_change_receipts.py serve/kanban/tests/test_jobs.py serve/kanban/tests/test_admission.py serve/kanban/tests/test_admission_transaction.py` (71 passed); `git diff --check` (passed).
+- Builder-challenger result: pass; no blockers.
+- Follow-up risks: subsequent lifecycle owners must supply their own participant plans and runtime-open hook when they consume the generic kernel for activity-shaped mutations.

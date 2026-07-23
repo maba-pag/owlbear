@@ -2,22 +2,20 @@
 
 from __future__ import annotations
 
-import contextlib
-import fcntl
-import os
-import secrets
-from threading import RLock
-from typing import TYPE_CHECKING, ClassVar
+from collections.abc import Mapping
+from io import StringIO
+from pathlib import Path
+from typing import TYPE_CHECKING, Never
 
 from pydantic import ValidationError
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator, Sequence
-    from pathlib import Path
+    from collections.abc import Callable, Sequence
 
 from owlbear_kanban.admission import AdmissionAssessment, AdmissionEvidence, evaluate_admission
 from owlbear_kanban.jobs import JobGeneration, plan_shape_jobs, read_job_generation
 from owlbear_kanban.receipt import ReceiptRecord, ReceiptStore
+from owlbear_kanban.runtime_transaction import RuntimeTransaction, TransactionConflictError, TransactionParticipant
 from owlbear_kanban.yaml_rt import make_yaml
 
 if TYPE_CHECKING:
@@ -52,16 +50,8 @@ class AdmissionPublicationError(RuntimeError):
 class AdmissionTransaction:
     """Compose admission evaluation and all-or-none receipt/job publication."""
 
-    _locks: ClassVar[dict[Path, RLock]] = {}
-    _locks_guard = RLock()
-
     def __init__(self, revision: ChangeRevision) -> None:
         self.revision = revision
-
-    @classmethod
-    def _lock_for(cls, source_dir: Path) -> RLock:
-        with cls._locks_guard:
-            return cls._locks.setdefault(source_dir.resolve(), RLock())
 
     def validate_and_admit(
         self,
@@ -93,66 +83,41 @@ class AdmissionTransaction:
             )
         except ValidationError as exc:
             raise AdmissionValidationError from exc
-        source = self.revision.source_dir
-        jobs_dir = source / "jobs"
-        with self._lock_for(source), _process_lock(source):
+        transaction = self._transaction(receipt, generation)
+        try:
+            transaction.recover()
             existing = ReceiptStore(self.revision).read(receipt_id)
+            existing_generation = _read_generation(self.revision.source_dir / "jobs", receipt_id, self.revision)
             if existing.receipt is not None:
-                existing_generation = _read_generation(jobs_dir, receipt_id, self.revision)
                 if existing.receipt == receipt and existing_generation == generation:
                     return existing.receipt, generation, assessment
-                raise AdmissionConflictError
-            try:
-                self._publish(receipt, generation, jobs_dir, failure)
-            except (AdmissionConflictError, AdmissionPublicationError):
-                raise
-            except Exception as exc:
-                raise AdmissionPublicationError(exc) from exc
+                _raise_conflict()
+            transaction.commit(failure=failure)
+        except TransactionConflictError as exc:
+            raise AdmissionConflictError from exc
+        except (AdmissionConflictError, AdmissionPublicationError):
+            raise
+        except Exception as exc:
+            raise AdmissionPublicationError(exc) from exc
         return receipt, generation, assessment
 
-    def _publish(
-        self,
-        receipt: ReceiptRecord,
-        generation: JobGeneration,
-        jobs_dir: Path,
-        failure: Callable[[str], None] | None,
-    ) -> None:
-        jobs_dir.mkdir(parents=True, exist_ok=True)
-        receipt_path = self.revision.source_dir / "receipts" / f"{receipt.receipt_id}.yaml"
-        generation_path = jobs_dir / f"{generation.receipt_id}.yaml"
-        temp_paths: list[Path] = []
-        published_paths: list[Path] = []
-        try:
-            for path, value in (
-                (receipt_path, receipt.to_mapping()),
-                (generation_path, generation.model_dump(mode="json")),
-            ):
-                path.parent.mkdir(parents=True, exist_ok=True)
-                temp = path.with_name(f".tmp-{secrets.token_hex(12)}-{path.name}")
-                with temp.open("x", encoding="utf-8") as handle:
-                    make_yaml(explicit_start=True).dump(value, handle)
-                    handle.flush()
-                    os.fsync(handle.fileno())
-                temp_paths.append(temp)
-            if failure:
-                failure("before-publication")
-            os.link(temp_paths[0], receipt_path)
-            published_paths.append(receipt_path)
-            if failure:
-                failure("after-receipt")
-            os.link(temp_paths[1], generation_path)
-            published_paths.append(generation_path)
-            _fsync_directory(receipt_path.parent)
-            _fsync_directory(generation_path.parent)
-        except Exception:
-            for path in (*published_paths, *temp_paths):
-                with contextlib.suppress(OSError):
-                    path.unlink()
-            raise
-        finally:
-            for path in temp_paths:
-                with contextlib.suppress(OSError):
-                    path.unlink()
+    def _transaction(self, receipt: ReceiptRecord, generation: JobGeneration) -> RuntimeTransaction:
+        return RuntimeTransaction(
+            self.revision.source_dir,
+            f"admission-{receipt.receipt_id}",
+            (
+                TransactionParticipant(
+                    self.revision.source_dir,
+                    Path("receipts") / f"{receipt.receipt_id}.yaml",
+                    _yaml_bytes(receipt.to_mapping()),
+                ),
+                TransactionParticipant(
+                    self.revision.source_dir,
+                    Path("jobs") / f"{generation.receipt_id}.yaml",
+                    _yaml_bytes(generation.model_dump(mode="json")),
+                ),
+            ),
+        )
 
 
 def _read_generation(jobs_dir: Path, receipt_id: str, revision: ChangeRevision) -> JobGeneration | None:
@@ -165,24 +130,24 @@ def _read_generation(jobs_dir: Path, receipt_id: str, revision: ChangeRevision) 
     return generation
 
 
-@contextlib.contextmanager
-def _process_lock(source_dir: Path) -> Iterator[None]:
-    lock_path = source_dir / ".admission.lock"
-    lock_path.touch(exist_ok=True)
-    with lock_path.open("r+") as handle:
-        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
-        try:
-            yield
-        finally:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+def _yaml_bytes(value: object) -> bytes:
+    stream = StringIO()
+    make_yaml(explicit_start=True).dump(_plain_value(value), stream)
+    return stream.getvalue().encode("utf-8")
 
 
-def _fsync_directory(directory: Path) -> None:
-    directory_fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY)
-    try:
-        os.fsync(directory_fd)
-    finally:
-        os.close(directory_fd)
+def _plain_value(value: object) -> object:
+    if isinstance(value, Mapping):
+        return {str(key): _plain_value(item) for key, item in value.items()}
+    if isinstance(value, tuple):
+        return [_plain_value(item) for item in value]
+    if isinstance(value, list):
+        return [_plain_value(item) for item in value]
+    return value
+
+
+def _raise_conflict() -> Never:
+    raise AdmissionConflictError
 
 
 def validate_and_admit(
