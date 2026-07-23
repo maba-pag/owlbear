@@ -1,10 +1,10 @@
 ---
 id: 2021
 title: Persist validated evidence in admission receipts
-status: verify
+status: collect
 priority: high
 created: 2026-07-23T17:45:08.767424+02:00
-updated: 2026-07-23T18:26:34.341348+02:00
+updated: 2026-07-23T18:33:56.176821+02:00
 tags:
   - phase-2
   - scope:core
@@ -73,3 +73,17 @@ Commands run:
 Builder-challenger: pass. It independently reran the focused tests (3 passed in 1.03s) and scoped Ruff checks; no concrete blockers.
 
 Follow-up risks: the live `.owlbear/changes/replace-delivery-pipeline` graph remains draft/unadmitted and fails evaluation with `DV-010`; this task deliberately uses in-memory fixture metadata and does not publish or re-admit that live revision.
+
+[[2026-07-23T18:33:56+02:00]]
+## Verify Notes
+- Evidence reviewed: builder commit `5adf8f460874c92c5b5515d56d854546a7dc9e95`; AC-1 through AC-3; Builder Notes and scoped implementation/test diff.
+- Named authorities checked: `.owlbear/changes/replace-delivery-pipeline/graph.yaml` `REQ-002`, `IF-002`, and `PROOF-002`; design sections 9.4 and 9.5. They require a public validate/admit boundary that atomically emits an immutable receipt tied to one delivery digest and retains repository challenge, clean baseline, user approval, and explicit limits.
+- Change Module Map: no deviation. Receipt assembly remains in the existing `AdmissionTransaction.validate_and_admit` owner; focused proof remains in its dedicated transaction test module.
+- Normal-path boundary exercised: public `validate_and_admit` with a temporary copied real change and non-empty `challenge`, `baseline`, `approval`, and `limits`. The receipt stores serialized evidence alongside assessment and generation; exact replay returns the existing receipt/generation; changed evidence raises `ERR_ADMISSION_CONFLICT`; recovery after interruption retains the stored evidence when `load_change` reopens the runtime.
+- Replacements used below that boundary: temporary filesystem change root and fixture-local immutable graph metadata only; no admission command, receipt transaction, or recovery behavior was replaced.
+- Checks run: `uv run pytest serve/kanban/tests/test_admission_transaction.py -q` passed, 3 tests in 1.09s. `uv run ruff check serve/kanban/src/owlbear_kanban/admission_transaction.py serve/kanban/tests/test_admission_transaction.py` passed. `uv run ruff format --check serve/kanban/src/owlbear_kanban/admission_transaction.py serve/kanban/tests/test_admission_transaction.py` passed, 2 files already formatted.
+- Findings: none.
+- Patches applied: none.
+- Prior same-AC rejection check: no earlier Verify Notes or resolved requests for task 2021.
+- Verifier-challenger result: pass; it found AC-1 through AC-3 covered with no unresolved scope drift.
+- Final route: PASS to collect.
