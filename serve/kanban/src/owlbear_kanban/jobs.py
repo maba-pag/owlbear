@@ -2,15 +2,23 @@
 
 from __future__ import annotations
 
+import contextlib
+import fcntl
+import hashlib
+import os
+import stat
 from enum import StrEnum
+from io import StringIO
 from typing import TYPE_CHECKING, Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from owlbear_kanban.change import ChangeRevision, Digest
+from owlbear_kanban.yaml_rt import make_yaml
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Iterator, Mapping, Sequence
+    from pathlib import Path
 
 
 class JobDiagnosticCode(StrEnum):
@@ -76,6 +84,251 @@ class JobRecord(BaseModel):
     receipt_id: str | None = None
     superseded_by_receipt_id: str | None = None
     disposition: str = "pending"
+
+
+class StoredJob(BaseModel):
+    """One persisted job record with its immutable OCC token."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    job: JobRecord
+    token: str
+
+
+class JobConflictError(FileExistsError):
+    """Raised when materialization would replace a different job record."""
+
+    code = "ERR_JOB_CONFLICT"
+
+    def __init__(self, job_id: int) -> None:
+        super().__init__(f"job already exists with different content: {job_id}")
+        self.job_id = job_id
+
+
+class JobConcurrencyError(RuntimeError):
+    """Raised when an operational write uses an outdated OCC token."""
+
+    code = "ERR_JOB_OCC_STALE"
+
+    def __init__(self, job_id: int) -> None:
+        super().__init__(f"job OCC token is stale: {job_id}")
+        self.job_id = job_id
+
+
+_DIRECTORY_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+_FILE_FLAGS = os.O_RDONLY | os.O_NOFOLLOW
+_CREATE_FLAGS = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+_LOCK_FLAGS = os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW
+
+
+def _job_filename(job_id: int) -> str:
+    if job_id <= 0:
+        msg = "job ID must be positive"
+        raise ValueError(msg)
+    return f"{job_id}.yaml"
+
+
+def _serialized_job(record: JobRecord) -> str:
+    stream = StringIO()
+    make_yaml(explicit_start=True).dump(record.model_dump(mode="json"), stream)
+    return stream.getvalue()
+
+
+def _stored_job(text: str, job_id: int) -> StoredJob:
+    value = make_yaml().load(text)
+    if not isinstance(value, dict):
+        msg = "job document must be a mapping"
+        raise TypeError(msg)
+    normalized = dict(value)
+    for field in ("predecessor_job_ids", "pending_request_ids", "evidence_ids"):
+        if isinstance(normalized.get(field), list):
+            normalized[field] = tuple(normalized[field])
+    record = JobRecord.model_validate(normalized)
+    if record.job_id != job_id:
+        msg = "job filename and record identities differ"
+        raise ValueError(msg)
+    return StoredJob(job=record, token=hashlib.sha256(text.encode("utf-8")).hexdigest())
+
+
+class JobStore:
+    """Contained active/archive job storage rooted at an explicit work directory."""
+
+    def __init__(self, work_root: Path) -> None:
+        self._work_root = work_root
+
+    @contextlib.contextmanager
+    def _root(self) -> Iterator[int]:
+        try:
+            root_fd = os.open(self._work_root, _DIRECTORY_FLAGS)
+        except OSError as exc:
+            msg = "work root could not be opened safely"
+            raise ValueError(msg) from exc
+        try:
+            yield root_fd
+        finally:
+            os.close(root_fd)
+
+    @staticmethod
+    def _directory(root_fd: int, name: str, *, create: bool) -> int | None:
+        if create:
+            with contextlib.suppress(FileExistsError):
+                os.mkdir(name, mode=0o755, dir_fd=root_fd)
+        try:
+            return os.open(name, _DIRECTORY_FLAGS, dir_fd=root_fd)
+        except FileNotFoundError:
+            return None
+        except OSError as exc:
+            msg = f"job {name} directory could not be opened safely"
+            raise ValueError(msg) from exc
+
+    @contextlib.contextmanager
+    def _locked_root(self) -> Iterator[int]:
+        with self._root() as root_fd:
+            lock_fd = os.open(".jobs.lock", _LOCK_FLAGS, 0o600, dir_fd=root_fd)
+            try:
+                fcntl.flock(lock_fd, fcntl.LOCK_EX)
+                yield root_fd
+            finally:
+                os.close(lock_fd)
+
+    @staticmethod
+    def _read(directory_fd: int, job_id: int) -> tuple[StoredJob, str]:
+        filename = _job_filename(job_id)
+        file_fd = os.open(filename, _FILE_FLAGS, dir_fd=directory_fd)
+        try:
+            if not stat.S_ISREG(os.fstat(file_fd).st_mode):
+                msg = "job path must identify a regular file"
+                raise ValueError(msg)
+            with os.fdopen(os.dup(file_fd), "r", encoding="utf-8") as handle:
+                text = handle.read()
+        finally:
+            os.close(file_fd)
+        return _stored_job(text, job_id), text
+
+    @staticmethod
+    def _create(directory_fd: int, record: JobRecord) -> None:
+        filename = _job_filename(record.job_id)
+        content = _serialized_job(record)
+        file_fd = os.open(filename, _CREATE_FLAGS, 0o644, dir_fd=directory_fd)
+        try:
+            with os.fdopen(os.dup(file_fd), "w", encoding="utf-8", newline="\n") as handle:
+                handle.write(content)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.fsync(directory_fd)
+        finally:
+            os.close(file_fd)
+
+    @staticmethod
+    def _replace(directory_fd: int, record: JobRecord) -> None:
+        filename = _job_filename(record.job_id)
+        temporary = f".tmp-{filename}-{os.urandom(8).hex()}"
+        content = _serialized_job(record)
+        file_fd = os.open(temporary, _CREATE_FLAGS, 0o644, dir_fd=directory_fd)
+        try:
+            with os.fdopen(os.dup(file_fd), "w", encoding="utf-8", newline="\n") as handle:
+                handle.write(content)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temporary, filename, src_dir_fd=directory_fd, dst_dir_fd=directory_fd)
+            os.fsync(directory_fd)
+        finally:
+            with contextlib.suppress(FileNotFoundError):
+                os.unlink(temporary, dir_fd=directory_fd)
+            os.close(file_fd)
+
+    def materialize(self, generation: JobGeneration) -> tuple[StoredJob, ...]:
+        """Create accepted generation jobs idempotently without overwriting records."""
+        with self._locked_root() as root_fd:
+            directory_fd = self._directory(root_fd, "jobs", create=True)
+            assert directory_fd is not None
+            try:
+                records = tuple(JobRecord(schema_version=1, **shape_job.model_dump()) for shape_job in generation.jobs)
+                for record in records:
+                    try:
+                        stored, _text = self._read(directory_fd, record.job_id)
+                    except FileNotFoundError:
+                        continue
+                    if stored.job != record:
+                        raise JobConflictError(record.job_id)
+                materialized: list[StoredJob] = []
+                for record in records:
+                    try:
+                        stored, _text = self._read(directory_fd, record.job_id)
+                    except FileNotFoundError:
+                        self._create(directory_fd, record)
+                        stored, _text = self._read(directory_fd, record.job_id)
+                    materialized.append(stored)
+                return tuple(materialized)
+            finally:
+                os.close(directory_fd)
+
+    def read(self, job_id: int, *, archived: bool = False) -> StoredJob:
+        """Read one active or archived job and its current OCC token."""
+        with self._root() as root_fd:
+            directory_fd = self._directory(root_fd, "archive" if archived else "jobs", create=False)
+            if directory_fd is None:
+                raise FileNotFoundError(_job_filename(job_id))
+            try:
+                return self._read(directory_fd, job_id)[0]
+            finally:
+                os.close(directory_fd)
+
+    def list(self, *, archived: bool = False) -> tuple[StoredJob, ...]:
+        """List active or archived jobs in ascending numeric job-ID order."""
+        with self._root() as root_fd:
+            directory_fd = self._directory(root_fd, "archive" if archived else "jobs", create=False)
+            if directory_fd is None:
+                return ()
+            try:
+                job_ids = sorted(
+                    int(name.removesuffix(".yaml"))
+                    for name in os.listdir(directory_fd)  # noqa: PTH208 - requires pinned descriptor.
+                    if name.endswith(".yaml") and name.removesuffix(".yaml").isdigit()
+                )
+                return tuple(self._read(directory_fd, job_id)[0] for job_id in job_ids)
+            finally:
+                os.close(directory_fd)
+
+    def update(self, record: JobRecord, expected_token: str) -> StoredJob:
+        """Replace one active record when its supplied OCC token is current."""
+        with self._locked_root() as root_fd:
+            directory_fd = self._directory(root_fd, "jobs", create=False)
+            if directory_fd is None:
+                raise FileNotFoundError(_job_filename(record.job_id))
+            try:
+                current, _text = self._read(directory_fd, record.job_id)
+                if current.token != expected_token:
+                    raise JobConcurrencyError(record.job_id)
+                self._replace(directory_fd, record)
+                return self._read(directory_fd, record.job_id)[0]
+            finally:
+                os.close(directory_fd)
+
+    def archive(self, job_id: int, expected_token: str) -> StoredJob:
+        """Move one active job into archive when its supplied OCC token is current."""
+        with self._locked_root() as root_fd:
+            active_fd = self._directory(root_fd, "jobs", create=False)
+            archive_fd = self._directory(root_fd, "archive", create=True)
+            if active_fd is None:
+                raise FileNotFoundError(_job_filename(job_id))
+            assert archive_fd is not None
+            try:
+                current, _text = self._read(active_fd, job_id)
+                if current.token != expected_token:
+                    raise JobConcurrencyError(job_id)
+                filename = _job_filename(job_id)
+                try:
+                    os.link(filename, filename, src_dir_fd=active_fd, dst_dir_fd=archive_fd, follow_symlinks=False)
+                except FileExistsError as exc:
+                    raise JobConflictError(job_id) from exc
+                os.unlink(filename, dir_fd=active_fd)
+                os.fsync(active_fd)
+                os.fsync(archive_fd)
+                return self._read(archive_fd, job_id)[0]
+            finally:
+                os.close(active_fd)
+                os.close(archive_fd)
 
 
 class JobProjection(BaseModel):
@@ -274,13 +527,17 @@ def read_job_generation(
 
 
 __all__ = [
+    "JobConcurrencyError",
+    "JobConflictError",
     "JobDiagnostic",
     "JobDiagnosticCode",
     "JobGeneration",
     "JobParseResult",
     "JobProjection",
     "JobRecord",
+    "JobStore",
     "ShapeJob",
+    "StoredJob",
     "parse_job_mapping",
     "plan_shape_jobs",
     "project_job",
