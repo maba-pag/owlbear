@@ -4,7 +4,7 @@ title: 'P3-14: Serialize mixed job and attempt transactions'
 status: shape
 priority: high
 created: 2026-07-23T14:40:53.788290+02:00
-updated: 2026-07-23T15:37:50.898551+02:00
+updated: 2026-07-23T23:28:20.147724+02:00
 tags:
   - phase-3
   - scope:core
@@ -64,3 +64,11 @@ Exercise a mixed job/event plan over explicit temporary roots. Inject one mixed 
 - Commands run: none.
 - Builder-challenger result: not invoked; a DONE verdict was not proposed.
 - Follow-up risk: task #2012 is in `shape`, but this task's scope requires its replacement/reopen primitive. Reshape or complete #2012 before redispatching #2013.
+
+[[2026-07-23T23:28:20+02:00]]
+## Shape Notes
+- Initial classification changed from mechanical reroute to connected local contract repair after live-source validation.
+- Dependency check: #2011 and #2012 are archived completed; no pending or resolved requests exist. The original builder dependency blocker is gone.
+- New source fact: `RuntimeTransaction` accepts byte participants, but canonical job replacement bytes/path and immutable attempt bytes/path remain private (`jobs._serialized_job`, `attempts._event_content`, and their private path helpers). The current AC terms `runtime reopen`, `stable outcome`, and `the operation` do not name a public mixed-plan construction or observation boundary.
+- Repair needed: define store-owned public participant planning for `JobStore` and `AttemptStore`, keep generic publication/recovery in `RuntimeTransaction`, replace AC with exact commit/recover/read/race/replay observations, and update parent #2003's module/scenario maps.
+- Lifecycle: released unchanged in shape. Restart as connected set #2003 and #2013, claimed in ID order, before the first mutation.
