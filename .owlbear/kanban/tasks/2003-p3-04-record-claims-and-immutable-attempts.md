@@ -4,7 +4,7 @@ title: 'P3-04: Record claims and immutable attempts'
 status: build
 priority: high
 created: 2026-07-22T21:58:44.211108+02:00
-updated: 2026-07-23T11:28:27.359596+02:00
+updated: 2026-07-23T12:20:29.533583+02:00
 tags:
   - phase-3
   - scope:core
@@ -133,3 +133,13 @@ Proof guidance: exercise public attempt parser and store APIs plus lifecycle ope
 - Contract audit: the existing operative body already owns the native append-only attempt/activity stream and atomically couples job claim changes with `started`, `released`, `failed`, and `crashed` events. Task #2004 remains the owner of the `succeeded` event during successful completion.
 - Dependency closure: #2003 consumes archived #2001 stores through the transaction kernel now owned by build task #2002. It requires no request, completion, invalidation, or health producer.
 - Route: restored to `build` with parent #1979 and dependency #2002 unchanged. It remains dependency-blocked and must not be dispatched until #2002 reaches non-blocking completion.
+
+[[2026-07-23T12:20:29+02:00]]
+## Builder Notes
+- Change envelope: no product change; task 2003 requires the transaction coordinator owned by dependency 2002.
+- Files changed: no product files.
+- Change Module Map deviations: none; implementation was not started because the shaped route states this task must not be dispatched until dependency 2002 completes.
+- Proof selected: board dependency projection and shaped dependency-closure note.
+- Commands run: none; implementation is intentionally deferred.
+- Builder-challenger result: not invoked because no DONE verdict is being proposed.
+- Follow-up risk: task 2002 is currently in `shape`, so 2003 must be redispatched only after 2002 reaches a non-blocking completed status.
