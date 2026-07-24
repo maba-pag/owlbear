@@ -1,10 +1,10 @@
 ---
 id: 2018
 title: 'P3-19: Release or fail owning attempts'
-status: collect
+status: archived
 priority: high
 created: 2026-07-23T14:41:48.715516+02:00
-updated: 2026-07-24T12:48:30.661757+02:00
+updated: 2026-07-24T12:52:38.182700+02:00
 tags:
   - phase-3
   - scope:core
@@ -56,7 +56,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -220,3 +220,12 @@ The revised native package loads with no diagnostics at digest `5d7cf64e0317707e
 - `uv run pytest serve/kanban/tests/test_attempts.py serve/kanban/tests/test_runtime_transaction.py` also exposed four unrelated existing lock-order test failures because their fixtures use unsupported `JobDisposition` values `updated` and `transaction`; `test_attempts.py` itself passed and the task's direct transaction fixture is outside this verifier patch.
 - Verifier-challenger: pass. It found no blocker and confirmed AC-specific public-boundary proof, mapped scope, and patch sufficiency.
 - Final route: collect.
+
+[[2026-07-24T12:52:38+02:00]]
+## Collect Notes
+- Classification: leaf. Task #2018 has no child tasks; it is neither an aggregate nor EPIC task.
+- Latest verification evidence: newest `## Verify Notes` occurrence records PASS and routes to collect. It maps AC-1 through AC-8 to focused public-boundary and parser proof: `uv run pytest serve/kanban/tests/test_native_runtime.py` (13 passed), `uv run pytest serve/kanban/tests/test_attempts.py` (19 passed), and clean ruff check/format checks on the finalization owner.
+- Invariant coverage: owner-bound release/fail, immutable sequence history, exact idempotent replay, non-owner/no-active diagnostics, cross-job isolation, and start claim identity are explicitly mapped across AC-1 through AC-8.
+- Parent/dependency state: parent #2003 is informational for this leaf; prerequisite #2017 is clear (`dep_status: ok`).
+- Requests and decisions: `list_requests` returned no pending or resolved structured requests for #2018. No later unresolved follow-up appears after the latest verifier PASS.
+- Archive rationale: complete verified leaf closure; no aggregate proof, child coverage, or residual decision gate applies.
