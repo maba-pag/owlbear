@@ -168,9 +168,19 @@ def test_finish_shape_publishes_one_complete_outcome_and_replays(revision, tmp_p
 
     result = runtime.finish_shape(request)
     replay = runtime.finish_shape(request)
-    changed_replay = runtime.finish_shape(
+    changed_receipt_replay = runtime.finish_shape(
         request.model_copy(update={"code_revision": "b" * 40, "evidence": {"methods": ["changed"]}})
     )
+    changed_plan = request.node_plan | {
+        "packets": [
+            request.node_plan["packets"][0],
+            request.node_plan["packets"][1] | {"dependencies": []},
+        ]
+    }
+    changed_plan_replay = runtime.finish_shape(request.model_copy(update={"node_plan": changed_plan}))
+    changed_jobs_replay = runtime.finish_shape(request.model_copy(update={"build_job_ids": (2, 5)}))
+    changed_receipt_id_replay = runtime.finish_shape(request.model_copy(update={"receipt_id": "shape-002"}))
+    changed_attempt_replay = runtime.finish_shape(request.model_copy(update={"attempt_id": "attempt-002"}))
 
     assert result.diagnostic is None
     assert result.receipt is not None
@@ -187,8 +197,16 @@ def test_finish_shape_publishes_one_complete_outcome_and_replays(revision, tmp_p
     assert replay.receipt == result.receipt
     assert replay.event == result.event
     assert replay.created_jobs == ()
-    assert changed_replay.diagnostic is not None
-    assert changed_replay.diagnostic.code is FinishJobDiagnosticCode.IDENTITY_CONFLICT
+    assert changed_receipt_replay.diagnostic is not None
+    assert changed_receipt_replay.diagnostic.code is FinishJobDiagnosticCode.IDENTITY_CONFLICT
+    assert changed_plan_replay.diagnostic is not None
+    assert changed_plan_replay.diagnostic.code is FinishJobDiagnosticCode.IDENTITY_CONFLICT
+    assert changed_jobs_replay.diagnostic is not None
+    assert changed_jobs_replay.diagnostic.code is FinishJobDiagnosticCode.IDENTITY_CONFLICT
+    assert changed_receipt_id_replay.diagnostic is not None
+    assert changed_receipt_id_replay.diagnostic.code is FinishJobDiagnosticCode.IDENTITY_CONFLICT
+    assert changed_attempt_replay.diagnostic is not None
+    assert changed_attempt_replay.diagnostic.code is FinishJobDiagnosticCode.IDENTITY_CONFLICT
     assert tuple(event.kind for event in AttemptStore(work_root).list()) == ("started", "succeeded")
 
 
@@ -252,7 +270,7 @@ def test_finish_shape_transaction_failure_publishes_nothing(tmp_path, monkeypatc
     assert not (revision.source_dir / "receipts/shape-001.yaml").exists()
 
 
-def test_finish_build_accept_and_audit_publish_complete_outcomes(tmp_path) -> None:
+def test_finish_build_accept_and_audit_publish_complete_outcomes(tmp_path) -> None:  # noqa: PLR0915
     revision = _copied_revision(tmp_path)
     work_root = tmp_path / "work"
     work_root.mkdir()
@@ -273,48 +291,54 @@ def test_finish_build_accept_and_audit_publish_complete_outcomes(tmp_path) -> No
         claim = f"claim-{job_id:03d}"
         start = _request().model_copy(update={"job_id": job_id, "attempt_id": attempt, "claim_id": claim})
         assert runtime.start_job(start).diagnostic is None
-        result = runtime.finish_build(
-            FinishJobRequest(
-                job_id=job_id,
-                attempt_id=attempt,
-                claim_id=claim,
-                actor_id=start.actor_id,
-                process_id=start.process_id,
-                finished_at=f"2026-07-24T00:0{job_id + 1}:00Z",
-                receipt_id=f"build-{job_id - 1:03d}",
-                code_revision="a" * 40,
-                evidence=finish_methods,
-                evidence_ids=(f"build-proof-{job_id}",),
-                impact_closure=closure,
-            )
+        request = FinishJobRequest(
+            job_id=job_id,
+            attempt_id=attempt,
+            claim_id=claim,
+            actor_id=start.actor_id,
+            process_id=start.process_id,
+            finished_at=f"2026-07-24T00:0{job_id + 1}:00Z",
+            receipt_id=f"build-{job_id - 1:03d}",
+            code_revision="a" * 40,
+            evidence=finish_methods,
+            evidence_ids=(f"build-proof-{job_id}",),
+            impact_closure=closure,
         )
+        result = runtime.finish_build(request)
         assert result.diagnostic is None
         assert result.receipt is not None
         assert result.receipt.payload["predecessor_receipt_ids"][-1] == predecessor_receipt_id
         assert result.event is not None
         assert result.event.kind == "succeeded"
+        replay = runtime.finish_build(request)
+        assert replay.receipt == result.receipt
+        assert replay.event == result.event
+        changed_closure = closure.model_copy(update={"paths": ("serve/tools/",)})
+        changed_replay = runtime.finish_build(request.model_copy(update={"impact_closure": changed_closure}))
+        assert changed_replay.diagnostic is not None
+        assert changed_replay.diagnostic.code is FinishJobDiagnosticCode.IDENTITY_CONFLICT
 
     accept_start = _request().model_copy(update={"job_id": 4, "attempt_id": "attempt-004", "claim_id": "claim-004"})
     assert runtime.start_job(accept_start).diagnostic is None
-    accept = runtime.finish_accept(
-        FinishJobRequest(
-            job_id=4,
-            attempt_id=accept_start.attempt_id,
-            claim_id=accept_start.claim_id,
-            actor_id=accept_start.actor_id,
-            process_id=accept_start.process_id,
-            finished_at="2026-07-24T00:05:00Z",
-            receipt_id="accept-001",
-            code_revision="a" * 40,
-            evidence=finish_methods,
-            evidence_ids=("accept-proof-001",),
-        )
+    accept_request = FinishJobRequest(
+        job_id=4,
+        attempt_id=accept_start.attempt_id,
+        claim_id=accept_start.claim_id,
+        actor_id=accept_start.actor_id,
+        process_id=accept_start.process_id,
+        finished_at="2026-07-24T00:05:00Z",
+        receipt_id="accept-001",
+        code_revision="a" * 40,
+        evidence=finish_methods,
+        evidence_ids=("accept-proof-001",),
     )
+    accept = runtime.finish_accept(accept_request)
     assert accept.diagnostic is None
     assert accept.receipt is not None
     assert accept.receipt.payload["predecessor_receipt_ids"] == ("build-001", "build-002")
     assert accept.event is not None
     assert accept.event.kind == "succeeded"
+    assert runtime.finish_accept(accept_request).receipt == accept.receipt
 
     target = runtime._revision.graph.nodes[0]  # noqa: SLF001 - arrange a same-authority audit job.
     audit_job = _record(
@@ -327,25 +351,26 @@ def test_finish_build_accept_and_audit_publish_complete_outcomes(tmp_path) -> No
     RuntimeTransaction(work_root, "audit-job", (store.create_participant(audit_job),)).commit()
     audit_start = _request().model_copy(update={"job_id": 5, "attempt_id": "attempt-005", "claim_id": "claim-005"})
     assert runtime.start_job(audit_start).diagnostic is None
-    audit = runtime.finish_audit(
-        FinishJobRequest(
-            job_id=5,
-            attempt_id=audit_start.attempt_id,
-            claim_id=audit_start.claim_id,
-            actor_id=audit_start.actor_id,
-            process_id=audit_start.process_id,
-            finished_at="2026-07-24T00:06:00Z",
-            receipt_id="audit-001",
-            code_revision="a" * 40,
-            evidence=finish_methods,
-            evidence_ids=("audit-proof-001",),
-        )
+    audit_request = FinishJobRequest(
+        job_id=5,
+        attempt_id=audit_start.attempt_id,
+        claim_id=audit_start.claim_id,
+        actor_id=audit_start.actor_id,
+        process_id=audit_start.process_id,
+        finished_at="2026-07-24T00:06:00Z",
+        receipt_id="audit-001",
+        code_revision="a" * 40,
+        evidence=finish_methods,
+        evidence_ids=("audit-proof-001",),
     )
+    audit = runtime.finish_audit(audit_request)
     assert audit.diagnostic is None
     assert audit.receipt is not None
     assert audit.receipt.payload["predecessor_receipt_ids"] == ("accept-001",)
     assert audit.event is not None
     assert audit.event.kind == "succeeded"
+    assert runtime.finish_audit(audit_request).receipt == audit.receipt
+    assert runtime.finish_shape(shape).receipt is not None
     assert tuple(item.job.job_id for item in store.list(archived=True)) == (1, 2, 3, 4, 5)
     assert tuple(event.kind for event in AttemptStore(work_root).list()) == (
         "started",

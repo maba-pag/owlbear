@@ -1,10 +1,10 @@
 ---
 id: 2004
 title: 'P3-05: Complete purpose-specific jobs with current receipts'
-status: verify
+status: collect
 priority: medium
 created: 2026-07-22T21:58:55.620202+02:00
-updated: 2026-07-24T14:31:29.854092+02:00
+updated: 2026-07-24T14:45:33.244750+02:00
 tags:
   - phase-3
   - scope:core
@@ -140,3 +140,15 @@ Proof uses the public finish boundary and the exported result codes. Receipt ID 
 - Commands: focused finish matrix passed 3 tests; complete native runtime module passed 23 tests; runtime plus change receipts plus jobs slice passed 102 tests; focused workspace lint passed; VS Code diagnostics were clean.
 - Builder challenger: pass. It independently reran the 23-test runtime module and Ruff, found no blockers, confirmed the durable-test rent, and made no auto-fixes.
 - Follow-up risks: none identified inside the shaped scope.
+
+[[2026-07-24T14:45:33+02:00]]
+## Verify Notes
+
+- Verdict: PASS after a local verifier repair. Builder commit `ebd6a5a5b` closed the public finish matrix but still accepted changed canonical closure and shape plan/job identity on replay; verifier completed exact replay identity in the approved runtime and owning test files.
+- AC-1: public shape success, invalid packet authority, and injected transaction failure prove one complete publication or no graph, job, archive, receipt, or succeeded-event publication.
+- AC-2: public shape, build, accept, and audit success/replay prove one immutable receipt, one succeeded event, and same-kind archive. Changed receipt ID, attempt ID, code revision, evidence, build closure, shape packet DAG, and generated job IDs return `ERR_FINISH_IDENTITY_CONFLICT` without duplicate events.
+- AC-3: the adjacent receipt-currentness and job-store slice covers delivery/node-plan staleness, predecessor refusal, supersession, code currency, and dependent-job retention.
+- Required Follow-up closure: `AC-2/exact-finish-replay` is resolved by canonical closure and shape plan/job comparison plus total identity-conflict handling before caller-supplied receipt/attempt lookups. `AC-1-AC-2/public-finish-proof` is resolved by maintained public build/accept/audit replay and injected shape transaction failure cases.
+- Evidence: native runtime module returned 23 passed; receipt-currentness plus job-store slice returned 79 passed; Ruff check and format check passed on both verifier-owned files; VS Code diagnostics and diff whitespace checks were clean.
+- Verifier challenger: final decision pass; no unresolved AC, follow-up, scope, or durable-test-rent finding.
+- Files changed: `serve/kanban/src/owlbear_kanban/native_runtime.py`, `serve/kanban/tests/test_native_runtime.py`.

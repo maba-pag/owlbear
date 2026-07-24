@@ -686,10 +686,53 @@ class NativeRuntime:
             stored = self._jobs.read(request.job_id, archived=True)
         except FileNotFoundError:
             return None
-        event = self._attempts.read(request.attempt_id, 2).event
+        if stored.job.receipt_id != request.receipt_id:
+            return self._finish_diagnostic(
+                FinishJobDiagnosticCode.IDENTITY_CONFLICT,
+                "archived finish identity differs from the request",
+                target=str(request.job_id),
+            )
+        try:
+            event = self._attempts.read(request.attempt_id, 2).event
+        except FileNotFoundError:
+            return self._finish_diagnostic(
+                FinishJobDiagnosticCode.IDENTITY_CONFLICT,
+                "archived finish identity differs from the request",
+                target=str(request.job_id),
+            )
         receipt_result = self._receipts.read(request.receipt_id)
         receipt = receipt_result.receipt
         receipt_payload = receipt.model_dump(mode="json")["payload"] if receipt is not None else {}
+        if isinstance(request, FinishShapeRequest):
+            validated = self._validate_node_plan(stored.job.target_node_id, request.node_plan)
+            prepared_closure = (
+                validated if isinstance(validated, FinishJobResult) else self._union_closures(validated[2])
+            )
+        else:
+            prepared_closure = self._finish_closure(stored.job, request)
+        closure_matches = (
+            receipt is not None
+            and not isinstance(prepared_closure, FinishJobResult)
+            and receipt.impact_closure == prepared_closure
+        )
+        shape_identity_matches = True
+        if isinstance(request, FinishShapeRequest):
+            node_plan = self._revision.graph.execution.node_plans.get(stored.job.target_node_id)
+            generated_jobs = tuple(
+                item.job
+                for item in (*self._jobs.list(), *self._jobs.list(archived=True))
+                if item.job.target_node_id == stored.job.target_node_id
+                and item.job.node_plan_digest == receipt_payload.get("node_plan_digest")
+                and (item.job.kind != "build" or stored.job.job_id in item.job.predecessor_job_ids)
+                and (item.job.kind != "accept" or item.job.predecessor_job_ids == request.build_job_ids)
+            )
+            build_job_ids = tuple(item.job_id for item in generated_jobs if item.kind == "build")
+            accept_job_ids = tuple(item.job_id for item in generated_jobs if item.kind == "accept")
+            shape_identity_matches = (
+                node_plan == request.node_plan
+                and build_job_ids == request.build_job_ids
+                and accept_job_ids == (request.accept_job_id,)
+            )
         if (
             stored.job.kind == kind
             and stored.job.receipt_id == request.receipt_id
@@ -704,6 +747,8 @@ class NativeRuntime:
             and receipt is not None
             and receipt.payload.get("code_revision") == request.code_revision
             and receipt_payload.get("evidence") == request.evidence
+            and closure_matches
+            and shape_identity_matches
         ):
             return FinishJobResult(job=stored, receipt=receipt, event=event)
         return self._finish_diagnostic(
