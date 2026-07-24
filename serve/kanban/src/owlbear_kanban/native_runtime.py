@@ -343,7 +343,12 @@ class NativeRuntime:
         if job.claim_id != request.claim_id or job.attempt_id != request.attempt_id:
             return "ERR_RELEASE_NON_OWNER" if kind == "released" else "ERR_FAIL_NON_OWNER"
         started = self._attempts.read(request.attempt_id, 1).event
-        if started is None or started.actor_id != request.actor_id or started.process_id != request.process_id:
+        if (
+            started is None
+            or started.claim_id != request.claim_id
+            or started.actor_id != request.actor_id
+            or started.process_id != request.process_id
+        ):
             return "ERR_RELEASE_NON_OWNER" if kind == "released" else "ERR_FAIL_NON_OWNER"
         replacement = job.model_copy(update={"claim_id": None, "attempt_id": None, "updated_at": timestamp})
         event = AttemptEvent(

@@ -1,10 +1,10 @@
 ---
 id: 2018
 title: 'P3-19: Release or fail owning attempts'
-status: verify
+status: collect
 priority: high
 created: 2026-07-23T14:41:48.715516+02:00
-updated: 2026-07-24T12:42:10.991507+02:00
+updated: 2026-07-24T12:48:30.661757+02:00
 tags:
   - phase-3
   - scope:core
@@ -205,3 +205,18 @@ The revised native package loads with no diagnostics at digest `5d7cf64e0317707e
 - Current failure-key resolutions: `claim-identity-finalization-replay` is resolved by durable release and fail mismatch regressions; the former cross-job finalization replay regression remains passing.
 - Builder challenger: pass. It confirmed focused proof, scope, and that the broader transaction failures arise from unrelated invalid disposition fixtures.
 - Follow-up risks: the known transaction fixture failures remain outside this task scope.
+
+[[2026-07-24T12:48:30+02:00]]
+## Verify Notes
+- Evidence reviewed: task AC-1 through AC-8; operative finalization replay identity contract; latest Builder Notes; public `NativeRuntime`, `AttemptStore`, and `RuntimeTransaction` owners; and the shaped module map.
+- Named authorities checked: `REQ-008`, `REQ-009`, `REQ-016`, `IF-003`, design sections 2.2, 2.3, 7.2, 7.3, 7.4, 8.6, 13, and 14, plus accepted `DEC-007`, `DEC-009`, `DEC-022`, and `DEC-023`. The implementation correctly partitions same-job completed replay before cleared-pointer handling and does not return cross-job outcomes.
+- Change Module Map: no deviation. Existing claim parsing is in `attempts.py`; this verifier patch is local to the mapped `native_runtime.py` finalization owner. No public interface, transaction behavior, expiry, completion, receipt, dispatch, MCP, or Cockpit code changed.
+- Normal-path boundary exercised: `uv run pytest serve/kanban/tests/test_native_runtime.py` passed 13 tests. These call public `NativeRuntime.start_job`, `release_job`, and `fail_job` against real temporary-root `JobStore` and `AttemptStore` instances; replacement is limited below the boundary to fixture repository history.
+- Checks run: `uv run pytest serve/kanban/tests/test_attempts.py` passed 19 tests; `uv run ruff check serve/kanban/src/owlbear_kanban/native_runtime.py` passed; `uv run ruff format --check serve/kanban/src/owlbear_kanban/native_runtime.py` passed; VS Code diagnostics reported none.
+- Finding and patch: active finalization checked job pointers and sequence-1 actor/process but omitted `started.claim_id`. A sequence-1 event with another claim could be finalized by the active pointer claim, violating AC-6. Patched `_finalize` to require `started.claim_id == request.claim_id` before mutation.
+- Patch proof: a public temporary-root probe started a job, changed its actual persisted `attempts/attempt-001/1.json` claim identity, then called `NativeRuntime.fail_job`. It returned `ERR_FAIL_NON_OWNER` and wrote no sequence-2 event. The focused runtime suite passed after the patch.
+- AC-to-evidence: AC-1 is covered by the attempt parser suite; AC-2 and AC-3 by public release/fail writes and preserved start history; AC-4 and AC-5 by exact and mismatched completed replay; AC-6 by public active/non-owner/no-active tests plus the patched claim-mismatch probe; AC-7 by public cross-job isolation; AC-8 by public start claim propagation and replay-diagnostic tests.
+- Prior same-failure-key rejection check: none. The earlier cross-job replay repair and subsequent claim-identity reshape were distinct, resolved failure keys.
+- `uv run pytest serve/kanban/tests/test_attempts.py serve/kanban/tests/test_runtime_transaction.py` also exposed four unrelated existing lock-order test failures because their fixtures use unsupported `JobDisposition` values `updated` and `transaction`; `test_attempts.py` itself passed and the task's direct transaction fixture is outside this verifier patch.
+- Verifier-challenger: pass. It found no blocker and confirmed AC-specific public-boundary proof, mapped scope, and patch sufficiency.
+- Final route: collect.
