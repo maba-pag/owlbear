@@ -10,6 +10,7 @@ from owlbear_kanban import (
     JobConcurrencyError,
     JobConflictError,
     JobDiagnosticCode,
+    JobDisposition,
     JobStore,
     load_change,
     parse_job_mapping,
@@ -22,7 +23,7 @@ from owlbear_kanban import (
 def _update_from_process(work_root: str, job: object, token: str, queue: object) -> None:
     store = JobStore(Path(work_root))
     try:
-        store.update(job.model_copy(update={"disposition": "claimed"}), token)  # type: ignore[attr-defined]
+        store.update(job.model_copy(update={"disposition": JobDisposition.CANCELLED}), token)  # type: ignore[attr-defined]
     except JobConcurrencyError:
         queue.put("stale")  # type: ignore[attr-defined]
     else:
@@ -262,9 +263,9 @@ def test_job_store_uses_occ_for_updates_and_archives(revision, tmp_path) -> None
     )
     stored = store.materialize(generation)[0]
 
-    updated = store.update(stored.job.model_copy(update={"disposition": "claimed"}), stored.token)
+    updated = store.update(stored.job.model_copy(update={"disposition": JobDisposition.CANCELLED}), stored.token)
 
-    assert updated.job.disposition == "claimed"
+    assert updated.job.disposition is JobDisposition.CANCELLED
     assert updated.token != stored.token
     with pytest.raises(JobConcurrencyError) as exc_info:
         store.update(stored.job, stored.token)
@@ -301,7 +302,7 @@ def test_job_store_allows_only_one_process_to_update_a_token(revision, tmp_path)
 
     assert [process.exitcode for process in processes] == [0, 0]
     assert sorted(queue.get() for _ in processes) == ["stale", "updated"]
-    assert store.read(stored.job.job_id).job.disposition == "claimed"
+    assert store.read(stored.job.job_id).job.disposition is JobDisposition.CANCELLED
 
 
 def test_job_store_does_not_follow_substituted_job_symlink(revision, tmp_path) -> None:

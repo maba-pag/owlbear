@@ -1,10 +1,10 @@
 ---
 id: 2017
 title: 'P3-18: Start only eligible job attempts'
-status: build
+status: verify
 priority: high
 created: 2026-07-23T14:41:39.975443+02:00
-updated: 2026-07-24T03:06:41.046184+02:00
+updated: 2026-07-24T03:11:44.912336+02:00
 tags:
   - phase-3
   - scope:core
@@ -145,3 +145,16 @@ The revised native package loads and reports no admission findings under a curre
 - Validation: `uv run pytest -q tests/test_edit_task_contract.py` passed 2 tests; both task diffs pass `git diff --check`; mechanical audit found one operative amendment per task and exactly eight #2017 AC.
 - Authority commit: e8de7f92df9847a004613898e2171c3239365e29. Parent map commit: 8e1032fa8adfb3ae62758b91597e3b0f498e5e41.
 - Shaper challenger: pass on the complete graph. Route to builder using the operative amendment as controlling task text.
+
+[[2026-07-24T03:11:44+02:00]]
+## Builder Notes
+- Change envelope: strict native job disposition parsing plus the transport-free `NativeRuntime.start_job` boundary that composes existing job, attempt, receipt-currentness, and mixed transaction owners.
+- Files changed: `serve/kanban/src/owlbear_kanban/jobs.py`, `serve/kanban/src/owlbear_kanban/native_runtime.py`, `serve/kanban/src/owlbear_kanban/__init__.py`, `serve/kanban/tests/test_jobs.py`, and `serve/kanban/tests/test_native_runtime.py`.
+- Change Module Map deviations: none. The shaped `jobs.py`, native runtime, package export, and public proof owners were used exactly as mapped. Incidental unsupported `claimed` test fixtures were migrated to the strict canonical disposition.
+- Proof selected: public-boundary pytest coverage for parser, eligible atomic start, rejection classes, and replay identity; Ruff lint for all touched source and tests.
+- Durable-test justification: added `test_native_runtime.py` because the assembled public mutation contract crosses stores and transaction ownership, making regressions hard to detect through lower-layer tests.
+- Commands run: `uv run pytest -q serve/kanban/tests/test_native_runtime.py serve/kanban/tests/test_jobs.py` passed 31; `uv run ruff check` on all five touched files passed.
+- AC-to-evidence map: AC-1 strict parser test; AC-2 start persists claim, attempt, timestamp, and sequence-one `started` event; AC-3 stale authority parameterized case; AC-4 missing predecessor case; AC-5 pending request case; AC-6 cancelled and superseded parameterized cases; AC-7 exact replay plus changed actor conflict; AC-8 partial and different active claim pointer cases. Rejection cases assert the stored job is unchanged.
+- Current failure-key resolutions: none; no Verify Notes Required Follow-up was present.
+- Builder-challenger result: pass. The challenger reviewed the diff and reran the focused suite: 31 passed.
+- Follow-up risks: receipt-currentness detail paths are delegated to the existing receipt owner; no transaction-failure matrices were added because they remain outside this task scope.

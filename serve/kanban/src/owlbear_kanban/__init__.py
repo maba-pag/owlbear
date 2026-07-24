@@ -66,6 +66,7 @@ from owlbear_kanban.jobs import (
     JobConflictError,
     JobDiagnostic,
     JobDiagnosticCode,
+    JobDisposition,
     JobGeneration,
     JobParseResult,
     JobProjection,
@@ -79,6 +80,13 @@ from owlbear_kanban.jobs import (
     read_job_generation,
 )
 from owlbear_kanban.models import BoardConfig, Task, TaskSummary
+from owlbear_kanban.native_runtime import (
+    NativeRuntime,
+    StartJobDiagnostic,
+    StartJobDiagnosticCode,
+    StartJobRequest,
+    StartJobResult,
+)
 from owlbear_kanban.receipt import (
     ChangeHealthFinding,
     ChangeHealthResult,
@@ -150,12 +158,14 @@ __all__ = [
     "JobConflictError",
     "JobDiagnostic",
     "JobDiagnosticCode",
+    "JobDisposition",
     "JobGeneration",
     "JobParseResult",
     "JobProjection",
     "JobRecord",
     "JobStore",
     "KanbanEngine",
+    "NativeRuntime",
     "NotFoundError",
     "ReceiptConflictError",
     "ReceiptDiagnostic",
@@ -170,6 +180,10 @@ __all__ = [
     "ReceiptValidityCode",
     "RepositoryHistory",
     "ShapeJob",
+    "StartJobDiagnostic",
+    "StartJobDiagnosticCode",
+    "StartJobRequest",
+    "StartJobResult",
     "StoredJob",
     "Task",
     "TaskSummary",

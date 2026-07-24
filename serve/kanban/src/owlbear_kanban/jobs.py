@@ -11,7 +11,7 @@ from io import StringIO
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator
 
 from owlbear_kanban.change import ChangeRevision, Digest
 from owlbear_kanban.runtime_transaction import ReplacementTransactionParticipant
@@ -60,6 +60,12 @@ JobKind = Literal["shape", "build", "accept", "audit", "supersession"]
 DeliveryNodeId = Annotated[str, StringConstraints(strict=True, pattern=r"^DN-[0-9]{3}$")]
 
 
+class JobDisposition(StrEnum):
+    PENDING = "pending"
+    CANCELLED = "cancelled"
+    SUPERSEDED = "superseded"
+
+
 class JobRecord(BaseModel):
     """Immutable operational job identity and references."""
 
@@ -84,7 +90,12 @@ class JobRecord(BaseModel):
     finding_id: str | None = None
     receipt_id: str | None = None
     superseded_by_receipt_id: str | None = None
-    disposition: str = "pending"
+    disposition: JobDisposition = JobDisposition.PENDING
+
+    @field_validator("disposition", mode="before")
+    @classmethod
+    def _parse_disposition(cls, value: object) -> object:
+        return JobDisposition(value) if isinstance(value, str) else value
 
 
 class StoredJob(BaseModel):
@@ -545,6 +556,7 @@ __all__ = [
     "JobConflictError",
     "JobDiagnostic",
     "JobDiagnosticCode",
+    "JobDisposition",
     "JobGeneration",
     "JobParseResult",
     "JobProjection",
