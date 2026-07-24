@@ -1,10 +1,10 @@
 ---
 id: 2017
 title: 'P3-18: Start only eligible job attempts'
-status: shape
+status: build
 priority: high
 created: 2026-07-23T14:41:39.975443+02:00
-updated: 2026-07-24T03:01:51.869841+02:00
+updated: 2026-07-24T03:06:41.046184+02:00
 tags:
   - phase-3
   - scope:core
@@ -22,16 +22,33 @@ depends_on:
   - 2013
   - 2016
 ac:
-  - 'AC-1: Given an open job matching loaded authority, current predecessor validity,
-    no pending request, and no terminal disposition or active claim, `start_job` atomically
-    writes `claim_id` and `attempt_id` on the job plus one `started` event at the
-    supplied claim timestamp.'
-  - 'AC-2: Given an active claim, stale authority, invalid predecessor projection,
-    pending request, or terminal disposition, `start_job` returns the stable reason
-    for that class and leaves the job and attempt history unchanged.'
-  - 'AC-3: Given replay with the same caller-supplied attempt identity that matches
-    the active claim, `start_job` returns the existing outcome; a different identity
-    is rejected without an additional event.'
+  - 'AC-1: Given schema-version-one job data with disposition `pending`, `cancelled`,
+    or `superseded`, `parse_job_mapping` returns that `JobRecord`; any other disposition
+    returns `ERR_JOB_SCHEMA_INVALID` and no job.'
+  - 'AC-2: Given matching loaded authority and target, every authored predecessor
+    with a `CURRENT` receipt, no pending request, disposition `pending`, and no active
+    claim, `start_job` atomically stores the request claim, attempt, and timestamp
+    on the job plus one sequence-1 `started` event with the request actor, process,
+    and timestamp; public store reads return both records.'
+  - 'AC-3: Given a job whose change ID or digest differs from loaded authority, or
+    whose target cannot be projected, `start_job` returns `ERR_START_AUTHORITY_STALE`
+    with the target and leaves job and attempt bytes unchanged.'
+  - 'AC-4: Given an authored predecessor whose job is missing, receipt ID is absent,
+    or receipt is not `CURRENT`, `start_job` returns `ERR_START_PREDECESSOR_INVALID`
+    with the blocking job or receipt target; when evaluation ran, `lower_code` is
+    its result code. Job and attempt bytes remain unchanged.'
+  - 'AC-5: Given an otherwise eligible job with pending requests, `start_job` returns
+    `ERR_START_REQUEST_PENDING` with the first request ID as target and leaves job
+    and attempt bytes unchanged.'
+  - 'AC-6: Given disposition `cancelled` or `superseded`, `start_job` returns `ERR_START_TERMINAL`
+    with that disposition as target and leaves job and attempt bytes unchanged.'
+  - 'AC-7: Given stored claim and attempt IDs equal the request and event 1 has the
+    same actor, process, and claim timestamp, `start_job` returns the existing job
+    and event while the attempt retains one event. A differing actor, process, or
+    timestamp returns `ERR_START_IDENTITY_CONFLICT` without mutation.'
+  - 'AC-8: Given a stored claim or attempt ID differs from the request, or only one
+    stored pointer is populated, `start_job` returns `ERR_START_ACTIVE_CLAIM` and
+    leaves job and attempt bytes unchanged.'
 proof_bundle: critical+challenge
 blocked: false
 block_reason:
@@ -80,3 +97,51 @@ Exercise public `start_job` with the finite readiness classes eligible, active c
 - Challenger: final complete graph challenge passed after adding explicit DEC-022/design 7.3 task authority, schema-migration ownership, and complete eligible preconditions.
 - User graph approval: approved the presented #2003/#2017 graph delta.
 - Lifecycle: release #2017 without movement. Commit reconciled authority and this task history, then restart the approved connected mutation set by claiming #2003 and #2017 in ID order.
+
+[[2026-07-24T03:05:18+02:00]]
+## Operative Native Job Start Contract
+
+This amendment supersedes earlier Scope, Authority, ownership, and proof wording where they conflict with the contract below.
+
+### Scope And Authority Amendment
+
+In scope: the strict `JobDisposition` schema migration; correction of incidental fixtures using unsupported disposition strings; public start request, result, and diagnostic models; the assembled transport-free start operation; and public-boundary proof. Release/failure remains task #2018, expiry recovery remains task #2019, and successful finish/receipt issuance, dispatch, MCP, and Cockpit remain outside this task.
+
+Controlling authority is `REQ-008`, `REQ-009`, `REQ-016`, `IF-003`, `KEEP-007`, `PROOF-003`, design sections 4.3, 7.2, 7.3, 8.6, 13, and 14, and accepted `DEC-007`, `DEC-009`, and `DEC-022`. `DEC-022` and design section 7.3 control disposition literals, start diagnostic codes, check order, and replay identity.
+
+### Public Contract
+
+- `JobDisposition` is a `StrEnum` with `pending`, `cancelled`, and `superseded`; `JobRecord.disposition` defaults to `pending`. Unsupported persisted values fail through existing `ERR_JOB_SCHEMA_INVALID`; no compatibility aliases are added.
+- `StartJobRequest` contains `job_id`, `attempt_id`, `claim_id`, `actor_id`, `process_id`, `claimed_at`, and `candidate_revision`.
+- `StartJobDiagnosticCode` contains `ERR_START_AUTHORITY_STALE`, `ERR_START_PREDECESSOR_INVALID`, `ERR_START_REQUEST_PENDING`, `ERR_START_TERMINAL`, `ERR_START_ACTIVE_CLAIM`, and `ERR_START_IDENTITY_CONFLICT`.
+- `StartJobDiagnostic` contains `code`, `detail`, optional `lower_code`, and optional `target`.
+- `StartJobResult` contains either one `StoredJob` plus one `AttemptEvent`, or one diagnostic.
+- `NativeRuntime(revision, work_root, history)` assembles `JobStore`, `AttemptStore`, and `ReceiptStore`; `start_job(request)` is the public mutation boundary.
+
+### Ordered Eligibility And Mutation
+
+`start_job` checks, in order: job authority and target projection; predecessor jobs and their receipt currentness in authored `predecessor_job_ids` order; pending requests; terminal disposition; active claim and replay identity. Exact replay identity includes attempt, claim, actor, process, and claim timestamp.
+
+An eligible start uses task #2013's `JobStore.replacement_participant` and `AttemptStore.create_participant`, then commits one `RuntimeTransaction` rooted at the work root. The job replacement sets `claim_id`, `attempt_id`, and `updated_at` to the request values; the immutable event uses sequence 1, kind `started`, and the request actor, process, and timestamp. Callers do not mutate stores directly.
+
+### Change Module Map
+
+- `serve/kanban/src/owlbear_kanban/jobs.py`: own strict disposition schema migration and parsing while preserving job serialization and OCC ownership.
+- `serve/kanban/src/owlbear_kanban/native_runtime.py`: own start request/result/diagnostic models and the assembled `NativeRuntime.start_job` operation.
+- `serve/kanban/src/owlbear_kanban/__init__.py`: export the disposition enum and public start contract.
+- `serve/kanban/tests/test_native_runtime.py`: prove the public assembled start scenarios; tasks #2018 and #2019 deepen this facade later.
+- Existing job and transaction fixtures using unsupported incidental disposition strings move to canonical literals; no compatibility path is introduced.
+
+### Validation And Bootstrap Admission
+
+The revised native package loads and reports no admission findings under a current-digest marker at `ce87d37e9935c7dfbb07a52ad485a8ce4b3641d3b054ba72417b0d80577f1a82`. The live `DV-010` remains the existing global re-admission obligation delegated to DN-013/DN-014, consistent with archived task #2021; it is not a local #2017 acceptance branch.
+
+[[2026-07-24T03:06:41+02:00]]
+## Approved Shape Handoff
+- User approved strict `JobDisposition = pending | cancelled | superseded` plus the dedicated `NativeRuntime.start_job` request/result/diagnostic contract.
+- Operative amendment names schema, facade, exports, tests, constructor inputs, six `ERR_START_*` codes, ordered checks, exact replay identity, and task #2013 participant composition.
+- Eight AC independently cover strict schema parsing, eligible atomic start, stale authority, predecessor invalidity, pending requests, both terminal dispositions, exact/conflicting replay, and different/inconsistent active claims.
+- Dependencies are unchanged and satisfied: archived #2013 and #2016. #2018 still owns release/fail; #2019 still owns expiry recovery.
+- Validation: `uv run pytest -q tests/test_edit_task_contract.py` passed 2 tests; both task diffs pass `git diff --check`; mechanical audit found one operative amendment per task and exactly eight #2017 AC.
+- Authority commit: e8de7f92df9847a004613898e2171c3239365e29. Parent map commit: 8e1032fa8adfb3ae62758b91597e3b0f498e5e41.
+- Shaper challenger: pass on the complete graph. Route to builder using the operative amendment as controlling task text.
