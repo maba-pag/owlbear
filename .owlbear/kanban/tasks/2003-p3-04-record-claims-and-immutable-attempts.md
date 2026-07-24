@@ -4,7 +4,7 @@ title: 'P3-04: Record claims and immutable attempts'
 status: collect
 priority: high
 created: 2026-07-22T21:58:44.211108+02:00
-updated: 2026-07-24T03:06:19.494061+02:00
+updated: 2026-07-24T12:36:37.432137+02:00
 tags:
   - phase-3
   - scope:core
@@ -357,4 +357,48 @@ Accepted `DEC-022`, design section 7.3, and `IF-003` own the strict disposition 
 - Dependency audit: no edge changes. #2017 remains gated on archived #2013/#2016; #2018 and #2019 remain downstream.
 - Authority: DEC-022, design section 7.3, and IF-003. Revised authority is coherent at digest ce87d37e9935c7dfbb07a52ad485a8ce4b3641d3b054ba72417b0d80577f1a82 under the documented bootstrap admission policy.
 - Validation: Kanban edit-contract tests passed (2 tests), diff check passed, amendments appear once, and #2017 has exactly eight independently verifiable AC.
+- Route: #2003 stays in collect and remains dependency-blocked on unfinished lifecycle children.
+
+[[2026-07-24T12:34:17+02:00]]
+## Operative Finalization Replay Identity Map Correction
+
+This user-approved correction extends the packet maps for #2018 without changing dependency edges or #2019 ownership.
+
+### Change Module Map Delta
+
+| Module | Planned change | Ownership |
+|---|---|---|
+| `serve/kanban/src/owlbear_kanban/attempts.py` | Add required nonempty `AttemptEvent.claim_id` and stable identity diagnostics | #2018 bounded repair of archived #2010 event contract/parser |
+| `serve/kanban/src/owlbear_kanban/native_runtime.py` | Populate claim on started/released/failed events and partition exact, mismatched, cross-job, and absent-outcome replay | #2018 bounded repair of archived #2017 event construction plus #2018 finalization ownership |
+| `serve/kanban/tests/test_attempts.py` | Public parser/serializer claim proof | #2018 bounded #2010 invariant repair |
+| `serve/kanban/tests/test_native_runtime.py` | Public start/release/fail replay proof | #2018 |
+| `serve/kanban/tests/test_runtime_transaction.py` | Adapt direct event fixture only | #2018; archived #2011 persistence/path-safety semantics unchanged |
+
+`AttemptEvent` is already exported, so package exports do not change. Archived #2011 remains the immutable persistence/path-safety owner. #2019 remains the expiry-recovery owner.
+
+### Dependency Closure Map Delta
+
+No edge changes. #2018 remains after archived #2017, whose dependency chain includes archived #2010 and #2011. #2019 remains after #2017 and #2018 and consumes the durable claim identity established by #2018.
+
+### Scenario Closure Map Delta
+
+| Task | Added finite scenario axis |
+|---|---|
+| #2018 | claim parse/round-trip/missing/empty; started claim propagation; exact, active-pointer, and matching-pointer metadata-conflict start replay; exact finalization replay; same-job completed mismatch across claim/kind/actor/process/timestamp/detail/evidence; active non-owner; absent-outcome no-active; cross-job replay |
+| #2019 | expiry and retry recovery only; consumes claim-bearing immutable history without redefining replay ownership |
+
+### Authority And Validation
+
+Accepted `DEC-023`, design section 7.4, reconciled design section 7.3, and `IF-003` own this strict event identity and replay partition. The revised authority loads without diagnostics at digest `5d7cf64e0317707ea78015e818f9e3a328b0c4239871edb5bf66014d71ae2552`; global re-admission remains assigned to DN-013/DN-014.
+
+[[2026-07-24T12:34:17+02:00]]
+
+[[2026-07-24T12:36:37+02:00]]
+## Shape Map Repair Notes
+- Applied the user-approved #2018 delta to the parent Change Module Map, Dependency Closure Map, and Scenario Closure Map.
+- Ownership: #2018 repairs archived #2010 event identity/parser and archived #2017 event claim propagation; archived #2011 persistence/path safety and #2019 expiry ownership remain unchanged.
+- Dependency audit: no edge changes. #2018 remains after archived #2017; #2019 remains after #2017/#2018.
+- Authority: DEC-023, design sections 7.3/7.4, and IF-003 at validated digest 5d7cf64e0317707ea78015e818f9e3a328b0c4239871edb5bf66014d71ae2552.
+- Mechanical correction: an accidental duplicate append during the board write was removed through canonical AgentView body replacement with before/after heading assertions; one approved amendment remains and prior history is preserved.
+- Validation: edit-contract tests passed (2), diff check passed, one amendment remains on each task, and #2018 has exactly eight AC.
 - Route: #2003 stays in collect and remains dependency-blocked on unfinished lifecycle children.
