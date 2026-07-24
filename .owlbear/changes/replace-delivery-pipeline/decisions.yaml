@@ -1081,3 +1081,102 @@ decisions:
           - Reopen callers must duplicate inventory, ordering, and expiry discovery
         risks:
           - Abandoned jobs can remain stuck when external inventory is incomplete
+
+  - id: DEC-025
+    title: Bootstrap native orchestration through a narrow MCP work bridge
+    status: accepted
+    decided_at: 2026-07-24
+    authority: user
+    selected: dn-004-native-work-bridge
+    rationale: >-
+      The VS Code orchestrator cannot call the transport-free Python runtime directly, while the
+      full native MCP control plane originally depended on DN-004. DN-004 therefore owns only the
+      strict job planning, start, purpose-specific completion, release, and recovery adapters needed
+      to execute its orchestrator contract. DN-009 consumes that bridge and completes the broader
+      change, request, evidence, health, and history API without introducing a second transport.
+    options:
+      - id: dn-004-native-work-bridge
+        label: Add a narrow native job-dispatch MCP bridge to DN-004
+        confidence: 0.92
+        recommended: true
+        pros:
+          - Preserves one documented MCP adapter model for VS Code agents
+          - Breaks the DN-004/DN-009 bootstrap cycle with bounded scope
+          - Reuses strict DispatchRuntime and lifecycle result contracts
+        cons:
+          - DN-004 gains a small MOD-002 implementation surface
+          - IF-010 becomes the completion of an earlier work bridge
+        risks:
+          - The bridge could grow into a duplicate control plane unless its tool list stays closed
+      - id: in-process-orchestrator-runner
+        label: Add a direct non-MCP orchestrator runner
+        confidence: 0.65
+        recommended: false
+        pros:
+          - Avoids an early MCP implementation slice
+        cons:
+          - Creates a second transport outside the documented adapter model
+          - Requires a new runner lifecycle and invocation boundary
+        risks:
+          - Direct and MCP orchestration semantics can diverge
+      - id: move-full-mcp-before-dispatch
+        label: Move the complete DN-009 control plane before DN-004
+        confidence: 0.45
+        recommended: false
+        pros:
+          - Keeps all MCP work in one delivery node
+        cons:
+          - DN-009 itself consumes dispatch behavior produced by DN-004
+          - Broadly reshapes downstream dependencies and proof
+        risks:
+          - Replaces one hidden cycle with a larger explicit cycle
+
+  - id: DEC-026
+    title: Return proof checkout context from the existing start-job bridge
+    status: accepted
+    decided_at: 2026-07-24
+    authority: user
+    selected: enrich-start-job
+    rationale: >-
+      Accept and audit agents require an engine-owned exact-commit proof checkout, but the VS Code
+      orchestrator cannot call the transport-free ProofCheckoutManager directly. The existing
+      start_job MCP operation therefore composes checkout preparation with DispatchRuntime start for
+      read-only jobs and returns the checkout context without adding a ninth bootstrap tool. Existing
+      finish, release, and recovery operations perform idempotent cleanup, preserving one transport
+      and the closed IF-015 tool set.
+    options:
+      - id: enrich-start-job
+        label: Enrich start_job for accept and audit proof checkouts
+        confidence: 0.94
+        recommended: true
+        pros:
+          - Keeps the approved eight-tool bridge closed
+          - Makes exact-commit proof context reachable at the real orchestrator boundary
+          - Preserves engine ownership of checkout setup and cleanup
+        cons:
+          - start_job returns a purpose-sensitive composite result
+          - Finalization and recovery adapters must include idempotent cleanup
+        risks:
+          - Claim and checkout state can diverge unless setup, start failure, and cleanup ordering are proved
+      - id: add-checkout-tools
+        label: Add separate materialize and cleanup MCP tools
+        confidence: 0.61
+        recommended: false
+        pros:
+          - Exposes each checkout operation directly
+        cons:
+          - Widens the approved closed bridge
+          - Makes the orchestrator coordinate claim and checkout state across more calls
+        risks:
+          - The bootstrap bridge grows into a duplicate control plane
+      - id: defer-proof-checkout-to-dn-009
+        label: Defer runnable accept and audit proof checkout to DN-009
+        confidence: 0.52
+        recommended: false
+        pros:
+          - Keeps DN-004 MCP adaptation smaller
+        cons:
+          - Leaves DN-004 orchestration proof incomplete
+          - Preserves the DN-004 to DN-009 bootstrap dependency gap
+        risks:
+          - Orchestrator wiring lands without a runnable read-only proof boundary

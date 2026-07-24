@@ -1,14 +1,18 @@
 ---
 schema_version: 1
 change_id: replace-delivery-pipeline
-state: draft
+state: admitted
 authority:
   intent: intent.md
   design: design.md
   decisions: decisions.yaml
   research:
     - ../../research/planning-workflow-root-cause-and-redesign.md
-admission: null
+admission:
+  state: admitted
+  delivery_digest: b56fedd21a54a670b5e192ef88a86d6cb4434597b264135ae6a9fd330458bdca
+  receipt: admission-b56fedd21a54
+  limits: [bootstrap]
 
 requirements:
   - id: REQ-001
@@ -435,6 +439,24 @@ interfaces:
     failure_semantics: Setup or cleanup failure becomes a health finding and no accept/audit receipt is valid.
     migration: null
     proof: PROOF-014
+  - id: IF-015
+    name: Bootstrap native job-dispatch MCP bridge
+    producer: DN-004
+    consumers: [DN-009]
+    contract: >-
+      Strict pick, start, purpose-specific finish, release, and expired-claim recovery tools expose IF-004 to the
+      VS Code orchestrator without adding authority or alternate lifecycle semantics. For accept and audit,
+      start_job composes IF-005 setup before claim creation and returns contained checkout context; purpose-specific
+      finish, release, and recovery perform idempotent cleanup without adding another tool.
+    runtime_producer: owlbear_mcp_kanban
+    runtime_consumers: [orchestrator]
+    authority: MOD-002
+    failure_semantics: >-
+      Stable dispatch, lifecycle, and proof-checkout diagnostics map without prose routing. Checkout setup failure
+      creates no claim, rejected start removes prepared checkout, and residual cleanup state becomes a health finding
+      that forbids a valid accept or audit receipt.
+    migration: MIG-003
+    proof: PROOF-014
   - id: IF-006
     name: Resumable design and admission session
     producer: DN-005
@@ -485,7 +507,7 @@ interfaces:
     consumers: [DN-005, DN-006, DN-007, DN-008, DN-010, DN-012, DN-013, DN-014]
     contract: >-
       Change, validation, admission, job, purpose-specific completion, request, evidence, health, and history tools
-      with strict schemas.
+      with strict schemas, completing and superseding the bootstrap work bridge IF-015.
     authority: MOD-002
     failure_semantics: Stable domain error codes map engine failures without leaking partial mutation.
     migration: MIG-003
@@ -586,15 +608,19 @@ migrations:
       editor.
     to: Resumable native /design, delivery-node shape jobs, purpose-specific job tools, and graph-aware Cockpit.
     ordered_steps:
-      - Install new agents, skills, prompts, hooks, and MCP contracts.
+      - Install IF-015 as the closed bootstrap job-dispatch bridge for the native orchestrator.
+      - Complete IF-010 by adding change, admission, request, evidence, health, history, and remaining read tools.
       - Install new Cockpit backend and frontend.
       - Update setup and seed.
       - Remove OpenSpec generated and shared surfaces.
-      - Remove retired agents/workflows and old UI/API routes.
+      - >-
+        Remove retired agents/workflows, old UI/API routes, and any bridge-only duplicate registration after IF-010
+        owns the assembled API.
     consumer_inventory:
       - VS Code prompt and agent users
       - orchestrator and pipeline agents
       - MCP clients
+      - IF-015 bootstrap job-dispatch tool registrations and schemas
       - Cockpit users
       - consumer setup
     compatibility: No aliases or quick lane remain.
@@ -755,6 +781,21 @@ risks:
       filtering/grouping, and desktop/mobile scale fixtures.
     owner: DN-011
     proof: PROOF-012
+  - id: RISK-013
+    class: interface
+    title: Bootstrap MCP bridge becomes a duplicate control plane
+    scenarios:
+      - DN-004 exposes change, request, evidence, health, or history tools outside its closed work bridge.
+      - IF-015 and IF-010 register different schemas or error mappings for the same job operation.
+      - Bridge-only registrations remain after the complete native MCP surface lands.
+      - Accept or audit claim state diverges from its prepared proof checkout after setup, start rejection, or cleanup.
+    disposition: >-
+      Keep IF-015 closed to pick, start, purpose-specific finish, release, and expired-claim recovery; adapt only
+      strict IF-004/IF-003 results while composing IF-005 for read-only starts; exercise exact schemas, ordering,
+      cleanup, and diagnostics in PROOF-014; and require MIG-003/PROOF-009 absence proof for residual duplicate
+      registrations after IF-010 completes the control plane.
+    owner: DN-004
+    proof: PROOF-014
 
 proofs:
   - id: PROOF-001
@@ -894,6 +935,12 @@ proofs:
       and disposable proof-checkout operations.
     owner: DN-004
     method:
+      - Exercise the public IF-015 MCP tools over the real DispatchRuntime and assert the registered tool set is
+        exactly pick_jobs, start_job, finish_shape, finish_build, finish_accept, finish_audit, release_job, and
+        recover_expired_claims with strict schemas and stable domain-error mapping.
+      - For accept and audit, assert start_job returns canonical contained IF-005 checkout context, setup failure
+        creates no claim, start rejection removes the checkout, and finish, release, and expired recovery clean it
+        without adding a ninth tool.
       - Dispatch assigned shape, build, accept, and audit agents from engine-selected waves without interpreting
         agent prose.
       - Assert tracked-file writers never overlap and accept or audit never overlaps a writer.
@@ -901,7 +948,7 @@ proofs:
         materialization, and orphan cleanup paths.
       - Assert every structured attempt is finalized once and replanning reads current graph/job state.
     allowed_replacements: [clock, subagent runner, temporary repository]
-    durable_outputs: [orchestrator scenario, writer-compatibility, and proof-checkout tests]
+    durable_outputs: [bootstrap MCP contract, orchestrator scenario, writer-compatibility, and proof-checkout tests]
   - id: PROOF-015
     title: Cockpit backend contract proof
     boundary: Public FastAPI HTTP and SSE routes over the real graph-aware engine.
@@ -959,12 +1006,12 @@ nodes:
       serialize shared-worktree writers, recover attempts, replan from current state, and provide crash-safe
       disposable proof checkouts.
     owns: [REQ-013, REQ-014, REQ-022, NEG-006]
-    supports: [KEEP-006, KEEP-007]
-    modules: [MOD-001, MOD-003, MOD-009]
-    produces: [IF-004, IF-005]
+    supports: [REQ-020, KEEP-006, KEEP-007]
+    modules: [MOD-001, MOD-002, MOD-003, MOD-009]
+    produces: [IF-004, IF-005, IF-015]
     consumes: [IF-003]
     dependencies: [DN-003]
-    risks: [RISK-002, RISK-004]
+    risks: [RISK-002, RISK-004, RISK-013]
     proof: PROOF-014
   - id: DN-005
     title: Deliver the resumable native design and admission experience
@@ -1027,7 +1074,7 @@ nodes:
     supports: [REQ-009, REQ-015, REQ-016, REQ-017, NEG-001, KEEP-006, KEEP-007]
     modules: [MOD-002, MOD-008]
     produces: [IF-010]
-    consumes: [IF-001, IF-002, IF-003, IF-004]
+    consumes: [IF-001, IF-002, IF-003, IF-004, IF-015]
     dependencies: [DN-004]
     risks: [RISK-005]
     proof: PROOF-011

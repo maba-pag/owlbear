@@ -618,6 +618,21 @@ No caller mutates stores independently. Engine transactions validate references,
 
 The MCP server exposes intent-level tools rather than generic file-like task mutation:
 
+DN-004 first exposes the minimum native work bridge needed by the VS Code orchestrator:
+`pick_jobs`, `start_job`, purpose-specific finish operations, `release_job`, and expired-claim
+recovery. These tools are thin strict adapters over `DispatchRuntime`; they add no authority or
+alternate lifecycle semantics. DN-009 then completes the control plane with change, admission,
+request, evidence, health, history, and remaining read surfaces. This split preserves one MCP
+transport for agents while avoiding a DN-004/DN-009 bootstrap cycle.
+
+For `shape | build`, the bridge `start_job` result is the strict dispatch start result. For
+`accept | audit`, the adapter first prepares IF-005 at the requested candidate commit, then starts
+the claim and returns the strict dispatch result plus the contained checkout path, canonical commit,
+and manifest path. Checkout setup failure creates no claim. A rejected start removes the prepared
+checkout. The matching finish, release, and expired-claim recovery adapters clean the checkout
+idempotently; a residual checkout is a typed health finding and forbids a valid accept or audit
+receipt. This composition does not change IF-003 or add another MCP operation.
+
 ### Change/design tools
 
 - `list_changes`
@@ -764,6 +779,7 @@ Use table-driven and property-based cases for dangling IDs, cycles, disconnected
 | Shared worktree contaminates proof | Single writer for implementation, disposable exact-SHA proof checkouts for accept/audit, scoped commits, stale-boundary detection |
 | Receipt/job files drift from graph | Jobs carry references/digests only; engine projects contracts and health-scans every reference |
 | Corrective jobs create board noise | Immutable history with latest-valid-chain default and grouped finding-set corrections |
+| Bootstrap MCP bridge becomes a duplicate control plane | Keep its tool list closed to native job pick/start/finish/release/recovery, prove exact schemas and error mapping in DN-004, and require DN-009/cutover absence proof for any residual bridge-only surface |
 | Deterministic validation creates false confidence | Admission receipt states limits; independent source-grounded challenge and executable baselines remain mandatory |
 | Final audit again discovers missing infrastructure | Every proof mechanism must have a shape/build owner before admission; auditor is tracked-file read-only |
 | Big-bang cutover loses unfinished work | Immutable hash-verified snapshot plus explicit active-item disposition inventory |
