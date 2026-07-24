@@ -4,7 +4,7 @@ title: 'P3-04: Record claims and immutable attempts'
 status: collect
 priority: high
 created: 2026-07-22T21:58:44.211108+02:00
-updated: 2026-07-23T23:34:54.942572+02:00
+updated: 2026-07-24T03:06:19.494061+02:00
 tags:
   - phase-3
   - scope:core
@@ -319,3 +319,42 @@ The participant factories expose canonical store-owned bytes and paths without m
 - Scenario map correction: current/stale job planning, non-mutating attempt planning, after-first-publication recovery, same-token rival pairs, and byte-equivalent replay are now finite #2013 axes.
 - Challenger: final connected shaper-challenger decision pass; it confirmed canonical helper availability, no import cycle, real assembled boundaries, exact result codes, and no strict-subset overclaim.
 - Route: #2003 remains collect, released and dependency-blocked on unfinished children. #2013 advances separately to build after this parent record is committed.
+
+[[2026-07-24T03:03:15+02:00]]
+## Operative Native Job Start Map Correction
+
+This user-approved correction extends the packet maps for task #2017 without changing dependency edges or tasks #2018/#2019 ownership.
+
+### Change Module Map Delta
+
+| Module | Planned change | Owning tasks |
+|---|---|---|
+| `serve/kanban/src/owlbear_kanban/jobs.py` | Preserve job serialization and OCC; migrate `disposition` to strict `pending | cancelled | superseded` and reject unsupported persisted values | #2017 for the schema migration |
+| `serve/kanban/src/owlbear_kanban/native_runtime.py` | Add public start request/result/diagnostics and assembled `NativeRuntime.start_job`; deepen the same facade with release/failure and expiry recovery | #2017 start; #2018 release/fail; #2019 expiry recovery |
+| `serve/kanban/src/owlbear_kanban/__init__.py` | Export strict disposition and native start contracts | #2017 |
+| `serve/kanban/tests/test_native_runtime.py` | Public assembled lifecycle proof | #2017, #2018, #2019 by owned scenario |
+
+### Dependency Closure Map Delta
+
+No edge changes. Task #2017 depends on archived-completed #2013 and #2016. Task #2018 depends on #2017. Task #2019 depends on #2017 and #2018. Therefore release/failure and expiry behavior remain gated on the strict start result and persisted identity established by #2017.
+
+### Scenario Closure Map Delta
+
+| Task | Added finite scenario axis |
+|---|---|
+| #2017 | strict disposition parsing; authority mismatch; predecessor job missing, receipt missing, and receipt non-current; pending request; cancelled and superseded; eligible atomic start; exact replay; replay identity conflict; different and inconsistent active-claim pointers |
+| #2018 | owner release/fail and replay only; consumes #2017 start result without repeating eligibility guards |
+| #2019 | expiry boundary and retry recovery only; consumes #2017 identity and #2018 finalization |
+
+### Authority And Validation
+
+Accepted `DEC-022`, design section 7.3, and `IF-003` own the strict disposition and dedicated start-result contract. The revised native authority is internally coherent at digest `ce87d37e9935c7dfbb07a52ad485a8ce4b3641d3b054ba72417b0d80577f1a82`; existing global `DV-010` re-admission debt remains assigned to DN-013/DN-014 under the bootstrap policy already recorded by archived task #2021.
+
+[[2026-07-24T03:06:19+02:00]]
+## Shape Map Repair Notes
+- Applied the user-approved #2017 ownership delta to the parent Change Module Map, Dependency Closure Map, and Scenario Closure Map.
+- Named ownership: #2017 migrates strict job disposition, creates the native start facade/models/exports, and owns public start scenarios; #2018 retains release/fail; #2019 retains expiry recovery.
+- Dependency audit: no edge changes. #2017 remains gated on archived #2013/#2016; #2018 and #2019 remain downstream.
+- Authority: DEC-022, design section 7.3, and IF-003. Revised authority is coherent at digest ce87d37e9935c7dfbb07a52ad485a8ce4b3641d3b054ba72417b0d80577f1a82 under the documented bootstrap admission policy.
+- Validation: Kanban edit-contract tests passed (2 tests), diff check passed, amendments appear once, and #2017 has exactly eight independently verifiable AC.
+- Route: #2003 stays in collect and remains dependency-blocked on unfinished lifecycle children.
