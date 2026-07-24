@@ -1,10 +1,10 @@
 ---
 id: 1980
 title: 'Bootstrap DN-004: Dispatch graph work and isolate exact-commit proof'
-status: shape
+status: collect
 priority: high
 created: 2026-07-22T01:06:00.529389+02:00
-updated: 2026-07-22T01:11:19.219621+02:00
+updated: 2026-07-24T16:56:16.107204+02:00
 tags:
   - bootstrap-projection
   - change:replace-delivery-pipeline
@@ -15,6 +15,10 @@ tags:
 parent: 1968
 depends_on:
   - 1979
+  - 2022
+  - 2023
+  - 2024
+  - 2025
 ac:
   - 'AC-1: Shaper, while this task is in `shape`, reads `DN-004` at the recorded digest
     and creates one outcome-cohesive packet DAG whose task records reference the same
@@ -56,3 +60,19 @@ This task is a non-authoritative bootstrap projection. Resolve current obligatio
 The current shaper turns this aggregate into the bounded build-packet DAG needed to satisfy the referenced node. Any newly discovered delivery outcome, interface, migration, material risk, or proof boundary returns to global design and re-admission.
 
 Proof guidance: exercise real engine-selected waves, writer leases, claims, structured completion, and disposable proof checkouts; replacements are limited to clock, subagent runner, and temporary repository below `PROOF-014`.
+
+## Shape Notes
+
+Shaped at delivery digest `9387dea789fb3334cd50e6f784d06847880bd006402b33d5ab2c45888c2202a8` into compact authority projections:
+
+- #2022 `DN-004-PK-001`: durable global writer coordination in existing `owlbear_kanban.dispatch`.
+- #2023 `DN-004-PK-002`: deterministic native wave planning; depends on #2022.
+- #2024 `DN-004-PK-003`: contained exact-commit proof checkout; independent of #2022/#2023.
+- #2025 `DN-004-PK-004`: graph-aware orchestration and assembled PROOF-014; depends on #2022-#2024.
+
+The challenger rejected and corrected four concrete drifts before passing the graph: modifying frozen IF-003 diagnostics, inventing `dispatch_runtime.py` despite IF-004 module authority, shorthand scenario families, and making writer coordination depend on descendant wave eligibility. Packet records reference canonical authority and do not duplicate node/interface/proof specifications. Board audit confirms parentage, dependency closure, build status, bounded AC, and expected dispatch layers.
+
+[[2026-07-24T16:56:16+02:00]]
+## Shape Notes
+
+DN-004 shaping is complete at digest `9387dea789fb3334cd50e6f784d06847880bd006402b33d5ab2c45888c2202a8`. Created build packets #2022-#2025 with the challenged dependency graph `(#2022 || #2024) -> #2023 -> #2025` where #2025 also directly consumes #2022/#2024. Focused evidence: `uv run pytest -q tests/test_edit_task_contract.py` (2 passed), path-scoped `git diff --check`, MCP parent/dependency/status audit, and final shaper-challenger `pass`. All recalled memories were assessed; no authority expansion or global re-admission is required.
