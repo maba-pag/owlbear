@@ -1,10 +1,10 @@
 ---
 id: 2004
 title: 'P3-05: Complete purpose-specific jobs with current receipts'
-status: verify
+status: build
 priority: medium
 created: 2026-07-22T21:58:55.620202+02:00
-updated: 2026-07-24T14:12:29.270333+02:00
+updated: 2026-07-24T14:19:19.937047+02:00
 tags:
   - phase-3
   - scope:core
@@ -106,3 +106,22 @@ Proof uses the public finish boundary and the exported result codes. Receipt ID 
 - Existing `test_runtime_transaction.py` result: 12 passed and 4 stale failures whose fixtures fabricate removed free-form `JobDisposition` values (`updated`, `transaction`, and `winner-*`); challenger confirmed these do not invalidate this task's public finish proof.
 - Builder challenger: pass; no concrete DONE defect or scope drift.
 - Files changed: `serve/kanban/src/owlbear_kanban/runtime_transaction.py`, `jobs.py`, `receipt.py`, `native_runtime.py`, `__init__.py`, and `serve/kanban/tests/test_native_runtime.py`.
+
+[[2026-07-24T14:19:19+02:00]]
+## Verify Notes
+
+- Verdict: REJECT. The implementation is close and the focused runtime/receipt/job slice passes, but AC-2 exact replay identity is defective and the shaped public finish proof matrix is incomplete.
+- Evidence reviewed: builder commit `464365509`; named authorities `REQ-009`, `REQ-016`, `NEG-002`, `NEG-010`, `IF-003`, `RISK-003`, and `PROOF-003`; changed runtime/store files and durable proof in `serve/kanban/tests/test_native_runtime.py`.
+- Change Module Map: changed modules stay within the task's native runtime, job/receipt stores, transaction kernel, public exports, and owning runtime tests. No architecture or scope drift found.
+- Normal-path boundary: `finish_shape` public success, archive, receipt/event publication, and exact unchanged replay are exercised. Shared source tracing shows build, accept, and audit enter `_finish`, but no maintained test invokes successful `finish_build`, `finish_accept`, or `finish_audit`.
+- Finding: `_finish_replay` compares archived job/event identity and receipt ID but does not compare receipt-defining request values. A public probe completed shape, changed both `code_revision` and `evidence`, called `finish_shape` again, and observed `changed_replay_ok: True`, no diagnostic, and the original persisted code revision. This is not an exact replay and violates AC-2 replay identity.
+- Checks: focused runtime/receipt/job command passed 100 tests. Runtime transaction command returned 12 passed and four disclosed stale-fixture failures caused by removed free-form `JobDisposition` values; these are not the rejection basis. VS Code diagnostics reported no errors in the six task-owned source/proof files.
+- AC map: AC-1 is partially proven by public shape success and invalid-plan zero-publication, but injected finish transaction failure is not exercised. AC-2 fails changed-request replay identity and lacks public successful build/accept/audit proof. AC-3 receipt evaluator cases cover delivery digest, node-plan digest, predecessor currentness, supersession, and code currency, including dependent build retention on stale predecessor.
+- Prior rejection check: no earlier `## Verify Notes`; this is the first return for these failure keys.
+
+### Required Follow-up
+| # | Failure Key | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|--------------|-----------------|---------|----------|
+| 1 | AC-2/exact-finish-replay | builder | Require archived finish replay to match all receipt-defining request values, including code revision, evidence, canonical impact closure, and shape node-plan/job identities where applicable; changed values must return `ERR_FINISH_IDENTITY_CONFLICT` without mutation. | `serve/kanban/src/owlbear_kanban/native_runtime.py`, `serve/kanban/tests/test_native_runtime.py` | Public probe changed code revision and evidence yet returned success with the old receipt. |
+| 2 | AC-1-AC-2/public-finish-proof | builder | Add the minimum public-boundary proof that invokes successful build, accept, and audit completion/replay and injects a finish transaction interruption to prove recovery leaves one receipt, one succeeded event, and one archived job with no partial or duplicate publication. Reuse existing fixtures/helpers and transaction injection support; do not duplicate receipt-evaluator matrices already covered. | `serve/kanban/tests/test_native_runtime.py` and existing transaction owner only if a public injection seam is required | No test invokes `finish_accept` or `finish_audit`; only a stale `finish_build` refusal is exercised, while task proof guidance and PROOF-003 explicitly require purpose transitions and injected write failure behavior. |
+
