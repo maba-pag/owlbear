@@ -1,10 +1,10 @@
 ---
 id: 2018
 title: 'P3-19: Release or fail owning attempts'
-status: shape
+status: build
 priority: high
 created: 2026-07-23T14:41:48.715516+02:00
-updated: 2026-07-24T12:32:34.923138+02:00
+updated: 2026-07-24T12:36:59.041143+02:00
 tags:
   - phase-3
   - scope:core
@@ -21,15 +21,37 @@ parent: 2003
 depends_on:
   - 2017
 ac:
-  - 'AC-1: Given the owning active attempt, release atomically appends one `released`
-    event, clears only the matching claim pointers, leaves the job open, and leaves
-    graph and receipts unchanged.'
-  - 'AC-2: Given the owning active attempt, failed finalization atomically appends
-    one `failed` event with supplied detail and evidence references, clears only the
-    matching claim pointers, and preserves prior attempt history.'
-  - 'AC-3: Given a non-owner, no active claim, or replay of an already committed outcome,
-    the operation returns the stable rejection or existing outcome and creates no
-    duplicate event or job mutation.'
+  - 'AC-1: Given schema-version-one attempt data with nonempty `claim_id`, `parse_attempt_event_mapping`
+    returns an `AttemptEvent` and serialization preserves the claim; missing or empty
+    `claim_id` returns `ERR_ATTEMPT_EVENT_IDENTITY_INVALID` and no event.'
+  - 'AC-2: Given the owning active attempt, `NativeRuntime.release_job` atomically
+    appends one sequence-2 `released` event carrying request `claim_id`, clears only
+    matching job pointers, leaves disposition `pending`, and leaves graph and receipts
+    unchanged.'
+  - 'AC-3: Given the owning active attempt, `NativeRuntime.fail_job` atomically appends
+    one sequence-2 `failed` event carrying request `claim_id`, detail, and evidence
+    IDs, clears only matching job pointers, and preserves sequence-1 history.'
+  - 'AC-4: Given a committed released or failed outcome and a replay matching job,
+    attempt, claim, kind, actor, process, timestamp, detail, and evidence, the operation
+    returns the existing job/event and `AttemptStore.list` retains one sequence-2
+    event.'
+  - 'AC-5: Given a sequence-2 outcome for the requested job and attempt, a release/fail
+    request differing in claim, kind, actor, process, timestamp, detail, or evidence
+    returns the operation-specific `NON_OWNER` diagnostic, leaves job bytes unchanged,
+    and appends no event.'
+  - 'AC-6: Given active pointers whose claim, attempt, actor, or process does not
+    own the active attempt, release/fail returns the operation-specific `NON_OWNER`
+    diagnostic without mutation. Given cleared pointers and no sequence-2 outcome
+    for the requested job and attempt, it returns the operation-specific `NO_ACTIVE_CLAIM`
+    diagnostic without mutation.'
+  - 'AC-7: Given a committed sequence-2 outcome whose `job_id` differs from the replay
+    request `job_id`, release/fail does not return that event, returns the operation-specific
+    diagnostic for the requested job state, leaves both job records unchanged, and
+    appends no event.'
+  - 'AC-8: Given an eligible `NativeRuntime.start_job` request, its sequence-1 started
+    event carries request `claim_id` and exact replay returns it without duplication;
+    changed claim or attempt pointers retain `ERR_START_ACTIVE_CLAIM`, while matching
+    pointers with changed actor, process, or claim timestamp retain `ERR_START_IDENTITY_CONFLICT`.'
 proof_bundle: critical+challenge
 blocked: false
 block_reason:
@@ -122,3 +144,50 @@ Exercise public release and fail operations over owner, non-owner, no-active-cla
 - Challenger iterations resolved diagnostic overlap, parser literal ambiguity, cross-job preservation, reopened #2010/#2017 ownership, same-job non-claim mismatch, and archived #2017 start-diagnostic fidelity. Final complete challenge passed.
 - User graph approval: approved the hardened #2003/#2018 delta.
 - Lifecycle: release #2018 without movement. Commit reconciled authority and this review history, then restart the connected mutation set by claiming #2003 and #2018 in ID order.
+
+[[2026-07-24T12:34:17+02:00]]
+## Operative Finalization Replay Identity Contract
+
+This amendment supersedes earlier Scope, Authority, ownership, and proof wording where they conflict with the contract below.
+
+### Scope And Authority Amendment
+
+In scope: required `AttemptEvent.claim_id`; stable parser diagnostics for missing or empty claim identity; claim propagation on started, released, and failed events; exact finalization replay; same-job completed mismatch; active-owner and no-active diagnostics; cross-job isolation; and preservation of start replay diagnostics. Expiry remains #2019. Successful completion, receipts, dispatch, MCP, and Cockpit remain outside this task.
+
+Controlling authority is `REQ-008`, `REQ-009`, `REQ-016`, `IF-003`, design sections 2.2, 2.3, 7.2, 7.3, 7.4, 8.6, 13, and 14, and accepted `DEC-007`, `DEC-009`, `DEC-022`, and `DEC-023`. `DEC-023` and design section 7.4 control durable finalization replay identity and check precedence.
+
+### Public Contract And Check Order
+
+Every schema-version-one `AttemptEvent` has required nonempty `claim_id`. Missing or empty values return `ERR_ATTEMPT_EVENT_IDENTITY_INVALID`; no default, alias, backfill, or compatibility path is added. Start, release, and fail events copy the request claim.
+
+For a sequence-two outcome belonging to the requested job and attempt, release/fail compares claim, kind, actor, process, timestamp, detail, and evidence before inspecting cleared pointers. An exact match returns the existing outcome. Any mismatch returns the operation-specific `NON_OWNER` diagnostic without mutation. A sequence-two event for another job is not returned. Cleared pointers with no sequence-two outcome for the requested job and attempt return the operation-specific `NO_ACTIVE_CLAIM` diagnostic.
+
+Start behavior is preserved: exact replay returns the existing started event; changed claim or attempt pointers, or one populated pointer, return `ERR_START_ACTIVE_CLAIM`; matching pointers with changed actor, process, or claim timestamp return `ERR_START_IDENTITY_CONFLICT`.
+
+### Change Module Map
+
+- `serve/kanban/src/owlbear_kanban/attempts.py`: add required claim identity and map missing/empty values to the existing identity diagnostic while preserving strict parser, serializer, and store behavior.
+- `serve/kanban/src/owlbear_kanban/native_runtime.py`: populate claim identity on both event constructors and enforce the completed-outcome replay partition before cleared-pointer handling.
+- `serve/kanban/tests/test_attempts.py`: prove public claim round-trip and missing/empty rejection.
+- `serve/kanban/tests/test_native_runtime.py`: prove started claim propagation, preserved start replay branches, exact and mismatched finalization replay, active/no-active diagnostics, and cross-job isolation.
+- `serve/kanban/tests/test_runtime_transaction.py`: update the direct event fixture only; transaction behavior does not change.
+- `serve/kanban/src/owlbear_kanban/__init__.py`: no change; `AttemptEvent` is already public.
+
+This is a bounded repair of archived #2010's event contract/parser and archived #2017's event construction. Archived #2011's persistence/path-safety behavior is not reopened.
+
+### Validation And Bootstrap Admission
+
+The revised native package loads with no diagnostics at digest `5d7cf64e0317707ea78015e818f9e3a328b0c4239871edb5bf66014d71ae2552`. Global `DV-010` re-admission remains delegated to DN-013/DN-014 under the bootstrap policy; it is not a local #2018 branch.
+
+[[2026-07-24T12:34:17+02:00]]
+
+[[2026-07-24T12:36:59+02:00]]
+## Approved Shape Handoff
+- User approved required nonempty `AttemptEvent.claim_id`, strict no-compatibility migration, and completed-event ownership before cleared-pointer handling.
+- Operative amendment names the public parser diagnostic, start/release/fail event propagation, exact replay, same-job mismatch, active/no-active, cross-job isolation, and preserved start diagnostics.
+- Eight AC cover the complete finite scenario set at public parser/serializer and `NativeRuntime` boundaries.
+- Bounded ownership: #2018 repairs archived #2010 event contract/parser and archived #2017 event construction; archived #2011 persistence/path safety and #2019 expiry remain unchanged. Dependencies do not change.
+- Authority commit: 956e6c29dc5e9cef4f7379ef785e6fd63d59eb73. Parent map commit: a9ae3bb46f84a61d2b1b0c64018afb1554a9c464.
+- Validation: public authority loader returned no diagnostics at digest 5d7cf64e0317707ea78015e818f9e3a328b0c4239871edb5bf66014d71ae2552; edit-contract tests passed 2; task diffs pass `git diff --check`; one operative amendment per task and exactly eight AC confirmed.
+- Shaper challenger: final complete graph pass after resolving diagnostic partition, parser literal, cross-job preservation, archived invariant ownership, non-claim completed mismatch, and #2017 start-diagnostic fidelity.
+- Route to builder using the operative amendment as controlling task text.
