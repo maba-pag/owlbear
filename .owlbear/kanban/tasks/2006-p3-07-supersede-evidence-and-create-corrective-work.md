@@ -1,10 +1,10 @@
 ---
 id: 2006
 title: 'P3-07: Supersede evidence and create corrective work'
-status: shape
+status: collect
 priority: medium
 created: 2026-07-22T21:59:17.003316+02:00
-updated: 2026-07-24T15:24:46.156169+02:00
+updated: 2026-07-24T15:27:48.231141+02:00
 tags:
   - phase-3
   - scope:core
@@ -109,3 +109,13 @@ Proof guidance: use a table-driven corrective-route matrix plus generic receipt/
 
 ### Required Follow-up
 Route the task through verify and record a current verifier PASS with AC-specific evidence before returning it to collect.
+
+[[2026-07-24T15:27:48+02:00]]
+## Shape Notes
+- Rejection source: the latest Collect Notes returned #2006 to shape because it reported no `Verifier Notes` section and requested a current verifier PASS.
+- Repair classification: mechanical reroute. The canonical pipeline heading is `## Verify Notes`, not `## Verifier Notes`.
+- Narrow board check: the authoritative task body already contains current `## Verify Notes` dated 2026-07-24T15:22:24+02:00 with `Verdict: PASS`, AC-1 through AC-3 evidence, 36 focused tests, 159 owning aggregate tests, clean Ruff/format/diagnostics, verifier challenger pass, and no follow-up.
+- Contradiction resolved: the collector searched for a non-canonical heading; no verifier evidence is missing. No pending or resolved structured request exists.
+- Changes: no code, AC, dependency, parent, tag, priority, authority, or proof contract changed. Dependencies #2004 and #2005 remain archived as completed.
+- Current failure key `collect/missing-verifier-pass` is resolved by the existing canonical Verify Notes PASS and this heading audit.
+- Route: returned directly to collect for leaf archival; rerunning build or verify would duplicate completed work without adding evidence.
