@@ -1,10 +1,10 @@
 ---
 id: 2017
 title: 'P3-18: Start only eligible job attempts'
-status: collect
+status: archived
 priority: high
 created: 2026-07-23T14:41:39.975443+02:00
-updated: 2026-07-24T03:14:05.957031+02:00
+updated: 2026-07-24T03:15:05.451390+02:00
 tags:
   - phase-3
   - scope:core
@@ -53,7 +53,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -171,3 +171,15 @@ The revised native package loads and reports no admission findings under a curre
 - Memory: assessed all ten recalled entries; artifact-to-scope and live-public-contract guidance materially informed this review.
 - Verifier-challenger: pass, no concrete blocker. It confirmed public coverage of the start boundary, source closure of remaining branch variants, mapped scope, and focused proof.
 - Final route: PASS to collect.
+
+[[2026-07-24T03:15:05+02:00]]
+## Collect Notes
+- Classification: leaf. No child tasks; parent `#2003` is aggregate context only.
+- Latest verification evidence: newest `## Verify Notes` records PASS after `uv run pytest -q serve/kanban/tests/test_native_runtime.py serve/kanban/tests/test_jobs.py` (31 passed), focused verbose runtime tests (9 passed), and ruff on the five mapped files. It maps AC-1 through AC-8 to the public `NativeRuntime.start_job` boundary and source-closed branch variants.
+- Intent source: `## Outcome` and `## Scope` require an eligible runtime attempt start with atomic claim pointers and one immutable `started` event.
+- Invariant coverage: verifier confirms authority, predecessor, pending request, terminal, active-claim, exact replay, identity-conflict, and unchanged-state rejection coverage across AC-1 through AC-8.
+- Dependency gate: `#2013` and `#2016` are archived with `completed`; task dependency status is `ok`.
+- Child coverage: none.
+- Aggregate normal-path proof: not applicable to this leaf; latest verification contains focused public normal-path proof.
+- Residual decisions: no pending or resolved structured requests; no Required Follow-up.
+- Archive rationale: current verifier PASS and clean closure state satisfy leaf archival requirements.
