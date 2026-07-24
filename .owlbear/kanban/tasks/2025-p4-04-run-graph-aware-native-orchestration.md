@@ -1,10 +1,10 @@
 ---
 id: 2025
 title: 'P4-04: Run graph-aware native orchestration'
-status: verify
+status: build
 priority: high
 created: 2026-07-24T16:54:49.020973+02:00
-updated: 2026-07-24T21:04:03.424812+02:00
+updated: 2026-07-24T21:07:12.540369+02:00
 tags:
   - phase-4
   - scope:core
@@ -206,3 +206,17 @@ Proof command: `uv run pytest serve/mcp-kanban/tests/test_mcp_surface_contract.p
 - Current failure-key resolution: `AC-5/native-proof-014-scenario` is resolved by direct runner-call, rate-limit release, crash recovery, and persisted exactly-once terminal-event assertions.
 - Builder-challenger: pass; independently ran the same 15 focused tests and found no DONE blocker.
 - Follow-up risks: none within DN-004; native dispatch remains explicitly non-default pending DN-012.
+
+[[2026-07-24T21:07:12+02:00]]
+## Verify Notes
+- Evidence reviewed: task AC-1 through AC-5, Module Map, latest Builder Notes, build commit `65690ec0e`, and the active IF-015 MCP surface/proof scenario in `serve/mcp-kanban/tests/test_mcp_surface_contract.py`.
+- Named authorities checked: the Module Map requires the existing `owlbear_mcp_kanban` bridge, real `DispatchRuntime`, frozen IF-003 outcomes, IF-005 checkout coverage, and non-default `pick_tasks` carrier. The updated scenario calls actual registered `pick_jobs`, `start_job`, purpose-specific finish, `release_job`, and `recover_expired_claims` functions against a real `DispatchRuntime`; its only replacement is the profile runner below the bridge boundary.
+- Change Module Map: no deviation. The builder changed only the mapped maintained MCP boundary test and task record.
+- Normal-path boundary exercised: `TestProof014NativeMcpScenario` invokes the live bridge functions, persists attempt events in `AttemptStore`, and replans through `pick_jobs`; `pick_tasks` remains registered.
+- Checks run: `uv run pytest serve/mcp-kanban/tests/test_mcp_surface_contract.py serve/kanban/tests/test_dispatch_runtime.py serve/kanban/tests/test_proof_checkout.py -q` (15 passed); `uv run ruff check serve/mcp-kanban/tests/test_mcp_surface_contract.py` (passed); `git diff --check` (passed).
+- AC-to-evidence: AC-1 registry and schema test passed; AC-2 bridge/runtime slice passed; AC-3 and AC-4 proof-checkout/runtime slice passed; AC-5 remains insufficiently proven despite its scenario passing.
+- Finding / required follow-up: `AC-5/native-proof-014-scenario` remains open. The scenario calls the replacement runner only with `(agent_profile, scripted_outcome)`, never passes or asserts the selected `job_id`, ignores a structured result from the runner, and hardcodes the finish/release/recovery actions outside that runner result. Update the existing scenario so its local replacement receives the exact selected profile and job ID, returns a typed disposition, and the test routes and asserts the corresponding finish, release, or expired recovery operation from that returned result. Keep the repair within this test slice; do not change production contracts.
+- Prior same-failure-key check: earlier verifier rejection for this AC led to reshape and a new builder repair; this verification found the remaining contract gap in that repaired scenario, so this is not a third build/verify authorization for the same previously specified failure.
+- Verifier-challenger: fail. It independently identified the missing selected-job handoff and ignored structured runner outcome as an AC-5 blocker.
+- Patches applied: none. The required repair exceeds verifier patch scope because it changes the proof scenario's behavioral contract.
+- Final route: reject to build.
