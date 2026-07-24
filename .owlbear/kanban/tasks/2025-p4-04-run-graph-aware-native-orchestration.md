@@ -4,7 +4,7 @@ title: 'P4-04: Run graph-aware native orchestration'
 status: build
 priority: high
 created: 2026-07-24T16:54:49.020973+02:00
-updated: 2026-07-24T16:54:49.020973+02:00
+updated: 2026-07-24T17:48:43.717980+02:00
 tags:
   - phase-4
   - scope:core
@@ -37,8 +37,11 @@ ac:
     ecosystem validation and expose native job/profile routing only; they do not route
     legacy builder/verifier/collector task stages or copy normative graph contracts.'
 proof_bundle: critical+challenge
-blocked: false
-block_reason:
+blocked: true
+block_reason: 'Builder crashed twice before claiming: both invocations treated bare
+  task ID 2025 as an ambiguous user value instead of loading the assigned Kanban task.
+  Recovery: restore builder task-ID dispatch recognition, clear this block, and redispatch
+  #2025 from a fresh pick_tasks plan.'
 claimed_at:
 archival_reason:
 archival_refs: []
@@ -53,3 +56,7 @@ Replace task-board orchestration wiring with graph-aware native job execution. T
 In: orchestrator agent, `w-orchestration`, `/orchestrate`, `share/WIRING.md`, and durable PROOF-014 integration tests. Preserve ecosystem loading/structure rules. Out: shaper/builder/acceptor/auditor role implementation, MCP/Cockpit surfaces, and broad legacy deletion owned by later nodes.
 
 Proof guidance: real public dispatch and checkout boundaries in a temporary repository; replace only clock and subagent runner as PROOF-014 permits.
+
+## Orchestration Containment
+
+Builder crashed twice before claiming or reading the task; both returns asked what `2025` meant. The orchestrator released after the first crash and retried the same fresh-plan pair once. No product or task implementation changes were reported by either invocation. Recovery owner: agent-runtime/tool dispatch. Recovery step: restore builder task-ID dispatch recognition, clear the block, then require a fresh `pick_tasks` plan before redispatch.
