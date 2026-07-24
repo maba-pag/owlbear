@@ -1,10 +1,10 @@
 ---
 id: 2025
 title: 'P4-04: Run graph-aware native orchestration'
-status: collect
+status: archived
 priority: high
 created: 2026-07-24T16:54:49.020973+02:00
-updated: 2026-07-24T22:18:10.703260+02:00
+updated: 2026-07-24T22:19:55.239919+02:00
 tags:
   - phase-4
   - scope:core
@@ -67,7 +67,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Projection
@@ -347,3 +347,13 @@ Qualify the existing `Do not dispatch shape work` / `shape stays user-facing thr
 - Prior same-failure-key check: the prior verifier rejection key `AC-5/native-proof-014-scenario` was resolved by the builder's maintained scenario. This verification found a distinct local AC-6 proof omission and closed it within the permitted single-owner patch budget; no repeat rejection applies.
 - Verifier-challenger result: pass after the AC-6 assertion patch.
 - Final route: PASS to collect.
+
+[[2026-07-24T22:19:55+02:00]]
+## Collect Notes
+- Classification: leaf. `list_tasks(parent=2025)` returned no children; the task has no aggregate/EPIC intent section.
+- Latest verification evidence: newest of five `## Verify Notes` occurrences records AC-1 through AC-8 coverage, verifier-challenger follow-up repaired, focused pytest passed (48 passed), and Ruff passed. The normal path is tied to builder revision `f0bb8c256` and its named PROOF-014 scenario.
+- Invariant map coverage: upstream verifier checked the Change Module Map and IF-015 / PROOF-014 authorities; public MCP bridge, real DispatchRuntime routing, checkout cleanup, structured dispositions, fresh replanning, and profile-unavailable behavior were covered.
+- Child coverage: not applicable; no child tasks.
+- Dependency gate: `dep_status` was `ok` for dependencies 2022, 2023, and 2024.
+- Residual decisions: no pending or resolved structured requests for task 2025; no later unresolved follow-up is recorded.
+- Archive rationale: verified leaf has current passing evidence and no remaining closure condition.
