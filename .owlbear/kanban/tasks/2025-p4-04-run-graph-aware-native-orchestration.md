@@ -1,10 +1,10 @@
 ---
 id: 2025
 title: 'P4-04: Run graph-aware native orchestration'
-status: verify
+status: build
 priority: high
 created: 2026-07-24T16:54:49.020973+02:00
-updated: 2026-07-24T19:31:10.907650+02:00
+updated: 2026-07-24T19:33:35.751049+02:00
 tags:
   - phase-4
   - scope:core
@@ -113,3 +113,20 @@ Failure-key resolution: `missing-public-native-transport` is closed by IF-015 an
 - Current failure-key resolutions: `missing-public-native-transport` resolved by closed IF-015 MCP tools; `proof-checkout-unreachable` resolved by composite `start_job`; `premature-carrier-cutover` resolved by explicit non-default wiring.
 - Builder-challenger: pass. It found no concrete blocker and independently ran focused MCP/dispatch/checkout and wiring tests.
 - Follow-up risks: native bridge is deliberately temporary; DN-009 must supersede it and DN-012 owns atomic carrier cutover and legacy absence proof.
+
+[[2026-07-24T19:33:35+02:00]]
+## Verify Notes
+- Evidence reviewed: task AC-1 through AC-5; latest Shape Notes and Builder Notes; committed task implementation `896e77960`; current source in the IF-015 MCP bridge, DispatchRuntime, proof checkout owner, and bootstrap orchestration authorities.
+- Named authorities checked: `share/agents/orchestrator.agent.md`, `share/skills/w-orchestration/SKILL.md`, and the maintained MCP registry snapshot agree that native IF-015 is explicitly non-default while `pick_tasks` remains the bootstrap carrier pending DN-012.
+- Change Module Map: no architectural deviation found. The committed owners match the map: existing MCP server/models, DispatchRuntime/proof checkout, MCP contract test, and bootstrap wiring. No verifier patch applied.
+- Normal-path boundary: AC-1 through AC-4 exercised through the installed MCP registry and the real DispatchRuntime/proof-checkout owners. `uv run pytest serve/mcp-kanban/tests/test_mcp_surface_contract.py serve/kanban/tests/test_dispatch_runtime.py serve/kanban/tests/test_proof_checkout.py` passed: 14 passed.
+- Bootstrap carrier evidence: `uv run pytest tests/test_skill_authority_wiring.py tests/test_agentview_ac_params.py` passed: 28 passed. The requested agent/skill validator command could not run because its documented script path no longer exists; this did not affect the focused tests.
+- Finding: AC-5 remains unproven and unimplemented at its stated boundary. Exact source search found `pick_jobs` and MCP `start_job` only in the bridge definitions, with no maintained caller or test that drives fresh native waves across `shape`, `build`, `accept`, and `audit`; no scenario replaces the subagent runner, triggers typed rate-limit release and crash recovery, then replans native state. Existing tests cover components independently, not this required assembled workflow.
+- AC-to-evidence: AC-1 through AC-4 pass with the 14 focused tests. AC-5 fails for missing maintained PROOF-014 scenario evidence. No prior Verify Notes exist, so this is the first verifier rejection for this failure key.
+
+### Required Follow-up
+| # | Failure Key | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|--------------|-----------------|---------|----------|
+| 1 | AC-5/native-proof-014-scenario | builder | Implement or restore a maintained PROOF-014 executable scenario at the native MCP boundary. It must invoke fresh `pick_jobs` waves and bridge `start_job` calls for `shape`, `build`, `accept`, and `audit`, replace the subagent runner, finalize one structured attempt per job, exercise typed rate-limit release and crash recovery, and replan from current native state. Keep `pick_tasks` as the explicit bootstrap default. | `serve/mcp-kanban/tests/`, `serve/kanban/tests/`, and only required orchestration wiring | Source search found no maintained `pick_jobs` or MCP `start_job` caller beyond bridge definitions; component suites passed but do not exercise the assembled AC-5 journey. |
+
+- Final route: REJECT to build.
