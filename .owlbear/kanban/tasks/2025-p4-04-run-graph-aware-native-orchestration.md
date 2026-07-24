@@ -1,10 +1,10 @@
 ---
 id: 2025
 title: 'P4-04: Run graph-aware native orchestration'
-status: verify
+status: shape
 priority: high
 created: 2026-07-24T16:54:49.020973+02:00
-updated: 2026-07-24T21:13:17.816027+02:00
+updated: 2026-07-24T21:16:07.898673+02:00
 tags:
   - phase-4
   - scope:core
@@ -232,3 +232,22 @@ Proof command: `uv run pytest serve/mcp-kanban/tests/test_mcp_surface_contract.p
 - Current failure-key resolution: `AC-5/native-proof-014-scenario` is closed. The three verifier gaps are now explicit: the replacement runner is invoked with profile and selected job ID, rate limiting asserts a typed `released` event, and attempt histories prove exactly one terminal event for every started attempt.
 - Builder-challenger: pass; it independently confirmed the focused 43-test proof and Ruff result with no DONE blocker.
 - Follow-up risks: none within scope; native orchestration remains non-default pending DN-012.
+
+[[2026-07-24T21:16:07+02:00]]
+## Verify Notes
+- Evidence reviewed: AC-1 through AC-5, Module Map, latest Shape/Builder/Verify Notes, task commit `a89650d30`, canonical PROOF-014, and the maintained IF-015 scenario in `serve/mcp-kanban/tests/test_mcp_surface_contract.py`.
+- Named authorities checked: PROOF-014 requires a real orchestrator contract over public engine-selected waves, a test-local subagent-runner replacement, typed outcome mapping, exactly-once structured-attempt finalization, current-state replanning, and retained bootstrap `pick_tasks` behavior pending DN-012.
+- Change Module Map: the current commit changes only the shaped maintained MCP-boundary scenario and task record; no module-map deviation or verifier patch applies.
+- Normal-path boundary exercised: `TestProof014NativeMcpScenario` invokes real registered `pick_jobs`, `start_job`, finish, release, and recovery bridge functions over a real `DispatchRuntime`; `AsyncMock` is the only lower-boundary replacement.
+- Checks run: `uv run pytest serve/mcp-kanban/tests/test_mcp_surface_contract.py serve/kanban/tests/test_dispatch_runtime.py serve/kanban/tests/test_proof_checkout.py tests/test_skill_authority_wiring.py tests/test_agentview_ac_params.py -q` passed (43 passed). `uv run ruff check serve/mcp-kanban/tests/test_mcp_surface_contract.py` passed. `git diff --check a89650d30^ a89650d30` passed.
+- Finding: AC-1 through AC-4 have sufficient focused evidence. AC-5 remains unproven: `pick_profile()` awaits the scripted runner and asserts its status, but discards that result. The scenario then hardcodes `finish_shape`, `release_job`, `finish_build`, `finish_accept`, `recover_expired_claims`, and `finish_audit` outside the returned typed outcome. It therefore does not prove the required mapping from structured runner dispositions to lifecycle calls, despite correctly asserting exact profile/job handoff, terminal events, attempt pairs, and replanning.
+- AC-to-evidence: AC-1 registry/schema and AC-2 through AC-4 bridge/runtime/proof-checkout coverage passed in the focused suite. AC-5 has valid runner-handoff, persisted terminal-pair, and replan evidence, but lacks typed-outcome-to-operation mapping.
+- Patches applied: none; correcting the orchestration scenario contract exceeds the verifier's one-owner local-patch budget.
+- Prior same-failure-key check: `AC-5/native-proof-014-scenario` previously caused a verifier rejection to build. This result remains in that failure family; per protocol it must return to shape, not authorize a further piecemeal build/verify cycle.
+
+### Required Follow-up
+| # | Failure Key | Target Agent | Action Required | File(s) | Evidence |
+|---|---|---|---|---|---|
+| 1 | AC-5/native-proof-014-scenario | shaper | Consolidate the runner-to-lifecycle proof contract: the test-local runner's returned typed disposition must directly select and assert the corresponding purpose-specific finish, `release_job`, or strict-expiry `recover_expired_claims` action while preserving the existing profile/job, persisted terminal-pair, and replanning matrix. Determine whether the task's stated orchestration contract also requires production orchestration ownership; do not authorize another test-only repair without that resolved boundary. | `serve/mcp-kanban/tests/test_mcp_surface_contract.py`; PROOF-014 | Current scenario awaits `runner(...)` only to compare a literal and then ignores its return before hardcoding terminal calls. |
+
+- Final route: RESHAPE to shape.
