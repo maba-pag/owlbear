@@ -1,10 +1,10 @@
 ---
 id: 1980
 title: 'Bootstrap DN-004: Dispatch graph work and isolate exact-commit proof'
-status: collect
+status: archived
 priority: high
 created: 2026-07-22T01:06:00.529389+02:00
-updated: 2026-07-24T16:56:16.107204+02:00
+updated: 2026-07-24T22:22:19.740465+02:00
 tags:
   - bootstrap-projection
   - change:replace-delivery-pipeline
@@ -34,7 +34,7 @@ proof_bundle: existing+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Bootstrap Projection Identity
@@ -76,3 +76,15 @@ The challenger rejected and corrected four concrete drifts before passing the gr
 ## Shape Notes
 
 DN-004 shaping is complete at digest `9387dea789fb3334cd50e6f784d06847880bd006402b33d5ab2c45888c2202a8`. Created build packets #2022-#2025 with the challenged dependency graph `(#2022 || #2024) -> #2023 -> #2025` where #2025 also directly consumes #2022/#2024. Focused evidence: `uv run pytest -q tests/test_edit_task_contract.py` (2 passed), path-scoped `git diff --check`, MCP parent/dependency/status audit, and final shaper-challenger `pass`. All recalled memories were assessed; no authority expansion or global re-admission is required.
+
+[[2026-07-24T22:22:19+02:00]]
+## Collect Notes
+- Classification: aggregate.
+- Aggregate intent source: `DN-004` and `PROOF-014` in `.owlbear/changes/replace-delivery-pipeline/graph.yaml`; the parent outcome is graph-aware dispatch, writer serialization, current-state replanning, recovery, and exact-commit disposable proof checkouts.
+- Invariant map coverage: #2022 covers global writer coordination, #2023 deterministic dependency-aware native waves, #2024 canonical contained exact-commit proof checkouts, and #2025 the assembled IF-015 MCP/orchestrator flow and PROOF-014.
+- Child coverage: `list_tasks(status="archived", parent=1980)` reports #2022, #2023, #2024, and #2025, each archived `completed`. The original parent query had no active children because archival moves them off-board.
+- Parent dependency gate: #1979 plus #2022, #2023, #2024, and #2025 are all archived `completed`; the gate is satisfied. #2025 depends on #2022, #2023, and #2024, all completed.
+- Latest child verification: each packet has current PASS evidence with no remaining follow-up; historical verifier rejections in #2023, #2024, and #2025 were superseded by their later PASS notes after targeted repairs.
+- SHA-linked normal-path proof: #2025 Verify Notes record builder revision `f0bb8c256` and `uv run pytest serve/mcp-kanban/tests/test_mcp_surface_contract.py serve/kanban/tests/test_dispatch_runtime.py serve/kanban/tests/test_proof_checkout.py tests/test_skill_authority_wiring.py tests/test_agentview_ac_params.py -q` passing 48 tests. The scenario drives public IF-015 MCP tools over real `DispatchRuntime`; only the PROOF-014-permitted subagent runner is replaced. `git merge-base --is-ancestor f0bb8c256 HEAD` confirmed the tested revision is an ancestor of the current checkout.
+- Residual decisions: no pending or resolved structured requests for #1980.
+- Archive rationale: the DN-004 aggregate contract, PROOF-014 normal-path proof, child coverage, dependency closure, and request state are all satisfied.
