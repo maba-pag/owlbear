@@ -1,10 +1,10 @@
 ---
 id: 2018
 title: 'P3-19: Release or fail owning attempts'
-status: build
+status: verify
 priority: high
 created: 2026-07-23T14:41:48.715516+02:00
-updated: 2026-07-24T12:36:59.041143+02:00
+updated: 2026-07-24T12:42:10.991507+02:00
 tags:
   - phase-3
   - scope:core
@@ -191,3 +191,17 @@ The revised native package loads with no diagnostics at digest `5d7cf64e0317707e
 - Validation: public authority loader returned no diagnostics at digest 5d7cf64e0317707ea78015e818f9e3a328b0c4239871edb5bf66014d71ae2552; edit-contract tests passed 2; task diffs pass `git diff --check`; one operative amendment per task and exactly eight AC confirmed.
 - Shaper challenger: final complete graph pass after resolving diagnostic partition, parser literal, cross-job preservation, archived invariant ownership, non-claim completed mismatch, and #2017 start-diagnostic fidelity.
 - Route to builder using the operative amendment as controlling task text.
+
+[[2026-07-24T12:42:10+02:00]]
+## Builder Notes
+- Change envelope: repair the shaped native attempt-event identity and finalization replay contract only. Required a nonempty `AttemptEvent.claim_id`, lifecycle propagation from start/release/fail requests, exact completed replay identity, and stable mismatch precedence. No expiry, completion, receipts, dispatch, MCP, Cockpit, or transaction behavior changes.
+- Files changed: `serve/kanban/src/owlbear_kanban/attempts.py`; `serve/kanban/src/owlbear_kanban/native_runtime.py`; `serve/kanban/tests/test_attempts.py`; `serve/kanban/tests/test_native_runtime.py`; `serve/kanban/tests/test_runtime_transaction.py`.
+- Change Module Map deviations: none. The transaction test changed only its direct `AttemptEvent` fixture to satisfy the strict required field.
+- Implementation: `AttemptEvent.claim_id` is required and validates as identity. Start/release/fail events copy their request claim. Finalization returns a completed event only for an exact same-job identity; same-job completed mismatches return the operation-specific `NON_OWNER` before cleared-pointer handling, while cross-job events remain isolated.
+- Proof selected: durable parser and public native-runtime regressions. They earn their maintenance cost because immutable claim identity and idempotent finalization replay are shared lifecycle invariants that are easy to regress and difficult to detect manually.
+- Commands run: `uv run pytest serve/kanban/tests/test_attempts.py serve/kanban/tests/test_native_runtime.py` passed 32 tests. `uv run ruff check` and `uv run ruff format --check` for the five changed files passed. `git diff --check` for the five changed files passed. VS Code diagnostics found none.
+- Additional check: `uv run pytest serve/kanban/tests/test_attempts.py serve/kanban/tests/test_native_runtime.py serve/kanban/tests/test_runtime_transaction.py` had 42 passing and 4 pre-existing failures in `test_runtime_transaction.py`; its fixtures use invalid `JobDisposition` literals `updated` and `transaction`. This task changed only the required direct event fixture and did not alter transaction behavior.
+- AC-to-evidence: AC-1 parser/serializer round-trip plus missing and empty claim diagnostics are directly covered in `test_attempts.py`. AC-2 release claim propagation, pointer clear, and pending disposition are covered through public `release_job`. AC-3 fail claim/detail/evidence propagation and preserved sequence-one history are covered through public `fail_job`. AC-4 exact release/fail replay is covered by existing public assertions. AC-5 same-job release/fail claim mismatches return their respective `NON_OWNER` diagnostics without job mutation. AC-6 active non-owner and cleared no-active release/fail diagnostics are covered. AC-7 cross-job finalization replay remains covered without returning or mutating either job. AC-8 started-event claim propagation, exact replay, changed claim active-claim, and changed timestamp identity-conflict branches are covered.
+- Current failure-key resolutions: `claim-identity-finalization-replay` is resolved by durable release and fail mismatch regressions; the former cross-job finalization replay regression remains passing.
+- Builder challenger: pass. It confirmed focused proof, scope, and that the broader transaction failures arise from unrelated invalid disposition fixtures.
+- Follow-up risks: the known transaction fixture failures remain outside this task scope.

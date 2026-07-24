@@ -20,6 +20,7 @@ def _event_mapping(kind: str) -> dict[str, object]:
     return {
         "schema_version": 1,
         "attempt_id": "attempt-001",
+        "claim_id": "claim-001",
         "job_id": 1,
         "change_id": "replace-delivery-pipeline",
         "delivery_digest": "a" * 64,
@@ -62,6 +63,7 @@ def test_public_attempt_event_parser_round_trips_frozen_records(kind: str) -> No
     [
         ("unexpected", True, AttemptEventDiagnosticCode.UNKNOWN_FIELD),
         ("attempt_id", "", AttemptEventDiagnosticCode.IDENTITY_INVALID),
+        ("claim_id", "", AttemptEventDiagnosticCode.IDENTITY_INVALID),
         ("job_id", 0, AttemptEventDiagnosticCode.REFERENCE_INVALID),
         ("delivery_digest", "bad", AttemptEventDiagnosticCode.REFERENCE_INVALID),
         ("sequence", 0, AttemptEventDiagnosticCode.SEQUENCE_INVALID),
@@ -91,6 +93,16 @@ def test_public_attempt_event_parser_reports_missing_required_reference() -> Non
     assert [diagnostic.code for diagnostic in result.diagnostics] == [
         AttemptEventDiagnosticCode.REQUIRED_REFERENCE_MISSING
     ]
+
+
+def test_public_attempt_event_parser_rejects_missing_claim_identity() -> None:
+    event = _event_mapping("started")
+    del event["claim_id"]
+
+    result = parse_attempt_event_mapping(event)
+
+    assert result.event is None
+    assert [diagnostic.code for diagnostic in result.diagnostics] == [AttemptEventDiagnosticCode.IDENTITY_INVALID]
 
 
 def test_attempt_store_replays_immutable_events_and_lists_by_identity(tmp_path: Path) -> None:

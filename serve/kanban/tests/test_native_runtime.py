@@ -112,12 +112,19 @@ def test_start_job_stores_claim_and_started_event_then_replays(revision, tmp_pat
     assert started.job.job.attempt_id == "attempt-001"
     assert started.job.job.updated_at == "2026-07-24T00:01:00Z"
     assert started.event.kind == "started"
+    assert started.event.claim_id == "claim-001"
     assert started.event.sequence == 1
     assert replayed.job == started.job
     assert replayed.event == started.event
     conflict = runtime.start_job(_request().model_copy(update={"actor_id": "agent-002"}))
     assert conflict.diagnostic is not None
     assert conflict.diagnostic.code is StartJobDiagnosticCode.IDENTITY_CONFLICT
+    claim_conflict = runtime.start_job(_request().model_copy(update={"claim_id": "other-claim"}))
+    assert claim_conflict.diagnostic is not None
+    assert claim_conflict.diagnostic.code is StartJobDiagnosticCode.ACTIVE_CLAIM
+    timestamp_conflict = runtime.start_job(_request().model_copy(update={"claimed_at": "2026-07-24T00:02:00Z"}))
+    assert timestamp_conflict.diagnostic is not None
+    assert timestamp_conflict.diagnostic.code is StartJobDiagnosticCode.IDENTITY_CONFLICT
 
 
 def test_release_and_fail_only_finalize_the_owning_attempt(revision, tmp_path) -> None:
@@ -144,6 +151,7 @@ def test_release_and_fail_only_finalize_the_owning_attempt(revision, tmp_path) -
     assert released.job.job.attempt_id is None
     assert released.job.job.disposition is JobDisposition.PENDING
     assert released.event.kind == "released"
+    assert released.event.claim_id == "claim-001"
     assert released.event.sequence == 2
     assert replayed_release == released
 
@@ -173,6 +181,7 @@ def test_release_and_fail_only_finalize_the_owning_attempt(revision, tmp_path) -
     assert failed.job.job.claim_id is None
     assert failed.job.job.attempt_id is None
     assert failed.event.kind == "failed"
+    assert failed.event.claim_id == "claim-002"
     assert failed.event.sequence == 2
     assert failed.event.detail == "unit test failure"
     assert failed.event.evidence_ids == ("evidence-001",)
@@ -194,6 +203,56 @@ def test_release_and_fail_only_finalize_the_owning_attempt(revision, tmp_path) -
 
     assert no_active_failure.diagnostic is not None
     assert no_active_failure.diagnostic.code is FailJobDiagnosticCode.NO_ACTIVE_CLAIM
+
+
+def test_completed_claim_mismatch_returns_non_owner_without_mutation(revision, tmp_path) -> None:
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    _materialize(JobStore(work_root), _record(revision))
+    runtime = NativeRuntime(revision, work_root, _History())
+    runtime.start_job(_request())
+    release = ReleaseJobRequest(
+        job_id=1,
+        attempt_id="attempt-001",
+        claim_id="claim-001",
+        actor_id="agent-001",
+        process_id="process-001",
+        released_at="2026-07-24T00:02:00Z",
+    )
+    runtime.release_job(release)
+    release_before_mismatch = JobStore(work_root).read(1)
+
+    release_mismatch = runtime.release_job(release.model_copy(update={"claim_id": "other-claim"}))
+
+    assert release_mismatch.diagnostic is not None
+    assert release_mismatch.diagnostic.code is ReleaseJobDiagnosticCode.NON_OWNER
+    assert JobStore(work_root).read(1) == release_before_mismatch
+
+
+def test_completed_failure_claim_mismatch_returns_non_owner_without_mutation(revision, tmp_path) -> None:
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    _materialize(JobStore(work_root), _record(revision))
+    runtime = NativeRuntime(revision, work_root, _History())
+    runtime.start_job(_request())
+    failure = FailJobRequest(
+        job_id=1,
+        attempt_id="attempt-001",
+        claim_id="claim-001",
+        actor_id="agent-001",
+        process_id="process-001",
+        failed_at="2026-07-24T00:02:00Z",
+        detail="unit test failure",
+        evidence_ids=("evidence-001",),
+    )
+    runtime.fail_job(failure)
+    failure_before_mismatch = JobStore(work_root).read(1)
+
+    failure_mismatch = runtime.fail_job(failure.model_copy(update={"claim_id": "other-claim"}))
+
+    assert failure_mismatch.diagnostic is not None
+    assert failure_mismatch.diagnostic.code is FailJobDiagnosticCode.NON_OWNER
+    assert JobStore(work_root).read(1) == failure_before_mismatch
 
 
 def test_release_replay_for_another_job_does_not_return_or_mutate_the_original_outcome(revision, tmp_path) -> None:

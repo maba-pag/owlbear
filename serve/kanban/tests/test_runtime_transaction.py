@@ -63,6 +63,7 @@ def _attempt_event(attempt_id: str) -> AttemptEvent:
     return AttemptEvent(
         schema_version=1,
         attempt_id=attempt_id,
+        claim_id=f"claim-{attempt_id}",
         job_id=1,
         change_id="change-001",
         delivery_digest="a" * 64,

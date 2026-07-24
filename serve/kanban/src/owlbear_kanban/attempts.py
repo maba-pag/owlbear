@@ -58,6 +58,7 @@ class AttemptEvent(_AttemptEventModel):
 
     schema_version: Literal[1]
     attempt_id: str = Field(min_length=1)
+    claim_id: str = Field(min_length=1)
     job_id: int = Field(gt=0)
     change_id: str = Field(min_length=1)
     delivery_digest: Digest
@@ -137,7 +138,7 @@ def _diagnostic_from_validation(exc: PydanticValidationError) -> AttemptEventDia
         field in message for field in ("job_id", "change_id", "delivery_digest", "target_node_id", "evidence_ids")
     ):
         code = AttemptEventDiagnosticCode.REFERENCE_INVALID
-    elif any(field in message for field in ("attempt_id", "actor_id", "process_id")):
+    elif any(field in message for field in ("attempt_id", "claim_id", "actor_id", "process_id")):
         code = AttemptEventDiagnosticCode.IDENTITY_INVALID
     return code
 

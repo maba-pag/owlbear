@@ -296,6 +296,7 @@ class NativeRuntime:
         event = AttemptEvent(
             schema_version=1,
             attempt_id=request.attempt_id,
+            claim_id=request.claim_id,
             job_id=job.job_id,
             change_id=job.change_id,
             delivery_digest=job.delivery_digest,
@@ -324,16 +325,18 @@ class NativeRuntime:
     ) -> tuple[StoredJob, AttemptEvent] | str:
         stored = self._jobs.read(request.job_id)
         completed = self._attempts.read(request.attempt_id, 2).event
-        if completed is not None and (
-            completed.job_id == request.job_id
-            and completed.kind == kind
-            and completed.actor_id == request.actor_id
-            and completed.process_id == request.process_id
-            and completed.timestamp == timestamp
-            and completed.detail == detail
-            and completed.evidence_ids == evidence_ids
-        ):
-            return stored, completed
+        if completed is not None and completed.job_id == request.job_id:
+            if (
+                completed.kind == kind
+                and completed.claim_id == request.claim_id
+                and completed.actor_id == request.actor_id
+                and completed.process_id == request.process_id
+                and completed.timestamp == timestamp
+                and completed.detail == detail
+                and completed.evidence_ids == evidence_ids
+            ):
+                return stored, completed
+            return "ERR_RELEASE_NON_OWNER" if kind == "released" else "ERR_FAIL_NON_OWNER"
         job = stored.job
         if job.claim_id is None and job.attempt_id is None:
             return "ERR_RELEASE_NO_ACTIVE_CLAIM" if kind == "released" else "ERR_FAIL_NO_ACTIVE_CLAIM"
@@ -346,6 +349,7 @@ class NativeRuntime:
         event = AttemptEvent(
             schema_version=1,
             attempt_id=request.attempt_id,
+            claim_id=request.claim_id,
             job_id=job.job_id,
             change_id=job.change_id,
             delivery_digest=job.delivery_digest,
