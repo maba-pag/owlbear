@@ -168,6 +168,9 @@ def test_finish_shape_publishes_one_complete_outcome_and_replays(revision, tmp_p
 
     result = runtime.finish_shape(request)
     replay = runtime.finish_shape(request)
+    changed_replay = runtime.finish_shape(
+        request.model_copy(update={"code_revision": "b" * 40, "evidence": {"methods": ["changed"]}})
+    )
 
     assert result.diagnostic is None
     assert result.receipt is not None
@@ -184,6 +187,9 @@ def test_finish_shape_publishes_one_complete_outcome_and_replays(revision, tmp_p
     assert replay.receipt == result.receipt
     assert replay.event == result.event
     assert replay.created_jobs == ()
+    assert changed_replay.diagnostic is not None
+    assert changed_replay.diagnostic.code is FinishJobDiagnosticCode.IDENTITY_CONFLICT
+    assert tuple(event.kind for event in AttemptStore(work_root).list()) == ("started", "succeeded")
 
 
 @pytest.mark.parametrize(
@@ -219,6 +225,140 @@ def test_finish_shape_rejects_invalid_packet_authority_without_publication(tmp_p
     assert tuple(item.job.job_id for item in store.list()) == (1,)
     assert store.list(archived=True) == ()
     assert AttemptStore(work_root).read("attempt-001", 2).event is None
+
+
+def test_finish_shape_transaction_failure_publishes_nothing(tmp_path, monkeypatch) -> None:
+    revision = _copied_revision(tmp_path)
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    store = JobStore(work_root)
+    _materialize(store, _record(revision, kind="shape", receipt_id="bootstrap-001"))
+    runtime = _runtime(revision, work_root)
+    runtime.start_job(_request())
+    graph_before = (revision.source_dir / "graph.yaml").read_bytes()
+
+    def reject_transaction(_transaction) -> None:
+        raise TransactionConflictError
+
+    monkeypatch.setattr(RuntimeTransaction, "commit", reject_transaction)
+
+    with pytest.raises(TransactionConflictError):
+        runtime.finish_shape(_shape_request(revision))
+
+    assert (revision.source_dir / "graph.yaml").read_bytes() == graph_before
+    assert tuple(item.job.job_id for item in store.list()) == (1,)
+    assert store.list(archived=True) == ()
+    assert AttemptStore(work_root).read("attempt-001", 2).event is None
+    assert not (revision.source_dir / "receipts/shape-001.yaml").exists()
+
+
+def test_finish_build_accept_and_audit_publish_complete_outcomes(tmp_path) -> None:
+    revision = _copied_revision(tmp_path)
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    store = JobStore(work_root)
+    _materialize(store, _record(revision, kind="shape", receipt_id="bootstrap-001"))
+    runtime = _runtime(revision, work_root)
+    runtime.start_job(_request())
+    shape = _shape_request(revision)
+    assert runtime.finish_shape(shape).diagnostic is None
+
+    packet_closures = tuple(parse_impact_closure(packet["impact_closure"]) for packet in shape.node_plan["packets"])
+    finish_methods = shape.evidence
+    for job_id, predecessor_receipt_id, closure in (
+        (2, "shape-001", packet_closures[0]),
+        (3, "build-001", packet_closures[1]),
+    ):
+        attempt = f"attempt-{job_id:03d}"
+        claim = f"claim-{job_id:03d}"
+        start = _request().model_copy(update={"job_id": job_id, "attempt_id": attempt, "claim_id": claim})
+        assert runtime.start_job(start).diagnostic is None
+        result = runtime.finish_build(
+            FinishJobRequest(
+                job_id=job_id,
+                attempt_id=attempt,
+                claim_id=claim,
+                actor_id=start.actor_id,
+                process_id=start.process_id,
+                finished_at=f"2026-07-24T00:0{job_id + 1}:00Z",
+                receipt_id=f"build-{job_id - 1:03d}",
+                code_revision="a" * 40,
+                evidence=finish_methods,
+                evidence_ids=(f"build-proof-{job_id}",),
+                impact_closure=closure,
+            )
+        )
+        assert result.diagnostic is None
+        assert result.receipt is not None
+        assert result.receipt.payload["predecessor_receipt_ids"][-1] == predecessor_receipt_id
+        assert result.event is not None
+        assert result.event.kind == "succeeded"
+
+    accept_start = _request().model_copy(update={"job_id": 4, "attempt_id": "attempt-004", "claim_id": "claim-004"})
+    assert runtime.start_job(accept_start).diagnostic is None
+    accept = runtime.finish_accept(
+        FinishJobRequest(
+            job_id=4,
+            attempt_id=accept_start.attempt_id,
+            claim_id=accept_start.claim_id,
+            actor_id=accept_start.actor_id,
+            process_id=accept_start.process_id,
+            finished_at="2026-07-24T00:05:00Z",
+            receipt_id="accept-001",
+            code_revision="a" * 40,
+            evidence=finish_methods,
+            evidence_ids=("accept-proof-001",),
+        )
+    )
+    assert accept.diagnostic is None
+    assert accept.receipt is not None
+    assert accept.receipt.payload["predecessor_receipt_ids"] == ("build-001", "build-002")
+    assert accept.event is not None
+    assert accept.event.kind == "succeeded"
+
+    target = runtime._revision.graph.nodes[0]  # noqa: SLF001 - arrange a same-authority audit job.
+    audit_job = _record(
+        runtime._revision,  # noqa: SLF001 - use the node-plan authority published by finish_shape.
+        job_id=5,
+        kind="audit",
+        node_plan_digest=compute_node_plan_digest(runtime._revision, target.id),  # noqa: SLF001
+        predecessor_job_ids=(4,),
+    )
+    RuntimeTransaction(work_root, "audit-job", (store.create_participant(audit_job),)).commit()
+    audit_start = _request().model_copy(update={"job_id": 5, "attempt_id": "attempt-005", "claim_id": "claim-005"})
+    assert runtime.start_job(audit_start).diagnostic is None
+    audit = runtime.finish_audit(
+        FinishJobRequest(
+            job_id=5,
+            attempt_id=audit_start.attempt_id,
+            claim_id=audit_start.claim_id,
+            actor_id=audit_start.actor_id,
+            process_id=audit_start.process_id,
+            finished_at="2026-07-24T00:06:00Z",
+            receipt_id="audit-001",
+            code_revision="a" * 40,
+            evidence=finish_methods,
+            evidence_ids=("audit-proof-001",),
+        )
+    )
+    assert audit.diagnostic is None
+    assert audit.receipt is not None
+    assert audit.receipt.payload["predecessor_receipt_ids"] == ("accept-001",)
+    assert audit.event is not None
+    assert audit.event.kind == "succeeded"
+    assert tuple(item.job.job_id for item in store.list(archived=True)) == (1, 2, 3, 4, 5)
+    assert tuple(event.kind for event in AttemptStore(work_root).list()) == (
+        "started",
+        "succeeded",
+        "started",
+        "succeeded",
+        "started",
+        "succeeded",
+        "started",
+        "succeeded",
+        "started",
+        "succeeded",
+    )
 
 
 def test_finish_build_refuses_stale_predecessor_and_keeps_job_active(tmp_path) -> None:

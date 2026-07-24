@@ -688,6 +688,8 @@ class NativeRuntime:
             return None
         event = self._attempts.read(request.attempt_id, 2).event
         receipt_result = self._receipts.read(request.receipt_id)
+        receipt = receipt_result.receipt
+        receipt_payload = receipt.model_dump(mode="json")["payload"] if receipt is not None else {}
         if (
             stored.job.kind == kind
             and stored.job.receipt_id == request.receipt_id
@@ -699,9 +701,11 @@ class NativeRuntime:
             and event.process_id == request.process_id
             and event.timestamp == request.finished_at
             and event.evidence_ids == request.evidence_ids
-            and receipt_result.receipt is not None
+            and receipt is not None
+            and receipt.payload.get("code_revision") == request.code_revision
+            and receipt_payload.get("evidence") == request.evidence
         ):
-            return FinishJobResult(job=stored, receipt=receipt_result.receipt, event=event)
+            return FinishJobResult(job=stored, receipt=receipt, event=event)
         return self._finish_diagnostic(
             FinishJobDiagnosticCode.IDENTITY_CONFLICT,
             "archived finish identity differs from the request",

@@ -1,10 +1,10 @@
 ---
 id: 2004
 title: 'P3-05: Complete purpose-specific jobs with current receipts'
-status: build
+status: verify
 priority: medium
 created: 2026-07-22T21:58:55.620202+02:00
-updated: 2026-07-24T14:19:19.937047+02:00
+updated: 2026-07-24T14:31:29.854092+02:00
 tags:
   - phase-3
   - scope:core
@@ -125,3 +125,18 @@ Proof uses the public finish boundary and the exported result codes. Receipt ID 
 | 1 | AC-2/exact-finish-replay | builder | Require archived finish replay to match all receipt-defining request values, including code revision, evidence, canonical impact closure, and shape node-plan/job identities where applicable; changed values must return `ERR_FINISH_IDENTITY_CONFLICT` without mutation. | `serve/kanban/src/owlbear_kanban/native_runtime.py`, `serve/kanban/tests/test_native_runtime.py` | Public probe changed code revision and evidence yet returned success with the old receipt. |
 | 2 | AC-1-AC-2/public-finish-proof | builder | Add the minimum public-boundary proof that invokes successful build, accept, and audit completion/replay and injects a finish transaction interruption to prove recovery leaves one receipt, one succeeded event, and one archived job with no partial or duplicate publication. Reuse existing fixtures/helpers and transaction injection support; do not duplicate receipt-evaluator matrices already covered. | `serve/kanban/tests/test_native_runtime.py` and existing transaction owner only if a public injection seam is required | No test invokes `finish_accept` or `finish_audit`; only a stale `finish_build` refusal is exercised, while task proof guidance and PROOF-003 explicitly require purpose transitions and injected write failure behavior. |
 
+[[2026-07-24T14:31:29+02:00]]
+## Builder Notes
+
+- Change envelope: repair exact finish replay identity in `NativeRuntime._finish_replay` and add public-boundary proof in the owning runtime tests. Adopted the existing task implementation from commit `464365509`; this invocation closes verifier return `c9e34d341`.
+- Files changed: `serve/kanban/src/owlbear_kanban/native_runtime.py`, `serve/kanban/tests/test_native_runtime.py`.
+- Change Module Map deviations: none. Changes remain in the verifier-approved native runtime and owning tests.
+- Replay identity repair: persisted receipt `code_revision` and canonical JSON `evidence` must match the replay request in addition to the existing archived job and succeeded-event identity fields. A changed request returns `ERR_FINISH_IDENTITY_CONFLICT` without another receipt or event.
+- Durable-test justification: immutable replay identity, multi-participant transaction atomicity, and the shared build/accept/audit lifecycle are concrete verifier-reported regression and data-consistency boundaries. The tests exercise public finish methods and are cheaper than repeated manual state inspection.
+- Prior failure keys resolved: changed receipt-defining replay values are rejected; public successful `finish_build`, `finish_accept`, and `finish_audit` paths are exercised; injected `finish_shape` transaction failure proves no graph, job, receipt, archive, or succeeded-event publication.
+- AC-1 evidence: `test_finish_shape_publishes_one_complete_outcome_and_replays`, `test_finish_shape_rejects_invalid_packet_authority_without_publication`, and `test_finish_shape_transaction_failure_publishes_nothing` cover complete publication, invalid closure containment, replay, and transaction-failure atomicity.
+- AC-2 evidence: `test_finish_build_accept_and_audit_publish_complete_outcomes` covers same-kind immutable receipts, predecessor chains, succeeded events, and archived jobs through all three public finish methods; changed replay identity is rejected with no duplicate event.
+- AC-3 evidence: the runtime, receipt-currentness, and job-store regression slice covers stable delivery, node-plan, predecessor, supersession, and code-currency results plus dependent-job retention.
+- Commands: focused finish matrix passed 3 tests; complete native runtime module passed 23 tests; runtime plus change receipts plus jobs slice passed 102 tests; focused workspace lint passed; VS Code diagnostics were clean.
+- Builder challenger: pass. It independently reran the 23-test runtime module and Ruff, found no blockers, confirmed the durable-test rent, and made no auto-fixes.
+- Follow-up risks: none identified inside the shaped scope.
