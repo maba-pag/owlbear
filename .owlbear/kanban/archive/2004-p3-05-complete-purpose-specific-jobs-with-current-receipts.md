@@ -1,10 +1,10 @@
 ---
 id: 2004
 title: 'P3-05: Complete purpose-specific jobs with current receipts'
-status: collect
+status: archived
 priority: medium
 created: 2026-07-22T21:58:55.620202+02:00
-updated: 2026-07-24T14:45:33.244750+02:00
+updated: 2026-07-24T14:48:36.869070+02:00
 tags:
   - phase-3
   - scope:core
@@ -42,7 +42,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Bootstrap Projection Identity
@@ -152,3 +152,10 @@ Proof uses the public finish boundary and the exported result codes. Receipt ID 
 - Evidence: native runtime module returned 23 passed; receipt-currentness plus job-store slice returned 79 passed; Ruff check and format check passed on both verifier-owned files; VS Code diagnostics and diff whitespace checks were clean.
 - Verifier challenger: final decision pass; no unresolved AC, follow-up, scope, or durable-test-rent finding.
 - Files changed: `serve/kanban/src/owlbear_kanban/native_runtime.py`, `serve/kanban/tests/test_native_runtime.py`.
+
+[[2026-07-24T14:48:36+02:00]]
+## Collector Notes
+- Mechanical leaf closure: latest verifier PASS maps AC-1 through AC-3 to maintained public finish, replay-identity, transaction-failure, receipt-currentness, and dependent-job-retention evidence.
+- Current required follow-ups `AC-2/exact-finish-replay` and `AC-1-AC-2/public-finish-proof` are explicitly resolved in the verifier note.
+- Recorded proof: native runtime module 23 passed; receipt-currentness and job-store slice 79 passed; Ruff check and format check passed; VS Code diagnostics and diff whitespace checks clean; verifier challenger passed.
+- No aggregate parent intent review performed; task is an ordinary verified leaf.
