@@ -4,7 +4,7 @@ title: 'P3-18: Start only eligible job attempts'
 status: shape
 priority: high
 created: 2026-07-23T14:41:39.975443+02:00
-updated: 2026-07-23T23:49:54.016080+02:00
+updated: 2026-07-24T03:01:51.869841+02:00
 tags:
   - phase-3
   - scope:core
@@ -68,3 +68,15 @@ Exercise public `start_job` with the finite readiness classes eligible, active c
 - Current failure-key resolutions: none; no Verify Notes or Required Follow-up section.
 - Builder-challenger result: not invoked; no DONE verdict is proposed.
 - Follow-up risk: shape must define the facade module, public callable signature/models, loaded-authority and candidate-revision inputs, request/terminal state ownership, exact stable rejection codes, and same-identity outcome semantics. Implementing these choices here would invent an unadmitted cross-module interface.
+
+[[2026-07-24T03:01:51+02:00]]
+## Shape Notes
+- Material repair review completed. The builder correctly found that the original task lacked a public facade, request/result models, exact diagnostics, terminal vocabulary, and replay contract.
+- User decision: approved Option A, strict `JobDisposition = pending | cancelled | superseded` plus a dedicated `NativeRuntime.start_job` result. Unknown dispositions fail schema validation; lower-layer code/target remain optional diagnostic evidence rather than public control flow.
+- Authority reconciliation: added accepted DEC-022, design section 7.3, and extended IF-003 with strict disposition, six stable `ERR_START_*` diagnostics, ordered eligibility checks, atomic start, and exact replay identity including claimed_at.
+- Validation: revised package loads. Standard focused authority tests produced 31 passes and four existing DV-010 failures because global admission metadata is null/old. With an in-memory current-digest admission marker, admission evaluation returned no findings at digest `ce87d37e9935c7dfbb07a52ad485a8ce4b3641d3b054ba72417b0d80577f1a82`. Archived #2021 records this live-change admission limitation as delegated to DN-013/DN-014 rather than a leaf blocker.
+- Draft graph: #2017 owns jobs.py strict disposition migration, new native_runtime.py start facade/models, package exports, and public start tests. Dependencies remain #2017 after archived #2013/#2016, then #2018 and #2019.
+- Draft AC: eight independently verifiable cases cover schema literals, eligible atomic start, stale authority, predecessor invalidity, pending request, terminal states, exact/conflicting replay identity, and different/inconsistent active claims.
+- Challenger: final complete graph challenge passed after adding explicit DEC-022/design 7.3 task authority, schema-migration ownership, and complete eligible preconditions.
+- User graph approval: approved the presented #2003/#2017 graph delta.
+- Lifecycle: release #2017 without movement. Commit reconciled authority and this task history, then restart the approved connected mutation set by claiming #2003 and #2017 in ID order.

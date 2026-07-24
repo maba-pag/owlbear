@@ -318,6 +318,35 @@ Title, outcome, acceptance, modules, interfaces, and proof are projected from au
 
 Claims and attempts remain append-only operational events. A failed or crashed attempt does not mutate the graph. A later attempt may claim the same open job until success, cancellation, or supersession. Successful jobs and rejected acceptance/audit attempts create durable receipts/findings.
 
+### 7.3 Native job start contract
+
+`JobRecord.disposition` is the strict enum `pending | cancelled | superseded`; only `pending` is
+startable. Unknown values are malformed persisted state, not future-compatible terminal states.
+
+The transport-free `NativeRuntime.start_job(StartJobRequest)` boundary accepts caller-supplied job,
+attempt, claim, actor, process, and claim-timestamp identity plus the candidate code revision needed
+for receipt-currentness evaluation. The runtime loads the authoritative `ChangeRevision`, current
+job and predecessor jobs, their required receipts, pending-request state, and the existing attempt
+identity from its stores; callers do not supply readiness projections or mutate stores directly.
+
+`StartJobResult` contains either the updated stored job plus its immutable `started` event, or one
+`StartJobDiagnostic` with a stable code from:
+
+- `ERR_START_AUTHORITY_STALE`;
+- `ERR_START_PREDECESSOR_INVALID`;
+- `ERR_START_REQUEST_PENDING`;
+- `ERR_START_TERMINAL`;
+- `ERR_START_ACTIVE_CLAIM`;
+- `ERR_START_IDENTITY_CONFLICT`.
+
+Diagnostics retain optional lower-layer code and target fields as evidence, but those values do not
+replace the public start code. Eligibility checks run in the order listed above: authority, complete
+predecessor receipt currentness in authored predecessor-job order, pending requests, terminal
+disposition, then active claim identity. An eligible start atomically replaces the job with
+`claim_id` and `attempt_id` and creates sequence-one `started` event data at the supplied timestamp.
+Replay with the same active attempt, claim, actor, process, and claim-timestamp identity returns the
+stored job/event; any different identity returns `ERR_START_IDENTITY_CONFLICT` without another event.
+
 ## 8. Agent Architecture
 
 ### 8.1 Designer

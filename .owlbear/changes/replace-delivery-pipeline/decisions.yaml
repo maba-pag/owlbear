@@ -926,3 +926,53 @@ decisions:
           - Reopens accepted premises that are not implicated by this defect
         risks:
           - Redesign expands beyond the underdefined currency contract
+
+  - id: DEC-022
+    title: Expose job start through a strict lifecycle result
+    status: accepted
+    decided_at: 2026-07-23
+    authority: user
+    selected: strict-disposition-dedicated-result
+    rationale: >-
+      The intent-level native runtime needs one stable start boundary rather than leaking receipt,
+      request, job-store, and transaction failures to MCP and Cockpit callers. Restricting persisted
+      job disposition to pending, cancelled, or superseded rejects malformed lifecycle state at load
+      time; a dedicated result keeps the public rejection vocabulary stable while retaining lower-layer
+      code and target evidence for diagnosis.
+    options:
+      - id: strict-disposition-dedicated-result
+        label: Use a strict disposition enum and dedicated start result
+        confidence: 0.96
+        recommended: true
+        pros:
+          - One stable lifecycle contract serves engine, MCP, Cockpit, and later finalization operations
+          - Unknown persisted dispositions fail closed instead of becoming accidental terminal states
+          - Lower-layer evidence remains available without coupling callers to its control flow
+        cons:
+          - Tightens the current permissive disposition schema
+          - Adds request, result, and diagnostic models
+        risks:
+          - Later lifecycle work must extend the same result vocabulary rather than create parallel errors
+      - id: flexible-disposition-dedicated-result
+        label: Keep arbitrary dispositions behind a dedicated start result
+        confidence: 0.56
+        recommended: false
+        pros:
+          - Adds a stable start API without immediately tightening stored data
+        cons:
+          - Misspelled or unsupported dispositions become durable terminal states
+          - Health, MCP, and Cockpit have no canonical disposition vocabulary
+        risks:
+          - Later schema tightening requires migration of ambiguous records
+      - id: propagate-lower-layer-errors
+        label: Propagate receipt, request, store, and transaction errors directly
+        confidence: 0.31
+        recommended: false
+        pros:
+          - Introduces the fewest lifecycle models
+          - Preserves maximum lower-layer detail
+        cons:
+          - Callers must understand unrelated subsystem contracts and check ordering
+          - Replay has no coherent public outcome shape
+        risks:
+          - Lower-layer refactors become breaking lifecycle API changes
