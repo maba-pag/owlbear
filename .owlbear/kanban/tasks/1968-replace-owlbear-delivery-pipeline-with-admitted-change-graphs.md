@@ -1,10 +1,10 @@
 ---
 id: 1968
 title: Replace OwlBear delivery pipeline with admitted change graphs
-status: collect
+status: shape
 priority: high
 created: 2026-07-21T01:46:53.257501+02:00
-updated: 2026-07-23T18:16:46.704872+02:00
+updated: 2026-07-25T00:33:51.822983+02:00
 tags:
   - pipeline-redesign
   - architecture
@@ -137,3 +137,17 @@ This is the bootstrap intake for an atomic cutover. The durable native change pa
 - Authority state: `replace-delivery-pipeline` is intentionally `draft` with `admission: null`; the prior digest/receipt is historical. DN-013/DN-014 retain whole-change re-proof and re-admission ownership.
 - Graph change: root #1968 now depends on #2021 so closure cannot outrun admission evidence fidelity.
 - Challenge: final concrete board/authority audit passed. Root remains `collect` and dependency-blocked.
+
+[[2026-07-25T00:33:51+02:00]]
+## Collect Notes — Material Operating-Model Re-entry
+
+Aggregate closure is not currently valid. Implementation of DN-001 through DN-004 and subsequent DN-009 shaping exposed a material design issue: the admitted model makes Kanban the default center, requires one shaping session per node, and stores delivery authority plus mutable node plans in one monolithic `graph.yaml`. User-directed analysis concluded that Definition/Specification and Delivery should be peer phases; delivery nodes belong to admitted specification, implementation packets begin Delivery, and eligible nodes may be batch-planned while retaining separate per-node validation, digests, reviews, transactions, and receipts.
+
+Durable evidence: `.owlbear/research/delivery-operating-model-reframe.md` records sources, observed cost proxies, preserved invariants, amendment radius, effort, limits, and the recommended recovery sequence. No authority or contained DN-009 task was changed by that analysis.
+
+### Required Follow-up
+| # | Failure Key | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|--------------|-----------------|---------|----------|
+| 1 | aggregate/operating-model-reframe | shaper | Re-enter global design for #1968. Resolve peer Definition/Delivery phases, delivery-node versus packet boundary, batch frontier planning, physical separation of delivery authority and node plans, native-change YAML line-length policy, and the deferred adaptive direct-execution contract. Reconcile and re-admit the complete authority before refreshing projections. Preserve #1981/#2027-#2031 partial-graph containment and do not resume DN-009 dispatch against the stale digest. | `.owlbear/changes/replace-delivery-pipeline/{intent.md,design.md,decisions.yaml,graph.yaml}`; `.editorconfig`; affected bootstrap projections | `.owlbear/research/delivery-operating-model-reframe.md`; current `graph.yaml` is 1,415 lines/57 KB; `NativeRuntime` rewrites it for node plans; #2025 independent verification history; #1981 containment |
+
+Route: `shape` for user-facing material design review, authority reconciliation, independent challenge, approval, and re-admission.
