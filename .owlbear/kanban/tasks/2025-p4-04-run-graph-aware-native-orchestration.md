@@ -1,10 +1,10 @@
 ---
 id: 2025
 title: 'P4-04: Run graph-aware native orchestration'
-status: shape
+status: build
 priority: high
 created: 2026-07-24T16:54:49.020973+02:00
-updated: 2026-07-24T20:43:55.886647+02:00
+updated: 2026-07-24T20:53:09.267249+02:00
 tags:
   - phase-4
   - scope:core
@@ -43,11 +43,12 @@ ac:
     receipt creation, while release and expired recovery clear matching claim/coordination
     state and request idempotent cleanup; a residual checkout yields typed orphan
     evidence, finish creates no receipt, and unrelated proof roots remain unchanged.'
-  - 'AC-5: The maintained PROOF-014 scenario sends `shape | build | accept | audit`
-    profile calls from fresh `pick_jobs` waves through a replaced subagent runner,
-    finalizes one structured attempt per job, exercises rate-limit and crash recovery,
-    and replans current state; ecosystem inspection shows the native contract is installed
-    while `pick_tasks` remains the explicit bootstrap default pending DN-012.'
+  - 'AC-5: Given a replaced runner with `success | rate_limited | crash`, PROOF-014
+    dispatches each fresh `shape | build | accept | audit` selection through it; maps
+    the outcomes to finish, `release_job`, or expired `recover_expired_claims`; proves
+    persisted attempt pairs `started+succeeded | started+released | started+crashed`
+    with one sequence-2 terminal event per start; replans after each result; and confirms
+    `pick_tasks` remains the bootstrap default pending DN-012.'
 proof_bundle: critical+challenge
 blocked: false
 block_reason:
@@ -163,3 +164,33 @@ Failure-key resolution: `missing-public-native-transport` is closed by IF-015 an
 | 1 | AC-5/native-proof-014-scenario | shaper | Consolidate the complete PROOF-014 orchestration matrix into one executable scenario contract before rebuilding: dispatch every fresh engine-selected `shape | build | accept | audit` profile through a replaced structured subagent runner; assert typed rate-limit release and expired-claim crash recovery outcomes; prove every started structured attempt is finalized exactly once from persisted attempt/event state; retain writer compatibility and fresh replanning assertions. Do not authorize another partial AC-5 repair. | `serve/mcp-kanban/tests/test_mcp_surface_contract.py`; PROOF-014 authority | Current 43-test suite passes but source inspection and verifier-challenger show the scenario stops before these required boundaries. |
 
 Final route: `shape` for repeated AC-5 scenario-closure failure.
+
+
+
+## PROOF-014 Scenario Closure
+
+Implement the AC-5 repair as one maintained scenario over the public IF-015 MCP functions and real `DispatchRuntime` stores. The runner is a test-local replacement below the orchestration boundary; do not add a production runner, ninth MCP tool, or direct-runtime transport.
+
+| Fresh selected profile | Scripted runner outcome | Required lifecycle call | Required returned terminal event | Persisted attempt events | Required next observation |
+|---|---|---|---|---|---|
+| `shaper` | `success` | `finish_shape` | `kind=succeeded`, `sequence=2` | `1:started`, `2:succeeded`; no sequence above 2 | New `pick_jobs` plan selects the first `builder` job |
+| `builder` | `rate_limited` | `release_job` | `kind=released`, `sequence=2` | `1:started`, `2:released`; no sequence above 2 | Sequential retry plan selects the same pending builder job |
+| `builder` | `success` | `finish_build` | `kind=succeeded`, `sequence=2` | `1:started`, `2:succeeded`; no sequence above 2 | Fresh plan advances through remaining builder work |
+| `acceptor` | `success` | `finish_accept` | `kind=succeeded`, `sequence=2` | `1:started`, `2:succeeded`; no sequence above 2 | Fresh plan permits audit only after required build/accept receipts |
+| `auditor` | `crash` | `recover_expired_claims` after strict expiry | `kind=crashed`, `sequence=2`, `detail="claim expired"` | `1:started`, `2:crashed`; no sequence above 2 | Fresh plan reselects the pending audit job |
+| `auditor` | `success` | `finish_audit` | `kind=succeeded`, `sequence=2` | `1:started`, `2:succeeded`; no sequence above 2 | Fresh plan contains no dispatchable job |
+
+For each row, assert the runner received the `agent_profile` and `job_id` from that row's new `pick_jobs` response and returned one structured test-local outcome without route inference from prose. Read persisted lifecycle evidence through `AttemptStore.list()` or `NativeRuntime.list_attempts()` and group by `attempt_id`; each started attempt must have the enumerated terminal pair and no additional event. Preserve existing writer/read compatibility, checkout cleanup, stale-lease, conflict, and orphan assertions in their focused tests rather than duplicating them here.
+
+Proof command: `uv run pytest serve/mcp-kanban/tests/test_mcp_surface_contract.py serve/kanban/tests/test_dispatch_runtime.py serve/kanban/tests/test_proof_checkout.py tests/test_skill_authority_wiring.py tests/test_agentview_ac_params.py -q`.
+
+[[2026-07-24T20:53:09+02:00]]
+## Shape Notes — Complete PROOF-014 Repair
+
+- Classification: local task repair for repeated failure key `AC-5/native-proof-014-scenario`; no material authority, architecture, dependency, or task-graph change.
+- Authority: admitted `graph.yaml` PROOF-014, design §8.6, accepted DEC-025/DEC-026, and current `AttemptEvent`/`NativeRuntime` contracts. DEC-025 remains intact: the runner is replaced only inside the maintained scenario; no production runner, ninth MCP tool, or direct-runtime transport is authorized.
+- Scope: AC-1 through AC-4 and dependencies `#2022 | #2023 | #2024` are unchanged. AC-5 now names the three runner dispositions, their lifecycle operations, durable terminal pairs, fresh replanning, and bootstrap-default check.
+- Scenario closure: the appended six-row matrix dispatches exact fresh `agent_profile`/`job_id` values for shaper, builder, acceptor, and auditor; maps success to purpose-specific finish, rate limiting to `release_job`, and crash to strict-expiry `recover_expired_claims`; checks returned event literals and persisted `1:started -> 2:succeeded|released|crashed` histories with no later event; and replans after each terminal result.
+- Failure resolution: this directly closes the verifier's three missing proof classes: actual replaced-runner invocation, typed rate-limit disposition, and durable exactly-once attempt finalization. The existing component assertions for writer compatibility, proof checkout cleanup, stale leases, conflict, containment, and orphan handling remain required and are not duplicated in the scenario.
+- Validation: `uv run pytest tests/test_agentview_ac_params.py -q` passed (13 tests). `shaper-challenger` returned `decision: pass`, verified source literals/result types and current incomplete scenario, found no blocker, and approved routing to build.
+- Resulting state: task is build-ready; builder should replace the current profile-recording shortcut in `TestProof014NativeMcpScenario` with the shaped scenario and run the recorded focused command.
