@@ -1,10 +1,10 @@
 ---
 id: 2018
 title: 'P3-19: Release or fail owning attempts'
-status: verify
+status: build
 priority: high
 created: 2026-07-23T14:41:48.715516+02:00
-updated: 2026-07-24T03:20:42.003051+02:00
+updated: 2026-07-24T03:23:54.484606+02:00
 tags:
   - phase-3
   - scope:core
@@ -66,3 +66,21 @@ Exercise public release and fail operations over owner, non-owner, no-active-cla
 - Current failure-key resolutions: none returned from verify.
 - Builder challenger: pass; no concrete blockers.
 - Follow-up risks: none identified.
+
+[[2026-07-24T03:23:54+02:00]]
+## Verify Notes
+- Evidence reviewed: Builder Notes; committed task change `44206943a`; public `NativeRuntime` release/fail contracts; `AttemptStore` immutable event model; `RuntimeTransaction` participant boundary.
+- Named authorities checked: `.owlbear/changes/replace-delivery-pipeline/design.md` sections 7.2, 8.6, 13, and 14; `graph.yaml` `REQ-008`, `REQ-009`, `REQ-016`, and `IF-003`; accepted `DEC-007` and `DEC-009`.
+- Change Module Map: changed modules remain within `DN-003` runtime ownership. No map deviation.
+- Normal-path boundary exercised: `uv run pytest serve/kanban/tests/test_native_runtime.py` passed 10 tests; this calls public `NativeRuntime.start_job`, `release_job`, and `fail_job` against real job/attempt stores. Replacements are limited to the lower-level repository-history stub needed for start eligibility.
+- Checks run: `uv run ruff check serve/kanban/src/owlbear_kanban/native_runtime.py serve/kanban/src/owlbear_kanban/__init__.py serve/kanban/tests/test_native_runtime.py` passed. `uv run ruff format --check` on the same files passed. `git diff --check 44206943a^ 44206943a` for the task files passed.
+- Finding: verifier-challenger found that `_finalize` replay accepted a sequence-2 event without confirming `completed.job_id == request.job_id`. A later request for another job could receive that event and bypass ownership validation.
+- Patch applied: `serve/kanban/src/owlbear_kanban/native_runtime.py` now requires the replay event's `job_id` to match the request before returning it. The focused suite and static checks passed after the repair.
+- AC-to-evidence: AC-1 release behavior, AC-2 failed-event detail/evidence and preserved started event, and AC-3 ordinary owner replay/non-owner/no-active cases pass in the public-facade suite. The discovered cross-job replay branch is not covered by the durable test.
+- Prior same-failure-key rejection check: none; this is the first verify rejection for `cross-job-finalization-replay`.
+- Verifier-challenger: fail. It identified the cross-job replay ownership gap; source repair is applied, but requested regression proof remains absent.
+- Final route: reject to build because verifier patch-pass cannot add a durable test.
+
+### Required Follow-up
+- Add a public `NativeRuntime` regression test with two materialized jobs: finalize an attempt for one job, then call the same finalization request identity with the other job ID. Assert it does not return the other job's completed event, returns the stable ownership/no-active diagnostic expected by the contract, and does not mutate either job or append a duplicate event.
+- Rerun `uv run pytest serve/kanban/tests/test_native_runtime.py` and the existing Ruff checks.

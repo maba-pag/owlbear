@@ -325,7 +325,8 @@ class NativeRuntime:
         stored = self._jobs.read(request.job_id)
         completed = self._attempts.read(request.attempt_id, 2).event
         if completed is not None and (
-            completed.kind == kind
+            completed.job_id == request.job_id
+            and completed.kind == kind
             and completed.actor_id == request.actor_id
             and completed.process_id == request.process_id
             and completed.timestamp == timestamp
