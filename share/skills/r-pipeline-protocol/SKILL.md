@@ -16,7 +16,7 @@ shape -> build -> verify -> collect -> archived
 
 ## Companion Skills
 
-Load these via `read_file` when the referenced capability is needed:
+Load on demand:
 
 | Skill | Load when |
 |-------|-----------|

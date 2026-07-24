@@ -109,11 +109,3 @@ user-facing response format.
 Tell the user what was repaired, why it was autonomous or interactive, and where the task now routes.
 For a split, include the resulting tasks and dependency order. Do not reduce the response to an
 `APPROVED`, `REFINE`, or `BLOCK` line.
-
-## Known Pitfalls
-
-- **Full reshaping by default:** A missing verifier pass does not require architecture research.
-- **Literal obedience:** A downstream instruction contradicted by current source still needs correction.
-- **Silent expansion:** Finding a second problem does not authorize rewriting the graph.
-- **Ceremonial confirmation:** Asking the user to approve a complete mechanical reroute wastes the user channel.
-- **Lost history:** Human output does not replace required `## Shape Notes` on the repaired task.

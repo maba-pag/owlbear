@@ -68,6 +68,19 @@ A fact appears in at most **two** places:
 If a rule applies to 2+ agents identically, it belongs in a shared skill, protocol, or authority
 instruction, not in local project instructions and not repeated in each agent.
 
+### Runtime Relevance
+
+Include only information the role can act on in the current invocation. State the current rule, not
+the migration story behind it. Future switches, superseded behavior, prior failures, and decision
+rationale belong in planning authority, task history, or tests unless they change a current action.
+
+Prefer one precise rule over a rationale plus examples plus repeated warnings. Keep edge cases only
+when they change routing, mutation, safety, or evidence requirements.
+
+An instruction that requires a tool mutation must name the tool, required arguments, and any
+outcome-specific fallback. Never shorten an executable procedure to an ambiguous verb such as
+"release", "advance", or "record" unless another loaded authority defines that exact operation.
+
 ### Project Instructions Boundary
 
 `copilot-instructions.md` describes the current project. It may contain identity, repository topology,

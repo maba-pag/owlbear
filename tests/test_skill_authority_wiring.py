@@ -292,6 +292,10 @@ def test_pipeline_signal_producers_match_orchestration_consumers() -> None:
 
     assert "No generic `FAIL` Channel A signal exists" in protocol
     assert "`FAIL`" not in orchestration
+    assert "`agent` capability's\n`runSubagent(agentName=agent, prompt=str(task_id)" in orchestration
+    assert 'end_work(id={task_id}, outcome="release"' in orchestration
+    assert 'end_work(id={task_id}, outcome="block"' in orchestration
+    assert "If that returns `ERR_NOT_CLAIMED`, call\n   `edit_task" in orchestration
     for signal in ("TOOL_UNAVAILABLE", "COMMIT_FAILED"):
         assert signal in orchestration
         for agent_name in ("builder", "verifier", "collector"):

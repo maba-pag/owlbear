@@ -34,8 +34,6 @@ Read `h-ac-quality` skill and use it as the authoritative AC validation checklis
 
 Use this workflow after shaper has claimed the parent task with `start_work` when a parent task ID exists. `start_work` returns the task body, making a separate `show_task` call redundant. If `start_work` fails, stop; a `ToolError` means the task is blocked, already claimed, or missing. For free-text ideas with no parent task ID, do not create a temporary `shape` task; shape the idea directly into routed outputs or stop without board mutation if it remains unresolved.
 
-**Knowledge pre-flight:** After claiming, call `recall_memory(agent="shaper")` to load reviewed entries. Apply returned entries as context. If the call fails or returns empty, proceed normally.
-
 **Execution mode:** The caller selects one phase:
 
 - `draft` — produce a complete provisional graph and maps without Kanban mutation;
@@ -311,49 +309,33 @@ small. Write the final map in `## Shape Notes`.
 
 Rules:
 
-- Name independently variable axes such as participant shape, interruption phase, recovery entry
-    point, malformed input, process race, stale token, unsafe path, and immutable conflict.
-- Do not hide a matrix behind phrases such as "injected failure", "concurrent processes", "stable
-    diagnostic", or "all interruption points". Enumerate the behaviorally distinct classes.
-- A task exceeds the complexity budget when its proof requires the cross-product of two or more
-    independently variable high-risk axes. Split the reusable primitive, consumer integration, and
-    distinct safety domains so each task has one primary matrix.
-- A complexity waiver cannot replace scenario closure or authorize an unresolved cross-product.
-    It may retain a fully enumerated matrix only when splitting would bypass the public boundary.
-- The map defines behavioral classes, not a required test count. One proof may cover several rows
-    when it exercises the same public boundary without hiding a distinct outcome.
+- Name behaviorally distinct input, failure, recovery, race, and conflict classes; do not hide them
+  behind broad phrases such as "all failures" or "concurrent processes".
+- Split a cross-product of two or more independent high-risk axes unless splitting would bypass the
+    public boundary. A waiver must still enumerate the complete matrix.
+- The map defines behavior, not test count; one boundary proof may cover several classes.
 
 ### Task Complexity Budget
 
-Draft tasks to fit this budget before creating them:
-
-- **AC target:** 3 acceptance criteria or fewer.
-- **AC hard cap:** 5 acceptance criteria. If a task needs more, split it.
-- **High-proof budget:** at most 2 AC lines that likely require multi-case proof, browser/runtime proof, concurrency proof, rollback proof, migration proof, or broad downstream-impact proof.
-- **Proof-mode budget:** one primary proof mode per task. Split when a task needs more than one of: unit/static proof, integration proof, E2E/browser proof, data-safety/rollback proof, migration/downstream regression proof.
-- **Failure-domain budget:** one failure-domain family per task. Split algorithm changes, config semantics, persistence, event/activity logging, rollback/atomicity, UI layout, accessibility, and documentation into separate tasks unless one is a trivial consequence of the other.
-- **Scenario budget:** one primary high-risk matrix per task. Do not combine independently variable
-    failure/recovery, malformed-input, concurrency, containment, and conflict matrices in one packet.
+| Dimension | Budget |
+|-----------|--------|
+| AC | Target 3; hard cap 5 |
+| High-proof AC | At most 2 |
+| Proof mode | One primary mode |
+| Failure domain | One family |
+| High-risk scenarios | One primary matrix; no independent-axis cross-product |
 
 Use an explicit `Complexity waiver:` note only when splitting would make the work less verifiable. The waiver must name the budget exceeded and why the task is still expected to finish inside one pipeline pass.
 
 ### Mandatory Split Triggers
 
-Split the planned task when any trigger applies:
+Split when the budget is exceeded or when:
 
-- More than 5 AC lines, or more than 3 AC lines with broad surface words such as "dashboard", "coherent experience", "end-to-end", or "all surfaces".
-- More than 2 likely high-proof AC lines.
-- More than one primary proof mode is needed.
-- More than one failure-domain family is present.
-- Proof requires the cross-product of two or more independently variable high-risk axes, such as
-    participant shapes across interruption phases plus recovery entries or process races.
-- A reusable transaction, persistence, migration, or integration primitive and its first product
-    consumer each require independent failure or recovery proof.
-- A proof artifact would be created only in `.owlbear/scratch/`, or the responsible agent cannot write the final tracked location. Create a separate builder-owned promotion/proof task with a concrete tracked deliverable, or choose a proof path the responsible agent can own.
-- A required operation or proof lies outside the responsible agent's authority and no user-action
-    request owns it.
-- A behavior-changing refactor changes existing semantics used by neighboring durable tests. Add a downstream-impact scan to the task body, or split the migration/update work into its own task.
-- An AC line combines behavior plus safety recovery, such as success-path emission and rollback-on-emit-failure. Split success behavior from failure recovery unless the recovery proof is one small smoke assertion.
+- a reusable stateful primitive and its consumer need independent failure proof;
+- proof has no durable, writable owner;
+- required work is outside the agent's authority and no user action owns it;
+- changed semantics require a separate downstream migration or regression proof;
+- success behavior and substantial safety recovery have different proof burdens.
 
 Ordering heuristic:
 
@@ -560,56 +542,3 @@ Append decomposition details inside shaper's `## Shape Notes` section:
 ### Dependency Graph
 {Mermaid diagram}
 ```
-
-## Verification Checklist
-
-- [ ] Announced decomposition plan and expected count
-- [ ] Brief readiness gate passed or material gaps were resolved interactively
-- [ ] Brownfield modules were located through `h-codebase-orientation` and verified from source
-- [ ] Change Module Map records responsibility, planned change, interface impact, and owning task
-- [ ] Proposed module boundaries pass the depth, locality, and Deletion Test diagnostics
-- [ ] External/generated contract claims record authority, evidence state, and confidence
-- [ ] Every product invariant has exactly one owning task and one normal-path proof
-- [ ] Every task's load-bearing inputs and mutation participants come from current source, the task
-    itself, or transitive predecessors
-- [ ] Each invariant owner can assemble its normal-path proof boundary from its dependency closure
-- [ ] No task depends semantically on a sibling or descendant producer
-- [ ] High-risk tasks enumerate behaviorally distinct scenario classes without shorthand matrices
-- [ ] No task proof crosses two or more independently variable high-risk axes
-- [ ] Task layout covers the full active Product Promise; every omitted requested outcome has an
-    explicit user-approved exclusion in the planning authority
-- [ ] Mocks or injected dependencies replace only layers below the boundary being proved
-- [ ] Every task has proportional proof guidance
-- [ ] No task has multiple responsibilities
-- [ ] Every child is outcome-cohesive within its domain; no integration-only cleanup task remains
-- [ ] Every task fits the Task Complexity Budget or has a `Complexity waiver:` note
-- [ ] No task mixes multiple proof modes without being split
-- [ ] No task mixes multiple failure-domain families without being split
-- [ ] Refactor tasks name downstream-impact scope or create a separate scan/update task
-- [ ] Sequence numbers unique and zero-padded (decomposition mode only)
-- [ ] Priority reflects blocking potential
-- [ ] Tags include `phase-{n}` + category (decomposition mode only)
-- [ ] No cycles in dependency graph
-- [ ] Parent task has `depends_on` pointing to required children when it is an aggregate/EPIC gate
-- [ ] Draft phase performed no Kanban mutation
-- [ ] Commit phase received a user-approved graph or complete non-material repair authorization
-- [ ] Created/routed task statuses were verified with `list_tasks(ids=[...])`
-- [ ] No shaper-created task remains in `shape` unless explicitly requested as raw manual intake
-- [ ] In spec mode, shaper-challenger reviewed the complete provisional graph before user approval
-- [ ] Concrete board state faithfully matches the approved or explicitly prescribed graph
-- [ ] Mermaid diagram matches task list (decomposition mode only)
-- [ ] Total 20 tasks or fewer
-- [ ] More than six tasks for a major feature has a fragmentation rationale in Shape Notes
-- [ ] AC describes "done", not "how"
-- [ ] AC meets durability principles (behavior/interface-first, codebase-independent clarity, explicit scope boundaries, no HOW prescriptions)
-- [ ] Shortcut mode returns created task ID in response message
-- [ ] No `TEMP-*` titles or empty bodies created
-
-## Known Pitfalls
-
-- **Creating proof-only tasks:** Do not create test-only/proof-only tasks unless the proof artifact is itself the product deliverable.
-- **Cross-phase dependencies:** These create long dependency chains that block parallelism. Use only when strictly necessary.
-- **Placeholder tasks:** Never create tasks with vague titles or empty bodies — they accumulate as board noise.
-- **Broad AC piles:** Many clear AC lines can still create an unclear task when they require different proof modes or failure domains. Split by proof burden, not just by wording quality.
-- **Scratch-only proof:** A scratch artifact is not a durable acceptance deliverable. Plan a tracked proof location and responsible owner before task creation.
-- **Body content in `create_task`:** Keep AC concise. For complex multi-line AC, use the temp-file pattern (see `h-mcp-kanban`).

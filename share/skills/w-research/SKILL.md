@@ -109,13 +109,3 @@ Return a compact evidence package:
 Do not create or edit Kanban tasks, invoke `shaper-challenger`, request approval, or advance the board.
 The selected shaping workflow incorporates the evidence, resolves material decisions, challenges the
 complete graph when applicable, and owns all task history and routing.
-
-## Known Pitfalls
-
-- **Skipping pre-flight check:** Multiple research cycles have been wasted because existing docs were missed. Always check `.owlbear/research/` first.
-- **Unbounded research:** Bounded evidence gathering is autonomous, but an exceptional-cost or
-  materially broader investigation still needs an explicit scope decision.
-- **Over-long research docs:** 200-line cap exists to force conciseness. If you need more, the analysis is not focused enough.
-- **Separate research column:** Keep research inside `shape`; do not reintroduce a separate `research` status.
-- **Premature routing:** Evidence can support a recommendation but cannot approve, reject, split, or
-  route the shaping subject.
