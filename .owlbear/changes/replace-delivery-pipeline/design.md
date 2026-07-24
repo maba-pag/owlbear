@@ -368,6 +368,34 @@ attempt, any mismatch in claim, kind, actor, process, timestamp, detail, or evid
 operation-specific non-owner diagnostic. Cleared pointers return the operation-specific
 no-active-claim diagnostic only when the requested job and attempt have no sequence-two outcome.
 
+### 7.5 Native expired-claim recovery contract
+
+`NativeRuntime` receives required positive `claim_expiry: timedelta` as stable injected policy. Zero
+or negative duration is rejected at construction. Native recovery does not load legacy
+`BoardConfig.pipeline.claim_timeout` and callers cannot override expiry per request.
+
+`RecoverExpiredClaimsRequest` contains supplied timezone-aware `recovered_at`, `actor_id`, and
+`process_id`. `NativeRuntime.recover_expired_claims(request)` first completes pending runtime
+transactions, then reads active jobs in ascending job-ID order. It resolves each active claim from
+the job's claim and attempt pointers plus its sequence-one `started` event. Missing or inconsistent
+pointers, event identity, or claim timestamp produce `ERR_RECOVERY_IDENTITY_INVALID` for that job.
+
+A claim is expired only when `recovered_at` is strictly later than the started-event timestamp plus
+`claim_expiry`; equality remains active. Recovery atomically clears the matching job pointers,
+keeps disposition `pending`, sets `updated_at` to the supplied recovery time, and appends one
+sequence-two `crashed` event. The event retains the active job, attempt, and claim identity, records
+the recovery request actor/process/time, uses detail `claim expired`, and carries no evidence IDs.
+
+`RecoverExpiredClaimsResult` contains recovered job/event pairs and per-job diagnostics, each ordered
+by job ID. A transaction destination conflict produces `ERR_RECOVERY_CONFLICT` for only that job and
+does not undo earlier recovered jobs. Non-expired jobs and jobs already resolved by release or fail
+produce neither an outcome nor a diagnostic.
+
+An exact repeated request returns the existing crash job/event outcomes without duplicate events.
+This replay is discovered from persisted job `updated_at` plus matching sequence-two crash events, so
+a newly assembled runtime reaches the same result without in-memory state or a separate recovery
+index. A later retry changes the job timestamp and therefore is not mistaken for the earlier replay.
+
 ## 8. Agent Architecture
 
 ### 8.1 Designer

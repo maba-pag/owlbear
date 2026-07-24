@@ -396,7 +396,9 @@ interfaces:
       job and immutable started event or one stable start diagnostic while preserving lower-layer code and target
       evidence. Every immutable attempt event retains required claim identity. Release and failure atomically clear
       matching active pointers and append their outcome event; exact replay returns the stored outcome while a changed
-      claim returns the operation-specific non-owner diagnostic without mutation.
+      claim returns the operation-specific non-owner diagnostic without mutation. NativeRuntime receives positive
+      claim-expiry policy and exposes a supplied-time, job-ID-ordered recovery sweep that turns strictly expired claims
+      into retryable jobs plus immutable crashed events.
     authority: MOD-001
     failure_semantics: >-
       Atomic transaction abort or recoverable manifest; no partial valid receipt. Job start rejects stale authority,
@@ -404,7 +406,9 @@ interfaces:
       identity with dedicated stable diagnostics and no job or attempt mutation. Missing or empty attempt-event claim
       identity returns ERR_ATTEMPT_EVENT_IDENTITY_INVALID. Finalization replay checks completed-event ownership before
       cleared pointers, so any mismatched request field for the same completed job and attempt returns the
-      operation-specific non-owner diagnostic rather than an existing outcome or a no-active diagnostic.
+      operation-specific non-owner diagnostic rather than an existing outcome or a no-active diagnostic. Recovery
+      rejects non-positive policy, leaves claims active through the exact expiry boundary, isolates identity and
+      transaction-conflict diagnostics per job, and replays exact persisted crash outcomes without duplication.
     migration: MIG-002
     proof: PROOF-003
   - id: IF-004

@@ -1023,3 +1023,61 @@ decisions:
           - Makes a changed-claim request indistinguishable from the original owner replay
         risks:
           - A non-owner request can receive an existing successful outcome
+
+  - id: DEC-024
+    title: Inject native claim expiry and recover through a deterministic sweep
+    status: accepted
+    decided_at: 2026-07-24
+    authority: user
+    selected: runtime-policy-deterministic-sweep
+    rationale: >-
+      Claim expiry is stable runtime policy, while recovery time and executor identity belong to one
+      recovery invocation. Injecting a positive duration into NativeRuntime avoids legacy board-config
+      coupling and conflicting per-request policy. A job-ID-ordered sweep lets reopen recovery discover
+      abandoned claims without duplicating inventory and expiry logic in callers.
+    options:
+      - id: runtime-policy-deterministic-sweep
+        label: Inject expiry into NativeRuntime and sweep native jobs
+        confidence: 0.96
+        recommended: true
+        pros:
+          - One deterministic expiry policy applies to every recovery invocation
+          - Reopen recovery discovers abandoned claims through the existing ordered job inventory
+          - Supplied recovery time keeps boundary tests and replay deterministic
+        cons:
+          - Every runtime assembler must provide a positive duration
+          - One sweep may commit several independent job/event transactions
+        risks:
+          - Per-job concurrent changes must be isolated rather than aborting already completed sweep outcomes
+      - id: request-policy-single-or-sweep
+        label: Supply expiry duration on every recovery request
+        confidence: 0.38
+        recommended: false
+        pros:
+          - Keeps the current runtime constructor unchanged
+        cons:
+          - Callers can evaluate the same claim under conflicting policies
+          - Policy is repeated in every invocation and replay identity
+        risks:
+          - Recovery outcomes depend on which caller-selected duration happened to run first
+      - id: legacy-config-policy
+        label: Load legacy BoardConfig claim_timeout
+        confidence: 0.25
+        recommended: false
+        pros:
+          - Reuses the existing duration string and parser
+        cons:
+          - Couples the replacement runtime to legacy board configuration and errors
+          - Hides policy loading inside an otherwise explicitly assembled runtime
+        risks:
+          - Native and legacy claim behavior become difficult to separate during removal
+      - id: caller-selected-single-job
+        label: Recover one caller-selected job
+        confidence: 0.33
+        recommended: false
+        pros:
+          - Each invocation has the smallest mutation scope
+        cons:
+          - Reopen callers must duplicate inventory, ordering, and expiry discovery
+        risks:
+          - Abandoned jobs can remain stuck when external inventory is incomplete
