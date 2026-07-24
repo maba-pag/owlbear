@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 from owlbear_kanban.attempts import AttemptEvent, AttemptStore
+from owlbear_kanban.invalidation import InvalidationRequest, InvalidationResult, InvalidationRuntime
 from owlbear_kanban.jobs import JobDisposition, JobRecord, JobStore, StoredJob, project_job
 from owlbear_kanban.receipt import (
     ImpactClosure,
@@ -25,6 +26,13 @@ from owlbear_kanban.receipt import (
     evaluate_receipt_currentness,
     parse_impact_closure,
 )
+from owlbear_kanban.runtime_query import (
+    RuntimeHistoryEntry,
+    RuntimeJobProjection,
+    RuntimePage,
+    RuntimeQuery,
+    WorkHealthResult,
+)
 from owlbear_kanban.runtime_transaction import (
     ReplacementTransactionParticipant,
     RuntimeTransaction,
@@ -37,6 +45,8 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from owlbear_kanban.change import ChangeRevision
+    from owlbear_kanban.finding import Finding
+    from owlbear_kanban.runtime_requests import StoredRequest
 
 _RECOVERY_EVENT_SEQUENCE = 2
 _PACKET_ID = re.compile(r"^(DN-[0-9]{3})-PK-[0-9]{3}$")
@@ -311,6 +321,8 @@ class NativeRuntime:
         self._jobs = JobStore(work_root)
         self._attempts = AttemptStore(work_root)
         self._receipts = ReceiptStore(revision)
+        self._invalidation = InvalidationRuntime(revision, work_root)
+        self._query = RuntimeQuery(revision, work_root, history)
         RuntimeTransaction.recover_all(work_root, roots=(work_root, revision.source_dir))
 
     @staticmethod
@@ -333,7 +345,56 @@ class NativeRuntime:
             diagnostic = check(stored, request)
             if diagnostic is not None:
                 return diagnostic
-        return self._commit_start(stored, request)
+        result = self._commit_start(stored, request)
+        self._query.reset()
+        return result
+
+    def list_jobs(
+        self,
+        *,
+        candidate_revision: str,
+        cursor: str | None = None,
+        limit: int = 100,
+    ) -> RuntimePage[RuntimeJobProjection]:
+        """Return one bounded page of indexed job projections."""
+        return self._query.list_jobs(candidate_revision=candidate_revision, cursor=cursor, limit=limit)
+
+    def list_attempts(self, *, cursor: str | None = None, limit: int = 100) -> RuntimePage[AttemptEvent]:
+        """Return one bounded page of attempt history."""
+        return self._query.list_attempts(cursor=cursor, limit=limit)
+
+    def list_findings(self, *, cursor: str | None = None, limit: int = 100) -> RuntimePage[Finding]:
+        """Return one bounded page of corrective findings."""
+        return self._query.list_findings(cursor=cursor, limit=limit)
+
+    def list_receipts(self, *, cursor: str | None = None, limit: int = 100) -> RuntimePage[ReceiptRecord]:
+        """Return one bounded page of immutable receipts."""
+        return self._query.list_receipts(cursor=cursor, limit=limit)
+
+    def list_requests(self, *, cursor: str | None = None, limit: int = 100) -> RuntimePage[StoredRequest]:
+        """Return one bounded page of native requests."""
+        return self._query.list_requests(cursor=cursor, limit=limit)
+
+    def list_history(self, *, cursor: str | None = None, limit: int = 100) -> RuntimePage[RuntimeHistoryEntry]:
+        """Return one bounded page across immutable runtime history."""
+        return self._query.list_history(cursor=cursor, limit=limit)
+
+    def invalidate(self, request: InvalidationRequest) -> InvalidationResult:
+        """Apply invalidation and refresh only its affected index closure."""
+        result = self._invalidation.apply(request)
+        if result.outcome is not None:
+            self._query.refresh_closure(
+                (*result.outcome.affected_receipt_ids, result.outcome.supersession_receipt.receipt_id),
+                (
+                    *result.outcome.affected_job_ids,
+                    *(item.job.job_id for item in result.outcome.corrective_jobs),
+                ),
+            )
+        return result
+
+    def work_health(self, *, cursor: str | None = None, limit: int = 100) -> WorkHealthResult:
+        """Return bounded stable work findings without mutation."""
+        return self._query.work_health(cursor=cursor, limit=limit)
 
     def release_job(self, request: ReleaseJobRequest) -> ReleaseJobResult:
         result = self._finalize(
@@ -344,6 +405,7 @@ class NativeRuntime:
             evidence_ids=(),
         )
         if isinstance(result, tuple):
+            self._query.reset()
             return ReleaseJobResult(job=result[0], event=result[1])
         return ReleaseJobResult(
             diagnostic=ReleaseJobDiagnostic(
@@ -360,6 +422,7 @@ class NativeRuntime:
             evidence_ids=request.evidence_ids,
         )
         if isinstance(result, tuple):
+            self._query.reset()
             return FailJobResult(job=result[0], event=result[1])
         return FailJobResult(
             diagnostic=FailJobDiagnostic(
@@ -368,16 +431,28 @@ class NativeRuntime:
         )
 
     def finish_shape(self, request: FinishShapeRequest) -> FinishJobResult:
-        return self._finish(request, "shape")
+        result = self._finish(request, "shape")
+        if result.diagnostic is None:
+            self._query.reset()
+        return result
 
     def finish_build(self, request: FinishJobRequest) -> FinishJobResult:
-        return self._finish(request, "build")
+        result = self._finish(request, "build")
+        if result.diagnostic is None:
+            self._query.reset()
+        return result
 
     def finish_accept(self, request: FinishJobRequest) -> FinishJobResult:
-        return self._finish(request, "accept")
+        result = self._finish(request, "accept")
+        if result.diagnostic is None:
+            self._query.reset()
+        return result
 
     def finish_audit(self, request: FinishJobRequest) -> FinishJobResult:
-        return self._finish(request, "audit")
+        result = self._finish(request, "audit")
+        if result.diagnostic is None:
+            self._query.reset()
+        return result
 
     def recover_expired_claims(self, request: RecoverExpiredClaimsRequest) -> RecoverExpiredClaimsResult:
         RuntimeTransaction.recover_all(self._work_root)
@@ -418,6 +493,8 @@ class NativeRuntime:
                 )
             else:
                 recovered.append(outcome)
+        if recovered:
+            self._query.reset()
         return RecoverExpiredClaimsResult(recovered=tuple(recovered), diagnostics=tuple(diagnostics))
 
     @staticmethod

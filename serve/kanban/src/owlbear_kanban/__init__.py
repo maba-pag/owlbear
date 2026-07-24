@@ -143,6 +143,13 @@ from owlbear_kanban.receipt import (
     parse_receipt_mapping,
     parse_repository_path,
 )
+from owlbear_kanban.runtime_query import (
+    RuntimeHistoryEntry,
+    RuntimeJobProjection,
+    RuntimePage,
+    WorkHealthFinding,
+    WorkHealthResult,
+)
 from owlbear_kanban.storage_io import atomic_write
 
 __all__ = [
@@ -237,6 +244,9 @@ __all__ = [
     "ReleaseJobRequest",
     "ReleaseJobResult",
     "RepositoryHistory",
+    "RuntimeHistoryEntry",
+    "RuntimeJobProjection",
+    "RuntimePage",
     "ShapeJob",
     "StartJobDiagnostic",
     "StartJobDiagnosticCode",
@@ -246,6 +256,8 @@ __all__ = [
     "Task",
     "TaskSummary",
     "ValidationError",
+    "WorkHealthFinding",
+    "WorkHealthResult",
     "WorkSession",
     "atomic_write",
     "change_health",

@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import shutil
+from collections import Counter
 from datetime import timedelta
 from pathlib import Path
 
 import pytest
 
 from owlbear_kanban import (
+    AttemptEvent,
     AttemptStore,
     FinishJobDiagnosticCode,
     FinishJobRequest,
@@ -453,6 +455,96 @@ def test_start_job_stores_claim_and_started_event_then_replays(revision, tmp_pat
     timestamp_conflict = runtime.start_job(_request().model_copy(update={"claimed_at": "2026-07-24T00:02:00Z"}))
     assert timestamp_conflict.diagnostic is not None
     assert timestamp_conflict.diagnostic.code is StartJobDiagnosticCode.IDENTITY_CONFLICT
+
+
+def test_runtime_queries_project_orthogonal_state_and_deterministic_history(revision, tmp_path) -> None:
+    revision = _copied_revision(tmp_path)
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    store = JobStore(work_root)
+    _materialize(store, _record(revision, job_id=2, predecessor_job_ids=(1,)))
+    _materialize(store, _record(revision, job_id=1))
+    runtime = _runtime(revision, work_root)
+    runtime.start_job(_request())
+
+    first = runtime.list_jobs(candidate_revision="a" * 40, limit=1)
+    repeated = runtime.list_jobs(candidate_revision="a" * 40, limit=1)
+    second = runtime.list_jobs(candidate_revision="a" * 40, cursor=first.next_cursor, limit=1)
+    attempts = runtime.list_attempts(limit=1)
+    history = runtime.list_history(limit=1)
+
+    assert first == repeated
+    assert first.next_cursor == "1"
+    assert first.items[0].kind == "build"
+    assert first.items[0].claim_id == "claim-001"
+    assert first.items[0].attempt is not None
+    assert first.items[0].attempt.kind == "started"
+    assert first.items[0].disposition is JobDisposition.PENDING
+    assert first.items[0].title == revision.graph.nodes[0].title
+    assert second.items[0].job_id == 2
+    assert second.items[0].dependency_ready is False
+    assert attempts.items[0] == first.items[0].attempt
+    assert history.items[0].identity == "attempt:attempt-001/1"
+
+
+def test_runtime_queries_bound_scale_pages_and_reuse_indexes(revision, tmp_path, monkeypatch) -> None:
+    node = revision.graph.nodes[0]
+    nodes = tuple(node.model_copy(update={"id": f"DN-{index:03d}"}) for index in range(1, 501))
+    revision = revision.model_copy(update={"graph": revision.graph.model_copy(update={"nodes": nodes})})
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    store = JobStore(work_root)
+    for job_id in range(1, 501):
+        _materialize(store, _record(revision, job_id=job_id, target_node_id=f"DN-{job_id:03d}"))
+    attempts = AttemptStore(work_root)
+    for job_id in range(1, 501):
+        for sequence in range(1, 5):
+            attempts.create(
+                AttemptEvent(
+                    schema_version=1,
+                    attempt_id=f"attempt-{job_id:03d}",
+                    claim_id=f"claim-{job_id:03d}",
+                    job_id=job_id,
+                    change_id=revision.change_id,
+                    delivery_digest=revision.delivery_digest,
+                    target_node_id=f"DN-{job_id:03d}",
+                    actor_id="agent-001",
+                    process_id="process-001",
+                    sequence=sequence,
+                    timestamp=f"2026-07-24T00:{sequence:02d}:00Z",
+                    kind="started" if sequence == 1 else "failed",
+                )
+            )
+
+    calls: Counter[str] = Counter()
+    original_jobs = JobStore.list
+    original_attempts = AttemptStore.list
+
+    def count_jobs(self, *, archived=False):
+        calls["jobs"] += 1
+        return original_jobs(self, archived=archived)
+
+    def count_attempts(self):
+        calls["attempts"] += 1
+        return original_attempts(self)
+
+    monkeypatch.setattr(JobStore, "list", count_jobs)
+    monkeypatch.setattr(AttemptStore, "list", count_attempts)
+    runtime = _runtime(revision, work_root)
+
+    first = runtime.list_jobs(candidate_revision="a" * 40, limit=25)
+    second = runtime.list_jobs(candidate_revision="a" * 40, cursor=first.next_cursor, limit=25)
+    repeated = runtime.list_jobs(candidate_revision="a" * 40, limit=25)
+    attempt_page = runtime.list_attempts(limit=25)
+
+    assert first == repeated
+    assert tuple(item.job_id for item in first.items) == tuple(range(1, 26))
+    assert tuple(item.job_id for item in second.items) == tuple(range(26, 51))
+    assert len(attempt_page.items) == 25
+    assert attempt_page.items[0].attempt_id == "attempt-001"
+    assert attempt_page.items[-1].attempt_id == "attempt-007"
+    assert attempt_page.next_cursor == "attempt-007/1"
+    assert calls == Counter({"jobs": 2, "attempts": 1})
 
 
 def test_release_and_fail_only_finalize_the_owning_attempt(revision, tmp_path) -> None:
