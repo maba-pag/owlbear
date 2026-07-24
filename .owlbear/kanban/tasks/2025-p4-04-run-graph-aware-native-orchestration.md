@@ -1,10 +1,10 @@
 ---
 id: 2025
 title: 'P4-04: Run graph-aware native orchestration'
-status: build
+status: shape
 priority: high
 created: 2026-07-24T16:54:49.020973+02:00
-updated: 2026-07-24T18:09:47.771634+02:00
+updated: 2026-07-24T18:11:14.363588+02:00
 tags:
   - phase-4
   - scope:core
@@ -61,3 +61,17 @@ Builder crashed twice before claiming or reading the task; both returns asked wh
 ## Recovery
 
 The current session revalidated the builder contract and task path: `builder.agent.md` accepts one task ID and has `start_work`; no partial implementation or source mutation exists. Treat the prior bare-ID ambiguity as a contained invocation failure. Block cleared for one fresh-plan redispatch.
+
+[[2026-07-24T18:11:14+02:00]]
+## Builder Notes
+
+- Change envelope: replace the orchestrator agent, `w-orchestration`, `/orchestrate`, `share/WIRING.md`, and PROOF-014 integration boundary so it dispatches native graph jobs through public engine-selected waves.
+- Files changed: none.
+- Change Module Map deviation: current source contradicts the packet premise. `serve/kanban/src/owlbear_kanban/dispatch.py` provides `DispatchRuntime.pick_waves`, `start`, kind-specific finish methods, and expired-claim recovery, but `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py` exposes only the legacy `pick_tasks` task-board route. The orchestrator agent has only `ob-kanban/pick_tasks`, `end_work`, and `edit_task`; no public native dispatch/planning/start/finalization/recovery/proof-checkout operations or profile-runner interface exists.
+- Contract classification: missing load-bearing public interface and mutation owner. Implementing AC-1 through AC-3 would require inventing the native MCP/tool API and how agents return typed outcomes, which belongs to the control-plane surface excluded from this packet and owned by the native control-plane work.
+- Proof selected: targeted source boundary inspection. `serve/kanban/tests/test_dispatch_runtime.py` confirms native runtime internals, including wave selection, writer coordination, and expiry recovery, but cannot establish the public orchestrator boundary required by PROOF-014.
+- Commands run: targeted repository searches and source reads only; no product edit was valid under the missing interface.
+- AC-to-evidence map: AC-1 cannot be implemented because a native plan/start/finalization API is not public to the orchestrator; AC-2 cannot route typed recovery or proof-checkout outcomes through an agent boundary; AC-3 cannot cross a nonexistent public dispatch boundary; AC-4 identifies the current legacy routing that must be replaced once the public native interface is available.
+- Current failure keys: none.
+- Builder-challenger: not run; a DONE claim was not proposed.
+- Follow-up risk: shape must either depend this packet on the native control-plane interface task or explicitly assign the missing public dispatch/profile-runner contract to this packet with a concrete module map and interface authority.
