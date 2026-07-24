@@ -554,6 +554,10 @@ class TestProof014NativeMcpScenario:
             ("auditor", 5),
         ]
         assert [call.args[:2] for call in runner.await_args_list] == dispatches
+        assert all(
+            call.args[2].event is not None and call.args[2].event.attempt_id == f"attempt-{index:03d}"
+            for index, call in enumerate(runner.await_args_list, start=1)
+        )
         events = AttemptStore(work_root).list()
         terminal_kinds = {"released", "crashed", "succeeded"}
         attempt_events = {

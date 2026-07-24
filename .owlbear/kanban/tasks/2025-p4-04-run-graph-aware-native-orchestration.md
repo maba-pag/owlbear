@@ -1,10 +1,10 @@
 ---
 id: 2025
 title: 'P4-04: Run graph-aware native orchestration'
-status: verify
+status: collect
 priority: high
 created: 2026-07-24T16:54:49.020973+02:00
-updated: 2026-07-24T22:12:57.128786+02:00
+updated: 2026-07-24T22:18:10.703260+02:00
 tags:
   - phase-4
   - scope:core
@@ -334,3 +334,16 @@ Qualify the existing `Do not dispatch shape work` / `shape stays user-facing thr
 - Current failure-key resolution: `AC-5/native-proof-014-scenario` is resolved. The runner return is now causally matched to the corresponding public lifecycle operation; no expected-outcome, operation name, callback, or external hardcoded terminal action remains.
 - Builder-challenger: pass. Independently reran the focused 48-test suite, Ruff, and `git diff --check`; no DONE blocker.
 - Follow-up risks: native mode remains explicitly non-default pending DN-012. Acceptor/auditor bodies remain absent as owned by DN-008/DN-014.
+
+[[2026-07-24T22:18:10+02:00]]
+## Verify Notes
+- Evidence reviewed: AC-1 through AC-8; latest Shape Notes, Builder Notes, and prior Verify Notes; builder revision `f0bb8c256`; canonical `PROOF-014` in `.owlbear/changes/replace-delivery-pipeline/graph.yaml`.
+- Named authorities checked: IF-015 and PROOF-014 require the exact public MCP bridge over real `DispatchRuntime`, permit a replacement only below the subagent-runner boundary, require structured disposition routing and fresh replanning, and retain `pick_tasks` as the bootstrap carrier pending DN-012. The agent, workflow, prompt, wiring, registry scenario, and source agree.
+- Change Module Map: committed owners match the map. The verifier patch stays in the maintained MCP-boundary scenario and adds only the missing AC-6 runner-context assertion; no production behavior, interface, or map expansion.
+- Normal-path boundary: the scenario drives public `pick_jobs`, `start_job`, the matching purpose-specific finish tools, `release_job`, and `recover_expired_claims over real `DispatchRuntime`; only the allowed subagent runner is replaced. It covers shape, build, accept, and audit profiles, structured Success, RateLimited, and Crash dispositions, and fresh plan retrieval for every dispatch.
+- Checks run: `uv run pytest serve/mcp-kanban/tests/test_mcp_surface_contract.py serve/kanban/tests/test_dispatch_runtime.py serve/kanban/tests/test_proof_checkout.py tests/test_skill_authority_wiring.py tests/test_agentview_ac_params.py -q` passed: 48 passed. `uv run ruff check serve/mcp-kanban/tests/test_mcp_surface_contract.py` passed.
+- Findings and patch: verifier-challenger initially found that AC-6 was not regression-protected because runner assertions omitted the returned `start_job` context. Patched `TestProof014NativeMcpScenario` to assert every runner call receives a non-null `StartJobResult.event` for its expected attempt ID. The focused pytest and Ruff rerun passed.
+- AC-to-evidence: AC-1 exact tool registration and schemas are covered by the MCP contract tests. AC-2 through AC-4 are covered by real MCP/DispatchRuntime/proof-checkout scenarios. AC-5 wiring artifacts and explicit non-default native contract are guarded. AC-6 runner receives profile, job ID, and returned start context. AC-7 asserts profile-matched finish, release, recovery, terminal histories `[started, terminal]`, and fresh planning. AC-8 proves unavailable profiles halt before start/runner with unchanged stores.
+- Prior same-failure-key check: the prior verifier rejection key `AC-5/native-proof-014-scenario` was resolved by the builder's maintained scenario. This verification found a distinct local AC-6 proof omission and closed it within the permitted single-owner patch budget; no repeat rejection applies.
+- Verifier-challenger result: pass after the AC-6 assertion patch.
+- Final route: PASS to collect.
