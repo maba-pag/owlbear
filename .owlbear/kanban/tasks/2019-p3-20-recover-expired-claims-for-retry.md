@@ -1,10 +1,10 @@
 ---
 id: 2019
 title: 'P3-20: Recover expired claims for retry'
-status: shape
+status: build
 priority: high
 created: 2026-07-23T14:42:08.799937+02:00
-updated: 2026-07-24T13:12:13.866902+02:00
+updated: 2026-07-24T13:15:32.665080+02:00
 tags:
   - phase-3
   - scope:core
@@ -22,15 +22,31 @@ depends_on:
   - 2017
   - 2018
 ac:
-  - 'AC-1: Given an active claim whose supplied recovery time is strictly beyond its
-    claim timestamp plus configured expiry duration, recovery atomically appends one
-    `crashed` event, clears only that claim, and leaves the job open and eligible
-    for a later attempt.'
-  - 'AC-2: Given a claim before or exactly at the expiry boundary, or a job whose
-    claim was already released or failed, recovery is a no-op and emits no event.'
-  - 'AC-3: Given reopen with an expired claim, runtime recovery reaches the same retryable
-    job/crashed-event outcome; repeated recovery returns that outcome without duplicate
-    events.'
+  - 'AC-1: Given positive `claim_expiry`, `NativeRuntime` constructs; zero or negative
+    duration raises `ValueError`. `RecoverExpiredClaimsRequest` accepts a timezone-aware
+    ISO `recovered_at` and rejects malformed or naive timestamps.'
+  - 'AC-2: Given an active job whose started timestamp plus `claim_expiry` is after
+    or equal to `recovered_at`, `recover_expired_claims` returns no outcome and changes
+    no bytes. A strictly later `recovered_at` clears matching pointers and appends
+    one sequence-2 `crashed` event.'
+  - 'AC-3: The recovered job remains `pending` and uses `recovered_at` as `updated_at`.
+    Its crashed event carries the active job, attempt, and claim; request actor, process,
+    and timestamp; detail `claim expired`; and no evidence IDs.'
+  - 'AC-4: Given active jobs stored out of job-ID order, recovery evaluates ascending
+    job IDs and returns expired outcomes in ascending job-ID order; non-expired and
+    release/fail-resolved jobs produce no outcome or diagnostic.'
+  - 'AC-5: Given inconsistent active pointers, missing or mismatched started identity,
+    or invalid started timestamp, recovery returns `ERR_RECOVERY_IDENTITY_INVALID`
+    for that job. A transaction destination conflict returns `ERR_RECOVERY_CONFLICT`;
+    either leaves that job unchanged and does not prevent a later eligible job from
+    recovery.'
+  - 'AC-6: Given an exact repeated request after recovery, `recover_expired_claims`
+    returns the existing job/crashed-event pair and `AttemptStore.list` retains one
+    crashed event. A newly assembled `NativeRuntime` with the same policy and request
+    returns the same result.'
+  - 'AC-7: Given a recovered job that starts a later attempt, repeating the older
+    recovery request does not return the prior crash outcome or mutate the later active
+    claim.'
 proof_bundle: critical+challenge
 blocked: false
 block_reason:
@@ -80,3 +96,52 @@ Exercise public recovery at just before, exactly at, and just after expiry; then
 - Complete shaper challenge passed with readiness, authority, ownership, dependency, scenario, proof, and fidelity coverage.
 - User graph approval: approved the hardened #2003/#2019 recovery delta.
 - Lifecycle: release #2019 without movement. Commit reconciled authority and this review history, then restart the connected mutation set by claiming #2003 and #2019 in ID order.
+
+[[2026-07-24T13:13:34+02:00]]
+## Operative Native Expired-Claim Recovery Contract
+
+This amendment supersedes earlier Scope, Authority, ownership, and proof wording where they conflict with the contract below.
+
+### Scope And Authority Amendment
+
+In scope: required positive runtime expiry policy; aware supplied recovery time; deterministic native job sweep; active identity validation; strict expiry boundary; per-job crash transaction; ordered mixed results; exact persisted replay after reassembly; and later-retry separation. Process liveness, successful completion, dispatch policy, global writer leases, receipts, MCP, and Cockpit remain outside this task.
+
+Controlling authority is `REQ-008`, `REQ-009`, `REQ-016`, `REQ-022`, `IF-003`, `KEEP-007`, design sections 2.2, 2.3, 7.2, 7.5, 8.6, 13, and 14, and accepted `DEC-007`, `DEC-009`, `DEC-023`, and `DEC-024`. `DEC-024` and design section 7.5 control expiry policy ownership, sweep scope, boundary semantics, diagnostics, and replay.
+
+### Public Contract
+
+- `NativeRuntime(revision, work_root, history, claim_expiry)` requires a positive `timedelta`; zero or negative values raise `ValueError`. It does not load legacy `BoardConfig` and requests cannot override policy.
+- `RecoverExpiredClaimsRequest` contains timezone-aware ISO `recovered_at`, `actor_id`, and `process_id`; malformed or naive time fails request validation.
+- `RecoveryDiagnosticCode` contains `ERR_RECOVERY_IDENTITY_INVALID` and `ERR_RECOVERY_CONFLICT`.
+- `RecoveryDiagnostic` contains code, job ID, detail, and optional lower-layer code.
+- `RecoveredClaim` contains one `StoredJob` and one `AttemptEvent`.
+- `RecoverExpiredClaimsResult` contains recovered outcomes and diagnostics, each ordered by job ID; mixed success and diagnostics are valid.
+
+### Sweep, Mutation, And Replay
+
+`recover_expired_claims` first completes pending transactions rooted at the work root, reads active jobs in ascending job-ID order, and scans immutable attempt history once for replay. Active identity requires both job pointers and a sequence-one started event matching job, attempt, and claim with an aware timestamp. Missing or inconsistent identity returns `ERR_RECOVERY_IDENTITY_INVALID` for only that job.
+
+A claim expires only when `recovered_at` is strictly later than the started timestamp plus `claim_expiry`; before and equality are no-ops. Recovery uses one `RuntimeTransaction` per expired job. It clears only matching claim and attempt pointers, keeps disposition `pending`, sets `updated_at` to `recovered_at`, and appends sequence-two `crashed` with active job/attempt/claim identity, request actor/process/time, detail `claim expired`, and no evidence. `TransactionConflictError` maps to `ERR_RECOVERY_CONFLICT` for that job; later jobs continue.
+
+Non-expired and release/fail-resolved jobs produce no result entry. An exact repeated request returns a pointer-clear job whose `updated_at` equals `recovered_at` plus its matching persisted crash event, without duplication. A new runtime instance returns the same result. Starting a later attempt changes job identity and timestamp, so an older request cannot replay or mutate it.
+
+### Change Module Map
+
+- `serve/kanban/src/owlbear_kanban/native_runtime.py`: own recovery models, constructor policy, time validation, transaction completion, ordered sweep, identity checks, strict expiry, crash transaction, diagnostics, and persisted replay.
+- `serve/kanban/src/owlbear_kanban/__init__.py`: export the recovery public contract.
+- `serve/kanban/tests/test_native_runtime.py`: update existing constructor calls with positive policy and prove all recovery scenarios through the public facade over real stores and transactions.
+- `serve/kanban/src/owlbear_kanban/jobs.py`, `attempts.py`, and `runtime_transaction.py`: reuse existing inventory, immutable history, participant, conflict, and recovery behavior unchanged.
+
+### Validation And Bootstrap Admission
+
+The revised authority loads without diagnostics at digest `eaab0f2e46780f38b5df541d248fc54cb8a0483da1464f60f4d507c0f3cad617`. Global re-admission remains delegated to DN-013/DN-014 and is not a local #2019 acceptance branch.
+
+[[2026-07-24T13:15:32+02:00]]
+## Shape Completion Notes
+- User-approved DEC-024 implementation contract applied: required positive constructor expiry, aware supplied recovery time, ascending native job sweep, strict-after boundary, per-job atomic crash transaction, stable identity/conflict diagnostics, exact persisted replay after reassembly, and later-retry separation.
+- Public models and export ownership are explicit; jobs, attempts, and RuntimeTransaction are reused unchanged.
+- Seven bounded AC cover policy/time validation, boundary and mutation bytes, event/job payload, ordering/no-ops, identity/conflict isolation, exact reopen replay, and later retry.
+- Authority loads without diagnostics at eaab0f2e46780f38b5df541d248fc54cb8a0483da1464f60f4d507c0f3cad617. Global admission remains DN-013/DN-014 debt.
+- Dependency audit: unchanged depends_on [2017, 2018], both archived.
+- Validation: uv run pytest -q tests/test_edit_task_contract.py passed 2; task diff check passed; one operative amendment and exactly seven AC confirmed.
+- Builder route: implement only native_runtime.py, __init__.py, and test_native_runtime.py; preserve unrelated dirty changes and use public facade proof over real stores.
