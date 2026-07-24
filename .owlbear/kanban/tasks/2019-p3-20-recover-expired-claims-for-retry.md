@@ -1,10 +1,10 @@
 ---
 id: 2019
 title: 'P3-20: Recover expired claims for retry'
-status: build
+status: verify
 priority: high
 created: 2026-07-23T14:42:08.799937+02:00
-updated: 2026-07-24T13:15:32.665080+02:00
+updated: 2026-07-24T13:23:47.299969+02:00
 tags:
   - phase-3
   - scope:core
@@ -145,3 +145,18 @@ The revised authority loads without diagnostics at digest `eaab0f2e46780f38b5df5
 - Dependency audit: unchanged depends_on [2017, 2018], both archived.
 - Validation: uv run pytest -q tests/test_edit_task_contract.py passed 2; task diff check passed; one operative amendment and exactly seven AC confirmed.
 - Builder route: implement only native_runtime.py, __init__.py, and test_native_runtime.py; preserve unrelated dirty changes and use public facade proof over real stores.
+
+[[2026-07-24T13:23:47+02:00]]
+## Builder Notes
+- Verdict: DONE. Implemented deterministic expired-claim recovery in the existing `NativeRuntime`, `JobStore`, `AttemptStore`, and `RuntimeTransaction` ownership boundary.
+- Change envelope: `serve/kanban/src/owlbear_kanban/native_runtime.py`, public exports in `serve/kanban/src/owlbear_kanban/__init__.py`, and focused public behavior coverage in `serve/kanban/tests/test_native_runtime.py`. No Change Module Map deviations.
+- Files changed: the three envelope files above. Added required positive `timedelta` policy, aware ISO recovery request validation, public recovery result/diagnostic models, ascending sweep, strict expiry, atomic crash publication, persisted replay, per-job diagnostic isolation, and stale-request separation.
+- Durable-test justification: this public lifecycle mutation has strict time, atomic persistence, reopen replay, duplicate-event, and stale-identity risks that are difficult to detect manually and data-loss prone.
+- Focused proof: `uv run pytest serve/kanban/tests/test_native_runtime.py -q` passed 17 tests. Scoped `ruff check`, `ruff format --check`, editor diagnostics, and `git diff --check` passed.
+- Domain regression: `uv run pytest serve/kanban/tests tests/test_engine_*.py tests/test_kanban_*.py -q` produced 1046 passed and 8 unrelated baseline failures: four admission tests report pre-existing DV-010/stale admitted digest state, and four runtime-transaction tests inject disposition strings rejected by the current `JobDisposition` enum. No recovery test failed.
+- AC-1: `test_recovery_rejects_invalid_policy_and_timestamp` proves policy and request validation.
+- AC-2, AC-3, AC-6: `test_recovery_uses_strict_expiry_boundary_and_replays_from_storage` proves byte-stable before/equal no-op, crash/job fields, one event, same-instance replay, and reopened replay.
+- AC-4, AC-5: `test_recovery_orders_jobs_and_isolates_identity_and_transaction_conflicts` proves ascending mixed results, stable diagnostics, unchanged conflicted state, and later-job continuation; implementation validates missing/mismatched started identity and aware started timestamps.
+- AC-7: `test_older_recovery_request_does_not_replay_across_a_later_attempt` proves the later claim remains unchanged.
+- Builder challenger: decision pass; minimum-change scope, authority fidelity, focused proof, and unrelated baseline classification accepted.
+- Current required follow-up: none.

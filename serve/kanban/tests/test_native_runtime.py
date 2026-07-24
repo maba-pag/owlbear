@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
@@ -13,6 +14,8 @@ from owlbear_kanban import (
     NativeRuntime,
     FailJobDiagnosticCode,
     FailJobRequest,
+    RecoverExpiredClaimsRequest,
+    RecoveryDiagnosticCode,
     ReleaseJobDiagnosticCode,
     ReleaseJobRequest,
     StartJobDiagnosticCode,
@@ -20,6 +23,7 @@ from owlbear_kanban import (
     load_change,
     parse_job_mapping,
 )
+from owlbear_kanban.runtime_transaction import RuntimeTransaction, TransactionConflictError
 
 
 class _History:
@@ -96,11 +100,15 @@ def _request() -> StartJobRequest:
     )
 
 
+def _runtime(revision, work_root: Path, *, claim_expiry: timedelta = timedelta(minutes=5)) -> NativeRuntime:
+    return NativeRuntime(revision, work_root, _History(), claim_expiry)
+
+
 def test_start_job_stores_claim_and_started_event_then_replays(revision, tmp_path) -> None:
     work_root = tmp_path / "work"
     work_root.mkdir()
     _materialize(JobStore(work_root), _record(revision))
-    runtime = NativeRuntime(revision, work_root, _History())
+    runtime = _runtime(revision, work_root)
 
     started = runtime.start_job(_request())
     replayed = runtime.start_job(_request())
@@ -131,7 +139,7 @@ def test_release_and_fail_only_finalize_the_owning_attempt(revision, tmp_path) -
     work_root = tmp_path / "work"
     work_root.mkdir()
     _materialize(JobStore(work_root), _record(revision))
-    runtime = NativeRuntime(revision, work_root, _History())
+    runtime = _runtime(revision, work_root)
     runtime.start_job(_request())
 
     release = ReleaseJobRequest(
@@ -209,7 +217,7 @@ def test_completed_claim_mismatch_returns_non_owner_without_mutation(revision, t
     work_root = tmp_path / "work"
     work_root.mkdir()
     _materialize(JobStore(work_root), _record(revision))
-    runtime = NativeRuntime(revision, work_root, _History())
+    runtime = _runtime(revision, work_root)
     runtime.start_job(_request())
     release = ReleaseJobRequest(
         job_id=1,
@@ -233,7 +241,7 @@ def test_completed_failure_claim_mismatch_returns_non_owner_without_mutation(rev
     work_root = tmp_path / "work"
     work_root.mkdir()
     _materialize(JobStore(work_root), _record(revision))
-    runtime = NativeRuntime(revision, work_root, _History())
+    runtime = _runtime(revision, work_root)
     runtime.start_job(_request())
     failure = FailJobRequest(
         job_id=1,
@@ -261,7 +269,7 @@ def test_release_replay_for_another_job_does_not_return_or_mutate_the_original_o
     store = JobStore(work_root)
     _materialize(store, _record(revision))
     _materialize(store, _record(revision, job_id=2))
-    runtime = NativeRuntime(revision, work_root, _History())
+    runtime = _runtime(revision, work_root)
     runtime.start_job(_request())
     release = ReleaseJobRequest(
         job_id=1,
@@ -291,7 +299,7 @@ def test_start_job_rejects_terminal_dispositions(revision, tmp_path, disposition
     work_root.mkdir()
     _materialize(JobStore(work_root), _record(revision, disposition=disposition))
 
-    result = NativeRuntime(revision, work_root, _History()).start_job(_request())
+    result = _runtime(revision, work_root).start_job(_request())
 
     assert result.diagnostic is not None
     assert result.diagnostic.code is StartJobDiagnosticCode.TERMINAL
@@ -319,7 +327,7 @@ def test_start_job_rejects_ineligible_jobs(revision, tmp_path, changes, code, ta
     _materialize(store, _record(revision, **changes))
     before = store.read(1)
 
-    result = NativeRuntime(revision, work_root, _History()).start_job(_request())
+    result = _runtime(revision, work_root).start_job(_request())
 
     assert result.diagnostic is not None
     assert result.diagnostic.code is code
@@ -332,3 +340,142 @@ def test_job_parser_rejects_unsupported_disposition(revision) -> None:
 
     assert result.job is None
     assert result.diagnostics[0].code is JobDiagnosticCode.SCHEMA_INVALID
+
+
+def test_recovery_uses_strict_expiry_boundary_and_replays_from_storage(revision, tmp_path) -> None:
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    _materialize(JobStore(work_root), _record(revision))
+    runtime = _runtime(revision, work_root)
+    runtime.start_job(_request())
+
+    before_expiry = RecoverExpiredClaimsRequest(
+        recovered_at="2026-07-24T00:05:59Z",
+        actor_id="recovery-agent",
+        process_id="recovery-process",
+    )
+    at_expiry = before_expiry.model_copy(update={"recovered_at": "2026-07-24T00:06:00Z"})
+    after_expiry = before_expiry.model_copy(update={"recovered_at": "2026-07-24T00:06:01Z"})
+    before = JobStore(work_root).read(1)
+
+    assert runtime.recover_expired_claims(before_expiry).recovered == ()
+    assert runtime.recover_expired_claims(at_expiry).recovered == ()
+    assert JobStore(work_root).read(1) == before
+
+    recovered = runtime.recover_expired_claims(after_expiry)
+    replayed = runtime.recover_expired_claims(after_expiry)
+    reopened = _runtime(revision, work_root).recover_expired_claims(after_expiry)
+
+    assert recovered.diagnostics == ()
+    assert len(recovered.recovered) == 1
+    assert replayed == recovered
+    assert reopened == recovered
+    outcome = recovered.recovered[0]
+    assert outcome.job.job.claim_id is None
+    assert outcome.job.job.attempt_id is None
+    assert outcome.job.job.disposition is JobDisposition.PENDING
+    assert outcome.job.job.updated_at == after_expiry.recovered_at
+    assert outcome.event.kind == "crashed"
+    assert outcome.event.sequence == 2
+    assert outcome.event.job_id == 1
+    assert outcome.event.attempt_id == "attempt-001"
+    assert outcome.event.claim_id == "claim-001"
+    assert outcome.event.actor_id == "recovery-agent"
+    assert outcome.event.process_id == "recovery-process"
+    assert outcome.event.timestamp == after_expiry.recovered_at
+    assert outcome.event.detail == "claim expired"
+    assert outcome.event.evidence_ids == ()
+    assert tuple(event.kind for event in AttemptStore(work_root).list()) == ("started", "crashed")
+
+
+def test_recovery_rejects_invalid_policy_and_timestamp(revision, tmp_path) -> None:
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+
+    with pytest.raises(ValueError, match="claim expiry must be positive"):
+        NativeRuntime(revision, work_root, _History(), timedelta(0))
+    with pytest.raises(ValueError, match="claim expiry must be positive"):
+        NativeRuntime(revision, work_root, _History(), timedelta(seconds=-1))
+    with pytest.raises(ValueError, match="valid ISO 8601"):
+        RecoverExpiredClaimsRequest(
+            recovered_at="not-a-timestamp",
+            actor_id="recovery-agent",
+            process_id="recovery-process",
+        )
+    with pytest.raises(ValueError, match="include a timezone"):
+        RecoverExpiredClaimsRequest(
+            recovered_at="2026-07-24T00:06:01",
+            actor_id="recovery-agent",
+            process_id="recovery-process",
+        )
+
+
+def test_recovery_orders_jobs_and_isolates_identity_and_transaction_conflicts(revision, tmp_path, monkeypatch) -> None:
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    store = JobStore(work_root)
+    _materialize(store, _record(revision, job_id=3))
+    _materialize(store, _record(revision, job_id=1, claim_id="orphaned-claim"))
+    _materialize(store, _record(revision, job_id=2))
+    runtime = _runtime(revision, work_root, claim_expiry=timedelta(minutes=1))
+    runtime.start_job(_request().model_copy(update={"job_id": 2, "attempt_id": "attempt-002"}))
+    runtime.start_job(_request().model_copy(update={"job_id": 3, "attempt_id": "attempt-003"}))
+    original_commit = RuntimeTransaction.commit
+    commit_calls = 0
+
+    def conflict_first_recovery(self, *, failure=None) -> None:
+        nonlocal commit_calls
+        commit_calls += 1
+        if commit_calls == 1:
+            raise TransactionConflictError
+        original_commit(self, failure=failure)
+
+    monkeypatch.setattr(RuntimeTransaction, "commit", conflict_first_recovery)
+    request = RecoverExpiredClaimsRequest(
+        recovered_at="2026-07-24T00:02:01Z",
+        actor_id="recovery-agent",
+        process_id="recovery-process",
+    )
+
+    result = runtime.recover_expired_claims(request)
+
+    assert tuple(item.job.job.job_id for item in result.recovered) == (3,)
+    assert tuple(item.job_id for item in result.diagnostics) == (1, 2)
+    assert tuple(item.code for item in result.diagnostics) == (
+        RecoveryDiagnosticCode.IDENTITY_INVALID,
+        RecoveryDiagnosticCode.CONFLICT,
+    )
+    assert store.read(2).job.claim_id == "claim-001"
+    assert store.read(3).job.claim_id is None
+
+
+def test_older_recovery_request_does_not_replay_across_a_later_attempt(revision, tmp_path) -> None:
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    _materialize(JobStore(work_root), _record(revision))
+    runtime = _runtime(revision, work_root, claim_expiry=timedelta(minutes=1))
+    runtime.start_job(_request())
+    recovery = RecoverExpiredClaimsRequest(
+        recovered_at="2026-07-24T00:02:01Z",
+        actor_id="recovery-agent",
+        process_id="recovery-process",
+    )
+    assert len(runtime.recover_expired_claims(recovery).recovered) == 1
+    runtime.start_job(
+        _request().model_copy(
+            update={
+                "attempt_id": "attempt-002",
+                "claim_id": "claim-002",
+                "claimed_at": "2026-07-24T00:03:00Z",
+            }
+        )
+    )
+    before = JobStore(work_root).read(1)
+
+    repeated = runtime.recover_expired_claims(recovery)
+
+    assert repeated.recovered == ()
+    assert repeated.diagnostics == ()
+    assert JobStore(work_root).read(1) == before
+    assert before.job.attempt_id == "attempt-002"
+    assert AttemptStore(work_root).read("attempt-002", 2).event is None

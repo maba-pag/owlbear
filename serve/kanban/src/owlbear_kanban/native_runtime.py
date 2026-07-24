@@ -2,20 +2,24 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 from owlbear_kanban.attempts import AttemptEvent, AttemptStore
 from owlbear_kanban.jobs import JobDisposition, JobStore, StoredJob, project_job
 from owlbear_kanban.receipt import ReceiptStore, ReceiptValidityCode, RepositoryHistory
-from owlbear_kanban.runtime_transaction import RuntimeTransaction
+from owlbear_kanban.runtime_transaction import RuntimeTransaction, TransactionConflictError
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
     from pathlib import Path
 
     from owlbear_kanban.change import ChangeRevision
+
+_RECOVERY_EVENT_SEQUENCE = 2
 
 
 class StartJobDiagnosticCode(StrEnum):
@@ -147,13 +151,76 @@ class FailJobResult(BaseModel):
         raise ValueError(msg)
 
 
+class RecoveryDiagnosticCode(StrEnum):
+    IDENTITY_INVALID = "ERR_RECOVERY_IDENTITY_INVALID"
+    CONFLICT = "ERR_RECOVERY_CONFLICT"
+
+
+def _aware_datetime(value: str) -> datetime:
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError as exc:
+        msg = "timestamp must be valid ISO 8601"
+        raise ValueError(msg) from exc
+    if parsed.utcoffset() is None:
+        msg = "timestamp must include a timezone"
+        raise ValueError(msg)
+    return parsed
+
+
+class RecoverExpiredClaimsRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    recovered_at: str
+    actor_id: str
+    process_id: str
+
+    @field_validator("recovered_at")
+    @classmethod
+    def _validate_recovered_at(cls, value: str) -> str:
+        _aware_datetime(value)
+        return value
+
+
+class RecoveredClaim(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    job: StoredJob
+    event: AttemptEvent
+
+
+class RecoveryDiagnostic(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    job_id: int
+    code: RecoveryDiagnosticCode
+    detail: str
+
+
+class RecoverExpiredClaimsResult(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    recovered: tuple[RecoveredClaim, ...] = ()
+    diagnostics: tuple[RecoveryDiagnostic, ...] = ()
+
+
 class NativeRuntime:
     """Assemble native stores behind the public job-start mutation boundary."""
 
-    def __init__(self, revision: ChangeRevision, work_root: Path, history: RepositoryHistory) -> None:
+    def __init__(
+        self,
+        revision: ChangeRevision,
+        work_root: Path,
+        history: RepositoryHistory,
+        claim_expiry: timedelta,
+    ) -> None:
+        if claim_expiry <= timedelta(0):
+            msg = "claim expiry must be positive"
+            raise ValueError(msg)
         self._revision = revision
         self._work_root = work_root
         self._history = history
+        self._claim_expiry = claim_expiry
         self._jobs = JobStore(work_root)
         self._attempts = AttemptStore(work_root)
         self._receipts = ReceiptStore(revision)
@@ -211,6 +278,125 @@ class NativeRuntime:
                 code=FailJobDiagnosticCode(result), detail="claim is not owned by the requesting attempt"
             )
         )
+
+    def recover_expired_claims(self, request: RecoverExpiredClaimsRequest) -> RecoverExpiredClaimsResult:
+        RuntimeTransaction.recover_all(self._work_root)
+        events = {(event.attempt_id, event.sequence): event for event in self._attempts.list()}
+        recovered_at = _aware_datetime(request.recovered_at)
+        recovered: list[RecoveredClaim] = []
+        diagnostics: list[RecoveryDiagnostic] = []
+        for stored in self._jobs.list():
+            job = stored.job
+            if job.claim_id is None and job.attempt_id is None:
+                replay = self._recovered_replay(stored, request, events.values())
+                if replay is not None:
+                    recovered.append(replay)
+                continue
+            if job.claim_id is None or job.attempt_id is None:
+                diagnostics.append(self._recovery_identity_diagnostic(job.job_id))
+                continue
+            started = events.get((job.attempt_id, 1))
+            if not self._valid_started_identity(stored, started):
+                diagnostics.append(self._recovery_identity_diagnostic(job.job_id))
+                continue
+            assert started is not None
+            try:
+                claimed_at = _aware_datetime(started.timestamp)
+            except ValueError:
+                diagnostics.append(self._recovery_identity_diagnostic(job.job_id))
+                continue
+            if recovered_at <= claimed_at + self._claim_expiry:
+                continue
+            outcome = self._commit_recovery(stored, started, request)
+            if outcome is None:
+                diagnostics.append(
+                    RecoveryDiagnostic(
+                        job_id=job.job_id,
+                        code=RecoveryDiagnosticCode.CONFLICT,
+                        detail="recovery transaction conflicts with persisted state",
+                    )
+                )
+            else:
+                recovered.append(outcome)
+        return RecoverExpiredClaimsResult(recovered=tuple(recovered), diagnostics=tuple(diagnostics))
+
+    @staticmethod
+    def _recovery_identity_diagnostic(job_id: int) -> RecoveryDiagnostic:
+        return RecoveryDiagnostic(
+            job_id=job_id,
+            code=RecoveryDiagnosticCode.IDENTITY_INVALID,
+            detail="active claim identity is inconsistent",
+        )
+
+    @staticmethod
+    def _valid_started_identity(stored: StoredJob, started: AttemptEvent | None) -> bool:
+        job = stored.job
+        return bool(
+            started is not None
+            and started.kind == "started"
+            and started.job_id == job.job_id
+            and started.attempt_id == job.attempt_id
+            and started.claim_id == job.claim_id
+        )
+
+    @staticmethod
+    def _recovered_replay(
+        stored: StoredJob,
+        request: RecoverExpiredClaimsRequest,
+        events: Iterable[AttemptEvent],
+    ) -> RecoveredClaim | None:
+        if stored.job.updated_at != request.recovered_at:
+            return None
+        for event in events:
+            if (
+                isinstance(event, AttemptEvent)
+                and event.job_id == stored.job.job_id
+                and event.sequence == _RECOVERY_EVENT_SEQUENCE
+                and event.kind == "crashed"
+                and event.actor_id == request.actor_id
+                and event.process_id == request.process_id
+                and event.timestamp == request.recovered_at
+                and event.detail == "claim expired"
+                and not event.evidence_ids
+            ):
+                return RecoveredClaim(job=stored, event=event)
+        return None
+
+    def _commit_recovery(
+        self,
+        stored: StoredJob,
+        started: AttemptEvent,
+        request: RecoverExpiredClaimsRequest,
+    ) -> RecoveredClaim | None:
+        job = stored.job
+        replacement = job.model_copy(update={"claim_id": None, "attempt_id": None, "updated_at": request.recovered_at})
+        event = AttemptEvent(
+            schema_version=1,
+            attempt_id=started.attempt_id,
+            claim_id=started.claim_id,
+            job_id=job.job_id,
+            change_id=job.change_id,
+            delivery_digest=job.delivery_digest,
+            target_node_id=job.target_node_id,
+            actor_id=request.actor_id,
+            process_id=request.process_id,
+            sequence=_RECOVERY_EVENT_SEQUENCE,
+            timestamp=request.recovered_at,
+            kind="crashed",
+            detail="claim expired",
+        )
+        try:
+            RuntimeTransaction(
+                self._work_root,
+                f"recover-{job.job_id}-{started.attempt_id}",
+                (
+                    self._jobs.replacement_participant(replacement, stored.token),
+                    self._attempts.create_participant(event),
+                ),
+            ).commit()
+        except TransactionConflictError:
+            return None
+        return RecoveredClaim(job=self._jobs.read(job.job_id), event=event)
 
     def _authoritative_job(self, request: StartJobRequest) -> StoredJob | StartJobResult:
         try:
@@ -381,6 +567,11 @@ __all__ = [
     "FailJobRequest",
     "FailJobResult",
     "NativeRuntime",
+    "RecoverExpiredClaimsRequest",
+    "RecoverExpiredClaimsResult",
+    "RecoveredClaim",
+    "RecoveryDiagnostic",
+    "RecoveryDiagnosticCode",
     "ReleaseJobDiagnostic",
     "ReleaseJobDiagnosticCode",
     "ReleaseJobRequest",
