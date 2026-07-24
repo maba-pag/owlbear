@@ -7,11 +7,38 @@
   "baseBranchPatterns": [
     "dev"
   ],
+  "timezone": "Europe/Berlin",
+  "prConcurrentLimit": 0,
+  "prHourlyLimit": 0,
+  "minimumReleaseAgeBehaviour": "timestamp-optional",
+  "updateNotScheduled": true,
   "labels": [
     "dependencies",
     "renovate"
   ],
   "rangeStrategy": "update-lockfile",
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "groupName": "{{datasource}} security updates",
+    "schedule": [
+      "* 9-11 * * 1,5"
+    ],
+    "minimumReleaseAge": "6 hours",
+    "prCreation": "immediate",
+    "vulnerabilityFixStrategy": "highest",
+    "labels": [
+      "dependencies",
+      "renovate",
+      "security"
+    ]
+  },
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": [
+      "* 9-11 * * 5"
+    ],
+    "automerge": true
+  },
   "packageRules": [
     {
       "description": "Freeze Python runtime floor to 3.12.x",
@@ -25,29 +52,30 @@
       "allowedVersions": "<3.13.0"
     },
     {
-      "description": "Group all non-major Python updates",
-      "matchManagers": [
-        "pip_requirements",
-        "pip-compile",
-        "pep621"
-      ],
+      "description": "Group routine version updates by ecosystem on Friday",
       "matchUpdateTypes": [
         "minor",
         "patch"
       ],
-      "groupName": "python minor/patch",
+      "groupName": "{{datasource}} minor/patch updates",
+      "schedule": [
+        "* 9-11 * * 5"
+      ],
+      "minimumReleaseAge": "24 hours",
+      "prCreation": "immediate",
       "automerge": true
     },
     {
-      "description": "Group all non-major npm updates",
-      "matchManagers": [
-        "npm"
-      ],
+      "description": "Group integrity updates by ecosystem on Friday",
       "matchUpdateTypes": [
-        "minor",
-        "patch"
+        "pin",
+        "pinDigest",
+        "digest"
       ],
-      "groupName": "npm minor/patch",
+      "groupName": "{{datasource}} integrity updates",
+      "schedule": [
+        "* 9-11 * * 5"
+      ],
       "automerge": true
     },
     {
@@ -68,11 +96,46 @@
       "automerge": false
     },
     {
-      "description": "Major version bumps get individual PRs",
+      "description": "Open major version updates on Sunday",
       "matchUpdateTypes": [
         "major"
       ],
+      "schedule": [
+        "* 11-13 * * 0"
+      ],
+      "minimumReleaseAge": "72 hours",
+      "prCreation": "immediate",
       "automerge": false
+    },
+    {
+      "description": "Keep Porsche Design System major versions coupled",
+      "matchManagers": [
+        "npm"
+      ],
+      "matchPackageNames": [
+        "@porsche-design-system/components-js",
+        "@porsche-design-system/components-react"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "groupName": "Porsche Design System major updates"
+    },
+    {
+      "description": "Keep Vite and its build plugins coupled on major updates",
+      "matchManagers": [
+        "npm"
+      ],
+      "matchPackageNames": [
+        "vite",
+        "@vitejs/plugin-react",
+        "@rolldown/plugin-babel",
+        "babel-plugin-react-compiler"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "groupName": "Vite major updates"
     }
   ],
   "pre-commit": {
