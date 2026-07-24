@@ -6,14 +6,14 @@ contested_by_task: null
 created_at: '2026-05-17T01:35:42.219291Z'
 didnt_use_count: 60
 id: 384486bf-5e49-4ccf-833e-3fcad98c9e28
-outstanding_count: 17
+outstanding_count: 18
 scope_agents: [builder, verifier]
-score: 2.36
+score: 2.46
 source_agent: copilot
 state: approved
 title: Adapter contract tests need live signatures
 unremarkable_count: 20
-updated_at: '2026-07-24T15:38:13.218124+00:00'
+updated_at: '2026-07-24T18:41:56.955277+00:00'
 ---
 
 For adapter contract changes, include an executable assertion against the public callable or advertised response shape; import or model-metadata checks alone can miss contract drift. Do not restore removed APIs solely to satisfy stale compatibility tests.

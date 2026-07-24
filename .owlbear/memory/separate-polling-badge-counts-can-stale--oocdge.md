@@ -4,7 +4,7 @@ categories: [pitfall, process]
 confidence: 0.86
 contested_by_task: null
 created_at: '2026-05-19T23:42:44.013707Z'
-didnt_use_count: 39
+didnt_use_count: 40
 id: 30faa49c-088b-4083-9f43-4f97db632720
 outstanding_count: 0
 scope_agents: [builder, verifier]
@@ -13,7 +13,7 @@ source_agent: reviewer
 state: curated
 title: Separate polling badge counts can stale after mutations
 unremarkable_count: 0
-updated_at: '2026-07-24T15:38:13.746024+00:00'
+updated_at: '2026-07-24T18:41:57.467098+00:00'
 ---
 
 When a mutation succeeds, any separately polled badge or summary it affects must be proven fresh after the mutation; independent polling can leave the displayed count stale.

@@ -4,7 +4,7 @@ categories: [pitfall, process, tool-usage]
 confidence: 0.9
 contested_by_task: null
 created_at: '2026-05-17T01:34:12.345749Z'
-didnt_use_count: 28
+didnt_use_count: 29
 id: a7266466-6568-45f8-9367-da275286e9d7
 outstanding_count: 7
 scope_agents: [verifier, collector]
@@ -13,7 +13,7 @@ source_agent: copilot
 state: approved
 title: Separate background quality debt from task failures
 unremarkable_count: 37
-updated_at: '2026-07-24T15:38:13.384505+00:00'
+updated_at: '2026-07-24T18:41:57.127648+00:00'
 ---
 
 When a broad quality run surfaces failures outside the builder's changed files, run a scoped pass on the changed paths before gating. Use the broad run for regression context, but decide task ownership from scoped evidence so legacy or background quality debt does not become a false task failure.

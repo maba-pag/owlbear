@@ -1,10 +1,10 @@
 ---
 id: 2025
 title: 'P4-04: Run graph-aware native orchestration'
-status: verify
+status: shape
 priority: high
 created: 2026-07-24T16:54:49.020973+02:00
-updated: 2026-07-24T19:40:41.115133+02:00
+updated: 2026-07-24T20:43:55.886647+02:00
 tags:
   - phase-4
   - scope:core
@@ -142,3 +142,24 @@ Failure-key resolution: `missing-public-native-transport` is closed by IF-015 an
 - Current failure-key resolution: `AC-5/native-proof-014-scenario` is closed by the executable MCP-boundary scenario. The scenario found and the implementation corrected JSON `impact_closure` conversion and immutable node-plan canonicalization in their owning boundaries.
 - Builder-challenger: pass; independently reran the 15 focused tests and lint with no DONE blocker.
 - Follow-up risks: none within this task; native orchestration remains explicitly non-default pending DN-012.
+
+[[2026-07-24T20:43:55+02:00]]
+## Verify Notes
+
+- Recovered the task from operational crash containment after the prior verifier returned unstructured responses (`2025.` and `2025 was last year.`); the block represented no pending decision or product issue.
+- Evidence reviewed: current AC-1 through AC-5, latest Shape/Builder/Verify Notes, builder commits `896e77960` and `34abdb811`, and canonical PROOF-014 in `.owlbear/changes/replace-delivery-pipeline/graph.yaml`.
+- Named authority check: PROOF-014 requires a real orchestrator contract over public engine-selected waves. The subagent runner may be replaced, but assigned agents must be dispatched without interpreting prose; typed rate-limit/crash paths, exactly-once structured attempt finalization, and fresh replanning are required.
+- Change Module Map: implementation remains in the shaped owners. No verifier code patch remains; unrelated dirty authority, prompt/skill, MCP configuration, memory, receipt, and lock paths were not modified as product work.
+- Checks run: `uv run pytest serve/mcp-kanban/tests/test_mcp_surface_contract.py serve/kanban/tests/test_dispatch_runtime.py serve/kanban/tests/test_proof_checkout.py tests/test_skill_authority_wiring.py tests/test_agentview_ac_params.py -q` -> 43 passed. Ruff and format checks passed during the local probe.
+- AC-to-evidence: AC-1 through AC-4 pass through the focused MCP/DispatchRuntime/proof-checkout tests. AC-5 remains incomplete: `TestProof014NativeMcpScenario` records returned `agent_profile` values but does not invoke a replaced subagent runner, assert a typed rate-limit disposition, or prove from persisted attempt/event data that every structured attempt is finalized exactly once.
+- Local patch probe: invoking an `AsyncMock` runner closed only the first missing class and passed the suite, but verifier-challenger correctly found the typed rate-limit and exactly-once finalization classes still unproved. The probe was fully removed.
+- Prior-cycle check: `AC-5/native-proof-014-scenario` already caused verifier rejection in `32e04c934`. This is the second miss in the same failure family, so protocol requires reshape rather than another piecemeal build/verify cycle.
+- Verifier-challenger: `decision: fail`; AC-5 lacks exactly-once attempt finalization and typed rate-limit outcome assertions.
+- Memory assessment: all 20 recalled verifier entries assessed; artifact-to-refined-scope and live-adapter-boundary guidance were applied.
+
+### Required Follow-up
+| # | Failure Key | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|--------------|-----------------|---------|----------|
+| 1 | AC-5/native-proof-014-scenario | shaper | Consolidate the complete PROOF-014 orchestration matrix into one executable scenario contract before rebuilding: dispatch every fresh engine-selected `shape | build | accept | audit` profile through a replaced structured subagent runner; assert typed rate-limit release and expired-claim crash recovery outcomes; prove every started structured attempt is finalized exactly once from persisted attempt/event state; retain writer compatibility and fresh replanning assertions. Do not authorize another partial AC-5 repair. | `serve/mcp-kanban/tests/test_mcp_surface_contract.py`; PROOF-014 authority | Current 43-test suite passes but source inspection and verifier-challenger show the scenario stops before these required boundaries. |
+
+Final route: `shape` for repeated AC-5 scenario-closure failure.
