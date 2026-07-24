@@ -15,8 +15,9 @@ import yaml
 from owlbear_kanban.attempts import AttemptEvent, AttemptStore
 import owlbear_kanban.jobs as jobs_module
 import owlbear_kanban.runtime_transaction as transaction_module
-from owlbear_kanban.jobs import JobConcurrencyError, JobGeneration, JobStore, ShapeJob
+from owlbear_kanban.jobs import JobConcurrencyError, JobDisposition, JobGeneration, JobStore, ShapeJob
 from owlbear_kanban.runtime_transaction import (
+    MoveTransactionParticipant,
     ReplacementTransactionParticipant,
     RuntimeTransaction,
     TransactionConflictError,
@@ -53,7 +54,7 @@ def _job_store_with_record(tmp_path: Path) -> tuple[JobStore, Path, object, byte
     )
     stored = store.materialize(generation)[0]
     destination = work_root / "jobs/1.yaml"
-    replacement = stored.job.model_copy(update={"disposition": "transaction"})
+    replacement = stored.job.model_copy(update={"disposition": JobDisposition.SUPERSEDED})
     stream = StringIO()
     make_yaml(explicit_start=True).dump(replacement.model_dump(mode="json"), stream)
     return store, destination, stored, stream.getvalue().encode()
@@ -89,7 +90,9 @@ def _commit_mixed_process(
         manifest_root,
         attempt_id,
         (
-            job_store.replacement_participant(stored.job.model_copy(update={"disposition": disposition}), stored.token),
+            job_store.replacement_participant(
+                stored.job.model_copy(update={"disposition": JobDisposition(disposition)}), stored.token
+            ),
             AttemptStore(work_root).create_participant(event),
         ),
     )
@@ -138,7 +141,7 @@ def test_job_update_and_transaction_replacement_serialize_on_shared_root_lock(
 
     def update() -> None:
         try:
-            store.update(stored.job.model_copy(update={"disposition": "updated"}), stored.token)
+            store.update(stored.job.model_copy(update={"disposition": JobDisposition.CANCELLED}), stored.token)
         except BaseException as exc:  # noqa: BLE001 - retain thread failure for assertion.
             results["update"] = exc
         finally:
@@ -218,7 +221,7 @@ def test_transaction_replacement_and_job_update_serialize_on_shared_root_lock(
 
     def update() -> None:
         try:
-            store.update(stored.job.model_copy(update={"disposition": "updated"}), stored.token)
+            store.update(stored.job.model_copy(update={"disposition": JobDisposition.CANCELLED}), stored.token)
         except BaseException as exc:  # noqa: BLE001 - retain thread failure for assertion.
             results["update"] = exc
         finally:
@@ -322,6 +325,50 @@ def test_replacement_participant_recovers_and_replays(tmp_path: Path, stage: str
     assert not list((manifest_root / ".runtime-transactions").glob("*.yaml"))
 
 
+def test_abort_restores_exact_prepublication_state_for_mixed_participants(tmp_path: Path) -> None:
+    manifest_root = tmp_path / "change"
+    work_root = tmp_path / "work"
+    immutable = work_root / "evidence/existing.yaml"
+    replacement = work_root / "jobs/1.yaml"
+    move_source = work_root / "jobs/2.yaml"
+    move_destination = work_root / "archive/2.yaml"
+    immutable.parent.mkdir(parents=True)
+    replacement.parent.mkdir(parents=True)
+    immutable.write_bytes(b"existing")
+    replacement.write_bytes(b"before")
+    move_source.write_bytes(b"active")
+    transaction = RuntimeTransaction(
+        manifest_root,
+        "abort-mixed",
+        (
+            TransactionParticipant(work_root, Path("evidence/existing.yaml"), b"existing"),
+            ReplacementTransactionParticipant(work_root, Path("jobs/1.yaml"), b"before", b"after"),
+            MoveTransactionParticipant(
+                work_root,
+                Path("jobs/2.yaml"),
+                Path("archive/2.yaml"),
+                b"active",
+                b"archived",
+            ),
+        ),
+    )
+
+    def interrupt(stage: str) -> None:
+        if stage == "before-manifest-cleanup":
+            message = "handled failure"
+            raise RuntimeError(message)
+
+    with pytest.raises(RuntimeError, match="handled failure"):
+        transaction.commit(failure=interrupt)
+    transaction.abort()
+
+    assert immutable.read_bytes() == b"existing"
+    assert replacement.read_bytes() == b"before"
+    assert move_source.read_bytes() == b"active"
+    assert not move_destination.exists()
+    assert not list((manifest_root / ".runtime-transactions").glob("*.yaml"))
+
+
 def test_replacement_participant_rejects_conflicts_and_invalid_recovery_manifests(tmp_path: Path) -> None:
     manifest_root = tmp_path / "change"
     work_root = tmp_path / "work"
@@ -406,7 +453,7 @@ def test_concurrent_processes_publish_one_immutable_participant_set(tmp_path: Pa
 def test_mixed_store_participants_recover_and_replay_without_planning_mutation(tmp_path: Path) -> None:
     job_store, destination, stored, _replacement_bytes = _job_store_with_record(tmp_path)
     attempt_store = AttemptStore(destination.parents[1])
-    replacement = stored.job.model_copy(update={"disposition": "transaction"})
+    replacement = stored.job.model_copy(update={"disposition": JobDisposition.SUPERSEDED})
     event = _attempt_event("attempt-recover")
 
     job_participant = job_store.replacement_participant(replacement, stored.token)
@@ -462,7 +509,16 @@ def test_mixed_store_participants_serialize_competing_processes(tmp_path: Path) 
     processes = [
         context.Process(
             target=_commit_mixed_process,
-            args=((work_root, tmp_path / "change", f"winner-{index}", f"attempt-race-{index}"), barrier, outcomes),
+            args=(
+                (
+                    work_root,
+                    tmp_path / "change",
+                    ("cancelled", "superseded")[index],
+                    f"attempt-race-{index}",
+                ),
+                barrier,
+                outcomes,
+            ),
         )
         for index in range(2)
     ]
@@ -477,7 +533,7 @@ def test_mixed_store_participants_serialize_competing_processes(tmp_path: Path) 
     winner = next(result for result in results if result[2] == "success")
     loser = next(result for result in results if result[2] == TransactionConflictError.code)
 
-    assert job_store.read(1).job.disposition == winner[0]
+    assert job_store.read(1).job.disposition.value == winner[0]
     assert AttemptStore(work_root).read(winner[1], 1).event == _attempt_event(winner[1])
     assert AttemptStore(work_root).read(loser[1], 1).event is None
     assert not list((tmp_path / "change/.runtime-transactions").glob("*.yaml"))

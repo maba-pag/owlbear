@@ -111,6 +111,7 @@ class RuntimeTransaction:
         self._manifest_root = manifest_root.resolve()
         self._transaction_id = transaction_id
         self._participants = participants
+        self._abort_snapshot: dict[Path, bytes | None] | None = None
 
     @property
     def _directory(self) -> Path:
@@ -137,6 +138,17 @@ class RuntimeTransaction:
             if self._manifest_path.exists():
                 self._publish(None)
                 self._cleanup()
+
+    def abort(self) -> None:
+        """Restore prepared participant bytes after a handled publication failure."""
+        with locked_roots(self._locked_roots()):
+            if not self._manifest_path.exists():
+                return
+            if self._abort_snapshot is None:
+                raise TransactionConflictError
+            for path, content in reversed(self._abort_snapshot.items()):
+                _restore_path(path, content)
+            self._cleanup()
 
     def _locked_roots(self) -> tuple[Path, ...]:
         return (self._manifest_root, *(participant.root for participant in self._participants))
@@ -198,7 +210,22 @@ class RuntimeTransaction:
                     raise TransactionConflictError
             elif destination.exists() and destination.read_bytes() != participant.content:
                 raise TransactionConflictError
+        self._abort_snapshot = {
+            path: path.read_bytes() if path.exists() else None for path in self._participant_paths()
+        }
         _atomic_write_yaml(self._manifest_path, manifest)
+
+    def _participant_paths(self) -> tuple[Path, ...]:
+        paths: list[Path] = []
+        for participant in self._participants:
+            if isinstance(participant, MoveTransactionParticipant):
+                candidates = (participant.source(), participant.destination())
+            else:
+                candidates = (participant.destination(),)
+            for path in candidates:
+                if path not in paths:
+                    paths.append(path)
+        return tuple(paths)
 
     def _manifest(self) -> dict[str, object]:
         has_replacements = any(
@@ -251,6 +278,7 @@ class RuntimeTransaction:
     def _cleanup(self) -> None:
         self._manifest_path.unlink(missing_ok=True)
         _fsync_directory(self._directory)
+        self._abort_snapshot = None
 
 
 def _atomic_write_yaml(path: Path, value: dict[str, object]) -> None:
@@ -475,6 +503,32 @@ def _publish_move(
             temporary.unlink()
     source.unlink()
     _fsync_directory(source.parent)
+
+
+def _restore_path(path: Path, content: bytes | None) -> None:
+    if content is None:
+        if path.exists():
+            path.unlink()
+            _fsync_directory(path.parent)
+        return
+    if path.exists() and path.read_bytes() == content:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _replace_bytes(path, content)
+
+
+def _replace_bytes(destination: Path, content: bytes) -> None:
+    temporary = destination.with_name(f".tmp-{secrets.token_hex(12)}-{destination.name}")
+    try:
+        with temporary.open("xb") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        temporary.replace(destination)
+        _fsync_directory(destination.parent)
+    finally:
+        with contextlib.suppress(FileNotFoundError):
+            temporary.unlink()
 
 
 def _fsync_directory(directory: Path) -> None:
