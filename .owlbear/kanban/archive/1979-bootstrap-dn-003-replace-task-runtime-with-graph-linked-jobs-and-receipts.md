@@ -1,10 +1,10 @@
 ---
 id: 1979
 title: 'Bootstrap DN-003: Replace task runtime with graph-linked jobs and receipts'
-status: collect
+status: archived
 priority: high
 created: 2026-07-22T01:05:46.251445+02:00
-updated: 2026-07-23T11:26:51.911482+02:00
+updated: 2026-07-24T16:11:56.232810+02:00
 tags:
   - bootstrap-projection
   - change:replace-delivery-pipeline
@@ -39,7 +39,7 @@ proof_bundle: existing+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Bootstrap Projection Identity
@@ -88,3 +88,17 @@ Proof guidance: exercise public job, claim, completion, invalidation, transactio
 - Instruction repair: `w-task-decomposition` now requires and validates a Dependency Closure Map; `w-spec-shaping` passes it to challenge; `shaper-challenger` fails forward references; `test_shaper_interaction_contract.py` preserves the contract.
 - Challenge and proof: shaper-challenger returned pass, with concrete participant-shape proof required for #2002. Focused contract suite passed 17 tests; skill/agent validators, Markdown lint, and diff check passed.
 - Board route: aggregate remains in `collect` behind #2002-#2007. The connected leaf contracts are repaired and audited separately before release.
+
+[[2026-07-24T16:11:56+02:00]]
+## Collect Notes
+- Classification: aggregate bootstrap projection for authoritative `DN-003` in `.owlbear/changes/replace-delivery-pipeline/graph.yaml` at delivery digest `9387dea789fb3334cd50e6f784d06847880bd006402b33d5ab2c45888c2202a8`.
+- Intent source: latest Shape Notes and graph `DN-003`, `IF-003`, and `PROOF-003`. The approved packet DAG assigns contracts, stores/OCC, transactions/recovery, attempts/claims, completion/receipt validity, requests, invalidation, and indexed health/history across packets #2000 through #2007.
+- Child and dependency coverage: direct packet tasks #2000 through #2007 are parented by #1979 and archived completed; nested leaves #2008 through #2020 are archived completed under aggregates #2001 and #2003. Predecessor nodes #1977 and #1978 are archived completed. The aggregate dependency gate reports `ok`.
+- Invariant map: latest Verify Notes across the leaves cover authority projection without copied normative truth; contained immutable job, finding, attempt, and receipt records; OCC and recoverable transactions; claim start/finalization/expiry recovery; currentness and code-history classes; scoped runtime requests; exact completion and replay; supersession and minimum invalidation closure; deterministic indexed query/history and corruption health.
+- Tested revision: `e83e839b9153685399ea922ff01873298ffa424a`.
+- Aggregate normal-path proof: at that SHA, `uv run pytest -q` over `test_jobs.py`, `test_attempts.py`, `test_findings.py`, `test_change_receipts.py`, `test_runtime_transaction.py`, `test_native_runtime.py`, `test_runtime_requests.py`, `test_invalidation.py`, and `test_runtime_query.py` passed 186 tests in 7.48 seconds. Two multiprocessing fork deprecation warnings were non-failing.
+- AC-1: satisfied by the approved packet DAG, consistent `change:replace-delivery-pipeline` and `node:DN-003` task identity, parent links, and dependency audit.
+- AC-2: satisfied by descendant module/interface ownership recorded in latest Verify Notes and by the bounded `PROOF-003` suite; no material expansion into dispatch, agents, MCP cutover, Cockpit, or legacy deletion was introduced.
+- AC-3: satisfied because all direct and nested descendants are archived completed with latest PASS evidence, the dependency gate is clear, and current-HEAD aggregate proof exercises the public job, claim, completion, invalidation, transaction, recovery, request, and health boundaries.
+- Residual decisions and requests: none; no resolved request records exist for this aggregate and no current Required Follow-up remains.
+- Archive rationale: the completed descendants and SHA-linked aggregate proof satisfy `DN-003`, `IF-003`, `PROOF-003`, and all aggregate acceptance criteria.
