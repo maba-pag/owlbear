@@ -1,10 +1,10 @@
 ---
 id: 2018
 title: 'P3-19: Release or fail owning attempts'
-status: verify
+status: shape
 priority: high
 created: 2026-07-23T14:41:48.715516+02:00
-updated: 2026-07-24T03:26:27.208621+02:00
+updated: 2026-07-24T03:29:35.057324+02:00
 tags:
   - phase-3
   - scope:core
@@ -97,3 +97,17 @@ Exercise public release and fail operations over owner, non-owner, no-active-cla
 - Current failure-key resolution: `cross-job-finalization-replay` is resolved by the new two-job regression, which would fail if a finalization event from job 1 were returned or applied to job 2.
 - Builder challenger: pass; it independently verified the focused suite and Ruff checks with no concrete blockers.
 - Follow-up risks: none identified.
+
+[[2026-07-24T03:29:35+02:00]]
+## Verify Notes
+- Evidence reviewed: task AC-1 through AC-3; Builder Notes; the committed release/fail implementation in `serve/kanban/src/owlbear_kanban/native_runtime.py`; package exports; focused public-facade tests; and commits `39b2b59dc` (prior verifier cross-job replay repair) and `ef7428219` (cross-job regression proof).
+- Named authorities checked: `REQ-008`, `REQ-009`, `REQ-016`, and `IF-003` in `.owlbear/changes/replace-delivery-pipeline/graph.yaml`; design sections 2.2, 2.3, 7.2, 8.6, 13, and 14; accepted `DEC-007` and `DEC-009`. Design section 7.2 requires replay only for the same active attempt, claim, actor, process, and timestamp identity.
+- Change Module Map: no unrelated module deviation. `native_runtime.py`, the public package exports, and the focused test remain the mapped slice. The missing replay identity must be retained in the immutable attempt contract or an explicit idempotency record, which is outside this task's existing owner boundary.
+- Normal-path boundary exercised: public `NativeRuntime.release_job` over a real temporary work root after a public start and release. Replacements were only fixture history and temporary filesystem beneath the public boundary.
+- Checks run: `uv run --project /Users/markus/Projects/owlbear-dev pytest serve/kanban/tests/test_native_runtime.py` (11 passed); `uv run --project /Users/markus/Projects/owlbear-dev ruff check serve/kanban/src/owlbear_kanban/native_runtime.py serve/kanban/src/owlbear_kanban/__init__.py serve/kanban/tests/test_native_runtime.py` (passed); `uv run --project /Users/markus/Projects/owlbear-dev ruff format --check serve/kanban/src/owlbear_kanban/native_runtime.py serve/kanban/src/owlbear_kanban/__init__.py serve/kanban/tests/test_native_runtime.py` (3 files already formatted); VS Code diagnostics (none); `git diff --check` (clean).
+- Finding: after a successful release, repeating the otherwise identical request with `claim_id="other-claim"` returns the committed job/event pair with no diagnostic. `_finalize` matches the completed event by job, kind, actor, process, timestamp, detail, and evidence, but the immutable event does not retain `claim_id`. This violates the authority's same-claim replay identity and makes a local verifier patch impossible without expanding the attempt-event public contract or selecting a separate idempotency-record owner.
+- Patches applied: none. The prior verifier patch addressed a distinct failure key: cross-job replay ownership.
+- AC-to-evidence map: AC-1 and AC-2 normal owner behavior passed the focused suite; AC-3 fails for claim-identity-mutated replay, demonstrated by the public-facade probe above.
+- Prior same-failure-key check: no prior rejection for claim-identity replay found. The previous verifier repair was cross-job replay isolation, a distinct key.
+- Verifier-challenger result: not invoked; a PASS verdict is not proposed.
+- Final route: RESHAPE. Shape must decide the canonical durable owner for claim identity used in finalization replay, update the contract/module map, and specify the stable diagnostic for a request that differs only by `claim_id`.
