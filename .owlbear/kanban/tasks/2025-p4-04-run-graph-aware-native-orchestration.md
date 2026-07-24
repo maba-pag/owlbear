@@ -1,10 +1,10 @@
 ---
 id: 2025
 title: 'P4-04: Run graph-aware native orchestration'
-status: build
+status: verify
 priority: high
 created: 2026-07-24T16:54:49.020973+02:00
-updated: 2026-07-24T20:53:09.267249+02:00
+updated: 2026-07-24T21:04:03.424812+02:00
 tags:
   - phase-4
   - scope:core
@@ -194,3 +194,15 @@ Proof command: `uv run pytest serve/mcp-kanban/tests/test_mcp_surface_contract.p
 - Failure resolution: this directly closes the verifier's three missing proof classes: actual replaced-runner invocation, typed rate-limit disposition, and durable exactly-once attempt finalization. The existing component assertions for writer compatibility, proof checkout cleanup, stale leases, conflict, containment, and orphan handling remain required and are not duplicated in the scenario.
 - Validation: `uv run pytest tests/test_agentview_ac_params.py -q` passed (13 tests). `shaper-challenger` returned `decision: pass`, verified source literals/result types and current incomplete scenario, found no blocker, and approved routing to build.
 - Resulting state: task is build-ready; builder should replace the current profile-recording shortcut in `TestProof014NativeMcpScenario` with the shaped scenario and run the recorded focused command.
+
+[[2026-07-24T21:04:03+02:00]]
+## Builder Notes
+- Change envelope: closed the returned `AC-5/native-proof-014-scenario` failure only in the existing maintained MCP orchestration scenario. No production bridge, runtime, carrier, or lifecycle changes.
+- Files changed: `serve/mcp-kanban/tests/test_mcp_surface_contract.py` and the active task record.
+- Change Module Map deviations: none. The proof remains at the existing public IF-015 MCP boundary with real `DispatchRuntime` and stored attempt events.
+- Proof selected: the existing durable PROOF-014 scenario was extended because the verifier identified a concrete uncovered regression: selected profiles were merely recorded, not dispatched through a replaceable runner, and terminal attempt pairs were not asserted.
+- Commands run: `uv run pytest serve/mcp-kanban/tests/test_mcp_surface_contract.py -q` -> 4 passed; `uv run pytest serve/mcp-kanban/tests/test_mcp_surface_contract.py serve/kanban/tests/test_dispatch_runtime.py serve/kanban/tests/test_proof_checkout.py -q` -> 15 passed; `uv run ruff check serve/mcp-kanban/tests/test_mcp_surface_contract.py` -> passed; `git diff --check` -> passed.
+- AC-to-evidence map: AC-1 live registry/schema contract passed; AC-2 through AC-4 focused MCP/DispatchRuntime/proof-checkout regression slice passed; AC-5 now injects an `AsyncMock` runner for each freshly selected `shape | build | accept | audit` profile, calls it with `success | rate_limited | crash`, applies the relevant purpose-specific finish/release/recovery flow, replans between each selection, and asserts every stored attempt has exactly `[started, sequence-2 terminal]`, including the expected `released`, `crashed`, and `succeeded` kinds.
+- Current failure-key resolution: `AC-5/native-proof-014-scenario` is resolved by direct runner-call, rate-limit release, crash recovery, and persisted exactly-once terminal-event assertions.
+- Builder-challenger: pass; independently ran the same 15 focused tests and found no DONE blocker.
+- Follow-up risks: none within DN-004; native dispatch remains explicitly non-default pending DN-012.

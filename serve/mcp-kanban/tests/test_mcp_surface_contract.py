@@ -29,13 +29,14 @@ from __future__ import annotations
 import shutil
 from datetime import timedelta
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 import owlbear_mcp_kanban
 from owlbear_mcp_kanban import server
 from owlbear_kanban import (
+    AttemptStore,
     DispatchRuntime,
     JobGeneration,
     JobRecord,
@@ -356,8 +357,9 @@ class TestProof014NativeMcpScenario:
         ctx = _native_ctx(tmp_path)
         monkeypatch.setattr(server, "_dispatch_runtime", lambda _app_ctx, _change_id: runtime)
         profiles: list[str] = []
+        runner = AsyncMock()
 
-        async def pick_profile() -> int:
+        async def pick_profile(outcome: str) -> int:
             plan = await server.pick_jobs(
                 ctx,
                 change_id=revision.change_id,
@@ -366,9 +368,10 @@ class TestProof014NativeMcpScenario:
             )
             entry = plan.waves[0][0]
             profiles.append(entry.agent_profile)
+            await runner(entry.agent_profile, outcome)
             return entry.job_id
 
-        assert await pick_profile() == 1
+        assert await pick_profile("success") == 1
         shape_start = _start_kwargs(1, 1, "2026-07-24T00:01:00Z")
         assert (await server.start_job(ctx, **shape_start)).diagnostic is None
         target = revision.graph.nodes[0]
@@ -396,7 +399,7 @@ class TestProof014NativeMcpScenario:
         )
         assert shaped.diagnostic is None
 
-        assert await pick_profile() == 2
+        assert await pick_profile("rate_limited") == 2
         rate_limited = _start_kwargs(2, 2, "2026-07-24T00:03:00Z")
         assert (await server.start_job(ctx, **rate_limited)).diagnostic is None
         released = await server.release_job(
@@ -405,7 +408,7 @@ class TestProof014NativeMcpScenario:
             released_at="2026-07-24T00:03:30Z",
         )
         assert released.diagnostic is None
-        assert await pick_profile() == 2
+        assert await pick_profile("success") == 2
 
         async def finish_build(job_id: int, attempt: int, timestamp: str, receipt_id: str) -> None:
             started = _start_kwargs(job_id, attempt, timestamp)
@@ -422,9 +425,9 @@ class TestProof014NativeMcpScenario:
             assert result.diagnostic is None
 
         await finish_build(2, 3, "2026-07-24T00:03:31Z", "build-001")
-        assert await pick_profile() == 3
+        assert await pick_profile("success") == 3
         await finish_build(3, 4, "2026-07-24T00:04:01Z", "build-002")
-        assert await pick_profile() == 4
+        assert await pick_profile("success") == 4
         accept_start = _start_kwargs(4, 5, "2026-07-24T00:05:00Z")
         assert (await server.start_job(ctx, **accept_start)).diagnostic is None
         accepted = await server.finish_accept(
@@ -452,7 +455,7 @@ class TestProof014NativeMcpScenario:
             predecessor_job_ids=(4,),
         )
         RuntimeTransaction(work_root, "proof-014-audit", (jobs.create_participant(audit),)).commit()
-        assert await pick_profile() == 5
+        assert await pick_profile("crash") == 5
         crashed = _start_kwargs(5, 6, "2026-07-24T00:07:00Z")
         assert (await server.start_job(ctx, **crashed)).diagnostic is None
         recovered = await server.recover_expired_claims(
@@ -463,7 +466,7 @@ class TestProof014NativeMcpScenario:
             process_id="proof-process",
         )
         assert len(recovered.recovered) == 1
-        assert await pick_profile() == 5
+        assert await pick_profile("success") == 5
         audit_start = _start_kwargs(5, 7, "2026-07-24T00:08:02Z")
         assert (await server.start_job(ctx, **audit_start)).diagnostic is None
         audited = await server.finish_audit(
@@ -476,3 +479,33 @@ class TestProof014NativeMcpScenario:
         )
         assert audited.diagnostic is None
         assert profiles == ["shaper", "builder", "builder", "builder", "acceptor", "auditor", "auditor"]
+        assert [call.args for call in runner.await_args_list] == [
+            ("shaper", "success"),
+            ("builder", "rate_limited"),
+            ("builder", "success"),
+            ("builder", "success"),
+            ("acceptor", "success"),
+            ("auditor", "crash"),
+            ("auditor", "success"),
+        ]
+        events = AttemptStore(work_root).list()
+        terminal_kinds = {"released", "crashed", "succeeded"}
+        attempt_events = {
+            attempt_id: tuple(event for event in events if event.attempt_id == attempt_id)
+            for attempt_id in {event.attempt_id for event in events}
+        }
+        assert all(
+            [event.sequence for event in attempt] == [1, 2]
+            and attempt[0].kind == "started"
+            and attempt[1].kind in terminal_kinds
+            for attempt in attempt_events.values()
+        )
+        assert {attempt_id: attempt[1].kind for attempt_id, attempt in attempt_events.items()} == {
+            "attempt-001": "succeeded",
+            "attempt-002": "released",
+            "attempt-003": "succeeded",
+            "attempt-004": "succeeded",
+            "attempt-005": "succeeded",
+            "attempt-006": "crashed",
+            "attempt-007": "succeeded",
+        }
