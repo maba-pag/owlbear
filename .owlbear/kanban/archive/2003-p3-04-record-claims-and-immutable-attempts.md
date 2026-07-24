@@ -1,10 +1,10 @@
 ---
 id: 2003
 title: 'P3-04: Record claims and immutable attempts'
-status: collect
+status: archived
 priority: high
 created: 2026-07-22T21:58:44.211108+02:00
-updated: 2026-07-24T13:14:30.380236+02:00
+updated: 2026-07-24T13:36:46.058277+02:00
 tags:
   - phase-3
   - scope:core
@@ -49,7 +49,7 @@ proof_bundle: existing+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Bootstrap Projection Identity
@@ -439,3 +439,13 @@ Accepted `DEC-024`, design section 7.5, and `IF-003` own constructor policy, det
 - Authority: DEC-024, design section 7.5, and IF-003 at validated digest eaab0f2e46780f38b5df541d248fc54cb8a0483da1464f60f4d507c0f3cad617.
 - Validation: edit-contract tests passed 2; diff check passed; one operative amendment remains on each task; #2019 has exactly seven AC; dependencies and claims were audited.
 - Route: #2003 stays in collect until #2019 completes.
+
+[[2026-07-24T13:36:46+02:00]]
+## Collect Notes
+- Verdict: ARCHIVED. Aggregate intent is complete; no product files were changed by collector.
+- AC-1 graph audit: tasks #2010 through #2020 are archived build leaves parented by #2003 with admitted change/node identity, bounded scope, and named proof bundles. Stored edges match the approved map: #2010 and #2012 and #2014 consume #2002; #2011 consumes #2010; #2013 consumes #2011/#2012; #2015 consumes #2014; #2020 consumes #2015; #2016 consumes #2014/#2020; #2017 consumes #2013/#2016; #2018 consumes #2017; #2019 consumes #2017/#2018. Public `KanbanEngine.task_health()` scanned 2,018 active/archive records and returned no missing parent/dependency, self-reference, or dependency-cycle findings.
+- AC-2 completion and revisions: every leaf is archived with reason `completed`, current Verify Notes, challenger pass, and focused proof. Tested revisions are #2010 `b3f3e9b07`, #2011 `51eec96a2`, #2012 `8fb18b7bbb89cbe86096a0dd632e8657db458ec2`, #2013 `c68ebc6a93a4017ac4b9d6df4796b7a7662b41b0`, #2014 `6c95d9bfa`, #2015 `876e7447e`, #2016 `c6311e6f7`, #2017 `ff2ea62e9`, #2018 `aab80fdcb`, #2019 `ffca14ed9`, and #2020 `f250642d1`. Their proof union covers attempt schema/storage, replacement OCC and mixed transaction recovery, impact closure, Git code currency, local and complete receipt currentness, start/release/fail/crash ownership, boundary-time expiry, retry, path containment, process concurrency, and byte-stable replay.
+- AC-3 ownership audit: #2003 exports attempt and reusable receipt-currentness boundaries through its leaves. Task #2004's current Scope and ownership section alone assign assembled finish-shape/build/accept/audit policy, `succeeded` publication, receipt creation, and job archival to #2004; no product responsibility is duplicated.
+- Residual state: no pending or resolved structured requests for #2003 and no open child follow-up.
+- Files changed by collector: task record move only.
+- Memory: all three recalled entries were assessed.
