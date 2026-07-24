@@ -1,10 +1,10 @@
 ---
 id: 2006
 title: 'P3-07: Supersede evidence and create corrective work'
-status: collect
+status: shape
 priority: medium
 created: 2026-07-22T21:59:17.003316+02:00
-updated: 2026-07-24T15:22:24.454732+02:00
+updated: 2026-07-24T15:24:46.156169+02:00
 tags:
   - phase-3
   - scope:core
@@ -97,3 +97,15 @@ Proof guidance: use a table-driven corrective-route matrix plus generic receipt/
 - Verifier challenger: decision `pass`; no concrete defect, unresolved AC, scope drift, or follow-up.
 - Memory: assessed all 10 recalled entries. Saved one pending builder/verifier lesson separating mutation eligibility from replay identity.
 - Files changed by verifier: `serve/kanban/src/owlbear_kanban/invalidation.py`, `serve/kanban/tests/test_invalidation.py`.
+
+[[2026-07-24T15:24:46+02:00]]
+## Collect Notes
+- Classification: leaf implementation task under aggregate parent #1979; no child or aggregate intent review applies.
+- Dependency gate: dependencies #2004 and #2005 are archived as completed, so dependency readiness is not the gap.
+- Structured requests: no resolved or pending decision/action state was found for this task.
+- Verification evidence: the task has no `Verifier Notes` section. The latest lifecycle evidence is `Builder Notes` only, despite the current `collect` status.
+- Residual decisions: none identified.
+- Rationale: collector policy requires a leaf verifier PASS in the latest Verify Notes before archival. Returned to shape because verification evidence is incomplete and collect cannot substitute a second implementation review.
+
+### Required Follow-up
+Route the task through verify and record a current verifier PASS with AC-specific evidence before returning it to collect.
