@@ -1,10 +1,10 @@
 ---
 id: 2019
 title: 'P3-20: Recover expired claims for retry'
-status: verify
+status: collect
 priority: high
 created: 2026-07-23T14:42:08.799937+02:00
-updated: 2026-07-24T13:23:47.299969+02:00
+updated: 2026-07-24T13:30:31.038766+02:00
 tags:
   - phase-3
   - scope:core
@@ -159,4 +159,22 @@ The revised authority loads without diagnostics at digest `eaab0f2e46780f38b5df5
 - AC-4, AC-5: `test_recovery_orders_jobs_and_isolates_identity_and_transaction_conflicts` proves ascending mixed results, stable diagnostics, unchanged conflicted state, and later-job continuation; implementation validates missing/mismatched started identity and aware started timestamps.
 - AC-7: `test_older_recovery_request_does_not_replay_across_a_later_attempt` proves the later claim remains unchanged.
 - Builder challenger: decision pass; minimum-change scope, authority fidelity, focused proof, and unrelated baseline classification accepted.
+- Current required follow-up: none.
+
+[[2026-07-24T13:30:31+02:00]]
+## Verify Notes
+- Verdict: PASS. Verified the native expired-claim recovery contract and repaired one local AC-4 stale-replay defect.
+- Defect found: after recovering attempt 1, a later attempt could start and release at the same timestamp as the older recovery request; repeating that request replayed attempt 1's historical crash because replay matched only job `updated_at`. A transient public-API probe reproduced the failure.
+- Repair: `NativeRuntime._recovered_replay` now requires the matching crash to be the sole event for that job at the persisted update timestamp. The existing later-attempt regression test now proves both active and release-resolved states return no stale outcome.
+- Files changed: `serve/kanban/src/owlbear_kanban/native_runtime.py`, `serve/kanban/tests/test_native_runtime.py`.
+- AC-1: focused validation test proves positive expiry and aware ISO timestamp requirements.
+- AC-2 and AC-3: strict before/equal/after boundary test proves byte-stable no-op, pending retryability, update timestamp, crash identity/detail, and no evidence.
+- AC-4: ordered mixed-job test proves ascending evaluation and per-job isolation; repaired later-attempt test proves a release-resolved job does not replay an older crash even when timestamps coincide.
+- AC-5: mixed identity/conflict test proves stable diagnostics, unchanged conflicted state, and continuation to a later eligible job.
+- AC-6: same-instance and reopened replay return the same pair while the attempt store retains one crash event.
+- AC-7: later active claim remains unchanged and returns no prior recovery outcome.
+- Focused proof: `uv run pytest serve/kanban/tests/test_native_runtime.py -q --tb=short` passed 17 tests after the repair and formatting.
+- Quality proof: scoped `uv run lint` passed; editor diagnostics reported no errors; `git diff --check` passed.
+- Domain regression: 1046 passed and 8 unchanged unrelated baseline failures: four admission fixture/DV-010 failures and four runtime-transaction tests using invalid disposition strings. No native recovery test failed.
+- Verifier challenger: decision pass; intent, all seven ACs, minimum scope, stale-replay repair, and baseline classification accepted.
 - Current required follow-up: none.

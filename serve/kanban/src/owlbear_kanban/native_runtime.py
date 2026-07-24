@@ -347,19 +347,21 @@ class NativeRuntime:
     ) -> RecoveredClaim | None:
         if stored.job.updated_at != request.recovered_at:
             return None
-        for event in events:
-            if (
-                isinstance(event, AttemptEvent)
-                and event.job_id == stored.job.job_id
-                and event.sequence == _RECOVERY_EVENT_SEQUENCE
-                and event.kind == "crashed"
-                and event.actor_id == request.actor_id
-                and event.process_id == request.process_id
-                and event.timestamp == request.recovered_at
-                and event.detail == "claim expired"
-                and not event.evidence_ids
-            ):
-                return RecoveredClaim(job=stored, event=event)
+        current_events = tuple(
+            event for event in events if event.job_id == stored.job.job_id and event.timestamp == stored.job.updated_at
+        )
+        if len(current_events) != 1:
+            return None
+        event = current_events[0]
+        if (
+            event.sequence == _RECOVERY_EVENT_SEQUENCE
+            and event.kind == "crashed"
+            and event.actor_id == request.actor_id
+            and event.process_id == request.process_id
+            and event.detail == "claim expired"
+            and not event.evidence_ids
+        ):
+            return RecoveredClaim(job=stored, event=event)
         return None
 
     def _commit_recovery(

@@ -461,15 +461,14 @@ def test_older_recovery_request_does_not_replay_across_a_later_attempt(revision,
         process_id="recovery-process",
     )
     assert len(runtime.recover_expired_claims(recovery).recovered) == 1
-    runtime.start_job(
-        _request().model_copy(
-            update={
-                "attempt_id": "attempt-002",
-                "claim_id": "claim-002",
-                "claimed_at": "2026-07-24T00:03:00Z",
-            }
-        )
+    second_request = _request().model_copy(
+        update={
+            "attempt_id": "attempt-002",
+            "claim_id": "claim-002",
+            "claimed_at": recovery.recovered_at,
+        }
     )
+    runtime.start_job(second_request)
     before = JobStore(work_root).read(1)
 
     repeated = runtime.recover_expired_claims(recovery)
@@ -479,3 +478,19 @@ def test_older_recovery_request_does_not_replay_across_a_later_attempt(revision,
     assert JobStore(work_root).read(1) == before
     assert before.job.attempt_id == "attempt-002"
     assert AttemptStore(work_root).read("attempt-002", 2).event is None
+
+    runtime.release_job(
+        ReleaseJobRequest(
+            job_id=1,
+            attempt_id=second_request.attempt_id,
+            claim_id=second_request.claim_id,
+            actor_id=second_request.actor_id,
+            process_id=second_request.process_id,
+            released_at=recovery.recovered_at,
+        )
+    )
+
+    resolved_repeat = runtime.recover_expired_claims(recovery)
+
+    assert resolved_repeat.recovered == ()
+    assert resolved_repeat.diagnostics == ()
