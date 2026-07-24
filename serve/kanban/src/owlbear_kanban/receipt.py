@@ -461,7 +461,7 @@ def compute_node_plan_digest(revision: ChangeRevision, target: str) -> Digest:
     payload = {
         "delivery_digest": revision.delivery_digest,
         "node": node.model_dump(mode="json"),
-        "node_plan": revision.graph.execution.node_plans.get(target),
+        "node_plan": revision.graph.execution.model_dump(mode="json")["node_plans"].get(target),
     }
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
     return hashlib.sha256(encoded.encode()).hexdigest()

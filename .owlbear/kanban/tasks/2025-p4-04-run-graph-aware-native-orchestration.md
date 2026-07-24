@@ -1,10 +1,10 @@
 ---
 id: 2025
 title: 'P4-04: Run graph-aware native orchestration'
-status: build
+status: verify
 priority: high
 created: 2026-07-24T16:54:49.020973+02:00
-updated: 2026-07-24T19:33:35.751049+02:00
+updated: 2026-07-24T19:40:41.115133+02:00
 tags:
   - phase-4
   - scope:core
@@ -130,3 +130,15 @@ Failure-key resolution: `missing-public-native-transport` is closed by IF-015 an
 | 1 | AC-5/native-proof-014-scenario | builder | Implement or restore a maintained PROOF-014 executable scenario at the native MCP boundary. It must invoke fresh `pick_jobs` waves and bridge `start_job` calls for `shape`, `build`, `accept`, and `audit`, replace the subagent runner, finalize one structured attempt per job, exercise typed rate-limit release and crash recovery, and replan from current native state. Keep `pick_tasks` as the explicit bootstrap default. | `serve/mcp-kanban/tests/`, `serve/kanban/tests/`, and only required orchestration wiring | Source search found no maintained `pick_jobs` or MCP `start_job` caller beyond bridge definitions; component suites passed but do not exercise the assembled AC-5 journey. |
 
 - Final route: REJECT to build.
+
+[[2026-07-24T19:40:41+02:00]]
+## Builder Notes
+- Change envelope: resolved the returned `AC-5/native-proof-014-scenario` failure only. Added a maintained MCP-boundary native orchestration scenario, plus local structured-data normalization exposed by that scenario. Kept the bootstrap `pick_tasks` carrier and all native orchestration wiring unchanged.
+- Files changed: `serve/mcp-kanban/tests/test_mcp_surface_contract.py`, `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py`, `serve/kanban/src/owlbear_kanban/receipt.py`, and `serve/kanban/src/owlbear_kanban/change.py`.
+- Change Module Map deviations: none. The MCP server remains a thin IF-015 adapter; `receipt` and `change` remain the canonical node-plan serialization owners.
+- Proof selected: durable test justified by the prior verifier's specific uncovered integration risk. `TestProof014NativeMcpScenario` exercises fresh `pick_jobs` waves, bridge start/finish for shape/build/accept/audit, typed rate-limit release, expired-claim crash recovery, and fresh replanning without bypassing the MCP bridge.
+- Commands run: focused scenario passed; `uv run pytest serve/mcp-kanban/tests/test_mcp_surface_contract.py serve/kanban/tests/test_dispatch_runtime.py serve/kanban/tests/test_proof_checkout.py -q` passed with 15 tests; `uv run ruff check` on all four changed Python files passed.
+- AC-to-evidence map: AC-1 through AC-4 remain covered by the MCP contract, DispatchRuntime, and proof-checkout focused tests. AC-5 is directly covered by the maintained MCP scenario's asserted profile sequence `shaper`, `builder`, `acceptor`, `auditor`, rate-limit release, crash recovery, and replans.
+- Current failure-key resolution: `AC-5/native-proof-014-scenario` is closed by the executable MCP-boundary scenario. The scenario found and the implementation corrected JSON `impact_closure` conversion and immutable node-plan canonicalization in their owning boundaries.
+- Builder-challenger: pass; independently reran the 15 focused tests and lint with no DONE blocker.
+- Follow-up risks: none within this task; native orchestration remains explicitly non-default pending DN-012.

@@ -30,6 +30,7 @@ from owlbear_kanban import (
     ReleaseJobRequest,
     StartJobRequest,
     load_change,
+    parse_impact_closure,
 )
 from owlbear_kanban._duration import _parse_duration
 from owlbear_kanban.errors import KanbanError
@@ -872,7 +873,10 @@ async def _finish_job(
 ) -> object:
     app_ctx: AppContext = ctx.request_context.lifespan_context
     runtime = _dispatch_runtime(app_ctx, params.change_id)
-    request = FinishJobRequest(**params.model_dump(exclude={"change_id"}))
+    request_data = params.model_dump(exclude={"change_id"})
+    if params.impact_closure is not None:
+        request_data["impact_closure"] = parse_impact_closure(params.impact_closure)
+    request = FinishJobRequest(**request_data)
     return {
         "build": runtime.finish_build,
         "accept": runtime.finish_accept,
