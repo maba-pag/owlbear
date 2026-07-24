@@ -1,10 +1,10 @@
 ---
 id: 2023
 title: 'P4-02: Plan native graph dispatch waves'
-status: collect
+status: archived
 priority: high
 created: 2026-07-24T16:50:33.396895+02:00
-updated: 2026-07-24T17:46:03.537668+02:00
+updated: 2026-07-24T17:47:17.848484+02:00
 tags:
   - phase-4
   - scope:core
@@ -34,7 +34,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Projection
@@ -130,3 +130,12 @@ Proof guidance: public planner over real job, receipt, request, and attempt stat
 - Verifier-challenger result: pass. It confirmed AC-specific public-boundary evidence, repaired bidirectional dependency handling, scope conformance, and passing focused checks.
 - Final route: PASS to collect.
 
+[[2026-07-24T17:47:17+02:00]]
+## Collect Notes
+- Classification: leaf. The task has no child tasks; `parent: 1980` identifies it as a child work item, not an aggregate.
+- Latest verification evidence: newest `## Verify Notes` records PASS to collect after `uv run --project . pytest serve/kanban/tests/test_dispatch_runtime.py` produced `5 passed`; path-scoped Ruff passed; format check reported both files formatted; and the planner/test diff check was clean.
+- Intent source and invariant coverage: task AC-1 through AC-3 are covered by the verifier's public `DispatchRuntime.pick_waves` and `start` evidence over persisted `JobStore` state. The prior `dependency-edge-wave-compatibility` rejection is explicitly resolved by the newest verification occurrence.
+- Child coverage: not applicable; `list_tasks(parent=2023)` returned no tasks.
+- Dependency gate: `2022` is satisfied (`dep_status: ok`).
+- Residual decisions: no pending or resolved structured requests for this task; no later unresolved follow-up.
+- Archive rationale: mechanically archived from current PASS evidence; no aggregate review or re-verification required.
