@@ -1,10 +1,10 @@
 ---
 id: 2006
 title: 'P3-07: Supersede evidence and create corrective work'
-status: collect
+status: archived
 priority: medium
 created: 2026-07-22T21:59:17.003316+02:00
-updated: 2026-07-24T15:27:48.231141+02:00
+updated: 2026-07-24T15:29:40.596671+02:00
 tags:
   - phase-3
   - scope:core
@@ -41,7 +41,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Bootstrap Projection Identity
@@ -119,3 +119,13 @@ Route the task through verify and record a current verifier PASS with AC-specifi
 - Changes: no code, AC, dependency, parent, tag, priority, authority, or proof contract changed. Dependencies #2004 and #2005 remain archived as completed.
 - Current failure key `collect/missing-verifier-pass` is resolved by the existing canonical Verify Notes PASS and this heading audit.
 - Route: returned directly to collect for leaf archival; rerunning build or verify would duplicate completed work without adding evidence.
+
+[[2026-07-24T15:29:40+02:00]]
+## Collect Notes
+- Verdict: ARCHIVED. This is a verified leaf under aggregate parent #1979; no second implementation review is required in collect.
+- Gate audit: dependencies #2004 and #2005 are archived as completed, and no pending or resolved structured request exists.
+- Verification evidence: the latest canonical `## Verify Notes` records PASS with AC-1 through AC-3 evidence, 36 focused invalidation tests, 159 owning aggregate tests, clean Ruff/format/diagnostics, and verifier-challenger pass with no follow-up.
+- Prior collection failure key `collect/missing-verifier-pass` is resolved: the rejected pass searched for the non-canonical heading `Verifier Notes`; the authoritative section is `Verify Notes` and was already present.
+- Collector proof: authoritative section-filtered task reads plus request and dependency gates confirm archive readiness. No product or proof files changed in collection.
+- Memory: assessed all six recalled entries; one workspace-location reminder applied and five were unrelated.
+
