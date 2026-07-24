@@ -65,6 +65,88 @@ class StartJobResult(BaseModel):
         raise ValueError(msg)
 
 
+class ReleaseJobDiagnosticCode(StrEnum):
+    NO_ACTIVE_CLAIM = "ERR_RELEASE_NO_ACTIVE_CLAIM"
+    NON_OWNER = "ERR_RELEASE_NON_OWNER"
+
+
+class ReleaseJobRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    job_id: int
+    attempt_id: str
+    claim_id: str
+    actor_id: str
+    process_id: str
+    released_at: str
+
+
+class ReleaseJobDiagnostic(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    code: ReleaseJobDiagnosticCode
+    detail: str
+
+
+class ReleaseJobResult(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    job: StoredJob | None = None
+    event: AttemptEvent | None = None
+    diagnostic: ReleaseJobDiagnostic | None = None
+
+    @model_validator(mode="after")
+    def _require_one_outcome(self) -> ReleaseJobResult:
+        if self.diagnostic is None and self.job is not None and self.event is not None:
+            return self
+        if self.diagnostic is not None and self.job is None and self.event is None:
+            return self
+        msg = "release result must contain a job/event pair or one diagnostic"
+        raise ValueError(msg)
+
+
+class FailJobDiagnosticCode(StrEnum):
+    NO_ACTIVE_CLAIM = "ERR_FAIL_NO_ACTIVE_CLAIM"
+    NON_OWNER = "ERR_FAIL_NON_OWNER"
+
+
+class FailJobRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    job_id: int
+    attempt_id: str
+    claim_id: str
+    actor_id: str
+    process_id: str
+    failed_at: str
+    detail: str
+    evidence_ids: tuple[str, ...]
+
+
+class FailJobDiagnostic(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    code: FailJobDiagnosticCode
+    detail: str
+
+
+class FailJobResult(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    job: StoredJob | None = None
+    event: AttemptEvent | None = None
+    diagnostic: FailJobDiagnostic | None = None
+
+    @model_validator(mode="after")
+    def _require_one_outcome(self) -> FailJobResult:
+        if self.diagnostic is None and self.job is not None and self.event is not None:
+            return self
+        if self.diagnostic is not None and self.job is None and self.event is None:
+            return self
+        msg = "failure result must contain a job/event pair or one diagnostic"
+        raise ValueError(msg)
+
+
 class NativeRuntime:
     """Assemble native stores behind the public job-start mutation boundary."""
 
@@ -97,6 +179,38 @@ class NativeRuntime:
             if diagnostic is not None:
                 return diagnostic
         return self._commit_start(stored, request)
+
+    def release_job(self, request: ReleaseJobRequest) -> ReleaseJobResult:
+        result = self._finalize(
+            request,
+            kind="released",
+            timestamp=request.released_at,
+            detail=None,
+            evidence_ids=(),
+        )
+        if isinstance(result, tuple):
+            return ReleaseJobResult(job=result[0], event=result[1])
+        return ReleaseJobResult(
+            diagnostic=ReleaseJobDiagnostic(
+                code=ReleaseJobDiagnosticCode(result), detail="claim is not owned by the requesting attempt"
+            )
+        )
+
+    def fail_job(self, request: FailJobRequest) -> FailJobResult:
+        result = self._finalize(
+            request,
+            kind="failed",
+            timestamp=request.failed_at,
+            detail=request.detail,
+            evidence_ids=request.evidence_ids,
+        )
+        if isinstance(result, tuple):
+            return FailJobResult(job=result[0], event=result[1])
+        return FailJobResult(
+            diagnostic=FailJobDiagnostic(
+                code=FailJobDiagnosticCode(result), detail="claim is not owned by the requesting attempt"
+            )
+        )
 
     def _authoritative_job(self, request: StartJobRequest) -> StoredJob | StartJobResult:
         try:
@@ -199,9 +313,68 @@ class NativeRuntime:
         ).commit()
         return StartJobResult(job=self._jobs.read(request.job_id), event=event)
 
+    def _finalize(
+        self,
+        request: ReleaseJobRequest | FailJobRequest,
+        *,
+        kind: str,
+        timestamp: str,
+        detail: str | None,
+        evidence_ids: tuple[str, ...],
+    ) -> tuple[StoredJob, AttemptEvent] | str:
+        stored = self._jobs.read(request.job_id)
+        completed = self._attempts.read(request.attempt_id, 2).event
+        if completed is not None and (
+            completed.kind == kind
+            and completed.actor_id == request.actor_id
+            and completed.process_id == request.process_id
+            and completed.timestamp == timestamp
+            and completed.detail == detail
+            and completed.evidence_ids == evidence_ids
+        ):
+            return stored, completed
+        job = stored.job
+        if job.claim_id is None and job.attempt_id is None:
+            return "ERR_RELEASE_NO_ACTIVE_CLAIM" if kind == "released" else "ERR_FAIL_NO_ACTIVE_CLAIM"
+        if job.claim_id != request.claim_id or job.attempt_id != request.attempt_id:
+            return "ERR_RELEASE_NON_OWNER" if kind == "released" else "ERR_FAIL_NON_OWNER"
+        started = self._attempts.read(request.attempt_id, 1).event
+        if started is None or started.actor_id != request.actor_id or started.process_id != request.process_id:
+            return "ERR_RELEASE_NON_OWNER" if kind == "released" else "ERR_FAIL_NON_OWNER"
+        replacement = job.model_copy(update={"claim_id": None, "attempt_id": None, "updated_at": timestamp})
+        event = AttemptEvent(
+            schema_version=1,
+            attempt_id=request.attempt_id,
+            job_id=job.job_id,
+            change_id=job.change_id,
+            delivery_digest=job.delivery_digest,
+            target_node_id=job.target_node_id,
+            actor_id=request.actor_id,
+            process_id=request.process_id,
+            sequence=2,
+            timestamp=timestamp,
+            kind=kind,
+            detail=detail,
+            evidence_ids=evidence_ids,
+        )
+        RuntimeTransaction(
+            self._work_root,
+            f"{kind}-{request.attempt_id}",
+            (self._jobs.replacement_participant(replacement, stored.token), self._attempts.create_participant(event)),
+        ).commit()
+        return self._jobs.read(request.job_id), event
+
 
 __all__ = [
+    "FailJobDiagnostic",
+    "FailJobDiagnosticCode",
+    "FailJobRequest",
+    "FailJobResult",
     "NativeRuntime",
+    "ReleaseJobDiagnostic",
+    "ReleaseJobDiagnosticCode",
+    "ReleaseJobRequest",
+    "ReleaseJobResult",
     "StartJobDiagnostic",
     "StartJobDiagnosticCode",
     "StartJobRequest",

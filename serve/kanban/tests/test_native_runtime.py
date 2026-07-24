@@ -5,11 +5,16 @@ from pathlib import Path
 import pytest
 
 from owlbear_kanban import (
+    AttemptStore,
     JobDiagnosticCode,
     JobDisposition,
     JobRecord,
     JobStore,
     NativeRuntime,
+    FailJobDiagnosticCode,
+    FailJobRequest,
+    ReleaseJobDiagnosticCode,
+    ReleaseJobRequest,
     StartJobDiagnosticCode,
     StartJobRequest,
     load_change,
@@ -113,6 +118,82 @@ def test_start_job_stores_claim_and_started_event_then_replays(revision, tmp_pat
     conflict = runtime.start_job(_request().model_copy(update={"actor_id": "agent-002"}))
     assert conflict.diagnostic is not None
     assert conflict.diagnostic.code is StartJobDiagnosticCode.IDENTITY_CONFLICT
+
+
+def test_release_and_fail_only_finalize_the_owning_attempt(revision, tmp_path) -> None:
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    _materialize(JobStore(work_root), _record(revision))
+    runtime = NativeRuntime(revision, work_root, _History())
+    runtime.start_job(_request())
+
+    release = ReleaseJobRequest(
+        job_id=1,
+        attempt_id="attempt-001",
+        claim_id="claim-001",
+        actor_id="agent-001",
+        process_id="process-001",
+        released_at="2026-07-24T00:02:00Z",
+    )
+    released = runtime.release_job(release)
+    replayed_release = runtime.release_job(release)
+
+    assert released.job is not None
+    assert released.event is not None
+    assert released.job.job.claim_id is None
+    assert released.job.job.attempt_id is None
+    assert released.job.job.disposition is JobDisposition.PENDING
+    assert released.event.kind == "released"
+    assert released.event.sequence == 2
+    assert replayed_release == released
+
+    runtime.start_job(_request().model_copy(update={"attempt_id": "attempt-002", "claim_id": "claim-002"}))
+    non_owner = runtime.release_job(
+        release.model_copy(update={"attempt_id": "attempt-002", "claim_id": "claim-002", "actor_id": "agent-002"})
+    )
+
+    assert non_owner.diagnostic is not None
+    assert non_owner.diagnostic.code is ReleaseJobDiagnosticCode.NON_OWNER
+
+    failure = FailJobRequest(
+        job_id=1,
+        attempt_id="attempt-002",
+        claim_id="claim-002",
+        actor_id="agent-001",
+        process_id="process-001",
+        failed_at="2026-07-24T00:03:00Z",
+        detail="unit test failure",
+        evidence_ids=("evidence-001",),
+    )
+    failed = runtime.fail_job(failure)
+    replayed_failure = runtime.fail_job(failure)
+
+    assert failed.job is not None
+    assert failed.event is not None
+    assert failed.job.job.claim_id is None
+    assert failed.job.job.attempt_id is None
+    assert failed.event.kind == "failed"
+    assert failed.event.sequence == 2
+    assert failed.event.detail == "unit test failure"
+    assert failed.event.evidence_ids == ("evidence-001",)
+    preserved_started = AttemptStore(work_root).read("attempt-002", 1).event
+    assert preserved_started is not None
+    assert preserved_started.kind == "started"
+    assert replayed_failure == failed
+
+    no_active_claim = runtime.release_job(
+        release.model_copy(update={"attempt_id": "attempt-003", "claim_id": "claim-003"})
+    )
+
+    assert no_active_claim.diagnostic is not None
+    assert no_active_claim.diagnostic.code is ReleaseJobDiagnosticCode.NO_ACTIVE_CLAIM
+
+    no_active_failure = runtime.fail_job(
+        failure.model_copy(update={"attempt_id": "attempt-003", "claim_id": "claim-003"})
+    )
+
+    assert no_active_failure.diagnostic is not None
+    assert no_active_failure.diagnostic.code is FailJobDiagnosticCode.NO_ACTIVE_CLAIM
 
 
 @pytest.mark.parametrize("disposition", [JobDisposition.CANCELLED, JobDisposition.SUPERSEDED])

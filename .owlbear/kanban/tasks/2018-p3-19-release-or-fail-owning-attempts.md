@@ -1,10 +1,10 @@
 ---
 id: 2018
 title: 'P3-19: Release or fail owning attempts'
-status: build
+status: verify
 priority: high
 created: 2026-07-23T14:41:48.715516+02:00
-updated: 2026-07-23T14:41:48.715516+02:00
+updated: 2026-07-24T03:20:42.003051+02:00
 tags:
   - phase-3
   - scope:core
@@ -53,3 +53,16 @@ Resolve behavior from `REQ-008`, `REQ-009`, `REQ-016`, `IF-003`, design sections
 
 ## Proof Guidance
 Exercise public release and fail operations over owner, non-owner, no-active-claim, and replay states. Do not repeat start guards or transaction failure injection.
+
+[[2026-07-24T03:20:42+02:00]]
+## Builder Notes
+- Change envelope: deepen `NativeRuntime` only with owner-bound release and failed-finalization operations. Preserve job openness, immutable attempt history, graph, and receipt ownership; no dispatch, MCP, Cockpit, or start-eligibility changes.
+- Files changed: `serve/kanban/src/owlbear_kanban/native_runtime.py`; `serve/kanban/src/owlbear_kanban/__init__.py`; `serve/kanban/tests/test_native_runtime.py`.
+- Change Module Map deviations: none. Source confirmed task #2017's facade, `AttemptStore`, `JobStore`, and `RuntimeTransaction` are the mapped owners.
+- Implementation: added public `release_job` and `fail_job` request/result/diagnostic contracts. Both validate claim and starter identity, append immutable sequence-2 outcome events, clear only matching pointers in one runtime transaction, preserve pending disposition, and return matching committed outcomes on replay.
+- Proof selected: one durable public-facade regression test. It earns its maintenance cost because owner isolation, atomic release/failure, immutable history, and replay are shared lifecycle invariants that are hard to verify manually and easy to regress.
+- Commands run: `uv run pytest serve/kanban/tests/test_native_runtime.py` passed 10 tests. `uv run ruff check serve/kanban/src/owlbear_kanban/native_runtime.py serve/kanban/src/owlbear_kanban/__init__.py serve/kanban/tests/test_native_runtime.py` and `uv run ruff format --check` for those same files passed.
+- AC evidence: AC-1 is exercised by release event, pointer clear, pending disposition, and replay assertions. AC-2 is exercised by failed event detail/evidence assertions, pointer clear, and preserved sequence-1 started event assertions. AC-3 is exercised by matching replay, active non-owner, and post-finalization no-active diagnostics with no mutation branch.
+- Current failure-key resolutions: none returned from verify.
+- Builder challenger: pass; no concrete blockers.
+- Follow-up risks: none identified.
