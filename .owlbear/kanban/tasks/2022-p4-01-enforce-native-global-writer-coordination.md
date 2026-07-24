@@ -1,10 +1,10 @@
 ---
 id: 2022
 title: 'P4-01: Enforce native global writer coordination'
-status: build
+status: verify
 priority: high
 created: 2026-07-24T16:49:45.233828+02:00
-updated: 2026-07-24T17:13:40.804366+02:00
+updated: 2026-07-24T17:21:46.864483+02:00
 tags:
   - phase-4
   - scope:core
@@ -67,3 +67,15 @@ In: `dispatch.py`, minimal private composition in `native_runtime.py`, exports, 
 ## Shape Notes
 
 Local task repair of the builder rejection; no authority or packet-graph change. Replaced the complete operative body and AC rather than appending over stale scope. Resolved the missing lease protocol with strict `CoordinationHolder`/`WriterCoordination` models at singleton `dispatch/coordination.yaml`; resolved the public boundary with `DispatchRuntime` methods reusing frozen IF-003 requests/results plus dispatch-owned conflict/stale diagnostics; represented accept/audit as sorted reader holders; fixed strict-expiry, replay, and non-owner semantics; and named a package-private participant-injection seam so lease, job, and event share one transaction. Checked current `dispatch.py`, `native_runtime.py`, `jobs.py`, and `runtime_transaction.py`; no `JobRecord` field or `dispatch_runtime.py` is authorized. Evidence: task contract tests 2 passed, all AC under 500 characters, diff check clean, shaper-challenger `pass`, and ten recalled memories assessed. Board audit: parent/dependency unchanged; route is build.
+
+[[2026-07-24T17:21:46+02:00]]
+## Builder Notes
+- Change envelope: added native global writer-reader coordination at `dispatch/coordination.yaml`, composed atomically with the existing native job lifecycle. The only integration seam is package-private participant injection in `NativeRuntime`; public native methods and `JobRecord` remain unchanged.
+- Files changed: `serve/kanban/src/owlbear_kanban/dispatch.py`, `serve/kanban/src/owlbear_kanban/native_runtime.py`, `serve/kanban/src/owlbear_kanban/__init__.py`, and `serve/kanban/tests/test_dispatch_runtime.py`.
+- Change Module Map: followed the shaped map exactly. No deviations; `dispatch.py` owns coordination and `native_runtime.py` owns lifecycle transactions.
+- Proof selected: durable dispatch tests were added because global coordination and recovery are shared, interruption-sensitive behavior not covered by the existing native lifecycle suite.
+- Commands run: `uv run pytest serve/kanban/tests/test_dispatch_runtime.py serve/kanban/tests/test_native_runtime.py` (28 passed); `uv run ruff check serve/kanban/src/owlbear_kanban/dispatch.py serve/kanban/src/owlbear_kanban/native_runtime.py serve/kanban/src/owlbear_kanban/__init__.py serve/kanban/tests/test_dispatch_runtime.py` (clean); package import smoke for `DispatchRuntime` and `WriterCoordination` (passed).
+- AC evidence: AC-1 is exercised by `test_writer_conflict_and_release_are_atomic`, including real coordination, job, and attempt storage byte preservation for a rival writer. AC-2 is exercised by `test_readers_coexist_and_block_writer`; persisted holder validation checks exact active job claim and started-event identity. AC-3 is exercised by the release half of `test_writer_conflict_and_release_are_atomic`; the dispatch layer clears only an exact holder and delegates existing native replay and non-owner outcomes without clearing a holder. AC-4 is exercised by `test_expired_recovery_clears_its_writer_holder`, including strict equality remaining active and post-expiry atomic holder cleanup.
+- Current failure keys: none.
+- Builder challenger: pass; independently ran the dispatch test module with 3 passed and reported no concrete blockers.
+- Follow-up risks: finish and fail reuse the same exact-holder participant path as release; verification should retain the focused runtime suite as the public behavior boundary.

@@ -13,16 +13,41 @@ the config.yml display order:
 
 from __future__ import annotations
 
+import hashlib
+import os
 import re
 import warnings
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from enum import StrEnum
+from io import StringIO
+from pathlib import Path
+from typing import TYPE_CHECKING, Literal
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 if TYPE_CHECKING:
     from owlbear_kanban.engine import KanbanEngine
     from owlbear_kanban.models import Task
+    from owlbear_kanban.native_runtime import (
+        FailJobRequest,
+        FailJobResult,
+        FinishJobRequest,
+        FinishJobResult,
+        FinishShapeRequest,
+        NativeRuntime,
+        RecoverExpiredClaimsRequest,
+        RecoverExpiredClaimsResult,
+        ReleaseJobRequest,
+        ReleaseJobResult,
+        StartJobRequest,
+        StartJobResult,
+    )
 
+from owlbear_kanban.attempts import AttemptStore
+from owlbear_kanban.jobs import JobStore, StoredJob
+from owlbear_kanban.runtime_transaction import ReplacementTransactionParticipant, TransactionConflictError
 from owlbear_kanban.topology import PRODUCT_TOPOLOGY
+from owlbear_kanban.yaml_rt import make_yaml
 
 # ---------------------------------------------------------------------------
 # Rank maps — execution priority (intentionally ≠ config display order)
@@ -55,6 +80,316 @@ _MAX_PRIORITY_RANK = max(PRIORITY_RANK.values())
 _MAX_STATUS_RANK = max(STATUS_RANK.values())
 
 _TERMINAL_STATUSES = frozenset({"archived"})
+
+_COORDINATION_PATH = Path("dispatch") / "coordination.yaml"
+_WriterKind = Literal["shape", "build"]
+_ReaderKind = Literal["accept", "audit"]
+
+
+class CoordinationHolder(BaseModel):
+    """Identity and provenance of one active dispatch participant."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    job_id: int = Field(gt=0)
+    kind: _WriterKind | _ReaderKind
+    attempt_id: str = Field(min_length=1)
+    claim_id: str = Field(min_length=1)
+    actor_id: str = Field(min_length=1)
+    process_id: str = Field(min_length=1)
+    claimed_at: str = Field(min_length=1)
+
+
+class WriterCoordination(BaseModel):
+    """The singleton native writer/reader coordination record."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    schema_version: Literal[1] = 1
+    writer: CoordinationHolder | None = None
+    readers: tuple[CoordinationHolder, ...] = ()
+
+    @field_validator("readers")
+    @classmethod
+    def _readers_are_sorted_and_unique(cls, readers: tuple[CoordinationHolder, ...]) -> tuple[CoordinationHolder, ...]:
+        identities = tuple(holder.job_id for holder in readers)
+        if identities != tuple(sorted(set(identities))):
+            msg = "readers must be unique and sorted by job ID"
+            raise ValueError(msg)
+        if any(holder.kind not in ("accept", "audit") for holder in readers):
+            msg = "readers must be accept or audit holders"
+            raise ValueError(msg)
+        return readers
+
+    @model_validator(mode="after")
+    def _participants_are_compatible(self) -> WriterCoordination:
+        if self.writer is not None and self.writer.kind not in ("shape", "build"):
+            msg = "writer must be a shape or build holder"
+            raise ValueError(msg)
+        if self.writer is not None and self.readers:
+            msg = "writer coordination cannot include readers"
+            raise ValueError(msg)
+        return self
+
+
+class DispatchDiagnosticCode(StrEnum):
+    WRITER_CONFLICT = "ERR_DISPATCH_WRITER_CONFLICT"
+    LEASE_STALE = "ERR_DISPATCH_LEASE_STALE"
+
+
+class DispatchDiagnostic(BaseModel):
+    """A coordination-specific runtime diagnostic."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    code: DispatchDiagnosticCode
+    detail: str
+    holder_job_ids: tuple[int, ...] = ()
+
+    @field_validator("holder_job_ids")
+    @classmethod
+    def _holder_ids_are_sorted(cls, holder_job_ids: tuple[int, ...]) -> tuple[int, ...]:
+        if holder_job_ids != tuple(sorted(set(holder_job_ids))):
+            msg = "holder job IDs must be unique and sorted"
+            raise ValueError(msg)
+        return holder_job_ids
+
+
+class _CoordinationStore:
+    def __init__(self, work_root: Path) -> None:
+        self._work_root = work_root
+
+    def read(self) -> tuple[WriterCoordination, str]:
+        path = self._work_root / _COORDINATION_PATH
+        path.parent.mkdir(parents=True, exist_ok=True)
+        empty = self._serialize(WriterCoordination())
+        try:
+            descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+        except FileExistsError:
+            pass
+        else:
+            with os.fdopen(descriptor, "wb") as output:
+                output.write(empty)
+                output.flush()
+                os.fsync(output.fileno())
+        content = path.read_bytes()
+        try:
+            parsed = make_yaml().load(content.decode("utf-8"))
+            if isinstance(parsed, dict) and isinstance(parsed.get("readers"), list):
+                parsed = dict(parsed) | {"readers": tuple(parsed["readers"])}
+            coordination = WriterCoordination.model_validate(parsed)
+        except (TypeError, UnicodeDecodeError, ValueError) as exc:
+            message = "dispatch coordination is invalid"
+            raise ValueError(message) from exc
+        return coordination, hashlib.sha256(content).hexdigest()
+
+    def replacement_participant(
+        self,
+        replacement: WriterCoordination,
+        token: str,
+    ) -> ReplacementTransactionParticipant:
+        path = self._work_root / _COORDINATION_PATH
+        current = path.read_bytes()
+        if hashlib.sha256(current).hexdigest() != token:
+            raise TransactionConflictError
+        return ReplacementTransactionParticipant(
+            self._work_root,
+            _COORDINATION_PATH,
+            current,
+            self._serialize(replacement),
+        )
+
+    @staticmethod
+    def _serialize(coordination: WriterCoordination) -> bytes:
+        stream = StringIO()
+        make_yaml(explicit_start=True).dump(coordination.model_dump(mode="json"), stream)
+        return stream.getvalue().encode("utf-8")
+
+
+class DispatchRuntime:
+    """Coordinate native lifecycle mutations across global writer and reader holders."""
+
+    def __init__(self, native: NativeRuntime, work_root: Path) -> None:
+        self._native = native
+        self._jobs = JobStore(work_root)
+        self._attempts = AttemptStore(work_root)
+        self._coordination = _CoordinationStore(work_root)
+
+    def start(self, request: StartJobRequest) -> StartJobResult | DispatchDiagnostic:
+        for _ in range(2):
+            try:
+                coordination, token = self._coordination.read()
+                stale = self._stale_diagnostic(coordination)
+                if stale is not None:
+                    return stale
+                stored = self._jobs.read(request.job_id)
+                holder = self._holder(stored, request)
+                conflict = self._start_conflict(coordination, holder)
+                if conflict is not None:
+                    return conflict
+                replacement = self._with_holder(coordination, holder)
+                participant = self._coordination.replacement_participant(replacement, token)
+                return self._native._start_job(request, (participant,))  # noqa: SLF001
+            except TransactionConflictError:
+                continue
+        coordination, _token = self._coordination.read()
+        return self._conflict("coordination changed during start", coordination)
+
+    def release(self, request: ReleaseJobRequest) -> ReleaseJobResult | DispatchDiagnostic:
+        return self._finalize(request, "released")
+
+    def fail(self, request: FailJobRequest) -> FailJobResult | DispatchDiagnostic:
+        return self._finalize(request, "failed")
+
+    def finish_shape(self, request: FinishShapeRequest) -> FinishJobResult | DispatchDiagnostic:
+        return self._finish(request, "shape")
+
+    def finish_build(self, request: FinishJobRequest) -> FinishJobResult | DispatchDiagnostic:
+        return self._finish(request, "build")
+
+    def finish_accept(self, request: FinishJobRequest) -> FinishJobResult | DispatchDiagnostic:
+        return self._finish(request, "accept")
+
+    def finish_audit(self, request: FinishJobRequest) -> FinishJobResult | DispatchDiagnostic:
+        return self._finish(request, "audit")
+
+    def recover_expired_claims(
+        self, request: RecoverExpiredClaimsRequest
+    ) -> RecoverExpiredClaimsResult | DispatchDiagnostic:
+        coordination, _token = self._coordination.read()
+        stale = self._stale_diagnostic(coordination)
+        if stale is not None:
+            return stale
+
+        def participant_for(stored: StoredJob, _started: object) -> tuple[ReplacementTransactionParticipant, ...]:
+            current, token = self._coordination.read()
+            holder = self._find_holder(current, stored.job.job_id)
+            if holder is None:
+                return ()
+            return (self._coordination.replacement_participant(self._without_holder(current, holder), token),)
+
+        return self._native._recover_expired_claims(request, participant_for)  # noqa: SLF001
+
+    def _finalize(
+        self,
+        request: ReleaseJobRequest | FailJobRequest,
+        kind: Literal["released", "failed"],
+    ) -> ReleaseJobResult | FailJobResult | DispatchDiagnostic:
+        coordination, token = self._coordination.read()
+        stale = self._stale_diagnostic(coordination)
+        if stale is not None:
+            return stale
+        holder = self._find_holder(coordination, request.job_id)
+        participants: tuple[ReplacementTransactionParticipant, ...] = ()
+        if holder is not None and self._matches(holder, request):
+            replacement = self._without_holder(coordination, holder)
+            participants = (self._coordination.replacement_participant(replacement, token),)
+        if kind == "released":
+            return self._native._release_job(request, participants)  # noqa: SLF001
+        return self._native._fail_job(request, participants)  # noqa: SLF001
+
+    def _finish(
+        self,
+        request: FinishJobRequest,
+        kind: _WriterKind | _ReaderKind,
+    ) -> FinishJobResult | DispatchDiagnostic:
+        coordination, token = self._coordination.read()
+        stale = self._stale_diagnostic(coordination)
+        if stale is not None:
+            return stale
+        holder = self._find_holder(coordination, request.job_id)
+        participants: tuple[ReplacementTransactionParticipant, ...] = ()
+        if holder is not None and self._matches(holder, request):
+            replacement = self._without_holder(coordination, holder)
+            participants = (self._coordination.replacement_participant(replacement, token),)
+        return self._native._finish(request, kind, participants)  # noqa: SLF001
+
+    def _stale_diagnostic(self, coordination: WriterCoordination) -> DispatchDiagnostic | None:
+        for holder in self._holders(coordination):
+            try:
+                stored = self._jobs.read(holder.job_id)
+                started = self._attempts.read(holder.attempt_id, 1).event
+            except (FileNotFoundError, ValueError):
+                return self._stale(coordination)
+            job = stored.job
+            if (
+                job.kind != holder.kind
+                or job.claim_id != holder.claim_id
+                or job.attempt_id != holder.attempt_id
+                or job.updated_at != holder.claimed_at
+                or started is None
+                or started.kind != "started"
+                or started.job_id != holder.job_id
+                or started.claim_id != holder.claim_id
+                or started.actor_id != holder.actor_id
+                or started.process_id != holder.process_id
+                or started.timestamp != holder.claimed_at
+            ):
+                return self._stale(coordination)
+        return None
+
+    @staticmethod
+    def _holder(stored: StoredJob, request: StartJobRequest) -> CoordinationHolder:
+        return CoordinationHolder(
+            job_id=request.job_id,
+            kind=stored.job.kind,
+            attempt_id=request.attempt_id,
+            claim_id=request.claim_id,
+            actor_id=request.actor_id,
+            process_id=request.process_id,
+            claimed_at=request.claimed_at,
+        )
+
+    def _start_conflict(
+        self, coordination: WriterCoordination, holder: CoordinationHolder
+    ) -> DispatchDiagnostic | None:
+        existing = self._find_holder(coordination, holder.job_id)
+        if existing is not None and existing == holder:
+            return None
+        if holder.kind in ("shape", "build") and self._holders(coordination):
+            return self._conflict("a global participant already holds coordination", coordination)
+        if holder.kind in ("accept", "audit") and coordination.writer is not None:
+            return self._conflict("a writer already holds coordination", coordination)
+        return None
+
+    @staticmethod
+    def _holders(coordination: WriterCoordination) -> tuple[CoordinationHolder, ...]:
+        return ((coordination.writer,) if coordination.writer is not None else ()) + coordination.readers
+
+    def _with_holder(self, coordination: WriterCoordination, holder: CoordinationHolder) -> WriterCoordination:
+        if holder.kind in ("shape", "build"):
+            return WriterCoordination(writer=holder)
+        if holder in coordination.readers:
+            return coordination
+        readers = tuple(sorted((*coordination.readers, holder), key=lambda item: item.job_id))
+        return WriterCoordination(readers=readers)
+
+    def _without_holder(self, coordination: WriterCoordination, holder: CoordinationHolder) -> WriterCoordination:
+        if coordination.writer == holder:
+            return WriterCoordination()
+        return WriterCoordination(readers=tuple(item for item in coordination.readers if item != holder))
+
+    def _find_holder(self, coordination: WriterCoordination, job_id: int) -> CoordinationHolder | None:
+        return next((holder for holder in self._holders(coordination) if holder.job_id == job_id), None)
+
+    @staticmethod
+    def _matches(holder: CoordinationHolder, request: object) -> bool:
+        fields = ("job_id", "attempt_id", "claim_id", "actor_id", "process_id")
+        return all(getattr(request, field) == getattr(holder, field) for field in fields)
+
+    def _stale(self, coordination: WriterCoordination) -> DispatchDiagnostic:
+        return DispatchDiagnostic(
+            code=DispatchDiagnosticCode.LEASE_STALE,
+            detail="persisted coordination does not match active job claim and started event",
+            holder_job_ids=tuple(sorted(holder.job_id for holder in self._holders(coordination))),
+        )
+
+    def _conflict(self, detail: str, coordination: WriterCoordination) -> DispatchDiagnostic:
+        return DispatchDiagnostic(
+            code=DispatchDiagnosticCode.WRITER_CONFLICT,
+            detail=detail,
+            holder_job_ids=tuple(sorted(holder.job_id for holder in self._holders(coordination))),
+        )
 
 
 # ---------------------------------------------------------------------------

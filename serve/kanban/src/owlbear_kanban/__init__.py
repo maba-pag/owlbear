@@ -45,6 +45,13 @@ from owlbear_kanban.change import (
     compute_delivery_digest,
     load_change,
 )
+from owlbear_kanban.dispatch import (
+    CoordinationHolder,
+    DispatchDiagnostic,
+    DispatchDiagnosticCode,
+    DispatchRuntime,
+    WriterCoordination,
+)
 from owlbear_kanban.engine import KanbanEngine, WorkSession
 from owlbear_kanban.errors import (
     ConcurrencyError,
@@ -187,12 +194,16 @@ __all__ = [
     "ChangeLoadResult",
     "ChangeRevision",
     "ConcurrencyError",
+    "CoordinationHolder",
     "CorrectiveJobPlan",
     "CorrectiveRoute",
     "CorrectiveRouteRequest",
     "CorruptionError",
     "DecisionsDocument",
     "DeliveryGraph",
+    "DispatchDiagnostic",
+    "DispatchDiagnosticCode",
+    "DispatchRuntime",
     "FailJobDiagnostic",
     "FailJobDiagnosticCode",
     "FailJobRequest",
@@ -271,6 +282,7 @@ __all__ = [
     "WorkHealthFinding",
     "WorkHealthResult",
     "WorkSession",
+    "WriterCoordination",
     "atomic_write",
     "change_health",
     "compute_delivery_digest",

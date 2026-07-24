@@ -41,7 +41,7 @@ from owlbear_kanban.runtime_transaction import (
 from owlbear_kanban.yaml_rt import make_yaml
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Callable, Iterable
     from pathlib import Path
 
     from owlbear_kanban.change import ChangeRevision
@@ -340,6 +340,13 @@ class NativeRuntime:
         )
 
     def start_job(self, request: StartJobRequest) -> StartJobResult:
+        return self._start_job(request)
+
+    def _start_job(
+        self,
+        request: StartJobRequest,
+        participants: tuple[ReplacementTransactionParticipant, ...] = (),
+    ) -> StartJobResult:
         stored = self._authoritative_job(request)
         if isinstance(stored, StartJobResult):
             return stored
@@ -347,7 +354,7 @@ class NativeRuntime:
             diagnostic = check(stored, request)
             if diagnostic is not None:
                 return diagnostic
-        result = self._commit_start(stored, request)
+        result = self._commit_start(stored, request, participants)
         self._query.reset()
         return result
 
@@ -399,12 +406,20 @@ class NativeRuntime:
         return self._query.work_health(cursor=cursor, limit=limit)
 
     def release_job(self, request: ReleaseJobRequest) -> ReleaseJobResult:
+        return self._release_job(request)
+
+    def _release_job(
+        self,
+        request: ReleaseJobRequest,
+        participants: tuple[ReplacementTransactionParticipant, ...] = (),
+    ) -> ReleaseJobResult:
         result = self._finalize(
             request,
             kind="released",
             timestamp=request.released_at,
             detail=None,
             evidence_ids=(),
+            participants=participants,
         )
         if isinstance(result, tuple):
             self._query.reset()
@@ -416,12 +431,20 @@ class NativeRuntime:
         )
 
     def fail_job(self, request: FailJobRequest) -> FailJobResult:
+        return self._fail_job(request)
+
+    def _fail_job(
+        self,
+        request: FailJobRequest,
+        participants: tuple[ReplacementTransactionParticipant, ...] = (),
+    ) -> FailJobResult:
         result = self._finalize(
             request,
             kind="failed",
             timestamp=request.failed_at,
             detail=request.detail,
             evidence_ids=request.evidence_ids,
+            participants=participants,
         )
         if isinstance(result, tuple):
             self._query.reset()
@@ -457,6 +480,13 @@ class NativeRuntime:
         return result
 
     def recover_expired_claims(self, request: RecoverExpiredClaimsRequest) -> RecoverExpiredClaimsResult:
+        return self._recover_expired_claims(request, lambda _stored, _started: ())
+
+    def _recover_expired_claims(
+        self,
+        request: RecoverExpiredClaimsRequest,
+        participant_factory: Callable[[StoredJob, AttemptEvent], tuple[ReplacementTransactionParticipant, ...]],
+    ) -> RecoverExpiredClaimsResult:
         RuntimeTransaction.recover_all(self._work_root)
         events = {(event.attempt_id, event.sequence): event for event in self._attempts.list()}
         recovered_at = _aware_datetime(request.recovered_at)
@@ -484,7 +514,7 @@ class NativeRuntime:
                 continue
             if recovered_at <= claimed_at + self._claim_expiry:
                 continue
-            outcome = self._commit_recovery(stored, started, request)
+            outcome = self._commit_recovery(stored, started, request, participant_factory(stored, started))
             if outcome is None:
                 diagnostics.append(
                     RecoveryDiagnostic(
@@ -548,6 +578,7 @@ class NativeRuntime:
         stored: StoredJob,
         started: AttemptEvent,
         request: RecoverExpiredClaimsRequest,
+        participants: tuple[ReplacementTransactionParticipant, ...],
     ) -> RecoveredClaim | None:
         job = stored.job
         replacement = job.model_copy(update={"claim_id": None, "attempt_id": None, "updated_at": request.recovered_at})
@@ -573,6 +604,7 @@ class NativeRuntime:
                 (
                     self._jobs.replacement_participant(replacement, stored.token),
                     self._attempts.create_participant(event),
+                    *participants,
                 ),
             ).commit()
         except TransactionConflictError:
@@ -637,7 +669,12 @@ class NativeRuntime:
             diagnostic=FinishJobDiagnostic(code=code, detail=detail, lower_code=lower_code, target=target)
         )
 
-    def _finish(self, request: FinishJobRequest, kind: str) -> FinishJobResult:  # noqa: C901, PLR0911, PLR0912
+    def _finish(  # noqa: C901, PLR0911, PLR0912
+        self,
+        request: FinishJobRequest,
+        kind: str,
+        extra_participants: tuple[ReplacementTransactionParticipant, ...] = (),
+    ) -> FinishJobResult:
         RuntimeTransaction.recover_all(
             self._work_root,
             roots=(self._work_root, self._revision.source_dir),
@@ -743,6 +780,7 @@ class NativeRuntime:
                 receipt_participant,
                 self._attempts.create_participant(event),
                 self._jobs.archive_participant(archived, stored.token),
+                *extra_participants,
             )
         )
         RuntimeTransaction(
@@ -1204,7 +1242,12 @@ class NativeRuntime:
             )
         return StartJobResult(job=stored, event=existing)
 
-    def _commit_start(self, stored: StoredJob, request: StartJobRequest) -> StartJobResult:
+    def _commit_start(
+        self,
+        stored: StoredJob,
+        request: StartJobRequest,
+        participants: tuple[ReplacementTransactionParticipant, ...],
+    ) -> StartJobResult:
         job = stored.job
         replacement = job.model_copy(
             update={"claim_id": request.claim_id, "attempt_id": request.attempt_id, "updated_at": request.claimed_at}
@@ -1226,11 +1269,15 @@ class NativeRuntime:
         RuntimeTransaction(
             self._work_root,
             f"start-{request.attempt_id}",
-            (self._jobs.replacement_participant(replacement, stored.token), self._attempts.create_participant(event)),
+            (
+                self._jobs.replacement_participant(replacement, stored.token),
+                self._attempts.create_participant(event),
+                *participants,
+            ),
         ).commit()
         return StartJobResult(job=self._jobs.read(request.job_id), event=event)
 
-    def _finalize(
+    def _finalize(  # noqa: PLR0913
         self,
         request: ReleaseJobRequest | FailJobRequest,
         *,
@@ -1238,6 +1285,7 @@ class NativeRuntime:
         timestamp: str,
         detail: str | None,
         evidence_ids: tuple[str, ...],
+        participants: tuple[ReplacementTransactionParticipant, ...],
     ) -> tuple[StoredJob, AttemptEvent] | str:
         stored = self._jobs.read(request.job_id)
         completed = self._attempts.read(request.attempt_id, 2).event
@@ -1286,7 +1334,11 @@ class NativeRuntime:
         RuntimeTransaction(
             self._work_root,
             f"{kind}-{request.attempt_id}",
-            (self._jobs.replacement_participant(replacement, stored.token), self._attempts.create_participant(event)),
+            (
+                self._jobs.replacement_participant(replacement, stored.token),
+                self._attempts.create_participant(event),
+                *participants,
+            ),
         ).commit()
         return self._jobs.read(request.job_id), event
 
