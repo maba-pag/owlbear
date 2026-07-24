@@ -1,10 +1,10 @@
 ---
 id: 2024
 title: 'P4-03: Isolate exact-commit proof checkouts'
-status: verify
+status: collect
 priority: high
 created: 2026-07-24T16:50:58.417043+02:00
-updated: 2026-07-24T17:24:09.787337+02:00
+updated: 2026-07-24T17:27:31.735973+02:00
 tags:
   - phase-4
   - scope:core
@@ -87,3 +87,17 @@ Proof guidance: real temporary Git repository; replace no Git or filesystem beha
 - Current failure-key resolution: canonical-SHA manifest recording is fixed by using the `rev-parse` output for worktree creation, returned checkout data, and manifest serialization; the new real-Git `HEAD` test asserts the canonical SHA appears in the manifest.
 - Builder-challenger result: pass; bounded two-file diff matches task scope and both focused checks pass.
 - Follow-up risks: none for the returned failure key. Future acceptor/auditor lifecycle ownership of cleanup remains outside this task's shaped scope.
+
+[[2026-07-24T17:27:31+02:00]]
+## Verify Notes
+- Evidence reviewed: task Projection/Outcome/Envelope/AC, both Builder Notes, the returned canonical-SHA diff `79f776531`, `ProofCheckoutManager`, public `RuntimeQuery` health integration, `NativeRuntime` wiring, exports, and focused real-Git tests.
+- Named authorities checked: `DN-004`, `IF-005`, `RISK-004`, `PROOF-014`, and accepted `DEC-018`. `DEC-018` requires a disposable read-only checkout under the proof root for the tested exact SHA, normal environment/toolchain, recorded SHA and replacements, and cleanup. The implementation uses the resolved `rev-parse` SHA for detached worktree creation, checkout result, and manifest.
+- Change Module Map: no map was supplied. The changed deep checkout owner, existing runtime health facade/wiring, exports, and real-Git proof all match the shaped envelope. No interface or scope deviation found.
+- Normal-path boundary exercised: builder evidence uses a real temporary Git repository, actual Git worktree operations, filesystem permissions, YAML manifest serialization, and public `RuntimeQuery.work_health`; no Git/filesystem behavior is replaced above the permitted lower boundary.
+- Checks run: verifier `ruff check` over the checkout owner, health integration, runtime wiring, exports, and focused test passed. The focused `pytest` command was externally interrupted twice with exit 130 before output, so it is not claimed as verifier proof. Builder's matching focused real-Git suite passed with 10 tests after the repair.
+- Findings and patch: no verifier patch. The prior failure key, canonical-SHA manifest recording, is resolved by `_resolve_commit`; the real-Git symbolic `HEAD` regression asserts resolved SHA output in checkout metadata and manifest.
+- AC-to-evidence: AC-1: real-Git materialization checks exact detached HEAD, read-only tracked file, environment/replacement manifest content, plus symbolic `HEAD` canonical SHA. AC-2: real-Git ineligible-kind, missing-commit, symlinked-root, and unusable-root cases check diagnostics and containment. AC-3: a real remaining checkout is visible as `ERR_WORK_PROOF_CHECKOUT_ORPHAN` through public work health; repeated cleanup removes it.
+- Prior same-failure-key rejection check: one prior verify rejection identified canonical SHA recording; this repair closes that exact key. No repeated rejection.
+- Recalled memory assessed: 6 entries assessed; scope/artifact and active-workspace guidance were applied.
+- Verifier-challenger: pass. It confirmed task intent, direct source behavior, scope, and builder real-Git proof support PASS despite verifier terminal interruptions.
+- Final route: pass to collect.
