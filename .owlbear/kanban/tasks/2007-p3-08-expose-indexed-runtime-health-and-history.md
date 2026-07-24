@@ -1,10 +1,10 @@
 ---
 id: 2007
 title: 'P3-08: Expose indexed runtime health and history'
-status: verify
+status: collect
 priority: low
 created: 2026-07-22T22:07:25.462842+02:00
-updated: 2026-07-24T15:59:51.690271+02:00
+updated: 2026-07-24T16:05:47.771799+02:00
 tags:
   - phase-3
   - scope:core
@@ -84,3 +84,16 @@ Proof guidance: exercise public projection and health operations over scale and 
 - Builder challenger: final decision `pass`; no problem, no further action, durable tests accepted, no auto-fixed files. Challenger independently ran 28 targeted tests plus Ruff and format checks.
 - Memory: all 10 recalled entries were assessed; refined artifact-to-scope and live public-callable proof guidance directly shaped the final proof.
 - Follow-up risks: none identified within shaped scope.
+
+[[2026-07-24T16:05:47+02:00]]
+## Verify Notes
+- Verdict: PASS after one local proof repair; advanced to collect.
+- Authority checked: `REQ-009`, `REQ-023`, `KEEP-006`, `KEEP-007`, `IF-003`, `RISK-006`, `PROOF-003`, and design sections 5, 13, and 14 in the admitted `replace-delivery-pipeline` change.
+- AC-1: public `NativeRuntime` projection and invalidation proof preserves immutable job kind, resolves authority fields from the current graph, and exposes dependency readiness, claim, persisted requests, attempt, finding, receipt, validity, and disposition as orthogonal state; block is a separate projection field.
+- AC-2: the public scale fixture uses 500 nodes, 500 jobs, and 2,000 attempts; cursor pages are deterministic and bounded, repeated queries preserve identities/order, lower-store instrumentation proves lazy index reuse, and public invalidation refreshes only the returned receipt/job closure while preserving an unrelated projection.
+- AC-3: public `work_health` proof covers healthy stores, dangling predecessor, orphan finding, unsafe entry, unresolved manifest, primed-index disagreement, stale digest, broken supersession, and missing predecessor receipt reference. Results and cursors are stable, pages are bounded, and byte snapshots prove no mutation.
+- Verifier repair: added one durable public-boundary test in `serve/kanban/tests/test_runtime_query.py` for `ERR_WORK_DIGEST_STALE`, `ERR_WORK_SUPERSESSION_BROKEN`, and `ERR_WORK_RECEIPT_REFERENCE_MISSING`; this closed the initial challenger proof gap without product-code changes.
+- Evidence: focused runtime-query proof passed 4 tests; Ruff check and format check passed for all five task files; corrected owning aggregate passed 186 tests. Two existing multiprocessing fork deprecation warnings remain.
+- Verifier challenger: initial decision failed only on the three missing AC-3 behavioral branches; final decision passed after repair with no problem, no follow-up, durable test admitted, and no auto-fixed files.
+- Memory: every recalled entry was submitted for assessment; one concurrently pending entry could not accept an assessment, while the remaining nine succeeded.
+- Follow-up: none.

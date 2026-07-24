@@ -261,3 +261,38 @@ def test_work_health_is_stable_bounded_and_non_mutating(tmp_path: Path) -> None:
         "ERR_WORK_PREDECESSOR_MISSING",
         "ERR_WORK_PATH_UNSAFE",
     } <= codes
+
+
+def test_work_health_reports_stale_digest_and_broken_receipt_chains(tmp_path: Path) -> None:
+    revision = _revision(tmp_path)
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    receipts = ReceiptStore(revision)
+    assert receipts.create("build-root", _receipt(revision, "build-root", ())).receipt is not None
+    assert receipts.create("build-child", _receipt(revision, "build-child", ("build-root",))).receipt is not None
+    jobs = JobStore(work_root)
+    _materialize(jobs, _job(revision, 1, delivery_digest="0" * 64))
+    _materialize(
+        jobs,
+        _job(
+            revision,
+            2,
+            receipt_id="build-child",
+            superseded_by_receipt_id="build-root",
+        ),
+    )
+    (revision.source_dir / "receipts" / "build-root.yaml").unlink()
+    runtime = NativeRuntime(revision, work_root, _History(), timedelta(minutes=5))
+    before = {path: path.read_bytes() for path in tmp_path.rglob("*") if path.is_file()}
+
+    result = runtime.work_health(limit=100)
+    repeated = runtime.work_health(limit=100)
+    after = {path: path.read_bytes() for path in tmp_path.rglob("*") if path.is_file()}
+
+    assert result == repeated
+    assert before == after
+    assert {finding.code for finding in result.findings} == {
+        "ERR_WORK_DIGEST_STALE",
+        "ERR_WORK_RECEIPT_REFERENCE_MISSING",
+        "ERR_WORK_SUPERSESSION_BROKEN",
+    }
