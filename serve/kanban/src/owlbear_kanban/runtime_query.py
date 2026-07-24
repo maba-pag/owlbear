@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -16,6 +16,9 @@ from owlbear_kanban.receipt import ReceiptRecord, ReceiptStore, ReceiptValidity,
 from owlbear_kanban.runtime_requests import NativeRequest, RequestResolution, StoredRequest
 from owlbear_kanban.runtime_transaction import RuntimeTransaction
 from owlbear_kanban.yaml_rt import make_yaml
+
+if TYPE_CHECKING:
+    from owlbear_kanban.proof_checkout import ProofCheckoutManager
 
 HistoryKind = Literal["attempt", "finding", "receipt", "request"]
 _ATTEMPT_PATH_PARTS = 3
@@ -122,6 +125,7 @@ class RuntimeQuery:
         revision: ChangeRevision,
         work_root: Path,
         history: RepositoryHistory,
+        proof_checkouts: ProofCheckoutManager | None = None,
     ) -> None:
         self._revision = revision
         self._work_root = work_root
@@ -130,6 +134,7 @@ class RuntimeQuery:
         self._attempts = AttemptStore(work_root)
         self._findings = FindingStore(work_root)
         self._receipts = ReceiptStore(revision)
+        self._proof_checkouts = proof_checkouts
         self.reset()
 
     def reset(self) -> None:
@@ -391,6 +396,8 @@ class RuntimeQuery:
                     paths.extend(self._entries(directory, f"attempts/{directory.name}"))
         for status in ("pending", "resolved"):
             paths.extend(self._entries(self._work_root / "requests" / status, f"requests/{status}"))
+        if self._proof_checkouts is not None:
+            paths.extend(f"proof-checkouts/{path}" for path in self._proof_checkouts.health_paths())
         return tuple(sorted(paths))
 
     @staticmethod
@@ -399,7 +406,9 @@ class RuntimeQuery:
             return ()
         return tuple(f"{prefix}/{item.name}" for item in sorted(root.iterdir(), key=lambda item: item.name))
 
-    def _check_path(self, path: str) -> tuple[WorkHealthFinding, ...]:
+    def _check_path(self, path: str) -> tuple[WorkHealthFinding, ...]:  # noqa: PLR0911
+        if path.startswith("proof-checkouts/"):
+            return self._check_proof_checkout(path)
         if path.startswith(".runtime-transactions/"):
             return self._check_manifest(path)
         if path.startswith(("jobs/", "archive/")):
@@ -411,6 +420,16 @@ class RuntimeQuery:
         if path.startswith("requests/"):
             return self._check_request(path)
         return self._check_receipt(path)
+
+    def _check_proof_checkout(self, path: str) -> tuple[WorkHealthFinding, ...]:
+        if self._proof_checkouts is None or not self._proof_checkouts.is_orphan(path.removeprefix("proof-checkouts/")):
+            return self._finding("ERR_WORK_PATH_UNSAFE", "proof checkout path is not canonical", path)
+        return self._finding(
+            "ERR_WORK_PROOF_CHECKOUT_ORPHAN",
+            "proof checkout requires cleanup",
+            path,
+            path.removeprefix("proof-checkouts/"),
+        )
 
     @staticmethod
     def _finding(code: str, detail: str, path: str, target: str | None = None) -> tuple[WorkHealthFinding, ...]:

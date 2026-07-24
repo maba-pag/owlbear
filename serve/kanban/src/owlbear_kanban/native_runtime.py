@@ -46,6 +46,7 @@ if TYPE_CHECKING:
 
     from owlbear_kanban.change import ChangeRevision
     from owlbear_kanban.finding import Finding
+    from owlbear_kanban.proof_checkout import ProofCheckoutManager
     from owlbear_kanban.runtime_requests import StoredRequest
 
 _RECOVERY_EVENT_SEQUENCE = 2
@@ -310,6 +311,7 @@ class NativeRuntime:
         work_root: Path,
         history: RepositoryHistory,
         claim_expiry: timedelta,
+        proof_checkouts: ProofCheckoutManager | None = None,
     ) -> None:
         if claim_expiry <= timedelta(0):
             msg = "claim expiry must be positive"
@@ -322,7 +324,7 @@ class NativeRuntime:
         self._attempts = AttemptStore(work_root)
         self._receipts = ReceiptStore(revision)
         self._invalidation = InvalidationRuntime(revision, work_root)
-        self._query = RuntimeQuery(revision, work_root, history)
+        self._query = RuntimeQuery(revision, work_root, history, proof_checkouts)
         RuntimeTransaction.recover_all(work_root, roots=(work_root, revision.source_dir))
 
     @staticmethod

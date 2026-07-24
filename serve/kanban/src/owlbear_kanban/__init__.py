@@ -117,6 +117,13 @@ from owlbear_kanban.native_runtime import (
     StartJobRequest,
     StartJobResult,
 )
+from owlbear_kanban.proof_checkout import (
+    ProofCheckout,
+    ProofCheckoutDiagnostic,
+    ProofCheckoutDiagnosticCode,
+    ProofCheckoutManager,
+    ProofCheckoutResult,
+)
 from owlbear_kanban.receipt import (
     ChangeHealthFinding,
     ChangeHealthResult,
@@ -223,6 +230,11 @@ __all__ = [
     "KanbanEngine",
     "NativeRuntime",
     "NotFoundError",
+    "ProofCheckout",
+    "ProofCheckoutDiagnostic",
+    "ProofCheckoutDiagnosticCode",
+    "ProofCheckoutManager",
+    "ProofCheckoutResult",
     "ReceiptConflictError",
     "ReceiptDiagnostic",
     "ReceiptDiagnosticCode",

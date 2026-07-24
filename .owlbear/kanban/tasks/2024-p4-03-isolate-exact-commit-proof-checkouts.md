@@ -1,10 +1,10 @@
 ---
 id: 2024
 title: 'P4-03: Isolate exact-commit proof checkouts'
-status: build
+status: verify
 priority: high
 created: 2026-07-24T16:50:58.417043+02:00
-updated: 2026-07-24T16:50:58.417043+02:00
+updated: 2026-07-24T17:04:29.444759+02:00
 tags:
   - phase-4
   - scope:core
@@ -48,3 +48,16 @@ Add a deep `ProofCheckoutManager` that owns contained exact-commit materializati
 In: new `serve/kanban/src/owlbear_kanban/proof_checkout.py`, work-health integration, exports, focused temporary-repository tests. Out: acceptor/auditor behavior, dispatch waves, MCP, Cockpit, and cutover removal.
 
 Proof guidance: real temporary Git repository; replace no Git or filesystem behavior. Prove exact HEAD, containment/no-follow policy, read-only tracked files, cleanup, and orphan health.
+
+[[2026-07-24T17:04:29+02:00]]
+## Builder Notes
+- Change envelope: implement only the deep proof-checkout owner, bounded work-health integration, public exports, and real temporary-Git proof. No acceptor, auditor, dispatch, MCP, Cockpit, or cutover changes.
+- Files changed: `serve/kanban/src/owlbear_kanban/proof_checkout.py`; `serve/kanban/src/owlbear_kanban/runtime_query.py`; `serve/kanban/src/owlbear_kanban/native_runtime.py`; `serve/kanban/src/owlbear_kanban/__init__.py`; `serve/kanban/tests/test_proof_checkout.py`.
+- Change Module Map deviations: no shaped map was supplied. Source confirmed the requested new owner and adjacent `RuntimeQuery`/`NativeRuntime` health boundary; no deviation.
+- Implementation: `ProofCheckoutManager` creates detached exact-commit worktrees only for accept/audit jobs below a resolved non-symlink proof root, makes tracked regular files non-writable, persists a job/target/commit/environment/replacements manifest, returns stable path/missing-commit/setup diagnostics, and performs idempotent contained cleanup. Runtime health reports remaining roots as `ERR_WORK_PROOF_CHECKOUT_ORPHAN` through the public facade.
+- Durable-test justification: retained real temporary-repository tests because exact revision, no-follow containment, read-only files, and orphan cleanup are shared security-sensitive behavior that is difficult to detect manually and likely to regress.
+- Commands run: `uv run ruff check serve/kanban/src/owlbear_kanban/proof_checkout.py serve/kanban/src/owlbear_kanban/runtime_query.py serve/kanban/src/owlbear_kanban/native_runtime.py serve/kanban/src/owlbear_kanban/__init__.py serve/kanban/tests/test_proof_checkout.py` (all checks passed); `uv run pytest serve/kanban/tests/test_runtime_query.py serve/kanban/tests/test_proof_checkout.py -q --tb=short` (9 passed).
+- AC evidence: AC-1 is exercised by the real Git materialization test: contained job path, exact detached HEAD, read-only tracked file, and manifest facts. AC-2 is exercised by invalid job, missing commit, symlinked root, and unusable-root cases, each leaving no external checkout. AC-3 is exercised via public bounded `RuntimeQuery.work_health`, then repeated cleanup of the same job root with no remaining health paths.
+- Current failure-key resolutions: none returned from verify.
+- Builder challenger: pass; no concrete blockers.
+- Follow-up risks: proof roots are intentionally reported as orphans until the future acceptor/auditor lifecycle invokes cleanup; this task does not own those integrations.
