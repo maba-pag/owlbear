@@ -1,10 +1,10 @@
 ---
 id: 2025
 title: 'P4-04: Run graph-aware native orchestration'
-status: shape
+status: build
 priority: high
 created: 2026-07-24T16:54:49.020973+02:00
-updated: 2026-07-24T21:16:07.898673+02:00
+updated: 2026-07-24T21:45:43.772902+02:00
 tags:
   - phase-4
   - scope:core
@@ -43,12 +43,26 @@ ac:
     receipt creation, while release and expired recovery clear matching claim/coordination
     state and request idempotent cleanup; a residual checkout yields typed orphan
     evidence, finish creates no receipt, and unrelated proof roots remain unchanged.'
-  - 'AC-5: Given a replaced runner with `success | rate_limited | crash`, PROOF-014
-    dispatches each fresh `shape | build | accept | audit` selection through it; maps
-    the outcomes to finish, `release_job`, or expired `recover_expired_claims`; proves
-    persisted attempt pairs `started+succeeded | started+released | started+crashed`
-    with one sequence-2 terminal event per start; replans after each result; and confirms
-    `pick_tasks` remains the bootstrap default pending DN-012.'
+  - 'AC-5: Given an explicitly requested admitted native change with `change_id` and
+    `candidate_revision`, the orchestrator agent, prompt, `w-orchestration`, and `share/WIRING.md`
+    expose the IF-015 tools named in AC-1; native mode follows `pick_jobs -> start_job
+    -> assigned profile -> returned disposition -> lifecycle operation -> fresh pick_jobs`,
+    routes without prose, and keeps `pick_tasks` default pending DN-012.'
+  - 'AC-6: Given a test-local `Success(completion) | RateLimited | Crash` runner,
+    the maintained PROOF-014 dispatcher starts the selected job, passes its profile,
+    job ID, and start context to the runner, then uses the returned value as the sole
+    selector for purpose-specific finish, `release_job`, or strict-expiry `recover_expired_claims`;
+    the dispatcher accepts no expected-outcome argument.'
+  - 'AC-7: Given the AC-6 dispatcher sequence, operation-ledger assertions prove `Success`
+    selects the profile-matched finish, `RateLimited` selects release, and `Crash`
+    selects expired recovery; persisted histories are `1:started, 2:succeeded|released|crashed`
+    with no later event; a fresh plan follows each terminal result. Artifact tests
+    fail if IF-015 tools or native-mode instructions are removed.'
+  - 'AC-8: Given a fresh native entry whose assigned profile has no installed agent
+    body, the orchestrator does not call `start_job` or a runner, leaves job and attempt
+    stores unchanged, reports the unavailable profile, and halts native mode. Given
+    an installed assigned profile, the same branch starts and dispatches it; this
+    packet installs no acceptor or auditor body owned by DN-008 or DN-014.'
 proof_bundle: critical+challenge
 blocked: false
 block_reason:
@@ -251,3 +265,59 @@ Proof command: `uv run pytest serve/mcp-kanban/tests/test_mcp_surface_contract.p
 | 1 | AC-5/native-proof-014-scenario | shaper | Consolidate the runner-to-lifecycle proof contract: the test-local runner's returned typed disposition must directly select and assert the corresponding purpose-specific finish, `release_job`, or strict-expiry `recover_expired_claims` action while preserving the existing profile/job, persisted terminal-pair, and replanning matrix. Determine whether the task's stated orchestration contract also requires production orchestration ownership; do not authorize another test-only repair without that resolved boundary. | `serve/mcp-kanban/tests/test_mcp_surface_contract.py`; PROOF-014 | Current scenario awaits `runner(...)` only to compare a literal and then ignores its return before hardcoding terminal calls. |
 
 - Final route: RESHAPE to shape.
+
+
+
+## PROOF-014 Revised Closure — Supersedes Prior Scenario Table
+
+The earlier six-row table is not the operative repair contract. It described correlated runner outcomes and lifecycle calls but did not require the returned value to control the call, and it omitted the executable product wiring later removed by `#2026`.
+
+### Product Contract
+
+Restore a concise, explicitly non-default native branch in `share/agents/orchestrator.agent.md`, `share/skills/w-orchestration/SKILL.md`, and `share/prompts/orchestrate.prompt.md`. The agent tool allowlist must expose the eight IF-015 operations from AC-1 plus the existing legacy operations. The workflow accepts an admitted `change_id` and `candidate_revision`, consumes only fresh `pick_jobs` entries, calls `start_job` before dispatch, dispatches the returned profile mechanically, maps its structured disposition to the matching lifecycle operation, and replans. It must state writer/accept/audit exclusion, checkout-context ownership, and no native-to-legacy state bridging. `pick_tasks` remains the ordinary default until DN-012.
+
+Do not add absent acceptor/auditor role bodies in this packet; DN-008 and DN-014 own them. The product contract names those engine-assigned profiles and is executable as they become installed. PROOF-014 replaces the subagent runner below this boundary.
+
+### Outcome-Controlled Scenario
+
+Refactor the maintained scenario around one local `dispatch_one`-equivalent helper with this dataflow:
+
+1. Obtain one entry from a fresh public `pick_jobs` result and call public `start_job` for that job before invoking the runner.
+2. Invoke the replaced runner with the selected `agent_profile`, selected `job_id`, and returned start/checkout context.
+3. Receive one discriminated test-local value: `Success(completion)`, `RateLimited`, or `Crash`. `Success.completion` carries the profile-specific evidence/receipt fields consumed by the matching finish call.
+4. Pattern-match that returned value inside the helper. `Success` selects only `finish_shape | finish_build | finish_accept | finish_audit` according to the selected profile; `RateLimited` selects only `release_job`; `Crash` advances the injected clock beyond strict expiry and selects only `recover_expired_claims`.
+5. Obtain a fresh `pick_jobs` plan only after the selected lifecycle operation returns.
+
+The helper must not accept an expected outcome, lifecycle callback, operation name, or test-row branch. The caller scripts only runner return values. An operation ledger/spies at the public IF-015 boundary must show one selected operation per returned disposition and fail if the runner result is ignored while lifecycle calls are hardcoded externally.
+
+Retain exact profile/job handoff, returned terminal-event assertions, persisted `AttemptStore` pairs, no sequence above 2, writer compatibility, checkout containment/cleanup, stale lease, orphan handling, and bootstrap-default checks. Add artifact assertions for the agent tool allowlist and native branch in agent/skill/prompt so instruction cleanup cannot delete the contract while the scenario stays green.
+
+Focused proof: `uv run pytest serve/mcp-kanban/tests/test_mcp_surface_contract.py serve/kanban/tests/test_dispatch_runtime.py serve/kanban/tests/test_proof_checkout.py tests/test_skill_authority_wiring.py tests/test_agentview_ac_params.py -q`; `uv run ruff check serve/mcp-kanban/tests/test_mcp_surface_contract.py`; agent/skill validators available in the current repository.
+
+
+
+### Unavailable Assigned Profile
+
+During bootstrap, agent installation may lag engine job production. Before `start_job`, resolve the selected `agent_profile` against the orchestrator's installed subagent allowlist. If unavailable, emit a structured/native-mode halt naming the profile; do not claim, create an attempt, call a runner, release, or mutate legacy task state. Cover this with a scenario row that snapshots job/attempt stores before and after. Do not add placeholder acceptor/auditor agents or list nonexistent agents in orchestrator frontmatter.
+
+`share/WIRING.md` remains a derived ecosystem contract in this packet: update its orchestrator tool/dispatch inventory and add a regression assertion consistent with the source agent/skill/prompt. The source files remain authoritative.
+
+
+
+### Legacy Shape Versus Native Shaper
+
+Qualify the existing `Do not dispatch shape work` / `shape stays user-facing through /shape` rules as legacy `pick_tasks` behavior only. In explicitly requested native mode, an installed engine-assigned `shaper` profile is dispatched through the AC-5/AC-6 path and completes through `finish_shape`. Keep the two modes disjoint; do not turn legacy shape tasks into native jobs.
+
+[[2026-07-24T21:45:43+02:00]]
+## Shape Notes — Root-Cause Repair
+
+- Rejection source: verifier commit `735b43061` returned repeated failure key `AC-5/native-proof-014-scenario` because the replaced runner's typed return was awaited and discarded before hardcoded lifecycle calls. Repair classification: non-material restoration and local contract repair under already-admitted DN-004/PROOF-014 ownership.
+- Root cause 1, product regression: `#2025` commit `896e77960` installed an explicitly non-default native branch, but instruction-cleanup task `#2026` commit `a9a848f203` deleted it from `orchestrator.agent.md`, `w-orchestration`, and `/orchestrate`. Live source then exposed only `pick_tasks`; the orchestrator tool allowlist lacked IF-015. The prior reshape checked the scenario but not the admitted product artifact set and falsely authorized a test-only repair.
+- Root cause 2, proof weakness: the prior six-row matrix specified runner outcomes beside lifecycle actions but did not require causal dataflow. Its helper could accept `expected_outcome`, assert the runner returned it, ignore that return, and hardcode the action externally. Passing rows therefore proved correlation, not structured-result routing.
+- Root cause 3, bootstrap availability: engine waves may name `acceptor` or `auditor` before DN-008/DN-014 install those role bodies. Previous shaping neither permitted placeholders nor defined a fail-closed branch.
+- Contract changes: AC-1 through AC-4 remain unchanged. Replaced old AC-5 with AC-5 through AC-8: restore executable non-default IF-015 policy/tool wiring across agent, skill, prompt, and derived WIRING; require one outcome-controlled dispatcher with no expected-outcome/callback/operation input; prove the selected public operation through an operation ledger plus durable attempt histories/replanning; and halt before claim with unchanged stores when the assigned profile is unavailable.
+- Boundary decisions: DN-004 installs native policy and IF-015 capability now; DN-012 alone makes native default and removes `pick_tasks`. DN-008/DN-014 still own acceptor/auditor bodies. Legacy shape tasks remain user-facing, while explicitly requested native shaper jobs dispatch through `finish_shape`; no state bridging is allowed.
+- Builder scope: repair `share/agents/orchestrator.agent.md`, `share/skills/w-orchestration/SKILL.md`, `share/prompts/orchestrate.prompt.md`, `share/WIRING.md`, the maintained PROOF-014 scenario, and focused artifact regressions. Do not add production runner APIs, placeholder role agents, a ninth MCP tool, or native activation/cutover.
+- Challenge: first shaper-challenger pass failed on unavailable profiles and omitted WIRING. After AC-8/fail-closed behavior and WIRING restoration, second challenge returned `decision: pass`; its non-blocking legacy/native shaper contradiction was also resolved in the task body.
+- Validation: `uv run pytest tests/test_agentview_ac_params.py -q` passed (13); `git diff --check` passed; current orchestrator agent/skill validators pass as baseline. All 20 recalled shaper memories were assessed.
+- Board audit: parent `#1980`, dependencies `#2022 | #2023 | #2024`, and admitted digest remain unchanged. Route: build.

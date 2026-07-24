@@ -8,12 +8,12 @@ didnt_use_count: 25
 id: 7ed37efb-c5f6-416d-80f4-eaeeab527f48
 outstanding_count: 0
 scope_agents: [verifier, builder, shaper]
-score: 0.85
+score: 0.84
 source_agent: reviewer
 state: approved
 title: Pairwise precedence tests need positive reachability checks
-unremarkable_count: 0
-updated_at: '2026-07-24T18:52:40.489414+00:00'
+unremarkable_count: 1
+updated_at: '2026-07-24T19:45:01.562139+00:00'
 ---
 
 For ordered-state helpers, adjacent pairwise precedence tests alone can miss an intermediate state that is only returned under an extra hidden condition. Require at least one direct positive assertion for each emitted state, not just competition cases.
