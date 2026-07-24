@@ -1,10 +1,10 @@
 ---
 id: 2005
 title: 'P3-06: Link runtime requests to dependent work'
-status: collect
+status: archived
 priority: medium
 created: 2026-07-22T21:59:06.804749+02:00
-updated: 2026-07-24T14:19:01.582931+02:00
+updated: 2026-07-24T14:22:40.676471+02:00
 tags:
   - phase-3
   - scope:core
@@ -39,7 +39,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Bootstrap Projection Identity
@@ -93,3 +93,10 @@ Proof guidance: exercise public native request operations over temporary change/
 - No resolved structured requests, current follow-up, earlier Verify Notes, or prior same-failure-key rejection existed for this task.
 - Verifier challenger decision: pass; no task-intent, proof-sufficiency, scope-drift, or unresolved-AC finding.
 - Final route: PASS to collect.
+
+[[2026-07-24T14:22:40+02:00]]
+## Collect Notes
+- Mechanically collected this verified leaf; aggregate parent review is not part of this task.
+- Archive readiness: verifier commit `4ba9b018d` follows builder commit `ed57a2430`; latest Verify Notes map AC-1 through AC-3 to focused request-runtime proof and report verifier-challenger pass.
+- No pending or resolved structured requests, current Required Follow-up, product changes, or collector-owned proof artifacts exist.
+- Archived as completed; collector ownership is limited to the moved task record.
