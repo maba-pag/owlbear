@@ -1,10 +1,10 @@
 ---
 id: 2018
 title: 'P3-19: Release or fail owning attempts'
-status: build
+status: verify
 priority: high
 created: 2026-07-23T14:41:48.715516+02:00
-updated: 2026-07-24T03:23:54.484606+02:00
+updated: 2026-07-24T03:26:27.208621+02:00
 tags:
   - phase-3
   - scope:core
@@ -84,3 +84,16 @@ Exercise public release and fail operations over owner, non-owner, no-active-cla
 ### Required Follow-up
 - Add a public `NativeRuntime` regression test with two materialized jobs: finalize an attempt for one job, then call the same finalization request identity with the other job ID. Assert it does not return the other job's completed event, returns the stable ownership/no-active diagnostic expected by the contract, and does not mutate either job or append a duplicate event.
 - Rerun `uv run pytest serve/kanban/tests/test_native_runtime.py` and the existing Ruff checks.
+
+[[2026-07-24T03:26:27+02:00]]
+## Builder Notes
+- Change envelope: resolve verifier failure key `cross-job-finalization-replay` through the existing public `NativeRuntime` test boundary only. No product behavior, runtime contract, or other lifecycle path changed.
+- Files changed: `serve/kanban/tests/test_native_runtime.py`; task record `2018-p3-19-release-or-fail-owning-attempts.md`.
+- Change Module Map deviations: none. The existing package-local native runtime test suite owns this public facade regression.
+- Implementation: added a two-job public-facade regression. It releases job 1, replays the same request identity against job 2, requires `ERR_RELEASE_NO_ACTIVE_CLAIM`, and confirms neither job changes nor a duplicate attempt event appears.
+- Proof selected: durable regression test. It earns its maintenance cost because it protects a previously observed, shared cross-job ownership regression that is hard to detect manually and easy to reintroduce.
+- Commands run: `uv run pytest serve/kanban/tests/test_native_runtime.py` passed 11 tests. `uv run ruff check serve/kanban/src/owlbear_kanban/native_runtime.py serve/kanban/src/owlbear_kanban/__init__.py serve/kanban/tests/test_native_runtime.py` passed. `uv run ruff format --check` for the same files passed. `git diff --check -- serve/kanban/tests/test_native_runtime.py` passed.
+- AC-to-evidence: AC-1 and AC-2 remain covered by the existing public release/fail assertions in the focused suite. AC-3 is directly covered by the new cross-job replay test: it asserts the stable no-active-claim diagnostic, unchanged job records, and the original single sequence-2 event.
+- Current failure-key resolution: `cross-job-finalization-replay` is resolved by the new two-job regression, which would fail if a finalization event from job 1 were returned or applied to job 2.
+- Builder challenger: pass; it independently verified the focused suite and Ruff checks with no concrete blockers.
+- Follow-up risks: none identified.

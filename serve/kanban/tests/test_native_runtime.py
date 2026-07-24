@@ -196,6 +196,36 @@ def test_release_and_fail_only_finalize_the_owning_attempt(revision, tmp_path) -
     assert no_active_failure.diagnostic.code is FailJobDiagnosticCode.NO_ACTIVE_CLAIM
 
 
+def test_release_replay_for_another_job_does_not_return_or_mutate_the_original_outcome(revision, tmp_path) -> None:
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    store = JobStore(work_root)
+    _materialize(store, _record(revision))
+    _materialize(store, _record(revision, job_id=2))
+    runtime = NativeRuntime(revision, work_root, _History())
+    runtime.start_job(_request())
+    release = ReleaseJobRequest(
+        job_id=1,
+        attempt_id="attempt-001",
+        claim_id="claim-001",
+        actor_id="agent-001",
+        process_id="process-001",
+        released_at="2026-07-24T00:02:00Z",
+    )
+    released = runtime.release_job(release)
+    job_one_before = store.read(1)
+    job_two_before = store.read(2)
+
+    replay_for_other_job = runtime.release_job(release.model_copy(update={"job_id": 2}))
+
+    assert released.event is not None
+    assert replay_for_other_job.diagnostic is not None
+    assert replay_for_other_job.diagnostic.code is ReleaseJobDiagnosticCode.NO_ACTIVE_CLAIM
+    assert store.read(1) == job_one_before
+    assert store.read(2) == job_two_before
+    assert AttemptStore(work_root).read("attempt-001", 2).event == released.event
+
+
 @pytest.mark.parametrize("disposition", [JobDisposition.CANCELLED, JobDisposition.SUPERSEDED])
 def test_start_job_rejects_terminal_dispositions(revision, tmp_path, disposition) -> None:
     work_root = tmp_path / "work"
