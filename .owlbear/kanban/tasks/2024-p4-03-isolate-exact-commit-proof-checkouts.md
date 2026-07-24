@@ -1,10 +1,10 @@
 ---
 id: 2024
 title: 'P4-03: Isolate exact-commit proof checkouts'
-status: build
+status: verify
 priority: high
 created: 2026-07-24T16:50:58.417043+02:00
-updated: 2026-07-24T17:06:43.051954+02:00
+updated: 2026-07-24T17:24:09.787337+02:00
 tags:
   - phase-4
   - scope:core
@@ -74,3 +74,16 @@ Proof guidance: real temporary Git repository; replace no Git or filesystem beha
 - Prior same-failure-key rejection check: no earlier Verify Notes or failure key exists for canonical-SHA manifest recording.
 - Verifier-challenger: fail. It independently identified the canonical-SHA manifest defect and recommended the same focused repair.
 - Final route: reject to build; the required implementation and durable regression assertion exceed the verifier's one-owner/no-durable-test patch-pass budget.
+
+[[2026-07-24T17:24:09+02:00]]
+## Builder Notes
+- Change envelope: resolve only the verifier's canonical-SHA follow-up within `ProofCheckoutManager` and its existing real-Git proof. No change to checkout containment, cleanup, runtime health, or unrelated delivery behavior.
+- Files changed: `serve/kanban/src/owlbear_kanban/proof_checkout.py`; `serve/kanban/tests/test_proof_checkout.py`.
+- Change Module Map deviations: none. The repair stays inside the shaped deep checkout owner and its focused proof boundary.
+- Implementation: replaced boolean revision existence validation with `_resolve_commit`, which returns `git rev-parse --verify <revision>^{commit}`. The resolved canonical SHA is now the sole value passed to detached `git worktree add`, stored in `ProofCheckout.commit`, and written to the manifest.
+- Durable-test justification: added a single real temporary-Git `HEAD` regression because manifest SHA is a security-sensitive external proof fact and symbolic/abbreviated revision handling is otherwise easy to regress without detection.
+- Commands run: `uv run pytest serve/kanban/tests/test_proof_checkout.py -q --tb=short` (6 passed); `uv run pytest serve/kanban/tests/test_proof_checkout.py serve/kanban/tests/test_runtime_query.py -q --tb=short` (10 passed); `uv run ruff check serve/kanban/src/owlbear_kanban/proof_checkout.py serve/kanban/tests/test_proof_checkout.py` (all checks passed).
+- AC-to-evidence map: AC-1: `test_materialize_uses_exact_commit_read_only_checkout_and_manifest` proves the detached exact checkout, tracked-file read-only policy, and manifest facts; `test_materialize_resolves_symbolic_commit_to_canonical_manifest_sha` proves symbolic `HEAD` records the resolved SHA. AC-2: the existing real-Git invalid-kind, missing-commit, symlinked-root, and unusable-root cases pass. AC-3: the existing idempotent cleanup and public `RuntimeQuery.work_health` orphan case pass in the 10-test focused suite.
+- Current failure-key resolution: canonical-SHA manifest recording is fixed by using the `rev-parse` output for worktree creation, returned checkout data, and manifest serialization; the new real-Git `HEAD` test asserts the canonical SHA appears in the manifest.
+- Builder-challenger result: pass; bounded two-file diff matches task scope and both focused checks pass.
+- Follow-up risks: none for the returned failure key. Future acceptor/auditor lifecycle ownership of cleanup remains outside this task's shaped scope.

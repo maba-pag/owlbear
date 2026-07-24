@@ -69,6 +69,18 @@ def test_materialize_uses_exact_commit_read_only_checkout_and_manifest(tmp_path:
         (checkout.checkout / "tracked.txt").write_text("changed\n", encoding="utf-8")
 
 
+def test_materialize_resolves_symbolic_commit_to_canonical_manifest_sha(tmp_path: Path) -> None:
+    repository, commit = _repository(tmp_path)
+    manager = ProofCheckoutManager(repository, tmp_path / "scratch" / "proof")
+
+    result = manager.materialize(_job(), "HEAD")
+
+    assert result.diagnostic is None
+    assert result.checkout is not None
+    assert result.checkout.commit == commit
+    assert f"commit: {commit}" in result.checkout.manifest.read_text(encoding="utf-8")
+
+
 @pytest.mark.parametrize(
     ("job", "commit", "proof_root", "expected"),
     [

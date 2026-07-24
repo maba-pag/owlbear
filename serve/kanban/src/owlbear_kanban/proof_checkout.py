@@ -82,7 +82,8 @@ class ProofCheckoutManager:
         if paths is None:
             return self._diagnostic(ProofCheckoutDiagnosticCode.PATH_UNSAFE, "proof path is not contained")
         root, checkout, manifest = paths
-        if not self._commit_exists(commit):
+        resolved_commit = self._resolve_commit(commit)
+        if resolved_commit is None:
             return self._diagnostic(ProofCheckoutDiagnosticCode.COMMIT_MISSING, "requested commit is not resolvable")
         try:
             self._proof_root.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -91,9 +92,9 @@ class ProofCheckoutManager:
                 return self._diagnostic(ProofCheckoutDiagnosticCode.PATH_UNSAFE, "proof path is not contained")
             root, checkout, manifest = paths
             root.mkdir(mode=0o700)
-            self._git("worktree", "add", "--detach", str(checkout), commit)
+            self._git("worktree", "add", "--detach", str(checkout), resolved_commit)
             self._make_tracked_files_read_only(checkout)
-            self._write_manifest(manifest, job, commit, environment or {}, replacements)
+            self._write_manifest(manifest, job, resolved_commit, environment or {}, replacements)
         except (OSError, subprocess.CalledProcessError, ValueError):
             self._remove(root, checkout)
             return self._diagnostic(ProofCheckoutDiagnosticCode.SETUP_FAILED, "proof checkout setup failed")
@@ -101,7 +102,7 @@ class ProofCheckoutManager:
             checkout=ProofCheckout(
                 job_id=job.job_id,
                 target=job.target_node_id,
-                commit=commit,
+                commit=resolved_commit,
                 root=root,
                 checkout=checkout,
                 manifest=manifest,
@@ -153,12 +154,11 @@ class ProofCheckoutManager:
             return None
         return root, checkout, manifest
 
-    def _commit_exists(self, commit: str) -> bool:
+    def _resolve_commit(self, commit: str) -> str | None:
         try:
-            self._git("rev-parse", "--verify", f"{commit}^{{commit}}")
+            return self._git("rev-parse", "--verify", f"{commit}^{{commit}}")
         except subprocess.CalledProcessError:
-            return False
-        return True
+            return None
 
     def _git(self, *arguments: str) -> str:
         return subprocess.run(  # noqa: S603 -- fixed Git executable with explicit arguments.
