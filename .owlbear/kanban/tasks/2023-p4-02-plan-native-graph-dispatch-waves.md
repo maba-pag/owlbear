@@ -1,10 +1,10 @@
 ---
 id: 2023
 title: 'P4-02: Plan native graph dispatch waves'
-status: verify
+status: collect
 priority: high
 created: 2026-07-24T16:50:33.396895+02:00
-updated: 2026-07-24T17:43:08.503176+02:00
+updated: 2026-07-24T17:46:03.537668+02:00
 tags:
   - phase-4
   - scope:core
@@ -107,3 +107,26 @@ Proof guidance: public planner over real job, receipt, request, and attempt stat
 - Current failure-key resolutions: `dependency-edge-wave-compatibility` resolved by propagating predecessor IDs into entries and checking direct edges in both directions before reader batching.
 - Builder-challenger: pass. Independently ran the focused pytest, Ruff, and format checks; confirmed the minimal scope and bidirectional/non-adjacent reader-edge handling.
 - Follow-up risks: only direct predecessor edges are required and represented by native job state; orchestration and proof-checkout remain intentionally outside this packet.
+
+[[2026-07-24T17:46:03+02:00]]
+## Verify Notes
+
+- Evidence reviewed: builder commits `e071d5443` and `25b515a5d`; task ACs; `DN-004`, `IF-004`, and `PROOF-014` in `.owlbear/changes/replace-delivery-pipeline/graph.yaml`; builder and prior verifier notes; committed planner/test diff.
+- Named authorities checked: `IF-004` requires dependency-aware waves, global writer serialization, and exact profiles. `DN-004` owns graph-aware dispatch with current-state replanning. `PROOF-014` reserves the full orchestrator flow for its later normal-path proof; this packet validly proves the public native planner below that boundary.
+- Change Module Map: no deviation. Wave compatibility remains in `dispatch.py`; persisted start eligibility stays in `native_runtime.py`; public contracts remain exported from `__init__.py`.
+- Normal-path boundary exercised: the public `DispatchRuntime.pick_waves` and `start` APIs over real persisted `JobStore` and receipt state. The planner and eligibility owner were not replaced.
+- Checks run:
+  - `uv run --project . pytest serve/kanban/tests/test_dispatch_runtime.py` produced `5 passed`.
+  - `uv run --project . ruff check serve/kanban/src/owlbear_kanban/dispatch.py serve/kanban/tests/test_dispatch_runtime.py` produced `All checks passed!`.
+  - `uv run --project . ruff format --check serve/kanban/src/owlbear_kanban/dispatch.py serve/kanban/tests/test_dispatch_runtime.py` reported `2 files already formatted`.
+  - `git diff --check` for the planner/test slice was clean.
+- Findings: none. The prior failure key `dependency-edge-wave-compatibility` is resolved: entries preserve persisted predecessor IDs and `_plan_waves` splits reader batches when a direct edge exists in either direction. The public regression proves output `[[1, 2], [3]]` for a dependent reader after an unrelated reader.
+- Patches applied: none by verifier.
+- AC-to-evidence:
+  - AC-1: `test_pick_waves_is_deterministic_and_uses_current_job_state` uses persisted records and native eligibility to prove stable IDs, exact profiles, and blocked omission.
+  - AC-2: `test_pick_waves_separates_dependent_readers` proves dependency-aware reader separation and unrelated reader batching through public `pick_waves`.
+  - AC-3: the deterministic/current-state test proves identical repeated plans and a fresh plan that excludes a job after public `start` persists its claim.
+- Prior same-failure-key rejection check: one prior verifier rejection for `dependency-edge-wave-compatibility`; this repair closes it, so no repeated repair cycle remains.
+- Verifier-challenger result: pass. It confirmed AC-specific public-boundary evidence, repaired bidirectional dependency handling, scope conformance, and passing focused checks.
+- Final route: PASS to collect.
+
