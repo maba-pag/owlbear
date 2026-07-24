@@ -1,10 +1,10 @@
 ---
 id: 2019
 title: 'P3-20: Recover expired claims for retry'
-status: collect
+status: archived
 priority: high
 created: 2026-07-23T14:42:08.799937+02:00
-updated: 2026-07-24T13:30:31.038766+02:00
+updated: 2026-07-24T13:32:58.716398+02:00
 tags:
   - phase-3
   - scope:core
@@ -51,7 +51,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -178,3 +178,10 @@ The revised authority loads without diagnostics at digest `eaab0f2e46780f38b5df5
 - Domain regression: 1046 passed and 8 unchanged unrelated baseline failures: four admission fixture/DV-010 failures and four runtime-transaction tests using invalid disposition strings. No native recovery test failed.
 - Verifier challenger: decision pass; intent, all seven ACs, minimum scope, stale-replay repair, and baseline classification accepted.
 - Current required follow-up: none.
+
+[[2026-07-24T13:32:58+02:00]]
+## Collect Notes
+- Verdict: ARCHIVED. Mechanically closed the verified leaf after confirming the latest Verify Notes report PASS, map all seven AC, name no current required follow-up, and record verifier-challenger decision pass.
+- Closure evidence: verifier commit `ffca14ed9` contains only the native recovery repair, focused regression proof, and task record; focused proof reports 17 passing native-runtime tests plus scoped lint and diff checks.
+- Parent context: #2003 remains the aggregate in collect and can be evaluated separately now that its final lifecycle child is complete.
+- Files changed by collector: task record move only. No product or proof files changed.
