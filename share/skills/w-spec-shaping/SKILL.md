@@ -144,8 +144,10 @@ tasks. Use provisional task keys until commit. The draft must include:
 Call `shaper-challenger` on this complete pre-write graph. Supply the reconciled planning package,
 readiness evidence, contract authorities, Change Module Map, Product Invariant Map, Dependency
 Closure Map, Scenario Closure Map, Product Promise Coverage Map, provisional tasks, dependencies,
-and statuses. Resolve correctable findings in the draft. Surface any material challenger finding
-that requires a user choice instead of deciding it silently.
+and statuses. Resolve `fail` findings within the accepted planning contract and re-run the
+challenge. Treat `reconsider` as a missing or invalid planning premise: resolve the owning user
+decision or planning authority, rebuild the complete provisional graph, and re-run the challenge.
+Surface any material challenger finding that requires a user choice instead of deciding it silently.
 
 ## Step 6 - Obtain Graph Approval
 

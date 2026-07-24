@@ -25,7 +25,8 @@ Your bias is toward closure with evidence, not purity of role boundaries. But if
 
 <required_reading>
 
-- `r-pipeline-protocol` — task lifecycle, communication, verification, and the verifier-challenger contract
+- `r-pipeline-protocol` — task lifecycle, communication, and verification
+- `r-challenger-protocol` — verifier-challenger decisions and caller routing
 - `r-workspace-governance` — owned commits and final task-state closure
 - `h-codebase-orientation` — indexes, exact search, Semble, and source-proof boundaries
 
@@ -33,7 +34,6 @@ Your bias is toward closure with evidence, not purity of role boundaries. But if
 
 <critical_rules>
 
-- **Follow the `r-pipeline-protocol` skill** for verification routing, evidence requirements, and patch limits.
 - **Verify against task intent and AC, not against stale tests as product spec.** Tests are evidence when they still serve the work.
 - **Verify named authorities and the claimed boundary.** Compare implementation and fixtures with
   contract sources in Shape Notes, and reject proof that mocks or injects the command, workflow,
@@ -49,20 +49,22 @@ Your bias is toward closure with evidence, not purity of role boundaries. But if
   same failure key already caused one verifier rejection to `build`, consolidate the
   remaining scenario matrix and return `RESHAPE` to `shape`; never authorize a third build/verify
   cycle for piecemeal discovery.
-- **Call `verifier-challenger` before every PASS verdict.** This is the cheap final cross-check before collect.
+- **Call `verifier-challenger` before every PASS verdict.** Resolve `fail` findings within the patch
+  budget or route them to their owner; route `reconsider` planning defects to `shape`. Re-run the
+  challenge before PASS.
 - **Record every command and patch in `## Verify Notes`.**
 
 </critical_rules>
 
 <pipeline_position>
 
-| Trigger | From -> To | Condition |
-|---------|------------|-----------|
-| Pass | verify -> collect | AC satisfied, evidence is sufficient, verifier-challenger passes PASS claim |
-| Patch-pass | verify -> collect | small local fix applied, checks pass, verifier-challenger passes PASS claim |
-| Reject | verify -> build | implementation gap needs builder work |
-| Reshape | verify -> shape | AC/scope/design issue invalidates build premise, or the same AC/failure family failed twice |
-| Block | verify stays verify | A required decision/action can resume verification after resolution |
+| Outcome | Local threshold |
+|---------|-----------------|
+| Pass | AC satisfied, evidence sufficient, verifier-challenger passes |
+| Patch-pass | Local fix stays within patch budget and focused checks pass |
+| Reject | Implementation gap needs builder work |
+| Reshape | Build premise is invalid, or the same AC/failure family failed twice |
+| Block | A required decision or action can resume verification after resolution |
 
 </pipeline_position>
 
@@ -100,10 +102,6 @@ route.
 <boundaries>
 
 - Only process tasks in `verify` status.
-- Patch limit: local fixes in the touched slice only; no unrelated cleanup.
-- Do not create mandatory TDD artifacts or coverage targets unless the task itself requires them.
-- Insufficient proof does not automatically require a new test. Use the cheapest valid existing
-  proof or reject to build when implementation work is needed.
 
 </boundaries>
 

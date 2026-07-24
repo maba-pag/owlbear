@@ -22,7 +22,7 @@ Memory entries use markdown body + YAML frontmatter. Core fields:
 | `title` | str | Required, non-empty |
 | `categories` | list[str] | One or more values from the 9-value enum |
 | `confidence` | float | Inclusive `[0.7, 1.0]` |
-| `state` | str | One of: `pending`, `curated`, `approved`, `deleted` |
+| `state` | str | One of: `pending`, `curated`, `approved`, `contested`, `disputed`, `stale`, `deleted` |
 | `content` | str | Markdown body |
 | `scope_agents` | list[str] | Scope list (empty list allowed) |
 | `source_agent` | str | Required; immutable provenance marker |
@@ -33,7 +33,7 @@ Memory entries use markdown body + YAML frontmatter. Core fields:
 Enumerations and ranges used by the schema:
 
 - `categories` values: `domain-knowledge`, `behaviour`, `pitfall`, `process`, `tool-usage`, `goal`, `personality`, `preference`, `env-context`
-- `state` values: `pending`, `curated`, `approved`, `deleted`
+- `state` values: `pending`, `curated`, `approved`, `contested`, `disputed`, `stale`, `deleted`
 - `confidence` range: inclusive `[0.7, 1.0]`
 
 This schema is validated by `MemoryEntry` in the `mcp-memory` package.
@@ -70,18 +70,24 @@ See `share/diagrams/memory-layers.excalidraw` for a visual overview of the tier 
 
 ## State Model
 
-Lifecycle transitions are controlled by MCP tools:
+Lifecycle transitions are controlled by the memory service. MCP tools expose ordinary curation,
+approval, assessment, and deletion; Cockpit is the human resolution surface for exceptional states.
 
 | From | To | Trigger | Tool |
 |------|----|---------|------|
 | `pending` | `curated` | Curator assigns non-empty scope during curation | `curate_memory` |
 | `curated` | `approved` | User approval | `approve_memory` |
 | `approved` | `curated` | Any curation edit (auto-downgrade) | `curate_memory` |
+| `curated` / `approved` | `contested` | First factually-wrong assessment | `assess_memories` |
+| `contested` | `disputed` | A second task reports the entry factually wrong | `assess_memories` |
+| `curated` / `approved` / `contested` | `stale` | Non-use exceeds the slot-efficiency threshold | `assess_memories` |
+| `contested` / `disputed` / `stale` | `approved` | User resolves the exceptional state | Cockpit (`MemoryEngine.resolve`) |
 | `pending` | `deleted` | Prune noise/duplicates (hard delete from disk) | `delete_memory` |
-| `curated` | `deleted` | Prune superseded guidance (soft delete) | `delete_memory` |
-| `approved` | `deleted` | Retire obsolete approved guidance (soft delete) | `delete_memory` |
+| `curated` / `approved` / `contested` / `disputed` / `stale` | `deleted` | Retire guidance (soft delete) | `delete_memory` |
 
-Tool responses include hints describing which branch was applied (for example, pending promotion, approved downgrade, hard-delete vs soft-delete).
+`contested` remains recallable at curated priority. `disputed` and `stale` are excluded from recall.
+MCP curation edits are blocked for all three exceptional states until the user resolves them in
+Cockpit. Tool responses include hints describing the transition or deletion branch applied.
 
 ## Candidate Production
 

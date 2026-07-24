@@ -181,18 +181,9 @@ serialization, corruption, or filesystem behavior.
 
 Put your full agent section (header + content + summary) into the `note` parameter of `end_work`. The note is appended to the task body with a timestamp, then the task advances and the claim is released — all atomically.
 
-The task is not complete when `end_work` returns. Follow `r-workspace-governance` immediately: commit
-the agent's explicit task-owned durable paths and the resulting task record. For collector archival,
-include both the old task path and new archive path. Do not return the Channel A success verdict until
-that scoped commit succeeds, even when unrelated worktree or index changes exist.
-
-If `commit-owned` reports that an owned path is already staged, do not unstage or modify it. Apply
-the `COMMIT_FAILED` containment from `r-workspace-governance`.
-
-If that commit cannot be repaired in the current invocation, apply the `COMMIT_FAILED` containment
-from `r-workspace-governance`: block an advanced on-board task with `edit_task(block_reason=...)`
-before returning. Clear the block with `edit_task(block_reason="")` only after the original scoped
-commit has succeeded and commit that unblock separately.
+`end_work` does not complete pipeline work. Follow `r-pipeline-protocol` for the closure gate and
+success-verdict timing; follow `r-workspace-governance` for scoped commit mechanics, staged-path
+handling, and `COMMIT_FAILED` containment and recovery.
 
 For agent section headers and lifecycle signals, see `r-pipeline-protocol` § `Communication`.
 

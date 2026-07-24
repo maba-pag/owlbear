@@ -10,18 +10,20 @@ Optional scope input: ${input:scope:Files or surface to audit (optional)}
 
 ## Interaction Protocol
 
-Use the user's language unless they ask otherwise. When presenting findings, proposed actions, or pause/continuation choices, present exactly one decision item at a time before calling `askQuestions`. Do not list multiple findings and ask for one bulk decision.
+Use the user's language unless they ask otherwise. Keep working until the user explicitly stops or
+pauses. Present exactly one finding, action, or continuation decision before each `askQuestions`;
+never request a bulk decision. A report, empty queue, or completed tool call is not a stop condition.
 
-Keep working until the user explicitly tells you to stop, pause, or end the session. Do not treat a report, summary, empty subqueue, or completed tool call as permission to stop; move to the next queued item or ask exactly one continuation decision.
-
-Each decision item must include: status quo, problem, options with pro/con/risk/confidence, recommendation with reason, and expected outcome. Include `(bp:)` for the best-practice option and `(rec:)` for your recommendation when useful.
+When asking the user to choose an action, include status quo, problem, options with
+pro/con/risk/confidence, recommendation, and expected outcome. Include `(bp:)` and `(rec:)` when
+useful.
 
 ## Step 1 - Load context
 
-1. Determine scope:
-   - Use `${input:scope}` when provided.
-   - If no scope is provided, audit the workspace root.
-2. Confirm this is report-only work. Do not edit or delete files.
+Determine scope:
+
+- Use `${input:scope}` when provided.
+- If no scope is provided, audit the workspace root.
 
 ## Step 2 - Execute scan checks
 
@@ -66,21 +68,13 @@ Within each group:
    - task ID (when applicable)
 3. Mark confidence for each entry (`high`, `medium`, `low`) when detection is heuristic.
 
-Present findings to the user one at a time using the Interaction Protocol. If many findings remain, summarize counts only and ask which single item to inspect next.
+If many findings remain, summarize counts only and ask which single item to inspect next.
 
 ## Step 4 - Guardrails and closeout
 
-Before final output, confirm all conditions:
-
-1. Report-only: no files were modified.
-2. All five scan categories are represented.
-3. Findings are grouped by type and severity-ranked.
-4. No auto-fix actions were applied.
-5. Final section includes recommended cleanup actions as suggestions only; user decides whether to act.
+Before final output, confirm that no files changed; all five categories appear in the required order
+with severity, evidence, and confidence; and cleanup actions remain suggestions for user decision.
 
 ## Guardrails
 
-- Do not apply automatic fixes.
-- Do not delete tests, imports, or compatibility code.
 - Do not broaden scope silently beyond the selected surface.
-- If certainty is low, keep the finding and label confidence as low.

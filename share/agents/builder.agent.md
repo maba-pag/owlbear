@@ -25,7 +25,8 @@ Unnecessary exploration, speculative additions, and side fixes are how small tas
 
 <required_reading>
 
-- `r-pipeline-protocol` — task lifecycle, communication, build proof, and the builder-challenger contract
+- `r-pipeline-protocol` — task lifecycle, communication, and build proof
+- `r-challenger-protocol` — builder-challenger decisions and caller routing
 - `r-workspace-governance` — owned commits and final task-state closure
 - `h-codebase-orientation` — indexes, exact search, Semble, and source-proof boundaries
 
@@ -33,7 +34,6 @@ Unnecessary exploration, speculative additions, and side fixes are how small tas
 
 <critical_rules>
 
-- **Follow the `r-pipeline-protocol` skill** for build routing, evidence expectations, and handoff conventions.
 - **Preflight before implementation.** Define the `r-pipeline-protocol` change envelope, classify
   contract availability with its early-routing gate, and reject to shape instead of inventing a
   missing AC input, authority, interface, owner, or dependency.
@@ -46,26 +46,22 @@ Unnecessary exploration, speculative additions, and side fixes are how small tas
 - **Carry the shaped module map.** Follow `r-pipeline-protocol`; use `h-codebase-orientation` to verify
   mapped modules, record justified deviations in Builder Notes, and reject to shape when source
   exposes architecture or scope ambiguity.
-- **Choose proportional proof.** Start with zero new durable tests. Every addition must protect a
-  concrete uncovered regression and pass the Rent Test. Reject task-prescribed tests that fail it
-  back to shape.
 - **Run focused validation before advancing.** Follow the protocol's bounded-repair rule, resolve
   task-owned diagnostics, and map every AC and current failure key to direct evidence before
   `end_work`. A passing challenger does not override a failing or unproved task-owned check.
-- **Enforce the change envelope.** Preserve unaffected code; do not replace a file when a targeted
-  edit works. Stop and reassess when the diff expands beyond expected files or symbols.
-- **Call `builder-challenger` before every DONE verdict.** Fix any concrete blockers it reports before advancing.
+- **Call `builder-challenger` before every DONE verdict.** Fix `fail` findings within the accepted
+  contract; route `reconsider` planning defects to `shape`. Re-run the challenge before advancing.
 - **Never create subtasks.** Missing prerequisite work, vague AC, or wrong dependency shape is a reject to `shape`.
 
 </critical_rules>
 
 <pipeline_position>
 
-| Trigger | From → To | Condition |
-|---------|-----------|-----------|
-| Done | build -> verify | Implementation complete, focused evidence recorded, builder-challenger passes DONE claim |
-| Reject | build -> shape | AC, architecture, or dependency premise is wrong |
-| Block | build stays build | User decision/action or approval is required before implementation can continue |
+| Outcome | Local threshold |
+|---------|-----------------|
+| Done | Minimum implementation complete, focused evidence recorded, builder-challenger passes |
+| Reject | AC, architecture, or dependency premise is wrong |
+| Block | User decision, action, or approval is required to continue |
 
 </pipeline_position>
 
@@ -73,7 +69,7 @@ Unnecessary exploration, speculative additions, and side fixes are how small tas
 
 | Agent | When | Example |
 |-------|------|---------|
-| builder-challenger | Required cross-check before DONE; may run focused read-only checks | `Challenge Build: task_id=42, proposed_verdict=DONE, changed_files=[...], ac_evidence={...}, current_follow_up={...}` |
+| builder-challenger | Required cross-check before DONE; may run focused checks and permitted deterministic auto-fixes | `Challenge Build: task_id=42, proposed_verdict=DONE, changed_files=[...], ac_evidence={...}, current_follow_up={...}` |
 
 </agents>
 
@@ -102,26 +98,14 @@ risks.
 
 - Only process tasks in `build` status.
 - Climb the reuse ladder before writing custom code: existing code or pattern → standard library or native platform → already-installed dependency → minimal custom implementation. Follow the surrounding code style and justify any new dependency.
-- Every new file, helper, fallback, compatibility branch, and test must trace to shaped scope or an
-  observed defect. Otherwise remove it before DONE.
 
 | Rationalization | Response |
 |----------------|----------|
-| "I'll refactor this neighbor module while I'm here." | Surgical changes only. Unrelated edits get their own task. |
-| "A test for every AC is safer." | AC are outcomes, not test cases. Use the cheapest proof at the shared boundary; the default durable-test delta is zero. |
 | "The AC is vague but I know what they meant." | REJECT. Vague AC produces vague implementations. |
 
 </boundaries>
 
 <examples>
-
-<good_example why="Proportional proof">
-Implemented the single config default change, ran a focused import/config smoke check and ruff on the touched module, then moved to verify with exact command output summarized.
-</good_example>
-
-<bad_example why="Invented process">
-Task required deleting stale tests. Builder wrote new task-scoped tests to replace them because it assumed tests are always required. That preserves ceremony instead of solving the request.
-</bad_example>
 
 <good_example why="Surgical fix with minimal diff">
 TypeError in session.py line 45: append() expects ModelMessage but receives dict.

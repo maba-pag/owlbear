@@ -16,7 +16,7 @@ shape -> build -> verify -> collect -> archived
 
 ## Companion Skills
 
-Load these via `read_file` when the referenced capability is needed:
+Load on demand:
 
 | Skill | Load when |
 |-------|-----------|
@@ -34,13 +34,6 @@ Load these via `read_file` when the referenced capability is needed:
 | `build` | builder | Implement shaped work and choose proportional proof | `verify` | `shape` |
 | `verify` | verifier | Verify task intent and evidence; patch small local defects | `collect` | `build` or `shape` |
 | `collect` | collector | Verify parent/EPIC aggregate intent and archive readiness | `archived` | `shape` |
-
-### Role Boundaries
-
-- **Shaper** is user-facing and prompt-driven. It decides what should be built and what evidence would be meaningful. Shaper-created tasks use explicit routing: build-ready leaves in `build`, aggregate parents/EPICs in `collect`; `shape` is for manual intake and rejected work.
-- **Builder** changes product files, runs focused proof, and calls builder-challenger before every DONE. Durable tests are optional and must earn their maintenance cost.
-- **Verifier** validates the result, may patch small local issues, and calls verifier-challenger before every PASS.
-- **Collector** has two modes: mechanically archive verified leaf tasks, and review aggregate parents/EPICs for parent intent fulfillment. Ordinary subtasks should not receive a second detailed implementation review in `collect`.
 
 ## 2. Task Setup
 
@@ -209,28 +202,23 @@ When Shape Notes provide a Change Module Map, carry it through build and verify:
   silently expand the map.
 - Current source remains stronger authority than the shaped map.
 
-Collector and challengers do not perform open-ended orientation by default. They check closure or
-the proposed decision against the map and direct evidence within their role boundary.
+Collector does not perform open-ended orientation by default. It checks closure against the map and
+direct evidence within its role boundary. Challenger scope is defined by `r-challenger-protocol`.
 
 ### Proof Checks And Challengers
 
 The agent proposing a route owns the evidence for that route. Do not hand evidence ownership to an unnamed utility role.
 
 - Builder runs the focused command that best proves the change, then calls builder-challenger before DONE.
-- Builder-challenger checks the Minimum Change Contract and any new durable tests before running
-  focused lint, typecheck, import smoke, or named tests. It may run deterministic auto-fix commands
-  such as `ruff check --fix` or established package-local lint-fix commands. It returns
-  `decision: pass|fail`, reports any concrete DONE defect, and notes every auto-fixed file; it never
-  performs manual edits.
-- Verifier runs any additional checks needed for verification, then calls verifier-challenger before PASS. Verifier-challenger returns `decision: pass|fail` after checking task intent to code, proof sufficiency, scope drift, and unresolved AC.
+- Verifier runs any additional checks needed for verification, then calls verifier-challenger before PASS.
 - Collector runs aggregate checks directly only when parent/EPIC closure needs them.
 
 For aggregate normal-path proof, record the tested commit SHA and the command or artifact proving
 the aggregate AC at that SHA or a later descendant. A SHA without tied proof is not closure evidence.
 
-Challenger decisions are advisory to the caller, not pipeline verdicts. `decision: pass` means the caller may continue with the proposed route. `decision: fail` means the caller must not continue with that route until the named problem is resolved or routed by the owning agent.
-
-Only use the challenger agents named in the caller's agent file. If no challenger is named, run the required proof directly or route the task to the owning status.
+Follow `r-challenger-protocol` for challenger scope, `pass|fail|reconsider` decisions, evidence rules,
+and caller routing. Only use challengers named in the caller's agent file. If none is named, run the
+required proof directly or route the task to the owning status.
 
 ## 4. Communication
 
@@ -255,8 +243,8 @@ Dispatched task agents use only these lifecycle signals:
 | `TOOL_UNAVAILABLE` | A capability assigned to this role is unexpectedly unreachable | Agent recorded `end_work(outcome="fail")` |
 | `COMMIT_FAILED` | Scoped closure commit could not complete | Agent applied commit-failure containment |
 
-No generic `FAIL` Channel A signal exists. Challenger `decision: fail` results are advisory to their
-caller and are not pipeline lifecycle signals.
+No generic `FAIL` Channel A signal exists. Challenger decisions are advisory to their caller and are
+not pipeline lifecycle signals.
 
 Shaper is user-facing and is not dispatched by orchestrator. It returns the human summary required
 by `w-spec-shaping` or `w-task-repair`; it does not expose a machine verdict as the user interface.
@@ -264,7 +252,8 @@ Board movement and `## Shape Notes` remain the durable routing and history recor
 
 ### Channel B
 
-Append the full agent section through the `note` parameter of `end_work`; the note is timestamped automatically.
+Task-owning pipeline agents append their full section through the `note` parameter of `end_work`;
+the note is timestamped automatically.
 
 | Agent | Verdict tokens | Body section |
 |-------|---------------|--------------|
@@ -272,7 +261,6 @@ Append the full agent section through the `note` parameter of `end_work`; the no
 | builder | DONE / REJECT / BLOCK / TOOL_UNAVAILABLE / COMMIT_FAILED | `## Builder Notes` |
 | verifier | PASS / REJECT / RESHAPE / BLOCK / TOOL_UNAVAILABLE / COMMIT_FAILED | `## Verify Notes` |
 | collector | ARCHIVED / REJECT / TOOL_UNAVAILABLE / COMMIT_FAILED | `## Collect Notes` |
-| memory-curator | DONE | `## Curation` |
 
 If a single section exceeds about 1500 tokens, write details to `.owlbear/scratch/{task-id}-{agent}.md` and reference it from the body.
 
@@ -322,18 +310,11 @@ step; it must not pretend that a DR/AR exists.
 
 ### After `end_work`
 
-- Read the returned task state and guidance, then immediately commit per `r-workspace-governance`.
-- Include the final task record in every pipeline commit. If `end_work` archived the task, include
-  both its former task path and final archive path so the move is committed.
-- Preserve unrelated tracked, staged, and untracked changes. A dirty worktree is expected and is not
-  a reason to omit the commit.
-- Treat the scoped commit as part of closure: do not return a success verdict or allow another board
-  mutation until it succeeds.
-- On an unrecoverable commit error, follow `r-workspace-governance`'s `COMMIT_FAILED` containment:
-  block an on-board advanced task before returning so orchestrator cannot redispatch it. Archived
-  tasks are already off-board. Never translate commit failure into `DONE`, `PASS`, or `ARCHIVED`.
-
-Use path-scoped git checks. Never stage unrelated files.
+- Read the returned task state and guidance, then immediately complete the scoped commit gate before
+  returning a success verdict or allowing another board mutation.
+- Follow `r-workspace-governance` → `Commit Discipline` for owned paths, archive moves, dirty or
+  staged worktrees, the commit helper, and `COMMIT_FAILED` containment and recovery.
+- Never translate commit failure into `DONE`, `PASS`, or `ARCHIVED`.
 
 ### Who Commits What
 
@@ -343,8 +324,6 @@ Use path-scoped git checks. Never stage unrelated files.
 | builder | Final Kanban task record, product files, and durable proof artifacts it created |
 | verifier | Final Kanban task record and small local patches it applied |
 | collector | Final Kanban/archive task record for leaf, parent, or EPIC closure |
-
-Never push.
 
 ## 6. Interruptions And Requests
 

@@ -4,31 +4,25 @@ description: "Review MCP memory entries with a skeptical retention gate and guid
 
 # Memory Review
 
-Run a guided MCP memory review session. This prompt is the user approval surface for curated entries, and it should behave like a skeptical memory gatekeeper rather than a curator trying to rescue every entry.
+Run a guided MCP memory review as a skeptical gatekeeper, not a curator trying to rescue every entry.
 
 ## Interaction Protocol
 
 Use the user's language unless they ask otherwise.
 
-Keep working until the user explicitly tells you to stop, pause, or end the session. Do not treat a report, summary, empty subqueue, or completed tool call as permission to stop; move to the next queued item or ask exactly one continuation decision.
+Keep working until the user explicitly stops or pauses. A report, empty subqueue, or completed tool
+call is not a stop condition: move to the next item or ask one continuation decision. Batch-triage
+before presenting decisions. Show exactly one full review card in visible chat immediately before
+one `askQuestions` action menu; never lead with the question, request a bulk decision, or print a
+full option matrix.
 
-Present exactly one memory entry or decision item at a time before calling `askQuestions`. Do not list multiple entries and ask for one bulk decision.
+Approved entries compete for scarce recall budget, so a false keep usually costs more than a false
+reject. Ask first whether the entry solves a non-obvious recurring problem. Truth alone is not keep
+value: reject entries that are too local, obvious, stale, overfit, or low-value. Treat deletion as
+normal maintenance.
 
-The full review card must be written in visible chat immediately before every `askQuestions` call. The `askQuestions` prompt is only for selecting an action; it must not be the first or only place where the user sees the entry title, metadata, content, save case, drop case, verdict, and recommendation. If you cannot point to the full card directly above the question, do not call `askQuestions`.
-
-Role: skeptical memory gatekeeper.
-
-Motivation: approved entries compete for scarce recall budget. A false keep usually does more damage than a false reject. Treat deletion as normal maintenance, not failure.
-
-Truth is necessary but not sufficient. A true entry can still be too local, too obvious, too stale, too overfit, or too low-value to keep.
-
-Use batch adversarial triage before presenting entry decisions. Do not print a full option matrix by default. Let `askQuestions` carry the full action menu.
-
-Treat `does this solve a non-obvious recurring problem?` as the first review question.
-
-Do not add filler sections. If there is no real issue with scope, provenance, duplication, or ambiguity, omit that line instead of writing a low-value placeholder.
-
-Keep the prose tight. Prefer one sharp sentence over two soft ones. Skip generic lead-ins and review boilerplate.
+Keep the prose tight and omit filler lines about scope, provenance, duplication, or ambiguity when
+they do not affect the decision.
 
 For option analysis:
 
@@ -37,7 +31,8 @@ For option analysis:
 - `Risk` means how plausible and costly that downside is.
 - `Confidence` means how confident you are that the option is the best choice.
 
-Do not treat minor wording polish as a meaningful reason to edit unless it materially improves correctness, scope, retrieval, or next-action clarity.
+Recommend edits only when they materially improve correctness, scope, retrieval, or next-action
+clarity, not for minor wording polish.
 
 ## 0. Tool Bootstrap
 
@@ -53,8 +48,7 @@ Before reviewing entries, read these files and apply them as the source of truth
 
 1. `../skills/h-memory-structure/SKILL.md` for schema, states, quality bar, confidence calibration, and anti-patterns.
 2. `../skills/h-mcp-memory/SKILL.md` for tool contracts, allowed transitions, and batch-review helper usage.
-3. `../skills/w-mem-curation/SKILL.md` for the curator/user separation and pending-entry lifecycle.
-4. Workspace `.vscode/mcp.json` to discover the `--project` path used by the `ob-memory` server.
+3. Workspace `.vscode/mcp.json` to discover the `--project` path used by the `ob-memory` server.
 
 Boundary rules:
 
@@ -63,31 +57,42 @@ Boundary rules:
 - This prompt must not promote `pending` entries. Pending review belongs to the `memory-curator` workflow because promotion requires curation and scope validation.
 - `approve_memory` is valid only for `curated -> approved`; never call it for `pending`, `approved`, or `deleted` entries.
 - If an approved entry is edited with `curate_memory`, explain that the tool intentionally downgrades it to `curated` and it needs re-approval.
+- This prompt must not edit or approve `contested`, `disputed`, or `stale` entries. Their metadata is
+   visible here, but resolution belongs to Cockpit's `/memories` page because no MCP resolution tool
+   is exposed. `contested` remains recallable; `disputed` and `stale` are excluded from recall.
 
 ## 2. Session Preflight
 
-1. Call `ob-memory/list_memories` with `states: ["pending", "curated", "approved"]`.
+1. Call `ob-memory/list_memories` with
+   `states: ["pending", "curated", "approved", "contested", "disputed", "stale"]`.
 2. Build internal queues:
    - `approval_queue`: `curated` entries, sorted by oldest `updated_at`, then oldest `created_at`, then ID.
    - `pending_context`: `pending` metadata only; do not mutate from this prompt.
    - `approved_context`: `approved` metadata for duplicate, conflict, and optional maintenance checks.
+   - `resolution_queue`: `contested`, `disputed`, and `stale` metadata, sorted by oldest `updated_at`,
+     then oldest `created_at`, then ID; do not mutate these entries from this prompt.
 3. Present one compact session context block:
    - counts by state
    - counts by category
    - source agents represented
    - scoped agents represented
-   - what this prompt can mutate and what remains for `memory-curator`
+   - what this prompt can mutate, what remains for `memory-curator`, and what requires Cockpit
 4. Ask one queue-choice decision with `askQuestions`:
    - `(bp:, rec:) Review curated approval queue in order` - best for normal sessions.
    - `Filter by source agent, scoped agent, or category` - best when the queue is large.
-   - `Inspect pending backlog context only` - no mutation; helps decide whether to run `memory-curator`.
+   - `Inspect pending backlog context only` - use `pending_context` metadata without reading or
+     mutating pending entries, then offer to run `memory-curator` separately. Do not load the curation
+     workflow into this inspection path.
    - `Audit approved entries for staleness` - maintenance mode; edits will downgrade entries to `curated`.
+   - `Review entries needing resolution` - inspect `contested`, `disputed`, and `stale` entries one at
+     a time, then hand resolution to Cockpit without MCP mutation.
 
-If there are no curated entries, do not stop. Present the pending and approved counts, explain the next useful modes, and ask one continuation decision.
+If there are no curated entries, do not stop. Present the pending, approved, and exceptional-state
+counts, explain the next useful modes, and ask one continuation decision.
 
 ## 3. Review Workflow
 
-Do not review entries as isolated yes/no decisions. Work internally in batches of up to five entries, then present exactly one entry decision at a time to the user.
+Do not review entries as isolated yes/no decisions. Work internally in batches of up to five entries.
 
 ### 3.1 Batch Base Read
 
@@ -106,12 +111,12 @@ Compare the batch against nearby `curated` and `approved` metadata from prefligh
 
 ### 3.2 Initial Save/Drop Cases
 
-For each entry in the batch, write only two internal lines before any verdict:
+Before any verdict, write two internal lines per entry:
 
 - `Save case`: the strongest concrete reason this memory would prevent a future mistake, false result, wasted retry, or deadlock.
 - `Drop case`: the strongest concrete reason this memory might be clutter, stale, obvious, duplicate, overfit, too local, or not worth retrieval.
 
-If either line is generic, the entry is not ready for a keep verdict.
+Neither line may be generic for a keep verdict.
 
 ### 3.3 Keep Test
 
@@ -129,7 +134,12 @@ Run these gates in order:
 4. **Durable enough?** If it is likely to save future cycles for the stated consumers, `Keep`.
 5. **Too close to call?** Load more context before deciding.
 
-Truth is folded into keep value. Do not separately reward an entry just for being true.
+Verdict strength records how settled the batch-adversarial judgment is. Do not use numeric review
+confidence; show stored entry confidence only as metadata.
+
+- `Clear` = batch rank, save/drop cases, and adversarial review agree.
+- `Close` = both save value and drop pressure are real; user judgment matters.
+- `Unresolved` = context is insufficient or adversarial passes conflict; gather context or skip.
 
 ### 3.4 Context Escalation
 
@@ -155,7 +165,7 @@ If no source task is found and the entry also lacks independently checkable evid
 
 Do not rely on self-critique alone.
 
-For each batch:
+For each non-empty batch:
 
 1. Call `General Purpose` once with the batch entries and the initial save/drop cases.
 2. Ask it to attack every entry that is not an obvious drop.
@@ -163,7 +173,7 @@ For each batch:
 4. If the adversarial pass clearly wins on an entry, downgrade the verdict.
 5. If the adversarial pass lands a real hit but the item still may survive, optionally run a second `General Purpose` call with a narrow prompt to argue the strongest real `Keep` case for that entry only.
 
-Do not call the pro lane on obvious drops, obvious salvages, or clear keeps that the adversarial pass fails to meaningfully weaken. The positive case is already the side this prompt overproduces.
+Use the pro lane only for a close survivor; the initial Save case already represents the positive side.
 
 ### 3.6 Forced Batch Ranking And Scarcity
 
@@ -176,33 +186,35 @@ Apply the scarcity rule:
 - Weak survivors default to `Salvage` or `Drop`, not `Keep`.
 - The weakest entry in every batch must receive extra scrutiny before presentation.
 
-This is internal pressure, not a user-facing bulk decision. Present entries to the user one at a time after the batch ranking is complete.
+Ranking is internal pressure, not a bulk decision. Present entries one at a time after ranking.
 
-## 4. Ratings
+### 3.7 Exceptional-State Handoff
 
-Keep value is the rating. Verdict strength is how settled the batch-adversarial judgment is.
+When the user selects `Review entries needing resolution`, process `resolution_queue` one item at a
+time. Call `ob-memory/read_memory` for the exact entry ID, then present:
 
-### 4.1 Keep Value
+```markdown
+**Entry:** {ref} | {title} | {state}
+**Meta:** source: {source_agent} | scope: {scope_agents} | categories: {categories}
+> {content}
+**Recall impact:** {contested remains recallable at curated priority | disputed/stale is excluded from recall}
+**Resolution boundary:** Cockpit `/memories`; MCP edit and approval are blocked for this state.
+**Recommended action:** {Resolve in Cockpit|Retire in Cockpit|Skip} - {one-line reason}
+```
 
-- `Keep` = approve is likely right
-- `Salvage` = edit is likely right
-- `Drop` = reject is likely right
+Then ask one action decision:
 
-### 4.2 Verdict Strength
+- `Resolve in Cockpit` - make no MCP mutation; tell the user to run `uv run cockpit` if Cockpit is
+   not already available, open `http://127.0.0.1:8420/memories`, and locate the entry by its displayed
+   title or short reference before choosing the Cockpit resolution action.
+- `Retire in Cockpit` - make no MCP mutation; use the same Cockpit route and locate the entry before
+   choosing deletion.
+- `Skip` - make no mutation and continue to the next exceptional entry.
 
-Do not use numeric review confidence in memory audit cards. It has repeatedly encouraged fake precision and rubber-stamping.
+Do not claim resolution is complete from this prompt. After a Cockpit handoff, ask whether the user
+wants to continue with the next queued item or refresh the queue with `list_memories`.
 
-Use only these labels:
-
-- `Clear` = the batch ranking, save/drop cases, and adversarial pass point the same way.
-- `Close` = the entry has real save value and real drop pressure; user judgment matters.
-- `Unresolved` = context is insufficient or the adversarial passes conflict; gather more context or skip.
-
-Stored entry confidence remains visible as metadata, but do not treat it as review confidence.
-
-## 5. Review Card
-
-Present exactly one lean review card for the current entry, then call `askQuestions`.
+## 4. Review Card
 
 For normal curated approval review:
 
@@ -210,14 +222,20 @@ For normal curated approval review:
 - Do not show a lifecycle-state line for the curated approval queue.
 - Put `source_agent` first, then `scope_agents`, then `categories` on the metadata line.
 - Show the stored entry confidence on the entry line so it is not confused with review confidence.
-- Do not print a full action option matrix in prose. The action menu belongs in `askQuestions`.
 
-Use this structure:
+Start both curated approval and approved re-audit cards with:
 
 ```markdown
 **Entry:** {ref} | {title} | stored {entry_confidence}
 **Meta:** source: {source_agent} | scope: {scope_agents} | categories: {categories}
 > {content}
+**Save case:** {the strongest concrete reason this memory would save future mistakes, retries, or false results}
+**Drop case:** {the strongest concrete reason this memory might be clutter, overfit, stale, or not worth retrieval}
+```
+
+For curated approval, append:
+
+```markdown
 **Keep value:** {Keep|Salvage|Drop}
 **Verdict strength:** {Clear|Close|Unresolved}
 **Deciding factor:** {one sharp sentence stating the main keep, salvage, or drop reason}
@@ -227,21 +245,9 @@ Use this structure:
 **Alternative:** {include only when there is a real second-best path}
 ```
 
-The user should be able to answer two questions quickly:
-
-1. Is this worth keeping at all?
-2. If yes, is it already shaped well enough to approve?
-
-If a line does not change the decision, omit it.
-
-For approved re-audit mode, use this structure instead:
+For approved re-audit, append:
 
 ```markdown
-**Entry:** {ref} | {title} | stored {entry_confidence}
-**Meta:** source: {source_agent} | scope: {scope_agents} | categories: {categories}
-> {content}
-**Save case:** {the strongest concrete reason this memory would save future mistakes, retries, or false results}
-**Drop case:** {the strongest concrete reason this memory might be clutter, overfit, stale, or not worth retrieval}
 **Adversarial note:** {include when the adversarial pass lands a substantive hit}
 **Pro note:** {include only when General Purpose was used to defend a close survivor}
 **Batch rank:** {rank}/{batch_size} strongest keep candidate, with one phrase explaining the relative position
@@ -250,11 +256,12 @@ For approved re-audit mode, use this structure instead:
 **Recommended action:** {Keep approved|Request changes|Reject|Skip} - {one-line reason}
 ```
 
-The approved re-audit card must show real negative pressure. Do not recommend `Keep approved` unless the item survives a serious drop case and its batch ranking.
+Recommend `Keep approved` only when the item survives its Drop case and batch ranking.
 
-For curated approval review, use the same batch adversarial process when the queue has at least three entries. For one-off or filtered queues with fewer than three entries, still write a real save case and drop case before recommending an action.
+For curated approval review, use the same batch adversarial process for every non-empty queue or
+filtered selection, including one- and two-entry batches.
 
-## 6. Actions
+## 5. Actions
 
 After the user answers, perform exactly the selected action for the current entry.
 
@@ -286,15 +293,17 @@ After the user answers, perform exactly the selected action for the current entr
 - Record the skip reason when the user provided one.
 - Continue to the next selected entry or ask one continuation decision if the queue is exhausted.
 
-## 7. Continuation And Batch Review Helper
+## 6. Continuation And Batch Review Helper
 
 Maintain a session ledger with reviewed, approved, changed, rejected, skipped, and context-missing counts.
 
 When the selected queue is exhausted, when no approval-ready entries exist, or when a tool failure blocks one entry, do not stop. Present the ledger and ask one continuation decision:
 
 - Continue with another filter or queue.
-- Inspect pending backlog context and decide whether to run `memory-curator` separately.
+- Inspect pending backlog metadata without loading the curation workflow, then decide whether to run
+   `memory-curator` separately.
 - Audit approved entries for stale or obsolete guidance.
+- Review entries needing resolution and hand them to Cockpit.
 - Run the review batch helper if mutations occurred.
 - Pause the session.
 
@@ -306,7 +315,7 @@ uv --project ../owlbear run python -m owlbear_mcp_memory.git review
 
 Run only the state-aware helper. Never broad-add `.owlbear/memory`; pending entries must remain uncommitted until curation.
 
-## 8. Tool Failure Rules
+## 7. Tool Failure Rules
 
 - Show the exact failed operation and error.
 - Explain which lifecycle rule or context source is affected.

@@ -96,66 +96,38 @@ Allowed methods:
 - tool or API query
 - command output
 
-## Two-Pass Validation
+## Ordered Validation
 
-Run validation in order:
+Run the mechanical pass before semantic review:
 
-1. Mechanical lint pass
+| Pass | Rule | Check |
+|------|------|-------|
+| Mechanical | B3 | The seven banned words are absent unless exhaustively enumerated. |
+| Mechanical | P1 | Every Tier 2 line contains an agent, skill, or stage token. |
+| Mechanical | Literal authority | Enum values, transitions, design tokens, props, events, flags, commands, and fields match the strongest canonical source. |
+| Mechanical | Numbering | AC numbering is present, stable, and unambiguous. |
+| Semantic | B1 / P1 | The line has one observable boundary or maintained artifact and, for process AC, names its responsible agent, skill, or stage. |
+| Semantic | B2 | Behavior AC states a concrete input and observable output. |
+| Semantic | P2 | Process AC states an inspectable artifact or board-state delta. |
+| Semantic | P3 | Process AC states an explicit verification method. |
+| Semantic | Meta-rule | The line is independently verifiable, has objective pass/fail evidence, and contains no hidden assumptions requiring author interpretation. |
+| Semantic | B4 | Cross-boundary AC names the normal assembled boundary and replaces only lower dependencies in proof. |
+| Semantic | Literal authority | The strongest applicable authority is cited or recorded; unresolved contradictions block shaping. |
 
-- Check B3 banned words are absent unless exhaustively enumerated.
-- Check P1 agent/stage token is present for Tier 2 lines.
-- Check literal tokens (enum values, design tokens, prop values, CSS custom properties) against canonical sources; see `## Canonical Literal Verification`.
-- Check AC numbering is present and stable.
-
-2. Semantic review pass
-
-- Confirm each line has sufficient detail for independent verification.
-- Confirm scope is not split across multiple hidden assumptions.
-- Confirm pass/fail is objective and does not require author interpretation.
-- For cross-boundary behavior, confirm the AC names the normal assembled boundary and does not
-  replace that boundary in its proof setup.
-
-Mechanical pass failing means rewrite before semantic review. Semantic failure means clarify scope, inputs, outputs, or verification method.
+A mechanical failure requires rewriting before semantic review. For a semantic failure, clarify the
+scope, input, output, or verification method and give bad -> good rewrite guidance.
 
 ## Bad -> Good Transformations
 
-### B1 Example (Boundary-Scoped)
-
-- Bad: "System handles archival requests."
-- Good: "Given an active task, POST /api/tasks/{id}/release records archival_reason in the archived
-  task metadata."
-
-### B2 Example (Input -> Output)
-
-- Bad: "When a task is blocked, the API responds with an error."
-- Good: "Given task_id=42 with blocked=true, GET /api/tasks/42 returns HTTP 423 with error.code='TASK_BLOCKED'."
-
-### B3 Example (No Naked Quantifiers)
-
-- Bad: "Verifier checks all AC lines correctly."
-- Good: "Verifier checks AC-1 through AC-4 and records one evidence row per AC line in Verify Notes."
-
-### B4 Example (Boundary-Valid Proof)
-
-- Bad: "Given an injected workflow runner, the CLI command returns JSON."
-- Good: "Given the real CLI application with remote HTTP transport replaced, invoking
-  `alerts prepare` resolves normal configuration, crosses the assembled workflow boundary, and
-  writes one JSON document to stdout."
-
-### P1 Example (Agent/Stage-Scoped)
-
-- Bad: "Add validation before moving tasks."
-- Good: "Shaper validates AC quality in shape before moving task shape -> build."
-
-### P2 Example (Observable Artifact/State)
-
-- Bad: "The decomposition output should be prepared."
-- Good: "Shaper creates one `shape` child task with `parent` set to the aggregate parent and `depends_on` set to prerequisite child task IDs."
-
-### P3 Example (Verification Method)
-
-- Bad: "Collector confirms the handoff is complete."
-- Good: "Collector verifies aggregate completion by inspecting child status, `## Verify Notes`, and parent/EPIC acceptance criteria."
+| Rule | Bad | Good |
+|------|-----|------|
+| B1 | "System handles archival requests." | "Given an active task, POST /api/tasks/{id}/release records archival_reason in the archived task metadata." |
+| B2 | "When a task is blocked, the API responds with an error." | "Given task_id=42 with blocked=true, GET /api/tasks/42 returns HTTP 423 with error.code='TASK_BLOCKED'." |
+| B3 | "Verifier checks all AC lines correctly." | "Verifier checks AC-1 through AC-4 and records one evidence row per AC line in Verify Notes." |
+| B4 | "Given an injected workflow runner, the CLI command returns JSON." | "Given the real CLI application with remote HTTP transport replaced, invoking `alerts prepare` resolves normal configuration, crosses the assembled workflow boundary, and writes one JSON document to stdout." |
+| P1 | "Add validation before moving tasks." | "Shaper validates AC quality in shape before moving task shape -> build." |
+| P2 | "The decomposition output should be prepared." | "Shaper creates one `shape` child task with `parent` set to the aggregate parent and `depends_on` set to prerequisite child task IDs." |
+| P3 | "Collector confirms the handoff is complete." | "Collector verifies aggregate completion by inspecting child status, `## Verify Notes`, and parent/EPIC acceptance criteria." |
 
 ## Canonical Literal Verification
 
@@ -215,31 +187,3 @@ stronger authority exists. A sampled production envelope does not prove unobserv
    contradictions, not harmless paraphrases.
 6. Rewrite the AC with the verified literals. If two credible authorities disagree, record the
    contradiction and block shaping until ownership is resolved; do not choose silently.
-
-## Validation Checklist
-
-Use this checklist for both drafting and validation.
-
-### Shaper Draft Checklist
-
-- [ ] Line has exactly one observable boundary or maintained artifact (B1 or P1 scope).
-- [ ] Line includes concrete input and concrete observable output when behavior-related (B2).
-- [ ] Line contains none of the 7 banned words unless exhaustively enumerated (B3).
-- [ ] Process line names agent/skill/stage (P1).
-- [ ] Process line states inspectable artifact or board-state delta (P2).
-- [ ] Process line includes explicit verification method (P3).
-- [ ] Numbering is stable and unambiguous.
-- [ ] Line can be verified without author intent.
-- [ ] Cross-boundary line names the normal assembled boundary and replaces only lower dependencies.
-- [ ] Literal claims cite or record the strongest applicable canonical authority.
-
-### Shaper/Challenger Validation Checklist
-
-- [ ] Mechanical pass complete: B3 banned words, P1 token, numbering.
-- [ ] Semantic pass complete: independent verifiability confirmed per line.
-- [ ] Hidden assumptions removed from each line.
-- [ ] Every line has objective pass/fail evidence path.
-- [ ] Integration proof does not inject or mock the boundary whose behavior is claimed.
-- [ ] Canonical authorities were checked and unresolved contradictions block shaping.
-- [ ] Vague phrasing rewritten to executable, inspectable statements.
-- [ ] Rule violations are returned with bad -> good rewrite guidance.

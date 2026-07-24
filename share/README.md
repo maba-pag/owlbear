@@ -1,139 +1,204 @@
-# share/ — Agent Ecosystem
+# share/ - Agent Ecosystem
 
-OwlBear's agent ecosystem definitions and supporting documents. This directory is their single source of truth.
+`share/` is the portable GitHub Copilot customization layer shipped by OwlBear. It contains the
+roles, procedures, rules, domain handbooks, contextual instructions, prompts, and visual assets that
+OwlBear-enabled workspaces consume. Its primary audience is agents and contributors changing that
+ecosystem.
+
+This guide explains how the parts compose and how to change them safely. It intentionally avoids a
+file-by-file catalog. [WIRING.md](WIRING.md) is the derived snapshot of current roles and loading
+relationships; executable frontmatter and file bodies remain authoritative.
 
 ## Directory Layout
 
-| Directory | Contents |
-|-----------|----------|
-| `agents/` | Agent definitions (`.agent.md`) |
-| `skills/` | Reusable domain knowledge (`SKILL.md`) |
-| `instructions/` | Auto-loaded instruction files (`.instructions.md`) |
-| `prompts/` | User-invocable one-shot commands (`.prompt.md`) |
-| `diagrams/` | Shared visual assets (Excalidraw, SVG) |
+| Directory | Contents | Naming convention |
+|-----------|----------|-------------------|
+| `agents/` | Persistent roles with identity, model, tools, hooks, dependencies, and output contracts | `{role}.agent.md` |
+| `skills/` | Reusable workflows, shared rules, and domain handbooks | `{prefix}-{domain}/SKILL.md` |
+| `instructions/` | Auto-applied universal authorities and narrow safety-net stubs | `{domain}.instructions.md` |
+| `prompts/` | User-invoked one-shot entry points | `{verb}.prompt.md` or `{scope}-{verb}.prompt.md` |
+| `diagrams/` | Shared explanatory visual assets | Descriptive filenames |
 
-## Loading Model
+Project-specific customizations use the corresponding `.owlbear/{agents,skills,instructions,prompts}/`
+directories. Workspace configuration selects the active roots. Do not assume the source tree being
+edited is the tree VS Code currently loads: inspect `.vscode/settings.json` before diagnosing a
+loading problem.
 
-Content reaches agents through four mechanisms, ordered by cost:
+## Product Boundary
 
-| Mechanism | When it loads | Cost | Use for |
-|-----------|--------------|------|---------|
-| `copilot-instructions.md` | Every turn, every agent | Project-dependent | Current-project identity, topology, stack, commands, and resources |
-| Instructions (`.instructions.md`) | Every turn when `applyTo` glob matches a touched file | ~20–70 tokens/turn | Safety-net stubs and universal rules |
-| Skill frontmatter | Every turn, every agent (YAML header only) | ~20 tokens/skill/turn | Discovery — VS Code uses this to decide when to suggest the skill |
-| Skill body (`read_file`) | Once per session, on demand | One-time read (~300–500 tokens) | Procedures, protocol, domain knowledge |
+The ecosystem targets **GitHub Copilot custom agents in VS Code**. Its frontmatter fields, tool
+names, hooks, instruction loading, prompt routing, and subagent behavior are product contracts, not
+portable conventions for Claude.ai, Claude Code, ChatGPT, Codex, or a generic model API.
 
-**Key insight:** Instructions are per-turn system prompt cost. Skills are one-time read cost. Large content belongs in skills, not instructions.
+Agent `model:` fields declare the intended Copilot model for each role. They do not prove which
+model ran, expose its reasoning setting, or create a cross-product fallback. When model availability
+or runtime attribution matters, verify it in the active VS Code product rather than inferring it
+from this repository.
 
-### Two-Tier Skill Loading
+## Effective Instruction Stack
 
-1. **Mandatory** — listed in the agent's `<required_reading>` section. Read via `read_file` at session start. These are skills the agent needs in 90%+ of sessions.
-2. **On-demand** — loaded during the workflow when a specific scenario arises. Referenced by other skills' companion tables or Step 0 directives.
+The model does not read every control in the same way. The effective behavior for one invocation is
+the ordered composition of the active layers below.
 
-### Belts and Suspenders
+| Layer | When it appears | Appropriate content | Authority |
+|-------|-----------------|---------------------|-----------|
+| Platform and policy | Every session | Product-level safety, tool semantics, and system behavior | VS Code and GitHub Copilot |
+| `.github/copilot-instructions.md` | Every turn in the workspace | Current-project identity, topology, stack, commands, and resources | Project workspace |
+| Matching `.instructions.md` files | When `applyTo` matches the working file | Universal behavior, project-local domain rules, or a pointer to a specialist skill | Most specific matching instruction |
+| Skill discovery metadata | Available for relevance and invocation routing | Name, category, and concise trigger description | Skill frontmatter |
+| Prompt body | When the user invokes the prompt | One-shot input handling, selected agent, and workflow entry | Prompt file |
+| Agent body | When the role is selected or dispatched | Identity, boundaries, guaranteed dependencies, communication contract | Agent file |
+| Required skill bodies | At agent session start | Knowledge needed in at least 90% of that role's sessions | Agent `<required_reading>` |
+| On-demand skill bodies | When a named condition occurs | Specialist procedure, rules, or domain knowledge | Calling workflow or companion table |
+| Runtime state and tools | When queried or invoked | Current tasks, memory, knowledge, schemas, and mutation semantics | Owning runtime service |
 
-For important skills, use both tiers:
+More specific rules do not automatically erase broader rules. Resolve a conflict by identifying the
+job and its fit authority; do not preserve both versions as competing truths.
 
-- **Belt:** List the skill in the agent's `<required_reading>` (guarantees it's loaded)
-- **Suspenders:** Provide an `applyTo` instruction stub that fires when the agent touches relevant files (catches agents that skip required_reading)
+### Skill Loading Tiers
 
-### Transitive Dependencies
+1. **Required reading** is listed directly in an agent's `<required_reading>` section and loaded at
+ session start. Use it only when the role needs the full skill in roughly 90% or more of sessions.
+2. **On-demand reading** is named by a workflow step, companion table, prompt, or instruction stub
+ and loaded immediately before the relevant decision or operation.
+3. **Discovery metadata** is not the skill body. A visible skill description helps routing but does
+ not mean the procedure has been read.
 
-Skills can declare companion skills that consumers should load when needed:
+Only direct, regular dependencies belong in `<required_reading>`. A required skill owns the timing
+of its situational companions. This keeps specialist material out of early context while preserving
+a reachable loading path.
 
-- **Level 0 (direct):** Agent → skill, listed in `<required_reading>`
-- **Level 1 (transitive):** Skill A → skill B, declared in A's companion table or Step 0
-- Only Level 0 goes in `<required_reading>`. Level 1 is the skill's responsibility.
+An `applyTo` stub can reinforce an important skill boundary for agents that reach the file without
+the expected workflow. The stub should point to the authority, not reproduce it.
 
-## Always-Loaded Context
+## Soft Guidance And Hard Controls
 
-These load into every agent's context on every turn:
+Text and enforcement serve different jobs even when both use imperative language.
 
-| File | Mechanism | Authority |
-|------|-----------|-----------|
-| `.github/copilot-instructions.md` | Workspace instructions (always present) | Current-project facts only; never shared OwlBear behavior |
-| `owlbear-system.instructions.md` | `applyTo: "**"` (fires on any file touch) | Universal OwlBear behavior |
+| Control | Kind | What it can do |
+|---------|------|----------------|
+| Personas, critical rules, workflows, handbooks, examples, and prompt instructions | Soft | Steer model decisions; they cannot mechanically prevent a violation |
+| Agent `tools:` and `agents:` frontmatter | Hard runtime boundary | Limit exposed capabilities and dispatch targets |
+| `PreToolUse`, `PostToolUse`, and `SessionStart` hooks | Hard runtime boundary | Reject operations, add context, or run checks at defined lifecycle points |
+| MCP and application schemas | Hard runtime boundary | Reject invalid operations or state |
+| Repository validators and regression tests | Hard repository boundary | Detect invalid customization structure and authority drift before delivery |
 
-## Agents
+Do not describe a prose requirement as enforced. If a yes/no rule is safety-critical or structural,
+prefer an existing tool restriction, hook, schema, validator, or focused regression test. Keep the
+text as the explanation and point to the enforcing owner.
 
-Agent definitions use `.agent.md` files.
+## Choosing The Owning Artifact
 
-| Tier | Agents |
-|------|--------|
-| T1 — Orchestrator | orchestrator |
-| T2 — Pipeline | shaper, builder, verifier, collector |
-| T3 — Support | test-curator, memory-curator |
-| T4 — Tools/Panel | shaper-challenger, builder-challenger, verifier-challenger |
-| T5 — Knowledge | knowledge-enricher, knowledge-ingestor |
+Put one rule in one canonical home and give consumers at most one concise pointer or reinforcement.
 
-### Nesting Depth
+| Job | Canonical home |
+|-----|----------------|
+| Current-project facts, paths, stack, and commands | `.github/copilot-instructions.md` |
+| Behavior every OwlBear agent needs on nearly every turn | Universal authority instruction |
+| File-domain safety net that routes to fuller guidance | Instruction stub |
+| Reusable convention shared by multiple roles | `r-` rules skill |
+| Step-by-step procedure | `w-` workflow skill |
+| Situational technical or domain reference | `h-` handbook skill |
+| One role's identity, model, tools, hooks, boundaries, and output interface | Agent file |
+| User-facing one-shot command and input collection | Prompt file |
+| Project-specific behavior that should not ship to every consumer | Matching `.owlbear/` customization |
+| Tool arguments, state transitions, and validation semantics | Owning runtime implementation or schema |
 
-VS Code does not inject the agents catalog at nesting depth ≥2. Agents at depth ≥3 (ND3) must have `disable-model-invocation: false` to be resolvable, and dispatching agents rely on their `<agents>` body section — not the system-injected catalog — for subagent discovery.
+Skill prefixes encode the content type:
 
-**ND3 agents** (marked with `(ND3)` in their description): shaper-challenger, builder-challenger, verifier-challenger.
-
-See `h-agent-structure` § Nesting Depth & DMI for the full rule and ND3 agent table.
-
-## Skills
-
-Skill definitions live under `share/skills/{name}/SKILL.md`.
-
-| Prefix | Purpose |
+| Prefix | Meaning |
 |--------|---------|
-| `w-` | Workflow — step-by-step procedures |
-| `r-` | Rules — shared conventions |
-| `h-` | Handbook — domain knowledge |
+| `w-` | Workflow: ordered procedure with entry, execution, and output behavior |
+| `r-` | Rules: shared behavioral convention used by multiple consumers |
+| `h-` | Handbook: domain knowledge loaded when that capability is needed |
 
-## Instructions
+For required frontmatter, body sections, naming grammar, nesting-depth constraints, and extraction
+criteria, read `h-agent-structure`. It is the creation-time structural authority; this README owns
+the composition and maintenance model.
 
-Instruction files use `.instructions.md`. Two categories:
+## Runtime And Source Of Truth
 
-**Substantive documents** — contain full behavioral specifications:
+Several representations are intentionally derived:
 
-| File | Purpose |
-|------|---------|
-| `owlbear-system.instructions.md` | Decision heuristics, system awareness, memory governance, and operational fundamentals |
+- Agent frontmatter and body sections own model, tool, hook, required-reading, and delegation
+  declarations.
+- Skill and prompt bodies own their direct and conditional loading instructions.
+- Instruction frontmatter owns `applyTo` scope.
+- MCP servers and application models own live tool and schema behavior; handbooks document them.
+- [WIRING.md](WIRING.md) summarizes those relationships for ecosystem-wide orientation. It never
+  overrides an executable declaration.
 
-**Instruction stubs** — safety nets loaded when `applyTo` glob matches a touched file; each stub points to the authoritative skill:
+When changing a relationship, edit its executable owner first, then update direct pointers and the
+derived wiring map in the same change. Do not hand-maintain a second inverse list inside another
+skill or agent.
 
-| File | applyTo | Points to |
-|------|---------|-----------|
-| `python.instructions.md` | `**/*.py` | `h-python-conventions` |
-| `frontend.instructions.md` | `**/*.tsx,**/*.jsx,**/*.vue,**/*.svelte,**/*.css,**/*.scss` | `h-frontend-conventions` |
-| `agent-ecosystem.instructions.md` | `share/agents/**,share/skills/**,share/instructions/**,share/prompts/**,.owlbear/agents/**,.owlbear/skills/**,.owlbear/instructions/**,.owlbear/prompts/**` | `share/README.md` + `h-agent-structure` |
-| `doc-standards.instructions.md` | `README.md,README-consumer.md,SECURITY.md,serve/*/README.md,share/README.md,setup/*.md` | `r-doc-standards` |
-| `research-docs.instructions.md` | `.owlbear/research/*.md` | `w-research` |
+### Delegation And Nesting
 
-Stubs catch agents editing files without the relevant skill loaded. They do not duplicate the skill content — they direct the agent to load it.
+VS Code does not inject the global agent catalog at deeper nesting levels. A dispatching agent's
+frontmatter `agents:` list and body `<agents>` table therefore form a load-bearing pair and must
+agree. Agents callable at nesting depth three or deeper also require the product-specific invocation
+setting documented in `h-agent-structure`.
 
-## Prompts
+The agent validator enforces the current delegation alignment and nesting-depth rule. Do not copy
+the current set of nested agents into this README; consult [WIRING.md](WIRING.md) for the derived
+inventory and the agent files for authority.
 
-Prompt files use `.prompt.md`. Prompts are user-invocable one-shot commands triggered from the VS Code chat command palette. Many accept `${input:...}` variable substitution.
+## Change Workflow For Agents And Skills
 
-**Naming convention:**
+Use this sequence for changes under `share/{agents,skills,instructions,prompts}/` or the equivalent
+project-local `.owlbear/` roots:
 
-| Pattern | Meaning |
-|---------|----------|
-| `{verb}.prompt.md` | Single-purpose action (e.g., `orchestrate`) |
-| `{scope}-{verb}.prompt.md` | Scoped action (e.g., `frontend-audit`, `memory-audit`) |
+1. **Confirm the active roots.** Read `.vscode/settings.json` and distinguish the loaded tree from
+ source, seed, generated, or consumer copies.
+2. **Read the structural authority.** Load `h-agent-structure` and the matching instruction stub.
+3. **Find the executable owner.** Start from the named agent, skill, prompt, instruction, hook, or
+ failing validator. Follow only the direct loading and delegation edges needed for the change.
+4. **Classify the job.** Decide whether the behavior is project fact, universal behavior, shared
+ rule, workflow, handbook knowledge, role boundary, prompt entry, or runtime enforcement.
+5. **Check timing.** Required reading should represent regular use; specialist material should load
+ immediately before its phase. Avoid both unavailable-late rules and irrelevant-early context.
+6. **Check enforcement.** Separate prose guidance from tool, hook, schema, and validator behavior.
+ Update the hard owner when the requirement must reject invalid behavior mechanically.
+7. **Edit the smallest canonical surface.** Update direct consumers only when their pointer,
+ allowlist, hook, or output contract changes. Remove obsolete copies instead of synchronizing them.
+8. **Update the derived map.** Revise [WIRING.md](WIRING.md) for changed roles, loading edges,
+ delegation, hooks, models, or entry points.
+9. **Run focused validation.** Use the checks below and any workflow-specific regression that
+ exercises the changed decision.
 
-**Current prompts:**
+## Validation
 
-| Group | Prompts |
-|-------|--------|
-| Orchestration | `shape`, `orchestrate` |
-| Planning and design | `ideate`, `architecture-review` |
-| Audits | `arch-audit`, `frontend-audit`, `memory-audit`, `legacy-audit` |
-| Knowledge | `kb-ingest`, `kb-enrich` |
-| Curation | `test-curation` |
+Run structural validators after changing agents or skills:
 
-## File Interconnections
+```shell
+uv run python .owlbear/scripts/validate_agents.py
+uv run python .owlbear/scripts/validate_skills.py
+```
 
-See [WIRING.md](WIRING.md) for the full two-way mapping:
+Run ecosystem integrity and write-boundary regressions when changing agent structure, MCP grants,
+delegation, write restrictions, or pipeline ownership:
 
-- **Table 1:** Agent/Prompt → relevant files (regularly vs. seldom, with connection method)
-- **Table 2:** File → consuming agents/prompts (inverse)
+```shell
+uv run pytest -q \
+  tests/test_agent_ecosystem_validation.py \
+  tests/test_write_guard_hooks.py \
+  tests/test_deny_non_doc_writes.py
+```
 
-## Structural Standards
+Also run the narrow test or executable check owned by the changed workflow. Validator success proves
+structural conformance, not that the instruction is useful, correctly timed, or behaviorally
+effective.
 
-For the authoritative specification of agent/skill/instruction file structure, section conventions, and naming grammar, see the `h-agent-structure` skill.
+## Maintenance Boundaries
+
+- Keep this README stable and category-oriented. Do not add a list of every current agent, skill,
+  instruction, or prompt.
+- Keep [WIRING.md](WIRING.md) exact and current. It may enumerate active controls because its job is
+  to expose the derived runtime map.
+- Keep structural specification in `h-agent-structure`; link rather than duplicate its templates.
+- Keep workflow and domain details in their owning skills; do not turn this guide into required
+  reading for unrelated product work.
+- Preserve project-local rules under `.owlbear/` when they are not portable to consumers.
+- Treat observed model behavior as evidence, not a reason to add repeated reminders at multiple
+  layers. First ask whether the model failed or the harness loaded the wrong, late, or conflicting
+  control.

@@ -27,10 +27,16 @@ Curated and approved MCP entries are what future agents recall. Pending entries 
 | `pending` | `curated` | Curator validates content and assigns scope | `curate_memory(scope_agents=[...])` | curator agent |
 | `curated` | `approved` | User signs off in review prompt | `approve_memory` | human user |
 | `approved` | `curated` | Curator edits obsolete or imprecise content | `curate_memory(...)` | curator agent |
+| `curated` / `approved` | `contested` | First factually-wrong assessment | `assess_memories` | task-owning agent |
+| `contested` | `disputed` | A second task reports the entry factually wrong | `assess_memories` | task-owning agent |
+| `curated` / `approved` / `contested` | `stale` | Non-use exceeds the slot-efficiency threshold | `assess_memories` | memory service |
+| `contested` / `disputed` / `stale` | `approved` | User resolves the exceptional state | Cockpit | human user |
 | `pending` | removed | Noise/duplicate pruned before commit | `delete_memory` | curator agent |
-| `curated` / `approved` | `deleted` | Superseded or invalidated guidance retired | `delete_memory` | curator agent |
+| `curated` / `approved` / `contested` / `disputed` / `stale` | `deleted` | Superseded or invalidated guidance retired | `delete_memory` | curator agent |
 
 The curator does not approve entries. Approval is a user decision through the memory review prompt.
+The curator also does not resolve exceptional states. `curate_memory` is blocked for `contested`,
+`disputed`, and `stale`; the user resolves them from Cockpit's `/memories` page.
 
 ## Step 0 — Setup
 
@@ -43,9 +49,11 @@ Track deferred items by leaving MCP entries pending and recording their entry ID
 
 ## Step 1 — Gather Candidates
 
-1. Call `list_memories(states=["pending", "curated", "approved"])`.
+1. Call `list_memories(states=["pending", "curated", "approved", "contested", "disputed", "stale"])`.
 2. Read each pending candidate with `read_memory(entry_id=...)`.
-3. Keep curated/approved metadata nearby for duplicate and conflict checks. Read likely overlaps before deciding.
+3. Keep curated/approved metadata nearby for duplicate and conflict checks. Treat exceptional-state
+ metadata as unavailable for curation until the user resolves it in Cockpit. Read likely overlaps
+ before deciding.
 
 ## Step 2 — Classify Signal
 
