@@ -1,10 +1,10 @@
 ---
 id: 2022
 title: 'P4-01: Enforce native global writer coordination'
-status: verify
+status: collect
 priority: high
 created: 2026-07-24T16:49:45.233828+02:00
-updated: 2026-07-24T17:21:46.864483+02:00
+updated: 2026-07-24T17:28:19.636134+02:00
 tags:
   - phase-4
   - scope:core
@@ -79,3 +79,16 @@ Local task repair of the builder rejection; no authority or packet-graph change.
 - Current failure keys: none.
 - Builder challenger: pass; independently ran the dispatch test module with 3 passed and reported no concrete blockers.
 - Follow-up risks: finish and fail reuse the same exact-holder participant path as release; verification should retain the focused runtime suite as the public behavior boundary.
+
+[[2026-07-24T17:28:19+02:00]]
+## Verify Notes
+- Evidence reviewed: Builder Notes, task AC-1 through AC-4, committed implementation `d93a9990d`, and the focused dispatch/native-runtime tests.
+- Named authorities checked: task projection names DN-004, IF-004, RISK-002, PROOF-014, and accepted DEC-014. The implementation retains IF-003 result types, adds only dispatch-owned diagnostics, and uses real native job, attempt, coordination, and transaction storage.
+- Change Module Map: no deviation. `dispatch.py` owns immutable coordination and conflict/stale validation; `native_runtime.py` owns lifecycle transaction composition; exports and the focused dispatch test are within the shaped envelope.
+- Normal-path boundary exercised: `uv run pytest -q serve/kanban/tests/test_dispatch_runtime.py serve/kanban/tests/test_native_runtime.py` passed 28 tests. The tests use a temporary work root and a history replacement below the public runtime boundary.
+- Atomic composition inspected: native start, finish, release, fail, and recovery transactions include supplied coordination replacement participants with their job and attempt-event participants. Exact finish/release/fail replays and non-owner exits occur before any clearing participant is committed.
+- AC-to-evidence: AC-1 writer conflict and byte-preserving no-mutation behavior are directly exercised; AC-2 reader coexistence and writer rejection are directly exercised, with source-confirmed stale identity diagnostics; AC-3 exact-holder clearing is directly exercised for release and source-confirmed for shared finish/fail paths plus native replay coverage; AC-4 strict expiry boundary and atomic recovery cleanup are directly exercised.
+- Prior same-failure-key rejection check: none in task history; current failure keys none.
+- Patches applied: none.
+- Verifier challenger: `pass`, no problem or unresolved AC.
+- Final route: collect.
