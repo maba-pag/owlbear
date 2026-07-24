@@ -8,6 +8,7 @@ import pytest
 from owlbear_kanban import (
     DispatchDiagnostic,
     DispatchDiagnosticCode,
+    DispatchOmissionReason,
     DispatchRuntime,
     JobGeneration,
     JobRecord,
@@ -179,3 +180,30 @@ def test_expired_recovery_clears_its_writer_holder(revision, tmp_path) -> None:
     assert len(recovered.recovered) == 1
     coordination = (work_root / "dispatch" / "coordination.yaml").read_text(encoding="utf-8")
     assert "readers: []" in coordination
+
+
+def test_pick_waves_is_deterministic_and_uses_current_job_state(revision, tmp_path) -> None:
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    store = JobStore(work_root)
+    _materialize(store, _reader_record(revision, 1, "accept"))
+    _materialize(store, _record(revision, 2))
+    _materialize(store, _reader_record(revision, 3, "audit"))
+    blocked = store.read(3)
+    store.update(blocked.job.model_copy(update={"block_id": "block-003"}), blocked.token)
+    native = NativeRuntime(revision, work_root, _History(), timedelta(minutes=5))
+    runtime = DispatchRuntime(native, work_root)
+
+    first = runtime.pick_waves("a" * 40, size=2)
+    assert [[entry.job_id for entry in wave] for wave in first.waves] == [[1], [2]]
+    assert [entry.agent_profile for wave in first.waves for entry in wave] == ["acceptor", "builder"]
+    assert first.omissions[0].reason is DispatchOmissionReason.BLOCKED
+    assert runtime.pick_waves("a" * 40, size=2) == first
+
+    assert not isinstance(runtime.start(_request(2)), DispatchDiagnostic)
+    fresh = runtime.pick_waves("a" * 40, size=2)
+    assert [[entry.job_id for entry in wave] for wave in fresh.waves] == [[1]]
+    assert [(item.job_id, item.reason) for item in fresh.omissions] == [
+        (2, DispatchOmissionReason.CLAIMED),
+        (3, DispatchOmissionReason.BLOCKED),
+    ]

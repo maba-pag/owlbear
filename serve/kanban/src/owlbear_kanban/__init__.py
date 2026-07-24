@@ -49,7 +49,11 @@ from owlbear_kanban.dispatch import (
     CoordinationHolder,
     DispatchDiagnostic,
     DispatchDiagnosticCode,
+    DispatchOmission,
+    DispatchOmissionReason,
+    DispatchPlan,
     DispatchRuntime,
+    DispatchWaveEntry,
     WriterCoordination,
 )
 from owlbear_kanban.engine import KanbanEngine, WorkSession
@@ -203,7 +207,11 @@ __all__ = [
     "DeliveryGraph",
     "DispatchDiagnostic",
     "DispatchDiagnosticCode",
+    "DispatchOmission",
+    "DispatchOmissionReason",
+    "DispatchPlan",
     "DispatchRuntime",
+    "DispatchWaveEntry",
     "FailJobDiagnostic",
     "FailJobDiagnosticCode",
     "FailJobRequest",

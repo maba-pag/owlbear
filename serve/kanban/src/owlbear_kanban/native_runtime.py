@@ -623,6 +623,29 @@ class NativeRuntime:
             )
         return stored
 
+    def _dispatch_eligibility(self, stored: StoredJob, candidate_revision: str) -> str | None:
+        """Return the start-gate code that excludes a read-only dispatch candidate."""
+        try:
+            project_job(stored.job, self._revision)
+        except ValueError:
+            return StartJobDiagnosticCode.AUTHORITY_STALE.value
+        request = StartJobRequest(
+            job_id=stored.job.job_id,
+            attempt_id="dispatch-plan",
+            claim_id="dispatch-plan",
+            actor_id="dispatch-plan",
+            process_id="dispatch-plan",
+            claimed_at="1970-01-01T00:00:00Z",
+            candidate_revision=candidate_revision,
+        )
+        for check in (self._predecessor_check, self._readiness_check, self._active_claim_check):
+            result = check(stored, request)
+            if result is not None:
+                if result.diagnostic is None:
+                    return StartJobDiagnosticCode.ACTIVE_CLAIM.value
+                return result.diagnostic.code.value
+        return None
+
     def _predecessor_check(self, stored: StoredJob, request: StartJobRequest) -> StartJobResult | None:
         for predecessor_id in stored.job.predecessor_job_ids:
             try:

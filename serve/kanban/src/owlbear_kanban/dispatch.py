@@ -137,6 +137,44 @@ class DispatchDiagnosticCode(StrEnum):
     LEASE_STALE = "ERR_DISPATCH_LEASE_STALE"
 
 
+class DispatchOmissionReason(StrEnum):
+    AUTHORITY_STALE = "authority-stale"
+    PREDECESSOR_INVALID = "predecessor-invalid"
+    REQUEST_PENDING = "request-pending"
+    NOT_PENDING = "not-pending"
+    CLAIMED = "claimed"
+    BLOCKED = "blocked"
+    UNSUPPORTED_KIND = "unsupported-kind"
+
+
+class DispatchWaveEntry(BaseModel):
+    """One dispatchable job with its exact agent profile."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    job_id: int = Field(gt=0)
+    kind: _WriterKind | _ReaderKind
+    agent_profile: Literal["shaper", "builder", "acceptor", "auditor"]
+
+
+class DispatchOmission(BaseModel):
+    """A persisted job excluded from a dispatch plan."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    job_id: int = Field(gt=0)
+    reason: DispatchOmissionReason
+
+
+class DispatchPlan(BaseModel):
+    """A deterministic, read-only dispatch plan for one candidate revision."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    waves: tuple[tuple[DispatchWaveEntry, ...], ...]
+    omissions: tuple[DispatchOmission, ...]
+
+
 class DispatchDiagnostic(BaseModel):
     """A coordination-specific runtime diagnostic."""
 
@@ -214,6 +252,69 @@ class DispatchRuntime:
         self._jobs = JobStore(work_root)
         self._attempts = AttemptStore(work_root)
         self._coordination = _CoordinationStore(work_root)
+
+    def pick_waves(self, candidate_revision: str, size: int) -> DispatchPlan:
+        """Plan current eligible jobs without granting any claim authority."""
+        if size <= 0:
+            msg = "wave size must be positive"
+            raise ValueError(msg)
+        eligible: list[DispatchWaveEntry] = []
+        omissions: list[DispatchOmission] = []
+        for stored in self._jobs.list():
+            reason = self._omission_reason(stored, candidate_revision)
+            if reason is not None:
+                omissions.append(DispatchOmission(job_id=stored.job.job_id, reason=reason))
+                continue
+            agent_profile = {
+                "shape": "shaper",
+                "build": "builder",
+                "accept": "acceptor",
+                "audit": "auditor",
+            }.get(stored.job.kind)
+            if agent_profile is None:
+                omissions.append(
+                    DispatchOmission(job_id=stored.job.job_id, reason=DispatchOmissionReason.UNSUPPORTED_KIND)
+                )
+                continue
+            eligible.append(
+                DispatchWaveEntry(
+                    job_id=stored.job.job_id,
+                    kind=stored.job.kind,
+                    agent_profile=agent_profile,
+                )
+            )
+        return DispatchPlan(waves=self._plan_waves(eligible, size), omissions=tuple(omissions))
+
+    def _omission_reason(self, stored: StoredJob, candidate_revision: str) -> DispatchOmissionReason | None:
+        job = stored.job
+        if job.claim_id is not None or job.attempt_id is not None:
+            return DispatchOmissionReason.CLAIMED
+        if job.block_id is not None:
+            return DispatchOmissionReason.BLOCKED
+        code = self._native._dispatch_eligibility(stored, candidate_revision)  # noqa: SLF001
+        return {
+            "ERR_START_AUTHORITY_STALE": DispatchOmissionReason.AUTHORITY_STALE,
+            "ERR_START_PREDECESSOR_INVALID": DispatchOmissionReason.PREDECESSOR_INVALID,
+            "ERR_START_REQUEST_PENDING": DispatchOmissionReason.REQUEST_PENDING,
+            "ERR_START_TERMINAL": DispatchOmissionReason.NOT_PENDING,
+            "ERR_START_ACTIVE_CLAIM": DispatchOmissionReason.CLAIMED,
+        }.get(code)
+
+    @staticmethod
+    def _plan_waves(entries: list[DispatchWaveEntry], size: int) -> tuple[tuple[DispatchWaveEntry, ...], ...]:
+        waves: list[tuple[DispatchWaveEntry, ...]] = []
+        readers: list[DispatchWaveEntry] = []
+        for entry in entries:
+            if entry.kind in ("shape", "build"):
+                if readers:
+                    waves.extend(tuple(readers[index : index + size]) for index in range(0, len(readers), size))
+                    readers = []
+                waves.append((entry,))
+            else:
+                readers.append(entry)
+        if readers:
+            waves.extend(tuple(readers[index : index + size]) for index in range(0, len(readers), size))
+        return tuple(waves)
 
     def start(self, request: StartJobRequest) -> StartJobResult | DispatchDiagnostic:
         for _ in range(2):
