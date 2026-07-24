@@ -1,10 +1,10 @@
 ---
 id: 2017
 title: 'P3-18: Start only eligible job attempts'
-status: verify
+status: collect
 priority: high
 created: 2026-07-23T14:41:39.975443+02:00
-updated: 2026-07-24T03:11:44.912336+02:00
+updated: 2026-07-24T03:14:05.957031+02:00
 tags:
   - phase-3
   - scope:core
@@ -158,3 +158,16 @@ The revised native package loads and reports no admission findings under a curre
 - Current failure-key resolutions: none; no Verify Notes Required Follow-up was present.
 - Builder-challenger result: pass. The challenger reviewed the diff and reran the focused suite: 31 passed.
 - Follow-up risks: receipt-currentness detail paths are delegated to the existing receipt owner; no transaction-failure matrices were added because they remain outside this task scope.
+
+[[2026-07-24T03:14:05+02:00]]
+## Verify Notes
+- Evidence reviewed: current Shape Notes, newest Builder Notes, all eight AC lines, and no prior Verify Notes or resolved requests. The named authorities are reflected in the approved runtime contract; `jobs.py` owns strict disposition parsing and `native_runtime.py` owns the public start boundary.
+- Change Module Map: no deviations. Builder changed exactly `jobs.py`, `native_runtime.py`, package exports, and their focused tests. Task-owned mapped files were clean; unrelated workspace changes were preserved.
+- Normal-path boundary: `NativeRuntime.start_job` was exercised directly. The test substitutes only repository-history behavior below the receipt-currentness boundary; it does not replace the runtime operation, store mutation, transaction, or emitted event.
+- Checks run: `uv run pytest -q serve/kanban/tests/test_native_runtime.py serve/kanban/tests/test_jobs.py` passed 31; `uv run ruff check` on the five mapped files passed; `uv run pytest -q serve/kanban/tests/test_native_runtime.py -vv` passed 9 cases. `git diff --check HEAD` found no task-owned file defects.
+- Findings: `start_job` evaluates loaded authority, predecessor currentness, pending requests, terminal disposition, and active claim before committing a `RuntimeTransaction` that persists updated job pointers and exactly one started event. Exact replay returns that persisted pair; actor, process, or timestamp mismatch returns identity conflict. Source confirms the AC-3 digest/unknown-target and AC-4 missing-receipt/non-current receipt variants that are not separately parameterized by the focused tests.
+- AC-to-evidence: AC-1 strict parser test plus `JobDisposition`; AC-2 public start/replay mutation case; AC-3 stale authority public case plus `project_job`; AC-4 missing predecessor public case plus predecessor owner; AC-5 pending-request public case; AC-6 both terminal dispositions; AC-7 exact replay and conflicting actor public case plus process/timestamp condition; AC-8 partial and different active-pointer public cases. All rejection tests read the job again and confirm it is unchanged.
+- Prior same-failure-key rejection check: none. No Required Follow-up is open.
+- Memory: assessed all ten recalled entries; artifact-to-scope and live-public-contract guidance materially informed this review.
+- Verifier-challenger: pass, no concrete blocker. It confirmed public coverage of the start boundary, source closure of remaining branch variants, mapped scope, and focused proof.
+- Final route: PASS to collect.
