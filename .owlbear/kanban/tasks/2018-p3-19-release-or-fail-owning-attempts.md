@@ -4,7 +4,7 @@ title: 'P3-19: Release or fail owning attempts'
 status: shape
 priority: high
 created: 2026-07-23T14:41:48.715516+02:00
-updated: 2026-07-24T03:29:35.057324+02:00
+updated: 2026-07-24T12:32:34.923138+02:00
 tags:
   - phase-3
   - scope:core
@@ -111,3 +111,14 @@ Exercise public release and fail operations over owner, non-owner, no-active-cla
 - Prior same-failure-key check: no prior rejection for claim-identity replay found. The previous verifier repair was cross-job replay isolation, a distinct key.
 - Verifier-challenger result: not invoked; a PASS verdict is not proposed.
 - Final route: RESHAPE. Shape must decide the canonical durable owner for claim identity used in finalization replay, update the contract/module map, and specify the stable diagnostic for a request that differs only by `claim_id`.
+
+[[2026-07-24T12:32:34+02:00]]
+## Shape Notes
+- Material repair source: verifier proved that a finalized request differing only by `claim_id` returned the existing successful event because active pointers were cleared and sequence-2 `AttemptEvent` did not retain claim identity.
+- User decision: required nonempty `claim_id` on every schema-version-one `AttemptEvent`; no separate idempotency store, no claim-insensitive replay, and no compatibility fallback.
+- Authority reconciliation: accepted DEC-023, added design section 7.4, extended IF-003, and narrowed design section 7.3 to the archived #2017 start diagnostic split. Missing/empty event claim returns `ERR_ATTEMPT_EVENT_IDENTITY_INVALID`. Exact finalization replay returns the existing outcome; any same-job/attempt sequence-2 mismatch returns operation-specific NON_OWNER before cleared-pointer handling; cleared pointers without that outcome return NO_ACTIVE_CLAIM; cross-job events are never returned.
+- Validation: public `load_change` returns a revision with no diagnostics at digest `5d7cf64e0317707ea78015e818f9e3a328b0c4239871edb5bf66014d71ae2552`; authority diffs pass `git diff --check`. Global re-admission remains DN-013/DN-014 bootstrap debt.
+- Approved graph: connected set #2003/#2018, no edge changes. #2018 owns a bounded repair of archived #2010 event contract/parser and archived #2017 started-event claim propagation; #2011 persistence/path safety and #2019 expiry remain unchanged. Eight AC cover strict claim parsing, release/fail writes, exact and mismatched completed replay, active/non-active diagnostics, cross-job isolation, and preserved start replay diagnostics.
+- Challenger iterations resolved diagnostic overlap, parser literal ambiguity, cross-job preservation, reopened #2010/#2017 ownership, same-job non-claim mismatch, and archived #2017 start-diagnostic fidelity. Final complete challenge passed.
+- User graph approval: approved the hardened #2003/#2018 delta.
+- Lifecycle: release #2018 without movement. Commit reconciled authority and this review history, then restart the connected mutation set by claiming #2003 and #2018 in ID order.

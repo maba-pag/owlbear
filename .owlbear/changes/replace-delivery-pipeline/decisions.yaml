@@ -976,3 +976,50 @@ decisions:
           - Replay has no coherent public outcome shape
         risks:
           - Lower-layer refactors become breaking lifecycle API changes
+
+  - id: DEC-023
+    title: Preserve finalization claim identity in immutable attempt events
+    status: accepted
+    decided_at: 2026-07-24
+    authority: user
+    selected: required-event-claim-identity
+    rationale: >-
+      Release and failure clear active job pointers, so their immutable outcome event must retain
+      claim identity for exact replay and owner enforcement. A required event field keeps lifecycle
+      history canonical and avoids a parallel idempotency store or permissive replay rule.
+    options:
+      - id: required-event-claim-identity
+        label: Add required claim identity to immutable attempt events
+        confidence: 0.97
+        recommended: true
+        pros:
+          - One canonical event retains the identity needed after active pointers are cleared
+          - Replay remains exact without another store or transaction participant
+          - Claim mismatch can reuse the operation-specific non-owner diagnostic
+        cons:
+          - Tightens the schema-version-one event contract
+          - Existing constructors and fixtures must supply claim identity
+        risks:
+          - Persisted events without claim identity become invalid rather than receiving a compatibility fallback
+      - id: separate-idempotency-record
+        label: Add a durable finalization idempotency record
+        confidence: 0.42
+        recommended: false
+        pros:
+          - Leaves the immutable event schema unchanged
+        cons:
+          - Duplicates lifecycle identity in a second store
+          - Adds another atomic transaction participant and recovery surface
+        risks:
+          - Event history and replay authority can diverge
+      - id: ignore-claim-on-finalization-replay
+        label: Exclude claim identity from finalization replay
+        confidence: 0.18
+        recommended: false
+        pros:
+          - Requires no persisted schema change
+        cons:
+          - Weakens the accepted ownership contract after finalization
+          - Makes a changed-claim request indistinguishable from the original owner replay
+        risks:
+          - A non-owner request can receive an existing successful outcome

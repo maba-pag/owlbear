@@ -345,7 +345,28 @@ predecessor receipt currentness in authored predecessor-job order, pending reque
 disposition, then active claim identity. An eligible start atomically replaces the job with
 `claim_id` and `attempt_id` and creates sequence-one `started` event data at the supplied timestamp.
 Replay with the same active attempt, claim, actor, process, and claim-timestamp identity returns the
-stored job/event; any different identity returns `ERR_START_IDENTITY_CONFLICT` without another event.
+stored job/event. A different active claim or attempt pointer, or only one populated pointer, returns
+`ERR_START_ACTIVE_CLAIM`; when both pointers match but actor, process, or claim timestamp differs,
+replay returns `ERR_START_IDENTITY_CONFLICT`. Neither branch appends another event.
+
+### 7.4 Native job finalization contract
+
+Every schema-version-one `AttemptEvent` carries required `claim_id` alongside attempt, job, actor,
+process, and timestamp identity. Sequence-one `started` events copy it from `StartJobRequest`;
+sequence-two `released` and `failed` events copy it from their finalization request. Persisted event
+data with missing or empty `claim_id` returns `ERR_ATTEMPT_EVENT_IDENTITY_INVALID` rather than being
+compatibility-migrated.
+
+`NativeRuntime.release_job` and `NativeRuntime.fail_job` clear only matching active job pointers and
+atomically append their immutable sequence-two event. Once those pointers are clear, replay compares
+job, attempt, claim, kind, actor, process, timestamp, detail, and evidence against the stored event.
+The same identity returns the existing job/event without mutation. A request that differs only by
+claim returns the operation-specific `ERR_RELEASE_NON_OWNER` or `ERR_FAIL_NON_OWNER`; it never returns
+the existing outcome or appends another event. This completed-event ownership check precedes the
+no-active-pointer check. More generally, when a sequence-two event belongs to the requested job and
+attempt, any mismatch in claim, kind, actor, process, timestamp, detail, or evidence returns the
+operation-specific non-owner diagnostic. Cleared pointers return the operation-specific
+no-active-claim diagnostic only when the requested job and attempt have no sequence-two outcome.
 
 ## 8. Agent Architecture
 
