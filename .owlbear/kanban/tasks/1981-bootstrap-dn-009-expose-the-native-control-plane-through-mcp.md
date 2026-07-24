@@ -4,7 +4,7 @@ title: 'Bootstrap DN-009: Expose the native control plane through MCP'
 status: shape
 priority: high
 created: 2026-07-22T01:06:55.160360+02:00
-updated: 2026-07-22T01:11:19.227948+02:00
+updated: 2026-07-24T23:22:58.927037+02:00
 tags:
   - bootstrap-projection
   - change:replace-delivery-pipeline
@@ -27,8 +27,11 @@ ac:
     Verify Notes and tested-revision evidence satisfy `DN-009` and `PROOF-011`, verified
     through Kanban queries and artifact inspection.'
 proof_bundle: existing+challenge
-blocked: false
-block_reason:
+blocked: true
+block_reason: 'PARTIAL_GRAPH_COMMIT: #2032 creation rejected by ERR_AC_ITEM_TOO_LONG
+  after #2027-#2031 were created; recovery owner shaper must create approved T6 with
+  each AC <=500 chars, refresh #1981 to b56/IF-015, add #2027-#2032 dependencies,
+  audit, route collect, then clear blocks.'
 claimed_at:
 archival_reason:
 archival_refs: []
@@ -56,3 +59,8 @@ This task is a non-authoritative bootstrap projection. Resolve current obligatio
 The current shaper turns this aggregate into the bounded build-packet DAG needed to satisfy the referenced node. Any newly discovered delivery outcome, interface, migration, material risk, or proof boundary returns to global design and re-admission.
 
 Proof guidance: exercise public MCP tools over the real graph-aware engine and prove old generic task mutation/lifecycle tools are absent; only a temporary engine store may replace a lower layer below `PROOF-011`.
+
+[[2026-07-24T23:22:58+02:00]]
+## Shape Notes
+
+Partial graph commit containment: the user approved the six-packet DN-009 graph and shaper-challenger passed after AC-boundary and `show_job` availability corrections. Created approved packets #2027 through #2031. Creation of final packet #2032 was rejected before write with `ERR_AC_ITEM_TOO_LONG`; effect check confirmed #2032 is absent. Per decomposition containment, #2027-#2031 are blocked and no retry or parent projection mutation was attempted. Recovery owner: shaper. Recovery: create the already-approved T6 with semantically identical AC shortened below 500 characters, refresh this aggregate from stale digest `9387...` to admitted `b56f...` with IF-015 consumption, depend on #2027-#2032, audit full records, route to collect, then clear containment blocks.
