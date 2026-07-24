@@ -1,10 +1,10 @@
 ---
 id: 2007
 title: 'P3-08: Expose indexed runtime health and history'
-status: collect
+status: archived
 priority: low
 created: 2026-07-22T22:07:25.462842+02:00
-updated: 2026-07-24T16:05:47.771799+02:00
+updated: 2026-07-24T16:08:35.580276+02:00
 tags:
   - phase-3
   - scope:core
@@ -40,7 +40,7 @@ proof_bundle: behavioral+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Bootstrap Projection Identity
@@ -97,3 +97,12 @@ Proof guidance: exercise public projection and health operations over scale and 
 - Verifier challenger: initial decision failed only on the three missing AC-3 behavioral branches; final decision passed after repair with no problem, no follow-up, durable test admitted, and no auto-fixed files.
 - Memory: every recalled entry was submitted for assessment; one concurrently pending entry could not accept an assessment, while the remaining nine succeeded.
 - Follow-up: none.
+
+[[2026-07-24T16:08:35+02:00]]
+## Collect Notes
+- Verdict: ARCHIVED; verified leaf task mechanically collected.
+- Closure: latest verifier PASS covers AC-1 through AC-3, reports no required follow-up, and records final verifier-challenger pass.
+- Delivery: builder commit `b663fc74c` and verifier commit `5e9007dd6`; no collector product changes or aggregate proof required.
+- Requests: no resolved structured requests.
+- Memory: all six recalled collector entries assessed; no new reusable collector insight warranted.
+
