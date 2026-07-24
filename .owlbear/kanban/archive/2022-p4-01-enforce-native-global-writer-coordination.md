@@ -1,10 +1,10 @@
 ---
 id: 2022
 title: 'P4-01: Enforce native global writer coordination'
-status: collect
+status: archived
 priority: high
 created: 2026-07-24T16:49:45.233828+02:00
-updated: 2026-07-24T17:28:19.636134+02:00
+updated: 2026-07-24T17:29:25.746644+02:00
 tags:
   - phase-4
   - scope:core
@@ -39,7 +39,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Projection
@@ -92,3 +92,14 @@ Local task repair of the builder rejection; no authority or packet-graph change.
 - Patches applied: none.
 - Verifier challenger: `pass`, no problem or unresolved AC.
 - Final route: collect.
+
+[[2026-07-24T17:29:25+02:00]]
+## Collect Notes
+- Classification: leaf. No child tasks, aggregate/EPIC tags, or aggregate intent section.
+- Latest verification evidence: PASS in the newest Verify Notes. AC-1 through AC-4 map to `uv run pytest -q serve/kanban/tests/test_dispatch_runtime.py serve/kanban/tests/test_native_runtime.py` with 28 passing tests; verifier challenger passed and recorded no unresolved AC or follow-up.
+- Intent source: task Public Contract and acceptance criteria, projected from DN-004-PK-001 under DN-004, IF-004, RISK-002, PROOF-014, and accepted DEC-014.
+- Invariant coverage: writer/read conflict and byte-identical rejection; reader coexistence and stale identity; lifecycle clearing/replay ownership; expiry-boundary recovery and atomic cleanup.
+- Child coverage and dependency gate: not applicable for leaf; parent linkage does not make this task aggregate. Dependency 1979 is satisfied (`dep_status: ok`).
+- Tested commit and proof: verifier records committed implementation `d93a9990d` and the tied focused native dispatch/runtime command above.
+- Residual decisions: no pending or resolved structured requests; no unresolved follow-up.
+- Archive rationale: complete leaf verification with no remaining closure condition.
