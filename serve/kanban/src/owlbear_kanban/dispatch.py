@@ -42,9 +42,11 @@ if TYPE_CHECKING:
         StartJobRequest,
         StartJobResult,
     )
+    from owlbear_kanban.proof_checkout import ProofCheckout, ProofCheckoutManager, ProofCheckoutResult
 
 from owlbear_kanban.attempts import AttemptStore
 from owlbear_kanban.jobs import JobStore, StoredJob
+from owlbear_kanban.native_runtime import StartJobDiagnosticCode
 from owlbear_kanban.runtime_transaction import ReplacementTransactionParticipant, TransactionConflictError
 from owlbear_kanban.topology import PRODUCT_TOPOLOGY
 from owlbear_kanban.yaml_rt import make_yaml
@@ -248,11 +250,17 @@ class _CoordinationStore:
 class DispatchRuntime:
     """Coordinate native lifecycle mutations across global writer and reader holders."""
 
-    def __init__(self, native: NativeRuntime, work_root: Path) -> None:
+    def __init__(
+        self,
+        native: NativeRuntime,
+        work_root: Path,
+        proof_checkouts: ProofCheckoutManager | None = None,
+    ) -> None:
         self._native = native
         self._jobs = JobStore(work_root)
         self._attempts = AttemptStore(work_root)
         self._coordination = _CoordinationStore(work_root)
+        self._proof_checkouts = proof_checkouts
 
     def pick_waves(self, candidate_revision: str, size: int) -> DispatchPlan:
         """Plan current eligible jobs without granting any claim authority."""
@@ -345,6 +353,36 @@ class DispatchRuntime:
         coordination, _token = self._coordination.read()
         return self._conflict("coordination changed during start", coordination)
 
+    def start_with_checkout(
+        self, request: StartJobRequest
+    ) -> tuple[StartJobResult | DispatchDiagnostic, ProofCheckout | ProofCheckoutResult | None]:
+        """Prepare a reader checkout before claiming, then return it with the start result."""
+        stored = self._jobs.read(request.job_id)
+        if stored.job.kind not in ("accept", "audit") or self._proof_checkouts is None:
+            return self.start(request), None
+        checkout = self._proof_checkouts.existing(request.job_id)
+        prepared = False
+        if checkout is None:
+            result = self._proof_checkouts.materialize(stored.job, request.candidate_revision)
+            if result.checkout is None:
+                return (
+                    self._native._diagnostic(  # noqa: SLF001
+                        StartJobDiagnosticCode.AUTHORITY_STALE,
+                        "proof checkout setup failed",
+                        lower_code=result.diagnostic.code.value if result.diagnostic else None,
+                        target=str(request.job_id),
+                    ),
+                    result,
+                )
+            checkout = result.checkout
+            prepared = True
+        started = self.start(request)
+        if isinstance(started, DispatchDiagnostic) or started.diagnostic is not None:
+            if prepared:
+                self._proof_checkouts.cleanup(request.job_id)
+            return started, None
+        return started, checkout
+
     def release(self, request: ReleaseJobRequest) -> ReleaseJobResult | DispatchDiagnostic:
         return self._finalize(request, "released")
 
@@ -358,9 +396,13 @@ class DispatchRuntime:
         return self._finish(request, "build")
 
     def finish_accept(self, request: FinishJobRequest) -> FinishJobResult | DispatchDiagnostic:
+        if not self._cleanup_proof_checkout(request.job_id):
+            return self._proof_cleanup_diagnostic(request.job_id)
         return self._finish(request, "accept")
 
     def finish_audit(self, request: FinishJobRequest) -> FinishJobResult | DispatchDiagnostic:
+        if not self._cleanup_proof_checkout(request.job_id):
+            return self._proof_cleanup_diagnostic(request.job_id)
         return self._finish(request, "audit")
 
     def recover_expired_claims(
@@ -378,7 +420,10 @@ class DispatchRuntime:
                 return ()
             return (self._coordination.replacement_participant(self._without_holder(current, holder), token),)
 
-        return self._native._recover_expired_claims(request, participant_for)  # noqa: SLF001
+        result = self._native._recover_expired_claims(request, participant_for)  # noqa: SLF001
+        for recovered in result.recovered:
+            self._cleanup_proof_checkout(recovered.job.job.job_id)
+        return result
 
     def _finalize(
         self,
@@ -395,8 +440,25 @@ class DispatchRuntime:
             replacement = self._without_holder(coordination, holder)
             participants = (self._coordination.replacement_participant(replacement, token),)
         if kind == "released":
-            return self._native._release_job(request, participants)  # noqa: SLF001
+            result = self._native._release_job(request, participants)  # noqa: SLF001
+            if result.diagnostic is None:
+                self._cleanup_proof_checkout(request.job_id)
+            return result
         return self._native._fail_job(request, participants)  # noqa: SLF001
+
+    def _cleanup_proof_checkout(self, job_id: int) -> bool:
+        if self._proof_checkouts is None:
+            return True
+        self._proof_checkouts.cleanup(job_id)
+        return not self._proof_checkouts.is_orphan(str(job_id))
+
+    @staticmethod
+    def _proof_cleanup_diagnostic(job_id: int) -> DispatchDiagnostic:
+        return DispatchDiagnostic(
+            code=DispatchDiagnosticCode.LEASE_STALE,
+            detail="proof checkout cleanup left an orphaned checkout",
+            holder_job_ids=(job_id,),
+        )
 
     def _finish(
         self,

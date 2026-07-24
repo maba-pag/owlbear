@@ -1,10 +1,10 @@
 ---
 id: 2025
 title: 'P4-04: Run graph-aware native orchestration'
-status: build
+status: verify
 priority: high
 created: 2026-07-24T16:54:49.020973+02:00
-updated: 2026-07-24T19:17:56.184043+02:00
+updated: 2026-07-24T19:31:10.907650+02:00
 tags:
   - phase-4
   - scope:core
@@ -95,3 +95,21 @@ Replaced the complete operative task body and AC instead of appending stale inst
 Resolved the challenger bootstrap-carrier finding by installing native orchestration as an explicitly non-default contract while preserving `pick_tasks` builder/verifier/collector routing as the operative design §9.5 carrier. DN-012 owns activation of native-only routing and legacy absence proof; the two loops must not alias or consume each other's state.
 
 Failure-key resolution: `missing-public-native-transport` is closed by IF-015 and the MOD-002 packet scope; `proof-checkout-unreachable` is closed by DEC-026 composite `start_job`; `premature-carrier-cutover` is closed by the non-default bootstrap wiring and explicit DN-012 activation boundary. Archived #2022-#2024 supply verified IF-004/IF-005 prerequisites. Final shaper-challenger decision: pass; no remaining task repair requested. Board route: build with parent #1980 and dependencies #2022/#2023/#2024 unchanged.
+
+[[2026-07-24T19:31:10+02:00]]
+## Builder Notes
+
+- Change envelope: native IF-015 work bridge only: MCP runtime assembly and strict adapters, IF-005 checkout composition in existing DispatchRuntime, MCP contract snapshot, and non-default bootstrap wiring. No second transport, no DN-009 APIs, Cockpit work, role-body implementation, native-to-legacy adapter, or DN-012 carrier cutover.
+- Files changed: `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py`, `serve/mcp-kanban/src/owlbear_mcp_kanban/models.py`, `serve/mcp-kanban/tests/test_mcp_surface_contract.py`, `serve/kanban/src/owlbear_kanban/dispatch.py`, `serve/kanban/src/owlbear_kanban/proof_checkout.py`, `share/agents/orchestrator.agent.md`, `share/skills/w-orchestration/SKILL.md`, `share/prompts/orchestrate.prompt.md`, and `share/WIRING.md`.
+- Change Module Map deviations: none. `DispatchRuntime` gained the minimum IF-005 composition because it already owns start/finish/release/recovery coordination; MCP remains a thin typed adapter.
+- Proof selected: no new durable tests. Existing MCP registry, server lifespan, annotation, dispatch-runtime, proof-checkout, and ecosystem wiring tests cover the public boundaries; the changed registry snapshot is required deployment-contract maintenance.
+- Commands run: `uv run ruff check` on all four touched Python modules passed; focused MCP, dispatch, checkout, and wiring suite passed with 66 tests; `validate_agents.py` and `validate_skills.py` passed.
+- AC-to-evidence map:
+  - AC-1: exact eight native tools registered with strict Pydantic parameter models; MCP surface and annotations covered by focused tests.
+  - AC-2: typed adapters delegate to frozen DispatchRuntime results; dispatch regression suite passed.
+  - AC-3: accept/audit start composes exact-commit checkout before claim, reuses an existing checkout on replay, and removes newly prepared checkout after rejected start; focused dispatch and checkout suites passed.
+  - AC-4: accept/audit finish cleans before finalization; release and expired recovery request idempotent cleanup and preserve orphan diagnostics; focused dispatch and checkout suites passed.
+  - AC-5: orchestrator agent, workflow, prompt, and derived wiring define explicit bootstrap-only native dispatch while retaining `pick_tasks` as default; ecosystem validation passed.
+- Current failure-key resolutions: `missing-public-native-transport` resolved by closed IF-015 MCP tools; `proof-checkout-unreachable` resolved by composite `start_job`; `premature-carrier-cutover` resolved by explicit non-default wiring.
+- Builder-challenger: pass. It found no concrete blocker and independently ran focused MCP/dispatch/checkout and wiring tests.
+- Follow-up risks: native bridge is deliberately temporary; DN-009 must supersede it and DN-012 owns atomic carrier cutover and legacy absence proof.

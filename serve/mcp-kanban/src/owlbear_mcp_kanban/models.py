@@ -63,6 +63,61 @@ class PickTasksParams(MCPParamsBase):
     max_waves: int = 3
 
 
+class PickJobsParams(MCPParamsBase):
+    change_id: str = Field(min_length=1)
+    candidate_revision: str = Field(min_length=1)
+    wave_size: int = Field(gt=0)
+
+
+class StartJobParams(MCPParamsBase):
+    change_id: str = Field(min_length=1)
+    job_id: int = Field(gt=0)
+    attempt_id: str = Field(min_length=1)
+    claim_id: str = Field(min_length=1)
+    actor_id: str = Field(min_length=1)
+    process_id: str = Field(min_length=1)
+    claimed_at: str = Field(min_length=1)
+    candidate_revision: str = Field(min_length=1)
+
+
+class FinishJobParams(MCPParamsBase):
+    change_id: str = Field(min_length=1)
+    job_id: int = Field(gt=0)
+    attempt_id: str = Field(min_length=1)
+    claim_id: str = Field(min_length=1)
+    actor_id: str = Field(min_length=1)
+    process_id: str = Field(min_length=1)
+    finished_at: str = Field(min_length=1)
+    receipt_id: str = Field(min_length=1)
+    code_revision: str = Field(min_length=1)
+    evidence: dict[str, object]
+    evidence_ids: tuple[str, ...] = ()
+    impact_closure: dict[str, object] | None = None
+
+
+class FinishShapeParams(FinishJobParams):
+    node_plan: dict[str, object]
+    build_job_ids: tuple[int, ...]
+    accept_job_id: int = Field(gt=0)
+
+
+class ReleaseJobParams(MCPParamsBase):
+    change_id: str = Field(min_length=1)
+    job_id: int = Field(gt=0)
+    attempt_id: str = Field(min_length=1)
+    claim_id: str = Field(min_length=1)
+    actor_id: str = Field(min_length=1)
+    process_id: str = Field(min_length=1)
+    released_at: str = Field(min_length=1)
+
+
+class RecoverExpiredClaimsParams(MCPParamsBase):
+    change_id: str = Field(min_length=1)
+    recovered_at: str = Field(min_length=1)
+    actor_id: str = Field(min_length=1)
+    process_id: str = Field(min_length=1)
+
+
 class CreateTaskParams(MCPParamsBase):
     """Input schema for create_task."""
 

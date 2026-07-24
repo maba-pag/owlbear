@@ -117,6 +117,33 @@ class ProofCheckoutManager:
         root, checkout, _manifest = paths
         self._remove(root, checkout)
 
+    def existing(self, job_id: int) -> ProofCheckout | None:
+        """Return a valid existing checkout context without materializing another worktree."""
+        paths = self._paths(job_id)
+        if paths is None:
+            return None
+        root, checkout, manifest = paths
+        if not checkout.is_dir() or not manifest.is_file():
+            return None
+        try:
+            payload = make_yaml().load(manifest.read_text(encoding="utf-8"))
+            if not isinstance(payload, dict):
+                return None
+            target = payload["target"]
+            commit = payload["commit"]
+            if not isinstance(target, str) or not isinstance(commit, str):
+                return None
+        except (OSError, TypeError, ValueError, KeyError):
+            return None
+        return ProofCheckout(
+            job_id=job_id,
+            target=target,
+            commit=commit,
+            root=root,
+            checkout=checkout,
+            manifest=manifest,
+        )
+
     def health_paths(self) -> tuple[str, ...]:
         """Return contained job roots left by interrupted cleanup."""
         if self._proof_root.is_symlink() or not self._proof_root.is_dir():

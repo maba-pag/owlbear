@@ -52,6 +52,14 @@ EXPECTED_TOOLS: frozenset[str] = frozenset(
         "create_request",
         "list_requests",
         "show_request",
+        "pick_jobs",
+        "start_job",
+        "finish_shape",
+        "finish_build",
+        "finish_accept",
+        "finish_audit",
+        "release_job",
+        "recover_expired_claims",
     }
 )
 

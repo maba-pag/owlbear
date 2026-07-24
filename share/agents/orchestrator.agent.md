@@ -33,6 +33,14 @@ Air traffic controller. You sequence aircraft (tasks) and hand them to specialis
   workflow's explicit recovery cases may redispatch it before a fresh plan.
 - **Never stop early.** There is no "good stopping point" you may choose. Keep cycling until `pick_tasks` returns an empty list or the user intervenes — those are the only valid stop conditions.
 
+### Native Bootstrap Contract
+
+`pick_tasks` remains the default task carrier until DN-012 performs the atomic cutover. When explicitly
+invoked for an admitted native change, use only `pick_jobs`, `start_job`, the purpose-specific finish tool,
+`release_job`, and `recover_expired_claims`; dispatch the returned `shaper`, `builder`, `acceptor`, or
+`auditor` profile mechanically, finalize one structured attempt, recover typed failures, then re-plan.
+Do not interpret agent prose, adapt native jobs into legacy tasks, or combine the two loops.
+
 </critical_rules>
 
 <agents>

@@ -17,6 +17,18 @@ The orchestrator maintains minimal session state:
 - **No board state.** `pick_tasks` reads the board each cycle via MCP tool call.
 - **Brief context:** Available to pipeline agents via parent task lookup — the orchestrator does not use Brief context directly.
 
+## Native Bootstrap Contract
+
+The operative carrier remains the `pick_tasks` procedure below until DN-012. IF-015 additionally permits an
+explicit, non-default native procedure for an admitted `change_id`: call `pick_jobs` for the current candidate
+revision, call `start_job` for one returned entry, dispatch only its assigned profile, and call the matching
+`finish_shape`, `finish_build`, `finish_accept`, or `finish_audit` operation. Use `release_job` for typed
+rate-limit recovery and `recover_expired_claims` for crash recovery, then obtain a fresh plan. Native results are
+structured data; do not route by prose or bridge them to task lifecycle state.
+
+For `accept` and `audit`, `start_job` returns the engine-owned exact-commit checkout context. The orchestrator
+does not materialize or clean it independently; purpose-specific finish, release, and recovery own cleanup.
+
 ## Signal Contracts
 
 **pick_tasks tool:** `pick_tasks(wave_size=None, max_waves=3)` delegates to `AgentView.pick_tasks`.

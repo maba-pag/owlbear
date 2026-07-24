@@ -7,7 +7,7 @@ import contextlib
 import json
 import os
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal
 from uuid import UUID
@@ -18,7 +18,20 @@ from mcp.types import ToolAnnotations
 from pydantic import BeforeValidator
 from pydantic import ValidationError as PydanticValidationError
 
-from owlbear_kanban import KanbanEngine
+from owlbear_kanban import (
+    DispatchRuntime,
+    FinishJobRequest,
+    FinishShapeRequest,
+    GitRepositoryHistory,
+    KanbanEngine,
+    NativeRuntime,
+    ProofCheckoutManager,
+    RecoverExpiredClaimsRequest,
+    ReleaseJobRequest,
+    StartJobRequest,
+    load_change,
+)
+from owlbear_kanban._duration import _parse_duration
 from owlbear_kanban.errors import KanbanError
 from owlbear_kanban.models import (
     ListTasksResponse,
@@ -28,9 +41,15 @@ from owlbear_kanban.models import (
 )
 from owlbear_mcp_kanban.guidance import collect_guidance
 from owlbear_mcp_kanban.models import (
+    FinishJobParams,
+    FinishShapeParams,
     KanbanTask,
     ListTasksParams,
+    PickJobsParams,
     PickTasksParams,
+    RecoverExpiredClaimsParams,
+    ReleaseJobParams,
+    StartJobParams,
 )
 
 if TYPE_CHECKING:
@@ -62,14 +81,22 @@ __all__ = [
     "create_task",
     "edit_task",
     "end_work",
+    "finish_accept",
+    "finish_audit",
+    "finish_build",
+    "finish_shape",
     "list_requests",
     "list_tasks",
     "mcp",
     "move_task",
     "parse_task_id",
+    "pick_jobs",
     "pick_tasks",
+    "recover_expired_claims",
+    "release_job",
     "show_request",
     "show_task",
+    "start_job",
     "start_work",
 ]
 
@@ -214,6 +241,7 @@ class AppContext:
 
     engine: KanbanEngine
     kanban_dir: Path
+    dispatch_runtimes: dict[str, DispatchRuntime] = field(default_factory=dict)
 
     def __contains__(self, item: object) -> bool:
         """Allow membership tests without TypeError (returns False always)."""
@@ -260,6 +288,33 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
 
     engine.sweep()
     yield AppContext(engine=engine, kanban_dir=kanban_dir)
+
+
+def _dispatch_runtime(app_ctx: AppContext, change_id: str) -> DispatchRuntime:
+    """Assemble and cache the native runtime for one admitted sibling change."""
+    cached = app_ctx.dispatch_runtimes.get(change_id)
+    if cached is not None:
+        return cached
+    workspace_root = app_ctx.kanban_dir.parent.parent
+    changes_dir = app_ctx.kanban_dir.parent / "changes"
+    loaded = load_change(changes_dir, change_id)
+    if loaded.revision is None:
+        _raise_tool_error("ERR_CHANGE_NOT_ADMITTED", "change is not admitted")
+    claim_expiry = _parse_duration(app_ctx.engine.board_config().claim_timeout)
+    proof_checkouts = ProofCheckoutManager(workspace_root, app_ctx.kanban_dir.parent / "scratch" / "proof")
+    runtime = DispatchRuntime(
+        NativeRuntime(
+            loaded.revision,
+            app_ctx.kanban_dir,
+            GitRepositoryHistory(workspace_root),
+            claim_expiry,
+            proof_checkouts,
+        ),
+        app_ctx.kanban_dir,
+        proof_checkouts,
+    )
+    app_ctx.dispatch_runtimes[change_id] = runtime
+    return runtime
 
 
 mcp = FastMCP("owlbear-kanban", lifespan=app_lifespan)
@@ -737,6 +792,241 @@ async def pick_tasks(
         )
     except KanbanError as exc:
         _map_kanban_error(exc)
+    except PydanticValidationError as exc:
+        _raise_param_validation(str(exc))
+
+
+# ---------------------------------------------------------------------------
+# Native dispatch bridge — bootstrap-only IF-015 work operations
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, destructiveHint=False))
+async def pick_jobs(
+    ctx: Context,
+    *,
+    change_id: str,
+    candidate_revision: str,
+    wave_size: int,
+) -> object:
+    """Plan eligible native jobs for one admitted change revision."""
+    try:
+        params = PickJobsParams.model_validate(
+            {
+                "change_id": change_id,
+                "candidate_revision": candidate_revision,
+                "wave_size": wave_size,
+            }
+        )
+        app_ctx: AppContext = ctx.request_context.lifespan_context
+        return _dispatch_runtime(app_ctx, params.change_id).pick_waves(
+            params.candidate_revision,
+            params.wave_size,
+        )
+    except PydanticValidationError as exc:
+        _raise_param_validation(str(exc))
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True, destructiveHint=False))
+async def start_job(  # noqa: PLR0913
+    ctx: Context,
+    *,
+    change_id: str,
+    job_id: int,
+    attempt_id: str,
+    claim_id: str,
+    actor_id: str,
+    process_id: str,
+    claimed_at: str,
+    candidate_revision: str,
+) -> object:
+    """Claim one native job through the dispatch runtime."""
+    try:
+        params = StartJobParams.model_validate(
+            {
+                "change_id": change_id,
+                "job_id": job_id,
+                "attempt_id": attempt_id,
+                "claim_id": claim_id,
+                "actor_id": actor_id,
+                "process_id": process_id,
+                "claimed_at": claimed_at,
+                "candidate_revision": candidate_revision,
+            }
+        )
+        app_ctx: AppContext = ctx.request_context.lifespan_context
+        started, checkout = _dispatch_runtime(app_ctx, params.change_id).start_with_checkout(
+            StartJobRequest(**params.model_dump(exclude={"change_id"}))
+        )
+        if checkout is not None and hasattr(checkout, "checkout"):
+            return {"start": started, "checkout": checkout}
+        return started  # noqa: TRY300
+    except PydanticValidationError as exc:
+        _raise_param_validation(str(exc))
+
+
+async def _finish_job(
+    ctx: Context,
+    params: FinishJobParams,
+    purpose: Literal["build", "accept", "audit"],
+) -> object:
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    runtime = _dispatch_runtime(app_ctx, params.change_id)
+    request = FinishJobRequest(**params.model_dump(exclude={"change_id"}))
+    return {
+        "build": runtime.finish_build,
+        "accept": runtime.finish_accept,
+        "audit": runtime.finish_audit,
+    }[purpose](request)
+
+
+def _tool_params(values: dict[str, object]) -> dict[str, object]:
+    """Remove the transport context before strict MCP parameter validation."""
+    return {key: value for key, value in values.items() if key != "ctx"}
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True, destructiveHint=False))
+async def finish_shape(  # noqa: PLR0913
+    ctx: Context,
+    *,
+    change_id: str,
+    job_id: int,
+    attempt_id: str,
+    claim_id: str,
+    actor_id: str,
+    process_id: str,
+    finished_at: str,
+    receipt_id: str,
+    code_revision: str,
+    evidence: dict[str, object],
+    node_plan: dict[str, object],
+    build_job_ids: tuple[int, ...],
+    accept_job_id: int,
+    evidence_ids: tuple[str, ...] = (),
+    impact_closure: dict[str, object] | None = None,
+) -> object:
+    """Finalize a shape job through the native dispatch runtime."""
+    try:
+        params = FinishShapeParams.model_validate(_tool_params(locals()))
+        app_ctx: AppContext = ctx.request_context.lifespan_context
+        return _dispatch_runtime(app_ctx, params.change_id).finish_shape(
+            FinishShapeRequest(**params.model_dump(exclude={"change_id"}))
+        )
+    except PydanticValidationError as exc:
+        _raise_param_validation(str(exc))
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True, destructiveHint=False))
+async def finish_build(  # noqa: PLR0913
+    ctx: Context,
+    *,
+    change_id: str,
+    job_id: int,
+    attempt_id: str,
+    claim_id: str,
+    actor_id: str,
+    process_id: str,
+    finished_at: str,
+    receipt_id: str,
+    code_revision: str,
+    evidence: dict[str, object],
+    evidence_ids: tuple[str, ...] = (),
+    impact_closure: dict[str, object] | None = None,
+) -> object:
+    """Finalize a build job through the native dispatch runtime."""
+    try:
+        return await _finish_job(ctx, FinishJobParams.model_validate(_tool_params(locals())), "build")
+    except PydanticValidationError as exc:
+        _raise_param_validation(str(exc))
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True, destructiveHint=False))
+async def finish_accept(  # noqa: PLR0913
+    ctx: Context,
+    *,
+    change_id: str,
+    job_id: int,
+    attempt_id: str,
+    claim_id: str,
+    actor_id: str,
+    process_id: str,
+    finished_at: str,
+    receipt_id: str,
+    code_revision: str,
+    evidence: dict[str, object],
+    evidence_ids: tuple[str, ...] = (),
+    impact_closure: dict[str, object] | None = None,
+) -> object:
+    """Finalize an accept job through the native dispatch runtime."""
+    try:
+        return await _finish_job(ctx, FinishJobParams.model_validate(_tool_params(locals())), "accept")
+    except PydanticValidationError as exc:
+        _raise_param_validation(str(exc))
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True, destructiveHint=False))
+async def finish_audit(  # noqa: PLR0913
+    ctx: Context,
+    *,
+    change_id: str,
+    job_id: int,
+    attempt_id: str,
+    claim_id: str,
+    actor_id: str,
+    process_id: str,
+    finished_at: str,
+    receipt_id: str,
+    code_revision: str,
+    evidence: dict[str, object],
+    evidence_ids: tuple[str, ...] = (),
+    impact_closure: dict[str, object] | None = None,
+) -> object:
+    """Finalize an audit job through the native dispatch runtime."""
+    try:
+        return await _finish_job(ctx, FinishJobParams.model_validate(_tool_params(locals())), "audit")
+    except PydanticValidationError as exc:
+        _raise_param_validation(str(exc))
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True, destructiveHint=False))
+async def release_job(  # noqa: PLR0913
+    ctx: Context,
+    *,
+    change_id: str,
+    job_id: int,
+    attempt_id: str,
+    claim_id: str,
+    actor_id: str,
+    process_id: str,
+    released_at: str,
+) -> object:
+    """Release one native job through the dispatch runtime."""
+    try:
+        params = ReleaseJobParams.model_validate(_tool_params(locals()))
+        app_ctx: AppContext = ctx.request_context.lifespan_context
+        return _dispatch_runtime(app_ctx, params.change_id).release(
+            ReleaseJobRequest(**params.model_dump(exclude={"change_id"}))
+        )
+    except PydanticValidationError as exc:
+        _raise_param_validation(str(exc))
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True, destructiveHint=False))
+async def recover_expired_claims(
+    ctx: Context,
+    *,
+    change_id: str,
+    recovered_at: str,
+    actor_id: str,
+    process_id: str,
+) -> object:
+    """Recover strictly expired native claims through the dispatch runtime."""
+    try:
+        params = RecoverExpiredClaimsParams.model_validate(_tool_params(locals()))
+        app_ctx: AppContext = ctx.request_context.lifespan_context
+        return _dispatch_runtime(app_ctx, params.change_id).recover_expired_claims(
+            RecoverExpiredClaimsRequest(**params.model_dump(exclude={"change_id"}))
+        )
     except PydanticValidationError as exc:
         _raise_param_validation(str(exc))
 

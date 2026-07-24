@@ -5,6 +5,9 @@ agent: orchestrator
 
 Orchestrate: ${input:scope_or_filter:Scope filter — e.g. 'phase-7', 'status:build', 'tag:linting', 'tasks 82-88', default: 'all'}
 
+For an explicitly requested admitted native change, use the non-default IF-015 native dispatch contract from
+`w-orchestration`. Otherwise retain the `pick_tasks` bootstrap carrier.
+
 ## Interaction Protocol
 
 Use the user's language unless they ask otherwise. When presenting dispatch choices, blockers, or continuation decisions, present exactly one decision item at a time before calling `askQuestions`.
