@@ -1,10 +1,10 @@
 ---
 id: 2011
 title: 'P3-12: Persist immutable attempt event history'
-status: collect
+status: archived
 priority: high
 created: 2026-07-23T14:40:36.839480+02:00
-updated: 2026-07-23T15:35:39.136241+02:00
+updated: 2026-07-23T15:36:33.330502+02:00
 tags:
   - phase-3
   - scope:core
@@ -34,7 +34,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -75,3 +75,13 @@ Exercise public create, read, and list operations against explicit temporary roo
 - Prior same-AC rejection check: no prior `## Verify Notes` exists.
 - Verifier-challenger: pass. It confirmed exported conflict semantics, byte-equivalent immutable replay, deterministic ordering, descriptor-relative `O_NOFOLLOW` path containment, and write-failure cleanup with no scope drift.
 - Final route: PASS to collect.
+
+[[2026-07-23T15:36:33+02:00]]
+## Collect Notes
+- Classification: leaf.
+- Latest verification evidence: newest `## Verify Notes` is PASS to collect (2026-07-23T15:35:39+02:00), reviewing builder commit `51eec96a2`. Tied normal-path proof: `uv run pytest serve/kanban/tests/test_attempts.py` (17 passed), with focused Ruff checks, format check, and `git diff --check` also passing.
+- Intent source and coverage: task Outcome, Scope, AC-1 through AC-3, and explicit-root public-store boundary; verifier confirmed create/read/list replay and ordering, exported conflict preservation, containment diagnostics, and failed-write cleanup.
+- Invariant map / dependency: leaf task; `depends_on: #2010` reports `dep_status: ok`.
+- Child coverage: none (`list_tasks(parent=2011)` returned no tasks).
+- Residual decisions / requests: no structured request records; newest Verify Notes has no required follow-up.
+- Archive rationale: complete current verification evidence and no unresolved closure state.
