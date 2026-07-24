@@ -225,15 +225,24 @@ class InvalidationRuntime:
             affected_receipts = _receipt_closure(request.invalidated_receipt_ids, receipt_records)
             all_jobs = (*self._jobs.list(), *self._jobs.list(archived=True))
             affected_jobs = _job_closure(affected_receipts, all_jobs)
-            active = tuple(item for item in self._jobs.list() if item.job.job_id in affected_jobs)
+            superseded = tuple(
+                item
+                for item in self._jobs.list()
+                if item.job.job_id in affected_jobs
+                and (
+                    item.job.disposition is JobDisposition.PENDING
+                    or item.job.superseded_by_receipt_id == request.supersession_receipt_id
+                )
+            )
+            pending = tuple(item for item in superseded if item.job.disposition is JobDisposition.PENDING)
             supersession_value = self._supersession_value(request, affected_receipts, receipt_records)
             corrective = self._corrective_jobs(request)
-            replay = self._replay(request, supersession_value, affected_receipts, affected_jobs, active, corrective)
+            replay = self._replay(request, supersession_value, affected_receipts, affected_jobs, superseded, corrective)
             if replay is not None:
                 return replay
             participants = [
                 self._receipts.create_participant(request.supersession_receipt_id, supersession_value)[1],
-                *(self._jobs.replacement_participant(self._superseded(item, request), item.token) for item in active),
+                *(self._jobs.replacement_participant(self._superseded(item, request), item.token) for item in pending),
                 *(self._jobs.create_participant(job) for job in corrective),
             ]
             transaction = RuntimeTransaction(
@@ -253,7 +262,7 @@ class InvalidationRuntime:
                 except TransactionConflictError:
                     return self._diagnostic(InvalidationDiagnosticCode.CONFLICT, "invalidation abort conflicts")
                 return self._diagnostic(InvalidationDiagnosticCode.ABORTED, "invalidation publication aborted")
-            return self._outcome(request, affected_receipts, affected_jobs, active, corrective)
+            return self._outcome(request, affected_receipts, affected_jobs, pending, corrective)
         except (FileNotFoundError, TypeError, ValueError) as exc:
             return self._diagnostic(InvalidationDiagnosticCode.REFERENCE_INVALID, str(exc))
 

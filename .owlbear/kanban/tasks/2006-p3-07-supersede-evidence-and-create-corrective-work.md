@@ -1,10 +1,10 @@
 ---
 id: 2006
 title: 'P3-07: Supersede evidence and create corrective work'
-status: verify
+status: collect
 priority: medium
 created: 2026-07-22T21:59:17.003316+02:00
-updated: 2026-07-24T15:14:07.001806+02:00
+updated: 2026-07-24T15:22:24.454732+02:00
 tags:
   - phase-3
   - scope:core
@@ -85,3 +85,15 @@ Proof guidance: use a table-driven corrective-route matrix plus generic receipt/
 - Builder challenger: final decision `pass`; no concrete defects, no scope drift, durable proof rent accepted, and no auto-fixes.
 - Memory: all 10 recalled entries were assessed; refined artifact-to-scope, replay-after-failure, and atomic rollback guidance directly shaped the proof. One scoped pending lesson recorded for handled abort versus crash recovery.
 - Follow-up risks: none identified within the shaped scope.
+
+[[2026-07-24T15:22:24+02:00]]
+## Verify Notes
+- Verdict: PASS. Compared the implementation to `REQ-008`, `NEG-010`, `IF-003`, `RISK-003`, `PROOF-003`, and design section 10; no authority or scope mismatch remains.
+- Local repair: found that affected terminal jobs still stored in the active directory were being rewritten as superseded. Updated `InvalidationRuntime.apply` to mutate only pending affected jobs while retaining jobs already superseded by this receipt in the exact replay identity. Added a durable regression assertion that an affected cancelled job remains byte-identical.
+- AC-1: the public table-driven route matrix covers all shaped targets and crosses every route with all four late-work classes.
+- AC-2: public filesystem proof covers minimum receipt and transitive job closure, pending-only stale-job supersession, exact corrective identity, immutable cancelled and archived jobs, unchanged unrelated work, and byte-identical prior receipts.
+- AC-3: exact replay and changed-input conflict are proven; all three publication failure stages restore pre-state. A separate public abort-then-retry probe proved `ERR_INVALIDATION_ABORTED`, successful same-request retry, and exact subsequent replay.
+- Evidence: focused invalidation proof passed 36 tests. Owning aggregate passed 159 tests across runtime transactions, receipts, jobs, findings, native runtime, and invalidation, with only two existing multiprocessing fork deprecation warnings. Ruff check and format check passed; diff whitespace check and VS Code diagnostics were clean.
+- Verifier challenger: decision `pass`; no concrete defect, unresolved AC, scope drift, or follow-up.
+- Memory: assessed all 10 recalled entries. Saved one pending builder/verifier lesson separating mutation eligibility from replay identity.
+- Files changed by verifier: `serve/kanban/src/owlbear_kanban/invalidation.py`, `serve/kanban/tests/test_invalidation.py`.

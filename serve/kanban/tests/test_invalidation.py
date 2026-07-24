@@ -197,6 +197,12 @@ def _scenario(tmp_path: Path):
 
 def test_invalidation_applies_minimum_closure_and_replays_without_rewriting_history(tmp_path: Path) -> None:
     revision, work_root, request = _scenario(tmp_path)
+    jobs = JobStore(work_root)
+    related_terminal = jobs.read(4).job.model_copy(
+        update={"job_id": 5, "receipt_id": "build-root", "disposition": JobDisposition.CANCELLED}
+    )
+    _materialize(jobs, related_terminal)
+    terminal_before = (work_root / "jobs/5.yaml").read_bytes()
     archived_before = {path.name: path.read_bytes() for path in (work_root / "archive").glob("*.yaml")}
     receipt_before = {
         path.name: path.read_bytes()
@@ -212,11 +218,12 @@ def test_invalidation_applies_minimum_closure_and_replays_without_rewriting_hist
     assert applied.outcome is not None
     assert replayed == applied
     assert applied.outcome.affected_receipt_ids == ("build-child", "build-root")
-    assert applied.outcome.affected_job_ids == (1, 2, 3)
+    assert applied.outcome.affected_job_ids == (1, 2, 3, 5)
     assert tuple(item.job.job_id for item in applied.outcome.superseded_jobs) == (3,)
     assert applied.outcome.superseded_jobs[0].job.disposition is JobDisposition.SUPERSEDED
     assert tuple(item.job.job_id for item in applied.outcome.corrective_jobs) == (20,)
     assert JobStore(work_root).read(4).job.disposition is JobDisposition.PENDING
+    assert (work_root / "jobs/5.yaml").read_bytes() == terminal_before
     assert conflict.diagnostic is not None
     assert conflict.diagnostic.code is InvalidationDiagnosticCode.CONFLICT
     assert archived_before == {path.name: path.read_bytes() for path in (work_root / "archive").glob("*.yaml")}
