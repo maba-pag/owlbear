@@ -356,10 +356,20 @@ class TestProof014NativeMcpScenario:
         runtime = DispatchRuntime(NativeRuntime(revision, work_root, _History(), timedelta(minutes=1)), work_root)
         ctx = _native_ctx(tmp_path)
         monkeypatch.setattr(server, "_dispatch_runtime", lambda _app_ctx, _change_id: runtime)
-        profiles: list[str] = []
-        runner = AsyncMock()
+        dispatches: list[tuple[str, int]] = []
+        runner = AsyncMock(
+            side_effect=[
+                {"status": "success"},
+                {"status": "rate_limited"},
+                {"status": "success"},
+                {"status": "success"},
+                {"status": "success"},
+                {"status": "crash"},
+                {"status": "success"},
+            ]
+        )
 
-        async def pick_profile(outcome: str) -> int:
+        async def pick_profile(expected_outcome: str) -> int:
             plan = await server.pick_jobs(
                 ctx,
                 change_id=revision.change_id,
@@ -367,8 +377,9 @@ class TestProof014NativeMcpScenario:
                 wave_size=2,
             )
             entry = plan.waves[0][0]
-            profiles.append(entry.agent_profile)
-            await runner(entry.agent_profile, outcome)
+            dispatches.append((entry.agent_profile, entry.job_id))
+            outcome = await runner(entry.agent_profile, entry.job_id)
+            assert outcome == {"status": expected_outcome}
             return entry.job_id
 
         assert await pick_profile("success") == 1
@@ -408,6 +419,9 @@ class TestProof014NativeMcpScenario:
             released_at="2026-07-24T00:03:30Z",
         )
         assert released.diagnostic is None
+        assert released.event is not None
+        assert released.event.kind == "released"
+        assert released.event.sequence == 2
         assert await pick_profile("success") == 2
 
         async def finish_build(job_id: int, attempt: int, timestamp: str, receipt_id: str) -> None:
@@ -466,6 +480,9 @@ class TestProof014NativeMcpScenario:
             process_id="proof-process",
         )
         assert len(recovered.recovered) == 1
+        assert recovered.recovered[0].event.kind == "crashed"
+        assert recovered.recovered[0].event.sequence == 2
+        assert recovered.recovered[0].event.detail == "claim expired"
         assert await pick_profile("success") == 5
         audit_start = _start_kwargs(5, 7, "2026-07-24T00:08:02Z")
         assert (await server.start_job(ctx, **audit_start)).diagnostic is None
@@ -478,15 +495,23 @@ class TestProof014NativeMcpScenario:
             evidence={"methods": list(proof.method)},
         )
         assert audited.diagnostic is None
-        assert profiles == ["shaper", "builder", "builder", "builder", "acceptor", "auditor", "auditor"]
+        assert dispatches == [
+            ("shaper", 1),
+            ("builder", 2),
+            ("builder", 2),
+            ("builder", 3),
+            ("acceptor", 4),
+            ("auditor", 5),
+            ("auditor", 5),
+        ]
         assert [call.args for call in runner.await_args_list] == [
-            ("shaper", "success"),
-            ("builder", "rate_limited"),
-            ("builder", "success"),
-            ("builder", "success"),
-            ("acceptor", "success"),
-            ("auditor", "crash"),
-            ("auditor", "success"),
+            ("shaper", 1),
+            ("builder", 2),
+            ("builder", 2),
+            ("builder", 3),
+            ("acceptor", 4),
+            ("auditor", 5),
+            ("auditor", 5),
         ]
         events = AttemptStore(work_root).list()
         terminal_kinds = {"released", "crashed", "succeeded"}

@@ -1,10 +1,10 @@
 ---
 id: 2025
 title: 'P4-04: Run graph-aware native orchestration'
-status: build
+status: verify
 priority: high
 created: 2026-07-24T16:54:49.020973+02:00
-updated: 2026-07-24T21:07:12.540369+02:00
+updated: 2026-07-24T21:13:17.816027+02:00
 tags:
   - phase-4
   - scope:core
@@ -220,3 +220,15 @@ Proof command: `uv run pytest serve/mcp-kanban/tests/test_mcp_surface_contract.p
 - Verifier-challenger: fail. It independently identified the missing selected-job handoff and ignored structured runner outcome as an AC-5 blocker.
 - Patches applied: none. The required repair exceeds verifier patch scope because it changes the proof scenario's behavioral contract.
 - Final route: reject to build.
+
+[[2026-07-24T21:13:17+02:00]]
+## Builder Notes
+- Change envelope: resolved only the returned `AC-5/native-proof-014-scenario` failure. The maintained MCP-boundary scenario now proves the required runner dispatch and lifecycle results; no production orchestration or bootstrap carrier behavior changed.
+- Files changed: `serve/mcp-kanban/tests/test_mcp_surface_contract.py` and the active task record.
+- Change Module Map deviations: none. The scenario remains at the IF-015 MCP boundary over the real `DispatchRuntime` stores.
+- Proof selected: retained and strengthened the existing durable scenario because the verifier identified a concrete unprotected integration regression. It directly protects runner invocation, typed terminal disposition, persisted attempt finalization, and replanning.
+- Commands run: `uv run pytest serve/mcp-kanban/tests/test_mcp_surface_contract.py::TestProof014NativeMcpScenario -q` passed (1 passed). `uv run pytest serve/mcp-kanban/tests/test_mcp_surface_contract.py serve/kanban/tests/test_dispatch_runtime.py serve/kanban/tests/test_proof_checkout.py tests/test_skill_authority_wiring.py tests/test_agentview_ac_params.py -q` passed (43 passed). `uv run ruff check serve/mcp-kanban/tests/test_mcp_surface_contract.py` passed.
+- AC-to-evidence map: AC-1 through AC-4 remain covered by the focused MCP surface, DispatchRuntime, and proof-checkout tests. AC-5 is directly covered by `TestProof014NativeMcpScenario`: each fresh MCP `pick_jobs` selection passes its exact `(agent_profile, job_id)` into a scripted runner; structured `success`, `rate_limited`, and `crash` outcomes are asserted; release and expiry recovery expose their sequence-2 terminal events; persisted attempts each contain only `started` then one sequence-2 `succeeded`, `released`, or `crashed` event; each terminal outcome is followed by a fresh plan; bootstrap `pick_tasks` remains covered by the named wiring tests.
+- Current failure-key resolution: `AC-5/native-proof-014-scenario` is closed. The three verifier gaps are now explicit: the replacement runner is invoked with profile and selected job ID, rate limiting asserts a typed `released` event, and attempt histories prove exactly one terminal event for every started attempt.
+- Builder-challenger: pass; it independently confirmed the focused 43-test proof and Ruff result with no DONE blocker.
+- Follow-up risks: none within scope; native orchestration remains non-default pending DN-012.
