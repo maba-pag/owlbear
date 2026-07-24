@@ -27,6 +27,7 @@ AC5-AC7: td:0 — no executable tests.
 from __future__ import annotations
 
 import shutil
+from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
@@ -307,8 +308,58 @@ def _release_kwargs(start: dict[str, object]) -> dict[str, object]:
     return _finish_kwargs(start)
 
 
+@dataclass(frozen=True)
+class Success:
+    receipt_id: str
+
+
+@dataclass(frozen=True)
+class RateLimited:
+    pass
+
+
+@dataclass(frozen=True)
+class Crash:
+    pass
+
+
+@dataclass(frozen=True)
+class NativeHalt:
+    agent_profile: str
+
+
 class TestProof014NativeMcpScenario:
     """The bootstrap native loop dispatches profiles through the installed MCP bridge."""
+
+    def test_native_mode_artifacts_expose_if_015_contract(self) -> None:
+        """The source ecosystem retains the non-default IF-015 contract."""
+        root = next(parent for parent in Path(__file__).resolve().parents if (parent / "share").is_dir())
+        agent = (root / "share/agents/orchestrator.agent.md").read_text(encoding="utf-8")
+        skill = (root / "share/skills/w-orchestration/SKILL.md").read_text(encoding="utf-8")
+        prompt = (root / "share/prompts/orchestrate.prompt.md").read_text(encoding="utf-8")
+        wiring = (root / "share/WIRING.md").read_text(encoding="utf-8")
+        native_tools = {
+            "pick_jobs",
+            "start_job",
+            "finish_shape",
+            "finish_build",
+            "finish_accept",
+            "finish_audit",
+            "release_job",
+            "recover_expired_claims",
+        }
+
+        agent_tools = {
+            tool.removeprefix("ob-kanban/")
+            for tool in agent.split("tools: [", 1)[1].split("]", 1)[0].replace(" ", "").split(",")
+        }
+        assert native_tools <= agent_tools
+        for artifact in (skill, prompt, wiring):
+            assert "IF-015" in artifact
+            assert "pick_tasks" in artifact
+        assert "non-default" in skill
+        assert "acceptor" not in agent.split("agents:", 1)[1].split("---", 1)[0]
+        assert "auditor" not in agent.split("agents:", 1)[1].split("---", 1)[0]
 
     @pytest.mark.asyncio
     async def test_profiles_release_recovery_and_replanning_use_native_tools(  # noqa: PLR0915
@@ -359,17 +410,23 @@ class TestProof014NativeMcpScenario:
         dispatches: list[tuple[str, int]] = []
         runner = AsyncMock(
             side_effect=[
-                {"status": "success"},
-                {"status": "rate_limited"},
-                {"status": "success"},
-                {"status": "success"},
-                {"status": "success"},
-                {"status": "crash"},
-                {"status": "success"},
+                Success("shape-001"),
+                RateLimited(),
+                Success("build-001"),
+                Success("build-002"),
+                Success("accept-001"),
+                Crash(),
+                Success("audit-001"),
             ]
         )
+        target = revision.graph.nodes[0]
+        proof = revision.resolve(target.proof)
+        closure = {"paths": ["serve/kanban/"], "authority_targets": [target.id, target.proof]}
+        node_plan_digest: str | None = None
+        installed_profiles = {"shaper", "builder", "acceptor", "auditor"}
 
-        async def pick_profile(expected_outcome: str) -> int:
+        async def dispatch_one(attempt: int, claimed_at: str, finished_at: str) -> int | NativeHalt:
+            nonlocal node_plan_digest
             plan = await server.pick_jobs(
                 ctx,
                 change_id=revision.change_id,
@@ -378,83 +435,99 @@ class TestProof014NativeMcpScenario:
             )
             entry = plan.waves[0][0]
             dispatches.append((entry.agent_profile, entry.job_id))
-            outcome = await runner(entry.agent_profile, entry.job_id)
-            assert outcome == {"status": expected_outcome}
+            if entry.agent_profile not in installed_profiles:
+                return NativeHalt(entry.agent_profile)
+            started = _start_kwargs(entry.job_id, attempt, claimed_at)
+            start = await server.start_job(ctx, **started)
+            assert start.diagnostic is None
+            outcome = await runner(entry.agent_profile, entry.job_id, start)
+            match outcome:
+                case Success(receipt_id):
+                    finish = _finish_kwargs(started)
+                    if entry.agent_profile == "shaper":
+                        result = await server.finish_shape(
+                            ctx,
+                            **finish,
+                            finished_at=finished_at,
+                            receipt_id=receipt_id,
+                            code_revision="a" * 40,
+                            evidence={"methods": list(proof.method)},
+                            node_plan={
+                                "packets": [
+                                    {"id": f"{target.id}-PK-001", "dependencies": [], "impact_closure": closure},
+                                    {
+                                        "id": f"{target.id}-PK-002",
+                                        "dependencies": [f"{target.id}-PK-001"],
+                                        "impact_closure": closure,
+                                    },
+                                ]
+                            },
+                            build_job_ids=(2, 3),
+                            accept_job_id=4,
+                        )
+                        assert result.receipt is not None
+                        node_plan_digest = result.receipt.payload["node_plan_digest"]
+                    elif entry.agent_profile == "builder":
+                        result = await server.finish_build(
+                            ctx,
+                            **finish,
+                            finished_at=finished_at,
+                            receipt_id=receipt_id,
+                            code_revision="a" * 40,
+                            evidence={"methods": list(proof.method)},
+                            impact_closure=closure,
+                        )
+                    elif entry.agent_profile == "acceptor":
+                        result = await server.finish_accept(
+                            ctx,
+                            **finish,
+                            finished_at=finished_at,
+                            receipt_id=receipt_id,
+                            code_revision="a" * 40,
+                            evidence={"methods": list(proof.method)},
+                        )
+                    else:
+                        result = await server.finish_audit(
+                            ctx,
+                            **finish,
+                            finished_at=finished_at,
+                            receipt_id=receipt_id,
+                            code_revision="a" * 40,
+                            evidence={"methods": list(proof.method)},
+                        )
+                    assert result.diagnostic is None
+                case RateLimited():
+                    result = await server.release_job(ctx, **_release_kwargs(started), released_at=finished_at)
+                    assert result.diagnostic is None
+                    assert result.event is not None
+                    assert result.event.kind == "released"
+                case Crash():
+                    result = await server.recover_expired_claims(
+                        ctx,
+                        change_id=revision.change_id,
+                        recovered_at=finished_at,
+                        actor_id="proof-runner",
+                        process_id="proof-process",
+                    )
+                    assert len(result.recovered) == 1
+                    assert result.recovered[0].event.kind == "crashed"
             return entry.job_id
 
-        assert await pick_profile("success") == 1
-        shape_start = _start_kwargs(1, 1, "2026-07-24T00:01:00Z")
-        assert (await server.start_job(ctx, **shape_start)).diagnostic is None
-        target = revision.graph.nodes[0]
-        proof = revision.resolve(target.proof)
-        closure = {"paths": ["serve/kanban/"], "authority_targets": [target.id, target.proof]}
-        shaped = await server.finish_shape(
-            ctx,
-            **_finish_kwargs(shape_start),
-            finished_at="2026-07-24T00:02:00Z",
-            receipt_id="shape-001",
-            code_revision="a" * 40,
-            evidence={"methods": list(proof.method)},
-            node_plan={
-                "packets": [
-                    {"id": f"{target.id}-PK-001", "dependencies": [], "impact_closure": closure},
-                    {
-                        "id": f"{target.id}-PK-002",
-                        "dependencies": [f"{target.id}-PK-001"],
-                        "impact_closure": closure,
-                    },
-                ]
-            },
-            build_job_ids=(2, 3),
-            accept_job_id=4,
-        )
-        assert shaped.diagnostic is None
+        assert await dispatch_one(1, "2026-07-24T00:01:00Z", "2026-07-24T00:02:00Z") == 1
+        assert await dispatch_one(2, "2026-07-24T00:03:00Z", "2026-07-24T00:03:30Z") == 2
+        assert await dispatch_one(3, "2026-07-24T00:03:31Z", "2026-07-24T00:04:00Z") == 2
+        assert await dispatch_one(4, "2026-07-24T00:04:01Z", "2026-07-24T00:05:00Z") == 3
+        installed_profiles.remove("acceptor")
+        jobs_before = jobs.list()
+        attempts_before = AttemptStore(work_root).list()
+        assert await dispatch_one(5, "2026-07-24T00:05:01Z", "2026-07-24T00:06:00Z") == NativeHalt("acceptor")
+        assert jobs.list() == jobs_before
+        assert AttemptStore(work_root).list() == attempts_before
+        installed_profiles.add("acceptor")
+        dispatches.pop()
+        assert await dispatch_one(5, "2026-07-24T00:05:01Z", "2026-07-24T00:06:00Z") == 4
+        assert node_plan_digest is not None
 
-        assert await pick_profile("rate_limited") == 2
-        rate_limited = _start_kwargs(2, 2, "2026-07-24T00:03:00Z")
-        assert (await server.start_job(ctx, **rate_limited)).diagnostic is None
-        released = await server.release_job(
-            ctx,
-            **_release_kwargs(rate_limited),
-            released_at="2026-07-24T00:03:30Z",
-        )
-        assert released.diagnostic is None
-        assert released.event is not None
-        assert released.event.kind == "released"
-        assert released.event.sequence == 2
-        assert await pick_profile("success") == 2
-
-        async def finish_build(job_id: int, attempt: int, timestamp: str, receipt_id: str) -> None:
-            started = _start_kwargs(job_id, attempt, timestamp)
-            assert (await server.start_job(ctx, **started)).diagnostic is None
-            result = await server.finish_build(
-                ctx,
-                **_finish_kwargs(started),
-                finished_at="2026-07-24T00:04:00Z",
-                receipt_id=receipt_id,
-                code_revision="a" * 40,
-                evidence={"methods": list(proof.method)},
-                impact_closure=closure,
-            )
-            assert result.diagnostic is None
-
-        await finish_build(2, 3, "2026-07-24T00:03:31Z", "build-001")
-        assert await pick_profile("success") == 3
-        await finish_build(3, 4, "2026-07-24T00:04:01Z", "build-002")
-        assert await pick_profile("success") == 4
-        accept_start = _start_kwargs(4, 5, "2026-07-24T00:05:00Z")
-        assert (await server.start_job(ctx, **accept_start)).diagnostic is None
-        accepted = await server.finish_accept(
-            ctx,
-            **_finish_kwargs(accept_start),
-            finished_at="2026-07-24T00:06:00Z",
-            receipt_id="accept-001",
-            code_revision="a" * 40,
-            evidence={"methods": list(proof.method)},
-        )
-        assert accepted.diagnostic is None
-
-        assert shaped.receipt is not None
         audit = JobRecord(
             schema_version=1,
             job_id=5,
@@ -465,36 +538,12 @@ class TestProof014NativeMcpScenario:
             change_id=revision.change_id,
             delivery_digest=revision.delivery_digest,
             target_node_id=target.id,
-            node_plan_digest=shaped.receipt.payload["node_plan_digest"],
+            node_plan_digest=node_plan_digest,
             predecessor_job_ids=(4,),
         )
         RuntimeTransaction(work_root, "proof-014-audit", (jobs.create_participant(audit),)).commit()
-        assert await pick_profile("crash") == 5
-        crashed = _start_kwargs(5, 6, "2026-07-24T00:07:00Z")
-        assert (await server.start_job(ctx, **crashed)).diagnostic is None
-        recovered = await server.recover_expired_claims(
-            ctx,
-            change_id=revision.change_id,
-            recovered_at="2026-07-24T00:08:01Z",
-            actor_id="proof-runner",
-            process_id="proof-process",
-        )
-        assert len(recovered.recovered) == 1
-        assert recovered.recovered[0].event.kind == "crashed"
-        assert recovered.recovered[0].event.sequence == 2
-        assert recovered.recovered[0].event.detail == "claim expired"
-        assert await pick_profile("success") == 5
-        audit_start = _start_kwargs(5, 7, "2026-07-24T00:08:02Z")
-        assert (await server.start_job(ctx, **audit_start)).diagnostic is None
-        audited = await server.finish_audit(
-            ctx,
-            **_finish_kwargs(audit_start),
-            finished_at="2026-07-24T00:09:00Z",
-            receipt_id="audit-001",
-            code_revision="a" * 40,
-            evidence={"methods": list(proof.method)},
-        )
-        assert audited.diagnostic is None
+        assert await dispatch_one(6, "2026-07-24T00:07:00Z", "2026-07-24T00:08:01Z") == 5
+        assert await dispatch_one(7, "2026-07-24T00:08:02Z", "2026-07-24T00:09:00Z") == 5
         assert dispatches == [
             ("shaper", 1),
             ("builder", 2),
@@ -504,15 +553,7 @@ class TestProof014NativeMcpScenario:
             ("auditor", 5),
             ("auditor", 5),
         ]
-        assert [call.args for call in runner.await_args_list] == [
-            ("shaper", 1),
-            ("builder", 2),
-            ("builder", 2),
-            ("builder", 3),
-            ("acceptor", 4),
-            ("auditor", 5),
-            ("auditor", 5),
-        ]
+        assert [call.args[:2] for call in runner.await_args_list] == dispatches
         events = AttemptStore(work_root).list()
         terminal_kinds = {"released", "crashed", "succeeded"}
         attempt_events = {

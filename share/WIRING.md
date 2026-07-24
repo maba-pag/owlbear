@@ -51,14 +51,14 @@ delegates are shown because they affect runtime behavior but do not have reposit
 
 | Agent | Model | Required reading | Delegates | Hooks |
 |-------|-------|------------------|-----------|-------|
-| orchestrator | GPT-5.6 Terra | `w-orchestration` | builder, verifier, collector, memory-curator, Explore | None |
-| shaper | GPT-5.6 Sol | `r-pipeline-protocol`, `r-workspace-governance` | shaper-challenger, Explore | `PreToolUse`: deny non-document writes |
-| builder | GPT-5.6 Terra | `r-pipeline-protocol`, `r-workspace-governance`, `h-codebase-orientation` | builder-challenger | `SessionStart`: task context; `PostToolUse`: lint changed files |
-| verifier | GPT-5.6 Terra | `r-pipeline-protocol`, `r-workspace-governance`, `h-codebase-orientation` | verifier-challenger | `SessionStart`: task context; `PostToolUse`: lint changed files |
+| orchestrator | GPT-5.6 Terra | `w-orchestration` | builder, verifier, collector, memory-curator, Explore | None; legacy `pick_tasks` plus non-default IF-015 `pick_jobs`, `start_job`, finish, release, and recovery tools |
+| shaper | GPT-5.6 Sol | `r-pipeline-protocol`, `r-challenger-protocol`, `r-workspace-governance` | shaper-challenger, Explore | `PreToolUse`: deny non-document writes |
+| builder | GPT-5.6 Terra | `r-pipeline-protocol`, `r-challenger-protocol`, `r-workspace-governance`, `h-codebase-orientation` | builder-challenger | `SessionStart`: task context; `PostToolUse`: lint changed files |
+| verifier | GPT-5.6 Terra | `r-pipeline-protocol`, `r-challenger-protocol`, `r-workspace-governance`, `h-codebase-orientation` | verifier-challenger | `SessionStart`: task context; `PostToolUse`: lint changed files |
 | collector | GPT-5.6 Terra | `r-pipeline-protocol`, `r-workspace-governance`, `h-mcp-kanban` | Explore | `PreToolUse`: deny writes except scratch |
-| shaper-challenger | Claude Sonnet 5 | `h-ac-quality`, `h-module-design`, `r-pipeline-protocol` | None | `PreToolUse`: deny writes except scratch |
-| builder-challenger | MAI-Code-1-Flash | `r-pipeline-protocol` | None | `PostToolUse`: lint changed files |
-| verifier-challenger | GPT-5.6 Luna | `r-pipeline-protocol` | None | `PreToolUse`: deny writes except scratch |
+| shaper-challenger | Claude Sonnet 5 | `h-ac-quality`, `h-module-design`, `r-challenger-protocol` | None | `PreToolUse`: deny writes except scratch |
+| builder-challenger | MAI-Code-1-Flash | `r-challenger-protocol` | None | `PostToolUse`: lint changed files |
+| verifier-challenger | GPT-5.6 Luna | `r-challenger-protocol` | None | `PreToolUse`: deny writes except scratch |
 | test-curator | GPT-5.6 Terra | `w-test-curation` | None | `PreToolUse`: deny source writes |
 | memory-curator | GPT-5.6 Terra | `w-mem-curation` | None | None |
 | knowledge-ingestor | GPT-5.6 Luna | `h-knowledge-ops` | None | None |
@@ -81,7 +81,7 @@ loading relationships, and tests already enforce the sensitive Kanban and memory
 | `architecture-review` | Current agent directed by prompt | Loads module-design, orientation, visual-output, and idea-refinement skills |
 | `arch-audit` | Current agent directed by prompt | Loads `h-module-design` |
 | `frontend-audit` | Current agent directed by prompt | Loads frontend design and conventions; loads frontend proof guidance only for that toolchain |
-| `memory-audit` | Current agent directed by prompt | Loads memory structure, MCP memory, and curation skills before review |
+| `memory-audit` | Current agent directed by prompt | Loads memory structure and MCP memory before review; pending inspection uses preflight metadata and hands curation to `memory-curator` |
 | `legacy-audit` | Current agent directed by prompt | Uses its prompt-defined read-only audit procedure |
 
 Project-local prompts are outside the portable inventory. They may select built-in agents or load
@@ -114,7 +114,8 @@ in the preceding table and must not be mistaken for guaranteed session-start con
 
 | Skill | Required by |
 |-------|-------------|
-| `r-pipeline-protocol` | shaper, builder, verifier, collector, shaper-challenger, builder-challenger, verifier-challenger |
+| `r-pipeline-protocol` | shaper, builder, verifier, collector |
+| `r-challenger-protocol` | shaper, builder, verifier, shaper-challenger, builder-challenger, verifier-challenger |
 | `r-workspace-governance` | shaper, builder, verifier, collector |
 | `h-codebase-orientation` | builder, verifier |
 | `h-mcp-kanban` | collector |

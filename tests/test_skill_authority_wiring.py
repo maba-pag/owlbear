@@ -12,6 +12,15 @@ _SHARE_ROOT = _REPO_ROOT / "share"
 _EXPECTED_REQUIRED_READERS = {
     "h-codebase-orientation": {"builder", "verifier"},
     "h-module-design": {"shaper-challenger"},
+    "r-challenger-protocol": {
+        "builder",
+        "builder-challenger",
+        "shaper",
+        "shaper-challenger",
+        "verifier",
+        "verifier-challenger",
+    },
+    "r-pipeline-protocol": {"builder", "collector", "shaper", "verifier"},
     "r-workspace-governance": {
         "builder",
         "collector",
@@ -154,7 +163,19 @@ def test_pipeline_kanban_tools_follow_role_boundaries() -> None:
             "show_task",
             "start_work",
         },
-        "orchestrator": {"edit_task", "end_work", "pick_tasks"},
+        "orchestrator": {
+            "edit_task",
+            "end_work",
+            "pick_tasks",
+            "pick_jobs",
+            "start_job",
+            "finish_shape",
+            "finish_build",
+            "finish_accept",
+            "finish_audit",
+            "release_job",
+            "recover_expired_claims",
+        },
         "shaper": {
             "create_request",
             "create_task",
@@ -190,19 +211,34 @@ def test_pipeline_kanban_tools_follow_role_boundaries() -> None:
 
 
 def test_pipeline_commit_gate_includes_final_task_state() -> None:
-    """Pipeline closure commits after end_work and includes archive moves explicitly."""
+    """Pipeline timing and commit mechanics have distinct, reachable authorities."""
     governance = (_REPO_ROOT / "share/skills/r-workspace-governance/SKILL.md").read_text(encoding="utf-8")
     protocol = (_REPO_ROOT / "share/skills/r-pipeline-protocol/SKILL.md").read_text(encoding="utf-8")
+    kanban = (_REPO_ROOT / "share/skills/h-mcp-kanban/SKILL.md").read_text(encoding="utf-8")
 
     assert "call `end_work` first" in governance
     assert "Do not return `DONE`, `PASS`, or `ARCHIVED`" in governance
     assert "### After `end_work`" in protocol
-    assert "Include the final task record in every pipeline commit" in protocol
-    assert "both its former task path and final archive path" in protocol
+    assert "complete the scoped commit gate before" in protocol
+    assert "Follow `r-workspace-governance` → `Commit Discipline`" in protocol
+    assert "Never translate commit failure into `DONE`, `PASS`, or `ARCHIVED`" in protocol
+    assert "both the former `.owlbear/kanban/tasks/{slug}.md` path" in governance
+    assert "`end_work` does not complete pipeline work" in kanban
+    assert "follow `r-workspace-governance` for scoped commit mechanics" in kanban
     assert 'block_reason="COMMIT_FAILED:' in governance
     assert "filesystem block prevents orchestrator" in governance
     assert 'block_reason=""' in governance
-    assert re.search(r"archived\s+tasks are already off-board", protocol, re.IGNORECASE)
+    assert re.search(r"archived task is already\s+off-board", governance, re.IGNORECASE)
+
+
+def test_universal_loop_detection_has_complete_pipeline_routing() -> None:
+    """Loop exhaustion stops universally and routes claimed pipeline work explicitly."""
+    system = (_SHARE_ROOT / "instructions/owlbear-system.instructions.md").read_text(encoding="utf-8")
+
+    assert "Tier 3: 3+ attempts — stop and report what failed" in system
+    assert "load `r-pipeline-protocol`" in system
+    assert "under `Interruptions And Requests` before mutating it" in system
+    assert "§5 Escalation Routing" not in system
 
 
 def test_pipeline_agents_bound_repair_and_prove_returned_work() -> None:
@@ -231,6 +267,72 @@ def test_pipeline_agents_bound_repair_and_prove_returned_work() -> None:
 
     assert "Treat each failure key in the latest follow-up as the repair identity" in repair
     assert "each current failure key and the authority" in repair
+
+
+def test_challenger_decisions_have_one_reachable_authority() -> None:
+    """Every challenger and caller loads the complete advisory decision contract."""
+    challenger_protocol = (_SHARE_ROOT / "skills/r-challenger-protocol/SKILL.md").read_text(encoding="utf-8")
+    pipeline_protocol = (_SHARE_ROOT / "skills/r-pipeline-protocol/SKILL.md").read_text(encoding="utf-8")
+    spec_shaping = (_SHARE_ROOT / "skills/w-spec-shaping/SKILL.md").read_text(encoding="utf-8")
+
+    assert "decision: pass|fail|reconsider" in challenger_protocol
+    assert "`fail` and `reconsider` are advisory decisions" in challenger_protocol
+    assert "Builder records the planning defect and rejects the task to `shape`" in challenger_protocol
+    assert "Verifier records the planning defect and reshapes the task to `shape`" in challenger_protocol
+    assert "### Minimum Change Review" in challenger_protocol
+    assert "Challenger decisions are advisory to their caller" in pipeline_protocol
+
+    for agent_name in (
+        "builder",
+        "builder-challenger",
+        "shaper",
+        "shaper-challenger",
+        "verifier",
+        "verifier-challenger",
+    ):
+        agent = (_AGENTS_ROOT / f"{agent_name}.agent.md").read_text(encoding="utf-8")
+        assert "r-challenger-protocol" in _required_skills(_AGENTS_ROOT / f"{agent_name}.agent.md")
+        assert "decision: pass|fail|reconsider" in agent or not agent_name.endswith("-challenger")
+
+    for challenger_name in ("builder-challenger", "shaper-challenger", "verifier-challenger"):
+        assert "r-pipeline-protocol" not in _required_skills(_AGENTS_ROOT / f"{challenger_name}.agent.md")
+
+    assert "Treat `reconsider` as a missing or invalid planning premise" in spec_shaping
+
+    builder_challenger = (_AGENTS_ROOT / "builder-challenger.agent.md").read_text(encoding="utf-8")
+    shaper_challenger = (_AGENTS_ROOT / "shaper-challenger.agent.md").read_text(encoding="utf-8")
+    verifier_challenger = (_AGENTS_ROOT / "verifier-challenger.agent.md").read_text(encoding="utf-8")
+    assert "return `reconsider` and tell the\n  builder to route the planning premise to shape" in builder_challenger
+    assert "Return `reconsider` when a material Brief-readiness" in shaper_challenger
+    assert "Return `reconsider` when PASS depends on changing scope" in verifier_challenger
+
+
+def test_repair_closure_evidence_has_one_shared_challenger_authority() -> None:
+    """Risky repair evidence is produced by task repair and judged by the shared protocol."""
+    protocol = (_SHARE_ROOT / "skills/r-challenger-protocol/SKILL.md").read_text(encoding="utf-8")
+    repair = (_SHARE_ROOT / "skills/w-task-repair/SKILL.md").read_text(encoding="utf-8")
+    shaper = (_AGENTS_ROOT / "shaper.agent.md").read_text(encoding="utf-8")
+    challenger = (_AGENTS_ROOT / "shaper-challenger.agent.md").read_text(encoding="utf-8")
+
+    assert "Repair Closure Map" in protocol
+    assert "Repair Closure Map" in repair
+    assert "Repair Closure Map" in challenger
+    assert "r-challenger-protocol" in _required_skills(_AGENTS_ROOT / "shaper.agent.md")
+    assert "r-challenger-protocol" in _required_skills(_AGENTS_ROOT / "shaper-challenger.agent.md")
+    assert "Repair Closure Map" not in shaper
+
+
+def test_pipeline_channel_b_excludes_taskless_memory_curation() -> None:
+    """Taskless memory curation keeps its output contract outside task-owner Channel B."""
+    protocol = (_SHARE_ROOT / "skills/r-pipeline-protocol/SKILL.md").read_text(encoding="utf-8")
+    curator = (_AGENTS_ROOT / "memory-curator.agent.md").read_text(encoding="utf-8")
+    curation = (_SHARE_ROOT / "skills/w-mem-curation/SKILL.md").read_text(encoding="utf-8")
+
+    channel_b = protocol.split("### Channel B", maxsplit=1)[1].split("### Current Lifecycle Evidence", maxsplit=1)[0]
+    assert "Task-owning pipeline agents" in channel_b
+    assert "memory-curator" not in channel_b
+    assert "Channel B does not apply" in curator
+    assert "## Step 7 — Return Channel A Signal" in curation
 
 
 def test_retired_authority_names_are_absent_from_shared_ecosystem() -> None:

@@ -5,7 +5,7 @@ argument-hint: "Orchestrate all eligible work"
 user-invocable: true
 disable-model-invocation: true
 model: GPT-5.6 Terra (copilot)
-tools: [vscode/toolSearch, read/readFile, agent, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/pick_tasks]
+tools: [vscode/toolSearch, read/readFile, agent, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/pick_tasks, ob-kanban/pick_jobs, ob-kanban/start_job, ob-kanban/finish_shape, ob-kanban/finish_build, ob-kanban/finish_accept, ob-kanban/finish_audit, ob-kanban/release_job, ob-kanban/recover_expired_claims]
 agents:
   - builder
   - verifier
@@ -29,6 +29,14 @@ Air traffic controller. You sequence aircraft (tasks) and hand them to specialis
 - **Follow `w-orchestration`** for planning, dispatch, and recovery.
 - **Use only the latest `pick_tasks` plan.** Agent output never authorizes routing.
 - **Continue until `pick_tasks` returns no waves or the user intervenes.**
+
+### Native Bootstrap Contract
+
+`pick_tasks` remains the default task carrier until DN-012 performs the atomic cutover. When explicitly
+invoked for an admitted native change, use only `pick_jobs`, `start_job`, the purpose-specific finish tool,
+`release_job`, and `recover_expired_claims`; dispatch the returned `shaper`, `builder`, `acceptor`, or
+`auditor` profile mechanically, finalize one structured attempt, recover typed failures, then re-plan.
+Do not interpret agent prose, adapt native jobs into legacy tasks, or combine the two loops.
 
 </critical_rules>
 

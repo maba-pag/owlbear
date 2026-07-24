@@ -1,10 +1,10 @@
 ---
 id: 2025
 title: 'P4-04: Run graph-aware native orchestration'
-status: build
+status: verify
 priority: high
 created: 2026-07-24T16:54:49.020973+02:00
-updated: 2026-07-24T21:45:43.772902+02:00
+updated: 2026-07-24T22:12:57.128786+02:00
 tags:
   - phase-4
   - scope:core
@@ -321,3 +321,16 @@ Qualify the existing `Do not dispatch shape work` / `shape stays user-facing thr
 - Challenge: first shaper-challenger pass failed on unavailable profiles and omitted WIRING. After AC-8/fail-closed behavior and WIRING restoration, second challenge returned `decision: pass`; its non-blocking legacy/native shaper contradiction was also resolved in the task body.
 - Validation: `uv run pytest tests/test_agentview_ac_params.py -q` passed (13); `git diff --check` passed; current orchestrator agent/skill validators pass as baseline. All 20 recalled shaper memories were assessed.
 - Board audit: parent `#1980`, dependencies `#2022 | #2023 | #2024`, and admitted digest remain unchanged. Route: build.
+
+[[2026-07-24T22:12:57+02:00]]
+## Builder Notes
+- Change envelope: restored the admitted, explicitly non-default IF-015 native branch and resolved the returned `AC-5/native-proof-014-scenario` failure. No MCP bridge/runtime API, legacy carrier, or role-body changes.
+- Files changed: `share/agents/orchestrator.agent.md`, `share/skills/w-orchestration/SKILL.md`, `share/prompts/orchestrate.prompt.md`, `share/WIRING.md`, `serve/mcp-kanban/tests/test_mcp_surface_contract.py`, `tests/test_skill_authority_wiring.py`, and this task record.
+- Change Module Map deviations: none. The bridge remains the existing `owlbear_mcp_kanban` IF-015 surface; the scenario invokes real bridge tools over `DispatchRuntime`; the runner is the allowed local replacement.
+- Proof selected: strengthened maintained PROOF-014 because the repeated verifier failure identified a concrete regression: typed runner results could be ignored while lifecycle calls were hardcoded. The scenario now makes `Success | RateLimited | Crash` the sole selector of public finish/release/recovery operations. Artifact and unavailable-profile assertions protect the restored executable policy.
+- Durable-test justification: existing maintained scenario and authority-wiring test were extended, not a new harness. They guard the shared MCP/orchestration boundary, are easy to regress by instruction cleanup, and directly protect the rejected behavior.
+- Commands run: `uv run pytest serve/mcp-kanban/tests/test_mcp_surface_contract.py::TestProof014NativeMcpScenario -q` -> 2 passed; `uv run pytest serve/mcp-kanban/tests/test_mcp_surface_contract.py serve/kanban/tests/test_dispatch_runtime.py serve/kanban/tests/test_proof_checkout.py tests/test_skill_authority_wiring.py tests/test_agentview_ac_params.py -q` -> 48 passed; `uv run ruff check serve/mcp-kanban/tests/test_mcp_surface_contract.py tests/test_skill_authority_wiring.py` -> passed; `git diff --check` -> passed.
+- AC-to-evidence map: AC-1 registry/schema snapshot passed; AC-2 focused real MCP/DispatchRuntime scenario passed; AC-3 and AC-4 focused checkout/recovery tests passed; AC-5 artifact guard proves all eight IF-015 tools and non-default native declarations across agent/skill/prompt/WIRING while `pick_tasks` remains; AC-6 `dispatch_one` passes selected profile, job ID, and start context to its runner and matches typed return values; AC-7 public operation result, persisted `[started, terminal]` pairs, and fresh plans are asserted; AC-8 unavailable selected profile returns `NativeHalt` before start/runner and leaves job/attempt stores unchanged.
+- Current failure-key resolution: `AC-5/native-proof-014-scenario` is resolved. The runner return is now causally matched to the corresponding public lifecycle operation; no expected-outcome, operation name, callback, or external hardcoded terminal action remains.
+- Builder-challenger: pass. Independently reran the focused 48-test suite, Ruff, and `git diff --check`; no DONE blocker.
+- Follow-up risks: native mode remains explicitly non-default pending DN-012. Acceptor/auditor bodies remain absent as owned by DN-008/DN-014.
