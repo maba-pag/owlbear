@@ -39,6 +39,31 @@ requires it.
 Treat downstream findings as evidence, not infallible authority. Check a narrow source or board fact
 when it can cheaply disconfirm the requested repair.
 
+### Repair Closure Gate
+
+Use this gate when a failure key has recurred, passing proof was later rejected, the repair crosses
+an assembled boundary, or current source may have drifted from the shaped contract. Ordinary
+mechanical reroutes and single-boundary wording fixes do not need the map.
+
+Before editing the task, append a compact Repair Closure Map to the proposed repair evidence:
+
+| Failure Key | Claimed Production Boundary | Current-Source Artifacts | Cheapest Disconfirming Check | Causal Proof Or Negative Control | Executor Availability |
+|-------------|-----------------------------|--------------------------|------------------------------|----------------------------------|-----------------------|
+| {current key} | {command, workflow, assembled context, or public operation} | {live owners and derived consumers checked} | {source observation or focused probe} | {what must control what; how bypass fails} | {installed executor or observable fail-closed state} |
+
+Rules:
+
+- Read every named live artifact that owns or exposes the claimed boundary; task notes and passing
+   component tests are not substitutes for current source.
+- State the causal relationship under proof. A scenario that independently scripts an expected
+   result and the matching action proves correlation only unless the returned value selects the
+   action and a negative control or operation ledger would detect bypass.
+- Resolve unavailable tools, agent profiles, mutation owners, and downstream capabilities before
+   approval. Use an accepted fail-closed behavior or route the missing premise; do not hide it below
+   a replacement or fixture.
+- Give the complete map to `shaper-challenger`. A missing or contradicted row blocks routing to
+   `build`, even when the repaired AC wording is individually valid.
+
 ## Step 2 - Classify The Repair
 
 Classify before changing the board:
@@ -95,6 +120,8 @@ silently.
 Append `## Shape Notes` through the task lifecycle operation. Include:
 
 - rejection source and repair classification;
+- the Repair Closure Map when the gate was triggered, including the current-source checks and
+   challenger disposition for each failure key;
 - facts checked and any contradiction resolved;
 - exact task, dependency, AC, or status changes;
 - each current failure key and the authority, contract, or route change that resolves it;

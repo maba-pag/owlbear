@@ -39,9 +39,8 @@ without behavior change).
   concrete hunk conflicts with the task or cannot be safely attributed, name that path and hunk in the
   containment reason instead of describing the whole task-owned diff as mixed.
 - Pipeline agents call `end_work` first so the final note, status, and archive move exist, then
-  immediately commit all task-owned durable changes plus the final task record before returning a
-  success verdict. Builders own product and durable proof files, verifiers own local fixes, and
-  collectors own board or archive changes they make.
+  immediately commit the role-owned durable changes defined by `r-pipeline-protocol` plus the final
+  task record before returning a success verdict.
 - Pass explicit file paths to `commit-owned`; never pass `.`, `.owlbear/kanban/`, or another broad
   directory. Include the active task path for ordinary transitions. For archival transitions,
   include both the former `.owlbear/kanban/tasks/{slug}.md` path and the resulting

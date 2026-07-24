@@ -20,6 +20,8 @@ import re
 import sys
 from pathlib import Path
 
+import yaml
+
 _BARE_TODO_RE = re.compile(r"\btodo\b")
 _TODOS_RE = re.compile(r"\btodos\b")
 _RESOLVE_URI = "resolveMemoryFileUri"
@@ -50,7 +52,9 @@ KNOWN_STANDALONE_TOOLS: frozenset[str] = frozenset({"newWorkspace", "selection",
 
 # MCP server names whose tools may appear as 'server/tool_name' or 'server/*'.
 # Update this set when a new MCP server is added to the workspace.
-KNOWN_MCP_SERVERS: frozenset[str] = frozenset({"ob-kanban", "ob-knowledge", "ob-memory", "ddgs", "markitdown"})
+KNOWN_MCP_SERVERS: frozenset[str] = frozenset(
+    {"ob-browser", "ob-kanban", "ob-knowledge", "ob-memory", "ddgs", "markitdown"}
+)
 
 # Tool names that already produce specific ban errors — skip in unknown-tool check
 # to avoid double-reporting the same tool with two different error messages.
@@ -70,6 +74,24 @@ ND3_AGENTS: frozenset[str] = frozenset(
 
 _BUILTINS = frozenset({"Explore", "General Purpose"})
 _AGENT_TABLE_MIN_CELLS = 2
+_REQUIRED_FRONTMATTER = frozenset(
+    {
+        "name",
+        "description",
+        "user-invocable",
+        "disable-model-invocation",
+        "model",
+        "tools",
+    }
+)
+_REQUIRED_SECTIONS = (
+    "persona",
+    "required_reading",
+    "critical_rules",
+    "output_format",
+    "boundaries",
+    "examples",
+)
 
 
 def _frontmatter_lines(content: str) -> list[str]:
@@ -113,10 +135,7 @@ def _is_valid_tool(name: str) -> bool:
         if prefix in KNOWN_MCP_SERVERS:
             return True
     # (c) exact match in KNOWN_STANDALONE_TOOLS
-    if name in KNOWN_STANDALONE_TOOLS:
-        return True
-    # (d) MCP server wildcard pattern — e.g. 'ob-kanban/*'
-    return bool(name.endswith("/*"))
+    return name in KNOWN_STANDALONE_TOOLS
 
 
 def _fm_scalar(fm_lines: list[str], key: str) -> str | None:
@@ -191,37 +210,65 @@ def _check_unknown_tools(fm_lines: list[str], agent_file: Path) -> list[str]:
     return errors
 
 
-def validate_agent(agent_file: Path) -> list[str]:
-    """Validate a single agent file.
-
-    Args:
-        agent_file: Path to the .agent.md file to check.
-
-    Returns:
-        List of validation error messages.  Empty list means valid.
-    """
-    content = Path(agent_file).read_text(encoding="utf-8")
+def _check_structure(content: str, fm_lines: list[str], agent_file: Path) -> list[str]:
+    """Validate frontmatter identity and required body sections."""
     errors: list[str] = []
-    fm_lines = _frontmatter_lines(content)
+    if not fm_lines:
+        errors.append(f"{agent_file}: missing or unterminated YAML frontmatter")
+        metadata: dict[str, object] = {}
+    else:
+        try:
+            parsed = yaml.safe_load("\n".join(fm_lines))
+        except yaml.YAMLError as exc:
+            errors.append(f"{agent_file}: invalid YAML frontmatter: {exc}")
+            metadata = {}
+        else:
+            if not isinstance(parsed, dict):
+                errors.append(f"{agent_file}: YAML frontmatter must be a mapping")
+                metadata = {}
+            else:
+                metadata = parsed
 
-    # Full-file checks for disabled tools
+    missing_keys = sorted(_REQUIRED_FRONTMATTER - metadata.keys())
+    if missing_keys:
+        errors.append(f"{agent_file}: missing required frontmatter fields: {missing_keys}")
+
+    name = agent_file.stem.replace(".agent", "")
+    declared_name = metadata.get("name")
+    if declared_name is not None and declared_name != name:
+        errors.append(f"{agent_file}: frontmatter name '{declared_name}' must match filename '{name}'")
+
+    for section in _REQUIRED_SECTIONS:
+        opening = f"<{section}>"
+        closing = f"</{section}>"
+        if opening not in content or closing not in content:
+            errors.append(f"{agent_file}: missing required <{section}> section")
+    return errors
+
+
+def _check_tool_policy(content: str, fm_lines: list[str], agent_file: Path) -> list[str]:
+    """Validate banned and unknown tool declarations."""
+    errors: list[str] = []
+
     if _RESOLVE_URI in content:
         errors.append(f"{agent_file}: contains '{_RESOLVE_URI}'")
     if _MANAGE_TODO_LIST in content:
         errors.append(f"{agent_file}: contains 'manage_todo_list' — tool is disabled for subagents")
 
-    # tools: line checks — word-boundary checks for banned tool names
     tools = _tools_text(fm_lines)
     if tools and _TODOS_RE.search(tools):
         errors.append(f"{agent_file}: tools: contains 'todos' — tool is disabled for subagents")
     if tools and _BARE_TODO_RE.search(tools):
         errors.append(f"{agent_file}: tools: contains bare 'todo' — tool is disabled for subagents")
 
-    # Unknown-tool check — runs after ban checks so banned tools are not double-reported
     errors.extend(_check_unknown_tools(fm_lines, agent_file))
+    return errors
 
-    # --- Agent table alignment ---
-    name = agent_file.stem.replace(".agent", "")
+
+def _check_delegation(content: str, fm_lines: list[str], agent_file: Path) -> list[str]:
+    """Validate delegated-agent discovery and resolution."""
+    errors: list[str] = []
+
     fm_agents = set(_fm_agents(fm_lines))
     body_agents = set(_body_agents_table(content))
     fm_custom = fm_agents - _BUILTINS
@@ -240,7 +287,37 @@ def validate_agent(agent_file: Path) -> list[str]:
     if in_body_not_fm:
         errors.append(f"{agent_file}: in <agents> table but missing from frontmatter agents:: {sorted(in_body_not_fm)}")
 
-    # --- ND3 DMI rule ---
+    unresolved = sorted(agent for agent in fm_custom if not (agent_file.parent / f"{agent}.agent.md").is_file())
+    if unresolved:
+        errors.append(f"{agent_file}: delegated agents do not resolve beside caller: {unresolved}")
+    return errors
+
+
+def _check_required_reading(content: str, agent_file: Path) -> list[str]:
+    """Validate that directly required skills resolve in the shared skill tree."""
+    match = re.search(r"<required_reading>(.*?)</required_reading>", content, re.DOTALL)
+    if match is None:
+        return []
+    skill_names = set(re.findall(r"`([hwr]-[a-z0-9-]+)`", match.group(1)))
+    skills_root = agent_file.parent.parent / "skills"
+    unresolved = sorted(name for name in skill_names if not (skills_root / name / "SKILL.md").is_file())
+    if not unresolved:
+        return []
+    return [f"{agent_file}: required skills do not resolve beside agent tree: {unresolved}"]
+
+
+def validate_agent(agent_file: Path) -> list[str]:
+    """Validate one agent's structure, tools, delegation, and nesting metadata."""
+    content = Path(agent_file).read_text(encoding="utf-8")
+    fm_lines = _frontmatter_lines(content)
+    errors = [
+        *_check_structure(content, fm_lines, agent_file),
+        *_check_tool_policy(content, fm_lines, agent_file),
+        *_check_delegation(content, fm_lines, agent_file),
+        *_check_required_reading(content, agent_file),
+    ]
+
+    name = agent_file.stem.replace(".agent", "")
     dmi = _fm_scalar(fm_lines, "disable-model-invocation")
     if name in ND3_AGENTS and dmi != "false":
         errors.append(f"{agent_file}: ND3 agent must have disable-model-invocation: false (currently: {dmi})")

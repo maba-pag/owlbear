@@ -175,12 +175,12 @@ uv run python .owlbear/scripts/validate_agents.py
 uv run python .owlbear/scripts/validate_skills.py
 ```
 
-Run the authority and hard-boundary regressions when changing required reading, MCP grants,
+Run ecosystem integrity and write-boundary regressions when changing agent structure, MCP grants,
 delegation, write restrictions, or pipeline ownership:
 
 ```shell
 uv run pytest -q \
-  tests/test_skill_authority_wiring.py \
+  tests/test_agent_ecosystem_validation.py \
   tests/test_write_guard_hooks.py \
   tests/test_deny_non_doc_writes.py
 ```

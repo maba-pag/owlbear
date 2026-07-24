@@ -10,31 +10,9 @@ Structural model for all shared agent, skill, and instruction files. Single sour
 
 ## Foundation
 
-For loading mechanisms (copilot-instructions, instructions, skills), two-tier skill loading, belts-and-suspenders, and tier counts with agent names, see [share/README.md](../../README.md).
-
-This skill specifies file structure, required sections, naming grammar, anti-patterns, and instruction file types — the creation-time spec.
-
-## File Type Selection
-
-| File type | Choose when |
-|-----------|------------|
-| `.prompt.md` | User-facing one-shot command, invoked explicitly. Default for user commands. |
-| `SKILL.md` | Reusable domain knowledge that auto-loads by relevance, or needs co-located resources. |
-| `.agent.md` | Long-lived role with persistent behavior: tool restrictions, model preferences, handoff boundaries, hooks. |
-
-Default: user-facing one-shot commands use `.prompt.md` unless auto-loading or co-located resources are needed.
-
-## Boundary Fitness
-
-| Condition | Tier |
-|-----------|------|
-| Current-project identity, topology, stack, commands, or resources | `copilot-instructions.md` |
-| Universal OwlBear behavior needed by every agent | Authority `.instructions.md` such as `owlbear-system.instructions.md` |
-| Reusable behavior needed by multiple but not all roles | Shared skill or protocol |
-| Content is loaded from `<critical_rules>` | Skill-tier minimum (SKILL.md or authority `.instructions.md`) |
-| Content applies to a single agent only | Agent file body |
-| Content is a step-by-step procedure invoked on-demand | Workflow skill (SKILL.md) |
-| Content is a file-type safety net pointing to a skill | Instruction stub (`.instructions.md`) |
+Use [share/README.md](../../README.md) for the effective instruction stack, loading tiers, owning
+artifact selection, and maintenance workflow. This skill is the creation-time structural authority:
+file schemas, required sections, naming grammar, extraction criteria, and anti-patterns.
 
 ## Agent Extraction Markers
 
@@ -54,7 +32,8 @@ Default: user-facing one-shot commands use `.prompt.md` unless auto-loading or c
 
 ### Precedent
 
-`builder-challenger` extracted from `builder`: independent cheap cross-check, distinct model, and deterministic auto-fix/reporting boundary.
+`builder-challenger` qualifies through its independent cross-check, distinct model, and deterministic
+auto-fix boundary.
 
 ## Principles
 
@@ -81,18 +60,9 @@ An instruction that requires a tool mutation must name the tool, required argume
 outcome-specific fallback. Never shorten an executable procedure to an ambiguous verb such as
 "release", "advance", or "record" unless another loaded authority defines that exact operation.
 
-### Project Instructions Boundary
-
-`copilot-instructions.md` describes the current project. It may contain identity, repository topology,
-technology choices, package-specific commands, and primary project resources. It must not contain
-portable OwlBear workflows, agent behavior, tool manuals, file-placement policy, or pipeline rules.
-
-Shared behavior belongs in `owlbear-system.instructions.md` only when every agent needs it on every
-turn. Otherwise use the narrowest shared skill or protocol and load it from the relevant roles.
-
 ### Implicit Encoding
 
-Every section in an agent file can carry more than its primary function:
+Agent sections also steer behavior implicitly:
 
 | Section | Primary function | Implicit function |
 |---------|-----------------|-------------------|
@@ -131,36 +101,35 @@ hooks:                         # only if enforcement needed
 
 ### Required Sections
 
-**`<persona>`** — 2-3 short paragraphs defining role, expertise, and attitude.
+**`<persona>`** — Usually 1-3 short paragraphs defining role, expertise, and attitude. Use only the
+paragraphs needed to encode the role's distinct behavioral frame; do not pad a narrow role to meet a
+count.
 
-Design process:
-
-1. List the 5 most important behaviors for this agent
-2. Find a real-world scenario where those behaviors arise naturally from the situation's constraints
-3. Frame the persona in that scenario — the emotional stakes should make the desired behaviors feel inevitable, not imposed
-4. Cross-check: which explicit rules in `<critical_rules>` can now be removed because the persona already implies them?
-
-The persona is not decoration — it is an **implicit rule encoder**. A well-chosen emotional framing activates behavioral patterns that would otherwise cost explicit rule tokens.
+Frame a real scenario whose constraints imply the role's most important behaviors. Remove explicit
+rules only when that frame makes the behavior reliably clear; persona text is not decoration.
 
 **`<required_reading>`** — Skills the agent must `read_file` at session start.
 
-Lists the skills this agent needs in 90%+ of sessions. These are Level 0 (direct) dependencies only — transitive dependencies (skills referenced by other skills) are handled by each skill's own Step 0 / preamble.
-
-**Criterion:** if the agent almost always needs the skill (90%+), list it. If the agent sometimes needs it, it stays on-demand (loaded during the workflow when relevant).
+List direct skills needed in 90%+ of sessions. Leave situational skills on-demand and let each
+required skill load its own transitive dependencies.
 
 ```markdown
 <required_reading>
 
-- `r-pipeline-protocol` — task lifecycle, communication, quality
-- `r-pipeline-protocol` — primary workflow/rules source
+- `{primary_skill}` — primary workflow or domain authority
+- `r-pipeline-protocol` — task-owner lifecycle, communication, and closure
+- `r-challenger-protocol` — advisory decisions and caller routing when this role challenges or invokes a challenger
 
 </required_reading>
 ```
 
-**`<critical_rules>`** — 3-7 non-negotiable constraints, ordered by importance.
+**`<critical_rules>`** — The smallest complete set of non-negotiable constraints, ordered by
+importance; 3-7 is the normal range. Exceed it only when every additional rule is distinct,
+agent-specific, and would lose a necessary constraint if combined or moved to shared authority.
 
 - First item: "**Follow the `{primary_skill}` skill** for {1-line summary}."
-- Pipeline agents (T1-T3): second item references `r-pipeline-protocol` for shared conventions.
+- Task-owning pipeline agents reference `r-pipeline-protocol` for lifecycle conventions.
+- Challengers and their callers reference `r-challenger-protocol` for advisory decisions and routing.
 - Every remaining rule must be **unique** to this agent. If the same rule would appear in 2+ agents,
   it belongs in a shared skill, protocol, or authority instruction.
 - Each rule must be **actionable** — it can be verified as followed or violated.
@@ -177,10 +146,12 @@ Lists the skills this agent needs in 90%+ of sessions. These are Level 0 (direct
 
 **`<boundaries>`** — Agent-specific red flags and failure rationalizations.
 
-- Only constraints that apply specifically to THIS agent. Common red flags live in `r-pipeline-protocol`.
+- Only constraints that apply specifically to THIS agent. Common task-owner red flags live in
+  `r-pipeline-protocol`; common challenger red flags live in `r-challenger-protocol`.
 - Optional: failure rationalizations table (common self-deception patterns with correct responses).
 
-**`<examples>`** — 2-3 abstract, principle-based examples.
+**`<examples>`** — Usually 2-3 abstract, principle-based examples. Add more only when each resolves a
+distinct, likely boundary confusion that the existing examples do not cover.
 
 - Mix of good and bad examples.
 - Encode **reasoning patterns**, not action sequences. Abstract examples generalize better than specific ones and cost fewer tokens.
@@ -214,22 +185,20 @@ The `<agents>` table must list every agent in the frontmatter `agents:` array an
 Agent files must NOT contain:
 
 - Step-by-step procedures → belongs in the owning workflow skill
-- Channel A/B protocol definition → belongs in `r-pipeline-protocol`
 - Commit discipline → belongs in `r-workspace-governance`
-- Shared red flags that apply to multiple agents → belongs in `r-pipeline-protocol`
 - Command templates (MCP kanban tools, git) → belongs in the skill's output template
 - Verbatim copies of skill checklist content → reference the skill instead
-- Rules that apply identically to 2+ agents → belongs in a shared location
+- Shared protocols, red flags, or rules → belong in the matching shared skill
 
 ### Nesting Depth & DMI
 
-VS Code has a limitation: at nesting depth ≥2 (3rd-level subagents), agents with `disable-model-invocation: true` cannot be resolved. Additionally, the `<agents>` catalog from the VS Code system prompt is not injected at depth ≥2 — agents rely solely on their own `<agents>` body section to know what subagents are available.
-
 **Rules:**
 
-1. **ND3 agents** (agents callable at nesting depth ≥3) must have `disable-model-invocation: false`.
+1. **ND3 agents** (callable at nesting depth ≥3) must have `disable-model-invocation: false`; VS Code
+  cannot resolve them otherwise.
 2. **ND1/ND2 agents** keep `disable-model-invocation: true` (default for pipeline agents).
-3. **Every dispatching agent** must have an `<agents>` body section listing all agents from its frontmatter `agents:` array — this is the only discovery mechanism at depth ≥2.
+3. **Every dispatching agent** must mirror its frontmatter `agents:` array in `<agents>`; the global
+  agent catalog is unavailable at depth ≥2.
 4. ND3 agents are tagged with `(ND3)` in their `description` field for identification.
 
 **Current ND3 agents:** shaper-challenger, builder-challenger, verifier-challenger.
@@ -288,14 +257,13 @@ Commit per `r-workspace-governance` → Commit Discipline.
 {Status transition + claim release}
 
 ## Output Template
-{Full Channel B template. The template's STRUCTURE forces evidence — if a column
-exists for "Evidence," the agent must find evidence to fill it.}
+{Full Channel B template with fields that force required evidence.}
 
 ## Known Pitfalls
 - {pitfall}: {avoidance}
 ```
 
-**Step 0 applies to:** Workflow skills where the agent claims and processes a task, such as `w-mem-curation` and `w-task-decomposition`.
+**Step 0 applies to:** Task-claiming workflows such as `w-mem-curation` and `w-task-decomposition`.
 
 **No Step 0:** w-orchestration (own dispatch pattern), w-test-curation (suite-scoped inventory, not task-scoped).
 
@@ -315,11 +283,11 @@ Handbook skills carry domain-specific knowledge. Organized by domain topics with
 
 ## Instruction File Types
 
-Instruction files (`.instructions.md`) serve two distinct roles. Knowing which role a file plays determines its permitted content.
+Instruction files (`.instructions.md`) are either stubs or authorities.
 
 ### Stubs — Safety Nets
 
-Instruction stubs are **safety nets** — minimal files that catch agents working in a domain without having loaded the relevant skill.
+Instruction stubs are minimal safety nets for agents that reach a domain without its skill loaded.
 
 Format:
 
@@ -334,16 +302,6 @@ For project-specific {domain} conventions, read the `{skill_name}` skill.
 
 A stub is justified when there is a realistic scenario where an agent edits files matching the glob WITHOUT having already loaded the skill from its critical_rules or workflow.
 
-Current stubs:
-
-| File | applyTo | Points to |
-|------|---------|----------|
-| `python.instructions.md` | `"**/*.py"` | `h-python-conventions` |
-| `frontend.instructions.md` | `"**/*.tsx,**/*.jsx,**/*.vue,**/*.svelte,**/*.css,**/*.scss"` | `h-frontend-conventions` |
-| `research-docs.instructions.md` | `".owlbear/research/*.md"` | `w-research` |
-| `agent-ecosystem.instructions.md` | `"share/agents/**,share/skills/**,share/instructions/**,share/prompts/**,.owlbear/agents/**,.owlbear/skills/**,.owlbear/instructions/**,.owlbear/prompts/**"` | `share/README.md` + `h-agent-structure` |
-| `doc-standards.instructions.md` | `"README.md,README-consumer.md,SECURITY.md,serve/*/README.md,share/README.md,setup/*.md"` | `r-doc-standards` |
-
 ### Authority Files — Embedded Rules
 
 | Use authority `.instructions.md` when | Rationale |
@@ -351,12 +309,6 @@ Current stubs:
 | Rules are universal or near-universal | No single skill boundary fits |
 | Content is always needed for the target scope | Loading a skill on every interaction would be wasteful |
 | `applyTo` scope is broad enough that no single skill owns the content | Authority files cross skill boundaries |
-
-Current authority files:
-
-| File | applyTo | Role |
-|------|---------|------|
-| `owlbear-system.instructions.md` | `**` | System instructions — decision heuristics, system awareness, memory governance, and operational fundamentals (universal) |
 
 | Rule | Value |
 |------|-------|

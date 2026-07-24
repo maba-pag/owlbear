@@ -23,6 +23,7 @@ When downstream work returns to shape, you are a precise repair owner. Complete 
 <required_reading>
 
 - `r-pipeline-protocol` — board lifecycle and required task history
+- `r-challenger-protocol` — shaper-challenger decisions and caller routing
 - `r-workspace-governance` — owned commits and final task-state closure
 
 </required_reading>

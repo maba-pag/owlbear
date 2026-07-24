@@ -12,9 +12,8 @@ system.
 
 ## When to Use
 
-Use this workflow when someone has an idea they may want implemented, but its intended effect,
-normal use, boundaries, important behavior, or proof of success is not yet concrete enough to plan.
-It also works for an existing plan or design that still needs sharpening.
+Use this workflow when an idea, plan, or design is not yet concrete enough for its planning
+destination.
 
 Do not use it when:
 
@@ -51,9 +50,8 @@ Restate the starting point in two to four sentences without pretending it is alr
 - what is known versus still vague.
 
 Build a private, dependency-ordered question tree from the idea. Potential branches include user
-value, the concrete effects that make the result worth using, normal workflow, observable behavior,
-boundaries, preserved behavior, constraints, failure handling, and success. Include only branches
-whose answers could materially change what gets proposed. Do not display the tree as a questionnaire.
+value, workflow, behavior, boundaries, constraints, failure handling, and success. Include only
+branches whose answers could materially change the proposal. Do not display the tree.
 
 ## Step 2 - Investigate Before Asking
 
@@ -101,10 +99,9 @@ four options and their benefits, costs, risks, and confidence. Do not create an 
 simple clarification, and do not pad it with weak choices.
 
 Do not introduce a smaller first delivery as a routine refinement question. This workflow defines
-the complete change being proposed, not a first building block with an untracked remainder. When a
-scope option would remove or weaken an outcome the user asked for, state the lost value plainly and
-record the exclusion only after the user explicitly accepts it. Do not call omitted work "deferred"
-unless it has a durable destination outside the current proposal.
+the complete proposed change. State the lost value of any option that weakens a requested outcome,
+and record the exclusion only after explicit user acceptance. Call omitted work "deferred" only
+when it has a durable destination outside the proposal.
 
 After asking, stop. Wait for the answer before following another branch.
 
@@ -112,11 +109,10 @@ After asking, stop. Wait for the answer before following another branch.
 
 After each answer:
 
-1. restate what was clarified or chosen in one sentence;
-2. update the working understanding;
-3. mark dependent questions resolved, changed, or newly relevant;
-4. surface contradictions with earlier confirmed understanding;
-5. ask explicitly before replacing a prior user choice.
+1. restate and record the clarification or choice;
+2. update dependent questions;
+3. surface contradictions;
+4. ask before replacing a prior user choice.
 
 Ambiguous answers are not confirmation. Narrow the same branch with the next single Refinement Turn.
 
@@ -128,9 +124,8 @@ The idea is refined enough only when:
 - the behaviors or effects that make the result worth using are concrete;
 - the normal workflow and observable result are understandable;
 - scope boundaries and preserved behavior are explicit where material;
-- every reduction of a user-stated outcome is explicitly accepted and no remainder disappears
-   merely because it was omitted from the proposed change;
-- repository facts have been investigated rather than delegated to the user;
+- every reduction of a user-stated outcome is explicitly accepted;
+- repository facts have been investigated;
 - genuine user-owned choices are confirmed or explicitly deferred;
 - assumptions are labeled with an owner or consequence;
 - success can be observed through a normal assembled workflow;
@@ -187,28 +182,19 @@ The caller decides how to use it.
 
 ## Examples
 
-**Good:** “I want alerts to be more useful” begins with who acts on an alert and what useful action
-should become possible. The workflow recommends a concrete interpretation, asks one question, and
-waits. It does not assume alert delivery architecture.
+**Good:** Source inspection establishes that alerts are synchronous. The workflow recommends a
+concrete interpretation of useful action, asks one timing question, and waits.
 
 **Bad:** The first response asks the user to choose queues, retries, webhooks, storage, and UI layout.
 This invents a design before the idea's outcome and normal workflow are understood.
 
-**Good:** Source inspection establishes that alerts are requested synchronously. A real timing choice
-then emerges, so the next Refinement Turn compares preserving synchronous behavior with introducing
-deferred delivery and recommends one.
-
-**Bad:** Every question is rendered as a decision table even when the user only needs to clarify who
-the feature serves. Ceremony has replaced refinement.
-
 ## Known Pitfalls
 
-- **Starting from a fictional plan:** restate the rough idea honestly; do not imply settled scope.
-- **Interrogation without leverage:** ask only questions that materially sharpen the proposal.
-- **Fact polling:** investigate repository behavior rather than asking the user to recall it.
-- **Decision theater:** compare options only when genuine alternatives emerge.
-- **Premature convergence:** use the readiness gate, not conversational fatigue.
-- **Disappearing remainder:** do not turn a smaller first slice into the whole proposal; record only
-   exclusions the user explicitly accepts.
-- **Destination leakage:** keep planning-tool mechanics in the caller.
-- **Chat-only understanding:** always finish with the confirmed Refined Idea Summary.
+- **Fictional plan:** do not imply settled scope.
+- **Low-leverage interrogation:** ask only what sharpens the proposal.
+- **Fact polling:** investigate repository behavior.
+- **Decision theater:** compare only genuine alternatives.
+- **Premature convergence:** use the readiness gate.
+- **Disappearing remainder:** require explicit exclusions.
+- **Destination leakage:** leave planning mechanics to the caller.
+- **Chat-only understanding:** finish with the confirmed Refined Idea Summary.

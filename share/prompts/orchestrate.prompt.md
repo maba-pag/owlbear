@@ -5,5 +5,5 @@ agent: orchestrator
 
 Orchestrate all eligible work.
 
-For an explicitly requested admitted native change with a candidate revision, use the non-default IF-015 native
-dispatch contract from `w-orchestration`. Otherwise retain the `pick_tasks` bootstrap carrier.
+Use the non-default IF-015 native contract from `w-orchestration` only for an explicitly requested
+admitted change and candidate revision; otherwise use its `pick_tasks` procedure.

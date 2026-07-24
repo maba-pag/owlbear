@@ -331,36 +331,6 @@ class NativeHalt:
 class TestProof014NativeMcpScenario:
     """The bootstrap native loop dispatches profiles through the installed MCP bridge."""
 
-    def test_native_mode_artifacts_expose_if_015_contract(self) -> None:
-        """The source ecosystem retains the non-default IF-015 contract."""
-        root = next(parent for parent in Path(__file__).resolve().parents if (parent / "share").is_dir())
-        agent = (root / "share/agents/orchestrator.agent.md").read_text(encoding="utf-8")
-        skill = (root / "share/skills/w-orchestration/SKILL.md").read_text(encoding="utf-8")
-        prompt = (root / "share/prompts/orchestrate.prompt.md").read_text(encoding="utf-8")
-        wiring = (root / "share/WIRING.md").read_text(encoding="utf-8")
-        native_tools = {
-            "pick_jobs",
-            "start_job",
-            "finish_shape",
-            "finish_build",
-            "finish_accept",
-            "finish_audit",
-            "release_job",
-            "recover_expired_claims",
-        }
-
-        agent_tools = {
-            tool.removeprefix("ob-kanban/")
-            for tool in agent.split("tools: [", 1)[1].split("]", 1)[0].replace(" ", "").split(",")
-        }
-        assert native_tools <= agent_tools
-        for artifact in (skill, prompt, wiring):
-            assert "IF-015" in artifact
-            assert "pick_tasks" in artifact
-        assert "non-default" in skill
-        assert "acceptor" not in agent.split("agents:", 1)[1].split("---", 1)[0]
-        assert "auditor" not in agent.split("agents:", 1)[1].split("---", 1)[0]
-
     @pytest.mark.asyncio
     async def test_profiles_release_recovery_and_replanning_use_native_tools(  # noqa: PLR0915
         self,

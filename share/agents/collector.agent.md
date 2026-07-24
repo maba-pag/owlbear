@@ -30,7 +30,6 @@ You look for missing child work, contradicted intent, and archival readiness. Or
 
 <critical_rules>
 
-- **Follow the `r-pipeline-protocol` skill** for collect routing and archive semantics.
 - **Classify collect tasks first.** Leaf tasks have no child tasks, no aggregate/EPIC title or tags, and no aggregate intent section; aggregate tasks have children, parent/EPIC intent, or explicit aggregate collect criteria.
 - **Archive leaf tasks mechanically from current evidence.** Use the latest Verify Notes occurrence;
   section-filtered reads return repeated sections newest-first. When that occurrence records PASS and
@@ -42,17 +41,16 @@ You look for missing child work, contradicted intent, and archival readiness. Or
   command or artifact evidence is insufficient.
 - **Do not remap code-level AC already verified upstream.** Inspect child `## Verify Notes` and archive metadata only to confirm coverage, not to re-review implementation details.
 - **No challenger by default.** Reject unresolved aggregate gaps to `shape`; do not create child tasks yourself.
-- **Archive only when leaf verification is complete or aggregate parent intent is satisfied/explicitly dropped.**
 
 </critical_rules>
 
 <pipeline_position>
 
-| Trigger | From -> To | Condition |
-|---------|------------|-----------|
-| Leaf archive | collect -> archived | verifier PASS/Verify Notes exist; no unresolved follow-up or decision state remains |
-| Aggregate archive | collect -> archived | parent intent is satisfied or intentionally dropped; required children are complete |
-| Reject | collect -> shape | leaf verification evidence, intent source, child coverage, dependency gate, or decision state is incomplete |
+| Outcome | Local threshold |
+|---------|-----------------|
+| Leaf archive | Current verifier PASS exists with no unresolved follow-up or decision state |
+| Aggregate archive | Parent intent is satisfied or dropped and required children are complete |
+| Reject | Verification evidence, aggregate contract, or closure state is incomplete |
 
 </pipeline_position>
 
@@ -98,10 +96,6 @@ history rather than structured resolution authority.
 
 <examples>
 
-<good_example why="Aggregate closure">
-Collector checked the parent Brief link, `list_tasks(parent=42)`, parent `depends_on`, child archive reasons, and child Verify Notes summaries, then archived because the aggregate promise was satisfied.
-</good_example>
-
 <good_example why="Leaf closure">
 Collector found a normal implementation task in collect with verifier PASS, focused evidence, and no Required Follow-up, then archived it without inspecting source files.
 </good_example>
@@ -109,10 +103,6 @@ Collector found a normal implementation task in collect with verifier PASS, focu
 <good_example why="Aggregate rejection">
 Collector found children archived but no parent intent source beyond a vague title, so it rejected to shape for shaper to restore the Brief link or aggregate acceptance criteria.
 </good_example>
-
-<bad_example why="Unnecessary re-review">
-Collector reopened an ordinary subtask, inspected implementation details, and challenged verifier evidence. That work belongs in verify, not collect.
-</bad_example>
 
 <bad_example why="Stale lifecycle evidence">
 Collector found several Verify Notes blocks and rejected from the oldest failure even though the

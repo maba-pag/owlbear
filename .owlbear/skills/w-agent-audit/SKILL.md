@@ -34,10 +34,11 @@ that stored guidance conflicts with the audited definition; do not inventory mem
 
 ## Setup, Authority, And Evidence
 
-The active customization roots are `.github/copilot-instructions.md`, shared definitions under
-`share/{agents,skills,instructions,prompts}/`, and project-local definitions under
-`.owlbear/{agents,skills,instructions,prompts}/` when present. Discover actual files rather than
-assuming every directory exists.
+Audit only customization source in the current workspace: `.github/`,
+`share/{agents,skills,instructions,prompts}/`, and
+`.owlbear/{agents,skills,instructions,prompts}/` when present. Never inspect or compare sibling,
+installed, or otherwise externally loaded customization trees. Discover actual local files rather
+than assuming every directory exists.
 
 Load only what the selected scope needs:
 
@@ -69,20 +70,14 @@ For every material rule, build this working map:
 | Rule or decision | Current authority | Consumers | Loading mechanism and time | Conflict or gap |
 |------------------|-------------------|-----------|----------------------------|-----------------|
 
-Check the effective surface rather than references in isolation:
-
-- project instructions and universal authority files that are always present;
-- matching `applyTo` instructions for the files being handled;
-- the invoked prompt and selected agent body;
-- skills in `<required_reading>`;
-- companion skills only on paths that actually trigger them;
-- hooks and tool allowlists that enforce or contradict prose.
+Map the applicable project and `applyTo` instructions, prompt, agent, required and triggered
+companion skills, hooks, and tool allowlists.
 
 A rule is mistimed when it loads for roles that rarely need it, is absent when a role normally needs
 it, or arrives only after the decision it is meant to control. Required reading should represent
 roughly 90% use; situational knowledge should remain on demand.
 
-## Finding Admission And Steering Value
+## Finding Admission
 
 Accept a finding only when evidence supports at least one concrete condition:
 
@@ -96,7 +91,7 @@ Accept a finding only when evidence supports at least one concrete condition:
 Separate observed harm from theoretical risk. A hypothetical concern without a concrete failure
 path is context, not an actionable finding.
 
-Keep instruction text when it does at least one of these jobs:
+Instruction text earns its context cost when it:
 
 - supplies a project fact that cannot be recovered cheaply at the decision point;
 - assigns authority, ownership, routing, loading, tools, safety, or an output contract;
@@ -104,39 +99,78 @@ Keep instruction text when it does at least one of these jobs:
 - prevents an observed recurring failure;
 - preserves a non-obvious procedural dependency whose omission changes the result.
 
-Generic trained knowledge is presumptive noise when a capable model would reliably supply it and
-the local system does not require a different choice. Correctness alone does not earn context cost.
-Ask the counterfactual: **if this block disappeared, which decision would change?** If no concrete
-answer exists and no observed failure justifies reinforcement, delete or compress it.
+Generic trained knowledge, framing, repeated conditionals, examples, templates, and historical
+cautions are presumptive noise when they add no local choice, branch, constraint, or evidenced
+failure guard. Correctness alone does not earn context cost, but model familiarity alone does not
+justify deletion: retain concise reinforcement for observed recurring failures such as excess scope
+or low-value tests. Ask: **if this block disappeared, which decision would change?** If none, compress
+or delete it.
 
-Do not remove a rule merely because a model may know it. Retain concise reinforcement when evidence
-shows that models routinely ignore the default, as with minimum-change and test-restraint rules.
+For duplication or context-cost findings, report the affected block or loading cluster's approximate
+word count, loading tier or timing, and direct-consumer count. Estimate removable words only after
+classifying concrete blocks; use measurements for impact and priority, never as a finding threshold,
+quota, or tokenizer-precision exercise.
 
-Compress or remove framing, trained language/framework knowledge, repeated conditionals, examples,
-templates, and historical cautions when they add no branch, constraint, or evidenced failure guard.
+### Temporal Narration Test
 
-Evaluate by section or behavioral block. Sentence-by-sentence tagging is reserved for resolving a
-specific ambiguity; it is not a mandatory output.
+In audited agents, skills, instructions, and prompts, treat migration stories, milestone or
+task IDs, superseded behavior, prior implementation details, and future-phase framing as presumptive
+noise. This includes indirect framing such as a later phase, migration point, or post-cutover state;
+it is not a lexical test for words such as "until" or "pending". Ask whether a presently observable
+condition changes a consumer action now.
+
+- If it does, state the current condition and action directly. Retain an identifier only when the
+   consumer must resolve it to decide or act.
+- If it does not, delete the narration or move it to its planning, task-history, decision, research,
+   or test authority.
+
+Do not apply this presumption to artifacts whose purpose is planning or history. Historical truth
+alone does not justify runtime context cost. Current loop stop conditions and named data states are
+operational contracts, not temporal narration.
+
+### Rewrite Conservation
+
+Before proposing a rewrite, classify the affected section or behavioral block as `keep`,
+`strengthen`, `compress`, `move`, or `delete`. `Strengthen` makes an obligation more explicit or
+prominent without changing its scope. For every action except `keep`, map the block's authority,
+routing, safety, timing, scope, imperative force, exceptions, evidence, and output obligations to
+surviving text and its loading path.
+
+Reject rewrites that merge materially different conditions, weaken imperative force, change scope,
+or leave a load-bearing obligation implied. Apply this test to the changed block, not the whole
+ecosystem; use sentence-level tagging only to resolve a specific ambiguity.
+
+When the block controls operations, extend the map with:
+
+| Condition or decision point | Tool, delegate, hook, or validator | Required arguments and ordering | Results, retries, recovery, and stop behavior | Surviving owner and loading path |
+|-----------------------------|------------------------------------|---------------------------------|---------------------------------------------|----------------------------------|
+
+Inventory only affected operations, including prose that changes whether, when, or how they run.
+Use separate rows when conditions change an operation or its arguments. Preserve every argument,
+ordering dependency, result branch, retry, recovery action, and stop condition. Remove an operation
+from the target only when another authority defines the complete obligation and reliably loads
+before the decision; otherwise the explicit call remains. Name the surviving owner and loading path
+in the finding or implementation package.
 
 ## Shared Audit Dimensions
 
-1. **Coherence and timing** - compatible rules reach the roles that need them before the decision.
-2. **Authority and duplication** - each behavior has one fit source of truth and at most one useful reinforcement.
-3. **Structure and execution** - artifact type, frontmatter, tools, hooks, references, and delegation match runtime behavior.
-4. **Signal quality** - retained text passes the Steering Value Test at its loading frequency and consumer count.
-5. **Completeness and currency** - load-bearing behavior has an owner; stale or speculative behavior is evidenced before removal.
+Apply the gates above across five dimensions: coherence and timing; authority and duplication;
+structure and execution; signal quality at the actual loading frequency; and completeness and
+currency.
 
 ## Broad Audit
 
 Use broad mode to identify patterns and priorities, not to deeply rewrite every file.
 
-1. Resolve the selected scope. For the whole ecosystem, inspect the complete active customization
-   roots.
+1. Resolve the selected scope. For the whole ecosystem, inspect the complete local customization
+   roots defined above.
 2. Discover current files and counts; do not copy catalog counts from a prompt.
 3. Run the read-only validators documented by the ecosystem when available. In this repository,
-   start with `.owlbear/scripts/validate_agents.py` and `.owlbear/scripts/validate_skills.py`; use
-   Markdownlint or `git diff --check` only when relevant. Validator output is evidence, not the
-   entire audit.
+   start with `uv run python .owlbear/scripts/validate_agents.py` and
+   `uv run python .owlbear/scripts/validate_skills.py`; use Markdownlint or `git diff --check` only
+   when relevant. If a validator is absent or fails to run, record the command and result under
+   Coverage, then continue with source inspection. Validator output is evidence, not the entire
+   audit.
 4. Build a metadata-level loading map from frontmatter, `required_reading`, `applyTo`, prompt agents,
    tool lists, hooks, and `WIRING.md`.
 5. Prioritize full body reads for:
@@ -145,15 +179,15 @@ Use broad mode to identify patterns and priorities, not to deeply rewrite every 
    - unusually large required-reading chains;
    - duplicate rule phrases or stale references;
    - files implicated by validator or wiring mismatches.
+   For context-cost candidates, prefer high-frequency and high-consumer surfaces over raw file size.
 6. Apply the Shared Audit Dimensions to those evidence-backed candidates.
-7. Group related findings by the authority change that resolves them. Do not emit progressive flags
-   or ask for one decision per sentence.
+7. Group findings by the authority change that resolves them.
 
 Return:
 
 ### Coverage
 
-- scope and active roots inspected;
+- scope and local roots inspected;
 - validators run and unavailable checks;
 - files read fully versus mapped from metadata;
 - material evidence limits.
@@ -167,17 +201,10 @@ Use `high` only for routing, loading, safety, silent-failure, or direct-conflict
 `medium` for structural and authority problems with credible behavioral cost. Use `low` only when a
 small cleanup has concrete context or maintenance value; omit cosmetic observations.
 
-### Implementation Packages
-
-Group findings that must change together. Each package names files, the authority decision, expected
-behavior, smallest coherent change, and validation. Cross-cutting packages may span multiple
-clusters when broad evidence is already sufficient; deep audit is not mandatory ceremony.
-
 ### Deep-Audit Priorities
 
-Rank only targets where local content judgment remains unresolved. Consider instruction frequency,
-consumer count, cluster size, conflict risk, and likely removable context. Explain the ranking in
-plain language rather than synthetic numeric scores.
+Rank unresolved targets by instruction frequency, consumer count, cluster size, conflict risk, and
+likely removable context. Explain the ranking without synthetic scores.
 
 ## Deep Audit
 
@@ -208,21 +235,20 @@ For each section or coherent block, determine:
 4. Whether it passes the Steering Value Test.
 5. Whether to keep, compress, delete, move, or revise the authority itself.
 
-Check history or task evidence only before calling guidance stale, speculative, or unused. Do not
-turn every feature section into a historical research exercise.
-
-### Return One Coherent Proposal Set
+### Return One Coherent Finding Set
 
 1. **Effective surface** - files loaded, consumers sampled, loading path, authorities, and evidence limits.
-2. **Findings** - conflicts and missing behavior first, then structural and compression findings grouped by shared cause.
+2. **Findings** - conflicts and missing behavior first, then structural and compression findings.
 3. **Retained content** - non-obvious blocks explicitly worth their context cost.
-4. **Implementation packages** - smallest groups that can be approved and changed independently.
+4. **Recommendations** - intended direction and affected authority without detailed edit design.
 
-Each finding needs evidence, authority, impact, recommendation, and confidence. Add status quo,
-options, and expected outcome only when the user faces a material decision. Do not split one
-structural decision into sentence-level approval items.
+Each finding needs evidence, authority, impact, recommendation, and confidence. Add options only for
+a material user decision; do not split one structural decision into sentence-level approvals.
 
-## Implementation Handoff
+## Implementation Handoff - Second Pass Only
+
+Produce implementation-ready packages only when the user selects findings or requests them with the
+audit.
 
 An implementation package must be usable without rerunning the audit:
 
@@ -232,15 +258,5 @@ An implementation package must be usable without rerunning the audit:
 - smallest coherent edit and explicitly excluded adjacent work;
 - references, validators, or focused checks that should prove the change.
 
-After approval, implement through a normal editing turn with appropriate tools and re-read current
-source first. The audit itself remains unchanged evidence. An exhausted report is a valid terminal
-condition; do not force another command, rerun, or explicit end-session confirmation.
-
-## Guardrails
-
-- Do not make files agree without deciding which behavior is best.
-- Do not use existing standards as a substitute for judgment about the standards themselves.
-- Do not inventory or mutate memory; hand memory-specific work to `/memory-audit`.
-- Do not equate file length with noise or compression with quality.
-- Do not require per-sentence scoring, decimal confidence, rigid message templates, or exhaustive option matrices.
-- Do not edit during an audit or hide speculative concerns among verified findings.
+After approval, use a normal editing turn and re-read current source. An exhausted report is a valid
+terminal condition; do not force another command or confirmation.

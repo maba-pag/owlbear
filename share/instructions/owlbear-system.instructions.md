@@ -7,38 +7,29 @@ applyTo: "**"
 
 - **Quality over speed.** Concise, actionable, immediately usable. Applies equally to foundations and features.
 - **Research before implementation.** Find how others solved it. Validate assumptions. No exceptions.
-- **KISS / YAGNI / DRY.** No over-engineering, no hypothetical-future work, single source of truth.
-- **Necessity and reuse first.** After understanding the goal, stop at the first adequate option: no new artifact or mechanism → reuse the existing source of truth, workflow, or tool → use a built-in platform capability → create the minimum new thing. Never simplify away explicit requirements, evidence, or safety.
+- **Reuse before creation.** After understanding the goal, choose the first adequate option: no new
+  artifact or mechanism → existing source, workflow, or tool → built-in capability → minimum custom
+  implementation. Keep one source of truth, avoid speculative future work and abstractions before the
+  third repetition, and split functions over 50 lines. Never simplify away requirements, evidence,
+  or safety.
 - **No legacy, no backwards compatibility.** Break things to improve them.
 - **Think before acting.** Articulate material assumptions, intended changes, expected behavior, trade-offs, and risks. Surface ambiguity instead of silently choosing between materially different interpretations.
-- **Simplicity first.** Simplest code that works. Avoid abstractions until the third repetition. Split functions > 50 lines.
 - **Minimum necessary change.** Preserve existing code by default and edit the smallest region that
   satisfies the request. Do not rewrite whole files, generalize behavior, add compatibility paths,
   or perform adjacent cleanup unless the requested outcome requires it. Stop when the requested
   behavior is satisfied and proportionally validated.
-- **Goal-driven.** Every action traces to a kanban task. If you can't name it, check the board first.
+- **Goal-driven.** Implementation and pipeline mutation trace to a kanban task. If you can't name it,
+  check the board before changing code or task state. Audits, research, ideation, and exploration may
+  remain taskless until they produce approved implementation work.
 
 ## 2. System Awareness
 
-### Tech Stack
-
-| Component | Technology | Notes |
-|-----------|-----------|-------|
-| Language | Python 3.12+ | `uv` package manager, never bare `pip` |
-| Agents | VS Code / Copilot custom agents | `.agent.md` files, subagent delegation |
-| MCP servers | 4 (3 custom stdio + 1 GitHub remote) | mcp-kanban, mcp-knowledge, mcp-memory, github |
-| Task board | kanban-md v0.33 (via MCP) | Fixed product topology in code; storage under `.owlbear/kanban/tasks/*.md`, `.owlbear/kanban/archive/*.md`, `.owlbear/kanban/decisions/` |
-| Safety | Git safety net + audit log | Review/revert as operational safety |
-| Distribution | Clone = install | `setup/init.py` wires workspace config |
-
-### Pipeline
-
-```
-shape → (/shape + shaper) → build → (builder) → verify → (verifier) → collect → (collector) → archived
-```
-
-For commits and OwlBear-managed artifact placement, see `r-workspace-governance`. For task priority
-and tags, see `r-pipeline-protocol`.
+- **Runtime.** Python 3.12+ with `uv` (never bare `pip`), VS Code/Copilot custom agents, MCP tools,
+  and a Kanban execution board.
+- **Distribution and safety.** Clone = install; `setup/init.py` wires workspace configuration. Git
+  history and audit logs provide review and recovery.
+- **Pipeline.** `shape → build → verify → collect → archived`. Use `r-pipeline-protocol` for lifecycle,
+  priority, and tags; use `r-workspace-governance` for commits and OwlBear-managed artifact placement.
 
 ## 3. Memory Governance
 
@@ -71,7 +62,7 @@ Before completing material work, decide whether you learned a specific, non-obvi
   result as unreliable. Before retrying a mutating or non-idempotent command, use a read-only check to
   determine whether it already took effect; retry only when the check shows it did not run. A read-only or
   idempotent command may be retried unchanged once when its output is still needed.
-- **Loop detection.** Tier 1: same approach twice — change approach. Tier 2: two different approaches failed — narrow scope (deliver what you can, note what you can't). Tier 3: 3+ attempts — stop, write what failed, escalate per §5 Escalation Routing in `r-pipeline-protocol`.
+- **Loop detection.** Tier 1: same approach twice — change approach. Tier 2: two different approaches failed — narrow scope (deliver what you can, note what you can't). Tier 3: 3+ attempts — stop and report what failed. When working a claimed pipeline task, load `r-pipeline-protocol` and classify the next task state under `Interruptions And Requests` before mutating it.
 - **Terminal.** `uv run` for all Python tools.
 - **Scratch files.** Terminal output, temp/debug files, and one-off scripts go to `.owlbear/scratch/`, never the project root.
 - **Commits.** Follow `r-workspace-governance` for format, ownership, and git discipline.

@@ -32,11 +32,9 @@ Air traffic controller. You sequence aircraft (tasks) and hand them to specialis
 
 ### Native Bootstrap Contract
 
-`pick_tasks` remains the default task carrier until DN-012 performs the atomic cutover. When explicitly
-invoked for an admitted native change, use only `pick_jobs`, `start_job`, the purpose-specific finish tool,
-`release_job`, and `recover_expired_claims`; dispatch the returned `shaper`, `builder`, `acceptor`, or
-`auditor` profile mechanically, finalize one structured attempt, recover typed failures, then re-plan.
-Do not interpret agent prose, adapt native jobs into legacy tasks, or combine the two loops.
+`pick_tasks` is the default. The non-default IF-015 native mode applies only to an explicitly admitted
+change and candidate revision. Follow `w-orchestration` for its complete tool ordering, structured
+results, recovery, and replanning; never bridge native jobs to task state or combine the loops.
 
 </critical_rules>
 

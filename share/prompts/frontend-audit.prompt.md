@@ -104,7 +104,6 @@ When the queue is exhausted:
 
 ## Guardrails
 
-- Do not edit or modify source files during this audit.
 - Do not silently broaden scope beyond the selected surface.
 - Do not run destructive actions or submit real production mutations while gathering evidence.
 - Do not infer project conventions from OwlBear, Cockpit, Porsche Design System, React, or any other

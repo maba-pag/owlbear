@@ -6,14 +6,8 @@ frontmatter block and workflow body.
 
 The map is descriptive, not authoritative. Resolve discrepancies in this order:
 
-1. agent, prompt, skill, and instruction frontmatter;
-2. agent body sections and direct workflow loading instructions;
-3. hooks, tool registries, and runtime schemas;
-4. this document.
-
-See [README.md](README.md) for the stable composition model, artifact ownership, change procedure,
-and validation commands. Update this map whenever an executable loading or delegation relationship
-changes.
+Executable frontmatter, bodies, loading instructions, hooks, registries, and runtime schemas take
+precedence. See [README.md](README.md) for composition, ownership, change procedure, and validation.
 
 ## Connection Vocabulary
 
@@ -26,8 +20,7 @@ changes.
 | `delegate` | The caller exposes and invokes a subagent through `agents:` and its `<agents>` table |
 | `hook` | VS Code runs a command at `SessionStart`, `PreToolUse`, or `PostToolUse` |
 
-Discovery metadata alone is not a loaded skill body and is therefore not represented as a runtime
-edge below.
+Discovery metadata is not a loaded skill body and is omitted below.
 
 ## Universal And Contextual Instructions
 
@@ -46,8 +39,7 @@ Project-local `.owlbear/instructions/` files compose with these shared instructi
 
 ## Agent Runtime Map
 
-Required skills and custom delegates below are exact snapshots of agent declarations. Built-in
-delegates are shown because they affect runtime behavior but do not have repository agent files.
+This table snapshots agent declarations and includes runtime-relevant built-in delegates.
 
 | Agent | Model | Required reading | Delegates | Hooks |
 |-------|-------|------------------|-----------|-------|
@@ -64,9 +56,7 @@ delegates are shown because they affect runtime behavior but do not have reposit
 | knowledge-ingestor | GPT-5.6 Luna | `h-knowledge-ops` | None | None |
 | knowledge-enricher | GPT-5.6 Luna | `w-knowledge-enrichment`, `h-knowledge-ops` | None | None |
 
-Tool allowlists remain in agent frontmatter and are validated against known product and MCP tool
-names. They are deliberately not duplicated here: exact tool grants change more often than role and
-loading relationships, and tests already enforce the sensitive Kanban and memory profiles.
+Tool allowlists remain in agent frontmatter; they are not duplicated here.
 
 ## Prompt Entry Map
 
@@ -89,8 +79,7 @@ project-local skills in addition to the shared surface.
 
 ## Conditional Skill Loading
 
-These are the load-bearing on-demand paths in the shared ecosystem. The named caller owns the
-condition and timing.
+The named caller owns each on-demand condition and timing.
 
 | Caller or trigger | Conditional skill | Load condition |
 |-------------------|-------------------|----------------|
@@ -109,8 +98,7 @@ condition and timing.
 
 ## Required Skill Consumers
 
-This inverse map includes only direct `<required_reading>` consumers. Conditional consumers belong
-in the preceding table and must not be mistaken for guaranteed session-start context.
+This inverse map includes only direct `<required_reading>` consumers, not conditional loading.
 
 | Skill | Required by |
 |-------|-------------|
@@ -140,10 +128,8 @@ in the preceding table and must not be mistaken for guaranteed session-start con
 | verifier-challenger | verifier | Verification completion loses its required final cross-check |
 | Explore | orchestrator, shaper, collector | Broad read-only orientation must be performed by the caller or omitted |
 
-The three challenger roles are callable at nesting depth three and therefore declare
-`disable-model-invocation: false`. Their descriptions carry the `(ND3)` marker. The agent validator
-enforces this set and verifies that custom delegates in frontmatter match each caller's `<agents>`
-table. Built-in agents resolve independently of repository agent definitions.
+The agent validator enforces ND3 metadata and frontmatter-to-`<agents>` alignment; see
+`h-agent-structure` for the nesting rules.
 
 ## Hard-Control Map
 
@@ -156,31 +142,21 @@ table. Built-in agents resolve independently of repository agent definitions.
 | `session-context.py` | builder, verifier | Adds task-aware context at session start |
 | `lint-changed.py` | builder, verifier, builder-challenger | Runs changed-file checks after tool use |
 | MCP schemas and stores | Tool-capable roles | Validate arguments, transitions, and persisted state |
-| `validate_agents.py` | Repository validation | Checks tools, delegation alignment, and nesting-depth metadata |
+| `validate_agents.py` | Repository validation | Checks frontmatter, required sections, tools, delegation, and nesting-depth metadata |
 | `validate_skills.py` | Repository validation | Checks skill metadata and structure |
-| `test_skill_authority_wiring.py` | Repository regression | Checks required readers, tool profiles, and authority reachability |
+| `test_agent_ecosystem_validation.py` | Repository regression | Exercises validators and resolves declared OwlBear MCP tools against live registries |
 | Write-guard regression tests | Repository regression | Exercise path restrictions and hook behavior |
 
-Workflow prose explains these constraints but does not replace their runtime or repository owner.
+Runtime and repository controls remain authoritative over prose.
 
 ## Maintenance Protocol
 
-Update this document in the same change when any of these surfaces changes:
-
-- an agent's model, required reading, delegate list, hook, or role;
-- a prompt's selected agent or initial skill route;
-- an instruction's loading scope or target authority;
-- a workflow's load-bearing conditional companion;
-- a nested agent's caller or invocation-depth requirement;
-- a hard control's attached role or enforcement job.
-
-Do not update this map from memory. Read the changed executable files, then run:
+Update affected rows in the same change as their executable owners, then run:
 
 ```shell
 uv run python .owlbear/scripts/validate_agents.py
 uv run python .owlbear/scripts/validate_skills.py
-uv run pytest -q tests/test_skill_authority_wiring.py
+uv run pytest -q tests/test_agent_ecosystem_validation.py
 ```
 
-If this map and a validator disagree, repair the executable source or validator first, then
-regenerate the affected rows here.
+If a validator disagrees, repair its executable owner before this map.

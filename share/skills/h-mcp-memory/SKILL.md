@@ -43,6 +43,15 @@ which owns task memory assessment and any resulting candidate.
 2. User runs the memory audit prompt for guided review
 3. Approved entries become highest-trust retrieval candidates
 
+### Exceptional-state resolution
+
+1. Assessment transitions an entry to `contested`, `disputed`, or `stale`
+2. The memory audit prompt surfaces the exceptional-state metadata
+3. The user resolves or retires the entry from Cockpit's `/memories` page
+
+There is no MCP resolution tool. `curate_memory` rejects exceptional states until Cockpit resolves
+them to `approved`; `delete_memory` may soft-delete them when the user chooses retirement.
+
 ### Batch commits
 
 Pending entries are not committed. After curation or review, use the state-aware
@@ -85,9 +94,10 @@ Returns: full entry object and a guidance hint indicating next-step curation.
 
 ## list_memories
 
-Returns metadata-only entries sorted for curation priority (`pending`, then `curated`, then `approved`).
+Returns metadata-only entries sorted for lifecycle priority. `contested` shares curated priority;
+`disputed` and `stale` sort after ordinary live entries.
 
-Default behavior (when `states` is omitted): includes `pending`, `curated`, and `approved` entries.
+Default behavior (when `states` is omitted): includes every non-deleted state.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
@@ -180,7 +190,8 @@ Auto-state behavior:
 
 - `pending -> curated` when scope is provided
 - any mutation from `approved` downgrades to `curated`
-- invalid transitions are rejected
+- mutations from `contested`, `disputed`, or `stale` are rejected until Cockpit resolves the entry
+- other invalid transitions are rejected
 
 Response hint values clarify what happened, for example:
 
@@ -201,7 +212,7 @@ Curator-only lifecycle mutation.
 Behavior:
 
 - pending entries are hard-deleted from disk
-- curated/approved entries are soft-deleted (`state=deleted`)
+- curated/approved/contested/disputed/stale entries are soft-deleted (`state=deleted`)
 - returns a hint describing hard vs soft delete path
 
 Returns: updated entry object.
