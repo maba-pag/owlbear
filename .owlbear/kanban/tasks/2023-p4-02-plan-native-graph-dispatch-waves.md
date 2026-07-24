@@ -1,10 +1,10 @@
 ---
 id: 2023
 title: 'P4-02: Plan native graph dispatch waves'
-status: build
+status: verify
 priority: high
 created: 2026-07-24T16:50:33.396895+02:00
-updated: 2026-07-24T17:38:27.027374+02:00
+updated: 2026-07-24T17:43:08.503176+02:00
 tags:
   - phase-4
   - scope:core
@@ -86,3 +86,24 @@ Proof guidance: public planner over real job, receipt, request, and attempt stat
 - Add focused persisted-`JobStore` proof containing at least two eligible `accept`/`audit` jobs connected by a predecessor edge and assert they are planned in separate waves. Rerun `uv run --project . pytest serve/kanban/tests/test_dispatch_runtime.py` and the path-scoped Ruff check.
 
 - Final route: reject to build; implementation gap.
+
+[[2026-07-24T17:43:08+02:00]]
+## Builder Notes
+
+- Change envelope: resolve returned failure key `dependency-edge-wave-compatibility` in native dispatch planning only. Expected files: `dispatch.py` and its focused runtime test; no ownership or module-map deviation.
+- Files changed: `serve/kanban/src/owlbear_kanban/dispatch.py`; `serve/kanban/tests/test_dispatch_runtime.py`; task record.
+- Change Module Map: no deviations. `dispatch.py` remains the planner owner and reads predecessor IDs from live `JobStore` state; `native_runtime.py` remains the eligibility authority.
+- Implementation: `DispatchWaveEntry` now preserves persisted `predecessor_job_ids`. `_plan_waves` flushes a reader batch before an `accept` or `audit` entry when either direction contains a direct predecessor edge, so dependent readers never share a wave while unrelated readers remain size-bounded and ID-stable.
+- Proof selected: added one durable public-planner regression because dependency-aware scheduling is shared runtime behavior and a non-adjacent reader edge is difficult to detect manually. It passes the Rent Test as a previously observed verifier finding.
+- Commands run:
+  - `uv run --project . pytest serve/kanban/tests/test_dispatch_runtime.py` -> `5 passed`.
+  - `uv run --project . ruff check serve/kanban/src/owlbear_kanban/dispatch.py serve/kanban/tests/test_dispatch_runtime.py` -> `All checks passed!`.
+  - `uv run --project . ruff format --check serve/kanban/src/owlbear_kanban/dispatch.py serve/kanban/tests/test_dispatch_runtime.py` -> `2 files already formatted`.
+  - `git diff --check -- serve/kanban/src/owlbear_kanban/dispatch.py serve/kanban/tests/test_dispatch_runtime.py` -> clean.
+- AC-to-evidence:
+  - AC-1: focused public `pick_waves` tests exercise persisted `JobStore` records and native eligibility; profiles and omissions remain covered by `test_pick_waves_is_deterministic_and_uses_current_job_state`.
+  - AC-2: `test_pick_waves_separates_dependent_readers` creates persisted `accept` job 1, independent `audit` job 2, and `audit` job 3 with `predecessor_job_ids=(1,)`; after persisting a current receipt for job 1, public `pick_waves(size=3)` returns `[[1, 2], [3]]`, proving the non-adjacent dependency edge splits reader waves while independent readers batch.
+  - AC-3: `test_pick_waves_is_deterministic_and_uses_current_job_state` still proves repeated plan equality and persisted-state freshness after a start claim.
+- Current failure-key resolutions: `dependency-edge-wave-compatibility` resolved by propagating predecessor IDs into entries and checking direct edges in both directions before reader batching.
+- Builder-challenger: pass. Independently ran the focused pytest, Ruff, and format checks; confirmed the minimal scope and bidirectional/non-adjacent reader-edge handling.
+- Follow-up risks: only direct predecessor edges are required and represented by native job state; orchestration and proof-checkout remain intentionally outside this packet.

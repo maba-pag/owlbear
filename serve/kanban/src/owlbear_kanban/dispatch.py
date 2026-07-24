@@ -155,6 +155,7 @@ class DispatchWaveEntry(BaseModel):
     job_id: int = Field(gt=0)
     kind: _WriterKind | _ReaderKind
     agent_profile: Literal["shaper", "builder", "acceptor", "auditor"]
+    predecessor_job_ids: tuple[int, ...] = ()
 
 
 class DispatchOmission(BaseModel):
@@ -281,6 +282,7 @@ class DispatchRuntime:
                     job_id=stored.job.job_id,
                     kind=stored.job.kind,
                     agent_profile=agent_profile,
+                    predecessor_job_ids=stored.job.predecessor_job_ids,
                 )
             )
         return DispatchPlan(waves=self._plan_waves(eligible, size), omissions=tuple(omissions))
@@ -311,6 +313,13 @@ class DispatchRuntime:
                     readers = []
                 waves.append((entry,))
             else:
+                reader_ids = {reader.job_id for reader in readers}
+                dependent = reader_ids.intersection(entry.predecessor_job_ids) or any(
+                    entry.job_id in reader.predecessor_job_ids for reader in readers
+                )
+                if dependent:
+                    waves.extend(tuple(readers[index : index + size]) for index in range(0, len(readers), size))
+                    readers = []
                 readers.append(entry)
         if readers:
             waves.extend(tuple(readers[index : index + size]) for index in range(0, len(readers), size))

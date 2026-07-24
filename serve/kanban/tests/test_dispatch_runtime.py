@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 from datetime import timedelta
 from pathlib import Path
 
@@ -14,10 +15,12 @@ from owlbear_kanban import (
     JobRecord,
     JobStore,
     NativeRuntime,
+    ReceiptStore,
     RecoverExpiredClaimsRequest,
     ReleaseJobRequest,
     ShapeJob,
     StartJobRequest,
+    compute_node_plan_digest,
     load_change,
 )
 
@@ -207,3 +210,47 @@ def test_pick_waves_is_deterministic_and_uses_current_job_state(revision, tmp_pa
         (2, DispatchOmissionReason.CLAIMED),
         (3, DispatchOmissionReason.BLOCKED),
     ]
+
+
+def test_pick_waves_separates_dependent_readers(revision, tmp_path) -> None:
+    changes_dir = tmp_path / "changes"
+    shutil.copytree(revision.source_dir, changes_dir / revision.change_id)
+    loaded = load_change(changes_dir, revision.change_id)
+    assert loaded.revision is not None
+    revision = loaded.revision
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    store = JobStore(work_root)
+    predecessor = _reader_record(revision, 1, "accept").model_copy(update={"receipt_id": "accept-001"})
+    _materialize(store, predecessor)
+    _materialize(store, _reader_record(revision, 2, "audit"))
+    _materialize(
+        store,
+        _reader_record(revision, 3, "audit").model_copy(update={"predecessor_job_ids": (1,)}),
+    )
+    node = revision.graph.nodes[0]
+    proof = revision.resolve(node.proof)
+    receipt = ReceiptStore(revision).create(
+        "accept-001",
+        {
+            "schema_version": 1,
+            "kind": "accept",
+            "receipt_id": "accept-001",
+            "change_id": revision.change_id,
+            "delivery_digest": revision.delivery_digest,
+            "issued_at": "2026-07-24T00:00:00Z",
+            "target_node_id": node.id,
+            "node_plan_digest": compute_node_plan_digest(revision, node.id),
+            "predecessor_receipt_ids": [],
+            "evidence": {"methods": list(proof.method)},
+            "code_revision": "a" * 40,
+            "impact_closure": {"paths": ["serve/kanban/"], "authority_targets": [node.id, node.proof]},
+        },
+    )
+    assert receipt.receipt is not None
+    native = NativeRuntime(revision, work_root, _History(), timedelta(minutes=5))
+    runtime = DispatchRuntime(native, work_root)
+
+    plan = runtime.pick_waves("a" * 40, size=3)
+
+    assert [[entry.job_id for entry in wave] for wave in plan.waves] == [[1, 2], [3]]
