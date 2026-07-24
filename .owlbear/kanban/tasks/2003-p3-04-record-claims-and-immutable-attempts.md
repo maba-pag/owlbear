@@ -4,7 +4,7 @@ title: 'P3-04: Record claims and immutable attempts'
 status: collect
 priority: high
 created: 2026-07-22T21:58:44.211108+02:00
-updated: 2026-07-24T12:36:37.432137+02:00
+updated: 2026-07-24T13:14:30.380236+02:00
 tags:
   - phase-3
   - scope:core
@@ -402,3 +402,40 @@ Accepted `DEC-023`, design section 7.4, reconciled design section 7.3, and `IF-0
 - Mechanical correction: an accidental duplicate append during the board write was removed through canonical AgentView body replacement with before/after heading assertions; one approved amendment remains and prior history is preserved.
 - Validation: edit-contract tests passed (2), diff check passed, one amendment remains on each task, and #2018 has exactly eight AC.
 - Route: #2003 stays in collect and remains dependency-blocked on unfinished lifecycle children.
+
+[[2026-07-24T13:13:54+02:00]]
+## Operative Native Claim Recovery Map Correction
+
+This user-approved correction extends the packet maps for task #2019 without changing dependency edges.
+
+### Change Module Map Delta
+
+| Module | Planned change | Ownership |
+|---|---|---|
+| `serve/kanban/src/owlbear_kanban/native_runtime.py` | Require positive injected claim expiry; add recovery request/result/diagnostics; complete pending transactions; sweep jobs by ID; validate active identity; enforce strict expiry; atomically crash expired attempts; replay persisted outcomes | #2019 |
+| `serve/kanban/src/owlbear_kanban/__init__.py` | Export the native recovery contract | #2019 |
+| `serve/kanban/tests/test_native_runtime.py` | Adapt the seven current runtime constructors and prove policy, time, ordering, diagnostics, mutation, reopen replay, and retry separation through the public facade | #2019 |
+| Existing `jobs.py`, `attempts.py`, `runtime_transaction.py` | Reuse ordered inventory, claim-bearing immutable events, transaction recovery, participants, and conflict errors without behavior change | archived #2011/#2012/#2013/#2017/#2018 foundations; consumed by #2019 |
+
+### Dependency Closure Map Delta
+
+No edge changes. Task #2019 remains dependent on archived #2017 and #2018. Those tasks supply active start identity, claim-bearing immutable events, and finalization semantics. Task #2019 adds expiry recovery over those contracts and is the final unfinished lifecycle child blocking parent #2003.
+
+### Scenario Closure Map Delta
+
+| Owner | Added finite scenario axis |
+|---|---|
+| #2019 | positive, zero, and negative policy; aware, malformed, and naive request time; before, equal, and after expiry; ascending multi-job recovery; non-expired and release/fail no-op; inconsistent pointers; missing, mismatched, or invalid started event; per-job transaction conflict; exact same-instance and reassembled replay; later retry not mistaken for replay |
+
+### Authority And Validation
+
+Accepted `DEC-024`, design section 7.5, and `IF-003` own constructor policy, deterministic sweep, strict boundary, crash identity, diagnostics, and replay. The revised authority loads without diagnostics at digest `eaab0f2e46780f38b5df541d248fc54cb8a0483da1464f60f4d507c0f3cad617`; global re-admission remains assigned to DN-013/DN-014.
+
+[[2026-07-24T13:14:30+02:00]]
+## Shape Map Repair Notes
+- Applied the user-approved #2019 native recovery delta to the parent Change Module Map, Dependency Closure Map, and Scenario Closure Map.
+- Ownership: #2019 adds constructor-owned positive expiry, supplied-time deterministic sweep, per-job diagnostics, atomic crash events, exact persisted replay, exports, and focused public proof. Existing job, attempt, and transaction owners are reused unchanged.
+- Dependency audit: no edge changes. #2019 remains after archived #2017/#2018 and is the final unfinished lifecycle child blocking #2003.
+- Authority: DEC-024, design section 7.5, and IF-003 at validated digest eaab0f2e46780f38b5df541d248fc54cb8a0483da1464f60f4d507c0f3cad617.
+- Validation: edit-contract tests passed 2; diff check passed; one operative amendment remains on each task; #2019 has exactly seven AC; dependencies and claims were audited.
+- Route: #2003 stays in collect until #2019 completes.
