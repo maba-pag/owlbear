@@ -1,10 +1,10 @@
 ---
 id: 2024
 title: 'P4-03: Isolate exact-commit proof checkouts'
-status: verify
+status: build
 priority: high
 created: 2026-07-24T16:50:58.417043+02:00
-updated: 2026-07-24T17:04:29.444759+02:00
+updated: 2026-07-24T17:06:43.051954+02:00
 tags:
   - phase-4
   - scope:core
@@ -61,3 +61,16 @@ Proof guidance: real temporary Git repository; replace no Git or filesystem beha
 - Current failure-key resolutions: none returned from verify.
 - Builder challenger: pass; no concrete blockers.
 - Follow-up risks: proof roots are intentionally reported as orphans until the future acceptor/auditor lifecycle invokes cleanup; this task does not own those integrations.
+
+[[2026-07-24T17:06:43+02:00]]
+## Verify Notes
+- Evidence reviewed: Builder Notes, committed task diff `32eb50638`, `ProofCheckoutManager`, `RuntimeQuery` health integration, exports, and `test_proof_checkout.py`.
+- Named authorities checked: `REQ-014`, `IF-005`, `RISK-004`, `PROOF-014`, and accepted `DEC-018` in `.owlbear/changes/replace-delivery-pipeline`. They require a contained disposable read-only checkout of the exact tested commit, manifest facts including SHA/replacements/environment, no-follow containment, cleanup, and orphan health.
+- Change Module Map: no supplied map; actual changed modules match the shaped envelope: deep checkout owner, existing runtime health facade, public exports, and focused real-Git proof. No architecture deviation found.
+- Normal-path boundary: the focused test creates a real temporary Git repository and uses the actual `git worktree`, filesystem permissions, YAML manifest, and public `RuntimeQuery.work_health`; no Git or filesystem behavior is replaced.
+- Checks run: from repository root, `uv run pytest serve/kanban/tests/test_proof_checkout.py serve/kanban/tests/test_runtime_query.py -q --tb=short` passed with 9 tests. `uv run ruff check` across the four touched source modules and proof-checkout test passed. An initial package-CWD test run exposed an existing fixture path assumption; the root-CWD rerun is the valid evidence.
+- Findings: `ProofCheckoutManager.materialize` verifies a revision but passes the original supplied `commit` text to `git worktree add` and the manifest. A symbolic or abbreviated revision can therefore be recorded as non-canonical, contradicting `DEC-018`'s tested-SHA requirement despite the checkout resolving correctly.
+- Required Follow-up: Resolve the input revision with `git rev-parse --verify <commit>^{commit}`; use the canonical returned SHA for the worktree, `ProofCheckout.commit`, and manifest; add a focused real-Git regression using a non-SHA revision and asserting the manifest contains the resolved SHA.
+- Prior same-failure-key rejection check: no earlier Verify Notes or failure key exists for canonical-SHA manifest recording.
+- Verifier-challenger: fail. It independently identified the canonical-SHA manifest defect and recommended the same focused repair.
+- Final route: reject to build; the required implementation and durable regression assertion exceed the verifier's one-owner/no-durable-test patch-pass budget.
