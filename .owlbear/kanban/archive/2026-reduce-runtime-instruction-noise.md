@@ -1,10 +1,10 @@
 ---
 id: 2026
 title: Reduce runtime instruction noise
-status: collect
+status: archived
 priority: low
 created: 2026-07-24T20:03:13.310394+02:00
-updated: 2026-07-24T20:29:24.216311+02:00
+updated: 2026-07-24T20:33:05.578537+02:00
 tags:
   - cleanup
   - agent
@@ -24,7 +24,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Scope
@@ -80,3 +80,14 @@ Files: share/agents/orchestrator.agent.md; share/prompts/orchestrate.prompt.md; 
 - Prior same-failure-key rejection check: none. The verifier-challenger first identified missing named shaping-proof evidence, which was closed by the explicit 29-test shaping command; it then identified record whitespace, which was locally repaired and rechecked.
 - Verifier-challenger: final `decision: pass`; no unresolved follow-up.
 - Final route: PASS to collect.
+
+[[2026-07-24T20:33:05+02:00]]
+## Collect Notes
+
+- Classification: leaf. No child tasks, aggregate/EPIC markers, aggregate intent, or dependency gate.
+- Latest leaf verification evidence: the newest `## Verify Notes` records PASS to collect after authority review; focused wiring and shaping tests, agent/skill validators, Ruff checks, and diff whitespace checks passed. Implementation commit: `a9a848f`.
+- Invariant map coverage: the verifier mapped all three ACs to direct authority/schema review, focused wiring and shaping tests, validators, and formatting/lint proof.
+- Child coverage: `list_tasks(parent=2026)` returned no tasks.
+- Parent dependency-gate check: not applicable.
+- Residual decisions: `list_requests` returned no pending or resolved structured requests for this task; verifier notes report no unresolved follow-up.
+- Archive rationale: complete leaf verification with no remaining closure condition; archive as completed.
