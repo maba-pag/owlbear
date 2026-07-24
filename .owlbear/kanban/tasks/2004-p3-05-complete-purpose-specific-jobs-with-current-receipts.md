@@ -1,10 +1,10 @@
 ---
 id: 2004
 title: 'P3-05: Complete purpose-specific jobs with current receipts'
-status: build
+status: verify
 priority: medium
 created: 2026-07-22T21:58:55.620202+02:00
-updated: 2026-07-23T18:16:46.730167+02:00
+updated: 2026-07-24T14:12:29.270333+02:00
 tags:
   - phase-3
   - scope:core
@@ -93,3 +93,16 @@ Proof uses the public finish boundary and the exported result codes. Receipt ID 
 - Receipt consumer contract now names #2014, #2015, #2020, and #2016 and consumes canonical typed impact closures.
 - AC-1 through AC-3 use stable currentness results and explicit `invalidated_receipt_ids`; receipt ID order, `issued_at`, changed-path inference, and prose `touched-boundary` wording are not authority.
 - Task remains `build`, dependency-blocked behind #2003. Final concrete challenge passed.
+
+[[2026-07-24T14:12:29+02:00]]
+## Builder Notes
+- Change envelope: completed purpose-specific native runtime finish policy in `native_runtime.py`, using transaction participants added to `runtime_transaction.py`, `jobs.py`, and `receipt.py`; exported the public request/result and node-plan digest contracts through `__init__.py`.
+- AC-1: `finish_shape` validates a contained acyclic packet DAG and canonical typed packet impact closures, writes only its node-plan namespace, derives the node-plan digest, creates ordered build jobs plus one dependency-gated accept job, publishes one shape receipt and one `succeeded` event, and archives the shape job in one recoverable cross-root transaction. Invalid or out-of-bound plans publish nothing.
+- AC-2: `finish_build`, `finish_accept`, and `finish_audit` share current authority, ownership, predecessor, purpose, evidence, code, and typed-closure validation before one immutable receipt, one `succeeded` event, and terminal archive publication. Exact archived replay returns the persisted outcome without another receipt or event.
+- AC-3: finish operations consume exported complete receipt currentness for predecessors and return its stable lower code for stale digest, node plan, supersession, predecessor, or code currency; dependent jobs remain active and unreleased on refusal. Build consumes its canonical packet closure, accept derives the canonical packet union, and audit uses the complete repository plus active authority targets.
+- Crash and concurrency behavior: added recoverable transformed move participants so job archive bytes and receipt/event/graph/job publications share one manifest; runtime construction recovers pending cross-root manifests before reading state.
+- Durable proof admitted because completion is a shared crash and data-loss boundary. Added public runtime cases for atomic shape publication and replay, invalid closure and out-of-bound plan zero-publication, and stale predecessor refusal.
+- Focused proof: `uv run pytest -n 0 serve/kanban/tests/test_native_runtime.py serve/kanban/tests/test_change_receipts.py serve/kanban/tests/test_jobs.py -q` returned 100 passed. Focused finish subset returned 4 passed. Ruff check and format check passed on all six task-owned source and proof files.
+- Existing `test_runtime_transaction.py` result: 12 passed and 4 stale failures whose fixtures fabricate removed free-form `JobDisposition` values (`updated`, `transaction`, and `winner-*`); challenger confirmed these do not invalidate this task's public finish proof.
+- Builder challenger: pass; no concrete DONE defect or scope drift.
+- Files changed: `serve/kanban/src/owlbear_kanban/runtime_transaction.py`, `jobs.py`, `receipt.py`, `native_runtime.py`, `__init__.py`, and `serve/kanban/tests/test_native_runtime.py`.

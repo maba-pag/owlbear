@@ -14,7 +14,11 @@ from typing import TYPE_CHECKING, Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator
 
 from owlbear_kanban.change import ChangeRevision, Digest
-from owlbear_kanban.runtime_transaction import ReplacementTransactionParticipant
+from owlbear_kanban.runtime_transaction import (
+    MoveTransactionParticipant,
+    ReplacementTransactionParticipant,
+    TransactionParticipant,
+)
 from owlbear_kanban.storage_io import locked_roots
 from owlbear_kanban.yaml_rt import make_yaml
 
@@ -324,6 +328,35 @@ class JobStore:
                 return ReplacementTransactionParticipant(
                     self._work_root,
                     Path("jobs") / _job_filename(replacement.job_id),
+                    current_text.encode("utf-8"),
+                    _serialized_job(replacement).encode("utf-8"),
+                )
+            finally:
+                os.close(directory_fd)
+
+    def create_participant(self, record: JobRecord) -> TransactionParticipant:
+        """Plan one immutable active-job transaction participant."""
+        return TransactionParticipant(
+            self._work_root,
+            Path("jobs") / _job_filename(record.job_id),
+            _serialized_job(record).encode("utf-8"),
+        )
+
+    def archive_participant(self, replacement: JobRecord, expected_token: str) -> MoveTransactionParticipant:
+        """Plan a non-mutating OCC-guarded archive transaction participant."""
+        with self._locked_root() as root_fd:
+            directory_fd = self._directory(root_fd, "jobs", create=False)
+            if directory_fd is None:
+                raise FileNotFoundError(_job_filename(replacement.job_id))
+            try:
+                current, current_text = self._read(directory_fd, replacement.job_id)
+                if current.token != expected_token:
+                    raise JobConcurrencyError(replacement.job_id)
+                filename = _job_filename(replacement.job_id)
+                return MoveTransactionParticipant(
+                    self._work_root,
+                    Path("jobs") / filename,
+                    Path("archive") / filename,
                     current_text.encode("utf-8"),
                     _serialized_job(replacement).encode("utf-8"),
                 )

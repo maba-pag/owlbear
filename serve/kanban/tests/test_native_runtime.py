@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 from datetime import timedelta
 from pathlib import Path
 
@@ -7,6 +8,9 @@ import pytest
 
 from owlbear_kanban import (
     AttemptStore,
+    FinishJobDiagnosticCode,
+    FinishJobRequest,
+    FinishShapeRequest,
     JobDiagnosticCode,
     JobDisposition,
     JobRecord,
@@ -20,13 +24,17 @@ from owlbear_kanban import (
     ReleaseJobRequest,
     StartJobDiagnosticCode,
     StartJobRequest,
+    compute_node_plan_digest,
     load_change,
+    parse_impact_closure,
     parse_job_mapping,
 )
 from owlbear_kanban.runtime_transaction import RuntimeTransaction, TransactionConflictError
 
 
 class _History:
+    changed_paths = b""
+
     def revisions_exist(self, _tested_revision: str, _candidate_revision: str) -> bool:
         return True
 
@@ -34,7 +42,7 @@ class _History:
         return True
 
     def name_status(self, _tested_revision: str, _candidate_revision: str) -> bytes:
-        return b""
+        return self.changed_paths
 
 
 @pytest.fixture
@@ -102,6 +110,153 @@ def _request() -> StartJobRequest:
 
 def _runtime(revision, work_root: Path, *, claim_expiry: timedelta = timedelta(minutes=5)) -> NativeRuntime:
     return NativeRuntime(revision, work_root, _History(), claim_expiry)
+
+
+def _copied_revision(tmp_path: Path):
+    changes_dir = tmp_path / "changes"
+    change_id = "replace-delivery-pipeline"
+    shutil.copytree(Path(f".owlbear/changes/{change_id}"), changes_dir / change_id)
+    result = load_change(changes_dir, change_id)
+    assert result.revision is not None
+    return result.revision
+
+
+def _shape_request(revision, **changes: object) -> FinishShapeRequest:
+    target = revision.graph.nodes[0]
+    proof = revision.resolve(target.proof)
+    closure = {"paths": ["serve/kanban/"], "authority_targets": [target.id, target.proof]}
+    return FinishShapeRequest.model_validate(
+        {
+            "job_id": 1,
+            "attempt_id": "attempt-001",
+            "claim_id": "claim-001",
+            "actor_id": "agent-001",
+            "process_id": "process-001",
+            "finished_at": "2026-07-24T00:02:00Z",
+            "receipt_id": "shape-001",
+            "code_revision": "a" * 40,
+            "evidence": {"methods": list(proof.method)},
+            "evidence_ids": ("shape-review-001",),
+            "node_plan": {
+                "packets": [
+                    {"id": f"{target.id}-PK-001", "dependencies": [], "impact_closure": closure},
+                    {
+                        "id": f"{target.id}-PK-002",
+                        "dependencies": [f"{target.id}-PK-001"],
+                        "impact_closure": closure,
+                    },
+                ]
+            },
+            "build_job_ids": (2, 3),
+            "accept_job_id": 4,
+            **changes,
+        }
+    )
+
+
+def test_finish_shape_publishes_one_complete_outcome_and_replays(revision, tmp_path) -> None:
+    revision = _copied_revision(tmp_path)
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    _materialize(
+        JobStore(work_root),
+        _record(revision, kind="shape", receipt_id="bootstrap-001"),
+    )
+    runtime = _runtime(revision, work_root)
+    runtime.start_job(_request())
+    request = _shape_request(revision)
+
+    result = runtime.finish_shape(request)
+    replay = runtime.finish_shape(request)
+
+    assert result.diagnostic is None
+    assert result.receipt is not None
+    assert result.event is not None
+    assert result.event.kind == "succeeded"
+    assert result.receipt.payload["node_plan_digest"] == compute_node_plan_digest(
+        runtime._revision,  # noqa: SLF001 - assert runtime adopted its published authority revision.
+        revision.graph.nodes[0].id,
+    )
+    assert tuple(job.kind for job in result.created_jobs) == ("build", "build", "accept")
+    assert JobStore(work_root).read(1, archived=True).job.receipt_id == request.receipt_id
+    assert tuple(item.job.kind for item in JobStore(work_root).list()) == ("build", "build", "accept")
+    assert tuple(event.kind for event in AttemptStore(work_root).list()) == ("started", "succeeded")
+    assert replay.receipt == result.receipt
+    assert replay.event == result.event
+    assert replay.created_jobs == ()
+
+
+@pytest.mark.parametrize(
+    "node_plan",
+    [
+        {"packets": [{"id": "DN-001-PK-001", "dependencies": []}]},
+        {
+            "packets": [
+                {
+                    "id": "DN-001-PK-001",
+                    "dependencies": [],
+                    "impact_closure": {"paths": ["serve/"], "authority_targets": ["DN-014"]},
+                }
+            ]
+        },
+    ],
+)
+def test_finish_shape_rejects_invalid_packet_authority_without_publication(tmp_path, node_plan) -> None:
+    revision = _copied_revision(tmp_path)
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    store = JobStore(work_root)
+    _materialize(store, _record(revision, kind="shape", receipt_id="bootstrap-001"))
+    runtime = _runtime(revision, work_root)
+    runtime.start_job(_request())
+    graph_before = (revision.source_dir / "graph.yaml").read_bytes()
+
+    result = runtime.finish_shape(_shape_request(revision, node_plan=node_plan, build_job_ids=(2,)))
+
+    assert result.diagnostic is not None
+    assert result.diagnostic.code is FinishJobDiagnosticCode.NODE_PLAN_INVALID
+    assert (revision.source_dir / "graph.yaml").read_bytes() == graph_before
+    assert tuple(item.job.job_id for item in store.list()) == (1,)
+    assert store.list(archived=True) == ()
+    assert AttemptStore(work_root).read("attempt-001", 2).event is None
+
+
+def test_finish_build_refuses_stale_predecessor_and_keeps_job_active(tmp_path) -> None:
+    revision = _copied_revision(tmp_path)
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    store = JobStore(work_root)
+    _materialize(store, _record(revision, kind="shape", receipt_id="bootstrap-001"))
+    history = _History()
+    runtime = NativeRuntime(revision, work_root, history, timedelta(minutes=5))
+    runtime.start_job(_request())
+    shape = _shape_request(revision)
+    shape_result = runtime.finish_shape(shape)
+    assert shape_result.diagnostic is None
+    runtime.start_job(_request().model_copy(update={"job_id": 2, "attempt_id": "attempt-002", "claim_id": "claim-002"}))
+    history.changed_paths = b"M\0serve/kanban/src/owlbear_kanban/native_runtime.py\0"
+    packet = shape.node_plan["packets"][0]
+    request = FinishJobRequest(
+        job_id=2,
+        attempt_id="attempt-002",
+        claim_id="claim-002",
+        actor_id="agent-001",
+        process_id="process-001",
+        finished_at="2026-07-24T00:03:00Z",
+        receipt_id="build-001",
+        code_revision="b" * 40,
+        evidence=shape.evidence,
+        impact_closure=parse_impact_closure(packet["impact_closure"]),
+    )
+
+    result = runtime.finish_build(request)
+
+    assert result.diagnostic is not None
+    assert result.diagnostic.code is FinishJobDiagnosticCode.PREDECESSOR_INVALID
+    assert result.diagnostic.lower_code == "ERR_RECEIPT_CODE_PATH_STALE"
+    assert store.read(2).job.attempt_id == "attempt-002"
+    assert AttemptStore(work_root).read("attempt-002", 2).event is None
+    assert store.list(archived=True)[0].job.job_id == 1
 
 
 def test_start_job_stores_claim_and_started_event_then_replays(revision, tmp_path) -> None:

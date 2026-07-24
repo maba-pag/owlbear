@@ -25,6 +25,7 @@ from pydantic import ValidationError as PydanticValidationError
 from ruamel.yaml.error import YAMLError
 
 from owlbear_kanban.change import ChangeId, ChangeRevision, Digest, Proof, StableId, load_change
+from owlbear_kanban.runtime_transaction import TransactionParticipant
 from owlbear_kanban.yaml_rt import make_yaml
 
 _RECEIPT_ID_PATTERN = r"^[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*$"
@@ -451,7 +452,8 @@ def parse_receipt_mapping(value: Mapping[str, object]) -> ReceiptParseResult:
     return ReceiptParseResult(diagnostics=diagnostics) if diagnostics else ReceiptParseResult(receipt=record)
 
 
-def _node_plan_digest(revision: ChangeRevision, target: str) -> Digest:
+def compute_node_plan_digest(revision: ChangeRevision, target: str) -> Digest:
+    """Return the canonical digest for one delivery node and its packet plan."""
     node = revision.resolve(target)
     if not hasattr(node, "proof"):
         msg = f"receipt target is not a delivery node: {target}"
@@ -524,7 +526,7 @@ def _evaluate_target_receipt(revision: ChangeRevision, receipt: ReceiptRecord) -
             detail="receipt payload is missing node_plan_digest",
             target=target,
         )
-    if node_plan_digest != _node_plan_digest(revision, target):
+    if node_plan_digest != compute_node_plan_digest(revision, target):
         return ReceiptValidity(
             code=ReceiptValidityCode.NODE_PLAN_DIGEST_STALE,
             detail="receipt node plan digest differs from the loaded revision",
@@ -880,6 +882,20 @@ class ReceiptStore:
         except _ReceiptFailure as exc:
             return ReceiptResult(diagnostics=(exc.diagnostic,))
         return ReceiptResult(receipt=record)
+
+    def create_participant(
+        self, receipt_id: str, value: Mapping[str, object]
+    ) -> tuple[ReceiptRecord, TransactionParticipant]:
+        """Validate and plan one immutable receipt transaction participant."""
+        filename, relative_path = _receipt_location(receipt_id)
+        record = self._validate_record(receipt_id, value, path=relative_path)
+        stream = StringIO()
+        make_yaml(explicit_start=True).dump(record.to_mapping(), stream)
+        return record, TransactionParticipant(
+            self._revision.source_dir,
+            Path("receipts") / filename,
+            stream.getvalue().encode("utf-8"),
+        )
 
     def _read_from_directory(self, directory_fd: int, receipt_id: str, filename: str, path: str) -> ReceiptResult:
         try:

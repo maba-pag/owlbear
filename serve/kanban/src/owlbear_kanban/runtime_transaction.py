@@ -69,6 +69,31 @@ class ReplacementTransactionParticipant:
         return destination
 
 
+@dataclass(frozen=True)
+class MoveTransactionParticipant:
+    """One contained move guarded by immutable source bytes."""
+
+    root: Path
+    source_path: Path
+    destination_path: Path
+    expected_content: bytes
+    destination_content: bytes
+
+    def source(self) -> Path:
+        return _contained_path(self.root, self.source_path)
+
+    def destination(self) -> Path:
+        return _contained_path(self.root, self.destination_path)
+
+
+def _contained_path(root: Path, relative_path: Path) -> Path:
+    resolved_root = root.resolve()
+    path = (resolved_root / relative_path).resolve()
+    if not relative_path.parts or relative_path.is_absolute() or resolved_root not in path.parents:
+        raise TransactionPathError
+    return path
+
+
 class RuntimeTransaction:
     """Publish immutable participants with a recoverable commit manifest."""
 
@@ -76,7 +101,9 @@ class RuntimeTransaction:
         self,
         manifest_root: Path,
         transaction_id: str,
-        participants: tuple[TransactionParticipant | ReplacementTransactionParticipant, ...],
+        participants: tuple[
+            TransactionParticipant | ReplacementTransactionParticipant | MoveTransactionParticipant, ...
+        ],
     ) -> None:
         if not transaction_id or not participants:
             msg = "transaction needs an ID and participants"
@@ -155,7 +182,15 @@ class RuntimeTransaction:
             return
         for participant in self._participants:
             destination = participant.destination()
-            if isinstance(participant, ReplacementTransactionParticipant):
+            if isinstance(participant, MoveTransactionParticipant):
+                source = participant.source()
+                source_matches = source.exists() and source.read_bytes() == participant.expected_content
+                destination_matches = (
+                    destination.exists() and destination.read_bytes() == participant.destination_content
+                )
+                if not source_matches or destination_matches:
+                    raise TransactionConflictError
+            elif isinstance(participant, ReplacementTransactionParticipant):
                 if not destination.exists() or destination.read_bytes() not in (
                     participant.expected_content,
                     participant.replacement_content,
@@ -167,7 +202,8 @@ class RuntimeTransaction:
 
     def _manifest(self) -> dict[str, object]:
         has_replacements = any(
-            isinstance(participant, ReplacementTransactionParticipant) for participant in self._participants
+            isinstance(participant, ReplacementTransactionParticipant | MoveTransactionParticipant)
+            for participant in self._participants
         )
         schema_version = 2 if has_replacements else 1
         return {
@@ -178,6 +214,16 @@ class RuntimeTransaction:
     def _publish(self, failure: Callable[[str], None] | None) -> None:
         for index, participant in enumerate(self._participants):
             destination = participant.destination()
+            if isinstance(participant, MoveTransactionParticipant):
+                _publish_move(
+                    participant.source(),
+                    destination,
+                    participant.expected_content,
+                    participant.destination_content,
+                )
+                if failure and index == 0:
+                    failure("after-first-publication")
+                continue
             destination.parent.mkdir(parents=True, exist_ok=True)
             if isinstance(participant, ReplacementTransactionParticipant):
                 _publish_replacement(destination, participant)
@@ -231,9 +277,11 @@ def _load_yaml(path: Path) -> dict[str, object]:
 
 def _participant_from_manifest(
     entry: object, allowed_roots: tuple[Path, ...]
-) -> TransactionParticipant | ReplacementTransactionParticipant:
+) -> TransactionParticipant | ReplacementTransactionParticipant | MoveTransactionParticipant:
     if not isinstance(entry, dict):
         raise TransactionManifestError
+    if entry.get("kind") == "move":
+        return _move_participant_from_manifest(entry, allowed_roots)
     if entry.get("kind") == "replacement":
         return _replacement_participant_from_manifest(entry, allowed_roots)
     root, path, digest, content = (entry.get(key) for key in ("root", "path", "sha256", "content"))
@@ -253,7 +301,20 @@ def _participant_from_manifest(
     return participant
 
 
-def _participant_manifest(participant: TransactionParticipant | ReplacementTransactionParticipant) -> dict[str, str]:
+def _participant_manifest(
+    participant: TransactionParticipant | ReplacementTransactionParticipant | MoveTransactionParticipant,
+) -> dict[str, str]:
+    if isinstance(participant, MoveTransactionParticipant):
+        return {
+            "kind": "move",
+            "root": str(participant.root.resolve()),
+            "source_path": str(participant.source_path),
+            "destination_path": str(participant.destination_path),
+            "expected_sha256": hashlib.sha256(participant.expected_content).hexdigest(),
+            "expected_content": participant.expected_content.hex(),
+            "destination_sha256": hashlib.sha256(participant.destination_content).hexdigest(),
+            "destination_content": participant.destination_content.hex(),
+        }
     if isinstance(participant, ReplacementTransactionParticipant):
         return {
             "kind": "replacement",
@@ -309,6 +370,59 @@ def _replacement_participant_from_manifest(
     return participant
 
 
+def _move_participant_from_manifest(
+    entry: dict[object, object], allowed_roots: tuple[Path, ...]
+) -> MoveTransactionParticipant:
+    root, source_path, destination_path, expected_digest, expected_content, destination_digest, destination_content = (
+        entry.get(key)
+        for key in (
+            "root",
+            "source_path",
+            "destination_path",
+            "expected_sha256",
+            "expected_content",
+            "destination_sha256",
+            "destination_content",
+        )
+    )
+    if not all(
+        isinstance(value, str)
+        for value in (
+            root,
+            source_path,
+            destination_path,
+            expected_digest,
+            expected_content,
+            destination_digest,
+            destination_content,
+        )
+    ):
+        raise TransactionManifestError
+    participant_root = Path(root).resolve()
+    if participant_root not in allowed_roots:
+        raise TransactionPathError
+    try:
+        expected_bytes = bytes.fromhex(expected_content)
+        destination_bytes = bytes.fromhex(destination_content)
+    except ValueError as exc:
+        raise TransactionManifestError from exc
+    if (
+        hashlib.sha256(expected_bytes).hexdigest() != expected_digest
+        or hashlib.sha256(destination_bytes).hexdigest() != destination_digest
+    ):
+        raise TransactionManifestError
+    participant = MoveTransactionParticipant(
+        participant_root,
+        Path(source_path),
+        Path(destination_path),
+        expected_bytes,
+        destination_bytes,
+    )
+    participant.source()
+    participant.destination()
+    return participant
+
+
 def _publish_replacement(destination: Path, participant: ReplacementTransactionParticipant) -> None:
     if not destination.exists() or destination.read_bytes() not in (
         participant.expected_content,
@@ -330,6 +444,39 @@ def _publish_replacement(destination: Path, participant: ReplacementTransactionP
             temporary.unlink()
 
 
+def _publish_move(
+    source: Path,
+    destination: Path,
+    expected_content: bytes,
+    destination_content: bytes,
+) -> None:
+    if destination.exists():
+        if destination.read_bytes() != destination_content:
+            raise TransactionConflictError
+        if source.exists():
+            if source.read_bytes() != expected_content:
+                raise TransactionConflictError
+            source.unlink()
+            _fsync_directory(source.parent)
+        return
+    if not source.exists() or source.read_bytes() != expected_content:
+        raise TransactionConflictError
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_name(f".tmp-{secrets.token_hex(12)}-{destination.name}")
+    try:
+        with temporary.open("xb") as handle:
+            handle.write(destination_content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.link(temporary, destination)
+        _fsync_directory(destination.parent)
+    finally:
+        with contextlib.suppress(FileNotFoundError):
+            temporary.unlink()
+    source.unlink()
+    _fsync_directory(source.parent)
+
+
 def _fsync_directory(directory: Path) -> None:
     descriptor = os.open(directory, os.O_RDONLY | os.O_DIRECTORY)
     try:
@@ -339,6 +486,7 @@ def _fsync_directory(directory: Path) -> None:
 
 
 __all__ = [
+    "MoveTransactionParticipant",
     "ReplacementTransactionParticipant",
     "RuntimeTransaction",
     "TransactionConflictError",
