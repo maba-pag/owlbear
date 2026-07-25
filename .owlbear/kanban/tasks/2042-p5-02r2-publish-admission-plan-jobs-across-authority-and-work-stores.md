@@ -1,10 +1,10 @@
 ---
 id: 2042
 title: 'P5-02R2: Publish admission plan jobs across authority and work stores'
-status: verify
+status: collect
 priority: high
 created: 2026-07-25T12:56:17.755663+02:00
-updated: 2026-07-25T13:31:56.509433+02:00
+updated: 2026-07-25T13:33:23.107881+02:00
 tags:
   - phase-5
   - scope:kanban
@@ -55,3 +55,6 @@ Proof guidance: exercise the core admission transaction across copied authority 
 
 [[2026-07-25T13:31:56+02:00]]
 Builder complete. AdmissionTransaction now accepts the work root, returns before mutation for non-admitted evidence, recovers only authority/work roots, checks exact receipt/generation/full-job replay before allocation, reserves omitted IDs via #2041, publishes receipt/generation/sequence/numeric jobs in one work-root transaction, retries one stale automatic reservation, and rejects explicit active/archive collisions. Proof: 10 focused admission scenarios passed; admission+allocator+transaction suites 54 passed; mapped kanban regression excluding the independently broken legacy-authority fixture file 1111 passed; focused lint and editor diagnostics clean. Public PROOF-011 now fails only at the planned #2040 server constructor wiring that has not yet passed app_ctx.kanban_dir. builder-challenger decision: pass; advance to verify and leave MCP assembly to #2040.
+
+[[2026-07-25T13:33:23+02:00]]
+Independent verification PASS at builder SHA 7b1d0bbb9d6e96ea1b52203f3a151a7b8ee1517f. Commit inspection confirmed exactly the task source, durable test, and task record. AC-1 through AC-4 verified: exact cross-root publication and full JobRecord equality; no-op and replay-before-allocation; changed-evidence/active/archive/stale conflicts with snapshot preservation and one retry; all three interruption stages with only authority/work roots and clean manifest recovery. Admission+allocator+transaction suites 54 passed (2 existing fork warnings); focused lint and diagnostics clean. verifier-challenger decision: pass. The server constructor handoff remains explicitly owned by #2040.
