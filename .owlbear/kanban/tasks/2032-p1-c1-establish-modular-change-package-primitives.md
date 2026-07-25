@@ -1,10 +1,10 @@
 ---
 id: 2032
 title: 'P1-C1: Establish modular change-package primitives'
-status: verify
+status: collect
 priority: high
 created: 2026-07-25T02:46:24.792896+02:00
-updated: 2026-07-25T03:45:58.272985+02:00
+updated: 2026-07-25T03:56:42.634638+02:00
 tags:
   - change:replace-delivery-pipeline
   - node:DN-001
@@ -78,3 +78,25 @@ Proof guidance: run focused modular parity/path checks plus isolated-plan transa
 - `serve/kanban/src/owlbear_kanban/__init__.py`
 - `serve/kanban/tests/test_change_revision.py`
 - `serve/kanban/tests/test_change_receipts.py`
+
+[[2026-07-25T03:56:42+02:00]]
+## Verify Notes
+
+### Verdict
+PASS. No verification patch was required.
+
+### Independent Evidence
+- AC1: the focused parity scenario passed, and an independent temporary split of the real admitted `graph.yaml` into `delivery/obligations.yaml`, `delivery/contracts.yaml`, and `delivery/nodes.yaml` loaded at exact digest `3f6c656289911320bb5e7faf37b5e86ffa8511e729ade201a03a19913e33d990` with identical authored entity order.
+- AC2: all five modular participant failures passed: missing, duplicate identity, malformed YAML, symlinked file, and escaping delivery directory; each returned no revision and the expected stable `ERR_CHANGE_*` class.
+- AC3: exact digest-named current admission, stale-history retention, absent current receipt, and ambiguous current receipt scenarios passed.
+- AC4: interrupted publication recovery, exact replay, observed-token replacement semantics, conflicting publication, and unchanged stored bytes passed.
+- Exact AC run: 10 passed. Owning loader/receipt modules: 85 passed.
+- Ruff check, format check, editor diagnostics, and whitespace checks were clean.
+- Verifier challenger: `pass`, with no findings.
+
+### Scope And Regression Boundary
+- Current source/tests match builder commit `c0d73675`; the three files flagged between turns contain no post-commit diff.
+- Broader mapped run previously had 1101 passes and four `finish_shape` fixture failures. They are causally outside this task: #2032 changes neither `native_runtime.py`, `test_native_runtime.py`, nor bootstrap fixtures. The admitted graph already embeds DN-001's plan and a local legacy `shape-001.yaml` fixture is copied by those tests. Runtime lifecycle replacement remains owned by #2034.
+
+### Commit Verified
+- Builder implementation commit: `c0d73675ce0fb71c75508aae3880140fb37043b5`.
