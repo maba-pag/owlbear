@@ -1,8 +1,6 @@
-"""Durable tests for Brief B B-02 models and errors behavior.
+"""Model and error-contract regression tests.
 
-Promoted from archived task #1066 during test curation.
-
-Covers AC items specific to 1066 not already addressed by B-01 (#1065):
+Covers behavior not addressed by the engine model suite:
 
   - Error classes importable from ``owlbear_kanban.errors`` module.
   - KANBAN_ERROR_CODES accessible from ``owlbear_kanban.errors``.

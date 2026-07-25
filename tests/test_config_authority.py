@@ -1,8 +1,6 @@
 """Config authority and validation regression tests.
 
-Promoted from the task-scoped suite for task #1177.
-
-AC coverage:
+Behavioral coverage:
   AC1 (td:1): ERR_CONFLICT_STATUS registered in KANBAN_ERROR_CODES in errors.py
   AC2 (td:2): _normalise_legacy grouped branch rejects pipeline.statuses/priorities
               that differ from root-level statuses/priorities — raises ConfigError

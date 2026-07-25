@@ -1,4 +1,4 @@
-"""RED-phase tests for Brief B engine models and error hierarchy (task #1065).
+"""Kanban engine model and error hierarchy regression tests.
 
 Covers:
   - TaskSummary §2.1 full field contract (AC1)
@@ -11,8 +11,6 @@ Covers:
   - KanbanError subclasses carry code + user_message (§3.6 + D57)
   - Error code catalogue for all ERR_* codes from §1/§4 (D57)
 
-All tests FAIL in RED phase: new types imported below do not yet exist in
-owlbear_kanban.models — the import block raises ImportError at collection time.
 """
 
 from __future__ import annotations

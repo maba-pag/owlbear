@@ -1,15 +1,12 @@
-"""Failing tests for task #950: SSRF pre-flight in navigate() — CWE-918.
+"""SSRF pre-flight regression tests for navigate().
 
-All tests must FAIL with the current navigate() implementation, which has no
-SSRF check before page.goto() calls.
-
-They will pass once the builder adds:
+The security boundary requires:
   - _check_ssrf(url) called BEFORE allowlist.check(url) in navigate()
   - Scheme check: non-http/https schemes raise ToolError
   - DNS resolution via asyncio.to_thread(socket.getaddrinfo, hostname, port)
   - IP blocklist: loopback / private / link-local / reserved / unspecified → ToolError
   - IPv4-mapped IPv6 unwrapping before blocklist check
-  - DNS failure (OSError from getaddrinfo) → ToolError with hostname in message
+    - DNS failure (OSError from getaddrinfo) → ToolError with hostname in message
 
 DNS is mocked via ``socket.getaddrinfo``.  The implementation must use
 ``asyncio.to_thread(socket.getaddrinfo, ...)`` so this patch intercepts it.

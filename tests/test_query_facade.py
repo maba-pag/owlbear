@@ -1,4 +1,4 @@
-"""Tests for QueryFacade.lookup_entity + render_context — task #1880.
+"""Tests for QueryFacade.lookup_entity and render_context.
 
 Tests the contract defined in:
   serve/knowledge/src/owlbear_knowledge/protocols/query.py
@@ -6,7 +6,7 @@ Tests the contract defined in:
 Target implementation:
   serve/knowledge/src/owlbear_knowledge/query_facade.py
 
-AC coverage:
+Behavioral coverage:
   AC1 — lookup_entity resolves entity by ID (get_entity) or name
          (find_entities + optional entity_type filter); raises LookupError
          when entity not found by either path

@@ -1,8 +1,8 @@
-"""Tests for CompositeSourceFetcher — task #1909.
+"""Tests for CompositeSourceFetcher.
 
 Target: serve/knowledge/src/owlbear_knowledge/source_fetcher.py
 
-AC coverage:
+Behavioral coverage:
   AC1 — CompositeSourceFetcher satisfies SourceFetcher protocol (isinstance passes)
   AC2 — URL_LIST: iterates urls, one FetchedDocument per success, one FetchError per failure
   AC3 — FILE_GLOB: resolves patterns, deduplicates paths, one FetchedDocument per readable file

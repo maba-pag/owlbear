@@ -1,4 +1,4 @@
-"""Tests for IngestCoordinator.delete_source() - 5-step delete cascade (task #1878).
+"""Tests for IngestCoordinator.delete_source() and its five-step delete cascade.
 
 Tests the contract defined in:
   serve/knowledge/src/owlbear_knowledge/protocols/ingest.py
@@ -6,7 +6,7 @@ Tests the contract defined in:
 Target implementation:
   serve/knowledge/src/owlbear_knowledge/ingest_coordinator.py
 
-AC coverage:
+Behavioral coverage:
   AC1  - delete_source(source_id, *, reason) executes 5-step cascade in order:
           Sources.delete -> Content.purge_source -> Enrichment.discard_chunks ->
           Enrichment.purge_source -> Graph.invalidate_evidence_by_chunks

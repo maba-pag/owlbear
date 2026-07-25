@@ -1,8 +1,6 @@
 """Config schema grouping, detection cascade, and forwarding regression tests.
 
-Promoted from the task-scoped suite for task #1171.
-
-AC coverage:
+Behavioral coverage:
   AC1: PathsConfig, PipelineConfig, AgentsConfig, PolicyConfig sub-models
        accept valid fields and reject unknown fields (extra='forbid')
   AC2: BoardConfig root-level extra='allow' permits unknown fields

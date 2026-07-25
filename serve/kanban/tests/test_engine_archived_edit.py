@@ -1,4 +1,4 @@
-"""Archived-task edit persistence regression tests (task #1121).
+"""Archived-task edit persistence regression tests.
 
 Tests that AgentView.edit_task and KanbanEngine.edit_task correctly persist
 edits to tasks stored in archive/.  Covers archival_reason, archival_refs,
@@ -6,7 +6,7 @@ append_body, priority update, archive-dir placement (no tasks/ duplicate),
 and updated-timestamp propagation.  Also covers the stale-cache fallback
 path and rollback behaviour on emit failure.
 
-AC coverage (from task #1121):
+Behavioral coverage:
   AC-1 → test_agentview_edit_archived_archival_reason_result_updated
           test_agentview_edit_archived_archival_reason_reread_from_archive
   AC-2 → test_agentview_edit_archived_archival_refs_result_updated

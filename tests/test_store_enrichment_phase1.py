@@ -1,4 +1,4 @@
-"""Tests for knowledge_enrichment_store MCP tool — phase-1 wiring to submit_extractions (task #1892).
+"""Tests for knowledge_enrichment_store phase-one extraction submission.
 
 Source files under test:
   serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py
@@ -6,7 +6,7 @@ Source files under test:
 Target interface:
   knowledge_enrichment_store — async MCP tool function
 
-AC coverage:
+Behavioral coverage:
   AC1 — Phase-1 path (chunk_id provided) calls EnrichmentStore.submit_extractions()
   AC2 — Entity dicts parsed into ExtractedEntity: id→local_ref, entity_type→EntityType,
          description/confidence use protocol defaults

@@ -1,4 +1,4 @@
-"""RED-phase tests for KanbanEngine init and BoardConfig validation (task #1067).
+"""KanbanEngine initialization and BoardConfig validation regression tests.
 
 Covers:
   - AC-NEW-14: entry_status not in statuses → ConfigError(ERR_ENTRY_STATUS_INVALID)
@@ -10,8 +10,6 @@ Covers:
   - D63: agent_compatibility not symmetric → ConfigError at init
     - Role views: AgentView constructable from a valid engine
 
-All tests FAIL in RED phase — validation logic and role-view classes are not yet
-implemented in owlbear_kanban.engine.
 """
 
 from __future__ import annotations

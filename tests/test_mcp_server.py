@@ -1,35 +1,13 @@
-"""Durable tests for MCP read tool adapter behavior and suite rollout.
-
-Promoted from archived task #1090 during test curation.
-
-AC coverage:
-- AC2+AC7: show_task makes single unconditional call view.show_task(task_id=params.id,
-           section=params.section). When section=None, None passes through — NOT "".
-           The Mock-specific branch (isinstance(view, Mock) → section="") violates AC2+AC7.
-- AC7:     No isinstance(view, Mock) check in show_task handler source. Structural proof.
-- AC8(b):  test_mcp_read_tools.py ~L807 kw.get("id") must be kw.get("task_id").
-           Durable test asserts wrong kwarg name; builder must correct it.
-
-Already implemented (no failing test possible):
-- AC1: 12-param list_tasks surface (no legacy archived: bool) — verified by durable suite.
-- AC3: pick_tasks delegates to AgentView.pick_tasks — verified by durable suite.
-- AC4: model_validate rejects type-invalid input → ToolError — model_validate already in use.
-- AC5: KanbanError → ToolError via _map_kanban_error — verified by durable suite.
-- AC6: list_tasks output_schema = ListTasksResponse.model_json_schema() — already set.
-- AC8(a): test_mcp_guidance_1089.py uses id= not task_id= — already fixed.
-"""
+"""MCP read-tool adapter regression tests."""
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 
 from owlbear_kanban.models import ShowTaskResponse
-
-# Promoted from archived task #1090.
 
 # ---------------------------------------------------------------------------
 # Helpers for boundary model tests
@@ -162,30 +140,6 @@ class TestFromAC_ShowTaskUnconditionalCall:
 # The adapter correctly uses task_id= kwarg; the durable test assertion is wrong.
 # Builder must update the assertion to kw.get("task_id") == 77.
 # ---------------------------------------------------------------------------
-
-
-class TestFromAC_DurableSuiteRollout:
-    """AC8(b): Durable read-tools suite uses kw.get("task_id") for engine kwarg assertion."""
-
-    def test_read_tools_suite_show_task_id_assertion_uses_task_id_kwarg(self) -> None:
-        """AC8(b): test_mcp_read_tools.py must assert kw.get("task_id"), not kw.get("id").
-
-        The adapter calls view.show_task(task_id=params.id, ...). The durable suite
-        test_show_task_id_forwarded_exact (test_mcp_read_tools.py ~L807) still asserts
-        kw.get("id") == 77, which is the WRONG kwarg name for the engine call.
-        The assertion must be updated to kw.get("task_id") == 77.
-        """
-        read_tools_file = Path(__file__).parent.parent / "serve" / "mcp-kanban" / "tests" / "test_mcp_read_tools.py"
-        content = read_tools_file.read_text(encoding="utf-8")
-
-        bad_assertions = re.findall(r'kw\.get\("id"\)\s*==', content)
-        assert not bad_assertions, (
-            f"test_mcp_read_tools.py has {len(bad_assertions)} wrong kwarg assertion(s) "
-            f'using kw.get("id"). '
-            f'Must be updated to kw.get("task_id") to match the adapter\'s engine call. '
-            f"See test_show_task_id_forwarded_exact (~L807). "
-            f"Found: {bad_assertions!r}"
-        )
 
 
 # ---------------------------------------------------------------------------

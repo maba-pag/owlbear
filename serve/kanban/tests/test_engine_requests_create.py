@@ -1,4 +1,4 @@
-"""Failing RED-phase tests for #1852: Engine API — create_request and get_request.
+"""Engine request creation and lookup regression tests.
 
 AC coverage:
   AC1 → TestFromAC_CreateRequest.test_create_request_decision_returns_model_fields
@@ -23,7 +23,6 @@ AC coverage:
         TestFromAC_GetRequest.test_get_request_corrupt_yaml_raises_validation_error
         TestFromAC_GetRequest.test_get_request_invalid_model_fields_raises_validation_error
 
-All tests FAIL in RED phase: create_request and get_request do not exist yet.
 """
 
 from __future__ import annotations

@@ -1,27 +1,7 @@
-"""Failing tests for #1402: Harden cache populate ordering in MtimeScanCache.
+"""MtimeScanCache population ordering and warm-cache recovery tests.
 
-AC coverage:
-  AC1 (td:2): MtimeScanCache signature state is not committed until cache.tasks is
-              successfully populated.  If view.list_tasks() raises after a
-              directory-signature change is detected, the signature must remain at its
-              previous value so the next request retries the populate.
-  AC2 (td:2): Warm-cache failure-recovery proof: (a) prime cache with successful
-              populate, (b) simulate directory-signature change, (c) make
-              view.list_tasks() raise on refresh attempt, (d) verify signature was NOT
-              committed — a subsequent request with the same directory state must
-              re-detect the change and retry population successfully.
-  AC3 (td:0): Existing cockpit test suites pass without modification (skipped, td:0).
-
-All tests FAIL until the builder fixes the signature-commit ordering in:
-  serve/cockpit/src/owlbear_cockpit/cache.py  (possible API change: split check/commit)
-  serve/cockpit/src/owlbear_cockpit/routes/read.py  (or try/except rollback)
-
-Root cause: cache.has_changed_at(mtime) commits _last_signature BEFORE
-view.list_tasks() is called. When list_tasks() raises, the new signature is already
-committed, so the next request with the same directory state is a cache hit and serves
-stale data indefinitely (until the next real file modification).
-
-The warm-cache stale window ONLY opens after a prior successful population followed by
+The signature must be committed only after task population succeeds so a failed
+refresh retries rather than serving stale data indefinitely.
 a failed refresh.  The cold-cache path is safe because `not has_cached_tasks` always
 retries regardless of the committed signature.
 """

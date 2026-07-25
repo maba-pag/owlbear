@@ -1,7 +1,4 @@
-"""Durable tests for mode-6 rename collision guarding in attempt_repair.
-
-Promoted from archived task #1109 during test curation.
-"""
+"""Regression tests for rename collision guarding in attempt_repair."""
 
 from __future__ import annotations
 
@@ -12,8 +9,6 @@ from owlbear_kanban.corruption import (
     attempt_repair,
 )
 from owlbear_kanban.config_loader import load_config
-
-# Promoted from archived task #1109.
 
 # ---------------------------------------------------------------------------
 # Board helpers

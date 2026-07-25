@@ -1,8 +1,6 @@
-"""RED-phase tests for the assess_memories MCP tool (task #1846).
+"""MCP assessment tool regression tests.
 
-P2-07: assess_memories MCP tool.
-
-AC coverage:
+Behavioral coverage:
 - AC1: assess_memories MCP tool validates assessments list (non-empty; ToolError if empty),
        task_id (non-empty; ToolError if empty/whitespace-only). Valid bucket values:
        outstanding, unremarkable, didnt_use, factually_wrong. Invalid bucket in any item

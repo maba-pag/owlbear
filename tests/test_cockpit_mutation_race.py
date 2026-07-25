@@ -1,17 +1,4 @@
 """Cockpit mutation route OCC and response-shape regression tests.
-
-Promoted from the task-scoped suite for task #1131.
-
-These tests document CURRENT (broken) behavior in the cockpit mutation HTTP routes:
-  - G1 (confirmed): Edit route precheck-only TOCTOU — engine CAS (expected_updated)
-    never engaged.  The route compares req.updated against task.updated and raises 409
-    on mismatch, but on match it calls engine.edit_task(**kwargs) WITHOUT forwarding
-    expected_updated (mutation.py L~209).
-  - G2 (RETRACTED): Move route DOES have OCC — MoveRequest carries updated: str and
-    the route passes expected_updated=req.updated to engine.move_task (mutation.py
-    L~108).  Original research incorrectly claimed move had no OCC.
-  - G3 (confirmed, reframed): Release route guard uses task.claimed_by (Field
-    exclude=True — never persisted, always None after disk round-trip).  The route's
     ``if not task.claimed_by`` guard fires even when claimed_at IS on disk, so the
     route always returns 409 on new-schema boards regardless of actual claim state.
 

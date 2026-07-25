@@ -1,17 +1,16 @@
-"""Failing tests for task #1443 — scan-based ID allocation and activity logging defaults.
+"""Scan-based task ID allocation and activity logging regression tests.
 
-Task:   #1443 — P4-06: Replace next_id config allocation and hard-code activity logging
-AC-1:   allocate_next_id (or replacement) scans active+archive dirs, computes max+1 (or 1
+Behavioral coverage:
+    - allocate_next_id (or replacement) scans active+archive dirs, computes max+1 (or 1
         if empty), and keeps the lock held while create_task writes the new task file.
-AC-2:   create_task no longer reads or writes config.next_id; scratch board works without
+    - create_task no longer reads or writes config.next_id; scratch board works without
         config.yml.
-AC-3:   Active prefixes 1, 3 and archive prefixes 2, 5 → create_task writes task with ID 6.
-AC-4:   Concurrent create_task calls produce distinct task filename prefixes; config.yml
+    - Active prefixes 1, 3 and archive prefixes 2, 5 → create_task writes task with ID 6.
+    - Concurrent create_task calls produce distinct task filename prefixes; config.yml
         is absent or unchanged.
-AC-5:   KanbanEngine activity logging defaults to enabled (True) without reading
+    - KanbanEngine activity logging defaults to enabled (True) without reading
         config.activity_log; create_task appends one ActivityEvent with all six model
         fields: timestamp, task_id, action, source, detail, task_status_at_start.
-AC-6:   (td:0) — test-writer skipped.
 """
 
 from __future__ import annotations

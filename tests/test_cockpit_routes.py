@@ -1,8 +1,6 @@
 """Cockpit route contract regression tests.
 
-Promoted from the task-scoped suite for task #1144.
-
-AC coverage:
+Behavioral coverage:
   G1: GET /api/tasks route uses cockpit-specific response model with mtime injected
       from MtimeScanCache (not bare ListTasksResponse which strips mtime field).
   G4: POST /api/tasks/{id}/edit preserves block:user tag lifecycle (D21 adapter contract):

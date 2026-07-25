@@ -1,9 +1,9 @@
-"""Tests for IngestCoordinator.refresh() — FetchError propagation (task #1910).
+"""Tests for IngestCoordinator.refresh() FetchError propagation.
 
 Target implementation:
   serve/knowledge/src/owlbear_knowledge/ingest_coordinator.py
 
-AC coverage (smoke — one test per AC line):
+Behavioral coverage:
   AC1 — refresh() maps each FetchError to RefreshError in RefreshResult.errors
         (source_id, error string incorporating uri/error, timestamp present)
   AC2 — partial success (docs + errors): update_source still called and

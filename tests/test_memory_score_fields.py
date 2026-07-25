@@ -1,8 +1,6 @@
-"""RED-phase tests for memory assessment counters and score computation (task #1841).
+"""Memory assessment counter and score computation regression tests.
 
-P2-02: Model fields — assessment counters and score computation.
-
-AC coverage:
+Behavioral coverage:
 - AC1: MemoryEntry has outstanding_count, unremarkable_count, didnt_use_count (int = 0),
        score (float = 0.0) in both owlbear_memory and owlbear_mcp_memory;
        defaults enable backward-compatible deserialization of pre-existing entries;

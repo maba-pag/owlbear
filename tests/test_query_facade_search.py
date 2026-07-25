@@ -1,4 +1,4 @@
-"""Tests for QueryFacade.search — task #1879.
+"""Tests for QueryFacade.search.
 
 Tests the contract defined in:
   serve/knowledge/src/owlbear_knowledge/protocols/query.py
@@ -6,7 +6,7 @@ Tests the contract defined in:
 Target implementation:
   serve/knowledge/src/owlbear_knowledge/query_facade.py
 
-AC coverage:
+Behavioral coverage:
   AC1 — search() constructs ContentSearchQuery from matching fields (text,
          top_k, scopes, source_ids, min_score) and awaits ContentStore.search;
          raises ValueError when request.text is empty

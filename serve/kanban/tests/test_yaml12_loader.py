@@ -1,4 +1,4 @@
-"""Tests for task #940: Switch read_task() to YAML12SafeLoader (PyYAML).
+"""YAML 1.2-compatible task frontmatter parsing regression tests.
 
 AC coverage:
   1.  YAML12SafeLoader importable from owlbear_kanban.storage
@@ -17,7 +17,6 @@ AC coverage:
   14. Integration: write_task() → read_task() → Task.model_validate() round-trip (bool, str|None,
       tags, timestamps, extra fields)
 
-All tests FAIL in RED phase — YAML12SafeLoader not yet defined in task_io.py.
 """
 
 from __future__ import annotations

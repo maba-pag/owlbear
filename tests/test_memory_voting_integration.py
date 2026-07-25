@@ -1,9 +1,9 @@
-"""Durable integration tests for memory voting pipeline (task #1848).
+"""Durable integration tests for the memory voting pipeline.
 
-Consolidation test verifying the full memory voting pipeline works across all
-subtask boundaries (#1842-#1847).
+Consolidation test verifying the full memory voting pipeline works across its
+storage, assessment, and recall boundaries.
 
-AC coverage:
+Behavioral coverage:
 - AC1: Integration test at MemoryEngine+recall_memory level — save->approve->recall
   with >=20 entries, 16+2+2 slot allocation, score formula, counters, recall sort.
 - AC2: State transitions end-to-end — factually_wrong->contested (still recalled),

@@ -1,16 +1,4 @@
-"""Error hierarchy regression tests.
-
-Promoted from the task-scoped suite for task #1201.
-
-AC coverage:
-- AC1: CorruptionError inherits from KanbanError (td:2)
-- AC2: CorruptionError.__init__ calls KanbanError.__init__(code, user_message) (td:2)
-- AC3: KANBAN_ERROR_CODES contains all 9 ERR_CORRUPT_* string codes (td:1)
-- AC4: errors.py re-exports CorruptionError (td:1)
-- AC5: isinstance(CorruptionError(...), KanbanError) is True (td:1)
-- AC6: All 9 ERR_CORRUPT_* dynamic subclasses remain CorruptionError subclasses (td:1)
-- AC7: Existing consumers importing from corruption.py or errors.py still work (td:1)
-"""
+"""Error hierarchy regression tests."""
 
 from __future__ import annotations
 

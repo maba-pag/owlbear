@@ -1,15 +1,6 @@
 """Grouped config migration and seed-template regression tests.
 
-Promoted from the task-scoped suite for task #1172.
-
-AC coverage:
-  AC9:  migrate._migrate_config produces grouped output — CLEAN, no flat-key duplicates.
-  AC10: Seed template (seed/.owlbear/kanban/config.yml) updated to grouped format.
-
-Context for 1171 overlap:
-  AC1-AC8 and partial AC9 are covered by test_config_schema.py and
-  test_config_loader_1171.py.  This file covers the remaining AC9 (clean output)
-  and the entirely untested AC10 (seed template).
+Covers clean grouped migration output and the grouped seed template.
 """
 
 from __future__ import annotations
@@ -21,8 +12,6 @@ import yaml
 from owlbear_kanban.config_loader import load_config
 from owlbear_kanban.migrate import _migrate_config
 from owlbear_kanban.storage import save_config
-
-# Provenance: promoted from task-scoped suite for task #1172.
 
 # ---------------------------------------------------------------------------
 # Path constants

@@ -1,8 +1,6 @@
-"""RED-phase tests for memory score migration — task #1842.
+"""Memory score migration regression tests.
 
-P2-03: Migration — score initialization from confidence.
-
-AC coverage:
+Behavioral coverage:
 - AC1: MemoryEngine.migrate_scores() -> int parses raw YAML, backfills score=confidence
        and counters=0 for entries missing any of the 4 keys; writes via write_entry;
        returns migrated count; skips malformed files; state unchanged.
