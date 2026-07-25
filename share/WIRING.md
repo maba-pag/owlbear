@@ -47,11 +47,12 @@ This table snapshots agent declarations and includes runtime-relevant built-in d
 | designer-challenger | Claude Sonnet 5 | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design` | None | `PreToolUse`: deny writes except scratch |
 | planner | GPT-5.6 Sol | `w-frontier-planning` | planner-challenger, Explore | None; no lifecycle or tracked-write tools |
 | planner-challenger | Claude Sonnet 5 | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design`, `h-ac-quality` | None | `PreToolUse`: deny writes except scratch |
-| orchestrator | GPT-5.6 Terra | `w-orchestration` | planner, builder, acceptor, verifier, collector, memory-curator, Explore | None; legacy `pick_tasks` plus non-default native pick/start, purpose-specific finish/reject, release, and recovery tools |
+| orchestrator | GPT-5.6 Terra | `w-orchestration` | planner, builder, acceptor, auditor, verifier, collector, memory-curator, Explore | None; legacy `pick_tasks` plus non-default native pick/start, purpose-specific finish/reject, release, and recovery tools |
 | shaper | GPT-5.6 Sol | `r-pipeline-protocol`, `r-challenger-protocol`, `r-workspace-governance` | shaper-challenger, Explore | `PreToolUse`: deny non-document writes |
 | builder | GPT-5.6 Terra | `w-packet-building`, `r-pipeline-protocol`, `r-challenger-protocol`, `r-workspace-governance`, `h-codebase-orientation` | builder-challenger, build-reviewer | `SessionStart`: task context; `PostToolUse`: lint changed files |
 | build-reviewer | Claude Sonnet 5 | `r-challenger-protocol`, `h-codebase-orientation` | None | `PreToolUse`: deny writes except scratch |
 | acceptor | GPT-5.6 Terra | `w-node-acceptance` | None | `PreToolUse`: deny writes except scratch and terminal mutation; exact-HEAD/tracked-state checks |
+| auditor | GPT-5.6 Terra | `w-whole-change-audit` | None | `PreToolUse`: deny writes except scratch and terminal mutation; whole-change audit scope |
 | verifier | GPT-5.6 Terra | `r-pipeline-protocol`, `r-challenger-protocol`, `r-workspace-governance`, `h-codebase-orientation` | verifier-challenger | `SessionStart`: task context; `PostToolUse`: lint changed files |
 | collector | GPT-5.6 Terra | `r-pipeline-protocol`, `r-workspace-governance`, `h-mcp-kanban` | Explore | `PreToolUse`: deny writes except scratch |
 | shaper-challenger | Claude Sonnet 5 | `h-ac-quality`, `h-module-design`, `r-challenger-protocol` | None | `PreToolUse`: deny writes except scratch |
@@ -113,6 +114,7 @@ This inverse map includes only direct `<required_reading>` consumers, not condit
 | `w-frontier-planning` | planner |
 | `w-packet-building` | builder |
 | `w-node-acceptance` | acceptor |
+| `w-whole-change-audit` | auditor |
 | `r-challenger-protocol` | designer-challenger, planner-challenger, shaper, builder, build-reviewer, verifier, shaper-challenger, builder-challenger, verifier-challenger |
 | `h-codebase-orientation` | designer-challenger, planner-challenger, builder, build-reviewer, verifier |
 | `h-module-design` | designer-challenger, planner-challenger, shaper-challenger |
@@ -133,6 +135,7 @@ This inverse map includes only direct `<required_reading>` consumers, not condit
 | designer-challenger | designer | Native admission lacks required repository-grounded entity challenge evidence |
 | planner | orchestrator | Engine-selected native plan jobs cannot be refined or completed |
 | acceptor | orchestrator | Engine-selected native accept jobs cannot produce independent success, rejection, or blocked dispositions |
+| auditor | orchestrator | Engine-selected native audit jobs cannot produce independent success, rejection, or blocked dispositions |
 | planner-challenger | planner | A packet DAG cannot satisfy the independent plan review gate |
 | builder | orchestrator | Build tasks and engine-selected native build jobs cannot be completed |
 | build-reviewer | builder | A native packet commit cannot satisfy mandatory independent inline review |
@@ -153,7 +156,7 @@ The agent validator enforces ND3 metadata and frontmatter-to-`<agents>` alignmen
 |---------|----------------|-----------------|
 | Agent `tools:` allowlist | Every agent | Limits runtime capabilities exposed to the role |
 | `deny-non-doc-writes.py` | shaper | Allows documentation and diagram writes, rejects code writes |
-| `deny-writes.py` | acceptor, collector, designer-challenger, planner-challenger, build-reviewer, and read-only pipeline challengers | Rejects durable edit-tool writes outside scratch; acceptor enables terminal-mutation mode |
+| `deny-writes.py` | acceptor, auditor, collector, designer-challenger, planner-challenger, build-reviewer, and read-only pipeline challengers | Rejects durable edit-tool writes outside scratch; acceptor and auditor enable terminal read-only mode |
 | `deny-src-writes.py` | test-curator | Restricts writes to tests and scratch |
 | `session-context.py` | builder, verifier | Adds task-aware context at session start |
 | `lint-changed.py` | builder, verifier, builder-challenger | Runs changed-file checks after tool use |

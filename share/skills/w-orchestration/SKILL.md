@@ -79,6 +79,25 @@ Malformed acceptor output is an unstructured return and follows crash recovery. 
 never executes acceptance proof, classifies findings, plans corrective routes, assembles evidence,
 alters replacements, or supplements a disposition.
 
+For an engine-selected `auditor`, dispatch `runSubagent(agentName="auditor")` with only the complete
+successful `start_job` result, including the engine checkout, serialized as its prompt. Pattern-match
+one exact disposition:
+
+- `AuditorSuccess`: call `finish_audit` with the unchanged change, job, attempt, claim, actor, and
+   process identity from the started job, an orchestrator-owned completion timestamp, and the returned
+   `receipt_id`, `code_revision`, `evidence`, `evidence_ids`, and optional `impact_closure`. Forward
+   every returned field unchanged.
+- `AuditRejected`: call `reject_audit` with the unchanged active identity, an orchestrator-owned
+   rejection timestamp, and the returned `detail`, `evidence_ids`, `findings`, and `invalidation`.
+   Forward every returned field unchanged.
+- `AuditBlocked`: call `release_job` with only the unchanged active identity and an
+   orchestrator-owned release timestamp, halt native mode, and report the returned `target` and
+   `finding`.
+
+Malformed auditor output is an unstructured return and follows crash recovery. The orchestrator
+never executes audit proof, classifies findings, assembles evidence, plans corrections, alters
+replacements, or supplements a disposition. It preserves the returned fields verbatim.
+
 Before `start_job`, resolve the selected profile against the installed subagent allowlist. If it is unavailable,
 report the profile and halt native mode without claiming, running, releasing, or mutating legacy task state.
 The native `planner` profile is valid only in this explicit mode; routine `pick_tasks` shape work remains

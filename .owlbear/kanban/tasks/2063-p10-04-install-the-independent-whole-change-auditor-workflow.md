@@ -1,10 +1,10 @@
 ---
 id: 2063
 title: 'P10-04: Install the independent whole-change auditor workflow'
-status: build
+status: verify
 priority: high
 created: 2026-07-25T19:53:37.879721+02:00
-updated: 2026-07-25T19:53:37.879721+02:00
+updated: 2026-07-25T20:50:33.307752+02:00
 tags:
   - phase-10
   - scope:agent-config
@@ -60,3 +60,32 @@ In: engine-started audit identity and checkout, native read queries, admitted wh
 Out: runtime semantics, Cockpit, setup, cutover, and complete-system proof.
 
 Proof guidance: run agent and skill validators plus ecosystem and write-guard regressions; inspect exact orchestration mappings.
+
+[[2026-07-25T20:50:33+02:00]]
+## Builder Notes
+
+Implemented the independent whole-change auditor and adopted/repaired the interrupted task-local candidate work.
+
+### Changed Files
+- `share/agents/auditor.agent.md`: proof-capable, lifecycle-free auditor with native read queries and terminal read-only hook.
+- `share/agents/orchestrator.agent.md`: executable auditor delegation and `reject_audit` grant.
+- `share/skills/w-whole-change-audit/SKILL.md`: whole-change authority rehydration, PROOF-008 execution, exact dispositions, and corrective classification matrix.
+- `share/skills/w-orchestration/SKILL.md`: exact auditor dispatch and success/rejection/blocked lifecycle routing.
+- `share/WIRING.md`: derived agent, skill, delegation, and hard-control maps.
+
+### AC Evidence
+- AC-1: Auditor accepts only the serialized engine-started audit result and checkout; its allowlist contains read/query/proof tools, no edit or lifecycle tools, and the terminal read-only hook. Agent/skill validators pass and WIRING matches executable declarations.
+- AC-2: Workflow explicitly rehydrates matching change/digest, job and active identity, engine checkout, Product Promise, accepted decisions, migrations/removals, admitted workflows, current accepted-node receipts, native request state, IF-014, PROOF-008, allowed lower replacements, and before/after Git state. Unsafe or missing authority returns `AuditBlocked`.
+- AC-3: `AuditorSuccess` and `AuditRejected` fields map unchanged to public MCP signatures. Cross-node integration, implemented migration/removal absence, stale acceptance, and tracked auditor edits use `implementation-defect` with `whole-change-integration`; admitted authority/proof omission uses `planning-omission` with `admitted-design-authority`.
+- AC-4: Orchestrator dispatches only its engine-selected auditor with complete start/checkout context; maps success to `finish_audit`, rejection to `reject_audit`, and blocked to unchanged-identity `release_job`; malformed output follows recovery and orchestration cannot perform audit proof or classification.
+
+### Proof
+- `uv run python .owlbear/scripts/validate_agents.py`: PASS, all 19 agents.
+- `uv run python .owlbear/scripts/validate_skills.py`: PASS.
+- Focused ecosystem, write-guard, non-doc guard, and MCP interaction suite excluding one known unrelated registry assertion: 80 passed.
+- Live MCP registry probe: every auditor query tool and the new orchestrator `reject_audit` grant resolve.
+- Public `finish_audit`, `reject_audit`, and `release_job` signatures inspected and match workflow mappings.
+- Editor diagnostics: none on all five changed files.
+- Builder challenger: pass, no blocking defects.
+
+The unexcluded ecosystem run had 46 passes and one pre-existing unrelated collector legacy-tool registry mismatch; no broad registry migration was included in this task.
