@@ -1,10 +1,10 @@
 ---
 id: 2045
 title: 'P6-03: Prove designer interruption, decisions, and refusal'
-status: verify
+status: collect
 priority: high
 created: 2026-07-25T14:29:01.440279+02:00
-updated: 2026-07-25T14:48:03.235075+02:00
+updated: 2026-07-25T14:54:10.770096+02:00
 tags:
   - phase-6
   - scope:test
@@ -75,3 +75,18 @@ Added one durable `PROOF-004` scenario module at `serve/mcp-kanban/tests/test_de
 - `uv run lint serve/mcp-kanban/tests/test_designer_interaction.py` — pass.
 - Editor diagnostics — none.
 - `builder-challenger` — pass; independently reran the focused scenarios and Ruff.
+
+[[2026-07-25T14:54:10+02:00]]
+## Verify Notes
+Adopted the interrupted verifier-local repair in `serve/mcp-kanban/tests/test_designer_interaction.py` and closed both AC-2 follow-up findings without changing production behavior or the accepted contract.
+
+### AC Evidence
+- AC-1: The scenario reloads shipped `/design`, `designer`, and `w-design-session` artifacts through public `show_change`; the two projections and delivery digest match, and `intent.md` plus `decisions.yaml` remain byte-identical.
+- AC-2: The fixture follows structured `delivery/nodes.yaml` `authority.research` references and copies the real canonical research artifacts. It resolves `delivery-operating-model-reframe.md`, whose text explicitly grounds DEC-028 through DEC-033 and the selected Specification boundary, then ties that evidence to persisted accepted DEC-028. DEC-028 proves selected option membership, one recommendation, pros, cons, risks, and bounded confidence; DEC-029 remains pending with no selection. The shipped workflow still permits exactly one question and requires Status quo, Options, Tradeoffs, Risks, Recommendation, and Confidence.
+- AC-3: The pending DEC-029 route uses public `show_change` and `validate_change`, observes targeted `DV-010` plus missing-approval `EV-004`, and leaves publication state unchanged under the shipped no-admit gate.
+- AC-4: The representative challenge route observes exactly one targeted `EV-002` and byte-identical receipt, generation, sequence, and job snapshots.
+
+### Validation
+- Focused designer and public MCP boundary suite: 14 passed in 6.87 seconds.
+- Focused lint: all hooks passed; only unrelated repository TODO warnings were reported.
+- `verifier-challenger`: pass; both prior AC-2 failure keys are closed by a repository-grounded authority chain, and the one-file repair remains within scope and the durable-test rent boundary.

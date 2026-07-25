@@ -50,15 +50,21 @@ status_predicates: {}
 def _copy_change(tmp_path: Path, *, pending_decision: bool) -> tuple[Path, object]:
     changes_dir = tmp_path / "changes"
     change_dir = changes_dir / _CHANGE_ID
-    shutil.copytree(_REPO_ROOT / ".owlbear" / "changes" / _CHANGE_ID, change_dir)
+    source_dir = _REPO_ROOT / ".owlbear" / "changes" / _CHANGE_ID
+    shutil.copytree(source_dir, change_dir)
     shutil.rmtree(change_dir / "receipts")
     shutil.rmtree(change_dir / "jobs")
+    yaml = YAML()
+    nodes = yaml.load((change_dir / "delivery" / "nodes.yaml").read_text(encoding="utf-8"))
+    for reference in nodes["authority"]["research"]:
+        destination = change_dir / reference
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source_dir / reference, destination)
 
     if pending_decision:
-        yaml = YAML()
         decisions_path = change_dir / "decisions.yaml"
         document = yaml.load(decisions_path.read_text(encoding="utf-8"))
-        decision = document["decisions"][1]
+        decision = next(item for item in document["decisions"] if item["id"] == "DEC-029")
         decision["status"] = "pending"
         decision["decided_at"] = None
         decision["selected"] = None
@@ -142,8 +148,27 @@ async def test_design_resume_preserves_authority_and_one_pending_choice(tmp_path
     assert "read all four authority parts before any mutation" in _normalized(workflow)
     assert first == resumed
     assert first["delivery_digest"] == revision.delivery_digest
-    assert first["decisions"]["decisions"][0]["status"] == "accepted"
-    assert first["decisions"]["decisions"][1]["status"] == "pending"
+    decisions = {item["id"]: item for item in first["decisions"]["decisions"]}
+    first_decision = decisions["DEC-028"]
+    second_decision = decisions["DEC-029"]
+    assert first_decision["status"] == "accepted"
+    assert first_decision["title"]
+    assert first_decision["selected"] in {option["id"] for option in first_decision["options"]}
+    assert sum(option["recommended"] for option in first_decision["options"]) == 1
+    assert all(
+        option["pros"] and option["cons"] and option["risks"] and 0 <= option["confidence"] <= 1
+        for option in first_decision["options"]
+    )
+    assert second_decision["status"] == "pending"
+    assert second_decision["selected"] is None
+    research_refs = first["graph"]["authority"]["research"]
+    research_ref = next(
+        reference for reference in research_refs if reference.endswith("delivery-operating-model-reframe.md")
+    )
+    research = (change_dir / research_ref).resolve().read_text(encoding="utf-8")
+    assert "DEC-028 through DEC-033" in research
+    assert "Specification ends with admitted delivery nodes" in research
+    assert first_decision["title"] == "End Specification at admitted delivery nodes"
     assert (change_dir / "intent.md").read_bytes() == intent_before
     assert (change_dir / "decisions.yaml").read_bytes() == decisions_before
 
@@ -181,7 +206,7 @@ async def test_unresolved_decision_validates_as_draft_without_approval_or_admiss
     )
 
     errors = [finding for finding in assessment["findings"] if finding["severity"] == "error"]
-    pending_id = shown["decisions"]["decisions"][1]["id"]
+    pending_id = next(item["id"] for item in shown["decisions"]["decisions"] if item["status"] == "pending")
     assert any(finding["code"] == "DV-010" and finding["target"] == pending_id for finding in errors)
     assert any(finding["code"] == "EV-004" for finding in errors)
     assert "Only the user can resolve material product and architecture choices" in agent
