@@ -470,9 +470,9 @@ class TestNativeQueryTools:
             receipt_id=test_receipt_id,
         )
 
-        assert result["receipt_id"] == test_receipt_id
-        assert result["kind"] == "admission"
-        assert result["change_id"] == revision.change_id
+        assert result.receipt_id == test_receipt_id
+        assert result.kind == "admission"
+        assert result.change_id == revision.change_id
 
     @pytest.mark.asyncio
     async def test_show_receipt_missing_receipt_distinct_error(
@@ -547,12 +547,21 @@ class TestNativeQueryTools:
         monkeypatch.setattr(server, "_dispatch_runtime", lambda _app_ctx, _change_id: runtime)
 
         # Test malformed receipt error (distinct from missing)
-        with pytest.raises(ToolError):
+        with pytest.raises(ToolError) as exc_info:
             _result = await server.show_receipt(
                 ctx,
                 change_id=revision.change_id,
                 receipt_id=test_receipt_id,
             )
+
+        # Verify distinct error code (not ERR_RECEIPT_MISSING)
+        error_str = str(exc_info.value)
+        assert "ERR_RECEIPT_YAML_PARSE" in error_str or "ERR_RECEIPT_SCHEMA_INVALID" in error_str
+        assert "ERR_RECEIPT_MISSING" not in error_str
+        # Verify no path leak
+        assert "receipts/" not in error_str
+        error_detail = error_str.rsplit(":", maxsplit=1)[-1]
+        assert "/" not in error_detail
 
     @pytest.mark.asyncio
     async def test_work_health_returns_bounded_findings(
@@ -593,6 +602,18 @@ class TestNativeQueryTools:
         assert "next_cursor" in result or result.get("next_cursor") is None
         assert isinstance(result["findings"], (list, tuple))
         assert isinstance(result["checked_paths"], (list, tuple))
+
+        # Verify bounded by limit
+        assert len(result["checked_paths"]) <= 10
+
+        # Verify findings sorted by (path, code, target)
+        if len(result["findings"]) > 1:
+            for i in range(len(result["findings"]) - 1):
+                curr = result["findings"][i]
+                next_f = result["findings"][i + 1]
+                curr_key = (curr["path"], curr["code"], curr.get("target") or "")
+                next_key = (next_f["path"], next_f["code"], next_f.get("target") or "")
+                assert curr_key <= next_key, f"Findings not sorted: {curr_key} > {next_key}"
 
         # Verify findings structure (if any)
         for finding in result["findings"]:

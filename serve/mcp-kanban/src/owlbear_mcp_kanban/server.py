@@ -1200,7 +1200,7 @@ async def show_receipt(
         runtime = _dispatch_runtime(app_ctx, params.change_id)
         result = runtime._native._receipts.read(params.receipt_id)  # noqa: SLF001
         if result.receipt is not None:
-            return result.receipt.model_dump(mode="python")
+            return result.receipt
         # Return stable error for missing or malformed receipt
         diagnostic = result.diagnostics[0]
         code = diagnostic.code

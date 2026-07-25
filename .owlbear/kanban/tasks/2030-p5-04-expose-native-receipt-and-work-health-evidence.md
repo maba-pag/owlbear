@@ -1,10 +1,10 @@
 ---
 id: 2030
 title: 'P5-04: Expose native receipt and work-health evidence'
-status: verify
+status: build
 priority: high
 created: 2026-07-24T23:22:11.791167+02:00
-updated: 2026-07-25T10:58:23.988547+02:00
+updated: 2026-07-25T11:12:09.346946+02:00
 tags:
   - phase-5
   - scope:mcp-kanban
@@ -70,3 +70,29 @@ Implemented show_receipt and work_health MCP tools over ReceiptStore.read and Na
 **AC Evidence:**
 - AC-1: show_receipt returns ReceiptRecord for existing receipts; distinct ERR_RECEIPT_MISSING vs other ReceiptDiagnosticCode errors; no path leak; read-only
 - AC-2: work_health returns bounded WorkHealthResult with sorted findings, checked_paths, stable next_cursor; ERR_CURSOR_STALE on invalid cursor; read-only
+
+[[2026-07-25T11:12:09+02:00]]
+### Verifier Notes
+
+Fixed production semantic defect: show_receipt now returns immutable ReceiptRecord model (not mutable dict).
+
+Strengthened test assertions:
+- test_show_receipt_malformed_receipt_distinct_error: now verifies distinct error code (ERR_RECEIPT_YAML_PARSE/SCHEMA_INVALID vs ERR_RECEIPT_MISSING) and no path leaks
+- test_work_health_returns_bounded_findings: now verifies limit bound (len <= 10) and sorted order
+
+AC-1 fully verified: show_receipt returns ReceiptRecord for existing receipts; ERR_RECEIPT_MISSING for missing; distinct codes for malformed; no path leaks (only diagnostic.detail passed); read-only.
+
+AC-2 API surface verified: work_health returns bounded sorted WorkHealthResult with findings/checked_paths/next_cursor; handles cursors; read-only. However, tests exercise empty workspace only - do not construct healthy/corrupt/orphan states per AC-2 precondition.
+
+All 449 mcp-kanban tests pass; ruff clean.
+
+### Required Follow-up
+
+AC-2 explicitly requires "Given healthy, corrupt, and orphan-checkout work paths" but tests don't construct these states. Add focused state-construction tests:
+
+1. **Healthy state test**: Create valid job/receipt/attempt files, verify work_health returns empty findings for valid workspace
+2. **Corrupt state test**: Create malformed job YAML in work_root/jobs/999.yaml, verify work_health returns ERR_WORK_JOB_INVALID finding with path="jobs/999.yaml"
+3. **Orphan checkout test**: If ProofCheckoutManager available in test context, create orphan checkout directory, verify ERR_WORK_PROOF_CHECKOUT_ORPHAN finding
+4. **Mtime verification**: Capture stat() of checked paths before/after work_health call, assert unchanged
+
+Test infrastructure exists (tmp_path, NativeRuntime construction). State construction requires writing YAML to work_root subdirectories. No production semantic changes needed.
