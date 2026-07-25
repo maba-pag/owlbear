@@ -1,10 +1,10 @@
 ---
 id: 2027
 title: 'P5-01: Establish native MCP authority context and change inspection'
-status: collect
+status: archived
 priority: high
 created: 2026-07-24T23:21:34.679658+02:00
-updated: 2026-07-25T09:45:38.671327+02:00
+updated: 2026-07-25T09:47:55.589058+02:00
 tags:
   - phase-5
   - scope:mcp-kanban
@@ -34,7 +34,7 @@ proof_bundle: existing+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Projection
@@ -120,3 +120,17 @@ No durable test added per guidance: focused proof exercises public MCP tools ove
 - Out of scope: admission publication, job/evidence queries, requests, lifecycle writes, Cockpit, setup, agents, core engine ✓
 
 Challenger feedback addressed with proof extensions and unused-model removal. All AC branches causally exercised over real authority loaders. IF-015 native-runtime tools preserved per #2040 scope.
+
+[[2026-07-25T09:47:55+02:00]]
+## Collect Notes
+
+**Leaf Archive Readiness:**
+- AC1-AC4: All PASSED per verifier evidence
+- Builder commit: 59e9fb0c3
+- Verifier commit: 91ac57ae6
+- MCP evidence: 440 passing tests over focused public MCP boundary
+- No unresolved follow-up/request
+- Scoped to mcp-kanban server/models/tests per envelope
+- Admitted digest 3f6c65628991 confirmed
+
+Leaf task closure complete. Parent #1981 collection requires sibling T2-T6 closure.
