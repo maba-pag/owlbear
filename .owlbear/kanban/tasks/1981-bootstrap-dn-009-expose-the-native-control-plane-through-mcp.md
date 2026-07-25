@@ -4,7 +4,7 @@ title: 'Bootstrap DN-009: Expose the native control plane through MCP'
 status: collect
 priority: high
 created: 2026-07-22T01:06:55.160360+02:00
-updated: 2026-07-25T09:17:05.844407+02:00
+updated: 2026-07-25T09:21:58.481601+02:00
 tags:
   - bootstrap-projection
   - change:replace-delivery-pipeline
@@ -15,6 +15,12 @@ tags:
 parent: 1968
 depends_on:
   - 1980
+  - 2027
+  - 2028
+  - 2029
+  - 2030
+  - 2031
+  - 2040
 ac:
   - 'AC-1: Shaper, while this task is in `shape`, reads `DN-009` at the recorded digest
     from modular delivery authority and publishes six outcome-cohesive packet tasks
@@ -77,3 +83,10 @@ Repair Closure Map: `PARTIAL_GRAPH_COMMIT/T6-missing` closes through #2040 creat
 Change Module Map: T1-T6 own `serve/mcp-kanban` models/server/tests and consume current `serve/kanban` public APIs; no core semantic changes are shaped. Product invariants: T1 authority reads, T2 atomic admission, T3 job/history reads, T4 evidence/health, T5 native request blocking, T6 assembled IF-010 and legacy absence. Dependency closure is `#2027` feeding #2028-#2031, which feed #2040; #1981 retains admitted DN-004 edge #1980 only. Scenario closure covers malformed/missing authority, admission failure/replay/recovery, paging/cursors, receipt corruption/orphan health, request reference/conflict/status, exact registry, public journey, and stable error/no-partial-mutation families.
 
 First challenger found and corrected an invalid proposal to add child dependencies to #1981 and identified IF-010/IF-015 plus PROOF-014 as the 22-tool literal authority. Concrete graph re-challenge passed. Board audit found exactly six unblocked build children #2027-#2031/#2040 with current digest, parent links, dependencies, proof bundles, and one PK-006 identity. Aggregate routes to `collect`; descendants route through normal build/verify/collect.
+
+[[2026-07-25T09:21:58+02:00]]
+## Shape Notes
+
+Post-route executable validation corrected the aggregate gate. `pick_tasks` selected collector #1981 in the same wave as unfinished builder #2027 when the aggregate depended only on admitted predecessor #1980. This falsified the earlier challenger recommendation and contradicted `w-task-decomposition` Step 11.
+
+Added #2027-#2031 and #2040 as aggregate completion dependencies while preserving #1980 as the admitted DN-004 prerequisite. The child DAG is unchanged. Re-challenge passed: active child IDs make #1981 dependency-blocked, while archived-completed #1980 remains satisfied. The earlier note describing child dependencies as invalid is superseded by this executable picker evidence. Required negative control after commit: fresh `pick_tasks` must select #2027 and exclude #1981 until all six descendants archive.
