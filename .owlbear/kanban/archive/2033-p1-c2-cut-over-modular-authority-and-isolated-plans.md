@@ -1,10 +1,10 @@
 ---
 id: 2033
 title: 'P1-C2: Cut over modular authority and isolated plan storage'
-status: collect
+status: archived
 priority: high
 created: 2026-07-25T02:46:34.205290+02:00
-updated: 2026-07-25T05:17:21.169858+02:00
+updated: 2026-07-25T05:18:41.910733+02:00
 tags:
   - change:replace-delivery-pipeline
   - node:DN-001
@@ -47,7 +47,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Objective
@@ -321,3 +321,21 @@ Added AC6 for current modular-loader metadata plus full-graph MIG-004 ownership 
 
 ### Final Route
 - PASS to collect. All AC are satisfied with focused executable and live-boundary evidence.
+
+[[2026-07-25T05:18:41+02:00]]
+## Collect Notes
+
+### Classification
+- leaf: task #2033 has no child tasks, no aggregate or EPIC intent, and is a child of aggregate parent #1968.
+
+### Latest Verification Evidence
+- Newest `## Verify Notes` occurrence records PASS to collect. It maps AC1-AC7 to focused executable and live public-boundary evidence at task range `28889dcd3..24ebe2721`.
+- `uv run pytest serve/kanban/tests/test_change_revision.py -q`: 27 passed; `uv run pytest serve/kanban/tests/test_change_receipts.py -q`: 59 passed; focused Ruff and `git diff --check 837b76518..HEAD` passed.
+- Live `load_change` returned admitted digest `3f6c656289911320bb5e7faf37b5e86ffa8511e729ade201a03a19913e33d990`, isolated node-plan reads behaved as required, `graph.yaml` was absent, and `discover_admission` selected one current admission. Receipt blob SHA-256 was tied to builder commit `837b76518`.
+
+### Closure Checks
+- Child lookup returned no children. Dependency #2032 is archived completed and the task dependency gate is `ok`.
+- Pending and resolved structured-request queries both returned none. No `Required Follow-up` section exists. The earlier verifier rejection is historical; the newest verifier pass records its repaired authority-metadata key as resolved.
+
+### Archive Rationale
+- Current verifier PASS and all closure checks satisfy leaf archival requirements. No aggregate proof is required for this leaf; parent #1968 retains aggregate closure responsibility.
