@@ -1,22 +1,29 @@
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
+import sys
 from datetime import timedelta
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
+import yaml
 from mcp.server.fastmcp.exceptions import ToolError
 
 from owlbear_kanban import (
+    AttemptStore,
     CorrectiveRouteRequest,
+    DispatchDiagnostic,
+    DispatchDiagnosticCode,
     DispatchRuntime,
     Finding,
     FindingStore,
     GitRepositoryHistory,
     InvalidationRequest,
     JobGeneration,
+    JobRecord,
     JobStore,
     NativeRuntime,
     PlanJob,
@@ -25,6 +32,7 @@ from owlbear_kanban import (
     load_change,
     plan_corrective_route,
 )
+from owlbear_kanban.runtime_transaction import RuntimeTransaction
 from owlbear_mcp_kanban import server
 from owlbear_mcp_kanban.server import AppContext
 
@@ -38,6 +46,48 @@ def _git_head() -> str:
         capture_output=True,
         text=True,
     ).stdout.strip()
+
+
+def _git_state(checkout: Path) -> dict[str, str]:
+    def inspect(*arguments: str) -> str:
+        return subprocess.run(
+            ["git", "-C", str(checkout), *arguments],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+
+    return {
+        "head": inspect("rev-parse", "--verify", "HEAD").strip(),
+        "status": inspect("status", "--porcelain=v1", "--untracked-files=no"),
+        "diff": inspect("diff", "--binary", "HEAD", "--"),
+    }
+
+
+def _frontmatter(path: Path) -> dict[str, object]:
+    metadata = yaml.safe_load(path.read_text(encoding="utf-8").split("---", 2)[1])
+    assert isinstance(metadata, dict)
+    return metadata
+
+
+def _assert_acceptor_write_denied(checkout: Path) -> None:
+    hook = checkout / ".owlbear" / "hooks" / "deny-writes.py"
+    payload = {
+        "tool_name": "execute/runInTerminal",
+        "tool_input": {"command": "printf changed > README.md"},
+    }
+    denied = subprocess.run(
+        [sys.executable, str(hook), "--terminal-read-only"],
+        cwd=checkout,
+        input=json.dumps(payload),
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    response = json.loads(denied.stdout)
+    assert response["hookSpecificOutput"]["permissionDecision"] == "deny"
+    with pytest.raises(PermissionError):
+        (checkout / "README.md").write_text("changed\n", encoding="utf-8")
 
 
 def _snapshot(root: Path) -> dict[str, bytes]:
@@ -161,6 +211,15 @@ async def _active_accept(tmp_path: Path):  # noqa: PLR0915 - public lifecycle as
         )
         assert built.diagnostic is None
 
+    picked = await server.pick_jobs(
+        ctx,
+        change_id=revision.change_id,
+        candidate_revision=commit,
+        wave_size=2,
+    )
+    selected = [entry for wave in picked.waves for entry in wave]
+    assert [(entry.job_id, entry.agent_profile) for entry in selected] == [(4, "acceptor")]
+
     accept_start = _start(4, 4, commit)
     started = await server.start_job(ctx, **accept_start)
     assert isinstance(started, dict)
@@ -168,6 +227,91 @@ async def _active_accept(tmp_path: Path):  # noqa: PLR0915 - public lifecycle as
     checkout = started["checkout"]
     assert checkout.commit == commit
     return revision, board, ctx, runtime, checkout, accept_start, commit
+
+
+def _materialize_waiting_writer(revision, board: Path) -> JobRecord:
+    target = revision.graph.nodes[0]
+    dependent = next(node for node in revision.graph.nodes if target.id in node.dependencies)
+    writer = JobRecord(
+        schema_version=1,
+        job_id=6,
+        kind="plan",
+        priority=7,
+        created_at="2026-07-25T00:05:00Z",
+        updated_at="2026-07-25T00:05:00Z",
+        change_id=revision.change_id,
+        delivery_digest=revision.delivery_digest,
+        target_node_id=dependent.id,
+    )
+    RuntimeTransaction(board, "accept-proof-writer", (JobStore(board).create_participant(writer),)).commit()
+    return writer
+
+
+async def _acceptor_evidence(revision, ctx, checkout, start: dict[str, object], commit: str) -> dict[str, object]:
+    checkout_root = checkout.checkout
+    agent_path = checkout_root / "share" / "agents" / "acceptor.agent.md"
+    workflow_path = checkout_root / "share" / "skills" / "w-node-acceptance" / "SKILL.md"
+    agent = _frontmatter(agent_path)
+    workflow = workflow_path.read_text(encoding="utf-8")
+    tools = agent["tools"]
+    assert isinstance(tools, list)
+    assert agent["hooks"]["PreToolUse"][0]["command"].endswith("deny-writes.py --terminal-read-only")
+    assert not any(
+        operation in tool
+        for operation in ("start_job", "finish_accept", "reject_accept", "release_job")
+        for tool in tools
+    )
+    assert "These fields map unchanged to `finish_accept`." in workflow
+    assert "After every proof command and before returning a disposition" in workflow
+
+    change = await server.show_change(ctx, change_id=revision.change_id)
+    shown_job = await server.show_job(ctx, change_id=revision.change_id, job_id=int(start["job_id"]))
+    receipts = [
+        await server.show_receipt(ctx, change_id=revision.change_id, receipt_id=receipt_id)
+        for receipt_id in ("build-001", "build-002")
+    ]
+    job = shown_job["job"]
+    target = revision.resolve(job.target_node_id)
+    proof = revision.resolve(target.proof)
+    plan = revision.read_node_plan(target.id)
+    before = _git_state(checkout_root)
+    assert change["delivery_digest"] == revision.delivery_digest == job.delivery_digest
+    assert job.attempt_id == start["attempt_id"]
+    assert job.claim_id == start["claim_id"]
+    assert job.node_plan_digest is not None
+    packets = plan["packets"]
+    assert isinstance(packets, list)
+    assert tuple(packet["id"] for packet in packets) == ("DN-001-PK-001", "DN-001-PK-002")
+    assert [receipt.payload["code_revision"] for receipt in receipts] == [commit, commit]
+    assert before == {"head": commit, "status": "", "diff": ""}
+
+    _assert_acceptor_write_denied(checkout_root)
+    after = _git_state(checkout_root)
+    assert after == before
+    return {
+        "methods": list(proof.method),
+        "authority": {
+            "delivery_digest": revision.delivery_digest,
+            "target_node_id": target.id,
+            "acceptance": list(shown_job["acceptance"]),
+            "proof": target.proof,
+        },
+        "plan": {
+            "node_plan_digest": job.node_plan_digest,
+            "packet_ids": [packet["id"] for packet in packets],
+        },
+        "packet_receipts": [
+            {"receipt_id": receipt.receipt_id, "code_revision": receipt.payload["code_revision"]}
+            for receipt in receipts
+        ],
+        "changed_surfaces": {
+            "paths": ["serve/kanban/"],
+            "authority_targets": [target.id, target.proof],
+        },
+        "checkout": {"root": str(checkout_root), "candidate_sha": commit},
+        "replacements": [],
+        "tracked_state": {"before": before, "after": after},
+    }
 
 
 def _rejection_payload(revision, start: dict[str, object], commit: str) -> dict[str, object]:
@@ -210,6 +354,52 @@ def _rejection_payload(revision, start: dict[str, object], commit: str) -> dict[
         "findings": (finding.model_dump(mode="json"),),
         "invalidation": invalidation.model_dump(mode="json"),
     }
+
+
+@pytest.mark.asyncio
+async def test_public_accept_success_is_independent_exact_and_replay_safe(tmp_path: Path) -> None:
+    revision, board, ctx, _runtime, checkout, start, commit = await _active_accept(tmp_path)
+    waiting_writer = _materialize_waiting_writer(revision, board)
+    waiting_start = _start(waiting_writer.job_id, 5, commit)
+    conflict = await server.start_job(ctx, **waiting_start)
+    assert isinstance(conflict, DispatchDiagnostic)
+    assert conflict.code is DispatchDiagnosticCode.WRITER_CONFLICT
+    assert conflict.holder_job_ids == (start["job_id"],)
+
+    evidence = await _acceptor_evidence(revision, ctx, checkout, start, commit)
+    closure = evidence["changed_surfaces"]
+    finish = {
+        "finished_at": "2026-07-25T00:06:00Z",
+        "receipt_id": "accept-001",
+        "code_revision": commit,
+        "evidence": evidence,
+        "evidence_ids": ("accept-contract-001", "accept-read-only-001"),
+        "impact_closure": closure,
+        "reconciliation_plan_job_ids": (6, 7),
+    }
+    events_before = len(AttemptStore(board).list())
+    accepted = await server.finish_accept(ctx, **_identity(start), **finish)
+    assert accepted.diagnostic is None
+    assert accepted.receipt is not None
+    assert accepted.receipt.payload["code_revision"] == commit
+    assert accepted.receipt.payload["predecessor_receipt_ids"] == ("build-001", "build-002")
+    assert accepted.receipt.to_mapping()["evidence"] == json.loads(json.dumps(evidence))
+    assert accepted.receipt.impact_closure is not None
+    assert accepted.receipt.impact_closure.model_dump(mode="json") == closure
+    assert accepted.event is not None
+    assert accepted.event.kind == "succeeded"
+    assert not checkout.root.exists()
+    assert "readers: []" in (board / "dispatch/coordination.yaml").read_text(encoding="utf-8")
+    plans = [item.job for item in JobStore(board).list() if item.job.kind == "plan" and item.job.job_id in (6, 7)]
+    assert [(job.job_id, job.predecessor_job_ids) for job in plans] == [(6, (4,)), (7, (4,))]
+
+    state_after_accept = _snapshot(board)
+    replayed = await server.finish_accept(ctx, **_identity(start), **finish)
+    assert replayed == accepted
+    assert _snapshot(board) == state_after_accept
+    assert len(AttemptStore(board).list()) == events_before + 1
+    shown = await server.show_receipt(ctx, change_id=revision.change_id, receipt_id="accept-001")
+    assert shown == accepted.receipt
 
 
 @pytest.mark.asyncio
