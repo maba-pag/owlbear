@@ -12,7 +12,7 @@ from owlbear_kanban import (
     AttemptStore,
     FinishJobDiagnosticCode,
     FinishJobRequest,
-    FinishShapeRequest,
+    FinishPlanRequest,
     JobDiagnosticCode,
     JobDisposition,
     JobRecord,
@@ -72,7 +72,7 @@ def _record(revision, **changes: object) -> JobRecord:
 
 
 def _materialize(store: JobStore, record: JobRecord) -> None:
-    from owlbear_kanban import JobGeneration, ShapeJob
+    from owlbear_kanban import JobGeneration, PlanJob
 
     stored = store.materialize(
         JobGeneration(
@@ -81,9 +81,9 @@ def _materialize(store: JobStore, record: JobRecord) -> None:
             delivery_digest=record.delivery_digest,
             receipt_id="receipt-001",
             jobs=(
-                ShapeJob(
+                PlanJob(
                     job_id=record.job_id,
-                    kind="shape",
+                    kind="plan",
                     priority=record.priority,
                     created_at=record.created_at,
                     updated_at=record.updated_at,
@@ -118,16 +118,17 @@ def _copied_revision(tmp_path: Path):
     changes_dir = tmp_path / "changes"
     change_id = "replace-delivery-pipeline"
     shutil.copytree(Path(f".owlbear/changes/{change_id}"), changes_dir / change_id)
+    (changes_dir / change_id / "plans" / "DN-001.yaml").unlink()
     result = load_change(changes_dir, change_id)
     assert result.revision is not None
     return result.revision
 
 
-def _shape_request(revision, **changes: object) -> FinishShapeRequest:
+def _plan_request(revision, **changes: object) -> FinishPlanRequest:
     target = revision.graph.nodes[0]
     proof = revision.resolve(target.proof)
     closure = {"paths": ["serve/kanban/"], "authority_targets": [target.id, target.proof]}
-    return FinishShapeRequest.model_validate(
+    return FinishPlanRequest.model_validate(
         {
             "job_id": 1,
             "attempt_id": "attempt-001",
@@ -135,10 +136,10 @@ def _shape_request(revision, **changes: object) -> FinishShapeRequest:
             "actor_id": "agent-001",
             "process_id": "process-001",
             "finished_at": "2026-07-24T00:02:00Z",
-            "receipt_id": "shape-001",
+            "receipt_id": "plan-001",
             "code_revision": "a" * 40,
             "evidence": {"methods": list(proof.method)},
-            "evidence_ids": ("shape-review-001",),
+            "evidence_ids": ("plan-review-001",),
             "node_plan": {
                 "packets": [
                     {"id": f"{target.id}-PK-001", "dependencies": [], "impact_closure": closure},
@@ -156,21 +157,21 @@ def _shape_request(revision, **changes: object) -> FinishShapeRequest:
     )
 
 
-def test_finish_shape_publishes_one_complete_outcome_and_replays(revision, tmp_path) -> None:
+def test_finish_plan_publishes_one_complete_outcome_and_replays(revision, tmp_path) -> None:
     revision = _copied_revision(tmp_path)
     work_root = tmp_path / "work"
     work_root.mkdir()
     _materialize(
         JobStore(work_root),
-        _record(revision, kind="shape", receipt_id="bootstrap-001"),
+        _record(revision, kind="plan", receipt_id="bootstrap-001"),
     )
     runtime = _runtime(revision, work_root)
     runtime.start_job(_request())
-    request = _shape_request(revision)
+    request = _plan_request(revision)
 
-    result = runtime.finish_shape(request)
-    replay = runtime.finish_shape(request)
-    changed_receipt_replay = runtime.finish_shape(
+    result = runtime.finish_plan(request)
+    replay = runtime.finish_plan(request)
+    changed_receipt_replay = runtime.finish_plan(
         request.model_copy(update={"code_revision": "b" * 40, "evidence": {"methods": ["changed"]}})
     )
     changed_plan = request.node_plan | {
@@ -179,10 +180,10 @@ def test_finish_shape_publishes_one_complete_outcome_and_replays(revision, tmp_p
             request.node_plan["packets"][1] | {"dependencies": []},
         ]
     }
-    changed_plan_replay = runtime.finish_shape(request.model_copy(update={"node_plan": changed_plan}))
-    changed_jobs_replay = runtime.finish_shape(request.model_copy(update={"build_job_ids": (2, 5)}))
-    changed_receipt_id_replay = runtime.finish_shape(request.model_copy(update={"receipt_id": "shape-002"}))
-    changed_attempt_replay = runtime.finish_shape(request.model_copy(update={"attempt_id": "attempt-002"}))
+    changed_plan_replay = runtime.finish_plan(request.model_copy(update={"node_plan": changed_plan}))
+    changed_jobs_replay = runtime.finish_plan(request.model_copy(update={"build_job_ids": (2, 5)}))
+    changed_receipt_id_replay = runtime.finish_plan(request.model_copy(update={"receipt_id": "plan-002"}))
+    changed_attempt_replay = runtime.finish_plan(request.model_copy(update={"attempt_id": "attempt-002"}))
 
     assert result.diagnostic is None
     assert result.receipt is not None
@@ -227,35 +228,35 @@ def test_finish_shape_publishes_one_complete_outcome_and_replays(revision, tmp_p
         },
     ],
 )
-def test_finish_shape_rejects_invalid_packet_authority_without_publication(tmp_path, node_plan) -> None:
+def test_finish_plan_rejects_invalid_packet_authority_without_publication(tmp_path, node_plan) -> None:
     revision = _copied_revision(tmp_path)
     work_root = tmp_path / "work"
     work_root.mkdir()
     store = JobStore(work_root)
-    _materialize(store, _record(revision, kind="shape", receipt_id="bootstrap-001"))
+    _materialize(store, _record(revision, kind="plan", receipt_id="bootstrap-001"))
     runtime = _runtime(revision, work_root)
     runtime.start_job(_request())
-    graph_before = (revision.source_dir / "graph.yaml").read_bytes()
+    plan_path = revision.source_dir / "plans" / "DN-001.yaml"
 
-    result = runtime.finish_shape(_shape_request(revision, node_plan=node_plan, build_job_ids=(2,)))
+    result = runtime.finish_plan(_plan_request(revision, node_plan=node_plan, build_job_ids=(2,)))
 
     assert result.diagnostic is not None
     assert result.diagnostic.code is FinishJobDiagnosticCode.NODE_PLAN_INVALID
-    assert (revision.source_dir / "graph.yaml").read_bytes() == graph_before
+    assert not plan_path.exists()
     assert tuple(item.job.job_id for item in store.list()) == (1,)
     assert store.list(archived=True) == ()
     assert AttemptStore(work_root).read("attempt-001", 2).event is None
 
 
-def test_finish_shape_transaction_failure_publishes_nothing(tmp_path, monkeypatch) -> None:
+def test_finish_plan_transaction_failure_publishes_nothing(tmp_path, monkeypatch) -> None:
     revision = _copied_revision(tmp_path)
     work_root = tmp_path / "work"
     work_root.mkdir()
     store = JobStore(work_root)
-    _materialize(store, _record(revision, kind="shape", receipt_id="bootstrap-001"))
+    _materialize(store, _record(revision, kind="plan", receipt_id="bootstrap-001"))
     runtime = _runtime(revision, work_root)
     runtime.start_job(_request())
-    graph_before = (revision.source_dir / "graph.yaml").read_bytes()
+    plan_path = revision.source_dir / "plans" / "DN-001.yaml"
 
     def reject_transaction(_transaction) -> None:
         raise TransactionConflictError
@@ -263,13 +264,13 @@ def test_finish_shape_transaction_failure_publishes_nothing(tmp_path, monkeypatc
     monkeypatch.setattr(RuntimeTransaction, "commit", reject_transaction)
 
     with pytest.raises(TransactionConflictError):
-        runtime.finish_shape(_shape_request(revision))
+        runtime.finish_plan(_plan_request(revision))
 
-    assert (revision.source_dir / "graph.yaml").read_bytes() == graph_before
+    assert not plan_path.exists()
     assert tuple(item.job.job_id for item in store.list()) == (1,)
     assert store.list(archived=True) == ()
     assert AttemptStore(work_root).read("attempt-001", 2).event is None
-    assert not (revision.source_dir / "receipts/shape-001.yaml").exists()
+    assert not (revision.source_dir / "receipts/plan-001.yaml").exists()
 
 
 def test_finish_build_accept_and_audit_publish_complete_outcomes(tmp_path) -> None:  # noqa: PLR0915
@@ -277,16 +278,16 @@ def test_finish_build_accept_and_audit_publish_complete_outcomes(tmp_path) -> No
     work_root = tmp_path / "work"
     work_root.mkdir()
     store = JobStore(work_root)
-    _materialize(store, _record(revision, kind="shape", receipt_id="bootstrap-001"))
+    _materialize(store, _record(revision, kind="plan", receipt_id="bootstrap-001"))
     runtime = _runtime(revision, work_root)
     runtime.start_job(_request())
-    shape = _shape_request(revision)
-    assert runtime.finish_shape(shape).diagnostic is None
+    plan = _plan_request(revision)
+    assert runtime.finish_plan(plan).diagnostic is None
 
-    packet_closures = tuple(parse_impact_closure(packet["impact_closure"]) for packet in shape.node_plan["packets"])
-    finish_methods = shape.evidence
+    packet_closures = tuple(parse_impact_closure(packet["impact_closure"]) for packet in plan.node_plan["packets"])
+    finish_methods = plan.evidence
     for job_id, predecessor_receipt_id, closure in (
-        (2, "shape-001", packet_closures[0]),
+        (2, "plan-001", packet_closures[0]),
         (3, "build-001", packet_closures[1]),
     ):
         attempt = f"attempt-{job_id:03d}"
@@ -344,7 +345,7 @@ def test_finish_build_accept_and_audit_publish_complete_outcomes(tmp_path) -> No
 
     target = runtime._revision.graph.nodes[0]  # noqa: SLF001 - arrange a same-authority audit job.
     audit_job = _record(
-        runtime._revision,  # noqa: SLF001 - use the node-plan authority published by finish_shape.
+        runtime._revision,  # noqa: SLF001 - use the node-plan authority published by finish_plan.
         job_id=5,
         kind="audit",
         node_plan_digest=compute_node_plan_digest(runtime._revision, target.id),  # noqa: SLF001
@@ -372,7 +373,7 @@ def test_finish_build_accept_and_audit_publish_complete_outcomes(tmp_path) -> No
     assert audit.event is not None
     assert audit.event.kind == "succeeded"
     assert runtime.finish_audit(audit_request).receipt == audit.receipt
-    assert runtime.finish_shape(shape).receipt is not None
+    assert runtime.finish_plan(plan).receipt is not None
     assert tuple(item.job.job_id for item in store.list(archived=True)) == (1, 2, 3, 4, 5)
     assert tuple(event.kind for event in AttemptStore(work_root).list()) == (
         "started",
@@ -393,16 +394,16 @@ def test_finish_build_refuses_stale_predecessor_and_keeps_job_active(tmp_path) -
     work_root = tmp_path / "work"
     work_root.mkdir()
     store = JobStore(work_root)
-    _materialize(store, _record(revision, kind="shape", receipt_id="bootstrap-001"))
+    _materialize(store, _record(revision, kind="plan", receipt_id="bootstrap-001"))
     history = _History()
     runtime = NativeRuntime(revision, work_root, history, timedelta(minutes=5))
     runtime.start_job(_request())
-    shape = _shape_request(revision)
-    shape_result = runtime.finish_shape(shape)
-    assert shape_result.diagnostic is None
+    plan = _plan_request(revision)
+    plan_result = runtime.finish_plan(plan)
+    assert plan_result.diagnostic is None
     runtime.start_job(_request().model_copy(update={"job_id": 2, "attempt_id": "attempt-002", "claim_id": "claim-002"}))
     history.changed_paths = b"M\0serve/kanban/src/owlbear_kanban/native_runtime.py\0"
-    packet = shape.node_plan["packets"][0]
+    packet = plan.node_plan["packets"][0]
     request = FinishJobRequest(
         job_id=2,
         attempt_id="attempt-002",
@@ -412,7 +413,7 @@ def test_finish_build_refuses_stale_predecessor_and_keeps_job_active(tmp_path) -
         finished_at="2026-07-24T00:03:00Z",
         receipt_id="build-001",
         code_revision="b" * 40,
-        evidence=shape.evidence,
+        evidence=plan.evidence,
         impact_closure=parse_impact_closure(packet["impact_closure"]),
     )
 

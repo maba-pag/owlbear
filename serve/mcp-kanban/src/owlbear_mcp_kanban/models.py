@@ -101,8 +101,8 @@ class FinishJobParams(MCPParamsBase):
     impact_closure: dict[str, object] | None = None
 
 
-class FinishShapeParams(FinishJobParams):
-    """Validate shape completion inputs and downstream job identities."""
+class FinishPlanParams(FinishJobParams):
+    """Validate plan completion inputs and downstream job identities."""
 
     node_plan: dict[str, object]
     build_job_ids: tuple[int, ...]

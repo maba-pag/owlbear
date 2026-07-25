@@ -277,7 +277,7 @@ class TestFromAC_ListTasksIdsExclusivity:
 
 # ---------------------------------------------------------------------------
 # TestFromAC_ListTasksSchemaContract
-# Refined AC §5.1: field shape, defaults, no archived, ids + display-modifier compat
+# Refined AC §5.1: field plan, defaults, no archived, ids + display-modifier compat
 # ---------------------------------------------------------------------------
 
 
@@ -598,7 +598,7 @@ class TestFromAC_ResponseEnvelopes:
 
 # ---------------------------------------------------------------------------
 # TestFromAC_PickTasksContract
-# Refined AC §5.3: PickTasksParams field shape, types, defaults
+# Refined AC §5.3: PickTasksParams field plan, types, defaults
 # ---------------------------------------------------------------------------
 
 
@@ -1029,21 +1029,21 @@ class TestFromAC_EndWorkStringFieldContracts:
         assert isinstance(p.archival_reason, str)
 
     def test_end_work_move_to_strict_mode_accepts_str(self) -> None:
-        """move_to annotation is str | None: strict mode accepts str (annotation shape proof)."""
+        """move_to annotation is str | None: strict mode accepts str (annotation plan proof)."""
         from owlbear_mcp_kanban.models import EndWorkParams
 
         p = EndWorkParams.model_validate({"id": 1, "outcome": "reject", "move_to": "todo"}, strict=True)
         assert p.move_to == "todo"
 
     def test_end_work_note_strict_mode_accepts_str(self) -> None:
-        """note annotation is str | None: strict mode accepts str (annotation shape proof)."""
+        """note annotation is str | None: strict mode accepts str (annotation plan proof)."""
         from owlbear_mcp_kanban.models import EndWorkParams
 
         p = EndWorkParams.model_validate({"id": 1, "note": "some note"}, strict=True)
         assert p.note == "some note"
 
     def test_end_work_block_reason_strict_mode_accepts_str(self) -> None:
-        """block_reason annotation is str | None: strict mode accepts str (annotation shape proof)."""
+        """block_reason annotation is str | None: strict mode accepts str (annotation plan proof)."""
         from owlbear_mcp_kanban.models import EndWorkParams
 
         p = EndWorkParams.model_validate(
@@ -1053,7 +1053,7 @@ class TestFromAC_EndWorkStringFieldContracts:
         assert p.block_reason == "blocked because"
 
     def test_end_work_archival_reason_strict_mode_accepts_str(self) -> None:
-        """archival_reason annotation is str | None: strict mode accepts str (annotation shape proof)."""
+        """archival_reason annotation is str | None: strict mode accepts str (annotation plan proof)."""
         from owlbear_mcp_kanban.models import EndWorkParams
 
         p = EndWorkParams.model_validate(

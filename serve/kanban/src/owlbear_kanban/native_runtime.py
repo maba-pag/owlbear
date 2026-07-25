@@ -6,14 +6,15 @@ import re
 from collections.abc import Mapping
 from datetime import datetime, timedelta
 from enum import StrEnum
-from io import StringIO
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 from owlbear_kanban.attempts import AttemptEvent, AttemptStore
+from owlbear_kanban.change import load_change
 from owlbear_kanban.invalidation import InvalidationRequest, InvalidationResult, InvalidationRuntime
 from owlbear_kanban.jobs import JobDisposition, JobRecord, JobStore, StoredJob, project_job
+from owlbear_kanban.node_plan import NodePlanStore
 from owlbear_kanban.receipt import (
     ImpactClosure,
     ReceiptRecord,
@@ -38,7 +39,6 @@ from owlbear_kanban.runtime_transaction import (
     RuntimeTransaction,
     TransactionConflictError,
 )
-from owlbear_kanban.yaml_rt import make_yaml
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
@@ -238,7 +238,7 @@ class FinishJobRequest(BaseModel):
     impact_closure: ImpactClosure | None = None
 
 
-class FinishShapeRequest(FinishJobRequest):
+class FinishPlanRequest(FinishJobRequest):
     """Extend job completion with a node plan and downstream job identities."""
 
     node_plan: dict[str, object]
@@ -364,6 +364,7 @@ class NativeRuntime:
         self._work_root = work_root
         self._history = history
         self._claim_expiry = claim_expiry
+        self._proof_checkouts = proof_checkouts
         self._jobs = JobStore(work_root)
         self._attempts = AttemptStore(work_root)
         self._receipts = ReceiptStore(revision)
@@ -502,9 +503,9 @@ class NativeRuntime:
             )
         )
 
-    def finish_shape(self, request: FinishShapeRequest) -> FinishJobResult:
-        """Complete shape work and publish its receipt and downstream jobs."""
-        result = self._finish(request, "shape")
+    def finish_plan(self, request: FinishPlanRequest) -> FinishJobResult:
+        """Complete plan work and publish its receipt and downstream jobs."""
+        result = self._finish(request, "plan")
         if result.diagnostic is None:
             self._query.reset()
         return result
@@ -762,7 +763,7 @@ class NativeRuntime:
             project_job(
                 stored.job,
                 self._revision,
-                self._revision.graph.execution.node_plans.get(stored.job.target_node_id),
+                self._revision.read_node_plan(stored.job.target_node_id),
             )
         except FileNotFoundError, ValueError:
             return self._finish_diagnostic(
@@ -787,9 +788,9 @@ class NativeRuntime:
         revision = self._revision
         participants: list[object] = []
         created_jobs: tuple[JobRecord, ...] = ()
-        if kind == "shape":
-            assert isinstance(request, FinishShapeRequest)
-            prepared = self._prepare_shape(stored, request)
+        if kind == "plan":
+            assert isinstance(request, FinishPlanRequest)
+            prepared = self._prepare_plan(stored, request)
             if isinstance(prepared, FinishJobResult):
                 return prepared
             revision, graph_participant, created_jobs, closure = prepared
@@ -801,8 +802,12 @@ class NativeRuntime:
                 return prepared_closure
             closure = prepared_closure
 
-        node_plan_digest = compute_node_plan_digest(revision, job.target_node_id)
-        if kind != "shape" and job.node_plan_digest != node_plan_digest:
+        node_plan_digest = compute_node_plan_digest(
+            revision,
+            job.target_node_id,
+            request.node_plan if isinstance(request, FinishPlanRequest) else None,
+        )
+        if kind != "plan" and job.node_plan_digest != node_plan_digest:
             return self._finish_diagnostic(
                 FinishJobDiagnosticCode.AUTHORITY_STALE,
                 "job node-plan digest differs from current authority",
@@ -831,7 +836,12 @@ class NativeRuntime:
                 "receipt evidence is malformed",
                 target=request.receipt_id,
             )
-        validity = self._new_receipt_validity(revision, receipt, request.code_revision)
+        validity = self._new_receipt_validity(
+            revision,
+            receipt,
+            request.code_revision,
+            request.node_plan if isinstance(request, FinishPlanRequest) else None,
+        )
         if not validity.current:
             return self._finish_diagnostic(
                 FinishJobDiagnosticCode.EVIDENCE_INVALID,
@@ -863,9 +873,12 @@ class NativeRuntime:
             f"finish-{request.attempt_id}",
             tuple(participants),  # type: ignore[arg-type]
         ).commit()
-        if revision is not self._revision:
-            self._revision = revision
-            self._receipts = receipt_store
+        if kind == "plan":
+            loaded = load_change(self._revision.source_dir.parent, self._revision.change_id)
+            assert loaded.revision is not None
+            self._revision = loaded.revision
+            self._receipts = ReceiptStore(self._revision)
+            self._query = RuntimeQuery(self._revision, self._work_root, self._history, self._proof_checkouts)
         return FinishJobResult(
             job=self._jobs.read(job.job_id, archived=True),
             receipt=receipt,
@@ -895,7 +908,7 @@ class NativeRuntime:
         receipt_result = self._receipts.read(request.receipt_id)
         receipt = receipt_result.receipt
         receipt_payload = receipt.model_dump(mode="json")["payload"] if receipt is not None else {}
-        if isinstance(request, FinishShapeRequest):
+        if isinstance(request, FinishPlanRequest):
             validated = self._validate_node_plan(stored.job.target_node_id, request.node_plan)
             prepared_closure = (
                 validated if isinstance(validated, FinishJobResult) else self._union_closures(validated[2])
@@ -908,8 +921,8 @@ class NativeRuntime:
             and receipt.impact_closure == prepared_closure
         )
         shape_identity_matches = True
-        if isinstance(request, FinishShapeRequest):
-            node_plan = self._revision.graph.execution.node_plans.get(stored.job.target_node_id)
+        if isinstance(request, FinishPlanRequest):
+            node_plan = self._revision.read_node_plan(stored.job.target_node_id)
             generated_jobs = tuple(
                 item.job
                 for item in (*self._jobs.list(), *self._jobs.list(archived=True))
@@ -996,10 +1009,10 @@ class NativeRuntime:
             receipt_ids.append(predecessor.receipt_id)
         return tuple(receipt_ids)
 
-    def _prepare_shape(
+    def _prepare_plan(
         self,
         stored: StoredJob,
-        request: FinishShapeRequest,
+        request: FinishPlanRequest,
     ) -> (
         tuple[ChangeRevision, ReplacementTransactionParticipant, tuple[JobRecord, ...], ImpactClosure] | FinishJobResult
     ):
@@ -1035,8 +1048,8 @@ class NativeRuntime:
                 "generated job identity already exists",
                 target=str(job_id),
             )
-        revised, graph_participant = self._node_plan_participant(job.target_node_id, request.node_plan)
-        digest = compute_node_plan_digest(revised, job.target_node_id)
+        plan_participant = self._node_plan_participant(job.target_node_id, request.node_plan)
+        digest = compute_node_plan_digest(self._revision, job.target_node_id, request.node_plan)
         by_packet = dict(zip(packet_ids, request.build_job_ids, strict=True))
         build_jobs = tuple(
             JobRecord(
@@ -1068,7 +1081,7 @@ class NativeRuntime:
             predecessor_job_ids=request.build_job_ids,
         )
         closure = self._union_closures(closures)
-        return revised, graph_participant, (*build_jobs, accept_job), closure
+        return self._revision, plan_participant, (*build_jobs, accept_job), closure
 
     def _validate_node_plan(  # noqa: C901, PLR0911
         self, target: str, node_plan: Mapping[str, object]
@@ -1179,36 +1192,13 @@ class NativeRuntime:
             return value
         return None
 
-    def _node_plan_participant(
-        self, target: str, node_plan: Mapping[str, object]
-    ) -> tuple[ChangeRevision, ReplacementTransactionParticipant]:
-        graph_path = self._revision.source_dir / "graph.yaml"
-        original = graph_path.read_text(encoding="utf-8")
-        document = make_yaml().load(original)
-        execution = document.setdefault("execution", {})
-        plans = execution.setdefault("node_plans", {})
-        if target in plans:
-            raise TransactionConflictError
-        plans[target] = dict(node_plan)
-        stream = StringIO()
-        make_yaml(explicit_start=original.startswith("---")).dump(document, stream)
-        current_plans = dict(self._revision.graph.execution.node_plans)
-        current_plans[target] = dict(node_plan)
-        execution_model = self._revision.graph.execution.model_copy(update={"node_plans": current_plans})
-        graph = self._revision.graph.model_copy(update={"execution": execution_model})
-        revision = self._revision.model_copy(update={"graph": graph})
-        participant = ReplacementTransactionParticipant(
-            self._revision.source_dir,
-            self._revision.source_dir.joinpath("graph.yaml").relative_to(self._revision.source_dir),
-            original.encode("utf-8"),
-            stream.getvalue().encode("utf-8"),
-        )
-        return revision, participant
+    def _node_plan_participant(self, target: str, node_plan: Mapping[str, object]) -> ReplacementTransactionParticipant:
+        return NodePlanStore(self._revision).prepare(target, node_plan)
 
     def _finish_closure(  # noqa: PLR0911
         self, job: JobRecord, request: FinishJobRequest
     ) -> ImpactClosure | FinishJobResult:
-        node_plan = self._revision.graph.execution.node_plans.get(job.target_node_id)
+        node_plan = self._revision.read_node_plan(job.target_node_id)
         if not isinstance(node_plan, Mapping):
             return self._finish_diagnostic(
                 FinishJobDiagnosticCode.AUTHORITY_STALE,
@@ -1255,9 +1245,13 @@ class NativeRuntime:
         )
 
     def _new_receipt_validity(
-        self, revision: ChangeRevision, receipt: ReceiptRecord, code_revision: str
+        self,
+        revision: ChangeRevision,
+        receipt: ReceiptRecord,
+        code_revision: str,
+        pending_node_plan: Mapping[str, object] | None = None,
     ) -> ReceiptValidity:
-        local = evaluate_receipt_currentness(revision, receipt)
+        local = evaluate_receipt_currentness(revision, receipt, pending_node_plan)
         if not local.current:
             return local
         assert receipt.impact_closure is not None
@@ -1427,7 +1421,7 @@ __all__ = [
     "FinishJobDiagnosticCode",
     "FinishJobRequest",
     "FinishJobResult",
-    "FinishShapeRequest",
+    "FinishPlanRequest",
     "NativeRuntime",
     "RecoverExpiredClaimsRequest",
     "RecoverExpiredClaimsResult",

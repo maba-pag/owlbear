@@ -37,7 +37,7 @@ _TEMP_CREATE_ATTEMPTS = 10
 _STABLE_ID_ADAPTER = TypeAdapter(StableId)
 
 ReceiptId = Annotated[str, StringConstraints(strict=True, pattern=_RECEIPT_ID_PATTERN)]
-ReceiptKind = Literal["admission", "shape", "build", "accept", "audit", "supersession"]
+ReceiptKind = Literal["admission", "plan", "build", "accept", "audit", "supersession"]
 type JsonValue = str | int | float | bool | list[JsonValue] | dict[str, JsonValue] | None
 
 _COMMON_RECEIPT_FIELDS = (
@@ -449,7 +449,7 @@ def parse_receipt_mapping(value: Mapping[str, object]) -> ReceiptParseResult:
         "evidence": ReceiptParseDiagnosticCode.EVIDENCE_MISSING,
         "code_revision": ReceiptParseDiagnosticCode.CODE_REVISION_MISSING,
     }
-    if record.kind in {"shape", "build", "accept"}:
+    if record.kind in {"plan", "build", "accept"}:
         required["node_plan_digest"] = ReceiptParseDiagnosticCode.NODE_PLAN_DIGEST_MISSING
     diagnostics = tuple(
         ReceiptParseDiagnostic(code=code, detail=f"receipt payload is missing {field}")
@@ -459,7 +459,11 @@ def parse_receipt_mapping(value: Mapping[str, object]) -> ReceiptParseResult:
     return ReceiptParseResult(diagnostics=diagnostics) if diagnostics else ReceiptParseResult(receipt=record)
 
 
-def compute_node_plan_digest(revision: ChangeRevision, target: str) -> Digest:
+def compute_node_plan_digest(
+    revision: ChangeRevision,
+    target: str,
+    node_plan: Mapping[str, object] | None = None,
+) -> Digest:
     """Return the canonical digest for one delivery node and its packet plan."""
     node = revision.resolve(target)
     if not hasattr(node, "proof"):
@@ -468,7 +472,7 @@ def compute_node_plan_digest(revision: ChangeRevision, target: str) -> Digest:
     payload = {
         "delivery_digest": revision.delivery_digest,
         "node": node.model_dump(mode="json"),
-        "node_plan": revision.graph.execution.model_dump(mode="json")["node_plans"].get(target),
+        "node_plan": node_plan if node_plan is not None else revision.read_node_plan(target),
     }
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
     return hashlib.sha256(encoded.encode()).hexdigest()
@@ -485,7 +489,11 @@ def _target_proof(revision: ChangeRevision, target: str) -> Proof | None:
     return proof if isinstance(proof, Proof) else None
 
 
-def evaluate_receipt_currentness(revision: ChangeRevision, receipt: ReceiptRecord) -> ReceiptValidity:
+def evaluate_receipt_currentness(
+    revision: ChangeRevision,
+    receipt: ReceiptRecord,
+    pending_node_plan: Mapping[str, object] | None = None,
+) -> ReceiptValidity:
     """Evaluate local receipt authority and proof currentness without graph traversal."""
     if receipt.schema_version != 1:
         result = ReceiptValidity(
@@ -514,11 +522,15 @@ def evaluate_receipt_currentness(revision: ChangeRevision, receipt: ReceiptRecor
     elif receipt.kind == "admission":
         result = ReceiptValidity(code=ReceiptValidityCode.CURRENT, detail="admission receipt is locally current")
     else:
-        result = _evaluate_target_receipt(revision, receipt)
+        result = _evaluate_target_receipt(revision, receipt, pending_node_plan)
     return result
 
 
-def _evaluate_target_receipt(revision: ChangeRevision, receipt: ReceiptRecord) -> ReceiptValidity:
+def _evaluate_target_receipt(
+    revision: ChangeRevision,
+    receipt: ReceiptRecord,
+    pending_node_plan: Mapping[str, object] | None = None,
+) -> ReceiptValidity:
     target = receipt.payload.get("target_node_id")
     if not isinstance(target, str) or _target_proof(revision, target) is None:
         return ReceiptValidity(
@@ -533,7 +545,7 @@ def _evaluate_target_receipt(revision: ChangeRevision, receipt: ReceiptRecord) -
             detail="receipt payload is missing node_plan_digest",
             target=target,
         )
-    if node_plan_digest != compute_node_plan_digest(revision, target):
+    if node_plan_digest != compute_node_plan_digest(revision, target, pending_node_plan):
         return ReceiptValidity(
             code=ReceiptValidityCode.NODE_PLAN_DIGEST_STALE,
             detail="receipt node plan digest differs from the loaded revision",
@@ -1291,7 +1303,14 @@ def _receipt_health(revision: ChangeRevision) -> tuple[list[ChangeHealthFinding]
 
 def change_health(changes_dir: Path, change_id: str) -> ChangeHealthResult:
     """Return deterministic read-only authority and receipt health evidence."""
-    authority_paths = ("intent.md", "design.md", "decisions.yaml", "graph.yaml")
+    authority_paths = (
+        "intent.md",
+        "design.md",
+        "decisions.yaml",
+        "delivery/contracts.yaml",
+        "delivery/nodes.yaml",
+        "delivery/obligations.yaml",
+    )
     load_result = load_change(changes_dir, change_id)
     checked_paths = list(authority_paths)
     findings = [

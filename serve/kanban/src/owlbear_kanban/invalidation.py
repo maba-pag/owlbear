@@ -30,10 +30,10 @@ FindingTarget = Literal[
     "node-integration",
     "whole-change-integration",
 ]
-CorrectiveJobKind = Literal["shape", "build"]
+CorrectiveJobKind = Literal["plan", "build"]
 CorrectiveRouteKind = Literal[
     "build-repair",
-    "node-shape-revision",
+    "node-plan-revision",
     "design-reentry",
     "node-integration-repair",
     "affected-node-correction",
@@ -72,7 +72,7 @@ class CorrectiveJobPlan(_InvalidationModel):
 
     kind: CorrectiveJobKind
     target_node_id: str
-    through_shape_correction: bool = False
+    through_plan_correction: bool = False
 
 
 class CorrectiveRoute(_InvalidationModel):
@@ -170,8 +170,8 @@ def plan_corrective_route(request: CorrectiveRouteRequest) -> CorrectiveRoute:
     if request.target in {"packet-plan", "packet-dependency", "packet-proof-plan"}:
         return CorrectiveRoute(
             **common,
-            route="node-shape-revision",
-            jobs=(CorrectiveJobPlan(kind="shape", target_node_id=node_id),),
+            route="node-plan-revision",
+            jobs=(CorrectiveJobPlan(kind="plan", target_node_id=node_id),),
         )
     if request.target == "admitted-design-authority":
         return CorrectiveRoute(**common, route="design-reentry", design_reentry=True)
@@ -181,14 +181,14 @@ def plan_corrective_route(request: CorrectiveRouteRequest) -> CorrectiveRoute:
             route="node-integration-repair",
             jobs=(
                 CorrectiveJobPlan(
-                    kind="shape",
+                    kind="plan",
                     target_node_id=node_id,
-                    through_shape_correction=True,
+                    through_plan_correction=True,
                 ),
             ),
         )
     jobs = tuple(
-        CorrectiveJobPlan(kind="shape", target_node_id=target_node_id, through_shape_correction=True)
+        CorrectiveJobPlan(kind="plan", target_node_id=target_node_id, through_plan_correction=True)
         for target_node_id in request.target_node_ids
     )
     return CorrectiveRoute(**common, route="affected-node-correction", jobs=jobs)

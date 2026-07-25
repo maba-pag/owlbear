@@ -1,10 +1,10 @@
 ---
 id: 2034
 title: 'P1-C3: Replace native shape identity with plan admission'
-status: build
+status: verify
 priority: high
 created: 2026-07-25T02:46:39.499546+02:00
-updated: 2026-07-25T04:42:48.845621+02:00
+updated: 2026-07-25T05:22:07.222705+02:00
 tags:
   - change:replace-delivery-pipeline
   - node:DN-002
@@ -113,3 +113,44 @@ Connected local task repair with #2033. Builder rejection key `AC3/modular-autho
 
 ### Challenge And Route
 Shaper challenger first failed on stale scope, waiver, fixture, and low-level storage ownership. Corrected rechallenge passed. Task advances to `build` but remains dependency-blocked until #2033 archives.
+
+[[2026-07-25T05:22:07+02:00]]
+## Builder Notes
+
+### Change Envelope
+- Converted the active native delivery contract from shape identity to plan identity, retaining the legacy shape receipt only as inert history.
+- Expected owners: native job/admission/receipt/runtime/query/corrective-route contracts, public exports, MCP models/server, and their maintained focused tests.
+
+### Files Changed
+- `serve/kanban/src/owlbear_kanban/{__init__,admission_transaction,dispatch,invalidation,jobs,native_runtime,receipt}.py`
+- `serve/kanban/tests/{test_change_receipts,test_dispatch_runtime,test_invalidation,test_jobs,test_native_runtime,test_runtime_query,test_runtime_requests,test_runtime_transaction}.py`
+- `serve/mcp-kanban/src/owlbear_mcp_kanban/{models,server}.py`
+- `serve/mcp-kanban/tests/{test_mcp_models,test_mcp_request_tools,test_mcp_surface_contract}.py`
+- `.owlbear/changes/replace-delivery-pipeline/receipts/shape-001.yaml`
+
+### Change Module Map
+- No deviations. The active runtime and MCP owners match the shaped module map; the preserved legacy receipt is explicitly inert history.
+
+### Proof Selected
+- `uv run pytest` across the eight focused Kanban runtime tests and three focused MCP contract tests: `340 passed` in 10.06s.
+- Task-owned `git diff --check` passed.
+- Active-source audit found no `ShapeJob`, `FinishShapeRequest`, `plan_shape_jobs`, shape job-kind, or shape receipt discriminator; explicit file assertion confirms `shape-001.yaml` remains available as historical bytes.
+
+### AC-to-Evidence Map
+- AC1: focused admission/transaction tests prove authored ordering and dual-participant recovery.
+- AC2: jobs, requests, queries, receipt, invalidation, and MCP contract tests prove active plan parsing and retired-shape diagnostics.
+- AC3: public export, runtime request, job-generation, and MCP surface tests prove plan-only active contracts; source audit confirms retired identifiers are absent.
+- AC4: admission and transaction replay tests prove idempotent reuse and conflict/validation paths without mutation.
+- AC5: native-runtime and transaction tests prove `NodePlanStore` plan-file/receipt publication, digest/currentness/change-health behavior, and interrupted atomic recovery without graph mutation.
+
+### Durable-Test Justification
+- Updated existing focused regression coverage for the shared runtime/MCP contract; no speculative test artifacts added.
+
+### Current Follow-up
+- None.
+
+### Builder-Challenger
+- `pass`: focused tests and source audit support the plan-only contract; retained legacy receipt aligns with the accepted historical-bytes condition.
+
+### Follow-up Risks
+- None within this task boundary.

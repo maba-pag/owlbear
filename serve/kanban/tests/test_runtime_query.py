@@ -13,7 +13,7 @@ from owlbear_kanban import (
     JobStore,
     NativeRuntime,
     ReceiptStore,
-    ShapeJob,
+    PlanJob,
     load_change,
     plan_corrective_route,
 )
@@ -67,9 +67,9 @@ def _materialize(store: JobStore, record: JobRecord, *, archived: bool = False) 
             delivery_digest=record.delivery_digest,
             receipt_id=record.receipt_id or "seed-receipt",
             jobs=(
-                ShapeJob(
+                PlanJob(
                     job_id=record.job_id,
-                    kind="shape",
+                    kind="plan",
                     priority=record.priority,
                     created_at=record.created_at,
                     updated_at=record.updated_at,

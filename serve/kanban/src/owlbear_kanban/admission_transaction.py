@@ -1,4 +1,4 @@
-"""Atomic public admission of a revision and its initial shape jobs."""
+"""Atomic public admission of a revision and its initial plan jobs."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
 from owlbear_kanban.admission import AdmissionAssessment, AdmissionEvidence, evaluate_admission
-from owlbear_kanban.jobs import JobGeneration, plan_shape_jobs, read_job_generation
+from owlbear_kanban.jobs import JobGeneration, plan_jobs, read_job_generation
 from owlbear_kanban.receipt import ReceiptRecord, ReceiptStore
 from owlbear_kanban.runtime_transaction import RuntimeTransaction, TransactionConflictError, TransactionParticipant
 from owlbear_kanban.yaml_rt import make_yaml
@@ -62,13 +62,13 @@ class AdmissionTransaction:
         timestamp: str = "1970-01-01T00:00:00Z",
         failure: Callable[[str], None] | None = None,
     ) -> tuple[ReceiptRecord | None, JobGeneration | None, AdmissionAssessment]:
-        """Evaluate a revision and atomically publish its admission receipt and shape jobs."""
+        """Evaluate a revision and atomically publish its admission receipt and plan jobs."""
         assessment = evaluate_admission(self.revision, evidence)
         if not assessment.admitted:
             return None, None, assessment
         receipt_id = receipt_id or f"admission-{self.revision.delivery_digest[:12]}"
         job_ids = tuple(job_ids or range(1, len(self.revision.graph.nodes) + 1))
-        generation = plan_shape_jobs(self.revision, receipt_id, job_ids, timestamp=timestamp)
+        generation = plan_jobs(self.revision, receipt_id, job_ids, timestamp=timestamp)
         try:
             receipt = ReceiptRecord(
                 schema_version=1,

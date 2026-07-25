@@ -15,7 +15,7 @@ import yaml
 from owlbear_kanban.attempts import AttemptEvent, AttemptStore
 import owlbear_kanban.jobs as jobs_module
 import owlbear_kanban.runtime_transaction as transaction_module
-from owlbear_kanban.jobs import JobConcurrencyError, JobDisposition, JobGeneration, JobStore, ShapeJob
+from owlbear_kanban.jobs import JobConcurrencyError, JobDisposition, JobGeneration, JobStore, PlanJob
 from owlbear_kanban.runtime_transaction import (
     MoveTransactionParticipant,
     ReplacementTransactionParticipant,
@@ -39,9 +39,9 @@ def _job_store_with_record(tmp_path: Path) -> tuple[JobStore, Path, object, byte
         delivery_digest="a" * 64,
         receipt_id="receipt-001",
         jobs=(
-            ShapeJob(
+            PlanJob(
                 job_id=1,
-                kind="shape",
+                kind="plan",
                 priority=0,
                 created_at="2026-07-23T00:00:00Z",
                 updated_at="2026-07-23T00:00:00Z",
@@ -252,8 +252,8 @@ def test_recovery_completes_lifecycle_job_and_activity_participants(tmp_path: Pa
         change_root,
         "lifecycle",
         (
-            TransactionParticipant(work_root, Path("jobs/shape.yaml"), b"shape"),
-            TransactionParticipant(work_root, Path("activity/shape.jsonl"), b'{"event":"started"}\n'),
+            TransactionParticipant(work_root, Path("jobs/plan.yaml"), b"plan"),
+            TransactionParticipant(work_root, Path("activity/plan.jsonl"), b'{"event":"started"}\n'),
         ),
     )
 
@@ -267,20 +267,20 @@ def test_recovery_completes_lifecycle_job_and_activity_participants(tmp_path: Pa
 
     RuntimeTransaction.recover_all(change_root, roots=(change_root, work_root))
 
-    assert (work_root / "jobs/shape.yaml").read_bytes() == b"shape"
-    assert (work_root / "activity/shape.jsonl").read_bytes() == b'{"event":"started"}\n'
+    assert (work_root / "jobs/plan.yaml").read_bytes() == b"plan"
+    assert (work_root / "activity/plan.jsonl").read_bytes() == b'{"event":"started"}\n'
     assert not list((change_root / ".runtime-transactions").glob("*.yaml"))
 
 
 def test_transaction_rejects_conflicts_and_escaped_destinations_without_mutation(tmp_path: Path) -> None:
     root = tmp_path / "work"
-    destination = root / "jobs/shape.yaml"
+    destination = root / "jobs/plan.yaml"
     destination.parent.mkdir(parents=True)
     destination.write_bytes(b"committed")
     conflicting = RuntimeTransaction(
         tmp_path / "change",
         "conflict",
-        (TransactionParticipant(root, Path("jobs/shape.yaml"), b"replacement"),),
+        (TransactionParticipant(root, Path("jobs/plan.yaml"), b"replacement"),),
     )
     escaped = RuntimeTransaction(
         tmp_path / "change",
@@ -301,13 +301,13 @@ def test_transaction_rejects_conflicts_and_escaped_destinations_without_mutation
 def test_replacement_participant_recovers_and_replays(tmp_path: Path, stage: str) -> None:
     manifest_root = tmp_path / "change"
     work_root = tmp_path / "work"
-    destination = work_root / "jobs/shape.yaml"
+    destination = work_root / "jobs/plan.yaml"
     destination.parent.mkdir(parents=True)
     destination.write_bytes(b"expected")
     transaction = RuntimeTransaction(
         manifest_root,
         "replacement",
-        (ReplacementTransactionParticipant(work_root, Path("jobs/shape.yaml"), b"expected", b"replacement"),),
+        (ReplacementTransactionParticipant(work_root, Path("jobs/plan.yaml"), b"expected", b"replacement"),),
     )
 
     def interrupt(current_stage: str) -> None:
@@ -372,13 +372,13 @@ def test_abort_restores_exact_prepublication_state_for_mixed_participants(tmp_pa
 def test_replacement_participant_rejects_conflicts_and_invalid_recovery_manifests(tmp_path: Path) -> None:
     manifest_root = tmp_path / "change"
     work_root = tmp_path / "work"
-    destination = work_root / "jobs/shape.yaml"
+    destination = work_root / "jobs/plan.yaml"
     destination.parent.mkdir(parents=True)
     destination.write_bytes(b"different")
     transaction = RuntimeTransaction(
         manifest_root,
         "replacement",
-        (ReplacementTransactionParticipant(work_root, Path("jobs/shape.yaml"), b"expected", b"replacement"),),
+        (ReplacementTransactionParticipant(work_root, Path("jobs/plan.yaml"), b"expected", b"replacement"),),
     )
 
     with pytest.raises(TransactionConflictError):
@@ -398,13 +398,13 @@ def test_replacement_participant_rejects_conflicts_and_invalid_recovery_manifest
 def test_replacement_recovery_rejects_altered_or_unsafe_manifests(tmp_path: Path, alteration: str) -> None:
     manifest_root = tmp_path / "change"
     work_root = tmp_path / "work"
-    destination = work_root / "jobs/shape.yaml"
+    destination = work_root / "jobs/plan.yaml"
     destination.parent.mkdir(parents=True)
     destination.write_bytes(b"expected")
     transaction = RuntimeTransaction(
         manifest_root,
         "replacement",
-        (ReplacementTransactionParticipant(work_root, Path("jobs/shape.yaml"), b"expected", b"replacement"),),
+        (ReplacementTransactionParticipant(work_root, Path("jobs/plan.yaml"), b"expected", b"replacement"),),
     )
 
     def interrupt(current_stage: str) -> None:
@@ -429,7 +429,7 @@ def test_replacement_recovery_rejects_altered_or_unsafe_manifests(tmp_path: Path
         RuntimeTransaction.recover_all(manifest_root, roots=(manifest_root, work_root))
 
     assert destination.read_bytes() == b"expected"
-    assert not (tmp_path / "outside/jobs/shape.yaml").exists()
+    assert not (tmp_path / "outside/jobs/plan.yaml").exists()
 
 
 def test_concurrent_processes_publish_one_immutable_participant_set(tmp_path: Path) -> None:
@@ -439,14 +439,14 @@ def test_concurrent_processes_publish_one_immutable_participant_set(tmp_path: Pa
         "from pathlib import Path\n"
         "from owlbear_kanban.runtime_transaction import RuntimeTransaction, TransactionParticipant\n"
         f"RuntimeTransaction(Path({str(manifest_root)!r}), 'shared', "
-        f"(TransactionParticipant(Path({str(work_root)!r}), Path('jobs/shape.yaml'), b'shape'),)).commit()\n"
+        f"(TransactionParticipant(Path({str(work_root)!r}), Path('jobs/plan.yaml'), b'plan'),)).commit()\n"
     )
     processes = [subprocess.Popen([sys.executable, "-c", command]) for _ in range(2)]
     for process in processes:
         process.wait()
 
     assert [process.returncode for process in processes] == [0, 0]
-    assert (work_root / "jobs/shape.yaml").read_bytes() == b"shape"
+    assert (work_root / "jobs/plan.yaml").read_bytes() == b"plan"
     assert not list((manifest_root / ".runtime-transactions").glob("*.yaml"))
 
 

@@ -1,4 +1,4 @@
-"""Side-effect-free planning and serialization of initial shape jobs."""
+"""Side-effect-free planning and serialization of initial plan jobs."""
 
 from __future__ import annotations
 
@@ -50,13 +50,13 @@ class JobDiagnostic(BaseModel):
     target: str | None = None
 
 
-class ShapeJob(BaseModel):
-    """Represent one planned initial shape job for a delivery node."""
+class PlanJob(BaseModel):
+    """Represent one planned initial plan job for a delivery node."""
 
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
     job_id: int = Field(gt=0)
-    kind: Literal["shape"]
+    kind: Literal["plan"]
     priority: int
     created_at: str
     updated_at: str
@@ -66,7 +66,7 @@ class ShapeJob(BaseModel):
     receipt_id: str
 
 
-JobKind = Literal["shape", "build", "accept", "audit", "supersession"]
+JobKind = Literal["plan", "build", "accept", "audit", "supersession"]
 DeliveryNodeId = Annotated[str, StringConstraints(strict=True, pattern=r"^DN-[0-9]{3}$")]
 
 
@@ -485,7 +485,7 @@ class JobGeneration(BaseModel):
     change_id: str
     delivery_digest: Digest
     receipt_id: str
-    jobs: tuple[ShapeJob, ...]
+    jobs: tuple[PlanJob, ...]
 
     @model_validator(mode="after")
     def _unique_jobs(self) -> JobGeneration:
@@ -498,7 +498,7 @@ class JobGeneration(BaseModel):
         return self
 
 
-def plan_shape_jobs(
+def plan_jobs(
     revision: ChangeRevision,
     receipt_id: str,
     job_ids: Sequence[int],
@@ -506,14 +506,14 @@ def plan_shape_jobs(
     priority: int = 0,
     timestamp: str,
 ) -> JobGeneration:
-    """Plan one immutable shape job for every authored delivery node."""
+    """Plan one immutable plan job for every authored delivery node."""
     nodes = revision.graph.nodes
     if len(job_ids) != len(nodes):
         raise ValueError(JobDiagnosticCode.MISSING_TARGET.value)
     jobs = tuple(
-        ShapeJob(
+        PlanJob(
             job_id=job_id,
-            kind="shape",
+            kind="plan",
             priority=priority,
             created_at=timestamp,
             updated_at=timestamp,
@@ -607,10 +607,10 @@ __all__ = [
     "JobProjection",
     "JobRecord",
     "JobStore",
-    "ShapeJob",
+    "PlanJob",
     "StoredJob",
     "parse_job_mapping",
-    "plan_shape_jobs",
+    "plan_jobs",
     "project_job",
     "read_job_generation",
 ]

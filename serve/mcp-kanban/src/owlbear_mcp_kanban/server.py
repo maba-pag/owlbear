@@ -21,7 +21,7 @@ from pydantic import ValidationError as PydanticValidationError
 from owlbear_kanban import (
     DispatchRuntime,
     FinishJobRequest,
-    FinishShapeRequest,
+    FinishPlanRequest,
     GitRepositoryHistory,
     KanbanEngine,
     NativeRuntime,
@@ -43,7 +43,7 @@ from owlbear_kanban.models import (
 from owlbear_mcp_kanban.guidance import collect_guidance
 from owlbear_mcp_kanban.models import (
     FinishJobParams,
-    FinishShapeParams,
+    FinishPlanParams,
     KanbanTask,
     ListTasksParams,
     PickJobsParams,
@@ -85,7 +85,7 @@ __all__ = [
     "finish_accept",
     "finish_audit",
     "finish_build",
-    "finish_shape",
+    "finish_plan",
     "list_requests",
     "list_tasks",
     "mcp",
@@ -890,7 +890,7 @@ def _tool_params(values: dict[str, object]) -> dict[str, object]:
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True, destructiveHint=False))
-async def finish_shape(  # noqa: PLR0913
+async def finish_plan(  # noqa: PLR0913
     ctx: Context,
     *,
     change_id: str,
@@ -909,12 +909,12 @@ async def finish_shape(  # noqa: PLR0913
     evidence_ids: tuple[str, ...] = (),
     impact_closure: dict[str, object] | None = None,
 ) -> object:
-    """Finalize a shape job through the native dispatch runtime."""
+    """Finalize a plan job through the native dispatch runtime."""
     try:
-        params = FinishShapeParams.model_validate(_tool_params(locals()))
+        params = FinishPlanParams.model_validate(_tool_params(locals()))
         app_ctx: AppContext = ctx.request_context.lifespan_context
-        return _dispatch_runtime(app_ctx, params.change_id).finish_shape(
-            FinishShapeRequest(**params.model_dump(exclude={"change_id"}))
+        return _dispatch_runtime(app_ctx, params.change_id).finish_plan(
+            FinishPlanRequest(**params.model_dump(exclude={"change_id"}))
         )
     except PydanticValidationError as exc:
         _raise_param_validation(str(exc))

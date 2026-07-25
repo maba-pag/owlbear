@@ -33,7 +33,7 @@ if TYPE_CHECKING:
         FailJobResult,
         FinishJobRequest,
         FinishJobResult,
-        FinishShapeRequest,
+        FinishPlanRequest,
         NativeRuntime,
         RecoverExpiredClaimsRequest,
         RecoverExpiredClaimsResult,
@@ -84,7 +84,7 @@ _MAX_STATUS_RANK = max(STATUS_RANK.values())
 _TERMINAL_STATUSES = frozenset({"archived"})
 
 _COORDINATION_PATH = Path("dispatch") / "coordination.yaml"
-_WriterKind = Literal["shape", "build"]
+_WriterKind = Literal["plan", "build"]
 _ReaderKind = Literal["accept", "audit"]
 
 
@@ -125,8 +125,8 @@ class WriterCoordination(BaseModel):
 
     @model_validator(mode="after")
     def _participants_are_compatible(self) -> WriterCoordination:
-        if self.writer is not None and self.writer.kind not in ("shape", "build"):
-            msg = "writer must be a shape or build holder"
+        if self.writer is not None and self.writer.kind not in ("plan", "build"):
+            msg = "writer must be a plan or build holder"
             raise ValueError(msg)
         if self.writer is not None and self.readers:
             msg = "writer coordination cannot include readers"
@@ -279,7 +279,7 @@ class DispatchRuntime:
                 omissions.append(DispatchOmission(job_id=stored.job.job_id, reason=reason))
                 continue
             agent_profile = {
-                "shape": "shaper",
+                "plan": "shaper",
                 "build": "builder",
                 "accept": "acceptor",
                 "audit": "auditor",
@@ -319,7 +319,7 @@ class DispatchRuntime:
         waves: list[tuple[DispatchWaveEntry, ...]] = []
         readers: list[DispatchWaveEntry] = []
         for entry in entries:
-            if entry.kind in ("shape", "build"):
+            if entry.kind in ("plan", "build"):
                 if readers:
                     waves.extend(tuple(readers[index : index + size]) for index in range(0, len(readers), size))
                     readers = []
@@ -396,9 +396,9 @@ class DispatchRuntime:
         """Record a failed attempt and release its coordination holder."""
         return self._finalize(request, "failed")
 
-    def finish_shape(self, request: FinishShapeRequest) -> FinishJobResult | DispatchDiagnostic:
-        """Finish shape work and release its writer coordination holder."""
-        return self._finish(request, "shape")
+    def finish_plan(self, request: FinishPlanRequest) -> FinishJobResult | DispatchDiagnostic:
+        """Finish plan work and release its writer coordination holder."""
+        return self._finish(request, "plan")
 
     def finish_build(self, request: FinishJobRequest) -> FinishJobResult | DispatchDiagnostic:
         """Finish build work and release its writer coordination holder."""
@@ -530,7 +530,7 @@ class DispatchRuntime:
         existing = self._find_holder(coordination, holder.job_id)
         if existing is not None and existing == holder:
             return None
-        if holder.kind in ("shape", "build") and self._holders(coordination):
+        if holder.kind in ("plan", "build") and self._holders(coordination):
             return self._conflict("a global participant already holds coordination", coordination)
         if holder.kind in ("accept", "audit") and coordination.writer is not None:
             return self._conflict("a writer already holds coordination", coordination)
@@ -541,7 +541,7 @@ class DispatchRuntime:
         return ((coordination.writer,) if coordination.writer is not None else ()) + coordination.readers
 
     def _with_holder(self, coordination: WriterCoordination, holder: CoordinationHolder) -> WriterCoordination:
-        if holder.kind in ("shape", "build"):
+        if holder.kind in ("plan", "build"):
             return WriterCoordination(writer=holder)
         if holder in coordination.readers:
             return coordination

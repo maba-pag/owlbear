@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from owlbear_kanban import JobGeneration, JobStore, ShapeJob, load_change
+from owlbear_kanban import JobGeneration, JobStore, PlanJob, load_change
 from owlbear_kanban.runtime_requests import (
     NativeRequest,
     NativeRequestRuntime,
@@ -33,9 +33,9 @@ def _materialize_jobs(revision, work_root: Path) -> None:
         delivery_digest=revision.delivery_digest,
         receipt_id="receipt-001",
         jobs=tuple(
-            ShapeJob(
+            PlanJob(
                 job_id=index,
-                kind="shape",
+                kind="plan",
                 priority=0,
                 created_at="2026-07-24T00:00:00Z",
                 updated_at="2026-07-24T00:00:00Z",

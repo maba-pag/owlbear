@@ -18,7 +18,7 @@ from owlbear_kanban import (
     ReceiptStore,
     RecoverExpiredClaimsRequest,
     ReleaseJobRequest,
-    ShapeJob,
+    PlanJob,
     StartJobRequest,
     compute_node_plan_digest,
     load_change,
@@ -71,9 +71,9 @@ def _materialize(store: JobStore, record: JobRecord) -> None:
             delivery_digest=record.delivery_digest,
             receipt_id="receipt-001",
             jobs=(
-                ShapeJob(
+                PlanJob(
                     job_id=record.job_id,
-                    kind="shape",
+                    kind="plan",
                     priority=record.priority,
                     created_at=record.created_at,
                     updated_at=record.updated_at,

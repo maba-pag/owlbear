@@ -959,7 +959,7 @@ class TestDelegationContracts:
 
 
 # ---------------------------------------------------------------------------
-# AC6+AC7 — Response-shape proof contracts
+# AC6+AC7 — Response-plan proof contracts
 # ---------------------------------------------------------------------------
 
 # All field names that RequestRecord.model_dump() produces.
@@ -971,9 +971,9 @@ _LIST_RECORD_KEYS = _REQUEST_RECORD_KEYS - {"body"}
 
 
 class TestResponseShapeContracts:
-    """AC6+AC7 response-shape proof — returned dicts must contain all expected keys."""
+    """AC6+AC7 response-plan proof — returned dicts must contain all expected keys."""
 
-    # -- AC6: create_request full response shape ----------------------------
+    # -- AC6: create_request full response plan ----------------------------
 
     @pytest.mark.asyncio
     async def test_create_request_success_returns_all_record_keys_plus_guidance(self, app_ctx: AppContext) -> None:
@@ -991,8 +991,8 @@ class TestResponseShapeContracts:
             ctx,
             task_id="1",
             kind="action",
-            title="Shape Test",
-            summary="Full shape check.",
+            title="Plan Test",
+            summary="Full plan check.",
             agent="builder",
             body="Clean body.",
         )
@@ -1006,7 +1006,7 @@ class TestResponseShapeContracts:
             f"create_request result must include 'guidance' key; got keys: {set(result.keys())!r}"
         )
 
-    # -- AC7: list_requests full response shape per record ------------------
+    # -- AC7: list_requests full response plan per record ------------------
 
     @pytest.mark.asyncio
     async def test_list_requests_success_each_record_has_all_expected_keys_body_absent(
@@ -1035,7 +1035,7 @@ class TestResponseShapeContracts:
         )
         assert "body" not in item, f"'body' must be excluded from list_requests records; got keys: {set(item.keys())!r}"
 
-    # -- AC7: show_request full response shape ------------------------------
+    # -- AC7: show_request full response plan ------------------------------
 
     @pytest.mark.asyncio
     async def test_show_request_success_returns_all_record_keys(self, app_ctx: AppContext) -> None:

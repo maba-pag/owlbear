@@ -14,7 +14,7 @@ from owlbear_kanban import (
     JobStore,
     load_change,
     parse_job_mapping,
-    plan_shape_jobs,
+    plan_jobs,
     project_job,
     read_job_generation,
 )
@@ -38,7 +38,7 @@ def revision():
 
 
 def _planned_mapping(revision) -> dict[str, object]:
-    generation = plan_shape_jobs(
+    generation = plan_jobs(
         revision,
         "receipt-001",
         range(1, len(revision.graph.nodes) + 1),
@@ -73,8 +73,8 @@ def _job_mapping(revision, kind: str, *, target_node_id: str | None = None) -> d
     }
 
 
-def test_plan_shape_jobs_preserves_authored_order_and_operational_identity(revision) -> None:
-    generation = plan_shape_jobs(
+def test_plan_jobs_preserves_authored_order_and_operational_identity(revision) -> None:
+    generation = plan_jobs(
         revision,
         "receipt-001",
         range(1, len(revision.graph.nodes) + 1),
@@ -83,7 +83,7 @@ def test_plan_shape_jobs_preserves_authored_order_and_operational_identity(revis
     )
 
     assert [job.target_node_id for job in generation.jobs] == [node.id for node in revision.graph.nodes]
-    assert all(job.kind == "shape" for job in generation.jobs)
+    assert all(job.kind == "plan" for job in generation.jobs)
     assert all(job.change_id == revision.change_id for job in generation.jobs)
     assert all(job.delivery_digest == revision.delivery_digest for job in generation.jobs)
     assert all(job.receipt_id == "receipt-001" for job in generation.jobs)
@@ -122,7 +122,7 @@ def test_plan_shape_jobs_preserves_authored_order_and_operational_identity(revis
     } & set(serialized["jobs"][0])
 
 
-@pytest.mark.parametrize("kind", ["shape", "build", "accept", "audit", "supersession"])
+@pytest.mark.parametrize("kind", ["plan", "build", "accept", "audit", "supersession"])
 def test_public_job_parser_round_trips_operational_records(revision, kind: str) -> None:
     value = _job_mapping(revision, kind)
 
@@ -145,7 +145,7 @@ def test_public_job_parser_round_trips_operational_records(revision, kind: str) 
     ],
 )
 def test_public_job_parser_returns_stable_diagnostics(revision, field: str, value: object, expected) -> None:
-    job = _job_mapping(revision, "shape")
+    job = _job_mapping(revision, "plan")
     job[field] = value
 
     result = parse_job_mapping(job)
@@ -217,7 +217,7 @@ def test_job_store_materializes_generations_idempotently_and_rejects_conflicts(r
     work_root = tmp_path / "work"
     work_root.mkdir()
     store = JobStore(work_root)
-    generation = plan_shape_jobs(
+    generation = plan_jobs(
         revision,
         "receipt-001",
         range(1, len(revision.graph.nodes) + 1),
@@ -255,7 +255,7 @@ def test_job_store_uses_occ_for_updates_and_archives(revision, tmp_path) -> None
     work_root = tmp_path / "work"
     work_root.mkdir()
     store = JobStore(work_root)
-    generation = plan_shape_jobs(
+    generation = plan_jobs(
         revision,
         "receipt-001",
         range(1, len(revision.graph.nodes) + 1),
@@ -282,7 +282,7 @@ def test_job_store_allows_only_one_process_to_update_a_token(revision, tmp_path)
     work_root = tmp_path / "work"
     work_root.mkdir()
     store = JobStore(work_root)
-    generation = plan_shape_jobs(
+    generation = plan_jobs(
         revision,
         "receipt-001",
         range(1, len(revision.graph.nodes) + 1),
@@ -311,7 +311,7 @@ def test_job_store_does_not_follow_substituted_job_symlink(revision, tmp_path) -
     outside = tmp_path / "outside.yaml"
     outside.write_text("outside bytes", encoding="utf-8")
     store = JobStore(work_root)
-    generation = plan_shape_jobs(
+    generation = plan_jobs(
         revision,
         "receipt-001",
         range(1, len(revision.graph.nodes) + 1),

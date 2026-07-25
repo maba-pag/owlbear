@@ -16,7 +16,7 @@ from owlbear_kanban import (
     JobRecord,
     JobStore,
     ReceiptStore,
-    ShapeJob,
+    PlanJob,
     load_change,
     plan_corrective_route,
 )
@@ -27,15 +27,15 @@ from owlbear_kanban import (
     [
         ("packet-implementation", "build-repair", ("build",), False, (False,)),
         ("packet-local-proof", "build-repair", ("build",), False, (False,)),
-        ("packet-plan", "node-shape-revision", ("shape",), False, (False,)),
-        ("packet-dependency", "node-shape-revision", ("shape",), False, (False,)),
-        ("packet-proof-plan", "node-shape-revision", ("shape",), False, (False,)),
+        ("packet-plan", "node-plan-revision", ("plan",), False, (False,)),
+        ("packet-dependency", "node-plan-revision", ("plan",), False, (False,)),
+        ("packet-proof-plan", "node-plan-revision", ("plan",), False, (False,)),
         ("admitted-design-authority", "design-reentry", (), True, ()),
-        ("node-integration", "node-integration-repair", ("shape",), False, (True,)),
+        ("node-integration", "node-integration-repair", ("plan",), False, (True,)),
         (
             "whole-change-integration",
             "affected-node-correction",
-            ("shape", "shape"),
+            ("plan", "plan"),
             False,
             (True, True),
         ),
@@ -70,7 +70,7 @@ def test_corrective_route_matrix_preserves_late_work_class(  # noqa: PLR0913
     assert planned.route == route
     assert planned.design_reentry is design_reentry
     assert tuple(job.kind for job in planned.jobs) == job_kinds
-    assert tuple(job.through_shape_correction for job in planned.jobs) == through_shape
+    assert tuple(job.through_plan_correction for job in planned.jobs) == through_shape
 
 
 def _copied_revision(tmp_path: Path):
@@ -109,9 +109,9 @@ def _materialize(store: JobStore, record: JobRecord, *, archived: bool = False) 
             delivery_digest=record.delivery_digest,
             receipt_id=record.receipt_id or "seed-receipt",
             jobs=(
-                ShapeJob(
+                PlanJob(
                     job_id=record.job_id,
-                    kind="shape",
+                    kind="plan",
                     priority=record.priority,
                     created_at=record.created_at,
                     updated_at=record.updated_at,

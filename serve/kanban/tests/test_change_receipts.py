@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import os
-import hashlib
-import json
 import subprocess
 from collections.abc import Callable
 from pathlib import Path
@@ -22,6 +20,7 @@ from owlbear_kanban import (
     ReceiptStore,
     ReceiptValidityCode,
     change_health,
+    compute_node_plan_digest,
     discover_admission,
     evaluate_receipt_currentness,
     evaluate_code_revision_currency,
@@ -31,14 +30,14 @@ from owlbear_kanban import (
     parse_repository_path,
 )
 
-from .test_change_revision import _documents, _write_package
+from .test_change_revision import _documents, _write_modular_package
 
-_RECEIPT_KINDS = ("admission", "shape", "build", "accept", "audit", "supersession")
+_RECEIPT_KINDS = ("admission", "plan", "build", "accept", "audit", "supersession")
 
 
 def _load_revision(tmp_path: Path, change_id: str = "receipt-change") -> tuple[Path, ChangeRevision]:
     changes_dir = tmp_path / "changes"
-    _write_package(changes_dir, change_id)
+    _write_modular_package(changes_dir, change_id)
     result = load_change(changes_dir, change_id)
     assert result.revision is not None
     return changes_dir, result.revision
@@ -80,17 +79,6 @@ def _parser_receipt(kind: str) -> dict[str, object]:
     return value
 
 
-def _node_plan_digest(revision: ChangeRevision, target: str) -> str:
-    node = revision.resolve(target)
-    payload = {
-        "delivery_digest": revision.delivery_digest,
-        "node": node.model_dump(mode="json"),
-        "node_plan": revision.graph.execution.node_plans.get(target),
-    }
-    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
-    return hashlib.sha256(encoded.encode()).hexdigest()
-
-
 def _current_receipt(revision: ChangeRevision) -> dict[str, object]:
     node = revision.graph.nodes[0]
     proof = revision.resolve(node.proof)
@@ -99,7 +87,7 @@ def _current_receipt(revision: ChangeRevision) -> dict[str, object]:
         "change_id": revision.change_id,
         "delivery_digest": revision.delivery_digest,
         "target_node_id": node.id,
-        "node_plan_digest": _node_plan_digest(revision, node.id),
+        "node_plan_digest": compute_node_plan_digest(revision, node.id),
         "evidence": {"methods": list(proof.method)},
     }
 
@@ -327,7 +315,7 @@ def test_public_receipt_parser_round_trips_all_receipt_kinds(kind: str) -> None:
     assert result.receipt.to_mapping() == value
 
 
-@pytest.mark.parametrize("kind", ["shape", "build", "accept"])
+@pytest.mark.parametrize("kind", ["plan", "build", "accept"])
 def test_public_receipt_parser_requires_node_plan_digest_for_node_scoped_receipts(kind: str) -> None:
     value = _parser_receipt(kind)
     del value["node_plan_digest"]
@@ -754,7 +742,7 @@ def test_receipt_store_rejects_change_directory_replacement(tmp_path: Path) -> N
 
 def test_change_health_rejects_change_directory_replacement(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     changes_dir = tmp_path / "changes"
-    _write_package(changes_dir, "health-replaced")
+    _write_modular_package(changes_dir, "health-replaced")
     real_load_change = receipt_module.load_change
 
     def load_then_replace(candidate_dir: Path, change_id: str) -> owlbear_kanban.ChangeLoadResult:
@@ -783,18 +771,20 @@ def _admitted_package(tmp_path: Path) -> tuple[Path, Path, ChangeRevision]:
     change_id = "health-change"
     changes_dir = tmp_path / "changes"
     decisions, graph = _documents(change_id)
-    change_dir = _write_package(changes_dir, change_id, authority=(decisions, graph))
+    change_dir = _write_modular_package(changes_dir, change_id, authority=(decisions, graph))
     initial = load_change(changes_dir, change_id)
     assert initial.revision is not None
     receipt_id = f"admission-{initial.revision.delivery_digest[:12]}"
-    graph["state"] = "admitted"
-    graph["admission"] = {
+    nodes_path = change_dir / "delivery" / "nodes.yaml"
+    nodes = yaml.safe_load(nodes_path.read_text(encoding="utf-8"))
+    nodes["state"] = "admitted"
+    nodes["admission"] = {
         "state": "admitted",
         "delivery_digest": initial.revision.delivery_digest,
         "receipt": f"receipts/{receipt_id}.yaml",
         "limits": [],
     }
-    (change_dir / "graph.yaml").write_text(yaml.safe_dump(graph, sort_keys=False), encoding="utf-8")
+    nodes_path.write_text(yaml.safe_dump(nodes, sort_keys=False), encoding="utf-8")
     loaded = load_change(changes_dir, change_id)
     assert loaded.revision is not None
     created = ReceiptStore(loaded.revision).create(
@@ -821,7 +811,9 @@ def test_change_health_accepts_matching_admission_without_mutation(tmp_path: Pat
         "intent.md",
         "design.md",
         "decisions.yaml",
-        "graph.yaml",
+        "delivery/contracts.yaml",
+        "delivery/nodes.yaml",
+        "delivery/obligations.yaml",
         f"receipts/admission-{_revision.delivery_digest[:12]}.yaml",
     )
     assert _snapshot(paths) == before
@@ -876,9 +868,9 @@ def test_change_health_reports_unresolved_current_admission(tmp_path: Path, defe
     [
         (lambda change_dir: (change_dir / "design.md").unlink(), "ERR_CHANGE_FILE_MISSING", "design.md"),
         (
-            lambda change_dir: (change_dir / "graph.yaml").write_text("[unclosed", encoding="utf-8"),
+            lambda change_dir: (change_dir / "delivery/nodes.yaml").write_text("[unclosed", encoding="utf-8"),
             "ERR_CHANGE_YAML_PARSE",
-            "graph.yaml",
+            "nodes.yaml",
         ),
         (
             lambda change_dir: (change_dir / "receipts").write_text("not a directory\n", encoding="utf-8"),
@@ -894,7 +886,7 @@ def test_change_health_reports_authority_defects_without_mutation(
     expected_path: str,
 ) -> None:
     changes_dir = tmp_path / "changes"
-    change_dir = _write_package(changes_dir, "defective-health")
+    change_dir = _write_modular_package(changes_dir, "defective-health")
     defect(change_dir)
     paths = sorted(path for path in change_dir.rglob("*") if path.is_file())
     before = _snapshot(paths)
@@ -902,13 +894,20 @@ def test_change_health_reports_authority_defects_without_mutation(
     result = change_health(changes_dir, "defective-health")
 
     assert [(item.code, item.path) for item in result.findings] == [(expected_code, expected_path)]
-    assert result.checked_paths == ("intent.md", "design.md", "decisions.yaml", "graph.yaml")
+    assert result.checked_paths == (
+        "intent.md",
+        "design.md",
+        "decisions.yaml",
+        "delivery/contracts.yaml",
+        "delivery/nodes.yaml",
+        "delivery/obligations.yaml",
+    )
     assert _snapshot(paths) == before
 
 
 def test_change_health_locates_unsafe_receipt_filename(tmp_path: Path) -> None:
     changes_dir = tmp_path / "changes"
-    change_dir = _write_package(changes_dir, "unsafe-receipt-health")
+    change_dir = _write_modular_package(changes_dir, "unsafe-receipt-health")
     receipts_dir = change_dir / "receipts"
     receipts_dir.mkdir()
     receipt_path = receipts_dir / "bad..id.yaml"

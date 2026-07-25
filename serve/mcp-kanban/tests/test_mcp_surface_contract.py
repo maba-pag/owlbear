@@ -43,11 +43,10 @@ from owlbear_kanban import (
     JobRecord,
     JobStore,
     NativeRuntime,
-    ShapeJob,
+    PlanJob,
     load_change,
 )
 from owlbear_kanban.runtime_transaction import RuntimeTransaction
-from owlbear_kanban.yaml_rt import make_yaml
 from owlbear_mcp_kanban.server import AppContext, app_lifespan, mcp
 
 # ---------------------------------------------------------------------------
@@ -70,7 +69,7 @@ EXPECTED_TOOLS: frozenset[str] = frozenset(
         "show_request",
         "pick_jobs",
         "start_job",
-        "finish_shape",
+        "finish_plan",
         "finish_build",
         "finish_accept",
         "finish_audit",
@@ -342,11 +341,7 @@ class TestProof014NativeMcpScenario:
             Path(".owlbear/changes/replace-delivery-pipeline"),
             changes_dir / "replace-delivery-pipeline",
         )
-        graph_path = changes_dir / "replace-delivery-pipeline" / "graph.yaml"
-        document = make_yaml().load(graph_path.read_text(encoding="utf-8"))
-        document["execution"]["node_plans"].pop("DN-001", None)
-        with graph_path.open("w", encoding="utf-8") as stream:
-            make_yaml(explicit_start=True).dump(document, stream)
+        (changes_dir / "replace-delivery-pipeline" / "plans" / "DN-001.yaml").unlink()
         loaded = load_change(changes_dir, "replace-delivery-pipeline")
         assert loaded.revision is not None
         revision = loaded.revision
@@ -360,9 +355,9 @@ class TestProof014NativeMcpScenario:
                 delivery_digest=revision.delivery_digest,
                 receipt_id="bootstrap-001",
                 jobs=(
-                    ShapeJob(
+                    PlanJob(
                         job_id=1,
-                        kind="shape",
+                        kind="plan",
                         priority=7,
                         created_at="2026-07-24T00:00:00Z",
                         updated_at="2026-07-24T00:00:00Z",
@@ -380,7 +375,7 @@ class TestProof014NativeMcpScenario:
         dispatches: list[tuple[str, int]] = []
         runner = AsyncMock(
             side_effect=[
-                Success("shape-001"),
+                Success("plan-001"),
                 RateLimited(),
                 Success("build-001"),
                 Success("build-002"),
@@ -415,7 +410,7 @@ class TestProof014NativeMcpScenario:
                 case Success(receipt_id):
                     finish = _finish_kwargs(started)
                     if entry.agent_profile == "shaper":
-                        result = await server.finish_shape(
+                        result = await server.finish_plan(
                             ctx,
                             **finish,
                             finished_at=finished_at,
