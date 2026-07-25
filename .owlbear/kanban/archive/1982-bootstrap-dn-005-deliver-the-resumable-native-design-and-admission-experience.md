@@ -1,10 +1,10 @@
 ---
 id: 1982
 title: 'Bootstrap DN-005: Deliver the resumable native design and admission experience'
-status: collect
+status: archived
 priority: medium
 created: 2026-07-22T01:07:06.767745+02:00
-updated: 2026-07-25T14:29:26.251629+02:00
+updated: 2026-07-25T15:00:45.401179+02:00
 tags:
   - bootstrap-projection
   - change:replace-delivery-pipeline
@@ -36,7 +36,7 @@ proof_bundle: existing+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Bootstrap Projection Identity
@@ -84,3 +84,18 @@ Current-source grounding found `/ideate` ending in an OpenSpec handoff and no `/
 #2043 uses archived DN-002/#1978 and DN-009/#1981 interfaces. #2044 depends on #2043. #2045 depends on #2043 and #2044. #2046 depends on #2045. Admission evaluator-family completeness remains owned by archived DN-002/PROOF-002; DN-005 only proves designer routing on one representative failed assessment. DN-006 planner, DN-012 setup/seed/OpenSpec removal, and product code remain excluded.
 
 Shaper challenge required three corrections: split independent negative proof families, remove duplicate DN-002 evaluator ownership, and refresh the stale parent projection. Final challenge passed after all three were resolved. Board audit confirms four build tasks #2043-#2046, current digest/parent/packet tags, intended dependencies, and #2043 as the sole dependency-ready leaf. Aggregate dependencies now gate collection on all four descendants.
+
+[[2026-07-25T15:00:45+02:00]]
+## Collect Notes
+Archived DN-005 after auditing the admitted digest, aggregate dependency graph, descendant Verify Notes, implementation artifacts, and current aggregate proof.
+
+### Closure Evidence
+- #2043 through #2046 are all archived with `completed` reason and preserve the shaped dependency order.
+- #2043 supplies the shared resumable native workflow and maps REQ-001 plus KEEP-001/002/003/008/009.
+- #2044 supplies the designer, read-only challenger, shared `/ideate` and `/design` entries, exact native tool grants, delegation, hard write denial, and derived wiring.
+- #2045 proves interruption resume, repository-grounded one-question decisions, unresolved-authority refusal, representative failed assessment, and unchanged publication state.
+- #2046 proves complete public native admission and exact persisted replay through `list_changes`, `show_change`, `validate_change`, and `admit_change`.
+- No descendant expanded into DN-006 planning, DN-012 setup/seed/OpenSpec deletion, evaluator-family semantics, or product implementation.
+
+### Aggregate Proof
+At tested revision `c2b43d3b603560aef75b00e4d84bc84c8ff14ecf`, agent validation reported all 14 agent files conform, skill validation passed, and the applicable ecosystem, hard write-guard, `PROOF-004` interaction, and public MCP surface suite passed 72 tests in 7.31 seconds. The known excluded live-registry case remains the pre-existing collector generic-tool migration outside DN-005.
