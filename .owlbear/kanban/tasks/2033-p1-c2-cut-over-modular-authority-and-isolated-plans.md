@@ -1,10 +1,10 @@
 ---
 id: 2033
 title: 'P1-C2: Cut over modular authority and isolated plan storage'
-status: verify
+status: collect
 priority: high
 created: 2026-07-25T02:46:34.205290+02:00
-updated: 2026-07-25T05:12:43.985406+02:00
+updated: 2026-07-25T05:17:21.169858+02:00
 tags:
   - change:replace-delivery-pipeline
   - node:DN-001
@@ -283,3 +283,41 @@ Added AC6 for current modular-loader metadata plus full-graph MIG-004 ownership 
 
 ### Follow-Up Risks
 - None within this task boundary; the unrelated untracked receipt artifact remains outside task ownership.
+
+[[2026-07-25T05:17:21+02:00]]
+## Verify Notes
+
+### Evidence Reviewed And Authorities Checked
+- Verified task AC1-AC7 against the admitted package, `DEC-030`, `MIG-004`, `DN-001`, `IF-001`, and `PROOF-001` named in the task.
+- Compared the repaired Change Module Map with `28889dcd3..24ebe2721`: the task changed only `change.py`, maintained change-revision tests, modular delivery/plan authority, and task records. It did not change `native_runtime.py` or `receipt.py`; no scope deviation remains.
+- Prior same-failure-key check: `scope/public-api-rename` caused one earlier verifier rejection and was repaired in Shape Notes. Current source confirms the prohibited lifecycle rename is absent. No repeated verifier-to-builder rejection exists.
+
+### Normal-Path Boundary
+- Live no-mock probe called public `load_change` for the admitted `replace-delivery-pipeline` package. It returned digest `3f6c656289911320bb5e7faf37b5e86ffa8511e729ade201a03a19913e33d990`, read the isolated DN-001 plan, and returned `None` for declared DN-002 with no plan.
+- The same probe called `discover_admission`: selected `admission-3f6c65628991`, with three stale historical admissions and no current-admission ambiguity. Its sole finding is the pre-existing, non-admission `receipts/shape-001.yaml` schema record; it does not affect the selected admission.
+- SHA-256 for `receipts/admission-3f6c65628991.yaml` is `3fabd975a4ce506c780bc7182d19c17beb25fdd6a94a6a07f3dfe6f69e1d0023`, identical to its blob at builder commit `837b76518`. The full task range makes no receipt changes.
+
+### Checks Run
+- `uv run pytest serve/kanban/tests/test_change_revision.py -q`: 27 passed. This public-loader and storage-boundary module covers legacy `graph.yaml` rejection, joined digest parity, isolated plan reads, RuntimeTransaction interruption recovery, matching-byte replay, and stale/differing-byte conflict preservation.
+- `uv run pytest serve/kanban/tests/test_change_receipts.py -q`: 59 passed, including current-admission selection and ambiguity coverage.
+- `uv run ruff check serve/kanban/src/owlbear_kanban/change.py serve/kanban/tests/test_change_revision.py`: passed.
+- `git diff --check 837b76518..HEAD`: passed.
+- Direct package-layout check confirmed `delivery/obligations.yaml`, `delivery/contracts.yaml`, `delivery/nodes.yaml`, and `plans/DN-001.yaml` exist while `graph.yaml` is absent. `nodes.yaml` says the modular loader is active while keeping MIG-004 open through full graph cutover, DN-012 deletion, and DN-013 PROOF-013 absence evidence.
+
+### AC-To-Evidence Map
+- AC1: live `load_change` digest and package-layout check.
+- AC2: maintained public-loader legacy-authority scenario in the 27 passing focused tests.
+- AC3: live declared-node reads plus focused authority-shape scenarios.
+- AC4: focused `NodePlanStore.prepare` recovery, replay, and OCC scenario.
+- AC5: maintained modular fixture and parity coverage in the focused passing module.
+- AC6: direct admitted `nodes.yaml` metadata inspection plus live digest.
+- AC7: blob hash comparison, live discovery selection, receipt test module, and no-receipt-mutation history check.
+
+### Patches Applied
+- None. The two malformed exploratory probes were corrected without source changes; they exposed only outdated field assumptions and did not affect production behavior.
+
+### Verifier-Challenger
+- `verifier-challenger`: pass. It confirmed AC1-AC5 have direct focused/live boundary evidence, AC6 leaves MIG-004 correctly open, and AC7 retains a unique selected current admission despite the unrelated historical `shape-001.yaml` finding.
+
+### Final Route
+- PASS to collect. All AC are satisfied with focused executable and live-boundary evidence.
