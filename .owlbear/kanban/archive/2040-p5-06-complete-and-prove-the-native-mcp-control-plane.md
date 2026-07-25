@@ -1,10 +1,10 @@
 ---
 id: 2040
 title: 'P5-06: Complete and prove the native MCP control plane'
-status: collect
+status: archived
 priority: high
 created: 2026-07-25T09:11:58.219921+02:00
-updated: 2026-07-25T13:54:54.400439+02:00
+updated: 2026-07-25T13:55:21.909423+02:00
 tags:
   - phase-5
   - scope:mcp-kanban
@@ -49,7 +49,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Projection
@@ -168,3 +168,13 @@ PASS at tested commit `1dc1a09f0ce2a3dced0b06c1d39c10180ef232f5`.
 - Direct committed-tree API probe: `obsolete module APIs absent: 9`.
 - Focused lint was clean in builder closure.
 - Verifier challenger: pass; confirmed deleted tests were adapter-only and retained native tests preserve all eight IF-015 operations plus public workflow/error proof.
+
+[[2026-07-25T13:55:21+02:00]]
+## Collect Notes
+ARCHIVED. DN-009-PK-006 aggregate intent is closed by the verified native MCP control plane.
+
+- Tested implementation: `1dc1a09f0ce2a3dced0b06c1d39c10180ef232f5`.
+- Verify descendant: `53aee657f27c620e560154420c17a65ee08ce70b`.
+- AC-1 through AC-4 are explicitly mapped in the latest Verify Notes.
+- Prior follow-up `#2040-AC2/source-api-removal` is closed by source/API absence, not registry hiding.
+- Integrated proof: 117 passed across allocator, admission transaction, runtime transaction, and native MCP; focused contract 11 passed; both required challengers passed.
