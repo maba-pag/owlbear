@@ -22,7 +22,6 @@ from pydantic import (
     Field,
     PrivateAttr,
     StringConstraints,
-    field_serializer,
     model_validator,
 )
 from pydantic import (
@@ -296,19 +295,8 @@ class DeliveryNodesDocument(_BoundaryModel):
     nodes: FrozenSequence[DeliveryNode]
 
 
-class ExecutionPlan(_BoundaryModel):
-    node_plans: Mapping[str, JsonValue]
-
-    def model_post_init(self, _context: object) -> None:
-        object.__setattr__(self, "node_plans", _freeze_json(dict(self.node_plans)))
-
-    @field_serializer("node_plans")
-    def _serialize_node_plans(self, value: Mapping[str, JsonValue]) -> dict[str, JsonValue]:
-        return {key: _thaw_json(item) for key, item in value.items()}
-
-
 class DeliveryGraph(_BoundaryModel):
-    """Represent the authored delivery authority and execution plan for a change."""
+    """Represent the authored delivery authority for a change."""
 
     schema_version: Literal[1]
     change_id: ChangeId
@@ -325,7 +313,6 @@ class DeliveryGraph(_BoundaryModel):
     risks: FrozenSequence[Risk]
     proofs: FrozenSequence[Proof]
     nodes: FrozenSequence[DeliveryNode]
-    execution: ExecutionPlan = Field(default_factory=lambda: ExecutionPlan(node_plans={}))
 
     def iter_entities(self) -> Iterator[StableEntity]:
         """Yield delivery entities in authored section order."""
@@ -388,6 +375,13 @@ class ChangeRevision(_BoundaryModel):
     def resolve(self, stable_id: str) -> StableEntity:
         """Resolve one stable identity or raise ``KeyError``."""
         return self._identity_index[stable_id]
+
+    def read_node_plan(self, node_id: str) -> Mapping[str, object] | None:
+        """Read one isolated node plan from this revision's pinned source directory."""
+        from owlbear_kanban.node_plan import NodePlanStore  # noqa: PLC0415
+
+        stored = NodePlanStore(self).read(node_id)
+        return stored.plan if stored is not None else None
 
 
 class ChangeLoadResult(_BoundaryModel):
@@ -680,49 +674,24 @@ def _validate_document(model: type[_BoundaryModel], value: object, path: str) ->
         )
 
 
-def _load_node_plans(directory_fd: int, nodes: FrozenSequence[DeliveryNode]) -> dict[str, JsonValue]:
-    try:
-        plans_fd = os.open("plans", _DIRECTORY_OPEN_FLAGS, dir_fd=directory_fd)
-    except FileNotFoundError:
-        return {}
-    except OSError:
-        _fail(
-            ChangeDiagnosticCode.PATH_UNSAFE,
-            "plans directory could not be opened safely",
-            path=Path("plans"),
-            target="plans",
-        )
-    try:
-        node_ids = {node.id for node in nodes}
-        plans: dict[str, JsonValue] = {}
-        for filename in sorted(os.listdir(plans_fd)):  # noqa: PTH208
-            path = Path(filename)
-            if path.suffix != ".yaml" or not _STABLE_ID_RE.fullmatch(path.stem) or path.stem not in node_ids:
-                _fail(
-                    ChangeDiagnosticCode.SCHEMA_INVALID,
-                    "plan filename does not identify one declared delivery node",
-                    path=Path("plans") / filename,
-                    target=path.stem,
-                )
-            value = _read_yaml(plans_fd, filename)
-            if not isinstance(value, dict):
-                _fail(
-                    ChangeDiagnosticCode.SCHEMA_INVALID,
-                    "node plan must be a YAML mapping",
-                    path=Path("plans") / filename,
-                    target=path.stem,
-                )
-            plans[path.stem] = value
-        return plans
-    finally:
-        os.close(plans_fd)
-
-
 def load_modular_change(changes_dir: Path, change_id: str) -> ChangeLoadResult:
     """Load one contained modular native change package."""
     try:
         change_dir = _validate_change_path(changes_dir, change_id)
         with _change_directory(change_dir) as (directory_fd, source_identity):
+            try:
+                os.stat("graph.yaml", dir_fd=directory_fd, follow_symlinks=False)
+            except FileNotFoundError:
+                pass
+            except OSError:
+                _fail(ChangeDiagnosticCode.PATH_UNSAFE, "legacy graph authority could not be inspected")
+            else:
+                _fail(
+                    ChangeDiagnosticCode.SCHEMA_INVALID,
+                    "legacy graph.yaml authority is not permitted",
+                    path=Path("graph.yaml"),
+                    target="graph.yaml",
+                )
             intent = _read_text(directory_fd, "intent.md", markdown=True)
             design = _read_text(directory_fd, "design.md", markdown=True)
             decisions = _validate_document(
@@ -757,7 +726,6 @@ def load_modular_change(changes_dir: Path, change_id: str) -> ChangeLoadResult:
                     "authority documents do not name the requested change",
                     target=change_id,
                 )
-            plans = _load_node_plans(directory_fd, nodes.nodes)
             graph = DeliveryGraph(
                 schema_version=nodes.schema_version,
                 change_id=nodes.change_id,
@@ -774,7 +742,6 @@ def load_modular_change(changes_dir: Path, change_id: str) -> ChangeLoadResult:
                 risks=contracts.risks,
                 proofs=contracts.proofs,
                 nodes=nodes.nodes,
-                execution=ExecutionPlan(node_plans=plans),
             )
         revision = _build_revision(
             change_dir=change_dir,
@@ -791,42 +758,8 @@ def load_modular_change(changes_dir: Path, change_id: str) -> ChangeLoadResult:
 
 
 def load_change(changes_dir: Path, change_id: str) -> ChangeLoadResult:
-    """Load one contained four-file native change package."""
-    try:
-        change_dir = _validate_change_path(changes_dir, change_id)
-        with _change_directory(change_dir) as (directory_fd, source_identity):
-            intent = _read_text(directory_fd, "intent.md", markdown=True)
-            design = _read_text(directory_fd, "design.md", markdown=True)
-            try:
-                decisions = DecisionsDocument.model_validate(_read_yaml(directory_fd, "decisions.yaml"))
-            except PydanticValidationError as exc:
-                _fail(
-                    ChangeDiagnosticCode.SCHEMA_INVALID,
-                    _schema_detail("decisions.yaml", exc),
-                    path=Path("decisions.yaml"),
-                    target="decisions.yaml",
-                )
-            try:
-                graph = DeliveryGraph.model_validate(_read_yaml(directory_fd, "graph.yaml"))
-            except PydanticValidationError as exc:
-                _fail(
-                    ChangeDiagnosticCode.SCHEMA_INVALID,
-                    _schema_detail("graph.yaml", exc),
-                    path=Path("graph.yaml"),
-                    target="graph.yaml",
-                )
-        revision = _build_revision(
-            change_dir=change_dir,
-            change_id=change_id,
-            source_identity=source_identity,
-            intent=intent,
-            design=design,
-            decisions=decisions,
-            graph=graph,
-        )
-    except _LoadFailure as exc:
-        return ChangeLoadResult(diagnostics=(exc.diagnostic,))
-    return ChangeLoadResult(revision=revision)
+    """Load one contained modular native change package."""
+    return load_modular_change(changes_dir, change_id)
 
 
 __all__ = [

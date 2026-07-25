@@ -1,10 +1,10 @@
 ---
 id: 2033
 title: 'P1-C2: Cut over modular authority and isolated plan storage'
-status: build
+status: verify
 priority: high
 created: 2026-07-25T02:46:34.205290+02:00
-updated: 2026-07-25T04:42:48.823548+02:00
+updated: 2026-07-25T04:47:33.857701+02:00
 tags:
   - change:replace-delivery-pipeline
   - node:DN-001
@@ -140,3 +140,44 @@ Connected local task repair with #2034. Builder rejection key `scope/public-api-
 
 ### Challenge And Route
 Shaper challenger first failed on four concrete contradictions; all four were corrected. Rechallenge passed with no findings. Task advances to `build`; #2034 depends on this task's archived modular baseline.
+
+[[2026-07-25T04:47:33+02:00]]
+## Builder Notes
+
+### Change Envelope
+- Migrated the admitted DN-001 package and public loader boundary to modular delivery authority with isolated plans; excluded runtime lifecycle identity and receipt integration per the repaired Shape Notes.
+- Changed owners: `change.py`, the admitted package delivery/plan records, and `test_change_revision.py` fixtures and public-boundary proof.
+
+### Change Module Map
+- No deviation. `native_runtime.py` and `receipt.py` were not changed; the earlier `scope/public-api-rename` failure key is resolved by keeping those later-stage owners out of this task.
+
+### Implementation
+- Public modular loading now rejects any reintroduced `graph.yaml` as `ERR_CHANGE_SCHEMA_INVALID` targeting that legacy authority.
+- Maintained package helpers create `delivery/obligations.yaml`, `delivery/contracts.yaml`, `delivery/nodes.yaml`, and isolated plans. Fixtures assert no embedded execution or node-plan authority, public digest parity, strict legacy rejection, and isolated plan reads.
+- The admitted package contains modular delivery files and `plans/DN-001.yaml`; its legacy `graph.yaml` was removed.
+
+### Proof
+- `uv run pytest serve/kanban/tests/test_change_revision.py -q`: 27 passed. Exercises public loader behavior, malformed and identity diagnostics, isolated-plan interruption recovery, replay, stale conflict preservation, and `read_node_plan`.
+- `uv run ruff check serve/kanban/src/owlbear_kanban/change.py serve/kanban/tests/test_change_revision.py`: all checks passed.
+- Public admitted-package probe loaded `.owlbear/changes/replace-delivery-pipeline` through `load_change`, returned digest `3f6c656289911320bb5e7faf37b5e86ffa8511e729ade201a03a19913e33d990`, found no `graph.yaml`, and read the isolated DN-001 plan.
+
+### AC Evidence
+- AC1: admitted public load returned the required digest with modular documents and isolated DN-001 plan.
+- AC2: focused public-loader test adds `graph.yaml` and receives the declared schema-invalid diagnostic targeting that file.
+- AC3: focused tests prove absent plans return `None`, committed isolated plans are read through `ChangeRevision`, and `DeliveryGraph` has neither embedded execution nor node plans.
+- AC4: focused transaction test proves interruption recovery, byte-identical replay, and conflict preservation.
+- AC5: modular helpers and logical digest parity use public `load_change`; the focused module passes.
+
+### Current Failure-Key Resolution
+- `scope/public-api-rename`: no lifecycle API rename remains in this task.
+- `AC3/modular-authority-fixtures`: legacy graph fixture writes and embedded-plan assertions were replaced with modular authority fixtures and isolated-plan proof.
+- `low-level-storage`: replay, OCC conflict, and interruption recovery were exercised at `NodePlanStore` and `RuntimeTransaction` boundary.
+
+### Durable Test Justification
+- Updated existing maintained change-revision coverage for a public loader authority migration and its isolated transaction storage risk; no new standalone test file or speculative coverage was added.
+
+### Builder Challenger
+- `pass`: challenger independently ran the focused test suite and Ruff and confirmed the admitted package digest, legacy-file absence, and isolated plan.
+
+### Follow-up Risks
+- Runtime publication and receipt currentness remain intentionally sequenced to #2034. Unrelated dirty worktree files, the package storage lock, and shape receipt were not modified or included.

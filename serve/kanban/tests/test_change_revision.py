@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -14,6 +13,7 @@ import owlbear_kanban.change as change_module
 from owlbear_kanban import (
     ChangeDiagnosticCode,
     NodePlanStore,
+    compute_delivery_digest,
     load_change,
     load_modular_change,
 )
@@ -202,9 +202,31 @@ def _write_package(
     (change_dir / "intent.md").write_bytes(encoded(intent))
     (change_dir / "design.md").write_bytes(encoded(design))
     decision_yaml = yaml.safe_dump(decision_data, sort_keys=False, allow_unicode=True)
-    graph_yaml = yaml.safe_dump(graph_data, sort_keys=False, allow_unicode=True)
     (change_dir / "decisions.yaml").write_bytes(encoded(decision_yaml))
-    (change_dir / "graph.yaml").write_bytes(encoded(graph_yaml))
+    delivery_dir = change_dir / "delivery"
+    delivery_dir.mkdir()
+    common = {"schema_version": graph_data["schema_version"], "change_id": graph_data["change_id"]}
+    documents = {
+        "obligations.yaml": {
+            **common,
+            **{
+                key: graph_data[key]
+                for key in ("requirements", "negative_requirements", "preserved_behaviors", "workflows")
+            },
+        },
+        "contracts.yaml": {
+            **common,
+            **{key: graph_data[key] for key in ("modules", "interfaces", "migrations", "risks", "proofs")},
+        },
+        "nodes.yaml": {
+            **common,
+            **{key: graph_data[key] for key in ("state", "authority", "nodes")},
+        },
+    }
+    for filename, document in documents.items():
+        delivery_dir.joinpath(filename).write_bytes(
+            encoded(yaml.safe_dump(document, sort_keys=False, allow_unicode=True))
+        )
     return change_dir
 
 
@@ -214,36 +236,7 @@ def _write_modular_package(
     *,
     authority: tuple[dict[str, object], dict[str, object]] | None = None,
 ) -> Path:
-    decisions, graph = authority or _documents(change_id)
-    change_dir = changes_dir / change_id
-    delivery_dir = change_dir / "delivery"
-    delivery_dir.mkdir(parents=True)
-    (change_dir / "intent.md").write_text("Product intent\n", encoding="utf-8")
-    (change_dir / "design.md").write_text("Implementation design\n", encoding="utf-8")
-    (change_dir / "decisions.yaml").write_text(
-        yaml.safe_dump(decisions, sort_keys=False),
-        encoding="utf-8",
-    )
-    common = {"schema_version": graph["schema_version"], "change_id": graph["change_id"]}
-    obligations = {
-        **common,
-        **{key: graph[key] for key in ("requirements", "negative_requirements", "preserved_behaviors", "workflows")},
-    }
-    contracts = {
-        **common,
-        **{key: graph[key] for key in ("modules", "interfaces", "migrations", "risks", "proofs")},
-    }
-    nodes = {
-        **common,
-        **{key: graph[key] for key in ("state", "authority", "nodes")},
-    }
-    for filename, document in (
-        ("obligations.yaml", obligations),
-        ("contracts.yaml", contracts),
-        ("nodes.yaml", nodes),
-    ):
-        (delivery_dir / filename).write_text(yaml.safe_dump(document, sort_keys=False), encoding="utf-8")
-    return change_dir
+    return _write_package(changes_dir, change_id, authority=authority)
 
 
 def _revision_digest(changes_dir: Path, change_id: str) -> str:
@@ -272,7 +265,6 @@ def test_package_exports_native_change_boundary() -> None:
 def test_load_change_returns_one_immutable_indexed_revision(tmp_path: Path) -> None:
     changes_dir = tmp_path / ".owlbear" / "changes"
     decisions, graph = _documents("sample-change")
-    graph["execution"] = {"node_plans": {"DN-001": {"packets": ["DN-001-PK-001"]}}}
     _write_package(changes_dir, "sample-change", authority=(decisions, graph))
 
     result = load_change(changes_dir, "sample-change")
@@ -287,33 +279,41 @@ def test_load_change_returns_one_immutable_indexed_revision(tmp_path: Path) -> N
         result.revision.change_id = "other-change"
     with pytest.raises(PydanticValidationError):
         result.revision.graph.nodes[0].title = "Changed"
-    with pytest.raises(TypeError):
-        result.revision.graph.execution.node_plans["DN-002"] = {}
-    node_plan = result.revision.graph.execution.node_plans["DN-001"]
-    assert isinstance(node_plan, Mapping)
-    with pytest.raises(TypeError):
-        node_plan["packets"] = []
+    assert result.revision.read_node_plan("DN-001") is None
     payload = result.revision.model_dump(mode="json")
-    assert payload["graph"]["execution"] == {"node_plans": {"DN-001": {"packets": ["DN-001-PK-001"]}}}
+    assert "execution" not in payload["graph"]
+    assert "node_plans" not in payload["graph"]
 
 
 def test_modular_loader_preserves_logical_revision_identity(tmp_path: Path) -> None:
     changes_dir = tmp_path / "changes"
     decisions, graph = _documents("parity-change")
-    _write_package(changes_dir, "monolithic-change", authority=(_documents("monolithic-change")))
     _write_modular_package(changes_dir, "parity-change", authority=(decisions, graph))
 
-    monolithic = load_change(changes_dir, "monolithic-change")
-    modular = load_modular_change(changes_dir, "parity-change")
+    result = load_change(changes_dir, "parity-change")
 
-    assert monolithic.revision is not None
-    assert modular.diagnostics == ()
-    assert modular.revision is not None
-    assert modular.revision.delivery_digest == monolithic.revision.delivery_digest
-    assert [item.id for item in modular.revision.graph.iter_entities()] == [
-        item.id for item in monolithic.revision.graph.iter_entities()
+    assert result.diagnostics == ()
+    assert result.revision is not None
+    assert result.revision.delivery_digest == compute_delivery_digest(
+        result.revision.intent,
+        result.revision.design,
+        result.revision.decisions,
+        result.revision.graph,
+    )
+    assert [item.id for item in result.revision.accepted_decisions] == ["DEC-001", "DEC-002"]
+
+
+def test_load_change_rejects_legacy_graph_authority(tmp_path: Path) -> None:
+    changes_dir = tmp_path / "changes"
+    change_dir = _write_modular_package(changes_dir, "legacy-authority")
+    (change_dir / "graph.yaml").write_text("schema_version: 1\n", encoding="utf-8")
+
+    result = load_change(changes_dir, "legacy-authority")
+
+    assert result.revision is None
+    assert [(item.code, item.target) for item in result.diagnostics] == [
+        (ChangeDiagnosticCode.SCHEMA_INVALID, "graph.yaml")
     ]
-    assert [item.id for item in modular.revision.accepted_decisions] == ["DEC-001", "DEC-002"]
 
 
 def _missing_modular_participant(change_dir: Path) -> None:
@@ -396,6 +396,7 @@ def test_node_plan_store_recovers_replays_and_rejects_conflicting_bytes(tmp_path
     stored = store.read("DN-001")
     assert stored is not None
     assert stored.plan == plan
+    assert loaded.revision.read_node_plan("DN-001") == plan
 
     before = (change_dir / "plans/DN-001.yaml").read_bytes()
     with pytest.raises(TransactionConflictError):
@@ -518,8 +519,12 @@ def _non_utf8_markdown(change_dir: Path, _decisions: dict[str, object], _graph: 
     (change_dir / "intent.md").write_bytes(b"\xff")
 
 
+def _write_delivery_document(change_dir: Path, filename: str, document: object) -> None:
+    (change_dir / "delivery" / filename).write_text(yaml.safe_dump(document, sort_keys=False), encoding="utf-8")
+
+
 def _malformed_yaml(change_dir: Path, _decisions: dict[str, object], _graph: dict[str, object]) -> None:
-    (change_dir / "graph.yaml").write_text("[unclosed", encoding="utf-8")
+    (change_dir / "delivery/obligations.yaml").write_text("[unclosed", encoding="utf-8")
 
 
 def _duplicate_id(change_dir: Path, _decisions: dict[str, object], graph: dict[str, object]) -> None:
@@ -527,7 +532,17 @@ def _duplicate_id(change_dir: Path, _decisions: dict[str, object], graph: dict[s
     assert isinstance(requirements, list)
     assert isinstance(requirements[1], dict)
     requirements[1]["id"] = "REQ-001"
-    (change_dir / "graph.yaml").write_text(yaml.safe_dump(graph, sort_keys=False), encoding="utf-8")
+    _write_delivery_document(
+        change_dir,
+        "obligations.yaml",
+        {
+            "schema_version": graph["schema_version"],
+            "change_id": graph["change_id"],
+            **{
+                key: graph[key] for key in ("requirements", "negative_requirements", "preserved_behaviors", "workflows")
+            },
+        },
+    )
 
 
 def _missing_reference(change_dir: Path, _decisions: dict[str, object], graph: dict[str, object]) -> None:
@@ -535,14 +550,30 @@ def _missing_reference(change_dir: Path, _decisions: dict[str, object], graph: d
     assert isinstance(nodes, list)
     assert isinstance(nodes[0], dict)
     nodes[0]["dependencies"] = ["DN-999"]
-    (change_dir / "graph.yaml").write_text(yaml.safe_dump(graph, sort_keys=False), encoding="utf-8")
+    _write_delivery_document(
+        change_dir,
+        "nodes.yaml",
+        {
+            "schema_version": graph["schema_version"],
+            "change_id": graph["change_id"],
+            **{key: graph[key] for key in ("state", "authority", "nodes")},
+        },
+    )
 
 
 def _redirected_authority(change_dir: Path, _decisions: dict[str, object], graph: dict[str, object]) -> None:
     authority = graph["authority"]
     assert isinstance(authority, dict)
     authority["intent"] = "../../outside.md"
-    (change_dir / "graph.yaml").write_text(yaml.safe_dump(graph, sort_keys=False), encoding="utf-8")
+    _write_delivery_document(
+        change_dir,
+        "nodes.yaml",
+        {
+            "schema_version": graph["schema_version"],
+            "change_id": graph["change_id"],
+            **{key: graph[key] for key in ("state", "authority", "nodes")},
+        },
+    )
 
 
 def _symlinked_file(change_dir: Path, _decisions: dict[str, object], _graph: dict[str, object]) -> None:

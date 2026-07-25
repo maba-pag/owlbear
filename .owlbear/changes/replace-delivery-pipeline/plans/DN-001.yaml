@@ -1,0 +1,19 @@
+---
+packets:
+  - id: DN-001-PK-001
+    dependencies: []
+    impact_closure:
+      paths:
+        - serve/kanban/
+      authority_targets:
+        - DN-001
+        - PROOF-001
+  - id: DN-001-PK-002
+    dependencies:
+      - DN-001-PK-001
+    impact_closure:
+      paths:
+        - serve/kanban/
+      authority_targets:
+        - DN-001
+        - PROOF-001
