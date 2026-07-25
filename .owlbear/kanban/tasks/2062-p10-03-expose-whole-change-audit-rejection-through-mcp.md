@@ -1,10 +1,10 @@
 ---
 id: 2062
 title: 'P10-03: Expose whole-change audit rejection through MCP'
-status: verify
+status: collect
 priority: high
 created: 2026-07-25T19:53:28.713892+02:00
-updated: 2026-07-25T20:33:36.078556+02:00
+updated: 2026-07-25T20:35:14.905759+02:00
 tags:
   - phase-10
   - scope:mcp-kanban
@@ -69,3 +69,16 @@ Exposed whole-change audit rejection through the strict FastMCP control plane.
 Task-scoped lint passed. `uv run pytest serve/mcp-kanban/tests serve/kanban/tests/test_native_runtime.py serve/kanban/tests/test_dispatch_runtime.py -q --tb=short` passed 155 tests. Builder challenger passed after independently rerunning 25 MCP surface/operation tests.
 
 Changed files: `serve/mcp-kanban/src/owlbear_mcp_kanban/models.py`, `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py`, `serve/mcp-kanban/tests/test_mcp_surface_contract.py`, `serve/mcp-kanban/tests/test_mcp_acceptance_tools.py`.
+
+[[2026-07-25T20:35:14+02:00]]
+## Verify Notes
+
+PASS
+
+Verified committed builder SHA `7e678f30ca3a4a7879b6adb24e031dc8697b2c47` against the public MCP boundary.
+
+- AC-1: live registry/schema assertions prove the exported `reject_audit` tool, required active identity/detail/evidence/findings/invalidation fields, strict nested invalidation model, and operation annotations. The assembled test captures the exact forwarded `RejectAuditRequest` and compares it to the conforming input.
+- AC-2: the operation proof traverses assembled `AppContext` through public `reject_audit`, `show_job`, `list_jobs`, `list_attempts`, `list_findings`, `show_finding`, and `show_receipt`, observing the failed attempt, superseded audit, finding, supersession receipt, zero-job design re-entry, and unchanged pre-existing receipt bytes.
+- AC-3: malformed input raises `ERR_PARAM_VALIDATION` before dispatch; diagnostic-bearing native/dispatch results are returned directly without field remapping.
+
+Independent `uv run pytest serve/mcp-kanban/tests/test_mcp_surface_contract.py serve/mcp-kanban/tests/test_mcp_acceptance_tools.py -q --tb=short` passed 25 tests. The initially named generic server path was absent in the current workspace and was not counted as evidence. Verifier challenger passed with no findings.
