@@ -1,10 +1,10 @@
 ---
 id: 2056
 title: 'P9-02: Expose acceptance rejection and findings through MCP'
-status: collect
+status: archived
 priority: high
 created: 2026-07-25T17:19:35.872293+02:00
-updated: 2026-07-25T18:01:30.138580+02:00
+updated: 2026-07-25T18:02:07.518709+02:00
 tags:
   - phase-9
   - scope:mcp-kanban
@@ -41,7 +41,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Projection
@@ -77,6 +77,16 @@ None.
 - AC-3: confirmed canonical bounded finding pagination, stable cursors, full immutable finding reads, stable stale/missing `ToolError` codes, and read-only error snapshots.
 - AC-4: confirmed the assembled proof invokes exported MCP operations over real dispatch/native runtimes and engine-created proof checkout; only temporary authority/work/proof stores and repository history replace persistence. It observes supersession, one minimum corrective build job, failed attempt, reader release, cleanup, and replay.
 - Independent validation: `uv run pytest serve/mcp-kanban/tests serve/kanban/tests/test_dispatch_runtime.py serve/kanban/tests/test_native_runtime.py serve/kanban/tests/test_invalidation.py serve/kanban/tests/test_proof_checkout.py -q --tb=short` passed 178 tests. Mechanical `load_change` assertion returned exact digest `3f6c656289911320bb5e7faf37b5e86ffa8511e729ade201a03a19913e33d990`. VS Code diagnostics are clean for all four changed files. Verifier challenger decision: pass.
+
+### Required Follow-up
+None.
+
+[[2026-07-25T18:02:07+02:00]]
+## Collect Notes
+- Confirmed the shaped leaf outcome is complete at builder commit `52f2c881` and independently verified at `777ea78d`; both stage notes have no required follow-up.
+- Confirmed dependencies #2055 and #1981 are archived with `completed`, no pending structured requests exist, and collection changed no product or proof file.
+- Closure evidence covers every AC: strict 25-tool live schema and annotations; typed public rejection forwarding with stable diagnostics and failed-call atomicity; bounded canonical finding pages plus full reads and stable read errors; and an assembled real proof-checkout rejection with exact minimum correction, cleanup, and replay.
+- Final independent regression evidence is 178 passing MCP/core corrective-runtime tests at the verified descendant, with exact admitted digest `3f6c656289911320bb5e7faf37b5e86ffa8511e729ade201a03a19913e33d990`.
 
 ### Required Follow-up
 None.
