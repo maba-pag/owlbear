@@ -1,10 +1,10 @@
 ---
 id: 2052
 title: 'P8-02: Expose the native builder and read-only build reviewer'
-status: verify
+status: collect
 priority: high
 created: 2026-07-25T16:14:20.905544+02:00
-updated: 2026-07-25T16:34:14.676101+02:00
+updated: 2026-07-25T16:36:59.163118+02:00
 tags:
   - phase-8
   - scope:agent
@@ -90,3 +90,30 @@ No runtime/MCP behavior, assembled proof scenario, acceptor/auditor role, setup/
 - `builder-challenger`: `pass`; independently reran validators and the targeted suite.
 
 Durable-test delta: zero. Existing validators and write-guard tests already own the structural and enforcement regressions.
+
+[[2026-07-25T16:36:59+02:00]]
+## Verify Notes
+
+Independently verified builder commit `7d96d6bd1a46c86fd3f08fb44ca90007829b96d7` against current DN-007 authority, `w-packet-building`, public lifecycle signatures, and ecosystem structure. No patch was required and no prior Verify Notes or repeated failure key exists.
+
+### Authority And Module Map
+- Confirmed the dual-mode builder preserves task-ID bootstrap while a serialized successful build start selects only native packet workflow.
+- Confirmed the reviewer is a distinct hard-read-only ND3 role and the orchestrator remains the sole lifecycle mutation owner.
+- Confirmed all changed files match the shaped role, workflow, ND3, and WIRING owners; runtime/MCP behavior and proof scenarios remain untouched for later packets.
+
+### AC Evidence
+- AC-1: Builder requires `w-packet-building`, delegates to `build-reviewer`, exposes all current native read projections, and grants no native pick, start, finish, release, or recovery operation. Its native output is one exact workflow disposition.
+- AC-2: Reviewer uses a distinct model, DMI false, read-only tools, and `deny-writes.py`; six fixed rows cover authority/packet, diff/paths, proof, commit context, scope, and canonical findings. Missing context is malformed and no repair capability exists.
+- AC-3: Orchestration sends only the successful start result. Live `finish_build` confirms the exact five builder-owned success fields. All three non-success dispositions release unchanged identity, halt/report, and forbid receipt or corrective work; malformed output follows crash recovery.
+- AC-4: Builder delegation, WIRING runtime/inverse/delegation/hook maps, the structural handbook, and validator ND3 registry agree on `build-reviewer`.
+
+### Independent Proof
+- `git show --check --stat --oneline 7d96d6bd1a46c86fd3f08fb44ca90007829b96d7`: passed.
+- `validate_agents.py`: all 17 agents passed; `validate_skills.py`: passed.
+- Ecosystem, write-guard, and non-doc-write checks excluding the unrelated broad registry assertion: 57 passed.
+- Ownership-aware live-schema/declaration probe: exact finish/release signatures, delegation, model split, hard hook, lifecycle-tool absence, all four dispositions, and WIRING/ND3 synchronization passed.
+- Path-scoped pre-commit: passed.
+- Full broad set's only failure remains pre-existing dirty `collector.agent.md` legacy tool-name corruption. The 11 newly added native builder reads all resolve in the live dev registry; legacy task tools intentionally remain for the sibling bootstrap carrier.
+- `verifier-challenger`: `pass`; no scope drift, unresolved follow-up, or evidence gap.
+
+A first ad hoc probe incorrectly expected `w-orchestration` to duplicate the reviewer identity; labeled diagnosis showed all contract facts passed and only that Rule-of-Two premise was false. The corrected ownership-aware probe passed without code changes. Replacements: none.
