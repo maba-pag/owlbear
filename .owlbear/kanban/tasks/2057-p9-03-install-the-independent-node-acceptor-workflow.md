@@ -1,10 +1,10 @@
 ---
 id: 2057
 title: 'P9-03: Install the independent node acceptor workflow'
-status: verify
+status: build
 priority: high
 created: 2026-07-25T17:19:45.152185+02:00
-updated: 2026-07-25T18:08:40.438167+02:00
+updated: 2026-07-25T18:13:14.642326+02:00
 tags:
   - phase-9
   - scope:agent
@@ -65,3 +65,16 @@ Out: runtime/MCP semantics, auditor work, setup/seed propagation, and Cockpit.
 
 ### Required Follow-up
 None.
+
+[[2026-07-25T18:13:14+02:00]]
+## Verify Notes
+- Independent structural and live-tool checks confirmed the declared role, disposition field ownership, orchestration mapping, digest, and ordinary edit-tool guard, but verifier challenger found a concrete hard-read-only defect.
+- `git status` plus `git diff` cannot detect a terminal proof command that creates a commit or moves `HEAD`, then leaves the checkout clean. Because the acceptor has generic terminal execution, it could approve acceptor-authored commit state despite the current before/after check.
+- This requires a hard terminal mutation guard and focused regression, which exceeds verifier local repair authority and returns to build.
+- Evidence already passing: all agent/skill validators; 37 relevant ecosystem/write-guard tests; scoped live acceptor MCP grants; exact digest `3f6c656289911320bb5e7faf37b5e86ffa8511e729ade201a03a19913e33d990`. Verifier challenger decision: fail.
+
+### Required Follow-up
+| # | Failure Key | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|--------------|-----------------|---------|----------|
+| 1 | AC-2/terminal-head-mutation | builder | Add a hard acceptor terminal guard that rejects Git commit/reset/checkout and tracked-write attempts before execution; require checkout `HEAD` to remain the supplied candidate SHA before and after every proof command; add focused regression for terminal commit/reset/write attempts and rerun validators. | `.owlbear/hooks/deny-writes.py`, `share/agents/acceptor.agent.md`, `share/skills/w-node-acceptance/SKILL.md`, focused hook tests | verifier-challenger: clean status/diff can hide a commit or moved-and-reset HEAD |
+
