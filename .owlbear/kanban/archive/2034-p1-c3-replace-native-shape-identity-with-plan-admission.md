@@ -1,10 +1,10 @@
 ---
 id: 2034
 title: 'P1-C3: Replace native shape identity with plan admission'
-status: collect
+status: archived
 priority: high
 created: 2026-07-25T02:46:39.499546+02:00
-updated: 2026-07-25T05:29:08.061819+02:00
+updated: 2026-07-25T05:29:58.530734+02:00
 tags:
   - change:replace-delivery-pipeline
   - node:DN-002
@@ -41,7 +41,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Objective
@@ -194,3 +194,13 @@ Shaper challenger first failed on stale scope, waiver, fixture, and low-level st
 
 ### Final Route
 - PASS to `collect`.
+
+[[2026-07-25T05:29:58+02:00]]
+## Collect Notes
+
+- Classification: leaf. Task has no children; its parent link and archived dependencies #2032 and #2033 do not create aggregate collect intent.
+- Latest verification evidence: PASS to collect. At commit `ac9af443`, the focused Kanban runtime and MCP contract suite passed (`340 passed`); active-source and maintained-test retired-identity audit found no matches; diff checks passed. The verifier repaired the one local syntax finding and the rechallenge passed.
+- Invariant coverage: AC1 admission ordering/atomic recovery; AC2 active plan parsing and inert legacy bytes; AC3 public plan-only exports and retired-identity audit; AC4 replay/conflict immutability; AC5 assembled plan-file/receipt/currentness/health/recovery behavior. All are explicitly mapped in the newest Verify Notes.
+- Child coverage: none. Parent dependency-gate check: not applicable to leaf archival; task dependency status was `ok` with #2032 and #2033 archived completed.
+- Residual decisions: no pending or resolved structured requests apply; the verifier recorded no unresolved follow-up.
+- Rationale: current verifier PASS and closure state satisfy mechanical leaf archival.
