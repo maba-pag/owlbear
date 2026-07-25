@@ -1,11 +1,10 @@
 ---
 id: 2039
-title: Compose dispatch completion participants through the native finish 
-  callback
+title: Compose native dispatch completion participants
 status: build
 priority: high
 created: 2026-07-25T08:00:32.540861+02:00
-updated: 2026-07-25T08:00:32.540861+02:00
+updated: 2026-07-25T08:09:49.505790+02:00
 tags:
   - change:replace-delivery-pipeline
   - node:DN-004
