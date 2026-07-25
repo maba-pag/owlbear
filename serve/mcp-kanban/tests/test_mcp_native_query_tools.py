@@ -675,3 +675,219 @@ class TestNativeQueryTools:
                 cursor="stale-cursor-999",
                 limit=1,
             )
+
+    @pytest.mark.asyncio
+    async def test_work_health_healthy_workspace_empty_findings(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """AC-2: work_health returns empty findings for healthy valid workspace."""
+        changes_dir = tmp_path / "changes"
+        shutil.copytree(
+            Path(".owlbear/changes/replace-delivery-pipeline"),
+            changes_dir / "replace-delivery-pipeline",
+        )
+        # Remove all existing receipts to start clean
+        receipts_dir = changes_dir / "replace-delivery-pipeline" / "receipts"
+        if receipts_dir.exists():
+            shutil.rmtree(receipts_dir)
+        receipts_dir.mkdir()
+        (changes_dir / "replace-delivery-pipeline" / "plans" / "DN-001.yaml").unlink()
+        loaded = load_change(changes_dir, "replace-delivery-pipeline")
+        assert loaded.revision is not None
+        revision = loaded.revision
+
+        work_root = tmp_path / "kanban"
+        work_root.mkdir()
+
+        # Create healthy workspace with valid job using JobStore.materialize
+        jobs = JobStore(work_root)
+        jobs.materialize(
+            JobGeneration(
+                schema_version=1,
+                change_id=revision.change_id,
+                delivery_digest=revision.delivery_digest,
+                receipt_id="test-receipt-001",
+                jobs=(
+                    PlanJob(
+                        job_id=1,
+                        kind="plan",
+                        priority=7,
+                        created_at="2026-07-24T00:00:00Z",
+                        updated_at="2026-07-24T00:00:00Z",
+                        change_id=revision.change_id,
+                        delivery_digest=revision.delivery_digest,
+                        target_node_id=revision.graph.nodes[0].id,
+                        receipt_id="test-receipt-001",
+                    ),
+                ),
+            )
+        )
+
+        # Create corresponding receipt
+        import yaml
+
+        receipt_data = {
+            "schema_version": 1,
+            "kind": "admission",
+            "receipt_id": "test-receipt-001",
+            "change_id": revision.change_id,
+            "delivery_digest": revision.delivery_digest,
+            "issued_at": "2026-07-24T00:00:00Z",
+            "payload": {},
+        }
+        (receipts_dir / "test-receipt-001.yaml").write_text(yaml.dump(receipt_data))
+
+        runtime = DispatchRuntime(
+            NativeRuntime(revision, work_root, _History(), timedelta(minutes=1)),
+            work_root,
+        )
+        ctx = _native_ctx(tmp_path)
+        monkeypatch.setattr(server, "_dispatch_runtime", lambda _app_ctx, _change_id: runtime)
+
+        # Capture mtime before work_health call
+        job_path = work_root / "jobs" / "1.yaml"
+        receipt_path = receipts_dir / "test-receipt-001.yaml"
+        job_mtime_before = job_path.stat().st_mtime_ns
+        receipt_mtime_before = receipt_path.stat().st_mtime_ns
+
+        result = await server.work_health(
+            ctx,
+            change_id=revision.change_id,
+            limit=100,
+        )
+
+        # Verify empty findings for healthy workspace
+        assert len(result["findings"]) == 0
+        assert "jobs/1.yaml" in result["checked_paths"]
+        assert "receipts/test-receipt-001.yaml" in result["checked_paths"]
+
+        # Verify paths unchanged (mtime verification)
+        job_mtime_after = job_path.stat().st_mtime_ns
+        receipt_mtime_after = receipt_path.stat().st_mtime_ns
+        assert job_mtime_before == job_mtime_after
+        assert receipt_mtime_before == receipt_mtime_after
+
+    @pytest.mark.asyncio
+    async def test_work_health_corrupt_job_returns_err_work_job_invalid(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """AC-2: work_health returns ERR_WORK_JOB_INVALID for malformed job storage."""
+        changes_dir = tmp_path / "changes"
+        shutil.copytree(
+            Path(".owlbear/changes/replace-delivery-pipeline"),
+            changes_dir / "replace-delivery-pipeline",
+        )
+        # Remove all existing receipts to start clean
+        receipts_dir = changes_dir / "replace-delivery-pipeline" / "receipts"
+        if receipts_dir.exists():
+            shutil.rmtree(receipts_dir)
+        receipts_dir.mkdir()
+        (changes_dir / "replace-delivery-pipeline" / "plans" / "DN-001.yaml").unlink()
+        loaded = load_change(changes_dir, "replace-delivery-pipeline")
+        assert loaded.revision is not None
+        revision = loaded.revision
+
+        work_root = tmp_path / "kanban"
+        work_root.mkdir()
+
+        # Create corrupt job with malformed YAML
+        jobs_dir = work_root / "jobs"
+        jobs_dir.mkdir()
+        (jobs_dir / "999.yaml").write_text("[unclosed")
+
+        runtime = DispatchRuntime(
+            NativeRuntime(revision, work_root, _History(), timedelta(minutes=1)),
+            work_root,
+        )
+        ctx = _native_ctx(tmp_path)
+        monkeypatch.setattr(server, "_dispatch_runtime", lambda _app_ctx, _change_id: runtime)
+
+        # Capture mtime before work_health call
+        corrupt_job_path = jobs_dir / "999.yaml"
+        mtime_before = corrupt_job_path.stat().st_mtime_ns
+
+        result = await server.work_health(
+            ctx,
+            change_id=revision.change_id,
+            limit=100,
+        )
+
+        # Verify ERR_WORK_JOB_INVALID finding with controlled relative path
+        findings = result["findings"]
+        assert len(findings) > 0
+        corrupt_finding = next((f for f in findings if f["code"] == "ERR_WORK_JOB_INVALID"), None)
+        assert corrupt_finding is not None
+        assert corrupt_finding["path"] == "jobs/999.yaml"
+        assert corrupt_finding["detail"] == "job record is malformed or unsafe"
+
+        # Verify path unchanged (mtime verification)
+        mtime_after = corrupt_job_path.stat().st_mtime_ns
+        assert mtime_before == mtime_after
+
+    @pytest.mark.asyncio
+    async def test_work_health_orphan_proof_checkout_returns_err(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """AC-2: work_health returns ERR_WORK_PROOF_CHECKOUT_ORPHAN for orphan checkout."""
+        from owlbear_kanban import ProofCheckoutManager
+
+        changes_dir = tmp_path / "changes"
+        shutil.copytree(
+            Path(".owlbear/changes/replace-delivery-pipeline"),
+            changes_dir / "replace-delivery-pipeline",
+        )
+        # Remove all existing receipts to start clean
+        receipts_dir = changes_dir / "replace-delivery-pipeline" / "receipts"
+        if receipts_dir.exists():
+            shutil.rmtree(receipts_dir)
+        receipts_dir.mkdir()
+        (changes_dir / "replace-delivery-pipeline" / "plans" / "DN-001.yaml").unlink()
+        loaded = load_change(changes_dir, "replace-delivery-pipeline")
+        assert loaded.revision is not None
+        revision = loaded.revision
+
+        work_root = tmp_path / "kanban"
+        work_root.mkdir()
+
+        # Create orphan proof checkout directory through real checkout convention
+        proof_root = work_root / "proof-checkouts"
+        proof_root.mkdir(mode=0o700)
+        orphan_dir = proof_root / "123"
+        orphan_dir.mkdir(mode=0o700)
+
+        # Create proof checkout manager and runtime with it
+        proof_checkouts = ProofCheckoutManager(Path.cwd(), proof_root)
+        runtime = DispatchRuntime(
+            NativeRuntime(revision, work_root, _History(), timedelta(minutes=1), proof_checkouts=proof_checkouts),
+            work_root,
+        )
+        ctx = _native_ctx(tmp_path)
+        monkeypatch.setattr(server, "_dispatch_runtime", lambda _app_ctx, _change_id: runtime)
+
+        # Capture mtime before work_health call
+        mtime_before = orphan_dir.stat().st_mtime_ns
+
+        result = await server.work_health(
+            ctx,
+            change_id=revision.change_id,
+            limit=100,
+        )
+
+        # Verify ERR_WORK_PROOF_CHECKOUT_ORPHAN finding with canonical target
+        findings = result["findings"]
+        assert len(findings) > 0
+        orphan_finding = next((f for f in findings if f["code"] == "ERR_WORK_PROOF_CHECKOUT_ORPHAN"), None)
+        assert orphan_finding is not None
+        assert orphan_finding["path"] == "proof-checkouts/123"
+        assert orphan_finding["target"] == "123"
+        assert orphan_finding["detail"] == "proof checkout requires cleanup"
+
+        # Verify path unchanged (mtime verification)
+        mtime_after = orphan_dir.stat().st_mtime_ns
+        assert mtime_before == mtime_after

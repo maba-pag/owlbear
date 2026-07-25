@@ -1,10 +1,10 @@
 ---
 id: 2030
 title: 'P5-04: Expose native receipt and work-health evidence'
-status: build
+status: verify
 priority: high
 created: 2026-07-24T23:22:11.791167+02:00
-updated: 2026-07-25T11:12:09.346946+02:00
+updated: 2026-07-25T11:24:36.773880+02:00
 tags:
   - phase-5
   - scope:mcp-kanban
@@ -96,3 +96,28 @@ AC-2 explicitly requires "Given healthy, corrupt, and orphan-checkout work paths
 4. **Mtime verification**: Capture stat() of checked paths before/after work_health call, assert unchanged
 
 Test infrastructure exists (tmp_path, NativeRuntime construction). State construction requires writing YAML to work_root subdirectories. No production semantic changes needed.
+
+[[2026-07-25T11:24:36+02:00]]
+**AC-2/work-health-state-classes Resolution**
+
+Adopted verifier commit 75f449ee6 (AC-1 verified). Resolved AC-2 state-construction gap with three focused tests:
+
+1. `test_work_health_healthy_workspace_empty_findings`: Created valid job via `JobStore.materialize` and receipt, verified work_health returns empty findings for healthy workspace, captured job/receipt mtime before/after and asserted unchanged.
+
+2. `test_work_health_corrupt_job_returns_err_work_job_invalid`: Created malformed job YAML `"[unclosed"` in `jobs/999.yaml`, verified work_health returns `ERR_WORK_JOB_INVALID` finding with controlled relative path `"jobs/999.yaml"`, captured corrupt job mtime before/after and asserted unchanged.
+
+3. `test_work_health_orphan_proof_checkout_returns_err`: Created orphan proof checkout directory `proof-checkouts/123` through real `ProofCheckoutManager` convention, verified work_health returns `ERR_WORK_PROOF_CHECKOUT_ORPHAN` with path `"proof-checkouts/123"` and canonical target `"123"`, captured orphan dir mtime before/after and asserted unchanged.
+
+Existing tests (`test_work_health_returns_bounded_findings`, `test_work_health_cursor_pagination`) already verify bounded/sorted/cursor properties.
+
+**Production Fix:** Discovered and fixed local defect in `serve/kanban/src/owlbear_kanban/runtime_query.py` `_check_job` method — added `YAMLError` import and exception handling. Malformed job YAML now returns stable `ERR_WORK_JOB_INVALID` instead of propagating parser exception. This defect blocked AC-2 verification. No other production semantic changes.
+
+**Test Results:**
+- 3 new focused tests: all pass
+- Full MCP suite: 452 passed in 5.49s
+- Ruff lint: all checks passed
+- Builder-challenger: pass
+
+**AC Evidence:**
+- AC-1: ✅ Verified by verifier commit 75f449ee6
+- AC-2: ✅ Healthy/corrupt/orphan states constructed and verified; mtime verification in all tests; bounded/sorted/cursor verified by existing tests

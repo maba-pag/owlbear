@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, ConfigDict
+from ruamel.yaml.error import YAMLError
 
 from owlbear_kanban.attempts import AttemptEvent, AttemptStore
 from owlbear_kanban.change import ChangeRevision, Digest
@@ -453,7 +454,7 @@ class RuntimeQuery:
         job_id = int(absolute.stem)
         try:
             job = self._jobs.read(job_id, archived=path.startswith("archive/")).job
-        except FileNotFoundError, OSError, TypeError, ValueError:
+        except FileNotFoundError, OSError, TypeError, ValueError, YAMLError:
             return self._finding("ERR_WORK_JOB_INVALID", "job record is malformed or unsafe", path)
         if self._jobs_by_id is not None and self._jobs_by_id.get(job_id) != job:
             return self._finding("ERR_WORK_INDEX_DISAGREEMENT", "job index disagrees with storage", path, str(job_id))
