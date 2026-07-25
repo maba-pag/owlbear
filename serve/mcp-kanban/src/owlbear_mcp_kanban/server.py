@@ -53,6 +53,15 @@ from owlbear_kanban.models import (
     ShowTaskResponse,
     SingleTaskResponse,
 )
+from owlbear_kanban.runtime_requests import (
+    NativeRequest,
+    NativeRequestRuntime,
+    RequestConflictError,
+    RequestNotFoundError,
+    RequestOption,
+    RequestReferenceError,
+    RequestStatus,
+)
 from owlbear_mcp_kanban.guidance import collect_guidance
 from owlbear_mcp_kanban.models import (
     FinishAcceptParams,
@@ -511,34 +520,77 @@ async def create_task(  # noqa: PLR0913
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False))
 async def create_request(  # noqa: PLR0913, PLR0917
     ctx: Context,
-    task_id: str | int,
+    change_id: str,
+    delivery_digest: str,
     kind: str,
     title: str,
     summary: str,
     agent: str,
+    target_node_id: str | None = None,
+    job_ids: list[int] | None = None,
     options: list[dict[str, object]] | None = None,
     body: str = "",
 ) -> dict[str, object]:
     """Create a pending request and return its structured payload."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    parsed_task_id = parse_task_id(task_id, field="task_id")
     normalized_body, body_changed = _normalize_escaped_newlines(body)
+
+    # Load the change revision
     try:
-        created = await asyncio.to_thread(
-            app_ctx.engine.create_request,
-            parsed_task_id,
-            kind,
-            title,
-            summary,
-            agent,
-            options=options,
+        changes_dir = app_ctx.kanban_dir.parent / "changes"
+        loaded = load_change(changes_dir, change_id)
+        if loaded.revision is None:
+            _raise_tool_error("ERR_CHANGE_NOT_ADMITTED", "change is not admitted")
+        if loaded.revision.delivery_digest != delivery_digest:
+            digest_short = loaded.revision.delivery_digest[:16]
+            _raise_tool_error("ERR_DIGEST_MISMATCH", f"digest mismatch: expected {digest_short}...")
+    except FileNotFoundError:
+        _raise_tool_error("ERR_CHANGE_NOT_FOUND", f"change '{change_id}' not found")
+
+    # Build native request
+    try:
+        parsed_options: tuple[RequestOption, ...] = ()
+        if kind == "decision" and options:
+            parsed_options = tuple(RequestOption.model_validate(opt) for opt in options)
+
+        evidence: tuple[str, ...] = ()
+        resume_condition: str | None = None
+        if kind == "action":
+            # Action requests require evidence and resume condition
+            evidence = (body,) if body else ()
+            resume_condition = "User resolution required"
+
+        request = NativeRequest(
+            request_id=f"{change_id}-{delivery_digest[:8]}-{len(title)}-{hash(title) & 0xFFFFFF:06x}",
+            kind=kind,  # type: ignore[arg-type]
+            title=title,
+            summary=summary,
             body=normalized_body,
+            agent=agent,
+            created_at=await asyncio.to_thread(lambda: __import__("datetime").datetime.now().astimezone().isoformat()),
+            change_id=change_id,
+            delivery_digest=delivery_digest,  # type: ignore[arg-type]
+            target_node_id=target_node_id,
+            job_ids=tuple(job_ids or ()),
+            options=parsed_options,
+            evidence=evidence,
+            resume_condition=resume_condition,
         )
-    except KanbanError as exc:
-        _map_kanban_error(exc)
     except PydanticValidationError as exc:
         _raise_param_validation(str(exc))
-    payload = created.model_dump()
+
+    # Create via native runtime
+    try:
+        runtime = NativeRequestRuntime(loaded.revision, app_ctx.kanban_dir)
+        stored = await asyncio.to_thread(runtime.create_request, request)
+    except RequestConflictError:
+        _raise_tool_error("ERR_NATIVE_REQUEST_CONFLICT", "request identity already names different immutable content")
+    except RequestReferenceError:
+        _raise_tool_error("ERR_NATIVE_REQUEST_REFERENCE", "request references authority or work outside its revision")
+    except PydanticValidationError as exc:
+        _raise_param_validation(str(exc))
+
+    payload = stored.model_dump()
     payload["guidance"] = _append_norm_guidance([], changed=body_changed)
     return payload
 
@@ -546,35 +598,77 @@ async def create_request(  # noqa: PLR0913, PLR0917
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
 async def list_requests(
     ctx: Context,
+    change_id: str,
+    delivery_digest: str,
     status: str = "pending",
-    task_id: str | int | None = None,
 ) -> list[dict[str, object]]:
     """List request records by status and optional task filter."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    parsed_task_id = parse_task_id(task_id, field="task_id") if task_id is not None else None
+
+    # Load the change revision
     try:
-        records = await asyncio.to_thread(
-            app_ctx.engine.list_requests,
-            status,
-            task_id=parsed_task_id,
-        )
-    except KanbanError as exc:
-        _map_kanban_error(exc)
-    return [record.model_dump(exclude={"body"}) for record in records]
+        changes_dir = app_ctx.kanban_dir.parent / "changes"
+        loaded = load_change(changes_dir, change_id)
+        if loaded.revision is None:
+            _raise_tool_error("ERR_CHANGE_NOT_ADMITTED", "change is not admitted")
+        if loaded.revision.delivery_digest != delivery_digest:
+            digest_short = loaded.revision.delivery_digest[:16]
+            _raise_tool_error("ERR_DIGEST_MISMATCH", f"digest mismatch: expected {digest_short}...")
+    except FileNotFoundError:
+        _raise_tool_error("ERR_CHANGE_NOT_FOUND", f"change '{change_id}' not found")
+
+    # Validate status parameter
+    try:
+        parsed_status: RequestStatus | None = None
+        if status and status != "all":
+            parsed_status = RequestStatus(status)
+    except ValueError:
+        _raise_param_validation(f"status must be 'pending', 'resolved', or 'all', got '{status}'")
+
+    # List via native runtime
+    try:
+        runtime = NativeRequestRuntime(loaded.revision, app_ctx.kanban_dir)
+        if status == "all":
+            records = await asyncio.to_thread(runtime.list_requests, None)
+        else:
+            records = await asyncio.to_thread(runtime.list_requests, parsed_status)
+    except PydanticValidationError as exc:
+        _raise_param_validation(str(exc))
+
+    return [record.model_dump(exclude={"request": {"body"}}) for record in records]
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
 async def show_request(
     ctx: Context,
+    change_id: str,
+    delivery_digest: str,
     request_id: str,
 ) -> dict[str, object]:
     """Show a single request record with full detail."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    validated_request_id = _require_uuid4(request_id, field="request_id")
+
+    # Load the change revision
     try:
-        record = await asyncio.to_thread(app_ctx.engine.get_request, validated_request_id)
-    except KanbanError as exc:
-        _map_kanban_error(exc)
+        changes_dir = app_ctx.kanban_dir.parent / "changes"
+        loaded = load_change(changes_dir, change_id)
+        if loaded.revision is None:
+            _raise_tool_error("ERR_CHANGE_NOT_ADMITTED", "change is not admitted")
+        if loaded.revision.delivery_digest != delivery_digest:
+            digest_short = loaded.revision.delivery_digest[:16]
+            _raise_tool_error("ERR_DIGEST_MISMATCH", f"digest mismatch: expected {digest_short}...")
+    except FileNotFoundError:
+        _raise_tool_error("ERR_CHANGE_NOT_FOUND", f"change '{change_id}' not found")
+
+    # Show via native runtime
+    try:
+        runtime = NativeRequestRuntime(loaded.revision, app_ctx.kanban_dir)
+        record = await asyncio.to_thread(runtime.show_request, request_id)  # type: ignore[arg-type]
+    except RequestNotFoundError:
+        _raise_tool_error("ERR_NATIVE_REQUEST_NOT_FOUND", f"request '{request_id}' not found")
+    except PydanticValidationError as exc:
+        _raise_param_validation(str(exc))
+
     return record.model_dump()
 
 
