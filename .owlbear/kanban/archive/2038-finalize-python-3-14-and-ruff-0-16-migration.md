@@ -1,10 +1,10 @@
 ---
 id: 2038
 title: Finalize Python 3.14 and Ruff 0.16 migration
-status: collect
+status: archived
 priority: high
 created: 2026-07-25T03:08:35.587003+02:00
-updated: 2026-07-25T03:59:39.031054+02:00
+updated: 2026-07-25T04:02:18.073238+02:00
 tags:
   - config
   - tooling
@@ -26,7 +26,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 Implement the user-directed dependency migration closure in reverse order: commit the already-validated Python floor/config and Ruff source changes separately; align manual MegaLinter to CI v9.6 while retaining bundled Ruff versions; synchronize live and seeded hook suppressions; enable the useful D1xx missing-docstring rules while excluding D105 and D107. Preserve unrelated concurrent worktree changes.
@@ -87,3 +87,23 @@ PASS. No verification patch was required.
 ### Final Route
 - Advances to `collect`.
 
+[[2026-07-25T04:02:18+02:00]]
+## Collect Notes
+
+### Classification
+- leaf: task #2038 has no child tasks, no parent or aggregate intent, and no dependency gate.
+
+### Latest Verification Evidence
+- The newest `## Verify Notes` records `PASS` with no required follow-up.
+- All five ACs are mapped to the five isolated #2038 commits, direct configuration inspection, and focused normal-path proof.
+- Focused proof recorded: live/seed hook diff passed; `uv lock --check` passed with 166 packages; selected D1xx Ruff check passed; Ruff format check passed.
+- `verifier-challenger` returned `pass`; no verification patch or residual defect was recorded.
+
+### Closure State
+- `list_tasks(parent=2038)` returned no children.
+- Task dependency projection has no dependencies and no gate.
+- Pending and resolved structured request lookups for #2038 both returned no records.
+- No aggregate contract applies, so SHA-linked aggregate normal-path proof is not required. The verifier nevertheless recorded the five migration commits, ending at `eca60a7a1`.
+
+### Archive Rationale
+- Current leaf verification is PASS and all closure checks are clear. Archive as completed; no residual decision, request, or follow-up remains.
