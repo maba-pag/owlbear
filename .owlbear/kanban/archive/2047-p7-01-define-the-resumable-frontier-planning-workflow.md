@@ -1,10 +1,10 @@
 ---
 id: 2047
 title: 'P7-01: Define the resumable frontier planning workflow'
-status: collect
+status: archived
 priority: high
 created: 2026-07-25T15:09:25.843626+02:00
-updated: 2026-07-25T15:16:01.964305+02:00
+updated: 2026-07-25T15:16:36.488562+02:00
 tags:
   - phase-7
   - scope:agent
@@ -43,7 +43,7 @@ proof_bundle: existing+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Projection
@@ -93,3 +93,7 @@ Verified committed builder revision `39ce9cdaa509782d4577994a327bfa738fdb72d9` a
 - Applicable ecosystem regressions: 7 passed.
 - Mechanical PlannerSuccess-to-FinishPlanParams field comparison: pass.
 - `verifier-challenger`: pass; all AC, source fidelity, metadata compatibility, initial/reconciliation semantics, and lifecycle ownership are supported.
+
+[[2026-07-25T15:16:36+02:00]]
+## Collect Notes
+Archived after confirming committed builder revision `39ce9cdaa509782d4577994a327bfa738fdb72d9`, committed verifier record `7630324a20d400ca044f8b858491cc6433c93860`, direct evidence for all four AC, clean skill and lint validation, seven applicable ecosystem regressions, exact public-model field alignment, and both mandatory challenger passes. No adjacent runtime, agent, wiring, test, or authority scope was introduced.
