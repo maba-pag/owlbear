@@ -1,10 +1,10 @@
 ---
 id: 2057
 title: 'P9-03: Install the independent node acceptor workflow'
-status: build
+status: verify
 priority: high
 created: 2026-07-25T17:19:45.152185+02:00
-updated: 2026-07-25T17:19:45.152185+02:00
+updated: 2026-07-25T18:08:40.438167+02:00
 tags:
   - phase-9
   - scope:agent
@@ -51,3 +51,17 @@ Install one hard-read-only acceptor role, its exact-commit workflow, and determi
 In: workflow, agent declaration, write guard, orchestrator mapping, agent validation, and WIRING.
 
 Out: runtime/MCP semantics, auditor work, setup/seed propagation, and Cockpit.
+
+[[2026-07-25T18:08:40+02:00]]
+## Builder Notes
+- Added `w-node-acceptance` as the single procedure for one engine-started exact-commit accept job. It rehydrates only successful execution identity, engine checkout, admitted target, current plan, packet receipts, and exact-SHA proof; records allowed replacements and tracked state before/after every command; confines proof to checkout/scratch; and emits one complete `AcceptorSuccess`, `AcceptanceRejected`, or `AcceptanceBlocked`.
+- Added `acceptor.agent.md` with read/search/proof execution and read-only native queries only. It has no edit, commit, pick, start, finish, reject, release, recovery, request mutation, or approval tools; `deny-writes.py` guards edit APIs and mandatory tracked-state evidence rejects proof-command writes or later-cleaned authored changes.
+- Updated `w-orchestration` to dispatch exactly one successful accept start result, preserve execution identity, and map acceptor-owned fields unchanged to `finish_accept`, `reject_accept`, or `release_job`. The orchestrator does not execute proof, classify findings, plan correction, assemble evidence, alter replacements, or supplement dispositions.
+- Added the acceptor delegate and public rejection tool to `orchestrator.agent.md`; updated WIRING role, required-skill, delegation, and hard-control rows.
+- AC-1: workflow defines complete exact authority/receipt/proof rehydration, replacements, tracked-state evidence, and all three exhaustive dispositions.
+- AC-2: frontmatter plus workflow enforce no edit/lifecycle surface, hard edit guard, checkout/scratch proof, before/after tracked diff, and no approval of authored changes.
+- AC-3: orchestration explicitly forwards each success/rejection field unchanged and releases blocked work with unchanged identity; it processes one started job before replanning and owns none of the acceptance judgment.
+- Validation: all 18 agents pass `validate_agents.py`; all skills pass `validate_skills.py`; explicit lint over five owned files passed; 37 relevant ecosystem/write-guard tests passed; executable YAML/text inspection proved forbidden-tool absence, hook attachment, delegate/tool reachability, exact mapping language, and WIRING rows. The full live-registry ecosystem assertion remains independently broken by pre-existing `collector.agent.md` declarations for removed task tools and was excluded without changing that unrelated role. Builder challenger decision: pass.
+
+### Required Follow-up
+None.

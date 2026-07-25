@@ -5,10 +5,11 @@ argument-hint: "Orchestrate all eligible work"
 user-invocable: true
 disable-model-invocation: true
 model: GPT-5.6 Terra (copilot)
-tools: [vscode/toolSearch, read/readFile, agent, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/pick_tasks, ob-kanban/pick_jobs, ob-kanban/start_job, ob-kanban/finish_plan, ob-kanban/finish_build, ob-kanban/finish_accept, ob-kanban/finish_audit, ob-kanban/release_job, ob-kanban/recover_expired_claims]
+tools: [vscode/toolSearch, read/readFile, agent, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/pick_tasks, ob-kanban/pick_jobs, ob-kanban/start_job, ob-kanban/finish_plan, ob-kanban/finish_build, ob-kanban/finish_accept, ob-kanban/reject_accept, ob-kanban/finish_audit, ob-kanban/release_job, ob-kanban/recover_expired_claims]
 agents:
   - planner
   - builder
+  - acceptor
   - verifier
   - collector
   - memory-curator
@@ -45,6 +46,7 @@ results, recovery, and replanning; never bridge native jobs to task state or com
 |-------|------|---------|
 | planner | Engine-selected native `plan` job in explicit IF-015 mode | Serialized successful `start_job` result only |
 | builder | Build phase task, or engine-selected native `build` job in explicit IF-015 mode | Task ID, or serialized successful `start_job` result only |
+| acceptor | Engine-selected native `accept` job in explicit IF-015 mode | Serialized successful `start_job` result with engine checkout only |
 | verifier | Verify phase tasks | Dispatched mechanically per `pick_tasks` |
 | collector | Collect phase tasks | Dispatched mechanically per `pick_tasks` |
 | memory-curator | Every 10th cycle housekeeping — periodic curation, no task ID | `Curate: Periodic curation` |

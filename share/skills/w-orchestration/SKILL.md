@@ -22,7 +22,8 @@ one returned entry, dispatch only its assigned profile, and pattern-match its st
 The profile-specific success object selects the matching `finish_plan`, `finish_build`,
 `finish_accept`, or `finish_audit`;
 `RateLimited` selects `release_job`; `Crash` selects strict-expiry `recover_expired_claims`. Then obtain
-a fresh plan. Do not route by prose or bridge native jobs to task lifecycle state.
+a fresh plan. Each profile processes exactly one started job and stops. Do not route by prose or
+bridge native jobs to task lifecycle state.
 
 For an engine-selected `planner`, dispatch `runSubagent(agentName="planner")` with only the complete
 successful `start_job` result serialized as its prompt. Pattern-match one exact disposition:
@@ -60,10 +61,28 @@ successful `start_job` result serialized as its prompt. Pattern-match one exact 
 Malformed builder output is an unstructured return and follows crash recovery. The orchestrator
 never reviews, repairs, commits, classifies findings, or assembles build evidence itself.
 
+For an engine-selected `acceptor`, dispatch `runSubagent(agentName="acceptor")` with only the complete
+successful `start_job` result, including the engine checkout, serialized as its prompt. Pattern-match
+one exact disposition:
+
+- `AcceptorSuccess`: call `finish_accept` with the unchanged change, job, attempt, claim, actor, and
+   process identity from the started job, an orchestrator-owned completion timestamp, and the returned
+   `receipt_id`, `code_revision`, `evidence`, `evidence_ids`, `impact_closure`, and
+   `reconciliation_plan_job_ids`. Forward every returned field unchanged.
+- `AcceptanceRejected`: call `reject_accept` with the unchanged active identity, an orchestrator-owned
+   rejection timestamp, and the returned `detail`, `evidence_ids`, `findings`, and `invalidation`.
+   Forward every returned field unchanged.
+- `AcceptanceBlocked`: call `release_job` with only the unchanged active identity and an
+   orchestrator-owned release timestamp, halt native mode, and report the returned target and finding.
+
+Malformed acceptor output is an unstructured return and follows crash recovery. The orchestrator
+never executes acceptance proof, classifies findings, plans corrective routes, assembles evidence,
+alters replacements, or supplements a disposition.
+
 Before `start_job`, resolve the selected profile against the installed subagent allowlist. If it is unavailable,
 report the profile and halt native mode without claiming, running, releasing, or mutating legacy task state.
 The native `planner` profile is valid only in this explicit mode; routine `pick_tasks` shape work remains
-user-facing through `/shape`. Do not add acceptor or auditor role bodies here.
+user-facing through `/shape`. Role bodies remain in their owning agent and workflow files.
 
 For `accept` and `audit`, `start_job` returns the engine-owned exact-commit checkout context. The orchestrator
 does not materialize or clean it independently; finish, release, and recovery own checkout cleanup.
