@@ -1,10 +1,10 @@
 ---
 id: 2041
 title: 'P5-02R1: Reserve globally monotonic native job identities'
-status: collect
+status: archived
 priority: high
 created: 2026-07-25T12:56:10.644283+02:00
-updated: 2026-07-25T13:22:19.333537+02:00
+updated: 2026-07-25T13:23:12.572209+02:00
 tags:
   - phase-5
   - scope:kanban
@@ -37,7 +37,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Projection
@@ -58,3 +58,6 @@ Builder complete. Added JobStore.reserve_job_ids(count), strict native job-seque
 
 [[2026-07-25T13:22:19+02:00]]
 Independent verification PASS at builder SHA 2f00e7b67542c6d2d25cfc4b2c09aa06fbd39072. Inspected exact committed diff and ownership. AC proof: empty/create and existing/replacement same-state reservations conflict after one commits; fresh reservations advance; active/archive/sequence maxima prevent reuse; malformed YAML, non-positive sequence, and unsafe symlink root return stable typed errors without byte mutation. Verification commands: allocator + RuntimeTransaction suites 44 passed (2 existing fork deprecation warnings); focused lint passed; editor diagnostics clean. verifier-challenger decision: pass, no problem; recommendation: advance to collect.
+
+[[2026-07-25T13:23:12+02:00]]
+Collection complete. Builder SHA 2f00e7b67542c6d2d25cfc4b2c09aa06fbd39072 is an ancestor of current HEAD 4fc5bbc77d462f7c33d143e9504cdbee70ecab84; task-owned source/test paths are unchanged since the verified builder commit. Durable JobStore proof rerun: 27 passed. AC-1 through AC-4 remain satisfied.
