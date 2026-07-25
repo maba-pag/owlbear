@@ -1,10 +1,10 @@
 ---
 id: 2040
 title: 'P5-06: Complete and prove the native MCP control plane'
-status: shape
+status: build
 priority: high
 created: 2026-07-25T09:11:58.219921+02:00
-updated: 2026-07-25T12:43:49.711525+02:00
+updated: 2026-07-25T13:13:37.796570+02:00
 tags:
   - phase-5
   - scope:mcp-kanban
@@ -24,6 +24,7 @@ depends_on:
   - 2029
   - 2030
   - 2031
+  - 2042
 ac:
   - 'AC-1: With tool exclusions unset, the live FastMCP registry is `list_changes
     | show_change | validate_change | admit_change | list_jobs | show_job | pick_jobs
@@ -81,3 +82,51 @@ This cannot be repaired solely inside #2040's MCP/test envelope without duplicat
 |---|-------------|--------------|-----------------|---------|----------|
 | 1 | #2040-AC3/admission-work-store-handoff | shaper | Create one core admission child packet, dependent on #2028 and gating #2040, whose transaction accepts the native work root and atomically publishes the admission receipt, generation, and one numeric plan `JobRecord` per delivery node across authority/work roots; exact replay, conflict, injected failure, and retry must preserve all-or-none state. | `serve/kanban/src/owlbear_kanban/admission_transaction.py`; `serve/kanban/tests/test_admission_transaction.py` | Public PROOF-011 segment returns 0 jobs after successful admission; design section 6 requires one initial plan job per node. |
 | 2 | #2040-AC3/admission-work-store-handoff | shaper | Keep #2040 scoped to MCP assembly: depend on the core packet, pass `app_ctx.kanban_dir` into the repaired transaction, and complete maintained PROOF-011 through request creation, job query/pick/start/completion, receipt/attempt/activity reads, and health without lower-boundary mutation shortcuts. | `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py`; `serve/mcp-kanban/tests/test_mcp_surface_contract.py`; `serve/mcp-kanban/tests/test_mcp_server.py` | Current first segment is a public failing test at the missing admission-to-work-store edge. |
+
+[[2026-07-25T13:13:37+02:00]]
+## Shape Notes
+Repair classification: prescribed split for recurring failure key `#2040-AC3/admission-work-store-handoff`. The admitted design already requires globally monotonic numeric job identities and one initial plan job per delivery node, so this repair changes neither product behavior nor #2040 acceptance meaning.
+
+The failure key is resolved by two ordered core packets. #2041 owns one `JobStore` reservation-participant API for contiguous globally monotonic identities in the flat work store. #2042 consumes that participant and owns one recoverable cross-root transaction that publishes the authority receipt and generation together with the work-store sequence and numeric plan jobs. #2040 depends on #2042 and remains limited to MCP assembly, error mapping, and public PROOF-011.
+
+### Repair Closure Map
+| Failure Key | Production Boundary | Current-Source Artifacts | Cheapest Disconfirming Check | Causal Proof / Negative Control | Executor |
+|---|---|---|---|---|---|
+| `#2040-AC3/admission-work-store-handoff` | Public `admit_change` followed by `list_jobs` through the assembled MCP adapter and graph-aware engine | `AdmissionTransaction`, `RuntimeTransaction`, `JobStore`, `DispatchRuntime`, `server.admit_change`, and `server.list_jobs` | Fresh copied authority plus temporary work root: admit current evidence, then count queried jobs | With #2042, returned generation identities select the persisted numeric records and query returns one plan job per graph node; bypassing #2042 reproduces the observed 0 records for 14 nodes | Core pytest and MCP pytest are installed and runnable through `uv run` |
+
+### Change Module Map
+| Module | Current Responsibility | Planned Change | Interface Impact | Owner |
+|---|---|---|---|---|
+| `serve/kanban/src/owlbear_kanban/jobs.py` | Flat active/archive numeric job storage and transactional job participants | Add reservation participant and native sequence validation | New core API; no MCP registration | #2041 |
+| `serve/kanban/src/owlbear_kanban/admission_transaction.py` | Immutable admission receipt and generation publication | Accept work root, consume reservation, publish sequence and plan jobs in one cross-root transaction | Existing admission constructor/call contract changes | #2042 |
+| `serve/kanban/src/owlbear_kanban/runtime_transaction.py` | Recoverable multi-root OCC publication | Reuse unchanged unless a concrete local defect is exposed | None expected | Current source authority |
+| `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py` | FastMCP transport and runtime assembly | Pass work root, retain JSON evidence normalization, expose only 22 native tools | Public registry narrowed to IF-010 | #2040 |
+| `serve/mcp-kanban/tests/test_mcp_surface_contract.py` | Maintained assembled registry and IF-015 proof | Complete causal PROOF-011 through admission, request, lifecycle, evidence, and health | Durable public-boundary proof | #2040 |
+
+### Product Invariant Map
+| Product Invariant | Owner | Normal Boundary | Proof / Allowed Replacement |
+|---|---|---|---|
+| Native job identities remain globally monotonic across active and archived work | #2041 | `JobStore` reservation plus `RuntimeTransaction` commit | Temporary work root; no allocator mock |
+| Admission publishes authority and initial work as one recoverable operation | #2042 | `AdmissionTransaction.validate_and_admit` | Copied authority and temporary work root; no publication shortcut |
+| The deployed control plane is the exact 22-tool native IF-010 surface | #2040 | Live FastMCP registry | Lower persistence may be temporary |
+| Public admission causally feeds request and job lifecycle operations | #2040 | Maintained PROOF-011 through exported MCP functions | Authority, work, and repository stores may be temporary; MCP functions and graph-aware engine remain real |
+
+### Dependency Closure Map
+| Task | Load-Bearing Input / Participant | Producer / Authority | Required Predecessor |
+|---|---|---|---|
+| #2041 | `JobStore`, active/archive records, `TransactionParticipant`, OCC replacement | Current `jobs.py` and `runtime_transaction.py` | #2028 |
+| #2042 | Reservation IDs and sequence participant | #2041 AC-1 through AC-4 | #2041 |
+| #2042 | Receipt/generation participants and multi-root recovery | #2028 plus current `AdmissionTransaction` / `RuntimeTransaction` | #2028 |
+| #2040 | Atomic admission-created numeric jobs | #2042 AC-1 through AC-4 | #2042 |
+| #2040 | Native query, request, receipt, history, health, and IF-015 operations | Archived #2029, #2030, #2031 and retained current source | #2029, #2030, #2031 |
+
+### Scenario Closure Map
+| Task | Risk Boundary | Input / State Classes | Failure / Recovery / Race Classes | AC |
+|---|---|---|---|---|
+| #2041 | Sequence reservation | Empty; active maximum; archive maximum; higher sequence | Malformed/non-positive sequence; unsafe path; stale competing reservation | AC-1 through AC-4 |
+| #2042 | Cross-root admission | Admitted; non-admitted; exact replay; explicit IDs; automatic IDs | Changed evidence; explicit collision; one stale auto-allocation retry; failure before/after publication and before manifest cleanup | AC-1 through AC-4 |
+| #2040 | Public control plane | Normal inspection/admission/request/lifecycle/evidence/health journey | Malformed parameter; unknown identity; stale authority; request/admission conflict; transaction failure | AC-1 through AC-4 |
+
+Board audit: #2041 is build-ready behind archived #2028. #2042 is in build and dependency-blocked on #2041. #2040 now depends on #2042 and routes to dependency-blocked build; `dep_status` prevents dispatch until the core chain archives. The revised graph passed shaper challenge after the original reconsideration exposed the missing global allocator owner. A later lifecycle objection was reconsidered and passed under the board's dependency-blocked build semantics.
+
+Existing uncommitted #2040 changes in `server.py`, `test_mcp_surface_contract.py`, and `test_mcp_server.py` are adopted as task-conforming candidate work: exact 22-tool registry removal, JSON-mode evidence normalization, and the causal PROOF-011 probe. They remain outside this shaping commit and must be revalidated against #2042 rather than discarded or treated as completed proof.
