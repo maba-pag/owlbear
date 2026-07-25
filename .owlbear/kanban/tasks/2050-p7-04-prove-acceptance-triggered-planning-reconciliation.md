@@ -1,10 +1,10 @@
 ---
 id: 2050
 title: 'P7-04: Prove acceptance-triggered planning reconciliation'
-status: build
+status: verify
 priority: high
 created: 2026-07-25T15:09:49.416616+02:00
-updated: 2026-07-25T15:09:49.416616+02:00
+updated: 2026-07-25T15:47:27.695520+02:00
 tags:
   - phase-7
   - scope:test
@@ -56,3 +56,30 @@ In: shipped planner contract over real native runtime transactions and public to
 Out: new runtime semantics, acceptance implementation, planner workflow changes, setup/seed work, and unrelated invalidation classes.
 
 Proof guidance: exercise the current `finish_accept`, reconciliation plan, `finish_plan`, readiness, and invalidation owners; direct store mutation cannot replace the claimed lifecycle boundary.
+
+[[2026-07-25T15:47:27+02:00]]
+## Builder Notes
+
+DONE. Adopted and completed the interrupted #2050 diff within the shaped envelope.
+
+### Changed Files
+- `serve/mcp-kanban/tests/test_planner_interaction.py`: added the maintained acceptance-triggered reconciliation and invalidation scenario through shipped planner artifacts, public MCP lifecycle tools, real native runtime transactions, and the existing corrective invalidation owner.
+- `serve/kanban/src/owlbear_kanban/native_runtime.py`: supplied the current node-plan token to the existing OCC replacement path so reconciliation can atomically publish superseding plans.
+- `serve/kanban/src/owlbear_kanban/receipt.py`: canonicalized immutable receipt evidence before node-plan digest hashing.
+
+### AC Evidence
+- AC-1: the assembled scenario proves `finish_accept` creates the completed DN-002 dependent reconciliation job and releases the still-active DN-003 plan identity; old DN-002 build 17 is blocked by reconciliation job 19.
+- AC-2: engine-picked job 19 is dispatched through the shipped planner contract with the predecessor accept receipt/evidence, publishes a distinct digest and predecessor receipt ID, diagnoses old build 17 with `ERR_RECEIPT_NODE_PLAN_DIGEST_STALE`, and starts new build 20.
+- AC-3: corrective invalidation of the predecessor accept stales the reconciled receipt and jobs 19/20/21 while DN-009 plan and receipt bytes remain identical.
+- AC-4: the two maintained PROOF-005 scenarios jointly cover initial topology, atomic publication/replay and invalid-next-node isolation, accepted-evidence fold-in, build blocking, superseding publication, and predecessor-accept invalidation through real boundaries.
+
+### Validation
+- Exact reconciliation scenario: 1 passed.
+- Complete planner interaction module: 2 passed.
+- Complete `serve/mcp-kanban/tests`: 69 passed.
+- Native runtime, dispatch, invalidation, receipt, and node-plan storage suites: 161 passed.
+- Ruff check and format: clean for all three changed Python files.
+- VS Code diagnostics: no errors in changed files.
+- Path-scoped pre-commit: all applicable hooks passed.
+- Live modular-delivery digest remains `3f6c656289911320bb5e7faf37b5e86ffa8511e729ade201a03a19913e33d990`.
+- Builder challenger: `pass`; independently reran the assembled scenarios, MCP suite, and static checks and found the runtime repairs narrow and required.

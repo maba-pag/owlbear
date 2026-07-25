@@ -13,11 +13,18 @@ import yaml
 from ruamel.yaml import YAML
 
 from owlbear_kanban import (
+    CorrectiveRouteRequest,
     DispatchRuntime,
+    FindingStore,
     FinishJobDiagnosticCode,
+    InvalidationRequest,
+    JobDisposition,
     JobStore,
     NativeRuntime,
+    ReceiptStore,
+    StartJobDiagnosticCode,
     load_change,
+    plan_corrective_route,
 )
 from owlbear_kanban.change import ChangeRevision
 from owlbear_mcp_kanban import server
@@ -68,6 +75,17 @@ class _Scenario:
     context: MagicMock
     revision: ChangeRevision
     topology: tuple[str, ...]
+    native: NativeRuntime
+
+
+@dataclass(frozen=True)
+class _PlanPublication:
+    attempt: int
+    receipt_id: str
+    next_job_id: int
+    claimed_at: str
+    finished_at: str
+    predecessor_receipt_id: str | None = None
 
 
 def _copy_change(tmp_path: Path):
@@ -93,20 +111,18 @@ def _copy_change(tmp_path: Path):
     return change_dir, loaded.revision
 
 
-def _context(tmp_path: Path, revision) -> tuple[Path, MagicMock]:
+def _context(tmp_path: Path, revision) -> tuple[Path, MagicMock, NativeRuntime]:
     board = tmp_path / "kanban"
     board.mkdir()
     (board / "config.yml").write_text(_CONFIG_YAML, encoding="utf-8")
     (board / "tasks").mkdir()
     (board / "archive").mkdir()
     app_context = AppContext(engine=server.KanbanEngine(board), kanban_dir=board)
-    app_context.dispatch_runtimes[revision.change_id] = DispatchRuntime(
-        NativeRuntime(revision, board, _History(), timedelta(minutes=1)),
-        board,
-    )
+    native = NativeRuntime(revision, board, _History(), timedelta(minutes=1))
+    app_context.dispatch_runtimes[revision.change_id] = DispatchRuntime(native, board)
     context = MagicMock()
     context.request_context.lifespan_context = app_context
-    return board, context
+    return board, context, native
 
 
 def _evidence(revision) -> dict[str, object]:
@@ -387,11 +403,161 @@ async def _reject_invalid_next_node(
     assert all(content == after_invalid_finish[path] for path, content in first_node_publication.items())
 
 
+async def _publish_selected_plan(
+    scenario: _Scenario,
+    entry,
+    publication: _PlanPublication,
+):
+    start_arguments = _start_arguments(entry.job_id, publication.attempt, publication.claimed_at)
+    started = await server.start_job(scenario.context, **start_arguments)
+    success = _dispatch_shipped_planner(
+        scenario.revision,
+        started,
+        receipt_id=publication.receipt_id,
+        next_job_id=publication.next_job_id,
+    )
+    if publication.predecessor_receipt_id is not None:
+        predecessor = await server.show_receipt(
+            scenario.context,
+            change_id=_CHANGE_ID,
+            receipt_id=publication.predecessor_receipt_id,
+        )
+        acceptance = {
+            "receipt_id": predecessor.receipt_id,
+            "target_node_id": predecessor.payload["target_node_id"],
+            "evidence": predecessor.payload["evidence"],
+        }
+        success["evidence"]["predecessor_acceptance"] = acceptance
+        success["node_plan"]["packets"][0]["predecessor_acceptance"] = acceptance
+        workflow = (_REPO_ROOT / "share" / "skills" / "w-frontier-planning" / "SKILL.md").read_text(encoding="utf-8")
+        assert "consumes the current predecessor accept receipts and their" in workflow
+        assert "implementation evidence" in workflow
+    result = await server.finish_plan(
+        scenario.context,
+        **_finish_identity(start_arguments),
+        finished_at=publication.finished_at,
+        **success,
+    )
+    assert result.diagnostic is None
+    assert result.receipt is not None
+    return result, success
+
+
+async def _finish_predecessor_build(
+    scenario: _Scenario,
+    job_id: int,
+    closure: dict[str, object],
+    evidence: dict[str, object],
+) -> None:
+    start_arguments = _start_arguments(job_id, 4, "2026-07-25T00:07:00Z")
+    started = await server.start_job(scenario.context, **start_arguments)
+    assert started.diagnostic is None
+    result = await server.finish_build(
+        scenario.context,
+        **_finish_identity(start_arguments),
+        finished_at="2026-07-25T00:08:00Z",
+        receipt_id="build-proof-005-predecessor",
+        code_revision=_CODE_REVISION,
+        evidence=evidence,
+        evidence_ids=("build-proof-005-predecessor-evidence",),
+        impact_closure=closure,
+    )
+    assert result.diagnostic is None
+
+
+async def _accept_predecessor(scenario: _Scenario, job_id: int, reconciliation_job_ids: tuple[int, ...]):
+    start_arguments = _start_arguments(job_id, 5, "2026-07-25T00:09:00Z")
+    started = await server.start_job(scenario.context, **start_arguments)
+    assert started.diagnostic is None
+    target = scenario.revision.resolve("DN-001")
+    proof = scenario.revision.resolve(target.proof)
+    result = await server.finish_accept(
+        scenario.context,
+        **_finish_identity(start_arguments),
+        finished_at="2026-07-25T00:10:00Z",
+        receipt_id="accept-proof-005-predecessor",
+        code_revision=_CODE_REVISION,
+        evidence={
+            "methods": list(proof.method),
+            "accepted_implementation": ["DN-001 implementation evidence"],
+        },
+        evidence_ids=("accept-proof-005-predecessor-evidence",),
+        reconciliation_plan_job_ids=reconciliation_job_ids,
+    )
+    assert result.diagnostic is None
+    assert result.receipt is not None
+    return result.receipt
+
+
+def _invalidate_predecessor_acceptance(
+    scenario: _Scenario,
+    *,
+    accept_receipt_id: str,
+    reconciled_receipt_id: str,
+    disjoint_paths: tuple[Path, Path],
+) -> None:
+    finding_id = "finding-proof-005-predecessor"
+    finding = FindingStore(scenario.board).create(
+        finding_id,
+        {
+            "schema_version": 1,
+            "finding_id": finding_id,
+            "source_attempt_id": "attempt-005",
+            "source_job_id": 16,
+            "change_id": _CHANGE_ID,
+            "delivery_digest": scenario.revision.delivery_digest,
+            "target_kind": "receipt",
+            "target_id": accept_receipt_id,
+            "finding_class": "implementation-defect",
+            "detail": "accepted predecessor evidence is invalid",
+            "created_at": "2026-07-25T00:15:00Z",
+        },
+    )
+    assert finding.finding is not None
+    route = plan_corrective_route(
+        CorrectiveRouteRequest(
+            finding_id=finding_id,
+            finding_class="implementation-defect",
+            target="node-integration",
+            target_node_ids=("DN-001",),
+        )
+    )
+    disjoint_before = {path: path.read_bytes() for path in disjoint_paths}
+    result = scenario.native.invalidate(
+        InvalidationRequest(
+            invalidation_id="invalidation-proof-005-predecessor",
+            supersession_receipt_id="supersession-proof-005-predecessor",
+            invalidated_receipt_ids=(accept_receipt_id,),
+            routes=(route,),
+            corrective_job_ids=(50,),
+            issued_at="2026-07-25T00:16:00Z",
+            code_revision=_CODE_REVISION,
+            priority=9,
+        )
+    )
+
+    assert result.outcome is not None
+    assert accept_receipt_id in result.outcome.affected_receipt_ids
+    assert reconciled_receipt_id in result.outcome.affected_receipt_ids
+    assert {19, 20, 21}.issubset(result.outcome.affected_job_ids)
+    assert JobStore(scenario.board).read(20).job.disposition is JobDisposition.SUPERSEDED
+    assert (
+        not ReceiptStore(scenario.revision)
+        .evaluate_currentness(
+            reconciled_receipt_id,
+            _History(),
+            _CODE_REVISION,
+        )
+        .current
+    )
+    assert all(path.read_bytes() == content for path, content in disjoint_before.items())
+
+
 @pytest.mark.asyncio
 async def test_initial_frontier_plans_one_node_atomically_and_isolates_invalid_next_node(tmp_path: Path) -> None:
     change_dir, revision = _copy_change(tmp_path)
-    board, context = _context(tmp_path, revision)
-    scenario = _Scenario(change_dir, board, context, revision, tuple(_admitted_topology(revision)))
+    board, context, native = _context(tmp_path, revision)
+    scenario = _Scenario(change_dir, board, context, revision, tuple(_admitted_topology(revision)), native)
     admitted_jobs, initial_entries, _store = await _admit_initial_frontier(scenario)
     next_job_id, remaining_plans, first_node_publication = await _publish_first_node(
         scenario,
@@ -403,4 +569,122 @@ async def test_initial_frontier_plans_one_node_atomically_and_isolates_invalid_n
         next_job_id,
         remaining_plans[0],
         first_node_publication,
+    )
+
+
+@pytest.mark.asyncio
+async def test_acceptance_reconciles_dependent_plan_and_invalidation_stales_its_closure(tmp_path: Path) -> None:
+    change_dir, revision = _copy_change(tmp_path)
+    board, context, native = _context(tmp_path, revision)
+    scenario = _Scenario(change_dir, board, context, revision, tuple(_admitted_topology(revision)), native)
+    _admitted_jobs, entries, store = await _admit_initial_frontier(scenario)
+    entries_by_target = {store.read(entry.job_id).job.target_node_id: entry for entry in entries}
+
+    predecessor_plan, predecessor_success = await _publish_selected_plan(
+        scenario,
+        entries_by_target["DN-001"],
+        _PlanPublication(
+            attempt=1,
+            receipt_id="plan-proof-005-predecessor",
+            next_job_id=15,
+            claimed_at="2026-07-25T00:01:00Z",
+            finished_at="2026-07-25T00:02:00Z",
+        ),
+    )
+    dependent_plan, _dependent_success = await _publish_selected_plan(
+        scenario,
+        entries_by_target["DN-002"],
+        _PlanPublication(
+            attempt=2,
+            receipt_id="plan-proof-005-dependent-initial",
+            next_job_id=17,
+            claimed_at="2026-07-25T00:03:00Z",
+            finished_at="2026-07-25T00:04:00Z",
+        ),
+    )
+    disjoint_plan, _disjoint_success = await _publish_selected_plan(
+        scenario,
+        entries_by_target["DN-009"],
+        _PlanPublication(
+            attempt=3,
+            receipt_id="plan-proof-005-disjoint",
+            next_job_id=22,
+            claimed_at="2026-07-25T00:05:00Z",
+            finished_at="2026-07-25T00:06:00Z",
+        ),
+    )
+    await _finish_predecessor_build(
+        scenario,
+        15,
+        predecessor_success["impact_closure"],
+        predecessor_success["evidence"],
+    )
+    direct_dependents = tuple(node.id for node in revision.graph.nodes if "DN-001" in node.dependencies)
+    assert direct_dependents[0] == "DN-002"
+    reconciliation_job_ids = (19, *(entries_by_target[node_id].job_id for node_id in direct_dependents[1:]))
+    accept_receipt = await _accept_predecessor(scenario, 16, reconciliation_job_ids)
+
+    reconciliation_job = store.read(19).job
+    assert reconciliation_job.target_node_id == "DN-002"
+    assert reconciliation_job.predecessor_job_ids == (16,)
+    blocked = await server.start_job(
+        scenario.context,
+        **_start_arguments(17, 6, "2026-07-25T00:11:00Z"),
+    )
+    assert blocked.diagnostic is not None
+    assert blocked.diagnostic.code is StartJobDiagnosticCode.PREDECESSOR_INVALID
+    assert blocked.diagnostic.target == "19"
+
+    picked = await server.pick_jobs(
+        scenario.context,
+        change_id=_CHANGE_ID,
+        candidate_revision=_CODE_REVISION,
+        wave_size=len(revision.graph.nodes),
+    )
+    reconciliation_entry = next(entry for wave in picked.waves for entry in wave if entry.job_id == 19)
+    reconciled_plan, reconciled_success = await _publish_selected_plan(
+        scenario,
+        reconciliation_entry,
+        _PlanPublication(
+            attempt=7,
+            receipt_id="plan-proof-005-dependent-reconciled",
+            next_job_id=20,
+            claimed_at="2026-07-25T00:12:00Z",
+            finished_at="2026-07-25T00:13:00Z",
+            predecessor_receipt_id=accept_receipt.receipt_id,
+        ),
+    )
+
+    assert reconciled_plan.receipt is not None
+    assert reconciled_plan.receipt.payload["predecessor_receipt_ids"] == (accept_receipt.receipt_id,)
+    assert reconciled_success["evidence"]["predecessor_acceptance"]["evidence"] == accept_receipt.payload["evidence"]
+    assert reconciled_plan.receipt.payload["node_plan_digest"] != dependent_plan.receipt.payload["node_plan_digest"]
+    stale = await server.start_job(
+        scenario.context,
+        **_start_arguments(17, 8, "2026-07-25T00:14:00Z"),
+    )
+    assert stale.diagnostic is not None
+    assert stale.diagnostic.code is StartJobDiagnosticCode.AUTHORITY_STALE
+    assert stale.diagnostic.lower_code == "ERR_RECEIPT_NODE_PLAN_DIGEST_STALE"
+
+    replacement_start_arguments = _start_arguments(20, 9, "2026-07-25T00:14:30Z")
+    replacement_started = await server.start_job(scenario.context, **replacement_start_arguments)
+    assert replacement_started.diagnostic is None
+    released = await server.release_job(
+        scenario.context,
+        **_finish_identity(replacement_start_arguments),
+        released_at="2026-07-25T00:14:45Z",
+    )
+    assert released.diagnostic is None
+
+    assert predecessor_plan.receipt is not None
+    assert disjoint_plan.receipt is not None
+    _invalidate_predecessor_acceptance(
+        scenario,
+        accept_receipt_id=accept_receipt.receipt_id,
+        reconciled_receipt_id=reconciled_plan.receipt.receipt_id,
+        disjoint_paths=(
+            change_dir / "plans" / "DN-009.yaml",
+            change_dir / "receipts" / f"{disjoint_plan.receipt.receipt_id}.yaml",
+        ),
     )

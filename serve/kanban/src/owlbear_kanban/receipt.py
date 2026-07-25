@@ -474,7 +474,13 @@ def compute_node_plan_digest(
         "node": node.model_dump(mode="json"),
         "node_plan": node_plan if node_plan is not None else revision.read_node_plan(target),
     }
-    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
+    encoded = json.dumps(
+        _to_json_value(payload),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    )
     return hashlib.sha256(encoded.encode()).hexdigest()
 
 

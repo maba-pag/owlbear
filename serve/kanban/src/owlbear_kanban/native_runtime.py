@@ -1358,7 +1358,9 @@ class NativeRuntime:
         return None
 
     def _node_plan_participant(self, target: str, node_plan: Mapping[str, object]) -> ReplacementTransactionParticipant:
-        return NodePlanStore(self._revision).prepare(target, node_plan)
+        store = NodePlanStore(self._revision)
+        current = store.read(target)
+        return store.prepare(target, node_plan, expected_token=current.token if current is not None else None)
 
     def _finish_closure(  # noqa: PLR0911
         self, job: JobRecord, request: FinishJobRequest
