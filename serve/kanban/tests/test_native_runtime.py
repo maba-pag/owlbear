@@ -122,8 +122,14 @@ def _request() -> StartJobRequest:
     )
 
 
-def _runtime(revision, work_root: Path, *, claim_expiry: timedelta = timedelta(minutes=5)) -> NativeRuntime:
-    return NativeRuntime(revision, work_root, _History(), claim_expiry)
+def _runtime(
+    revision,
+    work_root: Path,
+    *,
+    claim_expiry: timedelta = timedelta(minutes=5),
+    history=None,
+) -> NativeRuntime:
+    return NativeRuntime(revision, work_root, history if history is not None else _History(), claim_expiry)
 
 
 def _copied_revision(tmp_path: Path, *, clean_receipts: bool = False):
@@ -271,7 +277,12 @@ def _reject_request(revision, start: StartJobRequest) -> RejectAcceptRequest:
     )
 
 
-def _terminal_accept_scenario(tmp_path: Path):
+def _terminal_accept_scenario(
+    tmp_path: Path,
+    *,
+    code_revision: str = "a" * 40,
+    history=None,
+):
     revision = _copied_revision(tmp_path, clean_receipts=True)
     work_root = tmp_path / "work"
     work_root.mkdir()
@@ -319,7 +330,7 @@ def _terminal_accept_scenario(tmp_path: Path):
             "node_plan_digest": node_plan_digest,
             "predecessor_receipt_ids": [],
             "evidence": {"methods": list(revision.resolve(node.proof).method)},
-            "code_revision": "a" * 40,
+            "code_revision": code_revision,
         }
         assert receipt_store.create(receipt_id, value).receipt is not None
         _materialize(
@@ -347,8 +358,15 @@ def _terminal_accept_scenario(tmp_path: Path):
             node_plan_digest=compute_node_plan_digest(revision, terminal.id),
         ),
     )
-    runtime = _runtime(revision, work_root)
-    start = _request().model_copy(update={"job_id": job_id, "attempt_id": "attempt-final", "claim_id": "claim-final"})
+    runtime = _runtime(revision, work_root, history=history)
+    start = _request().model_copy(
+        update={
+            "job_id": job_id,
+            "attempt_id": "attempt-final",
+            "claim_id": "claim-final",
+            "candidate_revision": code_revision,
+        }
+    )
     assert runtime.start_job(start).diagnostic is None
     request = FinishAcceptRequest(
         job_id=job_id,
@@ -358,7 +376,7 @@ def _terminal_accept_scenario(tmp_path: Path):
         process_id=start.process_id,
         finished_at="2026-07-24T01:00:00Z",
         receipt_id="accept-final",
-        code_revision="a" * 40,
+        code_revision=code_revision,
         evidence={"methods": list(revision.resolve(terminal.proof).method)},
         reconciliation_plan_job_ids=(),
     )

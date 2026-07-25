@@ -1,10 +1,10 @@
 ---
 id: 2064
 title: 'P10-05: Prove successful independent whole-change audit'
-status: verify
+status: collect
 priority: high
 created: 2026-07-25T19:53:45.800696+02:00
-updated: 2026-07-25T21:23:33.295033+02:00
+updated: 2026-07-25T21:33:12.652455+02:00
 tags:
   - phase-10
   - scope:test
@@ -75,3 +75,22 @@ Added one maintained public MCP/native assembled PROOF-008 success scenario in `
 - Builder challenger: pass; independently reran 12 public tests, 26 audit/accept runtime tests, Ruff, formatting, and diff checks.
 
 During review, the delegated draft was tightened to use current archived-job receipt authority, canonical runtime closure, and explicit archive/reader/event assertions.
+
+[[2026-07-25T21:33:12+02:00]]
+## Verify Notes
+
+PASS after two verifier-local test repairs.
+
+### Required Follow-up Closure
+- `AC-1/public-final-accept`: closed by `_finish_terminal_accept`, which invokes public `server.finish_accept`, asserts exactly one created audit job and replay equality, and binds public `pick_jobs` to that exact audit ID.
+- `AC-1+AC-2/real-Git-currentness`: closed by parameterizing `_terminal_accept_scenario` with optional candidate revision and history. This scenario supplies actual Git HEAD and `GitRepositoryHistory(Path.cwd())`, so seeded accept receipts, final acceptance, selection, start, and audit finish use production ancestry and changed-path checks rather than the permissive test history.
+
+### Verification
+- Real-history isolated scenario: 1 passed.
+- Both directly affected native and public MCP files: 57 passed.
+- Earlier assembled MCP/native/dispatch suite: 73 passed before the fixture parameterization; dispatch production behavior was unchanged.
+- Ruff, formatting, and diff checks: clean for both files.
+- Editor diagnostics: none.
+- Final verifier challenger: pass. It confirmed public lifecycle boundaries, real Git currentness, writer conflict, authority evidence, complete accepted receipt closure, canonical audit closure, archival, reader release, cleanup, and replay identity.
+
+Verifier changes are test-only and preserve deterministic defaults for existing native fixture callers.

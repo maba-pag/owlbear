@@ -38,7 +38,11 @@ from owlbear_kanban import (
 from owlbear_kanban.runtime_transaction import RuntimeTransaction, TransactionConflictError
 from owlbear_mcp_kanban import server
 from owlbear_mcp_kanban.server import AppContext
-from serve.kanban.tests.test_native_runtime import _active_audit_scenario, _reject_audit_request
+from serve.kanban.tests.test_native_runtime import (
+    _active_audit_scenario,
+    _reject_audit_request,
+    _terminal_accept_scenario,
+)
 
 from .test_mcp_surface_contract import _make_board
 
@@ -378,6 +382,16 @@ async def _assert_audit_blocks_writer(revision, board: Path, ctx, audit_job_id: 
     assert isinstance(conflict, DispatchDiagnostic)
     assert conflict.code is DispatchDiagnosticCode.WRITER_CONFLICT
     assert conflict.holder_job_ids == (audit_job_id,)
+
+
+async def _finish_terminal_accept(ctx, revision, accept_request) -> JobRecord:
+    fields = accept_request.model_dump(mode="python")
+    accepted = await server.finish_accept(ctx, change_id=revision.change_id, **fields)
+    replayed = await server.finish_accept(ctx, change_id=revision.change_id, **fields)
+    assert accepted.diagnostic is None
+    assert len(accepted.created_jobs) == 1
+    assert replayed == accepted
+    return accepted.created_jobs[0]
 
 
 def _acceptance_failure_disposition(revision, start: dict[str, object], case: tuple[object, ...]):
@@ -853,26 +867,20 @@ async def test_public_accept_rejection_runtime_failure_is_atomic(
 
 @pytest.mark.asyncio
 async def test_public_audit_success_closes_accepted_whole_change_and_replays(tmp_path: Path) -> None:
-    revision, board, native, first_start = _active_audit_scenario(tmp_path)
     repository = Path.cwd()
     commit = _git_head()
-    released = native.release_job(
-        ReleaseJobRequest(
-            job_id=first_start.job_id,
-            attempt_id=first_start.attempt_id,
-            claim_id=first_start.claim_id,
-            actor_id=first_start.actor_id,
-            process_id=first_start.process_id,
-            released_at="2026-07-24T01:01:30Z",
-        )
+    revision, board, native, accept_request, _predecessor_ids = _terminal_accept_scenario(
+        tmp_path,
+        code_revision=commit,
+        history=GitRepositoryHistory(repository),
     )
-    assert released.diagnostic is None
     checkouts = ProofCheckoutManager(repository, tmp_path / "proof-mcp")
     runtime = DispatchRuntime(native, board, checkouts)
     app_ctx = AppContext(engine=server.KanbanEngine(board), kanban_dir=board)
     app_ctx.dispatch_runtimes[revision.change_id] = runtime
     ctx = MagicMock()
     ctx.request_context.lifespan_context = app_ctx
+    audit_job_id = (await _finish_terminal_accept(ctx, revision, accept_request)).job_id
     picked = await server.pick_jobs(
         ctx,
         change_id=revision.change_id,
@@ -880,9 +888,7 @@ async def test_public_audit_success_closes_accepted_whole_change_and_replays(tmp
         wave_size=1,
     )
     selected = [entry for wave in picked.waves for entry in wave]
-    assert len(selected) == 1
-    assert selected[0].agent_profile == "auditor"
-    audit_job_id = selected[0].job_id
+    assert [(entry.job_id, entry.agent_profile) for entry in selected] == [(audit_job_id, "auditor")]
     audit_start = _start(audit_job_id, 6, commit)
     started = await server.start_job(ctx, **audit_start)
     assert isinstance(started, dict)
