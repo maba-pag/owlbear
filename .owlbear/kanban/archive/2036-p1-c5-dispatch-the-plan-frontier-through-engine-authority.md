@@ -1,10 +1,10 @@
 ---
 id: 2036
 title: 'P1-C5: Dispatch the plan frontier through engine authority'
-status: collect
+status: archived
 priority: high
 created: 2026-07-25T02:46:52.874110+02:00
-updated: 2026-07-25T08:51:59.356119+02:00
+updated: 2026-07-25T08:53:41.428194+02:00
 tags:
   - change:replace-delivery-pipeline
   - node:DN-004
@@ -38,7 +38,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Objective
@@ -147,3 +147,13 @@ Proof guidance: run dispatch topology/readiness/coordination checks and the asse
 - Patches applied by verifier: none.
 - Verifier-challenger result: `pass`. It confirmed the repaired PROOF-014 binds returned-disposition identity, selected lifecycle operation, observed MCP operation, terminal events, and unchanged pick count; it also confirmed the executable attempt-order bypass fails and the repair remains test-only.
 - Final route: PASS to collect.
+
+[[2026-07-25T08:53:41+02:00]]
+## Collect Notes
+- Classification: leaf. Task #2036 has no child tasks, aggregate title/tags, or aggregate collect contract; its parent #1968 is not mutated.
+- Current lifecycle evidence: newest `## Verify Notes` records PASS at `1af6e580b2685c02147baef07ed88f62577a2fe3`, reviewing implementation `ffd863aebf39636307fd59ddc319cff21d4aa948` and causal proof repair `514e8c584a2c1aac2a6d5ddc4ff598f331175ea9`. The prior `#2036-AC3/disposition-causality-negative-control` follow-up is explicitly closed; no later unresolved follow-up exists.
+- Invariant / AC closure: AC1 stable plan topology and admitted profiles plus AC2 writer/read coordination are covered by focused dispatch checks. AC3 is covered by the exact native MCP scenario, identity-bound returned disposition, one selected runner invocation, no-repick ledger, and executable attempt-order bypass which raises on a mismatched terminal operation. AC4 is covered by the mutation-free reconciliation gate check. AC5 is covered by direct `orchestrator.agent.md`, `w-orchestration`, and `share/WIRING.md` inspection, agent/skill validators, and ecosystem checks; consumers use `planner` / `finish_plan`, retain no native `shaper` profile or `finish_shape` allowlist.
+- Exact mapped change set: `ffd863aeb` changed the shaped dispatch runtime, focused runtime and MCP proof, `share/agents/orchestrator.agent.md`, `share/skills/w-orchestration/SKILL.md`, and `share/WIRING.md`; `514e8c584` strengthens only `serve/mcp-kanban/tests/test_mcp_surface_contract.py` and the task record. This aligns the WIRING, agent, and skill consumers with engine authority.
+- Proof evidence: exact positive and negative PROOF-014 scenarios passed (2); focused dispatch, MCP contract, and reconciliation checks passed (16); agent and skill validators passed; ecosystem/write-guard checks passed (58; three unrelated Python 3.16 deprecation warnings); scoped ruff and formatting checks plus Git patch checks passed. The verifier challenger returned `pass` for the repaired causal proof.
+- Dependency / request closure: dependency #2037 and prerequisite #2039 are archived `completed`; current dependency projection is `ok`. `list_requests` reports no pending or resolved structured requests for #2036.
+- Workspace custody: the only task-owned dirty path before archive was the claimed task record; unrelated worktree changes remain untouched. Archive rationale: all ACs, current follow-up, prerequisites, consumers, proof evidence, and challenger review are closed.
