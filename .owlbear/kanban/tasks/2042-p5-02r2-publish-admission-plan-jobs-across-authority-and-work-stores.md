@@ -1,10 +1,10 @@
 ---
 id: 2042
 title: 'P5-02R2: Publish admission plan jobs across authority and work stores'
-status: build
+status: verify
 priority: high
 created: 2026-07-25T12:56:17.755663+02:00
-updated: 2026-07-25T12:56:17.755663+02:00
+updated: 2026-07-25T13:31:56.509433+02:00
 tags:
   - phase-5
   - scope:kanban
@@ -52,3 +52,6 @@ In: cross-root transaction assembly, exact replay, allocation-conflict retry, ex
 Out: MCP transport/error mapping, dispatch semantics, later build/accept/audit job allocation, and authority editing.
 
 Proof guidance: exercise the core admission transaction across copied authority and a temporary work root; then run the downstream public PROOF-011 admission-to-job segment.
+
+[[2026-07-25T13:31:56+02:00]]
+Builder complete. AdmissionTransaction now accepts the work root, returns before mutation for non-admitted evidence, recovers only authority/work roots, checks exact receipt/generation/full-job replay before allocation, reserves omitted IDs via #2041, publishes receipt/generation/sequence/numeric jobs in one work-root transaction, retries one stale automatic reservation, and rejects explicit active/archive collisions. Proof: 10 focused admission scenarios passed; admission+allocator+transaction suites 54 passed; mapped kanban regression excluding the independently broken legacy-authority fixture file 1111 passed; focused lint and editor diagnostics clean. Public PROOF-011 now fails only at the planned #2040 server constructor wiring that has not yet passed app_ctx.kanban_dir. builder-challenger decision: pass; advance to verify and leave MCP assembly to #2040.
