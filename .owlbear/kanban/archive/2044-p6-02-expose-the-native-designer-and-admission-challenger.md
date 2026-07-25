@@ -1,10 +1,10 @@
 ---
 id: 2044
 title: 'P6-02: Expose the native designer and admission challenger'
-status: collect
+status: archived
 priority: high
 created: 2026-07-25T14:28:55.328794+02:00
-updated: 2026-07-25T14:43:48.180280+02:00
+updated: 2026-07-25T14:44:05.239644+02:00
 tags:
   - phase-6
   - scope:agent
@@ -42,7 +42,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Projection
@@ -95,3 +95,7 @@ Verified committed builder revision `c56e86ce843fd69a365cafe37ede3dc294feeaa4` a
 - Editor diagnostics — none for all five artifacts.
 - Known collector generic-tool live-registry mismatch is unrelated existing migration state outside this packet.
 - `verifier-challenger` — pass; no follow-up.
+
+[[2026-07-25T14:44:05+02:00]]
+## Collect Notes
+Archived after confirming committed builder revision `c56e86ce843fd69a365cafe37ede3dc294feeaa4`, verifier record `44f527cbc6844262d17d14764d2bb18175cf9c8e`, complete AC mappings, passing agent/skill validators, 57 applicable ecosystem and hard-guard regressions, clean diagnostics, and both mandatory challenger passes. The unrelated collector generic-tool registry mismatch remains outside this packet.
