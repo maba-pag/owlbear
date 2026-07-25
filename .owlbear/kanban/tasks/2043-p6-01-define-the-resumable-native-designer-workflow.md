@@ -1,10 +1,10 @@
 ---
 id: 2043
 title: 'P6-01: Define the resumable native designer workflow'
-status: build
+status: verify
 priority: high
 created: 2026-07-25T14:28:48.796665+02:00
-updated: 2026-07-25T14:28:48.796665+02:00
+updated: 2026-07-25T14:35:16.768921+02:00
 tags:
   - phase-6
   - scope:agent
@@ -56,3 +56,20 @@ In: the workflow skill and its direct loading contract.
 Out: agent and prompt wiring, runtime code, setup or seed changes, OpenSpec deletion, frontier planning, and product implementation.
 
 Proof guidance: inspect the assembled workflow against canonical admission models and public change-tool declarations; no model-response substitute proves this packet.
+
+[[2026-07-25T14:35:16+02:00]]
+## Builder Notes
+Implemented the canonical native Specification workflow in `share/skills/w-design-session/SKILL.md`; no agent, prompt, runtime, setup, seed, or durable-test surface changed.
+
+### AC Evidence
+- AC-1: Steps 1-2 route `/ideate` and `/design` to one `change_id`, require `show_change` plus all four semantic authority parts before mutation, preserve confirmed authority, and resume at the earliest unresolved gate.
+- AC-2: Steps 4-5 investigate repository facts through read-only evidence and permit exactly one `askQuestions` material decision with status quo, options, tradeoffs, risks, recommendation, and confidence before stopping.
+- AC-3: Steps 3-7 preserve Product Promise and accepted exclusions, canonical evidence states, corroborated qualified memory, adaptive architecture review, and complete modular obligations/contracts/nodes authority.
+- AC-4: Steps 8-9 require digest-bound challenge, baselines, structured evidence, validation, explicit approval, and a second successful validation before identical-evidence `admit_change`; every failed or stale gate keeps the draft and creates no jobs, while success records receipt, generation, and plan-job identities.
+
+### Validation
+- `uv run python .owlbear/scripts/validate_skills.py` — pass.
+- `git diff --check -- share/skills/w-design-session/SKILL.md` — pass.
+- Editor diagnostics — none.
+- `uv run pytest -q tests/test_agent_ecosystem_validation.py` — 7 passed; one unrelated live-registry failure because existing `collector.agent.md` declares generic task tools removed by archived DN-009. No failure references the new skill.
+- `builder-challenger` — pass; no findings.
