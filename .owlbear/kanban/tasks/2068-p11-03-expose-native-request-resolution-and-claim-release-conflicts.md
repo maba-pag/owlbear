@@ -1,10 +1,10 @@
 ---
 id: 2068
 title: 'P11-03: Expose native request resolution and claim release conflicts'
-status: build
+status: verify
 priority: high
 created: 2026-07-25T22:31:02.444553+02:00
-updated: 2026-07-25T22:31:02.444553+02:00
+updated: 2026-07-25T23:31:05.395969+02:00
 tags:
   - phase-11
   - scope:cockpit-backend
@@ -50,3 +50,29 @@ In: request resolution, claim release, strict payloads, replay, ownership and tr
 Out: start/finish/reject/invalidate controls, generic task transitions, SSE, frontend, cutover.
 
 Proof guidance: cross public TestClient routes; inject failures below the route/runtime boundary and compare complete store state.
+
+[[2026-07-25T23:31:05+02:00]]
+## Builder Notes
+DONE: Exposed strict intent-specific native request resolution and matching-identity claim release at the public FastAPI boundary for delivery digest `3f6c656289911320bb5e7faf37b5e86ffa8511e729ade201a03a19913e33d990`.
+
+Changed files:
+- `serve/cockpit/src/owlbear_cockpit/native_models.py`: strict digest, resolution, and release request bodies.
+- `serve/cockpit/src/owlbear_cockpit/native_http.py`: centralized stable 409 conflict envelopes with current authority and lower diagnostics.
+- `serve/cockpit/src/owlbear_cockpit/routes/native_controls.py`: request-resolution and claim-release routes over `NativeRequestRuntime` and `DispatchRuntime`.
+- `serve/cockpit/src/owlbear_cockpit/main.py`: native control router assembly.
+- `serve/kanban/src/owlbear_kanban/native_runtime.py`: canonical fail-closed terminal release diagnostic.
+- `tests/test_cockpit_native_controls.py`: durable public-route proof over real stores, coordination, Git history, and proof checkout.
+
+AC evidence:
+- AC-1: `uv run pytest -q tests/test_cockpit_native_controls.py` proves local resume, material design reentry, exact replay, changed-identity 409, and persisted current authority (8 passed total suite).
+- AC-2: the same public suite proves one release event, exact replay, coordination/checkout cleanup, and byte-for-byte preservation for non-owner, terminal, stale coordination, and injected transaction conflict. Focused canonical release regression passed (3 tests); builder challenger independently ran control plus native runtime suites (59 passed).
+- AC-3: public malformed-payload cases return 422 without state mutation; conflict assertions preserve code, detail, lower code, target, current holders, and current digest.
+
+Regression and quality:
+- `uv run pytest -q tests/test_cockpit_*`: 307 passed.
+- Mapped Kanban regression: 1139 passed, 10 unrelated existing failures: eight legacy `graph.yaml` fixtures conflict with intentional legacy-authority rejection and two stale tests import removed `owlbear_mcp_kanban.server.pick_tasks`.
+- `uv run --package owlbear-tools lint-all`: passed.
+- Editor diagnostics: clean.
+- Builder challenger: pass; scope, architecture, replay/atomicity proof, and durable-test rent accepted.
+
+Recalled builder memories were assessed in one batch before closure.

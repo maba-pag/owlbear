@@ -31,6 +31,7 @@ from owlbear_cockpit.routes.ideas import router as ideas_router
 from owlbear_cockpit.routes.memory import router as memory_router
 from owlbear_cockpit.routes.mutation import router as mutation_router
 from owlbear_cockpit.routes.native_changes import router as native_changes_router
+from owlbear_cockpit.routes.native_controls import router as native_controls_router
 from owlbear_cockpit.routes.native_work import router as native_work_router
 from owlbear_cockpit.routes.read import router as read_router
 from owlbear_cockpit.routes.requests import router as requests_router
@@ -54,6 +55,7 @@ app.include_router(requests_router, prefix="/api")
 app.include_router(events_router, prefix="/api")
 app.include_router(native_changes_router, prefix="/api")
 app.include_router(native_work_router, prefix="/api")
+app.include_router(native_controls_router, prefix="/api")
 app.include_router(ideas_router, prefix="/api")
 app.include_router(memory_router, prefix="/api")
 

@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from owlbear_kanban import ChangeHealthFinding, ImpactClosure, JobRecord, ReceiptRecord
+
+_DeliveryDigest = Annotated[str, StringConstraints(strict=True, pattern=r"^[0-9a-f]{64}$")]
 
 
 class NativeDiagnosticResponse(BaseModel):
@@ -101,6 +103,40 @@ class ChangeHealthPageResponse(BaseModel):
     next_cursor: str | None = None
 
 
+class ResolveRequestBody(BaseModel):
+    """Provide one strict native request-resolution identity."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    delivery_digest: _DeliveryDigest
+    disposition: Literal["local", "material"]
+    resolved_at: str = Field(min_length=1)
+    resolved_by: str = Field(min_length=1)
+    selected_option_id: str | None = None
+    response: str | None = None
+    rationale: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _require_resolution_answer(self) -> ResolveRequestBody:
+        if self.selected_option_id is None and not self.response:
+            message = "a resolution needs a selected option or response"
+            raise ValueError(message)
+        return self
+
+
+class ReleaseJobBody(BaseModel):
+    """Provide one strict native claim-release identity."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    delivery_digest: _DeliveryDigest
+    attempt_id: str = Field(min_length=1)
+    claim_id: str = Field(min_length=1)
+    actor_id: str = Field(min_length=1)
+    process_id: str = Field(min_length=1)
+    released_at: str = Field(min_length=1)
+
+
 __all__ = [
     "ChangeDetailResponse",
     "ChangeGraphResponse",
@@ -110,4 +146,6 @@ __all__ = [
     "InvalidationResponse",
     "JobDetailResponse",
     "NativeDiagnosticResponse",
+    "ReleaseJobBody",
+    "ResolveRequestBody",
 ]

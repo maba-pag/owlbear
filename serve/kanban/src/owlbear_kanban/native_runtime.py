@@ -124,6 +124,7 @@ class ReleaseJobDiagnosticCode(StrEnum):
 
     NO_ACTIVE_CLAIM = "ERR_RELEASE_NO_ACTIVE_CLAIM"
     NON_OWNER = "ERR_RELEASE_NON_OWNER"
+    TERMINAL = "ERR_RELEASE_TERMINAL"
 
 
 class ReleaseJobRequest(BaseModel):
@@ -2142,7 +2143,7 @@ class NativeRuntime:
         ).commit()
         return StartJobResult(job=self._jobs.read(request.job_id), event=event)
 
-    def _finalize(  # noqa: PLR0913
+    def _finalize(  # noqa: PLR0911, PLR0913
         self,
         request: ReleaseJobRequest | FailJobRequest,
         *,
@@ -2167,6 +2168,8 @@ class NativeRuntime:
                 return stored, completed
             return "ERR_RELEASE_NON_OWNER" if kind == "released" else "ERR_FAIL_NON_OWNER"
         job = stored.job
+        if kind == "released" and job.disposition is not JobDisposition.PENDING:
+            return "ERR_RELEASE_TERMINAL"
         if job.claim_id is None and job.attempt_id is None:
             return "ERR_RELEASE_NO_ACTIVE_CLAIM" if kind == "released" else "ERR_FAIL_NO_ACTIVE_CLAIM"
         if job.claim_id != request.claim_id or job.attempt_id != request.attempt_id:

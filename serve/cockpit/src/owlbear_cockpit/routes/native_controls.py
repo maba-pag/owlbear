@@ -1,0 +1,150 @@
+"""Intent-specific native request resolution and claim release controls."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Annotated
+
+from fastapi import APIRouter, Depends
+
+from owlbear_cockpit.deps import NativeContextCache, get_engine, get_native_context_cache
+from owlbear_cockpit.native_http import conflict
+from owlbear_cockpit.native_models import (  # noqa: TC001 - FastAPI resolves route annotations
+    ReleaseJobBody,
+    ResolveRequestBody,
+)
+from owlbear_cockpit.routes.native_changes import get_native_context
+from owlbear_kanban import DispatchDiagnostic, KanbanEngine, ReleaseJobRequest, ReleaseJobResult
+from owlbear_kanban.runtime_requests import (
+    NativeRequestRuntime,
+    RequestConflictError,
+    RequestNotFoundError,
+    RequestReferenceError,
+    RequestResolution,
+    ResolveRequestResult,
+)
+from owlbear_kanban.runtime_transaction import TransactionConflictError
+
+router = APIRouter(prefix="/changes/{change_id}", tags=["native-controls"])
+_Engine = Annotated[KanbanEngine, Depends(get_engine)]
+_NativeCache = Annotated[NativeContextCache, Depends(get_native_context_cache)]
+
+
+def _work_root(engine: KanbanEngine) -> Path:
+    return Path(engine.kanban_dir)
+
+
+@router.post("/requests/{request_id}/resolve", response_model=ResolveRequestResult)
+def resolve_request(
+    change_id: str,
+    request_id: str,
+    body: ResolveRequestBody,
+    engine: _Engine,
+    cache: _NativeCache,
+) -> ResolveRequestResult:
+    """Resolve one pending native request through its immutable identity."""
+    context = get_native_context(change_id, engine, cache)
+    if body.delivery_digest != context.revision.delivery_digest:
+        error = conflict(
+            code="ERR_CHANGE_REVISION_CONFLICT",
+            detail="request revision is not current",
+            current_delivery_digest=context.revision.delivery_digest,
+            target=request_id,
+        )
+        raise error
+    resolution = RequestResolution(
+        request_id=request_id,
+        **body.model_dump(exclude={"delivery_digest"}),
+    )
+    runtime = NativeRequestRuntime(context.revision, _work_root(engine))
+    try:
+        return runtime.resolve_request(resolution)
+    except RequestNotFoundError as exc:
+        error = conflict(
+            code=exc.code,
+            detail="request not found",
+            current_delivery_digest=context.revision.delivery_digest,
+            target=request_id,
+        )
+        raise error from exc
+    except RequestReferenceError as exc:
+        error = conflict(
+            code=exc.code,
+            detail="request resolution references stale authority",
+            current_delivery_digest=context.revision.delivery_digest,
+            target=request_id,
+        )
+        raise error from exc
+    except RequestConflictError as exc:
+        current = runtime.show_request(request_id)
+        error = conflict(
+            code=exc.code,
+            detail="request resolution identity conflicts with persisted authority",
+            current_delivery_digest=context.revision.delivery_digest,
+            target=request_id,
+        )
+        error.detail["current"] = current.model_dump(mode="json")
+        raise error from exc
+
+
+@router.post("/jobs/{job_id}/release", response_model=ReleaseJobResult)
+def release_job(
+    change_id: str,
+    job_id: int,
+    body: ReleaseJobBody,
+    engine: _Engine,
+    cache: _NativeCache,
+) -> ReleaseJobResult:
+    """Release one claim only when its complete immutable identity matches."""
+    context = get_native_context(change_id, engine, cache)
+    if body.delivery_digest != context.revision.delivery_digest:
+        error = conflict(
+            code="ERR_CHANGE_REVISION_CONFLICT",
+            detail="release revision is not current",
+            current_delivery_digest=context.revision.delivery_digest,
+            target=str(job_id),
+        )
+        raise error
+    request = ReleaseJobRequest(job_id=job_id, **body.model_dump(exclude={"delivery_digest"}))
+    try:
+        result = context.dispatch.release(request)
+    except TransactionConflictError as exc:
+        error = conflict(
+            code="ERR_CONTROL_TRANSACTION_CONFLICT",
+            detail="release transaction did not commit",
+            current_delivery_digest=context.revision.delivery_digest,
+            lower_code=exc.code,
+            target=str(job_id),
+        )
+        raise error from exc
+    except OSError as exc:
+        error = conflict(
+            code="ERR_CONTROL_STORAGE_FAILURE",
+            detail="release storage could not be read or committed",
+            current_delivery_digest=context.revision.delivery_digest,
+            lower_code="ERR_STORAGE_IO",
+            target=str(job_id),
+        )
+        raise error from exc
+    if isinstance(result, DispatchDiagnostic):
+        error = conflict(
+            code=result.code.value,
+            detail=result.detail,
+            current_delivery_digest=context.revision.delivery_digest,
+            diagnostic=result,
+            target=str(job_id),
+        )
+        raise error
+    if result.diagnostic is not None:
+        error = conflict(
+            code=result.diagnostic.code.value,
+            detail=result.diagnostic.detail,
+            current_delivery_digest=context.revision.delivery_digest,
+            diagnostic=result.diagnostic,
+            target=str(job_id),
+        )
+        raise error
+    return result
+
+
+__all__ = ["router"]
