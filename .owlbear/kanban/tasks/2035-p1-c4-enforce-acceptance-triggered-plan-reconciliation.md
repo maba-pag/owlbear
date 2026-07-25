@@ -1,10 +1,10 @@
 ---
 id: 2035
 title: 'P1-C4: Enforce acceptance-triggered plan reconciliation'
-status: build
+status: shape
 priority: high
 created: 2026-07-25T02:46:46.300991+02:00
-updated: 2026-07-25T02:46:46.300991+02:00
+updated: 2026-07-25T05:32:04.750937+02:00
 tags:
   - change:replace-delivery-pipeline
   - node:DN-003
@@ -56,3 +56,22 @@ Admitted digest `3f6c656289911320bb5e7faf37b5e86ffa8511e729ade201a03a19913e33d99
 Complexity waiver: five AC cover one causal lifecycle matrix; splitting its transaction and currentness assertions would bypass the public runtime boundary.
 
 Proof guidance: run one native-runtime scenario from initial plan through publication, predecessor acceptance, reconciliation, build release, accept invalidation, and replay.
+
+[[2026-07-25T05:32:04+02:00]]
+## Builder Notes
+
+- Change envelope: expected `NativeRuntime.finish_plan`, `finish_accept`, job readiness/currentness, and nearest runtime scenario. The required behavior is acceptance-triggered dependent-plan reconciliation; the cheapest falsifier is a two-node lifecycle scenario using the public native runtime.
+- Files changed: none.
+- Change Module Map: source confirms `serve/kanban/src/owlbear_kanban/native_runtime.py` is the transition owner. No deviation made.
+- Contract gate: rejected. `delivery/nodes.yaml` assigns REQ-025 and IF-007, including superseding-plan creation, to DN-006. This task instead directs engine-side support under DN-003/DN-004 without defining the handoff.
+- Concrete blocker: `FinishJobRequest` has no reconciliation job ID, dependent-plan payload, or release command. `finish_accept` delegates to generic `_finish` and has no participant factory for dependent jobs. An initial dependent plan job is archived by `finish_plan`; therefore AC4 cannot create or release reconciliation work without inventing job identity, storage state, and a new public interface.
+- Proof selected and run: `uv run pytest serve/kanban/tests/test_native_runtime.py` passed, 25 tests. It proves the existing runtime baseline but cannot prove AC3-AC5 because the required reconciliation input/owner is absent.
+- AC-to-evidence: AC1 is supported by current `start_job` predecessor checks; AC2 is covered by the existing plan publication/replay test. AC3, AC4, and AC5 cannot be implemented or proved until shape defines the DN-006 to runtime handoff, reconciliation job identity/allocation, and the exact currentness relation for a superseding dependent plan.
+- Current failure key resolution: no prior Verify Required Follow-up.
+- Builder-challenger: not invoked because this is a planning reconsideration, not a proposed DONE route.
+- Memory assessment: completed for recalled entries; one recalled entry was concurrently unavailable during assessment.
+
+### Required Follow-up
+| # | Failure Key | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|--------------|-----------------|---------|----------|
+| 1 | AC3-AC5/reconciliation-handoff | shape | Define the DN-006 to native-runtime interface: who allocates or reuses reconciliation plan job IDs, what persisted marker makes a plan reconciliation-required, and how `finish_plan` proves its receipt supersedes the prior plan from current predecessor accept receipts. Split engine-only prerequisites from DN-006 planner behavior if appropriate. | `.owlbear/changes/replace-delivery-pipeline/delivery/nodes.yaml`, `delivery/contracts.yaml`, task 2035 AC | REQ-025 ownership is DN-006; `FinishJobRequest` and `NativeRuntime.finish_accept` contain no reconciliation input or participant path. |
