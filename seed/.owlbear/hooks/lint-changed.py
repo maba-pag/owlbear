@@ -65,7 +65,7 @@ def _extract_paths(tool_name: str, tool_input: object) -> list[str]:
 def _git(root: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
     """Run a non-interactive git query without raising on repository state."""
     return subprocess.run(  # noqa: S603
-        ["git", *arguments],
+        ["git", *arguments],  # noqa: S607 — git must be found via PATH
         cwd=root,
         capture_output=True,
         text=True,
@@ -201,7 +201,7 @@ def main() -> None:
     if existing_py:
         try:
             result = subprocess.run(  # noqa: S603
-                [
+                [  # noqa: S607 — uv must be found via PATH
                     "uv",
                     "run",
                     "--quiet",

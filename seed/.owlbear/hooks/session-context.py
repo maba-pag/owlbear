@@ -37,7 +37,7 @@ def main() -> None:  # noqa: PLR0911
     # Get current branch — return {} if git unavailable or not in a repo
     try:
         branch_result = subprocess.run(
-            ["git", "branch", "--show-current"],
+            ["git", "branch", "--show-current"],  # noqa: S607
             capture_output=True,
             text=True,
             check=False,
@@ -55,7 +55,7 @@ def main() -> None:  # noqa: PLR0911
     # Get recent commits — return {} on git failure
     try:
         log_result = subprocess.run(
-            ["git", "log", "--oneline", "-3", "--no-decorate"],
+            ["git", "log", "--oneline", "-3", "--no-decorate"],  # noqa: S607
             capture_output=True,
             text=True,
             check=False,

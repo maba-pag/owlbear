@@ -70,7 +70,6 @@ ignore = [
   "C901",   # hook scripts have inherently complex path-extraction logic
   "INP001", # seed/.owlbear/hooks/ is not a package — direct-run scripts are expected here
   "PLR0912", # guard scripts branch by path rule category
-  "S607",   # hook scripts invoke trusted workspace tooling by conventional names
   "T201",   # print() is the stdout I/O contract for VS Code hook scripts
 ]
 ".owlbear/scripts/*.py" = [
