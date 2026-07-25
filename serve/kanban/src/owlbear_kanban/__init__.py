@@ -148,6 +148,7 @@ from owlbear_kanban.proof_checkout import (
     ProofCheckoutDiagnosticCode,
     ProofCheckoutManager,
     ProofCheckoutResult,
+    ProofCheckoutSnapshot,
 )
 from owlbear_kanban.receipt import (
     AdmissionDiscovery,
@@ -281,6 +282,7 @@ __all__ = [
     "ProofCheckoutDiagnosticCode",
     "ProofCheckoutManager",
     "ProofCheckoutResult",
+    "ProofCheckoutSnapshot",
     "ReceiptConflictError",
     "ReceiptDiagnostic",
     "ReceiptDiagnosticCode",

@@ -142,3 +142,28 @@ def test_cleanup_is_idempotent_and_health_reports_leftover_checkout(tmp_path: Pa
     manager.cleanup(27)
     assert not result.checkout.root.exists()
     assert manager.health_paths() == ()
+
+
+def test_snapshot_restores_exact_checkout_manifest_after_cleanup(tmp_path: Path) -> None:
+    repository, commit = _repository(tmp_path)
+    manager = ProofCheckoutManager(repository, tmp_path / "scratch" / "proof")
+    job = _job()
+    created = manager.materialize(
+        job,
+        commit,
+        environment={"TOOLCHAIN": "uv"},
+        replacements=("temporary repository",),
+    )
+    assert created.checkout is not None
+    manifest_before = created.checkout.manifest.read_bytes()
+    snapshot = manager.snapshot(job.job_id)
+    assert snapshot is not None
+
+    manager.cleanup(job.job_id)
+    restored = manager.restore(job, snapshot)
+
+    assert restored
+    current = manager.existing(job.job_id)
+    assert current is not None
+    assert current.commit == commit
+    assert current.manifest.read_bytes() == manifest_before

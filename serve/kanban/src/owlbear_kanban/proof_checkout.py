@@ -11,7 +11,7 @@ from io import StringIO
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from owlbear_kanban.yaml_rt import make_yaml
 
@@ -49,6 +49,18 @@ class ProofCheckout(BaseModel):
     root: Path
     checkout: Path
     manifest: Path
+
+
+class ProofCheckoutSnapshot(BaseModel):
+    """Immutable authority needed to restore one cleaned proof checkout."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    job_id: int
+    target: str
+    commit: str
+    environment: dict[str, str] = Field(default_factory=dict)
+    replacements: tuple[str, ...] = ()
 
 
 class ProofCheckoutResult(BaseModel):
@@ -116,6 +128,35 @@ class ProofCheckoutManager:
             return
         root, checkout, _manifest = paths
         self._remove(root, checkout)
+
+    def snapshot(self, job_id: int) -> ProofCheckoutSnapshot | None:
+        """Capture the exact manifest authority needed to restore a checkout."""
+        existing = self.existing(job_id)
+        if existing is None:
+            return None
+        try:
+            payload = make_yaml().load(existing.manifest.read_text(encoding="utf-8"))
+            if isinstance(payload, dict) and isinstance(payload.get("replacements"), list):
+                payload = dict(payload) | {"replacements": tuple(payload["replacements"])}
+            return ProofCheckoutSnapshot.model_validate(payload)
+        except OSError, TypeError, ValueError:
+            return None
+
+    def restore(self, job: JobRecord, snapshot: ProofCheckoutSnapshot) -> bool:
+        """Restore one previously cleaned checkout from its exact manifest authority."""
+        if (
+            job.job_id != snapshot.job_id
+            or job.target_node_id != snapshot.target
+            or self.existing(job.job_id) is not None
+        ):
+            return False
+        result = self.materialize(
+            job,
+            snapshot.commit,
+            environment=snapshot.environment,
+            replacements=snapshot.replacements,
+        )
+        return result.checkout is not None
 
     def existing(self, job_id: int) -> ProofCheckout | None:
         """Return a valid existing checkout context without materializing another worktree."""
@@ -247,4 +288,5 @@ __all__ = [
     "ProofCheckoutDiagnosticCode",
     "ProofCheckoutManager",
     "ProofCheckoutResult",
+    "ProofCheckoutSnapshot",
 ]

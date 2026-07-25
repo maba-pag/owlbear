@@ -19,6 +19,7 @@ from owlbear_kanban import (
     JobRecord,
     JobStore,
     NativeRuntime,
+    ProofCheckoutManager,
     ReceiptStore,
     RecoverExpiredClaimsRequest,
     RejectAcceptDiagnosticCode,
@@ -29,9 +30,10 @@ from owlbear_kanban import (
     load_change,
     parse_impact_closure,
 )
-from owlbear_kanban.runtime_transaction import TransactionConflictError
+from owlbear_kanban.runtime_transaction import RuntimeTransaction, TransactionConflictError
 
 from .test_native_runtime import _active_accept_scenario, _reject_request
+from .test_proof_checkout import _repository
 
 
 class _History:
@@ -55,6 +57,16 @@ class _ProofCheckouts:
     def cleanup(self, job_id: int) -> None:
         if not self._fail_cleanup:
             self._active.discard(job_id)
+
+    def existing(self, job_id: int) -> object | None:
+        return object() if job_id in self._active else None
+
+    def snapshot(self, job_id: int) -> int | None:
+        return job_id if job_id in self._active else None
+
+    def restore(self, _job: JobRecord, snapshot: int) -> bool:
+        self._active.add(snapshot)
+        return True
 
     def is_orphan(self, path: str) -> bool:
         return int(path) in self._active
@@ -280,6 +292,68 @@ def test_reject_accept_cleanup_failure_preserves_all_runtime_state(tmp_path: Pat
         path.name: path.read_bytes() for path in (runtime._native._revision.source_dir / "receipts").glob("*.yaml")
     }
     assert proof_checkouts.is_orphan(str(start.job_id))
+
+
+def test_reject_accept_transaction_conflict_restores_cleaned_checkout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    revision, work_root, native, first_start = _active_accept_scenario(tmp_path)
+    released = native.release_job(
+        ReleaseJobRequest(
+            job_id=first_start.job_id,
+            attempt_id=first_start.attempt_id,
+            claim_id=first_start.claim_id,
+            actor_id=first_start.actor_id,
+            process_id=first_start.process_id,
+            released_at="2026-07-24T00:04:30Z",
+        )
+    )
+    assert released.diagnostic is None
+    repository, commit = _repository(tmp_path)
+    checkouts = ProofCheckoutManager(repository, tmp_path / "proof")
+    runtime = DispatchRuntime(native, work_root, checkouts)
+    start = first_start.model_copy(update={"attempt_id": "attempt-014", "claim_id": "claim-014"})
+    started = runtime.start(start)
+    assert not isinstance(started, DispatchDiagnostic)
+    assert started.diagnostic is None
+    checkout = checkouts.materialize(
+        JobStore(work_root).read(start.job_id).job,
+        commit,
+        environment={"TOOLCHAIN": "uv"},
+        replacements=("temporary repository",),
+    ).checkout
+    assert checkout is not None
+    manifest_before = checkout.manifest.read_bytes()
+    work_before = {
+        str(path.relative_to(work_root)): path.read_bytes() for path in work_root.rglob("*") if path.is_file()
+    }
+    receipts_before = {
+        path.name: path.read_bytes() for path in (native._revision.source_dir / "receipts").glob("*.yaml")
+    }
+    original_commit = RuntimeTransaction.commit
+
+    def fail_rejection(transaction: RuntimeTransaction, *, failure=None) -> None:
+        if transaction._transaction_id.startswith("reject-"):  # noqa: SLF001 - inject after checkout cleanup.
+            raise TransactionConflictError
+        original_commit(transaction, failure=failure)
+
+    monkeypatch.setattr(RuntimeTransaction, "commit", fail_rejection)
+
+    rejected = runtime.reject_accept(_reject_request(revision, start))
+
+    assert not isinstance(rejected, DispatchDiagnostic)
+    assert rejected.diagnostic is not None
+    assert rejected.diagnostic.code is RejectAcceptDiagnosticCode.IDENTITY_CONFLICT
+    assert work_before == {
+        str(path.relative_to(work_root)): path.read_bytes() for path in work_root.rglob("*") if path.is_file()
+    }
+    assert receipts_before == {
+        path.name: path.read_bytes() for path in (native._revision.source_dir / "receipts").glob("*.yaml")
+    }
+    restored = checkouts.existing(start.job_id)
+    assert restored is not None
+    assert restored.commit == commit
+    assert restored.manifest.read_bytes() == manifest_before
 
 
 def test_expired_recovery_clears_its_writer_holder(revision, tmp_path) -> None:
