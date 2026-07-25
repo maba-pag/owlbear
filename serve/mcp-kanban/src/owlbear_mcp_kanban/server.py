@@ -20,6 +20,7 @@ from pydantic import ValidationError as PydanticValidationError
 
 from owlbear_kanban import (
     AdmissionEvidence,
+    AdmissionTransaction,
     DispatchRuntime,
     FinishAcceptRequest,
     FinishJobRequest,
@@ -39,6 +40,11 @@ from owlbear_kanban import (
     change_health as get_change_health,
 )
 from owlbear_kanban._duration import _parse_duration
+from owlbear_kanban.admission_transaction import (
+    AdmissionConflictError,
+    AdmissionPublicationError,
+    AdmissionValidationError,
+)
 from owlbear_kanban.errors import KanbanError
 from owlbear_kanban.models import (
     ListTasksResponse,
@@ -84,6 +90,7 @@ __all__ = [
     "_apply_tool_exclusions",
     "_map_kanban_error",
     "_show_validated",
+    "admit_change",
     "app_lifespan",
     "change_health",
     "create_request",
@@ -1170,6 +1177,48 @@ async def change_health(ctx: Context, *, change_id: str) -> dict[str, object]:
 
     result = get_change_health(changes_dir, change_id)
     return result.model_dump(mode="python")
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True))
+async def admit_change(
+    ctx: Context,
+    *,
+    change_id: str,
+    evidence: dict[str, object],
+) -> dict[str, object]:
+    """Admit change and atomically publish receipt and initial plan jobs."""
+    if not change_id or not change_id.strip():
+        _raise_param_validation("change_id must be non-empty")
+
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    changes_dir = app_ctx.kanban_dir.parent / "changes"
+
+    load_result = load_change(changes_dir, change_id)
+
+    if load_result.revision is None:
+        _raise_tool_error("ERR_CHANGE_NOT_LOADED", "change could not be loaded")
+
+    try:
+        admission_evidence = AdmissionEvidence.model_validate(evidence)
+    except PydanticValidationError as exc:
+        _raise_param_validation(f"invalid evidence: {exc}")
+
+    try:
+        transaction = AdmissionTransaction(load_result.revision)
+        receipt, generation, assessment = transaction.validate_and_admit(admission_evidence)
+    except AdmissionConflictError:
+        _raise_tool_error("ERR_ADMISSION_CONFLICT", "admission conflict: incompatible identity already exists")
+    except AdmissionValidationError:
+        _raise_tool_error("ERR_ADMISSION_VALIDATION", "admission validation failed: invalid immutable identity")
+    except AdmissionPublicationError as exc:
+        cause_msg = str(getattr(exc, "cause", exc))
+        _raise_tool_error("ERR_ADMISSION_PUBLICATION", f"admission publication failed: {cause_msg}")
+
+    return {
+        "receipt": receipt.model_dump(mode="python") if receipt else None,
+        "generation": generation.model_dump(mode="python") if generation else None,
+        "assessment": assessment.model_dump(mode="python"),
+    }
 
 
 # Override outputSchema for mutation/lifecycle tools that return

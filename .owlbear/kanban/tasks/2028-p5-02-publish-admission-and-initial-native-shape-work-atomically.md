@@ -1,10 +1,10 @@
 ---
 id: 2028
 title: 'P5-02: Publish admission and initial native plan work atomically'
-status: build
+status: verify
 priority: high
 created: 2026-07-24T23:21:52.955135+02:00
-updated: 2026-07-25T09:16:55.055026+02:00
+updated: 2026-07-25T10:01:29.664921+02:00
 tags:
   - phase-5
   - scope:mcp-kanban
@@ -57,3 +57,23 @@ Proof guidance: invoke public `admit_change` over the real admission and runtime
 [[2026-07-25T09:16:55+02:00]]
 ## Shape Notes
 Connected partial-commit repair is summarized in #1981. Refreshed this packet to admitted digest `3f6c65628991` and replaced stale shape-job wording with initial plan-job generation. AC, parent, dependency on #2027, priority, and build route remain the approved T2 contract. Concrete graph passed shaper challenge.
+
+[[2026-07-25T10:01:29+02:00]]
+**Implementation:**
+Added public `admit_change` MCP tool over `AdmissionTransaction`. Returns `ReceiptRecord`, `JobGeneration`, and `AdmissionAssessment` for admitted revisions; atomicity guaranteed by existing `RuntimeTransaction`.
+
+**Files Changed:**
+- `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py`: Added `admit_change` tool + imports
+- `serve/mcp-kanban/tests/test_mcp_surface_contract.py`: Updated `EXPECTED_TOOLS`
+
+**Evidence:**
+- AC-1: Manual validation shows admit_change returns all 3 artifacts with persisted files
+- AC-2: Non-admitted returns assessment with no writes
+- AC-3: Replay returns persisted artifacts; conflict raises stable `ERR_ADMISSION_CONFLICT`
+- AC-4: Atomicity via `RuntimeTransaction` (tested in `test_admission_transaction.py`)
+- MCP surface contract: 440 tests GREEN
+- Builder-challenger: pass
+
+**Error codes:** `ERR_ADMISSION_CONFLICT`, `ERR_ADMISSION_VALIDATION`, `ERR_ADMISSION_PUBLICATION`, `ERR_CHANGE_NOT_LOADED`
+
+No durable test added per guidance: existing admission_transaction tests protect atomicity; MCP contract test protects tool registration.

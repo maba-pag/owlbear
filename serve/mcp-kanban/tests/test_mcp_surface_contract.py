@@ -56,6 +56,7 @@ from owlbear_mcp_kanban.server import AppContext, app_lifespan, mcp
 
 EXPECTED_TOOLS: frozenset[str] = frozenset(
     {
+        "admit_change",
         "change_health",
         "create_request",
         "create_task",
