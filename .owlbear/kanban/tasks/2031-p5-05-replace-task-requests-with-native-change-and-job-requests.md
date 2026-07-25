@@ -1,10 +1,10 @@
 ---
 id: 2031
 title: 'P5-05: Replace task requests with native change and job requests'
-status: shape
+status: build
 priority: high
 created: 2026-07-24T23:22:11.813787+02:00
-updated: 2026-07-25T12:21:26.353686+02:00
+updated: 2026-07-25T12:27:27.719100+02:00
 tags:
   - phase-5
   - scope:mcp-kanban
@@ -21,19 +21,24 @@ parent: 1981
 depends_on:
   - 2027
 ac:
-  - 'AC-1: Given a `NativeRequest` bound to the current change and digest with permitted
-    optional target-node and job links, public `create_request` persists the request
-    and linked job blocks atomically and returns `StoredRequest`; an exact replay
-    does not duplicate either record.'
-  - 'AC-2: Given mismatched change, digest, target-node, or job references, or changed
-    replay content, public `create_request` returns distinct stable reference or conflict
-    `ToolError` codes and leaves request and job records unchanged.'
-  - 'AC-3: Given pending and resolved native requests plus a `pending | resolved`
-    status filter, public `list_requests` returns matching summaries in stable request-identity
-    order; an unsupported status returns a stable parameter `ToolError`.'
+  - 'AC-1: Given required `request_id`, `created_at`, `change_id`, and `delivery_digest`
+    fields, a kind-specific payload, and permitted optional `target_node_id` and `job_ids`,
+    public `create_request` persists one pending request, adds that identity once
+    to each linked job, returns `StoredRequest`, and replaying the same immutable
+    fields returns the same record without changing request bytes or linked job projections.'
+  - 'AC-2: Public `create_request` maps these inputs to stable `ToolError` codes:
+    unknown change to `ERR_CHANGE_NOT_FOUND`; wrong digest to `ERR_DIGEST_MISMATCH`;
+    absent graph node or missing, revision-mismatched, or target-mismatched job to
+    `ERR_NATIVE_REQUEST_REFERENCE`; reused request ID with changed immutable fields
+    to `ERR_NATIVE_REQUEST_CONFLICT`. For each case, complete pre/post request and
+    job snapshots match.'
+  - 'AC-3: Given at least one pending and one resolved native request plus a `pending
+    | resolved` status filter, public `list_requests` returns only matching summaries
+    in ascending `request_id` order; a status outside those two literals returns a
+    parameter `ToolError`.'
   - 'AC-4: Given an existing `request_id`, public `show_request` returns the selected
-    `StoredRequest` including resolution state; a missing ID returns a stable not-found
-    `ToolError`.'
+    `StoredRequest` including its resolution state; a missing ID returns `ERR_NATIVE_REQUEST_NOT_FOUND`
+    without mutating request or job storage.'
 proof_bundle: existing+challenge
 blocked: false
 block_reason:
@@ -123,3 +128,20 @@ The uncommitted retry Builder Notes/status delta already present on the task-own
 |---|-------------|--------------|-----------------|---------|----------|
 | 1 | #2031-AC1-4/native-request-durable-boundary | shaper | Define one coherent public replay identity contract that makes an exact `create_request` replay expressible, and align AC-1, the MCP signature, immutable timestamp/identity ownership, and runtime comparison semantics without compatibility aliases. | `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py`; `serve/kanban/src/owlbear_kanban/runtime_requests.py`; task AC | Public adapter creates a new timestamp, runtime compares the full immutable request, and the retry test proves changed-content conflict instead of replay. |
 | 2 | #2031-AC1-4/native-request-durable-boundary | shaper | Enumerate AC-2's required mismatch classes and require full pre/post request plus linked-job state proof through the real change-loader/runtime boundary: change, digest, target node, job, and changed replay. | task AC; `serve/mcp-kanban/tests/test_mcp_request_tools.py` | Current suite covers digest, missing job, and changed content only; no change/target-node cases or complete state snapshots. |
+
+[[2026-07-25T12:27:27+02:00]]
+## Shape Notes
+Local task repair for verifier failure key `#2031-AC1-4/native-request-durable-boundary` at admitted digest `3f6c656289911320bb5e7faf37b5e86ffa8511e729ade201a03a19913e33d990`.
+
+The verifier correctly found that the old public adapter could not express exact replay: it synthesized `request_id` and a fresh `created_at`, while `NativeRequestRuntime` compares the complete immutable request. Admitted IF-010, REQ-015, DN-009, and the packet envelope leave core request semantics with `NativeRequestRuntime`; the minimum repair is therefore to expose its existing required `request_id` and `created_at` fields through the strict MCP adapter. No second idempotency mechanism, generated identity, compatibility alias, or runtime semantic change is approved.
+
+AC-1 now names the caller-supplied native identity/time fields and byte/job-projection replay result. AC-2 enumerates unknown change, wrong digest, absent node, missing/revision/target-mismatched job, and changed-content replay with their stable codes and complete no-mutation snapshots. AC-3 fixes the ordering claim to ascending `request_id`; AC-4 names the stable not-found code and no-mutation result. Outcome, parent #1981, dependency #2027, admitted digest, scope, and three-tool request surface are unchanged.
+
+### Repair Closure Map
+| Failure Key | Claimed Production Boundary | Current-Source Artifacts | Cheapest Disconfirming Check | Causal Proof Or Negative Control | Executor Availability |
+|-------------|-----------------------------|--------------------------|------------------------------|----------------------------------|-----------------------|
+| #2031-AC1-4/native-request-durable-boundary | Public MCP `create_request`, `list_requests`, and `show_request` through admitted change loading, `NativeRequestRuntime`, `RuntimeTransaction`, and `JobStore` | `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py`; `serve/mcp-kanban/tests/test_mcp_request_tools.py`; `serve/kanban/src/owlbear_kanban/runtime_requests.py`; `serve/kanban/tests/test_runtime_requests.py`; IF-010/REQ-015/DN-009 authority | Current adapter synthesizes identity/time; current replay test changes content; its `*.yml` glob misses runtime `*.yaml`, making no-duplicate proof vacuous | Call public MCP functions twice with identical caller-supplied immutable fields through real `load_change`; assert equal `StoredRequest`, byte-identical request YAML, one linked-job identity, and no extra files. Snapshot all request YAML bytes and linked-job projections for each AC-2 case. One changed immutable field under the same ID is the negative control. | `uv run pytest` available; existing 18-test suite runs but disputed cases must be rewritten |
+
+The first shaper challenge failed because the closure map stopped at direct runtime proof and omitted the vacuous file glob. The corrected map names the public wrapper, current maintained suite, real loader, `*.yaml` bytes, linked-job projections, and negative control. Second shaper-challenger decision: `pass`; task is build-ready.
+
+Builder route: remove synthetic identity/time generation from `server.py`, accept the native fields, and rewrite the existing maintained test slice around the corrected public-boundary proof. Do not add a parallel test artifact or modify core runtime semantics.
