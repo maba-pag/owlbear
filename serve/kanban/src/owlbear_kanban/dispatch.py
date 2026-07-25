@@ -163,7 +163,7 @@ class DispatchWaveEntry(BaseModel):
 
     job_id: int = Field(gt=0)
     kind: _WriterKind | _ReaderKind
-    agent_profile: Literal["shaper", "builder", "acceptor", "auditor"]
+    agent_profile: Literal["planner", "builder", "acceptor", "auditor"]
     predecessor_job_ids: tuple[int, ...] = ()
 
 
@@ -282,7 +282,7 @@ class DispatchRuntime:
                 omissions.append(DispatchOmission(job_id=stored.job.job_id, reason=reason))
                 continue
             agent_profile = {
-                "plan": "shaper",
+                "plan": "planner",
                 "build": "builder",
                 "accept": "acceptor",
                 "audit": "auditor",
@@ -300,7 +300,20 @@ class DispatchRuntime:
                     predecessor_job_ids=stored.job.predecessor_job_ids,
                 )
             )
+        eligible.sort(key=self._delivery_topology_key)
         return DispatchPlan(waves=self._plan_waves(eligible, size), omissions=tuple(omissions))
+
+    def _delivery_topology_key(self, entry: DispatchWaveEntry) -> tuple[int, int]:
+        node_by_id = {node.id: node for node in self._native._revision.graph.nodes}  # noqa: SLF001
+        pending = set(node_by_id)
+        order: list[str] = []
+        while pending:
+            ready = sorted(node_id for node_id in pending if not (set(node_by_id[node_id].dependencies) & pending))
+            if not ready:
+                ready = sorted(pending)
+            order.extend(ready)
+            pending.difference_update(ready)
+        return (order.index(self._jobs.read(entry.job_id).job.target_node_id), entry.job_id)
 
     def _omission_reason(self, stored: StoredJob, candidate_revision: str) -> DispatchOmissionReason | None:
         job = stored.job

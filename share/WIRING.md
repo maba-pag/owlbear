@@ -43,7 +43,7 @@ This table snapshots agent declarations and includes runtime-relevant built-in d
 
 | Agent | Model | Required reading | Delegates | Hooks |
 |-------|-------|------------------|-----------|-------|
-| orchestrator | GPT-5.6 Terra | `w-orchestration` | builder, verifier, collector, memory-curator, Explore | None; legacy `pick_tasks` plus non-default IF-015 `pick_jobs`, `start_job`, finish, release, and recovery tools |
+| orchestrator | GPT-5.6 Terra | `w-orchestration` | builder, verifier, collector, memory-curator, Explore | None; legacy `pick_tasks` plus non-default IF-015 `pick_jobs`, `start_job`, `finish_plan`, finish, release, and recovery tools |
 | shaper | GPT-5.6 Sol | `r-pipeline-protocol`, `r-challenger-protocol`, `r-workspace-governance` | shaper-challenger, Explore | `PreToolUse`: deny non-document writes |
 | builder | GPT-5.6 Terra | `r-pipeline-protocol`, `r-challenger-protocol`, `r-workspace-governance`, `h-codebase-orientation` | builder-challenger | `SessionStart`: task context; `PostToolUse`: lint changed files |
 | verifier | GPT-5.6 Terra | `r-pipeline-protocol`, `r-challenger-protocol`, `r-workspace-governance`, `h-codebase-orientation` | verifier-challenger | `SessionStart`: task context; `PostToolUse`: lint changed files |

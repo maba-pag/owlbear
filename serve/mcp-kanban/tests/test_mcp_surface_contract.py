@@ -401,7 +401,7 @@ class TestProof014NativeMcpScenario:
         proof = revision.resolve(target.proof)
         closure = {"paths": ["serve/kanban/"], "authority_targets": [target.id, target.proof]}
         node_plan_digest: str | None = None
-        installed_profiles = {"shaper", "builder", "acceptor", "auditor"}
+        installed_profiles = {"planner", "builder", "acceptor", "auditor"}
 
         async def dispatch_one(attempt: int, claimed_at: str, finished_at: str) -> int | NativeHalt:
             nonlocal node_plan_digest
@@ -422,7 +422,7 @@ class TestProof014NativeMcpScenario:
             match outcome:
                 case Success(receipt_id):
                     finish = _finish_kwargs(started)
-                    if entry.agent_profile == "shaper":
+                    if entry.agent_profile == "planner":
                         result = await server.finish_plan(
                             ctx,
                             **finish,
@@ -509,7 +509,7 @@ class TestProof014NativeMcpScenario:
 
         audit = JobRecord(
             schema_version=1,
-            job_id=5,
+            job_id=7,
             kind="audit",
             priority=7,
             created_at="2026-07-24T00:06:00Z",
@@ -521,16 +521,16 @@ class TestProof014NativeMcpScenario:
             predecessor_job_ids=(4,),
         )
         RuntimeTransaction(work_root, "proof-014-audit", (jobs.create_participant(audit),)).commit()
-        assert await dispatch_one(6, "2026-07-24T00:07:00Z", "2026-07-24T00:08:01Z") == 5
-        assert await dispatch_one(7, "2026-07-24T00:08:02Z", "2026-07-24T00:09:00Z") == 5
+        assert await dispatch_one(6, "2026-07-24T00:07:00Z", "2026-07-24T00:08:01Z") == 7
+        assert await dispatch_one(7, "2026-07-24T00:08:02Z", "2026-07-24T00:09:00Z") == 7
         assert dispatches == [
-            ("shaper", 1),
+            ("planner", 1),
             ("builder", 2),
             ("builder", 2),
             ("builder", 3),
             ("acceptor", 4),
-            ("auditor", 5),
-            ("auditor", 5),
+            ("auditor", 7),
+            ("auditor", 7),
         ]
         assert [call.args[:2] for call in runner.await_args_list] == dispatches
         assert all(

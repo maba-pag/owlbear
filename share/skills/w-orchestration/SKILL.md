@@ -19,13 +19,13 @@ Dispatch fresh engine plans until no work remains.
 `pick_tasks` is the default procedure below. IF-015 permits an explicit, non-default native procedure
 for an admitted `change_id`: call `pick_jobs` for the current candidate revision, call `start_job` for
 one returned entry, dispatch only its assigned profile, and pattern-match its structured disposition.
-`Success` selects the matching `finish_shape`, `finish_build`, `finish_accept`, or `finish_audit`;
+`Success` selects the matching `finish_plan`, `finish_build`, `finish_accept`, or `finish_audit`;
 `RateLimited` selects `release_job`; `Crash` selects strict-expiry `recover_expired_claims`. Then obtain
 a fresh plan. Do not route by prose or bridge native jobs to task lifecycle state.
 
 Before `start_job`, resolve the selected profile against the installed subagent allowlist. If it is unavailable,
 report the profile and halt native mode without claiming, running, releasing, or mutating legacy task state.
-The native `shaper` profile is valid only in this explicit mode; routine `pick_tasks` shape work remains
+The native `planner` profile is valid only in this explicit mode; routine `pick_tasks` shape work remains
 user-facing through `/shape`. Do not add acceptor or auditor role bodies here.
 
 For `accept` and `audit`, `start_job` returns the engine-owned exact-commit checkout context. The orchestrator

@@ -367,6 +367,27 @@ def test_pick_waves_is_deterministic_and_uses_current_job_state(revision, tmp_pa
     ]
 
 
+def test_pick_waves_orders_plan_frontier_by_delivery_topology(revision, tmp_path, monkeypatch) -> None:
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    store = JobStore(work_root)
+    for job_id, node_id in ((3, "DN-004"), (2, "DN-002"), (1, "DN-001")):
+        _materialize(
+            store,
+            _record(revision, job_id).model_copy(
+                update={"kind": "plan", "target_node_id": node_id, "receipt_id": "bootstrap-001"}
+            ),
+        )
+    runtime = DispatchRuntime(NativeRuntime(revision, work_root, _History(), timedelta(minutes=5)), work_root)
+    stored_jobs = runtime._jobs.list()  # noqa: SLF001 - simulate an arbitrary persistence order.
+    monkeypatch.setattr(runtime._jobs, "list", lambda: tuple(reversed(stored_jobs)))  # noqa: SLF001
+
+    plan = runtime.pick_waves("a" * 40, size=3)
+
+    assert [[entry.job_id for entry in wave] for wave in plan.waves] == [[1], [2], [3]]
+    assert [entry.agent_profile for wave in plan.waves for entry in wave] == ["planner", "planner", "planner"]
+
+
 def test_pick_waves_omits_stale_node_plan_digest(revision, tmp_path) -> None:
     work_root = tmp_path / "work"
     work_root.mkdir()

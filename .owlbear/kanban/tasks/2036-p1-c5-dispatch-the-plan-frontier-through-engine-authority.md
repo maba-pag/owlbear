@@ -1,10 +1,10 @@
 ---
 id: 2036
 title: 'P1-C5: Dispatch the plan frontier through engine authority'
-status: build
+status: verify
 priority: high
 created: 2026-07-25T02:46:52.874110+02:00
-updated: 2026-07-25T08:09:07.723984+02:00
+updated: 2026-07-25T08:36:02.608651+02:00
 tags:
   - change:replace-delivery-pipeline
   - node:DN-004
@@ -83,3 +83,18 @@ Proof guidance: run dispatch topology/readiness/coordination checks and the asse
 - Shaper-challenger passed the materialized graph for readiness, authority, invariant ownership, dependency/scenario closure, boundary proof, and fidelity.
 - Memory assessment: all recalled entries assessed; active-repository guidance applied.
 - Resulting route: advance to build, dependency-gated until #2039 and #2037 archive.
+
+[[2026-07-25T08:36:02+02:00]]
+## Builder Notes
+- Change envelope: `DispatchRuntime` plan profile and stable delivery-node topology ordering; existing focused runtime and assembled MCP proof; orchestrator native tool allowlist, `w-orchestration` disposition mapping, and the derived WIRING row.
+- Files changed: `serve/kanban/src/owlbear_kanban/dispatch.py`, `serve/kanban/tests/test_dispatch_runtime.py`, `serve/mcp-kanban/tests/test_mcp_surface_contract.py`, `share/agents/orchestrator.agent.md`, `share/skills/w-orchestration/SKILL.md`, and `share/WIRING.md`.
+- Change Module Map deviations: none. The required WIRING update was included because the orchestrator native-tool relationship changed.
+- Implementation: `plan` entries now expose profile `planner`; `pick_waves` sorts eligible entries by a stable Kahn traversal of `DeliveryNode.dependencies`; the PROOF-014 audit fixture uses job 7 so acceptance-created reconciliation job 5 remains authoritative.
+- Proof selected: focused runtime dispatch tests, exact assembled TestProof014 MCP scenario, reconciliation gate test, ecosystem validators and regression, scoped lint/format, diagnostics, whitespace diff, and builder challenge.
+- Durable-test justification: added one maintained runtime test because storage-order-independent delivery topology is an observable shared dispatch contract and the prior suite did not distinguish it from incidental persistence ordering.
+- Commands run: `uv run pytest -q serve/kanban/tests/test_dispatch_runtime.py` (9 passed); `uv run pytest -q serve/mcp-kanban/tests/test_mcp_surface_contract.py` (5 passed, including TestProof014); `uv run pytest -q serve/kanban/tests/test_native_runtime.py::test_build_start_reconciliation_gates_are_mutation_free` (1 passed); `uv run python .owlbear/scripts/validate_agents.py`; `uv run python .owlbear/scripts/validate_skills.py`; `uv run pytest -q tests/test_agent_ecosystem_validation.py` (8 passed; three unrelated Python 3.16 deprecation warnings); explicit `ruff check` and `ruff format --check`; `uv run lint` on all owned paths; `git diff --check`.
+- AC-to-evidence map: AC1 is proved by `test_pick_waves_orders_plan_frontier_by_delivery_topology`, which reverses returned storage order and asserts ordered planner entries; AC2 is covered by the existing writer/readers and no-mutation runtime tests; AC3 is proved by the assembled MCP TestProof014 path through pick, start, one runner invocation, finish/release/recovery, unavailable-profile halt, and terminal events; AC4 is proved by `test_build_start_reconciliation_gates_are_mutation_free`; AC5 is proved by direct consumer edits plus agent and skill validators and `test_agent_ecosystem_validation.py`.
+- Current failure-key resolution: `#2036-AC3/accept-completion-prerequisite` is fully closed by archived prerequisites #2039 and #2037 plus the passing assembled TestProof014 path; reconciliation job 5 is no longer overwritten by the acceptance fixture.
+- Builder-challenger: pass. It independently ran the focused dispatch, MCP surface, and ecosystem suites with 22 passed and three unrelated warnings.
+- Memory: assessed all 20 recalled entries; applied the active-workspace and refined-proof-scope guidance.
+- Follow-up risks: none within this task scope; no changes were made to `_finish` composition, MCP adapter naming/contracts, planner implementation, or the complete DN-009 API.
