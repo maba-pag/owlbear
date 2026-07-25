@@ -10,7 +10,7 @@ integration point.
 
 ## Prerequisites
 
-- **Python 3.12+**
+- **Python 3.14+**
 - **[uv](https://docs.astral.sh/uv/)** package manager
 - **[VS Code](https://code.visualstudio.com/)** with the GitHub Copilot extension
 

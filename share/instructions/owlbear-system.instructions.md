@@ -24,7 +24,7 @@ applyTo: "**"
 
 ## 2. System Awareness
 
-- **Runtime.** Python 3.12+ with `uv` (never bare `pip`), VS Code/Copilot custom agents, MCP tools,
+- **Runtime.** Python 3.14+ with `uv` (never bare `pip`), VS Code/Copilot custom agents, MCP tools,
   and a Kanban execution board.
 - **Distribution and safety.** Clone = install; `setup/init.py` wires workspace configuration. Git
   history and audit logs provide review and recovery.

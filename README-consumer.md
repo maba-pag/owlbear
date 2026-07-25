@@ -18,7 +18,7 @@ memory — all scoped to your project directory and shared through the filesyste
 
 | Requirement | Why | How to get it |
 |-------------|-----|---------------|
-| Python 3.12+ | OwlBear runtime | [python.org](https://www.python.org/downloads/) |
+| Python 3.14+ | OwlBear runtime | [python.org](https://www.python.org/downloads/) |
 | [uv](https://docs.astral.sh/uv/) | Package manager and MCP server launcher | `pip install uv` or see uv docs |
 | VS Code | IDE | [code.visualstudio.com](https://code.visualstudio.com/) |
 | GitHub Copilot extension | Chat and agents | VS Code Extensions marketplace |

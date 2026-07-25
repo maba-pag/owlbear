@@ -1,14 +1,7 @@
-"""Failing tests for task #1340: set coherent Python runtime floor and Renovate policy.
+"""Tests for a coherent Python runtime floor and Renovate policy.
 
-AC1: Audit every synced Python package under serve/* for Python 3.13+ syntax/features
-     AND for dependencies whose own requires-python floor exceeds 3.12.
-AC2: If no justified newer-language feature found, all synced serve/*/pyproject.toml
-     must set requires-python = ">=3.12".
-AC3: If newer floor IS justified, document the feature and align all prerequisite refs.
-     (Conditional — only applies when AC1 finds a justification; AC4 applies otherwise.)
-AC4: .python-version, package metadata, README.md, README-consumer.md,
-     setup/setup-guide.md aligned to Python 3.12.
-AC5: .github/renovate.json has a Python floor-freeze package rule.
+The development runtime, package metadata, consumer prerequisites, and automated
+dependency policy must remain aligned to Python 3.14.
 """
 
 from __future__ import annotations
@@ -17,6 +10,8 @@ import json
 import re
 import pathlib
 import tomllib
+
+import pytest
 
 _ROOT = pathlib.Path()
 _PYTHON_VERSION_FILE = _ROOT / ".python-version"
@@ -32,6 +27,7 @@ _SYNCED_PACKAGES: dict[str, pathlib.Path] = {
     "mcp-kanban": _ROOT / "serve/mcp-kanban/pyproject.toml",
     "mcp-knowledge": _ROOT / "serve/mcp-knowledge/pyproject.toml",
     "mcp-memory": _ROOT / "serve/mcp-memory/pyproject.toml",
+    "memory": _ROOT / "serve/memory/pyproject.toml",
     "tools": _ROOT / "serve/tools/pyproject.toml",
 }
 
@@ -45,6 +41,7 @@ _SYNCED_SOURCES: dict[str, pathlib.Path] = {
     "mcp-kanban": _ROOT / "serve/mcp-kanban/src/owlbear_mcp_kanban",
     "mcp-knowledge": _ROOT / "serve/mcp-knowledge/src/owlbear_mcp_knowledge",
     "mcp-memory": _ROOT / "serve/mcp-memory/src/owlbear_mcp_memory",
+    "memory": _ROOT / "serve/memory/src/owlbear_memory",
     "tools": _ROOT / "serve/tools/src/owlbear_tools",
 }
 
@@ -57,7 +54,7 @@ _PY313_PLUS_PATTERNS = [
     r"\bTypeForm\b",  # PEP 747 — typing.TypeForm (Python 3.14+)
 ]
 
-# Prerequisite doc files that must state the Python 3.12 floor (AC4)
+# Prerequisite doc files that must state the Python 3.14 floor
 _PREREQUISITE_DOCS: dict[str, pathlib.Path] = {
     "README.md": _ROOT / "README.md",
     "README-consumer.md": _ROOT / "README-consumer.md",
@@ -84,13 +81,19 @@ def _has_313_plus_features(src_dir: pathlib.Path) -> bool:
 
 
 class TestFromAC_PythonVersionAlignment:
-    """AC4: .python-version must align to the project-wide Python 3.12 floor."""
+    """The local runtime pin must align to the project-wide Python 3.14 floor."""
 
-    def test_python_version_file_says_3_12(self) -> None:
+    def test_python_version_file_says_3_14(self) -> None:
         content = _PYTHON_VERSION_FILE.read_text().strip()
-        assert content.startswith("3.12"), (
-            f".python-version contains {content!r} — must be '3.12' (or '3.12.x') "
-            "to align with the project-wide Python 3.12 floor (AC4)."
+        assert content.startswith("3.14"), (
+            f".python-version contains {content!r} — must be '3.14' (or '3.14.x') "
+            "to align with the project-wide Python 3.14 floor."
+        )
+
+    @pytest.mark.parametrize(("package", "metadata"), _SYNCED_PACKAGES.items())
+    def test_package_requires_python_3_14_6(self, package: str, metadata: pathlib.Path) -> None:
+        assert _read_requires_python(metadata) == ">=3.14.6", (
+            f"{package} declares {_read_requires_python(metadata)!r}; all shipped packages must require Python >=3.14.6"
         )
 
 
@@ -115,7 +118,7 @@ class TestFromAC_RenovatePythonPolicy:
         assert has_allowed_versions, (
             "No Renovate python rule with 'allowedVersions' found — "
             "AC5 requires a rule that limits automated Python floor changes "
-            "(e.g., 'allowedVersions': '<3.13.0')."
+            "(e.g., 'allowedVersions': '>=3.14.0,<3.15.0')."
         )
 
     def test_renovate_python_rule_targets_pep621_or_uv_manager(self) -> None:
@@ -132,33 +135,33 @@ class TestFromAC_RenovatePythonPolicy:
 
 
 class TestFromAC_PrerequisiteDocsAlignment:
-    """AC4: Consumer-facing prerequisite docs must state the Python 3.12 floor."""
+    """Consumer-facing prerequisite docs must state the Python 3.14 floor."""
 
-    def test_readme_states_python_3_12_floor(self) -> None:
+    def test_readme_states_python_3_14_floor(self) -> None:
         content = (_ROOT / "README.md").read_text()
-        assert re.search(r"Python 3\.12", content), (
-            "README.md does not mention 'Python 3.12' — AC4 requires all "
-            "consumer-facing prerequisite docs to be aligned to the Python 3.12 floor."
+        assert re.search(r"Python 3\.14", content), (
+            "README.md does not mention 'Python 3.14' — all consumer-facing "
+            "prerequisite docs must align to the Python 3.14 floor."
         )
 
-    def test_readme_consumer_states_python_3_12_floor(self) -> None:
+    def test_readme_consumer_states_python_3_14_floor(self) -> None:
         content = (_ROOT / "README-consumer.md").read_text()
-        assert re.search(r"Python 3\.12", content), (
-            "README-consumer.md does not mention 'Python 3.12' — AC4 requires all "
-            "consumer-facing prerequisite docs to be aligned to the Python 3.12 floor."
+        assert re.search(r"Python 3\.14", content), (
+            "README-consumer.md does not mention 'Python 3.14' — all consumer-facing "
+            "prerequisite docs must align to the Python 3.14 floor."
         )
 
-    def test_setup_guide_states_python_3_12_floor(self) -> None:
+    def test_setup_guide_states_python_3_14_floor(self) -> None:
         content = (_ROOT / "setup/setup-guide.md").read_text()
-        assert re.search(r"Python 3\.12", content), (
-            "setup/setup-guide.md does not mention 'Python 3.12' — AC4 requires all "
-            "consumer-facing prerequisite docs to be aligned to the Python 3.12 floor."
+        assert re.search(r"Python 3\.14", content), (
+            "setup/setup-guide.md does not mention 'Python 3.14' — all consumer-facing "
+            "prerequisite docs must align to the Python 3.14 floor."
         )
 
-    def test_system_instructions_states_python_3_12_floor(self) -> None:
+    def test_system_instructions_states_python_3_14_floor(self) -> None:
         content = (_ROOT / "share/instructions/owlbear-system.instructions.md").read_text()
-        assert re.search(r"Python 3\.12", content), (
+        assert re.search(r"Python 3\.14", content), (
             "share/instructions/owlbear-system.instructions.md does not mention "
-            "'Python 3.12' — AC4 requires this synced prerequisite reference to be "
-            "aligned to the Python 3.12 floor."
+            "'Python 3.14' — this synced prerequisite reference must align to the "
+            "Python 3.14 floor."
         )
