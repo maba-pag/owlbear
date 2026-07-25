@@ -1,10 +1,10 @@
 ---
 id: 2051
 title: 'P8-01: Define the native packet-building workflow'
-status: build
+status: verify
 priority: high
 created: 2026-07-25T16:14:11.579317+02:00
-updated: 2026-07-25T16:14:11.579317+02:00
+updated: 2026-07-25T16:23:40.135528+02:00
 tags:
   - phase-8
   - scope:agent
@@ -57,3 +57,25 @@ In: one packet-building workflow, existing native query and lifecycle schemas, s
 Out: agent declarations, orchestrator wiring, runtime semantics, new MCP operations, assembled PROOF-006 scenarios, acceptor or auditor work, and setup or seed propagation.
 
 Proof guidance: inspect the workflow against admitted authority, public native schemas, scoped commit governance, and the four canonical finding classes.
+
+[[2026-07-25T16:23:40+02:00]]
+## Builder Notes
+
+Implemented the canonical native packet-building workflow in `share/skills/w-packet-building/SKILL.md` without changing agent declarations, orchestrator wiring, runtime/MCP behavior, proof scenarios, or WIRING.
+
+### AC Evidence
+- AC-1: Step 1 requires the successful started build pair, exact active identity, current `show_change` and `show_job` projections, current target-node plan and digest, current plan/predecessor receipts, candidate repository state, and unambiguous path custody before edits. Stale, malformed, incomplete, or contradictory evidence returns `BuildBlocked`.
+- AC-2: Steps 2 through 5 fix the admitted envelope, keep one warm engine-owned writer claim, implement all packet outputs, run boundary-valid proof, create one explicit-path scoped commit, and generate mandatory reviewer context containing authority, packet, diff, changed paths, proof, commit/custody, and prior findings.
+- AC-3: Step 6 exhaustively maps `implementation-defect` to local repair plus repair commit, regenerated context, and fresh pass. `unforeseeable-discovery`, `planning-omission`, and `scope-change` return `SpecificationReentry`; commit failure returns `CommitFailed`; malformed review returns `BuildBlocked`. Only success carries finish fields.
+- AC-4: `BuilderSuccess` returns exactly `receipt_id`, `code_revision`, `evidence`, `evidence_ids`, and `impact_closure`. The authority boundary and Step 8 forbid builder pick, start, finish, release, and recovery calls and leave lifecycle mapping to the orchestrator.
+
+### Validation
+- `uv run python .owlbear/scripts/validate_skills.py`: passed.
+- `uv run pre-commit run --files share/skills/w-packet-building/SKILL.md`: passed after the end-of-file hook normalized the final newline and the identical command was rerun.
+- `uv run pytest -q tests/test_agent_ecosystem_validation.py -k 'not declared_owlbear_mcp_tools_exist_in_live_registries'`: 7 passed.
+- Full `tests/test_agent_ecosystem_validation.py`: 7 passed and 1 unrelated failure from pre-existing dirty `share/agents/collector.agent.md` newline-prefixed Kanban tool declarations; #2051 changes no agent or registry.
+- VS Code diagnostics: no errors.
+- `git diff --check` on the owned workflow and task record: passed.
+- `builder-challenger`: `pass`; no findings.
+
+No deviation from the shaped Change Module Map. Memory recall and all ten returned entries were assessed; the active-repository entry prevented editing the sibling consumer checkout.
