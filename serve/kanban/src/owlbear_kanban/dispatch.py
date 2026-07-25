@@ -492,12 +492,13 @@ class DispatchRuntime:
         if holder is not None and self._matches(holder, request):
             replacement = self._without_holder(coordination, holder)
             participants = (self._coordination.replacement_participant(replacement, token),)
-        if participant_factory is None:
-            return self._native._finish(request, kind, participants)  # noqa: SLF001
         return self._native._finish(  # noqa: SLF001
             request,
             kind,
-            lambda stored, finish_request: (*participants, *participant_factory(stored, finish_request)),
+            lambda stored, finish_request: (
+                *participants,
+                *(participant_factory(stored, finish_request) if participant_factory is not None else ()),
+            ),
         )
 
     def _stale_diagnostic(self, coordination: WriterCoordination) -> DispatchDiagnostic | None:

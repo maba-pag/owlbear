@@ -7,10 +7,14 @@ from pathlib import Path
 import pytest
 
 from owlbear_kanban import (
+    AttemptStore,
     DispatchDiagnostic,
     DispatchDiagnosticCode,
     DispatchOmissionReason,
     DispatchRuntime,
+    FinishJobDiagnosticCode,
+    FinishJobRequest,
+    FinishPlanRequest,
     JobGeneration,
     JobRecord,
     JobStore,
@@ -22,7 +26,9 @@ from owlbear_kanban import (
     StartJobRequest,
     compute_node_plan_digest,
     load_change,
+    parse_impact_closure,
 )
+from owlbear_kanban.runtime_transaction import TransactionConflictError
 
 
 class _History:
@@ -97,6 +103,47 @@ def _request(job_id: int) -> StartJobRequest:
         process_id="process-001",
         claimed_at="2026-07-24T00:01:00Z",
         candidate_revision="a" * 40,
+    )
+
+
+def _copied_revision(revision, tmp_path):
+    changes_dir = tmp_path / "changes"
+    shutil.copytree(revision.source_dir, changes_dir / revision.change_id)
+    (changes_dir / revision.change_id / "plans" / "DN-001.yaml").unlink()
+    result = load_change(changes_dir, revision.change_id)
+    assert result.revision is not None
+    return result.revision
+
+
+def _plan_request(revision) -> FinishPlanRequest:
+    target = revision.graph.nodes[0]
+    proof = revision.resolve(target.proof)
+    closure = {"paths": ["serve/kanban/"], "authority_targets": [target.id, target.proof]}
+    return FinishPlanRequest.model_validate(
+        {
+            "job_id": 1,
+            "attempt_id": "attempt-001",
+            "claim_id": "claim-001",
+            "actor_id": "agent-001",
+            "process_id": "process-001",
+            "finished_at": "2026-07-24T00:02:00Z",
+            "receipt_id": "plan-001",
+            "code_revision": "a" * 40,
+            "evidence": {"methods": list(proof.method)},
+            "evidence_ids": ("plan-proof-001",),
+            "node_plan": {
+                "packets": [
+                    {"id": f"{target.id}-PK-001", "dependencies": [], "impact_closure": closure},
+                    {
+                        "id": f"{target.id}-PK-002",
+                        "dependencies": [f"{target.id}-PK-001"],
+                        "impact_closure": closure,
+                    },
+                ]
+            },
+            "build_job_ids": (2, 3),
+            "accept_job_id": 4,
+        }
     )
 
 
@@ -183,6 +230,114 @@ def test_expired_recovery_clears_its_writer_holder(revision, tmp_path) -> None:
     assert len(recovered.recovered) == 1
     coordination = (work_root / "dispatch" / "coordination.yaml").read_text(encoding="utf-8")
     assert "readers: []" in coordination
+
+
+def test_finish_plan_build_and_audit_publish_with_coordination_release(revision, tmp_path) -> None:
+    revision = _copied_revision(revision, tmp_path)
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    store = JobStore(work_root)
+    _materialize(store, _record(revision, 1).model_copy(update={"kind": "plan", "receipt_id": "bootstrap-001"}))
+    native = NativeRuntime(revision, work_root, _History(), timedelta(minutes=5))
+    runtime = DispatchRuntime(native, work_root)
+    plan_request = _plan_request(revision)
+
+    assert not isinstance(runtime.start(_request(1)), DispatchDiagnostic)
+    plan = runtime.finish_plan(plan_request)
+    assert plan.diagnostic is None
+    assert plan.receipt is not None
+    assert plan.event is not None
+    assert "writer:\nreaders: []" in (work_root / "dispatch" / "coordination.yaml").read_text(encoding="utf-8")
+
+    build_request = FinishJobRequest(
+        job_id=2,
+        attempt_id="attempt-002",
+        claim_id="claim-002",
+        actor_id="agent-001",
+        process_id="process-001",
+        finished_at="2026-07-24T00:03:00Z",
+        receipt_id="build-001",
+        code_revision="a" * 40,
+        evidence=plan_request.evidence,
+        evidence_ids=("build-proof-001",),
+        impact_closure=parse_impact_closure(plan_request.node_plan["packets"][0]["impact_closure"]),
+    )
+    assert not isinstance(runtime.start(_request(2)), DispatchDiagnostic)
+    build = runtime.finish_build(build_request)
+    assert build.diagnostic is None
+    assert build.receipt is not None
+    assert build.event is not None
+    assert "writer:\nreaders: []" in (work_root / "dispatch" / "coordination.yaml").read_text(encoding="utf-8")
+
+    current_revision = native._revision  # noqa: SLF001 - plan completion replaces the active authority revision.
+    _materialize(
+        store,
+        _reader_record(current_revision, 5, "audit").model_copy(
+            update={"node_plan_digest": compute_node_plan_digest(current_revision, current_revision.graph.nodes[0].id)}
+        ),
+    )
+    audit_request = FinishJobRequest(
+        job_id=5,
+        attempt_id="attempt-005",
+        claim_id="claim-005",
+        actor_id="agent-001",
+        process_id="process-001",
+        finished_at="2026-07-24T00:04:00Z",
+        receipt_id="audit-001",
+        code_revision="a" * 40,
+        evidence=plan_request.evidence,
+        evidence_ids=("audit-proof-001",),
+    )
+    assert not isinstance(runtime.start(_request(5)), DispatchDiagnostic)
+    audit = runtime.finish_audit(audit_request)
+
+    assert audit.diagnostic is None
+    assert audit.receipt is not None
+    assert audit.event is not None
+    assert "readers: []" in (work_root / "dispatch" / "coordination.yaml").read_text(encoding="utf-8")
+    assert tuple(event.kind for event in AttemptStore(work_root).list()) == (
+        "started",
+        "succeeded",
+        "started",
+        "succeeded",
+        "started",
+        "succeeded",
+    )
+
+
+def test_finish_diagnostics_and_coordination_occ_conflicts_publish_nothing(revision, tmp_path, monkeypatch) -> None:
+    revision = _copied_revision(revision, tmp_path)
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    store = JobStore(work_root)
+    _materialize(store, _record(revision, 1).model_copy(update={"kind": "plan", "receipt_id": "bootstrap-001"}))
+    runtime = DispatchRuntime(NativeRuntime(revision, work_root, _History(), timedelta(minutes=5)), work_root)
+    request = _plan_request(revision)
+    coordination_path = work_root / "dispatch" / "coordination.yaml"
+
+    assert not isinstance(runtime.start(_request(1)), DispatchDiagnostic)
+    diagnostic = runtime.finish_plan(request.model_copy(update={"claim_id": "wrong-claim"}))
+    assert diagnostic.diagnostic is not None
+    assert diagnostic.diagnostic.code is FinishJobDiagnosticCode.NON_OWNER
+    assert store.read(1).job.attempt_id == "attempt-001"
+    assert AttemptStore(work_root).read("attempt-001", 2).event is None
+    assert not (revision.source_dir / "receipts" / "plan-001.yaml").exists()
+    assert "job_id: 1" in coordination_path.read_text(encoding="utf-8")
+
+    original = runtime._coordination.replacement_participant  # noqa: SLF001 - create a real stale-token conflict.
+
+    def stale_token(replacement, token):
+        coordination_path.write_bytes(coordination_path.read_bytes() + b"\n")
+        return original(replacement, token)
+
+    monkeypatch.setattr(runtime._coordination, "replacement_participant", stale_token)  # noqa: SLF001
+    with pytest.raises(TransactionConflictError):
+        runtime.finish_plan(request)
+
+    assert store.read(1).job.attempt_id == "attempt-001"
+    assert AttemptStore(work_root).read("attempt-001", 2).event is None
+    assert not (revision.source_dir / "receipts" / "plan-001.yaml").exists()
+    assert "job_id: 1" in coordination_path.read_text(encoding="utf-8")
 
 
 def test_pick_waves_is_deterministic_and_uses_current_job_state(revision, tmp_path) -> None:
