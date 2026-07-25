@@ -4,7 +4,7 @@ title: 'P5-05: Replace task requests with native change and job requests'
 status: build
 priority: high
 created: 2026-07-24T23:22:11.813787+02:00
-updated: 2026-07-24T23:22:44.362426+02:00
+updated: 2026-07-25T09:16:55.081739+02:00
 tags:
   - phase-5
   - scope:mcp-kanban
@@ -35,16 +35,14 @@ ac:
     `StoredRequest` including resolution state; a missing ID returns a stable not-found
     `ToolError`.'
 proof_bundle: existing+challenge
-blocked: true
-block_reason: 'PARTIAL_GRAPH_COMMIT: #2032 creation rejected by ERR_AC_ITEM_TOO_LONG;
-  recovery owner shaper must create approved T6 with each AC <=500 chars, complete
-  #1981 projection/dependency routing, audit #2027-#2032, then clear blocks.'
+blocked: false
+block_reason:
 claimed_at:
 archival_reason:
 archival_refs: []
 ---
 ## Projection
-`replace-delivery-pipeline` at `b56fedd21a54a670b5e192ef88a86d6cb4434597b264135ae6a9fd330458bdca`; `DN-009-PK-005`. Resolve normative behavior from `DN-009`, `REQ-015`, `IF-010`, and `PROOF-011`; this record is not specification authority.
+`replace-delivery-pipeline` at `3f6c656289911320bb5e7faf37b5e86ffa8511e729ade201a03a19913e33d990`; `DN-009-PK-005`. Resolve normative behavior from `DN-009`, `REQ-015`, `IF-010`, and `PROOF-011`; this record is not specification authority.
 
 ## Outcome
 Replace task-ID request adapters with `create_request`, `list_requests`, and `show_request` over native change, authority-digest, graph-target, and job identities while preserving user/Cockpit-controlled resolution.
@@ -55,3 +53,7 @@ In: strict MCP request models, stable request error mapping, and `NativeRequestR
 Out: request resolution, corrective invalidation, Cockpit UI/API work, task request compatibility, legacy removal outside MCP registration, and core request semantics.
 
 Proof guidance: invoke public MCP request calls over the real native request runtime and job store with a temporary work root; replacement occurs only below the MCP boundary.
+
+[[2026-07-25T09:16:55+02:00]]
+## Shape Notes
+Connected partial-commit repair is summarized in #1981. Refreshed this packet to admitted digest `3f6c65628991`; outcome, AC, parent, dependency on #2027, priority, and build route remain the approved T5 contract. Native request ownership was source-checked and the concrete graph passed shaper challenge.

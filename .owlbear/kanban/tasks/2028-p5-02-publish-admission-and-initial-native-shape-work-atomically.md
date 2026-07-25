@@ -1,10 +1,10 @@
 ---
 id: 2028
-title: 'P5-02: Publish admission and initial native shape work atomically'
+title: 'P5-02: Publish admission and initial native plan work atomically'
 status: build
 priority: high
 created: 2026-07-24T23:21:52.955135+02:00
-updated: 2026-07-24T23:22:44.339185+02:00
+updated: 2026-07-25T09:16:55.055026+02:00
 tags:
   - phase-5
   - scope:mcp-kanban
@@ -35,23 +35,25 @@ ac:
     manifest, retry through public `admit_change` publishes both receipt and generation
     or neither, with no one-sided admitted artifact.'
 proof_bundle: existing+challenge
-blocked: true
-block_reason: 'PARTIAL_GRAPH_COMMIT: #2032 creation rejected by ERR_AC_ITEM_TOO_LONG;
-  recovery owner shaper must create approved T6 with each AC <=500 chars, complete
-  #1981 projection/dependency routing, audit #2027-#2032, then clear blocks.'
+blocked: false
+block_reason:
 claimed_at:
 archival_reason:
 archival_refs: []
 ---
 ## Projection
-`replace-delivery-pipeline` at `b56fedd21a54a670b5e192ef88a86d6cb4434597b264135ae6a9fd330458bdca`; `DN-009-PK-002`. Resolve normative behavior from `DN-009`, `IF-002`, `IF-010`, and `PROOF-011`; this record is not specification authority.
+`replace-delivery-pipeline` at `3f6c656289911320bb5e7faf37b5e86ffa8511e729ade201a03a19913e33d990`; `DN-009-PK-002`. Resolve normative behavior from `DN-009`, `IF-002`, `IF-010`, and `PROOF-011`; this record is not specification authority.
 
 ## Outcome
-Expose `admit_change` as a strict adapter over the existing admission transaction so one current revision publishes its immutable admission receipt and initial native shape-job generation as one recoverable operation.
+Expose `admit_change` as a strict adapter over the existing admission transaction so one current revision publishes its immutable admission receipt and initial native plan-job generation as one recoverable operation.
 
 ## Envelope
 In: MCP admission parameter/result models, stable admission error mapping, `AdmissionTransaction`, and focused transaction proof.
 
-Out: design editing, graph mutation beyond admission-owned metadata, downstream dispatch/completion, requests, legacy removal, and core admission semantics.
+Out: design editing, delivery-authority mutation beyond admission-owned metadata, downstream dispatch/completion, requests, legacy removal, and core admission semantics.
 
 Proof guidance: invoke public `admit_change` over the real admission and runtime transaction owners with a temporary change store and failure injection below the MCP boundary.
+
+[[2026-07-25T09:16:55+02:00]]
+## Shape Notes
+Connected partial-commit repair is summarized in #1981. Refreshed this packet to admitted digest `3f6c65628991` and replaced stale shape-job wording with initial plan-job generation. AC, parent, dependency on #2027, priority, and build route remain the approved T2 contract. Concrete graph passed shaper challenge.
