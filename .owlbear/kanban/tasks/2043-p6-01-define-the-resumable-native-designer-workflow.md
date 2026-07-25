@@ -1,10 +1,10 @@
 ---
 id: 2043
 title: 'P6-01: Define the resumable native designer workflow'
-status: verify
+status: collect
 priority: high
 created: 2026-07-25T14:28:48.796665+02:00
-updated: 2026-07-25T14:35:16.768921+02:00
+updated: 2026-07-25T14:36:36.892856+02:00
 tags:
   - phase-6
   - scope:agent
@@ -73,3 +73,21 @@ Implemented the canonical native Specification workflow in `share/skills/w-desig
 - Editor diagnostics — none.
 - `uv run pytest -q tests/test_agent_ecosystem_validation.py` — 7 passed; one unrelated live-registry failure because existing `collector.agent.md` declares generic task tools removed by archived DN-009. No failure references the new skill.
 - `builder-challenger` — pass; no findings.
+
+[[2026-07-25T14:36:36+02:00]]
+## Verify Notes
+Verified builder revision `dd328c058f9210a533582ec78306a1c08842d1a9` independently against admitted DN-005, IF-006, PROOF-004, REQ-001, and KEEP-001/002/003/008/009.
+
+### AC Evidence
+- AC-1: Steps 1-2 share one native `change_id`, select or create from both entries, require `show_change` and all semantic authority reads before mutation, preserve confirmed authority, and resume at the earliest unresolved gate.
+- AC-2: Steps 4-5 route repository facts to read-only evidence and permit exactly one structured `askQuestions` material choice before stopping.
+- AC-3: Steps 3-7 explicitly own the Product Promise and accepted exclusions, four canonical evidence states, corroborated qualified memory, adaptive architecture, and complete modular delivery authority.
+- AC-4: Steps 8-9 fail closed on challenge, baseline, validation, approval, or digest defects; they validate immediately before identical-evidence `admit_change` and report persisted receipt, generation, and plan-job identities.
+
+### Proof
+- `git show --check dd328c058f9210a533582ec78306a1c08842d1a9` — pass.
+- `uv run python .owlbear/scripts/validate_skills.py` — pass.
+- `uv run pytest -q tests/test_agent_ecosystem_validation.py -k 'not declared_owlbear_mcp_tools_exist_in_live_registries'` — 7 passed.
+- Editor diagnostics — none.
+- Full ecosystem live-registry check remains blocked by pre-existing generic tool declarations in `collector.agent.md`; this does not touch or exercise the new skill and belongs to later admitted agent migration work.
+- `verifier-challenger` — pass; documentation-only slice has sufficient evidence and no current follow-up.
