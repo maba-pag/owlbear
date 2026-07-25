@@ -1,10 +1,10 @@
 ---
 id: 1987
 title: 'Bootstrap DN-010: Provide graph-aware Cockpit backend contracts and events'
-status: collect
+status: archived
 priority: high
 created: 2026-07-22T01:08:21.141570+02:00
-updated: 2026-07-25T22:32:06.426568+02:00
+updated: 2026-07-26T00:15:14.166930+02:00
 tags:
   - bootstrap-projection
   - change:replace-delivery-pipeline
@@ -39,7 +39,7 @@ proof_bundle: existing+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Bootstrap Projection Identity
@@ -90,3 +90,16 @@ APPROVED GRAPH
 Replaced the stale `9387...` monolithic projection with admitted modular digest `3f6c656289911320bb5e7faf37b5e86ffa8511e729ade201a03a19913e33d990`. Grounded DN-010, REQ-021, IF-011, MIG-003, RISK-005, and PROOF-015 in canonical authority and verified current Cockpit/core owners.
 
 Created five build-ready packets: #2066 native context and change/graph reads; #2067 paged work/evidence/invalidation/health reads; #2068 request resolution and claim release conflicts; #2069 native SSE, read-only legacy inventory, and backend route cutover; #2070 assembled PROOF-015. Concrete dependency audit matches `#2066 -> #2067 -> #2068 -> #2069 -> #2070`, with #2069 also depending on #2067. Frontend, immutable snapshot/global deletion, and complete-system proof remain DN-011 through DN-013. Shaper challenger: pass.
+
+[[2026-07-26T00:15:14+02:00]]
+## Collect Notes
+ARCHIVED: DN-010 aggregate is complete at admitted digest `3f6c656289911320bb5e7faf37b5e86ffa8511e729ade201a03a19913e33d990`.
+
+Aggregate closure:
+- Descendants #2066-#2070 are all archived completed with builder, verifier, challenger, and collector evidence.
+- Final tested verifier SHA `fcfc2e72991ec6d3045e27ccb6e89a5fa5aa4870` is an ancestor of HEAD.
+- Fresh aggregate execution of maintained `tests/test_cockpit_native_integration.py`: 3 passed, covering complete IF-011/PROOF-015 assembled HTTP/SSE journey, controls, strict schemas, stable errors including real core assembly failure, non-mutation, legacy inventory, and old-route absence.
+- Scope remained within DN-010: frontend rendering, immutable snapshot/global cutover, and complete-system proof remain DN-011 through DN-013.
+- No descendant, request, block, or follow-up remains open.
+
+Collector memories were assessed before archive.
