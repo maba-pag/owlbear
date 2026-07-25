@@ -1,10 +1,10 @@
 ---
 id: 2057
 title: 'P9-03: Install the independent node acceptor workflow'
-status: collect
+status: archived
 priority: high
 created: 2026-07-25T17:19:45.152185+02:00
-updated: 2026-07-25T18:22:18.616095+02:00
+updated: 2026-07-25T18:23:02.777068+02:00
 tags:
   - phase-9
   - scope:agent
@@ -38,7 +38,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Projection
@@ -98,6 +98,17 @@ None.
 - AC-3: confirmed one-job dispatch and unchanged acceptor-owned field forwarding to `finish_accept`, `reject_accept`, or identity-preserving `release_job`; orchestration retains no proof, finding, correction, replacement, or evidence judgment.
 - Independently repaired two local guard parser bypasses reported by the verifier challenger: Git `--output` options and Bash `&>` redirection are now denied, with focused unit and real subprocess evidence. The challenger passed after this repair.
 - Final validation: all 18 agents and all skills validate; 54 relevant write-guard, ecosystem, and setup-hook tests pass; explicit lint over all seven packet files passes; VS Code diagnostics are clean. The unrelated aggregate registry assertion still fails only on pre-existing legacy task grants and was not used as evidence.
+
+### Required Follow-up
+None.
+
+[[2026-07-25T18:23:02+02:00]]
+## Collect Notes
+- Confirmed complete role history across initial builder `d0d91497`, verifier rejection `b448488d`, hard-control repair `8f083f1b`, and passing verifier `b2d5b16a`; `AC-2/terminal-head-mutation` is explicitly resolved and no required follow-up remains.
+- Confirmed dependency #2056 is archived completed and no pending structured request exists.
+- Closure covers all ACs: complete exact-commit acceptance dispositions; hard role/tool/hook/HEAD/index/worktree independence; and one-job field-preserving orchestration to finish, reject, or release without acceptance judgment.
+- Final evidence is 54 passing guard/ecosystem/setup tests, all 18 agent and all skill validators, explicit lint over the complete packet, clean diagnostics, live new-tool resolution, real subprocess denial checks, and verifier challenger pass.
+- The unrelated aggregate registry assertion remains a pre-existing legacy task-tool mismatch and does not affect the new acceptor or rejection surface.
 
 ### Required Follow-up
 None.
