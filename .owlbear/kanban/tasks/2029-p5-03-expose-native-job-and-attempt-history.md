@@ -1,10 +1,10 @@
 ---
 id: 2029
 title: 'P5-03: Expose native job and attempt history'
-status: verify
+status: collect
 priority: high
 created: 2026-07-24T23:22:11.768263+02:00
-updated: 2026-07-25T10:28:20.057870+02:00
+updated: 2026-07-25T10:42:00.120492+02:00
 tags:
   - phase-5
   - scope:mcp-kanban
@@ -85,3 +85,16 @@ All tools use NativeRuntime paged APIs; show_job does not scan pages. Cursor Val
 - serve/mcp-kanban/tests/test_mcp_surface_contract.py: EXPECTED_TOOLS += 4
 
 Builder-challenger: pass (AC evidence aligned, no mutation, stable error paths)
+
+[[2026-07-25T10:42:00+02:00]]
+**Verifier: PASS**
+
+Production code correct - all 4 MCP tools delegate to NativeRuntime paged queries with proper error mapping, show_job uses JobStore.read + project_job composition, RuntimeJobProjection has all required fields, ordering correct.
+
+Strengthened test_mcp_native_query_tools.py (verifier local correction per Rent Test):
+- AC-1: Added active+archived jobs, all projection fields, cursor pagination, stale cursor error
+- AC-2: Added JobRecord composition check, missing job error
+- AC-3: Added event ordering, field preservation, cursor error
+- AC-4: Added chronological ordering, kind fields, cursor error
+
+444 tests pass, ruff clean. Verifier-challenger: pass.

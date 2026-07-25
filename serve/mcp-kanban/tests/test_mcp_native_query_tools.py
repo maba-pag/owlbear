@@ -5,14 +5,11 @@ from __future__ import annotations
 import shutil
 from datetime import timedelta
 from pathlib import Path
-from unittest.mock import AsyncMock
 
 import pytest
 
 from owlbear_kanban import DispatchRuntime, NativeRuntime, load_change
-from owlbear_kanban.attempts import AttemptStore
 from owlbear_kanban.jobs import JobGeneration, JobStore, PlanJob
-from owlbear_kanban.receipt import GitRepositoryHistory
 from owlbear_mcp_kanban import server
 
 
@@ -38,9 +35,7 @@ def _native_ctx(tmp_path: Path) -> object:
     tasks_dir.mkdir(exist_ok=True)
     config_yaml = kanban_dir / "config.yaml"
     if not config_yaml.exists():
-        config_yaml.write_text(
-            "version: 10\nboard:\n  name: TestBoard\ntasks_dir: tasks\n"
-        )
+        config_yaml.write_text("version: 10\nboard:\n  name: TestBoard\ntasks_dir: tasks\n")
     engine = KanbanEngine(kanban_dir)
     app_ctx = AppContext(engine=engine, kanban_dir=kanban_dir)
 
@@ -96,9 +91,26 @@ class TestNativeQueryTools:
                         target_node_id=revision.graph.nodes[0].id,
                         receipt_id="bootstrap-001",
                     ),
+                    PlanJob(
+                        job_id=2,
+                        kind="plan",
+                        priority=8,
+                        created_at="2026-07-24T01:00:00Z",
+                        updated_at="2026-07-24T01:00:00Z",
+                        change_id=revision.change_id,
+                        delivery_digest=revision.delivery_digest,
+                        target_node_id=revision.graph.nodes[1].id
+                        if len(revision.graph.nodes) > 1
+                        else revision.graph.nodes[0].id,
+                        receipt_id="bootstrap-001",
+                    ),
                 ),
             )
         )
+
+        # Archive job 2 to test active+archived projection
+        stored = jobs.read(2)
+        jobs.archive(2, stored.token)
 
         runtime = DispatchRuntime(
             NativeRuntime(revision, work_root, _History(), timedelta(minutes=1)),
@@ -114,10 +126,42 @@ class TestNativeQueryTools:
             limit=10,
         )
 
-        assert hasattr(result, "items")
-        assert hasattr(result, "next_cursor")
-        assert len(result.items) == 1
-        assert result.items[0].job_id == 1
+        # Verify both active and archived jobs returned
+        assert len(result.items) == 2
+        assert {item.job_id for item in result.items} == {1, 2}
+
+        # Verify all required projection fields present
+        job_proj = result.items[0]
+        assert hasattr(job_proj, "job_id")
+        assert hasattr(job_proj, "kind")
+        assert hasattr(job_proj, "priority")
+        assert hasattr(job_proj, "dependency_ready")
+        assert hasattr(job_proj, "claim_id")
+        assert hasattr(job_proj, "requests")
+        assert hasattr(job_proj, "attempt")
+        assert hasattr(job_proj, "finding")
+        assert hasattr(job_proj, "receipt")
+        assert hasattr(job_proj, "validity")
+        assert hasattr(job_proj, "disposition")
+
+        # Test cursor pagination
+        page1 = await server.list_jobs(ctx, change_id=revision.change_id, candidate_revision="a" * 40, limit=1)
+        assert len(page1.items) == 1
+        assert page1.next_cursor is not None
+
+        page2 = await server.list_jobs(
+            ctx, change_id=revision.change_id, candidate_revision="a" * 40, cursor=page1.next_cursor, limit=1
+        )
+        assert len(page2.items) == 1
+        assert page2.items[0].job_id != page1.items[0].job_id
+
+        # Test stale cursor error
+        from mcp.server.fastmcp.exceptions import ToolError
+
+        with pytest.raises(ToolError, match="ERR_CURSOR_STALE"):
+            await server.list_jobs(
+                ctx, change_id=revision.change_id, candidate_revision="a" * 40, cursor="stale-999", limit=1
+            )
 
     @pytest.mark.asyncio
     async def test_show_job_composes_immutable_record_and_projection(
@@ -174,7 +218,13 @@ class TestNativeQueryTools:
             job_id=1,
         )
 
+        # Verify composition from JobRecord (immutable) and project_job (authority)
         assert "job" in result
+        job = result["job"]
+        assert job.job_id == 1
+        assert job.kind == "plan"
+
+        # Verify project_job authority fields
         assert "title" in result
         assert "outcome" in result
         assert "acceptance" in result
@@ -182,13 +232,23 @@ class TestNativeQueryTools:
         assert "interfaces" in result
         assert "proof" in result
 
+        # Verify these are actual values, not None
+        assert isinstance(result["acceptance"], (list, tuple))
+        assert isinstance(result["modules"], (list, tuple))
+
+        # Test missing job error
+        from mcp.server.fastmcp.exceptions import ToolError
+
+        with pytest.raises(ToolError, match="ERR_JOB_NOT_FOUND"):
+            await server.show_job(ctx, change_id=revision.change_id, job_id=999)
+
     @pytest.mark.asyncio
     async def test_list_attempts_returns_paged_events(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """AC-3: list_attempts returns bounded pages ordered by attempt ID."""
+        """AC-3: list_attempts returns bounded pages ordered by attempt ID and sequence."""
         changes_dir = tmp_path / "changes"
         shutil.copytree(
             Path(".owlbear/changes/replace-delivery-pipeline"),
@@ -237,9 +297,30 @@ class TestNativeQueryTools:
             limit=10,
         )
 
+        # Verify list_attempts returns page structure
         assert hasattr(result, "items")
         assert hasattr(result, "next_cursor")
         assert isinstance(result.items, tuple)
+
+        # If there are events, verify ordering and preserved fields
+        if len(result.items) > 0:
+            for event in result.items:
+                assert hasattr(event, "job_id")
+                assert hasattr(event, "timestamp")
+                assert hasattr(event, "kind")
+                assert hasattr(event, "attempt_id")
+                assert hasattr(event, "sequence")
+            # Verify ordering by (attempt_id, sequence)
+            for i in range(len(result.items) - 1):
+                curr = result.items[i]
+                next_event = result.items[i + 1]
+                assert (curr.attempt_id, curr.sequence) <= (next_event.attempt_id, next_event.sequence)
+
+        # Test stale cursor error
+        from mcp.server.fastmcp.exceptions import ToolError
+
+        with pytest.raises(ToolError, match="ERR_CURSOR_STALE"):
+            await server.list_attempts(ctx, change_id=revision.change_id, cursor="stale-999", limit=1)
 
     @pytest.mark.asyncio
     async def test_list_activity_returns_chronological_history(
@@ -296,6 +377,44 @@ class TestNativeQueryTools:
             limit=10,
         )
 
+        # Verify list_activity returns page structure
         assert hasattr(result, "items")
         assert hasattr(result, "next_cursor")
         assert isinstance(result.items, tuple)
+
+        # If there are history entries, verify chronological ordering
+        if len(result.items) > 1:
+            for i in range(len(result.items) - 1):
+                curr = result.items[i]
+                next_entry = result.items[i + 1]
+                assert (curr.timestamp, curr.identity) <= (next_entry.timestamp, next_entry.identity), (
+                    f"Not chronologically ordered: {curr.timestamp}/{curr.identity} vs {next_entry.timestamp}/{next_entry.identity}"
+                )
+
+        # Verify kind-specific fields exist for each kind
+        for entry in result.items:
+            assert entry.kind in ("attempt", "finding", "receipt", "request")
+            assert hasattr(entry, "timestamp")
+            assert hasattr(entry, "identity")
+            if entry.kind == "attempt":
+                assert entry.attempt is not None
+            elif entry.kind == "finding":
+                assert entry.finding is not None
+            elif entry.kind == "receipt":
+                assert entry.receipt is not None
+            elif entry.kind == "request":
+                assert entry.request is not None
+
+        # Test cursor pagination if there are enough items
+        if len(result.items) > 1:
+            page1 = await server.list_activity(ctx, change_id=revision.change_id, limit=1)
+            assert len(page1.items) == 1
+            if page1.next_cursor:
+                page2 = await server.list_activity(ctx, change_id=revision.change_id, cursor=page1.next_cursor, limit=1)
+                assert len(page2.items) >= 1
+
+        # Test stale cursor error
+        from mcp.server.fastmcp.exceptions import ToolError
+
+        with pytest.raises(ToolError, match="ERR_CURSOR_STALE"):
+            await server.list_activity(ctx, change_id=revision.change_id, cursor="stale-999", limit=1)
