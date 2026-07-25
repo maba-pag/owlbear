@@ -1,10 +1,10 @@
 ---
 id: 2034
 title: 'P1-C3: Replace native shape identity with plan admission'
-status: verify
+status: collect
 priority: high
 created: 2026-07-25T02:46:39.499546+02:00
-updated: 2026-07-25T05:22:07.222705+02:00
+updated: 2026-07-25T05:27:58.912987+02:00
 tags:
   - change:replace-delivery-pipeline
   - node:DN-002
@@ -38,8 +38,13 @@ ac:
     receipt currentness, and change health use modular authority plus isolated plan
     bytes, and an injected transaction interruption exposes prior bytes or the complete
     new YAML without `graph.yaml` mutation.'
-blocked: false
-block_reason:
+blocked: true
+block_reason: 'COMMIT_FAILED: ruff format rewrites valid `except (A, B)` to invalid
+  Python 2 syntax, while ruff lint rejects the formatter-stable exception union. Recovery:
+  reconcile the repository Ruff formatter/linter behavior, then run `uv --project
+  /Users/markus/Projects/owlbear-dev run commit-owned -m "fix: verify plan admission
+  exception handling (#2034, verifier)" -- serve/kanban/src/owlbear_kanban/admission_transaction.py
+  .owlbear/kanban/tasks/2034-p1-c3-replace-native-shape-identity-with-plan-admission.md`.'
 claimed_at:
 archival_reason:
 archival_refs: []
@@ -154,3 +159,43 @@ Shaper challenger first failed on stale scope, waiver, fixture, and low-level st
 
 ### Follow-up Risks
 - None within this task boundary.
+
+[[2026-07-25T05:25:58+02:00]]
+## Verify Notes
+
+### Evidence Reviewed
+- Reviewed task authority: admitted digest `3f6c656289911320bb5e7faf37b5e86ffa8511e729ade201a03a19913e33d990`; AC1 through AC5; latest Builder Notes and Repair Closure Map.
+- No resolved requests apply to this task.
+- Compared commit `ac9af443` with the Change Module Map. Changed Kanban runtime, public export, MCP model/server, focused test owners, and the retained historical receipt match the mapped boundary. No module-map deviation remains.
+
+### Named Authorities And Boundary
+- The normal assembled boundary exercised is `AdmissionTransaction` and `NativeRuntime.finish_plan` through the maintained Kanban and MCP contract tests.
+- Low-level `NodePlanStore` semantics remain the #2033 dependency boundary; this task's focused proof reaches the assembled plan-file, receipt, currentness, health, and recovery behavior above it.
+- The retained `receipts/shape-001.yaml` is inspected only as inert historical bytes and is excluded from active-contract source auditing.
+
+### Checks Run
+- `uv run pytest` on the eight focused Kanban runtime tests and three focused MCP contract tests: `340 passed`; two Python 3.14 multiprocessing fork deprecation warnings only.
+- Active-source and maintained-test audit for `ShapeJob`, `FinishShapeRequest`, `plan_shape_jobs`, active shape job kind, and shape receipt discriminator: no matches.
+- `git diff --check ac9af443^ ac9af443` and `git show --check ac9af443`: passed.
+
+### Finding And Local Patch
+- Initial verifier-challenger review found invalid multi-exception syntax in `serve/kanban/src/owlbear_kanban/admission_transaction.py`.
+- Patched the existing owner only: changed the clause to `except (AdmissionConflictError, AdmissionPublicationError):`.
+- Reran the same focused suite after the patch: `340 passed` with the same two non-failing warnings.
+
+### AC-to-Evidence Map
+- AC1: focused admission and runtime transaction coverage verifies authored plan-job ordering and two-participant recovery.
+- AC2: jobs, requests, queries, receipts, invalidation, and MCP contract coverage verifies active plan parsing and retired-shape diagnostics; the legacy artifact remains historical only.
+- AC3: export, runtime request, job-generation, and MCP surface coverage passes; active source audit confirms retired identities are absent.
+- AC4: focused admission/runtime transaction replay and conflict coverage passes without duplicate publication.
+- AC5: native-runtime and transaction coverage passes for `NodePlanStore` plan publication, isolated digest/currentness/change-health, and interruption recovery without graph mutation.
+
+### Prior Failure Check
+- The earlier `AC3/modular-authority-fixtures` rejection was resolved through dependency #2033. The current clean focused suite covers the repaired baseline; no repeated failure key remains.
+
+### Verifier-Challenger
+- Initial decision: `fail` for invalid multi-exception syntax; repaired within the one-owner verifier patch budget.
+- Rechallenge decision: `pass`. It confirms the focused runtime/MCP, replay/conflict, publication/recovery, export, and source-audit evidence supports completion.
+
+### Final Route
+- PASS to `collect`.

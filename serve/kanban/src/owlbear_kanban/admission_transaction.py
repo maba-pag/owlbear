@@ -97,7 +97,9 @@ class AdmissionTransaction:
             transaction.commit(failure=failure)
         except TransactionConflictError as exc:
             raise AdmissionConflictError from exc
-        except AdmissionConflictError, AdmissionPublicationError:
+        except AdmissionConflictError:
+            raise
+        except AdmissionPublicationError:
             raise
         except Exception as exc:
             raise AdmissionPublicationError(exc) from exc
