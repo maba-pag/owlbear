@@ -1,10 +1,10 @@
 ---
 id: 2041
 title: 'P5-02R1: Reserve globally monotonic native job identities'
-status: verify
+status: collect
 priority: high
 created: 2026-07-25T12:56:10.644283+02:00
-updated: 2026-07-25T13:20:44.610281+02:00
+updated: 2026-07-25T13:22:19.333537+02:00
 tags:
   - phase-5
   - scope:kanban
@@ -55,3 +55,6 @@ Proof guidance: exercise `JobStore` plus `RuntimeTransaction` over a temporary w
 
 [[2026-07-25T13:20:44+02:00]]
 Builder complete. Added JobStore.reserve_job_ids(count), strict native job-sequence parsing, immutable-create/OCC replacement participants, unique reservation bytes for stale same-state conflict detection, typed reservation/sequence/path errors, and package exports. Proof: focused JobStore suite 27 passed; focused lint passed; editor diagnostics clean; mapped kanban regression excluding independently broken legacy-authority fixture file 1104 passed. Unfiltered mapped run had 1102 passes and 8 unrelated failures in test_historical_admission_fixtures.py because legacy graph.yaml authority is no longer permitted. builder-challenger decision: pass, no blocker; recommendation: advance to verify and commit only owned paths.
+
+[[2026-07-25T13:22:19+02:00]]
+Independent verification PASS at builder SHA 2f00e7b67542c6d2d25cfc4b2c09aa06fbd39072. Inspected exact committed diff and ownership. AC proof: empty/create and existing/replacement same-state reservations conflict after one commits; fresh reservations advance; active/archive/sequence maxima prevent reuse; malformed YAML, non-positive sequence, and unsafe symlink root return stable typed errors without byte mutation. Verification commands: allocator + RuntimeTransaction suites 44 passed (2 existing fork deprecation warnings); focused lint passed; editor diagnostics clean. verifier-challenger decision: pass, no problem; recommendation: advance to collect.
