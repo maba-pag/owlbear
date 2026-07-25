@@ -1,0 +1,60 @@
+---
+id: 2047
+title: 'P7-01: Define the resumable frontier planning workflow'
+status: build
+priority: high
+created: 2026-07-25T15:09:25.843626+02:00
+updated: 2026-07-25T15:09:25.843626+02:00
+tags:
+  - phase-7
+  - scope:agent
+  - planner
+  - workflow
+  - type:build
+  - rigor:thorough
+  - change:replace-delivery-pipeline
+  - node:DN-006
+  - packet:DN-006-PK-001
+  - interface:IF-007
+parent: 1983
+depends_on: []
+ac:
+  - 'AC-1: Given one engine-started initial or reconciliation `plan` job, `w-frontier-planning`
+    rehydrates the current `show_change`, `show_job`, relevant receipts, target-node
+    contract, source evidence, and prior node plan before proposing changes, processes
+    only the selected target, and requires a fresh `pick_jobs` result after each atomic
+    completion; artifact inspection verifies ordering and resume/checkpoint rules.'
+  - 'AC-2: Given an admitted target node, the skill emits one complete packet DAG
+    whose packets name outcome, obligations, in/out scope, modules/interfaces, dependencies,
+    acceptance scenarios, canonical impact closure, proof/outputs, profile, and context
+    budget, while enforcing REQ-024 outcome cohesion and admitted-node subset rules;
+    artifact inspection maps the packet contract to IF-007.'
+  - 'AC-3: Given a proposed interface, migration, risk, proof, or outcome expansion,
+    an unresolved material assumption, or a non-pass independent plan review, the
+    skill forbids a success payload, preserves prior completed plans, and routes one
+    material choice through a Decision Request or broader expansion to Specification
+    re-entry; artifact inspection maps NEG-008 and RISK-007 failure semantics.'
+  - 'AC-4: Given a reviewed node plan, the skill returns one structured planner success
+    payload containing the source-declared public `finish_plan` inputs `receipt_id`,
+    `code_revision`, `evidence`, `evidence_ids`, `impact_closure`, `node_plan`, `build_job_ids`,
+    and `accept_job_id`, and never calls lifecycle completion itself; artifact inspection
+    verifies orchestration ownership and field identity.'
+proof_bundle: existing+challenge
+blocked: false
+block_reason:
+claimed_at:
+archival_reason:
+archival_refs: []
+---
+## Projection
+`replace-delivery-pipeline` at `3f6c656289911320bb5e7faf37b5e86ffa8511e729ade201a03a19913e33d990`; `DN-006-PK-001`. Resolve normative behavior from `DN-006`, `IF-007`, `REQ-004`, `REQ-024`, `REQ-025`, `NEG-005`, `NEG-008`, `KEEP-004`, `RISK-007`, `RISK-011`, and `PROOF-005`; this record is not specification authority.
+
+## Outcome
+Define `w-frontier-planning` as the canonical warm-session procedure for engine-selected initial and reconciliation plan jobs, target-bounded packet DAGs, independent review, structured completion, and material-discovery refusal.
+
+## Envelope
+In: the workflow skill and its exact structured planner result contract.
+
+Out: agent/orchestrator wiring, engine or MCP schema changes, proof scenarios, builder behavior, and Specification authority edits.
+
+Proof guidance: inspect the assembled workflow against current public query/request tools, `FinishPlanParams`, admitted packet/refinement rules, and the fresh-pick requirement; no model-response substitute proves this packet.

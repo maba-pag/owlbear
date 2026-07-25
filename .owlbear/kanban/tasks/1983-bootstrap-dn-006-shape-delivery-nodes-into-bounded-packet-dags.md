@@ -1,10 +1,10 @@
 ---
 id: 1983
 title: 'Bootstrap DN-006: Plan and reconcile the delivery-node frontier'
-status: shape
+status: collect
 priority: high
 created: 2026-07-22T01:07:22.578615+02:00
-updated: 2026-07-25T08:08:56.060160+02:00
+updated: 2026-07-25T15:10:06.060580+02:00
 tags:
   - bootstrap-projection
   - change:replace-delivery-pipeline
@@ -19,6 +19,10 @@ depends_on:
   - 1982
   - 1981
   - 2036
+  - 2047
+  - 2048
+  - 2049
+  - 2050
 ac:
   - 'AC-1: Shaper, while this task is in `shape`, reads current `DN-006` at digest
     `3f6c656289911320bb5e7faf37b5e86ffa8511e729ade201a03a19913e33d990` and creates
@@ -86,3 +90,31 @@ The connected graph repair preserves IF-004 producer and DN-006 consumer ownersh
 - Replaced direct dependency #2037 with #2036 so DN-006 shaping still waits for the complete core completion, MCP bridge, and engine/orchestrator chain.
 - Preserved delivery dependencies #1979/#1980/#1982/#1981, current digest authority, scope, and AC1-AC3. Task remains intentionally parked in shape.
 - Shaper-challenger passed after executable Python 3.14.6 import/compile evidence corrected an erroneous syntax concern and the assembled test reproduced #2039's exact tuple-versus-callable defect.
+
+[[2026-07-25T15:10:06+02:00]]
+## Shape Notes
+Completed DN-006 decomposition from admitted modular authority at digest `3f6c656289911320bb5e7faf37b5e86ffa8511e729ade201a03a19913e33d990` after all delivery and executable prerequisites archived.
+
+### Source Grounding And Change Module Map
+Current source already owns public `pick_jobs`, `start_job`, `finish_plan`, `finish_accept`, atomic node-plan publication, reconciliation jobs, stale-build blocking, and corrective invalidation. No engine schema or MCP expansion is required. The missing product layer is the installed frontier planner.
+
+- #2047 owns new `share/skills/w-frontier-planning/SKILL.md`: warm-session target-bounded procedure and structured result.
+- #2048 owns `planner` and hard-read-only `planner-challenger` agents plus orchestrator allowlist, `w-orchestration` native planner handoff, and `share/WIRING.md`.
+- #2049 owns the initial-frontier and per-node atomicity half of durable `PROOF-005` through public native tools.
+- #2050 owns acceptance-triggered reconciliation, stale dependent-build blocking, accepted-evidence fold-in, and invalidation closure over the real runtime.
+
+### Product Invariant And Promise Coverage
+- REQ-004 warm engine-selected frontier with target-bounded atomic node outputs: #2047, assembled proof #2049.
+- REQ-024, RISK-011, KEEP-004 outcome cohesion and bounded context: #2047, observed in #2049 packet scenarios.
+- REQ-025 acceptance-triggered reconciliation: #2050.
+- NEG-008 and RISK-007 expansion refusal: #2047 workflow, #2048 independent reviewer, and #2049 mechanical public rejection.
+- NEG-005 remains satisfied by outcome-cohesive packet jobs rather than artifact-specific statuses.
+- WF-002 and the complete six-part PROOF-005 method split across #2049 initial/atomic classes and #2050 reconciliation/invalidation classes. No active DN-006 obligation is deferred.
+
+### Dependency And Scenario Closure
+The executable chain is `#2047 -> #2048 -> #2049 -> #2050`. #2047 consumes current admitted/query/completion contracts. #2048 consumes its structured result. #2049 consumes shipped planner artifacts and current public tools. #2050 consumes that assembled fixture plus current acceptance/reconciliation/invalidation owners. Independent risk axes are split: initial topology/success/replay/invalid authority in #2049; acceptance/reconciliation/blocked build/invalidation/disjoint preservation in #2050.
+
+### Challenge And Board Audit
+`shaper-challenger` passed after verifying the admission receipt, all DN-006 obligations and risks, current FinishPlan/FinishAccept fields, `ERR_FINISH_NODE_PLAN_INVALID`, and the real `InvalidationRuntime.apply` mutation boundary. Its non-blocking note confirms PROOF-005 requires assembled mechanical expansion rejection while reviewer judgment may remain declaration-inspected.
+
+Created build-ready packets #2047 through #2050 with current change/digest/node/packet identities and the intended linear dependencies. The aggregate now depends on all four descendants and moves to collect; only #2047 is initially dependency-ready.
