@@ -217,31 +217,37 @@ def health_live() -> dict[str, str]:
 
 @app.get("/health", response_model=WorkspaceHealth)
 def health(engine: _HealthEngine, memory_engine: _HealthMemoryEngine, ideas_path: _HealthIdeasPath) -> WorkspaceHealth:
+    """Return aggregate health for workspace task, request, memory, and idea storage."""
     return _workspace_health(engine, memory_engine, ideas_path)
 
 
 @app.get("/health/tasks", response_model=HealthModule)
 def task_health(engine: _HealthEngine) -> HealthModule:
+    """Return the task-storage health projection."""
     return _module_health(engine.task_health if engine else None)
 
 
 @app.get("/health/requests", response_model=HealthModule)
 def request_health(engine: _HealthEngine) -> HealthModule:
+    """Return the request-storage health projection."""
     return _module_health(engine.request_health if engine else None)
 
 
 @app.get("/health/memory", response_model=HealthModule)
 def memory_health(memory_engine: _HealthMemoryEngine) -> HealthModule:
+    """Return the memory-storage health projection."""
     return _module_health(memory_engine.health if memory_engine else None)
 
 
 @app.get("/health/ideas", response_model=IdeasHealth)
 def ideas_health(ideas_path: _IdeasPath) -> IdeasHealth:
+    """Return the ideas-file health projection."""
     return _ideas_health(ideas_path)
 
 
 @app.post("/health/tasks/repair", response_model=DeterministicRepairResult)
 def repair_task_health(engine: _Engine) -> DeterministicRepairResult:
+    """Repair deterministic task-storage findings and report unresolved outcomes."""
     result = repair_task_storage(engine.kanban_dir, engine.board_config())
     task_health_result = engine.task_health()
     unresolved_findings = [finding for finding in task_health_result.findings if not finding.repairable]

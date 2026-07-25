@@ -45,6 +45,7 @@ class TransactionParticipant:
     content: bytes
 
     def destination(self) -> Path:
+        """Return the participant destination after enforcing root containment."""
         root = self.root.resolve()
         destination = (root / self.relative_path).resolve()
         if not self.relative_path.parts or self.relative_path.is_absolute() or root not in destination.parents:
@@ -62,6 +63,7 @@ class ReplacementTransactionParticipant:
     replacement_content: bytes
 
     def destination(self) -> Path:
+        """Return the replacement destination after enforcing root containment."""
         root = self.root.resolve()
         destination = (root / self.relative_path).resolve()
         if not self.relative_path.parts or self.relative_path.is_absolute() or root not in destination.parents:
@@ -80,9 +82,11 @@ class MoveTransactionParticipant:
     destination_content: bytes
 
     def source(self) -> Path:
+        """Return the move source after enforcing root containment."""
         return _contained_path(self.root, self.source_path)
 
     def destination(self) -> Path:
+        """Return the move destination after enforcing root containment."""
         return _contained_path(self.root, self.destination_path)
 
 

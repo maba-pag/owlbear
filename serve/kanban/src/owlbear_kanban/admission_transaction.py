@@ -62,6 +62,7 @@ class AdmissionTransaction:
         timestamp: str = "1970-01-01T00:00:00Z",
         failure: Callable[[str], None] | None = None,
     ) -> tuple[ReceiptRecord | None, JobGeneration | None, AdmissionAssessment]:
+        """Evaluate a revision and atomically publish its admission receipt and shape jobs."""
         assessment = evaluate_admission(self.revision, evidence)
         if not assessment.admitted:
             return None, None, assessment

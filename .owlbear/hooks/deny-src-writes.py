@@ -66,6 +66,7 @@ def _extract_paths(tool_input: object) -> list[str]:
 
 
 def main() -> None:
+    """Deny hook-request writes outside test and scratch directories."""
     raw = sys.stdin.buffer.read()
     try:
         payload = json.loads(raw.decode("utf-8", errors="replace"))

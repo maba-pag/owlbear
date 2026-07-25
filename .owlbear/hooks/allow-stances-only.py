@@ -64,6 +64,7 @@ def _normalize(path: str) -> str:
 
 
 def main() -> None:
+    """Deny hook-request writes that target paths outside a stances directory."""
     raw = sys.stdin.buffer.read()
     try:
         payload = json.loads(raw.decode("utf-8", errors="replace"))

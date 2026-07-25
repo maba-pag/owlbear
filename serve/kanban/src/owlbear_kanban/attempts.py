@@ -73,15 +73,20 @@ class AttemptEvent(_AttemptEventModel):
 
 
 class AttemptEventDiagnostic(_AttemptEventModel):
+    """Describe one stable attempt-event parsing failure."""
+
     code: AttemptEventDiagnosticCode
     detail: str
 
 
 class AttemptEventParseResult(_AttemptEventModel):
+    """Contain either one parsed attempt event or its diagnostics."""
+
     event: AttemptEvent | None = None
     diagnostics: tuple[AttemptEventDiagnostic, ...] = ()
 
     def model_post_init(self, __context: object, /) -> None:
+        """Enforce that parsing produces exactly one event-or-diagnostics outcome."""
         if (self.event is None) == (not self.diagnostics):
             msg = "attempt event result must contain either one event or diagnostics"
             raise ValueError(msg)

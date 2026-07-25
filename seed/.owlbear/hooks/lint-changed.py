@@ -165,6 +165,7 @@ def _minimum_change_warnings(candidate_paths: list[str], root: Path) -> list[str
 
 
 def main() -> None:
+    """Report Ruff failures and scope warnings for files changed by an edit tool."""
     raw = sys.stdin.buffer.read()
     # Strip UTF-8 BOM if present
     if raw.startswith(b"\xef\xbb\xbf"):

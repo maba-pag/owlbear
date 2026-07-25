@@ -85,6 +85,7 @@ def run(scratch_dir: Path, *, dry_run: bool) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Parse cleanup options and remove stale files from the selected scratch directory."""
     args = _parse_args(argv)
     scratch_dir: Path = args.scratch_dir
 

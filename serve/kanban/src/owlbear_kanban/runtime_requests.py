@@ -179,6 +179,8 @@ class ResolveRequestResult(BaseModel):
 
 
 class RequestStatus(StrEnum):
+    """Enumerate lifecycle states for native runtime requests."""
+
     PENDING = "pending"
     RESOLVED = "resolved"
 

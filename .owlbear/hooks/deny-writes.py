@@ -70,6 +70,7 @@ def _is_scratch_path(normalized: str) -> bool:
 
 
 def main() -> None:
+    """Deny hook-request writes that target paths outside the scratch directory."""
     raw = sys.stdin.buffer.read()
     try:
         payload = json.loads(raw.decode("utf-8", errors="replace"))

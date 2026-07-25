@@ -84,6 +84,8 @@ class Finding(_FindingModel):
 
 
 class FindingDiagnostic(_FindingModel):
+    """Describe one stable finding parsing or storage failure."""
+
     code: FindingDiagnosticCode
     detail: str
     path: str | None = None
@@ -91,6 +93,8 @@ class FindingDiagnostic(_FindingModel):
 
 
 class FindingResult(_FindingModel):
+    """Contain either one parsed finding or its diagnostics."""
+
     finding: Finding | None = None
     diagnostics: tuple[FindingDiagnostic, ...] = ()
 

@@ -113,6 +113,7 @@ def _write_receipt(output: Path, tested_sha: str, responses: list[dict[str, obje
 
 
 def main() -> None:
+    """Run the MCP memory lifecycle proof and write its receipt."""
     args = _parse_args()
     root = args.root.resolve()
     responses = asyncio.run(_capture(root, args.memory_dir.resolve()))

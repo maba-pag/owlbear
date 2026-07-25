@@ -179,6 +179,7 @@ class ReceiptRecord(_ReceiptModel):
     payload: Mapping[str, JsonValue]
 
     def model_post_init(self, _context: object) -> None:
+        """Freeze the kind-specific receipt payload after validation."""
         object.__setattr__(self, "payload", _freeze_json(dict(self.payload)))
 
     @field_serializer("payload")
@@ -209,6 +210,8 @@ class ReceiptRecord(_ReceiptModel):
 
 
 class ReceiptParseDiagnosticCode(StrEnum):
+    """Enumerate stable root-receipt parsing and evidence failures."""
+
     UNKNOWN_FIELD = "ERR_RECEIPT_FIELD_UNKNOWN"
     UNKNOWN_KIND = "ERR_RECEIPT_KIND_INVALID"
     SCHEMA_INVALID = "ERR_RECEIPT_SCHEMA_INVALID"
@@ -398,12 +401,16 @@ def _intersecting_selector(path: str, selectors: tuple[str, ...]) -> str | None:
 
 
 class ReceiptParseDiagnostic(_ReceiptModel):
+    """Describe one stable root-receipt parsing failure."""
+
     code: ReceiptParseDiagnosticCode
     detail: str
     target: str | None = None
 
 
 class ReceiptParseResult(_ReceiptModel):
+    """Contain either one parsed receipt or its parsing diagnostics."""
+
     receipt: ReceiptRecord | None = None
     diagnostics: tuple[ReceiptParseDiagnostic, ...] = ()
 
@@ -564,6 +571,8 @@ class ReceiptDiagnosticCode(StrEnum):
 
 
 class ReceiptDiagnostic(_ReceiptModel):
+    """Describe one stable receipt-storage failure."""
+
     code: ReceiptDiagnosticCode
     detail: str
     path: str | None = None
@@ -571,6 +580,8 @@ class ReceiptDiagnostic(_ReceiptModel):
 
 
 class ReceiptResult(_ReceiptModel):
+    """Contain either one stored receipt or its storage diagnostics."""
+
     receipt: ReceiptRecord | None = None
     diagnostics: tuple[ReceiptDiagnostic, ...] = ()
 
@@ -583,6 +594,8 @@ class ReceiptResult(_ReceiptModel):
 
 
 class ChangeHealthFinding(_ReceiptModel):
+    """Describe one receipt-backed change-health problem."""
+
     code: str
     detail: str
     path: str | None = None
@@ -590,6 +603,8 @@ class ChangeHealthFinding(_ReceiptModel):
 
 
 class ChangeHealthResult(_ReceiptModel):
+    """Collect change-health findings and the receipt paths inspected."""
+
     findings: tuple[ChangeHealthFinding, ...] = ()
     checked_paths: tuple[str, ...] = ()
 

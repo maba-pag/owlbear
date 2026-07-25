@@ -64,12 +64,16 @@ class PickTasksParams(MCPParamsBase):
 
 
 class PickJobsParams(MCPParamsBase):
+    """Validate MCP inputs for planning native dispatch waves."""
+
     change_id: str = Field(min_length=1)
     candidate_revision: str = Field(min_length=1)
     wave_size: int = Field(gt=0)
 
 
 class StartJobParams(MCPParamsBase):
+    """Validate MCP inputs for claiming one native job."""
+
     change_id: str = Field(min_length=1)
     job_id: int = Field(gt=0)
     attempt_id: str = Field(min_length=1)
@@ -81,6 +85,8 @@ class StartJobParams(MCPParamsBase):
 
 
 class FinishJobParams(MCPParamsBase):
+    """Validate MCP inputs for completing a native job with receipt evidence."""
+
     change_id: str = Field(min_length=1)
     job_id: int = Field(gt=0)
     attempt_id: str = Field(min_length=1)
@@ -96,12 +102,16 @@ class FinishJobParams(MCPParamsBase):
 
 
 class FinishShapeParams(FinishJobParams):
+    """Validate shape completion inputs and downstream job identities."""
+
     node_plan: dict[str, object]
     build_job_ids: tuple[int, ...]
     accept_job_id: int = Field(gt=0)
 
 
 class ReleaseJobParams(MCPParamsBase):
+    """Validate MCP inputs for releasing one active native job claim."""
+
     change_id: str = Field(min_length=1)
     job_id: int = Field(gt=0)
     attempt_id: str = Field(min_length=1)
@@ -112,6 +122,8 @@ class ReleaseJobParams(MCPParamsBase):
 
 
 class RecoverExpiredClaimsParams(MCPParamsBase):
+    """Validate MCP inputs for an expired-claim recovery pass."""
+
     change_id: str = Field(min_length=1)
     recovered_at: str = Field(min_length=1)
     actor_id: str = Field(min_length=1)

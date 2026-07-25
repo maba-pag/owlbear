@@ -13,17 +13,23 @@ from owlbear_kanban.change import DELIVERY_SECTION_NAMES, ChangeRevision, Stable
 
 
 class AdmissionSeverity(StrEnum):
+    """Classify whether an admission finding blocks publication."""
+
     ERROR = "error"
     WARNING = "warning"
 
 
 class AdmissionDisposition(StrEnum):
+    """Summarize the highest-severity result of admission evaluation."""
+
     PASS = "pass"  # noqa: S105
     WARNING = "warning"
     ERROR = "error"
 
 
 class AdmissionFinding(BaseModel):
+    """Describe one evidenced revision-admission rule violation."""
+
     model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
 
     code: str
@@ -35,6 +41,8 @@ class AdmissionFinding(BaseModel):
 
 
 class AdmissionEvidence(BaseModel):
+    """Provide immutable challenge, baseline, and approval evidence for admission."""
+
     model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
 
     digest: str
@@ -45,6 +53,8 @@ class AdmissionEvidence(BaseModel):
 
 
 class AdmissionAssessment(BaseModel):
+    """Collect deterministic admission findings for one revision digest."""
+
     model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
 
     schema_version: int = 1
@@ -54,10 +64,12 @@ class AdmissionAssessment(BaseModel):
 
     @property
     def errors(self) -> tuple[AdmissionFinding, ...]:
+        """Return only findings that block revision admission."""
         return tuple(item for item in self.findings if item.severity == AdmissionSeverity.ERROR)
 
     @property
     def admitted(self) -> bool:
+        """Return whether the revision has no blocking admission findings."""
         return not self.errors
 
 

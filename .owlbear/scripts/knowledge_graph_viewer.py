@@ -207,6 +207,7 @@ def generate(db_path: str, out_path: str) -> None:
 
 
 def main() -> None:
+    """Generate an HTML knowledge-graph viewer from the configured SQLite database."""
     parser = argparse.ArgumentParser(description="Generate knowledge graph viewer")
     parser.add_argument("--db", default=".owlbear/knowledge/local.db", help="Path to knowledge SQLite database")
     parser.add_argument("--out", default=".owlbear/scratch/knowledge-graph.html", help="Output HTML file path")

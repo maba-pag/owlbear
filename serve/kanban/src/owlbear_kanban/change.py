@@ -105,6 +105,8 @@ class Decision(_BoundaryModel):
 
 
 class DecisionsDocument(_BoundaryModel):
+    """Collect the versioned authority decisions for one change."""
+
     schema_version: Literal[1]
     change_id: ChangeId
     decisions: FrozenSequence[Decision]
@@ -272,6 +274,8 @@ class ExecutionPlan(_BoundaryModel):
 
 
 class DeliveryGraph(_BoundaryModel):
+    """Represent the authored delivery authority and execution plan for a change."""
+
     schema_version: Literal[1]
     change_id: ChangeId
     state: Literal["draft", "admitted", "executing", "accepted", "abandoned", "superseded"]
@@ -308,6 +312,8 @@ class ChangeDiagnosticCode(StrEnum):
 
 
 class ChangeDiagnostic(_BoundaryModel):
+    """Describe one stable change-revision loading failure."""
+
     code: ChangeDiagnosticCode
     detail: str
     path: str | None = None
@@ -315,6 +321,8 @@ class ChangeDiagnostic(_BoundaryModel):
 
 
 class ChangeRevision(_BoundaryModel):
+    """Bind validated change authority to its delivery digest and stable identities."""
+
     source_dir: Path
     change_id: ChangeId
     intent: str
@@ -327,6 +335,7 @@ class ChangeRevision(_BoundaryModel):
     _source_identity: tuple[int, int] = PrivateAttr(default=(-1, -1))
 
     def model_post_init(self, _context: object) -> None:
+        """Build the immutable lookup index for all stable revision identities."""
         index = {decision.id: decision for decision in self.decisions.decisions}
         index.update({entity.id: entity for entity in self.graph.iter_entities()})
         object.__setattr__(self, "_identity_index", MappingProxyType(index))
@@ -348,6 +357,8 @@ class ChangeRevision(_BoundaryModel):
 
 
 class ChangeLoadResult(_BoundaryModel):
+    """Contain either one loaded change revision or its diagnostics."""
+
     revision: ChangeRevision | None = None
     diagnostics: FrozenSequence[ChangeDiagnostic] = ()
 

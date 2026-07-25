@@ -55,6 +55,8 @@ _STABLE_ID = re.compile(r"^(?:REQ|NEG|KEEP|DEC|WF|MOD|IF|MIG|RISK|PROOF|DN)-[0-9
 
 
 class StartJobDiagnosticCode(StrEnum):
+    """Enumerate stable failures that prevent a native job claim."""
+
     AUTHORITY_STALE = "ERR_START_AUTHORITY_STALE"
     PREDECESSOR_INVALID = "ERR_START_PREDECESSOR_INVALID"
     REQUEST_PENDING = "ERR_START_REQUEST_PENDING"
@@ -64,6 +66,8 @@ class StartJobDiagnosticCode(StrEnum):
 
 
 class StartJobRequest(BaseModel):
+    """Identify an actor's attempt to claim one job against a code revision."""
+
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
     job_id: int
@@ -76,6 +80,8 @@ class StartJobRequest(BaseModel):
 
 
 class StartJobDiagnostic(BaseModel):
+    """Describe why a native job claim was rejected."""
+
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
     code: StartJobDiagnosticCode
@@ -85,6 +91,8 @@ class StartJobDiagnostic(BaseModel):
 
 
 class StartJobResult(BaseModel):
+    """Contain either a claimed job and start event or one diagnostic."""
+
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
     job: StoredJob | None = None
@@ -102,11 +110,15 @@ class StartJobResult(BaseModel):
 
 
 class ReleaseJobDiagnosticCode(StrEnum):
+    """Enumerate stable failures that prevent releasing a job claim."""
+
     NO_ACTIVE_CLAIM = "ERR_RELEASE_NO_ACTIVE_CLAIM"
     NON_OWNER = "ERR_RELEASE_NON_OWNER"
 
 
 class ReleaseJobRequest(BaseModel):
+    """Identify an actor's request to release one active job claim."""
+
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
     job_id: int
@@ -118,6 +130,8 @@ class ReleaseJobRequest(BaseModel):
 
 
 class ReleaseJobDiagnostic(BaseModel):
+    """Describe why an active job claim could not be released."""
+
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
     code: ReleaseJobDiagnosticCode
@@ -125,6 +139,8 @@ class ReleaseJobDiagnostic(BaseModel):
 
 
 class ReleaseJobResult(BaseModel):
+    """Contain either a released job and event or one diagnostic."""
+
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
     job: StoredJob | None = None
@@ -142,11 +158,15 @@ class ReleaseJobResult(BaseModel):
 
 
 class FailJobDiagnosticCode(StrEnum):
+    """Enumerate stable failures that prevent recording a failed attempt."""
+
     NO_ACTIVE_CLAIM = "ERR_FAIL_NO_ACTIVE_CLAIM"
     NON_OWNER = "ERR_FAIL_NON_OWNER"
 
 
 class FailJobRequest(BaseModel):
+    """Provide the owned claim, failure detail, and evidence for a failed attempt."""
+
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
     job_id: int
@@ -160,6 +180,8 @@ class FailJobRequest(BaseModel):
 
 
 class FailJobDiagnostic(BaseModel):
+    """Describe why a failed attempt could not be recorded."""
+
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
     code: FailJobDiagnosticCode
@@ -167,6 +189,8 @@ class FailJobDiagnostic(BaseModel):
 
 
 class FailJobResult(BaseModel):
+    """Contain either a failed job and event or one diagnostic."""
+
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
     job: StoredJob | None = None
@@ -184,6 +208,8 @@ class FailJobResult(BaseModel):
 
 
 class FinishJobDiagnosticCode(StrEnum):
+    """Enumerate stable failures that prevent completing a native job."""
+
     AUTHORITY_STALE = "ERR_FINISH_AUTHORITY_STALE"
     PREDECESSOR_INVALID = "ERR_FINISH_PREDECESSOR_INVALID"
     WRONG_KIND = "ERR_FINISH_KIND_INVALID"
@@ -195,6 +221,8 @@ class FinishJobDiagnosticCode(StrEnum):
 
 
 class FinishJobRequest(BaseModel):
+    """Provide claim identity, evidence, and receipt authority for job completion."""
+
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
     job_id: int
@@ -211,12 +239,16 @@ class FinishJobRequest(BaseModel):
 
 
 class FinishShapeRequest(FinishJobRequest):
+    """Extend job completion with a node plan and downstream job identities."""
+
     node_plan: dict[str, object]
     build_job_ids: tuple[int, ...]
     accept_job_id: int
 
 
 class FinishJobDiagnostic(BaseModel):
+    """Describe why a native job could not be completed."""
+
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
     code: FinishJobDiagnosticCode
@@ -226,6 +258,8 @@ class FinishJobDiagnostic(BaseModel):
 
 
 class FinishJobResult(BaseModel):
+    """Contain a completed job, receipt, event, and derived jobs or one diagnostic."""
+
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
     job: StoredJob | None = None
@@ -250,6 +284,8 @@ class FinishJobResult(BaseModel):
 
 
 class RecoveryDiagnosticCode(StrEnum):
+    """Enumerate stable expired-claim recovery failures."""
+
     IDENTITY_INVALID = "ERR_RECOVERY_IDENTITY_INVALID"
     CONFLICT = "ERR_RECOVERY_CONFLICT"
 
@@ -267,6 +303,8 @@ def _aware_datetime(value: str) -> datetime:
 
 
 class RecoverExpiredClaimsRequest(BaseModel):
+    """Identify the actor and timestamp for an expired-claim recovery pass."""
+
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
     recovered_at: str
@@ -281,6 +319,8 @@ class RecoverExpiredClaimsRequest(BaseModel):
 
 
 class RecoveredClaim(BaseModel):
+    """Pair a recovered job with its generated crash event."""
+
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
     job: StoredJob
@@ -288,6 +328,8 @@ class RecoveredClaim(BaseModel):
 
 
 class RecoveryDiagnostic(BaseModel):
+    """Describe why one job claim could not be recovered."""
+
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
     job_id: int
@@ -296,6 +338,8 @@ class RecoveryDiagnostic(BaseModel):
 
 
 class RecoverExpiredClaimsResult(BaseModel):
+    """Collect recovered claims and per-job recovery diagnostics."""
+
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
     recovered: tuple[RecoveredClaim, ...] = ()
@@ -340,6 +384,7 @@ class NativeRuntime:
         )
 
     def start_job(self, request: StartJobRequest) -> StartJobResult:
+        """Claim an eligible job and append its immutable start event."""
         return self._start_job(request)
 
     def _start_job(
@@ -406,6 +451,7 @@ class NativeRuntime:
         return self._query.work_health(cursor=cursor, limit=limit)
 
     def release_job(self, request: ReleaseJobRequest) -> ReleaseJobResult:
+        """Release an owned job claim and append its release event."""
         return self._release_job(request)
 
     def _release_job(
@@ -431,6 +477,7 @@ class NativeRuntime:
         )
 
     def fail_job(self, request: FailJobRequest) -> FailJobResult:
+        """Record an owned attempt failure and release its job claim."""
         return self._fail_job(request)
 
     def _fail_job(
@@ -456,30 +503,35 @@ class NativeRuntime:
         )
 
     def finish_shape(self, request: FinishShapeRequest) -> FinishJobResult:
+        """Complete shape work and publish its receipt and downstream jobs."""
         result = self._finish(request, "shape")
         if result.diagnostic is None:
             self._query.reset()
         return result
 
     def finish_build(self, request: FinishJobRequest) -> FinishJobResult:
+        """Complete build work and publish its immutable receipt."""
         result = self._finish(request, "build")
         if result.diagnostic is None:
             self._query.reset()
         return result
 
     def finish_accept(self, request: FinishJobRequest) -> FinishJobResult:
+        """Complete acceptance work and publish its immutable receipt."""
         result = self._finish(request, "accept")
         if result.diagnostic is None:
             self._query.reset()
         return result
 
     def finish_audit(self, request: FinishJobRequest) -> FinishJobResult:
+        """Complete audit work and publish its immutable receipt."""
         result = self._finish(request, "audit")
         if result.diagnostic is None:
             self._query.reset()
         return result
 
     def recover_expired_claims(self, request: RecoverExpiredClaimsRequest) -> RecoverExpiredClaimsResult:
+        """Release expired claims and append deterministic crash events."""
         return self._recover_expired_claims(request, lambda _stored, _started: ())
 
     def _recover_expired_claims(

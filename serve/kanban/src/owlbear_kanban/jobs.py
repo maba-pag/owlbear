@@ -27,6 +27,8 @@ if TYPE_CHECKING:
 
 
 class JobDiagnosticCode(StrEnum):
+    """Enumerate stable shape-job planning and parsing failures."""
+
     DUPLICATE_ID = "ERR_JOB_ID_DUPLICATE"
     DUPLICATE_TARGET = "ERR_JOB_TARGET_DUPLICATE"
     MISSING_TARGET = "ERR_JOB_TARGET_MISSING"
@@ -39,6 +41,8 @@ class JobDiagnosticCode(StrEnum):
 
 
 class JobDiagnostic(BaseModel):
+    """Describe one stable shape-job planning or parsing failure."""
+
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
     code: JobDiagnosticCode
@@ -47,6 +51,8 @@ class JobDiagnostic(BaseModel):
 
 
 class ShapeJob(BaseModel):
+    """Represent one planned initial shape job for a delivery node."""
+
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
     job_id: int = Field(gt=0)
@@ -65,6 +71,8 @@ DeliveryNodeId = Annotated[str, StringConstraints(strict=True, pattern=r"^DN-[0-
 
 
 class JobDisposition(StrEnum):
+    """Enumerate non-terminal and invalidated operational job states."""
+
     PENDING = "pending"
     CANCELLED = "cancelled"
     SUPERSEDED = "superseded"
@@ -403,6 +411,8 @@ class JobProjection(BaseModel):
 
 
 class JobParseResult(BaseModel):
+    """Contain either one parsed native job or its diagnostics."""
+
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
     job: JobRecord | None = None
@@ -467,6 +477,8 @@ def project_job(
 
 
 class JobGeneration(BaseModel):
+    """Collect the initial shape jobs generated for one admitted revision."""
+
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
     schema_version: Literal[1]

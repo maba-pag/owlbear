@@ -77,6 +77,7 @@ def _is_denied(normalized: str) -> bool:
 
 
 def main() -> None:
+    """Deny hook-request writes outside scratch and documentation file types."""
     raw = sys.stdin.buffer.read()
     try:
         payload = json.loads(raw.decode("utf-8", errors="replace"))

@@ -135,11 +135,15 @@ class WriterCoordination(BaseModel):
 
 
 class DispatchDiagnosticCode(StrEnum):
+    """Enumerate stable dispatch coordination failure codes."""
+
     WRITER_CONFLICT = "ERR_DISPATCH_WRITER_CONFLICT"
     LEASE_STALE = "ERR_DISPATCH_LEASE_STALE"
 
 
 class DispatchOmissionReason(StrEnum):
+    """Explain why a persisted job is absent from a dispatch plan."""
+
     AUTHORITY_STALE = "authority-stale"
     PREDECESSOR_INVALID = "predecessor-invalid"
     REQUEST_PENDING = "request-pending"
@@ -334,6 +338,7 @@ class DispatchRuntime:
         return tuple(waves)
 
     def start(self, request: StartJobRequest) -> StartJobResult | DispatchDiagnostic:
+        """Claim an eligible job while enforcing global reader-writer coordination."""
         for _ in range(2):
             try:
                 coordination, token = self._coordination.read()
@@ -384,23 +389,29 @@ class DispatchRuntime:
         return started, checkout
 
     def release(self, request: ReleaseJobRequest) -> ReleaseJobResult | DispatchDiagnostic:
+        """Release an active claim and its coordination holder."""
         return self._finalize(request, "released")
 
     def fail(self, request: FailJobRequest) -> FailJobResult | DispatchDiagnostic:
+        """Record a failed attempt and release its coordination holder."""
         return self._finalize(request, "failed")
 
     def finish_shape(self, request: FinishShapeRequest) -> FinishJobResult | DispatchDiagnostic:
+        """Finish shape work and release its writer coordination holder."""
         return self._finish(request, "shape")
 
     def finish_build(self, request: FinishJobRequest) -> FinishJobResult | DispatchDiagnostic:
+        """Finish build work and release its writer coordination holder."""
         return self._finish(request, "build")
 
     def finish_accept(self, request: FinishJobRequest) -> FinishJobResult | DispatchDiagnostic:
+        """Clean the proof checkout and finish acceptance work."""
         if not self._cleanup_proof_checkout(request.job_id):
             return self._proof_cleanup_diagnostic(request.job_id)
         return self._finish(request, "accept")
 
     def finish_audit(self, request: FinishJobRequest) -> FinishJobResult | DispatchDiagnostic:
+        """Clean the proof checkout and finish audit work."""
         if not self._cleanup_proof_checkout(request.job_id):
             return self._proof_cleanup_diagnostic(request.job_id)
         return self._finish(request, "audit")
@@ -408,6 +419,7 @@ class DispatchRuntime:
     def recover_expired_claims(
         self, request: RecoverExpiredClaimsRequest
     ) -> RecoverExpiredClaimsResult | DispatchDiagnostic:
+        """Recover expired claims and remove their coordination and proof state."""
         coordination, _token = self._coordination.read()
         stale = self._stale_diagnostic(coordination)
         if stale is not None:

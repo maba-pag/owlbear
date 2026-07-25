@@ -125,6 +125,8 @@ class InvalidationDiagnosticCode(StrEnum):
 
 
 class InvalidationDiagnostic(_InvalidationModel):
+    """Describe one stable invalidation planning or publication failure."""
+
     code: InvalidationDiagnosticCode
     detail: str
     target: str | None = None
@@ -142,6 +144,8 @@ class InvalidationOutcome(_InvalidationModel):
 
 
 class InvalidationResult(_InvalidationModel):
+    """Contain either a published invalidation outcome or one diagnostic."""
+
     outcome: InvalidationOutcome | None = None
     diagnostic: InvalidationDiagnostic | None = None
 

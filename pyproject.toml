@@ -50,9 +50,10 @@ src = [
 [tool.ruff.lint]
 select = ["ALL"]
 ignore = [
-  "D1",     # missing docstring rules — not yet enforced
   "COM812", # trailing comma — conflicts with formatter
   "CPY001", # per-file copyright headers are not used in this repository
+  "D105",   # magic methods usually inherit their behavioral contract from Python
+  "D107",   # constructor documentation belongs on the class
   "ISC001", # implicit string concatenation — conflicts with formatter
   "S101",   # assert used — needed in tests
   "SIM108", # ternary suggestion — if-else is often more readable
