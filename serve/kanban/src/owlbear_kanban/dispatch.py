@@ -600,7 +600,10 @@ class DispatchRuntime:
     def _cleanup_proof_checkout(self, job_id: int) -> bool:
         if self._proof_checkouts is None:
             return True
-        self._proof_checkouts.cleanup(job_id)
+        try:
+            self._proof_checkouts.cleanup(job_id)
+        except OSError:
+            return False
         return not self._proof_checkouts.is_orphan(str(job_id))
 
     @staticmethod

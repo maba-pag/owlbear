@@ -1,10 +1,10 @@
 ---
 id: 2061
 title: 'P10-02: Atomically reject whole-change audit attempts'
-status: verify
+status: collect
 priority: high
 created: 2026-07-25T19:53:21.715434+02:00
-updated: 2026-07-25T20:23:28.968361+02:00
+updated: 2026-07-25T20:27:12.377363+02:00
 tags:
   - phase-10
   - scope:kanban
@@ -71,3 +71,18 @@ Exports were added only to the core kanban package. MCP is intentionally left to
 Proof: task-scoped lint passed; static diagnostics are clean; `uv run pytest serve/kanban/tests/test_native_runtime.py serve/kanban/tests/test_invalidation.py serve/kanban/tests/test_dispatch_runtime.py serve/kanban/tests/test_proof_checkout.py -q --tb=short` passed 103 tests. Builder challenger passed after independently rerunning 60 native/dispatch tests.
 
 Changed files: `serve/kanban/src/owlbear_kanban/native_runtime.py`, `serve/kanban/src/owlbear_kanban/dispatch.py`, `serve/kanban/src/owlbear_kanban/__init__.py`, `serve/kanban/tests/test_native_runtime.py`, `serve/kanban/tests/test_dispatch_runtime.py`.
+
+[[2026-07-25T20:27:12+02:00]]
+## Verify Notes
+
+PASS
+
+Verified builder commit `252aa524a0ae1d4bdf1b3807b5569b10c35e5cbf` against all AC and repaired one local AC-2 defect within the declared dispatch boundary.
+
+- AC-1: real terminal-audit tests prove atomic design-reentry rejection with zero jobs, exact replay, changed-identity conflict, and affected-node correction with exactly the declared DN-001/DN-002 plan jobs while all prior receipt bytes remain unchanged.
+- AC-2: dispatch proofs cover reader release, proof-checkout cleanup, orphaned cleanup failure, raised `OSError` cleanup failure, transaction conflict, full work/receipt snapshots, and checkout restoration. The verifier repair makes `_cleanup_proof_checkout` convert operational `OSError` into the existing stable `CLEANUP_FAILED` path before publication.
+- AC-3: exact replay reconstructs persisted findings, failed event, supersession closure, and corrective jobs; altered identity returns the audit-specific conflict diagnostic.
+
+Independent lint passed. `uv run pytest serve/kanban/tests/test_native_runtime.py serve/kanban/tests/test_invalidation.py serve/kanban/tests/test_dispatch_runtime.py serve/kanban/tests/test_proof_checkout.py tests/test_package_boundary.py -q --tb=short` passed 138 tests after repair. Verifier challenger initially identified the cleanup-exception gap; after the focused repair and rerun it passed with no remaining findings.
+
+Verifier-local changed files: `serve/kanban/src/owlbear_kanban/dispatch.py`, `serve/kanban/tests/test_dispatch_runtime.py`.

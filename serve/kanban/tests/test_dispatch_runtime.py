@@ -56,11 +56,14 @@ class _History:
 
 
 class _ProofCheckouts:
-    def __init__(self, job_id: int, *, fail_cleanup: bool = False) -> None:
+    def __init__(self, job_id: int, *, fail_cleanup: bool = False, raise_cleanup: bool = False) -> None:
         self._active = {job_id}
         self._fail_cleanup = fail_cleanup
+        self._raise_cleanup = raise_cleanup
 
     def cleanup(self, job_id: int) -> None:
+        if self._raise_cleanup:
+            raise OSError
         if not self._fail_cleanup:
             self._active.discard(job_id)
 
@@ -362,7 +365,7 @@ def test_reject_accept_transaction_conflict_restores_cleaned_checkout(
     assert restored.manifest.read_bytes() == manifest_before
 
 
-def _dispatch_audit_rejection(tmp_path: Path, *, fail_cleanup: bool = False):
+def _dispatch_audit_rejection(tmp_path: Path, *, fail_cleanup: bool = False, raise_cleanup: bool = False):
     revision, work_root, native, first_start = _active_audit_scenario(tmp_path)
     released = native.release_job(
         ReleaseJobRequest(
@@ -375,7 +378,11 @@ def _dispatch_audit_rejection(tmp_path: Path, *, fail_cleanup: bool = False):
         )
     )
     assert released.diagnostic is None
-    proof_checkouts = _ProofCheckouts(first_start.job_id, fail_cleanup=fail_cleanup)
+    proof_checkouts = _ProofCheckouts(
+        first_start.job_id,
+        fail_cleanup=fail_cleanup,
+        raise_cleanup=raise_cleanup,
+    )
     runtime = DispatchRuntime(native, work_root, proof_checkouts)  # type: ignore[arg-type]
     current = first_start.model_copy(
         update={"attempt_id": "attempt-audit-dispatch", "claim_id": "claim-audit-dispatch"}
@@ -400,8 +407,13 @@ def test_reject_audit_releases_reader_cleans_checkout_and_replays(tmp_path: Path
     assert not proof_checkouts.is_orphan(str(start.job_id))
 
 
-def test_reject_audit_cleanup_failure_preserves_all_runtime_state(tmp_path: Path) -> None:
-    revision, work_root, runtime, proof_checkouts, start = _dispatch_audit_rejection(tmp_path, fail_cleanup=True)
+@pytest.mark.parametrize("failure_mode", ["orphan", "exception"])
+def test_reject_audit_cleanup_failure_preserves_all_runtime_state(tmp_path: Path, failure_mode: str) -> None:
+    revision, work_root, runtime, proof_checkouts, start = _dispatch_audit_rejection(
+        tmp_path,
+        fail_cleanup=failure_mode == "orphan",
+        raise_cleanup=failure_mode == "exception",
+    )
     request = _reject_audit_request(revision, start)
     work_before = {
         str(path.relative_to(work_root)): path.read_bytes() for path in work_root.rglob("*") if path.is_file()
