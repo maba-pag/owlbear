@@ -1,10 +1,10 @@
 ---
 id: 2045
 title: 'P6-03: Prove designer interruption, decisions, and refusal'
-status: build
+status: verify
 priority: high
 created: 2026-07-25T14:29:01.440279+02:00
-updated: 2026-07-25T14:29:01.440279+02:00
+updated: 2026-07-25T14:48:03.235075+02:00
 tags:
   - phase-6
   - scope:test
@@ -58,3 +58,20 @@ In: durable agent scenario evidence over a temporary native change and local def
 Out: positive admission publication, admission evaluator-family completeness, setup or seed changes, OpenSpec deletion, and alternate prompt or MCP adapters.
 
 Proof guidance: exercise shipped prompt, agent, and workflow artifacts; only an external research response may be replaced below the designer workflow.
+
+[[2026-07-25T14:48:03+02:00]]
+## Builder Notes
+Added one durable `PROOF-004` scenario module at `serve/mcp-kanban/tests/test_designer_interaction.py`. It copies the real admitted modular change into temporary authority, loads the shipped `/design` prompt, `designer` agent, and `w-design-session`, and exercises public MCP `show_change` and `validate_change`. No production, positive admission, setup/seed, OpenSpec, or evaluator-family work changed.
+
+### AC Evidence
+- AC-1: Resume scenario persists one accepted decision and one pending decision, calls public `show_change` twice through a real `AppContext`, observes identical authority/digest, and proves intent and decision bytes unchanged.
+- AC-2: The same scenario derives the one-question contract from shipped Step 5, requiring exactly one `askQuestions` then stop with Status quo, Options, Tradeoffs, Risks, Recommendation, and Confidence; the public authority keeps the second choice pending and specialist evidence remains read-only.
+- AC-3: Unresolved-decision scenario calls public `show_change`/`validate_change`, observes `DV-010` for the pending decision plus absent-approval `EV-004`, checks the shipped approval/admission gate, and proves no receipt, generation, sequence, or job bytes appear.
+- AC-4: Resolved-draft scenario injects one representative challenge error, observes exactly `EV-002` for that target, checks the shipped report/keep-draft/no-admit contract, and proves publication snapshots unchanged. It does not assert evaluator-family completeness.
+
+### Validation
+- `uv run pytest serve/mcp-kanban/tests/test_designer_interaction.py -q --tb=short` — 3 passed.
+- `uv run pytest serve/mcp-kanban/tests/test_designer_interaction.py serve/mcp-kanban/tests/test_mcp_surface_contract.py -q --tb=short` — 14 passed.
+- `uv run lint serve/mcp-kanban/tests/test_designer_interaction.py` — pass.
+- Editor diagnostics — none.
+- `builder-challenger` — pass; independently reran the focused scenarios and Ruff.
