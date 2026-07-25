@@ -1,10 +1,10 @@
 ---
 id: 2068
 title: 'P11-03: Expose native request resolution and claim release conflicts'
-status: collect
+status: archived
 priority: high
 created: 2026-07-25T22:31:02.444553+02:00
-updated: 2026-07-25T23:34:34.998804+02:00
+updated: 2026-07-25T23:35:13.401713+02:00
 tags:
   - phase-11
   - scope:cockpit-backend
@@ -35,7 +35,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Projection
@@ -93,3 +93,16 @@ AC judgment:
 - AC-3: strict 422 rejection precedes runtime mutation, and 409 envelopes preserve domain/lower diagnostics, target, holders, and current digest.
 
 Verifier challenger: pass; no hidden mutation/replay gap, architecture violation, test-rent issue, or scope drift found. Broad-suite unrelated failures are separated from the green changed slice. Verifier memories were assessed before closure.
+
+[[2026-07-25T23:35:13+02:00]]
+## Collect Notes
+ARCHIVED: #2068 is complete and archive-ready.
+
+Closure evidence:
+- Builder commit `c9c8f80567b8852bf155b7eacd0082c54428cb0b` is an ancestor of HEAD and carries the strict native controls plus public proof.
+- Verifier commit `5cf17721119c9e513dd16e969d01627a81f1ba75` is an ancestor of HEAD and records independent 12-test/OpenAPI verification plus verifier-challenger pass.
+- Builder public suite: 8 passed; Cockpit regression: 307 passed; focused canonical release: 3 passed; builder challenger: 59 passed; verifier focused run: 12 passed; repository lint: passed.
+- All ACs have direct route-level evidence, and unrelated broad Kanban failures are explicitly outside the changed slice.
+- No unresolved request, block, follow-up, or uncommitted product/proof path remains.
+
+Collector memories were assessed before archive.
