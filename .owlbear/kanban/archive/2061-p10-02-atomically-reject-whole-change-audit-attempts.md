@@ -1,10 +1,10 @@
 ---
 id: 2061
 title: 'P10-02: Atomically reject whole-change audit attempts'
-status: collect
+status: archived
 priority: high
 created: 2026-07-25T19:53:21.715434+02:00
-updated: 2026-07-25T20:27:12.377363+02:00
+updated: 2026-07-25T20:27:32.894153+02:00
 tags:
   - phase-10
   - scope:kanban
@@ -39,7 +39,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Projection
@@ -86,3 +86,10 @@ Verified builder commit `252aa524a0ae1d4bdf1b3807b5569b10c35e5cbf` against all A
 Independent lint passed. `uv run pytest serve/kanban/tests/test_native_runtime.py serve/kanban/tests/test_invalidation.py serve/kanban/tests/test_dispatch_runtime.py serve/kanban/tests/test_proof_checkout.py tests/test_package_boundary.py -q --tb=short` passed 138 tests after repair. Verifier challenger initially identified the cleanup-exception gap; after the focused repair and rerun it passed with no remaining findings.
 
 Verifier-local changed files: `serve/kanban/src/owlbear_kanban/dispatch.py`, `serve/kanban/tests/test_dispatch_runtime.py`.
+
+[[2026-07-25T20:27:32+02:00]]
+## Collect Notes
+
+ARCHIVED
+
+Atomic whole-change audit rejection is complete. Builder commit `252aa524a0ae1d4bdf1b3807b5569b10c35e5cbf` establishes the native/dispatch operation and durable proofs; verifier commit `505fe77d847b86ceaaba6b48a83c1b951d7a4ed2` closes cleanup-exception containment and records the final 138-test verification. All AC have direct evidence, both final challenger decisions pass, package boundaries remain valid, and no unresolved follow-up or out-of-envelope MCP work remains.
