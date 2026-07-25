@@ -1,10 +1,10 @@
 ---
 id: 2043
 title: 'P6-01: Define the resumable native designer workflow'
-status: collect
+status: archived
 priority: high
 created: 2026-07-25T14:28:48.796665+02:00
-updated: 2026-07-25T14:36:36.892856+02:00
+updated: 2026-07-25T14:36:54.567026+02:00
 tags:
   - phase-6
   - scope:agent
@@ -41,7 +41,7 @@ proof_bundle: existing+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Projection
@@ -91,3 +91,7 @@ Verified builder revision `dd328c058f9210a533582ec78306a1c08842d1a9` independent
 - Editor diagnostics — none.
 - Full ecosystem live-registry check remains blocked by pre-existing generic tool declarations in `collector.agent.md`; this does not touch or exercise the new skill and belongs to later admitted agent migration work.
 - `verifier-challenger` — pass; documentation-only slice has sufficient evidence and no current follow-up.
+
+[[2026-07-25T14:36:54+02:00]]
+## Collect Notes
+Archived the leaf after confirming complete Builder and Verify Notes, committed implementation revision `dd328c058f9210a533582ec78306a1c08842d1a9`, committed verification record `6292cae4faf3950117d3980d2833a9ed1acf981f`, all four AC mappings, passing skill validation, seven applicable ecosystem regressions, clean diagnostics, and both mandatory challenger passes. The known full-suite registry mismatch is unrelated existing agent migration work and does not invalidate the isolated workflow authority.
