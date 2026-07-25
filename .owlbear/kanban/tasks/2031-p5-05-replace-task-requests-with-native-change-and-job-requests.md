@@ -1,10 +1,10 @@
 ---
 id: 2031
 title: 'P5-05: Replace task requests with native change and job requests'
-status: verify
+status: collect
 priority: high
 created: 2026-07-24T23:22:11.813787+02:00
-updated: 2026-07-25T12:34:59.248265+02:00
+updated: 2026-07-25T12:36:32.258045+02:00
 tags:
   - phase-5
   - scope:mcp-kanban
@@ -163,3 +163,19 @@ AC-3: public `list_requests` is exercised over two pending identities and one lo
 AC-4: public `show_request` returns complete body and resolution state; missing identity returns `ERR_NATIVE_REQUEST_NOT_FOUND` with identical pre/post storage.
 
 Validation: `uv run pytest serve/mcp-kanban/tests/test_mcp_request_tools.py -q --tb=short` -> 13 passed. `uv run pytest serve/mcp-kanban/tests -q --tb=short` -> 422 passed. `uv run lint serve/mcp-kanban/src/owlbear_mcp_kanban/server.py serve/mcp-kanban/tests/test_mcp_request_tools.py` passed. Editor diagnostics and `git diff --check` are clean. Builder-challenger: pass after independent 422-test and Ruff reruns. No skips, scratch proof, loader replacement, synthetic identity/time, or stale `.yml` request glob remains.
+
+[[2026-07-25T12:36:32+02:00]]
+## Verify Notes
+PASS at builder commit `32067bc869559930d362309b1091e0a73ef9b73f`. Independent verification closed recurring failure key `#2031-AC1-4/native-request-durable-boundary` at the public MCP boundary.
+
+AC-1: public `create_request` now requires native `request_id` and `created_at`, forwards the complete immutable payload unchanged, and is annotated idempotent. The focused proof calls the public wrapper twice through real admitted loading with one linked job and proves equal `StoredRequest`, byte-identical request/job YAML, one pending identity, and no extra files.
+
+AC-2: public wrapper scenarios cover unknown change, wrong digest, absent graph node, missing job, revision-mismatched job, target-mismatched job, and changed immutable content under a reused ID. Each enumerated code is asserted and complete request/job byte snapshots are equal before and after rejection. The former mocked loader, wrong runtime root, and vacuous `*.yml` glob are absent.
+
+AC-3: public `list_requests` returns pending and resolved summaries in ascending `request_id`, omits body, and rejects unsupported status with the stable parameter error.
+
+AC-4: public `show_request` returns full body and resolution state; a missing ID returns `ERR_NATIVE_REQUEST_NOT_FOUND` without changing storage.
+
+Independent commands: `git show --check --stat --oneline 32067bc869` clean; focused request suite 13 passed; complete `serve/mcp-kanban/tests` 422 passed. Editor diagnostics are clean. Source search confirms no loader monkeypatch, skip, synthetic hash/time identity, or stale request-file glob. Core runtime semantics were not modified.
+
+Verifier-challenger: `pass`; the repaired follow-up is closed through the real public wrappers and no concrete regression, scope, or durable-test-rent defect remains.
