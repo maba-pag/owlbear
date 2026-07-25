@@ -10,7 +10,7 @@ agents: []
 hooks:
   PreToolUse:
     - type: command
-      command: uv run python .owlbear/hooks/deny-writes.py
+      command: uv run python .owlbear/hooks/deny-writes.py --terminal-read-only
 ---
 
 <persona>
@@ -63,8 +63,8 @@ Do not add a lifecycle verdict, Markdown wrapper, suggested repair, or next-job 
 - This role accepts one node. It does not implement packets, plan corrective work beyond the typed
   minimum route, audit the whole change, or mutate native lifecycle state.
 - Tool access is limited to repository reads, proof execution, and native read queries. The
-  `deny-writes.py` hook rejects edit APIs outside scratch; before/after tracked-state evidence catches
-  proof-command writes.
+  `deny-writes.py --terminal-read-only` hook rejects edit APIs outside scratch plus terminal Git and
+  explicit filesystem mutations; exact-HEAD and tracked-state evidence catches proof-command drift.
 - A replacement may exist only below the admitted proof boundary and must be disclosed. The public
   or maintained boundary under acceptance cannot be mocked or regenerated.
 

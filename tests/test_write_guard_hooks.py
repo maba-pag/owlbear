@@ -32,7 +32,12 @@ def _load_hook(path: Path, module_name: str) -> types.ModuleType:
     return module
 
 
-def _invoke(module: types.ModuleType, payload: dict[str, Any]) -> dict[str, Any]:
+def _invoke(
+    module: types.ModuleType,
+    payload: dict[str, Any],
+    *,
+    argv: list[str] | None = None,
+) -> dict[str, Any]:
     raw = json.dumps(payload).encode()
     mock_stdin = MagicMock()
     mock_stdin.buffer.read.return_value = raw
@@ -42,7 +47,11 @@ def _invoke(module: types.ModuleType, payload: dict[str, Any]) -> dict[str, Any]
         if args:
             captured.append(str(args[0]))
 
-    with patch.object(sys, "stdin", mock_stdin), patch("builtins.print", _fake_print):
+    with (
+        patch.object(sys, "stdin", mock_stdin),
+        patch.object(sys, "argv", argv or [str(module.__file__)]),
+        patch("builtins.print", _fake_print),
+    ):
         module.main()
 
     return json.loads(captured[-1]) if captured else {}
@@ -95,6 +104,51 @@ class TestDenyWrites:
             "tool_input": {"input": "*** Begin Patch\n*** Update File: README.md\n@@\n-old\n+new\n*** End Patch"},
         }
         assert _is_denied(_invoke(deny_writes_module, payload))
+
+
+class TestAcceptorTerminalGuard:
+    @pytest.fixture
+    def module(self) -> types.ModuleType:
+        path = _REPO_ROOT / ".owlbear" / "hooks" / "deny-writes.py"
+        return _load_hook(path, "deny_writes_acceptor")
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "git commit --allow-empty -m accepted",
+            "git -C /tmp/proof reset --hard HEAD^",
+            "git checkout --detach HEAD^",
+            "git update-ref HEAD HEAD^",
+            "git -c alias.move=reset move --hard HEAD^",
+            "chmod u+w tracked.py",
+            "printf changed > tracked.py",
+            "python -c \"from pathlib import Path; Path('tracked.py').write_text('changed')\"",
+        ],
+    )
+    def test_denies_terminal_mutation(self, module: types.ModuleType, command: str) -> None:
+        payload = {"tool_name": "execute/runInTerminal", "tool_input": {"command": command}}
+
+        result = _invoke(module, payload, argv=[str(module.__file__), "--terminal-read-only"])
+
+        assert _is_denied(result)
+
+    def test_allows_read_only_proof_command(self, module: types.ModuleType) -> None:
+        payload = {
+            "tool_name": "execute/runInTerminal",
+            "tool_input": {"command": "git rev-parse --verify HEAD && uv run pytest tests/test_contract.py -q"},
+        }
+
+        result = _invoke(module, payload, argv=[str(module.__file__), "--terminal-read-only"])
+
+        assert _is_allowed(result)
+
+    def test_terminal_guard_is_opt_in(self, module: types.ModuleType) -> None:
+        payload = {
+            "tool_name": "execute/runInTerminal",
+            "tool_input": {"command": "git commit --allow-empty -m accepted"},
+        }
+
+        assert _is_allowed(_invoke(module, payload))
 
 
 class TestDenySrcWrites:

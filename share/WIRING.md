@@ -51,7 +51,7 @@ This table snapshots agent declarations and includes runtime-relevant built-in d
 | shaper | GPT-5.6 Sol | `r-pipeline-protocol`, `r-challenger-protocol`, `r-workspace-governance` | shaper-challenger, Explore | `PreToolUse`: deny non-document writes |
 | builder | GPT-5.6 Terra | `w-packet-building`, `r-pipeline-protocol`, `r-challenger-protocol`, `r-workspace-governance`, `h-codebase-orientation` | builder-challenger, build-reviewer | `SessionStart`: task context; `PostToolUse`: lint changed files |
 | build-reviewer | Claude Sonnet 5 | `r-challenger-protocol`, `h-codebase-orientation` | None | `PreToolUse`: deny writes except scratch |
-| acceptor | GPT-5.6 Terra | `w-node-acceptance` | None | `PreToolUse`: deny writes except scratch; before/after tracked-state check |
+| acceptor | GPT-5.6 Terra | `w-node-acceptance` | None | `PreToolUse`: deny writes except scratch and terminal mutation; exact-HEAD/tracked-state checks |
 | verifier | GPT-5.6 Terra | `r-pipeline-protocol`, `r-challenger-protocol`, `r-workspace-governance`, `h-codebase-orientation` | verifier-challenger | `SessionStart`: task context; `PostToolUse`: lint changed files |
 | collector | GPT-5.6 Terra | `r-pipeline-protocol`, `r-workspace-governance`, `h-mcp-kanban` | Explore | `PreToolUse`: deny writes except scratch |
 | shaper-challenger | Claude Sonnet 5 | `h-ac-quality`, `h-module-design`, `r-challenger-protocol` | None | `PreToolUse`: deny writes except scratch |
@@ -153,7 +153,7 @@ The agent validator enforces ND3 metadata and frontmatter-to-`<agents>` alignmen
 |---------|----------------|-----------------|
 | Agent `tools:` allowlist | Every agent | Limits runtime capabilities exposed to the role |
 | `deny-non-doc-writes.py` | shaper | Allows documentation and diagram writes, rejects code writes |
-| `deny-writes.py` | acceptor, collector, designer-challenger, planner-challenger, build-reviewer, and read-only pipeline challengers | Rejects durable edit-tool writes outside scratch |
+| `deny-writes.py` | acceptor, collector, designer-challenger, planner-challenger, build-reviewer, and read-only pipeline challengers | Rejects durable edit-tool writes outside scratch; acceptor enables terminal-mutation mode |
 | `deny-src-writes.py` | test-curator | Restricts writes to tests and scratch |
 | `session-context.py` | builder, verifier | Adds task-aware context at session start |
 | `lint-changed.py` | builder, verifier, builder-challenger | Runs changed-file checks after tool use |

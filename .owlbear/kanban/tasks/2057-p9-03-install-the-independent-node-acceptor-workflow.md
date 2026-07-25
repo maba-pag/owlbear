@@ -1,10 +1,10 @@
 ---
 id: 2057
 title: 'P9-03: Install the independent node acceptor workflow'
-status: build
+status: verify
 priority: high
 created: 2026-07-25T17:19:45.152185+02:00
-updated: 2026-07-25T18:13:14.642326+02:00
+updated: 2026-07-25T18:18:13.265983+02:00
 tags:
   - phase-9
   - scope:agent
@@ -78,3 +78,14 @@ None.
 |---|-------------|--------------|-----------------|---------|----------|
 | 1 | AC-2/terminal-head-mutation | builder | Add a hard acceptor terminal guard that rejects Git commit/reset/checkout and tracked-write attempts before execution; require checkout `HEAD` to remain the supplied candidate SHA before and after every proof command; add focused regression for terminal commit/reset/write attempts and rerun validators. | `.owlbear/hooks/deny-writes.py`, `share/agents/acceptor.agent.md`, `share/skills/w-node-acceptance/SKILL.md`, focused hook tests | verifier-challenger: clean status/diff can hide a commit or moved-and-reset HEAD |
 
+[[2026-07-25T18:18:13+02:00]]
+## Builder Notes
+- Resolved `AC-2/terminal-head-mutation` at the hard-control owner. `deny-writes.py` now has an acceptor-only `--terminal-read-only` mode; default behavior remains unchanged for every existing role.
+- Terminal-read-only mode fails closed on Git: only explicit inspection subcommands are allowed, so commit, reset, checkout, update-ref, custom aliases, and other unknown Git operations are denied before execution. It also denies explicit shell filesystem mutators/redirection, in-place sed/perl, and common inline scripting writes.
+- `acceptor.agent.md` opts into terminal-read-only mode. `w-node-acceptance` now records and rechecks `git rev-parse --verify HEAD` against the engine candidate plus status excluding untracked scratch and `git diff --binary HEAD --` after every proof command, covering moved HEAD and staged/unstaged tracked bytes.
+- Added focused regressions for commit, reset, checkout, update-ref, custom alias, chmod, redirection, and inline `Path.write_text`; read-only Git plus pytest remains allowed, and default guard mode is proven unaffected. Updated WIRING hard-control description.
+- Durable-test justification: terminal execution bypassed the edit-tool hook and could silently approve acceptor-authored commit state; this independence/data-integrity boundary is hard to inspect manually and the focused hook test is cheaper than repeated command review.
+- Validation: all 18 agents and all skills validate; 47 relevant ecosystem/write-guard tests pass; explicit lint over all five repair files passes. The unrelated global registry assertion still fails on pre-existing removed legacy task grants and remains untouched. Builder challenger decision: pass.
+
+### Required Follow-up
+None.

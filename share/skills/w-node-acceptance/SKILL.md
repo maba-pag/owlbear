@@ -40,7 +40,9 @@ Before running proof, record:
 - the current plan and packet receipt identities;
 - each proof command or observation and its expected boundary;
 - every lower-layer replacement, including why the admitted proof permits it;
-- `git status --porcelain=v1` and `git diff --binary` for tracked state in the checkout.
+- `git rev-parse --verify HEAD`, which must equal the supplied candidate SHA;
+- `git status --porcelain=v1 --untracked-files=no` and `git diff --binary HEAD --` for tracked index
+   and worktree state in the checkout.
 
 Run commands only with the engine checkout as working directory. Temporary diagnostics, generated
 configuration, or replacement fixtures must live under `.owlbear/scratch/` in that checkout and must
@@ -52,10 +54,13 @@ Exercise the node's assembled public or maintained boundary at the supplied SHA.
 observed behavior with the admitted node contract, current packet receipts, and proof methods. Keep
 command, exit status, relevant output, environment facts, and replacement identities as evidence.
 
-After every proof command and before returning a disposition, recapture `git status --porcelain=v1`
-and `git diff --binary`. Tracked state must be byte-identical to the baseline. Any tracked product,
-test, documentation, graph, plan, job-authority, or evidence change is a rejection; do not inspect a
-modified result as approval evidence and do not repair or remove the change.
+The hard terminal guard rejects Git state mutation and explicit filesystem-write commands before
+execution. After every proof command and before returning a disposition, recapture
+`git rev-parse --verify HEAD`, `git status --porcelain=v1 --untracked-files=no`, and
+`git diff --binary HEAD --`. `HEAD` must still equal the supplied candidate SHA, and tracked index
+and worktree state must be byte-identical to the baseline. Any tracked product, test, documentation,
+graph, plan, job-authority, or evidence change is a rejection; do not inspect a modified result as
+approval evidence and do not repair or remove the change.
 
 Classify each failed acceptance claim as exactly one immutable `Finding` using the admitted classes:
 `implementation-defect`, `unforeseeable-discovery`, `planning-omission`, or `scope-change`. For every
