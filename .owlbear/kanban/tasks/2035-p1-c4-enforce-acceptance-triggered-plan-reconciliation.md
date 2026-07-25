@@ -1,10 +1,10 @@
 ---
 id: 2035
 title: 'P1-C4: Enforce acceptance-triggered plan reconciliation'
-status: verify
+status: shape
 priority: high
 created: 2026-07-25T02:46:46.300991+02:00
-updated: 2026-07-25T06:19:14.252371+02:00
+updated: 2026-07-25T06:21:29.899329+02:00
 tags:
   - change:replace-delivery-pipeline
   - node:DN-003
@@ -157,3 +157,22 @@ Challenges caught and corrected non-supersession disposition misuse, missing fol
 - Current failure keys: none.
 - Builder challenger: pass. It independently ran the focused native-runtime test suite and found the evidence supports AC1 through AC4 with no blocking defect.
 - Follow-up risk: the package suite's eight historical-fixture failures remain outside this task's scope and predate this lifecycle handoff.
+
+[[2026-07-25T06:21:29+02:00]]
+## Verify Notes
+- Evidence reviewed: task Objective, Scope, Authority, Engine Handoff, AC1-AC5, latest Builder Notes, prior Verify Notes, commit `b803968a6`, and the claimed runtime/test slice. Named authorities checked: `native_runtime.py` owns accept completion and build eligibility; `dispatch.py` forwards the accept coordinator into that native transaction; receipt currentness and invalidation remain separately owned by `receipt.py` and `invalidation.py`.
+- Change Module Map: no implementation-map deviation. The adopted commit touches only `native_runtime.py`, `dispatch.py`, `__init__.py`, and `test_native_runtime.py`. However, after the prior Verify Note, `45157dd34..HEAD` changes only task metadata, so the stated proof defect has no remediation.
+- Normal-path boundary exercised: public `NativeRuntime.finish_accept` creation/replay behavior and native start eligibility ran through `serve/kanban/tests/test_native_runtime.py`; coordination replacements remain below the native runtime boundary. The direct reconciliation receipt/currentness/invalidation path was not exercised end-to-end.
+- Checks run: `uv run pytest serve/kanban/tests/test_native_runtime.py -q` passed (25 passed); focused reconciliation/start/invalidation selection passed (9 passed); `git show --check b803968a6` and `git diff --check b803968a6..HEAD` passed.
+- Findings: AC1 and AC2 have focused evidence. AC4 proves dependent creation, order, replay, and changed-ID conflict. AC3 still lacks direct, mutation-free coverage for stale plan digest plus active-plan, missing/ambiguous/non-current predecessor rejection cases. AC5 still lacks the coupled reconciliation scenario: receipt predecessor IDs, replacement digest, old/new build eligibility, predecessor invalidation through reconciled edges, and a disjoint node remaining current. Generic start/invalidation tests do not prove this reconciliation contract.
+- Patches applied: none. Adding the required durable lifecycle scenario exceeds the verifier local patch budget.
+- AC-to-evidence map: AC1 focused initial-plan/start checks; AC2 `test_finish_plan_publishes_one_complete_outcome_and_replays`; AC3 source inspection plus insufficient generic start test; AC4 `test_finish_build_accept_and_audit_publish_complete_outcomes`; AC5 source inspection plus insufficient generic invalidation coverage.
+- Prior same-failure-key rejection check: the preceding Verify Note rejected `AC3-AC5/reconciliation-scenario-proof`; no product or proof artifact changed afterward. Per repeated-repair policy, this must reshape rather than return to build again.
+- Memory assessment: all 20 recalled entries assessed; the refined-task artifact-to-scope check directly informed this route.
+- Verifier-challenger: not invoked for this non-PASS route; its previous `fail` result identified the same unresolved AC3/AC5 proof gap.
+- Final route: RESHAPE to `shape`.
+
+### Required Follow-up
+| # | Failure Key | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|--------------|-----------------|---------|----------|
+| 1 | AC3-AC5/reconciliation-scenario-proof | shape | Reconcile the acceptance criteria and proof contract into one minimal, explicit reconciliation scenario matrix covering direct build-gate failures without mutation and the full receipt/digest/currentness/invalidation sequence; identify the intended test boundary and any implementation gap before redispatch. | `serve/kanban/src/owlbear_kanban/native_runtime.py`, `serve/kanban/tests/test_native_runtime.py` | Prior and current Verify Notes; no remediation in `45157dd34..HEAD` |
