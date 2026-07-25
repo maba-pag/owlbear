@@ -53,7 +53,8 @@ def _load_revision(cache: NativeContextCache, changes_dir: Path, change_id: str)
     )
 
 
-def _context(change_id: str, engine: KanbanEngine, cache: NativeContextCache) -> NativeChangeContext:
+def get_native_context(change_id: str, engine: KanbanEngine, cache: NativeContextCache) -> NativeChangeContext:
+    """Load and assemble one native context or raise its stable HTTP error."""
     changes_dir, work_root, workspace_root = _roots(engine)
     revision = _load_revision(cache, changes_dir, change_id)
     try:
@@ -108,7 +109,7 @@ def show_change(
     cache: _NativeCache,
 ) -> ChangeDetailResponse:
     """Return joined authority for one native change revision."""
-    revision = _context(change_id, engine, cache).revision
+    revision = get_native_context(change_id, engine, cache).revision
     return ChangeDetailResponse(
         change_id=revision.change_id,
         delivery_digest=revision.delivery_digest,
@@ -126,7 +127,7 @@ def show_change_graph(
     cache: _NativeCache,
 ) -> ChangeGraphResponse:
     """Return delivery graph authority and current isolated node plans."""
-    revision = _context(change_id, engine, cache).revision
+    revision = get_native_context(change_id, engine, cache).revision
     plans = {node.id: plan for node in revision.graph.nodes if (plan := revision.read_node_plan(node.id)) is not None}
     return ChangeGraphResponse(
         change_id=revision.change_id,
@@ -136,4 +137,4 @@ def show_change_graph(
     )
 
 
-__all__ = ["router"]
+__all__ = ["get_native_context", "router"]

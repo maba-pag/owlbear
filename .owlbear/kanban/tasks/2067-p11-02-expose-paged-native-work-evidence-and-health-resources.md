@@ -1,10 +1,10 @@
 ---
 id: 2067
 title: 'P11-02: Expose paged native work evidence and health resources'
-status: build
+status: verify
 priority: high
 created: 2026-07-25T22:30:56.487007+02:00
-updated: 2026-07-25T22:30:56.487007+02:00
+updated: 2026-07-25T23:01:36.981209+02:00
 tags:
   - phase-11
   - scope:cockpit-backend
@@ -52,3 +52,15 @@ In: native read routes, show routes, cursor/limit validation, supersession proje
 Out: lifecycle controls, SSE, legacy inventory, frontend, cutover.
 
 Proof guidance: drive public TestClient routes over a real NativeRuntime with a temporary lower store.
+
+[[2026-07-25T23:01:36+02:00]]
+## Builder Notes
+DONE
+
+Implemented bounded typed native jobs, attempts, findings, receipts, requests, activity, invalidation, work-health, and change-health HTTP reads. Pages delegate to `NativeRuntime`; show routes delegate to canonical stores and `project_job`; invalidation is projected from the persisted supersession receipt and impact closure; canonical change health is bounded at the HTTP response boundary.
+
+Changed files: `serve/cockpit/src/owlbear_cockpit/native_models.py`, `serve/cockpit/src/owlbear_cockpit/routes/native_changes.py`, `serve/cockpit/src/owlbear_cockpit/routes/native_work.py`, `serve/cockpit/src/owlbear_cockpit/main.py`, and `tests/test_cockpit_native_work.py`.
+
+AC-1: public TestClient proof covers numeric job ordering, continuation, all nested `next_cursor` fields, stale 409, and limit 422. AC-2: job/finding/receipt/request show proof covers authority composition and resource-specific missing errors without paths. AC-3: a real supersession and corrective job expose receipt/impact closure; deliberate work and change defects produce bounded findings; byte snapshots prove all GETs leave work and authority files unchanged.
+
+Evidence: focused suite 3 passed; Cockpit backend regression 299 passed; all-file lint passed. Builder challenger: pass.
