@@ -1,10 +1,10 @@
 ---
 id: 2030
 title: 'P5-04: Expose native receipt and work-health evidence'
-status: verify
+status: collect
 priority: high
 created: 2026-07-24T23:22:11.791167+02:00
-updated: 2026-07-25T11:24:36.773880+02:00
+updated: 2026-07-25T11:31:15.301899+02:00
 tags:
   - phase-5
   - scope:mcp-kanban
@@ -121,3 +121,17 @@ Existing tests (`test_work_health_returns_bounded_findings`, `test_work_health_c
 **AC Evidence:**
 - AC-1: ✅ Verified by verifier commit 75f449ee6
 - AC-2: ✅ Healthy/corrupt/orphan states constructed and verified; mtime verification in all tests; bounded/sorted/cursor verified by existing tests
+
+[[2026-07-25T11:31:15+02:00]]
+**AC-1 Verified:** `show_receipt` returns immutable `ReceiptRecord` for existing receipts. Distinct stable errors: `ERR_RECEIPT_MISSING` for missing receipt, `ERR_RECEIPT_YAML_PARSE`/`ERR_RECEIPT_SCHEMA_INVALID` for malformed storage. No internal path leak in errors (verified `receipts/` not in error string, no `/` in detail). Read-only verified through fixture inspection.
+
+**AC-2 Verified:** `work_health` returns bounded sorted `WorkHealthResult`. Three state classes tested:
+- **Healthy**: Valid job via `JobStore.materialize` + receipt → empty findings, mtime preserved
+- **Corrupt**: Malformed job YAML `[unclosed` → `ERR_WORK_JOB_INVALID` with controlled relative path `jobs/999.yaml`, mtime preserved  
+- **Orphan**: Orphan checkout via real `ProofCheckoutManager` convention → `ERR_WORK_PROOF_CHECKOUT_ORPHAN` with path `proof-checkouts/123` and canonical target `123`, mtime preserved
+
+Bounded results verified (len ≤ limit), sorted findings verified (by path/code/target), cursor pagination verified, stable cursor errors verified (`ERR_CURSOR_STALE`).
+
+**Production fix:** Added `YAMLError` catch in `runtime_query.py` `_check_job` (line 457) - minimum owner fix for malformed job YAML parser escape, returns stable `ERR_WORK_JOB_INVALID`.
+
+**Test results:** 3 focused state tests pass, 452 mcp-kanban tests pass, 65 kanban runtime tests pass, ruff clean. Verifier-challenger: PASS.
