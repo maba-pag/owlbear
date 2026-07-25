@@ -1,10 +1,10 @@
 ---
 id: 2066
 title: 'P11-01: Assemble native Cockpit context and change graph resources'
-status: verify
+status: collect
 priority: high
 created: 2026-07-25T22:30:50.098738+02:00
-updated: 2026-07-25T22:42:42.232743+02:00
+updated: 2026-07-25T22:48:24.605385+02:00
 tags:
   - phase-11
   - scope:cockpit-backend
@@ -60,3 +60,13 @@ Changed files: `serve/cockpit/src/owlbear_cockpit/deps.py`, `serve/cockpit/src/o
 AC-1: public `GET /api/changes` proof covers identity ordering, admitted digest, malformed sibling diagnostics, and an absent changes root. AC-2: public detail/graph proof covers joined modular authority, isolated plans, and stable sanitized 404/422 envelopes. AC-3: public requests prove same-revision reuse and changed-digest replacement; injected assembly failure proves the prior cache and native work-store file set remain unchanged.
 
 Evidence: `uv run pytest -q tests/test_cockpit_native_changes.py` -> 6 passed; `uv run pytest -q tests/test_cockpit_*.py -m "not api"` -> 296 passed; `uv run --package owlbear-tools lint-all` -> passed with only four unrelated TODO notices. Builder challenger: pass.
+
+[[2026-07-25T22:48:24+02:00]]
+## Verify Notes
+PASS
+
+Verified builder SHA `9f954b3776f6918e010aaa9ed8cae59178dcaf89` against all three AC and the current admitted modular package. The builder commit owns exactly the shaped five-file product/proof slice plus task record, with no post-commit product drift.
+
+Verifier strengthened the existing public graph assertion to require the real current `DN-001` isolated plan and `DN-001-PK-001` packet. After an initial challenger failure, the AC-3 proof was repaired to change the digest, construct a real replacement `NativeRuntime`/history/proof manager, fail at `DispatchRuntime`, and assert the stable 503, old cache identity, work-store file set, and proof-root file set remain unchanged.
+
+Evidence: `uv run pytest -q tests/test_cockpit_native_changes.py` -> 6 passed; `uv run pytest -q tests/test_cockpit_*.py -m "not api"` -> 296 passed; focused verifier lint passed. Verifier challenger after repair: pass.

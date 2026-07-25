@@ -67,7 +67,8 @@ def test_show_change_and_graph_return_joined_authority(
     assert detail.json()["graph"]["nodes"]
     assert graph.status_code == 200
     assert graph.json()["delivery_digest"] == detail.json()["delivery_digest"]
-    assert set(graph.json()["plans"]) <= {node["id"] for node in graph.json()["graph"]["nodes"]}
+    assert set(graph.json()["plans"]) == {"DN-001"}
+    assert graph.json()["plans"]["DN-001"]["packets"][0]["id"] == "DN-001-PK-001"
 
 
 def test_missing_and_invalid_changes_have_stable_envelopes(
@@ -125,11 +126,13 @@ def test_failed_reassembly_preserves_cached_context_and_work_store(
     assert first.status_code == 200
     first_context = next(iter(cache._contexts.values()))  # noqa: SLF001
     work_root = change_dir.parent.parent / "kanban"
+    proof_root = change_dir.parent.parent / "scratch" / "proof"
     files_before = {path.relative_to(work_root) for path in work_root.rglob("*")}
+    proof_files_before = {path.relative_to(proof_root) for path in proof_root.rglob("*")}
 
     design = change_dir / "design.md"
     design.write_text(design.read_text(encoding="utf-8") + "\nFailed revision marker.\n", encoding="utf-8")
-    with mock.patch("owlbear_cockpit.deps.NativeRuntime", side_effect=RuntimeError("injected")):
+    with mock.patch("owlbear_cockpit.deps.DispatchRuntime", side_effect=RuntimeError("injected")):
         failed = client.get(f"/api/changes/{_CHANGE_ID}")
 
     assert failed.status_code == 503
@@ -139,3 +142,4 @@ def test_failed_reassembly_preserves_cached_context_and_work_store(
     }
     assert next(iter(cache._contexts.values())) is first_context  # noqa: SLF001
     assert {path.relative_to(work_root) for path in work_root.rglob("*")} == files_before
+    assert {path.relative_to(proof_root) for path in proof_root.rglob("*")} == proof_files_before
