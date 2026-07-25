@@ -1,10 +1,10 @@
 ---
 id: 2058
 title: 'P9-04: Prove successful independent node acceptance'
-status: verify
+status: collect
 priority: high
 created: 2026-07-25T17:19:52.292139+02:00
-updated: 2026-07-25T18:35:56.177974+02:00
+updated: 2026-07-25T18:38:09.991821+02:00
 tags:
   - phase-9
   - scope:test
@@ -59,6 +59,17 @@ Out: rejection routes, new runtime behavior, auditor, Cockpit, setup, and seed w
 - AC-2: proof reads the shipped `acceptor.agent.md`, `w-node-acceptance`, and terminal hook from the exact checkout; rehydrates change, job, canonical plan, and both current packet receipts through public queries; records contract, packet closure, changed surfaces, empty lower replacements, exact SHA, and before/after HEAD/status/diff; and proves both hook-level and filesystem-level tracked writes are denied with state byte-identical.
 - AC-3: the assembled `AcceptorSuccess` fields pass unchanged through public `finish_accept`; assertions cover persisted evidence/closure/SHA/predecessors, successful terminal event, proof-checkout cleanup, reader release, required dependent reconciliation jobs, exact replay equality, unchanged board bytes, one terminal event, and public receipt retrieval.
 - Validation: focused scenario passed; complete acceptance module 3 passed; complete MCP Kanban package 84 passed; focused workspace lint passed; editor diagnostics were empty; builder challenger passed.
+
+### Required Follow-up
+None.
+
+[[2026-07-25T18:38:09+02:00]]
+## Verifier Notes
+- Verified builder commit `79af8525` directly; its owned diff is limited to the maintained MCP acceptance integration module and the task transition, with no whitespace or editor diagnostics.
+- AC-1: public dispatch selection, engine checkout materialization, immutable active identity, and live reader/writer exclusion are exercised against real `DispatchRuntime`, not a replacement dispatcher.
+- AC-2: the scenario consumes shipped acceptor artifacts from the exact checkout, public native queries, canonical node-plan and receipt authority, actual hook/permission denials, and exact before/after HEAD/index/worktree evidence. The public boundary under acceptance is not mocked.
+- AC-3: public `finish_accept` persists the assembled proof, exact SHA, closure, predecessors, and dependent reconciliation jobs while cleaning checkout and coordination. Same-request replay returns identical receipt/event/jobs, leaves the persisted board byte-identical, and adds no terminal event.
+- Independent verification ran the acceptance, proof-checkout, dispatch-runtime, and native-runtime suites together: 62 passed. Prior full MCP package scope was 84 passed. Focused lint passed, diagnostics were empty, and verifier challenger passed without follow-up.
 
 ### Required Follow-up
 None.
