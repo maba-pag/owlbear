@@ -1,10 +1,10 @@
 ---
 id: 2037
 title: 'P1-C6: Replace IF-015 shape completion with plan completion'
-status: collect
+status: archived
 priority: high
 created: 2026-07-25T02:46:59.817987+02:00
-updated: 2026-07-25T08:29:04.775960+02:00
+updated: 2026-07-25T08:30:31.555666+02:00
 tags:
   - change:replace-delivery-pipeline
   - node:DN-004
@@ -40,7 +40,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Objective
@@ -121,3 +121,13 @@ Proof guidance: run assembled FastMCP inventory and invocation checks over real 
 - Verifier-challenger: `pass`. It confirmed AC1-AC5 direct evidence, no scope drift, and #2036 ownership for the post-accept fixture collision.
 - Final route: PASS to `collect`.
 
+[[2026-07-25T08:30:31+02:00]]
+## Collect Notes
+- Classification: leaf. `#2037` has no child tasks, no aggregate/EPIC tag or intent, and no aggregate collect contract; this collector check closes the task's AC evidence without reopening implementation review.
+- Intent source: `## Objective`, `## Scope`, `## Authority`, and AC1-AC5 define the strict native MCP completion bridge. The exact scope remains MCP parameter models, registrations/adapters, response/error mapping, proof-checkout composition, exports, and focused MCP proof; it excludes planner, picker/profile, orchestration, Cockpit, DN-009 APIs, and scheduling decisions.
+- Invariant/AC coverage: latest `## Verify Notes` is PASS. AC1 inventory confirms the eight lifecycle tools and no `finish_shape`; AC2 direct `FinishPlanRequest` delegation; AC3 real checkout setup/cleanup and diagnostic evidence; AC4 strict `reconciliation_plan_job_ids` to `FinishAcceptRequest`; AC5 lifecycle-only delegation outside `pick_jobs`. The latest note records no required follow-up.
+- Dependency and child coverage: `list_tasks(parent=2037)` returned no children. The sole prerequisite `#2039` is archived with reason `completed`; current dependency projection is `ok`. The `#2039 -> #2037 -> #2036 -> #1983` chain remains intact. No parent aggregate gate applies to this leaf.
+- SHA-linked proof: implementation `1a5e0300443ea702c3d29387543aac484e4da59f`; verification `244de9583ae1cba88423b2e990b37ca50540be93` is its descendant and records `uv run pytest serve/mcp-kanban/tests -q -k 'not TestProof014NativeMcpScenario'` with `438 passed`, live FastMCP inventory/schema checks with `2 passed`, and checkout/dispatch proof with `14 passed`. Builder and verifier records also report clean ruff and diff checks.
+- Challenger and handoff: verifier-challenger passed AC1-AC5 and exact scope. The normal-path PROOF-014 invocation completes this task's accept bridge; its later audit fixture collision with reconciliation plan job `5` is explicitly owned by downstream `#2036`. No `#2036` or `#1983` task was mutated.
+- Structured request state: task-scoped pending and resolved request lists are empty; no task-owned pending work remains.
+- Archive rationale: current verifier PASS, archived prerequisite, exact MCP-only boundary, SHA-linked focused proof, challenger pass, and correctly routed downstream handoff satisfy leaf closure.
