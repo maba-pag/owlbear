@@ -1,10 +1,10 @@
 ---
 id: 2033
 title: 'P1-C2: Cut over modular authority and isolated plan storage'
-status: build
+status: verify
 priority: high
 created: 2026-07-25T02:46:34.205290+02:00
-updated: 2026-07-25T05:08:11.264695+02:00
+updated: 2026-07-25T05:12:43.985406+02:00
 tags:
   - change:replace-delivery-pipeline
   - node:DN-001
@@ -249,3 +249,37 @@ Local task repair for verifier failure key `authority/stale-graph-carrier-limit`
 
 ### AC And Route
 Added AC6 for current modular-loader metadata plus full-graph MIG-004 ownership and AC7 for immutable receipt identity plus unambiguous discovery. Three challenge rounds rejected sibling-carrier conflation, an untyped errata artifact, and an incomplete owner range; the corrected mechanism and DN-012/DN-013 wording passed. Route returns to `build` for the two-artifact metadata/task correction and focused re-proof.
+
+[[2026-07-25T05:12:43+02:00]]
+## Builder Notes
+
+### Change Envelope
+- Corrected the digest-excluded admission limit in `.owlbear/changes/replace-delivery-pipeline/delivery/nodes.yaml` so it describes the already-active modular loader and retains the remaining MIG-004 closure conditions.
+- No runtime lifecycle identity, receipt implementation, public API, or receipt artifact changed.
+
+### Files Changed
+- `.owlbear/changes/replace-delivery-pipeline/delivery/nodes.yaml`
+- `.owlbear/kanban/tasks/2033-p1-c2-cut-over-modular-authority-and-isolated-plans.md` (lifecycle record)
+
+### Change Module Map
+- No deviation. The correction stayed in the shaped metadata owner; `native_runtime.py` and `receipt.py` remained excluded.
+
+### Proof Selected And Commands Run
+- `cd serve/kanban && uv run pytest tests/test_change_revision.py` completed: 27 passed.
+- Public `load_change` and `discover_admission` ran against an isolated copy of the tracked package and returned digest `3f6c656289911320bb5e7faf37b5e86ffa8511e729ade201a03a19913e33d990`, one current admission, and no findings.
+- SHA-256 for `receipts/admission-3f6c65628991.yaml` is `3fabd975a4ce506c780bc7182d19c17beb25fdd6a94a6a07f3dfe6f69e1d0023` both in the workspace and at builder commit `837b76518`; receipt diff is empty.
+
+### AC-To-Evidence Map
+- AC1-AC5: 27 passing maintained `test_change_revision.py` cases exercise modular documents, public digest loading, legacy `graph.yaml` rejection, isolated plan read/replay/OCC/interruption behavior, and fixture authority.
+- AC6: corrected `delivery/nodes.yaml` declares the modular loader active and leaves MIG-004 open through full graph cutover, DN-012 deletion, and DN-013 PROOF-013 absence evidence; isolated public loader proof preserves the admitted digest.
+- AC7: receipt SHA matches `837b76518`; no receipt diff exists; isolated discovery selected one current admission without findings.
+
+### Current Failure-Key Resolution
+- `authority/stale-graph-carrier-limit`: resolved by replacing the stale `graph.yaml` bootstrap-carrier limit with the modular-loader/MIG-004 completion condition.
+- An unrelated pre-existing untracked `receipts/shape-001.yaml` has an unsupported receipt kind and causes broad discovery noise. It was not changed; isolated tracked-package proof excluded it.
+
+### Builder-Challenger
+- `pass`: challenger confirmed the metadata matches the strict modular loader, preserves the open MIG-004/DN-012/DN-013 condition, and accepted the focused evidence.
+
+### Follow-Up Risks
+- None within this task boundary; the unrelated untracked receipt artifact remains outside task ownership.

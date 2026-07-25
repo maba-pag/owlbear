@@ -19,8 +19,8 @@ admission:
       projection audit.
     - Admission certifies delivery completeness and feasibility, not
       implementation correctness.
-    - The current graph.yaml remains the bootstrap carrier until MIG-004
-      implements modular loading.
+    - The modular loader is active. MIG-004 remains open until the full delivery
+      graph completes cutover, DN-012 deletion, and DN-013 PROOF-013 absence evidence.
 
 nodes:
   - id: DN-001
