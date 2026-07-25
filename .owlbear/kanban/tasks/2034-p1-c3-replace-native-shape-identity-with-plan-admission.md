@@ -4,7 +4,7 @@ title: 'P1-C3: Replace native shape identity with plan admission'
 status: collect
 priority: high
 created: 2026-07-25T02:46:39.499546+02:00
-updated: 2026-07-25T05:27:58.912987+02:00
+updated: 2026-07-25T05:29:08.061819+02:00
 tags:
   - change:replace-delivery-pipeline
   - node:DN-002
@@ -38,13 +38,8 @@ ac:
     receipt currentness, and change health use modular authority plus isolated plan
     bytes, and an injected transaction interruption exposes prior bytes or the complete
     new YAML without `graph.yaml` mutation.'
-blocked: true
-block_reason: 'COMMIT_FAILED: ruff format rewrites valid `except (A, B)` to invalid
-  Python 2 syntax, while ruff lint rejects the formatter-stable exception union. Recovery:
-  reconcile the repository Ruff formatter/linter behavior, then run `uv --project
-  /Users/markus/Projects/owlbear-dev run commit-owned -m "fix: verify plan admission
-  exception handling (#2034, verifier)" -- serve/kanban/src/owlbear_kanban/admission_transaction.py
-  .owlbear/kanban/tasks/2034-p1-c3-replace-native-shape-identity-with-plan-admission.md`.'
+blocked: false
+block_reason:
 claimed_at:
 archival_reason:
 archival_refs: []
