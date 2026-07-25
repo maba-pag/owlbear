@@ -1,10 +1,10 @@
 ---
 id: 2027
 title: 'P5-01: Establish native MCP authority context and change inspection'
-status: build
+status: verify
 priority: high
 created: 2026-07-24T23:21:34.679658+02:00
-updated: 2026-07-25T09:16:54.914372+02:00
+updated: 2026-07-25T09:31:06.346813+02:00
 tags:
   - phase-5
   - scope:mcp-kanban
@@ -53,3 +53,35 @@ Proof guidance: exercise the public MCP tools over real native authority loaders
 [[2026-07-25T09:16:54+02:00]]
 ## Shape Notes
 Connected partial-commit repair is summarized in #1981. Refreshed this packet to admitted digest `3f6c65628991` and modular DN-009/IF-010 authority; outcome, AC, parent, dependencies, priority, and build route remain the approved T1 contract. Concrete graph passed shaper challenge.
+
+[[2026-07-25T09:31:06+02:00]]
+## Builder Notes
+
+Implemented 4 public MCP tools for native change authority over `owlbear_kanban.load_change`, `evaluate_admission`, and `change_health`:
+
+**Added to server.py:**
+- `list_changes()` - Lists change packages with state and digest or structured diagnostics
+- `show_change(change_id)` - Returns `ChangeRevision` projection or stable JSON `ToolError`
+- `validate_change(change_id, evidence)` - Returns `AdmissionAssessment` without writing work paths
+- `change_health(change_id)` - Returns `ChangeHealthResult` without mutating authority/work-path mtimes
+
+**Added to models.py:**
+- `ValidateChangeParams` for structured parameter validation
+
+**Updated:**
+- `__all__` exports in server.py (added 4 new tools alphabetically)
+- Top-level imports: `AdmissionEvidence`, `evaluate_admission`, `change_health as get_change_health`
+- `EXPECTED_TOOLS` in test_mcp_surface_contract.py (updated deployment contract)
+
+**Evidence:**
+- Focused executable test `.owlbear/scratch/2027-test-change-tools.py` validates all 4 ACs against the public MCP boundary with temporary change packages
+- All 4 ACs passed: identity-ordered summaries, stable error projection, admission evaluation without writes, health check without mtime mutation
+- Existing MCP kanban test suite passes: 440 tests GREEN
+- Builder-challenger: pass
+
+**Preserved:**
+- IF-015 native-runtime job tools remain unchanged
+- Legacy tools preserved per #2040 removal scope
+- Core engine, Cockpit, setup, agents untouched per envelope
+
+No durable test added per guidance: focused proof exercises public MCP tools over real authority loaders; existing contract suite (test_mcp_surface_contract.py) protects tool registration and interface stability.

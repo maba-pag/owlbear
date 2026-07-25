@@ -225,3 +225,10 @@ class KanbanTask(BaseModel):
         if isinstance(data, dict) and "claimed_by" in data:
             data["claimed"] = data.pop("claimed_by") is not None
         return data
+
+
+class ValidateChangeParams(MCPParamsBase):
+    """Input schema for validate_change."""
+
+    change_id: str = Field(min_length=1)
+    evidence: dict[str, object]

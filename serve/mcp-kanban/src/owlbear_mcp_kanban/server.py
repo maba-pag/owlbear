@@ -19,6 +19,7 @@ from pydantic import BeforeValidator
 from pydantic import ValidationError as PydanticValidationError
 
 from owlbear_kanban import (
+    AdmissionEvidence,
     DispatchRuntime,
     FinishAcceptRequest,
     FinishJobRequest,
@@ -30,8 +31,12 @@ from owlbear_kanban import (
     RecoverExpiredClaimsRequest,
     ReleaseJobRequest,
     StartJobRequest,
+    evaluate_admission,
     load_change,
     parse_impact_closure,
+)
+from owlbear_kanban import (
+    change_health as get_change_health,
 )
 from owlbear_kanban._duration import _parse_duration
 from owlbear_kanban.errors import KanbanError
@@ -80,6 +85,7 @@ __all__ = [
     "_map_kanban_error",
     "_show_validated",
     "app_lifespan",
+    "change_health",
     "create_request",
     "create_task",
     "edit_task",
@@ -88,6 +94,7 @@ __all__ = [
     "finish_audit",
     "finish_build",
     "finish_plan",
+    "list_changes",
     "list_requests",
     "list_tasks",
     "mcp",
@@ -97,10 +104,12 @@ __all__ = [
     "pick_tasks",
     "recover_expired_claims",
     "release_job",
+    "show_change",
     "show_request",
     "show_task",
     "start_job",
     "start_work",
+    "validate_change",
 ]
 
 _DEFAULT_KANBAN_DIR = Path(".owlbear/kanban")
@@ -1041,6 +1050,126 @@ async def recover_expired_claims(
         )
     except PydanticValidationError as exc:
         _raise_param_validation(str(exc))
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
+async def list_changes(ctx: Context) -> list[dict[str, object]]:
+    """List all change packages with load state and identity-ordered summaries."""
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    changes_dir = app_ctx.kanban_dir.parent / "changes"
+
+    if not changes_dir.is_dir():
+        return []
+
+    results: list[dict[str, object]] = []
+    try:
+        entries = sorted(changes_dir.iterdir())
+    except OSError:
+        return []
+
+    for entry in entries:
+        if not entry.is_dir():
+            continue
+        change_id = entry.name
+        load_result = load_change(changes_dir, change_id)
+
+        if load_result.revision is not None:
+            results.append(
+                {
+                    "change_id": change_id,
+                    "state": "loaded",
+                    "digest": load_result.revision.delivery_digest,
+                }
+            )
+        else:
+            diagnostics = [
+                {
+                    "code": d.code.value,
+                    "detail": d.detail,
+                    "path": d.path,
+                    "target": d.target,
+                }
+                for d in load_result.diagnostics
+            ]
+            results.append(
+                {
+                    "change_id": change_id,
+                    "state": "malformed",
+                    "diagnostics": diagnostics,
+                }
+            )
+
+    return results
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
+async def show_change(ctx: Context, *, change_id: str) -> dict[str, object]:
+    """Show one loaded change revision with canonical digest and graph."""
+    if not change_id or not change_id.strip():
+        _raise_param_validation("change_id must be non-empty")
+
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    changes_dir = app_ctx.kanban_dir.parent / "changes"
+
+    load_result = load_change(changes_dir, change_id)
+
+    if load_result.revision is None:
+        diagnostics = [
+            {
+                "code": d.code.value,
+                "detail": d.detail,
+                "path": d.path,
+                "target": d.target,
+            }
+            for d in load_result.diagnostics
+        ]
+        _raise_tool_error("ERR_CHANGE_NOT_LOADED", json.dumps({"diagnostics": diagnostics}))
+
+    revision = load_result.revision
+    return {
+        "change_id": revision.change_id,
+        "delivery_digest": revision.delivery_digest,
+        "intent": revision.intent,
+        "design": revision.design,
+        "decisions": revision.decisions.model_dump(mode="python"),
+        "graph": revision.graph.model_dump(mode="python"),
+    }
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
+async def validate_change(ctx: Context, *, change_id: str, evidence: dict[str, object]) -> dict[str, object]:
+    """Validate change admission without writing receipt, job, request, or attempt paths."""
+    if not change_id or not change_id.strip():
+        _raise_param_validation("change_id must be non-empty")
+
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    changes_dir = app_ctx.kanban_dir.parent / "changes"
+
+    load_result = load_change(changes_dir, change_id)
+
+    if load_result.revision is None:
+        _raise_tool_error("ERR_CHANGE_NOT_LOADED", "change could not be loaded")
+
+    try:
+        admission_evidence = AdmissionEvidence.model_validate(evidence)
+    except PydanticValidationError as exc:
+        _raise_param_validation(f"invalid evidence: {exc}")
+
+    assessment = evaluate_admission(load_result.revision, admission_evidence)
+    return assessment.model_dump(mode="python")
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
+async def change_health(ctx: Context, *, change_id: str) -> dict[str, object]:
+    """Return canonical change health result without mutating authority or work paths."""
+    if not change_id or not change_id.strip():
+        _raise_param_validation("change_id must be non-empty")
+
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    changes_dir = app_ctx.kanban_dir.parent / "changes"
+
+    result = get_change_health(changes_dir, change_id)
+    return result.model_dump(mode="python")
 
 
 # Override outputSchema for mutation/lifecycle tools that return
