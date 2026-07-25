@@ -1,10 +1,10 @@
 ---
 id: 2050
 title: 'P7-04: Prove acceptance-triggered planning reconciliation'
-status: collect
+status: archived
 priority: high
 created: 2026-07-25T15:09:49.416616+02:00
-updated: 2026-07-25T15:49:32.854825+02:00
+updated: 2026-07-25T15:50:06.677443+02:00
 tags:
   - phase-7
   - scope:test
@@ -41,7 +41,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Projection
@@ -102,3 +102,14 @@ PASS at builder commit `75db1c280e4ac7a848c3fef56f98df46ac82a6bf`.
 - Complete `serve/mcp-kanban/tests`: 69 passed.
 - Ruff check and format: clean for all changed Python files.
 - Verifier challenger: `pass`; no implementation defect or missing proof blocks collection.
+
+[[2026-07-25T15:50:06+02:00]]
+## Collect Notes
+
+ARCHIVED. The leaf has no descendants and all four AC are closed by maintained product-boundary proof.
+
+- Builder implementation and proof commit: `75db1c280e4ac7a848c3fef56f98df46ac82a6bf`.
+- Independent verifier record commit: `be0b3f95cc6f2e4c0188de2fc3608b6e7d390c0f`.
+- Builder and verifier challengers both returned `pass`.
+- Aggregate evidence at the builder commit: 69 complete MCP-kanban tests, 154 independent focused owner tests, clean Ruff/format, and exact admitted digest `3f6c656289911320bb5e7faf37b5e86ffa8511e729ade201a03a19913e33d990`.
+- No pending descendant, request, follow-up key, or uncommitted task-owned code remains.
