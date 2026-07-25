@@ -42,6 +42,8 @@ if TYPE_CHECKING:
         RecoverExpiredClaimsResult,
         RejectAcceptRequest,
         RejectAcceptResult,
+        RejectAuditRequest,
+        RejectAuditResult,
         ReleaseJobRequest,
         ReleaseJobResult,
         StartJobRequest,
@@ -56,7 +58,11 @@ if TYPE_CHECKING:
 
 from owlbear_kanban.attempts import AttemptStore
 from owlbear_kanban.jobs import JobStore, StoredJob
-from owlbear_kanban.native_runtime import RejectAcceptDiagnosticCode, StartJobDiagnosticCode
+from owlbear_kanban.native_runtime import (
+    RejectAcceptDiagnosticCode,
+    RejectAuditDiagnosticCode,
+    StartJobDiagnosticCode,
+)
 from owlbear_kanban.runtime_transaction import ReplacementTransactionParticipant, TransactionConflictError
 from owlbear_kanban.topology import PRODUCT_TOPOLOGY
 from owlbear_kanban.yaml_rt import make_yaml
@@ -459,14 +465,49 @@ class DispatchRuntime:
         )
         return self._restore_rejection_checkout(request, result, snapshot)
 
+    def reject_audit(self, request: RejectAuditRequest) -> RejectAuditResult | DispatchDiagnostic:
+        """Reject an audit, release its reader, and remove its proof checkout."""
+        coordination, token = self._coordination.read()
+        stale = self._stale_diagnostic(coordination)
+        if stale is not None:
+            return stale
+        holder = self._find_holder(coordination, request.job_id)
+        if holder is None:
+            completed = self._attempts.read(request.attempt_id, 2).event
+            if completed is None:
+                return self._stale(coordination)
+            return self._native.reject_audit(request)
+        if not self._matches(holder, request):
+            return self._native.reject_audit(request)
+        snapshot, diagnostic = self._preserve_rejection_checkout(request, audit=True)
+        if diagnostic is not None:
+            return diagnostic
+        replacement = self._without_holder(coordination, holder)
+        participant = self._coordination.replacement_participant(replacement, token)
+        result = self._native._reject_audit(  # noqa: SLF001
+            request,
+            (participant,),
+            before_commit=lambda: self._cleanup_proof_checkout(request.job_id),
+        )
+        return self._restore_rejection_checkout(request, result, snapshot, audit=True)
+
     def _preserve_rejection_checkout(
-        self, request: RejectAcceptRequest
-    ) -> tuple[ProofCheckoutSnapshot | None, RejectAcceptResult | None]:
+        self,
+        request: RejectAcceptRequest | RejectAuditRequest,
+        *,
+        audit: bool = False,
+    ) -> tuple[ProofCheckoutSnapshot | None, RejectAcceptResult | RejectAuditResult | None]:
         if self._proof_checkouts is None:
             return None, None
         checkout = self._proof_checkouts.existing(request.job_id)
         snapshot = self._proof_checkouts.snapshot(request.job_id)
         if checkout is not None and snapshot is None:
+            if audit:
+                return None, self._native._reject_audit_diagnostic(  # noqa: SLF001
+                    RejectAuditDiagnosticCode.CLEANUP_FAILED,
+                    "proof checkout authority could not be preserved",
+                    target=str(request.job_id),
+                )
             return None, self._native._reject_diagnostic(  # noqa: SLF001
                 RejectAcceptDiagnosticCode.CLEANUP_FAILED,
                 "proof checkout authority could not be preserved",
@@ -476,10 +517,12 @@ class DispatchRuntime:
 
     def _restore_rejection_checkout(
         self,
-        request: RejectAcceptRequest,
-        result: RejectAcceptResult,
+        request: RejectAcceptRequest | RejectAuditRequest,
+        result: RejectAcceptResult | RejectAuditResult,
         snapshot: ProofCheckoutSnapshot | None,
-    ) -> RejectAcceptResult:
+        *,
+        audit: bool = False,
+    ) -> RejectAcceptResult | RejectAuditResult:
         if (
             result.diagnostic is not None
             and snapshot is not None
@@ -491,6 +534,13 @@ class DispatchRuntime:
             except FileNotFoundError, ValueError:
                 restored = False
             if not restored:
+                if audit:
+                    return self._native._reject_audit_diagnostic(  # noqa: SLF001
+                        RejectAuditDiagnosticCode.CLEANUP_FAILED,
+                        "proof checkout restoration failed after rejected publication",
+                        lower_code=result.diagnostic.code.value,
+                        target=str(request.job_id),
+                    )
                 return self._native._reject_diagnostic(  # noqa: SLF001
                     RejectAcceptDiagnosticCode.CLEANUP_FAILED,
                     "proof checkout restoration failed after rejected publication",

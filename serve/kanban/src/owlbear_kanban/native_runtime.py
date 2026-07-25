@@ -377,6 +377,56 @@ class RejectAcceptResult(BaseModel):
         raise ValueError(msg)
 
 
+class RejectAuditDiagnosticCode(StrEnum):
+    """Enumerate stable failures that prevent rejecting an audit attempt."""
+
+    AUTHORITY_STALE = "ERR_REJECT_AUDIT_AUTHORITY_STALE"
+    WRONG_KIND = "ERR_REJECT_AUDIT_KIND_INVALID"
+    NO_ACTIVE_CLAIM = "ERR_REJECT_AUDIT_NO_ACTIVE_CLAIM"
+    NON_OWNER = "ERR_REJECT_AUDIT_NON_OWNER"
+    FINDING_INVALID = "ERR_REJECT_AUDIT_FINDING_INVALID"
+    INVALIDATION_INVALID = "ERR_REJECT_AUDIT_INVALIDATION_INVALID"
+    IDENTITY_CONFLICT = "ERR_REJECT_AUDIT_IDENTITY_CONFLICT"
+    CLEANUP_FAILED = "ERR_REJECT_AUDIT_CLEANUP_FAILED"
+    ABORTED = "ERR_REJECT_AUDIT_ABORTED"
+
+
+class RejectAuditRequest(RejectAcceptRequest):
+    """Provide one owned audit rejection and its minimum corrective identity."""
+
+
+class RejectAuditDiagnostic(BaseModel):
+    """Describe why an owned audit attempt could not be rejected."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    code: RejectAuditDiagnosticCode
+    detail: str
+    lower_code: str | None = None
+    target: str | None = None
+
+
+class RejectAuditResult(BaseModel):
+    """Contain one complete rejected-audit outcome or one diagnostic."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    job: StoredJob | None = None
+    event: AttemptEvent | None = None
+    findings: tuple[Finding, ...] = ()
+    invalidation: InvalidationOutcome | None = None
+    diagnostic: RejectAuditDiagnostic | None = None
+
+    @model_validator(mode="after")
+    def _require_one_outcome(self) -> RejectAuditResult:
+        complete = self.job is not None and self.event is not None and self.findings and self.invalidation is not None
+        empty = self.job is None and self.event is None and not self.findings and self.invalidation is None
+        if (self.diagnostic is None and complete) or (self.diagnostic is not None and empty):
+            return self
+        msg = "audit rejection result needs one complete outcome or diagnostic"
+        raise ValueError(msg)
+
+
 @dataclass(frozen=True)
 class _PreparedAcceptRejection:
     stored: StoredJob
@@ -632,11 +682,33 @@ class NativeRuntime:
         """Reject owned acceptance and atomically publish minimum corrective work."""
         return self._reject_accept(request)
 
+    def reject_audit(self, request: RejectAuditRequest) -> RejectAuditResult:
+        """Reject an owned audit and atomically publish whole-change corrective work."""
+        return self._reject_audit(request)
+
+    def _reject_audit(
+        self,
+        request: RejectAuditRequest,
+        participants: tuple[ReplacementTransactionParticipant, ...] = (),
+        *,
+        before_commit: Callable[[], bool] | None = None,
+        failure: Callable[[str], None] | None = None,
+    ) -> RejectAuditResult:
+        result = self._reject_accept(
+            RejectAcceptRequest.model_validate(request.model_dump(mode="python")),
+            participants,
+            expected_kind="audit",
+            before_commit=before_commit,
+            failure=failure,
+        )
+        return self._audit_rejection_result(result)
+
     def _reject_accept(
         self,
         request: RejectAcceptRequest,
         participants: tuple[ReplacementTransactionParticipant, ...] = (),
         *,
+        expected_kind: str = "accept",
         before_commit: Callable[[], bool] | None = None,
         failure: Callable[[str], None] | None = None,
     ) -> RejectAcceptResult:
@@ -644,10 +716,10 @@ class NativeRuntime:
             self._work_root,
             roots=(self._work_root, self._revision.source_dir),
         )
-        replay = self._reject_accept_replay(request)
+        replay = self._reject_accept_replay(request, expected_kind)
         if replay is not None:
             return replay
-        prepared = self._prepare_accept_rejection(request)
+        prepared = self._prepare_accept_rejection(request, expected_kind)
         if isinstance(prepared, RejectAcceptResult):
             return prepared
         if before_commit is not None and not before_commit():
@@ -656,13 +728,15 @@ class NativeRuntime:
                 "proof checkout cleanup failed",
                 target=str(request.job_id),
             )
-        diagnostic = self._commit_accept_rejection(prepared, participants, failure)
+        diagnostic = self._commit_accept_rejection(prepared, participants, failure, expected_kind)
         if diagnostic is not None:
             return diagnostic
         return self._complete_accept_rejection(prepared)
 
-    def _prepare_accept_rejection(self, request: RejectAcceptRequest) -> _PreparedAcceptRejection | RejectAcceptResult:
-        stored = self._reject_accept_job(request)
+    def _prepare_accept_rejection(
+        self, request: RejectAcceptRequest, expected_kind: str
+    ) -> _PreparedAcceptRejection | RejectAcceptResult:
+        stored = self._reject_accept_job(request, expected_kind)
         if isinstance(stored, RejectAcceptResult):
             return stored
         findings = self._prepare_rejection_findings(request)
@@ -680,7 +754,7 @@ class NativeRuntime:
         ):
             return self._reject_diagnostic(
                 RejectAcceptDiagnosticCode.INVALIDATION_INVALID,
-                "invalidation closure does not supersede the active accept job",
+                f"invalidation closure does not supersede the active {expected_kind} job",
                 target=str(request.job_id),
             )
         return _PreparedAcceptRejection(
@@ -691,7 +765,7 @@ class NativeRuntime:
             invalidation=prepared,
         )
 
-    def _reject_accept_job(self, request: RejectAcceptRequest) -> StoredJob | RejectAcceptResult:
+    def _reject_accept_job(self, request: RejectAcceptRequest, expected_kind: str) -> StoredJob | RejectAcceptResult:
         try:
             stored = self._jobs.read(request.job_id)
             project_job(
@@ -705,7 +779,7 @@ class NativeRuntime:
                 "job authority does not match the loaded revision",
                 target=str(request.job_id),
             )
-        if stored.job.kind != "accept":
+        if stored.job.kind != expected_kind:
             return self._reject_diagnostic(
                 RejectAcceptDiagnosticCode.WRONG_KIND,
                 "reject operation does not match job purpose",
@@ -762,6 +836,7 @@ class NativeRuntime:
         prepared: _PreparedAcceptRejection,
         participants: tuple[ReplacementTransactionParticipant, ...],
         failure: Callable[[str], None] | None,
+        expected_kind: str,
     ) -> RejectAcceptResult | None:
         transaction = RuntimeTransaction(
             self._work_root,
@@ -780,7 +855,7 @@ class NativeRuntime:
                 transaction.abort()
             return self._reject_diagnostic(
                 RejectAcceptDiagnosticCode.IDENTITY_CONFLICT,
-                "accept rejection identity conflicts",
+                f"{expected_kind} rejection identity conflicts",
             )
         except Exception:  # noqa: BLE001 - any injected live-operation failure must abort prepared state.
             try:
@@ -788,11 +863,11 @@ class NativeRuntime:
             except TransactionConflictError:
                 return self._reject_diagnostic(
                     RejectAcceptDiagnosticCode.IDENTITY_CONFLICT,
-                    "accept rejection abort conflicts",
+                    f"{expected_kind} rejection abort conflicts",
                 )
             return self._reject_diagnostic(
                 RejectAcceptDiagnosticCode.ABORTED,
-                "accept rejection publication aborted",
+                f"{expected_kind} rejection publication aborted",
             )
         return None
 
@@ -870,7 +945,7 @@ class NativeRuntime:
             )
         return None
 
-    def _reject_accept_replay(self, request: RejectAcceptRequest) -> RejectAcceptResult | None:
+    def _reject_accept_replay(self, request: RejectAcceptRequest, expected_kind: str) -> RejectAcceptResult | None:
         event = self._attempts.read(request.attempt_id, 2).event
         if event is None:
             return None
@@ -879,7 +954,7 @@ class NativeRuntime:
         except FileNotFoundError:
             return self._reject_diagnostic(
                 RejectAcceptDiagnosticCode.IDENTITY_CONFLICT,
-                "rejected accept identity is incomplete",
+                f"rejected {expected_kind} identity is incomplete",
                 target=str(request.job_id),
             )
         findings = tuple(self._findings.read(item.finding_id).finding for item in request.findings)
@@ -887,7 +962,7 @@ class NativeRuntime:
         if not self._rejection_identity_matches(request, stored, event, findings, invalidation):
             return self._reject_diagnostic(
                 RejectAcceptDiagnosticCode.IDENTITY_CONFLICT,
-                "rejected accept identity differs from the request",
+                f"rejected {expected_kind} identity differs from the request",
                 target=str(request.job_id),
             )
         assert isinstance(invalidation, InvalidationResult)
@@ -897,6 +972,36 @@ class NativeRuntime:
             event=event,
             findings=request.findings,
             invalidation=invalidation.outcome,
+        )
+
+    @staticmethod
+    def _audit_rejection_result(result: RejectAcceptResult) -> RejectAuditResult:
+        if result.diagnostic is None:
+            return RejectAuditResult(
+                job=result.job,
+                event=result.event,
+                findings=result.findings,
+                invalidation=result.invalidation,
+            )
+        return RejectAuditResult(
+            diagnostic=RejectAuditDiagnostic(
+                code=RejectAuditDiagnosticCode[result.diagnostic.code.name],
+                detail=result.diagnostic.detail,
+                lower_code=result.diagnostic.lower_code,
+                target=result.diagnostic.target,
+            )
+        )
+
+    @staticmethod
+    def _reject_audit_diagnostic(
+        code: RejectAuditDiagnosticCode,
+        detail: str,
+        *,
+        lower_code: str | None = None,
+        target: str | None = None,
+    ) -> RejectAuditResult:
+        return RejectAuditResult(
+            diagnostic=RejectAuditDiagnostic(code=code, detail=detail, lower_code=lower_code, target=target)
         )
 
     @staticmethod

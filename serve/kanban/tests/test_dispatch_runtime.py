@@ -22,6 +22,7 @@ from owlbear_kanban import (
     ProofCheckoutManager,
     ReceiptStore,
     RecoverExpiredClaimsRequest,
+    RejectAuditDiagnosticCode,
     RejectAcceptDiagnosticCode,
     ReleaseJobRequest,
     PlanJob,
@@ -32,7 +33,12 @@ from owlbear_kanban import (
 )
 from owlbear_kanban.runtime_transaction import RuntimeTransaction, TransactionConflictError
 
-from .test_native_runtime import _active_accept_scenario, _reject_request
+from .test_native_runtime import (
+    _active_accept_scenario,
+    _active_audit_scenario,
+    _reject_audit_request,
+    _reject_request,
+)
 from .test_proof_checkout import _repository
 
 
@@ -354,6 +360,99 @@ def test_reject_accept_transaction_conflict_restores_cleaned_checkout(
     assert restored is not None
     assert restored.commit == commit
     assert restored.manifest.read_bytes() == manifest_before
+
+
+def _dispatch_audit_rejection(tmp_path: Path, *, fail_cleanup: bool = False):
+    revision, work_root, native, first_start = _active_audit_scenario(tmp_path)
+    released = native.release_job(
+        ReleaseJobRequest(
+            job_id=first_start.job_id,
+            attempt_id=first_start.attempt_id,
+            claim_id=first_start.claim_id,
+            actor_id=first_start.actor_id,
+            process_id=first_start.process_id,
+            released_at="2026-07-24T01:01:30Z",
+        )
+    )
+    assert released.diagnostic is None
+    proof_checkouts = _ProofCheckouts(first_start.job_id, fail_cleanup=fail_cleanup)
+    runtime = DispatchRuntime(native, work_root, proof_checkouts)  # type: ignore[arg-type]
+    current = first_start.model_copy(
+        update={"attempt_id": "attempt-audit-dispatch", "claim_id": "claim-audit-dispatch"}
+    )
+    started = runtime.start(current)
+    assert not isinstance(started, DispatchDiagnostic)
+    assert started.diagnostic is None
+    return revision, work_root, runtime, proof_checkouts, current
+
+
+def test_reject_audit_releases_reader_cleans_checkout_and_replays(tmp_path: Path) -> None:
+    revision, work_root, runtime, proof_checkouts, start = _dispatch_audit_rejection(tmp_path)
+    request = _reject_audit_request(revision, start)
+
+    rejected = runtime.reject_audit(request)
+    replayed = runtime.reject_audit(request)
+
+    assert not isinstance(rejected, DispatchDiagnostic)
+    assert rejected.diagnostic is None
+    assert replayed == rejected
+    assert "readers: []" in (work_root / "dispatch/coordination.yaml").read_text(encoding="utf-8")
+    assert not proof_checkouts.is_orphan(str(start.job_id))
+
+
+def test_reject_audit_cleanup_failure_preserves_all_runtime_state(tmp_path: Path) -> None:
+    revision, work_root, runtime, proof_checkouts, start = _dispatch_audit_rejection(tmp_path, fail_cleanup=True)
+    request = _reject_audit_request(revision, start)
+    work_before = {
+        str(path.relative_to(work_root)): path.read_bytes() for path in work_root.rglob("*") if path.is_file()
+    }
+    receipts_before = {
+        path.name: path.read_bytes() for path in (runtime._native._revision.source_dir / "receipts").glob("*.yaml")
+    }
+
+    rejected = runtime.reject_audit(request)
+
+    assert not isinstance(rejected, DispatchDiagnostic)
+    assert rejected.diagnostic is not None
+    assert rejected.diagnostic.code is RejectAuditDiagnosticCode.CLEANUP_FAILED
+    assert work_before == {
+        str(path.relative_to(work_root)): path.read_bytes() for path in work_root.rglob("*") if path.is_file()
+    }
+    assert receipts_before == {
+        path.name: path.read_bytes() for path in (runtime._native._revision.source_dir / "receipts").glob("*.yaml")
+    }
+    assert proof_checkouts.is_orphan(str(start.job_id))
+
+
+def test_reject_audit_transaction_conflict_restores_checkout_and_publishes_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    revision, work_root, runtime, proof_checkouts, start = _dispatch_audit_rejection(tmp_path)
+    request = _reject_audit_request(revision, start)
+    work_before = {
+        str(path.relative_to(work_root)): path.read_bytes() for path in work_root.rglob("*") if path.is_file()
+    }
+    receipts_before = {
+        path.name: path.read_bytes() for path in (runtime._native._revision.source_dir / "receipts").glob("*.yaml")
+    }
+
+    def reject_transaction(_transaction, *, failure: object = None) -> None:  # noqa: ARG001
+        raise TransactionConflictError
+
+    monkeypatch.setattr(RuntimeTransaction, "commit", reject_transaction)
+
+    rejected = runtime.reject_audit(request)
+
+    assert not isinstance(rejected, DispatchDiagnostic)
+    assert rejected.diagnostic is not None
+    assert rejected.diagnostic.code is RejectAuditDiagnosticCode.IDENTITY_CONFLICT
+    assert work_before == {
+        str(path.relative_to(work_root)): path.read_bytes() for path in work_root.rglob("*") if path.is_file()
+    }
+    assert receipts_before == {
+        path.name: path.read_bytes() for path in (runtime._native._revision.source_dir / "receipts").glob("*.yaml")
+    }
+    assert proof_checkouts.is_orphan(str(start.job_id))
 
 
 def test_expired_recovery_clears_its_writer_holder(revision, tmp_path) -> None:

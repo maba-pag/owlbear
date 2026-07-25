@@ -28,6 +28,8 @@ from owlbear_kanban import (
     FailJobRequest,
     RecoverExpiredClaimsRequest,
     RecoveryDiagnosticCode,
+    RejectAuditDiagnosticCode,
+    RejectAuditRequest,
     RejectAcceptDiagnosticCode,
     RejectAcceptRequest,
     ReceiptStore,
@@ -363,6 +365,69 @@ def _terminal_accept_scenario(tmp_path: Path):
     return revision, work_root, runtime, request, tuple(sorted(job_ids.values()))
 
 
+def _active_audit_scenario(tmp_path: Path):
+    revision, work_root, runtime, accept_request, _predecessor_ids = _terminal_accept_scenario(tmp_path)
+    accepted = runtime.finish_accept(accept_request)
+    assert accepted.diagnostic is None
+    audit_job = accepted.created_jobs[0]
+    start = StartJobRequest(
+        job_id=audit_job.job_id,
+        attempt_id="attempt-audit",
+        claim_id="claim-audit",
+        actor_id="auditor-001",
+        process_id="process-audit",
+        claimed_at="2026-07-24T01:01:00Z",
+        candidate_revision="a" * 40,
+    )
+    assert runtime.start_job(start).diagnostic is None
+    return revision, work_root, runtime, start
+
+
+def _reject_audit_request(revision, start: StartJobRequest) -> RejectAuditRequest:
+    finding = Finding(
+        schema_version=1,
+        finding_id="finding-audit-001",
+        source_attempt_id=start.attempt_id,
+        source_job_id=start.job_id,
+        change_id=revision.change_id,
+        delivery_digest=revision.delivery_digest,
+        target_kind="requirement",
+        target_id="REQ-007",
+        finding_class="planning-omission",
+        detail="assembled delivery authority requires design re-entry",
+        created_at="2026-07-24T01:02:00Z",
+    )
+    route = plan_corrective_route(
+        CorrectiveRouteRequest(
+            finding_id=finding.finding_id,
+            finding_class=finding.finding_class,
+            target="admitted-design-authority",
+            target_node_ids=("DN-014",),
+        )
+    )
+    return RejectAuditRequest(
+        job_id=start.job_id,
+        attempt_id=start.attempt_id,
+        claim_id=start.claim_id,
+        actor_id=start.actor_id,
+        process_id=start.process_id,
+        rejected_at="2026-07-24T01:02:00Z",
+        detail="whole-change audit rejected admitted design authority",
+        evidence_ids=("audit-proof-001",),
+        findings=(finding,),
+        invalidation=InvalidationRequest(
+            invalidation_id="invalidation-audit-001",
+            supersession_receipt_id="supersession-audit-001",
+            invalidated_receipt_ids=("accept-final",),
+            routes=(route,),
+            corrective_job_ids=(),
+            issued_at="2026-07-24T01:02:00Z",
+            code_revision="a" * 40,
+            priority=9,
+        ),
+    )
+
+
 def test_final_accept_atomically_creates_one_terminal_audit_job_and_replays(tmp_path: Path) -> None:
     revision, work_root, runtime, request, predecessor_ids = _terminal_accept_scenario(tmp_path)
 
@@ -427,6 +492,66 @@ def test_final_accept_rejects_conflicting_terminal_audit_identity_without_mutati
     assert _snapshot(work_root) == work_before
     assert receipts_before == {
         path.name: path.read_bytes() for path in (revision.source_dir / "receipts").glob("*.yaml")
+    }
+
+
+def test_reject_audit_atomically_publishes_design_reentry_and_replays(tmp_path: Path) -> None:
+    revision, work_root, runtime, start = _active_audit_scenario(tmp_path)
+    request = _reject_audit_request(revision, start)
+
+    rejected = runtime.reject_audit(request)
+    replayed = runtime.reject_audit(request)
+    changed = runtime.reject_audit(request.model_copy(update={"detail": "changed rejection"}))
+
+    assert rejected.diagnostic is None
+    assert replayed == rejected
+    assert rejected.job is not None
+    assert rejected.job.job.disposition is JobDisposition.SUPERSEDED
+    assert rejected.job.job.superseded_by_receipt_id == "supersession-audit-001"
+    assert rejected.event is not None
+    assert rejected.event.kind == "failed"
+    assert rejected.findings == request.findings
+    assert rejected.invalidation is not None
+    assert rejected.invalidation.affected_receipt_ids == ("accept-final",)
+    assert start.job_id in rejected.invalidation.affected_job_ids
+    assert rejected.invalidation.corrective_jobs == ()
+    assert FindingStore(work_root).read("finding-audit-001").finding == request.findings[0]
+    assert AttemptStore(work_root).read(start.attempt_id, 2).event == rejected.event
+    assert changed.diagnostic is not None
+    assert changed.diagnostic.code is RejectAuditDiagnosticCode.IDENTITY_CONFLICT
+
+
+def test_reject_audit_creates_only_declared_affected_node_corrections(tmp_path: Path) -> None:
+    revision, _work_root, runtime, start = _active_audit_scenario(tmp_path)
+    request = _reject_audit_request(revision, start)
+    route = plan_corrective_route(
+        CorrectiveRouteRequest(
+            finding_id=request.findings[0].finding_id,
+            finding_class=request.findings[0].finding_class,
+            target="whole-change-integration",
+            target_node_ids=("DN-001", "DN-002"),
+        )
+    )
+    request = request.model_copy(
+        update={
+            "invalidation": request.invalidation.model_copy(
+                update={"routes": (route,), "corrective_job_ids": (100, 101)}
+            )
+        }
+    )
+    receipt_bytes = {path.name: path.read_bytes() for path in (revision.source_dir / "receipts").glob("*.yaml")}
+
+    rejected = runtime.reject_audit(request)
+
+    assert rejected.diagnostic is None
+    assert rejected.invalidation is not None
+    assert tuple(
+        (item.job.job_id, item.job.kind, item.job.target_node_id) for item in rejected.invalidation.corrective_jobs
+    ) == ((100, "plan", "DN-001"), (101, "plan", "DN-002"))
+    assert receipt_bytes == {
+        path.name: path.read_bytes()
+        for path in (revision.source_dir / "receipts").glob("*.yaml")
+        if path.name != "supersession-audit-001.yaml"
     }
 
 
