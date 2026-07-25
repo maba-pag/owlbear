@@ -1,10 +1,10 @@
 ---
 id: 2054
 title: 'P8-04: Prove builder fail-closed dispositions and stale authority'
-status: collect
+status: archived
 priority: high
 created: 2026-07-25T16:14:38.333700+02:00
-updated: 2026-07-25T17:03:11.120835+02:00
+updated: 2026-07-25T17:03:39.982540+02:00
 tags:
   - phase-8
   - scope:test
@@ -44,7 +44,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Projection
@@ -82,3 +82,8 @@ Exact committed delta review confirmed the three specification re-entry classes,
 Initial verifier challenge found failure key `malformed-context-causality`: tests removed required reviewer fields but manually constructed `BuildBlocked`. Repaired the same test slice by adding a declaration-backed assembled context classifier. It validates the live shipped reviewer malformed-input contract, traverses authority, diff, changed paths, proof, and scoped commit requirements, returns exact `BuildBlocked` only from the actually malformed context, and returns no block for valid context. Each case now asserts that derived disposition before public release and write-denial observations.
 
 Post-repair evidence: complete builder module 11 passed; complete MCP-Kanban package 80 passed; focused lint passed; editor diagnostics reported no errors. Verifier rechallenge decision: pass and explicitly closed `malformed-context-causality`. All recalled memories were assessed.
+
+[[2026-07-25T17:03:39+02:00]]
+## Collector Notes
+
+Leaf packet closure is complete with no descendants or unresolved follow-up keys. All four ACs are covered by current committed evidence: builder commit `8bc8e044545ffbcae9cbff6e05e49c1f01a76218` and verifier repair commit `e5005471a67d05c3de57faf77103c15edd7bd76d`. The initial verifier challenge's sole failure key, `malformed-context-causality`, was repaired and explicitly passed on rechallenge. The complete assembled PROOF-006 module has 11 passing cases and the owning package has 80 passing tests; lint and diagnostics are clean. Archive reason: completed.
