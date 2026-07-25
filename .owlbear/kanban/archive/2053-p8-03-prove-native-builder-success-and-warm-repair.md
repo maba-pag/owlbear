@@ -1,10 +1,10 @@
 ---
 id: 2053
 title: 'P8-03: Prove native builder success and warm repair'
-status: collect
+status: archived
 priority: high
 created: 2026-07-25T16:14:29.095921+02:00
-updated: 2026-07-25T16:52:53.155220+02:00
+updated: 2026-07-25T16:53:34.678398+02:00
 tags:
   - phase-8
   - scope:test
@@ -43,7 +43,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Projection
@@ -83,3 +83,8 @@ Reviewed the exact committed artifact against all four ACs and the refined packe
 Observed proof is causal: writer conflict exists only while the real build claim is active; typed local review blocks receipt creation; repair changes the scoped commit and generated context; immutable receipt content matches the successful request; replay preserves the exact receipt/event with one attempt mutation; the next writer then starts and releases.
 
 Evidence: focused committed-tree scenario 1 passed. Builder-stage package evidence was 70 passing MCP-Kanban tests, focused lint clean, and no editor diagnostics. Verifier challenger decision: pass. All recalled memories were assessed; refined-scope and replay guidance were applied. No verifier patch.
+
+[[2026-07-25T16:53:34+02:00]]
+## Collector Notes
+
+Leaf packet closure is complete. There are no descendants, pending blocks, or unresolved follow-up keys. Builder and independent verifier evidence cover all four ACs at committed SHAs `b147c67c0bc1060c620c2774dba2c718c38d5cd8` and `4dc42670cb3b3425c67352c63dc3fea49346cb4f`; both mandatory challengers passed. The durable scenario remains within DN-007-PK-003 and protects the shared public lifecycle, writer coordination, immutable receipt, replay, and read-only review boundaries. Archive reason: completed.
