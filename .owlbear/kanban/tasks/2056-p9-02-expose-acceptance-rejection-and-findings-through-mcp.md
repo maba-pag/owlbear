@@ -1,10 +1,10 @@
 ---
 id: 2056
 title: 'P9-02: Expose acceptance rejection and findings through MCP'
-status: verify
+status: collect
 priority: high
 created: 2026-07-25T17:19:35.872293+02:00
-updated: 2026-07-25T17:58:23.439845+02:00
+updated: 2026-07-25T18:01:30.138580+02:00
 tags:
   - phase-9
   - scope:mcp-kanban
@@ -65,6 +65,18 @@ Out: new core semantics, acceptor role, Cockpit, request resolution, compatibili
 - AC-3: public two-page query proves stable finding order/cursors; stale and missing identities return stable JSON `ToolError` codes without mutation.
 - AC-4: real accept proof checkout is created by the engine and removed only after the complete corrective transaction; replay is exact and failure preserves checkout and stores.
 - Validation: full owning package `uv run pytest serve/mcp-kanban/tests -q --tb=short` passed 83 tests. Focused post-lint public boundary run passed 14 tests. Explicit `uv run lint` over all four owned source/test files passed every applicable hook. Builder challenger decision: pass.
+
+### Required Follow-up
+None.
+
+[[2026-07-25T18:01:30+02:00]]
+## Verify Notes
+- Independently inspected builder commit `52f2c881` against the exact admitted authority: IF-010 requires strict purpose-specific MCP operations and stable failure codes without partial mutation; WF-004 requires typed findings, minimum corrective jobs, and invalidation; PROOF-007 requires an engine-created exact-commit disposable checkout with exact minimal correction and cleanup. The implementation and proof remain inside the shaped transport-only envelope.
+- AC-1: confirmed live exported schema requires current change/job/attempt/claim/actor/process identities and references strict `Finding` plus nested `InvalidationParams`; all nested MCP models forbid extras, annotations match mutation/read semantics, and the 25-tool contract excludes old task operations.
+- AC-2: confirmed validated inputs become a strict core `RejectAcceptRequest` and are forwarded to `DispatchRuntime.reject_accept`; public assembled proof observes the typed result, stable invalidation diagnostic, exact replay, and byte-identical failed state.
+- AC-3: confirmed canonical bounded finding pagination, stable cursors, full immutable finding reads, stable stale/missing `ToolError` codes, and read-only error snapshots.
+- AC-4: confirmed the assembled proof invokes exported MCP operations over real dispatch/native runtimes and engine-created proof checkout; only temporary authority/work/proof stores and repository history replace persistence. It observes supersession, one minimum corrective build job, failed attempt, reader release, cleanup, and replay.
+- Independent validation: `uv run pytest serve/mcp-kanban/tests serve/kanban/tests/test_dispatch_runtime.py serve/kanban/tests/test_native_runtime.py serve/kanban/tests/test_invalidation.py serve/kanban/tests/test_proof_checkout.py -q --tb=short` passed 178 tests. Mechanical `load_change` assertion returned exact digest `3f6c656289911320bb5e7faf37b5e86ffa8511e729ade201a03a19913e33d990`. VS Code diagnostics are clean for all four changed files. Verifier challenger decision: pass.
 
 ### Required Follow-up
 None.
