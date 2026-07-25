@@ -1,10 +1,10 @@
 ---
 id: 2059
 title: 'P9-05: Prove acceptance rejection and minimum correction'
-status: collect
+status: archived
 priority: high
 created: 2026-07-25T17:19:59.273509+02:00
-updated: 2026-07-25T19:11:02.739662+02:00
+updated: 2026-07-25T19:12:04.082493+02:00
 tags:
   - phase-9
   - scope:test
@@ -40,7 +40,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Projection
@@ -74,6 +74,15 @@ None.
 - AC-3: verifier repair now parses and exactly compares the shipped `AcceptanceBlocked` mapping, requires the complete shipped orchestration mapping sentence, and proves public release preserves every event identity field before clearing both job claim and attempt pointers. It also proves no corrective publication and complete checkout/reader cleanup. Failure keys `AC-3/shipped-blocked-routing` and `AC-3/exact-field-pointer-clear` are closed.
 - AC-4: public malformed/cleanup/transaction diagnostics preserve complete snapshots; native all-stage injected failures cover deeper publication boundaries.
 - Final independent scope: 105 tests passed; focused lint and skill validation passed; diagnostics were empty; exact commit inspection was clean; final verifier challenger passed.
+
+### Required Follow-up
+None.
+
+[[2026-07-25T19:12:04+02:00]]
+## Collect Notes
+- Confirmed dependency #2058 is archived completed; builder `961c2811` and verifier `bd7d64f4` commits are present; all builder and verifier failure keys are explicitly closed; no required follow-up remains.
+- Closure covers canonical failure classification/minimum routing, exact public rejection publication and replay, hard-independent blocked release, and snapshot-complete malformed/cleanup/transaction failure handling.
+- Final evidence is 91 MCP package tests, 95 native corrective tests, 105 combined verifier tests, focused lint and skill validation, clean diagnostics, exact scoped commit inspection, and passing builder/verifier challengers.
 
 ### Required Follow-up
 None.
