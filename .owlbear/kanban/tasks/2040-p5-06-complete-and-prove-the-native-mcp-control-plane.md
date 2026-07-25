@@ -1,10 +1,10 @@
 ---
 id: 2040
 title: 'P5-06: Complete and prove the native MCP control plane'
-status: verify
+status: collect
 priority: high
 created: 2026-07-25T09:11:58.219921+02:00
-updated: 2026-07-25T13:53:18.763527+02:00
+updated: 2026-07-25T13:54:54.400439+02:00
 tags:
   - phase-5
   - scope:mcp-kanban
@@ -154,3 +154,17 @@ DONE. Adopted and completed the interrupted #2040 retry diff.
 - Focused lint and editor diagnostics: passed with no errors.
 - Source/package obsolete-name grep: only intentional negative assertion remains.
 - Builder challenger: pass; independently reran focused contract (11 passed) and package suite (63 passed), confirming AC-2 source/API absence without weakening retained PROOF-011 coverage.
+
+[[2026-07-25T13:54:54+02:00]]
+## Verify Notes
+PASS at tested commit `1dc1a09f0ce2a3dced0b06c1d39c10180ef232f5`.
+
+### Follow-up Closure
+- `#2040-AC2/source-api-removal`: closed. Direct module inspection proves all nine prohibited names are absent from module attributes and `__all__`; retained negative contract assertions protect this boundary.
+
+### AC Evidence
+- AC-1 through AC-4 focused contract: `test_mcp_surface_contract.py` 11 passed, covering exact registry/annotations, absence, public PROOF-011/PROOF-014 workflow, and stable negative snapshots.
+- IF-015 and transaction integration: allocator, admission transaction, runtime transaction, and complete MCP package 117 passed; only two multiprocessing fork deprecation warnings.
+- Direct committed-tree API probe: `obsolete module APIs absent: 9`.
+- Focused lint was clean in builder closure.
+- Verifier challenger: pass; confirmed deleted tests were adapter-only and retained native tests preserve all eight IF-015 operations plus public workflow/error proof.
