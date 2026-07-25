@@ -40,6 +40,8 @@ if TYPE_CHECKING:
         NativeRuntime,
         RecoverExpiredClaimsRequest,
         RecoverExpiredClaimsResult,
+        RejectAcceptRequest,
+        RejectAcceptResult,
         ReleaseJobRequest,
         ReleaseJobResult,
         StartJobRequest,
@@ -425,6 +427,28 @@ class DispatchRuntime:
         if not self._cleanup_proof_checkout(request.job_id):
             return self._proof_cleanup_diagnostic(request.job_id)
         return self._finish(request, "accept", self._native._accept_participants)  # noqa: SLF001
+
+    def reject_accept(self, request: RejectAcceptRequest) -> RejectAcceptResult | DispatchDiagnostic:
+        """Reject acceptance, release its reader, and remove its proof checkout."""
+        coordination, token = self._coordination.read()
+        stale = self._stale_diagnostic(coordination)
+        if stale is not None:
+            return stale
+        holder = self._find_holder(coordination, request.job_id)
+        if holder is None:
+            completed = self._attempts.read(request.attempt_id, 2).event
+            if completed is None:
+                return self._stale(coordination)
+            return self._native.reject_accept(request)
+        if not self._matches(holder, request):
+            return self._native.reject_accept(request)
+        replacement = self._without_holder(coordination, holder)
+        participant = self._coordination.replacement_participant(replacement, token)
+        return self._native._reject_accept(  # noqa: SLF001
+            request,
+            (participant,),
+            before_commit=lambda: self._cleanup_proof_checkout(request.job_id),
+        )
 
     def finish_audit(self, request: FinishJobRequest) -> FinishJobResult | DispatchDiagnostic:
         """Clean the proof checkout and finish audit work."""

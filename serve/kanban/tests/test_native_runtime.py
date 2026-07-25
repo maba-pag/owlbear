@@ -11,6 +11,7 @@ from owlbear_kanban import (
     AttemptEvent,
     AttemptStore,
     CorrectiveRouteRequest,
+    Finding,
     FindingStore,
     FinishAcceptRequest,
     FinishJobDiagnosticCode,
@@ -26,6 +27,8 @@ from owlbear_kanban import (
     FailJobRequest,
     RecoverExpiredClaimsRequest,
     RecoveryDiagnosticCode,
+    RejectAcceptDiagnosticCode,
+    RejectAcceptRequest,
     ReceiptStore,
     ReleaseJobDiagnosticCode,
     ReleaseJobRequest,
@@ -181,6 +184,189 @@ def _snapshot(work_root: Path) -> tuple[dict[str, bytes], tuple[AttemptEvent, ..
         {str(path.relative_to(work_root)): path.read_bytes() for path in work_root.rglob("*") if path.is_file()},
         AttemptStore(work_root).list(),
     )
+
+
+def _active_accept_scenario(tmp_path: Path):  # noqa: PLR0915 - assembles the public lifecycle under proof.
+    revision = _copied_revision(tmp_path, clean_receipts=True)
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    store = JobStore(work_root)
+    _materialize(store, _record(revision, kind="plan", receipt_id="bootstrap-001"))
+    runtime = _runtime(revision, work_root)
+    runtime.start_job(_request())
+    plan = _plan_request(revision)
+    assert runtime.finish_plan(plan).diagnostic is None
+    packet_closures = tuple(parse_impact_closure(packet["impact_closure"]) for packet in plan.node_plan["packets"])
+    for job_id, closure in ((2, packet_closures[0]), (3, packet_closures[1])):
+        attempt_id = f"attempt-{job_id:03d}"
+        claim_id = f"claim-{job_id:03d}"
+        start = _request().model_copy(update={"job_id": job_id, "attempt_id": attempt_id, "claim_id": claim_id})
+        assert runtime.start_job(start).diagnostic is None
+        result = runtime.finish_build(
+            FinishJobRequest(
+                job_id=job_id,
+                attempt_id=attempt_id,
+                claim_id=claim_id,
+                actor_id=start.actor_id,
+                process_id=start.process_id,
+                finished_at=f"2026-07-24T00:0{job_id + 1}:00Z",
+                receipt_id=f"build-{job_id - 1:03d}",
+                code_revision="a" * 40,
+                evidence=plan.evidence,
+                evidence_ids=(f"build-proof-{job_id}",),
+                impact_closure=closure,
+            )
+        )
+        assert result.diagnostic is None
+    start = _request().model_copy(update={"job_id": 4, "attempt_id": "attempt-004", "claim_id": "claim-004"})
+    assert runtime.start_job(start).diagnostic is None
+    return revision, work_root, runtime, start
+
+
+def _reject_request(revision, start: StartJobRequest) -> RejectAcceptRequest:
+    finding = Finding(
+        schema_version=1,
+        finding_id="finding-accept-001",
+        source_attempt_id=start.attempt_id,
+        source_job_id=start.job_id,
+        change_id=revision.change_id,
+        delivery_digest=revision.delivery_digest,
+        target_kind="packet",
+        target_id="DN-001-PK-001",
+        finding_class="implementation-defect",
+        detail="packet proof does not satisfy admitted behavior",
+        created_at="2026-07-24T00:05:00Z",
+    )
+    route = plan_corrective_route(
+        CorrectiveRouteRequest(
+            finding_id=finding.finding_id,
+            finding_class=finding.finding_class,
+            target="packet-implementation",
+            target_node_ids=("DN-001",),
+        )
+    )
+    return RejectAcceptRequest(
+        job_id=start.job_id,
+        attempt_id=start.attempt_id,
+        claim_id=start.claim_id,
+        actor_id=start.actor_id,
+        process_id=start.process_id,
+        rejected_at="2026-07-24T00:05:00Z",
+        detail="acceptance found an implementation defect",
+        evidence_ids=("accept-proof-001",),
+        findings=(finding,),
+        invalidation=InvalidationRequest(
+            invalidation_id="invalidation-accept-001",
+            supersession_receipt_id="supersession-accept-001",
+            invalidated_receipt_ids=("build-001",),
+            routes=(route,),
+            corrective_job_ids=(20,),
+            issued_at="2026-07-24T00:05:00Z",
+            code_revision="a" * 40,
+            priority=9,
+        ),
+    )
+
+
+def test_reject_accept_atomically_publishes_minimum_correction_and_replays(tmp_path: Path) -> None:
+    revision, work_root, runtime, start = _active_accept_scenario(tmp_path)
+    request = _reject_request(revision, start)
+
+    rejected = runtime.reject_accept(request)
+    replayed = runtime.reject_accept(request)
+    changed = runtime.reject_accept(request.model_copy(update={"detail": "changed rejection"}))
+
+    assert rejected.diagnostic is None
+    assert replayed == rejected
+    assert rejected.job is not None
+    assert rejected.job.job.disposition is JobDisposition.SUPERSEDED
+    assert rejected.job.job.superseded_by_receipt_id == "supersession-accept-001"
+    assert rejected.event is not None
+    assert rejected.event.kind == "failed"
+    assert rejected.findings == request.findings
+    assert rejected.invalidation is not None
+    assert rejected.invalidation.affected_receipt_ids == ("build-001", "build-002")
+    assert tuple(item.job.job_id for item in rejected.invalidation.corrective_jobs) == (20,)
+    assert FindingStore(work_root).read("finding-accept-001").finding == request.findings[0]
+    assert AttemptStore(work_root).read(start.attempt_id, 2).event == rejected.event
+    assert changed.diagnostic is not None
+    assert changed.diagnostic.code is RejectAcceptDiagnosticCode.IDENTITY_CONFLICT
+
+
+@pytest.mark.parametrize(
+    ("case", "expected_code"),
+    [
+        ("stale-finding-target", RejectAcceptDiagnosticCode.INVALIDATION_INVALID),
+        ("stale-finding-authority", RejectAcceptDiagnosticCode.FINDING_INVALID),
+        ("missing-receipt", RejectAcceptDiagnosticCode.INVALIDATION_INVALID),
+        ("route-mismatch", RejectAcceptDiagnosticCode.INVALIDATION_INVALID),
+        ("non-owner", RejectAcceptDiagnosticCode.NON_OWNER),
+        ("missing-job", RejectAcceptDiagnosticCode.AUTHORITY_STALE),
+    ],
+)
+def test_reject_accept_invalid_identity_publishes_nothing(
+    tmp_path: Path,
+    case: str,
+    expected_code: RejectAcceptDiagnosticCode,
+) -> None:
+    revision, work_root, runtime, start = _active_accept_scenario(tmp_path)
+    request = _reject_request(revision, start)
+    if case == "stale-finding-target":
+        request = request.model_copy(
+            update={"findings": (request.findings[0].model_copy(update={"target_id": "DN-001-PK-999"}),)}
+        )
+    elif case == "stale-finding-authority":
+        request = request.model_copy(
+            update={"findings": (request.findings[0].model_copy(update={"delivery_digest": "f" * 64}),)}
+        )
+    elif case == "missing-receipt":
+        request = request.model_copy(
+            update={
+                "invalidation": request.invalidation.model_copy(update={"invalidated_receipt_ids": ("build-missing",)})
+            }
+        )
+    elif case == "route-mismatch":
+        route = request.invalidation.routes[0].model_copy(update={"finding_class": "planning-omission"})
+        request = request.model_copy(
+            update={"invalidation": request.invalidation.model_copy(update={"routes": (route,)})}
+        )
+    elif case == "non-owner":
+        request = request.model_copy(update={"claim_id": "claim-other"})
+    else:
+        request = request.model_copy(update={"job_id": 999})
+    work_before = _snapshot(work_root)
+    receipt_before = {path.name: path.read_bytes() for path in (revision.source_dir / "receipts").glob("*.yaml")}
+
+    rejected = runtime.reject_accept(request)
+
+    assert rejected.diagnostic is not None
+    assert rejected.diagnostic.code is expected_code
+    assert _snapshot(work_root) == work_before
+    assert receipt_before == {
+        path.name: path.read_bytes() for path in (revision.source_dir / "receipts").glob("*.yaml")
+    }
+
+
+@pytest.mark.parametrize("stage", ["before-publication", "after-first-publication", "before-manifest-cleanup"])
+def test_reject_accept_failure_aborts_all_corrective_state(tmp_path: Path, stage: str) -> None:
+    revision, work_root, runtime, start = _active_accept_scenario(tmp_path)
+    request = _reject_request(revision, start)
+    work_before = _snapshot(work_root)
+    receipt_before = {path.name: path.read_bytes() for path in (revision.source_dir / "receipts").glob("*.yaml")}
+
+    def fail(current_stage: str) -> None:
+        if current_stage == stage:
+            message = "injected rejection failure"
+            raise RuntimeError(message)
+
+    rejected = runtime._reject_accept(request, failure=fail)  # noqa: SLF001 - exercise atomic failure seam.
+
+    assert rejected.diagnostic is not None
+    assert rejected.diagnostic.code is RejectAcceptDiagnosticCode.ABORTED
+    assert _snapshot(work_root) == work_before
+    assert receipt_before == {
+        path.name: path.read_bytes() for path in (revision.source_dir / "receipts").glob("*.yaml")
+    }
 
 
 def test_finish_plan_publishes_one_complete_outcome_and_replays(revision, tmp_path) -> None:

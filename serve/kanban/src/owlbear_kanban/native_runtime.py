@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import contextlib
 import re
 from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
 from typing import TYPE_CHECKING
@@ -12,7 +14,15 @@ from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 from owlbear_kanban.attempts import AttemptEvent, AttemptStore
 from owlbear_kanban.change import load_change
-from owlbear_kanban.invalidation import InvalidationRequest, InvalidationResult, InvalidationRuntime
+from owlbear_kanban.finding import Finding, FindingStore
+from owlbear_kanban.invalidation import (
+    InvalidationDiagnosticCode,
+    InvalidationOutcome,
+    InvalidationRequest,
+    InvalidationResult,
+    InvalidationRuntime,
+    PreparedInvalidation,
+)
 from owlbear_kanban.jobs import JobDisposition, JobRecord, JobStore, StoredJob, project_job
 from owlbear_kanban.node_plan import NodePlanStore
 from owlbear_kanban.receipt import (
@@ -38,6 +48,7 @@ from owlbear_kanban.runtime_transaction import (
     ReplacementTransactionParticipant,
     RuntimeTransaction,
     TransactionConflictError,
+    TransactionParticipant,
 )
 
 if TYPE_CHECKING:
@@ -45,7 +56,6 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from owlbear_kanban.change import ChangeRevision
-    from owlbear_kanban.finding import Finding
     from owlbear_kanban.proof_checkout import ProofCheckoutManager
     from owlbear_kanban.runtime_requests import StoredRequest
 
@@ -289,6 +299,93 @@ class FinishJobResult(BaseModel):
         raise ValueError(msg)
 
 
+class RejectAcceptDiagnosticCode(StrEnum):
+    """Enumerate stable failures that prevent rejecting an accept attempt."""
+
+    AUTHORITY_STALE = "ERR_REJECT_ACCEPT_AUTHORITY_STALE"
+    WRONG_KIND = "ERR_REJECT_ACCEPT_KIND_INVALID"
+    NO_ACTIVE_CLAIM = "ERR_REJECT_ACCEPT_NO_ACTIVE_CLAIM"
+    NON_OWNER = "ERR_REJECT_ACCEPT_NON_OWNER"
+    FINDING_INVALID = "ERR_REJECT_ACCEPT_FINDING_INVALID"
+    INVALIDATION_INVALID = "ERR_REJECT_ACCEPT_INVALIDATION_INVALID"
+    IDENTITY_CONFLICT = "ERR_REJECT_ACCEPT_IDENTITY_CONFLICT"
+    CLEANUP_FAILED = "ERR_REJECT_ACCEPT_CLEANUP_FAILED"
+    ABORTED = "ERR_REJECT_ACCEPT_ABORTED"
+
+
+class RejectAcceptRequest(BaseModel):
+    """Provide one owned accept rejection and its minimum corrective identity."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    job_id: int
+    attempt_id: str
+    claim_id: str
+    actor_id: str
+    process_id: str
+    rejected_at: str
+    detail: str
+    evidence_ids: tuple[str, ...]
+    findings: tuple[Finding, ...]
+    invalidation: InvalidationRequest
+
+    @model_validator(mode="after")
+    def _validate_corrective_identity(self) -> RejectAcceptRequest:
+        finding_ids = tuple(finding.finding_id for finding in self.findings)
+        route_ids = tuple(route.finding_id for route in self.invalidation.routes)
+        if not finding_ids or len(set(finding_ids)) != len(finding_ids):
+            msg = "accept rejection findings must be non-empty and unique"
+            raise ValueError(msg)
+        if set(finding_ids) != set(route_ids):
+            msg = "accept rejection findings and corrective routes must correspond"
+            raise ValueError(msg)
+        if self.invalidation.issued_at != self.rejected_at:
+            msg = "accept rejection and invalidation timestamps must match"
+            raise ValueError(msg)
+        return self
+
+
+class RejectAcceptDiagnostic(BaseModel):
+    """Describe why an owned accept attempt could not be rejected."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    code: RejectAcceptDiagnosticCode
+    detail: str
+    lower_code: str | None = None
+    target: str | None = None
+
+
+class RejectAcceptResult(BaseModel):
+    """Contain one complete rejected-accept outcome or one diagnostic."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    job: StoredJob | None = None
+    event: AttemptEvent | None = None
+    findings: tuple[Finding, ...] = ()
+    invalidation: InvalidationOutcome | None = None
+    diagnostic: RejectAcceptDiagnostic | None = None
+
+    @model_validator(mode="after")
+    def _require_one_outcome(self) -> RejectAcceptResult:
+        complete = self.job is not None and self.event is not None and self.findings and self.invalidation is not None
+        empty = self.job is None and self.event is None and not self.findings and self.invalidation is None
+        if (self.diagnostic is None and complete) or (self.diagnostic is not None and empty):
+            return self
+        msg = "accept rejection result needs one complete outcome or diagnostic"
+        raise ValueError(msg)
+
+
+@dataclass(frozen=True)
+class _PreparedAcceptRejection:
+    stored: StoredJob
+    event: AttemptEvent
+    findings: tuple[Finding, ...]
+    finding_participants: tuple[TransactionParticipant, ...]
+    invalidation: PreparedInvalidation
+
+
 class RecoveryDiagnosticCode(StrEnum):
     """Enumerate stable expired-claim recovery failures."""
 
@@ -373,6 +470,7 @@ class NativeRuntime:
         self._proof_checkouts = proof_checkouts
         self._jobs = JobStore(work_root)
         self._attempts = AttemptStore(work_root)
+        self._findings = FindingStore(work_root)
         self._receipts = ReceiptStore(revision)
         self._invalidation = InvalidationRuntime(revision, work_root)
         self._query = RuntimeQuery(revision, work_root, history, proof_checkouts)
@@ -529,6 +627,301 @@ class NativeRuntime:
         if result.diagnostic is None:
             self._query.reset()
         return result
+
+    def reject_accept(self, request: RejectAcceptRequest) -> RejectAcceptResult:
+        """Reject owned acceptance and atomically publish minimum corrective work."""
+        return self._reject_accept(request)
+
+    def _reject_accept(
+        self,
+        request: RejectAcceptRequest,
+        participants: tuple[ReplacementTransactionParticipant, ...] = (),
+        *,
+        before_commit: Callable[[], bool] | None = None,
+        failure: Callable[[str], None] | None = None,
+    ) -> RejectAcceptResult:
+        RuntimeTransaction.recover_all(
+            self._work_root,
+            roots=(self._work_root, self._revision.source_dir),
+        )
+        replay = self._reject_accept_replay(request)
+        if replay is not None:
+            return replay
+        prepared = self._prepare_accept_rejection(request)
+        if isinstance(prepared, RejectAcceptResult):
+            return prepared
+        if before_commit is not None and not before_commit():
+            return self._reject_diagnostic(
+                RejectAcceptDiagnosticCode.CLEANUP_FAILED,
+                "proof checkout cleanup failed",
+                target=str(request.job_id),
+            )
+        diagnostic = self._commit_accept_rejection(prepared, participants, failure)
+        if diagnostic is not None:
+            return diagnostic
+        return self._complete_accept_rejection(prepared)
+
+    def _prepare_accept_rejection(self, request: RejectAcceptRequest) -> _PreparedAcceptRejection | RejectAcceptResult:
+        stored = self._reject_accept_job(request)
+        if isinstance(stored, RejectAcceptResult):
+            return stored
+        findings = self._prepare_rejection_findings(request)
+        if isinstance(findings, RejectAcceptResult):
+            return findings
+        finding_values, finding_participants = findings
+        prepared = self._invalidation.prepare(
+            request.invalidation,
+            pending_findings={finding.finding_id: finding for finding in finding_values},
+        )
+        if isinstance(prepared, InvalidationResult):
+            return self._invalidation_rejection_diagnostic(prepared)
+        if request.job_id not in prepared.affected_job_ids or all(
+            item.job.job_id != request.job_id for item in prepared.active_jobs
+        ):
+            return self._reject_diagnostic(
+                RejectAcceptDiagnosticCode.INVALIDATION_INVALID,
+                "invalidation closure does not supersede the active accept job",
+                target=str(request.job_id),
+            )
+        return _PreparedAcceptRejection(
+            stored=stored,
+            event=self._rejection_event(stored.job, request),
+            findings=finding_values,
+            finding_participants=finding_participants,
+            invalidation=prepared,
+        )
+
+    def _reject_accept_job(self, request: RejectAcceptRequest) -> StoredJob | RejectAcceptResult:
+        try:
+            stored = self._jobs.read(request.job_id)
+            project_job(
+                stored.job,
+                self._revision,
+                self._revision.read_node_plan(stored.job.target_node_id),
+            )
+        except FileNotFoundError, ValueError:
+            return self._reject_diagnostic(
+                RejectAcceptDiagnosticCode.AUTHORITY_STALE,
+                "job authority does not match the loaded revision",
+                target=str(request.job_id),
+            )
+        if stored.job.kind != "accept":
+            return self._reject_diagnostic(
+                RejectAcceptDiagnosticCode.WRONG_KIND,
+                "reject operation does not match job purpose",
+                target=stored.job.kind,
+            )
+        ownership = self._reject_accept_ownership(stored.job, request)
+        return ownership or stored
+
+    def _prepare_rejection_findings(
+        self, request: RejectAcceptRequest
+    ) -> tuple[tuple[Finding, ...], tuple[TransactionParticipant, ...]] | RejectAcceptResult:
+        for finding in request.findings:
+            if (
+                finding.source_attempt_id != request.attempt_id
+                or finding.source_job_id != request.job_id
+                or finding.change_id != self._revision.change_id
+                or finding.delivery_digest != self._revision.delivery_digest
+            ):
+                return self._reject_diagnostic(
+                    RejectAcceptDiagnosticCode.FINDING_INVALID,
+                    "finding source or authority does not match the accept attempt",
+                    target=finding.finding_id,
+                )
+        try:
+            prepared = tuple(
+                self._findings.create_participant(finding.finding_id, finding.model_dump(mode="json"))
+                for finding in request.findings
+            )
+        except ValueError as exc:
+            return self._reject_diagnostic(RejectAcceptDiagnosticCode.FINDING_INVALID, str(exc))
+        return tuple(item[0] for item in prepared), tuple(item[1] for item in prepared)
+
+    @staticmethod
+    def _rejection_event(job: JobRecord, request: RejectAcceptRequest) -> AttemptEvent:
+        return AttemptEvent(
+            schema_version=1,
+            attempt_id=request.attempt_id,
+            claim_id=request.claim_id,
+            job_id=job.job_id,
+            change_id=job.change_id,
+            delivery_digest=job.delivery_digest,
+            target_node_id=job.target_node_id,
+            actor_id=request.actor_id,
+            process_id=request.process_id,
+            sequence=2,
+            timestamp=request.rejected_at,
+            kind="failed",
+            detail=request.detail,
+            evidence_ids=request.evidence_ids,
+        )
+
+    def _commit_accept_rejection(
+        self,
+        prepared: _PreparedAcceptRejection,
+        participants: tuple[ReplacementTransactionParticipant, ...],
+        failure: Callable[[str], None] | None,
+    ) -> RejectAcceptResult | None:
+        transaction = RuntimeTransaction(
+            self._work_root,
+            f"reject-{prepared.event.attempt_id}",
+            (
+                *prepared.finding_participants,
+                *prepared.invalidation.participants,
+                self._attempts.create_participant(prepared.event),
+                *participants,
+            ),
+        )
+        try:
+            transaction.commit(failure=failure)
+        except TransactionConflictError:
+            with contextlib.suppress(TransactionConflictError):
+                transaction.abort()
+            return self._reject_diagnostic(
+                RejectAcceptDiagnosticCode.IDENTITY_CONFLICT,
+                "accept rejection identity conflicts",
+            )
+        except Exception:  # noqa: BLE001 - any injected live-operation failure must abort prepared state.
+            try:
+                transaction.abort()
+            except TransactionConflictError:
+                return self._reject_diagnostic(
+                    RejectAcceptDiagnosticCode.IDENTITY_CONFLICT,
+                    "accept rejection abort conflicts",
+                )
+            return self._reject_diagnostic(
+                RejectAcceptDiagnosticCode.ABORTED,
+                "accept rejection publication aborted",
+            )
+        return None
+
+    def _complete_accept_rejection(self, prepared: _PreparedAcceptRejection) -> RejectAcceptResult:
+        invalidation = self._invalidation.complete(prepared.invalidation)
+        assert invalidation.outcome is not None
+        self._query.refresh_closure(
+            (*invalidation.outcome.affected_receipt_ids, invalidation.outcome.supersession_receipt.receipt_id),
+            (
+                *invalidation.outcome.affected_job_ids,
+                *(item.job.job_id for item in invalidation.outcome.corrective_jobs),
+            ),
+        )
+        return RejectAcceptResult(
+            job=self._jobs.read(prepared.stored.job.job_id),
+            event=prepared.event,
+            findings=prepared.findings,
+            invalidation=invalidation.outcome,
+        )
+
+    @staticmethod
+    def _invalidation_rejection_diagnostic(result: InvalidationResult) -> RejectAcceptResult:
+        if result.outcome is not None:
+            return NativeRuntime._reject_diagnostic(
+                RejectAcceptDiagnosticCode.IDENTITY_CONFLICT,
+                "invalidation was already published without this rejected attempt",
+            )
+        assert result.diagnostic is not None
+        code = (
+            RejectAcceptDiagnosticCode.IDENTITY_CONFLICT
+            if result.diagnostic.code is InvalidationDiagnosticCode.CONFLICT
+            else RejectAcceptDiagnosticCode.INVALIDATION_INVALID
+        )
+        return NativeRuntime._reject_diagnostic(
+            code,
+            result.diagnostic.detail,
+            lower_code=result.diagnostic.code.value,
+            target=result.diagnostic.target,
+        )
+
+    @staticmethod
+    def _reject_diagnostic(
+        code: RejectAcceptDiagnosticCode,
+        detail: str,
+        *,
+        lower_code: str | None = None,
+        target: str | None = None,
+    ) -> RejectAcceptResult:
+        return RejectAcceptResult(
+            diagnostic=RejectAcceptDiagnostic(code=code, detail=detail, lower_code=lower_code, target=target)
+        )
+
+    def _reject_accept_ownership(self, job: JobRecord, request: RejectAcceptRequest) -> RejectAcceptResult | None:
+        if job.claim_id is None and job.attempt_id is None:
+            return self._reject_diagnostic(
+                RejectAcceptDiagnosticCode.NO_ACTIVE_CLAIM,
+                "job has no active claim",
+            )
+        if job.claim_id != request.claim_id or job.attempt_id != request.attempt_id:
+            return self._reject_diagnostic(
+                RejectAcceptDiagnosticCode.NON_OWNER,
+                "claim is not owned by the attempt",
+            )
+        started = self._attempts.read(request.attempt_id, 1).event
+        if (
+            started is None
+            or started.job_id != job.job_id
+            or started.claim_id != request.claim_id
+            or started.actor_id != request.actor_id
+            or started.process_id != request.process_id
+        ):
+            return self._reject_diagnostic(
+                RejectAcceptDiagnosticCode.NON_OWNER,
+                "attempt identity is not current",
+            )
+        return None
+
+    def _reject_accept_replay(self, request: RejectAcceptRequest) -> RejectAcceptResult | None:
+        event = self._attempts.read(request.attempt_id, 2).event
+        if event is None:
+            return None
+        try:
+            stored = self._jobs.read(request.job_id)
+        except FileNotFoundError:
+            return self._reject_diagnostic(
+                RejectAcceptDiagnosticCode.IDENTITY_CONFLICT,
+                "rejected accept identity is incomplete",
+                target=str(request.job_id),
+            )
+        findings = tuple(self._findings.read(item.finding_id).finding for item in request.findings)
+        invalidation = self._invalidation.prepare(request.invalidation)
+        if not self._rejection_identity_matches(request, stored, event, findings, invalidation):
+            return self._reject_diagnostic(
+                RejectAcceptDiagnosticCode.IDENTITY_CONFLICT,
+                "rejected accept identity differs from the request",
+                target=str(request.job_id),
+            )
+        assert isinstance(invalidation, InvalidationResult)
+        assert invalidation.outcome is not None
+        return RejectAcceptResult(
+            job=stored,
+            event=event,
+            findings=request.findings,
+            invalidation=invalidation.outcome,
+        )
+
+    @staticmethod
+    def _rejection_identity_matches(
+        request: RejectAcceptRequest,
+        stored: StoredJob,
+        event: AttemptEvent,
+        findings: tuple[Finding | None, ...],
+        invalidation: PreparedInvalidation | InvalidationResult,
+    ) -> bool:
+        return bool(
+            event.kind == "failed"
+            and event.job_id == request.job_id
+            and event.claim_id == request.claim_id
+            and event.actor_id == request.actor_id
+            and event.process_id == request.process_id
+            and event.timestamp == request.rejected_at
+            and event.detail == request.detail
+            and event.evidence_ids == request.evidence_ids
+            and stored.job.disposition is JobDisposition.SUPERSEDED
+            and stored.job.superseded_by_receipt_id == request.invalidation.supersession_receipt_id
+            and findings == request.findings
+            and isinstance(invalidation, InvalidationResult)
+            and invalidation.outcome is not None
+        )
 
     def finish_audit(self, request: FinishJobRequest) -> FinishJobResult:
         """Complete audit work and publish its immutable receipt."""
@@ -913,6 +1306,7 @@ class NativeRuntime:
             assert loaded.revision is not None
             self._revision = loaded.revision
             self._receipts = ReceiptStore(self._revision)
+            self._invalidation = InvalidationRuntime(self._revision, self._work_root)
             self._query = RuntimeQuery(self._revision, self._work_root, self._history, self._proof_checkouts)
         return FinishJobResult(
             job=self._jobs.read(job.job_id, archived=True),
@@ -1595,6 +1989,10 @@ __all__ = [
     "RecoveredClaim",
     "RecoveryDiagnostic",
     "RecoveryDiagnosticCode",
+    "RejectAcceptDiagnostic",
+    "RejectAcceptDiagnosticCode",
+    "RejectAcceptRequest",
+    "RejectAcceptResult",
     "ReleaseJobDiagnostic",
     "ReleaseJobDiagnosticCode",
     "ReleaseJobRequest",

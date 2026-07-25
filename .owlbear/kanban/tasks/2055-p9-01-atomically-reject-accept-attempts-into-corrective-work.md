@@ -1,10 +1,10 @@
 ---
 id: 2055
 title: 'P9-01: Atomically reject accept attempts into corrective work'
-status: build
+status: verify
 priority: high
 created: 2026-07-25T17:19:27.594283+02:00
-updated: 2026-07-25T17:19:27.594283+02:00
+updated: 2026-07-25T17:38:29.741130+02:00
 tags:
   - phase-9
   - scope:kanban
@@ -50,3 +50,10 @@ Add one purpose-specific core rejection transaction for an active accept attempt
 In: finding transaction participation, composable invalidation preparation, terminal attempt state, minimum corrective jobs, reader release, checkout cleanup, replay, and stable diagnostics.
 
 Out: MCP exposure, agent workflow, new finding taxonomy, accept success, Cockpit, setup, and seed work.
+
+[[2026-07-25T17:38:29+02:00]]
+## Build Notes
+
+Implemented the atomic accept-rejection boundary across native finding, invalidation, attempt, job, receipt, dispatch coordination, and proof-checkout owners. `FindingStore.create_participant` and `InvalidationRuntime.prepare/complete` are non-mutating composition APIs; existing `apply` behavior remains intact. `RejectAcceptRequest/Result` validates finding/route identity, current authority and ownership, requires the active accept job in the affected closure, publishes one failed terminal event plus findings/supersession/minimum corrective jobs in one `RuntimeTransaction`, and resolves exact replay before ownership. `DispatchRuntime.reject_accept` removes the matching reader in the same transaction and performs validated pre-commit checkout cleanup; cleanup failure publishes nothing. Also refreshed `InvalidationRuntime` when `finish_plan` adopts a new `ChangeRevision`.
+
+Proof: finding tests 5 passed; invalidation/rejection slice 41 passed; rejection matrix 10 passed; dispatch rejection 2 passed; independent builder challenger reran 92 focused tests and Ruff, decision `pass`; focused repository lint clean; `git diff --check` clean; full Kanban package excluding the unrelated legacy `graph.yaml` historical fixture module 1015 passed. The unexcluded run had the same 1015 passes plus 8 unrelated historical-fixture failures because the current loader intentionally rejects legacy `graph.yaml` authority. Complete snapshots prove no partial findings, attempts, receipts, jobs, coordination, or cleanup mutation for stale target/authority, missing receipt/job, route mismatch, non-owner, checkout cleanup failure, and injected transaction failures.

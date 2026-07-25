@@ -4,18 +4,25 @@ from __future__ import annotations
 
 import contextlib
 from collections import deque
+from collections.abc import Mapping
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING, Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
-from owlbear_kanban.finding import FindingClass, FindingId, FindingStore
+from owlbear_kanban.finding import Finding, FindingClass, FindingId, FindingStore
 from owlbear_kanban.jobs import JobDisposition, JobRecord, JobStore, StoredJob
 from owlbear_kanban.receipt import ReceiptRecord, ReceiptStore
-from owlbear_kanban.runtime_transaction import RuntimeTransaction, TransactionConflictError
+from owlbear_kanban.runtime_transaction import (
+    ReplacementTransactionParticipant,
+    RuntimeTransaction,
+    TransactionConflictError,
+    TransactionParticipant,
+)
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Mapping
+    from collections.abc import Callable, Iterable
     from pathlib import Path
 
     from owlbear_kanban.change import ChangeRevision
@@ -157,6 +164,18 @@ class InvalidationResult(_InvalidationModel):
         return self
 
 
+@dataclass(frozen=True)
+class PreparedInvalidation:
+    """Validated invalidation state and its non-mutating transaction participants."""
+
+    request: InvalidationRequest
+    affected_receipt_ids: tuple[str, ...]
+    affected_job_ids: tuple[int, ...]
+    active_jobs: tuple[StoredJob, ...]
+    corrective_jobs: tuple[JobRecord, ...]
+    participants: tuple[TransactionParticipant | ReplacementTransactionParticipant, ...]
+
+
 def plan_corrective_route(request: CorrectiveRouteRequest) -> CorrectiveRoute:
     """Return the authority-defined minimum corrective route for one finding."""
     node_id = request.target_node_ids[0]
@@ -205,13 +224,42 @@ class InvalidationRuntime:
         self._findings = FindingStore(work_root)
         RuntimeTransaction.recover_all(work_root, roots=(work_root, revision.source_dir))
 
-    def apply(  # noqa: PLR0911 - stable public outcomes return at each mutation boundary.
+    def apply(
         self,
         request: InvalidationRequest,
         *,
         failure: Callable[[str], None] | None = None,
     ) -> InvalidationResult:
         """Apply one invalidation identity, returning exact replay or stable failure."""
+        prepared = self.prepare(request)
+        if isinstance(prepared, InvalidationResult):
+            return prepared
+        transaction = RuntimeTransaction(
+            self._work_root,
+            f"invalidation-{request.invalidation_id}",
+            prepared.participants,
+        )
+        try:
+            transaction.commit(failure=failure)
+        except TransactionConflictError:
+            with contextlib.suppress(TransactionConflictError):
+                transaction.abort()
+            return self._diagnostic(InvalidationDiagnosticCode.CONFLICT, "invalidation identity conflicts")
+        except Exception:  # noqa: BLE001 - any injected live-operation failure must abort prepared state.
+            try:
+                transaction.abort()
+            except TransactionConflictError:
+                return self._diagnostic(InvalidationDiagnosticCode.CONFLICT, "invalidation abort conflicts")
+            return self._diagnostic(InvalidationDiagnosticCode.ABORTED, "invalidation publication aborted")
+        return self.complete(prepared)
+
+    def prepare(
+        self,
+        request: InvalidationRequest,
+        *,
+        pending_findings: Mapping[str, Finding] | None = None,
+    ) -> PreparedInvalidation | InvalidationResult:
+        """Validate invalidation and return participants without publishing them."""
         try:
             receipt_records = self._receipt_records()
             existing_identity = next(
@@ -225,7 +273,7 @@ class InvalidationRuntime:
             )
             if existing_identity is not None and existing_identity.receipt_id != request.supersession_receipt_id:
                 return self._diagnostic(InvalidationDiagnosticCode.CONFLICT, "invalidation identity conflicts")
-            self._validate_request_references(request, receipt_records)
+            self._validate_request_references(request, receipt_records, pending_findings or {})
             affected_receipts = _receipt_closure(request.invalidated_receipt_ids, receipt_records)
             all_jobs = (*self._jobs.list(), *self._jobs.list(archived=True))
             affected_jobs = _job_closure(affected_receipts, all_jobs)
@@ -244,31 +292,31 @@ class InvalidationRuntime:
             replay = self._replay(request, supersession_value, affected_receipts, affected_jobs, superseded, corrective)
             if replay is not None:
                 return replay
-            participants = [
+            participants = (
                 self._receipts.create_participant(request.supersession_receipt_id, supersession_value)[1],
                 *(self._jobs.replacement_participant(self._superseded(item, request), item.token) for item in pending),
                 *(self._jobs.create_participant(job) for job in corrective),
-            ]
-            transaction = RuntimeTransaction(
-                self._work_root,
-                f"invalidation-{request.invalidation_id}",
-                tuple(participants),
             )
-            try:
-                transaction.commit(failure=failure)
-            except TransactionConflictError:
-                with contextlib.suppress(TransactionConflictError):
-                    transaction.abort()
-                return self._diagnostic(InvalidationDiagnosticCode.CONFLICT, "invalidation identity conflicts")
-            except Exception:  # noqa: BLE001 - any injected live-operation failure must abort prepared state.
-                try:
-                    transaction.abort()
-                except TransactionConflictError:
-                    return self._diagnostic(InvalidationDiagnosticCode.CONFLICT, "invalidation abort conflicts")
-                return self._diagnostic(InvalidationDiagnosticCode.ABORTED, "invalidation publication aborted")
-            return self._outcome(request, affected_receipts, affected_jobs, pending, corrective)
+            return PreparedInvalidation(
+                request=request,
+                affected_receipt_ids=affected_receipts,
+                affected_job_ids=affected_jobs,
+                active_jobs=pending,
+                corrective_jobs=corrective,
+                participants=participants,
+            )
         except (FileNotFoundError, TypeError, ValueError) as exc:
             return self._diagnostic(InvalidationDiagnosticCode.REFERENCE_INVALID, str(exc))
+
+    def complete(self, prepared: PreparedInvalidation) -> InvalidationResult:
+        """Read the published outcome for one prepared invalidation."""
+        return self._outcome(
+            prepared.request,
+            prepared.affected_receipt_ids,
+            prepared.affected_job_ids,
+            prepared.active_jobs,
+            prepared.corrective_jobs,
+        )
 
     @staticmethod
     def _diagnostic(code: InvalidationDiagnosticCode, detail: str) -> InvalidationResult:
@@ -285,6 +333,7 @@ class InvalidationRuntime:
         self,
         request: InvalidationRequest,
         receipts: Mapping[str, ReceiptRecord],
+        pending_findings: Mapping[str, Finding],
     ) -> None:
         for receipt_id in request.invalidated_receipt_ids:
             receipt = receipts.get(receipt_id)
@@ -292,8 +341,9 @@ class InvalidationRuntime:
                 msg = f"invalidated receipt is not a current purpose receipt: {receipt_id}"
                 raise ValueError(msg)
         for route in request.routes:
-            result = self._findings.read(route.finding_id)
-            finding = result.finding
+            finding = pending_findings.get(route.finding_id)
+            if finding is None:
+                finding = self._findings.read(route.finding_id).finding
             if (
                 finding is None
                 or finding.change_id != self._revision.change_id
@@ -302,6 +352,38 @@ class InvalidationRuntime:
             ):
                 msg = f"corrective route finding is invalid: {route.finding_id}"
                 raise ValueError(msg)
+            self._validate_finding_target(finding, route, receipts, request)
+
+    def _validate_finding_target(
+        self,
+        finding: Finding,
+        route: CorrectiveRoute,
+        receipts: Mapping[str, ReceiptRecord],
+        request: InvalidationRequest,
+    ) -> None:
+        if finding.target_kind == "packet":
+            target_nodes = {job.target_node_id for job in route.jobs}
+            packet_ids = {
+                packet.get("id")
+                for node_id in target_nodes
+                for packet in (self._revision.read_node_plan(node_id) or {}).get("packets", ())
+                if isinstance(packet, Mapping)
+            }
+            valid = finding.target_id in packet_ids
+        elif finding.target_kind == "receipt":
+            valid = finding.target_id in receipts
+        elif finding.target_kind == "code-revision":
+            valid = finding.target_id == request.code_revision
+        else:
+            try:
+                self._revision.resolve(finding.target_id)
+            except KeyError:
+                valid = False
+            else:
+                valid = True
+        if not valid:
+            msg = f"corrective finding target is stale: {finding.target_id}"
+            raise ValueError(msg)
 
     def _supersession_value(
         self,

@@ -13,6 +13,7 @@ from owlbear_kanban import (
     parse_finding_mapping,
 )
 import owlbear_kanban.finding as finding_module
+from owlbear_kanban.runtime_transaction import RuntimeTransaction
 
 from .test_change_receipts import _load_revision, _receipt
 
@@ -53,6 +54,20 @@ def test_public_finding_parser_and_store_preserve_immutable_contained_records(tm
         store.create("finding-002", {**value, "detail": "different"})
     assert exc_info.value.code == "ERR_FINDING_CONFLICT"
     assert store.read("../escape").diagnostics[0].code == FindingDiagnosticCode.PATH_UNSAFE
+
+
+def test_finding_store_prepares_non_mutating_transaction_participant(tmp_path: Path) -> None:
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    store = FindingStore(work_root)
+    value = _finding("finding-001")
+
+    finding, participant = store.create_participant("finding-001", value)
+
+    assert finding.model_dump(mode="json") == value
+    assert not (work_root / "findings/finding-001.yaml").exists()
+    RuntimeTransaction(work_root, "finding-create", (participant,)).commit()
+    assert store.read("finding-001").finding == finding
 
 
 def test_finding_parser_reports_public_contract_errors() -> None:

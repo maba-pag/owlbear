@@ -19,6 +19,7 @@ from pydantic import ValidationError as PydanticValidationError
 from ruamel.yaml.error import YAMLError
 
 from owlbear_kanban.change import Digest
+from owlbear_kanban.runtime_transaction import TransactionParticipant
 from owlbear_kanban.yaml_rt import make_yaml
 
 _FINDING_ID_PATTERN = r"^[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*$"
@@ -358,6 +359,27 @@ class FindingStore:
                 diagnostics=(_diagnostic(code, "finding file could not be created safely", path, finding_id),)
             )
         return result
+
+    def create_participant(
+        self, finding_id: str, value: Mapping[str, object]
+    ) -> tuple[Finding, TransactionParticipant]:
+        """Validate and plan one immutable finding transaction participant."""
+        filename, _path = _finding_location(finding_id)
+        result = parse_finding_mapping(value)
+        if result.finding is None:
+            msg = result.diagnostics[0].detail
+            raise ValueError(msg)
+        finding = result.finding
+        if finding.finding_id != finding_id:
+            msg = "finding filename and record identities differ"
+            raise ValueError(msg)
+        stream = StringIO()
+        make_yaml(explicit_start=True).dump(finding.model_dump(mode="json"), stream)
+        return finding, TransactionParticipant(
+            self._work_root,
+            Path("findings") / filename,
+            stream.getvalue().encode("utf-8"),
+        )
 
     def read(self, finding_id: str) -> FindingResult:
         """Read one contained immutable finding."""
