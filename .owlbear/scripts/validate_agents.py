@@ -68,6 +68,7 @@ ND3_AGENTS: frozenset[str] = frozenset(
     {
         "shaper-challenger",
         "builder-challenger",
+        "planner-challenger",
         "verifier-challenger",
     }
 )

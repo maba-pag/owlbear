@@ -23,6 +23,23 @@ one returned entry, dispatch only its assigned profile, and pattern-match its st
 `RateLimited` selects `release_job`; `Crash` selects strict-expiry `recover_expired_claims`. Then obtain
 a fresh plan. Do not route by prose or bridge native jobs to task lifecycle state.
 
+For an engine-selected `planner`, dispatch `runSubagent(agentName="planner")` with only the complete
+successful `start_job` result serialized as its prompt. Pattern-match one exact disposition:
+
+- `PlannerSuccess`: call `finish_plan` with the unchanged change, job, attempt, claim, actor, and
+   process identity from the started job, an orchestrator-owned completion timestamp, and the
+   returned `receipt_id`, `code_revision`, `evidence`, `evidence_ids`, `impact_closure`, `node_plan`,
+   `build_job_ids`, and `accept_job_id`. Do not inspect, complete, or reconstruct `node_plan`.
+- `RequestCreated`: call `release_job` with the unchanged active identity, then obtain a fresh
+   `pick_jobs` result. The pending request is an engine dispatch gate.
+- `SpecificationReentry`: call `release_job`, halt native mode, and report the returned target,
+   finding, and evidence for user-facing `/design` re-entry. Do not edit Specification or legacy task
+   state.
+- `PlanBlocked`: call `release_job`, halt native mode, and report the returned target and finding.
+
+Malformed planner output is an unstructured return and follows crash recovery. The orchestrator
+never creates a planner Decision Request or node plan itself.
+
 Before `start_job`, resolve the selected profile against the installed subagent allowlist. If it is unavailable,
 report the profile and halt native mode without claiming, running, releasing, or mutating legacy task state.
 The native `planner` profile is valid only in this explicit mode; routine `pick_tasks` shape work remains
