@@ -1,10 +1,10 @@
 ---
 id: 2048
 title: 'P7-02: Expose the frontier planner and independent plan reviewer'
-status: collect
+status: archived
 priority: high
 created: 2026-07-25T15:09:33.441773+02:00
-updated: 2026-07-25T15:24:40.236302+02:00
+updated: 2026-07-25T15:25:20.533152+02:00
 tags:
   - phase-7
   - scope:agent
@@ -42,7 +42,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Projection
@@ -131,3 +131,21 @@ Verified the native planner/reviewer declarations, orchestrator planner dispatch
 
 ### Required Follow-up
 None.
+
+[[2026-07-25T15:25:20+02:00]]
+## Collector Notes
+
+### Aggregate Intent
+Leaf packet #2048 exposes the native planner and independent reviewer, installs orchestrator dispatch, and preserves public lifecycle ownership at admitted digest `3f6c656289911320bb5e7faf37b5e86ffa8511e729ade201a03a19913e33d990`.
+
+### Closure Evidence
+- No descendant tasks.
+- Builder implementation commit: `c311d5dec5570627658f1d55d88066fd3c479c0c`.
+- Verifier evidence commit: `dd8b9da897b7029b63bc4bd8e7d24338d109b0ac`.
+- Affected agent and skill validators pass.
+- Existing ecosystem/write-guard regressions: 57 passed; the sole unfiltered failure is the documented unrelated collector live-registry mismatch.
+- Builder and verifier challengers both passed.
+- All four ACs are mapped to committed executable declarations and direct public-schema evidence.
+
+### Archive Readiness
+Complete. Downstream executable planner scenarios remain independently owned by #2049 and #2050; they do not block this leaf packet's declared outcome.
