@@ -193,6 +193,38 @@ class EndWorkParams(MCPParamsBase):
     block_reason: str | None = None
 
 
+class ListJobsParams(MCPParamsBase):
+    """Validate MCP inputs for listing native jobs."""
+
+    change_id: str = Field(min_length=1)
+    candidate_revision: str = Field(min_length=1)
+    cursor: str | None = None
+    limit: int = Field(default=100, gt=0)
+
+
+class ShowJobParams(MCPParamsBase):
+    """Validate MCP inputs for showing one native job."""
+
+    change_id: str = Field(min_length=1)
+    job_id: int = Field(gt=0)
+
+
+class ListAttemptsParams(MCPParamsBase):
+    """Validate MCP inputs for listing attempt history."""
+
+    change_id: str = Field(min_length=1)
+    cursor: str | None = None
+    limit: int = Field(default=100, gt=0)
+
+
+class ListActivityParams(MCPParamsBase):
+    """Validate MCP inputs for listing runtime activity history."""
+
+    change_id: str = Field(min_length=1)
+    cursor: str | None = None
+    limit: int = Field(default=100, gt=0)
+
+
 class KanbanTask(BaseModel):
     """Represents a single kanban task as returned by kanban-md --json."""
 

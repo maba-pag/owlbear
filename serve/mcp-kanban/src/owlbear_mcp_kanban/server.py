@@ -35,6 +35,7 @@ from owlbear_kanban import (
     evaluate_admission,
     load_change,
     parse_impact_closure,
+    project_job,
 )
 from owlbear_kanban import (
     change_health as get_change_health,
@@ -58,11 +59,15 @@ from owlbear_mcp_kanban.models import (
     FinishJobParams,
     FinishPlanParams,
     KanbanTask,
+    ListActivityParams,
+    ListAttemptsParams,
+    ListJobsParams,
     ListTasksParams,
     PickJobsParams,
     PickTasksParams,
     RecoverExpiredClaimsParams,
     ReleaseJobParams,
+    ShowJobParams,
     StartJobParams,
 )
 
@@ -101,7 +106,10 @@ __all__ = [
     "finish_audit",
     "finish_build",
     "finish_plan",
+    "list_activity",
+    "list_attempts",
     "list_changes",
+    "list_jobs",
     "list_requests",
     "list_tasks",
     "mcp",
@@ -112,6 +120,7 @@ __all__ = [
     "recover_expired_claims",
     "release_job",
     "show_change",
+    "show_job",
     "show_request",
     "show_task",
     "start_job",
@@ -1055,6 +1064,120 @@ async def recover_expired_claims(
         return _dispatch_runtime(app_ctx, params.change_id).recover_expired_claims(
             RecoverExpiredClaimsRequest(**params.model_dump(exclude={"change_id"}))
         )
+    except PydanticValidationError as exc:
+        _raise_param_validation(str(exc))
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, destructiveHint=False))
+async def list_jobs(
+    ctx: Context,
+    *,
+    change_id: str,
+    candidate_revision: str,
+    cursor: str | None = None,
+    limit: int = 100,
+) -> object:
+    """List native jobs with bounded pagination."""
+    try:
+        params = ListJobsParams.model_validate(_tool_params(locals()))
+        app_ctx: AppContext = ctx.request_context.lifespan_context
+        runtime = _dispatch_runtime(app_ctx, params.change_id)
+        try:
+            return runtime._native.list_jobs(  # noqa: SLF001
+                candidate_revision=params.candidate_revision,
+                cursor=params.cursor,
+                limit=params.limit,
+            )
+        except ValueError as exc:
+            if "cursor is not current" in str(exc):
+                _raise_tool_error("ERR_CURSOR_STALE", "page cursor is not current")
+            raise
+    except PydanticValidationError as exc:
+        _raise_param_validation(str(exc))
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, destructiveHint=False))
+async def show_job(
+    ctx: Context,
+    *,
+    change_id: str,
+    job_id: int,
+) -> object:
+    """Show one native job composed from immutable record and authority projection."""
+    try:
+        params = ShowJobParams.model_validate(_tool_params(locals()))
+        app_ctx: AppContext = ctx.request_context.lifespan_context
+        runtime = _dispatch_runtime(app_ctx, params.change_id)
+        try:
+            stored = runtime._jobs.read(params.job_id)  # noqa: SLF001
+        except FileNotFoundError:
+            _raise_tool_error("ERR_JOB_NOT_FOUND", f"job {params.job_id} not found")
+        else:
+            projection = project_job(
+                stored.job,
+                runtime._native._revision,  # noqa: SLF001
+            )
+            return {
+                "job": stored.job,
+                "title": projection.title,
+                "outcome": projection.outcome,
+                "acceptance": projection.acceptance,
+                "modules": projection.modules,
+                "interfaces": projection.interfaces,
+                "proof": projection.proof,
+            }
+    except PydanticValidationError as exc:
+        _raise_param_validation(str(exc))
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, destructiveHint=False))
+async def list_attempts(
+    ctx: Context,
+    *,
+    change_id: str,
+    cursor: str | None = None,
+    limit: int = 100,
+) -> object:
+    """List attempt history with bounded pagination."""
+    try:
+        params = ListAttemptsParams.model_validate(_tool_params(locals()))
+        app_ctx: AppContext = ctx.request_context.lifespan_context
+        runtime = _dispatch_runtime(app_ctx, params.change_id)
+        try:
+            return runtime._native.list_attempts(  # noqa: SLF001
+                cursor=params.cursor,
+                limit=params.limit,
+            )
+        except ValueError as exc:
+            if "cursor is not current" in str(exc):
+                _raise_tool_error("ERR_CURSOR_STALE", "page cursor is not current")
+            raise
+    except PydanticValidationError as exc:
+        _raise_param_validation(str(exc))
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, destructiveHint=False))
+async def list_activity(
+    ctx: Context,
+    *,
+    change_id: str,
+    cursor: str | None = None,
+    limit: int = 100,
+) -> object:
+    """List chronological runtime activity history with bounded pagination."""
+    try:
+        params = ListActivityParams.model_validate(_tool_params(locals()))
+        app_ctx: AppContext = ctx.request_context.lifespan_context
+        runtime = _dispatch_runtime(app_ctx, params.change_id)
+        try:
+            return runtime._native.list_history(  # noqa: SLF001
+                cursor=params.cursor,
+                limit=params.limit,
+            )
+        except ValueError as exc:
+            if "cursor is not current" in str(exc):
+                _raise_tool_error("ERR_CURSOR_STALE", "page cursor is not current")
+            raise
     except PydanticValidationError as exc:
         _raise_param_validation(str(exc))
 

@@ -1,10 +1,10 @@
 ---
 id: 2029
 title: 'P5-03: Expose native job and attempt history'
-status: build
+status: verify
 priority: high
 created: 2026-07-24T23:22:11.768263+02:00
-updated: 2026-07-25T09:16:55.064294+02:00
+updated: 2026-07-25T10:28:20.057870+02:00
 tags:
   - phase-5
   - scope:mcp-kanban
@@ -59,3 +59,29 @@ Proof guidance: exercise public MCP reads over real native job and attempt store
 [[2026-07-25T09:16:55+02:00]]
 ## Shape Notes
 Connected partial-commit repair is summarized in #1981. Refreshed this packet to admitted digest `3f6c65628991`; outcome, AC, parent, dependency on #2027, priority, and build route remain the approved T3 contract. Current public query producers were source-checked and the concrete graph passed shaper challenge.
+
+[[2026-07-25T10:28:20+02:00]]
+[[2026-07-25T10:26:45+02:00]]
+## Build Notes
+Implemented 4 public MCP read tools for native job/attempt/activity history:
+
+**Scope Delivered:**
+- `list_jobs`: bounded RuntimeJobProjection pages with stable cursors, stale-cursor ERR_CURSOR_STALE ToolError
+- `show_job`: composed from JobStore.read (immutable JobRecord) + project_job (authority title/outcome/acceptance/modules/interfaces/proof)
+- `list_attempts`: bounded AttemptEvent pages with stable cursors
+- `list_activity`: bounded RuntimeHistoryEntry pages (list_history) with stable cursors
+
+All tools use NativeRuntime paged APIs; show_job does not scan pages. Cursor ValueError mapped to ERR_CURSOR_STALE. All tools marked readOnlyHint=True, idempotentHint=True, destructiveHint=False.
+
+**Test Coverage:**
+- test_mcp_native_query_tools.py: 4 focused AC tests covering page structure, field composition, cursor handling
+- test_mcp_surface_contract.py: Updated EXPECTED_TOOLS deployment contract
+- Full suite: 444 tests pass, ruff clean
+
+**Changed Files:**
+- serve/mcp-kanban/src/owlbear_mcp_kanban/models.py: +4 params classes
+- serve/mcp-kanban/src/owlbear_mcp_kanban/server.py: +4 tools, project_job import, __all__ update
+- serve/mcp-kanban/tests/test_mcp_native_query_tools.py: +4 tests (new file)
+- serve/mcp-kanban/tests/test_mcp_surface_contract.py: EXPECTED_TOOLS += 4
+
+Builder-challenger: pass (AC evidence aligned, no mutation, stable error paths)
