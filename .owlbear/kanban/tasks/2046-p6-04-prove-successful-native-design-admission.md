@@ -1,10 +1,10 @@
 ---
 id: 2046
 title: 'P6-04: Prove successful native design admission'
-status: verify
+status: collect
 priority: high
 created: 2026-07-25T14:29:08.002900+02:00
-updated: 2026-07-25T14:58:00.576648+02:00
+updated: 2026-07-25T14:59:21.303390+02:00
 tags:
   - phase-6
   - scope:test
@@ -69,3 +69,18 @@ Completed the positive `PROOF-004` journey in the existing durable designer scen
 - Designer plus owning public MCP surface: 15 passed in 7.32 seconds; builder challenger independently reran it with 15 passed in 7.24 seconds.
 - Focused lint: all hooks passed; only unrelated repository TODO warnings were reported.
 - `builder-challenger`: pass; AC coverage, bypass sensitivity, durable-test rent, and minimum-change scope are supported.
+
+[[2026-07-25T14:59:21+02:00]]
+## Verify Notes
+Verified the committed builder slice `3b2f7af72358acd8ae31243d13bbc058d16a813d` without further code changes.
+
+### AC Evidence
+- AC-1: The assembled scenario exercises public `list_changes`, `show_change`, `validate_change`, and `admit_change` over a real loaded modular change and complete current-digest evidence. The returned non-null receipt and generation bind the exact admitted digest and identity; every generated item is a plan job bound to that receipt and digest, and targets exactly the authored node set. Persisted counts are one receipt, one generation, and one board job per node.
+- AC-2: The first publication snapshot covers receipt, change-generation, board-job, board-archive, and sequence paths. Identical evidence through a second public `admit_change` returns the complete equal payload and leaves every captured byte and artifact count unchanged.
+- AC-3: Both shipped entries must select `designer`, invoke the shared native workflow, and refuse OpenSpec; the designer must expose all four public change tools; the workflow must validate then admit with identical evidence. The maintained sibling scenario proves the one-question decision payload. A bypass of an entry, public call, or native admission artifact breaks these assertions.
+
+### Validation
+- `git show --check` on the builder commit: clean.
+- Designer plus public MCP surface suite: 15 passed in 8.05 seconds.
+- Focused lint: all relevant hooks passed; only unrelated repository TODO warnings were reported.
+- `verifier-challenger`: pass; public publication, persisted replay, shipped-artifact derivation, bypass sensitivity, and durable-test scope are supported.
