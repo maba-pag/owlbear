@@ -41,9 +41,13 @@ from owlbear_kanban.change import (
     ChangeLoadResult,
     ChangeRevision,
     DecisionsDocument,
+    DeliveryContractsDocument,
     DeliveryGraph,
+    DeliveryNodesDocument,
+    DeliveryObligationsDocument,
     compute_delivery_digest,
     load_change,
+    load_modular_change,
 )
 from owlbear_kanban.dispatch import (
     CoordinationHolder,
@@ -128,6 +132,7 @@ from owlbear_kanban.native_runtime import (
     StartJobRequest,
     StartJobResult,
 )
+from owlbear_kanban.node_plan import NodePlanStore, StoredNodePlan
 from owlbear_kanban.proof_checkout import (
     ProofCheckout,
     ProofCheckoutDiagnostic,
@@ -136,6 +141,7 @@ from owlbear_kanban.proof_checkout import (
     ProofCheckoutResult,
 )
 from owlbear_kanban.receipt import (
+    AdmissionDiscovery,
     ChangeHealthFinding,
     ChangeHealthResult,
     GitRepositoryHistory,
@@ -155,6 +161,7 @@ from owlbear_kanban.receipt import (
     RepositoryHistory,
     change_health,
     compute_node_plan_digest,
+    discover_admission,
     evaluate_code_revision_currency,
     evaluate_receipt_currentness,
     parse_impact_closure,
@@ -173,6 +180,7 @@ from owlbear_kanban.storage_io import atomic_write
 __all__ = [
     "AdmissionAssessment",
     "AdmissionConflictError",
+    "AdmissionDiscovery",
     "AdmissionDisposition",
     "AdmissionEvidence",
     "AdmissionFinding",
@@ -204,7 +212,10 @@ __all__ = [
     "CorrectiveRouteRequest",
     "CorruptionError",
     "DecisionsDocument",
+    "DeliveryContractsDocument",
     "DeliveryGraph",
+    "DeliveryNodesDocument",
+    "DeliveryObligationsDocument",
     "DispatchDiagnostic",
     "DispatchDiagnosticCode",
     "DispatchOmission",
@@ -248,6 +259,7 @@ __all__ = [
     "JobStore",
     "KanbanEngine",
     "NativeRuntime",
+    "NodePlanStore",
     "NotFoundError",
     "ProofCheckout",
     "ProofCheckoutDiagnostic",
@@ -284,6 +296,7 @@ __all__ = [
     "StartJobRequest",
     "StartJobResult",
     "StoredJob",
+    "StoredNodePlan",
     "Task",
     "TaskSummary",
     "ValidationError",
@@ -295,10 +308,12 @@ __all__ = [
     "change_health",
     "compute_delivery_digest",
     "compute_node_plan_digest",
+    "discover_admission",
     "evaluate_admission",
     "evaluate_code_revision_currency",
     "evaluate_receipt_currentness",
     "load_change",
+    "load_modular_change",
     "parse_attempt_event_mapping",
     "parse_finding_mapping",
     "parse_impact_closure",

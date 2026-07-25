@@ -609,6 +609,15 @@ class ChangeHealthResult(_ReceiptModel):
     checked_paths: tuple[str, ...] = ()
 
 
+class AdmissionDiscovery(_ReceiptModel):
+    """Select current admission evidence while retaining stale history."""
+
+    current: ReceiptRecord | None = None
+    stale_history: tuple[ReceiptRecord, ...] = ()
+    findings: tuple[ChangeHealthFinding, ...] = ()
+    checked_paths: tuple[str, ...] = ()
+
+
 class ReceiptConflictError(FileExistsError):
     """Raised when immutable receipt creation would overwrite a receipt."""
 
@@ -819,6 +828,7 @@ class ReceiptStore:
         value: Mapping[str, object],
         *,
         path: str,
+        require_current_revision: bool = True,
     ) -> ReceiptRecord:
         try:
             record = ReceiptRecord.from_mapping(value)
@@ -846,7 +856,9 @@ class ReceiptStore:
                 path=f"receipts/{receipt_id}.yaml",
                 target=record.receipt_id,
             )
-        if record.change_id != self._revision.change_id or record.delivery_digest != self._revision.delivery_digest:
+        if require_current_revision and (
+            record.change_id != self._revision.change_id or record.delivery_digest != self._revision.delivery_digest
+        ):
             _fail(
                 ReceiptDiagnosticCode.REVISION_MISMATCH,
                 "receipt identity does not match the loaded change revision",
@@ -912,7 +924,15 @@ class ReceiptStore:
             stream.getvalue().encode("utf-8"),
         )
 
-    def _read_from_directory(self, directory_fd: int, receipt_id: str, filename: str, path: str) -> ReceiptResult:
+    def _read_from_directory(
+        self,
+        directory_fd: int,
+        receipt_id: str,
+        filename: str,
+        path: str,
+        *,
+        require_current_revision: bool = True,
+    ) -> ReceiptResult:
         try:
             text = _read_receipt_text(directory_fd, filename, receipt_id, path)
             try:
@@ -931,7 +951,12 @@ class ReceiptStore:
                     path=path,
                     target=receipt_id,
                 )
-            record = self._validate_record(receipt_id, value, path=path)
+            record = self._validate_record(
+                receipt_id,
+                value,
+                path=path,
+                require_current_revision=require_current_revision,
+            )
         except _ReceiptFailure as exc:
             return ReceiptResult(diagnostics=(exc.diagnostic,))
         return ReceiptResult(receipt=record)
@@ -993,7 +1018,11 @@ class ReceiptStore:
             candidate_revision,
         ).evaluate(receipt_id)
 
-    def _scan(self) -> tuple[tuple[tuple[str, ReceiptResult], ...], ReceiptDiagnostic | None]:
+    def _scan(
+        self,
+        *,
+        require_current_revision: bool = True,
+    ) -> tuple[tuple[tuple[str, ReceiptResult], ...], ReceiptDiagnostic | None]:
         try:
             with _receipts_directory(
                 self._revision.source_dir,
@@ -1015,7 +1044,13 @@ class ReceiptStore:
                                 "receipt filename is not canonical",
                                 path=relative_path,
                             )
-                        result = self._read_from_directory(directory_fd, receipt_id, filename, relative_path)
+                        result = self._read_from_directory(
+                            directory_fd,
+                            receipt_id,
+                            filename,
+                            relative_path,
+                            require_current_revision=require_current_revision,
+                        )
                     except _ReceiptFailure as exc:
                         result = ReceiptResult(diagnostics=(exc.diagnostic,))
                     entries.append((relative_path, result))
@@ -1133,46 +1168,125 @@ def _expected_admission_path(revision: ChangeRevision) -> tuple[str | None, Chan
     if revision.graph.admission is None:
         return None, None
     value = revision.graph.admission.receipt
+    expected = f"receipts/admission-{revision.delivery_digest[:12]}.yaml"
     candidate = PurePosixPath(value)
     if (
         candidate.is_absolute()
         or candidate.parts != ("receipts", candidate.name)
         or candidate.suffix != ".yaml"
         or not _RECEIPT_ID_RE.fullmatch(candidate.stem)
+        or value != expected
     ):
         return None, ChangeHealthFinding(
             code=ReceiptDiagnosticCode.PATH_UNSAFE.value,
-            detail="admission receipt reference is not a safe canonical receipt path",
+            detail="admission receipt reference does not match the current delivery digest",
         )
-    return value, None
+    return expected, None
 
 
-def _receipt_health(revision: ChangeRevision) -> tuple[list[ChangeHealthFinding], list[str]]:
+def _scan_admission_history(
+    revision: ChangeRevision,
+) -> tuple[list[ChangeHealthFinding], list[str], list[ReceiptRecord], list[ReceiptRecord]]:
     findings: list[ChangeHealthFinding] = []
     checked_paths: list[str] = []
     store = ReceiptStore(revision)
-    expected_path, expected_finding = _expected_admission_path(revision)
-    entries, storage_diagnostic = store._scan()  # noqa: SLF001 - same-module health collaborator
-    receipt_storage_usable = storage_diagnostic is None
-    if expected_finding is not None:
-        findings.append(expected_finding)
+    entries, storage_diagnostic = store._scan(  # noqa: SLF001 - public discovery collaborates with store scan
+        require_current_revision=False
+    )
     if storage_diagnostic is not None:
         findings.append(_health_finding(storage_diagnostic, checked_path="receipts"))
+        return findings, checked_paths, [], []
+
+    current_candidates: list[ReceiptRecord] = []
+    stale_history: list[ReceiptRecord] = []
     for relative_path, result in entries:
         checked_paths.append(relative_path)
-        findings.extend(_health_finding(item, checked_path=relative_path) for item in result.diagnostics)
+        if result.diagnostics:
+            findings.extend(_health_finding(item, checked_path=relative_path) for item in result.diagnostics)
+            continue
+        assert result.receipt is not None
+        receipt = result.receipt
+        if receipt.change_id != revision.change_id:
+            findings.append(
+                ChangeHealthFinding(
+                    code=ReceiptDiagnosticCode.REVISION_MISMATCH.value,
+                    detail="receipt identity does not match the loaded change",
+                    path=relative_path,
+                    target=receipt.receipt_id,
+                )
+            )
+        elif receipt.kind == "admission" and receipt.delivery_digest == revision.delivery_digest:
+            current_candidates.append(receipt)
+        elif receipt.kind == "admission":
+            stale_history.append(receipt)
+    return findings, checked_paths, current_candidates, stale_history
 
-    if receipt_storage_usable and expected_path is not None and expected_path not in checked_paths:
-        checked_paths.append(expected_path)
+
+def _select_current_admission(
+    revision: ChangeRevision,
+    current_candidates: list[ReceiptRecord],
+    findings: list[ChangeHealthFinding],
+    checked_paths: list[str],
+) -> ReceiptRecord | None:
+    expected_path, expected_finding = _expected_admission_path(revision)
+    if expected_finding is not None:
+        findings.append(expected_finding)
+    if revision.graph.admission is None or expected_path is None:
+        return None
+
+    if not current_candidates:
+        if expected_path not in checked_paths:
+            checked_paths.append(expected_path)
         findings.append(
             ChangeHealthFinding(
                 code=ReceiptDiagnosticCode.FILE_MISSING.value,
-                detail="admission receipt file is missing",
+                detail="current digest admission receipt is missing",
                 path=expected_path,
                 target=PurePosixPath(expected_path).stem,
             )
         )
-    return findings, checked_paths
+        return None
+    if len(current_candidates) > 1:
+        findings.append(
+            ChangeHealthFinding(
+                code=ReceiptDiagnosticCode.SCHEMA_INVALID.value,
+                detail="current digest admission receipt is ambiguous",
+                path=expected_path,
+                target=revision.delivery_digest,
+            )
+        )
+        return None
+    candidate = current_candidates[0]
+    if candidate.receipt_id != PurePosixPath(expected_path).stem:
+        findings.append(
+            ChangeHealthFinding(
+                code=ReceiptDiagnosticCode.SCHEMA_INVALID.value,
+                detail="current admission receipt is not stored at its digest-named path",
+                path=f"receipts/{candidate.receipt_id}.yaml",
+                target=candidate.receipt_id,
+            )
+        )
+        return None
+    return candidate
+
+
+def discover_admission(revision: ChangeRevision) -> AdmissionDiscovery:
+    """Discover one digest-named current admission and retain older admissions."""
+    findings, checked_paths, current_candidates, stale_history = _scan_admission_history(revision)
+    current = _select_current_admission(revision, current_candidates, findings, checked_paths)
+
+    findings.sort(key=lambda item: (item.path or "", item.code, item.target or ""))
+    return AdmissionDiscovery(
+        current=current,
+        stale_history=tuple(sorted(stale_history, key=lambda item: item.receipt_id)),
+        findings=tuple(findings),
+        checked_paths=tuple(checked_paths),
+    )
+
+
+def _receipt_health(revision: ChangeRevision) -> tuple[list[ChangeHealthFinding], list[str]]:
+    discovery = discover_admission(revision)
+    return list(discovery.findings), list(discovery.checked_paths)
 
 
 def change_health(changes_dir: Path, change_id: str) -> ChangeHealthResult:
@@ -1195,6 +1309,7 @@ def change_health(changes_dir: Path, change_id: str) -> ChangeHealthResult:
 
 
 __all__ = [
+    "AdmissionDiscovery",
     "ChangeHealthFinding",
     "ChangeHealthResult",
     "ReceiptConflictError",
@@ -1208,5 +1323,6 @@ __all__ = [
     "ReceiptResult",
     "ReceiptStore",
     "change_health",
+    "discover_admission",
     "parse_receipt_mapping",
 ]

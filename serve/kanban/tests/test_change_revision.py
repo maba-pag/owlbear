@@ -11,7 +11,13 @@ from pydantic import ValidationError as PydanticValidationError
 
 import owlbear_kanban
 import owlbear_kanban.change as change_module
-from owlbear_kanban import ChangeDiagnosticCode, load_change
+from owlbear_kanban import (
+    ChangeDiagnosticCode,
+    NodePlanStore,
+    load_change,
+    load_modular_change,
+)
+from owlbear_kanban.runtime_transaction import RuntimeTransaction, TransactionConflictError
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -202,6 +208,44 @@ def _write_package(
     return change_dir
 
 
+def _write_modular_package(
+    changes_dir: Path,
+    change_id: str,
+    *,
+    authority: tuple[dict[str, object], dict[str, object]] | None = None,
+) -> Path:
+    decisions, graph = authority or _documents(change_id)
+    change_dir = changes_dir / change_id
+    delivery_dir = change_dir / "delivery"
+    delivery_dir.mkdir(parents=True)
+    (change_dir / "intent.md").write_text("Product intent\n", encoding="utf-8")
+    (change_dir / "design.md").write_text("Implementation design\n", encoding="utf-8")
+    (change_dir / "decisions.yaml").write_text(
+        yaml.safe_dump(decisions, sort_keys=False),
+        encoding="utf-8",
+    )
+    common = {"schema_version": graph["schema_version"], "change_id": graph["change_id"]}
+    obligations = {
+        **common,
+        **{key: graph[key] for key in ("requirements", "negative_requirements", "preserved_behaviors", "workflows")},
+    }
+    contracts = {
+        **common,
+        **{key: graph[key] for key in ("modules", "interfaces", "migrations", "risks", "proofs")},
+    }
+    nodes = {
+        **common,
+        **{key: graph[key] for key in ("state", "authority", "nodes")},
+    }
+    for filename, document in (
+        ("obligations.yaml", obligations),
+        ("contracts.yaml", contracts),
+        ("nodes.yaml", nodes),
+    ):
+        (delivery_dir / filename).write_text(yaml.safe_dump(document, sort_keys=False), encoding="utf-8")
+    return change_dir
+
+
 def _revision_digest(changes_dir: Path, change_id: str) -> str:
     result = load_change(changes_dir, change_id)
     assert result.diagnostics == ()
@@ -251,6 +295,112 @@ def test_load_change_returns_one_immutable_indexed_revision(tmp_path: Path) -> N
         node_plan["packets"] = []
     payload = result.revision.model_dump(mode="json")
     assert payload["graph"]["execution"] == {"node_plans": {"DN-001": {"packets": ["DN-001-PK-001"]}}}
+
+
+def test_modular_loader_preserves_logical_revision_identity(tmp_path: Path) -> None:
+    changes_dir = tmp_path / "changes"
+    decisions, graph = _documents("parity-change")
+    _write_package(changes_dir, "monolithic-change", authority=(_documents("monolithic-change")))
+    _write_modular_package(changes_dir, "parity-change", authority=(decisions, graph))
+
+    monolithic = load_change(changes_dir, "monolithic-change")
+    modular = load_modular_change(changes_dir, "parity-change")
+
+    assert monolithic.revision is not None
+    assert modular.diagnostics == ()
+    assert modular.revision is not None
+    assert modular.revision.delivery_digest == monolithic.revision.delivery_digest
+    assert [item.id for item in modular.revision.graph.iter_entities()] == [
+        item.id for item in monolithic.revision.graph.iter_entities()
+    ]
+    assert [item.id for item in modular.revision.accepted_decisions] == ["DEC-001", "DEC-002"]
+
+
+def _missing_modular_participant(change_dir: Path) -> None:
+    (change_dir / "delivery/contracts.yaml").unlink()
+
+
+def _duplicate_modular_identity(change_dir: Path) -> None:
+    path = change_dir / "delivery/contracts.yaml"
+    document = yaml.safe_load(path.read_text(encoding="utf-8"))
+    document["modules"].append(dict(document["modules"][0]))
+    path.write_text(yaml.safe_dump(document, sort_keys=False), encoding="utf-8")
+
+
+def _malformed_modular_participant(change_dir: Path) -> None:
+    (change_dir / "delivery/obligations.yaml").write_text("[unclosed", encoding="utf-8")
+
+
+def _symlinked_modular_participant(change_dir: Path) -> None:
+    path = change_dir / "delivery/nodes.yaml"
+    target = path.with_name("nodes-target.yaml")
+    path.rename(target)
+    path.symlink_to(target.name)
+
+
+def _escaping_modular_directory(change_dir: Path) -> None:
+    delivery_dir = change_dir / "delivery"
+    outside = change_dir.parent / "outside-delivery"
+    delivery_dir.rename(outside)
+    delivery_dir.symlink_to(outside, target_is_directory=True)
+
+
+@pytest.mark.parametrize(
+    ("defect", "expected"),
+    [
+        (_missing_modular_participant, ChangeDiagnosticCode.FILE_MISSING),
+        (_duplicate_modular_identity, ChangeDiagnosticCode.ID_DUPLICATE),
+        (_malformed_modular_participant, ChangeDiagnosticCode.YAML_PARSE),
+        (_symlinked_modular_participant, ChangeDiagnosticCode.PATH_UNSAFE),
+        (_escaping_modular_directory, ChangeDiagnosticCode.PATH_UNSAFE),
+    ],
+)
+def test_modular_loader_rejects_invalid_participants(
+    tmp_path: Path,
+    defect: Callable[[Path], None],
+    expected: ChangeDiagnosticCode,
+) -> None:
+    changes_dir = tmp_path / "changes"
+    change_dir = _write_modular_package(changes_dir, "modular-defect")
+    try:
+        defect(change_dir)
+    except OSError:
+        pytest.skip("symlinks unavailable")
+
+    result = load_modular_change(changes_dir, "modular-defect")
+
+    assert result.revision is None
+    assert [item.code for item in result.diagnostics] == [expected]
+
+
+def test_node_plan_store_recovers_replays_and_rejects_conflicting_bytes(tmp_path: Path) -> None:
+    changes_dir = tmp_path / "changes"
+    change_dir = _write_modular_package(changes_dir, "plan-change")
+    loaded = load_modular_change(changes_dir, "plan-change")
+    assert loaded.revision is not None
+    store = NodePlanStore(loaded.revision)
+    plan = {"packets": [{"id": "DN-001-PK-001", "dependencies": []}]}
+    participant = store.prepare("DN-001", plan)
+    conflicting = store.prepare("DN-001", {"packets": []})
+    transaction = RuntimeTransaction(change_dir, "plan-create", (participant,))
+
+    def interrupt(stage: str) -> None:
+        if stage == "after-first-publication":
+            message = "interrupted"
+            raise RuntimeError(message)
+
+    with pytest.raises(RuntimeError, match="interrupted"):
+        transaction.commit(failure=interrupt)
+    RuntimeTransaction.recover_all(change_dir)
+    RuntimeTransaction(change_dir, "plan-replay", (participant,)).commit()
+    stored = store.read("DN-001")
+    assert stored is not None
+    assert stored.plan == plan
+
+    before = (change_dir / "plans/DN-001.yaml").read_bytes()
+    with pytest.raises(TransactionConflictError):
+        RuntimeTransaction(change_dir, "plan-conflict", (conflicting,)).commit()
+    assert (change_dir / "plans/DN-001.yaml").read_bytes() == before
 
 
 def test_load_change_pins_authority_directory_during_reads(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

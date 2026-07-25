@@ -22,6 +22,7 @@ from owlbear_kanban import (
     ReceiptStore,
     ReceiptValidityCode,
     change_health,
+    discover_admission,
     evaluate_receipt_currentness,
     evaluate_code_revision_currency,
     load_change,
@@ -785,7 +786,7 @@ def _admitted_package(tmp_path: Path) -> tuple[Path, Path, ChangeRevision]:
     change_dir = _write_package(changes_dir, change_id, authority=(decisions, graph))
     initial = load_change(changes_dir, change_id)
     assert initial.revision is not None
-    receipt_id = "admission-health-001"
+    receipt_id = f"admission-{initial.revision.delivery_digest[:12]}"
     graph["state"] = "admitted"
     graph["admission"] = {
         "state": "admitted",
@@ -821,32 +822,53 @@ def test_change_health_accepts_matching_admission_without_mutation(tmp_path: Pat
         "design.md",
         "decisions.yaml",
         "graph.yaml",
-        "receipts/admission-health-001.yaml",
+        f"receipts/admission-{_revision.delivery_digest[:12]}.yaml",
     )
     assert _snapshot(paths) == before
 
 
-def test_change_health_reports_digest_mismatch_deterministically_without_mutation(tmp_path: Path) -> None:
-    changes_dir, change_dir, _revision = _admitted_package(tmp_path)
-    receipt_path = change_dir / "receipts" / "admission-health-001.yaml"
-    value = yaml.safe_load(receipt_path.read_text(encoding="utf-8"))
-    value["delivery_digest"] = "0" * 64
-    receipt_path.write_text(yaml.safe_dump(value, sort_keys=False), encoding="utf-8")
+def test_admission_discovery_selects_digest_path_and_preserves_stale_history(tmp_path: Path) -> None:
+    changes_dir, change_dir, revision = _admitted_package(tmp_path)
+    stale_id = "admission-000000000000"
+    stale_value = _receipt(revision, stale_id, "admission")
+    stale_value["delivery_digest"] = "0" * 64
+    stale_path = change_dir / "receipts" / f"{stale_id}.yaml"
+    stale_path.write_text(yaml.safe_dump(stale_value, sort_keys=False), encoding="utf-8")
     paths = sorted(path for path in change_dir.rglob("*") if path.is_file())
     before = _snapshot(paths)
 
-    first = change_health(changes_dir, "health-change")
-    second = change_health(changes_dir, "health-change")
+    discovery = discover_admission(revision)
+    health = change_health(changes_dir, "health-change")
 
-    assert first == second
-    assert [(item.code, item.path, item.target) for item in first.findings] == [
-        (
-            ReceiptDiagnosticCode.REVISION_MISMATCH.value,
-            "receipts/admission-health-001.yaml",
-            "admission-health-001",
-        )
-    ]
+    assert discovery.current is not None
+    assert discovery.current.receipt_id == f"admission-{revision.delivery_digest[:12]}"
+    assert [item.receipt_id for item in discovery.stale_history] == [stale_id]
+    assert discovery.findings == ()
+    assert health.findings == ()
     assert _snapshot(paths) == before
+
+
+@pytest.mark.parametrize("defect", ["absent", "ambiguous"])
+def test_change_health_reports_unresolved_current_admission(tmp_path: Path, defect: str) -> None:
+    changes_dir, change_dir, revision = _admitted_package(tmp_path)
+    expected_id = f"admission-{revision.delivery_digest[:12]}"
+    expected_path = change_dir / "receipts" / f"{expected_id}.yaml"
+    if defect == "absent":
+        expected_path.unlink()
+    else:
+        duplicate_id = "admission-current-copy"
+        duplicate = _receipt(revision, duplicate_id, "admission")
+        (change_dir / "receipts" / f"{duplicate_id}.yaml").write_text(
+            yaml.safe_dump(duplicate, sort_keys=False),
+            encoding="utf-8",
+        )
+
+    result = change_health(changes_dir, "health-change")
+
+    assert len(result.findings) == 1
+    assert result.findings[0].code == (
+        ReceiptDiagnosticCode.FILE_MISSING.value if defect == "absent" else ReceiptDiagnosticCode.SCHEMA_INVALID.value
+    )
 
 
 @pytest.mark.parametrize(

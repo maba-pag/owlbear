@@ -206,6 +206,29 @@ class DeliveryNode(_BoundaryModel):
     proof: StableId
 
 
+class DeliveryObligationsDocument(_BoundaryModel):
+    """Own product obligations and workflows in a modular change package."""
+
+    schema_version: Literal[1]
+    change_id: ChangeId
+    requirements: FrozenSequence[Requirement]
+    negative_requirements: FrozenSequence[NegativeRequirement]
+    preserved_behaviors: FrozenSequence[PreservedBehavior]
+    workflows: FrozenSequence[Workflow]
+
+
+class DeliveryContractsDocument(_BoundaryModel):
+    """Own module, interface, migration, risk, and proof contracts."""
+
+    schema_version: Literal[1]
+    change_id: ChangeId
+    modules: FrozenSequence[Module]
+    interfaces: FrozenSequence[Interface]
+    migrations: FrozenSequence[Migration]
+    risks: FrozenSequence[Risk]
+    proofs: FrozenSequence[Proof]
+
+
 type StableEntity = (
     Decision
     | Requirement
@@ -260,6 +283,17 @@ class AdmissionMetadata(_BoundaryModel):
     delivery_digest: Digest
     receipt: str
     limits: FrozenSequence[str]
+
+
+class DeliveryNodesDocument(_BoundaryModel):
+    """Own delivery-node topology and package-level graph metadata."""
+
+    schema_version: Literal[1]
+    change_id: ChangeId
+    state: Literal["draft", "admitted", "executing", "accepted", "abandoned", "superseded"]
+    authority: AuthorityMetadata
+    admission: AdmissionMetadata | None = None
+    nodes: FrozenSequence[DeliveryNode]
 
 
 class ExecutionPlan(_BoundaryModel):
@@ -477,6 +511,23 @@ def _read_yaml(directory_fd: int, name: str) -> object:
         _fail(ChangeDiagnosticCode.YAML_PARSE, "authority YAML could not be parsed", path=Path(name), target=name)
 
 
+@contextlib.contextmanager
+def _authority_directory(directory_fd: int, name: str) -> Iterator[int]:
+    path = Path(name)
+    try:
+        child_fd = os.open(name, _DIRECTORY_OPEN_FLAGS, dir_fd=directory_fd)
+    except FileNotFoundError:
+        _fail(ChangeDiagnosticCode.FILE_MISSING, "required authority directory is missing", path=path, target=name)
+    except OSError:
+        _fail(
+            ChangeDiagnosticCode.PATH_UNSAFE, "authority directory could not be opened safely", path=path, target=name
+        )
+    try:
+        yield child_fd
+    finally:
+        os.close(child_fd)
+
+
 def _schema_detail(document: str, exc: PydanticValidationError) -> str:
     error = exc.errors(include_input=False, include_url=False)[0]
     location = ".".join(str(part) for part in error["loc"])
@@ -579,6 +630,166 @@ def compute_delivery_digest(
     return sha256(canonical).hexdigest()
 
 
+def _build_revision(  # noqa: PLR0913
+    *,
+    change_dir: Path,
+    change_id: str,
+    source_identity: tuple[int, int],
+    intent: str,
+    design: str,
+    decisions: DecisionsDocument,
+    graph: DeliveryGraph,
+) -> ChangeRevision:
+    if decisions.change_id != change_id or graph.change_id != change_id:
+        _fail(
+            ChangeDiagnosticCode.SCHEMA_INVALID,
+            "authority documents do not name the requested change",
+            target=change_id,
+        )
+    _validate_identities(decisions, graph)
+    revision = ChangeRevision(
+        source_dir=change_dir.absolute(),
+        change_id=change_id,
+        intent=intent,
+        design=design,
+        decisions=decisions,
+        graph=graph,
+        delivery_digest=compute_delivery_digest(intent, design, decisions, graph),
+    )
+    object.__setattr__(revision, "_source_identity", source_identity)
+    try:
+        RuntimeTransaction.recover_all(revision.source_dir)
+    except TransactionPathError:
+        _fail(ChangeDiagnosticCode.PATH_UNSAFE, "pending transaction contains an unsafe participant path")
+    except TransactionManifestError:
+        _fail(ChangeDiagnosticCode.SCHEMA_INVALID, "pending transaction manifest is invalid")
+    except TransactionConflictError:
+        _fail(ChangeDiagnosticCode.SCHEMA_INVALID, "pending transaction conflicts with immutable bytes")
+    return revision
+
+
+def _validate_document(model: type[_BoundaryModel], value: object, path: str) -> _BoundaryModel:
+    try:
+        return model.model_validate(value)
+    except PydanticValidationError as exc:
+        _fail(
+            ChangeDiagnosticCode.SCHEMA_INVALID,
+            _schema_detail(path, exc),
+            path=Path(path),
+            target=path,
+        )
+
+
+def _load_node_plans(directory_fd: int, nodes: FrozenSequence[DeliveryNode]) -> dict[str, JsonValue]:
+    try:
+        plans_fd = os.open("plans", _DIRECTORY_OPEN_FLAGS, dir_fd=directory_fd)
+    except FileNotFoundError:
+        return {}
+    except OSError:
+        _fail(
+            ChangeDiagnosticCode.PATH_UNSAFE,
+            "plans directory could not be opened safely",
+            path=Path("plans"),
+            target="plans",
+        )
+    try:
+        node_ids = {node.id for node in nodes}
+        plans: dict[str, JsonValue] = {}
+        for filename in sorted(os.listdir(plans_fd)):  # noqa: PTH208
+            path = Path(filename)
+            if path.suffix != ".yaml" or not _STABLE_ID_RE.fullmatch(path.stem) or path.stem not in node_ids:
+                _fail(
+                    ChangeDiagnosticCode.SCHEMA_INVALID,
+                    "plan filename does not identify one declared delivery node",
+                    path=Path("plans") / filename,
+                    target=path.stem,
+                )
+            value = _read_yaml(plans_fd, filename)
+            if not isinstance(value, dict):
+                _fail(
+                    ChangeDiagnosticCode.SCHEMA_INVALID,
+                    "node plan must be a YAML mapping",
+                    path=Path("plans") / filename,
+                    target=path.stem,
+                )
+            plans[path.stem] = value
+        return plans
+    finally:
+        os.close(plans_fd)
+
+
+def load_modular_change(changes_dir: Path, change_id: str) -> ChangeLoadResult:
+    """Load one contained modular native change package."""
+    try:
+        change_dir = _validate_change_path(changes_dir, change_id)
+        with _change_directory(change_dir) as (directory_fd, source_identity):
+            intent = _read_text(directory_fd, "intent.md", markdown=True)
+            design = _read_text(directory_fd, "design.md", markdown=True)
+            decisions = _validate_document(
+                DecisionsDocument,
+                _read_yaml(directory_fd, "decisions.yaml"),
+                "decisions.yaml",
+            )
+            with _authority_directory(directory_fd, "delivery") as delivery_fd:
+                obligations = _validate_document(
+                    DeliveryObligationsDocument,
+                    _read_yaml(delivery_fd, "obligations.yaml"),
+                    "delivery/obligations.yaml",
+                )
+                contracts = _validate_document(
+                    DeliveryContractsDocument,
+                    _read_yaml(delivery_fd, "contracts.yaml"),
+                    "delivery/contracts.yaml",
+                )
+                nodes = _validate_document(
+                    DeliveryNodesDocument,
+                    _read_yaml(delivery_fd, "nodes.yaml"),
+                    "delivery/nodes.yaml",
+                )
+            assert isinstance(decisions, DecisionsDocument)
+            assert isinstance(obligations, DeliveryObligationsDocument)
+            assert isinstance(contracts, DeliveryContractsDocument)
+            assert isinstance(nodes, DeliveryNodesDocument)
+            document_ids = {decisions.change_id, obligations.change_id, contracts.change_id, nodes.change_id}
+            if document_ids != {change_id}:
+                _fail(
+                    ChangeDiagnosticCode.SCHEMA_INVALID,
+                    "authority documents do not name the requested change",
+                    target=change_id,
+                )
+            plans = _load_node_plans(directory_fd, nodes.nodes)
+            graph = DeliveryGraph(
+                schema_version=nodes.schema_version,
+                change_id=nodes.change_id,
+                state=nodes.state,
+                authority=nodes.authority,
+                admission=nodes.admission,
+                requirements=obligations.requirements,
+                negative_requirements=obligations.negative_requirements,
+                preserved_behaviors=obligations.preserved_behaviors,
+                workflows=obligations.workflows,
+                modules=contracts.modules,
+                interfaces=contracts.interfaces,
+                migrations=contracts.migrations,
+                risks=contracts.risks,
+                proofs=contracts.proofs,
+                nodes=nodes.nodes,
+                execution=ExecutionPlan(node_plans=plans),
+            )
+        revision = _build_revision(
+            change_dir=change_dir,
+            change_id=change_id,
+            source_identity=source_identity,
+            intent=intent,
+            design=design,
+            decisions=decisions,
+            graph=graph,
+        )
+    except _LoadFailure as exc:
+        return ChangeLoadResult(diagnostics=(exc.diagnostic,))
+    return ChangeLoadResult(revision=revision)
+
+
 def load_change(changes_dir: Path, change_id: str) -> ChangeLoadResult:
     """Load one contained four-file native change package."""
     try:
@@ -604,32 +815,15 @@ def load_change(changes_dir: Path, change_id: str) -> ChangeLoadResult:
                     path=Path("graph.yaml"),
                     target="graph.yaml",
                 )
-        if decisions.change_id != change_id or graph.change_id != change_id:
-            _fail(
-                ChangeDiagnosticCode.SCHEMA_INVALID,
-                "authority documents do not name the requested change",
-                target=change_id,
-            )
-        _validate_identities(decisions, graph)
-        digest = compute_delivery_digest(intent, design, decisions, graph)
-        revision = ChangeRevision(
-            source_dir=change_dir.absolute(),
+        revision = _build_revision(
+            change_dir=change_dir,
             change_id=change_id,
+            source_identity=source_identity,
             intent=intent,
             design=design,
             decisions=decisions,
             graph=graph,
-            delivery_digest=digest,
         )
-        object.__setattr__(revision, "_source_identity", source_identity)
-        try:
-            RuntimeTransaction.recover_all(revision.source_dir)
-        except TransactionPathError:
-            _fail(ChangeDiagnosticCode.PATH_UNSAFE, "pending transaction contains an unsafe participant path")
-        except TransactionManifestError:
-            _fail(ChangeDiagnosticCode.SCHEMA_INVALID, "pending transaction manifest is invalid")
-        except TransactionConflictError:
-            _fail(ChangeDiagnosticCode.SCHEMA_INVALID, "pending transaction conflicts with immutable bytes")
     except _LoadFailure as exc:
         return ChangeLoadResult(diagnostics=(exc.diagnostic,))
     return ChangeLoadResult(revision=revision)
@@ -641,7 +835,11 @@ __all__ = [
     "ChangeLoadResult",
     "ChangeRevision",
     "DecisionsDocument",
+    "DeliveryContractsDocument",
     "DeliveryGraph",
+    "DeliveryNodesDocument",
+    "DeliveryObligationsDocument",
     "compute_delivery_digest",
     "load_change",
+    "load_modular_change",
 ]
