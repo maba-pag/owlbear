@@ -334,6 +334,32 @@ def test_assembled_native_resource_journey_is_bounded_strict_and_non_mutating(
     assert schema["paths"][f"/api/changes/{{change_id}}/jobs"]["get"]["parameters"][-1]["schema"]["maximum"] == 100
 
 
+def test_core_context_failure_has_stable_envelope_without_partial_mutation(
+    assembled_harness: _Harness,
+) -> None:
+    harness = assembled_harness
+    transaction_dir = harness.work_root / ".runtime-transactions"
+    transaction_dir.mkdir(exist_ok=True)
+    (transaction_dir / "malformed.yaml").write_text(
+        "schema_version: 2\nparticipants: [bad]\n",
+        encoding="utf-8",
+    )
+    before = _state(harness.work_root, harness.change_dir)
+    app.dependency_overrides[get_engine] = lambda: harness.engine
+    assert get_native_context_cache not in app.dependency_overrides
+    from fastapi.testclient import TestClient  # noqa: PLC0415
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        response = client.get(f"/api/changes/{_CHANGE_ID}")
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == {
+        "code": "ERR_NATIVE_CONTEXT_UNAVAILABLE",
+        "message": "native context assembly failed",
+    }
+    assert _state(harness.work_root, harness.change_dir) == before
+
+
 @contextmanager
 def _live_server(engine: KanbanEngine) -> Iterator[str]:
     app.dependency_overrides[get_engine] = lambda: engine

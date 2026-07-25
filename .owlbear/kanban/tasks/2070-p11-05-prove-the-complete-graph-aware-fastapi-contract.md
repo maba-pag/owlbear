@@ -1,10 +1,10 @@
 ---
 id: 2070
 title: 'P11-05: Prove the complete graph-aware FastAPI contract'
-status: verify
+status: collect
 priority: high
 created: 2026-07-25T22:31:15.592752+02:00
-updated: 2026-07-26T00:06:50.321051+02:00
+updated: 2026-07-26T00:12:55.665206+02:00
 tags:
   - phase-11
   - scope:cockpit-backend
@@ -72,3 +72,21 @@ Validation:
 - Builder challenger: pass; accepted fixture seeding, sole dependency override, real assembly boundaries, SSE synchronization, cleanup, test rent, and full AC/resource/old-route coverage.
 
 Builder memories were assessed before closure.
+
+[[2026-07-26T00:12:55+02:00]]
+## Verify Notes
+PASS: Builder commit `ec663a4e84ce39b540ff9092e54f58fd74788234`, plus a local verifier proof repair, satisfies all PROOF-015 acceptance criteria.
+
+Independent evidence:
+- Focused integration suite passed twice consecutively from the builder commit (2 + 2 passed), proving live uvicorn/watchfiles repeatability.
+- Source audit found exactly two `dependency_overrides` assignments in the proof, both for `get_engine`; no native cache/runtime/dispatch replacement exists.
+- Initial verifier challenger identified one AC-3 gap: no public core context-assembly failure.
+- Local repair added a malformed canonical runtime transaction manifest case through real `NativeContextCache`/`NativeRuntime`; public GET change returns exact 503 `ERR_NATIVE_CONTEXT_UNAVAILABLE`, and complete work/change bytes remain unchanged.
+- Repaired focused suite: 3 passed; full Cockpit backend regression: 169 passed; focused lint/format: passed.
+
+AC judgment:
+- AC-1: all named resources are linked to seeded canonical records and read through assembled routes with strict schema, pagination, envelope, and non-mutation assertions.
+- AC-2: watcher readiness is causally established before each HTTP control; captured request/attempt resource events follow those controls, and replay/conflict snapshots prove stable behavior.
+- AC-3: old-route HTTP absence, malformed/missing/stale/domain conflicts, and now real context-assembly failure all have stable envelopes and no partial mutation.
+
+Verifier challenger after repair: pass; prior core-failure gap closed. Verifier memories were assessed before closure.
