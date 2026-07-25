@@ -19,7 +19,8 @@ Dispatch fresh engine plans until no work remains.
 `pick_tasks` is the default procedure below. IF-015 permits an explicit, non-default native procedure
 for an admitted `change_id`: call `pick_jobs` for the current candidate revision, call `start_job` for
 one returned entry, dispatch only its assigned profile, and pattern-match its structured disposition.
-`Success` selects the matching `finish_plan`, `finish_build`, `finish_accept`, or `finish_audit`;
+The profile-specific success object selects the matching `finish_plan`, `finish_build`,
+`finish_accept`, or `finish_audit`;
 `RateLimited` selects `release_job`; `Crash` selects strict-expiry `recover_expired_claims`. Then obtain
 a fresh plan. Do not route by prose or bridge native jobs to task lifecycle state.
 
@@ -39,6 +40,25 @@ successful `start_job` result serialized as its prompt. Pattern-match one exact 
 
 Malformed planner output is an unstructured return and follows crash recovery. The orchestrator
 never creates a planner Decision Request or node plan itself.
+
+For an engine-selected `builder`, dispatch `runSubagent(agentName="builder")` with only the complete
+successful `start_job` result serialized as its prompt. Pattern-match one exact disposition:
+
+- `BuilderSuccess`: call `finish_build` with the unchanged change, job, attempt, claim, actor, and
+   process identity from the started job, an orchestrator-owned completion timestamp, and the
+   returned `receipt_id`, `code_revision`, `evidence`, `evidence_ids`, and `impact_closure`. Do not
+   inspect, reconstruct, or supplement those returned fields.
+- `SpecificationReentry`: call `release_job` with the unchanged active identity, halt native mode,
+   and report the returned finding class, target, finding, and evidence for user-facing `/design`
+   re-entry. Do not create a corrective job, request, receipt, or authority edit.
+- `CommitFailed`: call `release_job` with the unchanged active identity, halt native mode, and report
+   the returned command, error, and changed paths. Do not broaden or retry the commit from the
+   orchestrator and do not issue a receipt.
+- `BuildBlocked`: call `release_job` with the unchanged active identity, halt native mode, and report
+   the returned target and finding. Do not create corrective work or issue a receipt.
+
+Malformed builder output is an unstructured return and follows crash recovery. The orchestrator
+never reviews, repairs, commits, classifies findings, or assembles build evidence itself.
 
 Before `start_job`, resolve the selected profile against the installed subagent allowlist. If it is unavailable,
 report the profile and halt native mode without claiming, running, releasing, or mutating legacy task state.

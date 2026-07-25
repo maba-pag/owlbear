@@ -44,7 +44,7 @@ results, recovery, and replanning; never bridge native jobs to task state or com
 | Agent | When | Example |
 |-------|------|---------|
 | planner | Engine-selected native `plan` job in explicit IF-015 mode | Serialized successful `start_job` result only |
-| builder | Build phase tasks | Dispatched mechanically per `pick_tasks` |
+| builder | Build phase task, or engine-selected native `build` job in explicit IF-015 mode | Task ID, or serialized successful `start_job` result only |
 | verifier | Verify phase tasks | Dispatched mechanically per `pick_tasks` |
 | collector | Collect phase tasks | Dispatched mechanically per `pick_tasks` |
 | memory-curator | Every 10th cycle housekeeping — periodic curation, no task ID | `Curate: Periodic curation` |

@@ -49,7 +49,8 @@ This table snapshots agent declarations and includes runtime-relevant built-in d
 | planner-challenger | Claude Sonnet 5 | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design`, `h-ac-quality` | None | `PreToolUse`: deny writes except scratch |
 | orchestrator | GPT-5.6 Terra | `w-orchestration` | planner, builder, verifier, collector, memory-curator, Explore | None; legacy `pick_tasks` plus non-default IF-015 `pick_jobs`, `start_job`, `finish_plan`, finish, release, and recovery tools |
 | shaper | GPT-5.6 Sol | `r-pipeline-protocol`, `r-challenger-protocol`, `r-workspace-governance` | shaper-challenger, Explore | `PreToolUse`: deny non-document writes |
-| builder | GPT-5.6 Terra | `r-pipeline-protocol`, `r-challenger-protocol`, `r-workspace-governance`, `h-codebase-orientation` | builder-challenger | `SessionStart`: task context; `PostToolUse`: lint changed files |
+| builder | GPT-5.6 Terra | `w-packet-building`, `r-pipeline-protocol`, `r-challenger-protocol`, `r-workspace-governance`, `h-codebase-orientation` | builder-challenger, build-reviewer | `SessionStart`: task context; `PostToolUse`: lint changed files |
+| build-reviewer | Claude Sonnet 5 | `r-challenger-protocol`, `h-codebase-orientation` | None | `PreToolUse`: deny writes except scratch |
 | verifier | GPT-5.6 Terra | `r-pipeline-protocol`, `r-challenger-protocol`, `r-workspace-governance`, `h-codebase-orientation` | verifier-challenger | `SessionStart`: task context; `PostToolUse`: lint changed files |
 | collector | GPT-5.6 Terra | `r-pipeline-protocol`, `r-workspace-governance`, `h-mcp-kanban` | Explore | `PreToolUse`: deny writes except scratch |
 | shaper-challenger | Claude Sonnet 5 | `h-ac-quality`, `h-module-design`, `r-challenger-protocol` | None | `PreToolUse`: deny writes except scratch |
@@ -109,8 +110,9 @@ This inverse map includes only direct `<required_reading>` consumers, not condit
 |-------|-------------|
 | `w-design-session` | designer |
 | `w-frontier-planning` | planner |
-| `r-challenger-protocol` | designer-challenger, planner-challenger, shaper, builder, verifier, shaper-challenger, builder-challenger, verifier-challenger |
-| `h-codebase-orientation` | designer-challenger, planner-challenger, builder, verifier |
+| `w-packet-building` | builder |
+| `r-challenger-protocol` | designer-challenger, planner-challenger, shaper, builder, build-reviewer, verifier, shaper-challenger, builder-challenger, verifier-challenger |
+| `h-codebase-orientation` | designer-challenger, planner-challenger, builder, build-reviewer, verifier |
 | `h-module-design` | designer-challenger, planner-challenger, shaper-challenger |
 | `r-pipeline-protocol` | shaper, builder, verifier, collector |
 | `r-workspace-governance` | shaper, builder, verifier, collector |
@@ -129,7 +131,8 @@ This inverse map includes only direct `<required_reading>` consumers, not condit
 | designer-challenger | designer | Native admission lacks required repository-grounded entity challenge evidence |
 | planner | orchestrator | Engine-selected native plan jobs cannot be refined or completed |
 | planner-challenger | planner | A packet DAG cannot satisfy the independent plan review gate |
-| builder | orchestrator | Build tasks cannot be dispatched |
+| builder | orchestrator | Build tasks and engine-selected native build jobs cannot be completed |
+| build-reviewer | builder | A native packet commit cannot satisfy mandatory independent inline review |
 | verifier | orchestrator | Verify tasks cannot be dispatched |
 | collector | orchestrator | Collect tasks cannot be dispatched |
 | memory-curator | orchestrator | Periodic memory housekeeping is skipped |
@@ -147,7 +150,7 @@ The agent validator enforces ND3 metadata and frontmatter-to-`<agents>` alignmen
 |---------|----------------|-----------------|
 | Agent `tools:` allowlist | Every agent | Limits runtime capabilities exposed to the role |
 | `deny-non-doc-writes.py` | shaper | Allows documentation and diagram writes, rejects code writes |
-| `deny-writes.py` | collector, designer-challenger, planner-challenger, and read-only pipeline challengers | Rejects durable writes outside scratch |
+| `deny-writes.py` | collector, designer-challenger, planner-challenger, build-reviewer, and read-only pipeline challengers | Rejects durable writes outside scratch |
 | `deny-src-writes.py` | test-curator | Restricts writes to tests and scratch |
 | `session-context.py` | builder, verifier | Adds task-aware context at session start |
 | `lint-changed.py` | builder, verifier, builder-challenger | Runs changed-file checks after tool use |

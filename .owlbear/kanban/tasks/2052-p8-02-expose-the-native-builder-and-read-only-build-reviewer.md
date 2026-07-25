@@ -1,10 +1,10 @@
 ---
 id: 2052
 title: 'P8-02: Expose the native builder and read-only build reviewer'
-status: build
+status: verify
 priority: high
 created: 2026-07-25T16:14:20.905544+02:00
-updated: 2026-07-25T16:14:20.905544+02:00
+updated: 2026-07-25T16:34:14.676101+02:00
 tags:
   - phase-8
   - scope:agent
@@ -58,3 +58,35 @@ In: builder and reviewer declarations, orchestrator allowlist and workflow routi
 Out: runtime or MCP semantics, proof scenarios, acceptor or auditor roles, setup or seed propagation, and removal of legacy task mode during bootstrap.
 
 Proof guidance: validate executable declarations, reviewer write denial, structured result routing, public tool schemas, and WIRING agreement.
+
+[[2026-07-25T16:34:14+02:00]]
+## Builder Notes
+
+Implemented the native builder/reviewer/orchestrator role graph while preserving the current task-ID bootstrap mode.
+
+### Change Envelope And Files
+- `share/agents/builder.agent.md`: dual-mode input contract, `w-packet-building` required reading, native read-only control-plane tools, `build-reviewer` delegation, structured native output, and explicit absence of native lifecycle ownership.
+- `share/agents/build-reviewer.agent.md`: new Claude Sonnet 5 ND3 hard-read-only reviewer with `deny-writes.py`, fixed authority/diff/proof/commit/scope rows, and canonical typed findings.
+- `share/agents/orchestrator.agent.md` and `share/skills/w-orchestration/SKILL.md`: native builder dispatch and exact `BuilderSuccess` or fail-closed result routing.
+- `share/skills/h-agent-structure/SKILL.md`, `.owlbear/scripts/validate_agents.py`, and `share/WIRING.md`: ND3, loading, delegation, hook, and inverse-map synchronization.
+
+No runtime/MCP behavior, assembled proof scenario, acceptor/auditor role, setup/seed artifact, or bootstrap-task removal entered the diff.
+
+### AC Evidence
+- AC-1: A serialized successful native start result selects `w-packet-building`; a task ID retains `r-pipeline-protocol`. Builder delegates native commit review to `build-reviewer`, exposes all current native read projections, and has no `pick_jobs`, `start_job`, finish, release, or recovery tool. Native output is one workflow disposition.
+- AC-2: `build-reviewer` uses a distinct model, `disable-model-invocation: false`, read-only tools, and `deny-writes.py`. Its complete mapping covers authority/packet, diff/paths, proof, commit context, scope, and findings; omitted or contradictory context is malformed, and it cannot edit, commit, delegate, or mutate lifecycle state.
+- AC-3: Orchestration forwards only the complete successful start result. `BuilderSuccess` fields pass unchanged to `finish_build`; `SpecificationReentry`, `CommitFailed`, and `BuildBlocked` release the unchanged identity, halt, report, and create no receipt or corrective work. Malformed output uses crash recovery.
+- AC-4: WIRING runtime/inverse/delegation/hook maps, the structural handbook, and validator ND3 registry all include `build-reviewer` and the new loading edge.
+
+### Validation
+- `validate_agents.py`: PASS, all 17 agents.
+- `validate_skills.py`: passed.
+- Ecosystem, write-guard, and non-doc-write tests excluding one unrelated broad registry assertion: 57 passed.
+- Full 58-test set: 57 passed; the sole failure is pre-existing dirty `collector.agent.md` legacy tool-name corruption outside this task.
+- Live source registry: all 11 newly added native builder read operations are registered. Legacy task tools intentionally remain for the external sibling bootstrap carrier.
+- Direct structured declaration probe: passed delegation, model separation, deny hook, lifecycle-tool absence, structured routing, finish fields, and WIRING/ND3 synchronization.
+- Path-scoped pre-commit: passed after final-newline normalization and identical rerun.
+- VS Code diagnostics and `git diff --check`: clean.
+- `builder-challenger`: `pass`; independently reran validators and the targeted suite.
+
+Durable-test delta: zero. Existing validators and write-guard tests already own the structural and enforcement regressions.
