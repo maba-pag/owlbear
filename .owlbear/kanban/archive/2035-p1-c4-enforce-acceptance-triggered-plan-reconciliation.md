@@ -1,10 +1,10 @@
 ---
 id: 2035
 title: 'P1-C4: Enforce acceptance-triggered plan reconciliation'
-status: collect
+status: archived
 priority: high
 created: 2026-07-25T02:46:46.300991+02:00
-updated: 2026-07-25T07:11:34.863099+02:00
+updated: 2026-07-25T07:13:39.479685+02:00
 tags:
   - change:replace-delivery-pipeline
   - node:DN-003
@@ -48,7 +48,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Objective
@@ -307,3 +307,15 @@ Task advances to `build` for one constrained recovery. Success requires a non-em
 - Verifier-challenger: pass. It confirmed public-boundary AC3-AC5 coverage, closure alignment, and sufficient scoped proof.
 - Memory: all 20 recalled entries assessed; artifact-to-scope review was outstanding, workspace-root guidance was applied, remainder not used. No new durable insight identified.
 - Final route: PASS to collect.
+
+[[2026-07-25T07:13:39+02:00]]
+## Collect Notes
+- Classification: leaf. Task #2035 has no child tasks; its parent is #1968, its dependency gate is `ok`, and collection does not alter the parent or any other task.
+- Intent source: authoritative Objective, Scope, Engine Handoff, and AC1-AC5 require public acceptance-triggered reconciliation: isolated plan publication, build gates, finish-accept direct-dependent reconciliation/OCC fold-in, receipt and digest transition, invalidation closure, disjoint currentness, and work-health consistency.
+- Lifecycle evidence: latest Shape Notes closes repeated key `AC3-AC5/reconciliation-scenario-proof`; latest Builder Notes record the mapped RuntimeQuery health repair and NativeRuntime lifecycle proof; latest Verify Notes records PASS with no Required Follow-up. Pending and resolved structured request queries are empty.
+- AC/invariant coverage: AC1 initial plan eligibility and AC2 isolated finish-plan/replay coverage passed in the focused suite. AC3 proves stale authority, active reconciliation, and missing, ambiguous, or non-current predecessor accept rejection without mutation. AC4 proves declaration-order dependent mapping, same-plan OCC fold-in, predecessor edges, and identity-conflict immutability. AC5 proves receipt predecessor IDs, digest replacement, old/new build transition, invalidation traversal, disjoint currentness, and clean work health.
+- SHA-linked normal-path proof: shaper repair `b01cfc2cf0eb7ad3c846c269e23e98461fed1ddc` is the parent of implementation `b1f53f6f2fb7f7c088a3e960cc771a73c2f0eb43`; verifier commit `af3234d0f25bce2d88000265995a21df8b273825` descends from it. At that verified descendant, `uv run pytest serve/kanban/tests/test_native_runtime.py serve/kanban/tests/test_runtime_query.py -q --tb=short` passed 34, `uv run ruff check serve/kanban/src/owlbear_kanban/runtime_query.py serve/kanban/tests/test_native_runtime.py` passed, and `git show --check b1f53f6f2fb7f7c088a3e960cc771a73c2f0eb43` passed.
+- Child/dependency/residual state: child lookup is empty; this leaf's existing dependency gate is `ok`; no blocked state, unresolved follow-up, structured request, or task-owned dirty deliverable remains beyond this archive transition.
+- Rationale: archival readiness is satisfied from current verifier PASS and SHA-tied focused evidence. No proof rerun is warranted.
+
+ARCHIVED #2035 -> archived | Leaf closure: current verifier PASS, AC1-AC5 reconciliation evidence, and SHA-linked normal-path proof at `af3234d0`.
