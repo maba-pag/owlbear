@@ -1,10 +1,10 @@
 ---
 id: 2038
 title: Finalize Python 3.14 and Ruff 0.16 migration
-status: verify
+status: collect
 priority: high
 created: 2026-07-25T03:08:35.587003+02:00
-updated: 2026-07-25T03:31:08.970852+02:00
+updated: 2026-07-25T03:59:39.031054+02:00
 tags:
   - config
   - tooling
@@ -55,3 +55,35 @@ Implemented the requested reverse-order migration closure in five isolated packa
 - Commit inspection confirms each package is isolated and unrelated memory, VS Code, and delivery-pipeline changes remain uncommitted.
 
 The aggregate main-worktree suite currently has five native-runtime transaction failures caused by concurrent admitted delivery-graph state. A clean current-HEAD baseline reproduces the deterministic native-runtime failures before applying the lint package; an earlier uncontaminated validation of the exact dependency/Ruff migration passed 4,073 tests. No current follow-up is required for this task.
+
+[[2026-07-25T03:59:39+02:00]]
+## Verify Notes
+
+### Verdict
+PASS. No verification patch was required.
+
+### Evidence Reviewed
+- Task intent and all five AC lines; no resolved DR/AR records and no prior verifier rejection for this failure family.
+- The task has no Shape Notes Change Module Map. Current source and the five claimed commits supplied the review boundary; no module-map deviation was found.
+- Commit inspection confirms five distinct `#2038` commits: `9e954c3fd` (Python floor/config), `803150128` (Ruff compatibility), `f7d8d4b84` (MegaLinter alignment), `5023bf431` (seed-hook equivalence), and `eca60a7a1` (D1xx docstrings). The inspected path lists fit those package boundaries and did not combine the unrelated concurrent worktree changes.
+- `.github/workflows/megalinter.yml` pins MegaLinter cupcake v9.6.0; `.mega-linter.yml` declares v9.6.0; `.pre-commit-config.yaml` uses the manual `ghcr.io/oxsecurity/megalinter-cupcake:v9.6.0` image. `uv.lock` resolves Ruff 0.16.0, while the MegaLinter bundle remains separately pinned by its v9.6 image.
+- `pyproject.toml` selects all Ruff rules and only excludes D105/D107 from the D1xx family. The hook per-file ignores no longer include a broad S607 exception. Live and seeded hook trees are identical and their executable calls use narrow inline S607 suppressions.
+
+### Normal-Path Proof
+- `diff -ru --exclude='__pycache__' .owlbear/hooks seed/.owlbear/hooks`: passed, exercising the delivered live/seed synchronization boundary.
+- `uv lock --check`: passed; resolved 166 packages.
+- `uv run ruff check . --select D100,D101,D102,D103,D104,D106`: passed, exercising enabled public-docstring rules.
+- `uv run ruff format --check .`: passed; 298 files already formatted.
+
+### AC-to-Evidence Map
+- AC1 and AC5: direct `git show --name-status` inspection of the five isolated commits, including separate Python-floor and Ruff-compatibility commits.
+- AC2: direct CI, manual-hook, MegaLinter config, and lock inspection.
+- AC3: live-to-seed recursive diff plus inline suppression and per-file-ignore inspection.
+- AC4: direct Ruff policy inspection plus the explicit D100/D101/D102/D103/D104/D106 lint command.
+
+### Challenger
+- `verifier-challenger`: `pass`; it independently found current config, lock, CI pin, Renovate policy, package floors, Ruff D-rule policy, and live/seed hook suppressions sufficient, with no concrete defect or follow-up.
+
+### Final Route
+- Advances to `collect`.
+
