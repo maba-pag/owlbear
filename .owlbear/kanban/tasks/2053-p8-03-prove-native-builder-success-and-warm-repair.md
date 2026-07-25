@@ -1,10 +1,10 @@
 ---
 id: 2053
 title: 'P8-03: Prove native builder success and warm repair'
-status: build
+status: verify
 priority: high
 created: 2026-07-25T16:14:29.095921+02:00
-updated: 2026-07-25T16:14:29.095921+02:00
+updated: 2026-07-25T16:50:56.052122+02:00
 tags:
   - phase-8
   - scope:test
@@ -58,3 +58,17 @@ In: assembled builder claim, scoped commit, generated reviewer context, fresh lo
 Out: material contradiction, commit failure, malformed review, stale digest, new runtime semantics, and setup or seed work.
 
 Proof guidance: exercise shipped roles and public MCP or native lifecycle operations; a fixture-only builder or direct store mutation does not prove this packet.
+
+[[2026-07-25T16:50:56+02:00]]
+## Builder Notes
+
+Implemented the durable successful and warm local-repair half of PROOF-006 in `serve/mcp-kanban/tests/test_builder_interaction.py`.
+
+- AC-1: public admission, planning, dispatch, and `start_job` select the shipped `builder` profile, preserve job/claim/delivery/node-plan identity, and expose `WRITER_CONFLICT` for a second tracked writer.
+- AC-2: `commit_owned_paths` creates the scoped product commit; generated context includes authority, envelope, diff, changed paths, deterministic proof, and custody; public `finish_build` persists exact commit, evidence, node-plan digest, impact closure, and proof-method identity.
+- AC-3: the first proof yields a typed `implementation-defect`; the reviewer write guard denies mutation; no receipt exists before the same claim makes a scoped repair commit, regenerates context with prior findings, and receives a fresh pass.
+- AC-4: identical completion replay returns the persisted receipt/event without duplicate attempt mutation, then the next writer starts and releases through public lifecycle.
+
+A dependency-free admitted sample node is intentional: DN-007 builds are correctly predecessor-gated, while the generic shipped builder/reviewer/workflow/orchestrator contracts apply to every admitted build job. The shaped envelope explicitly permits a sample product module and deterministic lower-layer runner.
+
+Evidence: focused scenario 1 passed; complete MCP-Kanban package 70 passed; focused repository lint passed; VS Code diagnostics reported no errors. Builder challenger decision: pass.
