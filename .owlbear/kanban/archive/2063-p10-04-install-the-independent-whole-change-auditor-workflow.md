@@ -1,10 +1,10 @@
 ---
 id: 2063
 title: 'P10-04: Install the independent whole-change auditor workflow'
-status: collect
+status: archived
 priority: high
 created: 2026-07-25T19:53:37.879721+02:00
-updated: 2026-07-25T20:52:12.063961+02:00
+updated: 2026-07-25T20:53:00.592402+02:00
 tags:
   - phase-10
   - scope:agent-config
@@ -45,7 +45,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Projection
@@ -109,3 +109,15 @@ PASS against committed build `69dfe40d51f04a1880b871de981c2ca5e9c1a2ce`.
 - Verifier challenger: pass; no current follow-up.
 
 The broader live-registry assertion remains red only for pre-existing removed legacy task tools on unrelated agents; all newly added auditor and `reject_audit` grants resolve and no task-local defect was found.
+
+[[2026-07-25T20:53:00+02:00]]
+## Collect Notes
+
+ARCHIVED: whole-change auditor delivery is complete.
+
+- Build commit `69dfe40d51f04a1880b871de981c2ca5e9c1a2ce` contains the five-file product change and builder evidence.
+- Verify commit `036029f2ceb2e88ff08dc6235f58121cb9eb82f9` records independent PASS and verifier-challenger approval.
+- All four ACs are mapped to direct proof; validators pass and the focused suite has 80 passing tests.
+- Dependency #2062 is archived completed; #2063 has no descendants and no pending requests.
+- The product files remain identical to the verified build commit.
+- The unrelated legacy-tool registry mismatch is neither caused nor changed by this task.
