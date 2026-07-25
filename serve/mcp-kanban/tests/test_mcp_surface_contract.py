@@ -75,6 +75,7 @@ EXPECTED_TOOLS: frozenset[str] = frozenset(
         "pick_jobs",
         "recover_expired_claims",
         "reject_accept",
+        "reject_audit",
         "release_job",
         "show_change",
         "show_finding",
@@ -513,6 +514,57 @@ class TestFinishAcceptSchema:
         assert properties["findings"]["items"]["$ref"].endswith("Finding")
         assert properties["invalidation"]["$ref"].endswith("InvalidationParams")
         assert tool.parameters["$defs"]["InvalidationParams"]["additionalProperties"] is False
+
+    def test_reject_audit_exposes_strict_nested_corrective_schema(self) -> None:
+        """The audit rejection schema exposes full identities and corrective structures."""
+        tool = next(
+            (t for t in mcp._tool_manager._tools.values() if t.name == "reject_audit"),  # noqa: SLF001
+            None,
+        )
+        assert tool is not None, "reject_audit must be registered in the MCP tool registry"
+        assert set(tool.parameters["required"]) == {
+            "change_id",
+            "job_id",
+            "attempt_id",
+            "claim_id",
+            "actor_id",
+            "process_id",
+            "rejected_at",
+            "detail",
+            "evidence_ids",
+            "findings",
+            "invalidation",
+        }
+        properties = tool.parameters["properties"]
+        assert properties["findings"]["items"]["$ref"].endswith("Finding")
+        assert properties["invalidation"]["$ref"].endswith("InvalidationParams")
+        assert tool.parameters["$defs"]["InvalidationParams"]["additionalProperties"] is False
+
+    @pytest.mark.asyncio
+    async def test_reject_audit_malformed_parameters_fail_before_dispatch(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Malformed audit rejection input maps to the stable parameter error without dispatch."""
+        dispatch = MagicMock()
+        monkeypatch.setattr(server, "_dispatch_runtime", dispatch)
+
+        with pytest.raises(ToolError, match="ERR_PARAM_VALIDATION"):
+            await server.reject_audit(
+                MagicMock(),
+                change_id="replace-delivery-pipeline",
+                job_id=1,
+                attempt_id="attempt-001",
+                claim_id="claim-001",
+                actor_id="auditor-001",
+                process_id="process-001",
+                rejected_at="2026-07-25T00:00:00Z",
+                detail="",
+                evidence_ids=(),
+                findings=(),
+                invalidation=MagicMock(),
+            )
+
+        dispatch.assert_not_called()
 
 
 class _History:

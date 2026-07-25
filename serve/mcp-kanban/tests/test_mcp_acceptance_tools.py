@@ -29,6 +29,7 @@ from owlbear_kanban import (
     NativeRuntime,
     PlanJob,
     ProofCheckoutManager,
+    ReleaseJobRequest,
     RejectAcceptDiagnosticCode,
     ReceiptStore,
     load_change,
@@ -37,6 +38,7 @@ from owlbear_kanban import (
 from owlbear_kanban.runtime_transaction import RuntimeTransaction, TransactionConflictError
 from owlbear_mcp_kanban import server
 from owlbear_mcp_kanban.server import AppContext
+from serve.kanban.tests.test_native_runtime import _active_audit_scenario, _reject_audit_request
 
 from .test_mcp_surface_contract import _make_board
 
@@ -599,6 +601,81 @@ async def test_public_accept_rejection_publishes_findings_and_replays(
     assert _snapshot(board) == before_errors
     assert {name: content for name, content in receipts_before.items() if name == "build-unrelated.yaml"} == {
         "build-unrelated.yaml": unrelated_before
+    }
+
+
+@pytest.mark.asyncio
+async def test_public_audit_rejection_forwards_and_exposes_persisted_correction_chain(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    revision, board, native, first_start = _active_audit_scenario(tmp_path)
+    released = native.release_job(
+        ReleaseJobRequest(
+            job_id=first_start.job_id,
+            attempt_id=first_start.attempt_id,
+            claim_id=first_start.claim_id,
+            actor_id=first_start.actor_id,
+            process_id=first_start.process_id,
+            released_at="2026-07-24T01:01:30Z",
+        )
+    )
+    assert released.diagnostic is None
+    runtime = DispatchRuntime(native, board)
+    app_ctx = AppContext(engine=server.KanbanEngine(board), kanban_dir=board)
+    app_ctx.dispatch_runtimes[revision.change_id] = runtime
+    ctx = MagicMock()
+    ctx.request_context.lifespan_context = app_ctx
+    current = first_start.model_copy(update={"attempt_id": "attempt-audit-mcp", "claim_id": "claim-audit-mcp"})
+    started = await server.start_job(
+        ctx,
+        change_id=revision.change_id,
+        **current.model_dump(mode="python"),
+    )
+    assert started.diagnostic is None
+    request = _reject_audit_request(revision, current)
+    receipts_before = {path.name: path.read_bytes() for path in (revision.source_dir / "receipts").glob("*.yaml")}
+    reject = MagicMock(wraps=runtime.reject_audit)
+    monkeypatch.setattr(runtime, "reject_audit", reject)
+
+    rejected = await server.reject_audit(
+        ctx,
+        change_id=revision.change_id,
+        **request.model_dump(mode="python"),
+    )
+    forwarded = reject.call_args.args[0]
+    shown_job = await server.show_job(ctx, change_id=revision.change_id, job_id=current.job_id)
+    jobs = await server.list_jobs(
+        ctx,
+        change_id=revision.change_id,
+        candidate_revision="a" * 40,
+    )
+    attempts = await server.list_attempts(ctx, change_id=revision.change_id)
+    findings = await server.list_findings(ctx, change_id=revision.change_id)
+    shown_finding = await server.show_finding(
+        ctx,
+        change_id=revision.change_id,
+        finding_id=request.findings[0].finding_id,
+    )
+    shown_receipt = await server.show_receipt(
+        ctx,
+        change_id=revision.change_id,
+        receipt_id=request.invalidation.supersession_receipt_id,
+    )
+
+    assert rejected.diagnostic is None
+    assert forwarded == request
+    assert shown_job["job"].disposition is JobDisposition.SUPERSEDED
+    assert any(item.job_id == current.job_id and item.disposition is JobDisposition.SUPERSEDED for item in jobs.items)
+    assert any(event.attempt_id == current.attempt_id and event.kind == "failed" for event in attempts.items)
+    assert findings.items == (request.findings[0],)
+    assert shown_finding == request.findings[0]
+    assert shown_receipt == rejected.invalidation.supersession_receipt
+    assert rejected.invalidation.corrective_jobs == ()
+    assert receipts_before == {
+        path.name: path.read_bytes()
+        for path in (revision.source_dir / "receipts").glob("*.yaml")
+        if path.name != request.invalidation.supersession_receipt_id + ".yaml"
     }
 
 

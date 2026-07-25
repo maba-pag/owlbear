@@ -34,6 +34,7 @@ from owlbear_kanban import (
     ProofCheckoutManager,
     RecoverExpiredClaimsRequest,
     RejectAcceptRequest,
+    RejectAuditRequest,
     ReleaseJobRequest,
     StartJobRequest,
     evaluate_admission,
@@ -71,6 +72,7 @@ from owlbear_mcp_kanban.models import (
     PickJobsParams,
     RecoverExpiredClaimsParams,
     RejectAcceptParams,
+    RejectAuditParams,
     ReleaseJobParams,
     ShowFindingParams,
     ShowJobParams,
@@ -120,6 +122,7 @@ __all__ = [
     "pick_jobs",
     "recover_expired_claims",
     "reject_accept",
+    "reject_audit",
     "release_job",
     "show_change",
     "show_finding",
@@ -697,6 +700,37 @@ async def reject_accept(  # noqa: PLR0913
         app_ctx: AppContext = ctx.request_context.lifespan_context
         return _dispatch_runtime(app_ctx, params.change_id).reject_accept(
             RejectAcceptRequest(
+                **params.model_dump(exclude={"change_id", "findings", "invalidation"}),
+                findings=params.findings,
+                invalidation=InvalidationRequest(**params.invalidation.model_dump()),
+            )
+        )
+    except PydanticValidationError as exc:
+        _raise_param_validation(str(exc))
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True, destructiveHint=False))
+async def reject_audit(  # noqa: PLR0913
+    ctx: Context,
+    *,
+    change_id: str,
+    job_id: int,
+    attempt_id: str,
+    claim_id: str,
+    actor_id: str,
+    process_id: str,
+    rejected_at: str,
+    detail: str,
+    evidence_ids: tuple[str, ...],
+    findings: tuple[Finding, ...],
+    invalidation: InvalidationParams,
+) -> object:
+    """Reject an audit job and publish its minimum corrective work."""
+    try:
+        params = RejectAuditParams.model_validate(_tool_params(locals()))
+        app_ctx: AppContext = ctx.request_context.lifespan_context
+        return _dispatch_runtime(app_ctx, params.change_id).reject_audit(
+            RejectAuditRequest(
                 **params.model_dump(exclude={"change_id", "findings", "invalidation"}),
                 findings=params.findings,
                 invalidation=InvalidationRequest(**params.invalidation.model_dump()),

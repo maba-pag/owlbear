@@ -125,6 +125,10 @@ class RejectAcceptParams(MCPParamsBase):
     invalidation: InvalidationParams
 
 
+class RejectAuditParams(RejectAcceptParams):
+    """Validate audit rejection and corrective publication inputs."""
+
+
 class ReleaseJobParams(MCPParamsBase):
     """Validate MCP inputs for releasing one active native job claim."""
 
