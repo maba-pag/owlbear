@@ -1,10 +1,10 @@
 ---
 id: 2035
 title: 'P1-C4: Enforce acceptance-triggered plan reconciliation'
-status: build
+status: verify
 priority: high
 created: 2026-07-25T02:46:46.300991+02:00
-updated: 2026-07-25T06:15:48.654268+02:00
+updated: 2026-07-25T06:19:14.252371+02:00
 tags:
   - change:replace-delivery-pipeline
   - node:DN-003
@@ -145,3 +145,15 @@ Challenges caught and corrected non-supersession disposition misuse, missing fol
 | 1 | AC3-AC5/reconciliation-scenario-proof | builder | Extend the native runtime lifecycle coverage to execute every AC3 start rejection with no mutation, then execute reconciliation plan finish/current predecessor receipts, stale old-digest build rejection, predecessor invalidation through reconciliation edges, and preservation of a disjoint current node. Re-run the focused runtime suite and lint. | `serve/kanban/tests/test_native_runtime.py` and any directly required existing runtime owner | Verifier and verifier-challenger found current creation/replay and generic invalidation proof do not exercise the complete required reconciliation boundary. |
 
 - Final route: REJECT to build.
+
+[[2026-07-25T06:19:14+02:00]]
+## Builder Notes
+
+- Change envelope: acceptance completion must atomically create or OCC-update direct-dependent reconciliation plan jobs, and build start/dispatch must reject stale authority or invalid predecessor reconciliation state. The source-supported change map is `native_runtime.py`, `dispatch.py`, package exports, and the focused native-runtime test; no map deviations.
+- Files changed: no new product edits in this invocation. Adopted and verified the existing task commit `b803968a6` (`serve/kanban/src/owlbear_kanban/__init__.py`, `serve/kanban/src/owlbear_kanban/dispatch.py`, `serve/kanban/src/owlbear_kanban/native_runtime.py`, and `serve/kanban/tests/test_native_runtime.py`). This lifecycle transition changes the active task record.
+- Proof selected: `uv run pytest serve/kanban/tests/test_native_runtime.py -q` passed 25. `uv run pytest serve/kanban/tests -q` yielded 981 passed and 8 unrelated failures in `test_historical_admission_fixtures.py`; those fixtures require legacy `graph.yaml` authority and do not touch this task's files or reconciliation behavior.
+- Durable-test justification: the committed focused native-runtime test extends the existing shared lifecycle test to protect accept-to-reconciliation creation and exact replay, a shared behavior that is easy to regress.
+- AC evidence: AC1 is supported by build-only reconciliation gating; AC2 by the focused `finish_plan` publish/replay test; AC3 by native start checks and dispatch omission mapping; AC4 by accept completion/replay assertions and identity-conflict implementation; AC5 by reconciled predecessor edges plus the existing invalidation graph test boundary.
+- Current failure keys: none.
+- Builder challenger: pass. It independently ran the focused native-runtime test suite and found the evidence supports AC1 through AC4 with no blocking defect.
+- Follow-up risk: the package suite's eight historical-fixture failures remain outside this task's scope and predate this lifecycle handoff.
