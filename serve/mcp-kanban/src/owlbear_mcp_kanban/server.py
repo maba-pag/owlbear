@@ -603,9 +603,10 @@ async def finish_plan(  # noqa: PLR0913
     try:
         params = FinishPlanParams.model_validate(_tool_params(locals()))
         app_ctx: AppContext = ctx.request_context.lifespan_context
-        return _dispatch_runtime(app_ctx, params.change_id).finish_plan(
-            FinishPlanRequest(**params.model_dump(exclude={"change_id"}))
-        )
+        request_data = params.model_dump(exclude={"change_id"})
+        if params.impact_closure is not None:
+            request_data["impact_closure"] = parse_impact_closure(params.impact_closure)
+        return _dispatch_runtime(app_ctx, params.change_id).finish_plan(FinishPlanRequest(**request_data))
     except PydanticValidationError as exc:
         _raise_param_validation(str(exc))
 

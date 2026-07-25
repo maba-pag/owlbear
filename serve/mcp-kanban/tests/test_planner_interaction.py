@@ -1,0 +1,406 @@
+"""Durable PROOF-005 scenario for initial frontier planning and node atomicity."""
+
+from __future__ import annotations
+
+import shutil
+from dataclasses import dataclass
+from datetime import timedelta
+from pathlib import Path
+from unittest.mock import MagicMock
+
+import pytest
+import yaml
+from ruamel.yaml import YAML
+
+from owlbear_kanban import (
+    DispatchRuntime,
+    FinishJobDiagnosticCode,
+    JobStore,
+    NativeRuntime,
+    load_change,
+)
+from owlbear_kanban.change import ChangeRevision
+from owlbear_mcp_kanban import server
+from owlbear_mcp_kanban.server import AppContext
+
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_CHANGE_ID = "replace-delivery-pipeline"
+_CODE_REVISION = "a" * 40
+_CHALLENGED_SECTIONS = ("requirements", "workflows", "interfaces", "migrations", "risks", "proofs", "nodes")
+_CONFIG_YAML = """\
+version: 10
+board:
+  name: PlannerProof
+board_dir: .
+tasks_dir: tasks
+statuses: [shape, build, verify, collect]
+priorities: [low, medium, high]
+defaults:
+  status: shape
+  priority: medium
+claim_timeout: 1h
+archive_dir: archive
+activity_log: false
+agent_map: {}
+agent_types: {}
+agent_compatibility: {}
+non_impl_tags: []
+archival_reasons: [completed]
+status_predicates: {}
+"""
+
+
+class _History:
+    def revisions_exist(self, _tested_revision: str, _candidate_revision: str) -> bool:
+        return True
+
+    def is_descendant(self, _tested_revision: str, _candidate_revision: str) -> bool:
+        return True
+
+    def name_status(self, _tested_revision: str, _candidate_revision: str) -> bytes:
+        return b""
+
+
+@dataclass(frozen=True)
+class _Scenario:
+    change_dir: Path
+    board: Path
+    context: MagicMock
+    revision: ChangeRevision
+    topology: tuple[str, ...]
+
+
+def _copy_change(tmp_path: Path):
+    changes_dir = tmp_path / "changes"
+    change_dir = changes_dir / _CHANGE_ID
+    source_dir = _REPO_ROOT / ".owlbear" / "changes" / _CHANGE_ID
+    shutil.copytree(source_dir, change_dir)
+    shutil.rmtree(change_dir / "receipts")
+    shutil.rmtree(change_dir / "jobs")
+    shutil.rmtree(change_dir / "plans")
+    (change_dir / "receipts").mkdir()
+    (change_dir / "jobs").mkdir()
+    (change_dir / "plans").mkdir()
+
+    authority = YAML().load((change_dir / "delivery" / "nodes.yaml").read_text(encoding="utf-8"))
+    for reference in authority["authority"]["research"]:
+        destination = (change_dir / reference).resolve()
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2((source_dir / reference).resolve(), destination)
+
+    loaded = load_change(changes_dir, _CHANGE_ID)
+    assert loaded.revision is not None
+    return change_dir, loaded.revision
+
+
+def _context(tmp_path: Path, revision) -> tuple[Path, MagicMock]:
+    board = tmp_path / "kanban"
+    board.mkdir()
+    (board / "config.yml").write_text(_CONFIG_YAML, encoding="utf-8")
+    (board / "tasks").mkdir()
+    (board / "archive").mkdir()
+    app_context = AppContext(engine=server.KanbanEngine(board), kanban_dir=board)
+    app_context.dispatch_runtimes[revision.change_id] = DispatchRuntime(
+        NativeRuntime(revision, board, _History(), timedelta(minutes=1)),
+        board,
+    )
+    context = MagicMock()
+    context.request_context.lifespan_context = app_context
+    return board, context
+
+
+def _evidence(revision) -> dict[str, object]:
+    challenge = {
+        entity.id: {"disposition": "pass", "evidence": f"source-grounded evidence for {entity.id}"}
+        for section in _CHALLENGED_SECTIONS
+        for entity in getattr(revision.graph, section)
+    }
+    return {
+        "digest": revision.delivery_digest,
+        "challenge": challenge,
+        "baseline": {"commands": [{"command": "pytest", "exit_code": 0}], "digest": revision.delivery_digest},
+        "approval": {"approved": True, "digest": revision.delivery_digest},
+        "limits": list(revision.graph.admission.limits),
+    }
+
+
+def _frontmatter(path: Path) -> dict[str, object]:
+    content = path.read_text(encoding="utf-8")
+    metadata = yaml.safe_load(content.split("---", 2)[1])
+    assert isinstance(metadata, dict)
+    return metadata
+
+
+def _dispatch_shipped_planner(revision, started, *, receipt_id: str, next_job_id: int) -> dict[str, object]:
+    planner_path = _REPO_ROOT / "share" / "agents" / "planner.agent.md"
+    reviewer_path = _REPO_ROOT / "share" / "agents" / "planner-challenger.agent.md"
+    workflow_path = _REPO_ROOT / "share" / "skills" / "w-frontier-planning" / "SKILL.md"
+    orchestration_path = _REPO_ROOT / "share" / "skills" / "w-orchestration" / "SKILL.md"
+    planner = _frontmatter(planner_path)
+    reviewer = _frontmatter(reviewer_path)
+    workflow = workflow_path.read_text(encoding="utf-8")
+    orchestration = orchestration_path.read_text(encoding="utf-8")
+
+    assert planner["agents"] == ["planner-challenger", "Explore"]
+    assert "ob-kanban/finish_plan" not in planner["tools"]
+    assert reviewer["tools"] == ["vscode/toolSearch", "read/problems", "read/readFile", "read/viewImage", "search"]
+    assert reviewer["hooks"]["PreToolUse"][0]["command"].endswith("deny-writes.py")
+    assert all(
+        key in reviewer_path.read_text(encoding="utf-8")
+        for key in (
+            "packet_completeness",
+            "admitted_references",
+            "impact_closures",
+            "dependency_order",
+            "proof_boundary",
+            "material_expansion",
+        )
+    )
+    assert "Call a fresh read-only plan reviewer" in workflow
+    assert "Return exactly one of these objects to the orchestrator" in workflow
+    assert 'runSubagent(agentName="planner")' in orchestration
+    assert "Do not inspect, complete, or reconstruct `node_plan`" in orchestration
+
+    assert started.diagnostic is None
+    assert started.job is not None
+    target = revision.resolve(started.job.job.target_node_id)
+    proof = revision.resolve(target.proof)
+    paths = sorted({path for module_id in target.modules for path in revision.resolve(module_id).paths})
+    closure = {
+        "paths": paths,
+        "authority_targets": sorted({target.id, target.proof, *target.owns, *target.supports}),
+    }
+    packet_id = f"{target.id}-PK-001"
+    review = {
+        key: {"disposition": "pass", "evidence": f"shipped reviewer contract checked {key}"}
+        for key in (
+            "packet_completeness",
+            "admitted_references",
+            "impact_closures",
+            "dependency_order",
+            "proof_boundary",
+            "material_expansion",
+        )
+    }
+    return {
+        "receipt_id": receipt_id,
+        "code_revision": _CODE_REVISION,
+        "evidence": {"methods": list(proof.method), "review": review},
+        "evidence_ids": (f"{receipt_id}-review",),
+        "impact_closure": closure,
+        "node_plan": {
+            "packets": [
+                {
+                    "id": packet_id,
+                    "outcome": target.outcome,
+                    "obligations": [*target.owns, *target.supports],
+                    "in_scope": paths,
+                    "excluded": ["authority outside the selected delivery node"],
+                    "modules": list(target.modules),
+                    "interfaces": [*target.produces, *target.consumes],
+                    "dependencies": [],
+                    "acceptance_scenarios": [f"Observe the admitted {target.id} outcome through {target.proof}"],
+                    "impact_closure": closure,
+                    "proof": {"authority": target.proof, "methods": list(proof.method)},
+                    "required_outputs": ["implementation and boundary-valid proof"],
+                    "profile": {"agent": "builder", "risk_ids": list(target.risks)},
+                    "context_budget": {"paths": paths, "interfaces": [*target.produces, *target.consumes]},
+                }
+            ]
+        },
+        "build_job_ids": (next_job_id,),
+        "accept_job_id": next_job_id + 1,
+    }
+
+
+def _start_arguments(job_id: int, attempt: int, timestamp: str) -> dict[str, object]:
+    return {
+        "change_id": _CHANGE_ID,
+        "job_id": job_id,
+        "attempt_id": f"attempt-{attempt:03}",
+        "claim_id": f"claim-{attempt:03}",
+        "actor_id": "orchestrator",
+        "process_id": "planner-proof",
+        "claimed_at": timestamp,
+        "candidate_revision": _CODE_REVISION,
+    }
+
+
+def _finish_identity(start: dict[str, object]) -> dict[str, object]:
+    return {key: start[key] for key in ("change_id", "job_id", "attempt_id", "claim_id", "actor_id", "process_id")}
+
+
+def _publication_snapshot(change_dir: Path, board: Path) -> dict[str, bytes]:
+    roots = (change_dir / "plans", change_dir / "receipts", board / "jobs", board / "archive")
+    return {
+        f"{root.name}/{path.relative_to(root).as_posix()}": path.read_bytes()
+        for root in roots
+        for path in root.rglob("*")
+        if path.is_file() and path.name != ".storage.lock"
+    }
+
+
+def _admitted_topology(revision) -> list[str]:
+    nodes = {node.id: node for node in revision.graph.nodes}
+    pending = set(nodes)
+    ordered: list[str] = []
+    while pending:
+        ready = sorted(node_id for node_id in pending if not (set(nodes[node_id].dependencies) & pending))
+        assert ready
+        ordered.extend(ready)
+        pending.difference_update(ready)
+    return ordered
+
+
+async def _admit_initial_frontier(scenario: _Scenario):
+    admitted = await server.admit_change(
+        scenario.context,
+        change_id=_CHANGE_ID,
+        evidence=_evidence(scenario.revision),
+    )
+    initial = await server.pick_jobs(
+        scenario.context,
+        change_id=_CHANGE_ID,
+        candidate_revision=_CODE_REVISION,
+        wave_size=len(scenario.revision.graph.nodes),
+    )
+    initial_entries = [entry for wave in initial.waves for entry in wave]
+    store = JobStore(scenario.board)
+
+    assert [store.read(entry.job_id).job.target_node_id for entry in initial_entries] == list(scenario.topology)
+    assert {entry.agent_profile for entry in initial_entries} == {"planner"}
+    assert {entry.kind for entry in initial_entries} == {"plan"}
+    return admitted["generation"]["jobs"], initial_entries, store
+
+
+def _assert_first_publication(completed, replayed, first_target, first_entry, success: dict[str, object]) -> None:
+    assert completed.diagnostic is None
+    assert completed.receipt is not None
+    node_plan_digest = completed.receipt.payload["node_plan_digest"]
+    assert completed.receipt.payload["target_node_id"] == first_target.id
+    assert completed.receipt.delivery_digest == first_entry.job.job.delivery_digest
+    assert completed.receipt.impact_closure is not None
+    assert completed.receipt.impact_closure.model_dump(mode="json") == success["impact_closure"]
+    assert tuple(job.kind for job in completed.created_jobs) == ("build", "accept")
+    build_job, accept_job = completed.created_jobs
+    assert build_job.target_node_id == accept_job.target_node_id == first_target.id
+    assert build_job.node_plan_digest == accept_job.node_plan_digest == node_plan_digest
+    assert build_job.predecessor_job_ids == (first_entry.job.job.job_id,)
+    assert accept_job.predecessor_job_ids == (build_job.job_id,)
+    assert replayed.receipt == completed.receipt
+    assert replayed.event == completed.event
+    assert replayed.created_jobs == ()
+
+
+async def _publish_first_node(
+    scenario: _Scenario,
+    admitted_jobs,
+    first_entry,
+):
+    first_start_args = _start_arguments(first_entry.job_id, 1, "2026-07-25T00:01:00Z")
+    first_started = await server.start_job(scenario.context, **first_start_args)
+    next_job_id = max(job["job_id"] for job in admitted_jobs) + 1
+    success = _dispatch_shipped_planner(
+        scenario.revision,
+        first_started,
+        receipt_id="plan-proof-005-node-1",
+        next_job_id=next_job_id,
+    )
+    before_first_finish = _publication_snapshot(scenario.change_dir, scenario.board)
+    completed = await server.finish_plan(
+        scenario.context,
+        **_finish_identity(first_start_args),
+        finished_at="2026-07-25T00:02:00Z",
+        **success,
+    )
+    published = _publication_snapshot(scenario.change_dir, scenario.board)
+    first_node_publication = {
+        path: content
+        for path, content in published.items()
+        if path not in before_first_finish or before_first_finish[path] != content
+    }
+    replayed = await server.finish_plan(
+        scenario.context,
+        **_finish_identity(first_start_args),
+        finished_at="2026-07-25T00:02:00Z",
+        **success,
+    )
+
+    first_target = scenario.revision.resolve(scenario.topology[0])
+    _assert_first_publication(completed, replayed, first_target, first_started, success)
+    assert _publication_snapshot(scenario.change_dir, scenario.board) == published
+    assert len(first_node_publication) == 5
+
+    fresh = await server.pick_jobs(
+        scenario.context,
+        change_id=_CHANGE_ID,
+        candidate_revision=_CODE_REVISION,
+        wave_size=len(scenario.revision.graph.nodes),
+    )
+    remaining_plans = [entry for wave in fresh.waves for entry in wave if entry.kind == "plan"]
+    assert [JobStore(scenario.board).read(entry.job_id).job.target_node_id for entry in remaining_plans] == list(
+        scenario.topology[1:]
+    )
+    return next_job_id, remaining_plans, first_node_publication
+
+
+async def _reject_invalid_next_node(
+    scenario: _Scenario,
+    next_job_id: int,
+    second_entry,
+    first_node_publication: dict[str, bytes],
+) -> None:
+    second_start_args = _start_arguments(second_entry.job_id, 2, "2026-07-25T00:03:00Z")
+    second_started = await server.start_job(scenario.context, **second_start_args)
+    invalid = _dispatch_shipped_planner(
+        scenario.revision,
+        second_started,
+        receipt_id="plan-proof-005-node-2",
+        next_job_id=next_job_id + 2,
+    )
+    second_target = scenario.revision.resolve(scenario.topology[1])
+    escaped_target = next(
+        node.id
+        for node in scenario.revision.graph.nodes
+        if node.id not in {second_target.id, *second_target.dependencies}
+    )
+    invalid["node_plan"]["packets"][0]["impact_closure"]["authority_targets"].append(escaped_target)
+    before_invalid_finish = _publication_snapshot(scenario.change_dir, scenario.board)
+
+    rejected = await server.finish_plan(
+        scenario.context,
+        **_finish_identity(second_start_args),
+        finished_at="2026-07-25T00:04:00Z",
+        **invalid,
+    )
+
+    assert rejected.diagnostic is not None
+    assert rejected.diagnostic.code is FinishJobDiagnosticCode.NODE_PLAN_INVALID
+    assert rejected.diagnostic.target == escaped_target
+    assert not (scenario.change_dir / "plans" / f"{second_target.id}.yaml").exists()
+    assert not (scenario.change_dir / "receipts" / "plan-proof-005-node-2.yaml").exists()
+    store = JobStore(scenario.board)
+    assert all(job_id not in {item.job.job_id for item in store.list()} for job_id in invalid["build_job_ids"])
+    assert invalid["accept_job_id"] not in {item.job.job_id for item in store.list()}
+    assert _publication_snapshot(scenario.change_dir, scenario.board) == before_invalid_finish
+    after_invalid_finish = _publication_snapshot(scenario.change_dir, scenario.board)
+    assert all(content == after_invalid_finish[path] for path, content in first_node_publication.items())
+
+
+@pytest.mark.asyncio
+async def test_initial_frontier_plans_one_node_atomically_and_isolates_invalid_next_node(tmp_path: Path) -> None:
+    change_dir, revision = _copy_change(tmp_path)
+    board, context = _context(tmp_path, revision)
+    scenario = _Scenario(change_dir, board, context, revision, tuple(_admitted_topology(revision)))
+    admitted_jobs, initial_entries, _store = await _admit_initial_frontier(scenario)
+    next_job_id, remaining_plans, first_node_publication = await _publish_first_node(
+        scenario,
+        admitted_jobs,
+        initial_entries[0],
+    )
+    await _reject_invalid_next_node(
+        scenario,
+        next_job_id,
+        remaining_plans[0],
+        first_node_publication,
+    )
