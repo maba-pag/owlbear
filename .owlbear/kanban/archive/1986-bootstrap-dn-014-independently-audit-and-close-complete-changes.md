@@ -1,10 +1,10 @@
 ---
 id: 1986
 title: 'Bootstrap DN-014: Independently audit and close complete changes'
-status: collect
+status: archived
 priority: high
 created: 2026-07-22T01:08:04.826887+02:00
-updated: 2026-07-25T19:54:35.723897+02:00
+updated: 2026-07-25T22:18:57.628644+02:00
 tags:
   - bootstrap-projection
   - change:replace-delivery-pipeline
@@ -39,7 +39,7 @@ proof_bundle: existing+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Bootstrap Projection Identity
@@ -121,3 +121,11 @@ Shaper challenge initially failed only on stale projection identity. After diges
 
 ### Required Follow-up
 None.
+
+[[2026-07-25T22:18:57+02:00]]
+## Collect Notes
+ARCHIVED
+
+DN-014 aggregate identity remains `replace-delivery-pipeline` at digest `3f6c656289911320bb5e7faf37b5e86ffa8511e729ade201a03a19913e33d990`. All six packet descendants #2060-#2065 are archived `completed` under this parent with verifier PASS notes and challenger evidence. Their chain covers terminal audit creation, atomic typed rejection, MCP exposure, the independent hard-read-only workflow, successful exact-commit closure, and required rejection/minimum-correction scenarios.
+
+Aggregate proof at tested revision `18f7fae5fd996f1c19ace47f5f52446ab3a3c971`: 100 combined tests passed across native runtime, dispatch runtime, MCP acceptance, and MCP surface modules. Focused lint/validators passed for `auditor.agent.md`, `orchestrator.agent.md`, `w-whole-change-audit`, `w-orchestration`, and `share/WIRING.md`. Dependencies resolve and no material delivery expansion occurred.
