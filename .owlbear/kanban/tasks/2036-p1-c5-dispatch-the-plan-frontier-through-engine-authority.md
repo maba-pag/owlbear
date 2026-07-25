@@ -1,10 +1,10 @@
 ---
 id: 2036
 title: 'P1-C5: Dispatch the plan frontier through engine authority'
-status: verify
+status: build
 priority: high
 created: 2026-07-25T02:46:52.874110+02:00
-updated: 2026-07-25T08:36:02.608651+02:00
+updated: 2026-07-25T08:40:56.297661+02:00
 tags:
   - change:replace-delivery-pipeline
   - node:DN-004
@@ -98,3 +98,25 @@ Proof guidance: run dispatch topology/readiness/coordination checks and the asse
 - Builder-challenger: pass. It independently ran the focused dispatch, MCP surface, and ecosystem suites with 22 passed and three unrelated warnings.
 - Memory: assessed all 20 recalled entries; applied the active-workspace and refined-proof-scope guidance.
 - Follow-up risks: none within this task scope; no changes were made to `_finish` composition, MCP adapter naming/contracts, planner implementation, or the complete DN-009 API.
+
+[[2026-07-25T08:40:56+02:00]]
+## Verify Notes
+- Candidate reviewed: `ffd863aebf39636307fd59ddc319cff21d4aa948` (`feat: dispatch engine plan frontier (#2036, builder)`). Named authorities checked: task AC1-AC5, failure key `#2036-AC3/accept-completion-prerequisite`, `DispatchRuntime`, `TestProof014NativeMcpScenario`, the orchestrator allowlist, `w-orchestration`, and `share/WIRING.md`.
+- Prerequisite boundaries: #2039 and #2037 are archived/completed. #2039 owns native completion participant composition; #2037 owns strict MCP `FinishAcceptRequest` construction and bridge delegation. Their scoped task records confirm no intrusion into #2036 picker or orchestration-consumer scope.
+- Change Module Map: candidate changed only the mapped dispatch runtime, focused runtime/MCP proof, and required agent/skill/WIRING consumers. No candidate scope leakage found. Current worktree memory and `.vscode/mcp.json` churn is unrelated and untouched.
+- AC1 PASS: `DispatchRuntime.pick_waves` maps `plan` to `planner` and applies stable delivery-node Kahn ordering. `test_pick_waves_orders_plan_frontier_by_delivery_topology` reverses storage order and passed in `uv run pytest -q serve/kanban/tests/test_dispatch_runtime.py` (9 passed). Build, accept, and audit profile mapping remains builder, acceptor, auditor.
+- AC2 PASS: the same 9-test suite passed writer-versus-reader coordination checks. `test_writer_conflict_and_release_are_atomic` proves plan/build writer conflict is diagnostic and mutation-free; `test_readers_coexist_and_block_writer` proves accept/audit reader overlap and stable writer conflict.
+- AC3 REJECT: exact `TestProof014NativeMcpScenario` passed, and does exercise real pick/start/finish/release/recovery MCP adapters with only the selected runner replaced below that boundary. It proves unavailable installed profile returns before claim/mutation and records one terminal event per attempt. But its test-local `dispatch_one` selects lifecycle operation in a direct match block and the assertions only compare scripted runner call order plus terminal kinds. A bypass that ignores the returned disposition and chooses lifecycle calls by attempt order could still satisfy those assertions. Therefore the proof does not establish engine-selected entry/profile feeds the runner exactly once and its returned `Success | RateLimited | Crash` causally selects exactly one matching lifecycle operation before repick. Failure key `#2036-AC3/accept-completion-prerequisite` is resolved by archived #2039/#2037; this is a distinct first verifier finding: `#2036-AC3/disposition-causality-negative-control`.
+- AC4 PASS: `uv run pytest -q serve/kanban/tests/test_native_runtime.py::test_build_start_reconciliation_gates_are_mutation_free` passed (1 passed). Direct source inspection confirms `NativeRuntime._reconciliation_predecessors` returns `PREDECESSOR_INVALID` for active/missing/ambiguous predecessor state and currentness selects the superseding reconciliation receipt. No prose routing observed.
+- AC5 PASS: direct inspection shows actual `orchestrator.agent.md` allowlist has `ob-kanban/finish_plan` and no `finish_shape`; `w-orchestration` uses native `planner`, no native `shaper`, maps success to `finish_plan`, and requires unavailable-profile halt before `start_job`; WIRING matches. `uv run python .owlbear/scripts/validate_agents.py`, `uv run python .owlbear/scripts/validate_skills.py`, and `uv run pytest -q tests/test_agent_ecosystem_validation.py tests/test_write_guard_hooks.py tests/test_deny_non_doc_writes.py` passed (58 passed; 3 unrelated Python 3.16 deprecation warnings).
+- Checks run: exact TestProof014 (1 passed); full MCP contract suite (5 passed); focused dispatch suite (9 passed); exact reconciliation gate (1 passed); scoped ruff check and format check (passed); `git show --check ffd863aebf39636307fd59ddc319cff21d4aa948` (passed); current diff check (passed).
+- Prior same-failure-key check: task history has no prior verifier rejection for `#2036-AC3/disposition-causality-negative-control`. The earlier builder rejection was the now-resolved MCP acceptance prerequisite, so protocol routes this first distinct proof failure to build rather than shape.
+- Patches applied: none. The needed work is a durable proof strengthening, outside verifier patch-pass budget.
+- Verifier-challenger result: pass for REJECT. It confirmed TestProof014 can false-green through attempt-order routing and that a negative control is a concrete accepted-contract build repair.
+
+### Required Follow-up
+1. In the existing `TestProof014NativeMcpScenario`, make the runner disposition the asserted causal input to exactly one lifecycle operation. Add a negative control that deliberately bypasses that returned disposition and demonstrably fails; do not replace pick/start/assembled MCP boundaries or mutate production contracts.
+2. Prove no fresh `pick_jobs` occurs between selected disposition and the corresponding finish/release/recovery operation, and retain the missing-installed-profile no-claim/no-mutation proof.
+3. Re-run exact TestProof014, the focused MCP and dispatch suites, AC4 gate proof, agent/skill validators plus ecosystem regressions, ruff/format, and `git show --check` before returning to verify.
+
+- Final route: REJECT to build.
