@@ -1,10 +1,10 @@
 ---
 id: 2060
 title: 'P10-01: Create the terminal whole-change audit job'
-status: verify
+status: collect
 priority: high
 created: 2026-07-25T19:53:13.954779+02:00
-updated: 2026-07-25T20:12:21.742412+02:00
+updated: 2026-07-25T20:14:44.143393+02:00
 tags:
   - phase-10
   - scope:kanban
@@ -67,3 +67,16 @@ Implemented terminal whole-change audit creation within the existing finish-acce
 Proof: focused lint passed for both changed files. The complete native-runtime module passed 43 tests. Durable proofs cover atomic creation and replay, rollback, conflicting existing audit identity with unchanged snapshots, and the existing non-final lifecycle. Builder challenger initially found missing node-plan digest equality; that defect was repaired and the repeated challenge passed.
 
 Changed files: `serve/kanban/src/owlbear_kanban/native_runtime.py`, `serve/kanban/tests/test_native_runtime.py`.
+
+[[2026-07-25T20:14:44+02:00]]
+## Verify Notes
+
+PASS
+
+Verified committed builder SHA `d63fec0d601bd4f283b9ce7614393d72fc6b14bf` against all task acceptance criteria.
+
+- AC-1: the committed finish transaction prepares the authoritative DN-014 plan digest, current accepted job set, monotonic reservation, audit job, accept receipt, success event, and accept archive as one transaction. Focused assertions verify target, delivery digest, node-plan digest, predecessor IDs, persisted job, and one active audit.
+- AC-2: currentness evaluation excludes missing, stale, and superseded accepts; the existing non-final lifecycle explicitly returns no created jobs; mismatched pending audit identity returns `ERR_FINISH_IDENTITY_CONFLICT` with unchanged work and receipt snapshots.
+- AC-3: exact replay returns the persisted receipt, event, and audit job; build and audit replay retain the empty created-job default; injected transaction conflict leaves work state and receipts unchanged.
+
+Independent downstream scan confirmed `DispatchRuntime.finish_accept` and the MCP adapter transport `FinishJobResult` unchanged. `uv run pytest serve/kanban/tests/test_native_runtime.py serve/kanban/tests/test_dispatch_runtime.py -q --tb=short` passed 55 tests. Static diagnostics reported no errors. Verifier challenger passed with no findings or follow-up.
