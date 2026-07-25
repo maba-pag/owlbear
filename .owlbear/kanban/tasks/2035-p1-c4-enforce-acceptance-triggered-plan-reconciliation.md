@@ -1,10 +1,10 @@
 ---
 id: 2035
 title: 'P1-C4: Enforce acceptance-triggered plan reconciliation'
-status: verify
+status: build
 priority: high
 created: 2026-07-25T02:46:46.300991+02:00
-updated: 2026-07-25T06:12:52.662404+02:00
+updated: 2026-07-25T06:15:48.654268+02:00
 tags:
   - change:replace-delivery-pipeline
   - node:DN-003
@@ -127,3 +127,21 @@ Challenges caught and corrected non-supersession disposition misuse, missing fol
 - Current failure-key resolutions: none.
 - Builder-challenger: pass after independent focused test and lint checks.
 - Follow-up risk: MCP transport remains outside this task scope and must construct `FinishAcceptRequest` when that interface is wired.
+
+[[2026-07-25T06:15:48+02:00]]
+## Verify Notes
+- Evidence reviewed: task Objective, Scope, Authority, AC1-AC5, Engine Handoff, latest Builder Notes, commit `b803968a6`, and the claimed change slice. Named authorities checked: `native_runtime.py` remains the transition owner; `dispatch.py` forwards acceptance completion into the same native transaction; receipt currentness and generic edge closure remain owned by `receipt.py` and `invalidation.py`.
+- Change Module Map: no deviation. The committed slice is exactly `native_runtime.py`, `dispatch.py`, `__init__.py`, and `test_native_runtime.py`; `git show --check b803968a6` passed and the task slice matches that commit.
+- Normal-path boundary exercised: public `NativeRuntime.finish_accept` lifecycle test creates direct-dependent reconciliation plans and verifies replay/conflict. `DispatchRuntime.finish_accept` source inspection confirms it forwards its coordination participant and the native acceptance participant factory as one transaction; replacements occur below this boundary.
+- Checks run: `uv run test-root serve/kanban/tests/test_native_runtime.py` identified the pytest boundary; `uv run pytest serve/kanban/tests/test_native_runtime.py` passed (25 passed); `uv run ruff check serve/kanban/src/owlbear_kanban/native_runtime.py serve/kanban/src/owlbear_kanban/dispatch.py serve/kanban/src/owlbear_kanban/__init__.py serve/kanban/tests/test_native_runtime.py` passed; `git show --check b803968a6` passed.
+- Findings: AC1 and AC2 retain adequate focused coverage. AC4 creation, ordered targets, exact replay, and changed-ID conflict are directly covered. Source inspection confirms the intended AC3 gates and generic AC5 closure mechanism, but the changed test does not directly prove each AC3 rejection case is mutation-free, nor the full AC5 reconciliation receipt/currentness, old-digest start block, edge invalidation, and disjoint-node-current sequence. Existing generic invalidation coverage cannot substitute for the missing reconciliation scenario.
+- Prior same-failure-key rejection check: no prior `## Verify Notes` exists; this is the first verifier rejection.
+- Memory assessment: recalled entries assessed; IDs `4b304f82-6904-4af1-bc7a-e73eefb1eaf1` and `67b38fbb-9690-4ba3-9356-09464e2a479` were unavailable during batch assessment.
+- Verifier-challenger: fail. It independently identified the same AC3/AC5 direct-proof gap. No verifier patch applied because adding the necessary durable lifecycle scenarios exceeds the one-owner, one-focused-cycle local patch budget.
+
+### Required Follow-up
+| # | Failure Key | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|--------------|-----------------|---------|----------|
+| 1 | AC3-AC5/reconciliation-scenario-proof | builder | Extend the native runtime lifecycle coverage to execute every AC3 start rejection with no mutation, then execute reconciliation plan finish/current predecessor receipts, stale old-digest build rejection, predecessor invalidation through reconciliation edges, and preservation of a disjoint current node. Re-run the focused runtime suite and lint. | `serve/kanban/tests/test_native_runtime.py` and any directly required existing runtime owner | Verifier and verifier-challenger found current creation/replay and generic invalidation proof do not exercise the complete required reconciliation boundary. |
+
+- Final route: REJECT to build.
