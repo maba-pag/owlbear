@@ -1,10 +1,10 @@
 ---
 id: 2037
 title: 'P1-C6: Replace IF-015 shape completion with plan completion'
-status: verify
+status: collect
 priority: high
 created: 2026-07-25T02:46:59.817987+02:00
-updated: 2026-07-25T08:25:38.869858+02:00
+updated: 2026-07-25T08:29:04.775960+02:00
 tags:
   - change:replace-delivery-pipeline
   - node:DN-004
@@ -95,3 +95,29 @@ Proof guidance: run assembled FastMCP inventory and invocation checks over real 
 - Current failure-key resolution: `#2036-AC3/accept-completion-prerequisite` MCP portion repaired. The earlier `FinishJobRequest` assertion is gone; the exact scenario completes accept and exposes only the explicitly out-of-scope downstream reconciliation/profile path.
 - Builder-challenger: pass. It independently confirmed the 4 surface checks, 438 focused package checks, and ruff/diff hygiene.
 - Follow-up risk: exact PROOF-014 remains red only after this task's accept-completion boundary because its next audit fixture assumes no reconciliation plan jobs; `#2036` owns the subsequent profile/orchestration expectation.
+
+[[2026-07-25T08:29:04+02:00]]
+## Verify Notes
+
+- Authoritative task and dependency checked: #2037 was claimed in `verify`; prerequisite #2039 is archived at `5906afac1` after implementation `3599b9376`. No resolved requests. Candidate is `1a5e03004`.
+- Named authorities checked: admitted digest, DEC-033, MIG-004, DN-004, IF-005, IF-015, and PROOF-014 were checked against the task's shaped boundary. Change Module Map matched exactly: candidate changes only MCP parameter models, FastMCP registrations/adapters, and focused MCP surface proof. No core picker/profile/orchestrator (`#2036`), planner, Cockpit, or DN-009 changes.
+- Candidate/source review: `FinishAcceptParams` requires `reconciliation_plan_job_ids`; `finish_accept` validates it, converts `impact_closure`, constructs `FinishAcceptRequest`, and delegates to `DispatchRuntime.finish_accept`. The generic `FinishJobRequest` helper remains build/audit-only. `finish_plan` constructs `FinishPlanRequest` directly. Only `pick_jobs` calls `pick_waves`; start/finish/release/recovery adapters only delegate.
+- AC1: post-lifespan live FastMCP inventory assertion passed. It contains `pick_jobs`, `start_job`, `finish_plan`, `finish_build`, `finish_accept`, `finish_audit`, `release_job`, and `recover_expired_claims`; no `finish_shape` alias/registration.
+- AC2: strict assembled `finish_plan` constructs `FinishPlanRequest` and delegates to real `DispatchRuntime.finish_plan`; PROOF-014 invokes that path.
+- AC3: assembled `_dispatch_runtime` composes `ProofCheckoutManager` below real `DispatchRuntime`. Source plus `14` focused checkout/dispatch tests prove setup before reader claim, cleanup after failed claim, finish cleanup before publication, release/recovery cleanup afterward, and stable setup/residual-cleanup diagnostics.
+- AC4: live FastMCP schema requires `reconciliation_plan_job_ids`; focused schema test passed. The exact PROOF-014 bridge invokes `finish_accept` with those IDs and completes accept through `FinishAcceptRequest`.
+- AC5: adapter source confirms lifecycle-only delegation and no picker/profile/dependency/next-operation selection outside `pick_jobs`; focused MCP suite passed.
+- Normal-path boundary: exact `TestProof014NativeMcpScenario::test_profiles_release_recovery_and_replanning_use_native_tools` exercises the assembled FastMCP adapters over a real `DispatchRuntime` with contained stores. `finish_accept` succeeds. Its only failure follows that completion when the scenario manually creates audit job `5`, colliding with reconciliation plan job `5` created by accept: `TransactionConflictError`. This is the declared later #2036-owned reconciliation/audit fixture/profile expectation; no #2036 code or fixture was patched here. The repaired MCP portion of `#2036-AC3/accept-completion-prerequisite` is therefore cleared.
+- Checks run:
+  - `uv run pytest serve/mcp-kanban/tests -q -k 'not TestProof014NativeMcpScenario'` -> `438 passed`.
+  - live inventory/schema checks -> `2 passed`.
+  - `uv run pytest serve/kanban/tests/test_proof_checkout.py serve/kanban/tests/test_dispatch_runtime.py -q` -> `14 passed`.
+  - `uv run ruff check ...` and `uv run ruff format --check ...` -> clean.
+  - `git show --check 1a5e03004` -> clean; touched-file editor diagnostics -> none.
+- Replacements remained below the claimed boundary: PROOF-014 replaces only `_dispatch_runtime` with a real contained `DispatchRuntime`; it does not mock the MCP command, workflow, generated tool visibility, or lifecycle path.
+- No verifier patch applied: no local defect remained within the one-owner, one-validation-cycle patch budget.
+- Prior same-failure-key rejection check: no earlier #2037 Verify Notes or verifier rejection exists. The current downstream fixture collision is separately owned by #2036, so no repeated verifier repair cycle applies.
+- Memory recall assessed: all 20 returned entries were assessed; live-signature and task-boundary guidance was applied.
+- Verifier-challenger: `pass`. It confirmed AC1-AC5 direct evidence, no scope drift, and #2036 ownership for the post-accept fixture collision.
+- Final route: PASS to `collect`.
+
