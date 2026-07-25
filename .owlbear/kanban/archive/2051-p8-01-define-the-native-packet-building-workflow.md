@@ -1,10 +1,10 @@
 ---
 id: 2051
 title: 'P8-01: Define the native packet-building workflow'
-status: collect
+status: archived
 priority: high
 created: 2026-07-25T16:14:11.579317+02:00
-updated: 2026-07-25T16:26:02.615517+02:00
+updated: 2026-07-25T16:27:30.492605+02:00
 tags:
   - phase-8
   - scope:agent
@@ -42,7 +42,7 @@ proof_bundle: existing+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Projection
@@ -105,3 +105,12 @@ Independently verified builder commit `a142f123ffb64af01d7280256b99d2d4e817de78`
 - `verifier-challenger`: `pass`; no scope drift or unresolved evidence.
 
 Replacements: none. The committed workflow and live public schema were inspected directly.
+
+[[2026-07-25T16:27:30+02:00]]
+## Collect Notes
+
+Classification: leaf. #2051 has no child tasks, aggregate title/tag, or aggregate intent section.
+
+Latest Verify Notes record PASS with no patch or unresolved follow-up. Builder commit `a142f123ffb64af01d7280256b99d2d4e817de78` contains the canonical `w-packet-building` workflow; verifier commit `3996dbab3e7e0cfd54b787449e727eb92a1fbfb1` records independent authority, live-schema, hook, and maintained-test proof. The tied normal-path command at the tested builder commit passed commit integrity, skill validation, path-scoped pre-commit, live native registry checks, and unaffected ecosystem validation with 9 tests passed.
+
+No child or dependency gate applies. Structured request inspection found no pending or resolved request for this task. No residual decision, current failure key, or uncommitted workflow deliverable remains. Archive as completed.
