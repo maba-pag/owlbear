@@ -1,10 +1,10 @@
 ---
 id: 2067
 title: 'P11-02: Expose paged native work evidence and health resources'
-status: collect
+status: archived
 priority: high
 created: 2026-07-25T22:30:56.487007+02:00
-updated: 2026-07-25T23:04:08.397050+02:00
+updated: 2026-07-25T23:05:04.550669+02:00
 tags:
   - phase-11
   - scope:cockpit-backend
@@ -37,7 +37,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Projection
@@ -74,3 +74,9 @@ Verified builder SHA `9e2369d7710792caaa00acc976782ef62c70ace2` against the admi
 Verifier added two test-only linkage assertions: the corrective job ID persisted in the supersession receipt must appear in the public job collection, and the custom bounded change-health route must itself return 409 `ERR_CURSOR_STALE` for a stale cursor. Both pass through public TestClient routes over the real seeded runtime.
 
 Evidence: focused native-work suite 3 passed; builder Cockpit regression 299 passed; focused verifier lint passed. Verifier challenger: pass.
+
+[[2026-07-25T23:05:04+02:00]]
+## Collect Notes
+ARCHIVED
+
+Latest Verify Notes are PASS with every AC tied to public route evidence and verifier challenger pass. Collector reran `uv run pytest -q tests/test_cockpit_native_work.py` at verifier SHA `22f46accd07bc93ee04b0ec015ea0f099d89d68e`: 3 passed. Packet scope is closed; parent #1987 remains pending #2068-#2070.
