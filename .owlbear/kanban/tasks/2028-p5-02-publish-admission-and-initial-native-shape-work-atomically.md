@@ -1,10 +1,10 @@
 ---
 id: 2028
 title: 'P5-02: Publish admission and initial native plan work atomically'
-status: verify
+status: collect
 priority: high
 created: 2026-07-24T23:21:52.955135+02:00
-updated: 2026-07-25T10:01:29.664921+02:00
+updated: 2026-07-25T10:13:33.716812+02:00
 tags:
   - phase-5
   - scope:mcp-kanban
@@ -77,3 +77,33 @@ Added public `admit_change` MCP tool over `AdmissionTransaction`. Returns `Recei
 **Error codes:** `ERR_ADMISSION_CONFLICT`, `ERR_ADMISSION_VALIDATION`, `ERR_ADMISSION_PUBLICATION`, `ERR_CHANGE_NOT_LOADED`
 
 No durable test added per guidance: existing admission_transaction tests protect atomicity; MCP contract test protects tool registration.
+
+[[2026-07-25T10:13:33+02:00]]
+### Verify Notes
+
+**Independent Verification Summary:**
+- Created `.owlbear/scratch/2028-verify-admit-change.py` exercising all 4 ACs through real AdmissionTransaction and MCP tool
+- Created `.owlbear/scratch/2028-verify-ac4-extended.py` proving MCP delegation to atomic transaction layer
+- All ACs independently verified with executable evidence
+
+**AC Evidence:**
+- **AC-1**: admit_change returns ReceiptRecord, JobGeneration, AdmissionAssessment with persisted files matching response identities ✓
+- **AC-2**: Non-admitted returns assessment only (admitted=False), no writes ✓
+- **AC-3**: Exact replay returns persisted artifacts; changed identity raises ERR_ADMISSION_CONFLICT; original files preserved ✓
+- **AC-4**: MCP tool delegates to AdmissionTransaction→RuntimeTransaction for atomic commit; both files persisted together ✓
+
+**Test Results:**
+- `serve/mcp-kanban/tests/test_mcp_surface_contract.py`: 6 tests PASS (tool count verified at 12)
+- `serve/kanban/tests/test_admission_transaction.py`: 3 tests PASS (atomicity/recovery proven)
+- Ruff lint: PASS on changed files
+- Commit a465cb249 matches envelope
+
+**Authority Compliance:**
+- IF-010 "Native MCP control-plane API" stable error codes used
+- DN-009 control-plane ownership respected  
+- Modular loader integration via current kanban package
+- Tool annotations correct: readOnlyHint=False, idempotentHint=True
+
+**Challenger Result:** PASS - "The implementation directly delegates public `admit_change` to `AdmissionTransaction.validate_and_admit`, whose existing transaction tests prove replay/conflict handling and recovery of both artifacts after injected failure"
+
+No local defects. Implementation matches AC contract and authority.
