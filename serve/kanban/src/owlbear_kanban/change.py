@@ -57,7 +57,7 @@ def _list_to_tuple(value: object) -> object:
 
 
 type FrozenSequence[T] = Annotated[tuple[T, ...], BeforeValidator(_list_to_tuple)]
-type JsonValue = str | int | float | bool | None | list[JsonValue] | dict[str, JsonValue]
+type JsonValue = str | int | float | bool | list[JsonValue] | dict[str, JsonValue] | None
 
 
 def _freeze_json(value: JsonValue) -> object:
@@ -400,7 +400,7 @@ def _validate_change_path(changes_dir: Path, change_id: str) -> Path:
 
     try:
         validate_path_containment(changes_dir, change_dir)
-    except (OSError, ValueError):
+    except OSError, ValueError:
         _fail(ChangeDiagnosticCode.PATH_UNSAFE, "change directory escapes the changes root", path=change_dir)
 
     if not change_dir.is_dir():

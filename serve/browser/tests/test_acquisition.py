@@ -263,7 +263,7 @@ async def test_acquire_rejects_download_navigation() -> None:
 @pytest.mark.parametrize(
     ("content_selector", "readiness_selector", "expected_status"),
     [
-        ("#delayed", None, AcquisitionStatus.SELECTOR_NOT_FOUND),
+        ("#missing-content", None, AcquisitionStatus.SELECTOR_NOT_FOUND),
         ("#content", "#missing", AcquisitionStatus.CONTENT_NOT_READY),
     ],
 )

@@ -119,7 +119,7 @@ def _apply_tool_exclusions(server: FastMCP) -> set[str]:
 
 
 @asynccontextmanager
-async def app_lifespan(server: FastMCP) -> AsyncGenerator[AppContext, None]:
+async def app_lifespan(server: FastMCP) -> AsyncGenerator[AppContext]:
     """Configure DomainAllowlist, attempt Playwright launch, and yield AppContext."""
     _apply_tool_exclusions(server)
     domains_env = os.environ.get("BROWSER_ALLOWED_DOMAINS", "")
@@ -178,7 +178,7 @@ def _serialize_acquisition(result: AcquisitionSuccess | AcquisitionFailure) -> d
 
 
 @_mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, destructiveHint=False))
-async def acquire(  # noqa: PLR0913
+async def acquire(  # noqa: PLR0913, PLR0917
     ctx: Context,
     url: str,
     readiness_selector: str | None = None,

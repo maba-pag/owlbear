@@ -388,7 +388,7 @@ async def _web_read(url: str) -> str | None:
 
 
 @asynccontextmanager
-async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
+async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext]:
     """Initialise knowledge-base services; close the DB connection on exit."""
     path = os.environ.get("OWLBEAR_LOCAL_KB_PATH") or os.environ.get("OWLBEAR_KB_PATH", _DEFAULT_KB_PATH)
     qdrant_path = os.environ.get("OWLBEAR_QDRANT_PATH", _DEFAULT_QDRANT_PATH)

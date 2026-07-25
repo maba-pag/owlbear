@@ -43,7 +43,7 @@ def _scan_for_activity_log_imports(pkg_dir: Path) -> list[str]:  # noqa: C901
         try:
             source = py_file.read_text(encoding="utf-8")
             tree = ast.parse(source, filename=str(py_file))
-        except (OSError, SyntaxError):
+        except OSError, SyntaxError:
             continue
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):

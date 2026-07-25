@@ -215,7 +215,7 @@ def _parse_dt(ts: object) -> datetime | None:
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=UTC)
         return dt  # noqa: TRY300
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return None
 
 

@@ -75,7 +75,7 @@ def get_board(engine: _Engine) -> BoardOut:
 
 
 @router.get("/tasks", response_model=CockpitListTasksResponse)
-def list_tasks(  # noqa: PLR0913
+def list_tasks(  # noqa: PLR0913, PLR0917
     view: _View,
     cache: _Cache,
     status: str = "",
@@ -126,7 +126,7 @@ def get_task(task_id: int, view: _View) -> ShowTaskResponse:
 
 
 @router.get("/activity", response_model=list[ActivityEvent])
-def list_activity(  # noqa: PLR0913
+def list_activity(  # noqa: PLR0913, PLR0917
     view: _View,
     task_id: int | None = None,
     action: str | None = None,

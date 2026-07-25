@@ -95,7 +95,7 @@ class ProofCheckoutManager:
             self._git("worktree", "add", "--detach", str(checkout), resolved_commit)
             self._make_tracked_files_read_only(checkout)
             self._write_manifest(manifest, job, resolved_commit, environment or {}, replacements)
-        except (OSError, subprocess.CalledProcessError, ValueError):
+        except OSError, subprocess.CalledProcessError, ValueError:
             self._remove(root, checkout)
             return self._diagnostic(ProofCheckoutDiagnosticCode.SETUP_FAILED, "proof checkout setup failed")
         return ProofCheckoutResult(
@@ -133,7 +133,7 @@ class ProofCheckoutManager:
             commit = payload["commit"]
             if not isinstance(target, str) or not isinstance(commit, str):
                 return None
-        except (OSError, TypeError, ValueError, KeyError):
+        except OSError, TypeError, ValueError, KeyError:
             return None
         return ProofCheckout(
             job_id=job_id,

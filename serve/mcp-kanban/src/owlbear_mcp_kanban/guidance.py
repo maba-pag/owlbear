@@ -105,7 +105,9 @@ def _move_guidance(
     if delta > 1:
         n = delta - 1
         return [
-            f"⚠️ Status skip: moved from '{before.status}' to '{after.status}'"
-            f" (skipped {n} column(s)). Verify this jump is intentional."
+            (
+                f"⚠️ Status skip: moved from '{before.status}' to '{after.status}'"
+                f" (skipped {n} column(s)). Verify this jump is intentional."
+            )
         ]
     return []

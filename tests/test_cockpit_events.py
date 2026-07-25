@@ -572,7 +572,7 @@ class TestFromAC_MissingDirGuard:
                     for line in text.splitlines():
                         if line.startswith(("event:", "data:")):
                             event_lines.append(line)
-        except (TimeoutError, asyncio.CancelledError):
+        except TimeoutError, asyncio.CancelledError:
             pass  # Expected: SSE stream is infinite, timeout is the exit path
 
         assert not event_lines, (

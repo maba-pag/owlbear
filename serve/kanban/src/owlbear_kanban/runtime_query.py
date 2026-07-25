@@ -442,7 +442,7 @@ class RuntimeQuery:
                 self._work_root / path,
                 (self._work_root.resolve(), self._revision.source_dir.resolve()),
             )
-        except (OSError, TypeError, ValueError):
+        except OSError, TypeError, ValueError:
             return self._finding("ERR_WORK_MANIFEST_INVALID", "transaction manifest is invalid", path)
         return self._finding("ERR_WORK_MANIFEST_PENDING", "transaction manifest requires recovery", path)
 
@@ -453,7 +453,7 @@ class RuntimeQuery:
         job_id = int(absolute.stem)
         try:
             job = self._jobs.read(job_id, archived=path.startswith("archive/")).job
-        except (FileNotFoundError, OSError, TypeError, ValueError):
+        except FileNotFoundError, OSError, TypeError, ValueError:
             return self._finding("ERR_WORK_JOB_INVALID", "job record is malformed or unsafe", path)
         if self._jobs_by_id is not None and self._jobs_by_id.get(job_id) != job:
             return self._finding("ERR_WORK_INDEX_DISAGREEMENT", "job index disagrees with storage", path, str(job_id))
@@ -528,7 +528,7 @@ class RuntimeQuery:
         try:
             value = self._load_mapping(absolute)
             job_ids = value.get("job_ids", ()) if path.startswith("requests/pending/") else ()
-        except (OSError, TypeError, ValueError):
+        except OSError, TypeError, ValueError:
             return self._finding("ERR_WORK_REQUEST_INVALID", "request record is malformed", path)
         missing = next((item for item in job_ids if isinstance(item, int) and not self._job_exists(item)), None)
         if missing is not None:
@@ -616,7 +616,7 @@ class RuntimeQuery:
         for archived in (False, True):
             try:
                 self._jobs.read(job_id, archived=archived)
-            except (FileNotFoundError, OSError, TypeError, ValueError):
+            except FileNotFoundError, OSError, TypeError, ValueError:
                 continue
             return True
         return False

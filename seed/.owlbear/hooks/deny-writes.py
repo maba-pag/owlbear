@@ -73,7 +73,7 @@ def main() -> None:
     raw = sys.stdin.buffer.read()
     try:
         payload = json.loads(raw.decode("utf-8", errors="replace"))
-    except (json.JSONDecodeError, ValueError):
+    except json.JSONDecodeError, ValueError:
         print("{}")
         return
 

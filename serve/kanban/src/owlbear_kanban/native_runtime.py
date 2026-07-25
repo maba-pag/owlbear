@@ -615,7 +615,7 @@ class NativeRuntime:
         try:
             stored = self._jobs.read(request.job_id)
             project_job(stored.job, self._revision)
-        except (FileNotFoundError, ValueError):
+        except FileNotFoundError, ValueError:
             return self._diagnostic(
                 StartJobDiagnosticCode.AUTHORITY_STALE,
                 "job authority does not match the loaded revision",
@@ -712,7 +712,7 @@ class NativeRuntime:
                 self._revision,
                 self._revision.graph.execution.node_plans.get(stored.job.target_node_id),
             )
-        except (FileNotFoundError, ValueError):
+        except FileNotFoundError, ValueError:
             return self._finish_diagnostic(
                 FinishJobDiagnosticCode.AUTHORITY_STALE,
                 "job authority does not match the loaded revision",
@@ -773,7 +773,7 @@ class NativeRuntime:
         }
         try:
             receipt = ReceiptRecord.from_mapping(receipt_value)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return self._finish_diagnostic(
                 FinishJobDiagnosticCode.EVIDENCE_INVALID,
                 "receipt evidence is malformed",
@@ -1177,7 +1177,7 @@ class NativeRuntime:
             )
             try:
                 expected = closures[sibling_ids.index(job.job_id)]
-            except (ValueError, IndexError):
+            except ValueError, IndexError:
                 return self._finish_diagnostic(
                     FinishJobDiagnosticCode.AUTHORITY_STALE,
                     "build job does not correspond to a packet",

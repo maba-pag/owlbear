@@ -223,7 +223,7 @@ def _read_task_health_record(
         if isinstance(frontmatter, dict) and isinstance(frontmatter.get("id"), int):
             body = "\n".join(lines[closing + 1 :]).replace("\r\n", "\n").rstrip("\n")
             return findings, (path, frontmatter, body)
-    except (OSError, UnicodeDecodeError, StopIteration, YAMLError):
+    except OSError, UnicodeDecodeError, StopIteration, YAMLError:
         pass
     return findings, None
 
@@ -859,7 +859,7 @@ class KanbanEngine:
             for task_path in directory.glob("*.md"):
                 try:
                     task = read_task(task_path, config=self._config)
-                except (OSError, ValueError, TypeError, YAMLError, PydanticValidationError):
+                except OSError, ValueError, TypeError, YAMLError, PydanticValidationError:
                     continue
                 owner_ids.add(task.id)
         return owner_ids
@@ -996,7 +996,7 @@ class KanbanEngine:
         for dep_id in task.depends_on or []:
             try:
                 dep_task = self.show_task(str(dep_id))
-            except (FileNotFoundError, CorruptionError, ValueError, KeyError):
+            except FileNotFoundError, CorruptionError, ValueError, KeyError:
                 continue
 
             if dep_task.status == "archived":
@@ -1057,7 +1057,7 @@ class KanbanEngine:
                     archive_ids.add(archive_id)
                     try:
                         archive_task = read_task(archive_path, config=self._config)
-                    except (FileNotFoundError, ValueError, KeyError):
+                    except FileNotFoundError, ValueError, KeyError:
                         archived_reasons[archive_id] = None
                     except CorruptionError:
                         archived_reasons[archive_id] = None
@@ -1092,7 +1092,7 @@ class KanbanEngine:
                     except FileNotFoundError:
                         cache.pop(entry.name, None)
                         continue
-                    except (ValueError, KeyError):
+                    except ValueError, KeyError:
                         continue
                     except CorruptionError:
                         continue
@@ -1437,7 +1437,7 @@ class KanbanEngine:
                 continue
             try:
                 frontmatter, _body = self._parse_request_file(candidate)
-            except (OSError, ValueError, TypeError, YAMLError):
+            except OSError, ValueError, TypeError, YAMLError:
                 continue
             if frontmatter.get("task_id") == task_id:
                 return True
@@ -1867,7 +1867,7 @@ class KanbanEngine:
         body: str | None = None,
         priority: str | None = None,
         status: str | None = None,
-        parent: int | None | object = _PARENT_UNSET,
+        parent: int | object | None = _PARENT_UNSET,
         ac: list[str] | None = None,
         add_ac: list[str] | None = None,
         remove_ac: list[str] | None = None,
@@ -2375,6 +2375,7 @@ class KanbanEngine:
         self,
         record: Task,
         outcome: str,
+        *,
         block_reason: str,
         move_to: str | None,
         archival_reason: str | None,
@@ -2487,10 +2488,10 @@ class KanbanEngine:
         needs_archive = self._apply_outcome(
             record,
             outcome,
-            block_reason,
-            move_to,
-            archival_reason,
-            list(archival_refs or []),
+            block_reason=block_reason,
+            move_to=move_to,
+            archival_reason=archival_reason,
+            archival_refs=list(archival_refs or []),
         )
 
         record.updated = now.isoformat()
@@ -2559,7 +2560,7 @@ class KanbanEngine:
         for path in sorted(self._tasks_dir.glob("*.md")):
             try:
                 record = read_task(path, config=self._config)
-            except (FileNotFoundError, ValueError, KeyError, CorruptionError):
+            except FileNotFoundError, ValueError, KeyError, CorruptionError:
                 continue  # silently skip corrupt files (AC-C27)
 
             # AC-C27: do not mutate parseable-but-corrupt files.
@@ -2667,6 +2668,7 @@ class KanbanEngine:
         detail: str | None = None,
         task_status_at_start: str | None = None,
         timestamp: datetime | None = None,
+        *,
         source: str = "engine",
     ) -> None:
         """Append one :class:`ActivityEvent` to ``activity.jsonl`` if logging is enabled."""
@@ -2758,7 +2760,7 @@ class KanbanEngine:
         if session.task_id not in task_cache:
             try:
                 task = self.show_task(str(session.task_id))
-            except (FileNotFoundError, CorruptionError, ValueError, KeyError):
+            except FileNotFoundError, CorruptionError, ValueError, KeyError:
                 task = None
             task_cache[session.task_id] = task
         if task is None or task.status == "archived" or task.claimed_at is None:
@@ -2813,7 +2815,7 @@ class KanbanEngine:
         for entry in self._read_log_entries():
             try:
                 task_id = int(entry["task_id"])
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 continue
             by_task[task_id].append(entry)
 

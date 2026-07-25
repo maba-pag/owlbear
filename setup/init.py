@@ -266,7 +266,7 @@ def _hook_diff(src: Path, dest: Path) -> str:
     try:
         seed_lines = src.read_text(encoding="utf-8").splitlines(keepends=True)
         existing_lines = dest.read_text(encoding="utf-8").splitlines(keepends=True)
-    except (OSError, UnicodeDecodeError):
+    except OSError, UnicodeDecodeError:
         return ""
     diff_lines = list(
         difflib.unified_diff(

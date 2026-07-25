@@ -74,7 +74,7 @@ class AppContext:
 @asynccontextmanager
 async def app_lifespan(
     _server: FastMCP,
-) -> AsyncGenerator[AppContext, None]:  # pragma: no cover
+) -> AsyncGenerator[AppContext]:  # pragma: no cover
     """Construct and expose memory runtime context for this MCP session."""
     memory_dir = Path(os.environ.get("OWLBEAR_MEMORY_DIR", str(_DEFAULT_MEMORY_DIR)))
     yield AppContext(engine=MemoryEngine(memory_dir=memory_dir))

@@ -271,7 +271,7 @@ def _apply_tool_exclusions(server: FastMCP) -> set[str]:
 
 
 @asynccontextmanager
-async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
+async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext]:
     """Instantiate KanbanEngine and yield AppContext for the MCP session."""
     kanban_dir = _resolve_kanban_dir()
     _apply_tool_exclusions(_server)
@@ -478,7 +478,7 @@ async def create_task(  # noqa: PLR0913
 
 
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False))
-async def create_request(  # noqa: PLR0913
+async def create_request(  # noqa: PLR0913, PLR0917
     ctx: Context,
     task_id: str | int,
     kind: str,

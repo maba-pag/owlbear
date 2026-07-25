@@ -45,7 +45,7 @@ def _has_pinned_version(executable: str) -> bool:
             capture_output=True,
             text=True,
         )
-    except (OSError, subprocess.CalledProcessError):
+    except OSError, subprocess.CalledProcessError:
         return False
     return result.stdout.strip() == OPEN_SPEC_VERSION
 

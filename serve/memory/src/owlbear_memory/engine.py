@@ -395,6 +395,7 @@ class MemoryEngine:
 
     def save(  # noqa: PLR0913
         self,
+        *,
         title: str,
         content: str,
         categories: list[MemoryCategory],
@@ -522,7 +523,7 @@ class MemoryEngine:
             if len(parts) < _FRONTMATTER_PARTS:
                 return None
             data = _YAML.load(parts[1])
-        except (OSError, UnicodeDecodeError, YAMLError):
+        except OSError, UnicodeDecodeError, YAMLError:
             return None
 
         if not isinstance(data, dict):

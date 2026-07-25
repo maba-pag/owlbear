@@ -362,7 +362,7 @@ class InvalidationRuntime:
             }
         )
 
-    def _replay(  # noqa: PLR0913 - replay compares the complete prepared identity.
+    def _replay(  # noqa: PLR0913, PLR0917 - replay compares the complete prepared identity.
         self,
         request: InvalidationRequest,
         receipt_value: Mapping[str, object],

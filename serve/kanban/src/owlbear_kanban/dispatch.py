@@ -481,7 +481,7 @@ class DispatchRuntime:
             try:
                 stored = self._jobs.read(holder.job_id)
                 started = self._attempts.read(holder.attempt_id, 1).event
-            except (FileNotFoundError, ValueError):
+            except FileNotFoundError, ValueError:
                 return self._stale(coordination)
             job = stored.job
             if (

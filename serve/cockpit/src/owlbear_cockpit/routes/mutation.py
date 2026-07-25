@@ -301,7 +301,7 @@ def release_task(task_id: int, req: ReleaseRequest, view: _View) -> SingleTaskRe
     """Release claim on a task. 409 if task is not currently claimed."""
     try:
         task = view.show_task(task_id)
-    except (FileNotFoundError, NotFoundError):
+    except FileNotFoundError, NotFoundError:
         raise NotFoundError(
             code="ERR_NOT_FOUND",
             user_message=f"Task {task_id} not found",

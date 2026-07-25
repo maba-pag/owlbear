@@ -78,9 +78,11 @@ class AgentView:
             return []
         skipped = delta if include_target_column else delta - 1
         return [
-            "\u26a0\ufe0f Status skip: moved from "
-            f"'{before_status}' to '{after_status}' (skipped {skipped} column(s))."
-            " Verify this jump is intentional."
+            (
+                "\u26a0\ufe0f Status skip: moved from "
+                f"'{before_status}' to '{after_status}' (skipped {skipped} column(s))."
+                " Verify this jump is intentional."
+            )
         ]
 
     def _wrap_not_found(self, task_id: int) -> NotFoundError:
@@ -599,7 +601,7 @@ class AgentView:
         remove_dep: list[int] | None = None,
         add_tag: list[str] | None = None,
         remove_tag: list[str] | None = None,
-        block_reason: str | None | object = _BLOCK_REASON_UNSET,
+        block_reason: str | object | None = _BLOCK_REASON_UNSET,
         archival_reason: str | None = None,
         archival_refs: list[int] | None = None,
     ) -> SingleTaskResponse:
@@ -939,7 +941,7 @@ class AgentView:
             for dep_id in task_record.depends_on or []:
                 try:
                     dep_task = self.engine.show_task(str(dep_id))
-                except (FileNotFoundError, CorruptionError, ValueError, KeyError):
+                except FileNotFoundError, CorruptionError, ValueError, KeyError:
                     continue
 
                 if dep_task.status == "archived":

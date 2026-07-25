@@ -30,7 +30,7 @@ def main() -> None:  # noqa: PLR0911
     # Return {} on malformed JSON (includes BOM-prefixed input)
     try:
         json.loads(stdin_text)
-    except (json.JSONDecodeError, ValueError):
+    except json.JSONDecodeError, ValueError:
         print("{}")
         return
 

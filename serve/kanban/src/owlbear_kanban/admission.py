@@ -61,7 +61,7 @@ class AdmissionAssessment(BaseModel):
         return not self.errors
 
 
-def _finding(  # noqa: PLR0913
+def _finding(  # noqa: PLR0913, PLR0917
     code: str,
     target: str,
     detail: str,

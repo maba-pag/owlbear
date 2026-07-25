@@ -587,7 +587,7 @@ def allocate_next_id(
             text = id_path.read_text(encoding="utf-8").strip()
             if text:
                 last_allocated = int(text)
-        except (OSError, ValueError):
+        except OSError, ValueError:
             last_allocated = 0
 
         if write_task_fn is not None:

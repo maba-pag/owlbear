@@ -38,7 +38,7 @@ _STABLE_ID_ADAPTER = TypeAdapter(StableId)
 
 ReceiptId = Annotated[str, StringConstraints(strict=True, pattern=_RECEIPT_ID_PATTERN)]
 ReceiptKind = Literal["admission", "shape", "build", "accept", "audit", "supersession"]
-type JsonValue = str | int | float | bool | None | list[JsonValue] | dict[str, JsonValue]
+type JsonValue = str | int | float | bool | list[JsonValue] | dict[str, JsonValue] | None
 
 _COMMON_RECEIPT_FIELDS = (
     "schema_version",
@@ -353,7 +353,7 @@ def evaluate_code_revision_currency(
                     path=path,
                     selector=selector,
                 )
-    except (RepositoryHistoryError, UnicodeDecodeError, ValueError):
+    except RepositoryHistoryError, UnicodeDecodeError, ValueError:
         return ReceiptValidity(
             code=ReceiptValidityCode.CODE_HISTORY_UNAVAILABLE,
             detail="repository history could not prove code-revision currency",
