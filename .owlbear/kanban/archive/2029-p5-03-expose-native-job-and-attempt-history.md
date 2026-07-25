@@ -1,10 +1,10 @@
 ---
 id: 2029
 title: 'P5-03: Expose native job and attempt history'
-status: collect
+status: archived
 priority: high
 created: 2026-07-24T23:22:11.768263+02:00
-updated: 2026-07-25T10:42:00.120492+02:00
+updated: 2026-07-25T10:49:56.788580+02:00
 tags:
   - phase-5
   - scope:mcp-kanban
@@ -40,7 +40,7 @@ proof_bundle: existing+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Projection
@@ -98,3 +98,22 @@ Strengthened test_mcp_native_query_tools.py (verifier local correction per Rent 
 - AC-4: Added chronological ordering, kind fields, cursor error
 
 444 tests pass, ruff clean. Verifier-challenger: pass.
+
+[[2026-07-25T10:49:56+02:00]]
+**Archive Readiness Verified:**
+
+**Builder Evidence:** 97e871765b1f — implemented 4 public MCP read tools (list_jobs, show_job, list_attempts, list_activity); all tools use NativeRuntime paged APIs with proper cursor/error mapping; show_job composes JobStore.read + project_job; 444 mcp-kanban tests pass, ruff clean, builder-challenger pass.
+
+**Verifier Evidence:** b5db52e2ecc9 — strengthened test_mcp_native_query_tools.py to protect real pagination/error/order/history-kind risks; all 4 AC proven with exact public MCP boundary exercises; verifier-challenger pass.
+
+**AC Proof:**
+- AC-1: test_list_jobs_returns_paged_projection — active+archived jobs, all RuntimeJobProjection fields (readiness/claim/request/attempt/finding/receipt/validity/disposition), cursor pagination, stale cursor ERR_CURSOR_STALE ToolError
+- AC-2: test_show_job_composes_immutable_record_and_projection — JobRecord composition + JobProjection authority fields (title/outcome/acceptance/modules/interfaces/proof), missing job ERR_JOB_NOT_FOUND
+- AC-3: test_list_attempts_returns_paged_events — bounded pages ordered by (attempt_id, sequence), field preservation, cursor error
+- AC-4: test_list_activity_returns_chronological_history — chronological (timestamp, identity) ordering, kind-specific fields for all 4 history entry types (attempt/finding/receipt/request), cursor pagination and error
+
+**Quality:** 444 tests pass in mcp-kanban domain at HEAD (b5db52e2e); ruff clean; one unrelated serve/kanban test failed (background quality debt, not task-owned).
+
+**Scope:** Changed files confined to serve/mcp-kanban/{src,tests}; no scratch files remain; current digest 3f6c65628991; leaf task under parent #1981.
+
+**Durable Test Quality:** Verifier-strengthened test_mcp_native_query_tools.py protects concrete behavioral risks — pagination boundary handling, cursor stability, error path stability, ordering invariants, and history-kind field contracts. Passes Rent Test: easy to regress cursor/error/ordering behavior, hard to notice manually, shared public MCP boundary, cheaper to maintain than repeated manual verification.
