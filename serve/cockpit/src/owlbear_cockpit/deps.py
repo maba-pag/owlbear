@@ -3,21 +3,91 @@
 from __future__ import annotations
 
 import weakref
+from dataclasses import dataclass
 from pathlib import Path
+from threading import RLock
 from typing import TYPE_CHECKING
 
 from fastapi import Depends
 
 from owlbear_cockpit.cache import MtimeScanCache
 from owlbear_cockpit.view import CockpitView
+from owlbear_kanban import (
+    ChangeLoadResult,
+    ChangeRevision,
+    DispatchRuntime,
+    GitRepositoryHistory,
+    NativeRuntime,
+    ProofCheckoutManager,
+    load_change,
+)
 
 if TYPE_CHECKING:
+    from datetime import timedelta
+
     from owlbear_memory.engine import MemoryEngine
 
     from owlbear_kanban import KanbanEngine
 
 # WeakKeyDictionary: cache is discarded when the engine instance is GC'd (end of test).
 _engine_caches: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
+_native_context_caches: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
+
+
+@dataclass(frozen=True, slots=True)
+class NativeChangeContext:
+    """Bind one admitted revision to its Cockpit runtime adapters."""
+
+    revision: ChangeRevision
+    runtime: NativeRuntime
+    dispatch: DispatchRuntime
+
+
+class NativeContextCache:
+    """Cache native contexts while their loaded revision identity is current."""
+
+    def __init__(self) -> None:
+        self._contexts: dict[tuple[Path, str], NativeChangeContext] = {}
+        self._lock = RLock()
+
+    def load(self, changes_dir: Path, change_id: str) -> ChangeLoadResult:
+        """Load current authority without constructing runtime stores."""
+        return load_change(changes_dir, change_id)
+
+    def get(
+        self,
+        *,
+        changes_dir: Path,
+        work_root: Path,
+        workspace_root: Path,
+        revision: ChangeRevision,
+        claim_expiry: timedelta,
+    ) -> NativeChangeContext:
+        """Reuse a context only when its complete revision identity still matches."""
+        key = (changes_dir.resolve(), revision.change_id)
+        with self._lock:
+            cached = self._contexts.get(key)
+            if cached is not None and (
+                cached.revision.delivery_digest == revision.delivery_digest
+                and cached.revision.source_identity == revision.source_identity
+            ):
+                return cached
+
+            proof_checkouts = ProofCheckoutManager(workspace_root, work_root.parent / "scratch" / "proof")
+            runtime = NativeRuntime(
+                revision,
+                work_root,
+                GitRepositoryHistory(workspace_root),
+                claim_expiry,
+                proof_checkouts,
+            )
+            context = NativeChangeContext(
+                revision=revision,
+                runtime=runtime,
+                dispatch=DispatchRuntime(runtime, work_root, proof_checkouts),
+            )
+            self._contexts[key] = context
+            return context
 
 
 def get_engine() -> KanbanEngine:
@@ -57,6 +127,13 @@ def get_cache(engine=Depends(get_engine)) -> MtimeScanCache:  # noqa: ANN001, B0
     if engine not in _engine_caches:
         _engine_caches[engine] = MtimeScanCache(engine.tasks_dir)
     return _engine_caches[engine]
+
+
+def get_native_context_cache(engine=Depends(get_engine)) -> NativeContextCache:  # noqa: ANN001, B008
+    """Return the native context cache scoped to the request engine."""
+    if engine not in _native_context_caches:
+        _native_context_caches[engine] = NativeContextCache()
+    return _native_context_caches[engine]
 
 
 def get_view(engine=Depends(get_engine)) -> CockpitView:  # noqa: ANN001, B008

@@ -1,10 +1,10 @@
 ---
 id: 2066
 title: 'P11-01: Assemble native Cockpit context and change graph resources'
-status: build
+status: verify
 priority: high
 created: 2026-07-25T22:30:50.098738+02:00
-updated: 2026-07-25T22:30:50.098738+02:00
+updated: 2026-07-25T22:42:42.232743+02:00
 tags:
   - phase-11
   - scope:cockpit-backend
@@ -48,3 +48,15 @@ In: backend dependency assembly, response models, change listing/detail, joined 
 Out: work/evidence routes, controls, SSE, legacy inventory, frontend, cutover.
 
 Proof guidance: exercise public FastAPI routes with TestClient and a temporary lower engine store; do not bypass Cockpit dependency assembly.
+
+[[2026-07-25T22:42:42+02:00]]
+## Builder Notes
+DONE
+
+Implemented the cached native Cockpit context and typed change/graph resources within the shaped module map.
+
+Changed files: `serve/cockpit/src/owlbear_cockpit/deps.py`, `serve/cockpit/src/owlbear_cockpit/native_models.py`, `serve/cockpit/src/owlbear_cockpit/routes/native_changes.py`, `serve/cockpit/src/owlbear_cockpit/main.py`, and `tests/test_cockpit_native_changes.py`.
+
+AC-1: public `GET /api/changes` proof covers identity ordering, admitted digest, malformed sibling diagnostics, and an absent changes root. AC-2: public detail/graph proof covers joined modular authority, isolated plans, and stable sanitized 404/422 envelopes. AC-3: public requests prove same-revision reuse and changed-digest replacement; injected assembly failure proves the prior cache and native work-store file set remain unchanged.
+
+Evidence: `uv run pytest -q tests/test_cockpit_native_changes.py` -> 6 passed; `uv run pytest -q tests/test_cockpit_*.py -m "not api"` -> 296 passed; `uv run --package owlbear-tools lint-all` -> passed with only four unrelated TODO notices. Builder challenger: pass.
