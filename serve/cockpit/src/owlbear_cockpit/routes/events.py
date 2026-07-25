@@ -1,4 +1,4 @@
-"""Cockpit SSE routes for kanban surface invalidation events."""
+"""Cockpit SSE invalidation events for canonical native resources."""
 
 from __future__ import annotations
 
@@ -17,6 +17,19 @@ from owlbear_kanban import KanbanEngine
 router = APIRouter()
 
 _Engine = Annotated[KanbanEngine, Depends(get_engine)]
+_AUTHORITY_RESOURCES = {
+    "delivery": "changes",
+    "plans": "graphs",
+    "receipts": "receipts",
+}
+_WORK_RESOURCES = {
+    "jobs": "jobs",
+    "attempts": "attempts",
+    "findings": "findings",
+    "requests": "requests",
+}
+_CHANGE_FILE_DEPTH = 2
+_CHANGE_RESOURCE_DEPTH = 3
 
 
 def _resolve(path: Path | str) -> Path:
@@ -24,127 +37,81 @@ def _resolve(path: Path | str) -> Path:
     return Path(path).resolve(strict=False)
 
 
-def _is_direct_md(path: Path, parent_dir: Path) -> bool:
-    """Return True for direct child markdown files only."""
+def _relative(path: Path, root: Path) -> Path | None:
     try:
-        relative = path.relative_to(parent_dir)
+        return path.relative_to(root)
     except ValueError:
-        return False
-    return len(relative.parts) == 1 and relative.suffix == ".md"
+        return None
+
+
+def _is_temporary(relative: Path) -> bool:
+    return any(part.startswith(".") for part in relative.parts) or relative.name.endswith((".tmp", "~"))
+
+
+def _classify_native_path(changed_path: Path, changes_root: Path, work_root: Path) -> str | None:
+    """Map one canonical authority or work path to its resource class."""
+    authority = _relative(changed_path, changes_root)
+    if authority is not None and authority.parts and not _is_temporary(authority):
+        if len(authority.parts) >= _CHANGE_RESOURCE_DEPTH and authority.parts[1] in _AUTHORITY_RESOURCES:
+            return _AUTHORITY_RESOURCES[authority.parts[1]]
+        if len(authority.parts) == _CHANGE_FILE_DEPTH and authority.suffix in {".md", ".yaml"}:
+            return "changes"
+
+    work = _relative(changed_path, work_root)
+    if work is not None and work.parts and not _is_temporary(work):
+        return _WORK_RESOURCES.get(work.parts[0])
+    return None
 
 
 def _build_watch_filter(
-    tasks_dir: Path,
-    archive_dir: Path,
-    decisions_pending_dir: Path,
-    activity_path: Path,
+    changes_root: Path,
+    work_root: Path,
 ) -> callable:
-    """Build a board-specific watch filter for tasks, decisions, and activity."""
-    tasks_dir_r = _resolve(tasks_dir)
-    archive_dir_r = _resolve(archive_dir)
-    decisions_pending_dir_r = _resolve(decisions_pending_dir)
-    activity_path_r = _resolve(activity_path)
+    """Build a filter that suppresses legacy stores and transaction noise."""
+    changes_root = _resolve(changes_root)
+    work_root = _resolve(work_root)
 
     def _watch_filter(_change: object, path: str) -> bool:
-        candidate = _resolve(path)
-        name = candidate.name
-        if candidate == activity_path_r:
-            return True
-        if name.startswith(".tmp-"):
-            return False
-        return (
-            _is_direct_md(candidate, tasks_dir_r)
-            or _is_direct_md(candidate, archive_dir_r)
-            or _is_direct_md(candidate, decisions_pending_dir_r)
-        )
+        return _classify_native_path(_resolve(path), changes_root, work_root) is not None
 
     return _watch_filter
 
 
-def _classify_path(
-    changed_path: Path,
-    tasks_dir: Path,
-    archive_dir: Path,
-    decisions_pending_dir: Path,
-    activity_path: Path,
-) -> str | None:
-    """Map a changed path to its typed SSE event or None."""
-    if changed_path == activity_path:
-        return "activity-changed"
-    if _is_direct_md(changed_path, tasks_dir) or _is_direct_md(changed_path, archive_dir):
-        return "tasks-changed"
-    if _is_direct_md(changed_path, decisions_pending_dir):
-        return "decisions-changed"
-    return None
-
-
-def _batch_latest_mtimes(
+def _batch_resources(
     changes: set[tuple[object, str]],
-    *,
-    tasks_dir: Path,
-    archive_dir: Path,
-    decisions_pending_dir: Path,
-    activity_path: Path,
-) -> dict[str, int]:
-    """Return the latest mtime per event type from one watch batch."""
-    latest_mtimes: dict[str, int] = {}
-    for _change, changed_path in changes:
-        changed_path_obj = _resolve(changed_path)
-        event_name = _classify_path(
-            changed_path_obj,
-            tasks_dir,
-            archive_dir,
-            decisions_pending_dir,
-            activity_path,
-        )
-        if event_name is None:
-            continue
-
-        try:
-            mtime = changed_path_obj.stat().st_mtime_ns
-        except FileNotFoundError:
-            mtime = time.time_ns()
-        latest_mtimes[event_name] = max(latest_mtimes.get(event_name, 0), mtime)
-    return latest_mtimes
+    changes_root: Path,
+    work_root: Path,
+) -> tuple[str, ...]:
+    """Return sorted unique resource classes affected by one watch batch."""
+    resources = {
+        resource
+        for _change, path in changes
+        if (resource := _classify_native_path(_resolve(path), changes_root, work_root)) is not None
+    }
+    return tuple(sorted(resources))
 
 
-def _next_event_mtime(
-    event_name: str,
-    candidate_mtime: int,
-    *,
-    last_emitted_mtimes: dict[str, int],
-) -> int:
-    """Return an event mtime guaranteed to differ from the last emitted value."""
-    previous = last_emitted_mtimes.get(event_name, 0)
-    if candidate_mtime <= previous:
-        return previous + 1
-    return candidate_mtime
+def _next_token(previous: int) -> int:
+    """Return a process-local token that is strictly monotonic."""
+    return max(time.time_ns(), previous + 1)
 
 
 @router.get("/events")
 async def events(request: Request, engine: _Engine) -> EventSourceResponse:
-    """Stream typed kanban invalidation events to clients via SSE."""
+    """Stream one native invalidation event for each canonical watch batch."""
 
     async def _stream() -> object:
-        kanban_dir = _resolve(engine.kanban_dir)
-        if not kanban_dir.exists():
+        work_root = _resolve(engine.kanban_dir)
+        ops_root = work_root.parent
+        changes_root = _resolve(ops_root / "changes")
+        if not ops_root.is_dir() or not work_root.is_dir() or not changes_root.is_dir():
             return
 
-        tasks_dir = _resolve(engine.tasks_dir)
-        archive_dir = _resolve(engine.archive_dir)
-        decisions_pending_dir = _resolve(kanban_dir / "decisions" / "pending")
-        activity_path = _resolve(kanban_dir / "activity.jsonl")
-        watch_filter = _build_watch_filter(
-            tasks_dir,
-            archive_dir,
-            decisions_pending_dir,
-            activity_path,
-        )
-        last_emitted_mtimes: dict[str, int] = {}
+        token = 0
 
         async for changes in awatch(
-            kanban_dir,
-            watch_filter=watch_filter,
+            ops_root,
+            watch_filter=_build_watch_filter(changes_root, work_root),
             recursive=True,
             yield_on_timeout=True,
             rust_timeout=100,
@@ -152,27 +119,16 @@ async def events(request: Request, engine: _Engine) -> EventSourceResponse:
             if await request.is_disconnected():
                 break
 
-            if not changes:
+            resources = _batch_resources(changes, changes_root, work_root)
+            if not resources:
                 continue
-
-            latest_mtimes = _batch_latest_mtimes(
-                changes,
-                tasks_dir=tasks_dir,
-                archive_dir=archive_dir,
-                decisions_pending_dir=decisions_pending_dir,
-                activity_path=activity_path,
-            )
-
-            for event_name, candidate_mtime in latest_mtimes.items():
-                emitted_mtime = _next_event_mtime(
-                    event_name,
-                    candidate_mtime,
-                    last_emitted_mtimes=last_emitted_mtimes,
-                )
-                last_emitted_mtimes[event_name] = emitted_mtime
-                yield {
-                    "event": event_name,
-                    "data": json.dumps({"mtime": emitted_mtime}),
-                }
+            token = _next_token(token)
+            yield {
+                "event": "native-changed",
+                "data": json.dumps({"resources": resources, "token": token}),
+            }
 
     return EventSourceResponse(_stream(), ping=1)
+
+
+__all__ = ["router"]

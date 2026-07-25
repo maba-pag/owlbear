@@ -66,7 +66,8 @@ def client(engine: KanbanEngine, decisions_dir: Path):
     from fastapi.testclient import TestClient  # noqa: PLC0415
 
     from owlbear_cockpit import deps as cockpit_deps  # noqa: PLC0415
-    from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
+    from owlbear_cockpit.deps import get_engine  # noqa: PLC0415
+    from owlbear_cockpit.main import app  # noqa: PLC0415
 
     app.dependency_overrides[get_engine] = lambda: engine
 

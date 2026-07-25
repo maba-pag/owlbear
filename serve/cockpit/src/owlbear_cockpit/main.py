@@ -24,18 +24,15 @@ from owlbear_memory.errors import (
     TransitionError as MemoryTransitionError,
 )
 
-from owlbear_cockpit.deps import get_engine, get_ideas_path, get_memory_engine
-from owlbear_cockpit.models import HealthModule, IdeasHealth, WorkspaceHealth
+from owlbear_cockpit.deps import get_ideas_path, get_memory_engine
+from owlbear_cockpit.models import HealthModule, IdeasHealth
 from owlbear_cockpit.routes.events import router as events_router
 from owlbear_cockpit.routes.ideas import router as ideas_router
+from owlbear_cockpit.routes.legacy import router as legacy_router
 from owlbear_cockpit.routes.memory import router as memory_router
-from owlbear_cockpit.routes.mutation import router as mutation_router
 from owlbear_cockpit.routes.native_changes import router as native_changes_router
 from owlbear_cockpit.routes.native_controls import router as native_controls_router
 from owlbear_cockpit.routes.native_work import router as native_work_router
-from owlbear_cockpit.routes.read import router as read_router
-from owlbear_cockpit.routes.requests import router as requests_router
-from owlbear_kanban.corruption import repair_task_storage
 from owlbear_kanban.errors import (
     ConcurrencyError,
     ConfigError,
@@ -43,32 +40,21 @@ from owlbear_kanban.errors import (
     NotFoundError,
     ValidationError,
 )
-from owlbear_kanban.models import DeterministicRepairResult
 
 _DEFAULT_PORT = 8420
 _MAX_PORT = 65535
 
 app = FastAPI(title="OwlBear Cockpit")
-app.include_router(read_router, prefix="/api")
-app.include_router(mutation_router, prefix="/api")
-app.include_router(requests_router, prefix="/api")
 app.include_router(events_router, prefix="/api")
+app.include_router(legacy_router, prefix="/api")
 app.include_router(native_changes_router, prefix="/api")
 app.include_router(native_work_router, prefix="/api")
 app.include_router(native_controls_router, prefix="/api")
 app.include_router(ideas_router, prefix="/api")
 app.include_router(memory_router, prefix="/api")
 
-_Engine = Annotated[object, Depends(get_engine)]
 _MemoryEngine = Annotated[object, Depends(get_memory_engine)]
 _IdeasPath = Annotated[Path, Depends(get_ideas_path)]
-
-
-def _get_health_engine() -> object | None:
-    try:
-        return get_engine()
-    except AttributeError:
-        return None
 
 
 def _get_health_memory_engine() -> object | None:
@@ -85,7 +71,6 @@ def _get_health_ideas_path() -> Path:
         return Path("ideas.md")
 
 
-_HealthEngine = Annotated[object | None, Depends(_get_health_engine)]
 _HealthMemoryEngine = Annotated[object | None, Depends(_get_health_memory_engine)]
 _HealthIdeasPath = Annotated[Path, Depends(_get_health_ideas_path)]
 
@@ -199,44 +184,10 @@ def _ideas_health(ideas_path: Path) -> IdeasHealth:
     return IdeasHealth(status="healthy", path=str(ideas_path))
 
 
-def _workspace_health(engine: object | None, memory_engine: object | None, ideas_path: Path) -> WorkspaceHealth:
-    modules = {
-        "tasks": _module_health(engine.task_health if engine else None),
-        "requests": _module_health(engine.request_health if engine else None),
-        "memory": _module_health(memory_engine.health if memory_engine else None),
-        "ideas": _ideas_health(ideas_path),
-    }
-    statuses = {module.status for module in modules.values()}
-    status = "healthy"
-    if statuses & {"unhealthy", "check-failed"}:
-        status = "unhealthy"
-    elif "attention" in statuses:
-        status = "attention"
-    return WorkspaceHealth(status=status, modules=modules)
-
-
 @app.get("/health/live")
 def health_live() -> dict[str, str]:
     """Return liveness without touching workspace storage."""
     return {"status": "ok"}
-
-
-@app.get("/health", response_model=WorkspaceHealth)
-def health(engine: _HealthEngine, memory_engine: _HealthMemoryEngine, ideas_path: _HealthIdeasPath) -> WorkspaceHealth:
-    """Return aggregate health for workspace task, request, memory, and idea storage."""
-    return _workspace_health(engine, memory_engine, ideas_path)
-
-
-@app.get("/health/tasks", response_model=HealthModule)
-def task_health(engine: _HealthEngine) -> HealthModule:
-    """Return the task-storage health projection."""
-    return _module_health(engine.task_health if engine else None)
-
-
-@app.get("/health/requests", response_model=HealthModule)
-def request_health(engine: _HealthEngine) -> HealthModule:
-    """Return the request-storage health projection."""
-    return _module_health(engine.request_health if engine else None)
 
 
 @app.get("/health/memory", response_model=HealthModule)
@@ -249,20 +200,6 @@ def memory_health(memory_engine: _HealthMemoryEngine) -> HealthModule:
 def ideas_health(ideas_path: _IdeasPath) -> IdeasHealth:
     """Return the ideas-file health projection."""
     return _ideas_health(ideas_path)
-
-
-@app.post("/health/tasks/repair", response_model=DeterministicRepairResult)
-def repair_task_health(engine: _Engine) -> DeterministicRepairResult:
-    """Repair deterministic task-storage findings and report unresolved outcomes."""
-    result = repair_task_storage(engine.kanban_dir, engine.board_config())
-    task_health_result = engine.task_health()
-    unresolved_findings = [finding for finding in task_health_result.findings if not finding.repairable]
-    result.task_health_result = task_health_result
-    result.unresolved_findings = unresolved_findings
-    result.unresolved_count = sum(outcome.action == "unresolved" for outcome in result.outcomes) + len(
-        unresolved_findings
-    )
-    return result
 
 
 def run() -> None:

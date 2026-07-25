@@ -123,21 +123,21 @@ class TestFromAC_CockpitPackageSkeleton:
         assert isinstance(app, FastAPI)
 
     def test_health_endpoint_exists_and_returns_200(self) -> None:
-        """AC#3: GET /health returns HTTP 200."""
+        """AC#3: GET /health/live returns HTTP 200."""
         from fastapi.testclient import TestClient
         from owlbear_cockpit.main import app
 
         client = TestClient(app)
-        response = client.get("/health")
+        response = client.get("/health/live")
         assert response.status_code == 200
 
     def test_health_endpoint_returns_json_body(self) -> None:
-        """AC#3: /health response body is a JSON object."""
+        """AC#3: /health/live response body is a JSON object."""
         from fastapi.testclient import TestClient
         from owlbear_cockpit.main import app
 
         client = TestClient(app)
-        response = client.get("/health")
+        response = client.get("/health/live")
         body = response.json()
         assert isinstance(body, dict), f"Expected JSON object, got {type(body).__name__}"
 
@@ -147,7 +147,7 @@ class TestFromAC_CockpitPackageSkeleton:
         from owlbear_cockpit.main import app
 
         client = TestClient(app, raise_server_exceptions=False)
-        response = client.get("/health")
+        response = client.get("/health/live")
         # Must not be 401 or 403 — unauthenticated access is expected.
         assert response.status_code not in (401, 403), (
             f"/health returned {response.status_code} — endpoint must not require auth"

@@ -248,7 +248,8 @@ class TestFromAC_CockpitLaunch:
         monkeypatch.setenv("COCKPIT_NO_OPEN", "1")
 
         with patch("uvicorn.run"):
-            from owlbear_cockpit.main import app, get_engine, run  # noqa: PLC0415
+            from owlbear_cockpit.deps import get_engine  # noqa: PLC0415
+            from owlbear_cockpit.main import app, run  # noqa: PLC0415
 
             run()
 
