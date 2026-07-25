@@ -1,10 +1,10 @@
 ---
 id: 2042
 title: 'P5-02R2: Publish admission plan jobs across authority and work stores'
-status: collect
+status: archived
 priority: high
 created: 2026-07-25T12:56:17.755663+02:00
-updated: 2026-07-25T13:33:23.107881+02:00
+updated: 2026-07-25T13:33:59.122658+02:00
 tags:
   - phase-5
   - scope:kanban
@@ -37,7 +37,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Projection
@@ -58,3 +58,6 @@ Builder complete. AdmissionTransaction now accepts the work root, returns before
 
 [[2026-07-25T13:33:23+02:00]]
 Independent verification PASS at builder SHA 7b1d0bbb9d6e96ea1b52203f3a151a7b8ee1517f. Commit inspection confirmed exactly the task source, durable test, and task record. AC-1 through AC-4 verified: exact cross-root publication and full JobRecord equality; no-op and replay-before-allocation; changed-evidence/active/archive/stale conflicts with snapshot preservation and one retry; all three interruption stages with only authority/work roots and clean manifest recovery. Admission+allocator+transaction suites 54 passed (2 existing fork warnings); focused lint and diagnostics clean. verifier-challenger decision: pass. The server constructor handoff remains explicitly owned by #2040.
+
+[[2026-07-25T13:33:59+02:00]]
+Collection complete. Builder SHA 7b1d0bbb9d6e96ea1b52203f3a151a7b8ee1517f is an ancestor of current HEAD c1117cbbeb4928a42a99d0faf1e153b20c7e9a81; task-owned source/test paths are unchanged since the verified builder commit. Durable admission proof rerun: 10 passed. AC-1 through AC-4 remain satisfied; #2040 may now assemble the work-root-aware public boundary.
