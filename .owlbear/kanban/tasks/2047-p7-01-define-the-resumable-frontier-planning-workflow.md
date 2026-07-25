@@ -1,10 +1,10 @@
 ---
 id: 2047
 title: 'P7-01: Define the resumable frontier planning workflow'
-status: build
+status: verify
 priority: high
 created: 2026-07-25T15:09:25.843626+02:00
-updated: 2026-07-25T15:09:25.843626+02:00
+updated: 2026-07-25T15:14:41.654519+02:00
 tags:
   - phase-7
   - scope:agent
@@ -58,3 +58,20 @@ In: the workflow skill and its exact structured planner result contract.
 Out: agent/orchestrator wiring, engine or MCP schema changes, proof scenarios, builder behavior, and Specification authority edits.
 
 Proof guidance: inspect the assembled workflow against current public query/request tools, `FinishPlanParams`, admitted packet/refinement rules, and the fresh-pick requirement; no model-response substitute proves this packet.
+
+[[2026-07-25T15:14:41+02:00]]
+## Builder Notes
+Added the canonical `w-frontier-planning` workflow as the only product change. No agent, orchestrator, runtime, MCP, test, setup, seed, or admitted-authority file changed.
+
+### AC Evidence
+- AC-1: The authority boundary and Steps 1, 2, and 7 require the orchestrator-supplied active plan-job identity; current `show_change`, `show_job`, target entities, relevant receipts, prior target plan, and focused source evidence are re-read for each initial or reconciliation job. Contradictions fail closed, and another job requires a fresh public pick after reported atomic completion.
+- AC-2: Step 4 defines a complete outcome-cohesive packet contract covering identity, outcome, obligations, in/out scope, modules/interfaces, dependencies, acceptance scenarios, canonical impact closure, proof, required outputs, profile, and context budget. Steps 3 and 5 enforce admitted target subsets, boundary-valid proof, acyclicity, ownership coverage, and bounded builder context.
+- AC-3: Step 3 exhaustively distinguishes legal refinement from unadmitted outcome/interface/ownership/failure/migration/security/lifecycle/workflow/proof/dependency expansion. One researched material choice creates a Decision Request and returns `RequestCreated`; broader authority change returns `SpecificationReentry`; stale/malformed/review failures return `PlanBlocked`. None can return success or roll back completed plans.
+- AC-4: Step 6 defines `PlannerSuccess` with precisely the eight planner-owned public `finish_plan` inputs and states that the orchestrator supplies immutable dispatch identity and completion time. The planner is forbidden to pick, start, finish, release, or directly write authority, plans, jobs, or receipts.
+
+### Validation
+- Skill validator: pass.
+- Focused lint and Markdown validation: pass; unrelated repository TODO warnings only.
+- Mechanical payload/model comparison: `PlannerSuccess` keys equal the expected eight fields and all exist in public `FinishPlanParams`.
+- Applicable ecosystem regressions: 7 passed.
+- `builder-challenger`: pass after independently rerunning the same checks.

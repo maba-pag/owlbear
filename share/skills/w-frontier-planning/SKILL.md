@@ -1,0 +1,225 @@
+---
+name: w-frontier-planning
+description: "Workflow: Plan engine-selected delivery nodes into reviewed atomic packet DAGs"
+user-invocable: false
+---
+
+# Frontier Planning
+
+Process engine-selected initial and reconciliation `plan` jobs in one resumable planner session.
+Each job independently refines one admitted delivery node into an outcome-cohesive packet DAG. The
+engine remains the authority for selection, claims, validation, publication, receipts, and
+downstream jobs.
+
+This workflow owns planning below admitted delivery authority. It cannot edit intent, design,
+decisions, obligations, contracts, nodes, jobs, receipts, or another node's plan.
+
+## Companion Skills
+
+Load these with `read_file` immediately before the named work:
+
+| Skill | Load when |
+|-------|-----------|
+| `h-codebase-orientation` | Locating current owners, callers, tests, and canonical contracts |
+| `h-module-design` | Choosing packet boundaries, module locality, or dependency placement |
+| `h-ac-quality` | Drafting packet acceptance scenarios and boundary-valid proof |
+| `h-decision-requests` | A single material choice requires a Decision Request |
+
+## Authority Boundary
+
+The orchestrator supplies the result of one successful public `start_job` call. Treat its job,
+attempt, claim, actor, process, candidate revision, change identity, delivery digest, target node,
+and timestamps as immutable execution identity. Do not pick or start work from this workflow.
+
+The planner may:
+
+- query current change, job, receipt, request, activity, and health projections;
+- inspect admitted authority, an existing target-node plan, repository source, history, and tests;
+- delegate focused read-only repository analysis and one independent plan review;
+- create one Decision Request for a single material choice;
+- return one structured disposition to the orchestrator.
+
+The planner must not call `finish_plan`, `release_job`, or another lifecycle completion tool. It
+must not write a node plan directly. Only the orchestrator maps a returned disposition to the
+public lifecycle operation.
+
+## Step 1 - Rehydrate The Selected Job
+
+Before proposing a packet or reusing session context:
+
+1. Confirm the supplied job has kind `plan` and an active claim matching the supplied execution
+   identity.
+2. Call `show_change(change_id)` and require its digest to equal the selected job digest.
+3. Call `show_job(change_id, job_id)` and read the projected target outcome, acceptance, modules,
+   interfaces, and proof.
+4. Read the target delivery node and resolve its owned and supported obligations, consumed and
+   produced interfaces, modules, risks, proof, and delivery predecessors from the shown change.
+5. Use `show_receipt` for the selected job's admission or superseded-plan identity and each current
+   predecessor receipt relevant to the target.
+6. Read `plans/<target-node-id>.yaml` when it exists. Treat it as the prior refinement to supersede,
+   not as admitted authority.
+7. Inspect focused repository evidence referenced by the authority or needed to choose current
+   implementation boundaries.
+
+Report a contradiction or stale identity as `PlanBlocked`; do not reconcile competing authority by
+choosing the newest-looking artifact. Session memory from a prior node is a search aid only. Repeat
+this complete rehydration for every selected job, including another job processed in the same warm
+session.
+
+## Step 2 - Classify Initial Or Reconciliation Work
+
+An initial plan consumes admitted predecessor contracts. Predecessor implementation acceptance is
+not an initial planning gate.
+
+A reconciliation plan additionally consumes the current predecessor accept receipts and their
+implementation evidence. Compare those receipts with the prior target-node plan and identify the
+specific packet boundaries, impact closures, acceptance scenarios, or proof commands affected by
+accepted implementation facts. Preserve unaffected refinement rather than rediscovering the whole
+change.
+
+Do not start or unblock a build from planner reasoning. The engine decides whether a superseding
+plan receipt is current enough to release digest-bound build jobs.
+
+## Step 3 - Ground The Node Refinement
+
+Load `h-codebase-orientation` and investigate repository-answerable facts before treating them as a
+choice. For each load-bearing claim, retain its source and evidence state. Repository search results
+may be replaced in proof below this workflow; the selected job, admitted authority, planner role,
+review gate, and public lifecycle tools may not be replaced.
+
+Apply these legal-refinement limits:
+
+- choose implementation boundaries only inside the target's admitted modules and interfaces;
+- split by genuine dependency, authority, failure domain, incompatible tool, or context limit;
+- combine code, tests, documentation, generated artifacts, migration, and proof when they advance
+  one outcome;
+- add implementation detail and proportional proof only inside the admitted proof boundary;
+- reference only the target node and its admitted obligations, modules, interfaces, risks, proof,
+  and predecessor contracts.
+
+Return `SpecificationReentry` when the work needs a new or weakened product outcome, public or
+cross-module interface, producer or consumer, failure semantic, migration, removal, compatibility,
+security, destructive, concurrency, lifecycle, workflow, proof boundary, delivery dependency, or
+other authority outside the selected node. Do not disguise global expansion as packet detail.
+
+If one material choice inside the admitted boundary remains after repository research, load
+`h-decision-requests`, create one Decision Request tied to the selected job, and return
+`RequestCreated`. Broader design discussion returns `SpecificationReentry` instead.
+
+## Step 4 - Draft One Complete Packet DAG
+
+Load `h-module-design` and prefer a small number of deep outcome-cohesive packets. Do not create
+artifact-specific code, test, documentation, migration, research, or proof jobs. Each packet must
+record:
+
+| Field | Required content |
+|-------|------------------|
+| `id` | Stable `<target-node-id>-PK-<number>` identity |
+| `outcome` | One coherent implementation result |
+| `obligations` | Admitted owned or supported targets advanced by the packet |
+| `in_scope` / `excluded` | Exact implementation boundary and named exclusions |
+| `modules` / `interfaces` | Admitted modules and interfaces read, modified, produced, or consumed |
+| `dependencies` | Other packet IDs in this node plan, in authored dependency order |
+| `acceptance_scenarios` | Concrete input, public or maintained boundary, and observable result |
+| `impact_closure` | Canonical repository paths and admitted authority targets consumed by proof |
+| `proof` | Boundary, commands or observations, allowed lower replacements, and evidence outputs |
+| `required_outputs` | Code, tests, docs, generated artifacts, migration, or evidence required by outcome |
+| `profile` | Domain, risk, and tool context needed by the builder |
+| `context_budget` | Expected files, interfaces, and change envelope for one focused session |
+
+Packet dependencies must remain acyclic and inside the target plan. A dependency does not grant
+path ownership; each packet declares the impact closure its own acceptance proof consumes.
+
+Use bounded `list_jobs` results while the selected plan job holds the global writer lease to choose
+unused positive downstream job IDs. Return one sorted `build_job_ids` entry per authored packet and
+one distinct `accept_job_id`. Do not infer readiness or reserve work by writing job files.
+
+## Step 5 - Validate And Review
+
+Before returning success:
+
+1. Check packet IDs, dependency references, and acyclicity.
+2. Confirm each impact path is canonical and each authority target is in the target node's admitted
+   node, obligations, modules, interfaces, risks, proof, or predecessor contracts.
+3. Confirm every target obligation and acceptance outcome has one packet owner and one
+   boundary-valid proof path.
+4. Confirm the packet set is outcome-cohesive, sized for focused builder contexts, and contains no
+   artifact-specific status work.
+5. Call a fresh read-only plan reviewer. Require source-grounded disposition and evidence for
+   packet completeness, admitted references, impact closures, dependency order, proof boundary,
+   and material expansion.
+
+Malformed or non-pass review evidence returns `PlanBlocked`. A review finding that exposes one
+material choice returns `RequestCreated` only after creating its Decision Request. A finding that
+changes admitted authority returns `SpecificationReentry`. Never weaken the plan or omit a finding
+to obtain success.
+
+## Step 6 - Return One Structured Disposition
+
+Return exactly one of these objects to the orchestrator. Do not wrap it in prose.
+
+### `PlannerSuccess`
+
+Use only after target-bounded validation and independent review pass:
+
+```yaml
+kind: PlannerSuccess
+receipt_id: <new stable plan receipt identity>
+code_revision: <tested candidate Git revision>
+evidence: <review and proof evidence accepted by finish_plan>
+evidence_ids: [<durable evidence identities>]
+impact_closure: <union of packet proof impact closures>
+node_plan: <complete reviewed packet DAG>
+build_job_ids: [<one unused ID per packet>]
+accept_job_id: <one distinct unused ID>
+```
+
+These keys match the planner-owned inputs of public `finish_plan`. The orchestrator supplies the
+unchanged change, job, attempt, claim, actor, process, and completion-time identity from dispatch.
+
+### `RequestCreated`
+
+```yaml
+kind: RequestCreated
+request_id: <persisted Decision Request identity>
+summary: <single material choice blocking this plan>
+```
+
+### `SpecificationReentry`
+
+```yaml
+kind: SpecificationReentry
+target: <authority target or proposed boundary>
+finding: <specific unadmitted expansion or contradiction>
+evidence: <source-grounded reason the node cannot own it>
+```
+
+### `PlanBlocked`
+
+```yaml
+kind: PlanBlocked
+target: <job, authority, review, or evidence target>
+finding: <specific stale, malformed, or incomplete condition>
+```
+
+## Step 7 - Checkpoint And Continue
+
+After the orchestrator reports successful `finish_plan`, discard node-local working state and
+require a fresh public `pick_jobs` result before another dispatch. Previously completed node plans
+remain persisted engine outcomes; a later node failure must not roll them back or prompt direct
+repair from this workflow.
+
+Checkpoint only compact reusable repository orientation between jobs. Rehydrate authority, job,
+receipts, prior plan, and source currentness again for the next selected target. Stop deliberately
+when context can no longer preserve these boundaries; do not trade target isolation for session
+continuity.
+
+## Known Pitfalls
+
+- **Self-selection:** only the orchestrator may pick and start the next job.
+- **Authority editing:** a packet plan refines one node; it never repairs admitted delivery files.
+- **Direct publication:** return a disposition; never write plan, receipt, or job files.
+- **Acceptance gating initial plans:** admitted predecessor contracts are sufficient for initial planning.
+- **Stale reconciliation:** accepted implementation evidence must be reflected before replacement builds can run.
+- **Reviewer substitution:** planner self-review does not satisfy the independent review gate.
+- **Warm-session leakage:** repeat rehydration and target checks for every selected node.
