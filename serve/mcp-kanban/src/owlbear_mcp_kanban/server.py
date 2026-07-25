@@ -21,6 +21,8 @@ from pydantic import ValidationError as PydanticValidationError
 from owlbear_kanban import (
     AdmissionEvidence,
     AdmissionTransaction,
+    ChangeDiagnosticCode,
+    ChangeRevision,
     DispatchRuntime,
     FinishAcceptRequest,
     FinishJobRequest,
@@ -358,6 +360,28 @@ def _dispatch_runtime(app_ctx: AppContext, change_id: str) -> DispatchRuntime:
     return runtime
 
 
+def _load_request_revision(app_ctx: AppContext, change_id: str, delivery_digest: str) -> ChangeRevision:
+    """Load and validate the admitted revision named by a request tool call."""
+    changes_dir = app_ctx.kanban_dir.parent / "changes"
+    try:
+        loaded = load_change(changes_dir, change_id)
+    except FileNotFoundError:
+        _raise_tool_error("ERR_CHANGE_NOT_FOUND", f"change '{change_id}' not found")
+    if loaded.revision is None:
+        diagnostic = loaded.diagnostics[0] if loaded.diagnostics else None
+        if (
+            diagnostic is not None
+            and diagnostic.code is ChangeDiagnosticCode.FILE_MISSING
+            and diagnostic.detail == "change directory is missing"
+        ):
+            _raise_tool_error("ERR_CHANGE_NOT_FOUND", f"change '{change_id}' not found")
+        _raise_tool_error("ERR_CHANGE_NOT_ADMITTED", "change is not admitted")
+    if loaded.revision.delivery_digest != delivery_digest:
+        digest_short = loaded.revision.delivery_digest[:16]
+        _raise_tool_error("ERR_DIGEST_MISMATCH", f"digest mismatch: expected {digest_short}...")
+    return loaded.revision
+
+
 mcp = FastMCP("owlbear-kanban", lifespan=app_lifespan)
 
 
@@ -517,9 +541,11 @@ async def create_task(  # noqa: PLR0913
     return result
 
 
-@mcp.tool(annotations=ToolAnnotations(destructiveHint=False))
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True, destructiveHint=False))
 async def create_request(  # noqa: PLR0913, PLR0917
     ctx: Context,
+    request_id: str,
+    created_at: str,
     change_id: str,
     delivery_digest: str,
     kind: str,
@@ -534,18 +560,7 @@ async def create_request(  # noqa: PLR0913, PLR0917
     """Create a pending request and return its structured payload."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     normalized_body, body_changed = _normalize_escaped_newlines(body)
-
-    # Load the change revision
-    try:
-        changes_dir = app_ctx.kanban_dir.parent / "changes"
-        loaded = load_change(changes_dir, change_id)
-        if loaded.revision is None:
-            _raise_tool_error("ERR_CHANGE_NOT_ADMITTED", "change is not admitted")
-        if loaded.revision.delivery_digest != delivery_digest:
-            digest_short = loaded.revision.delivery_digest[:16]
-            _raise_tool_error("ERR_DIGEST_MISMATCH", f"digest mismatch: expected {digest_short}...")
-    except FileNotFoundError:
-        _raise_tool_error("ERR_CHANGE_NOT_FOUND", f"change '{change_id}' not found")
+    revision = _load_request_revision(app_ctx, change_id, delivery_digest)
 
     # Build native request
     try:
@@ -561,13 +576,13 @@ async def create_request(  # noqa: PLR0913, PLR0917
             resume_condition = "User resolution required"
 
         request = NativeRequest(
-            request_id=f"{change_id}-{delivery_digest[:8]}-{len(title)}-{hash(title) & 0xFFFFFF:06x}",
+            request_id=request_id,
             kind=kind,  # type: ignore[arg-type]
             title=title,
             summary=summary,
             body=normalized_body,
             agent=agent,
-            created_at=await asyncio.to_thread(lambda: __import__("datetime").datetime.now().astimezone().isoformat()),
+            created_at=created_at,
             change_id=change_id,
             delivery_digest=delivery_digest,  # type: ignore[arg-type]
             target_node_id=target_node_id,
@@ -581,7 +596,7 @@ async def create_request(  # noqa: PLR0913, PLR0917
 
     # Create via native runtime
     try:
-        runtime = NativeRequestRuntime(loaded.revision, app_ctx.kanban_dir)
+        runtime = NativeRequestRuntime(revision, app_ctx.kanban_dir)
         stored = await asyncio.to_thread(runtime.create_request, request)
     except RequestConflictError:
         _raise_tool_error("ERR_NATIVE_REQUEST_CONFLICT", "request identity already names different immutable content")
@@ -604,18 +619,7 @@ async def list_requests(
 ) -> list[dict[str, object]]:
     """List request records by status and optional task filter."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
-
-    # Load the change revision
-    try:
-        changes_dir = app_ctx.kanban_dir.parent / "changes"
-        loaded = load_change(changes_dir, change_id)
-        if loaded.revision is None:
-            _raise_tool_error("ERR_CHANGE_NOT_ADMITTED", "change is not admitted")
-        if loaded.revision.delivery_digest != delivery_digest:
-            digest_short = loaded.revision.delivery_digest[:16]
-            _raise_tool_error("ERR_DIGEST_MISMATCH", f"digest mismatch: expected {digest_short}...")
-    except FileNotFoundError:
-        _raise_tool_error("ERR_CHANGE_NOT_FOUND", f"change '{change_id}' not found")
+    revision = _load_request_revision(app_ctx, change_id, delivery_digest)
 
     # Validate status parameter
     try:
@@ -627,7 +631,7 @@ async def list_requests(
 
     # List via native runtime
     try:
-        runtime = NativeRequestRuntime(loaded.revision, app_ctx.kanban_dir)
+        runtime = NativeRequestRuntime(revision, app_ctx.kanban_dir)
         if status == "all":
             records = await asyncio.to_thread(runtime.list_requests, None)
         else:
@@ -647,22 +651,11 @@ async def show_request(
 ) -> dict[str, object]:
     """Show a single request record with full detail."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
-
-    # Load the change revision
-    try:
-        changes_dir = app_ctx.kanban_dir.parent / "changes"
-        loaded = load_change(changes_dir, change_id)
-        if loaded.revision is None:
-            _raise_tool_error("ERR_CHANGE_NOT_ADMITTED", "change is not admitted")
-        if loaded.revision.delivery_digest != delivery_digest:
-            digest_short = loaded.revision.delivery_digest[:16]
-            _raise_tool_error("ERR_DIGEST_MISMATCH", f"digest mismatch: expected {digest_short}...")
-    except FileNotFoundError:
-        _raise_tool_error("ERR_CHANGE_NOT_FOUND", f"change '{change_id}' not found")
+    revision = _load_request_revision(app_ctx, change_id, delivery_digest)
 
     # Show via native runtime
     try:
-        runtime = NativeRequestRuntime(loaded.revision, app_ctx.kanban_dir)
+        runtime = NativeRequestRuntime(revision, app_ctx.kanban_dir)
         record = await asyncio.to_thread(runtime.show_request, request_id)  # type: ignore[arg-type]
     except RequestNotFoundError:
         _raise_tool_error("ERR_NATIVE_REQUEST_NOT_FOUND", f"request '{request_id}' not found")

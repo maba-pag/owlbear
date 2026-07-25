@@ -1,132 +1,54 @@
-"""Native request MCP tools tests — #2031: create_request, list_requests, show_request over NativeRequestRuntime.
-
-Covers AC1-AC4 through public MCP boundary with real NativeRequestRuntime, change loading,
-digest validation, JobStore, and RuntimeTransaction. Replaces obsolete task-ID request tests.
-"""
+"""Public MCP contract tests for native request creation and reads."""
 
 from __future__ import annotations
 
 import inspect
-from datetime import datetime
+import shutil
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 from unittest.mock import MagicMock
 
 import pytest
 from mcp.server.fastmcp.exceptions import ToolError
-from owlbear_kanban import KanbanEngine
-from owlbear_kanban.change import ChangeRevision, DecisionsDocument, DeliveryGraph
-from owlbear_kanban.jobs import JobGeneration, JobStore, PlanJob
-from owlbear_kanban.runtime_requests import (
-    NativeRequest,
-    NativeRequestRuntime,
-    RequestResolution,
-)
+from owlbear_kanban import JobGeneration, JobStore, KanbanEngine, PlanJob, load_change
+from owlbear_kanban.change import ChangeRevision
+from owlbear_kanban.runtime_requests import NativeRequestRuntime, RequestResolution
 from owlbear_mcp_kanban.server import AppContext, create_request, list_requests, mcp, show_request
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from owlbear_kanban.jobs import StoredJob
 
 
-# ---------------------------------------------------------------------------
-# Shared fixtures
-# ---------------------------------------------------------------------------
-
-
-def _make_minimal_revision(change_id: str, digest: str, source_dir: Path) -> ChangeRevision:
-    """Create minimal valid ChangeRevision for native request runtime tests."""
-    from owlbear_kanban.change import AdmissionMetadata, AuthorityMetadata, DeliveryNode, Proof
-
-    decisions = DecisionsDocument(schema_version=1, change_id=change_id, decisions=())
-    authority = AuthorityMetadata(
-        intent="intent.md",
-        design="design.md",
-        decisions="decisions.yaml",
-        research=(),
-    )
-    admission = AdmissionMetadata(
-        state="admitted",
-        delivery_digest=digest,
-        receipt="test-receipt",
-        limits=(),
-    )
-    # Add minimal proof and node for job references
-    proof = Proof(
-        id="PROOF-001",
-        title="Test Proof",
-        boundary="Test boundary",
-        owner="DN-001",
-        method=(),
-        allowed_replacements=(),
-        durable_outputs=(),
-    )
-    node = DeliveryNode(
-        id="DN-001",
-        title="Test Node",
-        outcome="Test outcome",
-        owns=(),
-        supports=(),
-        modules=(),
-        produces=(),
-        consumes=(),
-        dependencies=(),
-        risks=(),
-        proof="PROOF-001",
-    )
-    graph = DeliveryGraph(
-        schema_version=1,
-        change_id=change_id,
-        state="admitted",
-        authority=authority,
-        admission=admission,
-        requirements=(),
-        negative_requirements=(),
-        preserved_behaviors=(),
-        workflows=(),
-        modules=(),
-        interfaces=(),
-        migrations=(),
-        risks=(),
-        proofs=(proof,),
-        nodes=(node,),
-    )
-    return ChangeRevision(
-        source_dir=source_dir,
-        change_id=change_id,
-        intent="Test intent",
-        design="Test design",
-        decisions=decisions,
-        graph=graph,
-        delivery_digest=digest,
-    )
+CHANGE_ID = "replace-delivery-pipeline"
+CREATED_AT = "2026-07-25T00:00:00Z"
 
 
 @pytest.fixture
 def work_root(tmp_path: Path) -> Path:
-    """Temporary work root for JobStore and RuntimeTransaction."""
-    (tmp_path / "jobs").mkdir()
-    (tmp_path / "requests" / "pending").mkdir(parents=True)
-    (tmp_path / "requests" / "resolved").mkdir(parents=True)
-    (tmp_path / ".tx").mkdir()
+    """Copy the admitted change so MCP tools cross the real loader boundary."""
+    source = Path(".owlbear/changes") / CHANGE_ID
+    destination = tmp_path / "changes" / CHANGE_ID
+    shutil.copytree(source, destination)
     return tmp_path
 
 
 @pytest.fixture
-def revision(tmp_path: Path) -> ChangeRevision:
-    """Minimal ChangeRevision with stable digest."""
-    source_dir = tmp_path / "changes" / "test-change"
-    source_dir.mkdir(parents=True)
-    return _make_minimal_revision("test-change", "a" * 64, source_dir)
+def revision(work_root: Path) -> ChangeRevision:
+    """Load the copied admitted change through the production loader."""
+    loaded = load_change(work_root / "changes", CHANGE_ID)
+    assert loaded.revision is not None
+    return loaded.revision
 
 
 @pytest.fixture
-def app_ctx(work_root: Path, revision: ChangeRevision) -> AppContext:  # noqa: ARG001
-    """AppContext with engine and kanban_dir for MCP tool invocations."""
+def app_ctx(work_root: Path) -> AppContext:
+    """Provide the board root used by the MCP request runtime."""
     kanban_dir = work_root / "board"
     kanban_dir.mkdir()
     (kanban_dir / "tasks").mkdir()
     (kanban_dir / "archive").mkdir()
-    config_yaml = """\
+    (kanban_dir / "config.yml").write_text(
+        """\
 version: 10
 board:
   name: TestBoard
@@ -144,572 +66,353 @@ agent_compatibility: {}
 non_impl_tags: []
 archival_reasons: [completed]
 status_predicates: {}
-"""
-    (kanban_dir / "config.yml").write_text(config_yaml, encoding="utf-8")
-    engine = KanbanEngine(kanban_dir)
-    return AppContext(engine=engine, kanban_dir=kanban_dir)
+""",
+        encoding="utf-8",
+    )
+    return AppContext(engine=KanbanEngine(kanban_dir), kanban_dir=kanban_dir)
 
 
 @pytest.fixture
 def mcp_ctx(app_ctx: AppContext) -> MagicMock:
-    """Mock MCP context with lifespan_context."""
-    ctx = MagicMock()
-    ctx.request_context.lifespan_context = app_ctx
-    return ctx
+    """Provide the FastMCP lifespan context expected by public tools."""
+    context = MagicMock()
+    context.request_context.lifespan_context = app_ctx
+    return context
 
 
-@pytest.fixture
-def runtime(revision: ChangeRevision, work_root: Path) -> NativeRequestRuntime:
-    """NativeRequestRuntime for direct invocations."""
-    return NativeRequestRuntime(revision, work_root)
-
-
-@pytest.fixture
-def mock_load_change(monkeypatch: pytest.MonkeyPatch, revision: ChangeRevision) -> Generator[None]:
-    """Mock load_change to return test revision."""
-    from owlbear_kanban.change import ChangeLoadResult
-
-    def _mock_load(_changes_dir: Path, _change_id: str) -> ChangeLoadResult:
-        return ChangeLoadResult(revision=revision)
-
-    import owlbear_mcp_kanban.server as server_mod
-
-    monkeypatch.setattr(server_mod, "load_change", _mock_load)
-    return
-
-
-# ---------------------------------------------------------------------------
-# Tool registration tests
-# ---------------------------------------------------------------------------
-
-
-def test_create_request_tool_is_registered() -> None:
-    """create_request must be registered via @mcp.tool()."""
-    tool = next(
-        (t for t in mcp._tool_manager._tools.values() if t.name == "create_request"),  # noqa: SLF001
-        None,
-    )
-    assert tool is not None, (
-        "create_request must be registered via @mcp.tool(); "
-        f"registered tools: {[t.name for t in mcp._tool_manager._tools.values()]}"  # noqa: SLF001
-    )
-
-
-def test_list_requests_tool_is_registered() -> None:
-    """list_requests must be registered via @mcp.tool()."""
-    tool = next(
-        (t for t in mcp._tool_manager._tools.values() if t.name == "list_requests"),  # noqa: SLF001
-        None,
-    )
-    assert tool is not None, (
-        "list_requests must be registered via @mcp.tool(); "
-        f"registered tools: {[t.name for t in mcp._tool_manager._tools.values()]}"  # noqa: SLF001
-    )
-
-
-def test_show_request_tool_is_registered() -> None:
-    """show_request must be registered via @mcp.tool()."""
-    tool = next(
-        (t for t in mcp._tool_manager._tools.values() if t.name == "show_request"),  # noqa: SLF001
-        None,
-    )
-    assert tool is not None, (
-        "show_request must be registered via @mcp.tool(); "
-        f"registered tools: {[t.name for t in mcp._tool_manager._tools.values()]}"  # noqa: SLF001
-    )
-
-
-def test_resolve_request_tool_not_registered() -> None:
-    """resolve_request must NOT be registered (out of packet scope)."""
-    tool = next(
-        (t for t in mcp._tool_manager._tools.values() if t.name == "resolve_request"),  # noqa: SLF001
-        None,
-    )
-    assert tool is None, (
-        "resolve_request must NOT be registered in this packet; "
-        f"registered tools: {[t.name for t in mcp._tool_manager._tools.values()]}"  # noqa: SLF001
-    )
-
-
-# ---------------------------------------------------------------------------
-# Signature tests
-# ---------------------------------------------------------------------------
-
-
-def test_create_request_native_signature() -> None:
-    """create_request must have native change/digest signature."""
-    params = inspect.signature(create_request).parameters
-    # Required params
-    for required in ("ctx", "change_id", "delivery_digest", "kind", "title", "summary", "agent"):
-        assert required in params, f"create_request missing required param: {required}"
-        if required != "ctx":
-            assert params[required].default is inspect.Parameter.empty, (
-                f"create_request param '{required}' must be required (no default)"
-            )
-    # Optional params
-    for optional in ("target_node_id", "job_ids", "options", "body"):
-        assert optional in params, f"create_request must have '{optional}' optional param"
-
-
-def test_list_requests_native_signature() -> None:
-    """list_requests must have native change/digest signature."""
-    params = inspect.signature(list_requests).parameters
-    assert "ctx" in params
-    assert "change_id" in params
-    assert "delivery_digest" in params
-    assert "status" in params
-    assert params["status"].default == "pending", "list_requests status must default to 'pending'"
-
-
-def test_show_request_native_signature() -> None:
-    """show_request must have native change/digest signature."""
-    params = inspect.signature(show_request).parameters
-    assert "ctx" in params
-    assert "change_id" in params
-    assert "delivery_digest" in params
-    assert "request_id" in params
-
-
-# ---------------------------------------------------------------------------
-# AC1: Valid request with optional node/job links atomically persists
-#      request+job blocks; exact replay does not duplicate
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_create_request_action_atomically_persists_and_job_blocks(
-    mcp_ctx: MagicMock,
-    runtime: NativeRequestRuntime,  # noqa: ARG001
-    app_ctx: AppContext,
+def _materialize_job(  # noqa: PLR0913
+    work_root: Path,
     revision: ChangeRevision,
-    mock_load_change: None,  # noqa: ARG001
-) -> None:
-    """AC1: Valid action request with job_ids atomically persists request and linked job blocks."""
-    # Create a job via materialize (use app_ctx.kanban_dir since that's what the runtime uses)
-    jobs = JobStore(app_ctx.kanban_dir)
+    *,
+    job_id: int = 1,
+    target_node_id: str | None = None,
+    change_id: str | None = None,
+    delivery_digest: str | None = None,
+) -> StoredJob:
+    """Materialize one job record for request-reference scenarios."""
+    resolved_change_id = change_id or revision.change_id
+    resolved_digest = delivery_digest or revision.delivery_digest
     generation = JobGeneration(
         schema_version=1,
-        change_id=revision.change_id,
-        delivery_digest=revision.delivery_digest,
-        receipt_id="receipt-001",
+        change_id=resolved_change_id,
+        delivery_digest=resolved_digest,
+        receipt_id=f"receipt-{job_id}",
         jobs=(
             PlanJob(
-                job_id=1,
+                job_id=job_id,
                 kind="plan",
                 priority=0,
-                created_at="2026-07-24T00:00:00Z",
-                updated_at="2026-07-24T00:00:00Z",
-                change_id=revision.change_id,
-                delivery_digest=revision.delivery_digest,
-                target_node_id="DN-001",
-                receipt_id="receipt-001",
+                created_at=CREATED_AT,
+                updated_at=CREATED_AT,
+                change_id=resolved_change_id,
+                delivery_digest=resolved_digest,
+                target_node_id=target_node_id or revision.graph.nodes[0].id,
+                receipt_id=f"receipt-{job_id}",
             ),
         ),
     )
-    materialized = jobs.materialize(generation)
-    job = materialized[0]
+    return JobStore(work_root).materialize(generation)[0]
 
-    # Create request via public MCP tool with job link
-    result = await create_request(
+
+def _storage_snapshot(work_root: Path) -> dict[str, bytes]:
+    """Capture complete request and active-job bytes below the runtime root."""
+    paths = sorted((*work_root.glob("requests/**/*.yaml"), *work_root.glob("jobs/**/*.yaml")))
+    return {path.relative_to(work_root).as_posix(): path.read_bytes() for path in paths}
+
+
+async def _create_action(  # noqa: PLR0913
+    mcp_ctx: MagicMock,
+    revision: ChangeRevision,
+    *,
+    request_id: str,
+    created_at: str = CREATED_AT,
+    change_id: str | None = None,
+    delivery_digest: str | None = None,
+    target_node_id: str | None = None,
+    job_ids: list[int] | None = None,
+    summary: str = "External evidence is required.",
+) -> dict[str, object]:
+    """Invoke the public create tool with a complete native action payload."""
+    return await create_request(
         mcp_ctx,
-        change_id="test-change",
-        delivery_digest="a" * 64,
+        request_id=request_id,
+        created_at=created_at,
+        change_id=change_id or revision.change_id,
+        delivery_digest=delivery_digest or revision.delivery_digest,
         kind="action",
-        title="Test Request",
-        summary="Test summary",
+        title="Provide release evidence",
+        summary=summary,
         agent="builder",
-        target_node_id="DN-001",
-        job_ids=[job.job.job_id],
-        body="Test evidence",
+        target_node_id=target_node_id,
+        job_ids=job_ids,
+        body="release-id=42",
     )
 
-    # Assert request persisted
-    assert "request" in result
-    assert result["request"]["change_id"] == "test-change"
-    assert result["request"]["delivery_digest"] == "a" * 64
-    assert result["request"]["kind"] == "action"
-    request_id = result["request"]["request_id"]
 
-    # Assert job block updated atomically
-    stored_job = jobs.read(job.job.job_id)
-    assert request_id in stored_job.job.pending_request_ids, (
-        "Job must contain pending_request_ids with the new request_id"
-    )
+@pytest.mark.parametrize("tool_name", ["create_request", "list_requests", "show_request"])
+def test_native_request_tools_are_registered(tool_name: str) -> None:
+    """Expose the three native request operations through FastMCP."""
+    assert tool_name in mcp._tool_manager._tools  # noqa: SLF001
+
+
+def test_resolve_request_tool_is_not_registered() -> None:
+    """Keep request resolution outside the agent-facing MCP surface."""
+    assert "resolve_request" not in mcp._tool_manager._tools  # noqa: SLF001
+
+
+def test_native_request_tool_signatures() -> None:
+    """Require native revision and immutable request identity fields."""
+    create = inspect.signature(create_request).parameters
+    required = {
+        "ctx",
+        "request_id",
+        "created_at",
+        "change_id",
+        "delivery_digest",
+        "kind",
+        "title",
+        "summary",
+        "agent",
+    }
+    assert required <= create.keys()
+    assert all(create[name].default is inspect.Parameter.empty for name in required)
+    assert {"target_node_id", "job_ids", "options", "body"} <= create.keys()
+
+    listed = inspect.signature(list_requests).parameters
+    assert {"ctx", "change_id", "delivery_digest", "status"} <= listed.keys()
+    assert listed["status"].default == "pending"
+
+    shown = inspect.signature(show_request).parameters
+    assert {"ctx", "change_id", "delivery_digest", "request_id"} == shown.keys()
 
 
 @pytest.mark.asyncio
-async def test_create_request_exact_replay_no_duplicate(
+async def test_create_request_replays_exact_native_identity_without_mutation(
     mcp_ctx: MagicMock,
-    runtime: NativeRequestRuntime,  # noqa: ARG001
-    work_root: Path,
-    mock_load_change: None,  # noqa: ARG001
+    app_ctx: AppContext,
+    revision: ChangeRevision,
 ) -> None:
-    """AC1: Submitting request with same parameters but already-created request_id does not duplicate job blocks."""
-    # Note: The MCP tool generates fresh created_at timestamps, so exact content replay
-    # isn't possible through the public API. This test verifies that once a request exists,
-    # attempting to create with the same request_id (even with changed content) is rejected
-    # without corrupting job blocks.
+    """Persist one linked request and replay the same immutable payload exactly."""
+    stored_job = _materialize_job(app_ctx.kanban_dir, revision)
+    target_node_id = revision.graph.nodes[0].id
 
-    # Create request first time
-    await create_request(
+    created = await _create_action(
         mcp_ctx,
-        change_id="test-change",
-        delivery_digest="a" * 64,
-        kind="action",
-        title="Unique Request Title ABC",
-        summary="Test summary",
-        agent="builder",
-        body="Test evidence",
+        revision,
+        request_id="request-replay",
+        target_node_id=target_node_id,
+        job_ids=[stored_job.job.job_id],
+    )
+    snapshot = _storage_snapshot(app_ctx.kanban_dir)
+    replayed = await _create_action(
+        mcp_ctx,
+        revision,
+        request_id="request-replay",
+        target_node_id=target_node_id,
+        job_ids=[stored_job.job.job_id],
     )
 
-    # Count pending requests before replay
-    pending_before = list((work_root / "requests" / "pending").glob("*.yml"))
-    count_before = len(pending_before)
-
-    # Attempt to create again with slightly different content (MCP tool will generate new timestamp)
-    # This should be rejected as a conflict, not create a duplicate
-    with pytest.raises(ToolError) as exc_info:
-        await create_request(
-            mcp_ctx,
-            change_id="test-change",
-            delivery_digest="a" * 64,
-            kind="action",
-            title="Unique Request Title ABC",
-            summary="Test summary CHANGED",  # Changed to force different content
-            agent="builder",
-            body="Test evidence",
-        )
-
-    # Verify conflict error
-    assert "ERR_NATIVE_REQUEST_CONFLICT" in str(exc_info.value)
-
-    # Assert no duplicate file created
-    pending_after = list((work_root / "requests" / "pending").glob("*.yml"))
-    assert len(pending_after) == count_before, "Conflict must not create duplicate request file"
+    assert replayed == created
+    assert _storage_snapshot(app_ctx.kanban_dir) == snapshot
+    assert set(snapshot) == {"jobs/1.yaml", "requests/pending/request-replay.yaml"}
+    assert JobStore(app_ctx.kanban_dir).read(1).job.pending_request_ids == ("request-replay",)
 
 
 @pytest.mark.asyncio
-async def test_create_request_decision_with_options_persists(
+async def test_create_decision_request_preserves_options(
     mcp_ctx: MagicMock,
-    runtime: NativeRequestRuntime,  # noqa: ARG001
-    mock_load_change: None,  # noqa: ARG001
+    revision: ChangeRevision,
 ) -> None:
-    """AC1: Valid decision request with options atomically persists."""
+    """Preserve structured decision tradeoffs through the public adapter."""
     options = [
         {
-            "option_id": "opt-a",
-            "label": "Option A",
-            "pros": ("Pro 1",),
-            "cons": ("Con 1",),
+            "option_id": "local-fix",
+            "label": "Apply local fix",
+            "pros": ("Contained",),
+            "cons": ("Narrow",),
             "risks": (),
             "recommended": True,
             "confidence": 0.9,
-            "rationale": "Best choice",
+            "rationale": "The issue is implementation-local.",
         },
         {
-            "option_id": "opt-b",
-            "label": "Option B",
-            "pros": (),
-            "cons": ("Con 1",),
-            "risks": ("Risk 1",),
+            "option_id": "redesign",
+            "label": "Re-enter design",
+            "pros": ("Revisits authority",),
+            "cons": ("Interrupts delivery",),
+            "risks": ("Broader delay",),
             "recommended": False,
             "confidence": 0.7,
-            "rationale": "Alternative",
+            "rationale": "Use when authority must change.",
         },
     ]
 
     result = await create_request(
         mcp_ctx,
-        change_id="test-change",
-        delivery_digest="a" * 64,
+        request_id="request-decision",
+        created_at=CREATED_AT,
+        change_id=revision.change_id,
+        delivery_digest=revision.delivery_digest,
         kind="decision",
-        title="Test Decision",
-        summary="Test summary",
+        title="Choose implementation",
+        summary="One runtime choice is required.",
         agent="shaper",
         options=options,
     )
 
-    assert "request" in result
-    assert result["request"]["kind"] == "decision"
-    assert len(result["request"]["options"]) == 2
-
-
-# ---------------------------------------------------------------------------
-# AC2: Mismatched change/digest/node/job references or changed replay content
-#      returns distinct stable reference/conflict ToolError codes and leaves
-#      request+job records unchanged
-# ---------------------------------------------------------------------------
+    request = cast("dict[str, object]", result["request"])
+    assert request["kind"] == "decision"
+    assert request["options"] == tuple(options)
 
 
 @pytest.mark.asyncio
-async def test_create_request_mismatched_digest_stable_error(
+async def test_create_request_reference_errors_leave_storage_unchanged(
     mcp_ctx: MagicMock,
-    mock_load_change: None,  # noqa: ARG001
-) -> None:
-    """AC2: Mismatched delivery_digest returns stable ERR_DIGEST_MISMATCH."""
-    with pytest.raises(ToolError) as exc_info:
-        await create_request(
-            mcp_ctx,
-            change_id="test-change",
-            delivery_digest="b" * 64,  # Wrong digest
-            kind="action",
-            title="Test",
-            summary="Test",
-            agent="builder",
-            body="Evidence",
-        )
-    assert "ERR_DIGEST_MISMATCH" in str(exc_info.value)
-
-
-@pytest.mark.asyncio
-async def test_create_request_invalid_job_reference_stable_error(
-    mcp_ctx: MagicMock,
-    mock_load_change: None,  # noqa: ARG001
-) -> None:
-    """AC2: Invalid job reference returns stable ERR_NATIVE_REQUEST_REFERENCE."""
-    with pytest.raises(ToolError) as exc_info:
-        await create_request(
-            mcp_ctx,
-            change_id="test-change",
-            delivery_digest="a" * 64,
-            kind="action",
-            title="Test",
-            summary="Test",
-            agent="builder",
-            job_ids=[99999],  # Non-existent job
-            body="Evidence",
-        )
-    assert "ERR_NATIVE_REQUEST_REFERENCE" in str(exc_info.value)
-
-
-@pytest.mark.asyncio
-async def test_create_request_changed_replay_content_conflict_error(
-    mcp_ctx: MagicMock,
-    runtime: NativeRequestRuntime,  # noqa: ARG001
-    work_root: Path,
-    mock_load_change: None,  # noqa: ARG001
-) -> None:
-    """AC2: Changed replay content returns stable ERR_NATIVE_REQUEST_CONFLICT."""
-    # Create initial request
-    await create_request(
-        mcp_ctx,
-        change_id="test-change",
-        delivery_digest="a" * 64,
-        kind="action",
-        title="Test Request",
-        summary="Test summary",
-        agent="builder",
-        body="Original evidence",
-    )
-
-    # Get pre-change request count
-    pending_before = list((work_root / "requests" / "pending").glob("*.yml"))
-    count_before = len(pending_before)
-
-    # Attempt replay with changed content (same title generates same request_id)
-    with pytest.raises(ToolError) as exc_info:
-        await create_request(
-            mcp_ctx,
-            change_id="test-change",
-            delivery_digest="a" * 64,
-            kind="action",
-            title="Test Request",
-            summary="CHANGED summary",  # Changed content
-            agent="builder",
-            body="Original evidence",
-        )
-    assert "ERR_NATIVE_REQUEST_CONFLICT" in str(exc_info.value)
-
-    # Assert request count unchanged (no duplicate or replacement)
-    pending_after = list((work_root / "requests" / "pending").glob("*.yml"))
-    assert len(pending_after) == count_before, "Conflict must not create duplicate request"
-
-
-# ---------------------------------------------------------------------------
-# AC3: List with pending/resolved filtering in stable request-identity order;
-#      unsupported status returns stable parameter ToolError
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_list_requests_pending_filtering_stable_order(
-    mcp_ctx: MagicMock,
-    runtime: NativeRequestRuntime,  # noqa: ARG001
-    mock_load_change: None,  # noqa: ARG001
-) -> None:
-    """AC3: list_requests with status=pending returns only pending in stable order."""
-    # Create multiple pending requests
-    await create_request(
-        mcp_ctx,
-        change_id="test-change",
-        delivery_digest="a" * 64,
-        kind="action",
-        title="Request A",
-        summary="Summary A",
-        agent="builder",
-        body="Evidence A",
-    )
-    await create_request(
-        mcp_ctx,
-        change_id="test-change",
-        delivery_digest="a" * 64,
-        kind="action",
-        title="Request B",
-        summary="Summary B",
-        agent="builder",
-        body="Evidence B",
-    )
-
-    # List pending
-    result = await list_requests(mcp_ctx, change_id="test-change", delivery_digest="a" * 64, status="pending")
-
-    assert len(result) == 2
-    # Assert stable identity order (request_id lexicographic)
-    request_ids = [r["request"]["request_id"] for r in result]
-    assert request_ids == sorted(request_ids), "Requests must be in stable identity order"
-
-
-@pytest.mark.asyncio
-async def test_list_requests_resolved_filtering(
-    mcp_ctx: MagicMock,
-    runtime: NativeRequestRuntime,  # noqa: ARG001
     app_ctx: AppContext,
-    revision: ChangeRevision,  # noqa: ARG001
-    mock_load_change: None,  # noqa: ARG001
+    revision: ChangeRevision,
 ) -> None:
-    """AC3: list_requests with status=resolved returns only resolved requests."""
-    # Create pending request
-    await create_request(
-        mcp_ctx,
-        change_id="test-change",
-        delivery_digest="a" * 64,
-        kind="action",
-        title="Pending Request XYZ",
-        summary="Summary",
-        agent="builder",
-        body="Evidence",
+    """Map change, digest, node, and missing-job failures without mutation."""
+    target_node_id = revision.graph.nodes[0].id
+    cases = (
+        ({"request_id": "request-change", "change_id": "missing-change"}, "ERR_CHANGE_NOT_FOUND"),
+        ({"request_id": "request-digest", "delivery_digest": "0" * 64}, "ERR_DIGEST_MISMATCH"),
+        ({"request_id": "request-node", "target_node_id": "DN-999"}, "ERR_NATIVE_REQUEST_REFERENCE"),
+        (
+            {"request_id": "request-job", "target_node_id": target_node_id, "job_ids": [99999]},
+            "ERR_NATIVE_REQUEST_REFERENCE",
+        ),
     )
 
-    # Create resolved request by writing request to pending and resolution to resolved
-    request = NativeRequest(
-        request_id="test-resolved-req",
-        kind="action",
-        title="Resolved Request",
-        summary="Summary",
-        body="Evidence",
-        agent="builder",
-        created_at=datetime.now().astimezone().isoformat(),
-        change_id="test-change",
-        delivery_digest="a" * 64,
-        evidence=("Evidence",),
-        resume_condition="Resolved",
-    )
-    resolution = RequestResolution(
-        request_id="test-resolved-req",
-        disposition="local",
-        resolved_at=datetime.now().astimezone().isoformat(),
-        resolved_by="test-user",
-        response="Done",
-        rationale="Complete",
-    )
-
-    # Write request to pending directory
-    pending_dir = app_ctx.kanban_dir / "requests" / "pending"
-    pending_dir.mkdir(parents=True, exist_ok=True)
-    pending_path = pending_dir / "test-resolved-req.yaml"
-
-    # Write resolution to resolved directory
-    resolved_dir = app_ctx.kanban_dir / "requests" / "resolved"
-    resolved_dir.mkdir(parents=True, exist_ok=True)
-    resolved_path = resolved_dir / "test-resolved-req.yaml"
-
-    from owlbear_kanban.yaml_rt import make_yaml
-
-    yaml = make_yaml(explicit_start=True)
-
-    with pending_path.open("w", encoding="utf-8") as f:
-        yaml.dump(request.model_dump(mode="json"), f)
-
-    with resolved_path.open("w", encoding="utf-8") as f:
-        yaml.dump(resolution.model_dump(mode="json"), f)
-
-    # List resolved only
-    result = await list_requests(mcp_ctx, change_id="test-change", delivery_digest="a" * 64, status="resolved")
-
-    assert len(result) == 1, f"Expected 1 resolved request, got {len(result)}"
-    assert all(r.get("resolution") is not None for r in result), "All resolved requests must have resolution"
+    for arguments, error_code in cases:
+        before = _storage_snapshot(app_ctx.kanban_dir)
+        with pytest.raises(ToolError, match=error_code):
+            await _create_action(mcp_ctx, revision, **arguments)  # type: ignore[arg-type]
+        assert _storage_snapshot(app_ctx.kanban_dir) == before
 
 
 @pytest.mark.asyncio
-async def test_list_requests_unsupported_status_stable_error(
+async def test_create_request_rejects_jobs_outside_revision_or_target(
     mcp_ctx: MagicMock,
-    mock_load_change: None,  # noqa: ARG001
+    app_ctx: AppContext,
+    revision: ChangeRevision,
 ) -> None:
-    """AC3: Unsupported status returns stable parameter ToolError."""
-    with pytest.raises(ToolError) as exc_info:
+    """Reject revision- and target-mismatched jobs without changing storage."""
+    first_node = revision.graph.nodes[0].id
+    second_node = revision.graph.nodes[1].id
+    _materialize_job(app_ctx.kanban_dir, revision, job_id=2, change_id="other-change")
+    _materialize_job(app_ctx.kanban_dir, revision, job_id=3, target_node_id=second_node)
+
+    for request_id, job_id in (("request-revision-job", 2), ("request-target-job", 3)):
+        before = _storage_snapshot(app_ctx.kanban_dir)
+        with pytest.raises(ToolError, match="ERR_NATIVE_REQUEST_REFERENCE"):
+            await _create_action(
+                mcp_ctx,
+                revision,
+                request_id=request_id,
+                target_node_id=first_node,
+                job_ids=[job_id],
+            )
+        assert _storage_snapshot(app_ctx.kanban_dir) == before
+
+
+@pytest.mark.asyncio
+async def test_create_request_changed_replay_conflicts_without_mutation(
+    mcp_ctx: MagicMock,
+    app_ctx: AppContext,
+    revision: ChangeRevision,
+) -> None:
+    """Treat changed immutable content under one request identity as a conflict."""
+    await _create_action(mcp_ctx, revision, request_id="request-conflict")
+    before = _storage_snapshot(app_ctx.kanban_dir)
+
+    with pytest.raises(ToolError, match="ERR_NATIVE_REQUEST_CONFLICT"):
+        await _create_action(
+            mcp_ctx,
+            revision,
+            request_id="request-conflict",
+            summary="Changed immutable summary.",
+        )
+
+    assert _storage_snapshot(app_ctx.kanban_dir) == before
+
+
+@pytest.mark.asyncio
+async def test_list_requests_filters_status_in_request_identity_order(
+    mcp_ctx: MagicMock,
+    app_ctx: AppContext,
+    revision: ChangeRevision,
+) -> None:
+    """Filter pending and resolved summaries in ascending request identity order."""
+    for request_id in ("request-zulu", "request-alpha", "request-mike"):
+        await _create_action(mcp_ctx, revision, request_id=request_id)
+    NativeRequestRuntime(revision, app_ctx.kanban_dir).resolve_request(
+        RequestResolution(
+            request_id="request-alpha",
+            disposition="local",
+            resolved_at="2026-07-25T00:01:00Z",
+            resolved_by="user",
+            response="Evidence supplied.",
+            rationale="The request is complete.",
+        )
+    )
+
+    pending = await list_requests(
+        mcp_ctx,
+        change_id=revision.change_id,
+        delivery_digest=revision.delivery_digest,
+        status="pending",
+    )
+    resolved = await list_requests(
+        mcp_ctx,
+        change_id=revision.change_id,
+        delivery_digest=revision.delivery_digest,
+        status="resolved",
+    )
+
+    assert [item["request"]["request_id"] for item in pending] == ["request-mike", "request-zulu"]
+    assert [item["request"]["request_id"] for item in resolved] == ["request-alpha"]
+    assert all("body" not in item["request"] for item in (*pending, *resolved))
+
+
+@pytest.mark.asyncio
+async def test_list_requests_rejects_unsupported_status(
+    mcp_ctx: MagicMock,
+    revision: ChangeRevision,
+) -> None:
+    """Return a stable parameter error for unsupported request status."""
+    with pytest.raises(ToolError, match="status must be 'pending', 'resolved', or 'all'"):
         await list_requests(
             mcp_ctx,
-            change_id="test-change",
-            delivery_digest="a" * 64,
-            status="invalid-status",  # Unsupported
+            change_id=revision.change_id,
+            delivery_digest=revision.delivery_digest,
+            status="invalid",
         )
-    # Assert parameter validation error (not a specific ERR_ code, but validation failure)
-    assert "parameter" in str(exc_info.value).lower() or "validation" in str(exc_info.value).lower()
-
-
-# ---------------------------------------------------------------------------
-# AC4: show_request returns full StoredRequest with resolution for existing;
-#      missing request_id returns stable not-found ToolError
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_show_request_existing_complete_stored_request(
+async def test_show_request_returns_full_record_and_missing_is_read_only(
     mcp_ctx: MagicMock,
-    runtime: NativeRequestRuntime,  # noqa: ARG001
-    mock_load_change: None,  # noqa: ARG001
+    app_ctx: AppContext,
+    revision: ChangeRevision,
 ) -> None:
-    """AC4: show_request returns complete StoredRequest including resolution state."""
-    # Create request
-    result = await create_request(
+    """Return full request detail and a stable read-only not-found error."""
+    created = await _create_action(mcp_ctx, revision, request_id="request-show")
+    shown = await show_request(
         mcp_ctx,
-        change_id="test-change",
-        delivery_digest="a" * 64,
-        kind="action",
-        title="Test Request",
-        summary="Test summary",
-        agent="builder",
-        body="Test evidence",
+        change_id=revision.change_id,
+        delivery_digest=revision.delivery_digest,
+        request_id="request-show",
     )
-    request_id = result["request"]["request_id"]
+    assert shown == {"request": created["request"], "resolution": created["resolution"]}
+    assert shown["request"]["body"] == "release-id=42"
+    assert shown["resolution"] is None
 
-    # Show request
-    shown = await show_request(mcp_ctx, change_id="test-change", delivery_digest="a" * 64, request_id=request_id)
-
-    # Assert complete StoredRequest shape
-    assert "request" in shown
-    assert shown["request"]["request_id"] == request_id
-    assert shown["request"]["kind"] == "action"
-    assert shown["request"]["title"] == "Test Request"
-    assert shown["request"]["summary"] == "Test summary"
-    assert shown["request"]["body"] == "Test evidence"
-    assert shown["request"]["change_id"] == "test-change"
-    assert shown["request"]["delivery_digest"] == "a" * 64
-    # Resolution is None for pending
-    assert shown.get("resolution") is None or shown["resolution"] is None
-
-
-@pytest.mark.asyncio
-async def test_show_request_missing_stable_not_found_error(
-    mcp_ctx: MagicMock,
-    mock_load_change: None,  # noqa: ARG001
-) -> None:
-    """AC4: Missing request_id returns stable ERR_NATIVE_REQUEST_NOT_FOUND."""
-    with pytest.raises(ToolError) as exc_info:
+    before = _storage_snapshot(app_ctx.kanban_dir)
+    with pytest.raises(ToolError, match="ERR_NATIVE_REQUEST_NOT_FOUND"):
         await show_request(
             mcp_ctx,
-            change_id="test-change",
-            delivery_digest="a" * 64,
-            request_id="nonexistent-request-id",
+            change_id=revision.change_id,
+            delivery_digest=revision.delivery_digest,
+            request_id="request-missing",
         )
-    assert "ERR_NATIVE_REQUEST_NOT_FOUND" in str(exc_info.value)
+    assert _storage_snapshot(app_ctx.kanban_dir) == before

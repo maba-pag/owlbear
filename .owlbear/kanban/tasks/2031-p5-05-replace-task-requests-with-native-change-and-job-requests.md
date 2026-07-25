@@ -1,10 +1,10 @@
 ---
 id: 2031
 title: 'P5-05: Replace task requests with native change and job requests'
-status: build
+status: verify
 priority: high
 created: 2026-07-24T23:22:11.813787+02:00
-updated: 2026-07-25T12:27:27.719100+02:00
+updated: 2026-07-25T12:34:59.248265+02:00
 tags:
   - phase-5
   - scope:mcp-kanban
@@ -145,3 +145,21 @@ AC-1 now names the caller-supplied native identity/time fields and byte/job-proj
 The first shaper challenge failed because the closure map stopped at direct runtime proof and omitted the vacuous file glob. The corrected map names the public wrapper, current maintained suite, real loader, `*.yaml` bytes, linked-job projections, and negative control. Second shaper-challenger decision: `pass`; task is build-ready.
 
 Builder route: remove synthetic identity/time generation from `server.py`, accept the native fields, and rewrite the existing maintained test slice around the corrected public-boundary proof. Do not add a parallel test artifact or modify core runtime semantics.
+
+[[2026-07-25T12:34:59+02:00]]
+## Builder Notes
+DONE. Closed verifier failure key `#2031-AC1-4/native-request-durable-boundary` within the repaired adapter/test envelope.
+
+Changed `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py`: public `create_request` now requires caller-supplied `request_id` and `created_at`, forwards both unchanged into the existing immutable `NativeRequest`, and declares idempotent MCP semantics. Removed synthesized hash identity and wall-clock timestamp. Extracted the three request tools' repeated real change/digest loading into `_load_request_revision`; an absent change directory maps to `ERR_CHANGE_NOT_FOUND`, other invalid/non-admitted packages remain `ERR_CHANGE_NOT_ADMITTED`, and digest mismatch remains stable. Core `NativeRequestRuntime` semantics were not changed.
+
+Rewrote the existing maintained `serve/mcp-kanban/tests/test_mcp_request_tools.py` around the repaired public boundary. Fixtures copy the admitted `replace-delivery-pipeline` authority and use production `load_change`; no loader monkeypatch remains. Request and job proof snapshots read actual `*.yaml` bytes below `app_ctx.kanban_dir`, fixing both prior vacuous paths.
+
+AC-1: `test_create_request_replays_exact_native_identity_without_mutation` invokes public `create_request` twice with identical immutable fields and a real linked job, then proves equal `StoredRequest`, byte-identical request/job files, one request link, and no extra files. Decision tradeoffs are also preserved.
+
+AC-2: maintained public tests cover unknown change, wrong digest, absent graph node, missing job, revision-mismatched job, target-mismatched job, and one changed immutable field under a reused request ID. They assert the enumerated stable codes and complete pre/post request/job byte equality for each rejection.
+
+AC-3: public `list_requests` is exercised over two pending identities and one lower-layer resolved record; results filter correctly in ascending `request_id`, omit body from summaries, and reject unsupported status with the stable parameter error.
+
+AC-4: public `show_request` returns complete body and resolution state; missing identity returns `ERR_NATIVE_REQUEST_NOT_FOUND` with identical pre/post storage.
+
+Validation: `uv run pytest serve/mcp-kanban/tests/test_mcp_request_tools.py -q --tb=short` -> 13 passed. `uv run pytest serve/mcp-kanban/tests -q --tb=short` -> 422 passed. `uv run lint serve/mcp-kanban/src/owlbear_mcp_kanban/server.py serve/mcp-kanban/tests/test_mcp_request_tools.py` passed. Editor diagnostics and `git diff --check` are clean. Builder-challenger: pass after independent 422-test and Ruff reruns. No skips, scratch proof, loader replacement, synthetic identity/time, or stale `.yml` request glob remains.
