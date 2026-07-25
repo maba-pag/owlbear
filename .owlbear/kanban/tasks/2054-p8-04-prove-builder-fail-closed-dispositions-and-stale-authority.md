@@ -1,10 +1,10 @@
 ---
 id: 2054
 title: 'P8-04: Prove builder fail-closed dispositions and stale authority'
-status: build
+status: verify
 priority: high
 created: 2026-07-25T16:14:38.333700+02:00
-updated: 2026-07-25T16:14:38.333700+02:00
+updated: 2026-07-25T16:59:17.326266+02:00
 tags:
   - phase-8
   - scope:test
@@ -59,3 +59,15 @@ In: assembled shipped builder dispositions, identity-preserving public release, 
 Out: new finding persistence or corrective-job operations, runtime semantics, acceptor or auditor work, and setup or seed propagation.
 
 Proof guidance: exercise shipped builder and orchestrator contracts plus public start, release, receipt, and diagnostic boundaries.
+
+[[2026-07-25T16:59:17+02:00]]
+## Builder Notes
+
+Completed the fail-closed half of PROOF-006 in `serve/mcp-kanban/tests/test_builder_interaction.py` without changing runtime semantics or shipped declarations.
+
+- AC-1: three parameterized material-finding cases preserve exact `SpecificationReentry` fields, use the live shipped workflow/orchestrator routing contracts, release unchanged public claim identity, preserve prior receipt bytes, and issue no build receipt.
+- AC-2: a deterministic rejecting Git hook makes scoped `commit_owned_paths` fail; HEAD remains unchanged, the packet path remains visible and uncommitted, exact `CommitFailed` evidence is preserved, public release occurs, and no receipt is issued.
+- AC-3: five cases remove authority, diff, changed paths, proof, or commit identity from generated valid review context; the live malformed-review and `BuildBlocked` declarations are checked, reviewer write denial executes, unchanged identity releases, and no receipt appears.
+- AC-4: an isolated node-plan revision makes the generated build stale; public `start_job` returns `ERR_START_AUTHORITY_STALE` with `ERR_RECEIPT_NODE_PLAN_DIGEST_STALE` before claim. Attempt history, product commit, job claim identity, and receipt bytes remain unchanged.
+
+Evidence: assembled builder module 11 passed; complete MCP-Kanban package 80 passed; focused repository lint passed; VS Code diagnostics reported no errors. Builder challenger decision: pass.
