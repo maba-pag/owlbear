@@ -1,10 +1,10 @@
 ---
 id: 2064
 title: 'P10-05: Prove successful independent whole-change audit'
-status: collect
+status: archived
 priority: high
 created: 2026-07-25T19:53:45.800696+02:00
-updated: 2026-07-25T21:33:12.652455+02:00
+updated: 2026-07-25T21:33:50.385929+02:00
 tags:
   - phase-10
   - scope:test
@@ -40,7 +40,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Projection
@@ -94,3 +94,15 @@ PASS after two verifier-local test repairs.
 - Final verifier challenger: pass. It confirmed public lifecycle boundaries, real Git currentness, writer conflict, authority evidence, complete accepted receipt closure, canonical audit closure, archival, reader release, cleanup, and replay identity.
 
 Verifier changes are test-only and preserve deterministic defaults for existing native fixture callers.
+
+[[2026-07-25T21:33:50+02:00]]
+## Collect Notes
+
+ARCHIVED: successful PROOF-008 lifecycle proof is complete.
+
+- Builder commit `ce3fb7cd1f68531b7a721d3e9494273074b103d3` added the maintained public success scenario.
+- Verifier commit `66a5290d9fe4e87add24be3172cd4c394a249ef1` closed public-final-accept and real-Git-currentness gaps.
+- Final proof uses public `finish_accept`, `pick_jobs`, `start_job`, and `finish_audit` at actual Git HEAD with production receipt-currentness checks.
+- All ACs include direct evidence for writer coordination, shipped auditor authority, complete accepted receipt closure, canonical whole-change closure, archival, reader release, cleanup, and replay.
+- Dependency #2063 is archived completed; #2064 has no descendants or pending requests.
+- Final verifier challenger passed.
