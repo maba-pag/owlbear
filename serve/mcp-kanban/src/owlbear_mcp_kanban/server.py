@@ -20,6 +20,7 @@ from pydantic import ValidationError as PydanticValidationError
 
 from owlbear_kanban import (
     DispatchRuntime,
+    FinishAcceptRequest,
     FinishJobRequest,
     FinishPlanRequest,
     GitRepositoryHistory,
@@ -42,6 +43,7 @@ from owlbear_kanban.models import (
 )
 from owlbear_mcp_kanban.guidance import collect_guidance
 from owlbear_mcp_kanban.models import (
+    FinishAcceptParams,
     FinishJobParams,
     FinishPlanParams,
     KanbanTask,
@@ -958,12 +960,18 @@ async def finish_accept(  # noqa: PLR0913
     receipt_id: str,
     code_revision: str,
     evidence: dict[str, object],
+    reconciliation_plan_job_ids: tuple[int, ...],
     evidence_ids: tuple[str, ...] = (),
     impact_closure: dict[str, object] | None = None,
 ) -> object:
     """Finalize an accept job through the native dispatch runtime."""
     try:
-        return await _finish_job(ctx, FinishJobParams.model_validate(_tool_params(locals())), "accept")
+        params = FinishAcceptParams.model_validate(_tool_params(locals()))
+        app_ctx: AppContext = ctx.request_context.lifespan_context
+        request_data = params.model_dump(exclude={"change_id"})
+        if params.impact_closure is not None:
+            request_data["impact_closure"] = parse_impact_closure(params.impact_closure)
+        return _dispatch_runtime(app_ctx, params.change_id).finish_accept(FinishAcceptRequest(**request_data))
     except PydanticValidationError as exc:
         _raise_param_validation(str(exc))
 

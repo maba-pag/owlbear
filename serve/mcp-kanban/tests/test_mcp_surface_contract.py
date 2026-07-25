@@ -269,6 +269,19 @@ class TestFromAC_EndWorkOutcomeSchema:
         )
 
 
+class TestFinishAcceptSchema:
+    """The accept bridge exposes its native reconciliation identity contract."""
+
+    def test_finish_accept_requires_reconciliation_plan_job_ids(self) -> None:
+        """The public MCP schema requires accept-specific reconciliation plan IDs."""
+        tool = next(
+            (t for t in mcp._tool_manager._tools.values() if t.name == "finish_accept"),  # noqa: SLF001
+            None,
+        )
+        assert tool is not None, "finish_accept must be registered in the MCP tool registry"
+        assert "reconciliation_plan_job_ids" in tool.parameters.get("required", [])
+
+
 class _History:
     def revisions_exist(self, _tested_revision: str, _candidate_revision: str) -> bool:
         return True
@@ -450,6 +463,7 @@ class TestProof014NativeMcpScenario:
                             receipt_id=receipt_id,
                             code_revision="a" * 40,
                             evidence={"methods": list(proof.method)},
+                            reconciliation_plan_job_ids=(5, 6),
                         )
                     else:
                         result = await server.finish_audit(

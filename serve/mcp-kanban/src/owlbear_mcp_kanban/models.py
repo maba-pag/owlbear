@@ -109,6 +109,12 @@ class FinishPlanParams(FinishJobParams):
     accept_job_id: int = Field(gt=0)
 
 
+class FinishAcceptParams(FinishJobParams):
+    """Validate accept completion reconciliation-plan identities."""
+
+    reconciliation_plan_job_ids: tuple[int, ...]
+
+
 class ReleaseJobParams(MCPParamsBase):
     """Validate MCP inputs for releasing one active native job claim."""
 
