@@ -1,10 +1,10 @@
 ---
 id: 1983
 title: 'Bootstrap DN-006: Plan and reconcile the delivery-node frontier'
-status: collect
+status: archived
 priority: high
 created: 2026-07-22T01:07:22.578615+02:00
-updated: 2026-07-25T15:10:06.060580+02:00
+updated: 2026-07-25T15:52:25.247888+02:00
 tags:
   - bootstrap-projection
   - change:replace-delivery-pipeline
@@ -40,7 +40,7 @@ proof_bundle: existing+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Bootstrap Projection Identity
@@ -118,3 +118,21 @@ The executable chain is `#2047 -> #2048 -> #2049 -> #2050`. #2047 consumes curre
 `shaper-challenger` passed after verifying the admission receipt, all DN-006 obligations and risks, current FinishPlan/FinishAccept fields, `ERR_FINISH_NODE_PLAN_INVALID`, and the real `InvalidationRuntime.apply` mutation boundary. Its non-blocking note confirms PROOF-005 requires assembled mechanical expansion rejection while reviewer judgment may remain declaration-inspected.
 
 Created build-ready packets #2047 through #2050 with current change/digest/node/packet identities and the intended linear dependencies. The aggregate now depends on all four descendants and moves to collect; only #2047 is initially dependency-ready.
+
+[[2026-07-25T15:52:25+02:00]]
+## Collect Notes
+
+ARCHIVED. DN-006 is complete at admitted digest `3f6c656289911320bb5e7faf37b5e86ffa8511e729ade201a03a19913e33d990`.
+
+### Aggregate Closure
+- All nine declared dependencies are archived with `completed`, including packet children #2047 through #2050 and upstream DN-003/DN-004/DN-005/DN-009/IF-004 owners.
+- Descendant verification evidence is present for all four packets. #2048 and #2049 use the former `Verifier Notes` heading rather than canonical `Verify Notes`; their bounded records still contain tested commits, full AC maps, challenger passes, and no required follow-up.
+- Packet verifier commits: #2047 `39ce9cdaa509782d4577994a327bfa738fdb72d9`, #2048 `c311d5dec5570627658f1d55d88066fd3c479c0c`, #2049 `e6f494ede3f76889fda46d6e3f432588b6fe3966`, #2050 `75db1c280e4ac7a848c3fef56f98df46ac82a6bf`.
+
+### Current-SHA Proof
+At descendant commit `800f3d3e7b403ac1b5790f29342521439d9b7a4f`:
+- all 16 agent declarations conform;
+- skill validation passes;
+- assembled planner interaction, native runtime, dispatch runtime, and invalidation suites pass: 77 passed.
+
+The proof covers the resumable shipped planner, engine-selected initial and reconciliation jobs, atomic per-node publication/failure, accepted-evidence fold-in, blocked stale dependent builds, superseding digest-bound work, and predecessor-accept invalidation without material authority expansion.
