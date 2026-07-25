@@ -735,6 +735,7 @@ def test_start_job_rejects_terminal_dispositions(revision, tmp_path, disposition
     ("changes", "code", "target"),
     [
         ({"change_id": "other-change"}, StartJobDiagnosticCode.AUTHORITY_STALE, "1"),
+        ({"node_plan_digest": "a" * 64}, StartJobDiagnosticCode.AUTHORITY_STALE, "DN-001"),
         ({"predecessor_job_ids": (2,)}, StartJobDiagnosticCode.PREDECESSOR_INVALID, "2"),
         ({"pending_request_ids": ("request-001",)}, StartJobDiagnosticCode.REQUEST_PENDING, "request-001"),
         ({"claim_id": "claim-001"}, StartJobDiagnosticCode.ACTIVE_CLAIM, None),

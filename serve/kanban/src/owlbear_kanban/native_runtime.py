@@ -673,21 +673,25 @@ class NativeRuntime:
     def _authoritative_job(self, request: StartJobRequest) -> StoredJob | StartJobResult:
         try:
             stored = self._jobs.read(request.job_id)
-            project_job(stored.job, self._revision)
+            diagnostic = self._authority_diagnostic(stored.job)
         except FileNotFoundError, ValueError:
             return self._diagnostic(
                 StartJobDiagnosticCode.AUTHORITY_STALE,
                 "job authority does not match the loaded revision",
                 target=str(request.job_id),
             )
+        if diagnostic is not None:
+            return diagnostic
         return stored
 
     def _dispatch_eligibility(self, stored: StoredJob, candidate_revision: str) -> str | None:
         """Return the start-gate code that excludes a read-only dispatch candidate."""
         try:
-            project_job(stored.job, self._revision)
+            diagnostic = self._authority_diagnostic(stored.job)
         except ValueError:
             return StartJobDiagnosticCode.AUTHORITY_STALE.value
+        if diagnostic is not None:
+            return diagnostic.diagnostic.code.value
         request = StartJobRequest(
             job_id=stored.job.job_id,
             attempt_id="dispatch-plan",
@@ -703,6 +707,21 @@ class NativeRuntime:
                 if result.diagnostic is None:
                     return StartJobDiagnosticCode.ACTIVE_CLAIM.value
                 return result.diagnostic.code.value
+        return None
+
+    def _authority_diagnostic(self, job: JobRecord) -> StartJobResult | None:
+        project_job(job, self._revision, self._revision.read_node_plan(job.target_node_id))
+        if (
+            job.kind != "plan"
+            and job.node_plan_digest is not None
+            and job.node_plan_digest != compute_node_plan_digest(self._revision, job.target_node_id)
+        ):
+            return self._diagnostic(
+                StartJobDiagnosticCode.AUTHORITY_STALE,
+                "job node-plan digest differs from current authority",
+                lower_code=ReceiptValidityCode.NODE_PLAN_DIGEST_STALE.value,
+                target=job.target_node_id,
+            )
         return None
 
     def _predecessor_check(self, stored: StoredJob, request: StartJobRequest) -> StartJobResult | None:

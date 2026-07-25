@@ -1,10 +1,10 @@
 ---
 id: 2035
 title: 'P1-C4: Enforce acceptance-triggered plan reconciliation'
-status: build
+status: verify
 priority: high
 created: 2026-07-25T02:46:46.300991+02:00
-updated: 2026-07-25T06:29:47.839127+02:00
+updated: 2026-07-25T06:33:43.561776+02:00
 tags:
   - change:replace-delivery-pipeline
   - node:DN-003
@@ -199,3 +199,16 @@ Use real `JobStore`, `ReceiptStore`, `NodePlanStore`, `RuntimeTransaction`, and 
 
 ### Challenge And Route
 Challenge reconsidered only the claimed-build invalidation branch. The approved sequence proves new-build eligibility, explicitly releases the owned claim, then invalidates unclaimed descendants, leaving claim-stripping semantics out of scope. Final challenge passed. Route advances to `build` for actual durable scenario implementation.
+
+[[2026-07-25T06:33:43+02:00]]
+## Builder Notes
+- Change envelope: native start and dispatch eligibility needed to reject digest-bearing non-plan jobs whose node-plan authority is stale. Expected owners were `NativeRuntime` and its runtime/dispatch tests.
+- Files changed: `serve/kanban/src/owlbear_kanban/native_runtime.py`; `serve/kanban/tests/test_native_runtime.py`; `serve/kanban/tests/test_dispatch_runtime.py`.
+- Change Module Map deviations: none. The shared native authority gate is used by both start and dispatch eligibility paths.
+- Implementation: added `_authority_diagnostic`, which compares a declared non-plan `node_plan_digest` with the current isolated plan digest. Start returns `ERR_START_AUTHORITY_STALE` before mutation and dispatch projects the same state as an authority-stale omission.
+- Durable-test justification: start and dispatch are separate public boundaries over a shared correctness gate. The new tests guard stale-plan execution and scheduling regressions that are not otherwise covered.
+- Commands run: `uv run pytest serve/kanban/tests/test_native_runtime.py` passed 26 tests; `uv run pytest serve/kanban/tests/test_native_runtime.py serve/kanban/tests/test_dispatch_runtime.py` passed 32 tests; `uv run pytest serve/kanban/tests` produced 983 passes and 8 unrelated historical-admission fixture failures because legacy `graph.yaml` is rejected.
+- AC-to-evidence: AC1 remains unchanged because plan jobs bypass the digest comparison; AC2 existing finish-plan/replay coverage passed in the focused native suite; AC3 is directly covered by the new start diagnostic and dispatch omission tests; AC4 existing acceptance reconciliation and replay coverage passed in the focused native suite; AC5 existing plan-currentness/invalidation coverage remained green in the focused native suite.
+- Current failure-key resolutions: none were supplied.
+- Builder-challenger: pass. It confirmed the authority gate and targeted start/dispatch coverage fit the task contract.
+- Follow-up risk: full package suite has eight unrelated historical fixture failures from legacy `graph.yaml` admission rejection.

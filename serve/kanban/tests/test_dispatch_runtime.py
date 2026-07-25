@@ -212,6 +212,19 @@ def test_pick_waves_is_deterministic_and_uses_current_job_state(revision, tmp_pa
     ]
 
 
+def test_pick_waves_omits_stale_node_plan_digest(revision, tmp_path) -> None:
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    store = JobStore(work_root)
+    _materialize(store, _record(revision, 1).model_copy(update={"node_plan_digest": "a" * 64}))
+    runtime = DispatchRuntime(NativeRuntime(revision, work_root, _History(), timedelta(minutes=5)), work_root)
+
+    plan = runtime.pick_waves("a" * 40, size=1)
+
+    assert plan.waves == ()
+    assert [(item.job_id, item.reason) for item in plan.omissions] == [(1, DispatchOmissionReason.AUTHORITY_STALE)]
+
+
 def test_pick_waves_separates_dependent_readers(revision, tmp_path) -> None:
     changes_dir = tmp_path / "changes"
     shutil.copytree(revision.source_dir, changes_dir / revision.change_id)
