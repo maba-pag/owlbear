@@ -1,10 +1,10 @@
 ---
 id: 2044
 title: 'P6-02: Expose the native designer and admission challenger'
-status: verify
+status: collect
 priority: high
 created: 2026-07-25T14:28:55.328794+02:00
-updated: 2026-07-25T14:42:26.890388+02:00
+updated: 2026-07-25T14:43:48.180280+02:00
 tags:
   - phase-6
   - scope:agent
@@ -76,3 +76,22 @@ Exposed the native Specification surface with `designer`, hard-read-only `design
 - Editor diagnostics — none.
 - Full live-registry regression remains pre-existing failure on `collector.agent.md` generic task tools removed by DN-009; the four designer tools are present in the shipped native registry.
 - `builder-challenger` — pass; no findings.
+
+[[2026-07-25T14:43:48+02:00]]
+## Verify Notes
+Verified committed builder revision `c56e86ce843fd69a365cafe37ede3dc294feeaa4` against DN-005, IF-006, MOD-003, MIG-003, and the executable ecosystem contracts.
+
+### AC Evidence
+- AC-1: Committed `designer` requires `w-design-session`, has the user-question, source inspection, authority edit, and exact four native change tools, and aligns its frontmatter/body delegation to `designer-challenger` plus Explore with a narrow current-Specification write boundary.
+- AC-2: Committed `designer-challenger` has no mutation or admission tools, uses the hard deny-write hook, requires complete typed per-entity challenge evidence, and explicitly cannot approve admission.
+- AC-3: Both committed prompts select `designer` and `w-design-session` in discovery/direct modes over one native session; neither contains an OpenSpec command or handoff.
+- AC-4: Committed `share/WIRING.md` agrees on roles, prompt entries, required loading, delegation, and read-only hook.
+
+### Proof
+- `git show --check c56e86ce843fd69a365cafe37ede3dc294feeaa4` — pass.
+- Agent validator — all 14 agents conform.
+- Skill validator — pass.
+- Applicable ecosystem and write-guard regressions — 57 passed.
+- Editor diagnostics — none for all five artifacts.
+- Known collector generic-tool live-registry mismatch is unrelated existing migration state outside this packet.
+- `verifier-challenger` — pass; no follow-up.
