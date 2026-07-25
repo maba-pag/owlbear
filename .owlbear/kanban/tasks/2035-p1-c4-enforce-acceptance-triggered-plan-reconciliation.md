@@ -1,10 +1,10 @@
 ---
 id: 2035
 title: 'P1-C4: Enforce acceptance-triggered plan reconciliation'
-status: verify
+status: shape
 priority: high
 created: 2026-07-25T02:46:46.300991+02:00
-updated: 2026-07-25T06:33:43.561776+02:00
+updated: 2026-07-25T06:36:56.387498+02:00
 tags:
   - change:replace-delivery-pipeline
   - node:DN-003
@@ -212,3 +212,23 @@ Challenge reconsidered only the claimed-build invalidation branch. The approved 
 - Current failure-key resolutions: none were supplied.
 - Builder-challenger: pass. It confirmed the authority gate and targeted start/dispatch coverage fit the task contract.
 - Follow-up risk: full package suite has eight unrelated historical fixture failures from legacy `graph.yaml` admission rejection.
+
+[[2026-07-25T06:36:56+02:00]]
+## Verify Notes
+- Evidence reviewed: Objective, Scope, Authority, Engine Handoff, AC1-AC5, the repeated-failure Shape Notes, latest Builder Notes, commits `447fe240b` and `50d71028c`, and the claimed runtime/test slice.
+- Named authorities checked: `NativeRuntime` remains the transition and start-eligibility owner; `DispatchRuntime` forwards the native dispatch eligibility; receipt currentness and invalidation remain in their existing owners.
+- Change Module Map: no source-map deviation in the latest commit. The shared non-plan authority gate is a local `native_runtime.py` change; the commit also adds one native start parameterization and one dispatch omission test.
+- Normal-path boundary exercised: `uv run pytest serve/kanban/tests/test_native_runtime.py serve/kanban/tests/test_dispatch_runtime.py` passed with 32 tests. These tests use public NativeRuntime and DispatchRuntime operations; coordination replacements remain below that boundary.
+- Checks run: `git show --check HEAD` passed; `uv run --project . test-root` resolved both files to the root pytest boundary; focused pytest passed. Exact latest test additions cover stale node-plan authority at native start and dispatch wave selection.
+- Finding: the current tests do not implement the shaped scenario matrix. `test_reconciliation_finish_releases_new_build_and_invalidation_closure` and the three-node fold-in/OCC scenario are absent. Therefore AC3-AC5 lack direct proof for reconciliation plan completion, changed receipt/digest, old versus new build eligibility, invalidation closure with a disjoint-current negative control, and multi-predecessor identity conflicts. The passing stale-authority tests prove only a subset of AC3.
+- Patch applied: none. Adding the missing durable scenarios exceeds the verifier local patch budget.
+- AC-to-evidence: AC1 and AC2 retain existing focused native-runtime coverage; AC3 has partial start/dispatch stale-authority coverage; AC4 has prior accept creation/replay coverage but not the shaped three-node fold-in matrix; AC5 is unproven by the latest test artifacts.
+- Prior same-failure-key check: `AC3-AC5/reconciliation-scenario-proof` previously caused a verifier rejection and then a reshape. The latest builder commit did not add the required reconciled scenario artifacts, so another build retry without revising the explicit proof contract would create a prohibited third piecemeal build/verify cycle.
+- Verifier-challenger: not invoked because this is a non-PASS route.
+
+### Required Follow-up
+| # | Failure Key | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|--------------|-----------------|---------|----------|
+| 1 | AC3-AC5/reconciliation-scenario-proof | shape | Reconcile the current Shape Notes with the actual implementation delta before redispatch. Either preserve the approved public-runtime reconciliation scenario matrix as required work and verify the builder implements it, or materially narrow AC/proof scope with authority. Do not route a third piecemeal build cycle on stale-authority tests alone. | `serve/kanban/tests/test_native_runtime.py`, `serve/kanban/tests/test_dispatch_runtime.py`, task 2035 AC and Shape Notes | Focused pytest passed 32 tests, while source inspection and latest diff show only stale-authority native/dispatch assertions; required reconciliation finish/invalidation and fold-in scenarios are absent. |
+
+- Final route: RESHAPE to shape.
