@@ -1,10 +1,10 @@
 ---
 id: 2027
 title: 'P5-01: Establish native MCP authority context and change inspection'
-status: verify
+status: collect
 priority: high
 created: 2026-07-24T23:21:34.679658+02:00
-updated: 2026-07-25T09:31:06.346813+02:00
+updated: 2026-07-25T09:45:38.671327+02:00
 tags:
   - phase-5
   - scope:mcp-kanban
@@ -85,3 +85,38 @@ Implemented 4 public MCP tools for native change authority over `owlbear_kanban.
 - Core engine, Cockpit, setup, agents untouched per envelope
 
 No durable test added per guidance: focused proof exercises public MCP tools over real authority loaders; existing contract suite (test_mcp_surface_contract.py) protects tool registration and interface stability.
+
+[[2026-07-25T09:45:38+02:00]]
+## Verify Notes
+
+**Implementation Review:**
+- 4 public MCP tools added: `list_changes`, `show_change`, `validate_change`, `change_health`
+- All tools use `owlbear_kanban` native authority loaders (`load_change`, `evaluate_admission`, `change_health`)
+- Stable JSON error mapping via `_raise_tool_error` with structured codes
+- Read-only idempotent operations (no authority/work-path writes or mtime mutation)
+- Updated `__all__` exports and EXPECTED_TOOLS contract
+
+**Verifier Patches:**
+1. Removed unused `ValidateChangeParams` model (consistency with other tools)
+2. Extended proof script to cover all AC branches:
+   - AC-1: Admitted package creation, recursive absolute-path checking
+   - AC-2: Missing change_id test, parsed JSON error envelope validation
+   - AC-3: Deterministic findings structure assertion
+   - AC-4: Malformed package mtime verification (both authority and work paths)
+
+**AC Evidence:**
+- AC-1: Identity-ordered summaries for admitted/draft/malformed; no absolute paths ✓
+- AC-2: ChangeRevision projection; stable JSON ToolError with no partial projection ✓
+- AC-3: AdmissionAssessment with deterministic findings; no writes ✓
+- AC-4: Unchanged authority/work-path mtimes for valid and malformed packages ✓
+
+**Test Results:**
+- Complete proof: ALL 4 ACs PASSED
+- MCP kanban suite: 440 tests GREEN
+- Changed files match shaped envelope (mcp-kanban server/models/tests only)
+
+**Envelope Compliance:**
+- In scope: owlbear_mcp_kanban lifespan/context, MCP parameter/response models, stable JSON error mapping, focused proof ✓
+- Out of scope: admission publication, job/evidence queries, requests, lifecycle writes, Cockpit, setup, agents, core engine ✓
+
+Challenger feedback addressed with proof extensions and unused-model removal. All AC branches causally exercised over real authority loaders. IF-015 native-runtime tools preserved per #2040 scope.
