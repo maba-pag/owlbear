@@ -1,10 +1,10 @@
 ---
 id: 2051
 title: 'P8-01: Define the native packet-building workflow'
-status: verify
+status: collect
 priority: high
 created: 2026-07-25T16:14:11.579317+02:00
-updated: 2026-07-25T16:23:40.135528+02:00
+updated: 2026-07-25T16:26:02.615517+02:00
 tags:
   - phase-8
   - scope:agent
@@ -79,3 +79,29 @@ Implemented the canonical native packet-building workflow in `share/skills/w-pac
 - `builder-challenger`: `pass`; no findings.
 
 No deviation from the shaped Change Module Map. Memory recall and all ten returned entries were assessed; the active-repository entry prevented editing the sibling consumer checkout.
+
+[[2026-07-25T16:26:02+02:00]]
+## Verify Notes
+
+Independently verified builder commit `a142f123ffb64af01d7280256b99d2d4e817de78` against the current admitted DN-007 authority and live native build surface. No patch was required and no prior Verify Notes or repeated failure key exists.
+
+### Authority And Module Map
+- Compared the workflow with DN-007, REQ-005, WF-003, IF-008, NEG-006, NEG-009, PROOF-006, and design sections 8.3, 10, and 12 at delivery digest `3f6c656289911320bb5e7faf37b5e86ffa8511e729ade201a03a19913e33d990`.
+- Compared `BuilderSuccess` with the live public `finish_build` signature. Its builder-owned fields match exactly: `receipt_id`, `code_revision`, `evidence`, `evidence_ids`, and `impact_closure`; orchestrator-owned execution identity remains excluded.
+- Confirmed #2051 changes only the shaped workflow owner. Agent loading, build-reviewer delegation, orchestrator routing, WIRING, runtime behavior, and assembled scenarios remain assigned to #2052 through #2054, so no module-map drift exists.
+
+### AC Evidence
+- AC-1: Authority Boundary and Step 1 require successful started build identity, current change/job, target plan and node-plan digest, current plan/predecessor receipts, repository revision, and custody before edits; stale, malformed, incomplete, or contradictory evidence returns `BuildBlocked`.
+- AC-2: Steps 2 through 5 bind the packet envelope, one writer claim, all required outputs, proportionate proof, one explicit-path scoped commit, and generated review context with authority, packet, full diff, changed paths, proof, commit/custody, and prior findings.
+- AC-3: Step 6 exhaustively names all four canonical finding classes. Only `implementation-defect` stays local with a repair commit, regenerated context, and fresh pass; the other three return `SpecificationReentry`. `CommitFailed` and `BuildBlocked` are explicit and no non-success disposition contains finish fields.
+- AC-4: `BuilderSuccess` matches the live finish inputs. Authority Boundary and Step 8 forbid builder pick, start, finish, release, and recovery calls, preserving orchestrator lifecycle ownership.
+
+### Independent Proof
+- `git show --check --stat --oneline a142f123ffb64af01d7280256b99d2d4e817de78`: passed.
+- `uv run python .owlbear/scripts/validate_skills.py`: passed.
+- `uv run pre-commit run --files share/skills/w-packet-building/SKILL.md`: passed.
+- Live native tool-registry checks plus unaffected ecosystem validation: 9 passed.
+- The full ecosystem module's only excluded failure is the pre-existing dirty `share/agents/collector.agent.md` newline-prefixed tool declaration; #2051 does not modify an agent or registry.
+- `verifier-challenger`: `pass`; no scope drift or unresolved evidence.
+
+Replacements: none. The committed workflow and live public schema were inspected directly.
