@@ -1,10 +1,10 @@
 ---
 id: 2049
 title: 'P7-03: Prove initial frontier planning and node atomicity'
-status: verify
+status: collect
 priority: high
 created: 2026-07-25T15:09:42.182016+02:00
-updated: 2026-07-25T15:35:21.682752+02:00
+updated: 2026-07-25T15:36:57.989826+02:00
 tags:
   - phase-7
   - scope:test
@@ -97,3 +97,30 @@ PROOF-005 explicitly requires a durable planner scenario. It protects stable fro
 
 ### Follow-up Risks
 Acceptance-triggered reconciliation and invalidation remain independently owned by #2050.
+
+[[2026-07-25T15:36:57+02:00]]
+## Verifier Notes
+
+### Tested Commit
+`e6f494ede3f76889fda46d6e3f432588b6fe3966`
+
+### Commit Integrity
+Both product paths are byte-identical to the tested commit. The change contains one public `finish_plan` JSON-to-native closure normalization and one durable assembled planner scenario.
+
+### Commands And Observations
+- Complete `serve/mcp-kanban/tests`: 68 passed.
+- Core native runtime and dispatch regressions: 39 passed.
+- Focused Ruff: pass.
+- The scenario directly admits the real modular authority and invokes public pick/start/finish tools; no fixture lifecycle adapter replaces the claimed boundary.
+
+### AC-to-Evidence Map
+- AC-1 PASS: Public initial picks follow deterministic admitted dependency topology before predecessor acceptance; two selected nodes consume shipped planner contracts and a fresh pick follows completion.
+- AC-2 PASS: One public completion atomically creates the plan receipt/plan plus target-bound build and dependency-gated accept jobs, all sharing the node-plan digest. Exact retry returns persisted outcome without duplicate jobs or byte changes.
+- AC-3 PASS: An out-of-node stable authority target produces `ERR_FINISH_NODE_PLAN_INVALID`, no failing-node plan/receipt/jobs, no invalid-finish byte mutation, and byte-identical preservation of all five earlier transaction artifacts.
+- AC-4 PASS: The scenario parses actual planner/reviewer declarations and reads actual frontier/orchestration workflows before constructing structured success; all lifecycle calls are public MCP operations. The adapter repair matches the existing neighboring finish-tool parse contract.
+
+### Challenger
+`verifier-challenger`: pass. It found all ACs closed through the direct public boundary and no scope drift.
+
+### Required Follow-up
+None.
