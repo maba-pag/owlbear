@@ -1,10 +1,10 @@
 ---
 id: 2058
 title: 'P9-04: Prove successful independent node acceptance'
-status: collect
+status: archived
 priority: high
 created: 2026-07-25T17:19:52.292139+02:00
-updated: 2026-07-25T18:38:09.991821+02:00
+updated: 2026-07-25T18:40:56.330358+02:00
 tags:
   - phase-9
   - scope:test
@@ -38,7 +38,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Projection
@@ -70,6 +70,15 @@ None.
 - AC-2: the scenario consumes shipped acceptor artifacts from the exact checkout, public native queries, canonical node-plan and receipt authority, actual hook/permission denials, and exact before/after HEAD/index/worktree evidence. The public boundary under acceptance is not mocked.
 - AC-3: public `finish_accept` persists the assembled proof, exact SHA, closure, predecessors, and dependent reconciliation jobs while cleaning checkout and coordination. Same-request replay returns identical receipt/event/jobs, leaves the persisted board byte-identical, and adds no terminal event.
 - Independent verification ran the acceptance, proof-checkout, dispatch-runtime, and native-runtime suites together: 62 passed. Prior full MCP package scope was 84 passed. Focused lint passed, diagnostics were empty, and verifier challenger passed without follow-up.
+
+### Required Follow-up
+None.
+
+[[2026-07-25T18:40:56+02:00]]
+## Collect Notes
+- Confirmed dependency #2057 is archived completed, builder commit `79af8525` and verifier commit `a6d0b43f` are present, both stage notes report no required follow-up, and task dependency status is ready.
+- Closure covers the real admitted accept job, exact engine checkout and independent proof, public successful completion, cleanup/reconciliation, and mutation-free replay.
+- Evidence is 84 passing MCP Kanban tests, 62 passing acceptance/checkout/dispatch/native verifier tests, focused lint, clean diagnostics, builder and verifier challenger passes, and exact scoped commit inspection.
 
 ### Required Follow-up
 None.
