@@ -297,12 +297,12 @@ async def _active_accept(tmp_path: Path):  # noqa: PLR0915 - public lifecycle as
     return revision, board, ctx, runtime, checkout, accept_start, commit
 
 
-def _materialize_waiting_writer(revision, board: Path) -> JobRecord:
+def _materialize_waiting_writer(revision, board: Path, *, job_id: int = 6) -> JobRecord:
     target = revision.graph.nodes[0]
     dependent = next(node for node in revision.graph.nodes if target.id in node.dependencies)
     writer = JobRecord(
         schema_version=1,
-        job_id=6,
+        job_id=job_id,
         kind="plan",
         priority=7,
         created_at="2026-07-25T00:05:00Z",
@@ -313,6 +313,71 @@ def _materialize_waiting_writer(revision, board: Path) -> JobRecord:
     )
     RuntimeTransaction(board, "accept-proof-writer", (JobStore(board).create_participant(writer),)).commit()
     return writer
+
+
+async def _auditor_evidence(
+    revision,
+    ctx,
+    checkout,
+    start: dict[str, object],
+    accept_receipt_ids: tuple[str, ...],
+) -> dict[str, object]:
+    checkout_root = checkout.checkout
+    agent = _frontmatter(checkout_root / "share/agents/auditor.agent.md")
+    tools = agent["tools"]
+    assert isinstance(tools, list)
+    assert agent["hooks"]["PreToolUse"][0]["command"].endswith("deny-writes.py --terminal-read-only")
+    assert not any(
+        operation in tool
+        for operation in ("start_job", "finish_audit", "reject_audit", "release_job")
+        for tool in tools
+    )
+    assert (checkout_root / "share/skills/w-whole-change-audit/SKILL.md").is_file()
+
+    change = await server.show_change(ctx, change_id=revision.change_id)
+    shown_job = await server.show_job(ctx, change_id=revision.change_id, job_id=int(start["job_id"]))
+    receipts = [
+        await server.show_receipt(ctx, change_id=revision.change_id, receipt_id=receipt_id)
+        for receipt_id in accept_receipt_ids
+    ]
+    requests = await server.list_requests(
+        ctx,
+        change_id=revision.change_id,
+        delivery_digest=revision.delivery_digest,
+        status="pending",
+    )
+    job = shown_job["job"]
+    proof_id = revision.resolve(job.target_node_id).proof
+    proof = revision.resolve(proof_id)
+    tracked_state = _git_state(checkout_root)
+
+    assert change["delivery_digest"] == revision.delivery_digest == job.delivery_digest
+    assert change["intent"] == revision.intent
+    assert change["design"] == revision.design
+    assert change["decisions"] == revision.decisions.model_dump(mode="python")
+    assert proof_id == "PROOF-008"
+    assert requests == []
+    assert tracked_state == {"head": checkout.commit, "status": "", "diff": ""}
+    return {
+        "methods": list(proof.method),
+        "product_promise": change["intent"],
+        "accepted_decisions": revision.decisions.model_dump(mode="json"),
+        "migrations": [item.model_dump(mode="json") for item in revision.graph.migrations],
+        "admitted_workflows": [item.model_dump(mode="json") for item in revision.graph.workflows],
+        "accepted_receipts": [receipt.to_mapping() for receipt in receipts],
+        "proof": proof.model_dump(mode="json"),
+        "allowed_replacements": list(proof.allowed_replacements),
+        "before_tracked_state": tracked_state,
+        "after_tracked_state": _git_state(checkout_root),
+    }
+
+
+async def _assert_audit_blocks_writer(revision, board: Path, ctx, audit_job_id: int, commit: str) -> None:
+    waiting_writer = _materialize_waiting_writer(revision, board, job_id=audit_job_id + 1)
+    conflict = await server.start_job(ctx, **_start(waiting_writer.job_id, 7, commit))
+    assert isinstance(conflict, DispatchDiagnostic)
+    assert conflict.code is DispatchDiagnosticCode.WRITER_CONFLICT
+    assert conflict.holder_job_ids == (audit_job_id,)
 
 
 def _acceptance_failure_disposition(revision, start: dict[str, object], case: tuple[object, ...]):
@@ -784,3 +849,94 @@ async def test_public_accept_rejection_runtime_failure_is_atomic(
     assert _snapshot(tmp_path) == before
     assert checkout.root.exists()
     assert checkout.manifest.read_bytes() == manifest_before
+
+
+@pytest.mark.asyncio
+async def test_public_audit_success_closes_accepted_whole_change_and_replays(tmp_path: Path) -> None:
+    revision, board, native, first_start = _active_audit_scenario(tmp_path)
+    repository = Path.cwd()
+    commit = _git_head()
+    released = native.release_job(
+        ReleaseJobRequest(
+            job_id=first_start.job_id,
+            attempt_id=first_start.attempt_id,
+            claim_id=first_start.claim_id,
+            actor_id=first_start.actor_id,
+            process_id=first_start.process_id,
+            released_at="2026-07-24T01:01:30Z",
+        )
+    )
+    assert released.diagnostic is None
+    checkouts = ProofCheckoutManager(repository, tmp_path / "proof-mcp")
+    runtime = DispatchRuntime(native, board, checkouts)
+    app_ctx = AppContext(engine=server.KanbanEngine(board), kanban_dir=board)
+    app_ctx.dispatch_runtimes[revision.change_id] = runtime
+    ctx = MagicMock()
+    ctx.request_context.lifespan_context = app_ctx
+    picked = await server.pick_jobs(
+        ctx,
+        change_id=revision.change_id,
+        candidate_revision=commit,
+        wave_size=1,
+    )
+    selected = [entry for wave in picked.waves for entry in wave]
+    assert len(selected) == 1
+    assert selected[0].agent_profile == "auditor"
+    audit_job_id = selected[0].job_id
+    audit_start = _start(audit_job_id, 6, commit)
+    started = await server.start_job(ctx, **audit_start)
+    assert isinstance(started, dict)
+    assert started["start"].diagnostic is None
+    audit_checkout = started["checkout"]
+    assert audit_checkout.commit == commit
+    await _assert_audit_blocks_writer(revision, board, ctx, audit_job_id, commit)
+
+    accept_receipt_ids = tuple(
+        stored.job.receipt_id
+        for stored in JobStore(board).list(archived=True)
+        if stored.job.kind == "accept" and stored.job.receipt_id is not None
+    )
+    evidence = await _auditor_evidence(
+        revision,
+        ctx,
+        audit_checkout,
+        audit_start,
+        accept_receipt_ids,
+    )
+    impact_closure = {
+        "paths": ["/"],
+        "authority_targets": sorted(entity.id for entity in revision.graph.iter_entities()),
+    }
+    finish = {
+        "finished_at": "2026-07-24T01:02:00Z",
+        "receipt_id": "audit-001",
+        "code_revision": commit,
+        "evidence": evidence,
+        "evidence_ids": ("audit-proof-008",),
+        "impact_closure": impact_closure,
+    }
+    events_before = len(AttemptStore(board).list())
+    finished = await server.finish_audit(ctx, **_identity(audit_start), **finish)
+
+    assert finished.diagnostic is None
+    assert finished.receipt is not None
+    assert finished.receipt.payload["code_revision"] == commit
+    assert finished.receipt.payload["predecessor_receipt_ids"] == accept_receipt_ids
+    assert finished.receipt.to_mapping()["evidence"] == json.loads(json.dumps(evidence))
+    assert finished.receipt.impact_closure is not None
+    assert finished.receipt.impact_closure.model_dump(mode="json") == impact_closure
+    assert finished.event is not None
+    assert finished.event.kind == "succeeded"
+    assert finished.job == JobStore(board).read(audit_job_id, archived=True)
+    assert "readers: []" in (board / "dispatch/coordination.yaml").read_text(encoding="utf-8")
+    assert not audit_checkout.root.exists()
+
+    state_after_finish = _snapshot(tmp_path)
+    replayed = await server.finish_audit(ctx, **_identity(audit_start), **finish)
+    assert replayed == finished
+    assert _snapshot(tmp_path) == state_after_finish
+    assert len(AttemptStore(board).list()) == events_before + 1
+    audit_events = [event.kind for event in AttemptStore(board).list() if event.attempt_id == audit_start["attempt_id"]]
+    assert audit_events == ["started", "succeeded"]
+    shown_receipt = await server.show_receipt(ctx, change_id=revision.change_id, receipt_id="audit-001")
+    assert shown_receipt == finished.receipt
