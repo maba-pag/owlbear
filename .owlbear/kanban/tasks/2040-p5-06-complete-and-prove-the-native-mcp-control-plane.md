@@ -1,10 +1,10 @@
 ---
 id: 2040
 title: 'P5-06: Complete and prove the native MCP control plane'
-status: build
+status: verify
 priority: high
 created: 2026-07-25T09:11:58.219921+02:00
-updated: 2026-07-25T13:13:37.796570+02:00
+updated: 2026-07-25T13:43:00.032393+02:00
 tags:
   - phase-5
   - scope:mcp-kanban
@@ -130,3 +130,6 @@ The failure key is resolved by two ordered core packets. #2041 owns one `JobStor
 Board audit: #2041 is build-ready behind archived #2028. #2042 is in build and dependency-blocked on #2041. #2040 now depends on #2042 and routes to dependency-blocked build; `dep_status` prevents dispatch until the core chain archives. The revised graph passed shaper challenge after the original reconsideration exposed the missing global allocator owner. A later lifecycle objection was reconsidered and passed under the board's dependency-blocked build semantics.
 
 Existing uncommitted #2040 changes in `server.py`, `test_mcp_surface_contract.py`, and `test_mcp_server.py` are adopted as task-conforming candidate work: exact 22-tool registry removal, JSON-mode evidence normalization, and the causal PROOF-011 probe. They remain outside this shaping commit and must be revalidated against #2042 rather than discarded or treated as completed proof.
+
+[[2026-07-25T13:43:00+02:00]]
+Builder complete. The live FastMCP registry is exactly the 22 native IF-010 tools; generic task and finish_shape registrations are absent; all native tools explicitly declare correct read/mutation, idempotent, non-destructive annotations; retained IF-015 operations remain registered and covered. Admission evidence uses strict JSON-mode normalization and admit_change passes app_ctx.kanban_dir into the archived #2042 cross-root transaction. Maintained PROOF-011 now traverses public inspection, validation, admission, request create/list/show, job list/pick/start/finish_plan, completion receipt, attempts, activity, change health, and work health over real graph-aware runtime and temporary stores. Public malformed/admission-conflict/publication-error cases return stable codes and preserve complete artifact snapshots; existing suites cover unknown/stale/request and retained lifecycle negatives. Validation: complete MCP package 426 passed; core admission/allocator/transaction 54 passed with 2 existing fork warnings; focused lint and editor diagnostics clean. builder-challenger decision: pass with no findings.

@@ -20,7 +20,7 @@
 AC1 (td:2): app_lifespan starts against isolated temp board fixture; yields AppContext.
 AC2 (td:1): owlbear_mcp_kanban.__file__ resolves under the repo working tree.
 AC3 (td:1): Live tool registry (post-lifespan, no exclusions) == EXPECTED_TOOLS exactly.
-AC4 (td:1): end_work published parameter schema includes all 5 outcome values.
+AC4 (td:1): Generic task and old-lifecycle registrations are absent.
 AC5-AC7: td:0 — no executable tests.
 """
 
@@ -33,11 +33,13 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from mcp.server.fastmcp.exceptions import ToolError
 
 import owlbear_mcp_kanban
 from owlbear_mcp_kanban import server
 from owlbear_kanban import (
     AttemptStore,
+    AdmissionPublicationError,
     DispatchRuntime,
     JobGeneration,
     JobRecord,
@@ -46,6 +48,7 @@ from owlbear_kanban import (
     PlanJob,
     load_change,
 )
+from owlbear_kanban.change import ChangeRevision
 from owlbear_kanban.runtime_transaction import RuntimeTransaction
 from owlbear_mcp_kanban.server import AppContext, app_lifespan, mcp
 
@@ -59,9 +62,6 @@ EXPECTED_TOOLS: frozenset[str] = frozenset(
         "admit_change",
         "change_health",
         "create_request",
-        "create_task",
-        "edit_task",
-        "end_work",
         "finish_accept",
         "finish_audit",
         "finish_build",
@@ -71,25 +71,40 @@ EXPECTED_TOOLS: frozenset[str] = frozenset(
         "list_changes",
         "list_jobs",
         "list_requests",
-        "list_tasks",
-        "move_task",
         "pick_jobs",
-        "pick_tasks",
         "recover_expired_claims",
         "release_job",
         "show_change",
         "show_job",
         "show_receipt",
         "show_request",
-        "show_task",
         "start_job",
-        "start_work",
         "validate_change",
         "work_health",
     }
 )
 
-EXPECTED_OUTCOMES: frozenset[str] = frozenset({"success", "fail", "reject", "block", "release"})
+REMOVED_TASK_TOOLS: frozenset[str] = frozenset(
+    {"list_tasks", "show_task", "create_task", "edit_task", "move_task", "pick_tasks", "start_work", "end_work"}
+)
+
+READ_ONLY_TOOLS: frozenset[str] = frozenset(
+    {
+        "change_health",
+        "list_activity",
+        "list_attempts",
+        "list_changes",
+        "list_jobs",
+        "list_requests",
+        "pick_jobs",
+        "show_change",
+        "show_job",
+        "show_receipt",
+        "show_request",
+        "validate_change",
+        "work_health",
+    }
+)
 
 # ---------------------------------------------------------------------------
 # Shared helpers
@@ -204,7 +219,7 @@ class TestFromAC_ToolRegistryContract:
     """AC3: Live registry (post-lifespan, no exclusions) matches EXPECTED_TOOLS exactly."""
 
     @pytest.mark.asyncio
-    async def test_live_registry_contains_exactly_twelve_tools(
+    async def test_live_registry_contains_exactly_twenty_two_tools(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
@@ -236,48 +251,222 @@ class TestFromAC_ToolRegistryContract:
             "added or removed from server.py."
         )
 
+    def test_native_annotations_match_operation_semantics(self) -> None:
+        """Declare every native operation idempotent, non-destructive, and read-accurate."""
+        tools = {tool.name: tool for tool in mcp._tool_manager._tools.values()}  # noqa: SLF001
+        assert tools.keys() == EXPECTED_TOOLS
+        for name, tool in tools.items():
+            assert tool.annotations is not None
+            assert tool.annotations.readOnlyHint is (name in READ_ONLY_TOOLS)
+            assert tool.annotations.idempotentHint is True
+            assert tool.annotations.destructiveHint is False
+
 
 # ---------------------------------------------------------------------------
-# AC4 — end_work outcome schema
+# AC4 — legacy registration absence
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_EndWorkOutcomeSchema:
-    """AC4: end_work published parameter schema (post-_patch_params) includes all 5 outcomes."""
+class TestFromAC_LegacyRegistrationAbsence:
+    """AC4: generic task and old lifecycle tools are not registered."""
 
-    def test_end_work_published_outcome_schema_includes_all_five_values(self) -> None:
-        """AC4: mcp._tool_manager._tools['end_work'].parameters exposes all 5 outcome values.
+    def test_generic_task_and_old_lifecycle_tools_are_absent(self) -> None:
+        """Keep only native change and job identities on the public MCP surface."""
+        registered = frozenset(mcp._tool_manager._tools)  # noqa: SLF001
+        assert registered.isdisjoint(REMOVED_TASK_TOOLS | {"finish_shape"})
 
-        Checks the published MCP schema — what MCP clients receive — NOT the Python
-        function signature. _patch_params mutates the schema at module scope; this test
-        runs after import so post-mutation state is captured. The schema may encode
-        allowed values as ``enum`` or ``anyOf`` branches; both forms are accepted.
-        """
-        tool = next(
-            (t for t in mcp._tool_manager._tools.values() if t.name == "end_work"),  # noqa: SLF001
-            None,
+
+def _proof011_context(
+    tmp_path: Path,
+) -> tuple[ChangeRevision, Path, MagicMock, dict[str, object], str]:
+    changes_dir = tmp_path / "changes"
+    authority_dir = changes_dir / "replace-delivery-pipeline"
+    shutil.copytree(Path(".owlbear/changes/replace-delivery-pipeline"), authority_dir)
+    shutil.rmtree(authority_dir / "receipts")
+    shutil.rmtree(authority_dir / "jobs")
+    (authority_dir / "plans" / "DN-001.yaml").unlink()
+    board = _make_board(tmp_path)
+    loaded = load_change(changes_dir, "replace-delivery-pipeline")
+    assert loaded.revision is not None
+    revision = loaded.revision
+    challenge = {
+        entity.id: {"disposition": "pass", "evidence": entity.id}
+        for section in ("requirements", "workflows", "interfaces", "migrations", "risks", "proofs", "nodes")
+        for entity in getattr(revision.graph, section)
+    }
+    evidence = {
+        "digest": revision.delivery_digest,
+        "challenge": challenge,
+        "baseline": {"commands": ["pytest"], "digest": revision.delivery_digest},
+        "approval": {"approved": True, "digest": revision.delivery_digest},
+        "limits": list(revision.graph.admission.limits),
+    }
+    app_ctx = AppContext(engine=server.KanbanEngine(board), kanban_dir=board)
+    app_ctx.dispatch_runtimes[revision.change_id] = DispatchRuntime(
+        NativeRuntime(revision, board, _History(), timedelta(minutes=1)), board
+    )
+    ctx = MagicMock()
+    ctx.request_context.lifespan_context = app_ctx
+    return revision, board, ctx, evidence, Path(revision.graph.admission.receipt).stem
+
+
+async def _proof011_request(
+    ctx: MagicMock,
+    revision: ChangeRevision,
+    requested_job: dict[str, object],
+) -> tuple[dict[str, object], list[dict[str, object]], dict[str, object]]:
+    request = await server.create_request(
+        ctx,
+        request_id="request-proof-011",
+        created_at="2026-07-25T00:00:00Z",
+        change_id=revision.change_id,
+        delivery_digest=revision.delivery_digest,
+        kind="action",
+        title="Provide final-node evidence",
+        summary="The final admitted node needs external evidence.",
+        agent="builder",
+        target_node_id=requested_job["target_node_id"],
+        job_ids=[requested_job["job_id"]],
+        body="evidence-id=proof-011",
+    )
+    requests = await server.list_requests(ctx, revision.change_id, revision.delivery_digest)
+    shown = await server.show_request(ctx, revision.change_id, revision.delivery_digest, "request-proof-011")
+    return request, requests, shown
+
+
+def _proof011_snapshot(root: Path) -> dict[str, bytes]:
+    return {
+        path.relative_to(root).as_posix(): path.read_bytes()
+        for path in root.rglob("*")
+        if path.is_file() and path.name != ".storage.lock"
+    }
+
+
+class TestProof011NativeControlPlane:
+    """The assembled public control plane carries admission into native work."""
+
+    @pytest.mark.asyncio
+    async def test_admission_feeds_native_job_queries(self, tmp_path: Path) -> None:
+        """Invoke the complete graph-aware native control plane through public tools."""
+        revision, board, ctx, evidence, receipt_id = _proof011_context(tmp_path)
+
+        changes = await server.list_changes(ctx)
+        shown = await server.show_change(ctx, change_id=revision.change_id)
+        assessment = await server.validate_change(ctx, change_id=revision.change_id, evidence=evidence)
+        admitted = await server.admit_change(ctx, change_id=revision.change_id, evidence=evidence)
+        jobs = await server.list_jobs(
+            ctx,
+            change_id=revision.change_id,
+            candidate_revision="a" * 40,
         )
-        assert tool is not None, "end_work must be registered in the MCP tool registry"
-
-        outcome_prop = tool.parameters.get("properties", {}).get("outcome", {})
-
-        # Collect string literals from the schema subtree (enum or anyOf/const forms).
-        actual_values: set[str] = set()
-        if "enum" in outcome_prop:
-            actual_values.update(v for v in outcome_prop["enum"] if isinstance(v, str))
-        if "anyOf" in outcome_prop:
-            for branch in outcome_prop["anyOf"]:
-                if "const" in branch and isinstance(branch["const"], str):
-                    actual_values.add(branch["const"])
-                if "enum" in branch:
-                    actual_values.update(v for v in branch["enum"] if isinstance(v, str))
-
-        assert actual_values >= EXPECTED_OUTCOMES, (
-            f"end_work outcome schema is missing values: "
-            f"{EXPECTED_OUTCOMES - actual_values!r}. "
-            f"Found values: {actual_values!r}. "
-            f"Raw 'outcome' property schema: {outcome_prop!r}"
+        admitted_jobs = admitted["generation"]["jobs"]
+        requested_job = admitted_jobs[-1]
+        request, requests, shown_request = await _proof011_request(ctx, revision, requested_job)
+        waves = await server.pick_jobs(
+            ctx,
+            change_id=revision.change_id,
+            candidate_revision="a" * 40,
+            wave_size=5,
         )
+        selected = waves.waves[0][0]
+        started_at = "2026-07-25T00:01:00Z"
+        finished_at = "2026-07-25T00:02:00Z"
+        started = await server.start_job(ctx, **_start_kwargs(selected.job_id, 1, started_at))
+        selected_job = JobStore(board).read(selected.job_id).job
+        target = next(node for node in revision.graph.nodes if node.id == selected_job.target_node_id)
+        proof = revision.resolve(target.proof)
+        closure = {"paths": ["serve/kanban/"], "authority_targets": [target.id, target.proof]}
+        next_job_id = max(job["job_id"] for job in admitted_jobs) + 1
+        completed = await server.finish_plan(
+            ctx,
+            **_finish_kwargs(_start_kwargs(selected.job_id, 1, started_at)),
+            finished_at=finished_at,
+            receipt_id="plan-proof-011",
+            code_revision="a" * 40,
+            evidence={"methods": list(proof.method)},
+            node_plan={
+                "packets": [
+                    {"id": f"{target.id}-PK-001", "dependencies": [], "impact_closure": closure},
+                    {
+                        "id": f"{target.id}-PK-002",
+                        "dependencies": [f"{target.id}-PK-001"],
+                        "impact_closure": closure,
+                    },
+                ]
+            },
+            build_job_ids=(next_job_id, next_job_id + 1),
+            accept_job_id=next_job_id + 2,
+        )
+        receipt = await server.show_receipt(
+            ctx,
+            change_id=revision.change_id,
+            receipt_id="plan-proof-011",
+        )
+        attempts = await server.list_attempts(ctx, change_id=revision.change_id)
+        activity = await server.list_activity(ctx, change_id=revision.change_id)
+        change_integrity = await server.change_health(ctx, change_id=revision.change_id)
+        work_integrity = await server.work_health(ctx, change_id=revision.change_id)
+
+        assert changes == [{"change_id": revision.change_id, "state": "loaded", "digest": revision.delivery_digest}]
+        assert shown["delivery_digest"] == revision.delivery_digest
+        assert all(finding["severity"] != "error" for finding in assessment["findings"])
+        assert admitted["receipt"]["receipt_id"] == receipt_id
+        assert len(jobs.items) == len(revision.graph.nodes)
+        assert {item.kind for item in jobs.items} == {"plan"}
+        assert request["request"]["request_id"] == "request-proof-011"
+        assert [item["request"]["request_id"] for item in requests] == ["request-proof-011"]
+        assert shown_request == {key: value for key, value in request.items() if key != "guidance"}
+        assert selected.agent_profile == "planner"
+        assert selected.job_id != requested_job["job_id"]
+        assert started.diagnostic is None
+        assert completed.diagnostic is None
+        assert completed.receipt == receipt
+        assert {job.kind for job in completed.created_jobs} == {"build", "accept"}
+        assert [event.kind for event in attempts.items] == ["started", "succeeded"]
+        assert {entry.kind for entry in activity.items} >= {"attempt", "receipt"}
+        assert change_integrity["findings"] == ()
+        assert work_integrity["findings"] == ()
+
+
+class TestNativeAdmissionErrors:
+    """Public admission failures return stable codes without partial artifacts."""
+
+    @pytest.mark.asyncio
+    async def test_malformed_evidence_does_not_mutate_stores(self, tmp_path: Path) -> None:
+        revision, _board, ctx, _evidence, _receipt_id = _proof011_context(tmp_path)
+        before = _proof011_snapshot(tmp_path)
+
+        with pytest.raises(ToolError, match="ERR_PARAM_VALIDATION"):
+            await server.admit_change(ctx, change_id=revision.change_id, evidence={"digest": 1})
+
+        assert _proof011_snapshot(tmp_path) == before
+
+    @pytest.mark.asyncio
+    async def test_changed_evidence_conflict_does_not_mutate_stores(self, tmp_path: Path) -> None:
+        revision, _board, ctx, evidence, _receipt_id = _proof011_context(tmp_path)
+        await server.admit_change(ctx, change_id=revision.change_id, evidence=evidence)
+        before = _proof011_snapshot(tmp_path)
+        changed_evidence = evidence | {"baseline": {"commands": ["pytest", "ruff"], "digest": revision.delivery_digest}}
+
+        with pytest.raises(ToolError, match="ERR_ADMISSION_CONFLICT"):
+            await server.admit_change(ctx, change_id=revision.change_id, evidence=changed_evidence)
+
+        assert _proof011_snapshot(tmp_path) == before
+
+    @pytest.mark.asyncio
+    async def test_publication_failure_does_not_mutate_stores(self, tmp_path: Path, monkeypatch) -> None:
+        revision, _board, ctx, evidence, _receipt_id = _proof011_context(tmp_path)
+        before = _proof011_snapshot(tmp_path)
+
+        def fail_publication(_transaction, _evidence) -> None:
+            message = "injected publication failure"
+            raise AdmissionPublicationError(RuntimeError(message))
+
+        monkeypatch.setattr(server.AdmissionTransaction, "validate_and_admit", fail_publication)
+        with pytest.raises(ToolError, match="ERR_ADMISSION_PUBLICATION"):
+            await server.admit_change(ctx, change_id=revision.change_id, evidence=evidence)
+
+        assert _proof011_snapshot(tmp_path) == before
 
 
 class TestFinishAcceptSchema:

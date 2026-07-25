@@ -385,7 +385,6 @@ def _load_request_revision(app_ctx: AppContext, change_id: str, delivery_digest:
 mcp = FastMCP("owlbear-kanban", lifespan=app_lifespan)
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
 async def list_tasks(  # noqa: PLR0913
     ctx: Context,
     *,
@@ -446,17 +445,6 @@ async def list_tasks(  # noqa: PLR0913
         _raise_param_validation(str(exc))
 
 
-# Set outputSchema for list_tasks (lean task array)
-_list_tasks_tool_obj = next(
-    t
-    for t in mcp._tool_manager._tools.values()  # noqa: SLF001
-    if t.name == "list_tasks"
-)
-_list_tasks_tool_obj.fn_metadata.output_schema = {
-    **ListTasksResponse.model_json_schema(),
-}
-
-
 def _record_to_task(record: Task) -> KanbanTask:
     """Convert a Task to a KanbanTask (claimed_by → claimed bool)."""
     return KanbanTask.model_validate(record.model_dump())
@@ -485,7 +473,6 @@ async def _show_validated(app_ctx: AppContext, task_id: int) -> KanbanTask:
     return _record_to_task(record)
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
 async def show_task(
     ctx: Context,
     id: StrId,  # noqa: A002
@@ -501,7 +488,6 @@ async def show_task(
         _map_kanban_error(exc)
 
 
-@mcp.tool(annotations=ToolAnnotations(destructiveHint=False))
 async def create_task(  # noqa: PLR0913
     ctx: Context,
     *,
@@ -610,7 +596,7 @@ async def create_request(  # noqa: PLR0913, PLR0917
     return payload
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, destructiveHint=False))
 async def list_requests(
     ctx: Context,
     change_id: str,
@@ -642,7 +628,7 @@ async def list_requests(
     return [record.model_dump(exclude={"request": {"body"}}) for record in records]
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, destructiveHint=False))
 async def show_request(
     ctx: Context,
     change_id: str,
@@ -665,7 +651,6 @@ async def show_request(
     return record.model_dump()
 
 
-@mcp.tool(annotations=ToolAnnotations(destructiveHint=False, idempotentHint=False))
 async def move_task(
     ctx: Context,
     id: StrId,  # noqa: A002
@@ -704,7 +689,6 @@ async def move_task(
     return result
 
 
-@mcp.tool(annotations=ToolAnnotations(destructiveHint=False, idempotentHint=False))
 async def edit_task(  # noqa: PLR0912, PLR0913, PLR0915, C901
     ctx: Context,
     *,
@@ -788,7 +772,6 @@ async def edit_task(  # noqa: PLR0912, PLR0913, PLR0915, C901
     return result
 
 
-@mcp.tool(annotations=ToolAnnotations(destructiveHint=False))
 async def start_work(
     ctx: Context,
     id: StrId,  # noqa: A002
@@ -812,7 +795,6 @@ async def start_work(
     return result
 
 
-@mcp.tool(annotations=ToolAnnotations(destructiveHint=False))
 async def end_work(  # noqa: PLR0913, C901
     ctx: Context,
     *,
@@ -886,7 +868,6 @@ async def end_work(  # noqa: PLR0913, C901
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True))
 async def pick_tasks(
     ctx: Context,
     *,
@@ -1326,7 +1307,7 @@ async def work_health(
         _raise_param_validation(str(exc))
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, destructiveHint=False))
 async def list_changes(ctx: Context) -> list[dict[str, object]]:
     """List all change packages with load state and identity-ordered summaries."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
@@ -1376,7 +1357,7 @@ async def list_changes(ctx: Context) -> list[dict[str, object]]:
     return results
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, destructiveHint=False))
 async def show_change(ctx: Context, *, change_id: str) -> dict[str, object]:
     """Show one loaded change revision with canonical digest and graph."""
     if not change_id or not change_id.strip():
@@ -1410,7 +1391,7 @@ async def show_change(ctx: Context, *, change_id: str) -> dict[str, object]:
     }
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, destructiveHint=False))
 async def validate_change(ctx: Context, *, change_id: str, evidence: dict[str, object]) -> dict[str, object]:
     """Validate change admission without writing receipt, job, request, or attempt paths."""
     if not change_id or not change_id.strip():
@@ -1425,7 +1406,7 @@ async def validate_change(ctx: Context, *, change_id: str, evidence: dict[str, o
         _raise_tool_error("ERR_CHANGE_NOT_LOADED", "change could not be loaded")
 
     try:
-        admission_evidence = AdmissionEvidence.model_validate(evidence)
+        admission_evidence = AdmissionEvidence.model_validate_json(json.dumps(evidence))
     except PydanticValidationError as exc:
         _raise_param_validation(f"invalid evidence: {exc}")
 
@@ -1433,7 +1414,7 @@ async def validate_change(ctx: Context, *, change_id: str, evidence: dict[str, o
     return assessment.model_dump(mode="python")
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, destructiveHint=False))
 async def change_health(ctx: Context, *, change_id: str) -> dict[str, object]:
     """Return canonical change health result without mutating authority or work paths."""
     if not change_id or not change_id.strip():
@@ -1446,7 +1427,7 @@ async def change_health(ctx: Context, *, change_id: str) -> dict[str, object]:
     return result.model_dump(mode="python")
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True))
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True, destructiveHint=False))
 async def admit_change(
     ctx: Context,
     *,
@@ -1466,12 +1447,12 @@ async def admit_change(
         _raise_tool_error("ERR_CHANGE_NOT_LOADED", "change could not be loaded")
 
     try:
-        admission_evidence = AdmissionEvidence.model_validate(evidence)
+        admission_evidence = AdmissionEvidence.model_validate_json(json.dumps(evidence))
     except PydanticValidationError as exc:
         _raise_param_validation(f"invalid evidence: {exc}")
 
     try:
-        transaction = AdmissionTransaction(load_result.revision)
+        transaction = AdmissionTransaction(load_result.revision, app_ctx.kanban_dir)
         receipt, generation, assessment = transaction.validate_and_admit(admission_evidence)
     except AdmissionConflictError:
         _raise_tool_error("ERR_ADMISSION_CONFLICT", "admission conflict: incompatible identity already exists")
@@ -1486,102 +1467,3 @@ async def admit_change(
         "generation": generation.model_dump(mode="python") if generation else None,
         "assessment": assessment.model_dump(mode="python"),
     }
-
-
-# Override outputSchema for mutation/lifecycle tools that return
-# SingleTaskResponse. This ensures advertised schema matches tool output.
-_single_task_schema = SingleTaskResponse.model_json_schema()
-for _tool_name in (
-    "move_task",
-    "edit_task",
-    "create_task",
-    "start_work",
-    "end_work",
-):
-    _tool_obj = next(
-        t
-        for t in mcp._tool_manager._tools.values()  # noqa: SLF001
-        if t.name == _tool_name
-    )
-    _tool_obj.fn_metadata.output_schema = _single_task_schema
-
-
-# ---------------------------------------------------------------------------
-# Patch input parameter descriptions for better agent discoverability.
-# FastMCP auto-generates titles from argument names but has no descriptions.
-# ---------------------------------------------------------------------------
-_SORT_FIELDS = ["priority", "updated", "id", "title", "status", "created"]
-_NORM_PARAM_DESC = "Literal \\n is normalized to a newline; send \\\\n in JSON to preserve a literal \\n."
-
-
-def _patch_params(
-    tool_name: str,
-    patches: dict[str, dict[str, object]],
-) -> None:
-    """Patch description and/or enum for tool input parameters."""
-    tool = next(t for t in mcp._tool_manager._tools.values() if t.name == tool_name)  # noqa: SLF001
-    props = tool.parameters.get("properties", {})
-    for param, meta in patches.items():
-        if param in props:
-            props[param].update(meta)
-
-
-_patch_params(
-    "list_tasks",
-    {
-        "tag": {"description": "Filter by tag, e.g. 'phase-2'"},
-        "search": {"description": "Full-text search in titles and bodies"},
-        "sort": {"enum": _SORT_FIELDS},
-        "blocked": {"description": "true = only blocked, false = only unblocked, null = all"},
-    },
-)
-
-_patch_params(
-    "create_task",
-    {
-        "body": {"description": f"Markdown body (objectives, AC, context). {_NORM_PARAM_DESC}"},
-        "depends_on": {"description": "JSON array of dependency task IDs"},
-        "parent": {"description": "Parent task ID for subtask hierarchy"},
-        "tags": {"description": "JSON array of tags"},
-    },
-)
-
-_patch_params(
-    "move_task",
-    {
-        "status": {"description": "Target status name, or 'archived' to archive the task"},
-    },
-)
-
-_patch_params(
-    "edit_task",
-    {
-        "title": {"description": "Replace task title (must be non-empty)"},
-        "body": {
-            "description": (f"Replace task body; empty string clears, null/omitted = no change. {_NORM_PARAM_DESC}")
-        },
-        "append_body": {"description": f"Append to body (preserves existing content). {_NORM_PARAM_DESC}"},
-        "timestamp": {"description": "Prepend [[date]] timestamp to appended body"},
-        "add_dep": {"description": "Add dependency task IDs (JSON array, e.g. [601, 602])"},
-        "remove_dep": {"description": "Remove dependency task IDs (JSON array, e.g. [601, 602])"},
-        "parent": {"description": "Parent task ID for subtask hierarchy; use 0 to clear parent"},
-    },
-)
-
-_patch_params(
-    "end_work",
-    {
-        "note": {"description": f"Summary note appended to task body. {_NORM_PARAM_DESC}"},
-        "outcome": {
-            "description": (
-                "success = advance, fail = record failure and release claim, "
-                "reject = move back, block = mark blocked and release claim, "
-                "release = release claim without changing status"
-            ),
-        },
-        "block_reason": {"description": "Required when outcome=block"},
-        "move_to": {
-            "description": "Target status when outcome=reject; optional status move when outcome=success or block",
-        },
-    },
-)

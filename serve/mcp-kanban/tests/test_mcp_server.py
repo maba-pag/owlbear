@@ -25,7 +25,7 @@ from unittest.mock import MagicMock
 import pytest
 from mcp.server.fastmcp.exceptions import ToolError
 
-from owlbear_kanban.models import ListTasksResponse, ShowTaskResponse
+from owlbear_kanban.models import ShowTaskResponse
 
 # ---------------------------------------------------------------------------
 # Board / context helpers (mirrors test_mcp_read_tools.py pattern)
@@ -200,29 +200,3 @@ class TestFromAC_BoundaryValidation:
 # AC6: list_tasks output_schema is set from ListTasksResponse.model_json_schema().
 #      Executable equality assertion in serve/mcp-kanban/tests/ (not comment-only).
 # ---------------------------------------------------------------------------
-
-
-class TestFromAC_OutputSchema:
-    """AC6: list_tasks output_schema equals ListTasksResponse.model_json_schema()."""
-
-    def test_list_tasks_output_schema_equals_model_json_schema(self) -> None:
-        """AC6: list_tasks.fn_metadata.output_schema == ListTasksResponse.model_json_schema().
-
-        The registered output_schema must equal the serialization schema of
-        ListTasksResponse. Fails if the schema registration is removed or uses a
-        different model (e.g., KanbanTask) or a hardcoded dict that drifts from
-        the model definition.
-        """
-        from owlbear_mcp_kanban.server import mcp
-
-        tool_obj = next(
-            (t for t in mcp._tool_manager._tools.values() if t.name == "list_tasks"),
-            None,
-        )
-        assert tool_obj is not None, "AC6: 'list_tasks' tool must be registered in the MCP server"
-        registered = tool_obj.fn_metadata.output_schema
-        expected = ListTasksResponse.model_json_schema()
-        assert registered == expected, (
-            f"AC6: list_tasks output_schema must equal ListTasksResponse.model_json_schema(). "
-            f"Registered: {registered!r}. Expected: {expected!r}"
-        )
