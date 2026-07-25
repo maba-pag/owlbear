@@ -1,10 +1,10 @@
 ---
 id: 2031
 title: 'P5-05: Replace task requests with native change and job requests'
-status: collect
+status: archived
 priority: high
 created: 2026-07-24T23:22:11.813787+02:00
-updated: 2026-07-25T12:36:32.258045+02:00
+updated: 2026-07-25T12:37:14.066283+02:00
 tags:
   - phase-5
   - scope:mcp-kanban
@@ -43,7 +43,7 @@ proof_bundle: existing+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Projection
@@ -179,3 +179,11 @@ AC-4: public `show_request` returns full body and resolution state; a missing ID
 Independent commands: `git show --check --stat --oneline 32067bc869` clean; focused request suite 13 passed; complete `serve/mcp-kanban/tests` 422 passed. Editor diagnostics are clean. Source search confirms no loader monkeypatch, skip, synthetic hash/time identity, or stale request-file glob. Core runtime semantics were not modified.
 
 Verifier-challenger: `pass`; the repaired follow-up is closed through the real public wrappers and no concrete regression, scope, or durable-test-rent defect remains.
+
+[[2026-07-25T12:37:14+02:00]]
+## Collect Notes
+ARCHIVED. Leaf closure is complete for admitted packet `DN-009-PK-005` at digest `3f6c656289911320bb5e7faf37b5e86ffa8511e729ade201a03a19913e33d990`.
+
+The final shaped AC are fully covered by public MCP proof at builder commit `32067bc869559930d362309b1091e0a73ef9b73f`: exact caller-identity replay and linked-job idempotency; the complete stable error/no-mutation matrix; pending/resolved ordered summaries; and full show/not-found behavior. Independent verifier commit `0fcbd583db7f7df244425f73e62bbe2d4beb5b33` reproduces focused 13 passed and complete MCP 422 passed, with clean commit checks and editor diagnostics. Verifier-challenger passed.
+
+Dependency #2027 is archived completed. The tested builder commit is an ancestor of current HEAD. No pending request, scratch-only proof, skip, compatibility alias, synthetic request identity/time, core-runtime semantic change, or uncommitted task-owned product file remains. Parent #1981 and final integration packet #2040 remain outside this leaf collector's mutation scope.
