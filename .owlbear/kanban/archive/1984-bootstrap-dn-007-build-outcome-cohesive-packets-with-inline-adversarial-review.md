@@ -1,10 +1,10 @@
 ---
 id: 1984
 title: 'Bootstrap DN-007: Build outcome-cohesive packets with inline adversarial review'
-status: collect
+status: archived
 priority: medium
 created: 2026-07-22T01:07:36.999020+02:00
-updated: 2026-07-25T16:15:09.993698+02:00
+updated: 2026-07-25T17:05:32.495139+02:00
 tags:
   - bootstrap-projection
   - change:replace-delivery-pipeline
@@ -37,7 +37,7 @@ proof_bundle: existing+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Bootstrap Projection Identity
@@ -93,3 +93,15 @@ PROOF-006 runs a real builder job from public claim through scoped commit, syste
 
 ### Challenge And Audit
 `shaper-challenger` returned `pass` after the finding taxonomy was made exhaustive and required full replacement of stale digest, receipt, projection key, modular authority references, and AC wording. Board audit confirms #2051 through #2054 are build-ready, parented to #1984, linearly dependent, and included in the aggregate dependency set.
+
+[[2026-07-25T17:05:32+02:00]]
+## Collector Notes
+
+DN-007 aggregate closure passed at current implementation SHA `5c340750ac47190be01a8b62a75122c3857c8992`.
+
+- All packet descendants #2051 through #2054 are archived with reason `completed`, mandatory builder/verifier challenges passed, and the sole verifier failure key `malformed-context-causality` was repaired and passed on rechallenge.
+- Current-SHA PROOF-006: `serve/mcp-kanban/tests/test_builder_interaction.py` passed all 11 success, warm repair, material re-entry, commit failure, malformed review, and stale-authority cases.
+- `.owlbear/scripts/validate_agents.py` reports all 17 agent files conform; all DN-007 workflow, role, reviewer, orchestration, wiring, validator, and proof artifacts are clean at the tested SHA.
+- Maintained agent-validator/write-guard suite produced 37 passes and one unrelated failure in dirty `collector.agent.md` live-registry declarations. That file is outside DN-007's envelope and was preserved unchanged.
+
+AC closure: modular digest/projection identities match; the implementation remains within DN-007 modules/interfaces/proof with no runtime operation or authority expansion; all planned packet categories have descendant Verify Notes and current-SHA aggregate proof. All recalled collector memories were assessed. Archive reason: completed.
