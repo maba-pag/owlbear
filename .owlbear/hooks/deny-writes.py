@@ -51,6 +51,7 @@ _GIT_GLOBAL_FLAGS = {
     "--version",
 }
 _GIT_GLOBAL_OPTIONS = {"--exec-path", "--git-dir", "--namespace", "--work-tree", "-C", "-c"}
+_GIT_WRITE_OPTIONS = {"--output", "--output-indicator-context", "--output-indicator-new", "--output-indicator-old"}
 _SHELL_MUTATION_RE = re.compile(
     r"(?:^|[\s;&|])(?:chmod|chown|chflags|cp|dd|install|ln|mkdir|mv|patch|rm|rmdir|tee|touch|truncate)\b"
     r"|\bsed\s+[^\n;&|]*-[^\s]*i\b"
@@ -128,13 +129,30 @@ def _git_command(arguments: str) -> str | None:
     return "--version" if "--version" in tokens else None
 
 
-def _terminal_mutation(command: object) -> str | None:
-    if not isinstance(command, str) or not command.strip():
-        return "terminal command is missing"
+def _git_mutation(command: str) -> str | None:
     for match in _GIT_COMMAND_RE.finditer(command):
+        try:
+            git_tokens = shlex.split(match.group("arguments"))
+        except ValueError:
+            return "malformed Git command"
+        if any(
+            token in _GIT_WRITE_OPTIONS or any(token.startswith(f"{option}=") for option in _GIT_WRITE_OPTIONS)
+            for token in git_tokens
+        ):
+            return "Git output option"
         subcommand = _git_command(match.group("arguments"))
         if subcommand not in _READ_ONLY_GIT_COMMANDS and subcommand != "--version":
             return f"non-read-only Git command '{subcommand or match.group(0).strip()}'"
+    return None
+
+
+def _terminal_mutation(command: object) -> str | None:
+    if not isinstance(command, str) or not command.strip():
+        return "terminal command is missing"
+    if mutation := _git_mutation(command):
+        return mutation
+    if re.search(r"(?:^|[^>])(?:&>|>>?|\d+>>?)(?![>&])", command):
+        return "filesystem redirection"
     if match := _SHELL_MUTATION_RE.search(command):
         return f"filesystem mutation '{match.group(0).strip()}'"
     return None

@@ -120,8 +120,10 @@ class TestAcceptorTerminalGuard:
             "git checkout --detach HEAD^",
             "git update-ref HEAD HEAD^",
             "git -c alias.move=reset move --hard HEAD^",
+            "git diff --output=tracked.patch HEAD^ HEAD",
             "chmod u+w tracked.py",
             "printf changed > tracked.py",
+            "pytest &> tracked.log",
             "python -c \"from pathlib import Path; Path('tracked.py').write_text('changed')\"",
         ],
     )

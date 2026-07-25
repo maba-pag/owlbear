@@ -1,10 +1,10 @@
 ---
 id: 2057
 title: 'P9-03: Install the independent node acceptor workflow'
-status: verify
+status: collect
 priority: high
 created: 2026-07-25T17:19:45.152185+02:00
-updated: 2026-07-25T18:18:13.265983+02:00
+updated: 2026-07-25T18:22:18.616095+02:00
 tags:
   - phase-9
   - scope:agent
@@ -86,6 +86,18 @@ None.
 - Added focused regressions for commit, reset, checkout, update-ref, custom alias, chmod, redirection, and inline `Path.write_text`; read-only Git plus pytest remains allowed, and default guard mode is proven unaffected. Updated WIRING hard-control description.
 - Durable-test justification: terminal execution bypassed the edit-tool hook and could silently approve acceptor-authored commit state; this independence/data-integrity boundary is hard to inspect manually and the focused hook test is cheaper than repeated command review.
 - Validation: all 18 agents and all skills validate; 47 relevant ecosystem/write-guard tests pass; explicit lint over all five repair files passes. The unrelated global registry assertion still fails on pre-existing removed legacy task grants and remains untouched. Builder challenger decision: pass.
+
+### Required Follow-up
+None.
+
+[[2026-07-25T18:22:18+02:00]]
+## Verify Notes
+- Reverified the full acceptor workflow and hard-control boundary across builder commits `d0d91497` and `8f083f1b`, resolving prior failure key `AC-2/terminal-head-mutation`.
+- AC-1: confirmed successful-start/checkout/authority/plan/receipt/exact-SHA rehydration, disclosed replacements, complete tracked-state evidence, and exactly three complete dispositions.
+- AC-2: confirmed no edit or native lifecycle tools, acceptor-only terminal-read-only hook mode, fail-closed Git inspection allowlist, denial of explicit filesystem writes/redirections, exact candidate `HEAD`, staged index, and unstaged tracked-worktree checks after every command, plus no approval or cleanup of authored changes.
+- AC-3: confirmed one-job dispatch and unchanged acceptor-owned field forwarding to `finish_accept`, `reject_accept`, or identity-preserving `release_job`; orchestration retains no proof, finding, correction, replacement, or evidence judgment.
+- Independently repaired two local guard parser bypasses reported by the verifier challenger: Git `--output` options and Bash `&>` redirection are now denied, with focused unit and real subprocess evidence. The challenger passed after this repair.
+- Final validation: all 18 agents and all skills validate; 54 relevant write-guard, ecosystem, and setup-hook tests pass; explicit lint over all seven packet files passes; VS Code diagnostics are clean. The unrelated aggregate registry assertion still fails only on pre-existing legacy task grants and was not used as evidence.
 
 ### Required Follow-up
 None.
