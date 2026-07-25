@@ -1,10 +1,10 @@
 ---
 id: 2053
 title: 'P8-03: Prove native builder success and warm repair'
-status: verify
+status: collect
 priority: high
 created: 2026-07-25T16:14:29.095921+02:00
-updated: 2026-07-25T16:50:56.052122+02:00
+updated: 2026-07-25T16:52:53.155220+02:00
 tags:
   - phase-8
   - scope:test
@@ -72,3 +72,14 @@ Implemented the durable successful and warm local-repair half of PROOF-006 in `s
 A dependency-free admitted sample node is intentional: DN-007 builds are correctly predecessor-gated, while the generic shipped builder/reviewer/workflow/orchestrator contracts apply to every admitted build job. The shaped envelope explicitly permits a sample product module and deterministic lower-layer runner.
 
 Evidence: focused scenario 1 passed; complete MCP-Kanban package 70 passed; focused repository lint passed; VS Code diagnostics reported no errors. Builder challenger decision: pass.
+
+[[2026-07-25T16:52:53+02:00]]
+## Verifier Notes
+
+PASS at builder commit `b147c67c0bc1060c620c2774dba2c718c38d5cd8`.
+
+Reviewed the exact committed artifact against all four ACs and the refined packet envelope. The maintained scenario executes public MCP/native admission, planning, dispatch, start, finish, replay, and release boundaries while validating the live shipped builder, reviewer, packet workflow, and orchestrator declarations. Its dependency-free admitted sample node is within the shaped lower-layer allowance and avoids bypassing DN-007's lawful predecessor gate.
+
+Observed proof is causal: writer conflict exists only while the real build claim is active; typed local review blocks receipt creation; repair changes the scoped commit and generated context; immutable receipt content matches the successful request; replay preserves the exact receipt/event with one attempt mutation; the next writer then starts and releases.
+
+Evidence: focused committed-tree scenario 1 passed. Builder-stage package evidence was 70 passing MCP-Kanban tests, focused lint clean, and no editor diagnostics. Verifier challenger decision: pass. All recalled memories were assessed; refined-scope and replay guidance were applied. No verifier patch.
