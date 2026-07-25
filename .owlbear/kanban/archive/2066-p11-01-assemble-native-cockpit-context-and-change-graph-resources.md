@@ -1,10 +1,10 @@
 ---
 id: 2066
 title: 'P11-01: Assemble native Cockpit context and change graph resources'
-status: collect
+status: archived
 priority: high
 created: 2026-07-25T22:30:50.098738+02:00
-updated: 2026-07-25T22:48:24.605385+02:00
+updated: 2026-07-25T22:50:22.947156+02:00
 tags:
   - phase-11
   - scope:cockpit-backend
@@ -33,7 +33,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Projection
@@ -70,3 +70,9 @@ Verified builder SHA `9f954b3776f6918e010aaa9ed8cae59178dcaf89` against all thre
 Verifier strengthened the existing public graph assertion to require the real current `DN-001` isolated plan and `DN-001-PK-001` packet. After an initial challenger failure, the AC-3 proof was repaired to change the digest, construct a real replacement `NativeRuntime`/history/proof manager, fail at `DispatchRuntime`, and assert the stable 503, old cache identity, work-store file set, and proof-root file set remain unchanged.
 
 Evidence: `uv run pytest -q tests/test_cockpit_native_changes.py` -> 6 passed; `uv run pytest -q tests/test_cockpit_*.py -m "not api"` -> 296 passed; focused verifier lint passed. Verifier challenger after repair: pass.
+
+[[2026-07-25T22:50:22+02:00]]
+## Collect Notes
+ARCHIVED
+
+Latest Verify Notes are PASS with all AC mapped to public FastAPI evidence and verifier challenger pass. Collector reran `uv run pytest -q tests/test_cockpit_native_changes.py` at verifier SHA `e5b27a5cc22d4d914c8ebab0c9372951d99d7389`: 6 passed. Packet scope is closed; parent DN-010 aggregate #1987 remains in collect pending #2067-#2070.
