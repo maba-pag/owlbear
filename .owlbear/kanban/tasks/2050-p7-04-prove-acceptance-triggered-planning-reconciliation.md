@@ -1,10 +1,10 @@
 ---
 id: 2050
 title: 'P7-04: Prove acceptance-triggered planning reconciliation'
-status: verify
+status: collect
 priority: high
 created: 2026-07-25T15:09:49.416616+02:00
-updated: 2026-07-25T15:47:27.695520+02:00
+updated: 2026-07-25T15:49:32.854825+02:00
 tags:
   - phase-7
   - scope:test
@@ -83,3 +83,22 @@ DONE. Adopted and completed the interrupted #2050 diff within the shaped envelop
 - Path-scoped pre-commit: all applicable hooks passed.
 - Live modular-delivery digest remains `3f6c656289911320bb5e7faf37b5e86ffa8511e729ade201a03a19913e33d990`.
 - Builder challenger: `pass`; independently reran the assembled scenarios, MCP suite, and static checks and found the runtime repairs narrow and required.
+
+[[2026-07-25T15:49:32+02:00]]
+## Verify Notes
+
+PASS at builder commit `75db1c280e4ac7a848c3fef56f98df46ac82a6bf`.
+
+### Independent AC Verification
+- AC-1: the public assembled scenario verifies all direct-dependent create-or-release identities, reconciliation predecessor linkage, and old-build blocking before superseding publication.
+- AC-2: the engine-picked reconciliation job runs through shipped planner artifacts, embeds the predecessor accept receipt/evidence, records predecessor receipt linkage and a changed digest, rejects the old build as digest-stale, and starts the replacement build.
+- AC-3: existing corrective/invalidation owners stale the reconciled receipt and jobs 19/20/21 while disjoint DN-009 plan and receipt bytes remain unchanged.
+- AC-4: the maintained two-scenario module exercises initial topology, atomic success/replay, invalid next-node isolation, reconciliation, evidence fold-in, blocking, supersession, and invalidation through real planner and runtime boundaries.
+
+### Verification Evidence
+- Exact committed code paths had no drift from HEAD.
+- `git show` confirmed commit `75db1c280e4ac7a848c3fef56f98df46ac82a6bf` contains only the #2050 task record and three owned code paths.
+- Planner interaction plus native runtime, invalidation, receipt, and node-plan storage suites: 154 passed.
+- Complete `serve/mcp-kanban/tests`: 69 passed.
+- Ruff check and format: clean for all changed Python files.
+- Verifier challenger: `pass`; no implementation defect or missing proof blocks collection.
