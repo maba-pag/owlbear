@@ -1,0 +1,50 @@
+---
+id: 2066
+title: 'P11-01: Assemble native Cockpit context and change graph resources'
+status: build
+priority: high
+created: 2026-07-25T22:30:50.098738+02:00
+updated: 2026-07-25T22:30:50.098738+02:00
+tags:
+  - phase-11
+  - scope:cockpit-backend
+  - api
+  - change
+  - graph
+  - type:build
+  - rigor:thorough
+  - change:replace-delivery-pipeline
+  - node:DN-010
+  - packet:DN-010-PK-001
+  - interface:IF-011
+parent: 1987
+depends_on: []
+ac:
+  - 'AC-1: Given loaded and malformed sibling packages, `GET /api/changes` returns
+    identity-ordered typed entries with admitted digest or diagnostics; a missing
+    changes directory returns an empty list.'
+  - 'AC-2: Given an admitted change ID, `GET /api/changes/{change_id}` and `/graph`
+    return joined authority and current isolated plans; missing or malformed authority
+    returns a stable 404 or 422 envelope without filesystem paths.'
+  - 'AC-3: Repeated requests reuse context only for the matching revision; a changed
+    digest replaces cached authority, while runtime assembly failure returns a stable
+    error without work-store or proof-checkout mutation.'
+proof_bundle: critical+challenge
+blocked: false
+block_reason:
+claimed_at:
+archival_reason:
+archival_refs: []
+---
+## Projection
+`replace-delivery-pipeline` at `3f6c656289911320bb5e7faf37b5e86ffa8511e729ade201a03a19913e33d990`; `DN-010-PK-001`.
+
+## Outcome
+Cockpit owns a cached per-change native context and typed change and graph HTTP resources over admitted modular authority.
+
+## Envelope
+In: backend dependency assembly, response models, change listing/detail, joined graph and isolated-plan projection, cache invalidation, stable load diagnostics.
+
+Out: work/evidence routes, controls, SSE, legacy inventory, frontend, cutover.
+
+Proof guidance: exercise public FastAPI routes with TestClient and a temporary lower engine store; do not bypass Cockpit dependency assembly.
