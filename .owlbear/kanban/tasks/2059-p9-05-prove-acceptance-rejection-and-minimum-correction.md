@@ -1,10 +1,10 @@
 ---
 id: 2059
 title: 'P9-05: Prove acceptance rejection and minimum correction'
-status: verify
+status: collect
 priority: high
 created: 2026-07-25T17:19:59.273509+02:00
-updated: 2026-07-25T18:59:31.549549+02:00
+updated: 2026-07-25T19:11:02.739662+02:00
 tags:
   - phase-9
   - scope:test
@@ -62,6 +62,18 @@ Out: new semantics, auditor, Cockpit, setup, and seed work.
 - AC-3: an actual denied tracked write in the engine checkout yields the shipped `AcceptanceBlocked` shape and unchanged-identity public release. The test proves no finding, receipt, or corrective job publication plus checkout and coordination cleanup.
 - AC-4: malformed invalidation, cleanup failure, and injected rejection transaction conflict return stable diagnostics with complete snapshots and checkout manifests unchanged. Native regression scopes retain all-stage publication failure injection.
 - Validation: acceptance module 10 passed; full MCP Kanban package 91 passed; native invalidation/runtime/dispatch/checkout scopes 95 passed; focused lint and skill validation passed; diagnostics were empty; final builder challenger passed.
+
+### Required Follow-up
+None.
+
+[[2026-07-25T19:11:02+02:00]]
+## Verifier Notes
+- Verified builder commit `961c2811` and all four ACs against the public MCP path plus native invalidation, lifecycle, dispatch, and checkout owners.
+- AC-1: canonical shipped classification is bound to strict finding and route models, including direct `design_reentry` booleans and the zero-job design route. Builder failure key `AC-1/design-reentry-flag` is closed.
+- AC-2: rejection publication, exact invalidation closure, unrelated-state preservation, no accept receipt, cleanup, and replay are directly observable through public operations and persistent stores.
+- AC-3: verifier repair now parses and exactly compares the shipped `AcceptanceBlocked` mapping, requires the complete shipped orchestration mapping sentence, and proves public release preserves every event identity field before clearing both job claim and attempt pointers. It also proves no corrective publication and complete checkout/reader cleanup. Failure keys `AC-3/shipped-blocked-routing` and `AC-3/exact-field-pointer-clear` are closed.
+- AC-4: public malformed/cleanup/transaction diagnostics preserve complete snapshots; native all-stage injected failures cover deeper publication boundaries.
+- Final independent scope: 105 tests passed; focused lint and skill validation passed; diagnostics were empty; exact commit inspection was clean; final verifier challenger passed.
 
 ### Required Follow-up
 None.

@@ -76,6 +76,22 @@ def _workflow_text() -> str:
     return Path("share/skills/w-node-acceptance/SKILL.md").read_text(encoding="utf-8")
 
 
+def _orchestration_text() -> str:
+    return Path("share/skills/w-orchestration/SKILL.md").read_text(encoding="utf-8")
+
+
+def _markdown_subsection(content: str, heading: str) -> str:
+    section = content.split(heading, 1)[1]
+    return section.split("\n### `", 1)[0]
+
+
+def _yaml_code_block(content: str) -> dict[str, object]:
+    payload = content.split("```yaml", 1)[1].split("```", 1)[0]
+    parsed = yaml.safe_load(payload)
+    assert isinstance(parsed, dict)
+    return parsed
+
+
 def _assert_acceptor_write_denied(checkout: Path) -> None:
     hook = checkout / ".owlbear" / "hooks" / "deny-writes.py"
     payload = {
@@ -599,7 +615,18 @@ async def test_tracked_acceptor_edit_blocks_and_releases_without_corrective_publ
         "target": "checkout",
         "finding": "tracked acceptor edit was denied; self-authored state cannot be accepted",
     }
-    assert "### `AcceptanceBlocked`" in _workflow_text()
+    blocked_contract = _markdown_subsection(_workflow_text(), "### `AcceptanceBlocked`")
+    normalized_orchestration = " ".join(_orchestration_text().split())
+    assert _yaml_code_block(blocked_contract) == {
+        "kind": "AcceptanceBlocked",
+        "target": "<job, checkout, authority, plan, receipt, proof, or evidence target>",
+        "finding": "<specific stale, malformed, incomplete, contradictory, unsafe, or unavailable condition>",
+    }
+    assert (
+        "`AcceptanceBlocked`: call `release_job` with only the unchanged active identity and an "
+        "orchestrator-owned release timestamp, halt native mode, and report the returned target and finding."
+        in normalized_orchestration
+    )
     assert tuple(disposition) == ("kind", "target", "finding")
     released = await server.release_job(
         ctx,
@@ -610,9 +637,17 @@ async def test_tracked_acceptor_edit_blocks_and_releases_without_corrective_publ
     assert released.diagnostic is None
     assert released.event is not None
     assert released.event.kind == "released"
+    assert released.event.change_id == start["change_id"]
+    assert released.event.job_id == start["job_id"]
     assert released.event.attempt_id == start["attempt_id"]
+    assert released.event.claim_id == start["claim_id"]
+    assert released.event.actor_id == start["actor_id"]
+    assert released.event.process_id == start["process_id"]
+    assert released.event.delivery_digest == revision.delivery_digest
+    assert released.event.target_node_id == revision.graph.nodes[0].id
     assert released.job is not None
     assert released.job.job.claim_id is None
+    assert released.job.job.attempt_id is None
     assert not checkout.root.exists()
     assert "readers: []" in (board / "dispatch/coordination.yaml").read_text(encoding="utf-8")
     assert tuple(item.job.job_id for item in JobStore(board).list()) == jobs_before
