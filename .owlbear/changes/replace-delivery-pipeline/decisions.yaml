@@ -92,8 +92,8 @@ decisions:
     selected: change-graph-authority
     rationale: >-
       Product outcomes, interfaces, migrations, risks, dependencies, and proof ownership
-      require one durable graph-level authority. Kanban remains the implementation control
-      surface rather than becoming a second specification.
+      require one durable graph-level authority. Operational Delivery jobs reference that
+      authority rather than becoming a second specification.
     options:
       - id: task-authority
         label: Keep Kanban tasks authoritative
@@ -217,7 +217,7 @@ decisions:
 
   - id: DEC-006
     title: Seal delivery nodes before shaping implementation packets
-    status: accepted
+    status: superseded
     decided_at: 2026-07-21
     authority: user
     selected: two-level-graph
@@ -261,7 +261,7 @@ decisions:
 
   - id: DEC-007
     title: Use purpose-specific Kanban jobs
-    status: accepted
+    status: superseded
     decided_at: 2026-07-21
     authority: user
     selected: shape-build-accept-audit
@@ -355,7 +355,7 @@ decisions:
     selected: append-corrective-jobs
     rationale: >-
       Findings target graph identities and invalidate only affected receipts. The engine
-      creates the minimum new shape or build jobs; re-acceptance and re-audit depend on
+      creates the minimum new plan or build jobs; re-acceptance and re-audit depend on
       corrective receipts. Prior attempts remain immutable and cards never change purpose.
     options:
       - id: move-backward
@@ -436,7 +436,7 @@ decisions:
 
   - id: DEC-011
     title: Use a four-file native authority package
-    status: accepted
+    status: superseded
     decided_at: 2026-07-21
     authority: user
     selected: four-file-package
@@ -656,7 +656,7 @@ decisions:
 
   - id: DEC-016
     title: Deepen the Kanban package into the graph-aware engine
-    status: accepted
+    status: superseded
     decided_at: 2026-07-21
     authority: user
     selected: deepen-kanban
@@ -796,7 +796,7 @@ decisions:
       Delivery-node acceptance and whole-change audit have different graph scope,
       evidence, context, and completion contracts. They use shared read-only proof
       infrastructure but remain separate delivery nodes, agents, and Kanban job kinds.
-      Archive is the universal terminal disposition: a successful shape, build, accept,
+      Archive is the universal terminal disposition: a successful plan, build, accept,
       or audit job issues its receipt and archives; the final audit receipt additionally
       closes the change.
     options:
@@ -806,7 +806,7 @@ decisions:
         recommended: false
         pros:
           - Shared proof and finding policy stays local
-          - One fewer shaping and acceptance cycle
+          - One fewer planning and acceptance cycle
         cons:
           - Bundles materially different evidence scopes and agent contexts
         risks:
@@ -816,7 +816,7 @@ decisions:
         confidence: 0.94
         recommended: true
         pros:
-          - Each assurance boundary is independently shapeable and acceptable
+          - Each assurance boundary is independently plannable and acceptable
           - Final product coherence cannot hide inside node-level verification
         cons:
           - Adds one delivery node and associated shape/accept work
@@ -1180,3 +1180,318 @@ decisions:
           - Preserves the DN-004 to DN-009 bootstrap dependency gap
         risks:
           - Orchestrator wiring lands without a runnable read-only proof boundary
+
+  - id: DEC-027
+    title: Dispatch one fresh agent invocation per job
+    status: accepted
+    decided_at: 2026-07-25
+    authority: user
+    selected: one-invocation-one-job
+    rationale: >-
+      The native engine's graph-aware picker and lifecycle gates own scheduling authority; the
+      orchestrator only invokes the profile selected for one job and maps its result back to the
+      engine. Allowing a builder to repick sequential jobs inside one synchronous subagent call
+      would save repeated instruction loading, but prior-task context, compaction, and duplicated
+      dispatch behavior put critical instructions and role boundaries at greater risk than the
+      expected input-token savings justify.
+    options:
+      - id: one-invocation-one-job
+        label: Start a fresh top-level agent invocation for every engine-selected job
+        confidence: 0.96
+        recommended: true
+        pros:
+          - Scheduling remains entirely visible to and controlled by the native engine
+          - Every agent starts with a clean context and complete current instructions
+          - Job, claim, attempt, result, and receipt boundaries remain identical
+        cons:
+          - Repeats agent instructions and authority loading for sequential compatible jobs
+        risks:
+          - Excessively small packets can make initialization cost dominate delivery
+      - id: engine-selected-builder-continuation
+        label: Let a builder repick compatible jobs inside one synchronous invocation
+        confidence: 0.58
+        recommended: false
+        pros:
+          - Reuses repository and domain context across sequential build jobs
+        cons:
+          - Carries irrelevant prior-job context and partially duplicates orchestration behavior
+        risks:
+          - Context compaction drops critical initial instructions during later jobs
+          - Communication and lifecycle ownership become harder to reason about
+      - id: one-invocation-per-node
+        label: Execute every packet in one delivery node through one agent invocation
+        confidence: 0.24
+        recommended: false
+        pros:
+          - Maximizes context reuse within a delivery node
+        cons:
+          - Couples execution granularity to node size and weakens packet isolation
+        risks:
+          - Late failure or context exhaustion makes recovery expensive and ambiguous
+
+  - id: DEC-028
+    title: End Specification at admitted delivery nodes
+    status: accepted
+    decided_at: 2026-07-25
+    authority: user
+    selected: nodes-end-specification
+    rationale: >-
+      Intent, design, decisions, obligations, contracts, delivery nodes, and admission form one
+      Specification phase because together they define the approved outcome and its proof ownership.
+      Packet plans are implementation refinements and therefore begin Delivery rather than becoming
+      speculative admission authority. Specification and Delivery are peer product phases.
+    options:
+      - id: nodes-end-specification
+        label: End Specification with admitted delivery nodes and begin Delivery with planning
+        confidence: 0.96
+        recommended: true
+        pros:
+          - Keeps global product completeness separate from implementation refinement
+          - Gives Changes and Delivery equally explicit product ownership
+        cons:
+          - Delivery begins with a planning transformation before implementation
+        risks:
+          - Agents blur admitted obligations and post-admission implementation detail
+      - id: packets-end-specification
+        label: Admit every implementation packet as part of Specification
+        confidence: 0.34
+        recommended: false
+        pros:
+          - Provides a complete implementation queue at admission
+        cons:
+          - Requires speculative low-level decomposition in the largest context
+        risks:
+          - Packet churn repeatedly invalidates otherwise stable product authority
+      - id: nodes-begin-delivery
+        label: Treat delivery-node definition as the first Delivery activity
+        confidence: 0.42
+        recommended: false
+        pros:
+          - Makes Specification smaller
+        cons:
+          - Admits work before outcome ownership and dependencies are complete
+        risks:
+          - Delivery recreates node-complete but edge-incomplete planning
+
+  - id: DEC-029
+    title: Plan the eligible node frontier in one resumable session
+    status: accepted
+    decided_at: 2026-07-25
+    authority: user
+    selected: resumable-frontier-planner
+    rationale: >-
+      Planning dominates the observed interaction and context cost. One warm planner should process
+      every currently plan-ready node, while each node retains independent validation, challenge,
+      publication, digest, transaction, and receipt boundaries. Agent startup is not an authority
+      boundary; per-node atomic evidence is.
+    options:
+      - id: resumable-frontier-planner
+        label: Process every plan-ready node in one resumable planner session
+        confidence: 0.92
+        recommended: true
+        pros:
+          - Reuses admitted graph and repository context across related node plans
+          - Preserves independent per-node publication and recovery
+        cons:
+          - Planner control flow must isolate failure and review for each node
+        risks:
+          - A large frontier degrades context unless the planner checkpoints and stops deliberately
+      - id: fresh-planner-per-node
+        label: Start one independent planner invocation for every delivery node
+        confidence: 0.45
+        recommended: false
+        pros:
+          - Gives every node a clean context
+        cons:
+          - Repeats the most expensive authority and repository loading
+        risks:
+          - Planning remains sequential and dominates delivery economics
+      - id: one-change-plan-transaction
+        label: Publish every node plan in one change-wide transaction
+        confidence: 0.28
+        recommended: false
+        pros:
+          - Produces one complete implementation graph at once
+        cons:
+          - Couples independent plans and loses incremental recovery
+        risks:
+          - One invalid node discards all valid planning progress
+
+  - id: DEC-030
+    title: Modularize delivery authority and isolate node plans
+    status: accepted
+    decided_at: 2026-07-25
+    authority: user
+    selected: modular-delivery-isolated-plans
+    rationale: >-
+      The monolithic graph mixes stable specification authority with post-admission plan mutation and
+      forces whole-file rewrites for one node. The loader will join three bounded delivery-authority
+      files into the same canonical logical graph, while one file per node owns its Delivery plan.
+      Semantic identity remains independent of physical wrapping.
+    options:
+      - id: modular-delivery-isolated-plans
+        label: Use obligations, contracts, and nodes files plus one plan file per node
+        confidence: 0.90
+        recommended: true
+        pros:
+          - Separates admitted authority from mutable Delivery planning
+          - Localizes authorship, diffs, transactions, and recovery
+        cons:
+          - Loader and validation must join several files coherently
+        risks:
+          - Physical boundaries leak into semantic identity without canonical join tests
+      - id: monolithic-graph-isolated-plans
+        label: Keep one delivery graph file but move node plans out
+        confidence: 0.63
+        recommended: false
+        pros:
+          - Fixes plan mutation with a smaller loader change
+        cons:
+          - Leaves the large multi-owner specification file difficult to author
+        risks:
+          - A later modular migration repeats digest and fixture work
+      - id: monolithic-graph-and-plans
+        label: Keep delivery authority and execution plans in graph.yaml
+        confidence: 0.16
+        recommended: false
+        pros:
+          - Requires no package-layout change
+        cons:
+          - Rewrites the full authority file for every node plan
+        risks:
+          - Formatting churn and transaction conflicts continue to dominate authoring
+
+  - id: DEC-031
+    title: Keep one transactional core behind peer product phases
+    status: accepted
+    decided_at: 2026-07-25
+    authority: user
+    selected: one-core-peer-surfaces
+    rationale: >-
+      Change authority and operational work need one transaction and invalidation owner, but this does
+      not make Kanban the product center. The existing owlbear-kanban package becomes the neutral
+      graph-aware control-plane core behind peer Specification and Delivery experiences in Cockpit,
+      MCP, and agents.
+    options:
+      - id: one-core-peer-surfaces
+        label: Use one transactional core behind peer Specification and Delivery surfaces
+        confidence: 0.95
+        recommended: true
+        pros:
+          - Preserves atomic authority, work, receipt, and invalidation transitions
+          - Lets product navigation reflect the actual two-phase operating model
+        cons:
+          - The historical package name no longer describes its complete responsibility
+        risks:
+          - Internal modules remain Kanban-shaped unless ownership is deliberately deepened
+      - id: kanban-centered-product
+        label: Keep Kanban as the primary product surface with Changes as supporting context
+        confidence: 0.27
+        recommended: false
+        pros:
+          - Preserves familiar board-first navigation
+        cons:
+          - Hides the phase where most interaction and authority work occurs
+        risks:
+          - Users continue to mistake operational cards for product truth
+      - id: split-specification-and-delivery-cores
+        label: Put Specification and Delivery in separate transactional packages
+        confidence: 0.41
+        recommended: false
+        pros:
+          - Gives each phase explicit package ownership
+        cons:
+          - Every admission, plan, invalidation, and receipt transition crosses cores
+        risks:
+          - Split transactions recreate authority drift
+
+  - id: DEC-032
+    title: Reconcile downstream plans after node acceptance
+    status: accepted
+    decided_at: 2026-07-25
+    authority: user
+    selected: acceptance-triggered-reconciliation
+    rationale: >-
+      A predecessor's accepted implementation is the earliest durable evidence that can refine a
+      dependent plan without waiting for whole-change audit. Initial plans may use admitted
+      predecessor contracts before implementation is accepted. Acceptance then marks dependent plans
+      reconciliation-required and blocks dependent builds until the planner publishes current
+      superseding plans against implementation evidence. Final audit remains independent and read-only.
+    options:
+      - id: acceptance-triggered-reconciliation
+        label: Reconcile dependent plans after predecessor acceptance before dependent builds
+        confidence: 0.93
+        recommended: true
+        pros:
+          - Incorporates real predecessor evidence one lifecycle state earlier
+          - Keeps final audit read-only and focused on whole-change proof
+        cons:
+          - Initial plan, reconciliation, and build readiness require distinct engine gates
+        risks:
+          - Autonomous reconciliation exceeds admitted authority without strict expansion checks
+      - id: audit-triggered-reconciliation
+        label: Reconcile dependent plans during final audit
+        confidence: 0.18
+        recommended: false
+        pros:
+          - Delays planning changes until all implementation is assembled
+        cons:
+          - Makes audit mutate plans and discovers dependencies too late
+        risks:
+          - Final audit loses independence and becomes another planning stage
+      - id: manual-downstream-replanning
+        label: Require the user to resume planning after every accepted predecessor
+        confidence: 0.38
+        recommended: false
+        pros:
+          - Keeps every reconciliation explicitly user initiated
+        cons:
+          - Adds interaction where admitted authority already determines the safe action
+        risks:
+          - Ready dependent work remains stale or blocked unnecessarily
+
+  - id: DEC-033
+    title: Make planning the first purpose-specific Delivery job
+    status: accepted
+    decided_at: 2026-07-25
+    authority: user
+    selected: plan-build-accept-audit
+    rationale: >-
+      Delivery begins by transforming one admitted delivery node into an executable packet plan.
+      The operational job kind is therefore `plan`, followed by `build`, `accept`, and `audit`.
+      Readiness, blocking, claims, staleness, cancellation, supersession, and failed attempts remain
+      runtime properties rather than job kinds or lifecycle columns. This breaking rename makes
+      completed DN-003 and DN-004 stale and requires DN-009 to consume only their corrected API;
+      no `shape` compatibility alias is allowed.
+    options:
+      - id: plan-build-accept-audit
+        label: Use plan, build, accept, and audit as purpose-specific Delivery jobs
+        confidence: 0.97
+        recommended: true
+        pros:
+          - Makes every job name the transformation an agent performs
+          - Aligns operational vocabulary with the Specification and Delivery boundary
+        cons:
+          - Requires migration from the previously implemented shape job vocabulary
+        risks:
+          - Partial renaming leaves incompatible API, agent, and Cockpit contracts
+      - id: shape-build-accept-audit
+        label: Keep shape as the post-admission planning job name
+        confidence: 0.38
+        recommended: false
+        pros:
+          - Preserves existing implementation vocabulary
+        cons:
+          - Blurs global Specification shaping with bounded Delivery planning
+        risks:
+          - Agents re-enter product design when they should refine admitted implementation work
+      - id: specification-planning-stage
+        label: Add Planning as a third macro phase between Specification and Delivery
+        confidence: 0.31
+        recommended: false
+        pros:
+          - Gives planning a distinct top-level label
+        cons:
+          - Adds a phase boundary without a separate authority or acceptance boundary
+        risks:
+          - Product navigation gains ceremony without clearer ownership

@@ -2,18 +2,18 @@
 
 > **Change ID:** `replace-delivery-pipeline`
 > **Owning intake:** #1968
-> **State:** Approved, pending admission
-> **Authority:** This file owns technical realization. Product intent belongs in `intent.md`; material choices belong in `decisions.yaml`; stable identities and delivery ownership belong in `graph.yaml`.
+> **State:** Draft, pending challenge and approval
+> **Authority:** This file owns technical realization. Product intent belongs in `intent.md`; material choices belong in `decisions.yaml`; stable identities and delivery ownership belong in `delivery/`.
 
 ## 1. Design Goals
 
 The replacement must make these properties true by construction:
 
 1. One durable change revision owns product intent, decisions, architecture, delivery obligations, interface edges, migration, risk, and proof.
-2. Admission occurs before Kanban implementation and certifies layered delivery completeness for one exact revision.
-3. Kanban remains the implementation control surface, but jobs reference graph authority instead of copying it.
-4. The global graph is complete at delivery level; bounded node shaping adds implementation packets without changing admitted delivery obligations.
-5. Every visible Kanban column names an agent transformation: `shape`, `build`, `accept`, or `audit`.
+2. Admission ends Specification and certifies layered delivery completeness for one exact revision before Delivery work exists.
+3. Specification and Delivery are peer product phases backed by one transactional control-plane core.
+4. The admitted graph is complete at delivery-node level; bounded frontier planning adds implementation packets without changing admitted obligations.
+5. Every visible Delivery column names an agent transformation: `plan`, `build`, `accept`, or `audit`.
 6. Builders retain warm context while a mandatory read-only reviewer challenges their packet.
 7. Node acceptance and final change audit are independent, read-only over tracked files, exact-revision gates.
 8. Findings create immutable corrective jobs and superseding receipts rather than moving cards backward or rewriting history.
@@ -30,14 +30,15 @@ Authority plane                         Work plane
   intent.md                               jobs/
   design.md                               archive/
   decisions.yaml                          requests/
-  graph.yaml                              activity.jsonl
+  delivery/                               activity.jsonl
+  plans/
   receipts/
         |                                      |
         +------------ owlbear-kanban ----------+
                          |
                  MCP and Cockpit adapters
                          |
-     designer | shaper | builder | acceptor | auditor | orchestrator
+    designer | planner | builder | acceptor | auditor | orchestrator
 ```
 
 ### 2.1 Authority plane
@@ -63,12 +64,17 @@ The repository uses one shared implementation worktree. The orchestrator dispatc
   intent.md
   design.md
   decisions.yaml
-  graph.yaml
+  delivery/
+    obligations.yaml
+    contracts.yaml
+    nodes.yaml
+  plans/
+    <node-id>.yaml
   receipts/
     <receipt-id>.yaml
 ```
 
-The four root files are the editable authority. `receipts/` is engine-generated, immutable evidence rather than a fifth authored specification.
+The three prose/decision roots plus the three files under `delivery/` are editable Specification authority. `plans/` contains post-admission Delivery refinements. `receipts/` is engine-generated immutable evidence.
 
 ### 3.1 `intent.md`
 
@@ -82,21 +88,26 @@ Owns current-system evidence, architecture, module ownership, control/data flow,
 
 Owns material user decisions and supersession. Every option records pros, cons, risks, recommendation, rationale, and confidence. Runtime implementation questions do not enter this file unless their resolution changes intent, design, delivery obligations, compatibility, security, or proof meaning.
 
-### 3.4 `graph.yaml`
+### 3.4 `delivery/`
 
-Owns stable identities and relationships in two logical namespaces:
+Owns stable Specification identities and relationships in three physical files:
 
-- delivery-authority root sections: `requirements`, `negative_requirements`, `preserved_behaviors`, `workflows`, `modules`, `interfaces`, `migrations`, `risks`, `proofs`, and `nodes`;
-- `execution`: per-node packet plans created by successful shape jobs.
+- `obligations.yaml`: requirements, negative requirements, preserved behaviors, and workflows;
+- `contracts.yaml`: modules, interfaces, migrations, risks, and proofs;
+- `nodes.yaml`: delivery nodes and dependency edges.
 
-A shape job may write only its delivery node's `execution.node_plans` entry. Any change to `delivery`, `intent.md`, `design.md`, or accepted decisions requires global design re-entry and re-admission.
+The loader joins these files into one canonical logical `DeliveryGraph`; physical file boundaries do not affect semantic identity.
 
-### 3.5 Receipts
+### 3.5 `plans/`
+
+Each `<node-id>.yaml` contains one post-admission packet DAG. A planner may write only the target node's plan file through the per-node transaction. Any change to `delivery/`, `intent.md`, `design.md`, or accepted decisions requires Specification re-entry and re-admission.
+
+### 3.6 Receipts
 
 Receipts are immutable YAML records with a versioned discriminated schema. Core receipt kinds are:
 
 - `admission`: certifies one delivery digest and records deterministic diagnostics, semantic challenge, baseline commands, user approval, and limits;
-- `shape`: certifies one node plan digest and the complete packet DAG for a delivery node;
+- `plan`: certifies one node plan digest and the complete packet DAG for a delivery node;
 - `build`: certifies one packet contract, commit, changed paths, proof, inline-review result, and predecessors;
 - `accept`: certifies one delivery node against its node plan, build receipts, proof boundary, and tested code revision;
 - `audit`: certifies the complete change against all delivery nodes, workflows, accepted decisions, and tested code revision;
@@ -127,7 +138,7 @@ Jobs retain a globally monotonic numeric ID for board ergonomics and reference `
 1. `intent`: `intent.md` normalized to LF and one trailing newline;
 2. `design`: `design.md` normalized to LF and one trailing newline;
 3. `decisions`: the accepted material decision records in stable decision-ID order;
-4. `delivery`: the delivery-authority root sections named in §3.4, excluding `state`, `admission`, `authority`, and `execution` metadata.
+4. `delivery`: the canonical joined delivery-authority sections named in §3.4, excluding physical wrapping and admission metadata.
 
 Normalization standardizes UTF-8, LF endings, deterministic mapping keys, and trailing newline. Any authority edit creates a new digest. There is no compatibility promise between digests.
 
@@ -145,7 +156,7 @@ ensure_ascii=False, allow_nan=False).encode("utf-8")` before SHA-256.
 
 - the current `delivery_digest`;
 - the canonical delivery-node contract;
-- the canonical `execution.node_plans[<node-id>]` packet DAG.
+- the canonical `plans/<node-id>.yaml` packet DAG.
 
 Packet refinement changes only the affected node plan digest. It cannot change the admitted delivery digest.
 
@@ -173,7 +184,7 @@ Each non-admission receipt freezes one typed `impact_closure` at issuance. The c
 
 The reserved selector `/` denotes the complete repository tree. Other selectors reject a leading slash, `.`, `..`,
 empty segments, backslashes, NUL, and repository escape. A tree selector matches the named tree and its descendants;
-a file selector matches only that path. Shape and build receipts copy the closure from their canonical packet
+a file selector matches only that path. Plan and build receipts copy the closure from their canonical packet
 contract. An accept receipt uses the canonical union of its node-plan packet closures. An audit receipt uses `/` plus
 the active change-authority targets. Receipt issuance fails when the required closure is missing, malformed, or
 cannot be derived without ambiguity. Changed paths and receipt diffs are evidence, not authority for widening or
@@ -228,23 +239,40 @@ The admitted delivery graph is complete before implementation work enters Kanban
 
 ### 5.2 Delivery node boundary
 
-A delivery node is independently shapeable and independently acceptable. It owns one coherent delivery result and all cross-boundary obligations necessary to prove that result. Nodes split when ownership, dependency order, failure domain, proof environment, or agent context materially differs. They do not split by file type or framework layer alone.
+A delivery node is independently plannable and independently acceptable. It owns one coherent delivery result and all cross-boundary obligations necessary to prove that result. Nodes split when ownership, dependency order, failure domain, proof environment, or agent context materially differs. They do not split by file type or framework layer alone.
 
 ### 5.3 Completeness rule
 
 Every admitted obligation has one accountable delivery owner and one proof path. Shared prerequisites may serve several nodes, but observable completion has one owner. The graph includes explicit integration/proof nodes whenever code, fixtures, generated clients, environments, harnesses, or assembled workflows must be built before acceptance.
 
-## 6. Node Shaping and Packet Plans
+## 6. Frontier Planning and Packet Plans
 
-Admission creates one `shape` job per delivery node. A successful shape job atomically writes the node plan and creates its build jobs plus one dependency-gated `accept` job. A shape job receives:
+Admission creates one initially plan-ready `plan` job record per delivery node because admission has
+already sealed every predecessor contract. The planner consumes these jobs in stable topological
+order so predecessor plans inform dependent plans without making predecessor implementation a gate.
+Authority currentness, pending requests, claims, terminal disposition, and the global writer lease
+remain dispatch gates.
+
+One resumable planner may process several engine-selected plan-ready jobs in a warm session, but
+each job independently validates, challenges, and atomically writes only its node plan before
+creating build jobs plus one dependency-gated `accept` job. A plan job receives:
 
 - the complete current `ChangeRevision`;
 - its target delivery node;
 - predecessor receipts and relevant source state;
 - repository and contract-authority tools;
-- the node-shaping policy and independent shape reviewer.
+- the node-planning policy and independent plan reviewer.
 
-The shape job creates the complete outcome-cohesive packet DAG for that node in one session.
+After each atomic completion, the planner obtains a fresh engine plan. A failed node publishes no partial plan and does not roll back previously completed nodes.
+
+The initial plan receipt records the admitted predecessor contracts it consumed. A packet build job
+becomes ready only when its plan receipt remains current, every authored packet dependency is
+current, and every predecessor delivery node has a current accept receipt. `finish_accept`
+atomically issues the predecessor receipt, marks each dependent plan reconciliation-required, and
+creates or releases its corrective `plan` job. The dependent build remains blocked until that job
+publishes a superseding plan receipt based on the accepted implementation evidence. Invalidation of
+a predecessor accept receipt invalidates the dependent reconciled plan/build closure. Final audit
+does not participate in this release and cannot mutate a plan.
 
 ### 6.1 Legal refinement
 
@@ -257,7 +285,7 @@ A packet plan may:
 
 ### 6.2 Illegal expansion
 
-A shape job must return to global design when it discovers or proposes:
+A plan job must return to interactive Specification when it discovers or proposes:
 
 - a new or weakened product outcome;
 - a new public or cross-module interface edge;
@@ -284,7 +312,7 @@ Each packet records:
 - domain/risk/tool profile used to load builder skills;
 - expected context/change-envelope budget.
 
-The node shaper must validate and canonicalize each packet impact closure before publishing its node plan. Packet
+The planner must validate and canonicalize each packet impact closure before publishing its node plan. Packet
 dependencies do not imply path ownership: a packet names the paths and authority targets its own proof consumes.
 
 ## 7. Kanban Job Model
@@ -293,12 +321,12 @@ A Kanban card is one purpose-specific agent job. Its `kind` determines the board
 
 | Kind | Agent transformation | Success receipt |
 | --- | --- | --- |
-| `shape` | Delivery node -> complete packet DAG | `shape` |
+| `plan` | Delivery node -> complete packet DAG | `plan` |
 | `build` | Packet contract -> committed implementation and inline review | `build` |
 | `accept` | Delivery node plus descendant receipts -> independent node verdict | `accept` |
 | `audit` | Accepted delivery graph -> final product verdict | `audit` |
 
-Archive is the universal terminal disposition, not a fifth agent-work column. A successful shape, build, accept, or audit job issues its purpose-specific receipt and moves to archive; the final audit receipt also closes the change. Cards never change kind or move backward. Dependency readiness, claim activity, pending requests, blocked state, staleness, cancellation, supersession, and failed attempts are properties or dispositions rather than columns.
+Archive is the universal terminal disposition, not a fifth agent-work column. A successful plan, build, accept, or audit job issues its purpose-specific receipt and moves to archive; the final audit receipt also closes the change. Cards never change kind or move backward. Dependency readiness, claim activity, pending requests, blocked state, staleness, cancellation, supersession, and failed attempts are properties or dispositions rather than columns.
 
 ### 7.1 Job record
 
@@ -412,13 +440,20 @@ The user-facing designer owns one resumable pre-Kanban session. `/ideate` create
 
 The designer may write only the current change authority, focused research, and scratch diagnostics. It does not implement product code or create Kanban work before admission.
 
-### 8.2 Delivery-node shaper
+### 8.2 Frontier planner
 
-The shaper processes one `shape` job, writes only its node-plan namespace and resulting jobs, invokes a read-only shape reviewer, and either issues a shape receipt or returns a material discovery to the designer. It cannot change admitted delivery authority.
+The resumable planner processes engine-selected initial or reconciliation `plan` jobs from the
+current frontier. For each node it writes only that node's plan and resulting jobs, invokes a
+read-only plan reviewer, and either issues a plan receipt or returns a material discovery to the
+designer. It cannot change admitted delivery authority. After a predecessor acceptance receipt, the
+engine marks dependent plans reconciliation-required and blocks their builds until the planner
+publishes superseding plans against accepted implementation evidence. One material choice creates a
+Decision Request; broader design discussion re-enters Specification.
 
 ### 8.3 Builder
 
-The builder processes one `build` job in the shared worktree. It:
+One fresh top-level builder invocation processes exactly one `build` job in the shared worktree.
+It cannot pick or start a subsequent job before returning its structured lifecycle result. It:
 
 - verifies the exact packet digest and change envelope before editing;
 - implements all outputs needed for the packet outcome;
@@ -442,15 +477,21 @@ The acceptor processes one `accept` job after all required build receipts are va
 
 Pass creates an accept receipt. Failure creates typed findings and engine-generated corrective jobs. The acceptor never patches its own findings.
 
+Successful acceptance also makes dependent plans reconciliation-required and blocks their builds
+until superseding plan receipts exist. It does not wait for final audit.
+
 ### 8.5 Auditor
 
 The auditor processes the single `audit` job after every required node has a valid accept receipt. It is independent and read-only over tracked files. The engine materializes the target commit in a disposable proof checkout. The auditor executes all admitted normal workflows there, checks Product Promise and accepted decisions, confirms migration/removal and absence proofs, and verifies that no invalid or unresolved receipt/request remains. Pass creates the final audit receipt and closes the change mechanically. Failure creates typed findings and minimum corrective jobs.
 
 ### 8.6 Orchestrator
 
-The orchestrator has no product authority. It obtains graph-aware waves from the engine and dispatches the assigned agent for each job. It never parses prose to route work.
+The orchestrator has no product or scheduling authority. The engine's graph-aware `pick_jobs`
+result selects each eligible job and assigned profile; the orchestrator invokes that profile once
+for that job and maps its structured result to the matching engine lifecycle operation. It never
+parses prose to route work, and an invoked agent cannot repick or continue into another job.
 
-- tracked-file-mutating `shape` and `build` jobs are globally serialized;
+- tracked-file-mutating `plan` and `build` jobs are globally serialized;
 - `accept` and `audit` never overlap a writer;
 - read-only nested specialists/reviewers may run inside the owning session;
 - claims expire and are recoverable;
@@ -540,10 +581,10 @@ Findings are structured and target requirements, interfaces, migrations, risks, 
 | Finding class | Corrective route |
 | --- | --- |
 | Packet implementation or local proof defect | New `build` repair job |
-| Packet boundary/dependency/proof-plan defect within admitted node | New `shape` revision job for that node |
+| Packet boundary/dependency/proof-plan defect within admitted node | New `plan` revision job for that node |
 | Product, interface, migration, risk, architecture, or delivery-proof defect | Global `/design` re-entry and re-admission |
-| Node integration defect after valid packets | New build-owned integration/repair packet through node shape correction |
-| Whole-change integration defect within admitted obligations | Corrective node shape/build jobs, then re-accept and re-audit |
+| Node integration defect after valid packets | New build-owned integration/repair packet through node plan correction |
+| Whole-change integration defect within admitted obligations | Corrective node plan/build jobs, then re-accept and re-audit |
 
 The invalidation engine computes affected descendants from graph and receipt dependencies. It appends a supersession receipt, marks old receipts invalid, cancels or supersedes stale open jobs, and creates the minimum new corrective jobs. Prior records remain immutable. The Cockpit defaults to the latest valid chain but exposes full history.
 
@@ -571,12 +612,12 @@ During `/design`, live user choices use `askQuestions` and are written directly 
 ## 12. Shared Worktree and Commit Contract
 
 - The orchestrator dispatches no overlapping tracked-file writers.
-- A shape or build job starts from a recorded clean or explicitly bounded base commit.
+- A plan or build job starts from a recorded clean or explicitly bounded base commit.
 - Builders may coexist with unrelated user modifications while implementing when scoped ownership remains unambiguous.
 - Acceptance and audit use a disposable read-only checkout of the exact tested commit under `.owlbear/scratch/proof/<job-id>/`; unrelated shared-worktree changes neither block nor influence proof.
 - The proof checkout uses the workspace's normal toolchain and environment while isolating tracked files. Reused caches and external services are recorded when they affect evidence.
 - Proof-checkout creation, containment, and deletion are engine-owned and crash-safe. Orphaned proof checkouts are health findings and safe cleanup targets.
-- Each successful shape/build/accept/audit job owns one logical scoped commit containing its durable control-plane files and, for builders, product files.
+- Each successful plan/build/accept/audit job owns one logical scoped commit containing its durable control-plane files and, for builders, product files.
 - Inline reviewers are read-only and do not commit.
 - Acceptance/audit receipts record the tested commit, commands, environment-relevant facts, replacements, outputs, and result.
 - Control-plane-only receipt commits may follow the tested code commit; the receipt records the tested code SHA explicitly.
@@ -593,12 +634,12 @@ owlbear_kanban/
   engine.py              # Thin facade and transaction coordination
   models/
     change.py            # ChangeRevision and authority metadata
-    graph.py             # Delivery graph and node plans
+    graph.py             # Joined delivery graph and isolated node plans
     job.py               # Purpose-specific jobs and projections
     evidence.py          # Attempts, findings, receipts, validity
     request.py           # Change/job-scoped requests
   stores/
-    change.py            # Four-file package load and canonical digest
+    change.py            # Modular package load and canonical digest
     job.py               # Active/archive job storage and OCC
     receipt.py           # Immutable receipt storage
     request.py           # Pending/resolved request storage
@@ -614,6 +655,12 @@ owlbear_kanban/
 
 No caller mutates stores independently. Engine transactions validate references, write temp files, fsync, rename atomically where possible, append activity, and return structured projections. Multi-file operations use a transaction manifest and deterministic recovery so a crash cannot leave a receipt without its job/graph update.
 
+The self-hosting bootstrap currently implements `shape` vocabulary in DN-003/DN-004 and the IF-015
+MCP bridge. DEC-033 and MIG-004 make this completed work stale: DN-003 must replace job, receipt,
+request, and transaction discriminators; DN-004 must replace dispatch profiles and `finish_shape`
+with `finish_plan`; DN-009 must expose only the corrected assembled API. No `shape` compatibility
+alias or dual registration survives re-admission or cutover.
+
 ## 14. MCP Contract
 
 The MCP server exposes intent-level tools rather than generic file-like task mutation:
@@ -625,7 +672,7 @@ alternate lifecycle semantics. DN-009 then completes the control plane with chan
 request, evidence, health, history, and remaining read surfaces. This split preserves one MCP
 transport for agents while avoiding a DN-004/DN-009 bootstrap cycle.
 
-For `shape | build`, the bridge `start_job` result is the strict dispatch start result. For
+For `plan | build`, the bridge `start_job` result is the strict dispatch start result. For
 `accept | audit`, the adapter first prepares IF-005 at the requested candidate commit, then starts
 the claim and returns the strict dispatch result plus the contained checkout path, canonical commit,
 and manifest path. Checkout setup failure creates no claim. A rejected start removes the prepared
@@ -646,7 +693,7 @@ receipt. This composition does not change IF-003 or add another MCP operation.
 - `show_job`
 - `pick_jobs`
 - `start_job`
-- `finish_shape`
+- `finish_plan`
 - `finish_build`
 - `finish_accept`
 - `finish_audit`
@@ -668,15 +715,15 @@ Resolution remains user/Cockpit controlled.
 - `list_attempts`
 - `show_receipt`
 
-Generic `create_task`, `edit_task`, `move_task`, arbitrary status transitions, parent mutation, and OpenSpec tools are removed. Shape and corrective transactions are the only ways implementation jobs enter the board.
+Generic `create_task`, `edit_task`, `move_task`, arbitrary status transitions, parent mutation, and OpenSpec tools are removed. Plan and corrective transactions are the only ways implementation jobs enter Delivery.
 
 ## 15. Cockpit Product Experience
 
-Kanban remains the default operational surface.
+Specification and Delivery are peer top-level surfaces. Changes defaults to the current Specification revision; Delivery defaults to current executable work and its evidence.
 
 ### 15.1 Board
 
-Columns are `Shape`, `Build`, `Accept`, and `Audit`. Cards show projected graph title/outcome plus operational signals:
+Columns are `Plan`, `Build`, `Accept`, and `Audit`. Cards show projected graph title/outcome plus operational signals:
 
 - change and delivery-node identity;
 - priority and job kind;
@@ -696,7 +743,7 @@ A Changes view lists draft, admitted, executing, accepted, abandoned, and supers
 - Product Intent and decisions;
 - implementation design and named authorities;
 - delivery graph with requirement/interface/migration/proof overlays;
-- node packet plans after shaping;
+- node packet plans after planning;
 - admission diagnostics and receipt;
 - jobs, attempts, findings, receipts, and exact tested commits;
 - invalidation/supersession chain;
@@ -758,9 +805,9 @@ Use table-driven and property-based cases for dangling IDs, cycles, disconnected
 ### 17.4 End-to-end scenarios
 
 - rough `/ideate` entry -> resumed `/design` -> decision -> challenge -> admission;
-- admitted graph -> shape jobs -> packet DAG -> build with inline review -> node acceptance -> final audit;
+- admitted graph -> frontier plan jobs -> packet DAG -> build with inline review -> node acceptance -> final audit;
 - build defect -> corrective build job -> re-accept;
-- packet-boundary defect -> corrective shape job -> new packets -> re-accept;
+- packet-boundary defect -> corrective plan job -> new packets -> re-accept;
 - delivery-contract defect -> global re-design -> re-admission -> precise invalidation;
 - pending action/decision request -> resolution -> resumed job;
 - crash/expired claim/transaction recovery;
@@ -772,16 +819,16 @@ Use table-driven and property-based cases for dangling IDs, cycles, disconnected
 
 | Risk | Mitigation |
 | --- | --- |
-| Native framework recreates OpenSpec with more code | Implement only the four-file authority, graph validation, jobs, receipts, and closure required by this product; no plugin schema system or generic apply layer |
-| Delivery graph becomes an enormous speculative plan | Seal product/interface/proof obligations only; defer implementation packets to bounded node shaping |
-| Local shaper hides global expansion | Namespace and reference enforcement plus independent shape review; any new delivery edge forces re-admission |
-| Agent/session cost explodes | One shape and accept job per delivery node; outcome-cohesive packets; inline packet review; no artifact-specific statuses |
+| Native framework recreates OpenSpec with more code | Implement only the modular authority, graph validation, plans, jobs, receipts, and closure required by this product; no plugin schema system or generic apply layer |
+| Delivery graph becomes an enormous speculative plan | Seal product/interface/proof obligations only; defer implementation packets to bounded Delivery planning |
+| Local planner hides global expansion | Namespace and reference enforcement plus independent plan review; any new delivery edge forces re-admission |
+| Agent/session cost explodes | One resumable frontier planner with atomic per-node outputs; outcome-cohesive packets; inline packet review; no artifact-specific statuses |
 | Shared worktree contaminates proof | Single writer for implementation, disposable exact-SHA proof checkouts for accept/audit, scoped commits, stale-boundary detection |
 | Receipt/job files drift from graph | Jobs carry references/digests only; engine projects contracts and health-scans every reference |
 | Corrective jobs create board noise | Immutable history with latest-valid-chain default and grouped finding-set corrections |
 | Bootstrap MCP bridge becomes a duplicate control plane | Keep its tool list closed to native job pick/start/finish/release/recovery, prove exact schemas and error mapping in DN-004, and require DN-009/cutover absence proof for any residual bridge-only surface |
 | Deterministic validation creates false confidence | Admission receipt states limits; independent source-grounded challenge and executable baselines remain mandatory |
-| Final audit again discovers missing infrastructure | Every proof mechanism must have a shape/build owner before admission; auditor is tracked-file read-only |
+| Final audit again discovers missing infrastructure | Every proof mechanism must have a plan/build owner before admission; auditor is tracked-file read-only |
 | Big-bang cutover loses unfinished work | Immutable hash-verified snapshot plus explicit active-item disposition inventory |
 
 ## 19. Rejected Technical Directions

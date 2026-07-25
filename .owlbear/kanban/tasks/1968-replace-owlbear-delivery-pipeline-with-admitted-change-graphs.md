@@ -1,16 +1,17 @@
 ---
 id: 1968
 title: Replace OwlBear delivery pipeline with admitted change graphs
-status: shape
+status: collect
 priority: high
 created: 2026-07-21T01:46:53.257501+02:00
-updated: 2026-07-25T00:33:51.822983+02:00
+updated: 2026-07-25T02:48:10.051561+02:00
 tags:
   - pipeline-redesign
   - architecture
   - scope:core
   - admitted-change
-  - digest:9387dea789fb
+  - digest:3f6c65628991
+  - corrective-projection
 parent:
 depends_on:
   - 1975
@@ -30,6 +31,12 @@ depends_on:
   - 1989
   - 1990
   - 2021
+  - 2032
+  - 2033
+  - 2034
+  - 2035
+  - 2036
+  - 2037
 ac:
   - The bootstrap native change package records the approved intent, 
     architecture decisions, complete delivery-node graph, admission 
@@ -151,3 +158,40 @@ Durable evidence: `.owlbear/research/delivery-operating-model-reframe.md` record
 | 1 | aggregate/operating-model-reframe | shaper | Re-enter global design for #1968. Resolve peer Definition/Delivery phases, delivery-node versus packet boundary, batch frontier planning, physical separation of delivery authority and node plans, native-change YAML line-length policy, and the deferred adaptive direct-execution contract. Reconcile and re-admit the complete authority before refreshing projections. Preserve #1981/#2027-#2031 partial-graph containment and do not resume DN-009 dispatch against the stale digest. | `.owlbear/changes/replace-delivery-pipeline/{intent.md,design.md,decisions.yaml,graph.yaml}`; `.editorconfig`; affected bootstrap projections | `.owlbear/research/delivery-operating-model-reframe.md`; current `graph.yaml` is 1,415 lines/57 KB; `NativeRuntime` rewrites it for node plans; #2025 independent verification history; #1981 containment |
 
 Route: `shape` for user-facing material design review, authority reconciliation, independent challenge, approval, and re-admission.
+
+[[2026-07-25T02:48:10+02:00]]
+## Shape Notes
+
+### Admitted Authority
+- User approved exact digest `3f6c656289911320bb5e7faf37b5e86ffa8511e729ade201a03a19913e33d990`.
+- Immutable receipt: `.owlbear/changes/replace-delivery-pipeline/receipts/admission-3f6c65628991.yaml`.
+- Production loader plus persisted evidence returned zero admission findings. Focused clean baseline at `e6d229b5e7915189e8d65fe0aa7437154ec5e4ac`: 22 tests passed.
+- Independent shaper challenge passed after MOD-005 was corrected from Kanban-centered to peer Specification/Delivery wording.
+
+### Approved Model
+- Specification ends with admitted delivery nodes; Delivery begins with `plan` jobs.
+- Every admitted node is initially plan-eligible and processed in stable topology order.
+- Dependent build separately requires a current plan, authored packet dependencies, and predecessor accept receipts.
+- Predecessor acceptance triggers mandatory dependent-plan reconciliation; invalidation stales the reconciled closure.
+- Modular delivery authority and isolated plans replace `graph.yaml`; no fallback or `shape` alias survives.
+- Engine `pick_jobs` owns scheduling; one fresh invocation handles one selected job; final audit is read-only.
+
+### Corrective Graph
+- #2032 C1 modular package/plan-store primitives.
+- #2033 C2 modular authority and isolated-plan cutover; depends #2032.
+- #2034 C3 plan-only identities and admission generation; depends #2032.
+- #2035 C4 acceptance-triggered reconciliation; depends #2033/#2034.
+- #2036 C5 engine topology/profile dispatch and production orchestrator consumers; depends #2035.
+- #2037 C6 IF-015 `finish_plan` MCP cutover; depends #2036.
+- Dependency shape: `2032 -> {2033,2034} -> 2035 -> 2036 -> 2037`.
+
+### Challenge And Audit
+- First corrective-graph challenge found omitted production orchestrator consumers. C5 AC5 now covers `orchestrator.agent.md` and `w-orchestration` plan/planner cutover.
+- Re-challenge: pass across readiness, authority, invariant ownership, dependency closure, scenarios, boundary proof, and fidelity.
+- Board read-back confirmed six unblocked `build` children, exact parent/dependency links, and #2032 as the sole ready root.
+- #1981 and #2027-#2031 remain blocked under `PARTIAL_GRAPH_COMMIT`; no containment field was changed.
+
+### Limits
+- C4 supplies engine-side REQ-025 reconciliation behavior; DN-006 still owns planner publication and full REQ-025 closure.
+- Bootstrap projection dispatch remains locked until the digest-bound corrective graph passes completion audit.
+- Direct Ruff on unchanged admission modules still reports five pre-existing findings; `yamllint` is unavailable.

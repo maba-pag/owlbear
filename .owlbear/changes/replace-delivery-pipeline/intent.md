@@ -2,8 +2,8 @@
 
 > **Change ID:** `replace-delivery-pipeline`
 > **Owning intake:** #1968
-> **State:** Approved, pending admission
-> **Authority:** This file owns product intent. Technical realization belongs in `design.md`; execution ownership belongs in `graph.yaml`; material choices belong in `decisions.yaml`.
+> **State:** Draft, pending challenge and approval
+> **Authority:** This file owns product intent. Technical realization belongs in `design.md`; delivery ownership belongs in `delivery/`; material choices belong in `decisions.yaml`.
 
 ## Problem
 
@@ -26,12 +26,12 @@ OwlBear will provide one native, resumable path from rough idea to accepted chan
 
 1. A user collaborates with one `/design` session that persists intent, decisions, evidence, architecture, interfaces, migration, risk, proof, and a complete delivery graph as understanding develops.
 2. The user is asked one material decision at a time with explicit options, pros, cons, risks, recommendation, and confidence. Repository-answerable facts are researched rather than delegated to the user.
-3. Admission certifies a specific semantic revision for layered delivery completeness before any implementation work enters Kanban.
-4. Kanban remains OwlBear's implementation control surface. Each admitted delivery node receives one bounded `shape` job; shaping creates the outcome-cohesive build packets needed for that node without changing its admitted delivery obligations.
-5. Builders implement one packet in a shared worktree under a global writer lease and resolve mandatory read-only reviewer findings in the same warm session.
+3. Specification ends when admission certifies one semantic revision containing complete delivery nodes, contracts, risks, dependencies, and proof ownership.
+4. Delivery begins with a resumable frontier planner that publishes one independently validated, reviewed, digested, and receipted packet plan per plan-ready node without changing admitted obligations.
+5. The engine selects every purpose-specific `plan`, `build`, `accept`, or `audit` job. A thin orchestrator dispatches one fresh top-level agent invocation per job; builders implement one packet under the global writer lease and resolve mandatory read-only reviewer findings inside that job session.
 6. An independent acceptor proves each delivery node against its authoritative contract, all descendant receipts, and the exact committed revision. A final independent auditor proves the complete user workflow and issues the change receipt.
 7. Rejections create typed findings, corrective jobs, invalidated receipts, and superseding receipts. Completed attempts remain immutable history.
-8. Cockpit exposes changes, delivery graphs, Kanban jobs, decisions, evidence, invalidation, and acceptance without requiring users to reconstruct truth from Markdown task histories.
+8. Cockpit presents Specification and Delivery as peer product phases and exposes changes, delivery graphs, plans, jobs, decisions, evidence, invalidation, and acceptance without requiring users to reconstruct truth from Markdown task histories.
 9. OpenSpec and the old task-authoritative `shape -> build -> verify -> collect` path are removed in the same atomic cutover. The old stores remain only as an immutable historical snapshot.
 
 ## Primary Workflows
@@ -40,17 +40,24 @@ OwlBear will provide one native, resumable path from rough idea to accepted chan
 
 The user invokes `/ideate` or `/design`. OwlBear creates or resumes a native change, preserves every confirmed decision immediately, delegates research and architecture checks to fresh read-only specialists, presents the complete delivery graph, and admits only the exact revision that passes layered admission and user approval.
 
-### WF-2: Delivery node to shaped packets
+### WF-2: Plan the eligible delivery frontier
 
-Admission creates one `shape` job per delivery node. When its graph dependencies are satisfied, the shaper receives the node contract plus the full admitted graph and creates the complete build-packet DAG for that node. The shaper may refine implementation work but cannot add or weaken a product outcome, interface, migration, risk disposition, or proof boundary without global design re-entry and re-admission.
+Admission creates initially plan-ready `plan` jobs for admitted delivery nodes because their
+predecessor contracts are already authoritative. One resumable planner processes them in stable
+delivery-graph order while context is warm, but validates, reviews, publishes, digests, and receipts
+each node independently. A predecessor's acceptance makes each dependent plan
+reconciliation-required and blocks that dependent's build until the reconciled plan is current. The
+planner may refine implementation work within admitted authority; one material choice becomes a
+Decision Request, and any broader product or architecture change re-enters interactive Specification
+and re-admission.
 
 ### WF-3: Packet implementation with warm review
 
-The orchestrator dispatches at most one tracked-file writer at a time. A builder claims a `build` job, implements the complete outcome including proportionate tests, docs, generated artifacts, migration, and proof, commits it, and invokes a system-context read-only reviewer. The builder fixes concrete findings in the same session and produces a receipt only after review passes.
+The engine selects at most one tracked-file writer at a time. The orchestrator invokes one fresh builder for the selected `build` job. The builder implements the complete outcome including proportionate tests, docs, generated artifacts, migration, and proof, commits it, and invokes a system-context read-only reviewer. The builder fixes concrete findings in the same session and produces a receipt only after review passes.
 
 ### WF-4: Node acceptance and corrective work
 
-When all required packet receipts exist, an independent `accept` job executes the admitted node proof at an exact clean commit. The acceptor may create ephemeral diagnostic setup but cannot edit tracked files. Failure emits structured findings and minimum corrective `shape` or `build` jobs; prior attempts remain visible and invalid receipts cannot satisfy dependencies.
+When all required packet receipts exist, an independent `accept` job executes the admitted node proof at an exact clean commit. The acceptor may create ephemeral diagnostic setup but cannot edit tracked files. Success releases dependent planning reconciliation. Failure emits structured findings and minimum corrective `plan` or `build` jobs; prior attempts remain visible and invalid receipts cannot satisfy dependencies.
 
 ### WF-5: Whole-change audit and closure
 
@@ -59,8 +66,8 @@ After every delivery node has a valid acceptance receipt, an independent `audit`
 ## Success Conditions
 
 - Each active product promise, negative requirement, preserved behavior, design obligation, changed interface, migration/removal step, material risk, and normal workflow has an admitted owner and executable proof path.
-- Kanban jobs contain operational state and references; they do not become a competing specification authority.
-- Every status names an agent transformation: `shape`, `build`, `accept`, or `audit`. Dependency blocking, readiness, claims, staleness, cancellation, and failed attempts are properties or dispositions.
+- Delivery jobs contain operational state and references; they do not become a competing specification authority.
+- Every job kind names an agent transformation: `plan`, `build`, `accept`, or `audit`. Dependency blocking, readiness, claims, staleness, cancellation, and failed attempts are properties or dispositions.
 - No tracked-file writer overlaps another writer. Acceptance and audit operate on clean committed revisions.
 - The four historical defective plans are rejected before implementation; corrected equivalents are admitted and can complete through the new board.
 - A material change to intent, design, interfaces, migration, risk, or proof invalidates affected downstream receipts and jobs deterministically.
@@ -73,10 +80,10 @@ After every delivery node has a valid acceptance receipt, an independent `audit`
 
 - Native change authority and semantic revision model
 - Layered admission and stable diagnostics
-- Complete delivery graph and per-node packet shaping
+- Complete delivery graph and resumable frontier planning with atomic per-node plans
 - Graph-aware Kanban jobs, leases, requests, attempts, findings, evidence, receipts, invalidation, dispatch, and health
 - Shared-worktree writer serialization and exact-commit proof
-- New designer, shaper, builder, reviewer, acceptor, auditor, and orchestrator contracts
+- New designer, planner, builder, reviewer, acceptor, auditor, and orchestrator contracts
 - Cockpit change and graph experience
 - MCP/API contracts and setup/distribution changes
 - Historical snapshot and active-work disposition inventory

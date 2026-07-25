@@ -30,6 +30,10 @@ max_line_length = unset
 indent_size = unset
 max_line_length = unset
 
+# Native change YAML is schema-validated; wrapping it creates semantic diff noise
+[.owlbear/changes/**/*.yaml]
+max_line_length = unset
+
 # Excalidraw diagrams — JSON with embedded base64; line length not enforceable
 [*.excalidraw]
 end_of_line = unset
