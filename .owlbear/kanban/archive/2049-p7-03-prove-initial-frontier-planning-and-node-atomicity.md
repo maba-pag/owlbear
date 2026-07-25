@@ -1,10 +1,10 @@
 ---
 id: 2049
 title: 'P7-03: Prove initial frontier planning and node atomicity'
-status: collect
+status: archived
 priority: high
 created: 2026-07-25T15:09:42.182016+02:00
-updated: 2026-07-25T15:36:57.989826+02:00
+updated: 2026-07-25T15:37:22.225930+02:00
 tags:
   - phase-7
   - scope:test
@@ -42,7 +42,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Projection
@@ -124,3 +124,21 @@ Both product paths are byte-identical to the tested commit. The change contains 
 
 ### Required Follow-up
 None.
+
+[[2026-07-25T15:37:22+02:00]]
+## Collector Notes
+
+### Aggregate Intent
+Leaf packet #2049 maintains the initial-frontier half of PROOF-005 at admitted digest `3f6c656289911320bb5e7faf37b5e86ffa8511e729ade201a03a19913e33d990` through the shipped planner artifacts and public native tools.
+
+### Closure Evidence
+- No descendant tasks.
+- Builder commit: `e6f494ede3f76889fda46d6e3f432588b6fe3966`.
+- Verifier commit: `f55e04c0d7adbf281741a10484a6f72c7d512b97`.
+- Full MCP Kanban package: 68 passed.
+- Core native runtime/dispatch regressions: 39 passed.
+- Builder and verifier challengers passed.
+- All four ACs map to one durable public-boundary scenario and the necessary existing-adapter normalization it exposed.
+
+### Archive Readiness
+Complete. Reconciliation and invalidation remain independently owned by #2050.
