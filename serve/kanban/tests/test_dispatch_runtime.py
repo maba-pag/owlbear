@@ -365,6 +365,16 @@ def test_reject_accept_transaction_conflict_restores_cleaned_checkout(
     assert restored.manifest.read_bytes() == manifest_before
 
 
+def _complete_dispatch_snapshot(work_root: Path, runtime: DispatchRuntime) -> tuple[dict[str, bytes], dict[str, bytes]]:
+    return (
+        {str(path.relative_to(work_root)): path.read_bytes() for path in work_root.rglob("*") if path.is_file()},
+        {
+            path.name: path.read_bytes()
+            for path in (runtime._native._revision.source_dir / "receipts").glob("*.yaml")  # noqa: SLF001
+        },
+    )
+
+
 def _dispatch_audit_rejection(tmp_path: Path, *, fail_cleanup: bool = False, raise_cleanup: bool = False):
     revision, work_root, native, first_start = _active_audit_scenario(tmp_path)
     released = native.release_job(
@@ -415,24 +425,15 @@ def test_reject_audit_cleanup_failure_preserves_all_runtime_state(tmp_path: Path
         raise_cleanup=failure_mode == "exception",
     )
     request = _reject_audit_request(revision, start)
-    work_before = {
-        str(path.relative_to(work_root)): path.read_bytes() for path in work_root.rglob("*") if path.is_file()
-    }
-    receipts_before = {
-        path.name: path.read_bytes() for path in (runtime._native._revision.source_dir / "receipts").glob("*.yaml")
-    }
+    snapshot_before = _complete_dispatch_snapshot(work_root, runtime)
 
     rejected = runtime.reject_audit(request)
 
     assert not isinstance(rejected, DispatchDiagnostic)
     assert rejected.diagnostic is not None
     assert rejected.diagnostic.code is RejectAuditDiagnosticCode.CLEANUP_FAILED
-    assert work_before == {
-        str(path.relative_to(work_root)): path.read_bytes() for path in work_root.rglob("*") if path.is_file()
-    }
-    assert receipts_before == {
-        path.name: path.read_bytes() for path in (runtime._native._revision.source_dir / "receipts").glob("*.yaml")
-    }
+    snapshot_after = _complete_dispatch_snapshot(work_root, runtime)
+    assert snapshot_before == snapshot_after
     assert proof_checkouts.is_orphan(str(start.job_id))
 
 
@@ -441,12 +442,7 @@ def test_reject_audit_transaction_conflict_restores_checkout_and_publishes_nothi
 ) -> None:
     revision, work_root, runtime, proof_checkouts, start = _dispatch_audit_rejection(tmp_path)
     request = _reject_audit_request(revision, start)
-    work_before = {
-        str(path.relative_to(work_root)): path.read_bytes() for path in work_root.rglob("*") if path.is_file()
-    }
-    receipts_before = {
-        path.name: path.read_bytes() for path in (runtime._native._revision.source_dir / "receipts").glob("*.yaml")
-    }
+    snapshot_before = _complete_dispatch_snapshot(work_root, runtime)
 
     def reject_transaction(_transaction, *, failure: object = None) -> None:  # noqa: ARG001
         raise TransactionConflictError
@@ -458,12 +454,8 @@ def test_reject_audit_transaction_conflict_restores_checkout_and_publishes_nothi
     assert not isinstance(rejected, DispatchDiagnostic)
     assert rejected.diagnostic is not None
     assert rejected.diagnostic.code is RejectAuditDiagnosticCode.IDENTITY_CONFLICT
-    assert work_before == {
-        str(path.relative_to(work_root)): path.read_bytes() for path in work_root.rglob("*") if path.is_file()
-    }
-    assert receipts_before == {
-        path.name: path.read_bytes() for path in (runtime._native._revision.source_dir / "receipts").glob("*.yaml")
-    }
+    snapshot_after = _complete_dispatch_snapshot(work_root, runtime)
+    assert snapshot_before == snapshot_after
     assert proof_checkouts.is_orphan(str(start.job_id))
 
 

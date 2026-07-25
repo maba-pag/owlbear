@@ -533,6 +533,9 @@ def test_reject_audit_atomically_publishes_design_reentry_and_replays(tmp_path: 
     assert rejected.invalidation.affected_receipt_ids == ("accept-final",)
     assert start.job_id in rejected.invalidation.affected_job_ids
     assert rejected.invalidation.corrective_jobs == ()
+    assert rejected.findings[0].finding_class == "planning-omission"
+    assert request.invalidation.routes[0].design_reentry is True
+    assert request.invalidation.routes[0].route == "design-reentry"
     assert FindingStore(work_root).read("finding-audit-001").finding == request.findings[0]
     assert AttemptStore(work_root).read(start.attempt_id, 2).event == rejected.event
     assert changed.diagnostic is not None
@@ -545,7 +548,7 @@ def test_reject_audit_creates_only_declared_affected_node_corrections(tmp_path: 
     route = plan_corrective_route(
         CorrectiveRouteRequest(
             finding_id=request.findings[0].finding_id,
-            finding_class=request.findings[0].finding_class,
+            finding_class="implementation-defect",
             target="whole-change-integration",
             target_node_ids=("DN-001", "DN-002"),
         )
@@ -554,7 +557,8 @@ def test_reject_audit_creates_only_declared_affected_node_corrections(tmp_path: 
         update={
             "invalidation": request.invalidation.model_copy(
                 update={"routes": (route,), "corrective_job_ids": (100, 101)}
-            )
+            ),
+            "findings": (request.findings[0].model_copy(update={"finding_class": "implementation-defect"}),),
         }
     )
     receipt_bytes = {path.name: path.read_bytes() for path in (revision.source_dir / "receipts").glob("*.yaml")}
@@ -566,10 +570,71 @@ def test_reject_audit_creates_only_declared_affected_node_corrections(tmp_path: 
     assert tuple(
         (item.job.job_id, item.job.kind, item.job.target_node_id) for item in rejected.invalidation.corrective_jobs
     ) == ((100, "plan", "DN-001"), (101, "plan", "DN-002"))
+    assert rejected.findings[0].finding_class == "implementation-defect"
+    assert route.route == "affected-node-correction"
+    assert route.finding_class == "implementation-defect"
+    assert route.design_reentry is False
+    assert len(route.jobs) == 2
+    route_node_ids = tuple(job.target_node_id for job in route.jobs)
+    assert route_node_ids == ("DN-001", "DN-002")
     assert receipt_bytes == {
         path.name: path.read_bytes()
         for path in (revision.source_dir / "receipts").glob("*.yaml")
         if path.name != "supersession-audit-001.yaml"
+    }
+
+
+@pytest.mark.parametrize(
+    ("case", "expected_code"),
+    [
+        ("stale-finding-target", RejectAuditDiagnosticCode.INVALIDATION_INVALID),
+        ("stale-finding-authority", RejectAuditDiagnosticCode.FINDING_INVALID),
+        ("missing-receipt", RejectAuditDiagnosticCode.INVALIDATION_INVALID),
+        ("route-mismatch", RejectAuditDiagnosticCode.INVALIDATION_INVALID),
+        ("non-owner", RejectAuditDiagnosticCode.NON_OWNER),
+        ("missing-job", RejectAuditDiagnosticCode.AUTHORITY_STALE),
+    ],
+)
+def test_reject_audit_invalid_identity_publishes_nothing(
+    tmp_path: Path,
+    case: str,
+    expected_code: RejectAuditDiagnosticCode,
+) -> None:
+    revision, work_root, runtime, start = _active_audit_scenario(tmp_path)
+    request = _reject_audit_request(revision, start)
+    if case == "stale-finding-target":
+        request = request.model_copy(
+            update={"findings": (request.findings[0].model_copy(update={"target_id": "REQ-999"}),)}
+        )
+    elif case == "stale-finding-authority":
+        request = request.model_copy(
+            update={"findings": (request.findings[0].model_copy(update={"delivery_digest": "f" * 64}),)}
+        )
+    elif case == "missing-receipt":
+        request = request.model_copy(
+            update={
+                "invalidation": request.invalidation.model_copy(update={"invalidated_receipt_ids": ("accept-missing",)})
+            }
+        )
+    elif case == "route-mismatch":
+        route = request.invalidation.routes[0].model_copy(update={"finding_class": "implementation-defect"})
+        request = request.model_copy(
+            update={"invalidation": request.invalidation.model_copy(update={"routes": (route,)})}
+        )
+    elif case == "non-owner":
+        request = request.model_copy(update={"claim_id": "claim-other"})
+    else:
+        request = request.model_copy(update={"job_id": 999})
+    work_before = _snapshot(work_root)
+    receipt_before = {path.name: path.read_bytes() for path in (revision.source_dir / "receipts").glob("*.yaml")}
+
+    rejected = runtime.reject_audit(request)
+
+    assert rejected.diagnostic is not None
+    assert rejected.diagnostic.code is expected_code
+    assert _snapshot(work_root) == work_before
+    assert receipt_before == {
+        path.name: path.read_bytes() for path in (revision.source_dir / "receipts").glob("*.yaml")
     }
 
 
