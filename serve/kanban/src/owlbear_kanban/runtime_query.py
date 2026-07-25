@@ -478,8 +478,11 @@ class RuntimeQuery:
             return self._finding("ERR_WORK_RECEIPT_MISSING", "job receipt is missing", path, job.receipt_id)
         if job.superseded_by_receipt_id is not None:
             supersession = self._receipts.read(job.superseded_by_receipt_id).receipt
-            invalidated = supersession.payload.get("invalidated_receipt_ids", ()) if supersession else ()
-            if supersession is None or supersession.kind != "supersession" or job.receipt_id not in invalidated:
+            if (
+                supersession is None
+                or supersession.kind != "supersession"
+                or not self._supersession_reaches_job(job, supersession)
+            ):
                 return self._finding(
                     "ERR_WORK_SUPERSESSION_BROKEN",
                     "job supersession chain is broken",
@@ -487,6 +490,35 @@ class RuntimeQuery:
                     job.superseded_by_receipt_id,
                 )
         return ()
+
+    def _supersession_reaches_job(self, job: JobRecord, supersession: ReceiptRecord) -> bool:
+        invalidated = {
+            receipt_id
+            for receipt_id in supersession.payload.get("invalidated_receipt_ids", ())
+            if isinstance(receipt_id, str)
+        }
+        if job.receipt_id in invalidated:
+            return True
+        pending = list(job.predecessor_job_ids)
+        visited: set[int] = set()
+        while pending:
+            predecessor_id = pending.pop()
+            if predecessor_id in visited:
+                continue
+            visited.add(predecessor_id)
+            predecessor = None
+            for archived in (False, True):
+                try:
+                    predecessor = self._jobs.read(predecessor_id, archived=archived).job
+                except FileNotFoundError, OSError, TypeError, ValueError:
+                    continue
+                break
+            if predecessor is None:
+                continue
+            if predecessor.receipt_id in invalidated:
+                return True
+            pending.extend(predecessor.predecessor_job_ids)
+        return False
 
     def _check_attempt(self, path: str) -> tuple[WorkHealthFinding, ...]:
         absolute = self._work_root / path

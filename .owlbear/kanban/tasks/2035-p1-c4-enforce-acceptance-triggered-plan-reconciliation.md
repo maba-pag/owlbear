@@ -1,10 +1,10 @@
 ---
 id: 2035
 title: 'P1-C4: Enforce acceptance-triggered plan reconciliation'
-status: build
+status: verify
 priority: high
 created: 2026-07-25T02:46:46.300991+02:00
-updated: 2026-07-25T07:03:15.338329+02:00
+updated: 2026-07-25T07:06:31.449475+02:00
 tags:
   - change:replace-delivery-pipeline
   - node:DN-003
@@ -269,3 +269,26 @@ Task advances to `build` for one constrained recovery. Success requires a non-em
 - Shaper-challenger: initial fail correctly found missing/ambiguous/non-current AC3 branches; after those scenarios were added, rechallenge passed with authority, dependency, causal-boundary, and fidelity closure.
 - Memory assessment: all three recalled entries assessed; active-repository guidance was applied.
 - Resulting route: task advances to build for explicit candidate-diff adoption, builder challenge, scoped source/test/task commit, and normal verification.
+
+[[2026-07-25T07:06:31+02:00]]
+## Builder Notes
+
+- Change envelope: adopted the complete same-task uncommitted candidate after shaper commit `b01cfc2cf0eb7ad3c846c269e23e98461fed1ddc`; scope is RuntimeQuery supersession health validation and NativeRuntime reconciliation lifecycle proof. Candidate attribution was verified as exactly the two shaped paths.
+- Files changed: `serve/kanban/src/owlbear_kanban/runtime_query.py`; `serve/kanban/tests/test_native_runtime.py`.
+- Runtime defect: `work_health` treated a pending job superseded through a valid reconciled predecessor chain as broken because it accepted only direct invalidated receipt IDs. `_supersession_reaches_job` now walks predecessor job edges and accepts the typed supersession receipt's invalidated IDs, aligned with `InvalidationRuntime._job_closure`; the existing RuntimeQuery strict broken-chain negative control remains covered.
+- Change Module Map: no deviation. `RuntimeQuery` owns read-only health projection; public `NativeRuntime` owns the lifecycle boundary. No dependency or interface was added.
+- Durable-test justification: the scenarios are explicit AC3-AC5 long-lived regression guards for shared reconciliation/currentness behavior that was previously unproved and is hard to observe manually.
+- Proof selected and commands run:
+  - `uv run pytest serve/kanban/tests/test_native_runtime.py serve/kanban/tests/test_runtime_query.py -q --tb=short` passed: 34 passed.
+  - `uv run lint serve/kanban/src/owlbear_kanban/runtime_query.py serve/kanban/tests/test_native_runtime.py` passed.
+  - `git diff --check -- serve/kanban/src/owlbear_kanban/runtime_query.py serve/kanban/tests/test_native_runtime.py` passed.
+- AC-to-evidence:
+  - AC1: retained public initial-plan eligibility coverage in the focused NativeRuntime suite.
+  - AC2: retained public `finish_plan` isolated publication, replay, and stable-conflict coverage in that suite.
+  - AC3: mutation-free stale-digest and active-plan checks; mutation-free missing and ambiguous predecessor checks; plus invalidated/non-current predecessor rejection in the reconciliation lifecycle scenario.
+  - AC4: three-node same-plan OCC fold-in, predecessor edge update, identity conflict, and mutation-free conflict snapshot; existing public lifecycle coverage retains direct-dependent ordering/replay behavior.
+  - AC5: public `finish_accept`, reconciliation `finish_plan` predecessor receipt IDs and new digest, stale old build/new build start-release, predecessor invalidation through affected reconciled work, disjoint DN-004 bytes/currentness, and clean `work_health`.
+- Current failure-key resolution: `AC3-AC5/reconciliation-scenario-proof` is closed by the two new NativeRuntime scenarios and RuntimeQuery health traversal; the focused suite directly executes both.
+- Builder-challenger: pass. It independently re-ran the focused 34-test suite, lint, and scoped diff check with no finding.
+- Memory assessment: all 20 recalled entries assessed; refined-artifact scope review was outstanding, workspace-root and replay-identity guidance were applied as unremarkable, and the remaining entries were not used. No new durable memory insight was identified.
+- Follow-up risk: no broader suite claimed; unrelated historical graph fixtures were intentionally not used as closure evidence.

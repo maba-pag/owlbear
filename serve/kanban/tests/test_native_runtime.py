@@ -10,10 +10,13 @@ import pytest
 from owlbear_kanban import (
     AttemptEvent,
     AttemptStore,
+    CorrectiveRouteRequest,
+    FindingStore,
     FinishAcceptRequest,
     FinishJobDiagnosticCode,
     FinishJobRequest,
     FinishPlanRequest,
+    InvalidationRequest,
     JobDiagnosticCode,
     JobDisposition,
     JobRecord,
@@ -23,6 +26,7 @@ from owlbear_kanban import (
     FailJobRequest,
     RecoverExpiredClaimsRequest,
     RecoveryDiagnosticCode,
+    ReceiptStore,
     ReleaseJobDiagnosticCode,
     ReleaseJobRequest,
     StartJobDiagnosticCode,
@@ -31,6 +35,7 @@ from owlbear_kanban import (
     load_change,
     parse_impact_closure,
     parse_job_mapping,
+    plan_corrective_route,
 )
 from owlbear_kanban.runtime_transaction import RuntimeTransaction, TransactionConflictError
 
@@ -115,18 +120,20 @@ def _runtime(revision, work_root: Path, *, claim_expiry: timedelta = timedelta(m
     return NativeRuntime(revision, work_root, _History(), claim_expiry)
 
 
-def _copied_revision(tmp_path: Path):
+def _copied_revision(tmp_path: Path, *, clean_receipts: bool = False):
     changes_dir = tmp_path / "changes"
     change_id = "replace-delivery-pipeline"
     shutil.copytree(Path(f".owlbear/changes/{change_id}"), changes_dir / change_id)
     (changes_dir / change_id / "plans" / "DN-001.yaml").unlink()
+    if clean_receipts:
+        shutil.rmtree(changes_dir / change_id / "receipts")
     result = load_change(changes_dir, change_id)
     assert result.revision is not None
     return result.revision
 
 
-def _plan_request(revision, **changes: object) -> FinishPlanRequest:
-    target = revision.graph.nodes[0]
+def _plan_request(revision, *, target_node_id: str = "DN-001", **changes: object) -> FinishPlanRequest:
+    target = revision.resolve(target_node_id)
     proof = revision.resolve(target.proof)
     closure = {"paths": ["serve/kanban/"], "authority_targets": [target.id, target.proof]}
     return FinishPlanRequest.model_validate(
@@ -155,6 +162,24 @@ def _plan_request(revision, **changes: object) -> FinishPlanRequest:
             "accept_job_id": 4,
             **changes,
         }
+    )
+
+
+def _release_request(job_id: int, attempt_id: str, claim_id: str) -> ReleaseJobRequest:
+    return ReleaseJobRequest(
+        job_id=job_id,
+        attempt_id=attempt_id,
+        claim_id=claim_id,
+        actor_id="agent-001",
+        process_id="process-001",
+        released_at="2026-07-24T00:10:00Z",
+    )
+
+
+def _snapshot(work_root: Path) -> tuple[dict[str, bytes], tuple[AttemptEvent, ...]]:
+    return (
+        {str(path.relative_to(work_root)): path.read_bytes() for path in work_root.rglob("*") if path.is_file()},
+        AttemptStore(work_root).list(),
     )
 
 
@@ -437,6 +462,508 @@ def test_finish_build_refuses_stale_predecessor_and_keeps_job_active(tmp_path) -
     assert store.read(2).job.attempt_id == "attempt-002"
     assert AttemptStore(work_root).read("attempt-002", 2).event is None
     assert store.list(archived=True)[0].job.job_id == 1
+
+
+def test_build_start_reconciliation_gates_are_mutation_free(tmp_path) -> None:
+    revision = _copied_revision(tmp_path)
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    store = JobStore(work_root)
+    _materialize(store, _record(revision, kind="plan", receipt_id="bootstrap-001"))
+    runtime = _runtime(revision, work_root)
+    assert runtime.start_job(_request()).diagnostic is None
+    plan = _plan_request(revision)
+    assert runtime.finish_plan(plan).diagnostic is None
+    for job_id, predecessor_receipt_id, packet in (
+        (2, "plan-001", plan.node_plan["packets"][0]),
+        (3, "build-001", plan.node_plan["packets"][1]),
+    ):
+        attempt_id = f"attempt-{job_id:03d}"
+        claim_id = f"claim-{job_id:03d}"
+        assert (
+            runtime.start_job(
+                _request().model_copy(update={"job_id": job_id, "attempt_id": attempt_id, "claim_id": claim_id})
+            ).diagnostic
+            is None
+        )
+        result = runtime.finish_build(
+            FinishJobRequest(
+                job_id=job_id,
+                attempt_id=attempt_id,
+                claim_id=claim_id,
+                actor_id="agent-001",
+                process_id="process-001",
+                finished_at=f"2026-07-24T00:0{job_id + 1}:00Z",
+                receipt_id=f"build-{job_id - 1:03d}",
+                code_revision="a" * 40,
+                evidence=plan.evidence,
+                impact_closure=parse_impact_closure(packet["impact_closure"]),
+            )
+        )
+        assert result.diagnostic is None
+        assert result.receipt is not None
+        assert result.receipt.payload["predecessor_receipt_ids"][-1] == predecessor_receipt_id
+    accept_start = _request().model_copy(update={"job_id": 4, "attempt_id": "attempt-004", "claim_id": "claim-004"})
+    assert runtime.start_job(accept_start).diagnostic is None
+    assert (
+        runtime.finish_accept(
+            FinishAcceptRequest(
+                job_id=4,
+                attempt_id=accept_start.attempt_id,
+                claim_id=accept_start.claim_id,
+                actor_id=accept_start.actor_id,
+                process_id=accept_start.process_id,
+                finished_at="2026-07-24T00:05:00Z",
+                receipt_id="accept-001",
+                code_revision="a" * 40,
+                evidence=plan.evidence,
+                reconciliation_plan_job_ids=(6, 7),
+            )
+        ).diagnostic
+        is None
+    )
+
+    current_digest = compute_node_plan_digest(revision, "DN-002")
+    _materialize(
+        store,
+        _record(revision, job_id=5, target_node_id="DN-002", node_plan_digest="a" * 64),
+    )
+    _materialize(
+        store,
+        _record(revision, job_id=8, target_node_id="DN-002", node_plan_digest=current_digest),
+    )
+    stale_request = _request().model_copy(update={"job_id": 5, "attempt_id": "attempt-005", "claim_id": "claim-005"})
+    active_plan_request = _request().model_copy(
+        update={"job_id": 8, "attempt_id": "attempt-008", "claim_id": "claim-008"}
+    )
+
+    for request, expected in (
+        (stale_request, StartJobDiagnosticCode.AUTHORITY_STALE),
+        (active_plan_request, StartJobDiagnosticCode.PREDECESSOR_INVALID),
+    ):
+        before = _snapshot(work_root)
+        result = runtime.start_job(request)
+
+        assert result.diagnostic is not None
+        assert result.diagnostic.code is expected
+        assert _snapshot(work_root) == before
+
+    assert (
+        runtime.start_job(
+            _request().model_copy(update={"job_id": 6, "attempt_id": "attempt-006", "claim_id": "claim-006"})
+        ).diagnostic
+        is None
+    )
+    released = runtime.release_job(_release_request(6, "attempt-006", "claim-006"))
+
+    assert released.diagnostic is None
+    assert released.event is not None
+    assert released.event.kind == "released"
+
+
+def test_build_start_rejects_missing_and_ambiguous_predecessor_accepts_without_mutation(tmp_path) -> None:
+    missing_revision = _copied_revision(tmp_path / "missing")
+    missing_work_root = tmp_path / "missing" / "work"
+    missing_work_root.mkdir()
+    _materialize(
+        JobStore(missing_work_root),
+        _record(missing_revision, kind="plan", target_node_id="DN-002", receipt_id="bootstrap-002"),
+    )
+    missing_runtime = _runtime(missing_revision, missing_work_root)
+    assert missing_runtime.start_job(_request()).diagnostic is None
+    missing_plan = _plan_request(missing_revision, target_node_id="DN-002")
+    assert missing_runtime.finish_plan(missing_plan).diagnostic is None
+    missing_start = _request().model_copy(
+        update={"job_id": 2, "attempt_id": "attempt-missing", "claim_id": "claim-missing"}
+    )
+    missing_before = _snapshot(missing_work_root)
+
+    missing = missing_runtime.start_job(missing_start)
+
+    assert missing.diagnostic is not None
+    assert missing.diagnostic.code is StartJobDiagnosticCode.PREDECESSOR_INVALID
+    assert _snapshot(missing_work_root) == missing_before
+
+    ambiguous_revision = _copied_revision(tmp_path / "ambiguous")
+    ambiguous_work_root = tmp_path / "ambiguous" / "work"
+    ambiguous_work_root.mkdir()
+    ambiguous_store = JobStore(ambiguous_work_root)
+    _materialize(ambiguous_store, _record(ambiguous_revision, kind="plan", receipt_id="bootstrap-001"))
+    ambiguous_runtime = _runtime(ambiguous_revision, ambiguous_work_root)
+    assert ambiguous_runtime.start_job(_request()).diagnostic is None
+    predecessor_plan = _plan_request(ambiguous_revision)
+    predecessor_result = ambiguous_runtime.finish_plan(predecessor_plan)
+    assert predecessor_result.diagnostic is None
+    assert predecessor_result.receipt is not None
+    predecessor_digest = predecessor_result.receipt.payload["node_plan_digest"]
+    receipt_store = ReceiptStore(ambiguous_revision)
+    for job_id, receipt_id in ((11, "accept-011"), (12, "accept-012")):
+        value = {
+            "schema_version": 1,
+            "kind": "accept",
+            "receipt_id": receipt_id,
+            "change_id": ambiguous_revision.change_id,
+            "delivery_digest": ambiguous_revision.delivery_digest,
+            "issued_at": f"2026-07-24T00:{job_id:02d}:00Z",
+            "impact_closure": predecessor_result.receipt.impact_closure.model_dump(mode="json"),
+            "target_node_id": "DN-001",
+            "node_plan_digest": predecessor_digest,
+            "predecessor_receipt_ids": [],
+            "evidence": predecessor_plan.evidence,
+            "code_revision": "a" * 40,
+        }
+        assert receipt_store.create(receipt_id, value).receipt is not None
+        _materialize(
+            ambiguous_store,
+            _record(
+                ambiguous_revision,
+                job_id=job_id,
+                kind="accept",
+                target_node_id="DN-001",
+                node_plan_digest=predecessor_digest,
+                receipt_id=receipt_id,
+            ),
+        )
+        stored = ambiguous_store.read(job_id)
+        ambiguous_store.archive(job_id, stored.token)
+    _materialize(
+        ambiguous_store,
+        _record(
+            ambiguous_revision,
+            job_id=20,
+            kind="plan",
+            target_node_id="DN-002",
+            receipt_id="bootstrap-002",
+        ),
+    )
+    ambiguous_plan_start = _request().model_copy(
+        update={"job_id": 20, "attempt_id": "attempt-020", "claim_id": "claim-020"}
+    )
+    assert ambiguous_runtime.start_job(ambiguous_plan_start).diagnostic is None
+    ambiguous_plan = _plan_request(
+        ambiguous_revision,
+        target_node_id="DN-002",
+        job_id=20,
+        attempt_id="attempt-020",
+        claim_id="claim-020",
+        receipt_id="plan-002",
+        build_job_ids=(21, 22),
+        accept_job_id=23,
+    )
+    assert ambiguous_runtime.finish_plan(ambiguous_plan).diagnostic is None
+    ambiguous_start = _request().model_copy(update={"job_id": 21, "attempt_id": "attempt-021", "claim_id": "claim-021"})
+    ambiguous_before = _snapshot(ambiguous_work_root)
+
+    ambiguous = ambiguous_runtime.start_job(ambiguous_start)
+
+    assert ambiguous.diagnostic is not None
+    assert ambiguous.diagnostic.code is StartJobDiagnosticCode.PREDECESSOR_INVALID
+    assert _snapshot(ambiguous_work_root) == ambiguous_before
+
+
+def test_three_node_fold_in_occ_updates_same_plan_job_after_two_accepts(tmp_path) -> None:  # noqa: PLR0915
+    revision = _copied_revision(tmp_path)
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    store = JobStore(work_root)
+    _materialize(store, _record(revision, kind="plan", receipt_id="bootstrap-001"))
+    runtime = _runtime(revision, work_root)
+    assert runtime.start_job(_request()).diagnostic is None
+    first_plan = _plan_request(revision)
+    assert runtime.finish_plan(first_plan).diagnostic is None
+    for job_id, predecessor_receipt_id, packet in (
+        (2, "plan-001", first_plan.node_plan["packets"][0]),
+        (3, "build-001", first_plan.node_plan["packets"][1]),
+    ):
+        attempt_id = f"attempt-{job_id:03d}"
+        claim_id = f"claim-{job_id:03d}"
+        assert (
+            runtime.start_job(
+                _request().model_copy(update={"job_id": job_id, "attempt_id": attempt_id, "claim_id": claim_id})
+            ).diagnostic
+            is None
+        )
+        result = runtime.finish_build(
+            FinishJobRequest(
+                job_id=job_id,
+                attempt_id=attempt_id,
+                claim_id=claim_id,
+                actor_id="agent-001",
+                process_id="process-001",
+                finished_at=f"2026-07-24T00:0{job_id + 1}:00Z",
+                receipt_id=f"build-{job_id - 1:03d}",
+                code_revision="a" * 40,
+                evidence=first_plan.evidence,
+                impact_closure=parse_impact_closure(packet["impact_closure"]),
+            )
+        )
+        assert result.diagnostic is None
+        assert result.receipt is not None
+        assert result.receipt.payload["predecessor_receipt_ids"][-1] == predecessor_receipt_id
+    first_accept_start = _request().model_copy(
+        update={"job_id": 4, "attempt_id": "attempt-004", "claim_id": "claim-004"}
+    )
+    assert runtime.start_job(first_accept_start).diagnostic is None
+    first_accept = FinishAcceptRequest(
+        job_id=4,
+        attempt_id="attempt-004",
+        claim_id="claim-004",
+        actor_id="agent-001",
+        process_id="process-001",
+        finished_at="2026-07-24T00:05:00Z",
+        receipt_id="accept-001",
+        code_revision="a" * 40,
+        evidence=first_plan.evidence,
+        reconciliation_plan_job_ids=(6, 7),
+    )
+    assert runtime.finish_accept(first_accept).diagnostic is None
+
+    second_plan_start = _request().model_copy(
+        update={"job_id": 6, "attempt_id": "attempt-006", "claim_id": "claim-006"}
+    )
+    assert runtime.start_job(second_plan_start).diagnostic is None
+    second_plan = _plan_request(
+        revision,
+        target_node_id="DN-002",
+        job_id=6,
+        attempt_id="attempt-006",
+        claim_id="claim-006",
+        receipt_id="plan-002",
+        build_job_ids=(8, 9),
+        accept_job_id=10,
+    )
+    assert runtime.finish_plan(second_plan).diagnostic is None
+    for job_id, _predecessor_receipt_id, packet in (
+        (8, "plan-002", second_plan.node_plan["packets"][0]),
+        (9, "build-007", second_plan.node_plan["packets"][1]),
+    ):
+        attempt_id = f"attempt-{job_id:03d}"
+        claim_id = f"claim-{job_id:03d}"
+        assert (
+            runtime.start_job(
+                _request().model_copy(update={"job_id": job_id, "attempt_id": attempt_id, "claim_id": claim_id})
+            ).diagnostic
+            is None
+        )
+        assert (
+            runtime.finish_build(
+                FinishJobRequest(
+                    job_id=job_id,
+                    attempt_id=attempt_id,
+                    claim_id=claim_id,
+                    actor_id="agent-001",
+                    process_id="process-001",
+                    finished_at=f"2026-07-24T00:{job_id:02d}:00Z",
+                    receipt_id=f"build-{job_id - 1:03d}",
+                    code_revision="a" * 40,
+                    evidence=second_plan.evidence,
+                    impact_closure=parse_impact_closure(packet["impact_closure"]),
+                )
+            ).diagnostic
+            is None
+        )
+    second_accept_start = _request().model_copy(
+        update={"job_id": 10, "attempt_id": "attempt-010", "claim_id": "claim-010"}
+    )
+    assert runtime.start_job(second_accept_start).diagnostic is None
+    second_accept = FinishAcceptRequest(
+        job_id=10,
+        attempt_id="attempt-010",
+        claim_id="claim-010",
+        actor_id="agent-001",
+        process_id="process-001",
+        finished_at="2026-07-24T00:10:00Z",
+        receipt_id="accept-002",
+        code_revision="a" * 40,
+        evidence=second_plan.evidence,
+        reconciliation_plan_job_ids=(7, 11, 12),
+    )
+    assert runtime.finish_accept(second_accept).diagnostic is None
+    before_conflict = _snapshot(work_root)
+    conflict = runtime.finish_accept(second_accept.model_copy(update={"reconciliation_plan_job_ids": (13, 11, 12)}))
+
+    assert store.read(7).job.predecessor_job_ids == (4, 10)
+    assert conflict.diagnostic is not None
+    assert conflict.diagnostic.code is FinishJobDiagnosticCode.IDENTITY_CONFLICT
+    assert _snapshot(work_root) == before_conflict
+
+
+def test_reconciliation_finish_releases_new_build_and_invalidation_closure(tmp_path) -> None:  # noqa: PLR0915
+    revision = _copied_revision(tmp_path, clean_receipts=True)
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    store = JobStore(work_root)
+    _materialize(store, _record(revision, kind="plan", receipt_id="bootstrap-001"))
+    runtime = _runtime(revision, work_root)
+    assert runtime.start_job(_request()).diagnostic is None
+    predecessor_plan = _plan_request(revision)
+    assert runtime.finish_plan(predecessor_plan).diagnostic is None
+    for job_id, packet in zip((2, 3), predecessor_plan.node_plan["packets"], strict=True):
+        attempt_id = f"attempt-{job_id:03d}"
+        claim_id = f"claim-{job_id:03d}"
+        assert (
+            runtime.start_job(
+                _request().model_copy(update={"job_id": job_id, "attempt_id": attempt_id, "claim_id": claim_id})
+            ).diagnostic
+            is None
+        )
+        assert (
+            runtime.finish_build(
+                FinishJobRequest(
+                    job_id=job_id,
+                    attempt_id=attempt_id,
+                    claim_id=claim_id,
+                    actor_id="agent-001",
+                    process_id="process-001",
+                    finished_at=f"2026-07-24T00:0{job_id + 1}:00Z",
+                    receipt_id=f"build-{job_id - 1:03d}",
+                    code_revision="a" * 40,
+                    evidence=predecessor_plan.evidence,
+                    impact_closure=parse_impact_closure(packet["impact_closure"]),
+                )
+            ).diagnostic
+            is None
+        )
+    accept_start = _request().model_copy(update={"job_id": 4, "attempt_id": "attempt-004", "claim_id": "claim-004"})
+    assert runtime.start_job(accept_start).diagnostic is None
+    accept = runtime.finish_accept(
+        FinishAcceptRequest(
+            job_id=4,
+            attempt_id="attempt-004",
+            claim_id="claim-004",
+            actor_id="agent-001",
+            process_id="process-001",
+            finished_at="2026-07-24T00:05:00Z",
+            receipt_id="accept-001",
+            code_revision="a" * 40,
+            evidence=predecessor_plan.evidence,
+            reconciliation_plan_job_ids=(6, 7),
+        )
+    )
+    assert accept.diagnostic is None
+
+    old_digest = "a" * 64
+    _materialize(
+        store,
+        _record(
+            revision,
+            job_id=5,
+            target_node_id="DN-002",
+            node_plan_digest=old_digest,
+            predecessor_job_ids=(4,),
+        ),
+    )
+    old_build_start = _request().model_copy(update={"job_id": 5, "attempt_id": "attempt-005", "claim_id": "claim-005"})
+    blocked_before_plan = runtime.start_job(old_build_start)
+    assert blocked_before_plan.diagnostic is not None
+    assert blocked_before_plan.diagnostic.code is StartJobDiagnosticCode.AUTHORITY_STALE
+
+    reconciliation_start = _request().model_copy(
+        update={"job_id": 6, "attempt_id": "attempt-006", "claim_id": "claim-006"}
+    )
+    assert runtime.start_job(reconciliation_start).diagnostic is None
+    reconciliation_plan = _plan_request(
+        revision,
+        target_node_id="DN-002",
+        job_id=6,
+        attempt_id="attempt-006",
+        claim_id="claim-006",
+        receipt_id="plan-002",
+        build_job_ids=(8, 9),
+        accept_job_id=10,
+        finished_at="2026-07-24T00:06:00Z",
+    )
+    reconciled = runtime.finish_plan(reconciliation_plan)
+
+    assert reconciled.diagnostic is None
+    assert reconciled.receipt is not None
+    assert reconciled.receipt.payload["predecessor_receipt_ids"] == ("accept-001",)
+    new_digest = reconciled.receipt.payload["node_plan_digest"]
+    assert new_digest != old_digest
+    stale = runtime.start_job(old_build_start)
+    assert stale.diagnostic is not None
+    assert stale.diagnostic.code is StartJobDiagnosticCode.AUTHORITY_STALE
+    new_build_start = _request().model_copy(update={"job_id": 8, "attempt_id": "attempt-008", "claim_id": "claim-008"})
+    assert runtime.start_job(new_build_start).diagnostic is None
+    assert runtime.release_job(_release_request(8, "attempt-008", "claim-008")).diagnostic is None
+
+    _materialize(
+        store,
+        _record(revision, job_id=20, kind="plan", target_node_id="DN-004", receipt_id="bootstrap-disjoint"),
+    )
+    disjoint_start = _request().model_copy(update={"job_id": 20, "attempt_id": "attempt-020", "claim_id": "claim-020"})
+    assert runtime.start_job(disjoint_start).diagnostic is None
+    disjoint_plan = _plan_request(
+        revision,
+        target_node_id="DN-004",
+        job_id=20,
+        attempt_id="attempt-020",
+        claim_id="claim-020",
+        receipt_id="plan-disjoint",
+        build_job_ids=(21, 22),
+        accept_job_id=23,
+        finished_at="2026-07-24T00:07:00Z",
+    )
+    assert runtime.finish_plan(disjoint_plan).diagnostic is None
+    disjoint_plan_path = revision.source_dir / "plans" / "DN-004.yaml"
+    disjoint_plan_bytes = disjoint_plan_path.read_bytes()
+
+    finding = {
+        "schema_version": 1,
+        "finding_id": "finding-reconciliation",
+        "source_attempt_id": "attempt-004",
+        "source_job_id": 4,
+        "change_id": revision.change_id,
+        "delivery_digest": revision.delivery_digest,
+        "target_kind": "packet",
+        "target_id": "DN-001-PK-001",
+        "finding_class": "implementation-defect",
+        "detail": "predecessor acceptance requires correction",
+        "created_at": "2026-07-24T00:08:00Z",
+    }
+    assert FindingStore(work_root).create("finding-reconciliation", finding).finding is not None
+    route = plan_corrective_route(
+        CorrectiveRouteRequest(
+            finding_id="finding-reconciliation",
+            finding_class="implementation-defect",
+            target="packet-implementation",
+            target_node_ids=("DN-001",),
+        )
+    )
+    request = InvalidationRequest(
+        invalidation_id="invalidation-reconciliation",
+        supersession_receipt_id="supersession-reconciliation",
+        invalidated_receipt_ids=("accept-001",),
+        routes=(route,),
+        corrective_job_ids=(30,),
+        issued_at="2026-07-24T00:09:00Z",
+        code_revision="a" * 40,
+    )
+    before = {item.job_id: item for item in runtime.list_jobs(candidate_revision="a" * 40).items}
+    invalidated = runtime.invalidate(request)
+    after = {item.job_id: item for item in runtime.list_jobs(candidate_revision="a" * 40).items}
+
+    assert invalidated.outcome is not None
+    assert invalidated.outcome.affected_receipt_ids == ("accept-001", "plan-002")
+    assert {4, 6, 8, 9, 10}.issubset(invalidated.outcome.affected_job_ids)
+    assert after[6].validity is not None
+    assert not after[6].validity.current
+    assert 20 not in invalidated.outcome.affected_job_ids
+    assert after[20] == before[20]
+    assert after[20].validity is not None
+    assert after[20].validity.current
+    assert disjoint_plan_path.read_bytes() == disjoint_plan_bytes
+    assert runtime.work_health(limit=100).findings == ()
+    non_current_start = _request().model_copy(
+        update={"job_id": 8, "attempt_id": "attempt-non-current", "claim_id": "claim-non-current"}
+    )
+    non_current_before = _snapshot(work_root)
+
+    non_current = runtime.start_job(non_current_start)
+
+    assert non_current.diagnostic is not None
+    assert non_current.diagnostic.code is StartJobDiagnosticCode.PREDECESSOR_INVALID
+    assert _snapshot(work_root) == non_current_before
 
 
 def test_start_job_stores_claim_and_started_event_then_replays(revision, tmp_path) -> None:
