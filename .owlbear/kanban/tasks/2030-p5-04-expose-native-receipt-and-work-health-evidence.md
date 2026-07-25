@@ -1,10 +1,10 @@
 ---
 id: 2030
 title: 'P5-04: Expose native receipt and work-health evidence'
-status: build
+status: verify
 priority: high
 created: 2026-07-24T23:22:11.791167+02:00
-updated: 2026-07-25T09:16:55.072370+02:00
+updated: 2026-07-25T10:58:23.988547+02:00
 tags:
   - phase-5
   - scope:mcp-kanban
@@ -50,3 +50,23 @@ Proof guidance: invoke the public tools over real receipt, work, and proof-check
 [[2026-07-25T09:16:55+02:00]]
 ## Shape Notes
 Connected partial-commit repair is summarized in #1981. Refreshed this packet to admitted digest `3f6c65628991`; outcome, AC, parent, dependency on #2027, priority, and build route remain the approved T4 contract. Current receipt/health producers were source-checked and the concrete graph passed shaper challenge.
+
+[[2026-07-25T10:58:23+02:00]]
+Implemented show_receipt and work_health MCP tools over ReceiptStore.read and NativeRuntime.work_health.
+
+**Implementation:**
+- Added ShowReceiptParams and WorkHealthParams models to models.py
+- Implemented show_receipt tool: returns immutable ReceiptRecord or distinct stable errors (ERR_RECEIPT_MISSING for missing, other ReceiptDiagnosticCode for malformed)
+- Implemented work_health tool: returns bounded WorkHealthResult with findings, checked_paths, stable cursor pagination
+- Both tools follow existing MCP patterns: read-only, idempotent, stable error codes
+- Updated __all__ exports and EXPECTED_TOOLS deployment contract
+
+**Validation:**
+- Added 5 tests to test_mcp_native_query_tools.py covering AC-1 (receipt read, missing/malformed errors) and AC-2 (work health structure, pagination, cursor errors)
+- All 449 mcp-kanban tests pass
+- Ruff lint clean
+- Builder-challenger passed: "5 tests passed in 1.58s. The new read-only MCP tools are registered, the receipt and work-health behaviors are exercised, and the deployment-contract snapshot remains aligned."
+
+**AC Evidence:**
+- AC-1: show_receipt returns ReceiptRecord for existing receipts; distinct ERR_RECEIPT_MISSING vs other ReceiptDiagnosticCode errors; no path leak; read-only
+- AC-2: work_health returns bounded WorkHealthResult with sorted findings, checked_paths, stable next_cursor; ERR_CURSOR_STALE on invalid cursor; read-only

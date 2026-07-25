@@ -79,11 +79,13 @@ EXPECTED_TOOLS: frozenset[str] = frozenset(
         "release_job",
         "show_change",
         "show_job",
+        "show_receipt",
         "show_request",
         "show_task",
         "start_job",
         "start_work",
         "validate_change",
+        "work_health",
     }
 )
 

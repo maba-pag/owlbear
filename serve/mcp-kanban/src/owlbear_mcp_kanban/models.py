@@ -225,6 +225,21 @@ class ListActivityParams(MCPParamsBase):
     limit: int = Field(default=100, gt=0)
 
 
+class ShowReceiptParams(MCPParamsBase):
+    """Validate MCP inputs for showing one immutable receipt."""
+
+    change_id: str = Field(min_length=1)
+    receipt_id: str = Field(min_length=1)
+
+
+class WorkHealthParams(MCPParamsBase):
+    """Validate MCP inputs for native work health checks."""
+
+    change_id: str = Field(min_length=1)
+    cursor: str | None = None
+    limit: int = Field(default=100, gt=0)
+
+
 class KanbanTask(BaseModel):
     """Represents a single kanban task as returned by kanban-md --json."""
 

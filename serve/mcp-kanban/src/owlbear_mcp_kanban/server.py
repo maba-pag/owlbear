@@ -68,7 +68,9 @@ from owlbear_mcp_kanban.models import (
     RecoverExpiredClaimsParams,
     ReleaseJobParams,
     ShowJobParams,
+    ShowReceiptParams,
     StartJobParams,
+    WorkHealthParams,
 )
 
 if TYPE_CHECKING:
@@ -121,11 +123,13 @@ __all__ = [
     "release_job",
     "show_change",
     "show_job",
+    "show_receipt",
     "show_request",
     "show_task",
     "start_job",
     "start_work",
     "validate_change",
+    "work_health",
 ]
 
 _DEFAULT_KANBAN_DIR = Path(".owlbear/kanban")
@@ -1174,6 +1178,59 @@ async def list_activity(
                 cursor=params.cursor,
                 limit=params.limit,
             )
+        except ValueError as exc:
+            if "cursor is not current" in str(exc):
+                _raise_tool_error("ERR_CURSOR_STALE", "page cursor is not current")
+            raise
+    except PydanticValidationError as exc:
+        _raise_param_validation(str(exc))
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, destructiveHint=False))
+async def show_receipt(
+    ctx: Context,
+    *,
+    change_id: str,
+    receipt_id: str,
+) -> object:
+    """Show one immutable receipt by ID from the native receipt store."""
+    try:
+        params = ShowReceiptParams.model_validate(_tool_params(locals()))
+        app_ctx: AppContext = ctx.request_context.lifespan_context
+        runtime = _dispatch_runtime(app_ctx, params.change_id)
+        result = runtime._native._receipts.read(params.receipt_id)  # noqa: SLF001
+        if result.receipt is not None:
+            return result.receipt.model_dump(mode="python")
+        # Return stable error for missing or malformed receipt
+        diagnostic = result.diagnostics[0]
+        code = diagnostic.code
+        if code == "ERR_RECEIPT_FILE_MISSING":
+            _raise_tool_error("ERR_RECEIPT_MISSING", diagnostic.detail)
+        else:
+            _raise_tool_error(code, diagnostic.detail)
+    except PydanticValidationError as exc:
+        _raise_param_validation(str(exc))
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, destructiveHint=False))
+async def work_health(
+    ctx: Context,
+    *,
+    change_id: str,
+    cursor: str | None = None,
+    limit: int = 100,
+) -> object:
+    """Return bounded native work integrity findings without mutation."""
+    try:
+        params = WorkHealthParams.model_validate(_tool_params(locals()))
+        app_ctx: AppContext = ctx.request_context.lifespan_context
+        runtime = _dispatch_runtime(app_ctx, params.change_id)
+        try:
+            result = runtime._native.work_health(  # noqa: SLF001
+                cursor=params.cursor,
+                limit=params.limit,
+            )
+            return result.model_dump(mode="python")
         except ValueError as exc:
             if "cursor is not current" in str(exc):
                 _raise_tool_error("ERR_CURSOR_STALE", "page cursor is not current")

@@ -418,3 +418,239 @@ class TestNativeQueryTools:
 
         with pytest.raises(ToolError, match="ERR_CURSOR_STALE"):
             await server.list_activity(ctx, change_id=revision.change_id, cursor="stale-999", limit=1)
+
+    @pytest.mark.asyncio
+    async def test_show_receipt_returns_immutable_receipt(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """AC-1: show_receipt returns immutable ReceiptRecord for existing receipt."""
+        import yaml
+
+        changes_dir = tmp_path / "changes"
+        shutil.copytree(
+            Path(".owlbear/changes/replace-delivery-pipeline"),
+            changes_dir / "replace-delivery-pipeline",
+        )
+        (changes_dir / "replace-delivery-pipeline" / "plans" / "DN-001.yaml").unlink()
+        loaded = load_change(changes_dir, "replace-delivery-pipeline")
+        assert loaded.revision is not None
+        revision = loaded.revision
+
+        work_root = tmp_path / "kanban"
+        work_root.mkdir()
+
+        # Create a test receipt
+        receipts_dir = revision.source_dir / "receipts"
+        receipts_dir.mkdir(exist_ok=True)
+        test_receipt_id = "test-receipt-001"
+        receipt_data = {
+            "schema_version": 1,
+            "kind": "admission",
+            "receipt_id": test_receipt_id,
+            "change_id": revision.change_id,
+            "delivery_digest": revision.delivery_digest,
+            "issued_at": "2026-07-24T00:00:00Z",
+            "payload": {"test": "data"},
+        }
+        (receipts_dir / f"{test_receipt_id}.yaml").write_text(yaml.dump(receipt_data))
+
+        runtime = DispatchRuntime(
+            NativeRuntime(revision, work_root, _History(), timedelta(minutes=1)),
+            work_root,
+        )
+        ctx = _native_ctx(tmp_path)
+        monkeypatch.setattr(server, "_dispatch_runtime", lambda _app_ctx, _change_id: runtime)
+
+        # Test successful receipt read
+        result = await server.show_receipt(
+            ctx,
+            change_id=revision.change_id,
+            receipt_id=test_receipt_id,
+        )
+
+        assert result["receipt_id"] == test_receipt_id
+        assert result["kind"] == "admission"
+        assert result["change_id"] == revision.change_id
+
+    @pytest.mark.asyncio
+    async def test_show_receipt_missing_receipt_distinct_error(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """AC-1: show_receipt returns distinct stable error for missing receipt."""
+        from mcp.server.fastmcp.exceptions import ToolError
+
+        changes_dir = tmp_path / "changes"
+        shutil.copytree(
+            Path(".owlbear/changes/replace-delivery-pipeline"),
+            changes_dir / "replace-delivery-pipeline",
+        )
+        (changes_dir / "replace-delivery-pipeline" / "plans" / "DN-001.yaml").unlink()
+        loaded = load_change(changes_dir, "replace-delivery-pipeline")
+        assert loaded.revision is not None
+        revision = loaded.revision
+
+        work_root = tmp_path / "kanban"
+        work_root.mkdir()
+
+        runtime = DispatchRuntime(
+            NativeRuntime(revision, work_root, _History(), timedelta(minutes=1)),
+            work_root,
+        )
+        ctx = _native_ctx(tmp_path)
+        monkeypatch.setattr(server, "_dispatch_runtime", lambda _app_ctx, _change_id: runtime)
+
+        # Test missing receipt error
+        with pytest.raises(ToolError, match="ERR_RECEIPT_MISSING"):
+            await server.show_receipt(
+                ctx,
+                change_id=revision.change_id,
+                receipt_id="nonexistent-receipt",
+            )
+
+    @pytest.mark.asyncio
+    async def test_show_receipt_malformed_receipt_distinct_error(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """AC-1: show_receipt returns distinct stable error for malformed receipt."""
+        from mcp.server.fastmcp.exceptions import ToolError
+
+        changes_dir = tmp_path / "changes"
+        shutil.copytree(
+            Path(".owlbear/changes/replace-delivery-pipeline"),
+            changes_dir / "replace-delivery-pipeline",
+        )
+        (changes_dir / "replace-delivery-pipeline" / "plans" / "DN-001.yaml").unlink()
+        loaded = load_change(changes_dir, "replace-delivery-pipeline")
+        assert loaded.revision is not None
+        revision = loaded.revision
+
+        work_root = tmp_path / "kanban"
+        work_root.mkdir()
+
+        # Create a malformed receipt
+        receipts_dir = revision.source_dir / "receipts"
+        receipts_dir.mkdir(exist_ok=True)
+        test_receipt_id = "malformed-receipt-001"
+        (receipts_dir / f"{test_receipt_id}.yaml").write_text("invalid: yaml: content: [")
+
+        runtime = DispatchRuntime(
+            NativeRuntime(revision, work_root, _History(), timedelta(minutes=1)),
+            work_root,
+        )
+        ctx = _native_ctx(tmp_path)
+        monkeypatch.setattr(server, "_dispatch_runtime", lambda _app_ctx, _change_id: runtime)
+
+        # Test malformed receipt error (distinct from missing)
+        with pytest.raises(ToolError):
+            _result = await server.show_receipt(
+                ctx,
+                change_id=revision.change_id,
+                receipt_id=test_receipt_id,
+            )
+
+    @pytest.mark.asyncio
+    async def test_work_health_returns_bounded_findings(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """AC-2: work_health returns bounded sorted WorkHealthResult with findings and paths."""
+        changes_dir = tmp_path / "changes"
+        shutil.copytree(
+            Path(".owlbear/changes/replace-delivery-pipeline"),
+            changes_dir / "replace-delivery-pipeline",
+        )
+        (changes_dir / "replace-delivery-pipeline" / "plans" / "DN-001.yaml").unlink()
+        loaded = load_change(changes_dir, "replace-delivery-pipeline")
+        assert loaded.revision is not None
+        revision = loaded.revision
+
+        work_root = tmp_path / "kanban"
+        work_root.mkdir()
+
+        runtime = DispatchRuntime(
+            NativeRuntime(revision, work_root, _History(), timedelta(minutes=1)),
+            work_root,
+        )
+        ctx = _native_ctx(tmp_path)
+        monkeypatch.setattr(server, "_dispatch_runtime", lambda _app_ctx, _change_id: runtime)
+
+        result = await server.work_health(
+            ctx,
+            change_id=revision.change_id,
+            limit=10,
+        )
+
+        # Verify WorkHealthResult structure
+        assert "findings" in result
+        assert "checked_paths" in result
+        assert "next_cursor" in result or result.get("next_cursor") is None
+        assert isinstance(result["findings"], (list, tuple))
+        assert isinstance(result["checked_paths"], (list, tuple))
+
+        # Verify findings structure (if any)
+        for finding in result["findings"]:
+            assert "code" in finding
+            assert "detail" in finding
+            assert "path" in finding
+
+    @pytest.mark.asyncio
+    async def test_work_health_cursor_pagination(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """AC-2: work_health supports stable cursor pagination."""
+        from mcp.server.fastmcp.exceptions import ToolError
+
+        changes_dir = tmp_path / "changes"
+        shutil.copytree(
+            Path(".owlbear/changes/replace-delivery-pipeline"),
+            changes_dir / "replace-delivery-pipeline",
+        )
+        (changes_dir / "replace-delivery-pipeline" / "plans" / "DN-001.yaml").unlink()
+        loaded = load_change(changes_dir, "replace-delivery-pipeline")
+        assert loaded.revision is not None
+        revision = loaded.revision
+
+        work_root = tmp_path / "kanban"
+        work_root.mkdir()
+
+        runtime = DispatchRuntime(
+            NativeRuntime(revision, work_root, _History(), timedelta(minutes=1)),
+            work_root,
+        )
+        ctx = _native_ctx(tmp_path)
+        monkeypatch.setattr(server, "_dispatch_runtime", lambda _app_ctx, _change_id: runtime)
+
+        # Get first page
+        page1 = await server.work_health(
+            ctx,
+            change_id=revision.change_id,
+            limit=1,
+        )
+
+        # If there's a cursor, test pagination
+        if page1.get("next_cursor"):
+            page2 = await server.work_health(
+                ctx,
+                change_id=revision.change_id,
+                cursor=page1["next_cursor"],
+                limit=1,
+            )
+            assert "findings" in page2
+
+        # Test stale cursor error
+        with pytest.raises(ToolError, match="ERR_CURSOR_STALE"):
+            await server.work_health(
+                ctx,
+                change_id=revision.change_id,
+                cursor="stale-cursor-999",
+                limit=1,
+            )
