@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -86,6 +87,12 @@ def _workflow_text() -> str:
 
 def _audit_workflow_text() -> str:
     return Path("share/skills/w-whole-change-audit/SKILL.md").read_text(encoding="utf-8")
+
+
+def _audit_classification(scenario: str) -> tuple[str, str]:
+    row = next(line for line in _audit_workflow_text().splitlines() if line.startswith(f"| {scenario} |"))
+    _empty, _scenario, finding_class, corrective_target, _empty = (item.strip() for item in row.split("|"))
+    return finding_class.strip("`"), corrective_target.strip("`")
 
 
 def _orchestration_text() -> str:
@@ -974,7 +981,7 @@ async def _pending_public_audit(tmp_path: Path, proof_dir: str):
 
 _AUDIT_DISPOSITION_MATRIX = (
     (
-        "cross-node integration defect",
+        "Cross-node integration failure",
         "implementation-defect",
         "requirement",
         "REQ-008",
@@ -985,7 +992,7 @@ _AUDIT_DISPOSITION_MATRIX = (
         ("DN-001", "DN-002"),
     ),
     (
-        "implemented migration absence",
+        "Implemented migration/removal absence or failure",
         "implementation-defect",
         "requirement",
         "REQ-007",
@@ -996,7 +1003,7 @@ _AUDIT_DISPOSITION_MATRIX = (
         ("DN-001",),
     ),
     (
-        "admitted design authority omission",
+        "Admitted Product Promise, decision, workflow, or proof omission",
         "planning-omission",
         "proof",
         "PROOF-001",
@@ -1023,16 +1030,20 @@ def _audit_rejection_payload(
         route_node_ids,
         _expected_node_ids,
     ) = case
+    emitted_finding_class, emitted_route_target = _audit_classification(name)
+    assert emitted_finding_class == finding_class
+    assert emitted_route_target == route_target
+    scenario_id = re.sub(r"[^A-Za-z0-9]+", "-", str(name)).strip("-")
     finding = Finding(
         schema_version=1,
-        finding_id=f"finding-audit-{str(name).replace(' ', '-')}",
+        finding_id=f"finding-audit-{scenario_id}",
         source_attempt_id=str(start["attempt_id"]),
         source_job_id=int(start["job_id"]),
         change_id=revision.change_id,
         delivery_digest=revision.delivery_digest,
         target_kind=target_kind,
         target_id=target_id,
-        finding_class=finding_class,
+        finding_class=emitted_finding_class,
         detail=f"{name} discovered in whole-change audit",
         created_at="2026-07-25T00:07:00Z",
     )
@@ -1040,13 +1051,13 @@ def _audit_rejection_payload(
         CorrectiveRouteRequest(
             finding_id=finding.finding_id,
             finding_class=finding.finding_class,
-            target=route_target,
+            target=emitted_route_target,
             target_node_ids=route_node_ids,
         )
     )
     invalidation = InvalidationRequest(
-        invalidation_id=f"invalidation-audit-{str(name).replace(' ', '-')}",
-        supersession_receipt_id=f"supersession-audit-{str(name).replace(' ', '-')}",
+        invalidation_id=f"invalidation-audit-{scenario_id}",
+        supersession_receipt_id=f"supersession-audit-{scenario_id}",
         invalidated_receipt_ids=("accept-final",),
         routes=(route,),
         corrective_job_ids=tuple(range(100, 100 + len(route.jobs))),
@@ -1058,7 +1069,7 @@ def _audit_rejection_payload(
         **_identity(start),
         "rejected_at": "2026-07-25T00:07:00Z",
         "detail": f"audit found {finding_class}: {name}",
-        "evidence_ids": (f"audit-proof-{str(name).replace(' ', '-')}",),
+        "evidence_ids": (f"audit-proof-{scenario_id}",),
         "findings": (finding.model_dump(mode="json"),),
         "invalidation": invalidation.model_dump(mode="json"),
     }

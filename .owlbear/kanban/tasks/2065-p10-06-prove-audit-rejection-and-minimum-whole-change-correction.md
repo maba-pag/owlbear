@@ -1,10 +1,10 @@
 ---
 id: 2065
 title: 'P10-06: Prove audit rejection and minimum whole-change correction'
-status: verify
+status: collect
 priority: high
 created: 2026-07-25T19:53:54.333878+02:00
-updated: 2026-07-25T22:07:30.972357+02:00
+updated: 2026-07-25T22:13:14.542647+02:00
 tags:
   - phase-10
   - scope:test
@@ -72,3 +72,11 @@ Adopted and repaired the interrupted delegated test work within the shaped three
 Changed files: `serve/kanban/tests/test_native_runtime.py`, `serve/kanban/tests/test_dispatch_runtime.py`, `serve/mcp-kanban/tests/test_mcp_acceptance_tools.py`.
 
 Evidence: focused public matrix 7 passed; native/dispatch rejection matrix 12 passed; focused workspace lint passed; all three affected modules passed 86 tests; `git diff --check` passed. Builder challenger decision: pass and independently reran the 86-test module suite.
+
+[[2026-07-25T22:13:14+02:00]]
+## Verify Notes
+PASS
+
+Compared the committed artifacts with the shaped scope and authoritative `w-whole-change-audit` workflow. Initial verifier challenge found AC-1 only persisted caller-supplied classifications. Repaired the public real-Git matrix so each exact scenario label is looked up in the shipped workflow matrix, the emitted finding class and corrective target are asserted against task authority, and those emitted values construct the public rejection disposition. This closes `AC-1/workflow-emission` without duplicating the LLM workflow as a second classifier.
+
+Independent evidence: workflow-grounded route matrix 3 passed; complete rejection, preclaim, release, atomicity, and maintained malformed-public-schema matrix 21 passed; focused lint passed. Verifier challenger retry: pass. No production behavior or scope outside the three shaped test owners changed.
