@@ -1,10 +1,10 @@
 ---
 id: 2040
 title: 'P5-06: Complete and prove the native MCP control plane'
-status: build
+status: verify
 priority: high
 created: 2026-07-25T09:11:58.219921+02:00
-updated: 2026-07-25T13:44:40.266612+02:00
+updated: 2026-07-25T13:53:18.763527+02:00
 tags:
   - phase-5
   - scope:mcp-kanban
@@ -136,3 +136,21 @@ Builder complete. The live FastMCP registry is exactly the 22 native IF-010 tool
 
 [[2026-07-25T13:44:40+02:00]]
 Verifier rejection on AC-2. Registry absence passed, but server.py still defines and exports obsolete compatibility APIs list_tasks, show_task, create_task, edit_task, move_task, start_work, end_work, and pick_tasks. Required repair: remove obsolete adapter definitions and exports, remove/replace tests importing those symbols, add source/module API absence proof for all obsolete names and aliases, rerun complete MCP suite, then re-challenge. Other AC evidence passed.
+
+[[2026-07-25T13:53:18+02:00]]
+## Builder Notes
+DONE. Adopted and completed the interrupted #2040 retry diff.
+
+### Required Follow-up Closure
+- `#2040-AC2/source-api-removal`: resolved. Removed obsolete task APIs from `server.py` definitions and `__all__`; removed task-only boundary models, legacy guidance compatibility code, adapter-only tests, and stale README contracts. The only remaining obsolete-name occurrence is the intentional negative absence set in `test_mcp_surface_contract.py`.
+
+### Changed Files
+- Updated: `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py`, `models.py`, `tests/test_mcp_surface_contract.py`, and `README.md`.
+- Deleted: `guidance.py` and obsolete adapter-only tests `test_guidance.py`, `test_mcp_lifecycle_tools.py`, `test_mcp_models.py`, `test_mcp_mutation_tools.py`, `test_mcp_read_tools.py`, `test_mcp_server.py`, `test_server_ac_params.py`, `test_server_error_envelopes.py`, `test_server_newline_normalization.py`.
+
+### Evidence
+- Native MCP package: 63 passed.
+- Integrated allocator, admission transaction, runtime transaction, and MCP proof: 117 passed; only two Python multiprocessing fork deprecation warnings.
+- Focused lint and editor diagnostics: passed with no errors.
+- Source/package obsolete-name grep: only intentional negative assertion remains.
+- Builder challenger: pass; independently reran focused contract (11 passed) and package suite (63 passed), confirming AC-2 source/API absence without weakening retained PROOF-011 coverage.

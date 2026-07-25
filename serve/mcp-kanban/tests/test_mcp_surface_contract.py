@@ -274,6 +274,9 @@ class TestFromAC_LegacyRegistrationAbsence:
         """Keep only native change and job identities on the public MCP surface."""
         registered = frozenset(mcp._tool_manager._tools)  # noqa: SLF001
         assert registered.isdisjoint(REMOVED_TASK_TOOLS | {"finish_shape"})
+        assert all(not hasattr(server, name) for name in REMOVED_TASK_TOOLS | {"finish_shape"})
+        assert server.__all__ is not None
+        assert set(server.__all__).isdisjoint(REMOVED_TASK_TOOLS | {"finish_shape"})
 
 
 def _proof011_context(
