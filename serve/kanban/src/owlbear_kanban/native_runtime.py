@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 from owlbear_kanban.attempts import AttemptEvent, AttemptStore
-from owlbear_kanban.change import load_change
+from owlbear_kanban.change import DeliveryNode, load_change
 from owlbear_kanban.finding import Finding, FindingStore
 from owlbear_kanban.invalidation import (
     InvalidationDiagnosticCode,
@@ -1172,7 +1172,11 @@ class NativeRuntime:
         request: FinishJobRequest,
         kind: str,
         participant_factory: (
-            Callable[[StoredJob, FinishJobRequest], tuple[ReplacementTransactionParticipant, ...]] | None
+            Callable[
+                [StoredJob, FinishJobRequest],
+                tuple[TransactionParticipant | ReplacementTransactionParticipant, ...],
+            ]
+            | None
         ) = None,
     ) -> FinishJobResult:
         RuntimeTransaction.recover_all(
@@ -1230,6 +1234,14 @@ class NativeRuntime:
                 participants.extend(participant_factory(stored, request))
             except ValueError as exc:
                 return self._finish_diagnostic(FinishJobDiagnosticCode.IDENTITY_CONFLICT, str(exc))
+        if isinstance(request, FinishAcceptRequest):
+            prepared_audit = self._prepare_terminal_audit(stored, request)
+            if isinstance(prepared_audit, FinishJobResult):
+                return prepared_audit
+            audit_job, audit_participants = prepared_audit
+            participants.extend(audit_participants)
+            if audit_job is not None:
+                created_jobs = (audit_job,)
 
         node_plan_digest = compute_node_plan_digest(
             revision,
@@ -1316,6 +1328,7 @@ class NativeRuntime:
         )
 
     def _finish_replay(self, request: FinishJobRequest, kind: str) -> FinishJobResult | None:
+        created_jobs: tuple[JobRecord, ...] = ()
         try:
             stored = self._jobs.read(request.job_id, archived=True)
         except FileNotFoundError:
@@ -1378,6 +1391,7 @@ class NativeRuntime:
             shape_identity_matches = (
                 tuple(job.job_id for job in reconciliation_jobs) == request.reconciliation_plan_job_ids
             )
+            created_jobs = self._audit_jobs_created_by(stored.job, request.finished_at)
         if (
             stored.job.kind == kind
             and stored.job.receipt_id == request.receipt_id
@@ -1395,7 +1409,7 @@ class NativeRuntime:
             and closure_matches
             and shape_identity_matches
         ):
-            return FinishJobResult(job=stored, receipt=receipt, event=event)
+            return FinishJobResult(job=stored, receipt=receipt, event=event, created_jobs=created_jobs)
         return self._finish_diagnostic(
             FinishJobDiagnosticCode.IDENTITY_CONFLICT,
             "archived finish identity differs from the request",
@@ -1454,7 +1468,7 @@ class NativeRuntime:
 
     def _accept_participants(
         self, stored: StoredJob, request: FinishJobRequest
-    ) -> tuple[ReplacementTransactionParticipant, ...]:
+    ) -> tuple[TransactionParticipant | ReplacementTransactionParticipant, ...]:
         assert isinstance(request, FinishAcceptRequest)
         dependents = self._dependent_nodes(stored.job.target_node_id)
         if len(request.reconciliation_plan_job_ids) != len(dependents):
@@ -1513,6 +1527,122 @@ class NativeRuntime:
                 msg = "dependent reconciliation identity conflicts"
                 raise ValueError(msg)
         return tuple(participants)
+
+    def _prepare_terminal_audit(
+        self,
+        stored: StoredJob,
+        request: FinishAcceptRequest,
+    ) -> (
+        tuple[
+            JobRecord | None,
+            tuple[TransactionParticipant | ReplacementTransactionParticipant, ...],
+        ]
+        | FinishJobResult
+    ):
+        authority = self._terminal_audit_authority()
+        if request.reconciliation_plan_job_ids or authority is None:
+            return None, ()
+        audit_node, audit_plan = authority
+        accepted = self._terminal_accept_jobs(stored.job, request.code_revision)
+        if isinstance(accepted, FinishJobResult):
+            return accepted
+        if accepted is None:
+            return None, ()
+        predecessor_ids = tuple(sorted(job.job_id for job in accepted))
+        audit_plan_digest = compute_node_plan_digest(self._revision, audit_node.id, audit_plan)
+        existing, diagnostic = self._existing_audit_identity(
+            audit_node.id,
+            audit_plan_digest,
+            stored.job,
+            predecessor_ids,
+        )
+        if diagnostic is not None:
+            return diagnostic
+        if existing:
+            return None, ()
+
+        reservation = self._jobs.reserve_job_ids(1)
+        audit_job = JobRecord(
+            schema_version=1,
+            job_id=reservation.job_ids[0],
+            kind="audit",
+            priority=stored.job.priority,
+            created_at=request.finished_at,
+            updated_at=request.finished_at,
+            change_id=stored.job.change_id,
+            delivery_digest=stored.job.delivery_digest,
+            target_node_id=audit_node.id,
+            node_plan_digest=audit_plan_digest,
+            predecessor_job_ids=predecessor_ids,
+        )
+        return audit_job, (reservation.participant, self._jobs.create_participant(audit_job))
+
+    def _terminal_audit_authority(self) -> tuple[DeliveryNode, Mapping[str, object]] | None:
+        try:
+            audit_node = self._revision.resolve("DN-014")
+            audit_plan = self._revision.read_node_plan(audit_node.id)
+        except KeyError:
+            return None
+        if not isinstance(audit_node, DeliveryNode) or not isinstance(audit_plan, Mapping):
+            return None
+        return audit_node, audit_plan
+
+    def _terminal_accept_jobs(
+        self, accepted: JobRecord, code_revision: str
+    ) -> tuple[JobRecord, ...] | FinishJobResult | None:
+        jobs = [accepted]
+        try:
+            for node in self._revision.graph.nodes:
+                if node.id == accepted.target_node_id:
+                    continue
+                current = self._current_accept_job(node.id, code_revision)
+                if current is None:
+                    return None
+                jobs.append(current)
+        except ValueError as exc:
+            return self._finish_diagnostic(FinishJobDiagnosticCode.IDENTITY_CONFLICT, str(exc))
+        return tuple(jobs)
+
+    def _existing_audit_identity(
+        self,
+        target_node_id: str,
+        node_plan_digest: str,
+        accepted: JobRecord,
+        predecessor_ids: tuple[int, ...],
+    ) -> tuple[bool, FinishJobResult | None]:
+        existing = tuple(
+            item.job
+            for item in (*self._jobs.list(), *self._jobs.list(archived=True))
+            if item.job.kind == "audit" and item.job.disposition is JobDisposition.PENDING
+        )
+        matching = any(
+            job.target_node_id == target_node_id
+            and job.node_plan_digest == node_plan_digest
+            and job.delivery_digest == accepted.delivery_digest
+            and job.predecessor_job_ids == predecessor_ids
+            for job in existing
+        )
+        if matching:
+            return True, None
+        if existing:
+            return (
+                False,
+                self._finish_diagnostic(
+                    FinishJobDiagnosticCode.IDENTITY_CONFLICT,
+                    "active audit identity differs from current accepted nodes",
+                    target=str(existing[0].job_id),
+                ),
+            )
+        return False, None
+
+    def _audit_jobs_created_by(self, accepted: JobRecord, finished_at: str) -> tuple[JobRecord, ...]:
+        return tuple(
+            item.job
+            for item in (*self._jobs.list(), *self._jobs.list(archived=True))
+            if item.job.kind == "audit"
+            and accepted.job_id in item.job.predecessor_job_ids
+            and item.job.created_at == finished_at
+        )
 
     def _reconciliation_job_ids(self, dependent: object, accepted: JobRecord, code_revision: str) -> tuple[int, ...]:
         predecessor_ids: list[int] = []

@@ -23,6 +23,7 @@ from owlbear_kanban import (
     JobRecord,
     JobStore,
     NativeRuntime,
+    NodePlanStore,
     FailJobDiagnosticCode,
     FailJobRequest,
     RecoverExpiredClaimsRequest,
@@ -266,6 +267,167 @@ def _reject_request(revision, start: StartJobRequest) -> RejectAcceptRequest:
             priority=9,
         ),
     )
+
+
+def _terminal_accept_scenario(tmp_path: Path):
+    revision = _copied_revision(tmp_path, clean_receipts=True)
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    store = JobStore(work_root)
+    receipt_store = ReceiptStore(revision)
+    terminal = next(
+        node for node in revision.graph.nodes if not any(node.id in item.dependencies for item in revision.graph.nodes)
+    )
+    job_ids = {node.id: index for index, node in enumerate(revision.graph.nodes, start=1)}
+    for node in revision.graph.nodes:
+        plan = {
+            "packets": [
+                {
+                    "id": f"{node.id}-PK-001",
+                    "dependencies": [],
+                    "impact_closure": {
+                        "paths": ["serve/"],
+                        "authority_targets": [node.id, node.proof],
+                    },
+                }
+            ]
+        }
+        RuntimeTransaction(
+            work_root,
+            f"plan-{node.id}",
+            (NodePlanStore(revision).prepare(node.id, plan),),
+        ).commit()
+        if node.id == terminal.id:
+            continue
+        job_id = job_ids[node.id]
+        receipt_id = f"accept-{job_id:03d}"
+        node_plan_digest = compute_node_plan_digest(revision, node.id)
+        value = {
+            "schema_version": 1,
+            "kind": "accept",
+            "receipt_id": receipt_id,
+            "change_id": revision.change_id,
+            "delivery_digest": revision.delivery_digest,
+            "issued_at": f"2026-07-24T00:{job_id:02d}:00Z",
+            "impact_closure": {
+                "paths": ["serve/"],
+                "authority_targets": [node.id, node.proof],
+            },
+            "target_node_id": node.id,
+            "node_plan_digest": node_plan_digest,
+            "predecessor_receipt_ids": [],
+            "evidence": {"methods": list(revision.resolve(node.proof).method)},
+            "code_revision": "a" * 40,
+        }
+        assert receipt_store.create(receipt_id, value).receipt is not None
+        _materialize(
+            store,
+            _record(
+                revision,
+                job_id=job_id,
+                kind="accept",
+                target_node_id=node.id,
+                node_plan_digest=node_plan_digest,
+                receipt_id=receipt_id,
+            ),
+        )
+        current = store.read(job_id)
+        store.archive(job_id, current.token)
+
+    job_id = job_ids[terminal.id]
+    _materialize(
+        store,
+        _record(
+            revision,
+            job_id=job_id,
+            kind="accept",
+            target_node_id=terminal.id,
+            node_plan_digest=compute_node_plan_digest(revision, terminal.id),
+        ),
+    )
+    runtime = _runtime(revision, work_root)
+    start = _request().model_copy(update={"job_id": job_id, "attempt_id": "attempt-final", "claim_id": "claim-final"})
+    assert runtime.start_job(start).diagnostic is None
+    request = FinishAcceptRequest(
+        job_id=job_id,
+        attempt_id=start.attempt_id,
+        claim_id=start.claim_id,
+        actor_id=start.actor_id,
+        process_id=start.process_id,
+        finished_at="2026-07-24T01:00:00Z",
+        receipt_id="accept-final",
+        code_revision="a" * 40,
+        evidence={"methods": list(revision.resolve(terminal.proof).method)},
+        reconciliation_plan_job_ids=(),
+    )
+    return revision, work_root, runtime, request, tuple(sorted(job_ids.values()))
+
+
+def test_final_accept_atomically_creates_one_terminal_audit_job_and_replays(tmp_path: Path) -> None:
+    revision, work_root, runtime, request, predecessor_ids = _terminal_accept_scenario(tmp_path)
+
+    completed = runtime.finish_accept(request)
+    replayed = runtime.finish_accept(request)
+
+    assert completed.diagnostic is None
+    assert completed.receipt is not None
+    assert completed.event is not None
+    assert len(completed.created_jobs) == 1
+    audit_job = completed.created_jobs[0]
+    assert audit_job.kind == "audit"
+    assert audit_job.target_node_id == "DN-014"
+    assert audit_job.delivery_digest == revision.delivery_digest
+    assert audit_job.node_plan_digest == compute_node_plan_digest(revision, "DN-014")
+    assert audit_job.predecessor_job_ids == predecessor_ids
+    assert JobStore(work_root).read(audit_job.job_id).job == audit_job
+    assert replayed.receipt == completed.receipt
+    assert replayed.event == completed.event
+    assert replayed.created_jobs == (audit_job,)
+    assert tuple(item.job.kind for item in JobStore(work_root).list()) == ("audit",)
+
+
+def test_terminal_audit_creation_rolls_back_with_final_accept(tmp_path: Path, monkeypatch) -> None:
+    revision, work_root, runtime, request, _predecessor_ids = _terminal_accept_scenario(tmp_path)
+    work_before = _snapshot(work_root)
+    receipts_before = {path.name: path.read_bytes() for path in (revision.source_dir / "receipts").glob("*.yaml")}
+
+    def reject_transaction(_transaction) -> None:
+        raise TransactionConflictError
+
+    monkeypatch.setattr(RuntimeTransaction, "commit", reject_transaction)
+
+    with pytest.raises(TransactionConflictError):
+        runtime.finish_accept(request)
+
+    assert _snapshot(work_root) == work_before
+    assert receipts_before == {
+        path.name: path.read_bytes() for path in (revision.source_dir / "receipts").glob("*.yaml")
+    }
+
+
+def test_final_accept_rejects_conflicting_terminal_audit_identity_without_mutation(tmp_path: Path) -> None:
+    revision, work_root, runtime, request, predecessor_ids = _terminal_accept_scenario(tmp_path)
+    conflicting = _record(
+        revision,
+        job_id=max(predecessor_ids) + 1,
+        kind="audit",
+        target_node_id="DN-014",
+        node_plan_digest="b" * 64,
+        predecessor_job_ids=predecessor_ids,
+    )
+    _materialize(JobStore(work_root), conflicting)
+    work_before = _snapshot(work_root)
+    receipts_before = {path.name: path.read_bytes() for path in (revision.source_dir / "receipts").glob("*.yaml")}
+
+    result = runtime.finish_accept(request)
+
+    assert result.diagnostic is not None
+    assert result.diagnostic.code is FinishJobDiagnosticCode.IDENTITY_CONFLICT
+    assert result.diagnostic.target == str(conflicting.job_id)
+    assert _snapshot(work_root) == work_before
+    assert receipts_before == {
+        path.name: path.read_bytes() for path in (revision.source_dir / "receipts").glob("*.yaml")
+    }
 
 
 def test_reject_accept_atomically_publishes_minimum_correction_and_replays(tmp_path: Path) -> None:
@@ -550,6 +712,7 @@ def test_finish_build_accept_and_audit_publish_complete_outcomes(tmp_path) -> No
     )
     accept = runtime.finish_accept(accept_request)
     assert accept.diagnostic is None
+    assert accept.created_jobs == ()
     assert accept.receipt is not None
     assert accept.receipt.payload["predecessor_receipt_ids"] == ("build-001", "build-002")
     assert accept.event is not None

@@ -1,10 +1,10 @@
 ---
 id: 2060
 title: 'P10-01: Create the terminal whole-change audit job'
-status: build
+status: verify
 priority: high
 created: 2026-07-25T19:53:13.954779+02:00
-updated: 2026-07-25T19:53:13.954779+02:00
+updated: 2026-07-25T20:12:21.742412+02:00
 tags:
   - phase-10
   - scope:kanban
@@ -52,3 +52,18 @@ In: final acceptance completion, current node accept receipts, DN-014 authority,
 Out: audit rejection, MCP, auditor workflow, Cockpit, cutover, and complete-system proof.
 
 Proof guidance: run focused native finish-accept and audit-lifecycle checks plus a downstream impact scan.
+
+[[2026-07-25T20:12:21+02:00]]
+## Builder Notes
+
+DONE
+
+Implemented terminal whole-change audit creation within the existing finish-accept transaction.
+
+- AC-1: final acceptance now evaluates current accept jobs for every declared delivery node, reserves one monotonic job ID, creates a pending DN-014 audit with current delivery and node-plan authority plus accepted predecessor job IDs, and commits the sequence, audit, accept receipt, success event, and accept archive atomically.
+- AC-2: non-final acceptance returns no created jobs; missing or non-current acceptance authority does not create audit work; matching existing audit identity suppresses duplicates; a mismatched pending audit, including stale DN-014 plan digest, returns `ERR_FINISH_IDENTITY_CONFLICT` before mutation.
+- AC-3: finish replay discovers and returns the persisted audit created by the original accept finish without sequence reservation; an injected transaction conflict leaves work and receipt snapshots unchanged.
+
+Proof: focused lint passed for both changed files. The complete native-runtime module passed 43 tests. Durable proofs cover atomic creation and replay, rollback, conflicting existing audit identity with unchanged snapshots, and the existing non-final lifecycle. Builder challenger initially found missing node-plan digest equality; that defect was repaired and the repeated challenge passed.
+
+Changed files: `serve/kanban/src/owlbear_kanban/native_runtime.py`, `serve/kanban/tests/test_native_runtime.py`.
