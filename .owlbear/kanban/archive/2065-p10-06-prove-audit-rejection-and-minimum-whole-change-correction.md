@@ -1,10 +1,10 @@
 ---
 id: 2065
 title: 'P10-06: Prove audit rejection and minimum whole-change correction'
-status: collect
+status: archived
 priority: high
 created: 2026-07-25T19:53:54.333878+02:00
-updated: 2026-07-25T22:13:14.542647+02:00
+updated: 2026-07-25T22:14:17.820617+02:00
 tags:
   - phase-10
   - scope:test
@@ -42,7 +42,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Projection
@@ -80,3 +80,9 @@ PASS
 Compared the committed artifacts with the shaped scope and authoritative `w-whole-change-audit` workflow. Initial verifier challenge found AC-1 only persisted caller-supplied classifications. Repaired the public real-Git matrix so each exact scenario label is looked up in the shipped workflow matrix, the emitted finding class and corrective target are asserted against task authority, and those emitted values construct the public rejection disposition. This closes `AC-1/workflow-emission` without duplicating the LLM workflow as a second classifier.
 
 Independent evidence: workflow-grounded route matrix 3 passed; complete rejection, preclaim, release, atomicity, and maintained malformed-public-schema matrix 21 passed; focused lint passed. Verifier challenger retry: pass. No production behavior or scope outside the three shaped test owners changed.
+
+[[2026-07-25T22:14:17+02:00]]
+## Collect Notes
+ARCHIVED
+
+All four ACs have direct builder and verifier evidence. Builder and verifier challenger decisions are pass; the verifier repaired and closed `AC-1/workflow-emission`. Scoped role commits `743bc896642f43e9cb8a02125afd2522466d97d5` and `f29211f5ea6c4a9fbdcf04594913682927ddb7a4` contain only the shaped tests and task lifecycle records. Dependency #2064 is archived. Archive readiness confirmed.
