@@ -1,14 +1,13 @@
 ---
 id: 2033
-title: 'P1-C2: Cut over modular authority and isolated plans'
-status: shape
+title: 'P1-C2: Cut over modular authority and isolated plan storage'
+status: build
 priority: high
 created: 2026-07-25T02:46:34.205290+02:00
-updated: 2026-07-25T04:27:22.571363+02:00
+updated: 2026-07-25T04:42:48.823548+02:00
 tags:
   - change:replace-delivery-pipeline
   - node:DN-001
-  - node:DN-003
   - corrective
   - scope:core
   - migration
@@ -19,21 +18,24 @@ parent: 1968
 depends_on:
   - 2032
 ac:
-  - 'AC1: Given the admitted bootstrap package and embedded node plans, migration
-    writes the three `delivery/*.yaml` files and one plan file per populated node;
-    public `load_change` returns digest `3f6c656289911320bb5e7faf37b5e86ffa8511e729ade201a03a19913e33d990`.'
-  - 'AC2: Given `load_change` after migration, `graph.yaml` absence succeeds; restoring
-    `graph.yaml` returns `ERR_CHANGE_SCHEMA_INVALID` targeting that file, so no fallback
-    or dual authority is accepted.'
-  - 'AC3: Given a plan read or node-plan digest request, `ChangeRevision` and receipt
-    currentness use `plans/<node-id>.yaml`; a missing plan yields the declared unavailable
-    or stale result rather than embedded execution data.'
-  - 'AC4: Given a runtime plan-publication participant from #2032, commit changes
-    only the target plan and its transaction peers; injected interruption recovers
-    prior bytes or the complete new plan, never a partial YAML document.'
-  - 'AC5: Source and maintained-fixture inspection finds no active `ExecutionPlan`
-    or `node_plans` graph field, `graph.yaml` plan mutation, or dual modular/monolithic
-    registration.'
+  - 'AC1: Given the admitted bootstrap package and its populated node plan, migration
+    writes `delivery/obligations.yaml`, `delivery/contracts.yaml`, `delivery/nodes.yaml`,
+    and `plans/DN-001.yaml`; public `load_change` returns digest `3f6c656289911320bb5e7faf37b5e86ffa8511e729ade201a03a19913e33d990`.'
+  - 'AC2: Given the migrated package, absent `graph.yaml` loads successfully; adding
+    `graph.yaml` returns `ERR_CHANGE_SCHEMA_INVALID` targeting `graph.yaml`, so the
+    public loader accepts neither fallback nor dual authority.'
+  - 'AC3: Given a modular `ChangeRevision`, `read_node_plan("DN-001")` returns the
+    mapping from `plans/DN-001.yaml` and a missing declared-node plan returns `None`;
+    the joined `DeliveryGraph` exposes no `execution` or `node_plans` field.'
+  - 'AC4: Given `NodePlanStore.prepare` for `DN-001`, `RuntimeTransaction` interruption
+    restores prior bytes or commits the complete YAML, replayed matching bytes is
+    idempotent, and a stale observed token or differing existing bytes returns the
+    declared conflict without changing the stored plan.'
+  - 'AC5: Given maintained `test_change_revision.py` fixtures, package helpers write
+    modular delivery documents and isolated plans; the logical parity scenario compares
+    `compute_delivery_digest` over equivalent joined authority with public `load_change`
+    output rather than loading `graph.yaml`, the focused module passes, and active
+    scenarios create no `graph.yaml`, `ExecutionPlan`, or embedded `node_plans` authority.'
 blocked: false
 block_reason:
 claimed_at:
@@ -41,19 +43,19 @@ archival_reason:
 archival_refs: []
 ---
 ## Objective
-Migrate the admitted bootstrap carrier and active consumers to modular authority and isolated plans with no `graph.yaml` fallback.
+Migrate the admitted bootstrap carrier and public loader to modular authority, preserve canonical semantic identity, and retain low-level isolated plan storage/OCC as the package primitive.
 
 ## Scope
-In scope: physical package migration, public `load_change`, `ChangeRevision` plan access, receipt digest/currentness, native plan persistence, and change health.
+In scope: physical package migration; public `load_change`; `ChangeRevision.read_node_plan`; `NodePlanStore` read/prepare including replay, OCC conflict, and `RuntimeTransaction` interruption recovery; `graph.yaml` rejection; and maintained loader/store fixtures including `serve/kanban/tests/test_change_revision.py`.
 
-Out of scope: `shape` to `plan` identity, reconciliation, dispatch, and MCP.
+Out of scope: `NativeRuntime` `FinishPlanRequest` integration, receipt currentness/health integration, `shape` to `plan` identity, admission job generation, reconciliation, dispatch, and MCP.
 
 ## Authority
 Admitted digest `3f6c656289911320bb5e7faf37b5e86ffa8511e729ade201a03a19913e33d990`; DEC-030; MIG-004; DN-001; IF-001; PROOF-001.
 
-Complexity waiver: five AC share one atomic migrated-package boundary; splitting carrier removal from plan persistence would expose a forbidden dual authority.
+Package cutover and low-level `NodePlanStore` remain atomic because `ChangeRevision` source identity and contained plan paths define one package boundary. Assembled `NativeRuntime` publication and receipt integration are sequenced in #2034 after this primitive archives, avoiding dual authority without mixing public lifecycle identity into this task.
 
-Proof guidance: migrate a package copy through the public loader, compare semantic identity, and interrupt isolated plan publication.
+Proof guidance: load the migrated package through the public loader, compare its joined logical digest with the admitted digest, reject a reintroduced `graph.yaml`, and exercise isolated plan replay, conflict, and interruption recovery.
 
 [[2026-07-25T04:05:40+02:00]]
 ## Builder Notes
@@ -107,7 +109,7 @@ Proof guidance: migrate a package copy through the public loader, compare semant
 - Current partial diff introduces the forbidden `shape` to `plan` public identity migration in `native_runtime.py`; no implementation changes were made in this invocation.
 
 ### Proof Selected And Commands Run
-- Read-only owner and diff inspection: `git diff` scoped to the mapped owners/package plus exact `rg` searches for `load_change`, `ChangeRevision`, `graph.yaml`, `node_plans`, `ExecutionPlan`, `NodePlanStore`, and finish request identities.
+- Read-only owner and diff inspection: scoped `git diff` plus searches for `load_change`, `ChangeRevision`, `graph.yaml`, `node_plans`, `ExecutionPlan`, `NodePlanStore`, and finish request identities.
 - No focused test was run because the early routing gate failed on a named scope contradiction. Existing Builder Notes also record terminal exit 130 for the prior focused test attempts.
 
 ### AC And Follow-up Status
@@ -118,3 +120,23 @@ Proof guidance: migrate a package copy through the public loader, compare semant
 
 ### Follow-up Risk
 - The admitted package is already modular while the uncommitted source diff is not an approved coherent cutover. Do not advance or commit this task until shaping assigns the `shape`/`plan` rename and reissues a scope-consistent module map.
+
+[[2026-07-25T04:42:48+02:00]]
+## Shape Notes
+
+### Repair Classification
+Connected local task repair with #2034. Builder rejection key `scope/public-api-rename` showed that the prior task boundary mixed modular storage with the separately admitted plan-only runtime identity. No product behavior or admitted architecture changed.
+
+### Repair Closure Map
+- `scope/public-api-rename`: production boundary is the public modular loader and low-level plan store. Current `change.py`, `node_plan.py`, `native_runtime.py`, the admitted package, and `test_change_revision.py` were checked. The filtered diff proves modular loading and plan-store access do not require lifecycle renames; a negative source scan keeps `FinishPlanRequest` changes out of this task.
+- `AC3/modular-authority-fixtures`: focused `test_change_revision.py` reproduced 9 missing-delivery failures because its helper still wrote `graph.yaml`. AC5 now assigns that fixture migration and rewrites logical parity without a monolithic public-loader path.
+- `low-level-storage`: AC4 now owns `NodePlanStore.prepare` replay, OCC conflict, and interruption recovery at the `RuntimeTransaction` boundary.
+
+### Board Repair
+- Narrowed ownership to DN-001 and removed the `node:DN-003` tag.
+- Replaced stale scope and complexity-waiver prose with the modular package plus low-level storage boundary.
+- Rewrote AC1 through AC5 to cover package migration, strict `graph.yaml` rejection, isolated plan reads, low-level transactional writes, and maintained modular fixtures.
+- Sequenced assembled runtime and receipt integration in #2034.
+
+### Challenge And Route
+Shaper challenger first failed on four concrete contradictions; all four were corrected. Rechallenge passed with no findings. Task advances to `build`; #2034 depends on this task's archived modular baseline.
