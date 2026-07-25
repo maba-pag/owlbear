@@ -1,10 +1,10 @@
 ---
 id: 2035
 title: 'P1-C4: Enforce acceptance-triggered plan reconciliation'
-status: shape
+status: build
 priority: high
 created: 2026-07-25T02:46:46.300991+02:00
-updated: 2026-07-25T06:21:29.899329+02:00
+updated: 2026-07-25T06:29:47.839127+02:00
 tags:
   - change:replace-delivery-pipeline
   - node:DN-003
@@ -176,3 +176,26 @@ Challenges caught and corrected non-supersession disposition misuse, missing fol
 | # | Failure Key | Target Agent | Action Required | File(s) | Evidence |
 |---|-------------|--------------|-----------------|---------|----------|
 | 1 | AC3-AC5/reconciliation-scenario-proof | shape | Reconcile the acceptance criteria and proof contract into one minimal, explicit reconciliation scenario matrix covering direct build-gate failures without mutation and the full receipt/digest/currentness/invalidation sequence; identify the intended test boundary and any implementation gap before redispatch. | `serve/kanban/src/owlbear_kanban/native_runtime.py`, `serve/kanban/tests/test_native_runtime.py` | Prior and current Verify Notes; no remediation in `45157dd34..HEAD` |
+
+[[2026-07-25T06:29:47+02:00]]
+## Shape Notes
+
+### Repeated-Failure Repair
+Failure key `AC3-AC5/reconciliation-scenario-proof` repeated after a builder retry changed only task history. Runtime behavior and AC1 through AC5 remain unchanged; this local repair makes the required durable proof boundary explicit.
+
+### Repair Closure Map
+- Production boundary: public `NativeRuntime.start_job`, `finish_accept`, `finish_plan`, `release_job`, and `invalidate`, plus public work health.
+- Current artifacts checked: existing reconciliation assertions in `test_native_runtime.py`, invalidation fixture precedent in `test_invalidation.py`, receipt currentness, job predecessor edges, and runtime work-health supersession checks.
+- Disconfirming check: the source-test diff after implementation commit `b803968` was empty, so the first rejection was not remediated.
+- Causal proof: `finish_accept` state creates/selects the reconciliation plan job; its predecessor edges determine `finish_plan` receipt IDs; replacement plan bytes determine digest rejection/release; invalidation follows those exact job edges. Negative controls snapshot jobs, receipts, and attempt events.
+
+### Required Durable Scenarios
+1. `test_build_start_reconciliation_gates_are_mutation_free`: isolated cases prove stale plan digest returns `ERR_START_AUTHORITY_STALE`; active reconciliation plan, missing/ambiguous predecessor accept identity, and non-current predecessor accept return `ERR_START_PREDECESSOR_INVALID`; each rejection preserves job/archive bytes and attempt inventory. A positive current-evidence control writes only the owned claim and sequence-1 event.
+2. `test_reconciliation_finish_releases_new_build_and_invalidation_closure`: through public runtime operations, create dependent reconciliation from predecessor acceptance, prove old build blocked before planning, finish the reconciliation plan, verify predecessor receipt IDs and changed digest, prove old build authority-stale and new build start-eligible, explicitly release the successful new-build claim, then invalidate predecessor acceptance and prove closure reaches unclaimed dependent reconciled work while a disjoint node remains byte-identical/current. Work health must contain no broken supersession chain.
+3. Three-node fold-in coverage: first predecessor acceptance creates one dependent plan job; second acceptance before planning OCC-updates the same job with both accept edges; no duplicate appears; changed identity and claimed-plan conflicts preserve bytes.
+
+### Proof Constraints
+Use real `JobStore`, `ReceiptStore`, `NodePlanStore`, `RuntimeTransaction`, and public `NativeRuntime` operations. Only repository history may be deterministic below the boundary. Private helper invocation or source inspection cannot substitute. AC evidence must cite named test assertions, and a task-record-only diff cannot satisfy this follow-up.
+
+### Challenge And Route
+Challenge reconsidered only the claimed-build invalidation branch. The approved sequence proves new-build eligibility, explicitly releases the owned claim, then invalidates unclaimed descendants, leaving claim-stripping semantics out of scope. Final challenge passed. Route advances to `build` for actual durable scenario implementation.
