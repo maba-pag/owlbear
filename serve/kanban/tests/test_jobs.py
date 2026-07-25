@@ -11,13 +11,16 @@ from owlbear_kanban import (
     JobConflictError,
     JobDiagnosticCode,
     JobDisposition,
+    JobSequenceError,
     JobStore,
+    JobStorePathError,
     load_change,
     parse_job_mapping,
     plan_jobs,
     project_job,
     read_job_generation,
 )
+from owlbear_kanban.runtime_transaction import RuntimeTransaction, TransactionConflictError
 
 
 def _update_from_process(work_root: str, job: object, token: str, queue: object) -> None:
@@ -326,3 +329,88 @@ def test_job_store_does_not_follow_substituted_job_symlink(revision, tmp_path) -
         store.read(stored.job.job_id)
 
     assert outside.read_text(encoding="utf-8") == "outside bytes"
+
+
+def test_job_store_reserves_contiguous_ids_and_rejects_stale_competitors(tmp_path) -> None:
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    store = JobStore(work_root)
+
+    first = store.reserve_job_ids(3)
+    competing = store.reserve_job_ids(3)
+
+    assert first.job_ids == (1, 2, 3)
+    assert competing.job_ids == first.job_ids
+    RuntimeTransaction(work_root, "reserve-first", (first.participant,)).commit()
+    with pytest.raises(TransactionConflictError):
+        RuntimeTransaction(work_root, "reserve-competing", (competing.participant,)).commit()
+
+    following = store.reserve_job_ids(2)
+    competing_replacement = store.reserve_job_ids(2)
+    assert following.job_ids == (4, 5)
+    assert competing_replacement.job_ids == following.job_ids
+    RuntimeTransaction(work_root, "reserve-following", (following.participant,)).commit()
+    with pytest.raises(TransactionConflictError):
+        RuntimeTransaction(work_root, "reserve-competing-replacement", (competing_replacement.participant,)).commit()
+    assert store.reserve_job_ids(1).job_ids == (6,)
+
+
+def test_job_store_reservation_never_reuses_active_or_archived_ids(revision, tmp_path) -> None:
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    store = JobStore(work_root)
+    generation = plan_jobs(
+        revision,
+        "receipt-001",
+        range(10, 10 + len(revision.graph.nodes)),
+        timestamp="2026-07-22T12:00:00Z",
+    )
+    created = store.materialize(generation)
+    store.archive(created[-1].job.job_id, created[-1].token)
+
+    reservation = store.reserve_job_ids(2)
+
+    assert reservation.job_ids == (created[-1].job.job_id + 1, created[-1].job.job_id + 2)
+    RuntimeTransaction(work_root, "reserve-after-archive", (reservation.participant,)).commit()
+    assert store.reserve_job_ids(1).job_ids == (reservation.job_ids[-1] + 1,)
+
+
+@pytest.mark.parametrize(
+    "sequence_text",
+    [
+        "---\nsequence: [unterminated\n",
+        "---\nschema_version: 1\nlast_job_id: 0\nreservation_id: 0123456789abcdef0123456789abcdef\n",
+    ],
+)
+def test_job_store_reservation_rejects_invalid_sequence_without_mutation(tmp_path, sequence_text: str) -> None:
+    work_root = tmp_path / "work"
+    (work_root / "jobs").mkdir(parents=True)
+    (work_root / "archive").mkdir()
+    sequence_path = work_root / "job-sequence.yaml"
+    active_path = work_root / "jobs" / "1.yaml"
+    archived_path = work_root / "archive" / "2.yaml"
+    sequence_path.write_text(sequence_text, encoding="utf-8")
+    active_path.write_bytes(b"active bytes")
+    archived_path.write_bytes(b"archive bytes")
+    before = (sequence_path.read_bytes(), active_path.read_bytes(), archived_path.read_bytes())
+
+    with pytest.raises(JobSequenceError) as exc_info:
+        JobStore(work_root).reserve_job_ids(1)
+
+    assert exc_info.value.code == "ERR_JOB_SEQUENCE_INVALID"
+    assert (sequence_path.read_bytes(), active_path.read_bytes(), archived_path.read_bytes()) == before
+
+
+def test_job_store_reservation_rejects_unsafe_root_without_mutation(tmp_path) -> None:
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    sentinel = work_root / "sentinel"
+    sentinel.write_bytes(b"existing bytes")
+
+    unsafe_root = tmp_path / "unsafe-work"
+    unsafe_root.symlink_to(work_root, target_is_directory=True)
+    with pytest.raises(JobStorePathError) as path_exc_info:
+        JobStore(unsafe_root).reserve_job_ids(1)
+    assert path_exc_info.value.code == "ERR_JOB_PATH_UNSAFE"
+    assert sentinel.read_bytes() == b"existing bytes"
+    assert tuple(work_root.iterdir()) == (sentinel,)

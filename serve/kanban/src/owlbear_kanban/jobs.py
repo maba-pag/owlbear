@@ -5,13 +5,16 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import os
+import secrets
 import stat
+from dataclasses import dataclass
 from enum import StrEnum
 from io import StringIO
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator
+from ruamel.yaml import YAMLError
 
 from owlbear_kanban.change import ChangeRevision, Digest
 from owlbear_kanban.runtime_transaction import (
@@ -139,9 +142,46 @@ class JobConcurrencyError(RuntimeError):
         self.job_id = job_id
 
 
+class JobReservationError(ValueError):
+    """Raised when native job identities cannot be reserved."""
+
+    code = "ERR_JOB_RESERVATION_INVALID"
+
+
+class JobSequenceError(JobReservationError):
+    """Raised when the native job sequence document is malformed."""
+
+    code = "ERR_JOB_SEQUENCE_INVALID"
+
+
+class JobStorePathError(JobReservationError):
+    """Raised when reservation storage cannot be accessed safely."""
+
+    code = "ERR_JOB_PATH_UNSAFE"
+
+
+class _JobSequence(BaseModel):
+    """Persist the latest globally reserved native job identity."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    schema_version: Literal[1]
+    last_job_id: int = Field(gt=0)
+    reservation_id: Annotated[str, StringConstraints(strict=True, pattern=r"^[0-9a-f]{32}$")]
+
+
+@dataclass(frozen=True)
+class JobIdReservation:
+    """Return one contiguous identity block and its uncommitted sequence participant."""
+
+    job_ids: tuple[int, ...]
+    participant: TransactionParticipant | ReplacementTransactionParticipant
+
+
 _DIRECTORY_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
 _FILE_FLAGS = os.O_RDONLY | os.O_NOFOLLOW
 _CREATE_FLAGS = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+_SEQUENCE_FILENAME = "job-sequence.yaml"
 
 
 def _job_filename(job_id: int) -> str:
@@ -171,6 +211,12 @@ def _stored_job(text: str, job_id: int) -> StoredJob:
         msg = "job filename and record identities differ"
         raise ValueError(msg)
     return StoredJob(job=record, token=hashlib.sha256(text.encode("utf-8")).hexdigest())
+
+
+def _serialized_sequence(sequence: _JobSequence) -> bytes:
+    stream = StringIO()
+    make_yaml(explicit_start=True).dump(sequence.model_dump(mode="json"), stream)
+    return stream.getvalue().encode("utf-8")
 
 
 class JobStore:
@@ -236,6 +282,100 @@ class JobStore:
             os.fsync(directory_fd)
         finally:
             os.close(file_fd)
+
+    @staticmethod
+    def _read_sequence(root_fd: int) -> tuple[_JobSequence, bytes] | None:
+        try:
+            file_fd = os.open(_SEQUENCE_FILENAME, _FILE_FLAGS, dir_fd=root_fd)
+        except FileNotFoundError:
+            return None
+        except OSError as exc:
+            msg = "job sequence could not be opened safely"
+            raise JobStorePathError(msg) from exc
+        try:
+            if not stat.S_ISREG(os.fstat(file_fd).st_mode):
+                msg = "job sequence path must identify a regular file"
+                raise JobStorePathError(msg)
+            with os.fdopen(os.dup(file_fd), "r", encoding="utf-8") as handle:
+                text = handle.read()
+        except UnicodeError as exc:
+            msg = "job sequence must be strict UTF-8"
+            raise JobSequenceError(msg) from exc
+        finally:
+            os.close(file_fd)
+        try:
+            value = make_yaml().load(text)
+        except YAMLError as exc:
+            msg = "job sequence YAML is malformed"
+            raise JobSequenceError(msg) from exc
+        if not isinstance(value, dict):
+            msg = "job sequence document must be a mapping"
+            raise JobSequenceError(msg)
+        try:
+            sequence = _JobSequence.model_validate(dict(value))
+        except ValueError as exc:
+            msg = "job sequence schema is invalid"
+            raise JobSequenceError(msg) from exc
+        return sequence, text.encode("utf-8")
+
+    @classmethod
+    def _maximum_job_id(cls, root_fd: int, directory_name: str) -> int:
+        directory_fd = cls._directory(root_fd, directory_name, create=False)
+        if directory_fd is None:
+            return 0
+        try:
+            return max(
+                (
+                    int(name.removesuffix(".yaml"))
+                    for name in os.listdir(directory_fd)  # noqa: PTH208 - requires pinned descriptor.
+                    if name.endswith(".yaml") and name.removesuffix(".yaml").isdigit()
+                ),
+                default=0,
+            )
+        finally:
+            os.close(directory_fd)
+
+    def reserve_job_ids(self, count: int) -> JobIdReservation:
+        """Plan a globally monotonic identity reservation without committing it."""
+        if not isinstance(count, int) or isinstance(count, bool) or count <= 0:
+            msg = "job reservation count must be a positive integer"
+            raise JobReservationError(msg)
+        try:
+            with self._locked_root() as root_fd:
+                stored_sequence = self._read_sequence(root_fd)
+                sequence_maximum = stored_sequence[0].last_job_id if stored_sequence else 0
+                highest = max(
+                    sequence_maximum,
+                    self._maximum_job_id(root_fd, "jobs"),
+                    self._maximum_job_id(root_fd, "archive"),
+                )
+                job_ids = tuple(range(highest + 1, highest + count + 1))
+                replacement = _serialized_sequence(
+                    _JobSequence(
+                        schema_version=1,
+                        last_job_id=job_ids[-1],
+                        reservation_id=secrets.token_hex(16),
+                    )
+                )
+                if stored_sequence is None:
+                    participant: TransactionParticipant | ReplacementTransactionParticipant = TransactionParticipant(
+                        self._work_root,
+                        Path(_SEQUENCE_FILENAME),
+                        replacement,
+                    )
+                else:
+                    participant = ReplacementTransactionParticipant(
+                        self._work_root,
+                        Path(_SEQUENCE_FILENAME),
+                        stored_sequence[1],
+                        replacement,
+                    )
+                return JobIdReservation(job_ids=job_ids, participant=participant)
+        except JobReservationError:
+            raise
+        except (OSError, ValueError) as exc:
+            msg = "work root could not be inspected safely"
+            raise JobStorePathError(msg) from exc
 
     @staticmethod
     def _replace(directory_fd: int, record: JobRecord) -> None:
@@ -603,10 +743,14 @@ __all__ = [
     "JobDiagnosticCode",
     "JobDisposition",
     "JobGeneration",
+    "JobIdReservation",
     "JobParseResult",
     "JobProjection",
     "JobRecord",
+    "JobReservationError",
+    "JobSequenceError",
     "JobStore",
+    "JobStorePathError",
     "PlanJob",
     "StoredJob",
     "parse_job_mapping",

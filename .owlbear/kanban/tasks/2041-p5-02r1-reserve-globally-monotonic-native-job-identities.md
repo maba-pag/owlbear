@@ -1,10 +1,10 @@
 ---
 id: 2041
 title: 'P5-02R1: Reserve globally monotonic native job identities'
-status: build
+status: verify
 priority: high
 created: 2026-07-25T12:56:10.644283+02:00
-updated: 2026-07-25T12:56:10.644283+02:00
+updated: 2026-07-25T13:20:44.610281+02:00
 tags:
   - phase-5
   - scope:kanban
@@ -52,3 +52,6 @@ In: native sequence parsing, active/archive maxima, reservation participant cons
 Out: admission publication, MCP behavior, dispatch/completion job creation, and compatibility with legacy task `next_id`.
 
 Proof guidance: exercise `JobStore` plus `RuntimeTransaction` over a temporary work root, including a stale competing participant negative control.
+
+[[2026-07-25T13:20:44+02:00]]
+Builder complete. Added JobStore.reserve_job_ids(count), strict native job-sequence parsing, immutable-create/OCC replacement participants, unique reservation bytes for stale same-state conflict detection, typed reservation/sequence/path errors, and package exports. Proof: focused JobStore suite 27 passed; focused lint passed; editor diagnostics clean; mapped kanban regression excluding independently broken legacy-authority fixture file 1104 passed. Unfiltered mapped run had 1102 passes and 8 unrelated failures in test_historical_admission_fixtures.py because legacy graph.yaml authority is no longer permitted. builder-challenger decision: pass, no blocker; recommendation: advance to verify and commit only owned paths.
