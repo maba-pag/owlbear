@@ -1,10 +1,10 @@
 ---
 id: 2062
 title: 'P10-03: Expose whole-change audit rejection through MCP'
-status: collect
+status: archived
 priority: high
 created: 2026-07-25T19:53:28.713892+02:00
-updated: 2026-07-25T20:35:14.905759+02:00
+updated: 2026-07-25T20:35:32.599991+02:00
 tags:
   - phase-10
   - scope:mcp-kanban
@@ -39,7 +39,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Projection
@@ -82,3 +82,10 @@ Verified committed builder SHA `7e678f30ca3a4a7879b6adb24e031dc8697b2c47` agains
 - AC-3: malformed input raises `ERR_PARAM_VALIDATION` before dispatch; diagnostic-bearing native/dispatch results are returned directly without field remapping.
 
 Independent `uv run pytest serve/mcp-kanban/tests/test_mcp_surface_contract.py serve/mcp-kanban/tests/test_mcp_acceptance_tools.py -q --tb=short` passed 25 tests. The initially named generic server path was absent in the current workspace and was not counted as evidence. Verifier challenger passed with no findings.
+
+[[2026-07-25T20:35:32+02:00]]
+## Collect Notes
+
+ARCHIVED
+
+The public MCP audit-rejection boundary is complete. Builder commit `7e678f30ca3a4a7879b6adb24e031dc8697b2c47` contains the strict adapter, registry/schema contract, malformed-input guard, and assembled persisted-query proof; verifier commit `2d6f24d656825ddffc055a7b9df15449c30d793f` records independent public-boundary verification. All AC have direct evidence, both challengers pass, and no unresolved follow-up or out-of-envelope workflow/UI work remains.
