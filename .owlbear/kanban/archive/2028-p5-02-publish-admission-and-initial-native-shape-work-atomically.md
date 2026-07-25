@@ -1,10 +1,10 @@
 ---
 id: 2028
 title: 'P5-02: Publish admission and initial native plan work atomically'
-status: collect
+status: archived
 priority: high
 created: 2026-07-24T23:21:52.955135+02:00
-updated: 2026-07-25T10:13:33.716812+02:00
+updated: 2026-07-25T10:17:11.456855+02:00
 tags:
   - phase-5
   - scope:mcp-kanban
@@ -38,7 +38,7 @@ proof_bundle: existing+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Projection
@@ -100,10 +100,39 @@ No durable test added per guidance: existing admission_transaction tests protect
 
 **Authority Compliance:**
 - IF-010 "Native MCP control-plane API" stable error codes used
-- DN-009 control-plane ownership respected  
+- DN-009 control-plane ownership respected
 - Modular loader integration via current kanban package
 - Tool annotations correct: readOnlyHint=False, idempotentHint=True
 
 **Challenger Result:** PASS - "The implementation directly delegates public `admit_change` to `AdmissionTransaction.validate_and_admit`, whose existing transaction tests prove replay/conflict handling and recovery of both artifacts after injected failure"
 
 No local defects. Implementation matches AC contract and authority.
+
+[[2026-07-25T10:17:11+02:00]]
+### Collect Notes
+
+**Archive Readiness Verification:**
+
+**AC Coverage:**
+- AC-1: admit_change returns complete artifact triple with persisted identity match — builder manual + verifier executable ✓
+- AC-2: Non-admitted path returns assessment-only with no writes — builder + verifier ✓
+- AC-3: Exact replay returns persisted; changed identity raises ERR_ADMISSION_CONFLICT preserving prior — builder + verifier ✓
+- AC-4: Injected failure/recovery publishes both or neither — builder delegation + verifier atomic transaction proof ✓
+
+**Quality Evidence:**
+- 9 focused AC tests (verifier temp scripts, deleted before closure)
+- 440 MCP suite GREEN (builder)
+- Lint clean (builder, verifier)
+- Verifier challenger PASS
+- Builder commit a465cb249 clean
+- Verifier commit 6d4c63409 (historical whitespace corrected in working tree)
+
+**Local Closure Defects Fixed:**
+1. Removed trailing whitespace from Verify Notes Authority Compliance line (corrected in archived record)
+2. Deleted 4 temporary scratch files: `2028-manual-validation.py`, `2028-test-admit-change.py`, `2028-verify-ac4-extended.py`, `2028-verify-admit-change.py`
+
+**Resolved Requests:** None
+
+All AC satisfied with executable + structural proof. No unresolved follow-up. Authority compliance confirmed: IF-010 stable error codes, DN-009 control-plane ownership, modular loader integration, correct tool annotations.
+
+Ready for archive.
