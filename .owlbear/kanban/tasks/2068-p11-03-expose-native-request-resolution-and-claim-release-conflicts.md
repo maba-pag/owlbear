@@ -1,10 +1,10 @@
 ---
 id: 2068
 title: 'P11-03: Expose native request resolution and claim release conflicts'
-status: verify
+status: collect
 priority: high
 created: 2026-07-25T22:31:02.444553+02:00
-updated: 2026-07-25T23:31:05.395969+02:00
+updated: 2026-07-25T23:34:34.998804+02:00
 tags:
   - phase-11
   - scope:cockpit-backend
@@ -76,3 +76,20 @@ Regression and quality:
 - Builder challenger: pass; scope, architecture, replay/atomicity proof, and durable-test rent accepted.
 
 Recalled builder memories were assessed in one batch before closure.
+
+[[2026-07-25T23:34:34+02:00]]
+## Verify Notes
+PASS: Builder commit `c9c8f80567b8852bf155b7eacd0082c54428cb0b` satisfies all #2068 controls at the public FastAPI boundary without expanding beyond request resolution and claim release.
+
+Independent evidence:
+- `uv run pytest -q tests/test_cockpit_native_controls.py serve/kanban/tests/test_runtime_requests.py serve/kanban/tests/test_dispatch_runtime.py -k 'request_resolution or material_request or release or local_and_material_resolution or writer_conflict_and_release'`: 12 passed.
+- OpenAPI inspection: exactly the two new native `POST` routes are assembled; both control bodies set `additionalProperties: false` and require their identity fields.
+- Commit audit: builder SHA contains only the six declared product files, one durable public-contract test, and the #2068 task record; owned product/proof paths are clean.
+- Existing generic/legacy routes remain explicitly assigned to #2069 cutover, not this packet.
+
+AC judgment:
+- AC-1: local resume, material design reentry, persisted replay, changed identity, and current authority are directly asserted over `TestClient`.
+- AC-2: one event, replay, real coordination and proof-checkout cleanup, plus complete-state preservation for stale, non-owner, terminal, and transaction-abort paths are directly asserted.
+- AC-3: strict 422 rejection precedes runtime mutation, and 409 envelopes preserve domain/lower diagnostics, target, holders, and current digest.
+
+Verifier challenger: pass; no hidden mutation/replay gap, architecture violation, test-rent issue, or scope drift found. Broad-suite unrelated failures are separated from the green changed slice. Verifier memories were assessed before closure.
