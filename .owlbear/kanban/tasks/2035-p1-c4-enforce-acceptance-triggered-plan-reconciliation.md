@@ -1,10 +1,10 @@
 ---
 id: 2035
 title: 'P1-C4: Enforce acceptance-triggered plan reconciliation'
-status: verify
+status: collect
 priority: high
 created: 2026-07-25T02:46:46.300991+02:00
-updated: 2026-07-25T07:06:31.449475+02:00
+updated: 2026-07-25T07:11:34.863099+02:00
 tags:
   - change:replace-delivery-pipeline
   - node:DN-003
@@ -292,3 +292,18 @@ Task advances to `build` for one constrained recovery. Success requires a non-em
 - Builder-challenger: pass. It independently re-ran the focused 34-test suite, lint, and scoped diff check with no finding.
 - Memory assessment: all 20 recalled entries assessed; refined-artifact scope review was outstanding, workspace-root and replay-identity guidance were applied as unremarkable, and the remaining entries were not used. No new durable memory insight was identified.
 - Follow-up risk: no broader suite claimed; unrelated historical graph fixtures were intentionally not used as closure evidence.
+
+[[2026-07-25T07:11:34+02:00]]
+## Verify Notes
+
+- Evidence reviewed: authoritative task Objective, Scope, Engine Handoff, AC1-AC5; latest Tier-3 Shape Notes and latest Builder Notes; preceding shaper repair `b01cfc2cf0eb7ad3c846c269e23e98461fed1ddc`; candidate `b1f53f6f2fb7f7c088a3e960cc771a73c2f0eb43`; and the current source owners.
+- Named authorities checked: `NativeRuntime` public start, accept, plan, release, and invalidate operations; `InvalidationRuntime._job_closure`; `RuntimeQuery._supersession_reaches_job`; real `JobStore`, `ReceiptStore`, node-plan store, and transaction persistence.
+- Change Module Map: no deviation. Candidate changes the existing work-health owner and the mapped native public-runtime proof; no verifier patch was applied.
+- Normal-path boundary: public `NativeRuntime` scenarios use real stores and runtime transactions. Replacements remain below that boundary. Snapshot assertions prove rejected operations do not mutate jobs, receipts, or events.
+- Checks run: `uv run pytest serve/kanban/tests/test_native_runtime.py serve/kanban/tests/test_runtime_query.py -q --tb=short` passed 34; `uv run ruff check serve/kanban/src/owlbear_kanban/runtime_query.py serve/kanban/tests/test_native_runtime.py` passed; `git show --check b1f53f6f2fb7f7c088a3e960cc771a73c2f0eb43` passed.
+- Findings: none. `_supersession_reaches_job` accepts only the job receipt or an actual predecessor-chain receipt named in the supersession; it does not accept unrelated receipts. `_check_job` retains direct missing predecessor and receipt checks. `test_work_health_reports_stale_digest_and_broken_receipt_chains` retains the `ERR_WORK_SUPERSESSION_BROKEN` negative control.
+- AC-to-evidence: AC1 initial plan start remains public-path covered; AC2 existing finish-plan/replay coverage passed. AC3 named native scenarios prove stale digest, active plan, missing/ambiguous current predecessor accepts, and post-invalidation non-current predecessor accepts reject without mutation. AC4 three-node public finish-accept fold-in OCC-updates job 7 with `(4, 10)` predecessor edges and conflicting IDs preserve bytes. AC5 public reconciliation finish receipt includes `accept-001`, changes digest, makes old build stale, starts/releases new build, then invalidating `accept-001` reaches plan-002 and jobs 4/6/8/9/10 while DN-004 bytes/currentness stay unchanged and health is clean.
+- Prior same-failure-key check: `AC3-AC5/reconciliation-scenario-proof` had repeated previously. Latest Shape Notes required the named causal scenario matrix; candidate adds it and the focused suite passes, closing the follow-up.
+- Verifier-challenger: pass. It confirmed public-boundary AC3-AC5 coverage, closure alignment, and sufficient scoped proof.
+- Memory: all 20 recalled entries assessed; artifact-to-scope review was outstanding, workspace-root guidance was applied, remainder not used. No new durable insight identified.
+- Final route: PASS to collect.
