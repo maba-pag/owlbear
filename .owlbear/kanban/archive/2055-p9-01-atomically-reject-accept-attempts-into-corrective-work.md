@@ -1,10 +1,10 @@
 ---
 id: 2055
 title: 'P9-01: Atomically reject accept attempts into corrective work'
-status: collect
+status: archived
 priority: high
 created: 2026-07-25T17:19:27.594283+02:00
-updated: 2026-07-25T17:45:59.480210+02:00
+updated: 2026-07-25T17:48:10.274222+02:00
 tags:
   - phase-9
   - scope:kanban
@@ -37,7 +37,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Projection
@@ -64,3 +64,8 @@ Proof: finding tests 5 passed; invalidation/rejection slice 41 passed; rejection
 Verified builder commit `37474c251a464981a545370e10639444a0d59111`. Fresh initial verification: 92 owning tests passed and focused repository lint passed. The first `verifier-challenger` correctly rejected PASS because checkout cleanup preceded transaction commit and a later conflict could roll back runtime state while leaving the checkout deleted.
 
 Repaired the same slice in verifier commit `b45da1959859828f99099f923ddf8bb479200274`: added typed `ProofCheckoutSnapshot`, exact manifest snapshot/restore, pre-cleanup preservation, and compensation whenever native rejection returns a diagnostic after cleanup. A real-worktree test forces the reject transaction itself to conflict after successful cleanup; runtime, receipts, and coordination remain byte-identical, while checkout commit and manifest bytes are restored exactly. Snapshot round-trip independently proves environment and replacement preservation. Final fresh evidence: 100 owning tests passed, focused repository lint passed, editor diagnostics clean. `verifier-challenger` rechallenge: `pass`, specifically confirming the post-cleanup failure hole is closed. AC-1 through AC-3 PASS.
+
+[[2026-07-25T17:48:10+02:00]]
+## Collect Notes
+
+Collected at current SHA with builder commit `37474c251a464981a545370e10639444a0d59111` and verifier repair `b45da1959859828f99099f923ddf8bb479200274` both confirmed as ancestors. Fresh collector proof reran the discriminating native rejection, dispatch release/cleanup, checkout snapshot/restore, post-cleanup transaction-conflict compensation, replay, and rollback scenarios: 14 passed. Commit boundaries contain only #2055 core/runtime/tests plus its task record; unrelated dirty workspace paths remain untouched. Final collector challenger decision: `pass`; archival is justified and AC-1 through AC-3 remain closed at collected SHA.
