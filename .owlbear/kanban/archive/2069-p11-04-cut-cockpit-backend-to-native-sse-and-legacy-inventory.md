@@ -1,10 +1,10 @@
 ---
 id: 2069
 title: 'P11-04: Cut Cockpit backend to native SSE and legacy inventory'
-status: collect
+status: archived
 priority: high
 created: 2026-07-25T22:31:09.091791+02:00
-updated: 2026-07-25T23:54:59.030417+02:00
+updated: 2026-07-25T23:55:39.499665+02:00
 tags:
   - phase-11
   - scope:cockpit-backend
@@ -38,7 +38,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Projection
@@ -98,3 +98,15 @@ AC judgment:
 - AC-3: route absence and preserved peer services are proven over assembled OpenAPI and representative HTTP requests.
 
 Verifier challenger: pass; no architecture, deletion-semantics, token, inventory, route-completeness, or retired-test defect found. Verifier memories were assessed before closure.
+
+[[2026-07-25T23:55:39+02:00]]
+## Collect Notes
+ARCHIVED: #2069 is complete and archive-ready.
+
+Closure evidence:
+- Builder commit `9b8a61437aa707797e7b1b339a6df4eab90d77c7` and verifier commit `7b3ae1c4fb28ef9e0785e646b035a20d24ece773` are ancestors of HEAD.
+- Public cutover proof: 6 passed; complete remaining Cockpit backend regression: 166 passed; all native backend slices together: 23 passed; builder challenger independent cutover/surviving suite: 59 passed; lint-all passed.
+- Direct verifier disconnect probe and assembled OpenAPI inventory close the remaining SSE and route-composition branches.
+- Both builder and verifier challengers passed; no unresolved request, follow-up, block, or owned product/proof delta remains.
+
+Collector memories were assessed before archive.
