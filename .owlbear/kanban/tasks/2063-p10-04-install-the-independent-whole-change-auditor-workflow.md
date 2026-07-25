@@ -1,10 +1,10 @@
 ---
 id: 2063
 title: 'P10-04: Install the independent whole-change auditor workflow'
-status: verify
+status: collect
 priority: high
 created: 2026-07-25T19:53:37.879721+02:00
-updated: 2026-07-25T20:50:33.307752+02:00
+updated: 2026-07-25T20:52:12.063961+02:00
 tags:
   - phase-10
   - scope:agent-config
@@ -89,3 +89,23 @@ Implemented the independent whole-change auditor and adopted/repaired the interr
 - Builder challenger: pass, no blocking defects.
 
 The unexcluded ecosystem run had 46 passes and one pre-existing unrelated collector legacy-tool registry mismatch; no broad registry migration was included in this task.
+
+[[2026-07-25T20:52:12+02:00]]
+## Verify Notes
+
+PASS against committed build `69dfe40d51f04a1880b871de981c2ca5e9c1a2ce`.
+
+### Verification
+- AC-1: Confirmed auditor frontmatter exposes proof execution and native read queries only, includes no lifecycle/edit tools, uses `deny-writes.py --terminal-read-only`, requires `w-whole-change-audit`, and agrees with orchestrator delegation plus WIRING.
+- AC-2: Confirmed explicit whole-change rehydration for matching change/digest, active job identity, engine checkout, accepted-node receipts, Product Promise, decisions, migrations/removals, workflows, native request state, IF-014, PROOF-008, allowed replacements, and before/after Git state; blocked conditions fail closed.
+- AC-3: Compared the success/rejection payloads with public MCP signatures and confirmed exact class/route pairs plus tracked-edit rejection.
+- AC-4: Confirmed executable auditor delegation and `reject_audit` grant, exact three-way lifecycle routing, crash recovery for malformed output, and no orchestrator proof/classification/evidence/correction role.
+
+### Evidence
+- Agent and skill validators: PASS.
+- Focused ecosystem, hard-control, and MCP interaction suite: 80 passed.
+- Product files are byte-identical to commit `69dfe40`; no post-build drift.
+- Editor diagnostics: none.
+- Verifier challenger: pass; no current follow-up.
+
+The broader live-registry assertion remains red only for pre-existing removed legacy task tools on unrelated agents; all newly added auditor and `reject_audit` grants resolve and no task-local defect was found.
