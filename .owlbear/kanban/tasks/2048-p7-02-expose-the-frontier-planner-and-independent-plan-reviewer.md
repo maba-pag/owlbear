@@ -1,10 +1,10 @@
 ---
 id: 2048
 title: 'P7-02: Expose the frontier planner and independent plan reviewer'
-status: verify
+status: collect
 priority: high
 created: 2026-07-25T15:09:33.441773+02:00
-updated: 2026-07-25T15:23:09.582728+02:00
+updated: 2026-07-25T15:24:40.236302+02:00
 tags:
   - phase-7
   - scope:agent
@@ -100,3 +100,34 @@ Executable frontmatter/body validation, exact parsed declaration assertions, pub
 
 ### Follow-up Risks
 None within this packet. Initial-frontier and reconciliation executable scenarios remain owned by downstream #2049 and #2050.
+
+[[2026-07-25T15:24:40+02:00]]
+## Verifier Notes
+
+### Tested Commit
+`c311d5dec5570627658f1d55d88066fd3c479c0c`
+
+### Intent And Scope
+Verified the native planner/reviewer declarations, orchestrator planner dispatch edge, structured planner-result handoff, existing ND3 enforcement registration, and derived WIRING update. No engine/MCP semantics, proof scenarios, setup/seed files, downstream delivery roles, or Specification authority changed.
+
+### Commit Integrity
+`git diff --quiet c311d5dec5570627658f1d55d88066fd3c479c0c -- <seven product paths>` passed. The builder commit contains exactly those seven product paths plus the #2048 task record.
+
+### Commands And Observations
+- Affected agent validator - pass.
+- Affected/direct skill validator - pass.
+- Existing ecosystem and write-guard regressions excluding the documented unrelated collector live-registry mismatch - 57 passed in 0.45s.
+- Public `FinishPlanParams` and `finish_plan` tool boundary inspected: planner-owned fields exactly match `receipt_id`, `code_revision`, `evidence`, `evidence_ids`, `impact_closure`, `node_plan`, `build_job_ids`, and `accept_job_id`; orchestration supplies native dispatch identity and `finished_at`.
+- Unfiltered focused suite has one pre-existing failure from legacy task tools on `collector.agent.md`; no planner declaration adds an unavailable native tool.
+
+### AC-to-Evidence Map
+- AC-1 PASS: Planner requires `w-frontier-planning`, accepts only serialized engine-started context, has bounded read/query/request capabilities, delegates only planner-challenger and Explore, cannot finish or edit authority, and exposes the exact workflow disposition interface.
+- AC-2 PASS: Planner challenger is DMI-false ND3, exposes only read/search tools, enforces `deny-writes.py`, and requires all six source-grounded review rows without approval or lifecycle authority.
+- AC-3 PASS: Orchestrator installs planner in executable frontmatter and body. Workflow forwards only the successful start result, preserves all native identity, passes planner-owned fields unchanged to public `finish_plan`, releases requests before a fresh pick, and prohibits orchestrator-authored plans or requests.
+- AC-4 PASS: WIRING agrees with executable required-reading, delegation, native ownership, and hard-control declarations; validators report no drift.
+
+### Challenger
+`verifier-challenger`: pass. It found all ACs closed at the tested commit, no scope drift, and no unresolved follow-up.
+
+### Required Follow-up
+None.
