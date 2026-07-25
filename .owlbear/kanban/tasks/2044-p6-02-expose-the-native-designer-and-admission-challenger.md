@@ -1,10 +1,10 @@
 ---
 id: 2044
 title: 'P6-02: Expose the native designer and admission challenger'
-status: build
+status: verify
 priority: high
 created: 2026-07-25T14:28:55.328794+02:00
-updated: 2026-07-25T14:28:55.328794+02:00
+updated: 2026-07-25T14:42:26.890388+02:00
 tags:
   - phase-6
   - scope:agent
@@ -57,3 +57,22 @@ In: designer and challenger agents, prompt entries, exact native tool grants, di
 Out: setup or seed propagation, OpenSpec deletion, planner or builder roles, runtime changes, and product implementation.
 
 Proof guidance: run ecosystem validators and derive the prompt, agent, skill, delegate, tool, and hook graph from executable declarations.
+
+[[2026-07-25T14:42:26+02:00]]
+## Builder Notes
+Exposed the native Specification surface with `designer`, hard-read-only `designer-challenger`, shared `/ideate` and `/design` prompt entries, and synchronized `share/WIRING.md`. No setup, seed, runtime, OpenSpec deletion, planner, builder, or product implementation surface changed.
+
+### AC Evidence
+- AC-1: `designer.agent.md` requires `w-design-session`; grants `askQuestions`, source reads/search, authority edit tools, and exact native `list_changes | show_change | validate_change | admit_change`; delegates only `designer-challenger` and built-in read-only Explore; role rules constrain writes to the selected Specification authority, focused research, and scratch.
+- AC-2: `designer-challenger.agent.md` exposes only read/search/web tools plus `deny-writes.py`, has no admission or edit capability, and requires exactly one source-grounded `{disposition, evidence}` for every declared requirement, workflow, interface, migration, risk, proof, and node using only `pass | warning | error`, without overall approval.
+- AC-3: Both prompts select `agent: designer`; `/ideate` enters discovery and `/design` enters direct/resume mode over `w-design-session`, one native identity, and no OpenSpec handoff.
+- AC-4: `share/WIRING.md` records the roles, required skills, both prompt entries, delegation, Explore caller, and deny-write hook consistently with executable declarations.
+
+### Validation
+- `uv run python .owlbear/scripts/validate_agents.py` — pass, all 14 agent files conform.
+- `uv run python .owlbear/scripts/validate_skills.py` — pass.
+- `uv run pytest -q tests/test_agent_ecosystem_validation.py -k 'not declared_owlbear_mcp_tools_exist_in_live_registries' tests/test_write_guard_hooks.py tests/test_deny_non_doc_writes.py` — 57 passed.
+- `git diff --check` for all five product artifacts — pass.
+- Editor diagnostics — none.
+- Full live-registry regression remains pre-existing failure on `collector.agent.md` generic task tools removed by DN-009; the four designer tools are present in the shipped native registry.
+- `builder-challenger` — pass; no findings.

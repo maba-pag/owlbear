@@ -43,6 +43,8 @@ This table snapshots agent declarations and includes runtime-relevant built-in d
 
 | Agent | Model | Required reading | Delegates | Hooks |
 |-------|-------|------------------|-----------|-------|
+| designer | GPT-5.6 Sol | `w-design-session` | designer-challenger, Explore | None; authority writes are bounded by the role and narrow native tool surface |
+| designer-challenger | Claude Sonnet 5 | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design` | None | `PreToolUse`: deny writes except scratch |
 | orchestrator | GPT-5.6 Terra | `w-orchestration` | builder, verifier, collector, memory-curator, Explore | None; legacy `pick_tasks` plus non-default IF-015 `pick_jobs`, `start_job`, `finish_plan`, finish, release, and recovery tools |
 | shaper | GPT-5.6 Sol | `r-pipeline-protocol`, `r-challenger-protocol`, `r-workspace-governance` | shaper-challenger, Explore | `PreToolUse`: deny non-document writes |
 | builder | GPT-5.6 Terra | `r-pipeline-protocol`, `r-challenger-protocol`, `r-workspace-governance`, `h-codebase-orientation` | builder-challenger | `SessionStart`: task context; `PostToolUse`: lint changed files |
@@ -62,12 +64,13 @@ Tool allowlists remain in agent frontmatter; they are not duplicated here.
 
 | Prompt | Entry route | Initial loading behavior |
 |--------|-------------|--------------------------|
+| `ideate` | `prompt` -> designer in discovery mode | Agent required-reading loads `w-design-session`; selects or creates one native session |
+| `design` | `prompt` -> designer in direct design mode | Agent required-reading loads `w-design-session`; rehydrates the same native session |
 | `shape` | `prompt` -> shaper | Shaper selects `w-spec-shaping` or `w-task-repair` after classifying the input |
 | `orchestrate` | `prompt` -> orchestrator | Agent required-reading loads `w-orchestration` |
 | `test-curation` | `prompt` -> test-curator | Agent required-reading loads `w-test-curation` |
 | `kb-ingest` | `prompt` -> knowledge-ingestor | Agent required-reading loads `h-knowledge-ops` |
 | `kb-enrich` | `prompt` -> knowledge-enricher | Agent required-reading loads `w-knowledge-enrichment` and `h-knowledge-ops` |
-| `ideate` | Current agent directed by prompt | Loads `w-idea-refinement` |
 | `architecture-review` | Current agent directed by prompt | Loads module-design, orientation, visual-output, and idea-refinement skills |
 | `arch-audit` | Current agent directed by prompt | Loads `h-module-design` |
 | `frontend-audit` | Current agent directed by prompt | Loads frontend design and conventions; loads frontend proof guidance only for that toolchain |
@@ -102,13 +105,14 @@ This inverse map includes only direct `<required_reading>` consumers, not condit
 
 | Skill | Required by |
 |-------|-------------|
+| `w-design-session` | designer |
+| `r-challenger-protocol` | designer-challenger, shaper, builder, verifier, shaper-challenger, builder-challenger, verifier-challenger |
+| `h-codebase-orientation` | designer-challenger, builder, verifier |
+| `h-module-design` | designer-challenger, shaper-challenger |
 | `r-pipeline-protocol` | shaper, builder, verifier, collector |
-| `r-challenger-protocol` | shaper, builder, verifier, shaper-challenger, builder-challenger, verifier-challenger |
 | `r-workspace-governance` | shaper, builder, verifier, collector |
-| `h-codebase-orientation` | builder, verifier |
 | `h-mcp-kanban` | collector |
 | `h-ac-quality` | shaper-challenger |
-| `h-module-design` | shaper-challenger |
 | `w-orchestration` | orchestrator |
 | `w-test-curation` | test-curator |
 | `w-mem-curation` | memory-curator |
@@ -119,6 +123,7 @@ This inverse map includes only direct `<required_reading>` consumers, not condit
 
 | Delegate | Caller | Runtime consequence if unavailable |
 |----------|--------|------------------------------------|
+| designer-challenger | designer | Native admission lacks required repository-grounded entity challenge evidence |
 | builder | orchestrator | Build tasks cannot be dispatched |
 | verifier | orchestrator | Verify tasks cannot be dispatched |
 | collector | orchestrator | Collect tasks cannot be dispatched |
@@ -126,7 +131,7 @@ This inverse map includes only direct `<required_reading>` consumers, not condit
 | shaper-challenger | shaper | Shape approval loses the required adversarial cross-check |
 | builder-challenger | builder | Build completion loses its required proof and scope cross-check |
 | verifier-challenger | verifier | Verification completion loses its required final cross-check |
-| Explore | orchestrator, shaper, collector | Broad read-only orientation must be performed by the caller or omitted |
+| Explore | designer, orchestrator, shaper, collector | Broad read-only orientation must be performed by the caller or omitted |
 
 The agent validator enforces ND3 metadata and frontmatter-to-`<agents>` alignment; see
 `h-agent-structure` for the nesting rules.
@@ -137,7 +142,7 @@ The agent validator enforces ND3 metadata and frontmatter-to-`<agents>` alignmen
 |---------|----------------|-----------------|
 | Agent `tools:` allowlist | Every agent | Limits runtime capabilities exposed to the role |
 | `deny-non-doc-writes.py` | shaper | Allows documentation and diagram writes, rejects code writes |
-| `deny-writes.py` | collector and read-only challengers | Rejects durable writes outside scratch |
+| `deny-writes.py` | collector, designer-challenger, and read-only pipeline challengers | Rejects durable writes outside scratch |
 | `deny-src-writes.py` | test-curator | Restricts writes to tests and scratch |
 | `session-context.py` | builder, verifier | Adds task-aware context at session start |
 | `lint-changed.py` | builder, verifier, builder-challenger | Runs changed-file checks after tool use |
