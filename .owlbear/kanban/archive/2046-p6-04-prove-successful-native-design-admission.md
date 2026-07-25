@@ -1,10 +1,10 @@
 ---
 id: 2046
 title: 'P6-04: Prove successful native design admission'
-status: collect
+status: archived
 priority: high
 created: 2026-07-25T14:29:08.002900+02:00
-updated: 2026-07-25T14:59:21.303390+02:00
+updated: 2026-07-25T14:59:45.188884+02:00
 tags:
   - phase-6
   - scope:test
@@ -39,7 +39,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Projection
@@ -84,3 +84,7 @@ Verified the committed builder slice `3b2f7af72358acd8ae31243d13bbc058d16a813d` 
 - Designer plus public MCP surface suite: 15 passed in 8.05 seconds.
 - Focused lint: all relevant hooks passed; only unrelated repository TODO warnings were reported.
 - `verifier-challenger`: pass; public publication, persisted replay, shipped-artifact derivation, bypass sensitivity, and durable-test scope are supported.
+
+[[2026-07-25T14:59:45+02:00]]
+## Collect Notes
+Archived this final `DN-005-PK-004` leaf after confirming all three AC have direct builder and verifier evidence, the committed public-boundary suite passes 15 tests, focused lint passes, and both required challengers returned pass. The proof remains within the admitted one-file scenario envelope.
