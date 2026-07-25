@@ -1,10 +1,10 @@
 ---
 id: 2069
 title: 'P11-04: Cut Cockpit backend to native SSE and legacy inventory'
-status: verify
+status: collect
 priority: high
 created: 2026-07-25T22:31:09.091791+02:00
-updated: 2026-07-25T23:52:03.479952+02:00
+updated: 2026-07-25T23:54:59.030417+02:00
 tags:
   - phase-11
   - scope:cockpit-backend
@@ -81,3 +81,20 @@ Validation:
 - Builder challenger: pass; independently ran 59 cutover/surviving tests and accepted watcher semantics, route absence, legacy bounds, architecture, and every retired test as obsolete.
 
 Builder memories were assessed before closure.
+
+[[2026-07-25T23:54:59+02:00]]
+## Verify Notes
+PASS: Builder commit `9b8a61437aa707797e7b1b339a6df4eab90d77c7` satisfies native SSE, legacy inventory, and assembled backend cutover.
+
+Independent evidence:
+- Direct disconnect probe invoked the public SSE endpoint with a native event ready and an already-disconnected request; the stream emitted zero chunks.
+- `uv run pytest -q tests/test_cockpit_native_cutover.py tests/test_cockpit_native_changes.py tests/test_cockpit_native_work.py tests/test_cockpit_native_controls.py`: 23 passed across every native backend resource slice.
+- Builder commit audit confirmed declared product/proof/test-retirement scope and clean owned product/proof paths.
+- Assembled OpenAPI confirms GET-only `/api/legacy`, complete native resources and peer memory/ideas/liveness routes, with no generic board/task/activity/session/request prefixes.
+
+AC judgment:
+- AC-1: canonical authority/work classification is independent of watch kind, so create/modify/delete share behavior; mixed batching, sorted resources, monotonic tokens, temporary/legacy suppression, missing-root, and disconnect branches are proven.
+- AC-2: inventory bounds all three collections, reports provenance/truncation, exposes no URLs or write method, and preserves source bytes.
+- AC-3: route absence and preserved peer services are proven over assembled OpenAPI and representative HTTP requests.
+
+Verifier challenger: pass; no architecture, deletion-semantics, token, inventory, route-completeness, or retired-test defect found. Verifier memories were assessed before closure.
