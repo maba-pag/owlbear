@@ -238,3 +238,50 @@ async def test_failed_challenge_keeps_resolved_revision_unpublished(tmp_path: Pa
     assert "A non-pass challenge" in workflow
     assert "Do not invoke `admit_change`" in _normalized(workflow)
     assert _publication_snapshot(change_dir, board) == before
+
+
+@pytest.mark.asyncio
+async def test_complete_native_design_admits_once_and_replays_exactly(tmp_path: Path) -> None:
+    change_dir, revision = _copy_change(tmp_path, pending_decision=False)
+    context = _context(tmp_path)
+    design_prompt, agent, workflow = _shipped_contracts()
+    ideate_prompt = (_REPO_ROOT / "share" / "prompts" / "ideate.prompt.md").read_text(encoding="utf-8")
+    evidence = _evidence(revision, approval=True)
+    board = context.request_context.lifespan_context.kanban_dir
+
+    changes = await server.list_changes(context)
+    shown = await server.show_change(context, change_id=_CHANGE_ID)
+    assessment = await server.validate_change(context, change_id=_CHANGE_ID, evidence=evidence)
+    admitted = await server.admit_change(context, change_id=_CHANGE_ID, evidence=evidence)
+    published = _publication_snapshot(change_dir, board)
+    replayed = await server.admit_change(context, change_id=_CHANGE_ID, evidence=evidence)
+
+    assert changes == [{"change_id": _CHANGE_ID, "state": "loaded", "digest": revision.delivery_digest}]
+    assert shown["delivery_digest"] == revision.delivery_digest
+    assert assessment["revision_digest"] == revision.delivery_digest
+    assert all(finding["severity"] != "error" for finding in assessment["findings"])
+    assert admitted == replayed
+    assert _publication_snapshot(change_dir, board) == published
+
+    receipt = admitted["receipt"]
+    generation = admitted["generation"]
+    assert receipt["delivery_digest"] == revision.delivery_digest
+    assert generation["delivery_digest"] == revision.delivery_digest
+    assert generation["receipt_id"] == receipt["receipt_id"]
+    assert {job["kind"] for job in generation["jobs"]} == {"plan"}
+    assert {job["delivery_digest"] for job in generation["jobs"]} == {revision.delivery_digest}
+    assert {job["receipt_id"] for job in generation["jobs"]} == {receipt["receipt_id"]}
+    assert {job["target_node_id"] for job in generation["jobs"]} == {node.id for node in revision.graph.nodes}
+    assert len(list((change_dir / "receipts").glob("*.yaml"))) == 1
+    assert len(list((change_dir / "jobs").glob("*.yaml"))) == 1
+    assert len(list((board / "jobs").glob("*.yaml"))) == len(revision.graph.nodes)
+
+    assert "agent: designer" in ideate_prompt
+    assert "agent: designer" in design_prompt
+    assert "Enter discovery mode through `w-design-session`" in ideate_prompt
+    assert "Enter direct design mode through `w-design-session`" in design_prompt
+    assert "Never hand off to OpenSpec" in ideate_prompt
+    assert "never hand off to OpenSpec" in design_prompt
+    assert all(tool in agent for tool in ("list_changes", "show_change", "validate_change", "admit_change"))
+    assert "Call `validate_change(change_id, evidence)`" in workflow
+    assert "call `admit_change(change_id, evidence)` with the identical evidence" in _normalized(workflow)

@@ -1,10 +1,10 @@
 ---
 id: 2046
 title: 'P6-04: Prove successful native design admission'
-status: build
+status: verify
 priority: high
 created: 2026-07-25T14:29:08.002900+02:00
-updated: 2026-07-25T14:29:08.002900+02:00
+updated: 2026-07-25T14:58:00.576648+02:00
 tags:
   - phase-6
   - scope:test
@@ -54,3 +54,18 @@ In: assembled prompt, agent, workflow, native fixture, public change tools, publ
 Out: new admission evaluator semantics, frontier planning, setup or seed changes, OpenSpec deletion, and mocked MCP wrappers.
 
 Proof guidance: exercise assembled `MOD-003` contracts plus public MCP functions; only an external research response may be replaced below the designer workflow.
+
+[[2026-07-25T14:58:00+02:00]]
+## Builder Notes
+Completed the positive `PROOF-004` journey in the existing durable designer scenario module. No production, evaluator, frontier-planning, setup/seed, or OpenSpec files changed.
+
+### AC Evidence
+- AC-1: The new scenario copies the real admitted modular change and declared research, builds complete current-digest evidence with one pass disposition for every declared challenge family, a passing baseline, explicit approval, and limits, then directly invokes public `list_changes`, `show_change`, `validate_change`, and `admit_change`. It observes a no-error assessment, one digest-bound receipt and generation, and exactly one plan job for every real delivery node, all bound to the same digest and receipt.
+- AC-2: After the first admission, the scenario snapshots every receipt, generation, sequence, and board-job byte. An identical second public `admit_change` returns an equal receipt/generation/assessment payload, preserves the complete snapshot byte-for-byte, and leaves exactly one receipt, one generation, and one job per node.
+- AC-3: The maintained module reads the shipped `/ideate` and `/design` prompts, `designer` agent, and `w-design-session`; it requires both entries to delegate to designer and the shared workflow, requires their OpenSpec refusal, requires all four public tool contracts in the agent, and requires validate-then-admit with identical evidence in the workflow. The sibling resume case continues to prove exactly one question and concrete options, tradeoffs, risks, recommendation, and confidence. Direct public calls and artifact assertions make an OpenSpec handoff or fixture-only adapter substitution fail.
+
+### Validation
+- Focused `PROOF-004` module: 4 passed.
+- Designer plus owning public MCP surface: 15 passed in 7.32 seconds; builder challenger independently reran it with 15 passed in 7.24 seconds.
+- Focused lint: all hooks passed; only unrelated repository TODO warnings were reported.
+- `builder-challenger`: pass; AC coverage, bypass sensitivity, durable-test rent, and minimum-change scope are supported.
