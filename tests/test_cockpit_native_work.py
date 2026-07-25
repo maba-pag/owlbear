@@ -251,9 +251,12 @@ def test_native_pages_preserve_core_ordering_and_cursor_contract(
         assert "next_cursor" in response.json(), resource
 
     stale = client.get(f"/api/changes/{_CHANGE_ID}/findings", params={"cursor": "missing"})
+    stale_health = client.get(f"/api/changes/{_CHANGE_ID}/health/change", params={"cursor": "missing"})
     invalid_limit = client.get(f"/api/changes/{_CHANGE_ID}/attempts", params={"limit": 0})
     assert stale.status_code == 409
     assert stale.json()["detail"]["code"] == "ERR_CURSOR_STALE"
+    assert stale_health.status_code == 409
+    assert stale_health.json()["detail"]["code"] == "ERR_CURSOR_STALE"
     assert invalid_limit.status_code == 422
 
 
@@ -305,6 +308,8 @@ def test_invalidation_and_health_reads_are_complete_and_non_mutating(
     assert invalidation.json()["corrective_finding_ids"] == ["finding-001"]
     assert invalidation.json()["corrective_job_ids"] == [20]
     assert invalidation.json()["impact_closure"]["paths"] == ["serve/cockpit/"]
+    jobs = client.get(f"/api/changes/{_CHANGE_ID}/jobs", params={"candidate_revision": "HEAD"})
+    assert 20 in {item["job_id"] for item in jobs.json()["items"]}
     assert work_health.status_code == 200
     assert len(work_health.json()["checked_paths"]) <= 100
     assert work_health.json()["findings"]

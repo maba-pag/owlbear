@@ -1,10 +1,10 @@
 ---
 id: 2067
 title: 'P11-02: Expose paged native work evidence and health resources'
-status: verify
+status: collect
 priority: high
 created: 2026-07-25T22:30:56.487007+02:00
-updated: 2026-07-25T23:01:36.981209+02:00
+updated: 2026-07-25T23:04:08.397050+02:00
 tags:
   - phase-11
   - scope:cockpit-backend
@@ -64,3 +64,13 @@ Changed files: `serve/cockpit/src/owlbear_cockpit/native_models.py`, `serve/cock
 AC-1: public TestClient proof covers numeric job ordering, continuation, all nested `next_cursor` fields, stale 409, and limit 422. AC-2: job/finding/receipt/request show proof covers authority composition and resource-specific missing errors without paths. AC-3: a real supersession and corrective job expose receipt/impact closure; deliberate work and change defects produce bounded findings; byte snapshots prove all GETs leave work and authority files unchanged.
 
 Evidence: focused suite 3 passed; Cockpit backend regression 299 passed; all-file lint passed. Builder challenger: pass.
+
+[[2026-07-25T23:04:08+02:00]]
+## Verify Notes
+PASS
+
+Verified builder SHA `9e2369d7710792caaa00acc976782ef62c70ace2` against the admitted authority and all three AC. Exact commit ownership matches the shaped source/proof slice, with no product drift or resolved requests.
+
+Verifier added two test-only linkage assertions: the corrective job ID persisted in the supersession receipt must appear in the public job collection, and the custom bounded change-health route must itself return 409 `ERR_CURSOR_STALE` for a stale cursor. Both pass through public TestClient routes over the real seeded runtime.
+
+Evidence: focused native-work suite 3 passed; builder Cockpit regression 299 passed; focused verifier lint passed. Verifier challenger: pass.
