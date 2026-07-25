@@ -1,10 +1,10 @@
 ---
 id: 2039
 title: Compose native dispatch completion participants
-status: collect
+status: archived
 priority: high
 created: 2026-07-25T08:00:32.540861+02:00
-updated: 2026-07-25T08:18:29.182789+02:00
+updated: 2026-07-25T08:19:57.588030+02:00
 tags:
   - change:replace-delivery-pipeline
   - node:DN-004
@@ -28,7 +28,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Objective
@@ -102,3 +102,14 @@ Complexity waiver is unnecessary: one failure domain and one direct proof mode.
 - Verifier-challenger: `pass`. It confirmed the callable composition, preserved accept participants, exact file envelope, direct AC proof, and correct routing of the known `#2037` adapter failure.
 - Memory assessment: all 20 recalled entries assessed; the initial batch had one transcribed ID not found, then the recalled identifier was assessed successfully.
 - Final route: PASS to collect.
+
+[[2026-07-25T08:19:57+02:00]]
+## Collect Notes
+- Classification: leaf. `#2039` has no child tasks, no aggregate/EPIC intent, and no dependency gate of its own; parent `#1968` is not mutated.
+- Intent and invariant coverage: Objective and AC1/AC2 require `DispatchRuntime._finish` to provide NativeRuntime a participant factory that atomically publishes successful plan/build/audit completion and releases the matching coordination holder, while diagnostic and OCC controls leave no partial job, attempt, receipt, or coordination state.
+- Latest verifier evidence: PASS in `0de54cc0f6b1e64dfa53f1d48ad53a4f05981024`. Direct real-store proof `uv run pytest serve/kanban/tests/test_dispatch_runtime.py -q --tb=short` passed 8 tests, including `test_finish_plan_build_and_audit_publish_with_coordination_release` and `test_finish_diagnostics_and_coordination_occ_conflicts_publish_nothing`. Focused `uv run lint serve/kanban/src/owlbear_kanban/dispatch.py serve/kanban/tests/test_dispatch_runtime.py` and `git show --check 3599b9376` passed.
+- Exact scoped implementation provenance: `3599b9376a867566f4f0727a2743fb7fd3d3fb5e` changes only `serve/kanban/src/owlbear_kanban/dispatch.py`, `serve/kanban/tests/test_dispatch_runtime.py`, and this task record. Verifier challenger recorded `pass` for callable composition, preserved accept participants, direct AC proof, and file envelope.
+- TestProof014 downstream boundary: verifier and builder both record that the assembled scenario passed the former tuple-not-callable failure and reached `#2037`'s generic `FinishJobRequest` to `FinishAcceptRequest` assertion in `NativeRuntime._accept_participants`. Board state confirms `#2037` depends on `#2039`; no `#2037`, `#2036`, or `#1983` task was changed here.
+- Child coverage: none. Parent dependency-gate check: not applicable to this leaf; `#2039` has no dependencies. Structured request state: no pending or resolved task-owned requests. No unresolved task-owned work remains.
+- Archive rationale: AC1 and AC2 are closed by direct proof at the verification SHA, scoped implementation is committed, challenger passed, and the downstream TestProof014 handoff is correctly owned by `#2037`.
+
