@@ -1,10 +1,10 @@
 ---
 id: 2033
 title: 'P1-C2: Cut over modular authority and isolated plan storage'
-status: shape
+status: build
 priority: high
 created: 2026-07-25T02:46:34.205290+02:00
-updated: 2026-07-25T04:51:35.430457+02:00
+updated: 2026-07-25T05:08:11.264695+02:00
 tags:
   - change:replace-delivery-pipeline
   - node:DN-001
@@ -36,6 +36,14 @@ ac:
     `compute_delivery_digest` over equivalent joined authority with public `load_change`
     output rather than loading `graph.yaml`, the focused module passes, and active
     scenarios create no `graph.yaml`, `ExecutionPlan`, or embedded `node_plans` authority.'
+  - 'AC6: Given the migrated package, `delivery/nodes.yaml` admission limits identify
+    the modular loader as active and keep MIG-004 open until the full admitted delivery
+    graph completes cutover, DN-012 deletion, and DN-013 PROOF-013 absence evidence;
+    public `load_change` still returns digest `3f6c656289911320bb5e7faf37b5e86ffa8511e729ade201a03a19913e33d990`.'
+  - 'AC7: Given the metadata correction, SHA-256 for `receipts/admission-3f6c65628991.yaml`
+    matches its blob at builder commit `837b76518`, `discover_admission` returns that
+    one current receipt without ambiguity, and no new admission or supersession receipt
+    is created.'
 blocked: false
 block_reason:
 claimed_at:
@@ -221,3 +229,23 @@ Shaper challenger first failed on four concrete contradictions; all four were co
 
 ### Final Route
 - Reshape. The focused behavior is passing, but the shaped and admitted authority premise is contradictory; Shape must decide the re-admission and migration-boundary correction before a build can be verified.
+
+[[2026-07-25T05:08:11+02:00]]
+## Shape Notes
+
+### Repair Classification
+Local task repair for verifier failure key `authority/stale-graph-carrier-limit`. The strict modular implementation remains valid; one digest-excluded pre-implementation caveat in live admission metadata became stale when modular loading landed.
+
+### Corrective Mechanism
+- `compute_delivery_digest` excludes top-level admission metadata, while the approved receipt scope explicitly includes modular authority and isolated plans at digest `3f6c656289911320bb5e7faf37b5e86ffa8511e729ade201a03a19913e33d990`.
+- The original admission receipt is immutable. A typed supersession would invalidate the complete admission, and a second same-digest admission would make discovery ambiguous, so neither receipt operation represents this partial metadata correction.
+- No new receipt or artifact convention is introduced. Mandatory task history records the rationale; builder changes only `delivery/nodes.yaml` admission limits and preserves the exact receipt bytes.
+
+### Repair Closure Map
+- Production boundary: digest-excluded `nodes.admission.limits`, immutable exact-digest admission evidence, and public `load_change` / `discover_admission`.
+- Current-source artifacts checked: `compute_delivery_digest`, receipt supersession/currentness/discovery, `delivery/nodes.yaml`, the exact receipt approval/immutability clauses, MIG-004, and DN-012/DN-013 proof ownership.
+- Disconfirming checks: the limit edit must preserve the exact digest; receipt SHA must match commit `837b76518`; discovery must return one current admission; no second admission or supersession receipt may appear.
+- Negative control: the corrected limit must not declare MIG-004 complete. It remains open until the full admitted graph supplies DN-012 deletion and DN-013 PROOF-013 absence evidence.
+
+### AC And Route
+Added AC6 for current modular-loader metadata plus full-graph MIG-004 ownership and AC7 for immutable receipt identity plus unambiguous discovery. Three challenge rounds rejected sibling-carrier conflation, an untyped errata artifact, and an incomplete owner range; the corrected mechanism and DN-012/DN-013 wording passed. Route returns to `build` for the two-artifact metadata/task correction and focused re-proof.
