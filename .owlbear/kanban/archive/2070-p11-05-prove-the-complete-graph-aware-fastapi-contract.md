@@ -1,10 +1,10 @@
 ---
 id: 2070
 title: 'P11-05: Prove the complete graph-aware FastAPI contract'
-status: collect
+status: archived
 priority: high
 created: 2026-07-25T22:31:15.592752+02:00
-updated: 2026-07-26T00:12:55.665206+02:00
+updated: 2026-07-26T00:13:40.197154+02:00
 tags:
   - phase-11
   - scope:cockpit-backend
@@ -36,7 +36,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Projection
@@ -90,3 +90,16 @@ AC judgment:
 - AC-3: old-route HTTP absence, malformed/missing/stale/domain conflicts, and now real context-assembly failure all have stable envelopes and no partial mutation.
 
 Verifier challenger after repair: pass; prior core-failure gap closed. Verifier memories were assessed before closure.
+
+[[2026-07-26T00:13:40+02:00]]
+## Collect Notes
+ARCHIVED: #2070 is complete and archive-ready.
+
+Closure evidence:
+- Builder commit `ec663a4e84ce39b540ff9092e54f58fd74788234` and verifier repair commit `fcfc2e72991ec6d3045e27ccb6e89a5fa5aa4870` are ancestors of HEAD; maintained proof path is clean.
+- Final PROOF-015 suite: 3 passed, including real context-assembly failure; full Cockpit backend: 169 passed; lint-all and focused lint/format passed.
+- Live uvicorn/watchfiles proof passed repeatedly, only `get_engine` is overridden, and both challengers passed after the verifier-required core-failure repair.
+- Every AC resource, control/SSE link, error family, non-mutation boundary, strict schema, and old-route absence has direct assembled-app evidence.
+- No unresolved request, block, follow-up, or owned delta remains.
+
+Collector memories were assessed before archive.
