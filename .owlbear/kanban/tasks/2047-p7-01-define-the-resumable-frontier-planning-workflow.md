@@ -1,10 +1,10 @@
 ---
 id: 2047
 title: 'P7-01: Define the resumable frontier planning workflow'
-status: verify
+status: collect
 priority: high
 created: 2026-07-25T15:09:25.843626+02:00
-updated: 2026-07-25T15:14:41.654519+02:00
+updated: 2026-07-25T15:16:01.964305+02:00
 tags:
   - phase-7
   - scope:agent
@@ -75,3 +75,21 @@ Added the canonical `w-frontier-planning` workflow as the only product change. N
 - Mechanical payload/model comparison: `PlannerSuccess` keys equal the expected eight fields and all exist in public `FinishPlanParams`.
 - Applicable ecosystem regressions: 7 passed.
 - `builder-challenger`: pass after independently rerunning the same checks.
+
+[[2026-07-25T15:16:01+02:00]]
+## Verify Notes
+Verified committed builder revision `39ce9cdaa509782d4577994a327bfa738fdb72d9` against DN-006, IF-007, REQ-004/024/025, NEG-005/008, RISK-007/011, and the public runtime contracts without further code changes.
+
+### AC Evidence
+- AC-1: The committed skill treats orchestrator-started job identity as immutable and rehydrates current change digest, projected job contract, graph entities, receipts, prior target plan, and source for every selected job. Initial plans consume admitted predecessor contracts without acceptance; reconciliation additionally consumes accepted implementation evidence; another target requires a fresh pick and full rehydration.
+- AC-2: The complete packet table and validation gate cover all required semantic metadata while remaining compatible with NodePlanStore's JSON-shaped persistence and NativeRuntime's canonical ID, DAG, closure, and admitted-target enforcement.
+- AC-3: Legal refinement and unadmitted expansion are explicitly separated. Decision Request, Specification re-entry, and blocked routes are structured non-success dispositions; non-pass review, stale authority, or material expansion cannot complete lifecycle work or roll back persisted prior plans.
+- AC-4: The eight `PlannerSuccess` keys match public `FinishPlanParams`; lifecycle tools and direct authority/plan/job/receipt writes remain outside planner authority, with execution identity and completion time owned by the orchestrator.
+
+### Validation
+- `git show --check` on the builder revision: clean.
+- Skill validator: pass.
+- Focused lint and Markdown checks: pass; unrelated repository TODO warnings only.
+- Applicable ecosystem regressions: 7 passed.
+- Mechanical PlannerSuccess-to-FinishPlanParams field comparison: pass.
+- `verifier-challenger`: pass; all AC, source fidelity, metadata compatibility, initial/reconciliation semantics, and lifecycle ownership are supported.
