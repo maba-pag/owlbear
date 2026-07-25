@@ -1,10 +1,10 @@
 ---
 id: 1985
 title: 'Bootstrap DN-008: Independently accept delivery nodes'
-status: collect
+status: archived
 priority: high
 created: 2026-07-22T01:07:49.392051+02:00
-updated: 2026-07-25T17:20:35.352536+02:00
+updated: 2026-07-25T19:33:45.837288+02:00
 tags:
   - bootstrap-projection
   - change:replace-delivery-pipeline
@@ -40,7 +40,7 @@ proof_bundle: existing+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Bootstrap Projection Identity
@@ -100,3 +100,15 @@ REQ-006 is jointly proved by #2058 success and #2059 rejection. NEG-003, NEG-009
 ## Shape Completion
 
 Created and audited #2055 through #2059 in the challenged dependency order. All five leaves are `build`, parented to #1985, tagged with digest-bound change/node/packet identities, and included in this aggregate's dependency set. #2056 explicitly depends on core rejection #2055 and archived DN-009 #1981; later packets form a linear acceptor/proof chain. The aggregate identity, authority references, AC, module/invariant/dependency/scenario maps, and proof guidance now use modular digest `3f6c656289911320bb5e7faf37b5e86ffa8511e729ade201a03a19913e33d990`. Shaper challenge: pass with both requested traceability refinements applied.
+
+[[2026-07-25T19:33:45+02:00]]
+## Collect Notes
+- Classified as aggregate. The parent intent source is the digest-bound Bootstrap Projection Identity, Shaping Boundary, Final Graph, module/invariant/dependency/scenario maps, and Shape Completion.
+- AC-1: exact dependency gate is #1980, #1983, #1984, #1981, and #2055 through #2059; all nine are archived completed. The five child packets carry the audited digest/node/packet identities and dependency order.
+- AC-2: descendants stayed within native acceptance rejection, corrective MCP reachability, the read-only acceptor workflow, and maintained PROOF-007 integration. No new finding taxonomy, delivery outcome, Cockpit behavior, setup, or seed work entered the graph.
+- AC-3: all five leaves have timestamped independent verification-stage notes, exact verifier commits, per-AC evidence, challenger passes, `Required Follow-up: None`, and completed collector archives. #2058 and #2059 use the heading `Verifier Notes`; their placement, role, contents, exact-commit evidence, and subsequent archival are accepted here as unambiguous semantic equivalents of canonical `Verify Notes`, closing challenge key `AC-3/descendant-verify-notes`.
+- Aggregate normal-path proof ran at descendant SHA `cb7ca9cebe557586bf77f425ac981eb63de67c6d`: the assembled public acceptance plus native invalidation/runtime/dispatch/checkout command passed 105 tests, covering success, rejection, minimum correction, hard independence, failure atomicity, replay, dependent reconciliation, and cleanup.
+- No pending residual decision or required follow-up remains. Final aggregate rechallenge passed with no failure keys.
+
+### Required Follow-up
+None.
