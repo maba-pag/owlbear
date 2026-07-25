@@ -1,10 +1,10 @@
 ---
 id: 2056
 title: 'P9-02: Expose acceptance rejection and findings through MCP'
-status: build
+status: verify
 priority: high
 created: 2026-07-25T17:19:35.872293+02:00
-updated: 2026-07-25T17:19:35.872293+02:00
+updated: 2026-07-25T17:58:23.439845+02:00
 tags:
   - phase-9
   - scope:mcp-kanban
@@ -54,3 +54,17 @@ Expose strict public rejection and finding operations so read-only acceptors can
 In: `reject_accept`, `list_findings`, `show_finding`, schemas, annotations, errors, registry, and assembled MCP proof.
 
 Out: new core semantics, acceptor role, Cockpit, request resolution, compatibility aliases, setup, and seed work.
+
+[[2026-07-25T17:58:23+02:00]]
+## Builder Notes
+- Adopted the interrupted same-task MCP edits and completed the shaped transport-only envelope in `serve/mcp-kanban/src/owlbear_mcp_kanban/models.py` and `server.py`.
+- Added public `reject_accept`, `list_findings`, and `show_finding` operations with live registry exports, mutation/read annotations, strict current job identity fields, typed `Finding` and nested corrective invalidation schemas, JSON sequence adaptation, stable stale-cursor and missing-finding codes, and typed forwarding to `DispatchRuntime.reject_accept`.
+- Updated the authoritative 25-tool deployment contract and added one durable assembled MCP proof. The proof uses copied temporary admitted authority, temporary work stores, the current repository as Git history, and a real `ProofCheckoutManager`; it exercises public plan/build/start/reject/query operations, exact request forwarding, supersession, minimum corrective work, failed attempt, reader release, cleanup, replay, bounded canonical finding pages, stable read errors, and byte-for-byte failure atomicity.
+- AC-1: live registry/annotations and nested generated schema are asserted in `test_mcp_surface_contract.py`; removed task tools and aliases remain absent.
+- AC-2: assembled forwarding spy plus valid and invalid public calls prove typed result/diagnostic behavior and no partial failed publication.
+- AC-3: public two-page query proves stable finding order/cursors; stale and missing identities return stable JSON `ToolError` codes without mutation.
+- AC-4: real accept proof checkout is created by the engine and removed only after the complete corrective transaction; replay is exact and failure preserves checkout and stores.
+- Validation: full owning package `uv run pytest serve/mcp-kanban/tests -q --tb=short` passed 83 tests. Focused post-lint public boundary run passed 14 tests. Explicit `uv run lint` over all four owned source/test files passed every applicable hook. Builder challenger decision: pass.
+
+### Required Follow-up
+None.

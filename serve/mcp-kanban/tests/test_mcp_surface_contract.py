@@ -68,13 +68,16 @@ EXPECTED_TOOLS: frozenset[str] = frozenset(
         "finish_plan",
         "list_activity",
         "list_attempts",
+        "list_findings",
         "list_changes",
         "list_jobs",
         "list_requests",
         "pick_jobs",
         "recover_expired_claims",
+        "reject_accept",
         "release_job",
         "show_change",
+        "show_finding",
         "show_job",
         "show_receipt",
         "show_request",
@@ -93,11 +96,13 @@ READ_ONLY_TOOLS: frozenset[str] = frozenset(
         "change_health",
         "list_activity",
         "list_attempts",
+        "list_findings",
         "list_changes",
         "list_jobs",
         "list_requests",
         "pick_jobs",
         "show_change",
+        "show_finding",
         "show_job",
         "show_receipt",
         "show_request",
@@ -219,7 +224,7 @@ class TestFromAC_ToolRegistryContract:
     """AC3: Live registry (post-lifespan, no exclusions) matches EXPECTED_TOOLS exactly."""
 
     @pytest.mark.asyncio
-    async def test_live_registry_contains_exactly_twenty_two_tools(
+    async def test_live_registry_contains_exactly_twenty_five_tools(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
@@ -483,6 +488,31 @@ class TestFinishAcceptSchema:
         )
         assert tool is not None, "finish_accept must be registered in the MCP tool registry"
         assert "reconciliation_plan_job_ids" in tool.parameters.get("required", [])
+
+    def test_reject_accept_exposes_strict_nested_corrective_schema(self) -> None:
+        """The public rejection schema exposes full native identities and corrective structures."""
+        tool = next(
+            (t for t in mcp._tool_manager._tools.values() if t.name == "reject_accept"),  # noqa: SLF001
+            None,
+        )
+        assert tool is not None, "reject_accept must be registered in the MCP tool registry"
+        assert set(tool.parameters["required"]) == {
+            "change_id",
+            "job_id",
+            "attempt_id",
+            "claim_id",
+            "actor_id",
+            "process_id",
+            "rejected_at",
+            "detail",
+            "evidence_ids",
+            "findings",
+            "invalidation",
+        }
+        properties = tool.parameters["properties"]
+        assert properties["findings"]["items"]["$ref"].endswith("Finding")
+        assert properties["invalidation"]["$ref"].endswith("InvalidationParams")
+        assert tool.parameters["$defs"]["InvalidationParams"]["additionalProperties"] is False
 
 
 class _History:

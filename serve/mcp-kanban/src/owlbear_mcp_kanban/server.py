@@ -23,14 +23,17 @@ from owlbear_kanban import (
     ChangeDiagnosticCode,
     ChangeRevision,
     DispatchRuntime,
+    Finding,
     FinishAcceptRequest,
     FinishJobRequest,
     FinishPlanRequest,
     GitRepositoryHistory,
+    InvalidationRequest,
     KanbanEngine,
     NativeRuntime,
     ProofCheckoutManager,
     RecoverExpiredClaimsRequest,
+    RejectAcceptRequest,
     ReleaseJobRequest,
     StartJobRequest,
     evaluate_admission,
@@ -60,12 +63,16 @@ from owlbear_mcp_kanban.models import (
     FinishAcceptParams,
     FinishJobParams,
     FinishPlanParams,
+    InvalidationParams,
     ListActivityParams,
     ListAttemptsParams,
+    ListFindingsParams,
     ListJobsParams,
     PickJobsParams,
     RecoverExpiredClaimsParams,
+    RejectAcceptParams,
     ReleaseJobParams,
+    ShowFindingParams,
     ShowJobParams,
     ShowReceiptParams,
     StartJobParams,
@@ -106,13 +113,16 @@ __all__ = [
     "list_activity",
     "list_attempts",
     "list_changes",
+    "list_findings",
     "list_jobs",
     "list_requests",
     "mcp",
     "pick_jobs",
     "recover_expired_claims",
+    "reject_accept",
     "release_job",
     "show_change",
+    "show_finding",
     "show_job",
     "show_receipt",
     "show_request",
@@ -666,6 +676,37 @@ async def finish_accept(  # noqa: PLR0913
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True, destructiveHint=False))
+async def reject_accept(  # noqa: PLR0913
+    ctx: Context,
+    *,
+    change_id: str,
+    job_id: int,
+    attempt_id: str,
+    claim_id: str,
+    actor_id: str,
+    process_id: str,
+    rejected_at: str,
+    detail: str,
+    evidence_ids: tuple[str, ...],
+    findings: tuple[Finding, ...],
+    invalidation: InvalidationParams,
+) -> object:
+    """Reject an accept job and publish its minimum corrective work."""
+    try:
+        params = RejectAcceptParams.model_validate(_tool_params(locals()))
+        app_ctx: AppContext = ctx.request_context.lifespan_context
+        return _dispatch_runtime(app_ctx, params.change_id).reject_accept(
+            RejectAcceptRequest(
+                **params.model_dump(exclude={"change_id", "findings", "invalidation"}),
+                findings=params.findings,
+                invalidation=InvalidationRequest(**params.invalidation.model_dump()),
+            )
+        )
+    except PydanticValidationError as exc:
+        _raise_param_validation(str(exc))
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True, destructiveHint=False))
 async def finish_audit(  # noqa: PLR0913
     ctx: Context,
     *,
@@ -821,6 +862,32 @@ async def list_attempts(
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, destructiveHint=False))
+async def list_findings(
+    ctx: Context,
+    *,
+    change_id: str,
+    cursor: str | None = None,
+    limit: int = 100,
+) -> object:
+    """List corrective findings with bounded pagination."""
+    try:
+        params = ListFindingsParams.model_validate(_tool_params(locals()))
+        app_ctx: AppContext = ctx.request_context.lifespan_context
+        runtime = _dispatch_runtime(app_ctx, params.change_id)
+        try:
+            return runtime._native.list_findings(  # noqa: SLF001
+                cursor=params.cursor,
+                limit=params.limit,
+            )
+        except ValueError as exc:
+            if "cursor is not current" in str(exc):
+                _raise_tool_error("ERR_CURSOR_STALE", "page cursor is not current")
+            raise
+    except PydanticValidationError as exc:
+        _raise_param_validation(str(exc))
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, destructiveHint=False))
 async def list_activity(
     ctx: Context,
     *,
@@ -868,6 +935,29 @@ async def show_receipt(
             _raise_tool_error("ERR_RECEIPT_MISSING", diagnostic.detail)
         else:
             _raise_tool_error(code, diagnostic.detail)
+    except PydanticValidationError as exc:
+        _raise_param_validation(str(exc))
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, destructiveHint=False))
+async def show_finding(
+    ctx: Context,
+    *,
+    change_id: str,
+    finding_id: str,
+) -> object:
+    """Show one immutable corrective finding by ID."""
+    try:
+        params = ShowFindingParams.model_validate(_tool_params(locals()))
+        app_ctx: AppContext = ctx.request_context.lifespan_context
+        runtime = _dispatch_runtime(app_ctx, params.change_id)
+        result = runtime._native._findings.read(params.finding_id)  # noqa: SLF001
+        if result.finding is not None:
+            return result.finding
+        diagnostic = result.diagnostics[0]
+        if diagnostic.code == "ERR_FINDING_FILE_MISSING":
+            _raise_tool_error("ERR_FINDING_MISSING", diagnostic.detail)
+        _raise_tool_error(diagnostic.code, diagnostic.detail)
     except PydanticValidationError as exc:
         _raise_param_validation(str(exc))
 
