@@ -1,10 +1,10 @@
 ---
 id: 2036
 title: 'P1-C5: Dispatch the plan frontier through engine authority'
-status: verify
+status: collect
 priority: high
 created: 2026-07-25T02:46:52.874110+02:00
-updated: 2026-07-25T08:48:25.983251+02:00
+updated: 2026-07-25T08:51:59.356119+02:00
 tags:
   - change:replace-delivery-pipeline
   - node:DN-004
@@ -133,3 +133,17 @@ Proof guidance: run dispatch topology/readiness/coordination checks and the asse
 - AC-to-evidence: AC1 and AC2 remain covered by the passing dispatch suite; AC3 is covered by the assembled native MCP scenario, observed-operation ledger, negative control, and no-repick assertion; AC4 is covered by the passing reconciliation gate; AC5 remains covered by validators and ecosystem regressions.
 - Current failure-key resolution: `#2036-AC3/disposition-causality-negative-control` resolved by identity-bound runner dispositions, observed actual lifecycle operations keyed by attempt ID, persisted terminal results, pick-boundary records, and an executable attempt-order bypass rejection.
 - Builder-challenger: pass. It independently exercised the bypass where expected ledger fields were retained but the actual observed operation differed, and confirmed that the negative control fails.
+
+[[2026-07-25T08:51:59+02:00]]
+## Verify Notes
+- Candidate and repair reviewed: base `ffd863aebf39636307fd59ddc319cff21d4aa948`; proof repair `514e8c584a2c1aac2a6d5ddc4ff598f331175ea9`; prior rejection `f6f3926dc`. Named authorities checked: task AC1-AC5, DEC-027, DEC-031, DEC-033, DN-004, MOD-003, IF-004, IF-015, and PROOF-014.
+- Latest Required Follow-up closed: `#2036-AC3/disposition-causality-negative-control`. Repair `514e8c584` strengthens only `TestProof014NativeMcpScenario` and the task record. It adds no production or agent-ecosystem drift; the accumulated changed modules remain the shaped dispatch runtime, focused runtime/MCP proofs, and required orchestrator/skill/WIRING consumers.
+- Normal-path boundary exercised: exact TestProof014 uses real `server.pick_jobs`, `server.start_job`, and wrapped native `finish_*`, `release_job`, and `recover_expired_claims` MCP operations. Only the selected profile runner is replaced below that boundary. The selected engine entry/profile is passed to the runner once; the exact returned `Success | RateLimited | Crash` object is stored by identity in the lifecycle ledger and derives the lifecycle operation. Observed wrapped MCP calls are bound by attempt ID; each attempt has one start and one matching terminal release/recovery/finish event. `selected_pick == terminal_pick` proves no repick between disposition and lifecycle operation. Unavailable `acceptor` halts before claim or mutation, demonstrated by unchanged jobs and attempts.
+- Causal negative control: `test_disposition_causality_rejects_attempt_order_bypass` deliberately provides a builder `Success` ledger with observed `finish_plan`; `_assert_disposition_causality` raises `AssertionError` on that operation mismatch, establishing failure from causality rather than fixture setup.
+- Checks run: exact positive and negative TestProof014 scenarios: `2 passed`; focused dispatch, MCP contract, and exact reconciliation gate checks: `16 passed`; `validate_agents.py`: passed; `validate_skills.py`: passed; ecosystem/write-guard checks: `58 passed` with 3 unrelated Python 3.16 deprecation warnings; scoped `ruff check` and `ruff format --check`: passed; `git show --check 514e8c584`: passed.
+- AC-to-evidence: AC1 stable planner topology/profile mapping and AC2 writer/reader coordination are covered by focused dispatch checks. AC3 is covered by the exact native-MCP positive ledger and executable attempt-order bypass. AC4 is covered by `test_build_start_reconciliation_gates_are_mutation_free`. AC5 is covered by direct allowlist/workflow/WIRING inspection plus agent and skill validators and ecosystem checks.
+- Prior same-failure-key check: `f6f3926dc` is the first and only prior verifier rejection for `#2036-AC3/disposition-causality-negative-control`; this retry repairs and proves that exact key, so no repeated repair-cycle escalation applies.
+- Memory: recalled verifier entries assessed for task `2036`.
+- Patches applied by verifier: none.
+- Verifier-challenger result: `pass`. It confirmed the repaired PROOF-014 binds returned-disposition identity, selected lifecycle operation, observed MCP operation, terminal events, and unchanged pick count; it also confirmed the executable attempt-order bypass fails and the repair remains test-only.
+- Final route: PASS to collect.
