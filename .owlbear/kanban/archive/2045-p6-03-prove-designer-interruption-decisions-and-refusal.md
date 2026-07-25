@@ -1,10 +1,10 @@
 ---
 id: 2045
 title: 'P6-03: Prove designer interruption, decisions, and refusal'
-status: collect
+status: archived
 priority: high
 created: 2026-07-25T14:29:01.440279+02:00
-updated: 2026-07-25T14:54:10.770096+02:00
+updated: 2026-07-25T14:54:38.741372+02:00
 tags:
   - phase-6
   - scope:test
@@ -43,7 +43,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Projection
@@ -90,3 +90,7 @@ Adopted the interrupted verifier-local repair in `serve/mcp-kanban/tests/test_de
 - Focused designer and public MCP boundary suite: 14 passed in 6.87 seconds.
 - Focused lint: all hooks passed; only unrelated repository TODO warnings were reported.
 - `verifier-challenger`: pass; both prior AC-2 failure keys are closed by a repository-grounded authority chain, and the one-file repair remains within scope and the durable-test rent boundary.
+
+[[2026-07-25T14:54:38+02:00]]
+## Collect Notes
+Archived this leaf after confirming its two prerequisites are archived, all four AC have direct builder and verifier evidence, the final focused public-boundary suite passes 14 tests, focused lint passes, and the verifier challenger closed both prior AC-2 findings. The durable proof remains confined to one scenario module and the admitted `DN-005-PK-003` envelope.
