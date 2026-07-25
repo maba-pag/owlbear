@@ -1,10 +1,10 @@
 ---
 id: 2033
 title: 'P1-C2: Cut over modular authority and isolated plan storage'
-status: verify
+status: shape
 priority: high
 created: 2026-07-25T02:46:34.205290+02:00
-updated: 2026-07-25T04:47:33.857701+02:00
+updated: 2026-07-25T04:51:35.430457+02:00
 tags:
   - change:replace-delivery-pipeline
   - node:DN-001
@@ -181,3 +181,43 @@ Shaper challenger first failed on four concrete contradictions; all four were co
 
 ### Follow-up Risks
 - Runtime publication and receipt currentness remain intentionally sequenced to #2034. Unrelated dirty worktree files, the package storage lock, and shape receipt were not modified or included.
+
+[[2026-07-25T04:51:35+02:00]]
+## Verify Notes
+
+### Evidence Reviewed
+- Claimed task context and repaired Shape Notes. No resolved structured requests existed.
+- Reviewed builder commit `837b76518` and its changed module list. The changed files match the repaired map: `change.py`, modular delivery and DN-001 plan records, and maintained `test_change_revision.py`; runtime and receipt owners remain excluded for #2034.
+- Read `ChangeRevision.read_node_plan`, `load_modular_change`, `load_change`, and focused tests for public loading, strict legacy rejection, logical identity, and transactional plan storage.
+
+### Named Authorities And Boundary
+- Compared implementation and admitted package against the task authority, including digest `3f6c656289911320bb5e7faf37b5e86ffa8511e729ade201a03a19913e33d990`, MIG-004, and the digest-named admission receipt.
+- Normal public boundary was exercised directly with `load_change(Path('.owlbear/changes'), 'replace-delivery-pipeline')`: it returned the required digest, found no `graph.yaml`, and returned an isolated DN-001 plan.
+- The focused transaction proof uses real `NodePlanStore.prepare` and `RuntimeTransaction`; only the permitted interruption hook is replaced below that boundary.
+
+### Checks Run
+- `uv run pytest serve/kanban/tests/test_change_revision.py -q`: 27 passed.
+- `uv run ruff check serve/kanban/src/owlbear_kanban/change.py serve/kanban/tests/test_change_revision.py`: all checks passed.
+- Production public-loader probe returned the admitted digest, `graph.yaml` absent, and a non-null DN-001 plan.
+- A first standalone probe used the wrong `load_change` argument shape and failed with `TypeError`; it was corrected and is not used as evidence.
+
+### AC-To-Evidence Map
+- AC1: corrected public probe returned the admitted digest from the modular package and isolated plan.
+- AC2: `test_load_change_rejects_legacy_graph_authority` invokes public `load_change` after adding `graph.yaml` and asserts schema-invalid targeting that file.
+- AC3: focused tests prove absent isolated plan returns `None`, stored plan is read through `ChangeRevision`, and graph serialization contains neither `execution` nor `node_plans`.
+- AC4: `test_node_plan_store_recovers_replays_and_rejects_conflicting_bytes` proves interruption recovery, matching-byte replay, and byte-preserving conflict at the real transaction boundary.
+- AC5: maintained modular helpers and logical public-loader parity are exercised by the focused suite.
+
+### Finding
+- Verification challenger returned `fail`: `delivery/nodes.yaml` still says `graph.yaml` remains the bootstrap carrier until MIG-004, while the committed public loader rejects it unconditionally.
+- Direct source review confirms the statement was migrated from the prior graph authority. `delivery/contracts.yaml` defines MIG-004 as the broader migration of runtime, receipt, profile, transaction, dispatch, MCP, agent, test, and Cockpit vocabulary; the admitted receipt also still names `graph.yaml` as authority.
+- This makes the admitted digest-bearing authority internally inconsistent with the cutover. Updating it changes admission semantics and likely the digest or receipt; that requires shaping and re-admission, not a verifier patch.
+
+### Prior Failure-Key Check
+- The earlier rejection key `scope/public-api-rename` was resolved by the current task boundary. No previous verifier rejection has this authority-consistency failure key.
+
+### Verifier-Challenger Result
+- `fail`: reconcile the admitted migration metadata and authority record with the strict modular-loader cutover before acceptance.
+
+### Final Route
+- Reshape. The focused behavior is passing, but the shaped and admitted authority premise is contradictory; Shape must decide the re-admission and migration-boundary correction before a build can be verified.
