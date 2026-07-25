@@ -1,10 +1,10 @@
 ---
 id: 2035
 title: 'P1-C4: Enforce acceptance-triggered plan reconciliation'
-status: shape
+status: build
 priority: high
 created: 2026-07-25T02:46:46.300991+02:00
-updated: 2026-07-25T06:36:56.387498+02:00
+updated: 2026-07-25T06:38:04.938108+02:00
 tags:
   - change:replace-delivery-pipeline
   - node:DN-003
@@ -232,3 +232,15 @@ Challenge reconsidered only the claimed-build invalidation branch. The approved 
 | 1 | AC3-AC5/reconciliation-scenario-proof | shape | Reconcile the current Shape Notes with the actual implementation delta before redispatch. Either preserve the approved public-runtime reconciliation scenario matrix as required work and verify the builder implements it, or materially narrow AC/proof scope with authority. Do not route a third piecemeal build cycle on stale-authority tests alone. | `serve/kanban/tests/test_native_runtime.py`, `serve/kanban/tests/test_dispatch_runtime.py`, task 2035 AC and Shape Notes | Focused pytest passed 32 tests, while source inspection and latest diff show only stale-authority native/dispatch assertions; required reconciliation finish/invalidation and fold-in scenarios are absent. |
 
 - Final route: RESHAPE to shape.
+
+[[2026-07-25T06:38:04+02:00]]
+## Shape Notes
+
+### Tier-3 Recovery
+The repeated proof failure does not justify a mandatory test-only task: #2035 owns both the reconciliation behavior and its causal public-boundary proof. Splitting tests from the owning runtime invariant would violate task decomposition and permit implementation to close without its required evidence.
+
+### Builder Recovery Gate
+Redispatch remains one task. Builder must modify `serve/kanban/tests/test_native_runtime.py` with the named AC3 gate scenario, AC5 reconciliation-finish/invalidation scenario, and three-node fold-in assertions from the prior Shape Notes. A task-record-only change, a stale-digest parameter alone, aggregate test counts, or source inspection cannot satisfy the repeated failure key. Existing production behavior may change only where an executed scenario exposes a local defect.
+
+### Route
+Task advances to `build` for one constrained recovery. Success requires a non-empty test-source diff after `50d71028`, named scenario evidence, focused lint/tests, builder challenge, and scoped commit.
