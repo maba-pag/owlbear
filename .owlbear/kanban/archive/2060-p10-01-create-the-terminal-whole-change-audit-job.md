@@ -1,10 +1,10 @@
 ---
 id: 2060
 title: 'P10-01: Create the terminal whole-change audit job'
-status: collect
+status: archived
 priority: high
 created: 2026-07-25T19:53:13.954779+02:00
-updated: 2026-07-25T20:14:44.143393+02:00
+updated: 2026-07-25T20:15:11.230189+02:00
 tags:
   - phase-10
   - scope:kanban
@@ -37,7 +37,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Projection
@@ -80,3 +80,10 @@ Verified committed builder SHA `d63fec0d601bd4f283b9ce7614393d72fc6b14bf` agains
 - AC-3: exact replay returns the persisted receipt, event, and audit job; build and audit replay retain the empty created-job default; injected transaction conflict leaves work state and receipts unchanged.
 
 Independent downstream scan confirmed `DispatchRuntime.finish_accept` and the MCP adapter transport `FinishJobResult` unchanged. `uv run pytest serve/kanban/tests/test_native_runtime.py serve/kanban/tests/test_dispatch_runtime.py -q --tb=short` passed 55 tests. Static diagnostics reported no errors. Verifier challenger passed with no findings or follow-up.
+
+[[2026-07-25T20:15:11+02:00]]
+## Collect Notes
+
+ARCHIVED
+
+Closure is complete for the terminal whole-change audit job. Builder commit `d63fec0d601bd4f283b9ce7614393d72fc6b14bf` contains the scoped runtime and durable proof; verifier commit `293cbe8d79828df75920d74803fd69fdedb89b5d` records independent verification. All AC have direct evidence, the corrected builder challenge and verifier challenge both pass, and there are no unresolved follow-ups or out-of-envelope changes.
