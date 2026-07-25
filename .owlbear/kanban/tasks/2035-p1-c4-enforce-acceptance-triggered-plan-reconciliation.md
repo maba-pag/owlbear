@@ -4,7 +4,7 @@ title: 'P1-C4: Enforce acceptance-triggered plan reconciliation'
 status: build
 priority: high
 created: 2026-07-25T02:46:46.300991+02:00
-updated: 2026-07-25T06:38:04.938108+02:00
+updated: 2026-07-25T07:03:15.338329+02:00
 tags:
   - change:replace-delivery-pipeline
   - node:DN-003
@@ -244,3 +244,28 @@ Redispatch remains one task. Builder must modify `serve/kanban/tests/test_native
 
 ### Route
 Task advances to `build` for one constrained recovery. Success requires a non-empty test-source diff after `50d71028`, named scenario evidence, focused lint/tests, builder challenge, and scoped commit.
+
+[[2026-07-25T06:46:40+02:00]]
+## Builder Notes
+- Change envelope: extend `serve/kanban/tests/test_native_runtime.py` with public-NativeRuntime, real-store reconciliation proofs; production owner unchanged unless an executed scenario exposed a local defect.
+- Files changed: `serve/kanban/tests/test_native_runtime.py` (uncommitted partial proof only).
+- Change Module Map: no deviation. `NativeRuntime.start_job`, `finish_plan`, `finish_accept`, and `release_job` are exercised through public methods; real `JobStore`, `AttemptStore`, and runtime transactions persist state.
+- Proof selected: focused named scenarios plus Ruff.
+- Durable-test justification: reconciliation gates and OCC fold-in are shared, causal lifecycle invariants that are difficult to detect manually and were explicitly required by the shaped recovery matrix.
+- Commands run: focused AC3 scenario passed; focused fold-in/OCC scenario passed; combined focused run passed 2 tests. Ruff initially found and the final edit corrected one unused loop variable, but a final Ruff re-run was not completed before routing.
+- AC-to-evidence: AC3 partial direct evidence from `test_build_start_reconciliation_gates_are_mutation_free` for stale digest, active reconciliation plan, mutation-free diagnostics, and public release positive control. AC4 partial direct evidence from `test_three_node_fold_in_occ_updates_same_plan_job_after_two_accepts` for same-plan OCC predecessor update `(4, 10)` and changed-ID conflict without mutation. AC5 has no closure evidence.
+- Current failure key resolution: `AC3-AC5/reconciliation-scenario-proof` remains open because `test_reconciliation_finish_releases_new_build_and_invalidation_closure` was not implemented. Missing required assertions are `finish_accept` to reconciliation plan finish, predecessor receipt IDs/new digest, old-build authority stale/new-build release, public `invalidate` dependent closure, disjoint node currentness, and `work_health` proof.
+- Builder-challenger: not invoked; DONE is not proposed.
+- Follow-up risk: do not advance on the two partial scenarios; implement and execute the named AC5 causal public-runtime scenario, then rerun the focused suite, Ruff, and builder-challenger.
+
+[[2026-07-25T07:03:15+02:00]]
+## Shape Notes
+- Rejection source: latest constrained builder returned `AC3-AC5/reconciliation-scenario-proof` to shape after adding AC3 active-plan/stale-digest and AC4 fold-in/OCC scenarios but leaving AC5 absent. Classification: local task repair; accepted architecture, AC1-AC5, dependencies, and ownership remain unchanged.
+- Candidate adoption: preserved the interrupted builder's AC3/AC4 test changes, added the required public-runtime AC5 scenario in `serve/kanban/tests/test_native_runtime.py`, and repaired the local `RuntimeQuery.work_health` defect the scenario exposed. These source/test changes remain uncommitted candidate work for the build-stage owner.
+- Repair Closure Map: production boundary is public `NativeRuntime.start_job`, `finish_accept`, `finish_plan`, `release_job`, `invalidate`, `list_jobs`, and `work_health`; live owners checked were `native_runtime.py`, `invalidation.py`, `runtime_query.py`, and the owning tests. Cheapest disconfirming checks are the named branch scenarios. Causal proof now covers stale digest, active plan, zero-current predecessor accept, ambiguous accepts, non-current accept after invalidation, same-plan OCC fold-in, receipt predecessor IDs/new digest, old/new build eligibility, released-claim invalidation traversal, disjoint currentness, and typed supersession health. Every failed start snapshots persistent files and attempts.
+- Local defect resolution: pending superseded jobs have no purpose receipt of their own, so health now validates their predecessor-job closure reaches a receipt listed by the typed supersession receipt, matching `InvalidationRuntime._job_closure`; missing, non-supersession, and unrelated chains remain failures.
+- Failure key resolution: `AC3-AC5/reconciliation-scenario-proof` is closed by `test_build_start_reconciliation_gates_are_mutation_free`, `test_build_start_rejects_missing_and_ambiguous_predecessor_accepts_without_mutation`, `test_three_node_fold_in_occ_updates_same_plan_job_after_two_accepts`, and `test_reconciliation_finish_releases_new_build_and_invalidation_closure`.
+- Evidence: `uv run pytest serve/kanban/tests/test_native_runtime.py serve/kanban/tests/test_runtime_query.py -q --tb=short` passed 34 tests; focused `uv run lint` passed on both touched files; editor diagnostics and diff checks are clean.
+- Shaper-challenger: initial fail correctly found missing/ambiguous/non-current AC3 branches; after those scenarios were added, rechallenge passed with authority, dependency, causal-boundary, and fidelity closure.
+- Memory assessment: all three recalled entries assessed; active-repository guidance was applied.
+- Resulting route: task advances to build for explicit candidate-diff adoption, builder challenge, scoped source/test/task commit, and normal verification.
