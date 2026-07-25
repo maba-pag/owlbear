@@ -1,10 +1,10 @@
 ---
 id: 1981
 title: 'Bootstrap DN-009: Expose the native control plane through MCP'
-status: collect
+status: archived
 priority: high
 created: 2026-07-22T01:06:55.160360+02:00
-updated: 2026-07-25T09:21:58.481601+02:00
+updated: 2026-07-25T13:57:10.336104+02:00
 tags:
   - bootstrap-projection
   - change:replace-delivery-pipeline
@@ -37,7 +37,7 @@ proof_bundle: existing+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Bootstrap Projection Identity
@@ -90,3 +90,12 @@ First challenger found and corrected an invalid proposal to add child dependenci
 Post-route executable validation corrected the aggregate gate. `pick_tasks` selected collector #1981 in the same wave as unfinished builder #2027 when the aggregate depended only on admitted predecessor #1980. This falsified the earlier challenger recommendation and contradicted `w-task-decomposition` Step 11.
 
 Added #2027-#2031 and #2040 as aggregate completion dependencies while preserving #1980 as the admitted DN-004 prerequisite. The child DAG is unchanged. Re-challenge passed: active child IDs make #1981 dependency-blocked, while archived-completed #1980 remains satisfied. The earlier note describing child dependencies as invalid is superseded by this executable picker evidence. Required negative control after commit: fresh `pick_tasks` must select #2027 and exclude #1981 until all six descendants archive.
+
+[[2026-07-25T13:57:10+02:00]]
+## Collect Notes
+ARCHIVED. DN-009 aggregate closure is complete at admitted digest `3f6c656289911320bb5e7faf37b5e86ffa8511e729ade201a03a19913e33d990`.
+
+- All six packets #2027-#2031 and #2040 are archived with `archival_reason=completed` and the approved parent/dependency graph.
+- #2027 verifier evidence proves native authority inspection; #2028 proves atomic admission; #2029 committed record proves query/history at verifier commit `b5db52e2ecc90896c2b64b92ff66686d45da1026`; #2030 committed record proves receipt/health at verifier commit `8c6ff83ff5b9714b494d359233a0a4121fe262ed`; #2031 proves native requests at `32067bc869559930d362309b1091e0a73ef9b73f`; #2040 proves assembled PROOF-011 and exact source/API removal at `1dc1a09f0ce2a3dced0b06c1d39c10180ef232f5` with verify descendant `53aee657f27c620e560154420c17a65ee08ce70b`.
+- #2029 and #2030 use historical verifier headings rather than exact `## Verify Notes`, but their immutable committed archive bodies contain explicit verifier PASS evidence, AC mappings, test counts, and challenger passes.
+- Latest integrated control-plane proof: 117 passed across allocator, admission transaction, runtime transaction, and native MCP; focused exact registry/absence/PROOF-011 contract 11 passed.
