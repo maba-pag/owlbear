@@ -1,10 +1,10 @@
 ---
 id: 2052
 title: 'P8-02: Expose the native builder and read-only build reviewer'
-status: collect
+status: archived
 priority: high
 created: 2026-07-25T16:14:20.905544+02:00
-updated: 2026-07-25T16:36:59.163118+02:00
+updated: 2026-07-25T16:37:36.014165+02:00
 tags:
   - phase-8
   - scope:agent
@@ -43,7 +43,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Projection
@@ -117,3 +117,12 @@ Independently verified builder commit `7d96d6bd1a46c86fd3f08fb44ca90007829b96d7`
 - `verifier-challenger`: `pass`; no scope drift, unresolved follow-up, or evidence gap.
 
 A first ad hoc probe incorrectly expected `w-orchestration` to duplicate the reviewer identity; labeled diagnosis showed all contract facts passed and only that Rule-of-Two premise was false. The corrected ownership-aware probe passed without code changes. Replacements: none.
+
+[[2026-07-25T16:37:36+02:00]]
+## Collect Notes
+
+Classification: leaf. #2052 has no children or aggregate intent.
+
+Latest Verify Notes record PASS at builder commit `7d96d6bd1a46c86fd3f08fb44ca90007829b96d7`, with verifier lifecycle commit `c79fc21fcae00394a7402b1392b29aa6302693d7`. Tied proof includes exact commit integrity, both ecosystem validators, 57 structural/write-guard tests, live finish/release signature comparison, declaration and hard-control assertions, WIRING/ND3 synchronization, and path-scoped pre-commit. The broad suite's only excluded failure is the unrelated pre-existing collector declaration; the modified builder's newly added native tools were verified live.
+
+No child/dependency gate applies, no pending or resolved structured request exists, and all seven ecosystem deliverables are committed and clean. No current follow-up or residual decision remains. Archive as completed.
