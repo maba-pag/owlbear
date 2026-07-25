@@ -1,10 +1,10 @@
 ---
 id: 2039
 title: Compose native dispatch completion participants
-status: verify
+status: collect
 priority: high
 created: 2026-07-25T08:00:32.540861+02:00
-updated: 2026-07-25T08:15:52.013826+02:00
+updated: 2026-07-25T08:18:29.182789+02:00
 tags:
   - change:replace-delivery-pipeline
   - node:DN-004
@@ -81,3 +81,24 @@ Complexity waiver is unnecessary: one failure domain and one direct proof mode.
 - Builder-challenger: Initial review identified only the explicitly out-of-scope #2037 downstream adapter failure. Scoped recheck: `pass`; accepted #2039 boundary complete.
 - Memory: all recalled entries assessed; one recalled stale ID could not be found by the assessment tool.
 - Follow-up risk: PROOF-014 remains blocked after this task only at #2037's known generic FinishAcceptRequest adapter boundary; no scope change made here.
+
+[[2026-07-25T08:18:29+02:00]]
+## Verify Notes
+
+- Evidence reviewed: task intent, AC1/AC2, Builder Notes, `3599b9376`, graph repair `ced14a52b`, current `DispatchRuntime._finish`, and `NativeRuntime._finish` participant-factory contract. No prior Verify Notes or prior verifier rejection exists for failure key `dispatch-finish/participant-callback`.
+- Named authorities checked: the Change Module Map matches exactly. Candidate changes only `serve/kanban/src/owlbear_kanban/dispatch.py`, `serve/kanban/tests/test_dispatch_runtime.py`, and this task record. The graph repair changes only Kanban task records. No MCP, picker, profile, reconciliation-policy, or agent-ecosystem scope leaked into the candidate.
+- Normal-path boundary exercised: `DispatchRuntime.finish_plan`, `finish_build`, and `finish_audit` call real `NativeRuntime._finish`; the corrected lambda is callable and combines coordination replacement with optional native participants. `finish_accept` still passes `_accept_participants` through this same composition path.
+- Checks run:
+  - `uv run pytest serve/kanban/tests/test_dispatch_runtime.py -q --tb=short` passed: 8 tests.
+  - Named AC proof tests passed: `test_finish_plan_build_and_audit_publish_with_coordination_release` and `test_finish_diagnostics_and_coordination_occ_conflicts_publish_nothing`.
+  - `uv run lint serve/kanban/src/owlbear_kanban/dispatch.py serve/kanban/tests/test_dispatch_runtime.py` passed.
+  - `git show --check 3599b9376` passed.
+  - Assembled TestProof014 scenario reached downstream `#2037` generic `FinishJobRequest` to `FinishAcceptRequest` assertion in `NativeRuntime._accept_participants`; the former tuple-not-callable failure is absent. This is downstream MCP request-model evidence and was not patched here.
+- AC-to-evidence:
+  - AC1: direct real-store plan, build, and audit finishes publish receipts and succeeded events while releasing writer or reader coordination holders in the completion transaction.
+  - AC2: non-owner diagnostic and induced stale coordination-token OCC conflict retain the active job, attempt state, receipt absence, and coordination holder with no partial publication.
+- Replacements used only below the dispatch boundary: test fixtures create real native runtime, job/attempt stores, coordination persistence, and runtime transaction; the only replacement is the coordination participant method needed to induce a real stale-token OCC conflict.
+- Patches applied: none; candidate implementation is contract-correct within the verifier patch budget.
+- Verifier-challenger: `pass`. It confirmed the callable composition, preserved accept participants, exact file envelope, direct AC proof, and correct routing of the known `#2037` adapter failure.
+- Memory assessment: all 20 recalled entries assessed; the initial batch had one transcribed ID not found, then the recalled identifier was assessed successfully.
+- Final route: PASS to collect.
