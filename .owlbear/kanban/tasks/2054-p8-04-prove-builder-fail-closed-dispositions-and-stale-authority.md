@@ -1,10 +1,10 @@
 ---
 id: 2054
 title: 'P8-04: Prove builder fail-closed dispositions and stale authority'
-status: verify
+status: collect
 priority: high
 created: 2026-07-25T16:14:38.333700+02:00
-updated: 2026-07-25T16:59:17.326266+02:00
+updated: 2026-07-25T17:03:11.120835+02:00
 tags:
   - phase-8
   - scope:test
@@ -71,3 +71,14 @@ Completed the fail-closed half of PROOF-006 in `serve/mcp-kanban/tests/test_buil
 - AC-4: an isolated node-plan revision makes the generated build stale; public `start_job` returns `ERR_START_AUTHORITY_STALE` with `ERR_RECEIPT_NODE_PLAN_DIGEST_STALE` before claim. Attempt history, product commit, job claim identity, and receipt bytes remain unchanged.
 
 Evidence: assembled builder module 11 passed; complete MCP-Kanban package 80 passed; focused repository lint passed; VS Code diagnostics reported no errors. Builder challenger decision: pass.
+
+[[2026-07-25T17:03:11+02:00]]
+## Verifier Notes
+
+PASS after one local verifier repair at builder commit `8bc8e044545ffbcae9cbff6e05e49c1f01a76218`.
+
+Exact committed delta review confirmed the three specification re-entry classes, deterministic actual commit failure, public unchanged-identity releases, byte-preserved prior receipts, absent build receipts, and stale-authority pre-claim diagnostic all remain within DN-007-PK-004.
+
+Initial verifier challenge found failure key `malformed-context-causality`: tests removed required reviewer fields but manually constructed `BuildBlocked`. Repaired the same test slice by adding a declaration-backed assembled context classifier. It validates the live shipped reviewer malformed-input contract, traverses authority, diff, changed paths, proof, and scoped commit requirements, returns exact `BuildBlocked` only from the actually malformed context, and returns no block for valid context. Each case now asserts that derived disposition before public release and write-denial observations.
+
+Post-repair evidence: complete builder module 11 passed; complete MCP-Kanban package 80 passed; focused lint passed; editor diagnostics reported no errors. Verifier rechallenge decision: pass and explicitly closed `malformed-context-causality`. All recalled memories were assessed.

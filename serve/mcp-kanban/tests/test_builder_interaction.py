@@ -37,6 +37,13 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 _CHANGE_ID = "replace-delivery-pipeline"
 _TARGET_NODE_ID = "DN-001"
 _CHALLENGED_SECTIONS = ("requirements", "workflows", "interfaces", "migrations", "risks", "proofs", "nodes")
+_REVIEW_CONTEXT_REQUIREMENTS = {
+    ("authority",): "review context is missing authority",
+    ("change", "diff"): "review context is missing diff",
+    ("change", "changed_paths"): "review context is missing changed paths",
+    ("proof",): "review context is missing proof",
+    ("custody", "scoped_commit"): "review context is missing commit identity",
+}
 _CONFIG_YAML = """\
 version: 10
 board:
@@ -461,6 +468,23 @@ def _assert_fail_closed_declarations(disposition: dict[str, object]) -> None:
     )
 
 
+def _classify_review_context(context: dict[str, object]) -> dict[str, object] | None:
+    declaration = (_REPO_ROOT / "share" / "agents" / "build-reviewer.agent.md").read_text(encoding="utf-8")
+    for requirement in (
+        "Require execution identity, admitted authority",
+        "complete diff, canonical changed paths, proof, commit context, custody evidence",
+        "omission or contradiction is malformed input",
+    ):
+        assert requirement in declaration
+    for path, finding in _REVIEW_CONTEXT_REQUIREMENTS.items():
+        value: object = context
+        for key in path:
+            if not isinstance(value, dict) or key not in value or not value[key]:
+                return {"kind": "BuildBlocked", "target": "review", "finding": finding}
+            value = value[key]
+    return None
+
+
 async def _release_failed_build(
     scenario: _Scenario,
     start: dict[str, object],
@@ -620,13 +644,7 @@ async def test_native_builder_releases_failed_scoped_commit_without_receipt(scen
 
 @pytest.mark.parametrize(
     ("missing_path", "finding"),
-    [
-        (("authority",), "review context is missing authority"),
-        (("change", "diff"), "review context is missing diff"),
-        (("change", "changed_paths"), "review context is missing changed paths"),
-        (("proof",), "review context is missing proof"),
-        (("custody", "scoped_commit"), "review context is missing commit identity"),
-    ],
+    list(_REVIEW_CONTEXT_REQUIREMENTS.items()),
 )
 @pytest.mark.asyncio
 async def test_native_builder_blocks_malformed_review_without_receipt(
@@ -652,7 +670,8 @@ async def test_native_builder_blocks_malformed_review_without_receipt(
     for key in missing_path[:-1]:
         owner = owner[key]
     del owner[missing_path[-1]]
-    disposition = {"kind": "BuildBlocked", "target": "review", "finding": finding}
+    disposition = _classify_review_context(context)
+    assert disposition == {"kind": "BuildBlocked", "target": "review", "finding": finding}
     assert review["findings"] == []
     _assert_reviewer_write_denied()
     await _release_failed_build(scenario, start, disposition, f"build-blocked-{'-'.join(missing_path)}")
