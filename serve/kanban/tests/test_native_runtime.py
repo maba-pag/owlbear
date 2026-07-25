@@ -10,6 +10,7 @@ import pytest
 from owlbear_kanban import (
     AttemptEvent,
     AttemptStore,
+    FinishAcceptRequest,
     FinishJobDiagnosticCode,
     FinishJobRequest,
     FinishPlanRequest,
@@ -323,7 +324,7 @@ def test_finish_build_accept_and_audit_publish_complete_outcomes(tmp_path) -> No
 
     accept_start = _request().model_copy(update={"job_id": 4, "attempt_id": "attempt-004", "claim_id": "claim-004"})
     assert runtime.start_job(accept_start).diagnostic is None
-    accept_request = FinishJobRequest(
+    accept_request = FinishAcceptRequest(
         job_id=4,
         attempt_id=accept_start.attempt_id,
         claim_id=accept_start.claim_id,
@@ -334,6 +335,7 @@ def test_finish_build_accept_and_audit_publish_complete_outcomes(tmp_path) -> No
         code_revision="a" * 40,
         evidence=finish_methods,
         evidence_ids=("accept-proof-001",),
+        reconciliation_plan_job_ids=(6, 7),
     )
     accept = runtime.finish_accept(accept_request)
     assert accept.diagnostic is None
@@ -341,7 +343,17 @@ def test_finish_build_accept_and_audit_publish_complete_outcomes(tmp_path) -> No
     assert accept.receipt.payload["predecessor_receipt_ids"] == ("build-001", "build-002")
     assert accept.event is not None
     assert accept.event.kind == "succeeded"
+    assert tuple(
+        (item.job.job_id, item.job.target_node_id, item.job.predecessor_job_ids)
+        for item in store.list()
+        if item.job.kind == "plan"
+    ) == ((6, "DN-002", (4,)), (7, "DN-003", (4,)))
     assert runtime.finish_accept(accept_request).receipt == accept.receipt
+    changed_reconciliation_replay = runtime.finish_accept(
+        accept_request.model_copy(update={"reconciliation_plan_job_ids": (8, 9)})
+    )
+    assert changed_reconciliation_replay.diagnostic is not None
+    assert changed_reconciliation_replay.diagnostic.code is FinishJobDiagnosticCode.IDENTITY_CONFLICT
 
     target = runtime._revision.graph.nodes[0]  # noqa: SLF001 - arrange a same-authority audit job.
     audit_job = _record(

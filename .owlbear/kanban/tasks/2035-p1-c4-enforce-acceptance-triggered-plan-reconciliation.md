@@ -1,10 +1,10 @@
 ---
 id: 2035
 title: 'P1-C4: Enforce acceptance-triggered plan reconciliation'
-status: build
+status: verify
 priority: high
 created: 2026-07-25T02:46:46.300991+02:00
-updated: 2026-07-25T06:05:36.513367+02:00
+updated: 2026-07-25T06:12:52.662404+02:00
 tags:
   - change:replace-delivery-pipeline
   - node:DN-003
@@ -114,3 +114,16 @@ Connected local repair with stale DN-006 projection #1983. Builder failure key `
 
 ### Challenge And Route
 Challenges caught and corrected non-supersession disposition misuse, missing fold-in proof, IF-009 overreach, stale archive discovery, DN-006 dependency direction, and an unsupported accept-start gate. Final connected challenge passed. Task advances to `build`; #1983 remains dependency-blocked in `shape` as the downstream planner consumer.
+
+[[2026-07-25T06:12:52+02:00]]
+## Builder Notes
+- Change envelope: native acceptance completion, reconciliation plan-job creation or OCC update, build start currentness gates, dispatch forwarding, and the nearest lifecycle test.
+- Files changed: `serve/kanban/src/owlbear_kanban/native_runtime.py`; `serve/kanban/src/owlbear_kanban/dispatch.py`; `serve/kanban/src/owlbear_kanban/__init__.py`; `serve/kanban/tests/test_native_runtime.py`.
+- Change Module Map: no deviation. `native_runtime.py` remains the transition owner; `dispatch.py` preserves writer-coordination participation.
+- Implementation: `FinishAcceptRequest` supplies ordered direct-dependent plan IDs. Acceptance atomically creates or OCC-updates unclaimed plan markers with current predecessor accept edges, and build starts reject active reconciliation or absent or ambiguous current predecessor acceptance.
+- Durable-test justification: the existing end-to-end native lifecycle scenario is extended because reconciliation ordering, atomic replay identity, and predecessor edges are shared runtime behavior and difficult to validate manually.
+- Commands run: `uv run pytest serve/kanban/tests/test_native_runtime.py` (25 passed); `uv run ruff check serve/kanban/src/owlbear_kanban/native_runtime.py serve/kanban/src/owlbear_kanban/dispatch.py serve/kanban/src/owlbear_kanban/__init__.py serve/kanban/tests/test_native_runtime.py` (passed).
+- AC evidence: AC1 remains covered by initial-plan lifecycle behavior; AC2 by the existing atomic finish-plan replay scenario; AC3 by the new native build-start gates; AC4 by lifecycle assertions for `DN-002` and `DN-003` order, accept-job edges, and changed-ID replay conflict; AC5 by reconciliation plan edges feeding existing finish-plan predecessor receipt/currentness logic.
+- Current failure-key resolutions: none.
+- Builder-challenger: pass after independent focused test and lint checks.
+- Follow-up risk: MCP transport remains outside this task scope and must construct `FinishAcceptRequest` when that interface is wired.

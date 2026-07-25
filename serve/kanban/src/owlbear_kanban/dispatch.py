@@ -26,11 +26,14 @@ from typing import TYPE_CHECKING, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from owlbear_kanban.engine import KanbanEngine
     from owlbear_kanban.models import Task
     from owlbear_kanban.native_runtime import (
         FailJobRequest,
         FailJobResult,
+        FinishAcceptRequest,
         FinishJobRequest,
         FinishJobResult,
         FinishPlanRequest,
@@ -404,11 +407,11 @@ class DispatchRuntime:
         """Finish build work and release its writer coordination holder."""
         return self._finish(request, "build")
 
-    def finish_accept(self, request: FinishJobRequest) -> FinishJobResult | DispatchDiagnostic:
+    def finish_accept(self, request: FinishAcceptRequest) -> FinishJobResult | DispatchDiagnostic:
         """Clean the proof checkout and finish acceptance work."""
         if not self._cleanup_proof_checkout(request.job_id):
             return self._proof_cleanup_diagnostic(request.job_id)
-        return self._finish(request, "accept")
+        return self._finish(request, "accept", self._native._accept_participants)  # noqa: SLF001
 
     def finish_audit(self, request: FinishJobRequest) -> FinishJobResult | DispatchDiagnostic:
         """Clean the proof checkout and finish audit work."""
@@ -476,6 +479,9 @@ class DispatchRuntime:
         self,
         request: FinishJobRequest,
         kind: _WriterKind | _ReaderKind,
+        participant_factory: (
+            Callable[[StoredJob, FinishJobRequest], tuple[ReplacementTransactionParticipant, ...]] | None
+        ) = None,
     ) -> FinishJobResult | DispatchDiagnostic:
         coordination, token = self._coordination.read()
         stale = self._stale_diagnostic(coordination)
@@ -486,7 +492,13 @@ class DispatchRuntime:
         if holder is not None and self._matches(holder, request):
             replacement = self._without_holder(coordination, holder)
             participants = (self._coordination.replacement_participant(replacement, token),)
-        return self._native._finish(request, kind, participants)  # noqa: SLF001
+        if participant_factory is None:
+            return self._native._finish(request, kind, participants)  # noqa: SLF001
+        return self._native._finish(  # noqa: SLF001
+            request,
+            kind,
+            lambda stored, finish_request: (*participants, *participant_factory(stored, finish_request)),
+        )
 
     def _stale_diagnostic(self, coordination: WriterCoordination) -> DispatchDiagnostic | None:
         for holder in self._holders(coordination):

@@ -246,6 +246,12 @@ class FinishPlanRequest(FinishJobRequest):
     accept_job_id: int
 
 
+class FinishAcceptRequest(FinishJobRequest):
+    """Extend acceptance completion with dependent reconciliation-plan identities."""
+
+    reconciliation_plan_job_ids: tuple[int, ...]
+
+
 class FinishJobDiagnostic(BaseModel):
     """Describe why a native job could not be completed."""
 
@@ -517,9 +523,9 @@ class NativeRuntime:
             self._query.reset()
         return result
 
-    def finish_accept(self, request: FinishJobRequest) -> FinishJobResult:
+    def finish_accept(self, request: FinishAcceptRequest) -> FinishJobResult:
         """Complete acceptance work and publish its immutable receipt."""
-        result = self._finish(request, "accept")
+        result = self._finish(request, "accept", self._accept_participants)
         if result.diagnostic is None:
             self._query.reset()
         return result
@@ -700,6 +706,10 @@ class NativeRuntime:
         return None
 
     def _predecessor_check(self, stored: StoredJob, request: StartJobRequest) -> StartJobResult | None:
+        if stored.job.kind == "build":
+            reconciliation = self._reconciliation_predecessors(stored.job.target_node_id, request.candidate_revision)
+            if isinstance(reconciliation, StartJobResult):
+                return reconciliation
         for predecessor_id in stored.job.predecessor_job_ids:
             try:
                 predecessor = self._read_job(predecessor_id).job
@@ -745,11 +755,13 @@ class NativeRuntime:
             diagnostic=FinishJobDiagnostic(code=code, detail=detail, lower_code=lower_code, target=target)
         )
 
-    def _finish(  # noqa: C901, PLR0911, PLR0912
+    def _finish(  # noqa: C901, PLR0911, PLR0912, PLR0915
         self,
         request: FinishJobRequest,
         kind: str,
-        extra_participants: tuple[ReplacementTransactionParticipant, ...] = (),
+        participant_factory: (
+            Callable[[StoredJob, FinishJobRequest], tuple[ReplacementTransactionParticipant, ...]] | None
+        ) = None,
     ) -> FinishJobResult:
         RuntimeTransaction.recover_all(
             self._work_root,
@@ -801,6 +813,11 @@ class NativeRuntime:
             if isinstance(prepared_closure, FinishJobResult):
                 return prepared_closure
             closure = prepared_closure
+        if participant_factory is not None:
+            try:
+                participants.extend(participant_factory(stored, request))
+            except ValueError as exc:
+                return self._finish_diagnostic(FinishJobDiagnosticCode.IDENTITY_CONFLICT, str(exc))
 
         node_plan_digest = compute_node_plan_digest(
             revision,
@@ -865,7 +882,6 @@ class NativeRuntime:
                 receipt_participant,
                 self._attempts.create_participant(event),
                 self._jobs.archive_participant(archived, stored.token),
-                *extra_participants,
             )
         )
         RuntimeTransaction(
@@ -938,6 +954,17 @@ class NativeRuntime:
                 and build_job_ids == request.build_job_ids
                 and accept_job_ids == (request.accept_job_id,)
             )
+        if isinstance(request, FinishAcceptRequest):
+            dependents = self._dependent_nodes(stored.job.target_node_id)
+            reconciliation_jobs = tuple(
+                item.job
+                for dependent in dependents
+                for item in self._jobs.list()
+                if item.job.kind == "plan" and item.job.target_node_id == dependent.id
+            )
+            shape_identity_matches = (
+                tuple(job.job_id for job in reconciliation_jobs) == request.reconciliation_plan_job_ids
+            )
         if (
             stored.job.kind == kind
             and stored.job.receipt_id == request.receipt_id
@@ -1008,6 +1035,125 @@ class NativeRuntime:
                 )
             receipt_ids.append(predecessor.receipt_id)
         return tuple(receipt_ids)
+
+    def _dependent_nodes(self, node_id: str) -> tuple[object, ...]:
+        return tuple(node for node in self._revision.graph.nodes if node_id in node.dependencies)
+
+    def _accept_participants(
+        self, stored: StoredJob, request: FinishJobRequest
+    ) -> tuple[ReplacementTransactionParticipant, ...]:
+        assert isinstance(request, FinishAcceptRequest)
+        dependents = self._dependent_nodes(stored.job.target_node_id)
+        if len(request.reconciliation_plan_job_ids) != len(dependents):
+            msg = "dependent reconciliation identities do not correspond"
+            raise ValueError(msg)
+        if len(set(request.reconciliation_plan_job_ids)) != len(dependents) or any(
+            job_id <= 0 or job_id == stored.job.job_id for job_id in request.reconciliation_plan_job_ids
+        ):
+            msg = "dependent reconciliation identities are invalid"
+            raise ValueError(msg)
+        participants: list[ReplacementTransactionParticipant] = []
+        for dependent, job_id in zip(dependents, request.reconciliation_plan_job_ids, strict=True):
+            predecessors = self._reconciliation_job_ids(dependent, stored.job, request.code_revision)
+            active = tuple(
+                item
+                for item in self._jobs.list()
+                if item.job.kind == "plan" and item.job.target_node_id == dependent.id
+            )
+            if len(active) > 1:
+                msg = "dependent has multiple active plan jobs"
+                raise ValueError(msg)
+            if active:
+                existing = active[0]
+                if (
+                    existing.job.job_id != job_id
+                    or existing.job.claim_id is not None
+                    or existing.job.attempt_id is not None
+                ):
+                    msg = "dependent reconciliation identity conflicts"
+                    raise ValueError(msg)
+                replacement = existing.job.model_copy(
+                    update={"predecessor_job_ids": predecessors, "updated_at": request.finished_at}
+                )
+                participants.append(self._jobs.replacement_participant(replacement, existing.token))
+                continue
+            try:
+                self._read_job(job_id)
+            except FileNotFoundError:
+                participants.append(
+                    self._jobs.create_participant(
+                        JobRecord(
+                            schema_version=1,
+                            job_id=job_id,
+                            kind="plan",
+                            priority=stored.job.priority,
+                            created_at=request.finished_at,
+                            updated_at=request.finished_at,
+                            change_id=stored.job.change_id,
+                            delivery_digest=stored.job.delivery_digest,
+                            target_node_id=dependent.id,
+                            predecessor_job_ids=predecessors,
+                        )
+                    )
+                )
+            else:
+                msg = "dependent reconciliation identity conflicts"
+                raise ValueError(msg)
+        return tuple(participants)
+
+    def _reconciliation_job_ids(self, dependent: object, accepted: JobRecord, code_revision: str) -> tuple[int, ...]:
+        predecessor_ids: list[int] = []
+        for predecessor_node_id in dependent.dependencies:
+            if predecessor_node_id == accepted.target_node_id:
+                predecessor_ids.append(accepted.job_id)
+                continue
+            current = self._current_accept_job(predecessor_node_id, code_revision)
+            if current is not None:
+                predecessor_ids.append(current.job_id)
+        return tuple(predecessor_ids)
+
+    def _reconciliation_predecessors(self, node_id: str, code_revision: str) -> StartJobResult | None:
+        active_plan = next(
+            (item.job for item in self._jobs.list() if item.job.kind == "plan" and item.job.target_node_id == node_id),
+            None,
+        )
+        if active_plan is not None:
+            return self._diagnostic(
+                StartJobDiagnosticCode.PREDECESSOR_INVALID,
+                "node has active reconciliation plan work",
+                target=str(active_plan.job_id),
+            )
+        node = self._revision.resolve(node_id)
+        for predecessor_node_id in node.dependencies:
+            try:
+                current = self._current_accept_job(predecessor_node_id, code_revision)
+            except ValueError:
+                return self._diagnostic(
+                    StartJobDiagnosticCode.PREDECESSOR_INVALID,
+                    "predecessor acceptance is ambiguous",
+                    target=predecessor_node_id,
+                )
+            if current is None:
+                return self._diagnostic(
+                    StartJobDiagnosticCode.PREDECESSOR_INVALID,
+                    "predecessor acceptance is unavailable",
+                    target=predecessor_node_id,
+                )
+        return None
+
+    def _current_accept_job(self, node_id: str, code_revision: str) -> JobRecord | None:
+        current = tuple(
+            item.job
+            for item in self._jobs.list(archived=True)
+            if item.job.kind == "accept"
+            and item.job.target_node_id == node_id
+            and item.job.receipt_id is not None
+            and self._receipts.evaluate_currentness(item.job.receipt_id, self._history, code_revision).current
+        )
+        if len(current) > 1:
+            msg = "predecessor acceptance is ambiguous"
+            raise ValueError(msg)
+        return current[0] if current else None
 
     def _prepare_plan(
         self,
