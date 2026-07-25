@@ -340,11 +340,69 @@ class NativeHalt:
     agent_profile: str
 
 
+@dataclass
+class LifecycleLedgerEntry:
+    """Records one runner disposition and its matching native lifecycle operation."""
+
+    agent_profile: str
+    disposition: Success | RateLimited | Crash
+    operation: str
+    attempt_id: str
+    selected_pick: int
+    terminal_pick: int
+    terminal_kind: str | None = None
+
+
+def _lifecycle_operation(agent_profile: str, disposition: Success | RateLimited | Crash) -> str:
+    """Return the sole lifecycle operation selected by a runner disposition."""
+
+    match disposition:
+        case Success():
+            return {
+                "planner": "finish_plan",
+                "builder": "finish_build",
+                "acceptor": "finish_accept",
+                "auditor": "finish_audit",
+            }[agent_profile]
+        case RateLimited():
+            return "release_job"
+        case Crash():
+            return "recover_expired_claims"
+
+
+def _terminal_kind(disposition: Success | RateLimited | Crash) -> str:
+    """Return the terminal attempt event expected from a runner disposition."""
+
+    match disposition:
+        case Success():
+            return "succeeded"
+        case RateLimited():
+            return "released"
+        case Crash():
+            return "crashed"
+
+
+def _assert_disposition_causality(
+    ledger: list[LifecycleLedgerEntry],
+    runner_dispositions: list[Success | RateLimited | Crash],
+    observed_operations: dict[str, str],
+) -> None:
+    """Prove runner results, native operations, and attempt terminals remain causally bound."""
+
+    assert len(ledger) == len(runner_dispositions)
+    for entry, disposition in zip(ledger, runner_dispositions, strict=True):
+        assert entry.disposition is disposition
+        assert entry.operation == _lifecycle_operation(entry.agent_profile, disposition)
+        assert observed_operations[entry.attempt_id] == entry.operation
+        assert entry.terminal_kind == _terminal_kind(disposition)
+        assert entry.selected_pick == entry.terminal_pick
+
+
 class TestProof014NativeMcpScenario:
     """The bootstrap native loop dispatches profiles through the installed MCP bridge."""
 
     @pytest.mark.asyncio
-    async def test_profiles_release_recovery_and_replanning_use_native_tools(  # noqa: PLR0915
+    async def test_profiles_release_recovery_and_replanning_use_native_tools(  # noqa: C901, PLR0915
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
@@ -385,7 +443,20 @@ class TestProof014NativeMcpScenario:
         runtime = DispatchRuntime(NativeRuntime(revision, work_root, _History(), timedelta(minutes=1)), work_root)
         ctx = _native_ctx(tmp_path)
         monkeypatch.setattr(server, "_dispatch_runtime", lambda _app_ctx, _change_id: runtime)
+        observed_tools = {
+            "finish_plan": AsyncMock(wraps=server.finish_plan),
+            "finish_build": AsyncMock(wraps=server.finish_build),
+            "finish_accept": AsyncMock(wraps=server.finish_accept),
+            "finish_audit": AsyncMock(wraps=server.finish_audit),
+            "release_job": AsyncMock(wraps=server.release_job),
+            "recover_expired_claims": AsyncMock(wraps=server.recover_expired_claims),
+        }
+        for operation, tool in observed_tools.items():
+            monkeypatch.setattr(server, operation, tool)
         dispatches: list[tuple[str, int]] = []
+        lifecycle_ledger: list[LifecycleLedgerEntry] = []
+        runner_dispositions: list[Success | RateLimited | Crash] = []
+        pick_count = 0
         runner = AsyncMock(
             side_effect=[
                 Success("plan-001"),
@@ -404,13 +475,14 @@ class TestProof014NativeMcpScenario:
         installed_profiles = {"planner", "builder", "acceptor", "auditor"}
 
         async def dispatch_one(attempt: int, claimed_at: str, finished_at: str) -> int | NativeHalt:
-            nonlocal node_plan_digest
+            nonlocal node_plan_digest, pick_count
             plan = await server.pick_jobs(
                 ctx,
                 change_id=revision.change_id,
                 candidate_revision="a" * 40,
                 wave_size=2,
             )
+            pick_count += 1
             entry = plan.waves[0][0]
             dispatches.append((entry.agent_profile, entry.job_id))
             if entry.agent_profile not in installed_profiles:
@@ -419,68 +491,76 @@ class TestProof014NativeMcpScenario:
             start = await server.start_job(ctx, **started)
             assert start.diagnostic is None
             outcome = await runner(entry.agent_profile, entry.job_id, start)
-            match outcome:
-                case Success(receipt_id):
+            runner_dispositions.append(outcome)
+            operation = _lifecycle_operation(entry.agent_profile, outcome)
+            terminal_pick = pick_count
+            match operation:
+                case "finish_plan":
                     finish = _finish_kwargs(started)
-                    if entry.agent_profile == "planner":
-                        result = await server.finish_plan(
-                            ctx,
-                            **finish,
-                            finished_at=finished_at,
-                            receipt_id=receipt_id,
-                            code_revision="a" * 40,
-                            evidence={"methods": list(proof.method)},
-                            node_plan={
-                                "packets": [
-                                    {"id": f"{target.id}-PK-001", "dependencies": [], "impact_closure": closure},
-                                    {
-                                        "id": f"{target.id}-PK-002",
-                                        "dependencies": [f"{target.id}-PK-001"],
-                                        "impact_closure": closure,
-                                    },
-                                ]
-                            },
-                            build_job_ids=(2, 3),
-                            accept_job_id=4,
-                        )
-                        assert result.receipt is not None
-                        node_plan_digest = result.receipt.payload["node_plan_digest"]
-                    elif entry.agent_profile == "builder":
-                        result = await server.finish_build(
-                            ctx,
-                            **finish,
-                            finished_at=finished_at,
-                            receipt_id=receipt_id,
-                            code_revision="a" * 40,
-                            evidence={"methods": list(proof.method)},
-                            impact_closure=closure,
-                        )
-                    elif entry.agent_profile == "acceptor":
-                        result = await server.finish_accept(
-                            ctx,
-                            **finish,
-                            finished_at=finished_at,
-                            receipt_id=receipt_id,
-                            code_revision="a" * 40,
-                            evidence={"methods": list(proof.method)},
-                            reconciliation_plan_job_ids=(5, 6),
-                        )
-                    else:
-                        result = await server.finish_audit(
-                            ctx,
-                            **finish,
-                            finished_at=finished_at,
-                            receipt_id=receipt_id,
-                            code_revision="a" * 40,
-                            evidence={"methods": list(proof.method)},
-                        )
-                    assert result.diagnostic is None
-                case RateLimited():
+                    assert isinstance(outcome, Success)
+                    result = await server.finish_plan(
+                        ctx,
+                        **finish,
+                        finished_at=finished_at,
+                        receipt_id=outcome.receipt_id,
+                        code_revision="a" * 40,
+                        evidence={"methods": list(proof.method)},
+                        node_plan={
+                            "packets": [
+                                {"id": f"{target.id}-PK-001", "dependencies": [], "impact_closure": closure},
+                                {
+                                    "id": f"{target.id}-PK-002",
+                                    "dependencies": [f"{target.id}-PK-001"],
+                                    "impact_closure": closure,
+                                },
+                            ]
+                        },
+                        build_job_ids=(2, 3),
+                        accept_job_id=4,
+                    )
+                    assert result.receipt is not None
+                    node_plan_digest = result.receipt.payload["node_plan_digest"]
+                case "finish_build":
+                    finish = _finish_kwargs(started)
+                    assert isinstance(outcome, Success)
+                    result = await server.finish_build(
+                        ctx,
+                        **finish,
+                        finished_at=finished_at,
+                        receipt_id=outcome.receipt_id,
+                        code_revision="a" * 40,
+                        evidence={"methods": list(proof.method)},
+                        impact_closure=closure,
+                    )
+                case "finish_accept":
+                    finish = _finish_kwargs(started)
+                    assert isinstance(outcome, Success)
+                    result = await server.finish_accept(
+                        ctx,
+                        **finish,
+                        finished_at=finished_at,
+                        receipt_id=outcome.receipt_id,
+                        code_revision="a" * 40,
+                        evidence={"methods": list(proof.method)},
+                        reconciliation_plan_job_ids=(5, 6),
+                    )
+                case "finish_audit":
+                    finish = _finish_kwargs(started)
+                    assert isinstance(outcome, Success)
+                    result = await server.finish_audit(
+                        ctx,
+                        **finish,
+                        finished_at=finished_at,
+                        receipt_id=outcome.receipt_id,
+                        code_revision="a" * 40,
+                        evidence={"methods": list(proof.method)},
+                    )
+                case "release_job":
                     result = await server.release_job(ctx, **_release_kwargs(started), released_at=finished_at)
                     assert result.diagnostic is None
                     assert result.event is not None
                     assert result.event.kind == "released"
-                case Crash():
+                case "recover_expired_claims":
                     result = await server.recover_expired_claims(
                         ctx,
                         change_id=revision.change_id,
@@ -490,6 +570,23 @@ class TestProof014NativeMcpScenario:
                     )
                     assert len(result.recovered) == 1
                     assert result.recovered[0].event.kind == "crashed"
+                case unexpected:
+                    pytest.fail(f"unexpected lifecycle operation: {unexpected}")
+            if operation == "recover_expired_claims":
+                assert result.diagnostics == ()
+            else:
+                assert result.diagnostic is None
+            assert start.event is not None
+            lifecycle_ledger.append(
+                LifecycleLedgerEntry(
+                    agent_profile=entry.agent_profile,
+                    disposition=outcome,
+                    operation=operation,
+                    attempt_id=start.event.attempt_id,
+                    selected_pick=terminal_pick,
+                    terminal_pick=pick_count,
+                )
+            )
             return entry.job_id
 
         assert await dispatch_one(1, "2026-07-24T00:01:00Z", "2026-07-24T00:02:00Z") == 1
@@ -558,3 +655,40 @@ class TestProof014NativeMcpScenario:
             "attempt-006": "crashed",
             "attempt-007": "succeeded",
         }
+        for entry in lifecycle_ledger:
+            entry.terminal_kind = attempt_events[entry.attempt_id][1].kind
+        observed_operations = {
+            str(call.kwargs["attempt_id"]): operation
+            for operation, tool in observed_tools.items()
+            if operation != "recover_expired_claims"
+            for call in tool.await_args_list
+        }
+        recovery_entries = [entry for entry in lifecycle_ledger if entry.operation == "recover_expired_claims"]
+        recovery_tool = observed_tools["recover_expired_claims"]
+        assert recovery_tool.await_count == len(recovery_entries)
+        for entry in recovery_entries:
+            observed_operations[entry.attempt_id] = "recover_expired_claims"
+        _assert_disposition_causality(lifecycle_ledger, runner_dispositions, observed_operations)
+
+    def test_disposition_causality_rejects_attempt_order_bypass(self) -> None:
+        """A lifecycle operation chosen without the runner result is not accepted as causal proof."""
+
+        disposition = Success("receipt-from-runner")
+        bypassed_ledger = [
+            LifecycleLedgerEntry(
+                agent_profile="builder",
+                disposition=disposition,
+                operation="finish_build",
+                attempt_id="attempt-bypass",
+                selected_pick=1,
+                terminal_pick=1,
+                terminal_kind="succeeded",
+            )
+        ]
+
+        with pytest.raises(AssertionError):
+            _assert_disposition_causality(
+                bypassed_ledger,
+                [disposition],
+                {"attempt-bypass": "finish_plan"},
+            )

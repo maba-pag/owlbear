@@ -1,10 +1,10 @@
 ---
 id: 2036
 title: 'P1-C5: Dispatch the plan frontier through engine authority'
-status: build
+status: verify
 priority: high
 created: 2026-07-25T02:46:52.874110+02:00
-updated: 2026-07-25T08:40:56.297661+02:00
+updated: 2026-07-25T08:48:25.983251+02:00
 tags:
   - change:replace-delivery-pipeline
   - node:DN-004
@@ -120,3 +120,16 @@ Proof guidance: run dispatch topology/readiness/coordination checks and the asse
 3. Re-run exact TestProof014, the focused MCP and dispatch suites, AC4 gate proof, agent/skill validators plus ecosystem regressions, ruff/format, and `git show --check` before returning to verify.
 
 - Final route: REJECT to build.
+
+[[2026-07-25T08:48:25+02:00]]
+## Builder Notes
+- Change envelope: repair only `#2036-AC3/disposition-causality-negative-control` in `TestProof014NativeMcpScenario`; no production, MCP-contract, agent/skill/WIRING, or sibling-task changes.
+- Files changed: `serve/mcp-kanban/tests/test_mcp_surface_contract.py` and the final task record.
+- Change Module Map: no deviations. The existing native MCP scenario remains the proof owner; test-local ledger helpers observe rather than replace real `pick_jobs`, `start_job`, finish, release, and recovery boundaries.
+- Proof repair: each exact `Success | RateLimited | Crash` runner object determines one operation. The ledger binds runner-object identity, derived operation, actual wrapped MCP call for the same attempt ID, persisted terminal event, and unchanged pick counter from disposition selection through terminal operation. The unavailable installed-profile halt still precedes claim and mutation.
+- Negative control: a builder `Success` has a superficially valid `finish_build` and `succeeded` ledger entry but an observed `finish_plan` operation. The causal assertion fails, demonstrating that attempt-order or post-hoc routing cannot pass.
+- Durable-test justification: retained and strengthened the existing assembled public MCP scenario because its regression risk is cross-boundary orchestration causality that is difficult to observe manually; no separate test artifact was added.
+- Commands run: exact `TestProof014NativeMcpScenario` (2 passed); MCP contract suite (6 passed); dispatch runtime suite (9 passed); reconciliation gate (1 passed); agent and skill validators plus ecosystem regressions (58 passed, 3 unrelated Python 3.16 deprecation warnings); ruff check and format check; `git diff --check`; `git show --check f6f3926dc` and `git show --check ffd863aeb`.
+- AC-to-evidence: AC1 and AC2 remain covered by the passing dispatch suite; AC3 is covered by the assembled native MCP scenario, observed-operation ledger, negative control, and no-repick assertion; AC4 is covered by the passing reconciliation gate; AC5 remains covered by validators and ecosystem regressions.
+- Current failure-key resolution: `#2036-AC3/disposition-causality-negative-control` resolved by identity-bound runner dispositions, observed actual lifecycle operations keyed by attempt ID, persisted terminal results, pick-boundary records, and an executable attempt-order bypass rejection.
+- Builder-challenger: pass. It independently exercised the bypass where expected ledger fields were retained but the actual observed operation differed, and confirmed that the negative control fails.
