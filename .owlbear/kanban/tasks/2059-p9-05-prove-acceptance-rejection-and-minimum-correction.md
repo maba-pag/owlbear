@@ -1,10 +1,10 @@
 ---
 id: 2059
 title: 'P9-05: Prove acceptance rejection and minimum correction'
-status: build
+status: verify
 priority: high
 created: 2026-07-25T17:19:59.273509+02:00
-updated: 2026-07-25T17:19:59.273509+02:00
+updated: 2026-07-25T18:59:31.549549+02:00
 tags:
   - phase-9
   - scope:test
@@ -53,3 +53,15 @@ Complete PROOF-007's rejection, minimum correction, independence, failure atomic
 In: real accept jobs, shipped dispositions, public reject/release, typed findings/routes, snapshots, replay, and cleanup.
 
 Out: new semantics, auditor, Cockpit, setup, and seed work.
+
+[[2026-07-25T18:59:31+02:00]]
+## Builder Notes
+- Added the canonical PROOF-007 failure matrix to the shipped node-acceptance workflow, distinguishing finding class/kind/identity from the `plan_corrective_route` target and exact minimum result.
+- AC-1: real-accept fixtures cover local defect, missing planned harness, admitted-boundary bypass, and stale receipt. Strict `Finding`/`CorrectiveRoute` objects prove canonical class, target, evidence identity, route, design-reentry flag, and zero-or-one minimum job. The initial challenger failure `AC-1/design-reentry-flag` was repaired with direct boolean and empty-job assertions; rechallenge passed.
+- AC-2: public `reject_accept` proves failed terminal attempt, superseded accept job and affected build closure, one supersession receipt, only the planned build repair, no accept receipt, unchanged unrelated receipt, stale affected receipts, finding queries, reader/checkout cleanup, and mutation-free replay.
+- AC-3: an actual denied tracked write in the engine checkout yields the shipped `AcceptanceBlocked` shape and unchanged-identity public release. The test proves no finding, receipt, or corrective job publication plus checkout and coordination cleanup.
+- AC-4: malformed invalidation, cleanup failure, and injected rejection transaction conflict return stable diagnostics with complete snapshots and checkout manifests unchanged. Native regression scopes retain all-stage publication failure injection.
+- Validation: acceptance module 10 passed; full MCP Kanban package 91 passed; native invalidation/runtime/dispatch/checkout scopes 95 passed; focused lint and skill validation passed; diagnostics were empty; final builder challenger passed.
+
+### Required Follow-up
+None.

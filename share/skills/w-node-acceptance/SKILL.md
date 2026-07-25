@@ -69,6 +69,20 @@ Use the admitted corrective route rules to return one matching invalidation with
 identity and the minimum corrective jobs. The acceptor classifies observed evidence; the orchestrator
 must not classify findings or assemble evidence.
 
+Use this canonical PROOF-007 routing matrix. The route target is input to `plan_corrective_route`; it
+does not replace the finding's admitted target kind and identity.
+
+| Observed failure | Finding class | Finding target | Route target | Minimum result |
+| --- | --- | --- | --- | --- |
+| Planned packet behavior fails | `implementation-defect` | `packet` and packet ID | `packet-implementation` | one `build-repair` build job |
+| Required local harness is absent from the admitted node plan | `planning-omission` | `proof` and proof ID | `packet-proof-plan` | one `node-plan-revision` plan job |
+| Admitted proof permits replacement of its maintained boundary | `planning-omission` | `proof` and proof ID | `admitted-design-authority` | `design-reentry` and no runtime job |
+| A required packet receipt is stale or superseded | `implementation-defect` | `receipt` and receipt ID | `packet-dependency` | one `node-plan-revision` plan job |
+
+If the plan names a valid harness or assembled boundary but the implementation omits or substitutes it,
+classify that implementation as `packet-local-proof` and return one `build-repair` job. Do not convert
+missing or defective admitted authority into local implementation work.
+
 ## Step 4 - Return One Disposition
 
 Return exactly one object. Preserve the supplied execution identity outside the object; the

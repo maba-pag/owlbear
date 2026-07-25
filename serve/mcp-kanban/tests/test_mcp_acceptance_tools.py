@@ -23,16 +23,18 @@ from owlbear_kanban import (
     GitRepositoryHistory,
     InvalidationRequest,
     JobGeneration,
+    JobDisposition,
     JobRecord,
     JobStore,
     NativeRuntime,
     PlanJob,
     ProofCheckoutManager,
     RejectAcceptDiagnosticCode,
+    ReceiptStore,
     load_change,
     plan_corrective_route,
 )
-from owlbear_kanban.runtime_transaction import RuntimeTransaction
+from owlbear_kanban.runtime_transaction import RuntimeTransaction, TransactionConflictError
 from owlbear_mcp_kanban import server
 from owlbear_mcp_kanban.server import AppContext
 
@@ -70,6 +72,10 @@ def _frontmatter(path: Path) -> dict[str, object]:
     return metadata
 
 
+def _workflow_text() -> str:
+    return Path("share/skills/w-node-acceptance/SKILL.md").read_text(encoding="utf-8")
+
+
 def _assert_acceptor_write_denied(checkout: Path) -> None:
     hook = checkout / ".owlbear" / "hooks" / "deny-writes.py"
     payload = {
@@ -88,6 +94,50 @@ def _assert_acceptor_write_denied(checkout: Path) -> None:
     assert response["hookSpecificOutput"]["permissionDecision"] == "deny"
     with pytest.raises(PermissionError):
         (checkout / "README.md").write_text("changed\n", encoding="utf-8")
+
+
+_ACCEPTANCE_FAILURES = (
+    (
+        "local defect",
+        "implementation-defect",
+        "packet",
+        "DN-001-PK-001",
+        "packet-implementation",
+        "build-repair",
+        False,
+        ("build",),
+    ),
+    (
+        "missing harness",
+        "planning-omission",
+        "proof",
+        "PROOF-001",
+        "packet-proof-plan",
+        "node-plan-revision",
+        False,
+        ("plan",),
+    ),
+    (
+        "boundary bypass",
+        "planning-omission",
+        "proof",
+        "PROOF-001",
+        "admitted-design-authority",
+        "design-reentry",
+        True,
+        (),
+    ),
+    (
+        "stale receipt",
+        "implementation-defect",
+        "receipt",
+        "build-001",
+        "packet-dependency",
+        "node-plan-revision",
+        False,
+        ("plan",),
+    ),
+)
 
 
 def _snapshot(root: Path) -> dict[str, bytes]:
@@ -247,6 +297,46 @@ def _materialize_waiting_writer(revision, board: Path) -> JobRecord:
     return writer
 
 
+def _acceptance_failure_disposition(revision, start: dict[str, object], case: tuple[object, ...]):
+    name, finding_class, target_kind, target_id, route_target, route_kind, _design_reentry, _job_kinds = case
+    workflow = _workflow_text()
+    row = next(line for line in workflow.splitlines() if f"`{route_target}`" in line)
+    assert f"`{finding_class}`" in row
+    assert f"`{target_kind}`" in row
+    assert f"`{route_kind}`" in row
+    finding = Finding(
+        schema_version=1,
+        finding_id=f"finding-{str(name).replace(' ', '-')}",
+        source_attempt_id=str(start["attempt_id"]),
+        source_job_id=int(start["job_id"]),
+        change_id=revision.change_id,
+        delivery_digest=revision.delivery_digest,
+        target_kind=target_kind,
+        target_id=target_id,
+        finding_class=finding_class,
+        detail=f"{name} observed at exact candidate revision",
+        created_at="2026-07-25T00:06:00Z",
+    )
+    route = plan_corrective_route(
+        CorrectiveRouteRequest(
+            finding_id=finding.finding_id,
+            finding_class=finding.finding_class,
+            target=route_target,
+            target_node_ids=("DN-001",),
+        )
+    )
+    return finding, route, (f"evidence-{str(name).replace(' ', '-')}",)
+
+
+def _create_unrelated_receipt(revision) -> bytes:
+    receipts = ReceiptStore(revision)
+    source = receipts.read("build-002").receipt
+    assert source is not None
+    mapping = source.to_mapping() | {"receipt_id": "build-unrelated", "predecessor_receipt_ids": []}
+    assert receipts.create("build-unrelated", mapping).receipt is not None
+    return (revision.source_dir / "receipts/build-unrelated.yaml").read_bytes()
+
+
 async def _acceptor_evidence(revision, ctx, checkout, start: dict[str, object], commit: str) -> dict[str, object]:
     checkout_root = checkout.checkout
     agent_path = checkout_root / "share" / "agents" / "acceptor.agent.md"
@@ -356,6 +446,22 @@ def _rejection_payload(revision, start: dict[str, object], commit: str) -> dict[
     }
 
 
+@pytest.mark.parametrize("case", _ACCEPTANCE_FAILURES, ids=[str(case[0]) for case in _ACCEPTANCE_FAILURES])
+@pytest.mark.asyncio
+async def test_shipped_acceptor_routes_canonical_minimum_correction(tmp_path: Path, case: tuple[object, ...]) -> None:
+    revision, _board, _ctx, _runtime, _checkout, start, _commit = await _active_accept(tmp_path)
+
+    finding, route, evidence_ids = _acceptance_failure_disposition(revision, start, case)
+
+    assert finding.finding_class == case[1]
+    assert (finding.target_kind, finding.target_id) == (case[2], case[3])
+    assert evidence_ids == (f"evidence-{str(case[0]).replace(' ', '-')}",)
+    assert route.route == case[5]
+    assert route.design_reentry is case[6]
+    assert tuple(job.kind for job in route.jobs) == case[7]
+    assert len(route.jobs) <= 1
+
+
 @pytest.mark.asyncio
 async def test_public_accept_success_is_independent_exact_and_replay_safe(tmp_path: Path) -> None:
     revision, board, ctx, _runtime, checkout, start, commit = await _active_accept(tmp_path)
@@ -409,6 +515,9 @@ async def test_public_accept_rejection_publishes_findings_and_replays(
 ) -> None:
     revision, board, ctx, runtime, checkout, start, commit = await _active_accept(tmp_path)
     payload = _rejection_payload(revision, start, commit)
+    receipts = ReceiptStore(revision)
+    unrelated_before = _create_unrelated_receipt(revision)
+    receipts_before = {path.name: path.read_bytes() for path in (revision.source_dir / "receipts").glob("*.yaml")}
     reject = MagicMock(wraps=runtime.reject_accept)
     monkeypatch.setattr(runtime, "reject_accept", reject)
 
@@ -448,8 +557,18 @@ async def test_public_accept_rejection_publishes_findings_and_replays(
     assert forwarded.invalidation.invalidation_id == "invalidation-accept-001"
     assert rejected.event is not None
     assert rejected.event.kind == "failed"
+    assert rejected.job is not None
+    assert rejected.job.job.disposition is JobDisposition.SUPERSEDED
+    assert rejected.job.job.superseded_by_receipt_id == "supersession-accept-001"
     assert rejected.invalidation is not None
+    assert rejected.invalidation.affected_receipt_ids == ("build-001", "build-002")
+    assert rejected.invalidation.supersession_receipt.receipt_id == "supersession-accept-001"
     assert tuple(item.job.job_id for item in rejected.invalidation.corrective_jobs) == (20,)
+    assert tuple(item.job.kind for item in rejected.invalidation.corrective_jobs) == ("build",)
+    assert not (revision.source_dir / "receipts/accept-001.yaml").exists()
+    assert (revision.source_dir / "receipts/build-unrelated.yaml").read_bytes() == unrelated_before
+    for receipt_id in ("build-001", "build-002"):
+        assert not receipts.evaluate_currentness(receipt_id, GitRepositoryHistory(Path.cwd()), commit).current
     assert page_1.items == (shown,)
     assert page_2.items == (second_finding,)
     assert page_2.next_cursor is None
@@ -462,6 +581,46 @@ async def test_public_accept_rejection_publishes_findings_and_replays(
     with pytest.raises(ToolError, match="ERR_FINDING_MISSING"):
         await server.show_finding(ctx, change_id=revision.change_id, finding_id="finding-missing")
     assert _snapshot(board) == before_errors
+    assert {name: content for name, content in receipts_before.items() if name == "build-unrelated.yaml"} == {
+        "build-unrelated.yaml": unrelated_before
+    }
+
+
+@pytest.mark.asyncio
+async def test_tracked_acceptor_edit_blocks_and_releases_without_corrective_publication(tmp_path: Path) -> None:
+    revision, board, ctx, _runtime, checkout, start, _commit = await _active_accept(tmp_path)
+    receipts_before = {path.name: path.read_bytes() for path in (revision.source_dir / "receipts").glob("*.yaml")}
+    jobs_before = tuple(item.job.job_id for item in JobStore(board).list())
+    findings_before = tuple((board / "findings").glob("*.yaml")) if (board / "findings").exists() else ()
+
+    _assert_acceptor_write_denied(checkout.checkout)
+    disposition = {
+        "kind": "AcceptanceBlocked",
+        "target": "checkout",
+        "finding": "tracked acceptor edit was denied; self-authored state cannot be accepted",
+    }
+    assert "### `AcceptanceBlocked`" in _workflow_text()
+    assert tuple(disposition) == ("kind", "target", "finding")
+    released = await server.release_job(
+        ctx,
+        **_identity(start),
+        released_at="2026-07-25T00:06:00Z",
+    )
+
+    assert released.diagnostic is None
+    assert released.event is not None
+    assert released.event.kind == "released"
+    assert released.event.attempt_id == start["attempt_id"]
+    assert released.job is not None
+    assert released.job.job.claim_id is None
+    assert not checkout.root.exists()
+    assert "readers: []" in (board / "dispatch/coordination.yaml").read_text(encoding="utf-8")
+    assert tuple(item.job.job_id for item in JobStore(board).list()) == jobs_before
+    findings_after = tuple((board / "findings").glob("*.yaml")) if (board / "findings").exists() else ()
+    assert findings_after == findings_before
+    assert receipts_before == {
+        path.name: path.read_bytes() for path in (revision.source_dir / "receipts").glob("*.yaml")
+    }
 
 
 @pytest.mark.asyncio
@@ -479,3 +638,37 @@ async def test_public_accept_rejection_failure_preserves_all_stores(tmp_path: Pa
     assert rejected.diagnostic.code is RejectAcceptDiagnosticCode.INVALIDATION_INVALID
     assert _snapshot(tmp_path) == before
     assert checkout.root.exists()
+
+
+@pytest.mark.parametrize("failure", ["cleanup", "transaction"])
+@pytest.mark.asyncio
+async def test_public_accept_rejection_runtime_failure_is_atomic(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure: str,
+) -> None:
+    revision, _board, ctx, runtime, checkout, start, commit = await _active_accept(tmp_path)
+    payload = _rejection_payload(revision, start, commit)
+    before = _snapshot(tmp_path)
+    manifest_before = checkout.manifest.read_bytes()
+    if failure == "cleanup":
+        monkeypatch.setattr(runtime._proof_checkouts, "cleanup", lambda _job_id: None)  # noqa: SLF001
+        expected = RejectAcceptDiagnosticCode.CLEANUP_FAILED
+    else:
+        original_commit = RuntimeTransaction.commit
+
+        def fail_rejection(transaction: RuntimeTransaction, *, failure=None) -> None:
+            if transaction._transaction_id.startswith("reject-"):  # noqa: SLF001
+                raise TransactionConflictError
+            original_commit(transaction, failure=failure)
+
+        monkeypatch.setattr(RuntimeTransaction, "commit", fail_rejection)
+        expected = RejectAcceptDiagnosticCode.IDENTITY_CONFLICT
+
+    rejected = await server.reject_accept(ctx, **payload)
+
+    assert rejected.diagnostic is not None
+    assert rejected.diagnostic.code is expected
+    assert _snapshot(tmp_path) == before
+    assert checkout.root.exists()
+    assert checkout.manifest.read_bytes() == manifest_before
