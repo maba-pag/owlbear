@@ -4,7 +4,7 @@ title: 'Bootstrap DN-006: Plan and reconcile the delivery-node frontier'
 status: shape
 priority: high
 created: 2026-07-22T01:07:22.578615+02:00
-updated: 2026-07-25T06:05:36.544373+02:00
+updated: 2026-07-25T08:08:56.060160+02:00
 tags:
   - bootstrap-projection
   - change:replace-delivery-pipeline
@@ -18,7 +18,7 @@ depends_on:
   - 1980
   - 1982
   - 1981
-  - 2037
+  - 2036
 ac:
   - 'AC-1: Shaper, while this task is in `shape`, reads current `DN-006` at digest
     `3f6c656289911320bb5e7faf37b5e86ffa8511e729ade201a03a19913e33d990` and creates
@@ -59,7 +59,7 @@ This task is a non-authoritative bootstrap projection. Resolve current DN-006 fr
 - Delivery dependencies: `DN-003`, `DN-004`, `DN-005`, `DN-009`
 
 ## Shaping Boundary
-The planner consumes the engine-side IF-004 reconciliation handoff after corrective task #2037 completes the current plan-only dispatch/MCP chain. Shaper turns this aggregate into the bounded build-packet DAG needed to satisfy current DN-006. Any new delivery outcome, interface, migration, material risk, or proof boundary returns to global design and re-admission.
+The planner consumes the engine-side IF-004 reconciliation handoff after #2036, gated behind #2039's core-completion fix and #2037's strict MCP bridge, completes the plan-only dispatch/orchestrator chain. Shaper turns this aggregate into the bounded build-packet DAG needed to satisfy current DN-006. Any new delivery outcome, interface, migration, material risk, or proof boundary returns to global design and re-admission.
 
 Proof guidance: exercise the real resumable planner plus engine `finish_plan` transactions across initial frontier planning, independent per-node publication, acceptance-triggered reconciliation/fold-in, blocked dependent builds, and invalidation. Only repository search results may be replaced below the planner boundary.
 
@@ -67,15 +67,22 @@ Proof guidance: exercise the real resumable planner plus engine `finish_plan` tr
 ## Shape Notes
 
 ### Projection Repair
-Connected non-material repair with #2035 refreshed this stale DN-006 projection from digest `9387...`, `graph.yaml`, `shape`, and `finish_shape` to admitted digest `3f6c656289911320bb5e7faf37b5e86ffa8511e729ade201a03a19913e33d990`, modular authority, and plan/reconciliation vocabulary.
+Connected non-material repair refreshed this stale DN-006 projection from digest `9387...`, `graph.yaml`, `shape`, and `finish_shape` to admitted digest `3f6c656289911320bb5e7faf37b5e86ffa8511e729ade201a03a19913e33d990`, modular authority, and plan/reconciliation vocabulary.
 
 ### Authority And Dependencies
 - Current DN-006 produces IF-007, consumes IF-004, and owns planner publication plus full REQ-025/PROOF-005 closure.
-- Added dependency #2037 so the planner cannot shape against interim engine/dispatch/MCP contracts; #2037 transitively depends on #2035 and #2036.
+- Dependency #2036 keeps the planner from shaping against interim contracts; #2036 transitively depends on #2037 and #2039.
 - Retained current delivery-node dependencies through #1979/#1980/#1982/#1981. DN-005 and DN-009 remain unresolved, so this aggregate intentionally stays in `shape` and is not dispatchable.
 
 ### Acceptance Refresh
-AC now requires current-digest identity, real resumable frontier planning, initial and reconciliation plan jobs, per-node atomicity, fold-in after predecessor acceptance, blocked dependent builds, and invalidation under PROOF-005.
+AC requires current-digest identity, real resumable frontier planning, initial and reconciliation plan jobs, per-node atomicity, fold-in after predecessor acceptance, blocked dependent builds, and invalidation under PROOF-005.
 
 ### Challenge And Route
-Connected challenge passed after aligning IF-004 producer and DN-006 consumer ownership. Claim released with status unchanged in `shape`; resume only after current dependencies, including #2037, are complete.
+The connected graph repair preserves IF-004 producer and DN-006 consumer ownership while correcting the executable prerequisite order to `#2039 -> #2037 -> #2036 -> #1983`. Status remains `shape`; resume only after current dependencies, including #2036, are complete.
+
+[[2026-07-25T08:08:56+02:00]]
+## Shape Notes
+- Connected repair updated the live prerequisite chain to `#2039 -> #2037 -> #2036 -> #1983` after #2036's assembled proof exposed independent core-completion and strict-MCP failure domains.
+- Replaced direct dependency #2037 with #2036 so DN-006 shaping still waits for the complete core completion, MCP bridge, and engine/orchestrator chain.
+- Preserved delivery dependencies #1979/#1980/#1982/#1981, current digest authority, scope, and AC1-AC3. Task remains intentionally parked in shape.
+- Shaper-challenger passed after executable Python 3.14.6 import/compile evidence corrected an erroneous syntax concern and the assembled test reproduced #2039's exact tuple-versus-callable defect.

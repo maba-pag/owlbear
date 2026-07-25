@@ -1,10 +1,10 @@
 ---
 id: 2036
 title: 'P1-C5: Dispatch the plan frontier through engine authority'
-status: shape
+status: build
 priority: high
 created: 2026-07-25T02:46:52.874110+02:00
-updated: 2026-07-25T07:17:09.063589+02:00
+updated: 2026-07-25T08:09:07.723984+02:00
 tags:
   - change:replace-delivery-pipeline
   - node:DN-004
@@ -17,7 +17,7 @@ tags:
   - rigor:thorough
 parent: 1968
 depends_on:
-  - 2035
+  - 2037
 ac:
   - 'AC1: Given initially eligible plan jobs in unsorted storage order, `pick_jobs`
     returns stable delivery-node topological order with profile `planner`; build,
@@ -45,9 +45,9 @@ archival_refs: []
 Make the engine picker own plan/build/accept/audit topology, profiles, readiness, coordination, and one-invocation orchestration results.
 
 ## Scope
-In scope: `DispatchRuntime` kinds, profiles, readiness, topological ordering, writer/readers, orchestration agent allowlist, workflow mapping, and causal lifecycle result handling.
+In scope: `DispatchRuntime` kinds, profiles, readiness, topological ordering, writer/readers at start, orchestration agent allowlist, workflow mapping, and selected-disposition-to-lifecycle-operation routing.
 
-Out of scope: MCP adapter names, planner implementation, and the complete DN-009 API.
+Out of scope: `DispatchRuntime._finish` participant-factory and holder-release transaction composition owned by #2039, MCP adapter names, planner implementation, and the complete DN-009 API.
 
 ## Authority
 Admitted digest `3f6c656289911320bb5e7faf37b5e86ffa8511e729ade201a03a19913e33d990`; DEC-027; DEC-031; DEC-033; DN-004; MOD-003; IF-004; IF-015; PROOF-014.
@@ -58,18 +58,28 @@ Proof guidance: run dispatch topology/readiness/coordination checks and the asse
 
 [[2026-07-25T07:17:09+02:00]]
 ## Builder Notes
-
 - Change envelope: align `DispatchRuntime` plan profile, the orchestrator tool allowlist, and `w-orchestration` success dispatch with `planner` and `finish_plan`; exercise the assembled native MCP scenario as the cheapest causal proof.
 - Files probed: `serve/kanban/src/owlbear_kanban/dispatch.py`, `serve/kanban/tests/test_dispatch_runtime.py`, `serve/mcp-kanban/tests/test_mcp_surface_contract.py`, `share/agents/orchestrator.agent.md`, and `share/skills/w-orchestration/SKILL.md`.
-- Change Module Map: no explicit Engine Handoff or Change Module Map section was present in the claimed task body. The named current owners supported the planned dispatch-profile correction, but the assembled consumer exposed a prerequisite completion contract outside this task's stated scope.
-- Required follow-up: none present in the claimed task context.
-- Proof selected: `uv run pytest serve/mcp-kanban/tests/test_mcp_surface_contract.py::TestProof014NativeMcpScenario::test_profiles_release_recovery_and_replanning_use_native_tools -q`.
-- First proof failure: `DispatchRuntime.finish_plan` passed a coordination participant tuple to `NativeRuntime._finish`, whose current interface requires a participant callback. A local probe adapter correction advanced the scenario to the acceptance completion boundary.
-- Blocking proof failure: `server._finish_job` constructs `FinishJobRequest` for `finish_accept`, while `DispatchRuntime.finish_accept` delegates to `NativeRuntime._accept_participants`, which requires `FinishAcceptRequest` and its `reconciliation_plan_job_ids`. The assembled scenario fails with that assertion before the selected accept disposition can complete.
-- Planning contradiction: AC3 requires the assembled orchestrator scenario to map selected `Success`, `RateLimited`, and `Crash` dispositions to matching lifecycle operations. The task explicitly excludes MCP adapter names and directs this builder not to expand into `#2037` IF-015 MCP completion. Constructing the required acceptance request is that reserved completion work; adding a fallback or alias would invent an out-of-scope compatibility path.
-- AC-to-evidence: AC1 and AC5 identify the required `planner` and `finish_plan` consumer edits, but cannot be accepted independently because AC3's required causal scenario fails at the current MCP completion boundary. AC2 and AC4 were not separately run after the blocking AC3 failure, because they cannot close the missing accepted completion premise.
-- Commands run: the focused assembled scenario twice; `git diff --check` on all five probe paths; scoped diff name check returned no remaining probe paths.
-- Result: all probe edits were removed. No task-owned source, test, prompt, or task-record commit is appropriate on this reject.
-- Memory: recalled entries were assessed; one entry ID was no longer present when assessment was submitted.
-- Builder-challenger: not called because this is a planning-premise reject, not a DONE proposal.
-- Required shape repair: reconcile #2036 AC3 and its out-of-scope boundary with #2037. Either make IF-015 acceptance completion available before the assembled scenario is required, or narrow #2036 proof to a current executable boundary that does not claim end-to-end acceptance completion.
+- First proof failure: `DispatchRuntime.finish_plan` passed a coordination participant tuple to `NativeRuntime._finish`, whose current interface requires a participant callback.
+- Blocking proof failure after a local probe: `server._finish_job` constructed generic `FinishJobRequest` for `finish_accept`, while `DispatchRuntime.finish_accept` requires `FinishAcceptRequest.reconciliation_plan_job_ids`.
+- All probe edits were removed. The task returned to shape because its assembled proof required completion work outside the accepted task scope.
+- Required shape repair: reconcile #2036 AC3 with the core completion and strict MCP adapter prerequisites before redispatch.
+
+## Shape Notes
+- Classification: prescribed connected split and dependency repair after the builder's assembled boundary exposed two independent prerequisite failure domains.
+- #2039 exclusively owns `_finish` participant-factory and coordination-holder transaction composition. This task retains picker topology/profile/readiness/start coordination and selected-disposition routing.
+- #2037 owns strict MCP request construction and delegation. Replaced the obsolete #2035 dependency with #2037, making #2039 transitive through #2037.
+- Active chain: `#2039 -> #2037 -> #2036 -> #1983`.
+- Failure key `#2036-AC3/accept-completion-prerequisite` resolves when #2039 supplies working completion composition and #2037 supplies strict `FinishAcceptRequest` construction; the existing assembled PROOF-014 scenario remains this task's causal discriminator.
+- Shaper challenge validated the split's AC quality, current-source ownership, dependency closure, scenario closure, and boundary proof after task #2039 was materialized.
+
+[[2026-07-25T08:09:07+02:00]]
+## Shape Notes
+- Rejection source: builder's assembled PROOF-014 scenario found a core participant-callback defect followed by a strict accept-request MCP defect. Classification: prescribed connected split/dependency repair; product behavior and admitted authority are unchanged.
+- Created prerequisite #2039 for `DispatchRuntime._finish` participant-factory and holder-release transaction composition; carved that primitive out of this task's scope.
+- Replaced obsolete dependency #2035 with #2037. #2037 depends on #2039, so this task's assembled orchestration proof receives both prerequisites in order.
+- Failure key `#2036-AC3/accept-completion-prerequisite` is resolved by the live graph `#2039 -> #2037 -> #2036`; #1983 now depends on #2036 and remains parked behind the completed chain.
+- Current-source checks: Python 3.14.6 imports and compiles all named modules; the assembled TestProof014 scenario executes and fails exactly where dispatch passes a tuple as native participant callback. This disconfirmed the challenger's temporary syntax concern.
+- Shaper-challenger passed the materialized graph for readiness, authority, invariant ownership, dependency/scenario closure, boundary proof, and fidelity.
+- Memory assessment: all recalled entries assessed; active-repository guidance applied.
+- Resulting route: advance to build, dependency-gated until #2039 and #2037 archive.
