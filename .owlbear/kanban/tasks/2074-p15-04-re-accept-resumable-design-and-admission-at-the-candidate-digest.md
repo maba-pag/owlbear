@@ -1,10 +1,10 @@
 ---
 id: 2074
 title: 'P15-04: Re-accept resumable design and admission at the candidate digest'
-status: build
+status: verify
 priority: high
 created: 2026-07-26T01:59:00.156507+02:00
-updated: 2026-07-26T01:59:00.156507+02:00
+updated: 2026-07-26T03:17:48.349679+02:00
 tags:
   - phase-15
   - candidate-reacceptance
@@ -48,3 +48,9 @@ In: `/ideate` and `/design`, decision persistence, research/challenge, graph pre
 Out: frontier planning, build, Cockpit, cutover.
 
 Proof guidance: exercise the assembled workflow with durable session state and public tools; do not substitute a completed workflow fixture for the invocation boundary.
+
+[[2026-07-26T03:17:48+02:00]]
+## Builder Notes
+DONE: Re-accepted unchanged DN-005/PROOF-004 at candidate digest `bf5edd...`, tested SHA `9705b2c3c7bfc65c133f27731f65cad34bfb6d29`.
+
+Designer interaction plus admission evaluation/transaction: 30 passed. Evidence covers shipped `/ideate`/`/design`, designer/w-design-session, byte-preserving resume, one pending decision and complete tradeoffs/recommendation/confidence, unresolved/failed challenge refusal with no publication, complete public list/show/validate/admit flow, and exact replay with candidate plan jobs. Builder challenger independently reran 30 and passed. Product/proof paths stayed clean; contract lint passed. No product edit required. Memories assessed.
