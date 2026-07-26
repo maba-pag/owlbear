@@ -1,10 +1,10 @@
 ---
 id: 2084
 title: 'P15-14: Build native change and job request resolution'
-status: verify
+status: archived
 priority: high
 created: 2026-07-26T02:00:27.248344+02:00
-updated: 2026-07-26T15:54:45.665893+02:00
+updated: 2026-07-26T15:55:22.684268+02:00
 tags:
   - phase-15
   - change:replace-delivery-pipeline
@@ -33,8 +33,8 @@ ac:
 proof_bundle: critical+challenge
 blocked: false
 block_reason:
-claimed_at: 2026-07-26T15:54:45.665893+02:00
-archival_reason:
+claimed_at:
+archival_reason: completed
 archival_refs: []
 ---
 ## Projection
@@ -52,3 +52,9 @@ Proof guidance: component/browser tests use IF-011-grounded payloads and exercis
 
 [[2026-07-26T15:54:42+02:00]]
 Builder d1908d552 implemented the native Requests phase and shared Delivery resolver. Proof: Vitest 111/111 files, 1519 passed + 2 skipped; Playwright native-requests 6/6 across desktop/mobile; production TypeScript/Vite build PASS; backend native-control challenge 17/17; independent final AC-1/2/3 challenge PASS. Canonical conflicts covered: ERR_CHANGE_REVISION_CONFLICT, ERR_NATIVE_REQUEST_REFERENCE, ERR_NATIVE_REQUEST_CONFLICT. Server outcome is painted before affected-resource refresh and resolved context remains complete.
+
+[[2026-07-26T15:55:01+02:00]]
+Verifier 9b8690989 accepted AC-1/2/3 after two independent corrective challenges. Exact evidence: full Vitest 111/111 files with 1519 passed and 2 skipped; Playwright 6/6; build PASS; canonical conflict variants and paint-before-refresh observed; final independent acceptance PASS.
+
+[[2026-07-26T15:55:22+02:00]]
+Collector confirmed builder d1908d552 and verifier 9b8690989 are durable. Final proof: AC-1/2/3 independently PASS; 1519 frontend tests pass with 2 skipped, 6 browser cases pass, production build passes, canonical conflict and paint-before-refresh behavior proven.
