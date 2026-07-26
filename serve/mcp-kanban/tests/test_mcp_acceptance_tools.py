@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 import shutil
+import stat
 import subprocess
 import sys
 from datetime import timedelta
@@ -407,8 +409,48 @@ async def _finish_terminal_accept(ctx, revision, accept_request) -> JobRecord:
     return accepted.created_jobs[0]
 
 
-def _acceptance_failure_disposition(revision, start: dict[str, object], case: tuple[object, ...]):
-    name, finding_class, target_kind, target_id, route_target, route_kind, _design_reentry, _job_kinds = case
+def _acceptance_failure_disposition(
+    revision,
+    checkout,
+    start: dict[str, object],
+    commit: str,
+    case: tuple[object, ...],
+):
+    name, expected_class, expected_kind, expected_id, route_target, route_kind, _design_reentry, _job_kinds = case
+    target = revision.resolve("DN-001")
+    proof = revision.resolve(target.proof)
+    if name == "local defect":
+        observed = subprocess.run(
+            [sys.executable, "-c", "raise SystemExit(17)"],
+            cwd=checkout.checkout,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert observed.returncode == 17
+        finding_class, target_kind, target_id = "implementation-defect", "packet", "DN-001-PK-001"
+        detail = f"assembled packet command failed with exit {observed.returncode} at {commit}"
+    elif name == "missing harness":
+        plan = revision.read_node_plan(target.id)
+        assert "harness" not in plan
+        finding_class, target_kind, target_id = "planning-omission", "proof", proof.id
+        detail = f"required local harness is absent from {target.id} node plan at {commit}"
+    elif name == "boundary bypass":
+        replacement = "finish_accept public boundary"
+        assert replacement not in proof.allowed_replacements
+        finding_class, target_kind, target_id = "planning-omission", "proof", proof.id
+        detail = f"replacement bypasses admitted {proof.id} boundary at {commit}"
+    else:
+        validity = ReceiptStore(revision).evaluate_currentness(
+            "build-001",
+            GitRepositoryHistory(Path.cwd()),
+            "f" * 40,
+        )
+        assert not validity.current
+        finding_class, target_kind, target_id = "implementation-defect", "receipt", "build-001"
+        detail = f"build-001 is not current: {validity.code.value}"
+
+    assert (finding_class, target_kind, target_id) == (expected_class, expected_kind, expected_id)
     workflow = _workflow_text()
     row = next(line for line in workflow.splitlines() if f"`{route_target}`" in line)
     assert f"`{finding_class}`" in row
@@ -424,7 +466,7 @@ def _acceptance_failure_disposition(revision, start: dict[str, object], case: tu
         target_kind=target_kind,
         target_id=target_id,
         finding_class=finding_class,
-        detail=f"{name} observed at exact candidate revision",
+        detail=detail,
         created_at="2026-07-25T00:06:00Z",
     )
     route = plan_corrective_route(
@@ -486,15 +528,66 @@ async def _acceptor_evidence(revision, ctx, checkout, start: dict[str, object], 
     assert before == {"head": commit, "status": "", "diff": ""}
 
     _assert_acceptor_write_denied(checkout_root)
+    probe_script = (
+        "from pathlib import Path; "
+        "from owlbear_kanban import ReceiptStore, load_change; "
+        "result=load_change(Path('.owlbear/changes'), 'replace-delivery-pipeline'); "
+        "assert result.revision is not None; "
+        "print(result.revision.delivery_digest, len(ReceiptStore(result.revision).list()))"
+    )
+    command_arguments = (
+        "uv",
+        "run",
+        "python",
+        "-c",
+        probe_script,
+    )
+    command = " ".join(command_arguments[:3]) + " -c <assembled ChangeRevision + ReceiptStore probe>"
+    process = await asyncio.create_subprocess_exec(
+        *command_arguments,
+        cwd=checkout_root,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await process.communicate()
+    assert process.returncode == 0, (stdout + stderr).decode()
     after = _git_state(checkout_root)
     assert after == before
+    interface_ids = tuple(sorted((*target.produces, *target.consumes)))
+    migration_ids = tuple(
+        sorted(
+            {
+                interface.migration
+                for interface_id in interface_ids
+                if (interface := revision.resolve(interface_id)).migration is not None
+            }
+            | {item_id for item_id in target.owns if item_id.startswith("MIG-")}
+        )
+    )
     return {
         "methods": list(proof.method),
+        "assembled_proof": {
+            "boundary": proof.boundary,
+            "durable_outputs": list(proof.durable_outputs),
+            "commands": [command],
+            "results": [
+                {
+                    "command": command,
+                    "exit_code": process.returncode,
+                    "result": stdout.decode(),
+                }
+            ],
+        },
         "authority": {
             "delivery_digest": revision.delivery_digest,
             "target_node_id": target.id,
             "acceptance": list(shown_job["acceptance"]),
             "proof": target.proof,
+            "node_contract": target.model_dump(mode="json"),
+            "modules": list(target.modules),
+            "interfaces": list(interface_ids),
+            "migrations": list(migration_ids),
+            "risks": list(target.risks),
         },
         "plan": {
             "node_plan_digest": job.node_plan_digest,
@@ -559,9 +652,31 @@ def _rejection_payload(revision, start: dict[str, object], commit: str) -> dict[
 @pytest.mark.parametrize("case", _ACCEPTANCE_FAILURES, ids=[str(case[0]) for case in _ACCEPTANCE_FAILURES])
 @pytest.mark.asyncio
 async def test_shipped_acceptor_routes_canonical_minimum_correction(tmp_path: Path, case: tuple[object, ...]) -> None:
-    revision, _board, _ctx, _runtime, _checkout, start, _commit = await _active_accept(tmp_path)
+    revision, board, ctx, _runtime, checkout, start, commit = await _active_accept(tmp_path)
 
-    finding, route, evidence_ids = _acceptance_failure_disposition(revision, start, case)
+    finding, route, evidence_ids = _acceptance_failure_disposition(revision, checkout, start, commit, case)
+    corrective_job_ids = tuple(range(20, 20 + len(route.jobs)))
+    invalidation = InvalidationRequest(
+        invalidation_id=f"invalidation-{finding.finding_id}",
+        supersession_receipt_id=f"supersession-{finding.finding_id}",
+        invalidated_receipt_ids=("build-001",),
+        routes=(route,),
+        corrective_job_ids=corrective_job_ids,
+        issued_at=finding.created_at,
+        code_revision=commit,
+        priority=9,
+    )
+
+    payload = {
+        **_identity(start),
+        "rejected_at": finding.created_at,
+        "detail": finding.detail,
+        "evidence_ids": evidence_ids,
+        "findings": (finding.model_dump(mode="json"),),
+        "invalidation": invalidation.model_dump(mode="json"),
+    }
+    rejected = await server.reject_accept(ctx, **payload)
+    replayed = await server.reject_accept(ctx, **payload)
 
     assert finding.finding_class == case[1]
     assert (finding.target_kind, finding.target_id) == (case[2], case[3])
@@ -570,6 +685,15 @@ async def test_shipped_acceptor_routes_canonical_minimum_correction(tmp_path: Pa
     assert route.design_reentry is case[6]
     assert tuple(job.kind for job in route.jobs) == case[7]
     assert len(route.jobs) <= 1
+    assert rejected.diagnostic is None
+    assert replayed == rejected
+    assert rejected.findings == (finding,)
+    assert rejected.invalidation is not None
+    assert tuple(item.job.job_id for item in rejected.invalidation.corrective_jobs) == corrective_job_ids
+    assert tuple(item.job.kind for item in rejected.invalidation.corrective_jobs) == case[7]
+    assert FindingStore(board).read(finding.finding_id).finding == finding
+    assert not checkout.root.exists()
+    assert "readers: []" in (board / "dispatch/coordination.yaml").read_text(encoding="utf-8")
 
 
 @pytest.mark.asyncio
@@ -616,6 +740,172 @@ async def test_public_accept_success_is_independent_exact_and_replay_safe(tmp_pa
     assert len(AttemptStore(board).list()) == events_before + 1
     shown = await server.show_receipt(ctx, change_id=revision.change_id, receipt_id="accept-001")
     assert shown == accepted.receipt
+
+
+@pytest.mark.asyncio
+async def test_public_accept_rejects_methods_only_evidence_without_cleanup(tmp_path: Path) -> None:
+    revision, board, ctx, _runtime, checkout, start, commit = await _active_accept(tmp_path)
+    proof = revision.resolve(revision.resolve("DN-001").proof)
+
+    result = await server.finish_accept(
+        ctx,
+        **_identity(start),
+        finished_at="2026-07-25T00:06:00Z",
+        receipt_id="accept-methods-only",
+        code_revision=commit,
+        evidence={"methods": list(proof.method)},
+        evidence_ids=("accept-methods-only",),
+        reconciliation_plan_job_ids=(6, 7),
+    )
+
+    assert result.diagnostic is not None
+    assert result.diagnostic.code.value == "ERR_FINISH_EVIDENCE_INVALID"
+    assert result.diagnostic.lower_code == "ERR_RECEIPT_PROOF_UNSATISFIED"
+    assert checkout.root.exists()
+    assert JobStore(board).read(int(start["job_id"])).job.attempt_id == start["attempt_id"]
+    assert not (revision.source_dir / "receipts/accept-methods-only.yaml").exists()
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "proof",
+        "node-contract",
+        "modules",
+        "interfaces",
+        "migrations",
+        "risks",
+        "boundary",
+        "durable-outputs",
+        "replacements",
+        "packets",
+        "receipts",
+        "surfaces",
+    ],
+)
+@pytest.mark.asyncio
+async def test_public_accept_rejects_forged_evidence_authority(tmp_path: Path, mutation: str) -> None:
+    revision, board, ctx, _runtime, checkout, start, commit = await _active_accept(tmp_path)
+    evidence = await _acceptor_evidence(revision, ctx, checkout, start, commit)
+    if mutation == "proof":
+        evidence["authority"]["proof"] = "PROOF-999"
+    elif mutation == "node-contract":
+        evidence["authority"]["node_contract"]["outcome"] = "forged"
+    elif mutation in {"modules", "interfaces", "migrations", "risks"}:
+        evidence["authority"][mutation] = []
+    elif mutation == "boundary":
+        evidence["assembled_proof"]["boundary"] = "bypassed boundary"
+    elif mutation == "durable-outputs":
+        evidence["assembled_proof"]["durable_outputs"] = []
+    elif mutation == "replacements":
+        evidence["replacements"] = ["finish_accept public boundary"]
+    elif mutation == "packets":
+        evidence["plan"]["packet_ids"] = ["DN-001-PK-999"]
+    elif mutation == "receipts":
+        evidence["packet_receipts"] = [{"receipt_id": "forged-build", "code_revision": commit}]
+    else:
+        evidence["changed_surfaces"] = {"paths": ["serve/tools/"], "authority_targets": ["DN-001"]}
+
+    result = await server.finish_accept(
+        ctx,
+        **_identity(start),
+        finished_at="2026-07-25T00:06:00Z",
+        receipt_id=f"accept-forged-{mutation}",
+        code_revision=commit,
+        evidence=evidence,
+        evidence_ids=(f"accept-forged-{mutation}",),
+        impact_closure={"paths": ["serve/kanban/"], "authority_targets": ["DN-001", "PROOF-001"]},
+        reconciliation_plan_job_ids=(6, 7),
+    )
+
+    assert result.diagnostic is not None
+    assert result.diagnostic.lower_code == "ERR_RECEIPT_PROOF_UNSATISFIED"
+    assert checkout.root.exists()
+    assert JobStore(board).read(int(start["job_id"])).job.attempt_id == start["attempt_id"]
+    assert not (revision.source_dir / f"receipts/accept-forged-{mutation}.yaml").exists()
+
+
+@pytest.mark.asyncio
+async def test_public_accept_rejects_symbolic_revision_authority(tmp_path: Path) -> None:
+    revision, board, ctx, _runtime, checkout, start, commit = await _active_accept(tmp_path)
+    evidence = await _acceptor_evidence(revision, ctx, checkout, start, commit)
+
+    result = await server.finish_accept(
+        ctx,
+        **_identity(start),
+        finished_at="2026-07-25T00:06:00Z",
+        receipt_id="accept-symbolic",
+        code_revision="HEAD",
+        evidence=evidence,
+        evidence_ids=("accept-symbolic",),
+        impact_closure=evidence["changed_surfaces"],
+        reconciliation_plan_job_ids=(6, 7),
+    )
+
+    assert result.diagnostic is not None
+    assert result.diagnostic.lower_code == "ERR_PROOF_COMMIT_MISMATCH"
+    assert checkout.root.exists()
+    assert JobStore(board).read(int(start["job_id"])).job.attempt_id == start["attempt_id"]
+    assert not (revision.source_dir / "receipts/accept-symbolic.yaml").exists()
+
+
+@pytest.mark.asyncio
+async def test_public_accept_rejects_tracked_checkout_mutation(tmp_path: Path) -> None:
+    revision, board, ctx, _runtime, checkout, start, commit = await _active_accept(tmp_path)
+    evidence = await _acceptor_evidence(revision, ctx, checkout, start, commit)
+    tracked = checkout.checkout / "README.md"
+    tracked.chmod(stat.S_IMODE(tracked.stat().st_mode) | stat.S_IWUSR)
+    tracked.write_text("modified by acceptance\n", encoding="utf-8")
+
+    result = await server.finish_accept(
+        ctx,
+        **_identity(start),
+        finished_at="2026-07-25T00:06:00Z",
+        receipt_id="accept-mutated",
+        code_revision=commit,
+        evidence=evidence,
+        evidence_ids=("accept-mutated",),
+        impact_closure=evidence["changed_surfaces"],
+        reconciliation_plan_job_ids=(6, 7),
+    )
+
+    assert result.diagnostic is not None
+    assert result.diagnostic.lower_code == "ERR_PROOF_TRACKED_MUTATION"
+    assert checkout.root.exists()
+    assert JobStore(board).read(int(start["job_id"])).job.attempt_id == start["attempt_id"]
+    assert not (revision.source_dir / "receipts/accept-mutated.yaml").exists()
+
+
+@pytest.mark.asyncio
+async def test_public_accept_conflict_restores_exact_checkout_for_retry(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    revision, board, ctx, _runtime, checkout, start, commit = await _active_accept(tmp_path)
+    evidence = await _acceptor_evidence(revision, ctx, checkout, start, commit)
+
+    def conflict(_transaction) -> None:
+        raise TransactionConflictError
+
+    monkeypatch.setattr(RuntimeTransaction, "commit", conflict)
+    with pytest.raises(TransactionConflictError):
+        await server.finish_accept(
+            ctx,
+            **_identity(start),
+            finished_at="2026-07-25T00:06:00Z",
+            receipt_id="accept-conflict",
+            code_revision=commit,
+            evidence=evidence,
+            evidence_ids=("accept-conflict",),
+            impact_closure=evidence["changed_surfaces"],
+            reconciliation_plan_job_ids=(6, 7),
+        )
+
+    restored = checkout.root / "checkout"
+    assert restored.is_dir()
+    assert _git_state(restored) == {"head": commit, "status": "", "diff": ""}
+    assert JobStore(board).read(int(start["job_id"])).job.attempt_id == start["attempt_id"]
+    assert not (revision.source_dir / "receipts/accept-conflict.yaml").exists()
 
 
 @pytest.mark.asyncio
@@ -888,6 +1178,8 @@ async def test_public_audit_success_closes_accepted_whole_change_and_replays(tmp
         history=GitRepositoryHistory(repository),
     )
     checkouts = ProofCheckoutManager(repository, tmp_path / "proof-mcp")
+    prepared = checkouts.materialize(JobStore(board).read(accept_request.job_id).job, commit)
+    assert prepared.checkout is not None
     runtime = DispatchRuntime(native, board, checkouts)
     app_ctx = AppContext(engine=server.KanbanEngine(board), kanban_dir=board)
     app_ctx.dispatch_runtimes[revision.change_id] = runtime
@@ -970,6 +1262,8 @@ async def _pending_public_audit(tmp_path: Path, proof_dir: str):
         history=GitRepositoryHistory(repository),
     )
     checkouts = ProofCheckoutManager(repository, tmp_path / proof_dir)
+    prepared = checkouts.materialize(JobStore(board).read(accept_request.job_id).job, commit)
+    assert prepared.checkout is not None
     runtime = DispatchRuntime(native, board, checkouts)
     app_ctx = AppContext(engine=server.KanbanEngine(board), kanban_dir=board)
     app_ctx.dispatch_runtimes[revision.change_id] = runtime

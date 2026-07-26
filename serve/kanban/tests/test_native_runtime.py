@@ -297,6 +297,68 @@ def _reject_request(revision, start: StartJobRequest) -> RejectAcceptRequest:
     )
 
 
+def _accept_evidence(
+    revision,
+    target_node_id: str,
+    *,
+    code_revision: str = "a" * 40,
+    packet_receipt_ids: tuple[str, ...] = ("build-001", "build-002"),
+) -> dict[str, object]:
+    proof_id = revision.resolve(target_node_id).proof
+    target = revision.resolve(target_node_id)
+    proof = revision.resolve(proof_id)
+    interface_ids = tuple(sorted((*target.produces, *target.consumes)))
+    migration_ids = tuple(
+        sorted(
+            {
+                interface.migration
+                for interface_id in interface_ids
+                if (interface := revision.resolve(interface_id)).migration is not None
+            }
+            | {item_id for item_id in target.owns if item_id.startswith("MIG-")}
+        )
+    )
+    packets = revision.read_node_plan(target_node_id)["packets"]
+    closures = tuple(parse_impact_closure(packet["impact_closure"]) for packet in packets)
+    state = {"head": code_revision, "status": "", "diff": ""}
+    command = "maintained assembled acceptance boundary"
+    return {
+        "methods": list(proof.method),
+        "assembled_proof": {
+            "boundary": proof.boundary,
+            "durable_outputs": list(proof.durable_outputs),
+            "commands": [command],
+            "results": [{"command": command, "exit_code": 0, "result": "passed"}],
+        },
+        "authority": {
+            "delivery_digest": revision.delivery_digest,
+            "target_node_id": target_node_id,
+            "proof": proof_id,
+            "node_contract": target.model_dump(mode="json"),
+            "modules": list(target.modules),
+            "interfaces": list(interface_ids),
+            "migrations": list(migration_ids),
+            "risks": list(target.risks),
+        },
+        "plan": {
+            "node_plan_digest": compute_node_plan_digest(revision, target_node_id),
+            "packet_ids": [packet["id"] for packet in packets],
+        },
+        "packet_receipts": [
+            {"receipt_id": receipt_id, "code_revision": code_revision} for receipt_id in packet_receipt_ids
+        ],
+        "changed_surfaces": {
+            "paths": sorted({path for closure in closures for path in closure.paths}),
+            "authority_targets": sorted(
+                {authority_target for closure in closures for authority_target in closure.authority_targets}
+            ),
+        },
+        "checkout": {"candidate_sha": code_revision},
+        "replacements": [],
+        "tracked_state": {"before": state, "after": state},
+    }
+
+
 def _terminal_accept_scenario(
     tmp_path: Path,
     *,
@@ -334,7 +396,26 @@ def _terminal_accept_scenario(
             continue
         job_id = job_ids[node.id]
         receipt_id = f"accept-{job_id:03d}"
+        seed_receipt_id = f"build-seed-{job_id:03d}"
         node_plan_digest = compute_node_plan_digest(revision, node.id)
+        seed_value = {
+            "schema_version": 1,
+            "kind": "build",
+            "receipt_id": seed_receipt_id,
+            "change_id": revision.change_id,
+            "delivery_digest": revision.delivery_digest,
+            "issued_at": f"2026-07-23T00:{job_id:02d}:00Z",
+            "impact_closure": {
+                "paths": ["serve/"],
+                "authority_targets": [node.id, node.proof],
+            },
+            "target_node_id": node.id,
+            "node_plan_digest": node_plan_digest,
+            "predecessor_receipt_ids": [],
+            "evidence": {"methods": list(revision.resolve(node.proof).method)},
+            "code_revision": code_revision,
+        }
+        assert receipt_store.create(seed_receipt_id, seed_value).receipt is not None
         value = {
             "schema_version": 1,
             "kind": "accept",
@@ -348,8 +429,13 @@ def _terminal_accept_scenario(
             },
             "target_node_id": node.id,
             "node_plan_digest": node_plan_digest,
-            "predecessor_receipt_ids": [],
-            "evidence": {"methods": list(revision.resolve(node.proof).method)},
+            "predecessor_receipt_ids": [seed_receipt_id],
+            "evidence": _accept_evidence(
+                revision,
+                node.id,
+                code_revision=code_revision,
+                packet_receipt_ids=(seed_receipt_id,),
+            ),
             "code_revision": code_revision,
         }
         assert receipt_store.create(receipt_id, value).receipt is not None
@@ -376,6 +462,7 @@ def _terminal_accept_scenario(
             kind="accept",
             target_node_id=terminal.id,
             node_plan_digest=compute_node_plan_digest(revision, terminal.id),
+            predecessor_job_ids=tuple(job_id for node_id, job_id in job_ids.items() if node_id != terminal.id),
         ),
     )
     runtime = _runtime(revision, work_root, history=history)
@@ -397,7 +484,15 @@ def _terminal_accept_scenario(
         finished_at="2026-07-24T01:00:00Z",
         receipt_id="accept-final",
         code_revision=code_revision,
-        evidence={"methods": list(revision.resolve(terminal.proof).method)},
+        evidence=_accept_evidence(
+            revision,
+            terminal.id,
+            code_revision=code_revision,
+            packet_receipt_ids=tuple(
+                f"accept-{predecessor_job_id:03d}"
+                for predecessor_job_id in sorted(job_id for job_id in job_ids.values() if job_id != start.job_id)
+            ),
+        ),
         reconciliation_plan_job_ids=(),
     )
     return revision, work_root, runtime, request, tuple(sorted(job_ids.values()))
@@ -934,7 +1029,7 @@ def test_finish_build_accept_and_audit_publish_complete_outcomes(tmp_path) -> No
         finished_at="2026-07-24T00:05:00Z",
         receipt_id="accept-001",
         code_revision="a" * 40,
-        evidence=finish_methods,
+        evidence=_accept_evidence(runtime._revision, "DN-001"),  # noqa: SLF001
         evidence_ids=("accept-proof-001",),
         reconciliation_plan_job_ids=(6, 7),
     )
@@ -1093,7 +1188,7 @@ def test_build_start_reconciliation_gates_are_mutation_free(tmp_path) -> None:
                 finished_at="2026-07-24T00:05:00Z",
                 receipt_id="accept-001",
                 code_revision="a" * 40,
-                evidence=plan.evidence,
+                evidence=_accept_evidence(revision, "DN-001"),
                 reconciliation_plan_job_ids=(6, 7),
             )
         ).diagnostic
@@ -1290,7 +1385,7 @@ def test_three_node_fold_in_occ_updates_same_plan_job_after_two_accepts(tmp_path
         finished_at="2026-07-24T00:05:00Z",
         receipt_id="accept-001",
         code_revision="a" * 40,
-        evidence=first_plan.evidence,
+        evidence=_accept_evidence(revision, "DN-001"),
         reconciliation_plan_job_ids=(6, 7),
     )
     assert runtime.finish_accept(first_accept).diagnostic is None
@@ -1352,7 +1447,7 @@ def test_three_node_fold_in_occ_updates_same_plan_job_after_two_accepts(tmp_path
         finished_at="2026-07-24T00:10:00Z",
         receipt_id="accept-002",
         code_revision="a" * 40,
-        evidence=second_plan.evidence,
+        evidence=_accept_evidence(revision, "DN-002", packet_receipt_ids=("build-007", "build-008")),
         reconciliation_plan_job_ids=(7, 11, 12),
     )
     assert runtime.finish_accept(second_accept).diagnostic is None
@@ -1413,7 +1508,7 @@ def test_reconciliation_finish_releases_new_build_and_invalidation_closure(tmp_p
             finished_at="2026-07-24T00:05:00Z",
             receipt_id="accept-001",
             code_revision="a" * 40,
-            evidence=predecessor_plan.evidence,
+            evidence=_accept_evidence(revision, "DN-001"),
             reconciliation_plan_job_ids=(6, 7),
         )
     )

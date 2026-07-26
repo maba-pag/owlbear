@@ -24,7 +24,16 @@ from pydantic import BaseModel, ConfigDict, StringConstraints, TypeAdapter, fiel
 from pydantic import ValidationError as PydanticValidationError
 from ruamel.yaml.error import YAMLError
 
-from owlbear_kanban.change import ChangeId, ChangeRevision, Digest, Proof, StableId, load_change
+from owlbear_kanban.change import (
+    ChangeId,
+    ChangeRevision,
+    DeliveryNode,
+    Digest,
+    Interface,
+    Proof,
+    StableId,
+    load_change,
+)
 from owlbear_kanban.runtime_transaction import TransactionParticipant
 from owlbear_kanban.yaml_rt import make_yaml
 
@@ -571,7 +580,136 @@ def _evaluate_target_receipt(
             detail="receipt evidence does not satisfy the target proof contract",
             target=target,
         )
+    if receipt.kind == "accept" and not _acceptance_evidence_complete(revision, receipt, evidence):
+        return ReceiptValidity(
+            code=ReceiptValidityCode.PROOF_UNSATISFIED,
+            detail="accept receipt evidence is missing exact-commit assembled proof",
+            target=target,
+        )
     return ReceiptValidity(code=ReceiptValidityCode.CURRENT, detail="receipt is locally current", target=target)
+
+
+def _acceptance_evidence_complete(  # noqa: C901, PLR0911 - proof dimensions fail closed independently.
+    revision: ChangeRevision,
+    receipt: ReceiptRecord,
+    evidence: object,
+) -> bool:
+    if not isinstance(evidence, Mapping):
+        return False
+    target = receipt.payload.get("target_node_id")
+    node_plan_digest = receipt.payload.get("node_plan_digest")
+    code_revision = receipt.payload.get("code_revision")
+    authority = evidence.get("authority")
+    plan = evidence.get("plan")
+    assembled = evidence.get("assembled_proof")
+    checkout = evidence.get("checkout")
+    tracked = evidence.get("tracked_state")
+    receipts = evidence.get("packet_receipts")
+    replacements = evidence.get("replacements")
+    changed_surfaces = evidence.get("changed_surfaces")
+    if not all(isinstance(value, Mapping) for value in (authority, plan, assembled, checkout, tracked)):
+        return False
+    assert isinstance(authority, Mapping)
+    assert isinstance(plan, Mapping)
+    assert isinstance(assembled, Mapping)
+    assert isinstance(checkout, Mapping)
+    assert isinstance(tracked, Mapping)
+    proof = _target_proof(revision, target) if isinstance(target, str) else None
+    try:
+        node = revision.resolve(target) if isinstance(target, str) else None
+    except KeyError:
+        node = None
+    interface_ids = tuple(sorted((*node.produces, *node.consumes))) if isinstance(node, DeliveryNode) else ()
+    migration_ids = (
+        tuple(
+            sorted(
+                {
+                    interface.migration
+                    for interface_id in interface_ids
+                    if isinstance((interface := revision.resolve(interface_id)), Interface)
+                    and interface.migration is not None
+                }
+                | {item_id for item_id in node.owns if item_id.startswith("MIG-")}
+            )
+        )
+        if isinstance(node, DeliveryNode)
+        else ()
+    )
+    if (
+        authority.get("delivery_digest") != revision.delivery_digest
+        or authority.get("target_node_id") != target
+        or proof is None
+        or authority.get("proof") != proof.id
+        or not isinstance(node, DeliveryNode)
+        or authority.get("node_contract") != node.model_dump()
+        or authority.get("modules") != node.modules
+        or authority.get("interfaces") != interface_ids
+        or authority.get("migrations") != migration_ids
+        or authority.get("risks") != node.risks
+        or plan.get("node_plan_digest") != node_plan_digest
+        or checkout.get("candidate_sha") != code_revision
+    ):
+        return False
+    node_plan = revision.read_node_plan(target) if isinstance(target, str) else None
+    packets = node_plan.get("packets") if isinstance(node_plan, Mapping) else None
+    if not isinstance(packets, list | tuple) or not packets:
+        return False
+    packet_ids = tuple(packet.get("id") for packet in packets if isinstance(packet, Mapping))
+    if len(packet_ids) != len(packets) or plan.get("packet_ids") != packet_ids:
+        return False
+    commands = assembled.get("commands")
+    results = assembled.get("results")
+    if (
+        assembled.get("boundary") != proof.boundary
+        or assembled.get("durable_outputs") != proof.durable_outputs
+        or not isinstance(commands, tuple)
+        or not commands
+        or not all(isinstance(command, str) and command for command in commands)
+        or not isinstance(results, tuple)
+        or not results
+        or not all(
+            isinstance(result, Mapping)
+            and isinstance(result.get("command"), str)
+            and result.get("command") in commands
+            and result.get("exit_code") == 0
+            and isinstance(result.get("result"), str)
+            and bool(result.get("result"))
+            for result in results
+        )
+    ):
+        return False
+    if not isinstance(receipts, tuple) or not receipts or not all(isinstance(item, Mapping) for item in receipts):
+        return False
+    receipt_ids = tuple(item.get("receipt_id") for item in receipts)
+    predecessor_receipt_ids = receipt.payload.get("predecessor_receipt_ids")
+    if (
+        not all(
+            isinstance(item.get("receipt_id"), str) and item.get("code_revision") == code_revision for item in receipts
+        )
+        or receipt_ids != predecessor_receipt_ids
+    ):
+        return False
+    if (
+        not isinstance(replacements, tuple)
+        or not set(replacements) <= set(proof.allowed_replacements)
+        or not isinstance(changed_surfaces, Mapping)
+    ):
+        return False
+    try:
+        evidence_closure = parse_impact_closure(changed_surfaces)
+    except ImpactClosureError:
+        return False
+    if evidence_closure != receipt.impact_closure:
+        return False
+    before = tracked.get("before")
+    after = tracked.get("after")
+    return all(
+        isinstance(state, Mapping)
+        and state.get("head") == code_revision
+        and state.get("status") == ""
+        and state.get("diff") == ""
+        for state in (before, after)
+    )
 
 
 class ReceiptDiagnosticCode(StrEnum):

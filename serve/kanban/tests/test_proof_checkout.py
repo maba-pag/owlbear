@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import stat
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -79,6 +80,33 @@ def test_materialize_resolves_symbolic_commit_to_canonical_manifest_sha(tmp_path
     assert result.checkout is not None
     assert result.checkout.commit == commit
     assert f"commit: {commit}" in result.checkout.manifest.read_text(encoding="utf-8")
+
+
+def test_validate_rejects_revision_mismatch_and_tracked_mutation(tmp_path: Path) -> None:
+    repository, commit = _repository(tmp_path)
+    manager = ProofCheckoutManager(repository, tmp_path / "scratch" / "proof")
+    result = manager.materialize(_job(), commit)
+    assert result.checkout is not None
+
+    mismatch = manager.validate(27, "HEAD")
+    assert mismatch is not None
+    assert mismatch.code is ProofCheckoutDiagnosticCode.COMMIT_MISMATCH
+
+    tracked = result.checkout.checkout / "tracked.txt"
+    tracked.chmod(stat.S_IMODE(tracked.stat().st_mode) | stat.S_IWUSR)
+    tracked.write_text("changed\n", encoding="utf-8")
+
+    mutation = manager.validate(27, commit)
+    assert mutation is not None
+    assert mutation.code is ProofCheckoutDiagnosticCode.TRACKED_MUTATION
+
+    other = repository / "other.txt"
+    other.write_text("other\n", encoding="utf-8")
+    _git(repository, "add", "other.txt")
+    _git(repository, "commit", "-m", "other")
+    mismatch = manager.validate(27, _git(repository, "rev-parse", "HEAD"))
+    assert mismatch is not None
+    assert mismatch.code is ProofCheckoutDiagnosticCode.COMMIT_MISMATCH
 
 
 @pytest.mark.parametrize(

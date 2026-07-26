@@ -34,6 +34,7 @@ from owlbear_kanban import (
 from owlbear_kanban.runtime_transaction import RuntimeTransaction, TransactionConflictError
 
 from .test_native_runtime import (
+    _accept_evidence,
     _active_accept_scenario,
     _active_audit_scenario,
     _reject_audit_request,
@@ -69,6 +70,9 @@ class _ProofCheckouts:
 
     def existing(self, job_id: int) -> object | None:
         return object() if job_id in self._active else None
+
+    def validate(self, job_id: int, _expected_commit: str) -> None:
+        assert job_id in self._active
 
     def snapshot(self, job_id: int) -> int | None:
         return job_id if job_id in self._active else None
@@ -672,7 +676,27 @@ def test_pick_waves_separates_dependent_readers(revision, tmp_path) -> None:
     )
     node = revision.graph.nodes[0]
     proof = revision.resolve(node.proof)
-    receipt = ReceiptStore(revision).create(
+    receipts = ReceiptStore(revision)
+    seed_receipt_id = "build-seed-001"
+    seed = receipts.create(
+        seed_receipt_id,
+        {
+            "schema_version": 1,
+            "kind": "build",
+            "receipt_id": seed_receipt_id,
+            "change_id": revision.change_id,
+            "delivery_digest": revision.delivery_digest,
+            "issued_at": "2026-07-23T00:00:00Z",
+            "target_node_id": node.id,
+            "node_plan_digest": compute_node_plan_digest(revision, node.id),
+            "predecessor_receipt_ids": [],
+            "evidence": {"methods": list(proof.method)},
+            "code_revision": "a" * 40,
+            "impact_closure": {"paths": ["serve/kanban/"], "authority_targets": [node.id, node.proof]},
+        },
+    )
+    assert seed.receipt is not None
+    receipt = receipts.create(
         "accept-001",
         {
             "schema_version": 1,
@@ -683,8 +707,8 @@ def test_pick_waves_separates_dependent_readers(revision, tmp_path) -> None:
             "issued_at": "2026-07-24T00:00:00Z",
             "target_node_id": node.id,
             "node_plan_digest": compute_node_plan_digest(revision, node.id),
-            "predecessor_receipt_ids": [],
-            "evidence": {"methods": list(proof.method)},
+            "predecessor_receipt_ids": [seed_receipt_id],
+            "evidence": _accept_evidence(revision, node.id, packet_receipt_ids=(seed_receipt_id,)),
             "code_revision": "a" * 40,
             "impact_closure": {"paths": ["serve/kanban/"], "authority_targets": [node.id, node.proof]},
         },

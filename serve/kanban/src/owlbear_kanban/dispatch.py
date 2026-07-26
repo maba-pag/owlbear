@@ -59,6 +59,8 @@ if TYPE_CHECKING:
 from owlbear_kanban.attempts import AttemptStore
 from owlbear_kanban.jobs import JobStore, StoredJob
 from owlbear_kanban.native_runtime import (
+    FinishJobDiagnosticCode,
+    FinishJobResult,
     RejectAcceptDiagnosticCode,
     RejectAuditDiagnosticCode,
     StartJobDiagnosticCode,
@@ -434,10 +436,80 @@ class DispatchRuntime:
         return self._finish(request, "build")
 
     def finish_accept(self, request: FinishAcceptRequest) -> FinishJobResult | DispatchDiagnostic:
-        """Clean the proof checkout and finish acceptance work."""
-        if not self._cleanup_proof_checkout(request.job_id):
-            return self._proof_cleanup_diagnostic(request.job_id)
-        return self._finish(request, "accept", self._native._accept_participants)  # noqa: SLF001
+        """Validate and transactionally clean the exact acceptance checkout."""
+        replay = self._native._finish_replay(request, "accept")  # noqa: SLF001
+        if replay is not None:
+            return replay
+        if self._proof_checkouts is not None:
+            diagnostic = self._proof_checkouts.validate(request.job_id, request.code_revision)
+            if diagnostic is not None:
+                return self._native._finish_diagnostic(  # noqa: SLF001
+                    FinishJobDiagnosticCode.EVIDENCE_INVALID,
+                    diagnostic.detail,
+                    lower_code=diagnostic.code.value,
+                    target=str(request.job_id),
+                )
+        snapshot, diagnostic = self._preserve_finish_checkout(request)
+        if diagnostic is not None:
+            return diagnostic
+        try:
+            result = self._finish(
+                request,
+                "accept",
+                self._native._accept_participants,  # noqa: SLF001
+                before_commit=lambda: self._cleanup_proof_checkout(request.job_id),
+            )
+        except TransactionConflictError:
+            self._restore_finish_checkout(request, snapshot)
+            raise
+        if isinstance(result, FinishJobResult) and result.diagnostic is not None:
+            return self._restore_finish_checkout(request, snapshot, result)
+        return result
+
+    def _preserve_finish_checkout(
+        self, request: FinishJobRequest
+    ) -> tuple[ProofCheckoutSnapshot | None, FinishJobResult | None]:
+        if self._proof_checkouts is None:
+            return None, None
+        checkout = self._proof_checkouts.existing(request.job_id)
+        snapshot = self._proof_checkouts.snapshot(request.job_id)
+        if checkout is not None and snapshot is None:
+            return None, self._native._finish_diagnostic(  # noqa: SLF001
+                FinishJobDiagnosticCode.EVIDENCE_INVALID,
+                "proof checkout authority could not be preserved",
+                target=str(request.job_id),
+            )
+        return snapshot, None
+
+    def _restore_finish_checkout(
+        self,
+        request: FinishJobRequest,
+        snapshot: ProofCheckoutSnapshot | None,
+        result: FinishJobResult | None = None,
+    ) -> FinishJobResult:
+        if (
+            snapshot is not None
+            and self._proof_checkouts is not None
+            and self._proof_checkouts.existing(request.job_id) is None
+        ):
+            try:
+                restored = self._proof_checkouts.restore(self._jobs.read(request.job_id).job, snapshot)
+            except FileNotFoundError, ValueError:
+                restored = False
+            if not restored:
+                return self._native._finish_diagnostic(  # noqa: SLF001
+                    FinishJobDiagnosticCode.EVIDENCE_INVALID,
+                    "proof checkout restoration failed after incomplete acceptance",
+                    lower_code=result.diagnostic.code.value if result and result.diagnostic else None,
+                    target=str(request.job_id),
+                )
+        if result is not None:
+            return result
+        return self._native._finish_diagnostic(  # noqa: SLF001
+            FinishJobDiagnosticCode.EVIDENCE_INVALID,
+            "acceptance publication conflicted after proof cleanup",
+            target=str(request.job_id),
+        )
 
     def reject_accept(self, request: RejectAcceptRequest) -> RejectAcceptResult | DispatchDiagnostic:
         """Reject acceptance, release its reader, and remove its proof checkout."""
@@ -621,6 +693,7 @@ class DispatchRuntime:
         participant_factory: (
             Callable[[StoredJob, FinishJobRequest], tuple[ReplacementTransactionParticipant, ...]] | None
         ) = None,
+        before_commit: Callable[[], bool] | None = None,
     ) -> FinishJobResult | DispatchDiagnostic:
         coordination, token = self._coordination.read()
         stale = self._stale_diagnostic(coordination)
@@ -638,6 +711,7 @@ class DispatchRuntime:
                 *participants,
                 *(participant_factory(stored, finish_request) if participant_factory is not None else ()),
             ),
+            before_commit,
         )
 
     def _stale_diagnostic(self, coordination: WriterCoordination) -> DispatchDiagnostic | None:

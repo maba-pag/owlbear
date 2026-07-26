@@ -1514,6 +1514,7 @@ class NativeRuntime:
             ]
             | None
         ) = None,
+        before_commit: Callable[[], bool] | None = None,
     ) -> FinishJobResult:
         RuntimeTransaction.recover_all(
             self._work_root,
@@ -1644,6 +1645,12 @@ class NativeRuntime:
                 self._jobs.archive_participant(archived, stored.token),
             )
         )
+        if before_commit is not None and not before_commit():
+            return self._finish_diagnostic(
+                FinishJobDiagnosticCode.EVIDENCE_INVALID,
+                "proof checkout cleanup failed",
+                target=str(request.job_id),
+            )
         RuntimeTransaction(
             self._work_root,
             f"finish-{request.attempt_id}",

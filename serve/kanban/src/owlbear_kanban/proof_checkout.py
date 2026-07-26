@@ -26,6 +26,8 @@ class ProofCheckoutDiagnosticCode(StrEnum):
 
     PATH_UNSAFE = "ERR_PROOF_PATH_UNSAFE"
     COMMIT_MISSING = "ERR_PROOF_COMMIT_MISSING"
+    COMMIT_MISMATCH = "ERR_PROOF_COMMIT_MISMATCH"
+    TRACKED_MUTATION = "ERR_PROOF_TRACKED_MUTATION"
     SETUP_FAILED = "ERR_PROOF_SETUP_FAILED"
 
 
@@ -184,6 +186,39 @@ class ProofCheckoutManager:
             checkout=checkout,
             manifest=manifest,
         )
+
+    def validate(self, job_id: int, expected_commit: str) -> ProofCheckoutDiagnostic | None:
+        """Require the existing checkout to remain at the expected clean revision."""
+        checkout = self.existing(job_id)
+        if checkout is None:
+            return ProofCheckoutDiagnostic(
+                code=ProofCheckoutDiagnosticCode.SETUP_FAILED,
+                detail="proof checkout is unavailable",
+            )
+        if expected_commit != checkout.commit:
+            return ProofCheckoutDiagnostic(
+                code=ProofCheckoutDiagnosticCode.COMMIT_MISMATCH,
+                detail="proof checkout revision differs from acceptance evidence",
+            )
+        try:
+            head = self._git("-C", str(checkout.checkout), "rev-parse", "HEAD")
+            status = self._git("-C", str(checkout.checkout), "status", "--porcelain=v1", "--untracked-files=no")
+        except subprocess.CalledProcessError:
+            return ProofCheckoutDiagnostic(
+                code=ProofCheckoutDiagnosticCode.SETUP_FAILED,
+                detail="proof checkout state is unavailable",
+            )
+        if head != checkout.commit:
+            return ProofCheckoutDiagnostic(
+                code=ProofCheckoutDiagnosticCode.COMMIT_MISMATCH,
+                detail="proof checkout HEAD differs from acceptance evidence",
+            )
+        if status:
+            return ProofCheckoutDiagnostic(
+                code=ProofCheckoutDiagnosticCode.TRACKED_MUTATION,
+                detail="proof checkout contains tracked mutations",
+            )
+        return None
 
     def health_paths(self) -> tuple[str, ...]:
         """Return contained job roots left by interrupted cleanup."""
