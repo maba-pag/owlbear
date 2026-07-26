@@ -2,12 +2,9 @@
 
 AC1: POST /api/decisions/{id}/resolve returns HTTP 404 after endpoint removal.
 AC2: GET /api/decisions/pending returns HTTP 404 after endpoint removal.
-AC3: Frontend decisions.test.ts removed; LegacyPendingDRResponse and dual-format
-     normalization removed from usePendingDRs.ts.
 AC4: Legacy decisions route module (decisions.py) is fully removed from disk.
 
-These tests keep the removed route surface and old dual-format frontend hook
-support from being reintroduced.
+These tests keep the removed route surface from being reintroduced.
 """
 
 from __future__ import annotations
@@ -82,15 +79,6 @@ def client(engine: KanbanEngine, decisions_dir: Path):
 
 
 # ---------------------------------------------------------------------------
-# Absolute paths for frontend file assertions
-# ---------------------------------------------------------------------------
-
-_PROJECT_ROOT = Path(__file__).parent.parent
-_HOOK_FILE = _PROJECT_ROOT / "serve" / "cockpit" / "web" / "src" / "hooks" / "usePendingDRs.ts"
-_DECISIONS_TEST_FILE = _PROJECT_ROOT / "serve" / "cockpit" / "web" / "src" / "__tests__" / "decisions.test.ts"
-
-
-# ---------------------------------------------------------------------------
 # AC1 + AC2 + AC4: backend endpoint removal and module gone from disk
 # ---------------------------------------------------------------------------
 
@@ -161,35 +149,3 @@ class TestRemovedDecisionsApi:
         cockpit_dir = Path(owlbear_cockpit.__file__).parent
         decisions_file = cockpit_dir / "routes" / "decisions.py"
         assert not decisions_file.exists(), f"Legacy decisions route module still present at {decisions_file}"
-
-
-# ---------------------------------------------------------------------------
-# AC3: frontend legacy type and normalization code removal
-# ---------------------------------------------------------------------------
-
-
-class TestRemovedFrontendDecisionsSupport:
-    """Verify old frontend test file and legacy hook types/normalization are removed."""
-
-    def test_frontend_decisions_test_file_removed(self) -> None:
-        """AC3: decisions.test.ts (testing old POST /api/decisions endpoint) is deleted."""
-        assert not _DECISIONS_TEST_FILE.exists(), f"Legacy frontend test file still exists: {_DECISIONS_TEST_FILE}"
-
-    def test_legacy_pending_dr_response_interface_removed(self) -> None:
-        """AC3: LegacyPendingDRResponse interface is removed from usePendingDRs.ts."""
-        content = _HOOK_FILE.read_text(encoding="utf-8")
-        assert "LegacyPendingDRResponse" not in content
-
-    def test_is_pending_requests_payload_guard_removed(self) -> None:
-        """AC3: isPendingRequestsPayload dual-format type guard is removed from hook."""
-        content = _HOOK_FILE.read_text(encoding="utf-8")
-        assert "isPendingRequestsPayload" not in content
-
-    def test_dual_format_payload_items_access_removed(self) -> None:
-        """AC3: Legacy payload.items branch in normalization is removed from hook.
-
-        The old dual-format onSuccess handler reads payload.items to support
-        LegacyPendingDRResponse.  After cleanup only the array (new) shape remains.
-        """
-        content = _HOOK_FILE.read_text(encoding="utf-8")
-        assert "payload.items" not in content

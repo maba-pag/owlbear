@@ -45,29 +45,36 @@ export function useNativeRequests(changeId: string | null): UseNativePageResult<
   })
 }
 
-export function useNativeAttempts(changeId: string): UseNativePageResult<NativeAttempt> {
-  const load = useCallback((cursor?: string) => listNativeAttempts(changeId, cursor), [changeId])
-  return useNativePage({ resource: 'attempts', load, identity: (item) => item.attempt_id })
+export function useNativeAttempts(changeId: string | null): UseNativePageResult<NativeAttempt> {
+  const load = useCallback((cursor?: string) => listNativeAttempts(changeId ?? '', cursor), [changeId])
+  return useNativePage({
+    resource: 'attempts', load, identity: (item) => item.attempt_id, enabled: changeId !== null,
+  })
 }
 
-export function useNativeFindings(changeId: string): UseNativePageResult<NativeFinding> {
-  const load = useCallback((cursor?: string) => listNativeFindings(changeId, cursor), [changeId])
-  return useNativePage({ resource: 'findings', load, identity: (item) => item.finding_id })
+export function useNativeFindings(changeId: string | null): UseNativePageResult<NativeFinding> {
+  const load = useCallback((cursor?: string) => listNativeFindings(changeId ?? '', cursor), [changeId])
+  return useNativePage({
+    resource: 'findings', load, identity: (item) => item.finding_id, enabled: changeId !== null,
+  })
 }
 
-export function useNativeReceipts(changeId: string): UseNativePageResult<NativeReceipt> {
-  const load = useCallback((cursor?: string) => listNativeReceipts(changeId, cursor), [changeId])
-  return useNativePage({ resource: 'receipts', load, identity: (item) => item.receipt_id })
+export function useNativeReceipts(changeId: string | null): UseNativePageResult<NativeReceipt> {
+  const load = useCallback((cursor?: string) => listNativeReceipts(changeId ?? '', cursor), [changeId])
+  return useNativePage({
+    resource: 'receipts', load, identity: (item) => item.receipt_id, enabled: changeId !== null,
+  })
 }
 
-export function useNativeActivity(changeId: string): UseNativePageResult<NativeActivityEntry> {
-  const load = useCallback((cursor?: string) => listNativeActivity(changeId, cursor), [changeId])
+export function useNativeActivity(changeId: string | null): UseNativePageResult<NativeActivityEntry> {
+  const load = useCallback((cursor?: string) => listNativeActivity(changeId ?? '', cursor), [changeId])
   return useNativePage({
     resource: 'attempts',
     additionalResources: ['findings', 'receipts', 'requests'],
     alwaysPoll: true,
     load,
     identity: (item) => item.identity,
+    enabled: changeId !== null,
   })
 }
 
@@ -163,11 +170,11 @@ export function useNativeGraph(changeId: string | null): ReturnType<typeof useNa
 }
 
 export function useNativeInvalidationDetail(
-  changeId: string,
-  receiptId: string,
+  changeId: string | null,
+  receiptId: string | null,
 ): ReturnType<typeof useNativeValue<NativeInvalidationDetail>> {
-  const load = useCallback(() => getNativeInvalidation(changeId, receiptId), [changeId, receiptId])
-  return useNativeValue({ resources: ['receipts'], load })
+  const load = useCallback(() => getNativeInvalidation(changeId ?? '', receiptId ?? ''), [changeId, receiptId])
+  return useNativeValue({ resources: ['receipts'], load, enabled: changeId !== null && receiptId !== null })
 }
 
 export function useNativeWorkHealth(changeId: string): ReturnType<typeof useNativeValue<NativeHealthPage>> {

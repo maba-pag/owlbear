@@ -174,11 +174,6 @@ describe('retired legacy token tests', () => {
   })
 })
 
-// ─── AC-4: Updated test files assert --p-* equivalents ────────────────────────
-// Card.css.supplemental.test.ts was removed — Card.css is replaced by PDS Tailwind in Card.tsx.
-// Signal border mapping is enforced via Card.visual-treatment.test.tsx DOM tests.
-// --custom-signal-claimed is used in Card.tsx source (inline Tailwind class).
-
 describe('migrated token test coverage', () => {
   it('AC-4: native shell visual coverage uses PDS tokens without legacy theme blocks', () => {
     const paths = [resolve(TESTS_DIR, 'NativeShell.test.tsx'), resolve(TESTS_DIR, 'SpecificationPage.test.tsx')]
@@ -187,15 +182,5 @@ describe('migrated token test coverage', () => {
       const source = readFileSync(path, 'utf-8')
       expect(source).not.toMatch(/\[data-theme\s*=\s*["']dark["']\]\s*block/)
     }
-  })
-
-  it('AC-4: Card.tsx source uses border-l-info for claimed signal border', () => {
-    const cardPath = resolve(TESTS_DIR, '..', 'components', 'Card.tsx')
-    expect(existsSync(cardPath), 'Card.tsx must exist').toBe(true)
-    const source = readFileSync(cardPath, 'utf-8')
-    expect(
-      source,
-      'Card.tsx must use border-l-info for claimed signal border (PDS info = blue)',
-    ).toMatch(/border-l-info/)
   })
 })

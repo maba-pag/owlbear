@@ -1,9 +1,11 @@
 import { lazy, type ComponentType, type LazyExoticComponent } from 'react'
-import type { KanbanBoardProps } from './KanbanBoard'
 
 const SpecificationPage = lazy(() => import('./pages/SpecificationPage'))
 const DeliveryPage = lazy(() => import('./pages/DeliveryPage'))
 const RequestsPage = lazy(() => import('./pages/RequestsPage'))
+const ActivityPage = lazy(() => import('./pages/ActivityPage'))
+const EvidencePage = lazy(() => import('./pages/EvidencePage'))
+const LegacyPage = lazy(() => import('./pages/LegacyPage'))
 const IdeasPage = lazy(() => import('./pages/IdeasPage'))
 const MemoryTab = lazy(() => import('./pages/MemoryTab'))
 
@@ -15,7 +17,6 @@ export interface RouteConfigEntry {
   icon: string
   kind?: 'board' | 'workspace'
   component:
-    | ComponentType<KanbanBoardProps>
     | WorkspaceComponent
     | LazyExoticComponent<WorkspaceComponent>
 }
@@ -38,6 +39,24 @@ export const routeConfig: RouteConfigEntry[] = [
     label: 'Requests',
     icon: 'requests',
     component: RequestsPage,
+  },
+  {
+    path: '/activity',
+    label: 'Activity',
+    icon: 'activity',
+    component: ActivityPage,
+  },
+  {
+    path: '/evidence',
+    label: 'Evidence',
+    icon: 'evidence',
+    component: EvidencePage,
+  },
+  {
+    path: '/legacy',
+    label: 'Legacy',
+    icon: 'legacy',
+    component: LegacyPage,
   },
   {
     path: '/memories',

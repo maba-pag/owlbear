@@ -116,8 +116,8 @@ describe('TestFromAC_PdsTrapBehavior', () => {
   beforeEach(() => {
     // Clear module cache so each test gets a fresh main.tsx execution
     vi.resetModules()
-    // Remove any prior namespace state
-    delete (document as Record<string, unknown>).porscheDesignSystem
+    // Reset prior namespace state without breaking delayed PDS polyfill callbacks.
+    ;(document as Record<string, unknown>).porscheDesignSystem = {}
     // Ensure customElements.whenDefined resolves immediately (no real PDS loading)
     vi.spyOn(customElements, 'whenDefined').mockResolvedValue(
       undefined as unknown as CustomElementConstructor,
@@ -125,7 +125,7 @@ describe('TestFromAC_PdsTrapBehavior', () => {
   })
 
   afterEach(() => {
-    delete (document as Record<string, unknown>).porscheDesignSystem
+    ;(document as Record<string, unknown>).porscheDesignSystem = {}
     vi.restoreAllMocks()
   })
 

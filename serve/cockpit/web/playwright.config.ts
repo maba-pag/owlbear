@@ -23,8 +23,20 @@ export default defineConfig({
       testMatch: /memory-lifecycle-assembled\.spec\.ts/,
       use: { ...devices['Desktop Chrome'], baseURL: 'http://127.0.0.1:8422' },
     },
+    {
+      name: 'native-proof-assembled',
+      testMatch: /native-proof-assembled\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'], baseURL: 'http://127.0.0.1:8423' },
+    },
   ],
-  webServer: process.env['LIFECYCLE_E2E']
+  webServer: process.env['NATIVE_PROOF_E2E']
+    ? {
+        command: 'npm run build && node e2e/support/start-native-proof-stack.mjs',
+        url: 'http://127.0.0.1:8423/health',
+        reuseExistingServer: false,
+        timeout: 120_000,
+      }
+    : process.env['LIFECYCLE_E2E']
     ? {
         command: 'npm run build && node e2e/support/start-memory-lifecycle-stack.mjs',
         url: 'http://127.0.0.1:8422/health',

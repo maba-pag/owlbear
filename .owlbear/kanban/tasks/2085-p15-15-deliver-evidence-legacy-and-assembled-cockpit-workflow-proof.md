@@ -1,10 +1,10 @@
 ---
 id: 2085
 title: 'P15-15: Deliver evidence, legacy, and assembled Cockpit workflow proof'
-status: build
+status: verify
 priority: high
 created: 2026-07-26T02:00:36.235890+02:00
-updated: 2026-07-26T02:00:36.235890+02:00
+updated: 2026-07-27T01:05:44.301473+02:00
 tags:
   - phase-15
   - change:replace-delivery-pipeline
@@ -59,3 +59,19 @@ Out: setup/snapshot/global cutover (DN-012), complete-system audit (DN-013), Mem
 Complexity waiver: Activity, Evidence, Legacy, route retirement, and assembled proof close one immutable-provenance experience; splitting proof would leave no build-owned real-stack boundary.
 
 Proof guidance: build the SPA, start real FastAPI over a seeded native store, and run Playwright with no HTTP route interception under PROOF-012.
+
+[[2026-07-27T01:05:44+02:00]]
+## Builder Notes
+DONE
+
+Implemented the final native Cockpit readers and route retirement for DN-011 packet 6. Activity and Evidence provide current/full immutable history, code revisions, validity labels, and supersession chains; Legacy exposes bounded provenance-only task/request/activity inventory. The final shell exposes Specification, Delivery, Requests, Activity, Evidence, Legacy, Memory, and Ideas, with superseded Kanban/Decisions/task-mutation production and dedicated test surfaces removed.
+
+PROOF-012 now runs a built SPA over real FastAPI and temporary canonical stores without HTTP interception. Separate 1440x900 and 390x844 journeys passed, including persisted request resolution, every final route, screenshots, keyboard/geometry/overflow checks, preserved Memory/Ideas, and a real modular 300-node authority with fewer than 100 mounted rows.
+
+A real-stack defect was repaired at the owning boundary: NativeRuntime now owns request show/resolve, successful resolution resets RuntimeQuery projections, and an RLock makes reset/index/read atomic across FastAPI threads. The primed-cache request/history regression passes.
+
+Evidence: desktop Playwright 1 passed in 52.0s; mobile Playwright 1 passed in 54.7s; focused Python 25 passed; Cockpit domain 175 passed; frontend 264 passed; production build transformed 446 modules; Stylelint and HTMLHint clean; changed-file Ruff check/format clean; removed-decisions endpoint 5 passed; PDS cleanup 12 passed; legacy-loader owner suite 27 passed; VS Code diagnostics clean. Builder challenger decision: pass.
+
+Broad kanban xdist regression progressed beyond 88 percent after obsolete graph.yaml compatibility tests were removed but reported two failures whose tracebacks were lost to terminal transport. Historical evidence points to multiprocessing harness pressure rather than this packet, and no task-boundary production defect was evidenced; challenger classified this as non-blocking residual broad-suite risk.
+
+Adopted the complete interrupted-attempt diff within the shaped envelope, including current externally formatted runtime-query and proof-seeder contents.

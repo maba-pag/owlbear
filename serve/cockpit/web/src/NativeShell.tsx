@@ -10,6 +10,9 @@ const ICONS = {
   specification: 'document',
   delivery: 'route',
   requests: 'question',
+  activity: 'clock',
+  evidence: 'document',
+  legacy: 'history',
   memory: 'brain',
   ideas: 'user-manual',
 } as const
@@ -53,14 +56,14 @@ export default function NativeShell() {
           </div>
           <ThemeToggle compact />
         </div>
-        <nav aria-label="Product phases" className="mx-auto grid w-full max-w-[1440px] grid-cols-5 gap-0.5 overflow-hidden px-0.5 sm:gap-static-xs sm:px-static-md md:px-static-xl">
+        <nav aria-label="Product phases" className="mx-auto flex w-full max-w-[1440px] gap-0.5 overflow-x-auto px-0.5 sm:gap-static-xs sm:px-static-md md:px-static-xl">
           {navItems.map((route) => (
             <PLink
               key={route.path}
               href={`${route.path}${search}`}
               aria-current={route.active ? 'page' : undefined}
               className={[
-                'inline-flex min-h-11 min-w-0 items-center justify-center gap-static-xs border-b-2 px-0.5 py-static-xs text-[0.7rem] font-semibold sm:px-static-sm sm:text-sm',
+                'inline-flex min-h-11 min-w-[5.5rem] flex-1 items-center justify-center gap-static-xs border-b-2 px-0.5 py-static-xs text-[0.7rem] font-semibold sm:px-static-sm sm:text-sm',
                 route.active ? 'border-primary text-primary' : 'border-transparent text-contrast-medium',
               ].join(' ')}
               onClick={(event) => {

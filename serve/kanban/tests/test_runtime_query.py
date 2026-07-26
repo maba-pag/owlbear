@@ -17,7 +17,7 @@ from owlbear_kanban import (
     load_change,
     plan_corrective_route,
 )
-from owlbear_kanban.runtime_requests import NativeRequest, NativeRequestRuntime
+from owlbear_kanban.runtime_requests import NativeRequest, NativeRequestRuntime, RequestResolution
 from owlbear_kanban.runtime_transaction import RuntimeTransaction, TransactionParticipant
 
 
@@ -196,9 +196,24 @@ def test_request_projection_uses_persisted_native_records(tmp_path: Path) -> Non
     requests = runtime.list_requests(limit=10)
     history = runtime.list_history(limit=10)
 
+    resolution = RequestResolution(
+        request_id=request.request_id,
+        disposition="local",
+        resolved_at="2026-07-24T00:02:00Z",
+        resolved_by="operator",
+        response="signed receipt exists",
+        rationale="Required evidence was supplied.",
+    )
+    resolved = runtime.resolve_request(resolution)
+    refreshed_requests = runtime.list_requests(limit=10)
+    refreshed_history = runtime.list_history(limit=10)
+
     assert jobs.items[0].requests[0].request == request
     assert requests.items[0].request == request
     assert next(item for item in history.items if item.kind == "request").request == requests.items[0]
+    assert resolved.request.resolution == resolution
+    assert refreshed_requests.items == (resolved.request,)
+    assert next(item for item in refreshed_history.items if item.kind == "request").request == resolved.request
 
 
 def test_work_health_is_stable_bounded_and_non_mutating(tmp_path: Path) -> None:

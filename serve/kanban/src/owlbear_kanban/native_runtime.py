@@ -51,6 +51,12 @@ from owlbear_kanban.runtime_query import (
     RuntimeQuery,
     WorkHealthResult,
 )
+from owlbear_kanban.runtime_requests import (
+    NativeRequestRuntime,
+    RequestResolution,
+    ResolveRequestResult,
+    StoredRequest,
+)
 from owlbear_kanban.runtime_transaction import (
     ReplacementTransactionParticipant,
     RuntimeTransaction,
@@ -64,8 +70,6 @@ if TYPE_CHECKING:
 
     from owlbear_kanban.change import ChangeRevision
     from owlbear_kanban.proof_checkout import ProofCheckoutManager
-    from owlbear_kanban.runtime_requests import StoredRequest
-
 _RECOVERY_EVENT_SEQUENCE = 2
 _PACKET_ID = re.compile(r"^(DN-[0-9]{3})-PK-[0-9]{3}$")
 _STABLE_ID = re.compile(r"^(?:REQ|NEG|KEEP|DEC|WF|MOD|IF|MIG|RISK|PROOF|DN)-[0-9]{3}$")
@@ -670,6 +674,24 @@ class NativeRuntime:
     def list_requests(self, *, cursor: str | None = None, limit: int = 100) -> RuntimePage[StoredRequest]:
         """Return one bounded page of native requests."""
         return self._query.list_requests(cursor=cursor, limit=limit)
+
+    def show_request(self, request_id: str) -> StoredRequest:
+        """Return one native request with its optional resolution."""
+        return NativeRequestRuntime(self._revision, self._work_root).show_request(request_id)
+
+    def resolve_request(
+        self,
+        resolution: RequestResolution,
+        *,
+        failure: Callable[[str], None] | None = None,
+    ) -> ResolveRequestResult:
+        """Resolve one native request and refresh cached runtime projections."""
+        result = NativeRequestRuntime(self._revision, self._work_root).resolve_request(
+            resolution,
+            failure=failure,
+        )
+        self._query.reset()
+        return result
 
     def list_history(self, *, cursor: str | None = None, limit: int = 100) -> RuntimePage[RuntimeHistoryEntry]:
         """Return one bounded page across immutable runtime history."""

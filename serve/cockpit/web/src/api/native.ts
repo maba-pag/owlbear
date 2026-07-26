@@ -147,9 +147,14 @@ export interface NativeFinding {
 }
 
 export interface NativeReceipt {
+  schema_version: number
   receipt_id: string
   kind: string
+  change_id: string
+  delivery_digest: string
   issued_at: string
+  impact_closure: { paths: string[]; authority_targets: string[] } | null
+  payload: Record<string, unknown>
   [key: string]: unknown
 }
 
@@ -163,6 +168,11 @@ export interface NativeActivityEntry {
   identity: string
   timestamp: string
   kind: string
+  job_id: number | null
+  attempt: NativeAttempt | null
+  finding: NativeFinding | null
+  receipt: NativeReceipt | null
+  request: NativeStoredRequest | null
   [key: string]: unknown
 }
 
@@ -259,10 +269,13 @@ export interface NativeInvalidationDetail {
 }
 
 export interface LegacyInventory {
-  tasks: unknown[]
-  requests: unknown[]
-  activity: unknown[]
-  [key: string]: unknown
+  tasks: Array<{ provenance: 'tasks' | 'archive'; task: Record<string, unknown> }>
+  requests: Array<{
+    provenance: 'decisions/pending' | 'decisions/resolved'
+    request: Record<string, unknown>
+  }>
+  activity: Array<{ provenance: 'activity.jsonl'; event: Record<string, unknown> }>
+  truncated: { tasks: boolean; requests: boolean; activity: boolean }
 }
 
 export class NativeApiError extends Error {

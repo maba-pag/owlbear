@@ -20,15 +20,18 @@ describe('RoutesConfigContracts', () => {
     expect(Object.isFrozen(routeConfig)).toBe(false)
   })
 
-  it('keeps peer Specification and Delivery paths present and unique', () => {
+  it('exposes exactly the final native and preserved utility routes', () => {
     const paths = routeConfig.map((entry) => entry.path)
-    expect(paths).toContain('/')
-    expect(paths).toContain('/delivery')
+    expect(paths).toEqual([
+      '/', '/delivery', '/requests', '/activity', '/evidence', '/legacy', '/memories', '/ideas',
+    ])
     expect(new Set(paths).size).toBe(paths.length)
+    expect(paths).not.toContain('/kanban')
+    expect(paths).not.toContain('/decisions')
   })
 
   it('keeps each route entry shaped with path, label, icon, and component', () => {
-    expect(routeConfig.length).toBeGreaterThanOrEqual(2)
+    expect(routeConfig).toHaveLength(8)
     for (const entry of routeConfig) {
       expect(entry).toHaveProperty('path')
       expect(entry).toHaveProperty('label')

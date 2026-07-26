@@ -31,7 +31,6 @@ from owlbear_kanban import (
     SetJobPriorityResult,
 )
 from owlbear_kanban.runtime_requests import (
-    NativeRequestRuntime,
     RequestConflictError,
     RequestNotFoundError,
     RequestReferenceError,
@@ -77,7 +76,7 @@ def resolve_request(
         request_id=request_id,
         **body.model_dump(exclude={"delivery_digest"}),
     )
-    runtime = NativeRequestRuntime(context.revision, _work_root(engine))
+    runtime = context.runtime
     try:
         return runtime.resolve_request(resolution)
     except RequestNotFoundError as exc:

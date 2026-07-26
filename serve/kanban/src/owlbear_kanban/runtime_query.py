@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from pathlib import Path
+from threading import RLock
 from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, ConfigDict
@@ -137,10 +138,15 @@ class RuntimeQuery:
         self._findings = FindingStore(work_root)
         self._receipts = ReceiptStore(revision)
         self._proof_checkouts = proof_checkouts
+        self._lock = RLock()
         self.reset()
 
     def reset(self) -> None:
         """Discard indexes after a general runtime mutation."""
+        with self._lock:
+            self._reset()
+
+    def _reset(self) -> None:
         self._jobs_by_id: dict[int, JobRecord] | None = None
         self._job_tokens: dict[int, str] = {}
         self._archived_ids: set[int] = set()
@@ -153,6 +159,10 @@ class RuntimeQuery:
 
     def refresh_closure(self, receipt_ids: tuple[str, ...], job_ids: tuple[int, ...]) -> None:
         """Refresh only identities explicitly returned by invalidation."""
+        with self._lock:
+            self._refresh_closure(receipt_ids, job_ids)
+
+    def _refresh_closure(self, receipt_ids: tuple[str, ...], job_ids: tuple[int, ...]) -> None:
         if self._jobs_by_id is None:
             return
         for job_id in job_ids:
@@ -184,58 +194,64 @@ class RuntimeQuery:
         limit: int = 100,
     ) -> RuntimePage[RuntimeJobProjection]:
         """Project only one numeric job-ID page from lazy indexes."""
-        self._ensure_indexes()
-        assert self._jobs_by_id is not None
-        identities = tuple(str(job_id) for job_id in sorted(self._jobs_by_id))
-        id_page = _page(identities, identities, cursor, limit)
-        items = tuple(
-            self._project_job(self._jobs_by_id[int(identity)], candidate_revision) for identity in id_page.items
-        )
-        return RuntimePage(items=items, next_cursor=id_page.next_cursor)
+        with self._lock:
+            self._ensure_indexes()
+            assert self._jobs_by_id is not None
+            identities = tuple(str(job_id) for job_id in sorted(self._jobs_by_id))
+            id_page = _page(identities, identities, cursor, limit)
+            items = tuple(
+                self._project_job(self._jobs_by_id[int(identity)], candidate_revision) for identity in id_page.items
+            )
+            return RuntimePage(items=items, next_cursor=id_page.next_cursor)
 
     def list_attempts(self, *, cursor: str | None = None, limit: int = 100) -> RuntimePage[AttemptEvent]:
         """List attempt history by attempt ID and sequence."""
-        self._ensure_indexes()
-        assert self._attempts_by_job is not None
-        items = tuple(
-            sorted(
-                (event for values in self._attempts_by_job.values() for event in values),
-                key=lambda event: (event.attempt_id, event.sequence),
+        with self._lock:
+            self._ensure_indexes()
+            assert self._attempts_by_job is not None
+            items = tuple(
+                sorted(
+                    (event for values in self._attempts_by_job.values() for event in values),
+                    key=lambda event: (event.attempt_id, event.sequence),
+                )
             )
-        )
-        return _page(items, tuple(f"{item.attempt_id}/{item.sequence}" for item in items), cursor, limit)
+            return _page(items, tuple(f"{item.attempt_id}/{item.sequence}" for item in items), cursor, limit)
 
     def list_findings(self, *, cursor: str | None = None, limit: int = 100) -> RuntimePage[Finding]:
         """List finding history by finding ID."""
-        self._ensure_indexes()
-        assert self._findings_by_job is not None
-        items = tuple(
-            sorted(
-                (finding for values in self._findings_by_job.values() for finding in values),
-                key=lambda finding: finding.finding_id,
+        with self._lock:
+            self._ensure_indexes()
+            assert self._findings_by_job is not None
+            items = tuple(
+                sorted(
+                    (finding for values in self._findings_by_job.values() for finding in values),
+                    key=lambda finding: finding.finding_id,
+                )
             )
-        )
-        return _page(items, tuple(item.finding_id for item in items), cursor, limit)
+            return _page(items, tuple(item.finding_id for item in items), cursor, limit)
 
     def list_receipts(self, *, cursor: str | None = None, limit: int = 100) -> RuntimePage[ReceiptRecord]:
         """List receipt history by receipt ID."""
-        self._ensure_indexes()
-        assert self._receipts_by_id is not None
-        items = tuple(self._receipts_by_id[receipt_id] for receipt_id in sorted(self._receipts_by_id))
-        return _page(items, tuple(item.receipt_id for item in items), cursor, limit)
+        with self._lock:
+            self._ensure_indexes()
+            assert self._receipts_by_id is not None
+            items = tuple(self._receipts_by_id[receipt_id] for receipt_id in sorted(self._receipts_by_id))
+            return _page(items, tuple(item.receipt_id for item in items), cursor, limit)
 
     def list_requests(self, *, cursor: str | None = None, limit: int = 100) -> RuntimePage[StoredRequest]:
         """List request history by request ID."""
-        self._ensure_indexes()
-        assert self._requests_by_id is not None
-        items = tuple(self._requests_by_id[request_id] for request_id in sorted(self._requests_by_id))
-        return _page(items, tuple(item.request.request_id for item in items), cursor, limit)
+        with self._lock:
+            self._ensure_indexes()
+            assert self._requests_by_id is not None
+            items = tuple(self._requests_by_id[request_id] for request_id in sorted(self._requests_by_id))
+            return _page(items, tuple(item.request.request_id for item in items), cursor, limit)
 
     def list_history(self, *, cursor: str | None = None, limit: int = 100) -> RuntimePage[RuntimeHistoryEntry]:
         """List chronological immutable history across native stores."""
-        self._ensure_indexes()
-        items = tuple(sorted(self._history_entries(), key=lambda item: (item.timestamp, item.identity)))
-        return _page(items, tuple(item.identity for item in items), cursor, limit)
+        with self._lock:
+            self._ensure_indexes()
+            items = tuple(sorted(self._history_entries(), key=lambda item: (item.timestamp, item.identity)))
+            return _page(items, tuple(item.identity for item in items), cursor, limit)
 
     def work_health(self, *, cursor: str | None = None, limit: int = 100) -> WorkHealthResult:
         """Check only one deterministic path page without mutation."""
