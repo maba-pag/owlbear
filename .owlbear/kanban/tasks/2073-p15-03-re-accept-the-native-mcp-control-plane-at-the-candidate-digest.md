@@ -1,10 +1,10 @@
 ---
 id: 2073
 title: 'P15-03: Re-accept the native MCP control plane at the candidate digest'
-status: build
+status: verify
 priority: high
 created: 2026-07-26T01:58:52.402176+02:00
-updated: 2026-07-26T01:58:52.402176+02:00
+updated: 2026-07-26T03:07:03.834616+02:00
 tags:
   - phase-15
   - candidate-reacceptance
@@ -47,3 +47,16 @@ In: IF-010, PROOF-011, assembled MCP server, candidate change/store fixture, old
 Out: new MCP controls for priority/cancel, which are not required by the admitted DN-011 browser path; frontend and cutover.
 
 Proof guidance: execute public MCP tools over the real graph-aware engine at a recorded SHA with a temporary store; mocks may not replace server assembly.
+
+[[2026-07-26T03:07:03+02:00]]
+## Builder Notes
+DONE: Re-accepted unchanged DN-009/PROOF-011 at candidate digest `bf5edd...`, tested SHA `2a804df1ce9b291c5919c9356883f958bba1c362`.
+
+Evidence:
+- Complete `serve/mcp-kanban/tests`: 102 passed.
+- Focused inventory/native query/request: 39 passed.
+- Focused admission/completion/designer/planner/builder interactions: 36 passed.
+- Builder challenger: pass; confirmed every PROOF-011 category and generic/old tool absence over the assembled real-engine server.
+- MCP product/proof paths remained clean; focused lint passed.
+
+No product edit or priority/cancel MCP expansion was required because IF-010 is unchanged and DN-011 consumes IF-011. Builder memories assessed.
