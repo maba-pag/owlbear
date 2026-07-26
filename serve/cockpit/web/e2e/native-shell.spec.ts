@@ -88,6 +88,17 @@ for (const viewport of [
     }
     expect(selectorReached).toBe(true)
 
+    const focusedSections = new Set<string>()
+    for (let index = 0; index < 16; index += 1) {
+      await page.keyboard.press('Tab')
+      const labelledBy = await page.evaluate(() => document.activeElement?.getAttribute('aria-labelledby') ?? '')
+      if (labelledBy) {
+        focusedSections.add(labelledBy)
+      }
+    }
+    expect(focusedSections).toContain('metadata-heading')
+    expect(focusedSections).toContain('intent-heading')
+
     await page.screenshot({ path: `test-results/native-shell-${viewport.name}.png`, fullPage: true })
   })
 }

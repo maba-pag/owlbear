@@ -4,7 +4,7 @@ title: 'P15-11: Present peer Specification and Delivery Cockpit surfaces'
 status: verify
 priority: high
 created: 2026-07-26T01:59:59.934764+02:00
-updated: 2026-07-26T12:58:39.501172+02:00
+updated: 2026-07-26T13:05:35.591657+02:00
 tags:
   - phase-15
   - change:replace-delivery-pipeline
@@ -59,3 +59,24 @@ Verifier rejected bde1a1e473c51ae47cc151aba0ef62fb8936d580: URL-requested change
 
 [[2026-07-26T12:58:39+02:00]]
 Final repair gates missing URL changes on successfully loaded summaries, keeping loading, error, and missing states mutually coherent. Added delayed/error/loaded-missing regressions. Validation: build; provider5/5; mandatory components11/11; Playwright3 at desktop/mobile; final signoff PASS. Unrelated workspace state untouched.
+
+[[2026-07-26T13:04:26+02:00]]
+## Verify Notes
+
+REJECT at accepted candidate SHA `338ba0a52b5320d9efc77f8e291d124bb1666a1e` for delivery digest `bf5edd67478d5304943e695bbb6d53186f2520773c0964f448b658613ee96357`.
+
+Read-only HEAD report: the repair commit changes only `serve/cockpit/web/src/hooks/NativeChangeProvider.tsx` and `serve/cockpit/web/src/__tests__/NativeChangeProvider.test.tsx`; `serve/cockpit/web` remained clean before and after verification.
+
+Focused component command: `npm test` with `NativeChangeProvider.test.tsx`, `SpecificationPage.test.tsx`, `DeliveryPage.test.tsx`, and `NativeShell.test.tsx`. Exact result: 4 test files passed, 12 tests passed, duration 1.08 seconds.
+
+Focused browser command: Playwright `e2e/native-shell.spec.ts` with project `chromium`. Exact result: 3 tests passed in 5.4 seconds: desktop bounded keyboard-accessible geometry, mobile bounded keyboard-accessible geometry, and invalid URL-selected icon plus text in both phases. The configured server also completed its production build and preview startup.
+
+Verifier challenger decision: fail. The E2E keyboard loop proves that `change-selector` receives focus but does not assert that the named authority sections receive focus. Source gives Authority, Authority metadata, Product Intent, and Implementation design `tabIndex={0}`, and the component test checks the Product Intent tab-index contract, but the critical browser proof does not directly exercise authority-section focus at both required viewports. No product or test edits were made because this invocation was explicitly read-only.
+
+### Required Follow-up
+| # | Failure Key | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|--------------|-----------------|---------|----------|
+| 1 | AC-3/authority-keyboard-reach | builder | Extend the focused native-shell Chromium proof to tab beyond the change selector and assert focus reaches the authority section at both 1440x900 and 390x844, then rerun the focused Vitest and Chromium commands. | `serve/cockpit/web/e2e/native-shell.spec.ts` | Verifier challenger fail; current browser loop stops when `change-selector` is reached. |
+
+[[2026-07-26T13:05:35+02:00]]
+Verifier repair strengthens AC-3 browser proof: at 1440x900 and390x844 keyboard Tab traversal must reach change selector, Authority metadata, and Product Intent section hosts; geometry/no-overflow and invalid icon/text remain asserted. Playwright 3/3 passed.
