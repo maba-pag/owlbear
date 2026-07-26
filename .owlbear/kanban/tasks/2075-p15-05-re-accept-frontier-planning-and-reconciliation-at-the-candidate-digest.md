@@ -1,10 +1,10 @@
 ---
 id: 2075
 title: 'P15-05: Re-accept frontier planning and reconciliation at the candidate digest'
-status: build
+status: verify
 priority: high
 created: 2026-07-26T01:59:09.251790+02:00
-updated: 2026-07-26T01:59:09.251790+02:00
+updated: 2026-07-26T03:35:25.491925+02:00
 tags:
   - phase-15
   - candidate-reacceptance
@@ -51,3 +51,9 @@ In: plan-ready selection, per-node packet plans, expansion gates, reconciliation
 Out: packet building, acceptance, Cockpit, cutover.
 
 Proof guidance: exercise planner entry through real engine selection and node-scoped atomic publication; a fixture may provide repository inputs but not replace planner assembly.
+
+[[2026-07-26T03:35:25+02:00]]
+## Builder Notes
+DONE: Re-accepted unchanged DN-006/PROOF-005 at candidate digest `bf5edd...`, tested SHA `9be7018bbef8718a847b7df7c75d02ea275a0348`.
+
+Focused planner/native/dispatch proof: 12 passed. Builder challenger independently ran complete three-file boundary: 72 passed. Evidence covers candidate admission, stable topological frontier, atomic per-node plan/jobs and replay, invalid expansion zero-partial with prior-node preservation, acceptance-triggered reconciliation, old-build blocking, predecessor evidence, digest supersession, and precise invalidation preserving disjoint state. Product/proof clean; lint passed. No correction needed. Memories assessed.
