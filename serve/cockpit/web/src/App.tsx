@@ -1,32 +1,20 @@
-import { useMemo, type ReactNode } from 'react'
+import { useMemo } from 'react'
 import { createBrowserRouter, RouterProvider } from 'react-router'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
-import Shell from './Shell'
+import NativeShell from './NativeShell'
 import { ErrorBoundary } from './components/ErrorBoundary'
-import { CockpitProvider } from './hooks/CockpitProvider'
-import * as EventSourceProviderModule from './hooks/EventSourceProvider'
 import { NativeInvalidationProvider } from './hooks/NativeInvalidationProvider'
-
-function PassthroughProvider({ children }: { children: ReactNode; url?: string }) {
-  return <>{children}</>
-}
-
-const EventSourceProvider =
-  'EventSourceProvider' in EventSourceProviderModule
-    ? EventSourceProviderModule.EventSourceProvider
-    : PassthroughProvider
+import { NativeChangeProvider } from './hooks/NativeChangeProvider'
 
 function CockpitRuntime() {
   return (
-    <EventSourceProvider url="/api/events">
-      <NativeInvalidationProvider>
-        <CockpitProvider>
-          <ErrorBoundary label="Cockpit">
-            <Shell />
-          </ErrorBoundary>
-        </CockpitProvider>
-      </NativeInvalidationProvider>
-    </EventSourceProvider>
+    <NativeInvalidationProvider>
+      <NativeChangeProvider>
+        <ErrorBoundary label="Cockpit">
+          <NativeShell />
+        </ErrorBoundary>
+      </NativeChangeProvider>
+    </NativeInvalidationProvider>
   )
 }
 

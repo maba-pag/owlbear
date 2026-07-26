@@ -180,14 +180,13 @@ describe('retired legacy token tests', () => {
 // --custom-signal-claimed is used in Card.tsx source (inline Tailwind class).
 
 describe('migrated token test coverage', () => {
-  it('AC-4: BoardVisualDesign.test.tsx no longer asserts [data-theme="dark"] block in tokens.css (file deleted)', () => {
-    const path = resolve(TESTS_DIR, 'BoardVisualDesign.test.tsx')
-    expect(existsSync(path), 'BoardVisualDesign.test.tsx must exist (updated, not retired)').toBe(true)
-    const source = readFileSync(path, 'utf-8')
-    expect(
-      source,
-      'BoardVisualDesign.test.tsx must not assert [data-theme="dark"] override block — tokens.css is deleted',
-    ).not.toMatch(/\[data-theme\s*=\s*["']dark["']\]\s*block/)
+  it('AC-4: native shell visual coverage uses PDS tokens without legacy theme blocks', () => {
+    const paths = [resolve(TESTS_DIR, 'NativeShell.test.tsx'), resolve(TESTS_DIR, 'SpecificationPage.test.tsx')]
+    for (const path of paths) {
+      expect(existsSync(path), `${path} must exist`).toBe(true)
+      const source = readFileSync(path, 'utf-8')
+      expect(source).not.toMatch(/\[data-theme\s*=\s*["']dark["']\]\s*block/)
+    }
   })
 
   it('AC-4: Card.tsx source uses border-l-info for claimed signal border', () => {

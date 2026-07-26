@@ -72,9 +72,10 @@ interface NativeValueOptions<T> {
   resources: NativeResource[]
   load: () => Promise<T>
   pollIntervalMs?: number
+  enabled?: boolean
 }
 
-function useNativeValue<T>({ resources, load, pollIntervalMs = 10_000 }: NativeValueOptions<T>): {
+function useNativeValue<T>({ resources, load, pollIntervalMs = 10_000, enabled = true }: NativeValueOptions<T>): {
   data: T | null
   error: Error | null
   isLoading: boolean
@@ -113,8 +114,14 @@ function useNativeValue<T>({ resources, load, pollIntervalMs = 10_000 }: NativeV
 
   useEffect(() => {
     generationRef.current += 1
+    if (!enabled) {
+      setData(null)
+      setError(null)
+      setIsLoading(false)
+      return
+    }
     void refresh()
-  }, [load, refresh])
+  }, [enabled, load, refresh])
 
   useEffect(() => {
     const changed =
@@ -122,18 +129,18 @@ function useNativeValue<T>({ resources, load, pollIntervalMs = 10_000 }: NativeV
       (secondary.token !== null && secondary.token !== secondaryTokenRef.current)
     primaryTokenRef.current = primary.token
     secondaryTokenRef.current = secondary.token
-    if (changed) {
+    if (enabled && changed) {
       void refresh()
     }
-  }, [primary.token, refresh, secondary.token])
+  }, [enabled, primary.token, refresh, secondary.token])
 
   useEffect(() => {
-    if (primary.status === 'open') {
+    if (!enabled || primary.status === 'open') {
       return
     }
     const interval = setInterval(() => void refresh(), pollIntervalMs)
     return () => clearInterval(interval)
-  }, [pollIntervalMs, primary.status, refresh])
+  }, [enabled, pollIntervalMs, primary.status, refresh])
 
   return { data, error, isLoading, retry: () => void refresh() }
 }
@@ -142,9 +149,9 @@ export function useNativeChanges(): ReturnType<typeof useNativeValue<NativeChang
   return useNativeValue({ resources: ['changes'], load: listNativeChanges })
 }
 
-export function useNativeChange(changeId: string): ReturnType<typeof useNativeValue<NativeChangeDetail>> {
-  const load = useCallback(() => getNativeChange(changeId), [changeId])
-  return useNativeValue({ resources: ['changes'], load })
+export function useNativeChange(changeId: string | null): ReturnType<typeof useNativeValue<NativeChangeDetail>> {
+  const load = useCallback(() => getNativeChange(changeId ?? ''), [changeId])
+  return useNativeValue({ resources: ['changes'], load, enabled: changeId !== null })
 }
 
 export function useNativeGraph(changeId: string): ReturnType<typeof useNativeValue<NativeGraphDetail>> {

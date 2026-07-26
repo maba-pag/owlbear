@@ -50,8 +50,8 @@ function syncTagVariantAttr(variant: string) {
 }
 
 const NAV_ICONS: Record<string, IconName> = {
-  kanban: 'steering-wheel',
-  decisions: 'route',
+  specification: 'document',
+  delivery: 'route',
   memory: 'brain',
   ideas: 'user-manual',
 }
@@ -249,7 +249,7 @@ function Shell() {
     (route) => normalizeRoutePath(route.path) === normalizedPathname,
   )
   const matchedRoute = activeNavIndex >= 0 ? routeConfig[activeNavIndex] : undefined
-  const isKanbanRoute = normalizedPathname === '/'
+  const isKanbanRoute = matchedRoute?.kind === 'board'
   const isTaskDetailOpen = selectedTaskId !== null && (isKanbanRoute || isTaskDetailRouteOverlayOpen)
   const isNavRailOpen = isSidebarStartOpen
   const canvasKey = isNavRailOpen ? 'nav-open' : 'nav-closed'
@@ -268,7 +268,7 @@ function Shell() {
       return null
     }
 
-    if (matchedRoute.path === '/') {
+    if (matchedRoute.kind === 'board') {
       const KanbanRouteComponent = matchedRoute.component as ComponentType<KanbanBoardProps>
       return <KanbanRouteComponent {...kanbanProps} />
     }

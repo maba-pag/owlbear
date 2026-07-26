@@ -31,9 +31,8 @@
  *   AC3: Shell onResolved wiring already calls refetchPendingDRs; integration
  *        test verifies item removal from rendered list end-to-end.
  */
-import { describe, it, expect, vi, afterEach, beforeEach, beforeAll } from 'vitest'
-import { render, fireEvent, waitFor, act } from '@testing-library/react'
-import { MemoryRouter } from 'react-router'
+import { describe, it, expect, vi, afterEach, beforeAll } from 'vitest'
+import { render, fireEvent, waitFor } from '@testing-library/react'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
 import type { PendingDR } from '../hooks/usePendingDRs'
 
@@ -44,48 +43,12 @@ vi.mock('react-markdown', () => ({
   ),
 }))
 
-// ─── Module mocks for integration tests (AC3) ────────────────────────────────
-vi.mock('../hooks/EventSourceProvider', () => ({
-  useSSEEvent: vi.fn(() => ({ status: 'closed', mtime: null })),
-}))
-vi.mock('../hooks/useBoard', () => ({ useBoard: vi.fn() }))
-vi.mock('../hooks/usePendingDRs', () => ({ usePendingDRs: vi.fn() }))
-vi.mock('../hooks/useWorkspaceHealth', () => ({
-  useWorkspaceHealth: vi.fn(() => ({
-    health: { status: 'healthy', modules: {} },
-    connectionError: null,
-    isFetching: false,
-    receipt: null,
-    refresh: vi.fn(),
-    refreshAfterMutation: vi.fn(),
-    mergeRepair: vi.fn(),
-    dismissReceipt: vi.fn(),
-  })),
-}))
-vi.mock('../hooks/usePendingMemoryCount', () => ({
-  usePendingMemoryCount: vi.fn(() => ({ count: 0 })),
-}))
 vi.mock('../api/errorMessage', () => ({
   getResponseErrorMessage: vi.fn().mockResolvedValue('Fetch failed'),
 }))
 
-// Stub Shell child components not under test
-vi.mock('../KanbanBoard', () => ({
-  default: vi.fn(() => <div data-testid="kanban-board-stub" />),
-}))
-vi.mock('../components/DetailTab', () => ({ default: vi.fn(() => null) }))
-vi.mock('../components/ActivityTab', () => ({ default: vi.fn(() => null) }))
-vi.mock('../components/DecisionViewport', () => ({ default: vi.fn(() => null) }))
-vi.mock('../components/RepairPanel', () => ({ default: vi.fn(() => null) }))
-vi.mock('../components/ThemeToggle', () => ({ default: vi.fn(() => null) }))
-
 // ─── Imports (after mocks) ────────────────────────────────────────────────────
-import { useBoard } from '../hooks/useBoard'
-import { usePendingDRs } from '../hooks/usePendingDRs'
-import Shell from '../Shell'
-import { CockpitProvider } from '../hooks/CockpitProvider'
 import ResolveModal from '../components/ResolveModal'
-import type { Board } from '../hooks/useBoard'
 
 // ─── PDS web-component workaround ────────────────────────────────────────────
 beforeAll(() => {
@@ -130,12 +93,6 @@ const DR_DECISION: PendingDR = {
   body_preview: 'Which approach should we adopt?',
 }
 
-const BOARD: Board = {
-  statuses: [{ name: 'todo' }, { name: 'in-progress' }, { name: 'done' }],
-  priorities: ['someday', 'nice-to-have', 'important', 'needed', 'critical'],
-  valid_transitions: { todo: ['in-progress'], 'in-progress': ['done'], done: [] },
-}
-
 // ─── Unit render helper ───────────────────────────────────────────────────────
 
 function renderModal(
@@ -147,49 +104,6 @@ function renderModal(
     <PorscheDesignSystemProvider>
       <ResolveModal dr={dr} onClose={onClose} onResolved={onResolved} />
     </PorscheDesignSystemProvider>,
-  )
-}
-
-// ─── Integration helpers (AC3) ───────────────────────────────────────────────
-
-function stubBoard() {
-  const refetchTasks = vi.fn()
-  vi.mocked(useBoard).mockReturnValue({
-    board: BOARD,
-    tasks: [],
-    loading: false,
-    error: null,
-    isFetching: false,
-    isStale: false,
-    health: 'green',
-    refetchTasks,
-    lastDecisionsMtime: null,
-  } as ReturnType<typeof useBoard>)
-  return refetchTasks
-}
-
-function stubPendingDRs(overrides?: Partial<ReturnType<typeof usePendingDRs>>) {
-  const refetch = overrides?.refetch ?? vi.fn()
-  vi.mocked(usePendingDRs).mockReturnValue({
-    count: overrides?.items?.length ?? 0,
-    items: [],
-    isLoading: false,
-    error: null,
-    refetch,
-    ...overrides,
-  } as ReturnType<typeof usePendingDRs>)
-  return refetch
-}
-
-function buildShellTree(route = '/decisions') {
-  return (
-    <PorscheDesignSystemProvider>
-      <MemoryRouter initialEntries={[route]}>
-        <CockpitProvider>
-          <Shell />
-        </CockpitProvider>
-      </MemoryRouter>
-    </PorscheDesignSystemProvider>
   )
 }
 
@@ -364,87 +278,4 @@ describe('ActionResolver', () => {
     })
   })
 
-  // ─── AC3: Resolved action disappears from pending list ─────────────────────
-
-  describe('AC3: resolved action entry removed from list after HTTP 200', () => {
-    beforeEach(() => {
-      // Stub fetch for task detail (used by Shell internally)
-      vi.stubGlobal(
-        'fetch',
-        vi.fn((_url: string, init?: RequestInit) =>
-          new Promise<never>((_resolve, reject) => {
-            init?.signal?.addEventListener('abort', () =>
-              reject(new DOMException('Aborted', 'AbortError')),
-            )
-          }),
-        ),
-      )
-      stubBoard()
-    })
-
-    it('ac3 integration: resolved action card [dr-item-{id}] removed from list; resolve-action-body visible before submit', async () => {
-      // Compound: opens the resolver, verifies resolve-action-body is present (AC1a)
-      // before submitting, then verifies the item disappears from the list (AC3).
-      // RED: fails when ResolveModal renders without [data-testid='resolve-action-body'].
-      const refetch = vi.fn()
-      stubPendingDRs({ items: [DR_ACTION], count: 1, refetch })
-
-      const { container, rerender } = render(buildShellTree('/decisions'))
-
-      // The action item must appear as a list card in DecisionsPage.
-      await waitFor(() => {
-        expect(
-          container.querySelector(`[data-testid="dr-item-${DR_ACTION.id}"]`),
-        ).not.toBeNull()
-      })
-
-      // Open the resolver by clicking the item card.
-      fireEvent.click(
-        container.querySelector(`[data-testid="dr-item-${DR_ACTION.id}"]`) as HTMLElement,
-      )
-
-      // Wait for the ResolveModal to appear.
-      await waitFor(() => {
-        expect(container.querySelector('[data-testid="resolve-submit"]')).not.toBeNull()
-      })
-
-      // AC1a precondition: resolve-action-body must be directly visible (not in <details>).
-      // RED: this assertion fails — [data-testid='resolve-action-body'] does not exist.
-      const bodyEl = container.querySelector('[data-testid="resolve-action-body"]')
-      expect(bodyEl).not.toBeNull()
-
-      // Stub fetch to return HTTP 200 for the POST /api/requests/{id}/resolve call.
-      vi.stubGlobal(
-        'fetch',
-        vi.fn(() =>
-          Promise.resolve({
-            ok: true,
-            status: 200,
-            json: () => Promise.resolve({ request_id: DR_ACTION.id }),
-          }),
-        ),
-      )
-
-      // Click Complete in the resolver modal.
-      fireEvent.click(
-        container.querySelector('[data-testid="resolve-submit"]') as HTMLElement,
-      )
-
-      // After POST 200, onResolved fires → refetchPendingDRs called.
-      await waitFor(() => {
-        expect(refetch).toHaveBeenCalled()
-      })
-
-      // Update the mock to reflect the state after refetch (item removed by backend).
-      stubPendingDRs({ items: [], count: 0, refetch })
-      await act(async () => {
-        rerender(buildShellTree('/decisions'))
-      })
-
-      // The resolved action's card must no longer appear in the list.
-      expect(
-        container.querySelector(`[data-testid="dr-item-${DR_ACTION.id}"]`),
-      ).toBeNull()
-    })
-  })
 })

@@ -20,10 +20,10 @@ describe('RoutesConfigContracts', () => {
     expect(Object.isFrozen(routeConfig)).toBe(false)
   })
 
-  it('keeps the base and decisions paths present and unique', () => {
+  it('keeps peer Specification and Delivery paths present and unique', () => {
     const paths = routeConfig.map((entry) => entry.path)
     expect(paths).toContain('/')
-    expect(paths).toContain('/decisions')
+    expect(paths).toContain('/delivery')
     expect(new Set(paths).size).toBe(paths.length)
   })
 
@@ -43,25 +43,24 @@ describe('RoutesConfigContracts', () => {
     }
   })
 
-  it('keeps the home route eager and callable', () => {
+  it('loads the home Specification route lazily', () => {
     const homeEntry = routeConfig.find((entry) => entry.path === '/')
     expect(homeEntry?.component).toBeDefined()
-    expect((homeEntry?.component as { $$typeof?: symbol })?.$$typeof).not.toBe(Symbol.for('react.lazy'))
-    expect(typeof homeEntry?.component).toBe('function')
+    expect((homeEntry?.component as { $$typeof?: symbol })?.$$typeof).toBe(Symbol.for('react.lazy'))
   })
 })
 
 describe('RoutesLazyLoadingContracts', () => {
-  it('loads the /decisions route via React.lazy', () => {
-    const entry = routeConfig.find((route) => route.path === '/decisions')
+  it('loads the /delivery route via React.lazy', () => {
+    const entry = routeConfig.find((route) => route.path === '/delivery')
     expect(entry).toBeDefined()
     expect((entry!.component as { $$typeof?: symbol }).$$typeof).toBe(Symbol.for('react.lazy'))
   })
 
-  it('starts the DecisionsPage import inside the React.lazy callback', () => {
+  it('starts Specification and Delivery imports inside React.lazy callbacks', () => {
     const source = readFileSync(routesSource, 'utf-8')
-    expect(source).toMatch(/lazy\(\s*\(\)\s*=>\s*import\(['"]\.\/pages\/DecisionsPage['"]\)\s*\)/)
-    expect(source).not.toMatch(/const\s+\w*decisions\w*\s*=\s*import\(['"]\.\/pages\/DecisionsPage['"]\)/i)
+    expect(source).toMatch(/lazy\(\s*\(\)\s*=>\s*import\(['"]\.\/pages\/SpecificationPage['"]\)\s*\)/)
+    expect(source).toMatch(/lazy\(\s*\(\)\s*=>\s*import\(['"]\.\/pages\/DeliveryPage['"]\)\s*\)/)
   })
 
   it('keeps multiple JS chunks in dist/assets after build', () => {

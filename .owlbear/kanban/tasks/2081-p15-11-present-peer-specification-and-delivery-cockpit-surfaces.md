@@ -1,10 +1,10 @@
 ---
 id: 2081
 title: 'P15-11: Present peer Specification and Delivery Cockpit surfaces'
-status: build
+status: verify
 priority: high
 created: 2026-07-26T01:59:59.934764+02:00
-updated: 2026-07-26T01:59:59.934764+02:00
+updated: 2026-07-26T12:41:45.236375+02:00
 tags:
   - phase-15
   - change:replace-delivery-pipeline
@@ -50,3 +50,6 @@ In: routes/shell/provider, change selector, Specification authority reader, inva
 Out: graph visualization, operational board, requests, evidence, legacy, feature changes to Memory/Ideas.
 
 Proof guidance: component tests plus browser geometry/focus checks at 1440×900 and 390×844; lower HTTP may be replaced here because PROOF-012 belongs to the final packet.
+
+[[2026-07-26T12:41:45+02:00]]
+Builder implementation at digest bf5edd67478d5304943e695bbb6d53186f2520773c0964f448b658613ee96357 and base SHA 5197c5e150e661168ff13a515677c37bb48787d4. Production App now mounts native-only peer Specification/Delivery shell with URL-backed change selection; invalid/missing/loading/error states; retained Retry; accepted-only decisions; digest, intent, design and authority/admission metadata; Memory/Ideas modules unchanged and Memory task links route to Delivery job URLs. Browser proof at 1440x900 and390x844 verifies keyboard selector reach, icon+text invalid states, bounded controls and no horizontal overflow. Curated only retired legacy Shell/Kanban/Decisions composition tests. Validation 1485 pass/2skip, build, Playwright3, final challenger PASS.
