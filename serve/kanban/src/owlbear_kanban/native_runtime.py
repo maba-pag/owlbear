@@ -23,7 +23,14 @@ from owlbear_kanban.invalidation import (
     InvalidationRuntime,
     PreparedInvalidation,
 )
-from owlbear_kanban.jobs import JobDisposition, JobRecord, JobStore, StoredJob, project_job
+from owlbear_kanban.jobs import (
+    JobConcurrencyError,
+    JobDisposition,
+    JobRecord,
+    JobStore,
+    StoredJob,
+    project_job,
+)
 from owlbear_kanban.node_plan import NodePlanStore
 from owlbear_kanban.receipt import (
     ImpactClosure,
@@ -62,6 +69,85 @@ if TYPE_CHECKING:
 _RECOVERY_EVENT_SEQUENCE = 2
 _PACKET_ID = re.compile(r"^(DN-[0-9]{3})-PK-[0-9]{3}$")
 _STABLE_ID = re.compile(r"^(?:REQ|NEG|KEEP|DEC|WF|MOD|IF|MIG|RISK|PROOF|DN)-[0-9]{3}$")
+
+
+class JobAdminDiagnosticCode(StrEnum):
+    """Enumerate stable failures for intent-specific job administration."""
+
+    NOT_FOUND = "ERR_JOB_ADMIN_NOT_FOUND"
+    AUTHORITY_STALE = "ERR_JOB_ADMIN_AUTHORITY_STALE"
+    OCC_STALE = "ERR_JOB_ADMIN_OCC_STALE"
+    ACTIVE_CLAIM = "ERR_JOB_ADMIN_ACTIVE_CLAIM"
+    TERMINAL = "ERR_JOB_ADMIN_TERMINAL"
+
+
+class JobAdminDiagnostic(BaseModel):
+    """Describe a failed administrative operation with current job authority."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    code: JobAdminDiagnosticCode
+    detail: str
+    target: str
+    lower_code: str | None = None
+    current: StoredJob | None = None
+
+
+class SetJobPriorityRequest(BaseModel):
+    """Identify one OCC-guarded job priority update."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    job_id: int
+    change_id: str
+    delivery_digest: str
+    expected_token: str
+    priority: int
+    updated_at: str
+
+
+class SetJobPriorityResult(BaseModel):
+    """Contain either refreshed job authority or one priority diagnostic."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    job: StoredJob | None = None
+    diagnostic: JobAdminDiagnostic | None = None
+
+    @model_validator(mode="after")
+    def _require_one_outcome(self) -> SetJobPriorityResult:
+        if (self.job is None) == (self.diagnostic is None):
+            msg = "priority result must contain one job or diagnostic"
+            raise ValueError(msg)
+        return self
+
+
+class CancelJobRequest(BaseModel):
+    """Identify one OCC-guarded job cancellation."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    job_id: int
+    change_id: str
+    delivery_digest: str
+    expected_token: str
+    cancelled_at: str
+
+
+class CancelJobResult(BaseModel):
+    """Contain either refreshed job authority or one cancellation diagnostic."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    job: StoredJob | None = None
+    diagnostic: JobAdminDiagnostic | None = None
+
+    @model_validator(mode="after")
+    def _require_one_outcome(self) -> CancelJobResult:
+        if (self.job is None) == (self.diagnostic is None):
+            msg = "cancellation result must contain one job or diagnostic"
+            raise ValueError(msg)
+        return self
 
 
 class StartJobDiagnosticCode(StrEnum):
@@ -609,6 +695,147 @@ class NativeRuntime:
     def release_job(self, request: ReleaseJobRequest) -> ReleaseJobResult:
         """Release an owned job claim and append its release event."""
         return self._release_job(request)
+
+    def set_job_priority(
+        self,
+        request: SetJobPriorityRequest,
+        *,
+        failure: Callable[[str], None] | None = None,
+    ) -> SetJobPriorityResult:
+        """Update one pending unclaimed job through complete OCC identity."""
+        current = self._administrable_job(request)
+        if isinstance(current, JobAdminDiagnostic):
+            return SetJobPriorityResult(diagnostic=current)
+        job = current.job
+        if (
+            job.priority == request.priority
+            and job.updated_at == request.updated_at
+            and job.claim_id is None
+            and job.attempt_id is None
+            and job.disposition is JobDisposition.PENDING
+        ):
+            return SetJobPriorityResult(job=current)
+        diagnostic = self._administration_conflict(current, request.expected_token)
+        if diagnostic is not None:
+            return SetJobPriorityResult(diagnostic=diagnostic)
+        replacement = job.model_copy(update={"priority": request.priority, "updated_at": request.updated_at})
+        committed = self._commit_administration("priority", replacement, current.token, failure)
+        if isinstance(committed, JobAdminDiagnostic):
+            return SetJobPriorityResult(diagnostic=committed)
+        return SetJobPriorityResult(job=committed)
+
+    def cancel_job(
+        self,
+        request: CancelJobRequest,
+        *,
+        failure: Callable[[str], None] | None = None,
+    ) -> CancelJobResult:
+        """Cancel one pending unclaimed job through complete OCC identity."""
+        current = self._administrable_job(request)
+        if isinstance(current, JobAdminDiagnostic):
+            return CancelJobResult(diagnostic=current)
+        job = current.job
+        if job.disposition is JobDisposition.CANCELLED and job.updated_at == request.cancelled_at:
+            return CancelJobResult(job=current)
+        diagnostic = self._administration_conflict(current, request.expected_token)
+        if diagnostic is not None:
+            return CancelJobResult(diagnostic=diagnostic)
+        replacement = job.model_copy(
+            update={"disposition": JobDisposition.CANCELLED, "updated_at": request.cancelled_at}
+        )
+        committed = self._commit_administration("cancel", replacement, current.token, failure)
+        if isinstance(committed, JobAdminDiagnostic):
+            return CancelJobResult(diagnostic=committed)
+        return CancelJobResult(job=committed)
+
+    def _administrable_job(
+        self,
+        request: SetJobPriorityRequest | CancelJobRequest,
+    ) -> StoredJob | JobAdminDiagnostic:
+        try:
+            current = self._jobs.read(request.job_id)
+        except FileNotFoundError:
+            return JobAdminDiagnostic(
+                code=JobAdminDiagnosticCode.NOT_FOUND,
+                detail="job does not exist in the active store",
+                target=str(request.job_id),
+            )
+        job = current.job
+        if job.change_id != request.change_id or job.delivery_digest != request.delivery_digest:
+            return self._admin_diagnostic(
+                JobAdminDiagnosticCode.AUTHORITY_STALE,
+                "job authority differs from the administrative request",
+                current,
+            )
+        return current
+
+    def _administration_conflict(
+        self,
+        current: StoredJob,
+        expected_token: str,
+    ) -> JobAdminDiagnostic | None:
+        job = current.job
+        if current.token != expected_token:
+            return self._admin_diagnostic(
+                JobAdminDiagnosticCode.OCC_STALE,
+                "job OCC token is stale",
+                current,
+                lower_code=JobConcurrencyError.code,
+            )
+        if job.claim_id is not None or job.attempt_id is not None:
+            return self._admin_diagnostic(
+                JobAdminDiagnosticCode.ACTIVE_CLAIM,
+                "job has an active claim",
+                current,
+            )
+        if job.disposition is not JobDisposition.PENDING:
+            return self._admin_diagnostic(
+                JobAdminDiagnosticCode.TERMINAL,
+                "job has an incompatible terminal disposition",
+                current,
+            )
+        return None
+
+    def _commit_administration(
+        self,
+        operation: str,
+        replacement: JobRecord,
+        expected_token: str,
+        failure: Callable[[str], None] | None,
+    ) -> StoredJob | JobAdminDiagnostic:
+        try:
+            participant = self._jobs.replacement_participant(replacement, expected_token)
+            RuntimeTransaction(
+                self._work_root,
+                f"{operation}-{replacement.job_id}",
+                (participant,),
+            ).commit(failure=failure)
+        except JobConcurrencyError, TransactionConflictError:
+            current = self._jobs.read(replacement.job_id)
+            return self._admin_diagnostic(
+                JobAdminDiagnosticCode.OCC_STALE,
+                "job changed during the administrative operation",
+                current,
+                lower_code=JobConcurrencyError.code,
+            )
+        self._query.reset()
+        return self._jobs.read(replacement.job_id)
+
+    @staticmethod
+    def _admin_diagnostic(
+        code: JobAdminDiagnosticCode,
+        detail: str,
+        current: StoredJob,
+        *,
+        lower_code: str | None = None,
+    ) -> JobAdminDiagnostic:
+        return JobAdminDiagnostic(
+            code=code,
+            detail=detail,
+            target=str(current.job.job_id),
+            lower_code=lower_code,
+            current=current,
+        )
 
     def _release_job(
         self,
@@ -2212,6 +2439,8 @@ class NativeRuntime:
 
 
 __all__ = [
+    "CancelJobRequest",
+    "CancelJobResult",
     "FailJobDiagnostic",
     "FailJobDiagnosticCode",
     "FailJobRequest",
@@ -2221,6 +2450,8 @@ __all__ = [
     "FinishJobRequest",
     "FinishJobResult",
     "FinishPlanRequest",
+    "JobAdminDiagnostic",
+    "JobAdminDiagnosticCode",
     "NativeRuntime",
     "RecoverExpiredClaimsRequest",
     "RecoverExpiredClaimsResult",
@@ -2235,6 +2466,8 @@ __all__ = [
     "ReleaseJobDiagnosticCode",
     "ReleaseJobRequest",
     "ReleaseJobResult",
+    "SetJobPriorityRequest",
+    "SetJobPriorityResult",
     "StartJobDiagnostic",
     "StartJobDiagnosticCode",
     "StartJobRequest",

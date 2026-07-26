@@ -3,6 +3,7 @@ from __future__ import annotations
 import shutil
 from collections import Counter
 from datetime import timedelta
+from multiprocessing import get_context
 from pathlib import Path
 
 import pytest
@@ -10,6 +11,7 @@ import pytest
 from owlbear_kanban import (
     AttemptEvent,
     AttemptStore,
+    CancelJobRequest,
     CorrectiveRouteRequest,
     Finding,
     FindingStore,
@@ -18,6 +20,7 @@ from owlbear_kanban import (
     FinishJobRequest,
     FinishPlanRequest,
     InvalidationRequest,
+    JobAdminDiagnosticCode,
     JobDiagnosticCode,
     JobDisposition,
     JobRecord,
@@ -35,6 +38,7 @@ from owlbear_kanban import (
     ReceiptStore,
     ReleaseJobDiagnosticCode,
     ReleaseJobRequest,
+    SetJobPriorityRequest,
     StartJobDiagnosticCode,
     StartJobRequest,
     compute_node_plan_digest,
@@ -57,6 +61,22 @@ class _History:
 
     def name_status(self, _tested_revision: str, _candidate_revision: str) -> bytes:
         return self.changed_paths
+
+
+def _priority_process(
+    work_root: str,
+    request_payload: dict[str, object],
+    ready: object,
+    start: object,
+    results: object,
+) -> None:
+    revision_result = load_change(Path(".owlbear/changes"), "replace-delivery-pipeline")
+    assert revision_result.revision is not None
+    runtime = _runtime(revision_result.revision, Path(work_root))
+    ready.put("ready")
+    start.wait()
+    result = runtime.set_job_priority(SetJobPriorityRequest.model_validate(request_payload))
+    results.put(result.model_dump(mode="json"))
 
 
 @pytest.fixture
@@ -1720,6 +1740,186 @@ def test_release_and_fail_only_finalize_the_owning_attempt(revision, tmp_path) -
 
     assert no_active_failure.diagnostic is not None
     assert no_active_failure.diagnostic.code is FailJobDiagnosticCode.NO_ACTIVE_CLAIM
+
+
+def test_job_priority_and_cancellation_succeed_replay_and_refresh_projection_token(revision, tmp_path) -> None:
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    store = JobStore(work_root)
+    _materialize(store, _record(revision))
+    _materialize(store, _record(revision, job_id=2))
+    runtime = _runtime(revision, work_root)
+    initial = store.read(1)
+    priority_request = SetJobPriorityRequest(
+        job_id=1,
+        change_id=revision.change_id,
+        delivery_digest=revision.delivery_digest,
+        expected_token=initial.token,
+        priority=11,
+        updated_at="2026-07-24T00:02:00Z",
+    )
+
+    prioritized = runtime.set_job_priority(priority_request)
+    replayed_priority = runtime.set_job_priority(priority_request)
+
+    assert prioritized.job is not None
+    assert prioritized.job.job.priority == 11
+    assert prioritized.job.token != initial.token
+    assert replayed_priority == prioritized
+    projection = next(item for item in runtime.list_jobs(candidate_revision="a" * 40).items if item.job_id == 1)
+    assert projection.token == prioritized.job.token
+
+    cancel_initial = store.read(2)
+    cancel_request = CancelJobRequest(
+        job_id=2,
+        change_id=revision.change_id,
+        delivery_digest=revision.delivery_digest,
+        expected_token=cancel_initial.token,
+        cancelled_at="2026-07-24T00:03:00Z",
+    )
+    cancelled = runtime.cancel_job(cancel_request)
+    replayed_cancel = runtime.cancel_job(cancel_request)
+
+    assert cancelled.job is not None
+    assert cancelled.job.job.disposition is JobDisposition.CANCELLED
+    assert cancelled.job.token != cancel_initial.token
+    assert replayed_cancel == cancelled
+
+
+def test_job_administration_conflicts_preserve_complete_state(revision, tmp_path) -> None:
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    store = JobStore(work_root)
+    for job_id in range(1, 5):
+        _materialize(store, _record(revision, job_id=job_id))
+    runtime = _runtime(revision, work_root)
+    initial = store.read(1)
+    priority_request = SetJobPriorityRequest(
+        job_id=1,
+        change_id=revision.change_id,
+        delivery_digest=revision.delivery_digest,
+        expected_token=initial.token,
+        priority=8,
+        updated_at="2026-07-24T00:02:00Z",
+    )
+    prioritized = runtime.set_job_priority(priority_request)
+    assert prioritized.job is not None
+
+    active_request = _request().model_copy(update={"job_id": 2, "attempt_id": "attempt-002", "claim_id": "claim-002"})
+    assert runtime.start_job(active_request).diagnostic is None
+    terminal = store.read(3)
+    store.update(terminal.job.model_copy(update={"disposition": JobDisposition.SUPERSEDED}), terminal.token)
+    before = _snapshot(work_root)
+
+    stale = runtime.set_job_priority(priority_request.model_copy(update={"priority": 9}))
+    authority = runtime.cancel_job(
+        CancelJobRequest(
+            job_id=4,
+            change_id=revision.change_id,
+            delivery_digest="f" * 64,
+            expected_token=store.read(4).token,
+            cancelled_at="2026-07-24T00:03:00Z",
+        )
+    )
+    active = runtime.cancel_job(
+        CancelJobRequest(
+            job_id=2,
+            change_id=revision.change_id,
+            delivery_digest=revision.delivery_digest,
+            expected_token=store.read(2).token,
+            cancelled_at="2026-07-24T00:03:00Z",
+        )
+    )
+    terminal_result = runtime.cancel_job(
+        CancelJobRequest(
+            job_id=3,
+            change_id=revision.change_id,
+            delivery_digest=revision.delivery_digest,
+            expected_token=store.read(3).token,
+            cancelled_at="2026-07-24T00:03:00Z",
+        )
+    )
+
+    assert stale.diagnostic is not None
+    assert stale.diagnostic.code is JobAdminDiagnosticCode.OCC_STALE
+    assert stale.diagnostic.current == prioritized.job
+    assert authority.diagnostic is not None
+    assert authority.diagnostic.code is JobAdminDiagnosticCode.AUTHORITY_STALE
+    assert active.diagnostic is not None
+    assert active.diagnostic.code is JobAdminDiagnosticCode.ACTIVE_CLAIM
+    assert terminal_result.diagnostic is not None
+    assert terminal_result.diagnostic.code is JobAdminDiagnosticCode.TERMINAL
+    assert _snapshot(work_root) == before
+
+
+def test_job_priority_process_race_has_one_winner_and_interrupted_publication_recovers(revision, tmp_path) -> None:
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    store = JobStore(work_root)
+    _materialize(store, _record(revision))
+    initial = store.read(1)
+    base = {
+        "job_id": 1,
+        "change_id": revision.change_id,
+        "delivery_digest": revision.delivery_digest,
+        "expected_token": initial.token,
+    }
+    context = get_context("fork")
+    ready = context.Queue()
+    start = context.Event()
+    results = context.Queue()
+    processes = [
+        context.Process(
+            target=_priority_process,
+            args=(str(work_root), base | {"priority": priority, "updated_at": timestamp}, ready, start, results),
+        )
+        for priority, timestamp in ((8, "2026-07-24T00:02:00Z"), (9, "2026-07-24T00:03:00Z"))
+    ]
+    for process in processes:
+        process.start()
+    for _process in processes:
+        assert ready.get(timeout=10) == "ready"
+    start.set()
+    outcomes = [results.get(timeout=10) for _process in processes]
+    for process in processes:
+        process.join(timeout=10)
+        assert process.exitcode == 0
+
+    assert sum(item["job"] is not None for item in outcomes) == 1
+    assert [item["diagnostic"]["code"] for item in outcomes if item["diagnostic"] is not None] == [
+        JobAdminDiagnosticCode.OCC_STALE.value
+    ]
+    winner = store.read(1)
+    assert winner.job.priority in {8, 9}
+
+    recovery_root = tmp_path / "recovery"
+    recovery_root.mkdir()
+    recovery_store = JobStore(recovery_root)
+    _materialize(recovery_store, _record(revision))
+    recovery_initial = recovery_store.read(1)
+    recovery_request = SetJobPriorityRequest(
+        job_id=1,
+        change_id=revision.change_id,
+        delivery_digest=revision.delivery_digest,
+        expected_token=recovery_initial.token,
+        priority=12,
+        updated_at="2026-07-24T00:04:00Z",
+    )
+    runtime = _runtime(revision, recovery_root)
+
+    with pytest.raises(RuntimeError, match="interrupted"):
+        runtime.set_job_priority(
+            recovery_request,
+            failure=lambda stage: (
+                (_ for _ in ()).throw(RuntimeError("interrupted")) if stage == "after-first-publication" else None
+            ),
+        )
+
+    recovered_runtime = _runtime(revision, recovery_root)
+    recovered = recovered_runtime.set_job_priority(recovery_request)
+    assert recovered.job is not None
+    assert recovered.job.job.priority == 12
+    assert not list((recovery_root / ".runtime-transactions").glob("*.yaml"))
 
 
 def test_completed_claim_mismatch_returns_non_owner_without_mutation(revision, tmp_path) -> None:

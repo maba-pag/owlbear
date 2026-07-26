@@ -40,6 +40,7 @@ class RuntimeJobProjection(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
     job_id: int
+    token: str
     kind: JobKind
     priority: int
     change_id: str
@@ -141,6 +142,7 @@ class RuntimeQuery:
     def reset(self) -> None:
         """Discard indexes after a general runtime mutation."""
         self._jobs_by_id: dict[int, JobRecord] | None = None
+        self._job_tokens: dict[int, str] = {}
         self._archived_ids: set[int] = set()
         self._attempts_by_job: dict[int, tuple[AttemptEvent, ...]] | None = None
         self._findings_by_job: dict[int, tuple[Finding, ...]] | None = None
@@ -165,6 +167,7 @@ class RuntimeQuery:
                     self._jobs_by_id.pop(job_id, None)
                     continue
             self._jobs_by_id[job_id] = stored.job
+            self._job_tokens[job_id] = stored.token
         if self._receipts_by_id is not None:
             for receipt_id in receipt_ids:
                 result = self._receipts.read(receipt_id)
@@ -251,6 +254,7 @@ class RuntimeQuery:
         active = self._jobs.list()
         archived = self._jobs.list(archived=True)
         self._jobs_by_id = {item.job.job_id: item.job for item in (*active, *archived)}
+        self._job_tokens = {item.job.job_id: item.token for item in (*active, *archived)}
         self._archived_ids = {item.job.job_id for item in archived}
         attempts: dict[int, list[AttemptEvent]] = {}
         for event in self._attempts.list():
@@ -281,6 +285,7 @@ class RuntimeQuery:
         receipt = self._receipts_by_id.get(job.receipt_id) if job.receipt_id else None
         return RuntimeJobProjection(
             job_id=job.job_id,
+            token=self._job_tokens[job.job_id],
             kind=job.kind,
             priority=job.priority,
             change_id=job.change_id,

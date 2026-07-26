@@ -1,10 +1,10 @@
 ---
 id: 2071
 title: 'P15-01: Add OCC-safe native job priority and cancellation controls'
-status: build
+status: verify
 priority: high
 created: 2026-07-26T01:58:18.179812+02:00
-updated: 2026-07-26T01:58:18.179812+02:00
+updated: 2026-07-26T02:29:12.632898+02:00
 tags:
   - phase-15
   - corrective-projection
@@ -54,3 +54,22 @@ In: strict requests/results/diagnostics, delivery-digest and JobStore OCC identi
 Out: HTTP/MCP adapters, Cockpit rendering, candidate-digest re-acceptance of descendant nodes.
 
 Proof guidance: exercise public runtime operations and real stores/transactions across success, replay, stale identity, active claim, terminal state, concurrent writers, and injected transaction failure.
+
+[[2026-07-26T02:29:12+02:00]]
+## Builder Notes
+DONE: Added strict transport-free OCC job priority and cancellation controls for candidate digest `bf5edd...`.
+
+Changed:
+- `native_runtime.py`: frozen request/result/diagnostic contracts; complete change/digest/token identity; pending-unclaimed eligibility; exact desired-state replay; atomic one-participant replacement; current-authority diagnostics for stale/claimed/terminal/not-found; transaction recovery.
+- `runtime_query.py`: current OCC token in job projections and refreshed token index.
+- package exports and durable runtime proof.
+
+Evidence:
+- Focused public runtime matrix: 3 passed, including two-process one-winner OCC race and interrupted-publication recovery.
+- Complete native runtime/query: 58 passed.
+- Complete Kanban package: 1035 passed; only eight unrelated known legacy `graph.yaml` fixture failures.
+- Cockpit backend consumers: 169 passed.
+- lint-all and editor diagnostics: passed/clean.
+- Builder challenger: pass; independently reran 3 focused, 58 runtime/query, 20 native Cockpit, and lint checks.
+
+Builder memories assessed before closure.
