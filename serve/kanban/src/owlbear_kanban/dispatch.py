@@ -605,6 +605,23 @@ class DispatchRuntime:
             if replay.diagnostic is None and not self._cleanup_proof_checkout(request.job_id):
                 return self._proof_cleanup_diagnostic(request.job_id)
             return replay
+        coordination, _token = self._coordination.read()
+        holder = self._find_holder(coordination, request.job_id)
+        if holder is None or holder.candidate_revision != request.code_revision:
+            return self._native._finish_diagnostic(  # noqa: SLF001
+                FinishJobDiagnosticCode.EVIDENCE_INVALID,
+                "audit revision differs from dispatched checkout authority",
+                target=str(request.job_id),
+            )
+        if self._proof_checkouts is not None:
+            diagnostic = self._proof_checkouts.validate(request.job_id, request.code_revision)
+            if diagnostic is not None:
+                return self._native._finish_diagnostic(  # noqa: SLF001
+                    FinishJobDiagnosticCode.EVIDENCE_INVALID,
+                    diagnostic.detail,
+                    lower_code=diagnostic.code.value,
+                    target=str(request.job_id),
+                )
         result = self._finish(request, "audit")
         if (
             isinstance(result, FinishJobResult)

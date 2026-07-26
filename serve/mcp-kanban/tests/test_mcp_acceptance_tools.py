@@ -377,6 +377,23 @@ async def _auditor_evidence(
     assert proof_id == "PROOF-008"
     assert requests == []
     assert tracked_state == {"head": checkout.commit, "status": "", "diff": ""}
+    probe_script = (
+        "from pathlib import Path; "
+        "from owlbear_kanban import ReceiptStore, load_change; "
+        "result=load_change(Path('.owlbear/changes'), 'replace-delivery-pipeline'); "
+        "assert result.revision is not None; "
+        "print(result.revision.delivery_digest, len(ReceiptStore(result.revision).list()))"
+    )
+    command_arguments = ("uv", "run", "python", "-c", probe_script)
+    command = " ".join(command_arguments[:3]) + " -c <whole-change audit probe>"
+    process = await asyncio.create_subprocess_exec(
+        *command_arguments,
+        cwd=checkout_root,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await process.communicate()
+    assert process.returncode == 0, (stdout + stderr).decode()
     return {
         "methods": list(proof.method),
         "product_promise": change["intent"],
@@ -386,6 +403,13 @@ async def _auditor_evidence(
         "accepted_receipts": [receipt.to_mapping() for receipt in receipts],
         "proof": proof.model_dump(mode="json"),
         "allowed_replacements": list(proof.allowed_replacements),
+        "pending_requests": [],
+        "assembled_proof": {
+            "boundary": proof.boundary,
+            "durable_outputs": list(proof.durable_outputs),
+            "commands": [command],
+            "results": [{"command": command, "exit_code": process.returncode, "result": stdout.decode()}],
+        },
         "before_tracked_state": tracked_state,
         "after_tracked_state": _git_state(checkout_root),
     }
@@ -1425,6 +1449,143 @@ async def test_public_audit_success_closes_accepted_whole_change_and_replays(tmp
     assert shown_receipt == finished.receipt
 
 
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "methods-only",
+        "promise",
+        "decisions",
+        "migrations",
+        "workflows",
+        "receipts",
+        "requests",
+        "proof",
+        "replacements",
+        "boundary",
+        "null-command",
+        "tracked-state",
+    ],
+)
+@pytest.mark.asyncio
+async def test_public_audit_rejects_incomplete_or_forged_evidence(  # noqa: C901 - each forged dimension is explicit.
+    tmp_path: Path, mutation: str
+) -> None:
+    revision, board, _native, ctx, checkouts, audit_job_id, _accept_request, commit = await _pending_public_audit(
+        tmp_path, f"proof-forged-audit-{mutation}"
+    )
+    start = _start(audit_job_id, 8, commit)
+    started = await server.start_job(ctx, **start)
+    assert isinstance(started, dict)
+    checkout = started["checkout"]
+    accept_receipt_ids = tuple(
+        stored.job.receipt_id
+        for stored in JobStore(board).list(archived=True)
+        if stored.job.kind == "accept" and stored.job.receipt_id is not None
+    )
+    evidence = await _auditor_evidence(revision, ctx, checkout, start, accept_receipt_ids)
+    if mutation == "methods-only":
+        evidence = {"methods": evidence["methods"]}
+    elif mutation == "promise":
+        evidence["product_promise"] = "forged"
+    elif mutation == "decisions":
+        evidence["accepted_decisions"] = {}
+    elif mutation == "migrations":
+        evidence["migrations"] = []
+    elif mutation == "workflows":
+        evidence["admitted_workflows"] = []
+    elif mutation == "receipts":
+        evidence["accepted_receipts"] = []
+    elif mutation == "requests":
+        evidence["pending_requests"] = [{"request_id": "pending"}]
+    elif mutation == "proof":
+        evidence["proof"]["id"] = "PROOF-999"
+    elif mutation == "replacements":
+        evidence["allowed_replacements"] = ["finish_audit public boundary"]
+    elif mutation == "boundary":
+        evidence["assembled_proof"]["boundary"] = "bypassed"
+    elif mutation == "null-command":
+        evidence["assembled_proof"]["commands"] = [None]
+        evidence["assembled_proof"]["results"] = [{"command": None, "exit_code": 0, "result": "forged success"}]
+    else:
+        evidence["after_tracked_state"]["status"] = " M README.md"
+
+    result = await server.finish_audit(
+        ctx,
+        **_identity(start),
+        finished_at="2026-07-24T01:03:00Z",
+        receipt_id=f"audit-forged-{mutation}",
+        code_revision=commit,
+        evidence=evidence,
+        evidence_ids=(f"audit-forged-{mutation}",),
+        impact_closure={
+            "paths": ["/"],
+            "authority_targets": sorted(entity.id for entity in revision.graph.iter_entities()),
+        },
+    )
+
+    assert result.diagnostic is not None
+    assert result.diagnostic.lower_code == "ERR_RECEIPT_PROOF_UNSATISFIED"
+    assert checkouts.existing(audit_job_id) is not None
+    assert JobStore(board).read(audit_job_id).job.attempt_id == start["attempt_id"]
+    assert not (revision.source_dir / f"receipts/audit-forged-{mutation}.yaml").exists()
+
+
+@pytest.mark.asyncio
+async def test_public_audit_finish_rejects_request_created_after_start(tmp_path: Path) -> None:
+    revision, board, _native, ctx, checkouts, audit_job_id, _accept_request, commit = await _pending_public_audit(
+        tmp_path, "proof-late-request-audit"
+    )
+    start = _start(audit_job_id, 9, commit)
+    started = await server.start_job(ctx, **start)
+    assert isinstance(started, dict)
+    checkout = started["checkout"]
+    accept_receipt_ids = tuple(
+        stored.job.receipt_id
+        for stored in JobStore(board).list(archived=True)
+        if stored.job.kind == "accept" and stored.job.receipt_id is not None
+    )
+    evidence = await _auditor_evidence(revision, ctx, checkout, start, accept_receipt_ids)
+    NativeRequestRuntime(revision, board).create_request(
+        NativeRequest(
+            schema_version=1,
+            request_id="request-late-audit",
+            kind="action",
+            title="Resolve late audit evidence",
+            summary="Evidence became unresolved after audit start.",
+            body="Resolve before finalization.",
+            agent="orchestrator",
+            created_at="2026-07-25T00:12:00Z",
+            change_id=revision.change_id,
+            delivery_digest=revision.delivery_digest,
+            target_node_id="DN-014",
+            job_ids=(audit_job_id,),
+            evidence=("late-audit-evidence",),
+            resume_condition="Evidence is resolved.",
+        )
+    )
+
+    result = await server.finish_audit(
+        ctx,
+        **_identity(start),
+        finished_at="2026-07-25T00:12:30Z",
+        receipt_id="audit-late-request",
+        code_revision=commit,
+        evidence=evidence,
+        evidence_ids=("audit-late-request",),
+        impact_closure={
+            "paths": ["/"],
+            "authority_targets": sorted(entity.id for entity in revision.graph.iter_entities()),
+        },
+    )
+
+    assert result.diagnostic is not None
+    assert result.diagnostic.detail == "audit job has unresolved requests"
+    assert result.diagnostic.target == "request-late-audit"
+    assert checkouts.existing(audit_job_id) is not None
+    assert JobStore(board).read(audit_job_id).job.attempt_id == start["attempt_id"]
+    assert not (revision.source_dir / "receipts/audit-late-request.yaml").exists()
+
+
 async def _pending_public_audit(tmp_path: Path, proof_dir: str):
     repository = Path.cwd()
     commit = _git_head()
@@ -1482,19 +1643,53 @@ _AUDIT_DISPOSITION_MATRIX = (
 
 
 def _audit_rejection_payload(
-    revision, start: dict[str, object], commit: str, case: tuple[object, ...]
+    revision,
+    checkout,
+    start: dict[str, object],
+    commit: str,
+    case: tuple[object, ...],
 ) -> dict[str, object]:
     (
         name,
-        finding_class,
-        target_kind,
-        target_id,
+        expected_finding_class,
+        expected_target_kind,
+        expected_target_id,
         route_target,
         _route_kind,
         _design_reentry,
         route_node_ids,
         _expected_node_ids,
     ) = case
+    if name == "Cross-node integration failure":
+        observed = subprocess.run(
+            [sys.executable, "-c", "raise SystemExit(23)"],
+            cwd=checkout.checkout,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert observed.returncode == 23
+        finding_class, target_kind, target_id = "implementation-defect", "requirement", "REQ-008"
+        detail = f"cross-node assembled command failed with exit {observed.returncode} at {commit}"
+    elif name == "Implemented migration/removal absence or failure":
+        migration = revision.graph.migrations[0]
+        assert migration.absence_proof
+        missing = checkout.checkout / ".owlbear" / "scratch" / "missing-migration-proof"
+        assert not missing.exists()
+        finding_class, target_kind, target_id = "implementation-defect", "requirement", "REQ-007"
+        detail = f"{migration.id} absence proof artifact is unavailable at {commit}"
+    else:
+        proof = revision.resolve("PROOF-008")
+        omitted = proof.model_dump(mode="json") | {"method": []}
+        assert omitted["method"] == []
+        finding_class, target_kind, target_id = "planning-omission", "proof", "PROOF-001"
+        detail = f"admitted proof method is omitted from whole-change authority at {commit}"
+
+    assert (finding_class, target_kind, target_id) == (
+        expected_finding_class,
+        expected_target_kind,
+        expected_target_id,
+    )
     emitted_finding_class, emitted_route_target = _audit_classification(name)
     assert emitted_finding_class == finding_class
     assert emitted_route_target == route_target
@@ -1509,7 +1704,7 @@ def _audit_rejection_payload(
         target_kind=target_kind,
         target_id=target_id,
         finding_class=emitted_finding_class,
-        detail=f"{name} discovered in whole-change audit",
+        detail=detail,
         created_at="2026-07-25T00:07:00Z",
     )
     route = plan_corrective_route(
@@ -1553,6 +1748,7 @@ async def test_public_audit_rejection_routes_canonical_minimum_correction(
     started = await server.start_job(ctx, **audit_start)
     assert isinstance(started, dict)
     assert started["start"].diagnostic is None
+    checkout = started["checkout"]
 
     (
         _name,
@@ -1565,7 +1761,7 @@ async def test_public_audit_rejection_routes_canonical_minimum_correction(
         _route_node_ids,
         expected_node_ids,
     ) = case
-    payload = _audit_rejection_payload(revision, audit_start, commit, case)
+    payload = _audit_rejection_payload(revision, checkout, audit_start, commit, case)
     rejected = await server.reject_audit(ctx, **payload)
 
     assert rejected.diagnostic is None
@@ -1766,8 +1962,8 @@ async def test_public_start_job_rejects_pending_request_without_mutation(tmp_pat
 
 
 @pytest.mark.asyncio
-async def test_public_release_job_on_tracked_edit_without_publication(tmp_path: Path) -> None:
-    """A tracked auditor edit maps to AuditBlocked and releases without publication."""
+async def test_public_audit_tracked_edit_publishes_typed_minimum_correction(tmp_path: Path) -> None:
+    """A tracked auditor edit is detected and routed as AuditRejected."""
     revision, board, _native, ctx, _checkouts, audit_job_id, _accept_request, commit = await _pending_public_audit(
         tmp_path, "proof-blocked-audit"
     )
@@ -1776,43 +1972,66 @@ async def test_public_release_job_on_tracked_edit_without_publication(tmp_path: 
     assert isinstance(started, dict)
     audit_checkout = started["checkout"]
 
-    jobs_before = tuple(item.job.job_id for item in JobStore(board).list())
-    findings_before = tuple((board / "findings").glob("*.yaml")) if (board / "findings").exists() else ()
-    receipts_before = {path.name: path.read_bytes() for path in (revision.source_dir / "receipts").glob("*.yaml")}
-
-    _assert_acceptor_write_denied(audit_checkout.checkout)
-    blocked_contract = _markdown_subsection(
-        _audit_workflow_text(),
-        "### `AuditBlocked`",
-    )
-    disposition = {
-        "kind": "AuditBlocked",
-        "target": "checkout",
-        "finding": "tracked auditor edit was denied; self-authored state cannot be audited",
-    }
-    assert _yaml_code_block(blocked_contract) == {
-        "kind": "AuditBlocked",
-        "target": "<job, checkout, authority, plan, receipt, proof, or evidence target>",
-        "finding": "<specific stale, malformed, incomplete, contradictory, unsafe, or unavailable condition>",
-    }
-    assert tuple(disposition) == ("kind", "target", "finding")
-    released = await server.release_job(
+    tracked = audit_checkout.checkout / "README.md"
+    tracked.chmod(stat.S_IMODE(tracked.stat().st_mode) | stat.S_IWUSR)
+    tracked.write_text("modified by auditor\n", encoding="utf-8")
+    finish = await server.finish_audit(
         ctx,
         **_identity(audit_start),
-        released_at="2026-07-25T00:11:00Z",
+        finished_at="2026-07-25T00:11:00Z",
+        receipt_id="audit-tracked-mutation",
+        code_revision=commit,
+        evidence={"methods": list(revision.resolve("PROOF-008").method)},
+        evidence_ids=("audit-tracked-mutation",),
+    )
+    assert finish.diagnostic is not None
+    assert finish.diagnostic.lower_code == "ERR_PROOF_TRACKED_MUTATION"
+
+    finding = Finding(
+        schema_version=1,
+        finding_id="finding-audit-tracked-mutation",
+        source_attempt_id=str(audit_start["attempt_id"]),
+        source_job_id=int(audit_start["job_id"]),
+        change_id=revision.change_id,
+        delivery_digest=revision.delivery_digest,
+        target_kind="requirement",
+        target_id="REQ-008",
+        finding_class="implementation-defect",
+        detail=f"{finish.diagnostic.lower_code}: tracked auditor state changed at {commit}",
+        created_at="2026-07-25T00:11:30Z",
+    )
+    route = plan_corrective_route(
+        CorrectiveRouteRequest(
+            finding_id=finding.finding_id,
+            finding_class=finding.finding_class,
+            target="whole-change-integration",
+            target_node_ids=("DN-001",),
+        )
+    )
+    rejected = await server.reject_audit(
+        ctx,
+        **_identity(audit_start),
+        rejected_at=finding.created_at,
+        detail=finding.detail,
+        evidence_ids=("audit-tracked-mutation",),
+        findings=(finding.model_dump(mode="json"),),
+        invalidation=InvalidationRequest(
+            invalidation_id="invalidation-audit-tracked-mutation",
+            supersession_receipt_id="supersession-audit-tracked-mutation",
+            invalidated_receipt_ids=("accept-final",),
+            routes=(route,),
+            corrective_job_ids=(100,),
+            issued_at=finding.created_at,
+            code_revision=commit,
+            priority=9,
+        ).model_dump(mode="json"),
     )
 
-    assert released.diagnostic is None
-    assert released.event is not None
-    assert released.event.kind == "released"
-    assert released.event.job_id == audit_start["job_id"]
-    assert released.event.attempt_id == audit_start["attempt_id"]
-    assert released.event.claim_id == audit_start["claim_id"]
-    assert tuple(item.job.job_id for item in JobStore(board).list()) == jobs_before
-    findings_after = tuple((board / "findings").glob("*.yaml")) if (board / "findings").exists() else ()
-    assert findings_after == findings_before
-    assert receipts_before == {
-        path.name: path.read_bytes() for path in (revision.source_dir / "receipts").glob("*.yaml")
-    }
+    assert rejected.diagnostic is None
+    assert rejected.findings == (finding,)
+    assert rejected.invalidation is not None
+    assert tuple(item.job.target_node_id for item in rejected.invalidation.corrective_jobs) == ("DN-001",)
+    assert not audit_checkout.root.exists()
+    assert not (revision.source_dir / "receipts/audit-tracked-mutation.yaml").exists()
     assert "readers: []" in (board / "dispatch/coordination.yaml").read_text(encoding="utf-8")
     assert not audit_checkout.root.exists()

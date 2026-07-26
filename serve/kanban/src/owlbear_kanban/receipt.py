@@ -541,7 +541,7 @@ def evaluate_receipt_currentness(
     return result
 
 
-def _evaluate_target_receipt(
+def _evaluate_target_receipt(  # noqa: PLR0911 - each receipt proof kind fails closed independently.
     revision: ChangeRevision,
     receipt: ReceiptRecord,
     pending_node_plan: Mapping[str, object] | None = None,
@@ -584,6 +584,12 @@ def _evaluate_target_receipt(
         return ReceiptValidity(
             code=ReceiptValidityCode.PROOF_UNSATISFIED,
             detail="accept receipt evidence is missing exact-commit assembled proof",
+            target=target,
+        )
+    if receipt.kind == "audit" and target == "DN-014" and not _audit_evidence_complete(revision, receipt, evidence):
+        return ReceiptValidity(
+            code=ReceiptValidityCode.PROOF_UNSATISFIED,
+            detail="audit receipt evidence is missing exact-commit whole-change proof",
             target=target,
         )
     return ReceiptValidity(code=ReceiptValidityCode.CURRENT, detail="receipt is locally current", target=target)
@@ -704,6 +710,77 @@ def _acceptance_evidence_complete(  # noqa: C901, PLR0911 - proof dimensions fai
         return False
     before = tracked.get("before")
     after = tracked.get("after")
+    return all(
+        isinstance(state, Mapping)
+        and state.get("head") == code_revision
+        and state.get("status") == ""
+        and state.get("diff") == ""
+        for state in (before, after)
+    )
+
+
+def _audit_evidence_complete(  # noqa: C901, PLR0911, PLR0912 - proof dimensions fail closed independently.
+    revision: ChangeRevision, receipt: ReceiptRecord, evidence: object
+) -> bool:
+    if not isinstance(evidence, Mapping):
+        return False
+    target = receipt.payload.get("target_node_id")
+    code_revision = receipt.payload.get("code_revision")
+    proof = _target_proof(revision, target) if isinstance(target, str) else None
+    if proof is None or proof.id != "PROOF-008":
+        return False
+    if evidence.get("product_promise") != revision.intent:
+        return False
+    if evidence.get("accepted_decisions") != _freeze_json(revision.decisions.model_dump(mode="json")):
+        return False
+    if evidence.get("migrations") != tuple(item.model_dump() for item in revision.graph.migrations):
+        return False
+    if evidence.get("admitted_workflows") != tuple(item.model_dump() for item in revision.graph.workflows):
+        return False
+    if evidence.get("proof") != proof.model_dump():
+        return False
+    if evidence.get("allowed_replacements") != proof.allowed_replacements:
+        return False
+    if evidence.get("pending_requests") != ():
+        return False
+    accepted = evidence.get("accepted_receipts")
+    if not isinstance(accepted, tuple) or not accepted:
+        return False
+    accepted_ids = tuple(item.get("receipt_id") for item in accepted if isinstance(item, Mapping))
+    if len(accepted_ids) != len(accepted) or accepted_ids != receipt.payload.get("predecessor_receipt_ids"):
+        return False
+    if not all(item.get("kind") == "accept" and item.get("code_revision") == code_revision for item in accepted):
+        return False
+    stored_receipts = tuple(ReceiptStore(revision).read(receipt_id).receipt for receipt_id in accepted_ids)
+    if any(stored is None for stored in stored_receipts):
+        return False
+    if accepted != tuple(_freeze_json(stored.to_mapping()) for stored in stored_receipts if stored is not None):
+        return False
+    assembled = evidence.get("assembled_proof")
+    if not isinstance(assembled, Mapping):
+        return False
+    commands = assembled.get("commands")
+    results = assembled.get("results")
+    if (
+        assembled.get("boundary") != proof.boundary
+        or assembled.get("durable_outputs") != proof.durable_outputs
+        or not isinstance(commands, tuple)
+        or not commands
+        or not all(isinstance(command, str) and command for command in commands)
+        or not isinstance(results, tuple)
+        or tuple(result.get("command") for result in results if isinstance(result, Mapping)) != commands
+        or not all(
+            isinstance(result, Mapping)
+            and isinstance(result.get("command"), str)
+            and result.get("exit_code") == 0
+            and isinstance(result.get("result"), str)
+            and bool(result.get("result"))
+            for result in results
+        )
+    ):
+        return False
+    before = evidence.get("before_tracked_state")
+    after = evidence.get("after_tracked_state")
     return all(
         isinstance(state, Mapping)
         and state.get("head") == code_revision

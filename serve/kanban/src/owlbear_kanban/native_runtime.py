@@ -1545,6 +1545,12 @@ class NativeRuntime:
         ownership = self._finish_ownership(job, request)
         if ownership is not None:
             return ownership
+        if kind == "audit" and job.pending_request_ids:
+            return self._finish_diagnostic(
+                FinishJobDiagnosticCode.EVIDENCE_INVALID,
+                "audit job has unresolved requests",
+                target=job.pending_request_ids[0],
+            )
         predecessors = self._finish_predecessors(job, request.code_revision)
         if isinstance(predecessors, FinishJobResult):
             return predecessors
