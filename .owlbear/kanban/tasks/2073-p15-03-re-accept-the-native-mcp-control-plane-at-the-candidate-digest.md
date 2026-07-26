@@ -1,10 +1,10 @@
 ---
 id: 2073
 title: 'P15-03: Re-accept the native MCP control plane at the candidate digest'
-status: verify
+status: collect
 priority: high
 created: 2026-07-26T01:58:52.402176+02:00
-updated: 2026-07-26T03:07:03.834616+02:00
+updated: 2026-07-26T03:13:47.452299+02:00
 tags:
   - phase-15
   - candidate-reacceptance
@@ -60,3 +60,17 @@ Evidence:
 - MCP product/proof paths remained clean; focused lint passed.
 
 No product edit or priority/cancel MCP expansion was required because IF-010 is unchanged and DN-011 consumes IF-011. Builder memories assessed.
+
+[[2026-07-26T03:13:47+02:00]]
+## Verify Notes
+PASS: DN-009 candidate re-acceptance is complete.
+
+Evidence:
+- Tested product SHA `2a804df1ce9b291c5919c9356883f958bba1c362`; builder evidence commit `80111bd91007a8c32d1721a4ca9be74eb0ad51c9` is in ancestry.
+- Complete MCP package: 102 passed.
+- Builder focused contract/interactions: 39 + 36 passed.
+- Verifier independent inventory/error/absence and jobs/health/history: 7 + 7 passed.
+- MCP package remained clean; focused lint passed.
+- Verifier challenger: pass; AC-1 through AC-3 and unchanged IF-010 scope are closed.
+
+Verifier memories assessed.
