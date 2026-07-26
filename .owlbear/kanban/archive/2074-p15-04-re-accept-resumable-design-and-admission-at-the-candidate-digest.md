@@ -1,10 +1,10 @@
 ---
 id: 2074
 title: 'P15-04: Re-accept resumable design and admission at the candidate digest'
-status: collect
+status: archived
 priority: high
 created: 2026-07-26T01:59:00.156507+02:00
-updated: 2026-07-26T03:28:23.561002+02:00
+updated: 2026-07-26T03:29:15.091435+02:00
 tags:
   - phase-15
   - candidate-reacceptance
@@ -33,7 +33,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Projection
@@ -58,3 +58,7 @@ Designer interaction plus admission evaluation/transaction: 30 passed. Evidence 
 [[2026-07-26T03:28:23+02:00]]
 ## Verify Notes
 PASS: DN-005 candidate re-acceptance is complete. Tested product SHA `9705b2c3c7bfc65c133f27731f65cad34bfb6d29` and builder commit `c0408ae665d8953e8c23bbf90ed7881953e8b900` are ancestors. Full designer/admission proof and independent challenge: 30 + 30 passed; verifier reran all four durable PROOF-004 scenario classes: 4 passed. Product/proof paths remained clean; shipped contract lint passed; verifier challenger passed. Resume, one-question tradeoffs, refusal/nonpublication, complete admission, and exact replay are directly proven. Memories assessed.
+
+[[2026-07-26T03:29:15+02:00]]
+## Collect Notes
+ARCHIVED: DN-005 candidate re-acceptance is complete. Tested SHA `9705b2c3c7bfc65c133f27731f65cad34bfb6d29`, builder `c0408ae665d8953e8c23bbf90ed7881953e8b900`, and verifier `2421cb7040ee6a30a8108915960532f1f759f521` are ancestors. Full 30 + challenge 30 + independent four-scenario proof passed; no product delta or open finding. Collector memories assessed.
