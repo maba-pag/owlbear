@@ -1,10 +1,10 @@
 ---
 id: 2084
 title: 'P15-14: Build native change and job request resolution'
-status: build
+status: verify
 priority: high
 created: 2026-07-26T02:00:27.248344+02:00
-updated: 2026-07-26T15:12:14.272099+02:00
+updated: 2026-07-26T15:54:45.665893+02:00
 tags:
   - phase-15
   - change:replace-delivery-pipeline
@@ -33,7 +33,7 @@ ac:
 proof_bundle: critical+challenge
 blocked: false
 block_reason:
-claimed_at: 2026-07-26T15:12:14.272099+02:00
+claimed_at: 2026-07-26T15:54:45.665893+02:00
 archival_reason:
 archival_refs: []
 ---
@@ -49,3 +49,6 @@ In: pending/resolved request lists/details, decision tradeoffs, action evidence,
 Out: backend request semantics, job controls, evidence history, final real-stack proof.
 
 Proof guidance: component/browser tests use IF-011-grounded payloads and exercise keyboard/focus restoration plus responsive layouts.
+
+[[2026-07-26T15:54:42+02:00]]
+Builder d1908d552 implemented the native Requests phase and shared Delivery resolver. Proof: Vitest 111/111 files, 1519 passed + 2 skipped; Playwright native-requests 6/6 across desktop/mobile; production TypeScript/Vite build PASS; backend native-control challenge 17/17; independent final AC-1/2/3 challenge PASS. Canonical conflicts covered: ERR_CHANGE_REVISION_CONFLICT, ERR_NATIVE_REQUEST_REFERENCE, ERR_NATIVE_REQUEST_CONFLICT. Server outcome is painted before affected-resource refresh and resolved context remains complete.
