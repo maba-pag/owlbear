@@ -4,7 +4,7 @@ title: 'P15-11: Present peer Specification and Delivery Cockpit surfaces'
 status: verify
 priority: high
 created: 2026-07-26T01:59:59.934764+02:00
-updated: 2026-07-26T12:41:45.236375+02:00
+updated: 2026-07-26T12:58:39.501172+02:00
 tags:
   - phase-15
   - change:replace-delivery-pipeline
@@ -53,3 +53,9 @@ Proof guidance: component tests plus browser geometry/focus checks at 1440×900 
 
 [[2026-07-26T12:41:45+02:00]]
 Builder implementation at digest bf5edd67478d5304943e695bbb6d53186f2520773c0964f448b658613ee96357 and base SHA 5197c5e150e661168ff13a515677c37bb48787d4. Production App now mounts native-only peer Specification/Delivery shell with URL-backed change selection; invalid/missing/loading/error states; retained Retry; accepted-only decisions; digest, intent, design and authority/admission metadata; Memory/Ideas modules unchanged and Memory task links route to Delivery job URLs. Browser proof at 1440x900 and390x844 verifies keyboard selector reach, icon+text invalid states, bounded controls and no horizontal overflow. Curated only retired legacy Shell/Kanban/Decisions composition tests. Validation 1485 pass/2skip, build, Playwright3, final challenger PASS.
+
+[[2026-07-26T12:54:29+02:00]]
+Verifier rejected bde1a1e473c51ae47cc151aba0ef62fb8936d580: URL-requested changes are marked missing while summaries are still loading and alongside summaries errors, producing contradictory states and duplicate Retry controls. Return for state-gating repair.
+
+[[2026-07-26T12:58:39+02:00]]
+Final repair gates missing URL changes on successfully loaded summaries, keeping loading, error, and missing states mutually coherent. Added delayed/error/loaded-missing regressions. Validation: build; provider5/5; mandatory components11/11; Playwright3 at desktop/mobile; final signoff PASS. Unrelated workspace state untouched.

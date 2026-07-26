@@ -37,7 +37,8 @@ export function NativeChangeProvider({ children }: PropsWithChildren): ReactElem
   const requestedChangeId = searchParams.get('change')
   const changes = summaries.data?.changes ?? []
   const requestedSummary = changes.find((change) => change.change_id === requestedChangeId) ?? null
-  const missingChangeId = requestedChangeId !== null && requestedSummary === null ? requestedChangeId : null
+  const summariesReady = summaries.data !== null && !summaries.isLoading && summaries.error === null
+  const missingChangeId = summariesReady && requestedChangeId !== null && requestedSummary === null ? requestedChangeId : null
   const selectedChangeId = requestedChangeId !== null ? requestedChangeId : (changes[0]?.change_id ?? null)
   const selectedSummary = changes.find((change) => change.change_id === selectedChangeId) ?? null
   const selectedDetail = useNativeChange(

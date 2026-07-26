@@ -35,6 +35,17 @@ function wrapper({ children }: PropsWithChildren) {
 describe('NativeChangeProvider', () => {
   afterEach(() => vi.clearAllMocks())
 
+  afterEach(() => {
+    hooks.changes.data = {
+      changes: [
+        { change_id: 'change-a', state: 'loaded', delivery_digest: 'a'.repeat(64), diagnostics: [] },
+        { change_id: 'change-b', state: 'invalid', delivery_digest: null, diagnostics: [] },
+      ],
+    }
+    hooks.changes.error = null
+    hooks.changes.isLoading = false
+  })
+
   it('selects the URL change and exposes invalid authority without loading detail', () => {
     const hook = renderHook(
       () => ({ selection: useNativeChangeSelection(), location: useLocation() }),
@@ -65,6 +76,24 @@ describe('NativeChangeProvider', () => {
     expect(hook.result.current.selection.missingChangeId).toBe('missing-change')
     expect(hook.result.current.selection.selectedSummary).toBeNull()
     expect(hook.result.current.location.search).toBe('?change=missing-change')
+  })
+
+  it('does not classify a requested change as missing while summaries load', () => {
+    hooks.changes.data = null as unknown as typeof hooks.changes.data
+    hooks.changes.isLoading = true
+    const hook = renderHook(() => useNativeChangeSelection(), { wrapper })
+
+    expect(hook.result.current.isLoading).toBe(true)
+    expect(hook.result.current.missingChangeId).toBeNull()
+  })
+
+  it('does not classify a requested change as missing when summaries fail', () => {
+    hooks.changes.data = null as unknown as typeof hooks.changes.data
+    hooks.changes.error = new Error('summaries unavailable')
+    const hook = renderHook(() => useNativeChangeSelection(), { wrapper })
+
+    expect(hook.result.current.error?.message).toBe('summaries unavailable')
+    expect(hook.result.current.missingChangeId).toBeNull()
   })
 
   it('stores a selected change in the existing URL', async () => {
