@@ -1,10 +1,10 @@
 ---
 id: 2077
 title: 'P15-07: Re-accept independent node acceptance at the candidate digest'
-status: collect
+status: archived
 priority: high
 created: 2026-07-26T01:59:26.362933+02:00
-updated: 2026-07-26T07:29:56.036729+02:00
+updated: 2026-07-26T07:32:25.471669+02:00
 tags:
   - phase-15
   - candidate-reacceptance
@@ -36,7 +36,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Projection
@@ -81,3 +81,6 @@ Validation: both new regressions pass; full public acceptance/rejection file pas
 
 [[2026-07-26T07:29:56+02:00]]
 Verifier acceptance at committed HEAD 2465c771c3a3460c5fe5062fdffdb28efe1cbd66. Exact final regressions: tracked checkout mutation -> typed finding/minimum build correction and stale checkout SHA mismatch -> typed stale authority, 2 passed in 8.43s. Final independent signoff PASS; aggregate Ruff and diff check clean.
+
+[[2026-07-26T07:32:25+02:00]]
+Collector confirms candidate digest bf5edd67478d5304943e695bbb6d53186f2520773c0964f448b658613ee96357 and final accepted code SHA 2465c771c3a3460c5fe5062fdffdb28efe1cbd66. Builder/verifier commits and PROOF-007 evidence are recorded; all dependencies archived; no stale receipt reused.
