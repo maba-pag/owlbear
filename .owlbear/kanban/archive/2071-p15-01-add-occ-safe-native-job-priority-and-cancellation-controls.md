@@ -1,10 +1,10 @@
 ---
 id: 2071
 title: 'P15-01: Add OCC-safe native job priority and cancellation controls'
-status: collect
+status: archived
 priority: high
 created: 2026-07-26T01:58:18.179812+02:00
-updated: 2026-07-26T02:36:26.485348+02:00
+updated: 2026-07-26T02:37:06.316371+02:00
 tags:
   - phase-15
   - corrective-projection
@@ -39,7 +39,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Projection
@@ -86,3 +86,7 @@ Independent evidence:
 - Full Kanban package had 1035 passing with only eight unrelated stale legacy graph fixtures; Cockpit consumers 169 passed; lint-all passed.
 
 AC judgment: refreshed token and replay are stable; stale/digest/active/active-terminal/archived-terminal diagnostics contain current authority; process race has one winner; interrupted publication recovers and replays. Verifier memories assessed before closure.
+
+[[2026-07-26T02:37:06+02:00]]
+## Collect Notes
+ARCHIVED: #2071 is complete. Builder SHA `5162328111077a38aa9977523435ba656f2f79df` and verifier repair SHA `8780879763f6662444ce849ed75f0420d7fe2717` are ancestors of HEAD. Final focused matrix and runtime/query suite passed; both challengers passed after archived-terminal repair. Broad failures are only unrelated legacy graph fixtures. No owned delta or follow-up remains. Collector memories assessed.
